@@ -461,6 +461,17 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
         };
     }
 
+    public function shapesEffortFor(string $model): bool
+    {
+        // The `reasoning_effort` field exists only on the reasoning arms:
+        // gpt-4o, gpt-4.1 and the gpt-5-chat compat builds have no field to
+        // put a tier in, and the API answers 400 to one that arrives. The
+        // predicate is the same truth `samplingParams()` gates the field
+        // with — so `/effort` can say "this pair shapes nothing" instead of
+        // letting the wire swallow a "set" value in silence.
+        return self::isReasoningFamily($model);
+    }
+
     /**
      * ISS-005: the sampling knobs for one request, spelled the way the
      * target family reads them. Legacy models keep the historical pair

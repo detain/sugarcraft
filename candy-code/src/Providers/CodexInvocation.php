@@ -91,6 +91,15 @@ final readonly class CodexInvocation
             $args[] = (string) $options['sandbox'];
         }
 
+        // C-PRV-1: `-c <key=value>` is verified in `codex exec --help`
+        // (0.154.0) as an exec-level config override. The value is the
+        // TOML spelling the CLI parses; the provider has already filtered
+        // it to a member of its level table.
+        if (isset($options['reasoningEffort'])) {
+            $args[] = '-c';
+            $args[] = 'model_reasoning_effort=' . (string) $options['reasoningEffort'];
+        }
+
         $args[] = '-';
 
         return $args;

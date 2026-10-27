@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Providers\AnthropicProvider;
 use SugarCraft\Code\Providers\BedrockProvider;
 use SugarCraft\Code\Providers\ClaudeCodeProvider;
+use SugarCraft\Code\Providers\CodexProvider;
 use SugarCraft\Code\Providers\CustomProvider;
 use SugarCraft\Code\Providers\EchoProvider;
 use SugarCraft\Code\Providers\EffortBudget;
@@ -68,12 +69,15 @@ final class EffortBudgetTest extends TestCase
         self::assertSame(AnthropicProvider::MIN_THINKING_BUDGET, EffortBudget::thinkingTokens('low'));
     }
 
-    public function testTheShapesRosterIsExactlyTheFiveDialTurners(): void
+    public function testTheShapesRosterIsExactlyTheEightShapers(): void
     {
         // /effort refuses loudly everywhere else; this roster IS the refusal
         // set's complement, so an accidental `implements` (or a rename that
         // drops one) flips a refusal into silence or vice versa. Pinned
-        // against the classes, not a narrated list.
+        // against the classes, not a narrated list. C-PRV-1 moved Bedrock
+        // (request-side thinking on its Claude ids), Codex and claude-code
+        // (named tiers forwarded as CLI flags) from the refusal set onto
+        // this one.
         $shapers = [];
         foreach ($this->providerClasses() as $class) {
             if (is_subclass_of($class, ShapesReasoningEffort::class)) {
@@ -87,15 +91,20 @@ final class EffortBudgetTest extends TestCase
             AnthropicProvider::class,
             VertexProvider::class,
             GeminiProvider::class,
+            BedrockProvider::class,
+            CodexProvider::class,
+            ClaudeCodeProvider::class,
         ], $shapers);
     }
 
     public function testTheRefusalSetCarriesTheMarkerNotAtAll(): void
     {
-        // Bedrock speaks Converse (no thinking wire today), Custom and
-        // ClaudeCode forward no budget knob, Echo draws nothing: a /effort
-        // grant here would be the banned set-but-ignored failure.
-        foreach ([BedrockProvider::class, CustomProvider::class, ClaudeCodeProvider::class, EchoProvider::class] as $class) {
+        // Custom forwards no budget knob and Echo draws nothing: a /effort
+        // grant here would be the banned set-but-ignored failure. The
+        // per-model refusals (a marked class whose predicate answers no —
+        // gpt-4o, gemini-2.0-flash, a Bedrock llama id) are EffortGateTest's
+        // ground; this pin is the class-level complement only.
+        foreach ([CustomProvider::class, EchoProvider::class] as $class) {
             self::assertNotContains(ShapesReasoningEffort::class, class_implements($class) ?: [], $class.' must stay a loud refusal');
         }
     }
@@ -110,6 +119,7 @@ final class EffortBudgetTest extends TestCase
             VertexProvider::class,
             GeminiProvider::class,
             BedrockProvider::class,
+            CodexProvider::class,
             CustomProvider::class,
             ClaudeCodeProvider::class,
             EchoProvider::class,

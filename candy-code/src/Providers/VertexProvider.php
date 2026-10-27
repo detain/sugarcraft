@@ -354,6 +354,18 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
         return 'vertex';
     }
 
+    public function shapesEffortFor(string $model): bool
+    {
+        // Vertex serves two wire arms from one class and each spends the
+        // tier differently: the claude arm turns it into Anthropic-style
+        // `thinking.budget_tokens` (see {@see anthropicThinkingBudget()})
+        // and the gemini arm into `thinkingConfig.thinkingBudget`. Both
+        // refuse it on their pre-thinking families, so one table —
+        // {@see ThinkingCapability}, keyed by the id's family — answers
+        // for both arms; an id that matches neither family shapes nothing.
+        return ThinkingCapability::supportsThinking($model);
+    }
+
     /**
      * Capability flags carry no model argument, so they answer for the
      * provider's configured default model. A caller that overrides the model

@@ -14,7 +14,7 @@ use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Usage;
 
-final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsModel
+final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsModel, ShapesReasoningEffort
 {
     /**
      * How much of a failing child's stderr is kept for the exception message.
@@ -40,6 +40,14 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
     public function name(): string
     {
         return 'claude-code';
+    }
+
+    public function shapesEffortFor(string $model): bool
+    {
+        // Every id the CLI serves is a Claude model it accepts
+        // `--effort` for; the value-filter (level word vs float dial)
+        // lives in {@see options()} where the request value is visible.
+        return true;
     }
 
     /**
@@ -162,6 +170,15 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
         if ($request->tools !== null) {
             $toolNames = array_map(fn($t) => $t->name(), $request->tools);
             $options['allowedTools'] = implode(',', $toolNames);
+        }
+
+        // C-PRV-1: `claude --help` (2.1.306 installed here; design-verified
+        // unchanged at 2.1.311) shows `--effort <level>` listing low,
+        // medium, high, xhigh, max — exactly {@see EffortBudget::levels()},
+        // so a named rung passes through by name. A float dial value is not
+        // a level and sends no flag.
+        if ($request->reasoningEffort !== null && in_array(strtolower((string) $request->reasoningEffort), EffortBudget::levels(), true)) {
+            $options['effort'] = strtolower((string) $request->reasoningEffort);
         }
 
         return $options;

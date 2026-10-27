@@ -169,6 +169,32 @@ final class CodexProviderTest extends TestCase
 
         $sand = (new CodexInvocation())->execArgs(['model' => 'm', 'sandbox' => 'read-only']);
         $this->assertSame(['exec', '--json', '-m', 'm', '-s', 'read-only', '-'], $sand);
+
+        // C-PRV-1.a: a shaped tier becomes one -c line between the sandbox
+        // flag and the stdin operand - never a positional argument.
+        $effort = (new CodexInvocation())->execArgs(['model' => 'm', 'reasoningEffort' => 'xhigh']);
+        $this->assertSame(['exec', '--json', '-m', 'm', '-c', 'model_reasoning_effort=xhigh', '-'], $effort);
+    }
+
+    public function testOptionsThreadNamedEffortTiersAndRefuseTheRest(): void
+    {
+        $optionsOf = new \ReflectionMethod(CodexProvider::class, 'options');
+        $optionsOf->setAccessible(true);
+
+        $tiered = new CompleteRequest(model: 'probe-model', messages: [], reasoningEffort: 'high');
+        $this->assertSame(
+            ['model' => CodexProvider::DEFAULT_MODEL, 'reasoningEffort' => 'high'],
+            $optionsOf->invoke($this->codexProvider(), $tiered),
+        );
+
+        $dial = new CompleteRequest(model: 'probe-model', messages: [], reasoningEffort: 0.5);
+        $this->assertArrayNotHasKey('reasoningEffort', $optionsOf->invoke($this->codexProvider(), $dial));
+
+        $unknown = new CompleteRequest(model: 'probe-model', messages: [], reasoningEffort: 'turbo');
+        $this->assertArrayNotHasKey('reasoningEffort', $optionsOf->invoke($this->codexProvider(), $unknown));
+
+        $unset = new CompleteRequest(model: 'probe-model', messages: []);
+        $this->assertArrayNotHasKey('reasoningEffort', $optionsOf->invoke($this->codexProvider(), $unset));
     }
 
     public function testWithModelRebindsAndKeepsTheRestOfTheState(): void

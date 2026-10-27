@@ -984,6 +984,19 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
         return 'sglang';
     }
 
+    public function shapesEffortFor(string $model): bool
+    {
+        // SGLang is an OpenAI-compatible server, so this provider puts
+        // `reasoning_effort` on every request it builds for any model id —
+        // the field is always on the wire, whatever the served model then
+        // chooses to do with it. Whether a given deployment honours a given
+        // tier is server-side truth the client cannot see (the sanitizer
+        // that trims unsupported spellings lives beside the request
+        // builder, not here), so the predicate answers for the SENDER and
+        // yes is the honest answer for every id.
+        return true;
+    }
+
     /** PRV-1 (§6.5): the configured base, normalized for memo identity. */
     public function catalogKey(): ?string
     {

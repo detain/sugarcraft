@@ -12250,7 +12250,7 @@ final class Chat implements Model
             $provider = $provider->primary();
         }
         $names = $provider instanceof \SugarCraft\Code\Providers\ProviderInterface ? $provider->name() : 'this backend';
-        $shapes = $provider instanceof \SugarCraft\Code\Providers\ShapesReasoningEffort;
+        $shapes = \SugarCraft\Code\Providers\EffortGate::verdict($provider, $engine?->model() ?? '');
 
         if ($args === []) {
             if ($engine === null) {
@@ -12260,24 +12260,7 @@ final class Chat implements Model
             $raw = $engine->reasoningEffort();
             $level = $raw === null ? null : (string) $raw;
 
-            if (!$shapes) {
-                return $this->effortRow(Lang::t('chat.effort.status', [
-                    'level' => $level ?? 'unset',
-                    'provider' => $names,
-                    'shape' => Lang::t('chat.effort.shape.none'),
-                ]));
-            }
-
-            if ($level === null) {
-                $shape = Lang::t('chat.effort.shape.unset');
-            } elseif ($provider instanceof \SugarCraft\Code\Providers\AnthropicProvider
-                || $provider instanceof \SugarCraft\Code\Providers\VertexProvider
-                || $provider instanceof \SugarCraft\Code\Providers\GeminiProvider
-            ) {
-                $shape = Lang::t('chat.effort.shape.thinking', ['tokens' => (string) \SugarCraft\Code\Providers\EffortBudget::thinkingTokens($level)]);
-            } else {
-                $shape = Lang::t('chat.effort.shape.request');
-            }
+            $shape = \SugarCraft\Code\Providers\EffortGate::shape($provider, $level, $engine->model());
 
             return $this->effortRow(Lang::t('chat.effort.status', ['level' => $level ?? 'unset', 'provider' => $names, 'shape' => $shape]));
         }

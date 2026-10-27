@@ -659,6 +659,118 @@ final class BedrockProviderTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // C-PRV-1.a: effort threading on the Claude Converse arm
+    //
+    // Fixture-pinned ONLY (there are no AWS credentials in this repo): these
+    // pin the SHAPE of the request the SDK would put on the wire, not the
+    // server-side behaviour of the thinking field.
+    // -------------------------------------------------------------------------
+
+    public function testCompleteTurnsEffortIntoAThinkingBudgetForClaudeIds(): void
+    {
+        $mock = new MockHandler();
+        $mock->append(new Result(['output' => ['message' => ['role' => 'assistant', 'content' => [['text' => 'ok']]]]]));
+
+        $provider = new BedrockProvider($this->offlineRuntimeClient($mock), 'us-east-1', 'anthropic.claude-sonnet-4-6', promptCache: false);
+        $provider->complete(new CompleteRequest(
+            model: 'anthropic.claude-sonnet-4-6',
+            messages: [new UserMessage('hi')],
+            temperature: 0.2,
+            maxTokens: 99,
+            reasoningEffort: 'high',
+        ));
+
+        $sent = $mock->getLastCommand()->toArray();
+        $this->assertSame(
+            ['thinking' => ['type' => 'enabled', 'budget_tokens' => 8192]],
+            $sent['additionalModelRequestFields'],
+        );
+        // The Anthropic arm rejects a thinking request that also carries a
+        // temperature, and the ceiling must leave room above the budget -
+        // 99 cannot hold 8192 + headroom, so it is raised to 12288.
+        $this->assertSame(['maxTokens' => 12288], $sent['inferenceConfig']);
+    }
+
+    public function testThinkingBudgetKeepsAnAlreadyAmpleOutputCeiling(): void
+    {
+        $mock = new MockHandler();
+        $mock->append(new Result(['output' => ['message' => ['role' => 'assistant', 'content' => [['text' => 'ok']]]]]));
+
+        $provider = new BedrockProvider($this->offlineRuntimeClient($mock), 'us-east-1', 'anthropic.claude-sonnet-4-6', promptCache: false);
+        $provider->complete(new CompleteRequest(
+            model: 'anthropic.claude-sonnet-4-6',
+            messages: [new UserMessage('hi')],
+            maxTokens: 20000,
+            reasoningEffort: 'high',
+        ));
+
+        $sent = $mock->getLastCommand()->toArray();
+        $this->assertSame(['maxTokens' => 20000], $sent['inferenceConfig']);
+        $this->assertSame(
+            ['thinking' => ['type' => 'enabled', 'budget_tokens' => 8192]],
+            $sent['additionalModelRequestFields'],
+        );
+    }
+
+    public function testClaudeRequestWithoutEffortCarriesNoThinkingField(): void
+    {
+        $mock = new MockHandler();
+        $mock->append(new Result(['output' => ['message' => ['role' => 'assistant', 'content' => [['text' => 'ok']]]]]));
+
+        $provider = new BedrockProvider($this->offlineRuntimeClient($mock), 'us-east-1', 'anthropic.claude-sonnet-4-6', promptCache: false);
+        $provider->complete(new CompleteRequest(
+            model: 'anthropic.claude-sonnet-4-6',
+            messages: [new UserMessage('hi')],
+            temperature: 0.2,
+            maxTokens: 99,
+        ));
+
+        $sent = $mock->getLastCommand()->toArray();
+        $this->assertArrayNotHasKey('additionalModelRequestFields', $sent);
+        $this->assertSame(['maxTokens' => 99, 'temperature' => 0.2], $sent['inferenceConfig']);
+    }
+
+    public function testEffortStaysOffTheWireForNonClaudeModelIds(): void
+    {
+        $mock = new MockHandler();
+        $mock->append(new Result(['output' => ['message' => ['role' => 'assistant', 'content' => [['text' => 'ok']]]]]));
+
+        $provider = new BedrockProvider($this->offlineRuntimeClient($mock), 'us-east-1', 'meta.llama3-1-8b-instruct-v1:0', promptCache: false);
+        $provider->complete(new CompleteRequest(
+            model: 'meta.llama3-1-8b-instruct-v1:0',
+            messages: [new UserMessage('hi')],
+            temperature: 0.2,
+            reasoningEffort: 'high',
+        ));
+
+        $sent = $mock->getLastCommand()->toArray();
+        $this->assertArrayNotHasKey('additionalModelRequestFields', $sent);
+        $this->assertSame(['temperature' => 0.2], $sent['inferenceConfig']);
+    }
+
+    public function testCompleteStreamTurnsEffortIntoAThinkingBudgetToo(): void
+    {
+        $mock = new MockHandler();
+        $mock->append(new Result(['stream' => new \ArrayIterator([])]));
+
+        $provider = new BedrockProvider($this->offlineRuntimeClient($mock));
+        iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'anthropic.claude-sonnet-4-6',
+            messages: [new UserMessage('hi')],
+            reasoningEffort: 'low',
+        )));
+
+        $sent = $mock->getLastCommand()->toArray();
+        $this->assertSame(
+            ['thinking' => ['type' => 'enabled', 'budget_tokens' => 1024]],
+            $sent['additionalModelRequestFields'],
+        );
+        // The stream default ceiling (4096) and its temperature both ride the
+        // same reshape: 1024 + 4096 headroom lifts the ceiling, temperature goes.
+        $this->assertSame(['maxTokens' => 5120], $sent['inferenceConfig']);
+    }
+
+    // -------------------------------------------------------------------------
     // 14. Region wiring
     // -------------------------------------------------------------------------
 

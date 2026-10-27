@@ -10,27 +10,44 @@ namespace SugarCraft\Code\Providers;
  * (OpenAI, SGLang), a thinking-token budget ({@see EffortBudget}) on the
  * Anthropic Messages arms or the derived Gemini `thinkingConfig`.
  *
- * The marker exists for one refusal: `/effort` asks the live backend for
- * it, and a provider that does not implement this is told so loudly
- * instead of storing a tier no wire will ever read. That asymmetry IS
- * the contract — the banned failure mode of PRV-2 is a setting that is
- * set but ignored, so the command surface and the transport surface must
- * agree on exactly this list, and the roster test pins the list to the
- * implementations.
+ * C-PRV-1: the marker became a PREDICATE. "This provider shapes effort"
+ * was never the whole truth — OpenAI shapes it for o-series and gpt-5
+ * (non-chat) ids only, Anthropic's family only gained extended thinking
+ * at claude-3-7, a Bedrock account running llama has no thinking field to
+ * set. A boolean on the class let `/effort high` claim success on
+ * `gpt-4o` while the wire silently dropped the tier: the set-but-ignored
+ * failure PRV-2 itself bans, wearing a per-model mask. `shapesEffortFor()`
+ * answers the question the command actually asks — does THIS provider put
+ * the tier on the wire for THIS model — and {@see EffortGate::verdict()}
+ * is the one place the answer is read.
  *
- * Deliberately NOT shapers: `bedrock` (its Converse transport carries no
- * REQUEST-side thinking or effort control in this codebase — the
- * response-side `reasoningContent` parse is a different matter and does
- * live there; mapping the tier would be forking wire work, §6.5 says
- * refuse loudly instead),
- * `custom` (an operator-defined endpoint: the app cannot know which of
- * its extensions reads the field, so `/effort` refuses rather than
- * implying a guarantee), `claude-code` (the tier belongs to the CLI it
- * shells out to, not to this wire), and the offline providers.
+ * The roster is still the refusal's complement, and the roster test still
+ * pins it to the implementations: a provider that implements the marker
+ * but whose predicate lies per model is the pre-C-PRV-1 failure again.
+ *
+ * Deliberately NOT shapers, now only: `custom` (an operator-defined
+ * endpoint: the app cannot know which of its extensions reads the field,
+ * so `/effort` refuses rather than implying a guarantee) and the offline
+ * providers (`echo` draws nothing). The former refusals joined the roster
+ * with real wire controls: `bedrock` spends the tier as Converse
+ * `additionalModelRequestFields.thinking` on its Claude-family ids (§6.5's
+ * "forking wire work" fork, taken), and `claude-code` plus `codex` forward
+ * it as the CLI flag/config override their own binaries advertise —
+ * `--effort <level>` and `-c model_reasoning_effort=<level>`, each read
+ * off the installed CLI rather than guessed.
  *
  * This is a SugarCraft architecture interface, not a port: no
  * `Mirrors charmbracelet/...` citation attaches to it.
  */
 interface ShapesReasoningEffort
 {
+    /**
+     * Does this provider send the effort tier on the wire for this model id?
+     *
+     * The predicate is about the provider's CAPABILITY for the named model,
+     * never about whether a tier is currently set: an unset tier is simply
+     * never sent by anyone, and that is the `unset` phrase in the status
+     * line, not a refusal.
+     */
+    public function shapesEffortFor(string $model): bool;
 }

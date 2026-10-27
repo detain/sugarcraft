@@ -212,6 +212,17 @@ final readonly class GeminiProvider implements ProviderInterface, RebindsModel, 
         return 'gemini';
     }
 
+    public function shapesEffortFor(string $model): bool
+    {
+        // The tier spends `thinkingConfig.thinkingBudget`, and the family
+        // table in {@see ThinkingCapability} says where that block is
+        // accepted at all: gemini-1.* never answered it, and the 2.0 Flash
+        // line only answers a configured budget or an explicit off switch —
+        // a tier word on those ids would be silently dropped, so the gate
+        // refuses it out loud instead.
+        return ThinkingCapability::supportsThinking($model);
+    }
+
     /**
      * Absolute GenerateContent URL for a configured root: the root keeps
      * its documented meaning (the bare API root, `/v1` or `/v1beta`

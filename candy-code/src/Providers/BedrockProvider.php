@@ -36,7 +36,7 @@ use SugarCraft\Code\Usage;
  * and out of the provider unwrapped. Every Bedrock completion failed, always,
  * before a single byte reached AWS.
  */
-final readonly class BedrockProvider implements ProviderInterface, MarksPromptCache, AcceptsAssistantPrefill, RebindsModel
+final readonly class BedrockProvider implements ProviderInterface, MarksPromptCache, AcceptsAssistantPrefill, RebindsModel, ShapesReasoningEffort
 {
     use HttpClientDefaults;
 
@@ -245,6 +245,18 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
     private const DEFAULT_STREAM_MAX_TOKENS = 4096;
 
     private const DEFAULT_TEMPERATURE = 0.7;
+
+    /**
+     * C-PRV-1: the room the answer keeps once a thinking budget is set.
+     *
+     * `budget_tokens` counts toward the Converse `maxTokens` ceiling, so a
+     * ceiling equal to (or below) the budget would spend the whole reply on
+     * thinking and return nothing. The headroom matches what
+     * {@see DEFAULT_STREAM_MAX_TOKENS} already grants an unbudgeted answer,
+     * so raising a too-small ceiling to `budget + 4096` keeps at least the
+     * same answer space the un-thinking default would have had.
+     */
+    private const THINKING_ANSWER_HEADROOM = 4096;
 
     /**
      * E707 (round 81): of the Converse `StopReason` enum this repo vendors
@@ -598,6 +610,18 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
         return $this->costPer1kTokens($model, 'input');
     }
 
+    public function shapesEffortFor(string $model): bool
+    {
+        // Converse carries a request-side thinking block only on the
+        // Anthropic Claude ids (`additionalModelRequestFields.thinking`);
+        // Llama, Titan, Cohere and Mistral ids have no such field and would
+        // take the block as a validation error or ignore it. The family
+        // ladder is the same one {@see marksPromptCache()} uses to scope
+        // cache points — same decoration-stripping, same `anthropic.claude`
+        // head.
+        return str_starts_with(self::family($model), 'anthropic.claude');
+    }
+
     public function complete(CompleteRequest $request): CompleteResponse
     {
         $model = $this->modelId($request);
@@ -613,8 +637,13 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
         }
 
         $inference = $this->inferenceConfig($request);
+        $thinking = $this->effortThinking($request, $model, $inference);
         if ($inference !== []) {
             $params['inferenceConfig'] = $inference;
+        }
+
+        if ($thinking !== null) {
+            $params['additionalModelRequestFields'] = $thinking;
         }
 
         $params = $this->withCachePoints($params, $model);
@@ -658,14 +687,21 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
     {
         $model = $this->modelId($request);
 
+        $inference = $this->inferenceConfig($request) + [
+            'maxTokens' => self::DEFAULT_STREAM_MAX_TOKENS,
+            'temperature' => self::DEFAULT_TEMPERATURE,
+        ];
+        $thinking = $this->effortThinking($request, $model, $inference);
+
         $params = [
             'modelId' => $model,
             'messages' => $this->conversationTurns($request->messages),
-            'inferenceConfig' => $this->inferenceConfig($request) + [
-                'maxTokens' => self::DEFAULT_STREAM_MAX_TOKENS,
-                'temperature' => self::DEFAULT_TEMPERATURE,
-            ],
+            'inferenceConfig' => $inference,
         ];
+
+        if ($thinking !== null) {
+            $params['additionalModelRequestFields'] = $thinking;
+        }
 
         $system = $this->systemBlocks($request);
         if ($system !== []) {
@@ -785,6 +821,50 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
         }
 
         return $config;
+    }
+
+    /**
+     * C-PRV-1: shape a named effort tier into Converse's request-side
+     * thinking block for the Claude ids that carry one.
+     *
+     * Two rewrites ride with the block, both documented AWS constraints:
+     * Claude rejects `temperature` alongside extended thinking, so the
+     * key is dropped from the (already-defaulted) inference config; and
+     * `budget_tokens` counts toward the answer ceiling, so a
+     * `maxTokens` at or below the budget would return a thinking-only
+     * turn — the ceiling is raised to `budget + {@see
+     * THINKING_ANSWER_HEADROOM}` only when it was smaller, never
+     * lowered. When either gate says no — not a Claude id, or no tier
+     * word to spend — `$inference` is left byte-identical and null
+     * answers, which is the pre-C-PRV-1 wire shape exactly.
+     *
+     * Fixture-pinned only: no AWS credentials live in this repo, so
+     * every byte here is measured against the request an offline
+     * `BedrockRuntime` mock captures, not a served response — pin what
+     * was measured.
+     *
+     * @param array<string, mixed> $inference
+     *
+     * @return ?array<string, mixed>
+     */
+    private function effortThinking(CompleteRequest $request, string $model, array &$inference): ?array
+    {
+        if (!$this->shapesEffortFor($model)) {
+            return null;
+        }
+
+        $budget = EffortBudget::thinkingTokens($request->reasoningEffort);
+        if ($budget === null) {
+            return null;
+        }
+
+        unset($inference['temperature']);
+        $inference['maxTokens'] = max(
+            $inference['maxTokens'] ?? 0,
+            $budget + self::THINKING_ANSWER_HEADROOM,
+        );
+
+        return ['thinking' => ['type' => 'enabled', 'budget_tokens' => $budget]];
     }
 
     /**

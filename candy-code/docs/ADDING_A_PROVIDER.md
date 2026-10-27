@@ -17,6 +17,21 @@ refused at launch (`json_schema_unsupported`, exit 2) when
 `supportsJsonSchema()` says no, and vision or document requests check theirs
 before the call is ever built.
 
+Reasoning-effort shaping is a separate opt-in: `ShapesReasoningEffort` adds
+`shapesEffortFor(string $model): bool`, and the `/effort` surface consults it
+through `EffortGate::verdict()` — a marked class whose predicate answers no
+for the live model is refused on the wire rather than silently swallowing a
+set value (that is why `gpt-4o` says so out loud now). The status phrase
+comes from `EffortGate::shape()`, never from the command itself.
+`ThinkingCapability` is the per-family table (thinking support, output
+ceiling) the Anthropic/Gemini-armed predicates read from. CLI-spawning classes
+shape by forwarding the tier as a flag — codex as
+`-c model_reasoning_effort=<level>`, claude-code as `--effort <level>` — and
+`BedrockProvider` spends it as an Anthropic
+`additionalModelRequestFields.thinking` budget on its Claude ids. A provider
+with no conceivable use for the tier (Custom, Echo) implements no marker at
+all.
+
 Return a `CompleteResponse` — a readonly DTO, constructed with named
 arguments. The fields the engine consumes:
 

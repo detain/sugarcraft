@@ -62,6 +62,28 @@ final class OpenAIProviderTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // 1b. C-PRV-1.a: the per-model shaper predicate
+    // -------------------------------------------------------------------------
+
+    public function testShapesEffortOnlyOnReasoningFamilyModels(): void
+    {
+        $client = $this->createMock(ClientContract::class);
+        $provider = new OpenAIProvider($client, 'gpt-4o');
+
+        // The silent-drop bug C-PRV-1 roots out: these models have no field
+        // on the wire for the tier, and the predicate now says so instead of
+        // the request swallowing it.
+        $this->assertFalse($provider->shapesEffortFor('gpt-4o'));
+        $this->assertFalse($provider->shapesEffortFor('gpt-4.1'));
+        $this->assertFalse($provider->shapesEffortFor('gpt-5-chat-2025'));
+
+        $this->assertTrue($provider->shapesEffortFor('o3'));
+        $this->assertTrue($provider->shapesEffortFor('o4-mini'));
+        $this->assertTrue($provider->shapesEffortFor('gpt-5'));
+        $this->assertTrue($provider->shapesEffortFor('gpt-5-pro'));
+    }
+
+    // -------------------------------------------------------------------------
     // 2. name() returns 'openai'
     // -------------------------------------------------------------------------
 

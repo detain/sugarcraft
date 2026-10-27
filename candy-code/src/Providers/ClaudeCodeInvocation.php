@@ -156,6 +156,15 @@ final readonly class ClaudeCodeInvocation
             $args[] = $options['permissionMode'];
         }
 
+        // C-PRV-1: `--effort <level>` verified in `claude --help` at
+        // 2.1.306 (list low, medium, high, xhigh, max — the same five
+        // rungs EffortBudget carries). The provider filters the value; a
+        // key that arrived is a level by construction.
+        if (isset($options['effort'])) {
+            $args[] = '--effort';
+            $args[] = (string) $options['effort'];
+        }
+
         return $args;
     }
 

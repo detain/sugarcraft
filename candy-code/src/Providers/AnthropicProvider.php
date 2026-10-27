@@ -381,6 +381,16 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
         return 'Anthropic Messages';
     }
 
+    public function shapesEffortFor(string $model): bool
+    {
+        // The tier becomes a `thinking.budget_tokens` spend, and Anthropic
+        // refuses that block on the pre-3.7 families (and on ids outside the
+        // claude series entirely). {@see ThinkingCapability} is the one
+        // per-family table of that truth — C-PRV-5.a reuses it for the
+        // budget-window clamps.
+        return ThinkingCapability::supportsThinking($model);
+    }
+
     /**
      * CTX-1 (§6.3): this host speaks extended thinking natively, so it feeds
      * the wire's budget hook from the constructor-parsed setting. The value

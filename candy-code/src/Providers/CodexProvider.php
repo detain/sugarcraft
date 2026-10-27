@@ -34,7 +34,7 @@ use SugarCraft\Code\Usage;
  * - NOT a token-billed provider here: costPer1kTokens() returns 0.0 for the
  *   same reason claude-code's does — billing belongs to the subscription.
  */
-final readonly class CodexProvider implements ProviderInterface, RebindsModel
+final readonly class CodexProvider implements ProviderInterface, RebindsModel, ShapesReasoningEffort
 {
     /**
      * The slug probed against codex-cli 0.154.0 on 2026-10-19.
@@ -52,6 +52,23 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel
      */
     private const MAX_STDERR_BYTES = 65536;
 
+    /**
+     * The levels `model_reasoning_effort` accepts, read from the
+     * codex-cli 0.154.0 installed dist — the binary's strings carry the
+     * Rust `ReasoningEffort` enum variants concatenated
+     * (`minimallowmediumhighxhighmaxultra`), not a guess from prose. The
+     * CLI parses `-c` values leniently (an unrecognized spelling falls
+     * back raw rather than erroring at the flag), so the filter belongs
+     * HERE, at the side that knows its own tier vocabulary: every
+     * {@see EffortBudget} rung is a member of this table; `minimal` and
+     * `ultra` are kept because they are real upstream spellings even
+     * though no EffortBudget rung produces them. A float dial value is
+     * not a level word and sends no line.
+     *
+     * @var list<string>
+     */
+    private const CODEX_EFFORT_LEVELS = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
+
     public function __construct(
         private CodexInvocation $invocation,
         private string $defaultModel = self::DEFAULT_MODEL,
@@ -64,6 +81,17 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel
     public function name(): string
     {
         return 'codex';
+    }
+
+    public function shapesEffortFor(string $model): bool
+    {
+        // Every model the Codex CLI serves is a reasoning model, and the
+        // level word rides `codex exec -c model_reasoning_effort=<level>`
+        // whatever the served id — the filter that drops non-level values
+        // (the float dial, an unrecognized spelling) lives in
+        // {@see options()}, where the request's own value is visible, not
+        // here where only the model id is.
+        return true;
     }
 
     public function sandbox(): ?string
@@ -298,6 +326,13 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel
 
         if ($this->sandbox !== null) {
             $options['sandbox'] = $this->sandbox;
+        }
+
+        if ($request->reasoningEffort !== null) {
+            $tier = strtolower((string) $request->reasoningEffort);
+            if (in_array($tier, self::CODEX_EFFORT_LEVELS, true)) {
+                $options['reasoningEffort'] = $tier;
+            }
         }
 
         return $options;

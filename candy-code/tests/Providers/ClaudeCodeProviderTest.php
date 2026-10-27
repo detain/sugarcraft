@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Providers;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Providers\ClaudeCodeInvocation;
 use SugarCraft\Code\Providers\ClaudeCodeProvider;
+use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\EmbeddingsRequest;
 use SugarCraft\Code\Providers\EmbeddingsResponse;
 
@@ -271,6 +272,37 @@ final class ClaudeCodeProviderTest extends TestCase
         $this->assertContains('Be concise', $args);
         $this->assertContains('--max-turns', $args);
         $this->assertContains('5', $args);
+    }
+
+    public function testClaudeCodeInvocationPrintModeArgsWithEffort(): void
+    {
+        // C-PRV-1.a: the flag is `--effort <level>`, verified against
+        // `claude --help` on the installed 2.1.306 (design-verified same at
+        // 2.1.311). It rides immediately after the option that precedes it.
+        $invocation = new ClaudeCodeInvocation();
+        $args = $invocation->printModeArgs(['effort' => 'max']);
+
+        $effortIndex = array_search('--effort', $args, true);
+        $this->assertNotFalse($effortIndex);
+        $this->assertSame('max', $args[$effortIndex + 1]);
+
+        $this->assertNotContains('--effort', $invocation->printModeArgs());
+    }
+
+    public function testProviderOptionsThreadNamedEffortTiersOnly(): void
+    {
+        $optionsOf = new \ReflectionMethod(ClaudeCodeProvider::class, 'options');
+        $optionsOf->setAccessible(true);
+        $provider = new ClaudeCodeProvider(new ClaudeCodeInvocation());
+
+        $tiered = new CompleteRequest(model: 'claude-sonnet-4-6', messages: [], reasoningEffort: 'xhigh');
+        $this->assertSame('xhigh', $optionsOf->invoke($provider, 'json', $tiered, null)['effort']);
+
+        $floatDial = new CompleteRequest(model: 'claude-sonnet-4-6', messages: [], reasoningEffort: 0.5);
+        $this->assertArrayNotHasKey('effort', $optionsOf->invoke($provider, 'json', $floatDial, null));
+
+        $unset = new CompleteRequest(model: 'claude-sonnet-4-6', messages: []);
+        $this->assertArrayNotHasKey('effort', $optionsOf->invoke($provider, 'json', $unset, null));
     }
 
     // =========================================================================
