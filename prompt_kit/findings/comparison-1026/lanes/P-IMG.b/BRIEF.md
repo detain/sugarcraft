@@ -1,0 +1,27 @@
+### P-IMG.b — Content-sized, centred `/generate` popup
+- item: P-IMAGE-MENU (sources: owner pick)
+- kind: feature · effort M
+- approach:
+  - **Root cause.** `Tui\Renderer::renderView` diverts to `renderMediaForm()` before the band is laid out (`src/Tui/Renderer.php:646-650`). It hands `MediaForm::view()` the full `$cols × $paneRows` (:940-960), and `view()` draws its border at `cols-4` (`src/Tui/MediaForm/MediaForm.php:716-757`), so the form always fills the screen.
+  - **Fix.**
+    - Add `MediaForm::naturalSize(Theme, maxCols, maxRows)`: the widest of title, natural tab strip (`FormTabs`), longest label+value of the visible sections, footer hints and status, plus chrome. It is clamped to `[MIN_COLS 60, min(cols, MAX_COLS 104)]`, and full width only when the content needs more. Rows are `6 + max visible section rows`, bounded by the band.
+    - `renderMediaForm()` composes the normal shell frame as a backdrop:
+      - extract the tail of `renderView` into `composeBand()`;
+      - drop images, because a graphics placement would paint through the popup;
+      - `LiveRenderer::clearZones()`, so the chat underneath is inert;
+      - dim the backdrop with `Veil::withBackdrop(50)`, as the chat palette does;
+      - centre the form box in the band below a live menu bar;
+      - offset `MediaForm::zones()` by the box origin.
+  - `view()` keeps its exact-size contract, so the goldens stay valid.
+- files.create: none
+- files.modify: `candy-code/src/Tui/MediaForm/MediaForm.php` (`naturalSize()`), `candy-code/src/Tui/MediaForm/FormTabs.php` (natural-width helper), `candy-code/src/Tui/Renderer.php` (`renderView()` band extraction, `renderMediaForm()`)
+- tests:
+  - create `candy-code/tests/Tui/MediaForm/MediaFormPopupSizeTest.php` (200×50: the box is narrower than the terminal and centred; content wider than cols → full width; zones land on painted cells; the View carries no images while open; no frame line over-wide; the menu bar stays clickable);
+  - modify `candy-code/tests/App/MediaFormWiringTest.php`.
+- docs/guards: none (`tests/Tui/MediaForm/golden/*` unaffected: `view()` contract unchanged)
+- serialized: [renderer:Tui/Renderer.php renderView+renderMediaForm] (layout #1 of 3)
+- deps: none
+- phase: normal
+- ruling: none
+- risks: the band extraction is the riskiest refactor here. It must leave the normal frame byte-identical (assert with `tests/Tui/RendererTest.php` unchanged).
+
