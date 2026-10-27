@@ -454,8 +454,11 @@ so a turn whose recall matches the previous one adds nothing.
 
 **The user sees it too.** A non-empty ranking records one count-only
 row — `💭 Recalled N notes for this turn` — through the runtime notice sink
-(`Runtime::primeMemoryRecall()` → `RuntimeNoticeSink::record()`, drained by
-`Chat::pumpRuntimeNotices()`). The row is uiOnly, so it lands in the transcript
+(`Runtime::primeMemoryRecall()` → `RuntimeNoticeSink::record()`). The interactive
+drain is `Chat::pumpRuntimeNotices()`; a served session has no `Chat`, so
+`SessionHost::pumpRuntimeNotices()` drains its own per-session sink instead —
+recorded inside the turn's fork, folded on the server's tick, at settle, and on
+the sink's one-shot loop wake. The row is uiOnly, so it lands in the transcript
 and never in the model's history or behind the prompt cache. It speaks once per
 change — within one engine process: a re-ranking identical to the last announced
 one stays silent, an empty recall never records a row, and the keyword-only

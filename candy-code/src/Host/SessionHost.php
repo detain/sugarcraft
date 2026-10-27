@@ -27,6 +27,8 @@ use SugarCraft\Code\Context\Compaction\HistoryFingerprint;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Context\ContextCompactor;
 use SugarCraft\Code\Context\IdleCompactionPolicy;
+use SugarCraft\Code\Diagnostics\NoticeSink;
+use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Events\PermissionAsked;
 use SugarCraft\Code\Events\PermissionResolved;
 use SugarCraft\Code\Events\ToolFinished;
@@ -227,6 +229,22 @@ final class SessionHost
     /** The session's "always" answers, handed to every later turn's gate. */
     private SessionPermissionMemo $grants;
 
+    /**
+     * C-CTX-2.a: the session's own runtime-notice inbox.
+     *
+     * serve arms the process-wide sink in `Bootstrap::workspace()` and only
+     * ever drains it through {@see Chat} — which a served session has no
+     * instance of — so a row recorded inside a turn's forked child used to
+     * vanish. The host keeps a sink per session instead, armed exactly when
+     * the workspace's was (a test or embedder that never armed one keeps
+     * dropping, byte-identically), and every fork the host starts runs under
+     * {@see RuntimeNoticeSink::using()} so the child's records land HERE. The
+     * drain is wake-driven — the sink's one-shot loop watcher — plus a fold
+     * at every {@see pump()} and at settle; no timer is minted anywhere
+     * (E646). {@see release()} closes the pair of socket fds with the host.
+     */
+    private readonly NoticeSink $notices;
+
     /** The mode this session's turns run in; null is the workspace gate's. */
     private ?PermissionMode $permissionMode = null;
 
@@ -271,6 +289,18 @@ final class SessionHost
             $workspace->commandLoader?->loadAll($root, $workspace->projectCommandsTrusted) ?? [],
             static fn (CommandSpec $spec): bool => $spec->isFileBased(),
         );
+        // C-CTX-2.a: adopt the launch's arm state, never invent one. The
+        // process sink is armed by Bootstrap::workspace() on serve; a test
+        // or embedder that never armed it (or a workspace handed a fresh
+        // unarmed sink) leaves this host dropping notices exactly as every
+        // host built before this step did. Armed here means this process is
+        // the reader — the child a turn forks pins to this sink through the
+        // using() windows in dispatch(), requestAheadOfNeed() and
+        // scheduleGoalJudge() and writes rows back over its own transport.
+        $this->notices = NoticeSink::new();
+        if ($workspace->notices->isArmed() && $this->notices->arm()) {
+            $this->armNoticeWake();
+        }
     }
 
     /**
@@ -656,7 +686,13 @@ final class SessionHost
             'summaries' => null,
             'safeguardHold' => null,
         ];
-        $request['promise']()->then(function (HistoryCompactedMsg $msg) use ($request): void {
+        // C-CTX-2.a: this request forks a model call from either of its
+        // callers — the 70% dispatch tier or the CTX-5 idle timer — so it
+        // carries its own using() window: the summaries' child records land
+        // in THIS session's inbox wherever the request went out from, and
+        // the queue fallback for a sink without transport fills the same way.
+        RuntimeNoticeSink::using($this->notices, fn (): PromiseInterface => $request['promise']())
+            ->then(function (HistoryCompactedMsg $msg) use ($request): void {
             // Billed before the latch check, as the TUI bills it: a
             // paid-for provider call is never unbilled, even when the
             // summaries it carried are superseded on arrival.
@@ -868,6 +904,11 @@ final class SessionHost
      */
     public function pump(): int
     {
+        // C-CTX-2.a: the server's own tick is a drain point too — a session
+        // nobody followed yet (or whose wake raced the tick) still lands its
+        // notice rows here. The count a caller reads is the folded tool
+        // events alone; notices are rows, not events.
+        $this->pumpRuntimeNotices();
         if ($this->turn === null || \count($this->inbox) === 0) {
             return 0;
         }
@@ -887,6 +928,44 @@ final class SessionHost
         }
 
         return $folded;
+    }
+
+    /**
+     * C-CTX-2.a: land every pending runtime notice as its own transcript
+     * row — the served mirror of {@see Chat::pumpRuntimeNotices()}.
+     *
+     * Each row goes through {@see appendMessageRow()}: saved with the
+     * session and announced as the durable `message.created` whose kind is
+     * `notice`, the shape the web reducer already paints. The one-shot wake
+     * is renewed on EVERY path, the drain that found nothing included — the
+     * read that empties the transport is precisely the moment the watcher
+     * must be listening again (the same cadence Chat pins in
+     * RuntimeNoticeSinkDeliveryTest).
+     */
+    private function pumpRuntimeNotices(): void
+    {
+        foreach ($this->notices->drain() as $notice) {
+            $this->appendMessageRow(Message::notice($notice));
+        }
+
+        $this->armNoticeWake();
+    }
+
+    /**
+     * Re-arm the sink's one-shot loop wake. Without a transport there is no
+     * stream to read — an array-queue sink (socketpair refused, e.g. an
+     * embedder out of fds) drains on pump and settle alone, which is the
+     * same shape Chat's own wake gate keeps ({@see Chat::runtimeNoticeWake()}).
+     */
+    private function armNoticeWake(): void
+    {
+        if (!$this->notices->hasTransport()) {
+            return;
+        }
+
+        $this->notices->notifyOnceWhenPending(function (): void {
+            $this->pumpRuntimeNotices();
+        });
     }
 
     /**
@@ -936,6 +1015,11 @@ final class SessionHost
      */
     public function release(): void
     {
+        // C-CTX-2.a: the session's notice inbox dies with the session.
+        // reset() cancels any armed loop watcher BEFORE closing both socket
+        // fds — a watcher left on the loop over a closed stream would be
+        // handed to stream_select() on every later iteration.
+        $this->notices->reset();
         $registry = $this->workspace->service(ScheduleRegistry::class);
         if ($registry instanceof ScheduleRegistry) {
             $registry->removeEphemeralFor($this->sessionId);
@@ -1914,7 +1998,14 @@ final class SessionHost
         $this->save();
         $created = $turns->recordMessagesCreated($this->transcripts, $this->sessionId, $newTurnMessages, $this->runner());
 
-        $run = $this->runner()->start(
+        // C-CTX-2.a: two using() windows, not one. The first covers
+        // start() — where the one-turn notice budget opens on THIS session's
+        // sink (the drain owner passes its own, per E199's rule) — and the
+        // second covers the fork itself: EngineBackend reads the routed sink
+        // in the parent before pcntl_fork, so $run() must be called inside
+        // the window for the child's records to land here and not in the
+        // process sink nobody drains on serve.
+        $run = RuntimeNoticeSink::using($this->notices, fn (): \Closure => $this->runner()->start(
             backend: TurnRunner::backendForTurn(
                 $this->backend($modeCeiling),
                 $this->workspace->maxCostUsd,
@@ -1927,11 +2018,11 @@ final class SessionHost
             inbox: $this->inbox,
             generation: $generation,
             cancellation: $cancellation,
-            notices: $this->workspace->notices,
+            notices: $this->notices,
             agentManager: $this->workspace->agentManager,
             transcripts: $this->transcripts,
             sessionId: $this->sessionId,
-        );
+        ));
         $turnId = $this->runner()->turnIdOf($cancellation);
 
         // The workspace snapshot belongs to the checkpoint and is complete
@@ -1940,7 +2031,9 @@ final class SessionHost
             $capture();
         }
 
-        $this->settleWith($run(), $generation, $cancellation);
+        RuntimeNoticeSink::using($this->notices, function () use ($run, $generation, $cancellation): void {
+            $this->settleWith($run(), $generation, $cancellation);
+        });
 
         $last = $created === [] ? null : $created[\count($created) - 1];
 
@@ -1981,6 +2074,11 @@ final class SessionHost
             $this->turn = null;
             $this->applyApprovedPlanExit();
             $this->save();
+            // C-CTX-2.a: land the turn's last notice rows here, before the
+            // next queued prompt re-opens the budget — the settle of the
+            // turn is the read point its child's final writes precede, and
+            // a wake left un-drained across release() would drop them.
+            $this->pumpRuntimeNotices();
             $this->releaseQueue();
 
             // W7a-3: a session with a live `/goal` is not done yet — the title
@@ -2021,10 +2119,18 @@ final class SessionHost
 
         $this->generation++;
         $this->turn = new CancellationToken();
-        GoalJudge::new()->call($judge, $goal->condition, $this->history, $this->generation, $this->sessionId)()
-            ->then(function (mixed $msg): void {
-                $this->landGoalVerdict($msg);
-            });
+        // C-CTX-2.a: the judge's fork runs under THIS session's sink, the
+        // same window rule the ahead-of-need request keeps — its records
+        // (a parser warning off the title call, say) are this session's.
+        RuntimeNoticeSink::using($this->notices, fn (): PromiseInterface => GoalJudge::new()->call(
+            $judge,
+            $goal->condition,
+            $this->history,
+            $this->generation,
+            $this->sessionId,
+        )())->then(function (mixed $msg): void {
+            $this->landGoalVerdict($msg);
+        });
     }
 
     /**
