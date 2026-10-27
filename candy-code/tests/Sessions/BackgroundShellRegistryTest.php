@@ -385,7 +385,7 @@ final class BackgroundShellRegistryTest extends TestCase
         self::assertSame([], $registry->localIds(), 'teardown releases every handle this process held');
     }
 
-    public function testTheLifetimeWallIsALaneDecisionAndItIsFifteenHundredSeconds(): void
+    public function testTheLifetimeWallIsALaneDecisionAndItIsThirtyMinutes(): void
     {
         // The number is a decision recorded in the lane's REPORT; this pin is
         // the decision's shadow. A RESOURCE bound on detached shells, stated
@@ -470,7 +470,7 @@ final class BackgroundShellRegistryTest extends TestCase
         self::assertCount(1, $registry->ids(), 'malformed payloads are skipped, never fatal');
     }
 
-    public function testTheShellCapRefusesTheSixtyFirstStartAndSaysWhatToDo(): void
+    public function testTheShellCapRefusesTheSixtyFifthStartAndSaysWhatToDo(): void
     {
         $registry = $this->registry();
         $rows = new \ReflectionProperty(BackgroundShellRegistry::class, 'rows');

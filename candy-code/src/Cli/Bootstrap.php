@@ -8613,10 +8613,15 @@ public static function useMaxCost(?string $maxCost): void
      * tools' {@see \SugarCraft\Code\Tools\CarriesSessionState} exports.
      *
      * Construction touches no disk; the registry's directory appears on the
-     * first background spawn. The session folder is `'main'` — the same
-     * fallback `GenerateImage`/`GenerateVideo` use when no engine-bound
-     * session id is in reach — because the table is launch-scoped, not
-     * turn-scoped: shells started by one turn are readable by the next.
+     * first background spawn. The folder is `'launch-' . getmypid()` —
+     * launch-scoped twice over: one table per launch process (shells started
+     * by one turn are readable by the next, and every turn runs through this
+     * launch), and one DIRECTORY per launch, so two candy-code processes
+     * alive at once never share a shell table or cross ids; a crashed
+     * launch's directory is swept by a later launch once its pid can no
+     * longer answer and the retention has passed (the sweep promised by the
+     * {@see BackgroundShellRegistry} class doc-block, run from {@see
+     * BackgroundShellRegistry::start()}).
      *
      * REGISTERING THE SHUTDOWN HOOK IS PART OF THIS METHOD, for the reason
      * {@see registerMcpShutdown()} gives for MCP servers: this is the only
@@ -8632,7 +8637,7 @@ public static function useMaxCost(?string $maxCost): void
         return LaunchContext::backgroundShellRegistryFor(
             $pid,
             $root,
-            static fn(): BackgroundShellRegistry => BackgroundShellRegistry::forSession('main'),
+            static fn(): BackgroundShellRegistry => BackgroundShellRegistry::forSession('launch-' . $pid),
         );
     }
 

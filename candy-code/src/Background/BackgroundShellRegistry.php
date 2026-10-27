@@ -428,7 +428,10 @@ final class BackgroundShellRegistry
      * doctrine promises: shells killed at the wall or stopped long ago leave
      * capped-but-useless trios, and without this the session directory grows
      * for the life of the disk. A row still in the table owns its files, live
-     * or settled: deleting under a reader's cursor is not cleaning.
+     * or settled: deleting under a reader's cursor is not cleaning. Sibling
+     * launch directories get the same mercy-period rule from the outside: a
+     * dead pid's whole directory is dead weight once the retention passes,
+     * {@see sweepDeadLaunchDirs()}.
      */
     private function sweepCorpseFiles(): void
     {
@@ -449,6 +452,62 @@ final class BackgroundShellRegistry
             if ($mtime !== false && (float) $mtime < $ceiling) {
                 @unlink($path);
             }
+        }
+
+        $this->sweepDeadLaunchDirs($ceiling);
+    }
+
+    /**
+     * Remove SIBLING `launch-<pid>` directories whose launch is dead: a
+     * crashed or finished launch leaves its whole directory behind, and its
+     * id is never addressed again by any live table (the registry instance
+     * died with its process). Death is proven by signal 0 only — without
+     * posix there is no honest way to tell a dead pid from a live one, so
+     * the pass fails open and keeps everything. A live sibling's directory
+     * is untouchable regardless of mtimes: its rows are being read RIGHT
+     * NOW by another process this one cannot see. Past that gate, the same
+     * retention ceiling as the file sweep applies, file by file; the
+     * directory itself goes only once emptied (rmdir refuses non-empty,
+     * which is the honest outcome when one fresh file spared the clock).
+     */
+    private function sweepDeadLaunchDirs(float $ceiling): void
+    {
+        if (!\function_exists('posix_kill')) {
+            return;
+        }
+        $parent = @scandir(\dirname($this->directory));
+        if ($parent === false) {
+            return;
+        }
+        $own = \basename($this->directory);
+        foreach ($parent as $entry) {
+            if (!\is_string($entry) || \str_starts_with($entry, '.') || $entry === $own) {
+                continue;
+            }
+            $path = \dirname($this->directory) . '/' . $entry;
+            if (!\is_dir($path) || preg_match('/^launch-([1-9][0-9]*)$/', $entry, $m) !== 1) {
+                continue; // not a launch directory this tree owns the name of
+            }
+            if (@posix_kill((int) $m[1], 0) !== false) {
+                continue; // live launch — its table is reading those files now
+            }
+            $dirMtime = @filemtime($path);
+            if ($dirMtime === false || (float) $dirMtime >= $ceiling) {
+                continue; // recently touched: not yet dead weight
+            }
+            foreach ((array) @scandir($path) as $inner) {
+                if (!\is_string($inner) || \str_starts_with($inner, '.')) {
+                    continue;
+                }
+                $innerPath = $path . '/' . $inner;
+                if (\is_file($innerPath)) {
+                    $mtime = @filemtime($innerPath);
+                    if ($mtime !== false && (float) $mtime < $ceiling) {
+                        @unlink($innerPath);
+                    }
+                }
+            }
+            @rmdir($path);
         }
     }
 
