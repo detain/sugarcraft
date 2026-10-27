@@ -135,9 +135,9 @@ So while 2 lanes are in review, the other 8 slots build steps from the next wave
 | Wave | Lanes | Steps |
 |---|---|---|
 | ✅ W1 (closed 2026-10-27) | 10 | C-SEC-1.a · C-SEC-2.a · C-TOOL-1.a · C-AGT-1.a · C-TOOL-1.c · C-EXT-1.a · C-MCP-1.a · C-SES-3.a · C-AGT-1.c · C-AGT-2.a |
-| W2 | 10 | C-SEC-2.b · C-SEC-3.a · C-SES-3.b · C-PRV-1.a · C-SES-2.a · C-SES-3.c · C-SES-4.a · C-SES-5.a · C-AGT-2.c · C-EXT-1.b |
+| ✅ W2 (closed 2026-10-27) | 10 | C-SEC-2.b · C-SEC-3.a · C-SES-3.b · C-PRV-1.a · C-SES-2.a · C-SES-3.c · C-SES-4.a · C-SES-5.a · C-AGT-2.c · C-EXT-1.b |
 | W3 | 10 | C-SEC-3.b · C-MCP-1.b · C-SES-5.b · C-CTX-1.a · C-PRV-1.b · C-PRV-1.c · C-SEC-4.b · C-SES-2.b · C-WEB-1.d · C-CTX-1.b |
-| W4 | 10 | C-SES-2.c · C-SEC-4.a · C-SES-1.a · C-SES-5.d · C-TOOL-1.b · C-WEB-1.c · P-CTX.a · P-TABS.b · P-TABS.d · P-IMG.b |
+| ✅ W4 (closed 2026-10-27) | 10 | C-SES-2.c · C-SEC-4.a · C-SES-1.a · C-SES-5.d · C-TOOL-1.b · C-WEB-1.c · P-CTX.a · P-TABS.b · P-TABS.d · P-IMG.b |
 | W5 | 10 | C-WEB-1.a · C-WEB-1.b · P-CTX.c · P-CTX.d · P-TABS.a · P-MENU.a · P-CTX.b · P-IMG.c · P-TABS.h · C-TOOL-7.a |
 | W6 | 10 | P-MENU.c · P-AGENT.a · P-TABS.c · P-MENU.b · P-CTX.f · C-TOOL-7.c · C-AGT-1.b · C-AGT-3.a · C-CTX-2.b · C-EXT-2.a |
 | W7 | 10 | P-CTX.e · P-AGENT.c · P-CTX.g · C-AGT-7.a · C-AGT-2.b · C-AGT-3.b · C-EXT-7.b · C-SEC-5.a · C-SES-6.a · C-SES-9.a |
@@ -301,7 +301,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - protocol lanes: C-SEC-2.b, C-SES-3.c (weld regenerates schema → SERVER.md → generated.ts once)
 - Bootstrap.php method claims: C-EXT-1.b (checkPolicyFreshness, hookFileEntries, reportSkippedClaudeSettingsEvents)
 
-#### C-SEC-2.b — Server-computed diff on `permission.asked`
+#### ✅ 7d7bed319 C-SEC-2.b — Server-computed diff on `permission.asked`
 - **Item:** C-SEC-2 (sources: GAP-EDT-03, WEB-5-P4) · fix · CRITICAL · effort M
 - **What:** The TUI already shows the real file diff. `Renderer.php:7258-7263` dispatches to `Edit/Write/ApplyPatch::previewDiff($root, $args)`. The web computes its own snippet diff instead, and shows ApplyPatch only as raw JSON. New …
 - **Files — create:** `candy-code/src/Permissions/AskDiffPreview.php`
@@ -312,7 +312,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SEC-2.a (W1)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-2.b`
 
-#### C-SEC-3.a — One provenance-aware `!cmd` gate (refuse MCP and bundle shell forms)
+#### ✅ 2dd2f9a7d C-SEC-3.a — One provenance-aware `!cmd` gate (refuse MCP and bundle shell forms)
 - **Item:** C-SEC-3 (sources: PLG-1-P2, MCP-2-P1, p1 Summary theme, p1-miss "unified third-party shell posture") · fix · MAJOR · effort M
 - **What:** Root cause: `TurnController::refuseCommandShell()` (`candy-code/src/Host/TurnController.php:521-575`) gates only the `project` tier (:528) and the `mcp` tier (:545-554), and both legs check only `trustedProjectCommands`. After …
 - **Files — create:** `candy-code/src/Commands/CommandShellPosture.php`, `candy-code/src/Commands/ShellProvenance.php`
@@ -323,7 +323,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-3.a`
 
-#### C-SES-3.b — `/share list` across sessions; revoke hardening
+#### ✅ 01d34eb49 C-SES-3.b — `/share list` across sessions; revoke hardening
 - **Item:** C-SES-3 (+ C-SES-9's SES-3-P3) (sources: SES-3-P1, SES-3-P3, p2-miss: cross-session `/share list`) · fix · MAJOR · effort S
 - **What:** **`/share list`.** New subcommand: render `ShareStore::liveAll()` as token prefix, session name (or "deleted session"), expiry and format. `/share revoke` with no token now lists every live share, not just …
 - **Files — create:** none
@@ -334,7 +334,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SES-3.a (W1)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-3.b`
 
-#### C-PRV-1.a — `EffortGate`, a per-model shaper predicate, and Bedrock / Codex / claude-code effort
+#### ✅ e55b78f22 C-PRV-1.a — `EffortGate`, a per-model shaper predicate, and Bedrock / Codex / claude-code effort
 - **Item:** C-PRV-1 (sources: PRV-2-P1, p1-miss: Bedrock request-side thinking/effort, p1-miss: Codex parity (`-c model_reasoning_effort`)) · fix · MAJOR · effort M
 - **What:** Root cause: `/effort` gates per provider, through the empty marker `ShapesReasoningEffort` (`candy-code/src/Providers/ShapesReasoningEffort.php:34`). But `OpenAIProvider` sends `reasoning_effort` only inside `isReasoningFamily()` …
 - **Files — create:** `candy-code/src/Providers/EffortGate.php`, `candy-code/src/Providers/ThinkingCapability.php`, `candy-code/tests/Providers/EffortGateTest.php`
@@ -345,7 +345,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-PRV-1.a`
 
-#### C-SES-2.a — FTS index: one-transaction rebuild + persisted build marker
+#### ✅ 85be78e05 C-SES-2.a — FTS index: one-transaction rebuild + persisted build marker
 - **Item:** C-SES-2 (sources: SES-2-P2) · fix · MAJOR · effort M
 - **What:** **Root cause.** `SessionSearchIndex::$built` starts `false` in every process (`src/Session/SessionSearchIndex.php:68-70`), so `needsRebuild()` (`:102-105`) is true on each launch's first body search. …
 - **Files — create:** none
@@ -378,7 +378,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-4.a`
 
-#### C-SES-5.a — Self-update robustness: exec bit, HTTP status, stall abort, temp cleanup, pagination
+#### ✅ e3eef8ac3 C-SES-5.a — Self-update robustness: exec bit, HTTP status, stall abort, temp cleanup, pagination
 - **Item:** C-SES-5 (sources: DST-3-P2, DST-3-P3, DST-3-P4, DST-3-P5, DST-3-P1 (stranded-temp half)) · fix · MAJOR · effort M
 - **What:** All in `src/Cli/SelfUpdate.php`. **DST-3-P2, the exec bit.** Capture `fileperms($phar) & 0777` before the swap. `chmod` the temp file after verification and before the `rename` (`:451`). `chmod` the `.old` copy after `copy()` …
 - **Files — create:** none
@@ -389,7 +389,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-5.a`
 
-#### C-AGT-2.c — Composite action installs with root semantics + self-test
+#### ✅ f57221068 C-AGT-2.c — Composite action installs with root semantics + self-test
 - **Item:** C-AGT-2 (sources: GIT-2-P1, GIT-2-P2) · fix · MAJOR · effort M
 - **What:** Root cause: `action.yml:103` runs `composer global require "sugarcraft/candy-code:…"`. Stability flags are root-only, the global root is `stable`, and Packagist carries no stable sibling, so the install cannot resolve; no …
 - **Files — create:** `.github/workflows/candy-code-action-selftest.yml`, `tools/tests/ActionYmlInstallTest.php`
@@ -400,7 +400,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-2.c`
 
-#### C-EXT-1.b — Skip-and-record unsupported CC entries, file-qualified names, `~/.claude/settings.json` in policy freshness
+#### ✅ 602ec5c22 C-EXT-1.b — Skip-and-record unsupported CC entries, file-qualified names, `~/.claude/settings.json` in policy freshness
 - **Item:** C-EXT-1 (sources: INT-4-P1, INT-4-P2, INT-4-P3, GAP-HK-07, p1-miss: CC hook `type: prompt|agent`) · fix · MAJOR · effort M
 - **What:** **Root causes.** `ClaudeSettingsHooks.php:257-265` refuses the launch for any non-`command` type. `:269` names rows `cc:{event}:{index}` with a per-file index, so a user `PreToolUse` plus a trusted project `PreToolUse` collide. …
 - **Files — create:** none
@@ -417,7 +417,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - Chat.php region claims: C-PRV-1.b (handleEffortCommand, withEngineSettings); C-SES-2.b (buildSessionPicker, runSessionListAction, sanitizeSessionRows)
 - Bootstrap.php method claims: C-PRV-1.b (withResolvedReasoningEffort)
 
-#### C-SEC-3.b — Per-origin shell opt-in and the foreign-row decision
+#### ✅ 393635d2c C-SEC-3.b (foreign-row/doc-truth half; opt-in half carried: per-origin trustedBundleCommands/mcpPromptShell follow-up lane after C-EXT-4.c — row-identity gap, dated 2026-10-27) — Per-origin shell opt-in and the foreign-row decision
 - **Item:** C-SEC-3 (sources: PLG-1-P2 fix option 2, MCP-2-P1 fix option 2, p1-miss "foreign-user" tier) · fix · MAJOR · effort S
 - **What:** Two user-tier-only list keys: `trustedBundleCommands`: bundle names whose command `!` forms may run; `mcpPromptShell`: MCP server names whose prompt bodies may run `!` forms. Neither key is ever project-settable. The …
 - **Files — create:** none
@@ -429,7 +429,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Ruling:** Should bundle and MCP-prompt `!cmd` be opt-in per origin (two new user-tier list keys)? And do user-tier foreign commands (`~/.claude|.opencode/commands`) run … — see §6
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-3.b`
 
-#### C-MCP-1.b — Deferred `mcp_call` keeps `mcp__*` hooks and exact Allow grants
+#### ✅ 9c3857a5b C-MCP-1.b — Deferred `mcp_call` keeps `mcp__*` hooks and exact Allow grants
 - **Item:** C-MCP-1 (sources: MCP-7-P1, MCP-7-P2) · fix · MAJOR · effort M
 - **What:** Root cause (hooks): `HookRegistry::findMatches()` tests each matcher against the bare `$toolName` (`candy-code/src/Hooks/HookRegistry.php:191-211`), fed `$context->toolName` by `executeHooks()` (`:875`) and `chainBudgetSeconds()` …
 - **Files — create:** `candy-code/tests/Hooks/McpCallHookParityTest.php`
@@ -440,7 +440,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-mcp.md` → `### C-MCP-1.b`
 
-#### C-SES-5.b — Signature over the sha256 sidecar (stream-safe verify)
+#### ✅ a8ead9976 C-SES-5.b — Signature over the sha256 sidecar (stream-safe verify)
 - **Item:** C-SES-5 (sources: DST-3-P1, DST-3-P5 (minisig naming/format)) · fix · MAJOR · effort M
 - **What:** **Root cause.** `verifySignature()` reads the whole ~119 MiB phar with `file_get_contents($temp)` (`SelfUpdate.php:678`) to call `sodium_crypto_sign_verify_detached` (`:714`). That is fatal under the default 128M `memory_limit`. …
 - **Files — create:** none
@@ -451,7 +451,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SES-5.a (W2)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-5.b`
 
-#### C-CTX-1.a — Prime the instruction-diff tracker before the turn forks
+#### ✅ 893f271cf C-CTX-1.a — Prime the instruction-diff tracker before the turn forks
 - **Item:** C-CTX-1 (sources: CTX-3-P1) · fix · MAJOR · effort M
 - **What:** Root cause: `Runtime::instructionDiff()` (`candy-code/src/Runtime.php:5742-5754`) memoises `InstructionDiffTracker::capture($loader)` on the first `turnContext()`, and that runs only inside the forked child. …
 - **Files — create:** none
@@ -473,7 +473,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-PRV-1.a (W2)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-PRV-1.b`
 
-#### C-PRV-1.c — Safe `candy-code login`: merge, refuse a type clash, no echo
+#### ✅ 0e25ae5c7 C-PRV-1.c — Safe `candy-code login`: merge, refuse a type clash, no echo
 - **Item:** C-PRV-1 (sources: PRV-4-P1, PRV-4-P2) · fix · MAJOR · effort S
 - **What:** Root cause 1: `Subcommands::loginStoreKey()` replaces the provider block outright with `$providers[$type] = ['type' => $type, 'apiKey' => $key]` (`candy-code/src/Cli/Subcommands.php:973`). Rotating a key wipes `model`, …
 - **Files — create:** none
@@ -484,7 +484,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-PRV-1.c`
 
-#### C-SEC-4.b — `context.trust` routable, failed writes surfaced, prompt discoverable
+#### ✅ 40d19f15f C-SEC-4.b — `context.trust` routable, failed writes surfaced, prompt discoverable
 - **Item:** C-SEC-4 (sources: WEB-3-P1, WEB-3-P2, WEB-3-P3, p2-miss "WEB-3 trust prompt discovery") · fix · MAJOR · effort M
 - **What:** P1 root cause: the `context.trust` params (`MethodSchemas.php:413-418`) carry no `sessionId`. `Gateway::routeOf()` (`src/Server/Workspace/Gateway.php:289-298`) therefore sends the call to the primary process. The prompt was …
 - **Files — create:** `candy-code/tests/Server/GatewayTrustRoutingTest.php`, `candy-code-web/src-web/stores/__tests__/contextTrustRouting.spec.ts`, `candy-code-web/src-web/components/__tests__/statusBarTrustBadge.spec.ts`
@@ -495,7 +495,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-4.b`
 
-#### C-SES-2.b — Picker shows body hits + snippets + per-row spend; `/` filter reaches FTS
+#### ✅ f05d52c06 C-SES-2.b — Picker shows body hits + snippets + per-row spend; `/` filter reaches FTS
 - **Item:** C-SES-2 (+ C-SES-1's SES-1-P4 picker half) (sources: SES-2-P1, p2-miss: picker body snippet (`SessionRow::withBodySnippet` dormant), SES-1-P4, p2-miss: … · fix · MAJOR · effort M
 - **What:** **Root cause.** `buildSessionPicker()` (`src/Chat.php:14668-14689`) fetches FTS-ranked rows through `sessionPickerRows()` (`:14714-14733`), then calls `withQuery()`. `SessionPicker::rankedLayout()` …
 - **Files — create:** `candy-code/src/App/SessionPickerSearchMsg.php`
@@ -506,7 +506,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SES-2.a (W2)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-2.b`
 
-#### C-WEB-1.d — Read-image MediaCards adopt into the session media store
+#### ✅ 8c93928f2 C-WEB-1.d — Read-image MediaCards adopt into the session media store
 - **Item:** C-WEB-1 (sources: GAP-TL-19 web half, k2-sum `media.fetch` live defect, k2-dorm broken Read-image path) · fix · MAJOR · M
 - **What:** **Root cause.** `TranscriptProjector::mediaRefs()` (`candy-code/src/Host/TranscriptProjector.php:301-303`, `mediaRef()` :351-364) projects Read's workspace `imagePath` (set at `src/Tools/BuiltIn/Read.php:745`) as an artifact …
 - **Files — create:** none
@@ -517,7 +517,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web.md` → `### C-WEB-1.d`
 
-#### C-CTX-1.b — Cursor glob rules fire; disabled imported rules are explained
+#### ✅ 592261f3c C-CTX-1.b — Cursor glob rules fire; disabled imported rules are explained
 - **Item:** C-CTX-1 (sources: INT-2-P1, INT-2-P2) · fix · MAJOR · effort S
 - **What:** Root cause: `candy-code/src/Context/Rule.php:233-238` ANDs `alwaysApply` into `enabled`. Cursor's canonical Auto-Attached shape (`globs: src/**/*.ts` + `alwaysApply: false`) therefore parses as disabled, and `RuleLoader::load()` …
 - **Files — create:** none
@@ -533,7 +533,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - protocol lanes: C-SES-2.c, C-SEC-4.a (weld regenerates schema → SERVER.md → generated.ts once)
 - Bootstrap.php method claims: P-TABS.d (chat)
 
-#### C-SES-2.c — Protocol: summaries carry snippets + honest spend; web body search + live `≥`
+#### ✅ 46f517459 C-SES-2.c — Protocol: summaries carry snippets + honest spend; web body search + live `≥`
 - **Item:** C-SES-2 (+ C-SES-1's web half) (sources: GAP-SES-11, SES-1-P2, SES-1-P4, p2-miss: per-session spend on sidebar) · fix · MAJOR · effort M
 - **What:** **Root cause (web search).** `SessionMethods::list()` filters `query` by `str_contains` over name, id and `last_preview` (`src/Protocol/Methods/SessionMethods.php:82-113`). It never reaches FTS. **Root cause (spend).** The …
 - **Files — create:** none
@@ -544,7 +544,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SES-2.a (W2)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-2.c`
 
-#### C-SEC-4.a — Served sessions honour `trustedProjectCommands`
+#### ✅ 745fe7d14 C-SEC-4.a — Served sessions honour `trustedProjectCommands`
 - **Item:** C-SEC-4 (sources: GAP-CMD-02, k2-sum live defect) · fix · MAJOR · effort S
 - **What:** Root cause: two served callers of `CommandLoader::loadAll()` omit its second argument, `bool $projectCommandsTrusted` (`src/Commands/CommandLoader.php:605`): `SessionHost::__construct()` …
 - **Files — create:** none
@@ -555,7 +555,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-4.a`
 
-#### C-SES-1.a — Headless `-p` spend reaches the ledger; `session list` shows spend
+#### ✅ 512a60936 C-SES-1.a — Headless `-p` spend reaches the ledger; `session list` shows spend
 - **Item:** C-SES-1 (sources: SES-1-P1, p2-miss: headless `-p` spend, SES-1-P4 `session list` half) · fix · MAJOR · effort M
 - **What:** **Root cause.** `NonInteractive::run()` collects each step's `Usage` into `$sessionUsages` (`src/Cli/NonInteractive.php:405-409`), but only for the JSON envelope (`:609`). `appendUsageRecord` has exactly two callers, …
 - **Files — create:** none
@@ -566,7 +566,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-1.a`
 
-#### C-SES-5.d — Workflows: GHCR image cache-bust, release filter, versioned tags
+#### ✅ dd79e7d73 C-SES-5.d — Workflows: GHCR image cache-bust, release filter, versioned tags
 - **Item:** C-SES-5 (sources: DST-2-P1, DST-2-P2, p2-miss: versioned Docker tags/provenance) · fix · MAJOR · effort M
 - **What:** **Root cause.** The `RUN composer create-project sugarcraft/candy-code:dev-master` instruction text never changes (`candy-code/Dockerfile:63-69`), and the workflow caches with `cache-from: type=gha`. The layer is therefore served …
 - **Files — create:** `tools/tests/CandyCodeImageCacheBustTest.php`
@@ -577,7 +577,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-5.d`
 
-#### C-TOOL-1.b — rg `--no-config` jail fix
+#### ✅ 7c237e059 C-TOOL-1.b — rg `--no-config` jail fix
 - **Item:** C-TOOL-1 (sources: SHL-4-P1) · fix · MAJOR · effort S
 - **What:** Root cause `candy-code/src/Tools/BuiltIn/Grep.php:972`: the rg command line has no `--no-config`, and `ProcessContainment::scrubbedEnv()` strips only secret-shaped names, so the operator's `RIPGREP_CONFIG_PATH` reaches rg. A …
 - **Files — create:** none
@@ -588,7 +588,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tool.md` → `### C-TOOL-1.b`
 
-#### C-WEB-1.c — `@`-mention index refreshes at every turn end (TUI + serve)
+#### ✅ 4e3535ed4 C-WEB-1.c — `@`-mention index refreshes at every turn end (TUI + serve)
 - **Item:** C-WEB-1 (sources: WEB-5-P2, TUI-1-P1, p2-miss: @-mention freshness) · fix · MAJOR · S
 - **What:** **Root cause.** `MentionIndex::files()` (`candy-code/src/Attachments/MentionIndex.php:103-111`) memoizes one `git ls-files` per root per process. `forget()` (:540-560), "the hook a future refresh command would call", has only …
 - **Files — create:** `candy-code/tests/Host/TurnRunnerMentionFreshnessTest.php`
@@ -599,7 +599,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web.md` → `### C-WEB-1.c`
 
-#### P-CTX.a — Context attribution by category (core + `/context` text)
+#### ✅ 4a94eb432 P-CTX.a — Context attribution by category (core + `/context` text)
 - **Item:** P-CTX-BREAKDOWN (sources: owner pick; PRM-12; CC `/context` grid, `comp-claude-code.md` PRM-12 row) · feature · effort M
 - **What:** **What exists.** `ContextBreakdown` (`src/Context/ContextBreakdown.php:94-105`) knows the per-label prompt layers (`Runtime::promptSectionSizes()`, `src/Runtime.php:4389`), a single tools figure, history, pruning and cache. **New …
 - **Files — create:** `candy-code/src/Context/ContextCategory.php`, `candy-code/src/Context/ContextCategories.php`
@@ -610,7 +610,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-CTX.a`
 
-#### P-TABS.b — TabScope envelope + SessionDeck (wires dormant SessionTabs detach/summary)
+#### ✅ 88ac5e485 P-TABS.b — TabScope envelope + SessionDeck (wires dormant SessionTabs detach/summary)
 - **Item:** P-SESSION-TABS (sources: GAP-SES-12, GAP-UI-N6) · feature · effort M
 - **What:** **The problem.** Today one `App::$chat` receives every Msg (`App::delegateToChat`, `src/App/App.php:4298`). For a parked tab to keep streaming, its Cmds must come back addressed to it. **`TabScope::cmd(string $tabKey, …
 - **Files — create:** `candy-code/src/App/Tabs/TabScope.php`, `candy-code/src/App/Tabs/TabScopedMsg.php`, `candy-code/src/App/Tabs/SessionDeck.php`, `candy-code/src/App/Tabs/OpenTabMsg.php`, `candy-code/src/App/Tabs/CloseTabMsg.php`, `candy-code/src/App/Tabs/CycleTabMsg.php`
@@ -621,7 +621,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-TABS.b`
 
-#### P-TABS.d — Tab-Chat factory (`Bootstrap::tabChat`)
+#### ✅ da772ff56 P-TABS.d — Tab-Chat factory (`Bootstrap::tabChat`)
 - **Item:** P-SESSION-TABS (sources: GAP-SES-12) · feature · effort M
 - **What:** `Bootstrap::chat()` (`src/Cli/Bootstrap.php:1183`) is the only Chat constructor. It also seeds launch notices, opens/locks the launch session and arms the notice drain (`drainsRuntimeNotices: true`, :1415). Extract its body into …
 - **Files — create:** none
@@ -632,7 +632,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-TABS.d`
 
-#### P-IMG.b — Content-sized, centred `/generate` popup
+#### ✅ 6caf1052d P-IMG.b — Content-sized, centred `/generate` popup
 - **Item:** P-IMAGE-MENU (sources: owner pick) · feature · effort M
 - **What:** **Root cause.** `Tui\Renderer::renderView` diverts to `renderMediaForm()` before the band is laid out (`src/Tui/Renderer.php:646-650`). It hands `MediaForm::view()` the full `$cols × $paneRows` (:940-960), and `view()` draws its …
 - **Files — create:** none
@@ -649,7 +649,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - Chat.php region claims: P-CTX.d (measureContextCmd (new method) + session-surface route arm)
 - Bootstrap.php method claims: C-TOOL-7.a (backgroundShells)
 
-#### C-WEB-1.a — Served `/model` and `/rename` reach the session summary
+#### ✅ 09feae49b C-WEB-1.a — Served `/model` and `/rename` reach the session summary
 - **Item:** C-WEB-1 (sources: WEB-2-P1, p2-miss: web model switch) · fix · MAJOR · S
 - **What:** **Root cause, model.** The `SetModel` arm (`candy-code/src/Host/SessionHost.php:1348-1353`) only swaps `$sessionBackend`, while `ServerContext::summary()` (`src/Protocol/ServerContext.php:320-340`) reads `provider`/`model` from …
 - **Files — create:** `candy-code/tests/Protocol/SessionSummaryModelOverlayTest.php`
@@ -660,7 +660,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web.md` → `### C-WEB-1.a`
 
-#### C-WEB-1.b — Status-bar model select never shows an unapplied pick
+#### ✅ 34a295d2d C-WEB-1.b — Status-bar model select never shows an unapplied pick
 - **Item:** C-WEB-1 (sources: WEB-2-P1 client half) · fix · MAJOR · S
 - **What:** **Root cause.** `pickModel()` (`candy-code-web/src-web/components/StatusBar.vue:52-55`) emits `/model` and leaves the `<select>` DOM showing the pick. The bound `:value` (the summary) did not change, so Vue never repaints. A …
 - **Files — create:** none
@@ -671,7 +671,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web.md` → `### C-WEB-1.b`
 
-#### P-CTX.c — ContextPane component (collapsed meter → expanded breakdown)
+#### ✅ 9aa5258b1 P-CTX.c — ContextPane component (collapsed meter → expanded breakdown)
 - **Item:** P-CTX-BREAKDOWN (sources: owner pick) · feature · effort M
 - **What:** `ContextPane::renderModel(ContextPaneModel, Theme, width, rows)` and `layout()` (row keys), the pure "sidebar box". `ContextPaneModel` holds `?ContextCategories`, the live history tokens (status-bar figure), the window, …
 - **Files — create:** `candy-code/src/Tui/Components/ContextPane.php`, `candy-code/src/Tui/Components/ContextPaneModel.php`
@@ -682,7 +682,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** P-CTX.a (W4)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-CTX.c`
 
-#### P-CTX.d — Chat context-snapshot producer (TurnRunner-held)
+#### ✅ 967479a37 P-CTX.d — Chat context-snapshot producer (TurnRunner-held)
 - **Item:** P-CTX-BREAKDOWN (sources: owner pick) · feature · effort S
 - **What:** The pane must never measure in `view()`: `promptSectionSizes()` builds a Runtime, and the first call can touch disk. Follow TodoPane's "read, never fetched" law (`src/Tui/Components/TodoPane.php:103-115`): `TurnRunner` gains …
 - **Files — create:** `candy-code/src/App/ContextMeasuredMsg.php`
@@ -693,7 +693,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** P-CTX.a (W4)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-CTX.d`
 
-#### P-TABS.a — Window kit: shared session-window primitives
+#### ✅ eecf4d5b0 P-TABS.a — Window kit: shared session-window primitives
 - **Item:** P-SESSION-TABS + P-AGENT-ATTACH (sources: GAP-SES-12, GAP-UI-N6, k1-dorm#3) · feature · effort M
 - **What:** New pure value and renderer classes under `src/Tui/Window/`, shared by both picks. The model and its values: `WindowRef{kind, key, label, ?color, ?parentKey}`; `WindowAttention` enum (Idle/Working/Waiting/Unseen/Failed), with a …
 - **Files — create:** `candy-code/src/Tui/Window/WindowKind.php`, `candy-code/src/Tui/Window/WindowRef.php`, `candy-code/src/Tui/Window/WindowAttention.php`, `candy-code/src/Tui/Window/WindowViewport.php`, `candy-code/src/Tui/Window/WindowViewports.php`, `candy-code/src/Tui/Window/WindowList.php`, `candy-code/src/Tui/Window/WindowEntry.php`, `candy-code/src/Tui/Window/WindowStrip.php`, `candy-code/src/Tui/Window/AgentColor.php`
@@ -704,7 +704,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-TABS.a`
 
-#### P-MENU.a — Nested menu kit (`Tui/Menu/*`)
+#### ✅ c1267a71a P-MENU.a — Nested menu kit (`Tui/Menu/*`)
 - **Item:** P-MENU-REDO (sources: owner pick) · feature · effort M
 - **What:** No nested menu exists. `MenuBar` models a menu as a flat `list<string>` with one static row cursor (`MenuBar.php:74-82`, :127). The kit is therefore new, pure and theme-driven, in `candy-code/src/Tui/Menu/`: the same shape as …
 - **Files — create:** `candy-code/src/Tui/Menu/MenuNode.php`, `candy-code/src/Tui/Menu/MenuNodeKind.php`, `candy-code/src/Tui/Menu/MenuTree.php`, `candy-code/src/Tui/Menu/MenuCursor.php`, `candy-code/src/Tui/Menu/MenuStep.php`, `candy-code/src/Tui/Menu/MenuCascade.php`, `candy-code/src/Tui/Menu/MenuPanel.php`
@@ -715,7 +715,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-menu.md` → `### P-MENU.a`
 
-#### P-CTX.b — `/context --raw [path]` prompt dump (GAP-PRM-15)
+#### ✅ 4e91ddcb2 P-CTX.b — `/context --raw [path]` prompt dump (GAP-PRM-15)
 - **Item:** P-CTX-BREAKDOWN (sources: GAP-PRM-15) · gap · effort S
 - **What:** There is no raw system-prompt dump today. `Runtime::buildSystemPrompt()` is private (`src/Runtime.php:4362`). Add a public one-line `Runtime::assembledSystemPrompt(App)`, and a new opt-in `Backend\DumpsSystemPrompt` capability …
 - **Files — create:** `candy-code/src/Backend/DumpsSystemPrompt.php`
@@ -726,7 +726,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-CTX.b`
 
-#### P-IMG.c — Web: Generate entry in the top bar
+#### ✅ a28779b00 P-IMG.c — Web: Generate entry in the top bar
 - **Item:** P-IMAGE-MENU (sources: owner pick) · feature · effort S
 - **What:** The web Generate panel is only a drawer tab and a palette row. Add a `generate` button to the top bar beside settings/about, shown only when `connection.canGenerateImage`. It opens `usePanelsStore().show('generate')`. The drawer …
 - **Files — create:** none
@@ -737,7 +737,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-IMG.c`
 
-#### P-TABS.h — Web: `+` new-session tab and unseen badges
+#### ✅ c6f3e3f56 P-TABS.h — Web: `+` new-session tab and unseen badges
 - **Item:** P-SESSION-TABS (sources: GAP-UI-N6 web half; owner pick) · feature · effort S
 - **What:** The web tab strip (`components/grid/SessionTabs.vue`) already streams every session and badges asks, but has no `+`. Add a trailing `+` tab → `useNewSessionStore().start()` (picker-aware), then route to the new session. Add an …
 - **Files — create:** none

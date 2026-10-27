@@ -94,12 +94,14 @@
   "blocked": [],
   "extra_agents": 0,
   "waves_closed": [
-    1
+    1,
+    2,
+    4
   ],
   "wave_loops": {
     "1": "closed r2 CLEAN",
-    "2": "r1 CLEAN static; gates owed by lead post six-lane welder; close then",
-    "4": "r1 CLEAN FINAL (draft FINDINGS superseded; WAVE-REVIEW-1.md rewritten, draft kept); battery owed then wave-close"
+    "2": "closed r1 CLEAN battery green",
+    "4": "closed r1 FINAL CLEAN battery green 2026-10-27"
   },
   "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
   "weld_notes": {
