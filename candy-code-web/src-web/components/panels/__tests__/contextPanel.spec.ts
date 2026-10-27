@@ -159,7 +159,9 @@ describe('ContextPanel trust prompt (WEB-3b)', () => {
     const wrapper = await openWithTrust()
 
     await wrapper.find('[data-testid="context-trust-user"]').trigger('click')
-    expect(wire.sent('context.trust').at(-1)?.params).toEqual({ askId: 'trust-9f0e1d2c3', decision: 'grant', remember: 'user' })
+    // C-SEC-4: the answer names its session — the gateway routes it to the
+    // workspace host that minted the prompt, not the primary process.
+    expect(wire.sent('context.trust').at(-1)?.params).toEqual({ sessionId: 's1', askId: 'trust-9f0e1d2c3', decision: 'grant', remember: 'user' })
     await wire.answer('context.trust', { askId: 'trust-9f0e1d2c3', status: 'granted', persisted: true })
     await flushPromises()
 
@@ -181,7 +183,7 @@ describe('ContextPanel trust prompt (WEB-3b)', () => {
     expect(wrapper.find('[data-testid="context-trust-root"]').text()).toBe('/repo/project')
 
     await wrapper.find('[data-testid="context-trust-session"]').trigger('click')
-    expect(wire.sent('context.trust').at(-1)?.params).toEqual({ askId: 'trust-9f0e1d2c3', decision: 'grant', remember: 'session' })
+    expect(wire.sent('context.trust').at(-1)?.params).toEqual({ sessionId: 's1', askId: 'trust-9f0e1d2c3', decision: 'grant', remember: 'session' })
     await wire.answer('context.trust', { askId: 'trust-9f0e1d2c3', status: 'granted', persisted: false })
     await flushPromises()
     // WEB-3b MINOR-3: the session-tier line speaks the frozen-trust truth —
@@ -215,5 +217,24 @@ describe('ContextPanel trust prompt (WEB-3b)', () => {
     expect(wrapper.find('[data-testid="context-trust-error"]').text()).toContain('settled elsewhere')
     expect(wrapper.find('[data-testid="context-trust-root"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="context-trust-reject"]').exists()).toBe(false)
+  })
+
+  it('a failed user-config write keeps the prompt open with its own line', async () => {
+    await wire.connect()
+    const wrapper = await openWithTrust()
+
+    await wrapper.find('[data-testid="context-trust-user"]').trigger('click')
+    await wire.fail('context.trust', -32009, 'trust_write_failed', 'the trustedProjectMcp list was not updated')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="context-trust-error"]').text()).toContain('stays open')
+    // The server left the record `asked`, so the verdict buttons stay live.
+    expect(wrapper.find('[data-testid="context-trust-user"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="context-trust-settled"]').exists()).toBe(false)
+
+    await wrapper.find('[data-testid="context-trust-user"]').trigger('click')
+    await wire.answer('context.trust', { askId: 'trust-9f0e1d2c3', status: 'granted', persisted: true })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="context-trust-settled"]').text()).toContain('user config')
   })
 })

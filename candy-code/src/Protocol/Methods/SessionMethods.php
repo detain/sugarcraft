@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Protocol\Methods;
 
+use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Host\SessionHost;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Share\ShareSession;
 use SugarCraft\Code\Share\ShareStore;
 use SugarCraft\Code\Host\SessionSnapshot;
@@ -20,6 +22,7 @@ use SugarCraft\Code\Protocol\Params;
 use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Protocol\Scope;
 use SugarCraft\Code\Protocol\SessionFeed;
+use SugarCraft\Code\Protocol\TrustAsks;
 use SugarCraft\Code\Util\Exporter;
 
 /**
@@ -134,12 +137,40 @@ final class SessionMethods
     /** @return array<string, mixed> */
     private static function subscribe(CallContext $call, Params $params): array
     {
-        $host = $call->host(self::sessionId($params));
+        $sessionId = self::sessionId($params);
+        $host = $call->host($sessionId);
+        // C-SEC-4: the trust prompt must reach a client before it opens the
+        // Context panel — subscribing is the moment a client says it is
+        // watching this session, so the same once-per-root discovery
+        // `context.sources` runs rides here first, off the cheap launch
+        // verdict, not the full measurement.
+        self::discoverTrustOnSubscribe($call, $sessionId, $host);
         $afterSeq = $params->optionalInt('afterSeq', 0);
         $mode = $params->enum('mode', [SessionFeed::MODE_FULL, SessionFeed::MODE_NARRATION], SessionFeed::MODE_FULL);
         $snapshotLimit = $params->optionalInt('snapshotLimit', 1, SessionSnapshot::MAX_PAGE_ROWS);
 
         return $call->feed($host)->subscribe($call->client, $afterSeq, $mode, $snapshotLimit);
+    }
+
+    /**
+     * Mint (once per root) the project-trust prompt an untrusted project
+     * `.mcp.json` verdict warrants, announcing it exactly as
+     * {@see ContextMethods::sources()} does; nothing else is read.
+     */
+    private static function discoverTrustOnSubscribe(CallContext $call, string $sessionId, SessionHost $host): void
+    {
+        $root = $host->workspace()->root;
+        if ((Bootstrap::mcpServerInventory($root)['status'] ?? null) !== Bootstrap::MCP_UNTRUSTED) {
+            return;
+        }
+
+        TrustAsks::discover(
+            $root,
+            Lang::t('server.trust.ask.mcp', ['root' => $root]),
+            static function (array $record) use ($call, $sessionId): void {
+                $call->server->broadcast(EventEnvelope::server(EventType::PERMISSION_ASKED, ['sessionId' => $sessionId] + $record));
+            },
+        );
     }
 
     /** @return array<string, mixed> */

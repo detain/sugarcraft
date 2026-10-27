@@ -400,7 +400,7 @@ which is returned exactly as sent (string or integer).
 | `-32002` | not initialized — `server.hello` first |
 | `-32003` | forbidden (scope, or a write the server does not allow remotely) |
 | `-32004` | not found (`session_not_found`, `ask_not_found`, …) |
-| `-32009` | conflict (`already_resolved`, `session_locked`, `refused`, `command_refused`, …) |
+| `-32009` | conflict (`already_resolved`, `session_locked`, `refused`, `command_refused`, `trust_write_failed`, …) |
 | `-32010` | busy, retryable (`too_many_turns`, `turn_running`, `draining`, …) |
 | `-32011` | rate limited, retryable |
 | `-32020` | permission mode refused |

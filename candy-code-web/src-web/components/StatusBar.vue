@@ -3,6 +3,8 @@ import { computed, onMounted, ref } from 'vue'
 import { spendLabel, tokens } from '../lib/format'
 import type { MethodResult, PermissionMode, SessionSummary } from '../protocol/generated'
 import { useConnectionStore } from '../stores/connection'
+import { useContextSourcesStore } from '../stores/contextSources'
+import { usePanelsStore } from '../stores/agents/panels'
 import type { SessionState } from '../stores/reducer'
 
 const MODES: PermissionMode[] = ['default', 'accept-edits', 'plan', 'auto', 'dont-ask', 'bypass-permissions']
@@ -24,6 +26,12 @@ const emit = defineEmits<{ setMode: [mode: PermissionMode]; runCommand: [text: s
  * second source of truth about what is selected (the session summary is).
  */
 const socket = useConnectionStore()
+// C-SEC-4: the trust prompt can arrive before any panel measured; the shelf
+// in the context store keeps it, and the badge sends the user to the panel
+// that answers it.
+const context = useContextSourcesStore()
+const panels = usePanelsStore()
+const trustAwaiting = computed(() => context.pendingTrust?.status === 'asked')
 const providers = ref<string[]>([])
 
 onMounted(async () => {
@@ -76,6 +84,7 @@ const model = computed(() => {
 <template>
   <footer class="status" data-testid="status-bar" :data-status="state.status">
     <span class="item state" :class="state.status">{{ statusText }}</span>
+    <button v-if="trustAwaiting" type="button" class="item action" data-testid="trust-badge" title="This project is not trusted — open the Context panel to answer" @click="panels.show('context')">trust?</button>
     <span class="item" title="Context used">
       ~{{ tokens(state.contextTokens) }} tok<template v-if="contextPct !== null"> · {{ contextPct }}%</template>
       <span v-if="contextPct !== null" class="meter" aria-hidden="true"><span :style="{ width: `${contextPct}%` }" /></span>

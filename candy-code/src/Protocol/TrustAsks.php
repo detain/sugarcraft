@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Protocol;
 
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Lang;
 
 /**
  * WEB-3b: the project-trust prompts this server has put — one per untrusted
@@ -22,7 +23,9 @@ use SugarCraft\Code\Cli\Bootstrap;
  * construction, which is the honest answer, not a leak into the gate.
  *
  * THE ONCE LAW. {@see discover()} is called from every `context.sources`
- * measurement; the first untrusted sighting mints the ask and broadcasts it
+ * measurement and, since C-SEC-4, from every `session.subscribe` (the cheap
+ * launch verdict, so the prompt reaches a watcher before the panel mounts);
+ * the first untrusted sighting mints the ask and broadcasts it
  * server-scope (the BackgroundEvents precedent: an ask outside any turn still
  * rides `permission.asked`), every later sighting — reloads, other sessions,
  * reconnects — re-reads the same record. The answer settles it for the
@@ -91,21 +94,31 @@ final class TrustAsks
      * question, and a project-tier remember is the same refusal it gives a
      * project-tier rule.
      *
+     * C-SEC-4: $sessionRoot is the workspace root of the session answering.
+     * The registry is per-process statics and a gateway-routed prompt is
+     * minted inside its own workspace host, so a correctly routed answer
+     * always names the record's root; a mismatch is the misroute the gateway
+     * must never let settle a different root's prompt, answered as
+     * `ask_not_found` — the honest answer from where it came. A user-tier
+     * write that does not land is `trust_write_failed`: the record stays
+     * `asked`, because nothing was persisted and the answer is repeatable
+     * once the config is writable.
+     *
      * @param 'grant'|'reject' $decision
      * @param 'session'|'user'|'project'|null $remember
      *
      * @return array<string, mixed> the settled record
      *
-     * @throws RpcError remember_refused / ask_not_found / already_resolved
+     * @throws RpcError remember_refused / ask_not_found / already_resolved / trust_write_failed
      */
-    public static function settle(string $askId, string $decision, ?string $remember): array
+    public static function settle(string $askId, string $decision, ?string $remember, string $sessionRoot): array
     {
         if ($remember === 'project') {
             throw RpcError::of(ErrorCode::Forbidden, 'trust is user-tier only; a project cannot be told to trust itself', 'remember_refused');
         }
 
         $root = self::$byAsk[$askId] ?? null;
-        if ($root === null) {
+        if ($root === null || $root !== $sessionRoot) {
             throw RpcError::notFound(\sprintf('no trust prompt %s', $askId), 'ask_not_found');
         }
 
@@ -121,8 +134,20 @@ final class TrustAsks
             // user config door and records the server fingerprints (MCP-5).
             // The grant applies at next launch — the trust keys are
             // ApplyMode::Frozen, and saying so honestly is this method's job.
+            // C-SEC-4: honesty continues past the door — `writeUserConfig`
+            // fails SILENTLY on an unwritable config, so the list-not-updated
+            // verdict (or a named error) is refused HERE rather than settled
+            // as a grant whose persistence was a lie.
             $report = Bootstrap::trustProjectMcp($root);
-            $persisted = $report['error'] === null && $report['granted'] === true;
+            if ($report['error'] !== null || $report['granted'] !== true) {
+                throw RpcError::of(
+                    ErrorCode::Conflict,
+                    Lang::t('server.trust.write_failed'),
+                    'trust_write_failed',
+                    ['error' => $report['error'] ?? 'the trustedProjectMcp list was not updated'],
+                );
+            }
+            $persisted = true;
         }
 
         return self::$byRoot[$root] = [

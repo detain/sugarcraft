@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useConnectionStore } from '../../stores/connection'
 import { useContextSourcesStore } from '../../stores/contextSources'
+import { ProtocolError } from '../../protocol/jsonrpc'
 
 /**
  * WEB-3a: the session's context panel over `context.sources` — what the next
@@ -39,7 +40,13 @@ async function answer(decision: 'grant' | 'reject', remember: 'session' | 'user'
     const settled = await context.respondTrust(decision, remember)
     if (!settled) trustError.value = 'The prompt was settled elsewhere — reload to re-measure.'
   } catch (failure) {
-    trustError.value = failure instanceof Error ? failure.message : String(failure)
+    // C-SEC-4: a refused write is not a lost prompt — the server kept the
+    // record `asked`, so say what failed and leave the buttons usable.
+    if (failure instanceof ProtocolError && failure.kind === 'trust_write_failed') {
+      trustError.value = 'Your user config could not be written — the project stays untrusted and the prompt stays open. Fix the config, then answer again.'
+    } else {
+      trustError.value = failure instanceof Error ? failure.message : String(failure)
+    }
   } finally {
     busy.value = false
   }

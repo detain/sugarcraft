@@ -81,4 +81,43 @@ describe('contextSources ordering latch (WEB-3a MINOR-2)', () => {
     // Loading settled (the current generation finished), so no stuck spinner.
     expect(store.loading).toBe(false)
   })
+
+  it('C-SEC-4: the trust answer carries the session it was asked on', async () => {
+    await wire.connect()
+    const store = useContextSourcesStore()
+    const load = store.load('s1')
+    await flushPromises()
+    const frame = wire.sent('context.sources').at(-1)
+    wire.socket().answer(
+      {
+        ...sourcesFor('s1'),
+        trust: {
+          askId: 'trust-9f0e1d2c3',
+          kind: 'trust',
+          target: 'mcp',
+          root: '/repo-s1',
+          status: 'asked',
+          persisted: false,
+        },
+      },
+      frame?.id as string,
+    )
+    await load
+    await flushPromises()
+
+    const settled = store.respondTrust('grant', 'user')
+    await flushPromises()
+    expect(wire.sent('context.trust').at(-1)?.params).toEqual({
+      sessionId: 's1',
+      askId: 'trust-9f0e1d2c3',
+      decision: 'grant',
+      remember: 'user',
+    })
+    wire.socket().answer(
+      { askId: 'trust-9f0e1d2c3', status: 'granted', persisted: true },
+      wire.sent('context.trust').at(-1)?.id as string,
+    )
+    await expect(settled).resolves.toBe(true)
+    expect(store.pendingTrust?.status).toBe('granted')
+  })
 })

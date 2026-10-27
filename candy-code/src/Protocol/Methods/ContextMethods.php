@@ -34,7 +34,9 @@ use SugarCraft\Code\Protocol\TrustAsks;
  * DISCOVERED over the wire, so the first sighting mints the prompt once per
  * root ({@see TrustAsks}) — the discovery is a notification raised by a read,
  * the same posture as the launch notices the CLI prints while answering any
- * question; answering still takes a write, `context.trust`, under the
+ * question (C-SEC-4 added the same discovery to `session.subscribe`, so the
+ * prompt reaches a watcher without the panel having to mount first);
+ * answering still takes a write, `context.trust`, under the
  * Approve scope, and the one grantable verdict (MCP) persists through the
  * one user-tier writer `Bootstrap::trustProjectMcp()` already owns.
  */
@@ -79,11 +81,17 @@ final class ContextMethods
     /** @return array<string, mixed> */
     private static function trust(CallContext $call, Params $params): array
     {
+        // C-SEC-4: the sessionId routes the answer to the process that minted
+        // the prompt (a gateway's workspace host holds its own TrustAsks
+        // statics) and roots it: settle() refuses a prompt from any other
+        // root, so a misroute can never answer a different project's question.
+        $sessionId = SessionMethods::sessionId($params);
+        $root = $call->host($sessionId)->workspace()->root;
         $askId = $params->string('askId', 16);
         $decision = $params->enum('decision', ['grant', 'reject']);
         $remember = $params->has('remember') ? $params->enum('remember', ['session', 'user', 'project']) : null;
 
-        $record = TrustAsks::settle($askId, $decision, $remember);
+        $record = TrustAsks::settle($askId, $decision, $remember, $root);
 
         return [
             'askId' => $record['askId'],

@@ -425,10 +425,11 @@ final class MethodSchemas
 
             'context.trust' => [
                 Schema::object([
+                    ...$sid,
                     'askId' => Schema::string(16)->describe('The trust prompt\'s id, as permission.asked (kind "trust") carried it.'),
                     'decision' => Schema::enum(['grant', 'reject']),
-                    'remember' => Schema::enum(['session', 'user', 'project'])->describe('`user` writes the root into your own trustedProjectMcp list (effective next launch, like the TUI grant); `session` — or omitted — settles for this server only; `project` is refused: a project cannot grant itself trust (the permission.respond posture).'),
-                ], ['askId', 'decision']),
+                    'remember' => Schema::enum(['session', 'user', 'project'])->describe('`user` writes the root into your own trustedProjectMcp list (effective next launch, like the TUI grant) and refuses `trust_write_failed` — leaving the prompt open — when that write does not land; `session` — or omitted — settles for this server only; `project` is refused: a project cannot grant itself trust (the permission.respond posture).'),
+                ], ['sessionId', 'askId', 'decision']),
                 Schema::object([
                     'askId' => Schema::string(16),
                     'status' => Schema::enum(['granted', 'rejected']),
