@@ -56,7 +56,9 @@ Inside `hooks`, Claude Code's shape is nested where `hooks.yaml` is flat:
 
 Each inner hook flattens into one `hooks.yaml`-shaped entry and runs through
 the SAME validator — event-name check, matcher compilation, positive-finite
-`timeout` — so the file format section below applies to it verbatim. Names are
+`timeout` — so the file format section below applies to it, with the one
+exception that this format's two extra keys are stamped onto the row only
+*after* that validator has passed it. Names are
 generated as `cc:{event}:{index}` (CC entries carry no `name`); the `cc:`
 prefix means these entries can never claim a `hooks.yaml` guard's name.
 Differences that are this loader's own:
@@ -64,6 +66,25 @@ Differences that are this loader's own:
 - `type` must be `command`. The newer `prompt`/`agent` types have no exit-code
   verdict to read, so one refuses the launch by name rather than being skipped
   quietly or run with the wrong meaning.
+- An entry may carry five keys: `type`, `command`, `timeout`, `statusMessage`
+  and `async`. Anything else still refuses the launch by name. The two beyond
+  the native three have no `hooks.yaml` equivalent to refuse *them*, so each
+  lands on a native slot rather than being dropped:
+  - **`statusMessage` becomes the entry's `description`** — the same text
+    `/hooks` shows for a `hooks.yaml` guard, which is what a spinner label is
+    for. A `statusMessage` that is not text is refused by the same validator
+    that refuses a non-text `description`.
+  - **`async: true` makes the entry advisory.** Claude Code runs such a hook
+    beside the tool call, so its verdict never gates anything. candy-code has
+    no detached hook runner, so the script still runs inline and still inside
+    its `timeout` — what it gives up is the power to stop the call, including
+    at exit `2`. A non-boolean `async` refuses the launch: this flag decides
+    whether a hook may block, so it is not a value to guess at.
+- And an entry from this file format is read through **Claude Code's exit-code
+  dialect**, not the table below — see "Claude Code's two codes" there. Each
+  flattened row carries a `dialect` stamp for exactly that reason; a
+  `hooks.yaml` entry cannot spell the key, so the stamp is also the proof of
+  which file a row came from.
 - `matcher` is taken as a regular expression, exactly as `hooks.yaml` takes it
   (CC's own `*`/empty spelling means "every tool" and flattens to `.*`).
 - Relative commands are NOT anchored to the settings file's directory: Claude
@@ -576,6 +597,39 @@ Notes that matter in practice:
 - **A hook that could not run denies.** `proc_open()` refuses a `cwd` that does
   not exist, so a mistyped `--root` used to turn a *denying* hook into an allow.
   The hook now inherits the process directory rather than not running.
+
+### Claude Code's two codes
+
+Everything above is the **native** table, and it is the table a `hooks.yaml`
+entry gets. An entry that arrived from a `.claude/settings*.json` is read
+through the shell that wrote it instead (`ScriptHook::DIALECT_CLAUDE`, stamped
+by the loader):
+
+- **`0` proceeds**, exactly as above — including a JSON envelope on stdout,
+  which is still read. The dialect never touches a successful hook.
+- **`2` blocks**, exactly as above. This is the one hold-the-line answer Claude
+  Code's hooks have, and it stays one.
+- **Any other non-zero is a non-blocking complaint.** Claude Code shows the user
+  the hook's stderr and runs the tool call anyway; it has no exit `3` or `4` at
+  all. So under this dialect those codes are not a prompt and not a rewrite —
+  they are "this hook said something", and the call proceeds. Reading `1`
+  through the native table would stop a tool call the file never meant to stop.
+- **An `async: true` entry proceeds at every non-zero code**, `2` included: the
+  file asked for a hook that watches rather than gates. It still runs inline,
+  inside its `timeout` — candy-code has no detached runner — so what `async`
+  costs is the power to block, not the hook's execution.
+- **Every such downgrade is announced**, on the runtime-notice inbox
+  (`RuntimeNoticeSink`): the hook's name, the code, and the start of its stderr.
+  A hook that meant to gate and does not must be visible rather than silently
+  obeyed. In the terminal you see the row between turns; a session hosted by
+  `candy-code serve` shows it once the hosted notice drain lands.
+- **A timeout is not a downgrade.** A hook that never answered has not allowed
+  anything, so a dialect row whose run was killed still denies as native does —
+  the dialect reads exit codes, and a killed hook's code says only "signalled".
+
+The check sits in front of the `match` rather than inside it, so a
+`hooks.yaml` row — the only kind there was before — resolves byte-for-byte as
+it always did.
 
 ### JSON on stdout
 

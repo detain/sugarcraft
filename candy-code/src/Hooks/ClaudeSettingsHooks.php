@@ -73,6 +73,21 @@ use Symfony\Component\Yaml\Yaml;
  * `$context->projectRoot` — the pair already agree. ({@see HookConfig}'s
  * ISS-039 anchoring keys off the native user file's realpath, so it
  * correctly does not fire for these paths.)
+ *
+ * WHAT THE NATIVE VALIDATOR CAN NEVER SAY, AND THE DIALLECTIC IT NEEDS. Two CC
+ * keys have no native equivalent to flatten INTO, so they are carried as the
+ * pair of stamps {@see parse()} adds after the validator returns:
+ * `statusMessage` rides the native `description`, and `async: true` rides
+ * `advisory`. Every row this file produces also carries `dialect`
+ * ({@see ScriptHook::DIALECT_CLAUDE}), which is how {@see ScriptHook} knows the
+ * file behind it was written against Claude Code's two-code exit shell — `0`
+ * proceeds, `2` blocks, any other non-zero is a complaint rather than a deny —
+ * rather than against candy-code's six-row table. An `async` hook runs inline
+ * here, inside its timeout, because there is no detached runner in candy-code;
+ * what it forfeits is the power to block. Both readings live in
+ * {@see ScriptHook::claudeDialectVerdict()}; the rows they apply to are the
+ * subject of the "What is read from a Claude settings file" section of
+ * `docs/HOOKS.md`.
  */
 final class ClaudeSettingsHooks
 {
@@ -94,8 +109,18 @@ final class ClaudeSettingsHooks
     /** Keys a CC hook group may carry. */
     private const GROUP_KEYS = ['matcher', 'hooks'];
 
-    /** Keys a CC inner hook entry may carry. */
-    private const ENTRY_KEYS = ['type', 'command', 'timeout'];
+    /**
+     * Keys a CC inner hook entry may carry.
+     *
+     * The first three are the ones with a native equivalent. `statusMessage`
+     * and `async` are here because Claude Code WRITES them on real hooks — a
+     * file that carries either is not a file that means something else — and
+     * what the loader does with each is the pair of bullets in the "What is
+     * read from a Claude settings file" section of `docs/HOOKS.md`. They are
+     * keys of THIS dialect only: a native `hooks.yaml` entry carrying either
+     * is still refused by {@see HookConfig}.
+     */
+    private const ENTRY_KEYS = ['type', 'command', 'timeout', 'statusMessage', 'async'];
 
     /** Whether $path names a file this parser reads. */
     public static function isClaudeSettingsPath(string $path): bool
@@ -108,7 +133,7 @@ final class ClaudeSettingsHooks
      * Load hooks from a CC settings file, or nothing at all when there is no
      * file — the exact polarity {@see HookConfig::loadFromFile()} documents.
      *
-     * @return list<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool}>
+     * @return list<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool, dialect: string, advisory: bool}>
      *
      * @throws \RuntimeException when the file exists and cannot be read
      * @throws \InvalidArgumentException when the file exists and cannot be used
@@ -139,7 +164,7 @@ final class ClaudeSettingsHooks
      * @param string $source what to call the content in an error message — a
      *        path when there is one, so the report names the file to fix
      *
-     * @return list<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool}>
+     * @return list<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool, dialect: string, advisory: bool}>
      *
      * @throws \InvalidArgumentException when the content is not usable
      */
@@ -182,6 +207,12 @@ final class ClaudeSettingsHooks
         }
 
         $document = [];
+
+        // Which generated row names asked for a verdict that may not block,
+        // keyed by the `cc:{event}:{index}` name above. Collected during the
+        // walk and applied after the native validator has had its say, because
+        // the validator returns the rows this ends up stamping.
+        $advisoryByName = [];
 
         foreach ($events as $event => $groups) {
             if (!is_string($event)) {
@@ -249,8 +280,8 @@ final class ClaudeSettingsHooks
                         throw new \InvalidArgumentException(
                             "{$source}: '" . implode("', '", array_map('strval', $unknownKeys))
                             . "' is not a key a hook under `hooks.{$event}` has (valid keys are 'type', "
-                            . "'command' and 'timeout'); refusing rather than registering a hook that is "
-                            . 'not the one you wrote.',
+                            . "'command', 'timeout', 'statusMessage' and 'async'); refusing rather than "
+                            . 'registering a hook that is not the one you wrote.',
                         );
                     }
 
@@ -273,6 +304,30 @@ final class ClaudeSettingsHooks
                         'command' => $entry['command'] ?? '',
                     ];
 
+                    // `statusMessage` is CC's spinner label, and the native row
+                    // has the same slot for the same reader: `description`,
+                    // which is what `/hooks` shows. Whether it is TEXT stays
+                    // HookConfig's verdict rather than this parser's, per the
+                    // "validation is not re-implemented" rule above.
+                    if (\array_key_exists('statusMessage', $entry)) {
+                        $row['description'] = $entry['statusMessage'];
+                    }
+
+                    // `async` decides whether this hook may stop a tool call, so
+                    // it is not a value to guess at: HookConfig applies the same
+                    // no-coercion law to the two booleans it owns
+                    // (`disabled`, `unattendedAsk`) and this flag is the third
+                    // of that family.
+                    $async = $entry['async'] ?? false;
+                    if (!\is_bool($async)) {
+                        throw new \InvalidArgumentException(
+                            "{$source}: a hook under `hooks.{$event}` has an 'async' that is "
+                            . (\is_string($async) ? "'{$async}'" : get_debug_type($async))
+                            . "; 'async' is a boolean in Claude Code, and guessing here would decide "
+                            . 'whether this hook is allowed to block the tool call it watches.',
+                        );
+                    }
+
                     // Absent stays absent so HookConfig applies the default;
                     // present-but-bad (`"60"`, `0`, `null`) is HookConfig's
                     // loud territory, untouched by this parser.
@@ -282,6 +337,7 @@ final class ClaudeSettingsHooks
 
                     $document[$event]['count'] = $index + 1;
                     $document[$event]['rows'][] = $row;
+                    $advisoryByName["cc:{$event}:{$index}"] = $async;
                 }
             }
         }
@@ -298,7 +354,22 @@ final class ClaudeSettingsHooks
         // The reuse step: the rows go through the native validator verbatim.
         // Symfony's dumper quotes anything whose bare form would re-parse as
         // a different type, so a command literally named `60` stays a string.
-        return HookConfig::parse(Yaml::dump($normalized, 8), $source);
+        $rows = HookConfig::parse(Yaml::dump($normalized, 8), $source);
+
+        // And then the two keys the native validator can never produce, stamped
+        // on afterwards. `dialect` and `advisory` are not in
+        // HookConfig::ENTRY_KEYS — a `hooks.yaml` that spelled either is
+        // refused there — so a stamped row is the proof that this file format,
+        // and nothing else, produced it. {@see ScriptHook} reads the pair to
+        // apply CC's exit-code dialect. This adds no opinion about a row's
+        // shape; every judgement about the values above it was HookConfig's.
+        foreach ($rows as &$row) {
+            $row['dialect'] = ScriptHook::DIALECT_CLAUDE;
+            $row['advisory'] = $advisoryByName[$row['name']] ?? false;
+        }
+        unset($row);
+
+        return $rows;
     }
 
     /**

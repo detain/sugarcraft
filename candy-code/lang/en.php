@@ -3114,6 +3114,11 @@ TXT,
     'keys.chat.repaint' => 'Clear the screen and repaint the frame',
     'keys.unbound' => 'unbound',
 
+    // --- C-EXT-1 (Claude Code hook dialect) 2026-10-27 ---
+    'hooks.notice.advisory' => '⚠ The `async` Claude Code hook `{hook}` exited {code}. An `async` hook asks to watch a tool call rather than gate it, so it has no power to block one and the call proceeded. What it said: {reason}',
+    'hooks.notice.claude_dialect' => '⚠ The Claude Code hook `{hook}` exited {code}, which Claude Code reads as a non-blocking complaint rather than a decision, so the tool call proceeded. What it said: {reason}',
+    'hooks.notice.said_nothing' => '(nothing on stderr)',
+
 
     // --- settings help (W3-B i18n migration) ---
     'settings.allowedTools.help' => 'Whitelist of tool names or globs; unset offers every tool.',

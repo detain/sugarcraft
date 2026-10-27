@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Hooks;
 
+use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\HookContextFiles;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
@@ -67,6 +69,16 @@ use SugarCraft\Code\Support\ToolIpcFiles;
  * A MODIFY whose stdout is not a JSON object is downgraded to a DENY rather
  * than to an ALLOW: a hook that meant to rewrite dangerous arguments and
  * failed must not have the ORIGINAL arguments run in its place.
+ *
+ * THE TABLE ABOVE IS ONE DIALECT'S TABLE. A row loaded from a Claude Code
+ * settings file carries {@see self::DIALECT_CLAUDE}, and the shell that wrote
+ * it knows only `0` and `2` — any other non-zero is a non-blocking complaint
+ * there, not a deny, so reading `1` through the table above would stop a tool
+ * call the file never meant to stop. A row its file marked `async: true`
+ * forfeits the block as well, since the file asked for a hook that watches
+ * rather than gates. Both readings live in {@see claudeDialectVerdict()}, in
+ * front of the table rather than inside it, so a `hooks.yaml` row — the only
+ * kind this class had until then — resolves exactly as before.
  */
 final readonly class ScriptHook implements BoundedHookInterface
 {
@@ -87,6 +99,27 @@ final readonly class ScriptHook implements BoundedHookInterface
 
     /** Rewrite the tool arguments; stdout is a JSON object. */
     public const EXIT_MODIFY = 4;
+
+    /**
+     * The row came from candy-code's own `hooks.yaml` (or from a caller that
+     * built it by hand), so the exit table above means exactly what it says.
+     */
+    public const DIALECT_NATIVE = 'native';
+
+    /**
+     * The row came from a Claude Code settings file — see
+     * {@see \SugarCraft\Code\Hooks\ClaudeSettingsHooks::parse()}, the only
+     * producer of this stamp, since a native entry cannot spell the key.
+     *
+     * Claude Code defines two exit codes and nothing else: `0` proceeds, `2`
+     * is a blocking error, and ANY OTHER non-zero is a non-blocking error —
+     * stderr reaches its user and the tool call goes ahead. So a hook written
+     * for that shell, exiting `1` to complain about something, would under the
+     * native table stop the tool call the file never meant to stop. Under this
+     * dialect only `0` and `2` carry a verdict; every other exit code allows,
+     * and says so — see {@see claudeDialectVerdict()}.
+     */
+    public const DIALECT_CLAUDE = 'claude';
 
     /**
      * How many CONSECUTIVE `stream_select()` failures {@see drain()} rides out
@@ -295,6 +328,17 @@ final readonly class ScriptHook implements BoundedHookInterface
     private const MAX_ASK_PROMPT_BYTES = 16384;
 
     /**
+     * Bytes of a downgraded hook's stderr that ride into its notice.
+     *
+     * Deliberately small, and not a fourth entry in the per-exit-code table in
+     * `docs/HOOKS.md`: a notice is a one-line heads-up in an inbox a human
+     * scans between turns, not an explanation the model reads, so the ceiling
+     * that serves a deny reason (16 KiB) would be the wrong ceiling here even
+     * though the sink clips a row anyway.
+     */
+    private const NOTICE_REASON_BYTES = 400;
+
+    /**
      * The floor under an {@see EXIT_MODIFY} rewrite's ceiling — see
      * {@see modifyOrDeny()}, which allows the LARGER of this and the byte
      * length of the arguments the rewrite replaces.
@@ -454,6 +498,14 @@ final readonly class ScriptHook implements BoundedHookInterface
      *
      * @param callable(): float|null $clock deadline clock; null keeps production
      *        on `microtime(true)` — see {@see self::$clock} for the seam's why.
+     * @param string $dialect whose exit-code table this row's file was written
+     *        against: {@see self::DIALECT_NATIVE} for candy-code's own
+     *        `hooks.yaml`, {@see self::DIALECT_CLAUDE} for a Claude Code
+     *        settings file. See {@see claudeDialectVerdict()}.
+     * @param bool $advisory the file asked for a hook that may never hold the
+     *        tool call open (`async: true`). candy-code has no detached hook
+     *        runner, so such a row still runs inline and inside its timeout;
+     *        what it loses is the power to block — see {@see $advisory}.
      */
     public function __construct(
         private string $name,
@@ -463,6 +515,8 @@ final readonly class ScriptHook implements BoundedHookInterface
         private string $description,
         private float $timeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS,
         ?callable $clock = null,
+        private string $dialect = self::DIALECT_NATIVE,
+        private bool $advisory = false,
     ) {
         $this->clock = $clock !== null
             ? \Closure::fromCallable($clock)
@@ -486,6 +540,13 @@ final readonly class ScriptHook implements BoundedHookInterface
      * that never went through a file. What it must not do is read `timeout: 0`
      * as "wait forever", which is why the fallback is the default rather than
      * the value.
+     *
+     * `dialect` and `advisory` are read here too, and they are the only two
+     * keys this method takes that a hand-written `hooks.yaml` cannot produce:
+     * {@see HookConfig::parse()} refuses an entry carrying either, so their
+     * presence marks a row that arrived from a Claude Code settings file. Both
+     * default to the native shape, which is what every row that never mentions
+     * them has always been.
      */
     public static function fromConfig(array $config): self
     {
@@ -494,6 +555,19 @@ final readonly class ScriptHook implements BoundedHookInterface
 
         $name = $config['name'] ?? null;
         $timeout = $config['timeout'] ?? null;
+
+        // The two dialect flags are config keys a native `hooks.yaml` cannot
+        // carry — `dialect` and `advisory` are not in HookConfig::ENTRY_KEYS, so
+        // a file that spelled one would be refused by the parser. They arrive
+        // only on rows {@see ClaudeSettingsHooks::parse()} stamps. Read
+        // strictly-typed rather than coerced: a `dialect: 1` is a row whose
+        // dialect is unknown, and an unknown dialect gets the native table it
+        // has always got, which is the fail-CLOSED direction for `advisory`.
+        $dialect = ($config['dialect'] ?? null) === self::DIALECT_CLAUDE
+            ? self::DIALECT_CLAUDE
+            : self::DIALECT_NATIVE;
+
+        $advisory = ($config['advisory'] ?? null) === true;
 
         return new self(
             // E329. This one is a display NAME rather than a path — the hook
@@ -512,6 +586,8 @@ final readonly class ScriptHook implements BoundedHookInterface
                 && is_finite((float) $timeout)
                     ? (float) $timeout
                     : self::DEFAULT_TIMEOUT_SECONDS,
+            dialect: $dialect,
+            advisory: $advisory,
         );
     }
 
@@ -566,6 +642,13 @@ final readonly class ScriptHook implements BoundedHookInterface
             // wall clock and every scripted-clock expectation downstream of a
             // clamp would be measuring the scheduler again.
             $this->clock,
+            // And the clone carries the DIALECT for the same reason: this is
+            // the one method a loader's rows pass through on the way into the
+            // registry ({@see HookRegistry}'s chain clamp), so losing the pair
+            // here would quietly hand a Claude Code hook the native exit table
+            // the moment the chain budget was shortened.
+            $this->dialect,
+            $this->advisory,
         );
     }
 
@@ -582,6 +665,24 @@ final readonly class ScriptHook implements BoundedHookInterface
     public function matcher(): string
     {
         return $this->matcher;
+    }
+
+    /**
+     * Whose exit-code table this row's file was written against —
+     * {@see self::DIALECT_NATIVE} or {@see self::DIALECT_CLAUDE}.
+     */
+    public function dialect(): string
+    {
+        return $this->dialect;
+    }
+
+    /**
+     * Whether the row's file asked for a verdict that may not block
+     * (`async: true` in a Claude Code settings file).
+     */
+    public function isAdvisory(): bool
+    {
+        return $this->advisory;
     }
 
     /**
@@ -779,6 +880,17 @@ final readonly class ScriptHook implements BoundedHookInterface
         $output = trim($output);
         $errors = trim($errors);
 
+        // The foreign-dialect check runs FIRST and returns out of this method,
+        // so the `match` below stays byte-for-byte the native table
+        // `docs/HOOKS.md` documents: a row whose file was written against
+        // Claude Code's two-code shell, or one its file marked `async`, gets
+        // its verdict here instead, and an ordinary `hooks.yaml` row is
+        // untouched by any of it.
+        $dialectVerdict = $this->claudeDialectVerdict($exitCode, $errors);
+        if ($dialectVerdict !== null) {
+            return $dialectVerdict;
+        }
+
         return match ($exitCode) {
             // The hook's stdout is now ROUTED TO THE MODEL, not thrown away. It
             // goes into `additionalContext` (NOT `message`, which both gates
@@ -810,6 +922,83 @@ final readonly class ScriptHook implements BoundedHookInterface
                 self::clip($errors, self::MAX_DENY_REASON_BYTES) ?: "Hook exited with code $exitCode",
             ),
         };
+    }
+
+    /**
+     * The verdict for a row whose file was not written against this class's
+     * exit table, or `null` when the native table stands.
+     *
+     * UNDER {@see self::DIALECT_CLAUDE} a hook's shell defines two codes and
+     * nothing else: `0` proceeds, `2` is a blocking error, and EVERY OTHER
+     * non-zero is a NON-BLOCKING error — Claude Code shows the user the hook's
+     * stderr and runs the tool call anyway. Read through the native table, a
+     * hook written for that shell and exiting `1` to complain about something
+     * would deny, and one exiting `3` or `4` would prompt or rewrite arguments
+     * neither file ever asked for. So under this dialect `0` and `2` keep their
+     * answers — `2` still blocks, which is the one hold-the-line answer that
+     * shell has, and the reason this is a downgrade rather than a deafening —
+     * and every other code is an allow.
+     *
+     * AN {@see $advisory} ROW GIVES UP THE BLOCK TOO. `async: true` is a file
+     * asking for a hook that runs beside the tool call rather than in front of
+     * it. candy-code has no detached hook runner, so the script still runs
+     * inline and still inside its timeout; what it forfeits is the power to
+     * stop anything, in exchange for its complaint reaching a human. A row that
+     * wanted a gate it cannot build is the loudest thing in this method, which
+     * is why both paths record before they allow.
+     *
+     * `0` is answered by the caller's own allow arm rather than here, because
+     * that is where a JSON envelope on stdout is read — a dialect that swallowed
+     * exit `0` would silently discard the context a permitted hook is meant to
+     * hand to the model.
+     */
+    private function claudeDialectVerdict(int $exitCode, string $errors): ?HookResult
+    {
+        if ($exitCode === self::EXIT_ALLOW) {
+            return null;
+        }
+
+        $nativeAnswerStands = !$this->advisory
+            && !($this->dialect === self::DIALECT_CLAUDE && $exitCode !== self::EXIT_BLOCK);
+
+        if ($nativeAnswerStands) {
+            return null;
+        }
+
+        $this->recordDialectNotice($exitCode, $errors);
+
+        // Empty message AND empty context, on purpose. An allow's `message`
+        // reaches nobody on either live path (see the class docblock), and its
+        // `additionalContext` reaches the MODEL — so putting the hook's stderr
+        // there would launder a foreign shell's error text into the prompt while
+        // the human who needs to see it is exactly the party the notice is for.
+        return HookResult::allow();
+    }
+
+    /**
+     * The one-line human notice for a verdict this row was not allowed to give.
+     *
+     * {@see RuntimeNoticeSink::record()} is the carrier because it crosses
+     * forks — a hook run on a worker-side path lands in the parent's inbox
+     * instead of disappearing with the child — and because the row is read
+     * between turns rather than interrupting one.
+     *
+     * SHARED BY BOTH DOWNGRADES, and the intended home for the next one
+     * (C-EXT-6.a's hook-argument forms add a shape here, not a second Lang key
+     * per call site).
+     */
+    private function recordDialectNotice(int $exitCode, string $errors): void
+    {
+        RuntimeNoticeSink::record(Lang::t(
+            $this->advisory ? 'hooks.notice.advisory' : 'hooks.notice.claude_dialect',
+            [
+                'hook' => $this->name,
+                'code' => (string) $exitCode,
+                'reason' => self::clip($errors, self::NOTICE_REASON_BYTES) !== ''
+                    ? self::clip($errors, self::NOTICE_REASON_BYTES)
+                    : Lang::t('hooks.notice.said_nothing'),
+            ],
+        ));
     }
 
     /**
