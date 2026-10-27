@@ -76,6 +76,7 @@ use SugarCraft\Code\Commands\WebSearchCommand;
 use SugarCraft\Code\Tools\BuiltIn\WebSearch;
 use SugarCraft\Code\Observability\EventSink;
 use SugarCraft\Code\Observability\NullEventSink;
+use SugarCraft\Code\Observability\RetryingEventSink;
 use SugarCraft\Code\Palette\PaletteAction;
 use SugarCraft\Code\Palette\PaletteState;
 use SugarCraft\Forms\TextArea\TextArea;
@@ -139,6 +140,7 @@ use SugarCraft\Code\App\AgentControlMsg;
 use SugarCraft\Code\App\ToolResultsMsg;
 use SugarCraft\Code\App\GoalJudgedMsg;
 use SugarCraft\Code\App\AssistantMsg;
+use SugarCraft\Code\App\TelemetryRetryTickMsg;
 use SugarCraft\Code\Chat\Handlers\HandlesRunControl;
 use SugarCraft\Code\Chat\Handlers\HandlesTurnCompletion;
 use SugarCraft\Code\Message;
@@ -312,6 +314,24 @@ trait HandlesSessionSurface
         // every other unhandled Msg below.
         if ($msg instanceof LoadMoreMsg) {
             return $this->handleSessionLoadMore();
+        }
+
+        if ($msg instanceof TelemetryRetryTickMsg) {
+            // C-SES-4.b: the span-retry tick. subscriptions() armed this tick
+            // only while the sink carried a refused batch, and the payload
+            // is whatever the sink itself still holds — so the arm is three
+            // lines: re-post, answer with no state change, and let the
+            // reconcile after drop the timer when the carry queue emptied
+            // (a still-refused body keeps it armed, one tick at a time).
+            // The instanceof re-check is the same honesty the subscription's
+            // gate gives: a sink that is not retryable (NullEventSink, a
+            // bare OtelSink) was never supposed to arm this, and is never
+            // touched here either.
+            if ($this->eventSink instanceof RetryingEventSink) {
+                $this->eventSink->tick();
+            }
+
+            return [$this, null];
         }
 
         return null;

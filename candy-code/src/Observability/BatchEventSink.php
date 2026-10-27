@@ -28,20 +28,35 @@ namespace SugarCraft\Code\Observability;
  * caller and never queued (raw events cannot be replayed after encoding
  * closes spans).
  *
- * Arms, all bounded and none timer-based:
- * - the buffer reaching `batchSize` renders and POSTs synchronously inside
- *   `consume()`,
+ * Arms, all bounded and none timer-based INSIDE this class:
+ * - the buffer reaching `batchSize` renders and POSTs through the sink's
+ *   async leg when it has one (C-SES-4.b) — the body is handed to the event
+ *   loop and `consume()` returns without waiting for the response — or
+ *   synchronously through the Guzzle leg when it has not (the debugging and
+ *   test shapes, unchanged),
  * - {@see flush()} is the shutdown arm (best-effort, never throws, owner-pid
- *   only),
+ *   only). It stays synchronous: it runs where the loop may never run again
+ *   (`-p` exits between turns' settle points; a TUI leaving through
+ *   `exit()`), so it re-posts through the Guzzle leg whatever the async leg
+ *   had still not been answered — see the duplication note below,
  * - {@see tick()} re-POSTs only bodies a previous attempt FAILED to
- *   deliver — designed to ride a bounded tick-drainer of the app's own
- *   event loop; a healthy stream therefore performs no I/O on ticks at all.
+ *   deliver — the retry rides the TUI's own tick since C-SES-4.b
+ *   (`Chat::subscriptions()` declares it only while {@see hasCarryOver()}
+ *   answers true); a healthy stream therefore performs no I/O on ticks at all.
+ *
+ * IN-FLIGHT DUPLICATION (C-SES-4.b, accepted): a body handed to the async
+ * leg is neither delivered nor refused until its response arrives. If the
+ * loop stops running with bodies in flight — the shutdown flush is exactly
+ * that moment — flush cannot know whether the collector already stored them,
+ * so it re-posts them synchronously. A lost response whose request DID land
+ * therefore duplicates those spans. Telemetry tolerates the double; it does
+ * not tolerate the silent loss of the alternative.
  *
  * A refused batch carries the already-RENDERED JSON bodies (not the stamped
  * events): encoding closes spans, so replayed events could never reproduce
  * what a failed POST lost. The carry-over queue is capped at one batch.
  */
-final class BatchEventSink implements EventSink
+final class BatchEventSink implements EventSink, RetryingEventSink
 {
     /**
      * Buffered events, each paired with its consume-time unix nanos.
@@ -56,6 +71,20 @@ final class BatchEventSink implements EventSink
      * @var list<string>
      */
     private array $unsent = [];
+
+    /**
+     * Bodies handed to the SINK'S ASYNC LEG (C-SES-4.b) whose response has
+     * not arrived yet, keyed by a per-send sequence number (bodies can be
+     * byte-identical, so the body itself is no key). Neither delivered nor
+     * refused yet: {@see flush()} re-posts whatever is still here, which is
+     * where the documented duplicate-span trade lives.
+     *
+     * @var array<int, string>
+     */
+    private array $inFlight = [];
+
+    /** @see $inFlight */
+    private int $flightSeq = 0;
 
     private bool $closed = false;
 
@@ -119,6 +148,10 @@ final class BatchEventSink implements EventSink
 
     /**
      * Loop-tick arm: re-posts failed bodies only. See the class docblock.
+     * Since C-SES-4.b this has a production caller — the 15-second
+     * `code.otel-retry` tick {@see \SugarCraft\Code\Chat::subscriptions()}
+     * declares while {@see hasCarryOver()} answers true, dispatched by
+     * `HandlesSessionSurface`'s TelemetryRetryTickMsg arm.
      */
     public function tick(): void
     {
@@ -148,7 +181,26 @@ final class BatchEventSink implements EventSink
         }
 
         $this->closed = true;
+
+        // C-SES-4.b reconciliation: bodies the async leg accepted for sending
+        // but the loop never answered are INDETERMINATE — with the loop about
+        // to stop for good they cannot still land their response. flush()
+        // re-posts them through the synchronous Guzzle leg (settle callbacks
+        // arriving later are inert: settleFlight() reads $closed and does
+        // nothing). A collector that already stored one of these bodies sees
+        // it twice — the duplicate-span trade the class docblock owns.
+        $uncertain = \array_values($this->inFlight);
+        $this->inFlight = [];
+
+        // $closed is already true, so every send() below — here and in the
+        // last-attempt arm — routes through the synchronous leg even when an
+        // async transport was built. That is what "flush stays synchronous"
+        // means concretely: the shutdown path never hands work to a loop it
+        // is standing up next to an exit() with.
         $this->exportBuffer();
+        if ([] !== $uncertain) {
+            $this->send($uncertain);
+        }
         if ([] !== $this->unsent) {
             // One bounded last attempt for whatever the batch arms refused.
             $bodies = $this->unsent;
@@ -208,6 +260,27 @@ final class BatchEventSink implements EventSink
      */
     private function send(array $bodies): void
     {
+        if (!$this->closed && $this->sink->hasAsyncTransport()) {
+            // C-SES-4.b: hand each body to the loop and return. The TUI's
+            // update() path no longer waits on the POST; a refusal (or a
+            // transport rejection) lands on the retry queue from the settle
+            // callback, which runs on the same loop the caller pumps.
+            foreach ($bodies as $body) {
+                $key = ++$this->flightSeq;
+                $this->inFlight[$key] = $body;
+                $this->sink->postAsync($body)->then(
+                    function (bool $accepted) use ($key): void {
+                        $this->settleFlight($key, $accepted);
+                    },
+                    function () use ($key): void {
+                        $this->settleFlight($key, false);
+                    },
+                );
+            }
+
+            return;
+        }
+
         foreach ($bodies as $index => $body) {
             try {
                 $this->sink->post($body);
@@ -223,5 +296,29 @@ final class BatchEventSink implements EventSink
                 return;
             }
         }
+    }
+
+    /**
+     * A body's async leg settled. On refusal it joins the retry queue (same
+     * oldest-first, one-batch-capped rule the synchronous arm uses); on
+     * acceptance it is simply dropped from the in-flight map.
+     */
+    private function settleFlight(int $key, bool $accepted): void
+    {
+        if (!isset($this->inFlight[$key])) {
+            // The key was already reconciled by flush() (which cleared the
+            // whole map before its synchronous re-post); a late loop tick
+            // after shutdown must not resurrect or double-carry it.
+            return;
+        }
+
+        $body = $this->inFlight[$key];
+        unset($this->inFlight[$key]);
+
+        if ($accepted) {
+            return;
+        }
+
+        $this->unsent = \array_slice(array_merge($this->unsent, [$body]), -$this->batchSize);
     }
 }

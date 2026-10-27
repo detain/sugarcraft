@@ -134,6 +134,39 @@ final class BatchEventSinkTest extends TestCase
     }
 
     /**
+     * C-SES-4.b: an async-built sink still flushes SYNCHRONOUSLY. The flush
+     * is the shutdown arm (`-p` exits between turns; a TUI leaves through
+     * exit()) and the loop may never run again, so the buffered batch rides
+     * the Guzzle leg — the async leg is for the open path only, where a
+     * caller exists to pump the loop.
+     */
+    public function testWithAsyncLegBuiltTheFlushArmStillPostsSynchronously(): void
+    {
+        $asyncCalls = 0;
+        $sink = new BatchEventSink(OtelSink::withTransports(
+            function (string $body): bool {
+                $this->bodies[] = $body;
+
+                return true;
+            },
+            static function (string $body) use (&$asyncCalls): \React\Promise\PromiseInterface {
+                ++$asyncCalls;
+
+                return \React\Promise\resolve(true);
+            },
+        ), 64);
+
+        $sink->consume(new StepStarted(1, 9));
+        $sink->consume(new SpendCapBreached(1, 2.0, 1.0));
+        $this->assertSame(0, $asyncCalls, 'a partial batch is buffered, not sent — the count arms both legs');
+
+        $sink->flush();
+        $this->assertSame(0, $asyncCalls, 'the flush handed nothing to the loop it cannot trust to run again');
+        $this->assertCount(1, $this->bodies, 'the buffered batch left through the synchronous leg');
+        $this->assertFalse($sink->hasCarryOver());
+    }
+
+    /**
      * OBS-1: render failure was the one way the batch arm broke its
      * never-throws promise — `encodeAll()`'s `JSON_THROW_ON_ERROR` sat
      * outside any try while `consume()` and `flush()` promised silence, so a

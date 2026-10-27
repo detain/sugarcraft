@@ -18356,6 +18356,21 @@ final class Chat implements Model
     private const AGENT_STRIP_TICK_SECONDS = 1.0;
 
     /**
+     * The OTel span-retry tick (C-SES-4.b): declared only while the sink
+     * carries a batch its endpoint refused, re-posting through
+     * {@see \SugarCraft\Code\Observability\RetryingEventSink::tick()} — the
+     * production caller OBS-1's tick arm never had. Fifteen seconds is
+     * telemetry cadence, not UI cadence: a collector reboot costs one extra
+     * turn's spans at worst, and the no-op answer when nothing moved keeps
+     * the tick off the render path (same shape as the schedule watch
+     * above). E646 does not bind a retry cadence on an export that already
+     * bounded every request it makes.
+     */
+    private const OTEL_RETRY_SUBSCRIPTION = 'code.otel-retry';
+
+    private const OTEL_RETRY_TICK_SECONDS = 15.0;
+
+    /**
      * Declare the recurring work this model needs the runtime to drive
      * (crush_feat.md section 5 E4).
      *
@@ -18583,6 +18598,22 @@ final class Chat implements Model
 
                     return $prompt === null ? null : new InitialPromptMsg($prompt);
                 },
+            );
+        }
+
+        // The OTel span-retry tick (C-SES-4.b). Declared only while the sink
+        // holds a body the endpoint refused — a dark launch (NullEventSink)
+        // or a healthy collector answers false to the one array check and
+        // arms nothing, the same conditionality every tick above carries.
+        // The reconcile after the retry that lands drops it; a permanently
+        // dead endpoint keeps one slow timer, never a per-event cost.
+        if ($this->eventSink instanceof \SugarCraft\Code\Observability\RetryingEventSink
+            && $this->eventSink->hasCarryOver()
+        ) {
+            $subscriptions = ($subscriptions ?? new \SugarCraft\Core\Subscriptions())->withTick(
+                self::OTEL_RETRY_SUBSCRIPTION,
+                self::OTEL_RETRY_TICK_SECONDS,
+                static fn (): \SugarCraft\Core\Msg => new \SugarCraft\Code\App\TelemetryRetryTickMsg(),
             );
         }
 
