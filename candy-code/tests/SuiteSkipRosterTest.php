@@ -76,6 +76,10 @@ final class SuiteSkipRosterTest extends TestCase
     private const PHAR_PREMISE_ENTRY =
         'SugarCraft\\Code\\Tests\\Integration\\PharCompatTest::testTheMeasuredPremiseGlobSeesNothingInsideAPharAndScandirDoes';
 
+    /** The C-SES-6.a renamed-install key — the private `PHAR_RENAME`, riding the same mint gate. */
+    private const PHAR_RENAME_ENTRY =
+        'SugarCraft\\Code\\Tests\\Integration\\PharCompatTest::testARenamedPharBootsItsOwnArchiveThroughTheMapPharFallback';
+
     /**
      * Runs $body with CANDY_CODE_PHAR forced UNARMED and restores the caller's
      * shell state exactly, so the layout pins stay deterministic no matter
@@ -100,10 +104,11 @@ final class SuiteSkipRosterTest extends TestCase
     }
 
     /**
-     * Which DST-1 keys this process shape adds to an effective roster with the
-     * smoke forced unarmed: the smoke skips (rostered); the premise skips only
-     * where phar writing is NOT possible, so its key joins conditionally —
-     * computed from the same predicate the roster and the test bodies read.
+     * Which phar keys this process shape adds to an effective roster with the
+     * smoke forced unarmed: the smoke skips (rostered); the premise and the
+     * C-SES-6.a rename arm both mint a fixture archive and so skip (rostered)
+     * only where phar writing is NOT possible — computed from the same
+     * predicate the roster and the test bodies read.
      *
      * @return array<string,string>
      */
@@ -113,6 +118,7 @@ final class SuiteSkipRosterTest extends TestCase
 
         if (!SuiteSkipRoster::pharWritingPossible()) {
             $entries[self::PHAR_PREMISE_ENTRY] = SuiteSkipRoster::EXPECTED[self::PHAR_PREMISE_ENTRY];
+            $entries[self::PHAR_RENAME_ENTRY] = SuiteSkipRoster::EXPECTED[self::PHAR_RENAME_ENTRY];
         }
 
         return $entries;
@@ -262,8 +268,8 @@ final class SuiteSkipRosterTest extends TestCase
                 ] + self::pharEntriesUnarmed(),
                 'over a path-repo symlink farm the layout-conditional test RUNS while the dormant '
                 . 'smokes stay rostered, so the effective roster must be the const minus exactly '
-                . 'its GitignoreAwareness key (and minus the premise wherever phar writing is '
-                . 'possible), reasons intact',
+                . 'its GitignoreAwareness key (and minus the premise and the rename arm wherever '
+                . 'phar writing is possible), reasons intact',
             );
         } finally {
             $this->purgeFarmSandbox($dir);
@@ -282,6 +288,7 @@ final class SuiteSkipRosterTest extends TestCase
             $expected = SuiteSkipRoster::EXPECTED;
             if (SuiteSkipRoster::pharWritingPossible()) {
                 unset($expected[self::PHAR_PREMISE_ENTRY]);
+                unset($expected[self::PHAR_RENAME_ENTRY]);
             }
 
             self::assertSame(
@@ -293,8 +300,8 @@ final class SuiteSkipRosterTest extends TestCase
                 ),
                 'over a packagist farm the layout-conditional test skips and the unarmed smokes skip '
                 . 'too, so the effective roster must be the full const -- all unconditional and '
-                . 'dormant keys, all reasons, same order (minus the premise wherever phar writing '
-                . 'is possible and it RUNS instead of skipping)',
+                . 'dormant keys, all reasons, same order (minus the premise and the rename arm '
+                . 'wherever phar writing is possible and they RUN instead of skipping)',
             );
         } finally {
             $this->purgeFarmSandbox($dir);
@@ -330,6 +337,7 @@ final class SuiteSkipRosterTest extends TestCase
             $unarmed = SuiteSkipRoster::EXPECTED;
             if (SuiteSkipRoster::pharWritingPossible()) {
                 unset($unarmed[self::PHAR_PREMISE_ENTRY]);
+                unset($unarmed[self::PHAR_RENAME_ENTRY]);
             }
 
             self::assertSame(
@@ -338,7 +346,7 @@ final class SuiteSkipRosterTest extends TestCase
                     static fn () => SuiteSkipRoster::expectedForLayout($farm),
                 ),
                 'the unarmed gate may not lift anything -- the smokes skip and stay rostered (the '
-                . 'premise lifts only where phar writing is possible)',
+                . 'premise and the rename arm lift only where phar writing is possible)',
             );
 
             putenv('CANDY_CODE_LIVE_SGLANG=0');
@@ -393,6 +401,12 @@ final class SuiteSkipRosterTest extends TestCase
                 SuiteSkipRoster::pharWritingPossible(),
                 !array_key_exists(self::PHAR_PREMISE_ENTRY, SuiteSkipRoster::expectedForLayout($farm)),
                 'the premise entry rides the roster exactly when this process cannot mint a fixture phar'
+            );
+            self::assertSame(
+                SuiteSkipRoster::pharWritingPossible(),
+                !array_key_exists(self::PHAR_RENAME_ENTRY, SuiteSkipRoster::expectedForLayout($farm)),
+                'the rename entry rides the roster on the same mint gate as the premise — it '
+                . 'mints its miniature archive the same way, so the two lift and rejoin together'
             );
         } finally {
             $prior === false ? putenv('CANDY_CODE_PHAR') : putenv('CANDY_CODE_PHAR=' . $prior);
@@ -455,8 +469,11 @@ final class SuiteSkipRosterTest extends TestCase
             if (!SuiteSkipRoster::pharWritingPossible()) {
                 $roster->recordPrepared(self::PHAR_PREMISE_ENTRY);
                 $roster->recordSkip(self::PHAR_PREMISE_ENTRY, self::PHAR_PREMISE_ENTRY, 'phar.readonly armed');
+                $roster->recordPrepared(self::PHAR_RENAME_ENTRY);
+                $roster->recordSkip(self::PHAR_RENAME_ENTRY, self::PHAR_RENAME_ENTRY, 'phar.readonly armed');
             } else {
                 $roster->recordPrepared(self::PHAR_PREMISE_ENTRY);
+                $roster->recordPrepared(self::PHAR_RENAME_ENTRY);
             }
 
             self::assertSame(
@@ -511,7 +528,9 @@ final class SuiteSkipRosterTest extends TestCase
             if (!SuiteSkipRoster::pharWritingPossible()) {
                 $roster->recordPrepared(self::PHAR_PREMISE_ENTRY);
                 $roster->recordSkip(self::PHAR_PREMISE_ENTRY, self::PHAR_PREMISE_ENTRY, 'phar.readonly armed');
-                $skips++;
+                $roster->recordPrepared(self::PHAR_RENAME_ENTRY);
+                $roster->recordSkip(self::PHAR_RENAME_ENTRY, self::PHAR_RENAME_ENTRY, 'phar.readonly armed');
+                $skips += 2;
             }
 
             self::assertSame($skips, $roster->skipEventCount());

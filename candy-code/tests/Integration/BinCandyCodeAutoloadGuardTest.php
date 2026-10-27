@@ -268,12 +268,17 @@ final class BinCandyCodeAutoloadGuardTest extends TestCase
      * because the guard would not fire at all.
      *
      * SINCE DST-1 the script can replace this list outright, but only from a
-     * door no phpunit process can open: the archive identity — the stub's
-     * `phar://__FILE__` or a non-empty `Phar::running(false)` — exists only
-     * inside a phar build, so `assertCount(3)` remains the truth for every
-     * non-phar launch this file models. The safe-direction
-     * argument is unchanged for the phar door: an archive-only candidate that
-     * FOUND an autoloader in a non-phar fixture would fire the same red below.
+     * door no phpunit process can open: the two archive identities — the
+     * stub's `phar://__FILE__` and a non-empty `Phar::running(false)` — exist
+     * only inside a phar build. C-SES-6.a added a third door, the
+     * `Phar::mapPhar()` fallback a renamed install boots through; it opens
+     * only for a script whose own bytes carry the `__HALT_COMPILER();` seal,
+     * and every copy this file launches is an UNSEALED plain file, where the
+     * call throws `PharException` and the filesystem candidates stand — so
+     * `assertCount(3)` remains the truth for every non-phar launch this file
+     * models. The safe-direction argument is unchanged for every phar door: an
+     * archive-only candidate that FOUND an autoloader in a non-phar fixture
+     * would fire the same red below.
      */
     public function testTheGuardsThreeCandidatesAllLandInsideTheEmptyFixture(): void
     {
@@ -291,6 +296,48 @@ final class BinCandyCodeAutoloadGuardTest extends TestCase
             );
             self::assertFileDoesNotExist($candidate);
         }
+    }
+
+    /**
+     * C-SES-6.a — the guard's THIRD archive door, restated.
+     *
+     * The fallback works only while two literals on two sides of the build
+     * pair: the stub calls `Phar::mapPhar()` under one alias, and
+     * tools/build-phar.php mints the release archive under the same one. A
+     * respelling on either side would silently drop a renamed install back on
+     * the filesystem candidates — the exact exit-2 the door exists to end —
+     * with nothing pointing at the drift, so this pins the executable
+     * statements in both files and the alias they share.
+     *
+     * The UNSEALED half of this door is already policed by every other test in
+     * this file: each copy it launches is a plain file whose mapPhar attempt
+     * throws `PharException`, so the three-candidate exit-2 shape is itself
+     * the standing negative control for the fallback.
+     */
+    public function testTheStubCarriesTheMapPharFallbackPairedWithTheBuildAlias(): void
+    {
+        $bin = file_get_contents(dirname(__DIR__, 2) . '/bin/candy-code');
+        self::assertIsString($bin, 'unreadable bin stub — every source pin in this file is vacuous without it');
+        $build = file_get_contents(dirname(__DIR__, 2) . '/tools/build-phar.php');
+        self::assertIsString($build, 'unreadable build tool — the alias pairing cannot be judged');
+
+        self::assertStringContainsString(
+            "\Phar::mapPhar('candy-code.phar');",
+            $bin,
+            'the renamed-install fallback door is gone from the guard — a suffix-less install '
+            . 'falls back to the filesystem candidates and exits 2 again'
+        );
+        self::assertStringContainsString(
+            "\$archive = 'phar://candy-code.phar';",
+            $bin,
+            'a successful mapPhar must address the archive through the alias it registered'
+        );
+        self::assertStringContainsString(
+            "new Phar(\$outArg, 0, 'candy-code.phar')",
+            $build,
+            'the build mints the release archive under the alias the stub fallback must track — '
+            . 'move both together or the renamed boot diverges'
+        );
     }
 
     public function testACheckoutWithNoAutoloaderFailsOnStderrWithExitTwo(): void

@@ -32,6 +32,28 @@ ini_set('display_errors', 'stderr');
     $archive = \Phar::running(false) !== ''
         ? 'phar://' . \Phar::running(false)
         : (str_ends_with(__FILE__, '.phar') ? 'phar://' . __FILE__ : '');
+    // C-SES-6.a — a third door for the renamed install: `mv candy-code.phar
+    // ~/bin/candy-code` (or a symlink of it) hands PHP an ordinary script
+    // whose bytes seal an archive, and both doors above are blind to exactly
+    // that shape — Phar::running(false) is '' in stub context, and the
+    // suffix-less name never matches __FILE__. Phar::mapPhar() is the oracle
+    // for it: it loads the archive sealed inside the running script under the
+    // build's alias, and on every UNSEALED script — a composer checkout's own
+    // bin, a fixture copy of it — it throws PharException, which is why no
+    // pre-gate is needed. (__COMPILER_HALT_OFFSET__ cannot gate this: on PHP
+    // 8.3.6 `defined()` answers false inside the halting file itself — the
+    // constant is compile-time-substituted and never enters the symbol table,
+    // measured.) The alias literal pairs with tools/build-phar.php's
+    // `new Phar(..., 'candy-code.phar')`; BinCandyCodeAutoloadGuardTest pins
+    // both sides.
+    if ($archive === '') {
+        try {
+            \Phar::mapPhar('candy-code.phar');
+            $archive = 'phar://candy-code.phar';
+        } catch (\PharException) {
+            // Not a sealed script — the filesystem candidates above stand.
+        }
+    }
     if ($archive !== '') {
         $candidates = [$archive . '/vendor/autoload.php'];
     }

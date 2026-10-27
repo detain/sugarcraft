@@ -121,7 +121,11 @@ Or run the single-file phar — no Composer, no `vendor/`: download
 `candy-code.phar` and its `candy-code.phar.sha256` sidecar from the
 `candy-code/v*` releases at <https://github.com/detain/sugarcraft/releases>,
 verify with `sha256sum -c candy-code.phar.sha256`, run with
-`php candy-code.phar`. Releases from `candy-code/v0.1.1` onward carry an
+`php candy-code.phar`. Renaming it to a suffix-less executable (`mv
+candy-code.phar ~/bin/candy-code`) works just as well, and so does a symlink:
+the stub maps the archive sealed in its own bytes and boots that archive's
+vendor — a stray `vendor/` beside the installed name is never consulted.
+Releases from `candy-code/v0.1.1` onward carry an
 Ed25519 signature that `candy-code self-update` verifies against the pinned
 key before any swap. The preferred asset is `candy-code.phar.sha256.sig` — a
 signature over the `candy-code.phar.sha256` sidecar body, so verification

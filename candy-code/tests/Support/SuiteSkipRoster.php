@@ -196,6 +196,14 @@ final class SuiteSkipRoster
         'SugarCraft\Code\Tests\Integration\PharCompatTest::testTheMeasuredPremiseGlobSeesNothingInsideAPharAndScandirDoes';
 
     /**
+     * The C-SES-6.a key: the renamed-install fallback arm, which mints a real
+     * miniature archive exactly like the premise test's fixture and so rides
+     * the SAME gate — the body calls {@see pharWritingPossible()} directly.
+     */
+    private const PHAR_RENAME =
+        'SugarCraft\Code\Tests\Integration\PharCompatTest::testARenamedPharBootsItsOwnArchiveThroughTheMapPharFallback';
+
+    /**
      * The tests this suite is allowed to skip, `Class::method` => why.
      *
      * The first is UNCONDITIONAL -- no environment gate, no platform check, no
@@ -231,6 +239,9 @@ final class SuiteSkipRoster
      * implemented, not described — `builtPharSmokeArmed()` and
      * `pharWritingPossible()` are the very predicates the test bodies call, and
      * {@see expectedForLayout()} lifts each entry exactly when it reads armed.
+     * The C-SES-6.a renamed-install arm mints its miniature the same way the
+     * premise does, so its key rides `pharWritingPossible()` too — the two
+     * phar-writing entries lift and rejoin the roster together.
      */
     public const EXPECTED = [
         'SugarCraft\Code\Tests\MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails'
@@ -264,6 +275,12 @@ final class SuiteSkipRoster
                 . 'test runs and asserts the measured asymmetry (glob reads nothing under '
                 . 'phar://, scandir does), and expectedForLayout() lifts the entry; again the '
                 . 'predicate IS the body gate',
+        self::PHAR_RENAME
+            => 'conditional phar-writing gate: rostered while this process cannot mint a '
+                . 'fixture archive -- the C-SES-6.a renamed-install arm needs the same '
+                . 'new-Phar() mint as the premise test, so it skips on the same predicate it '
+                . 'calls in its body, and expectedForLayout() lifts both together wherever '
+                . 'pharWritingPossible() is true',
     ];
 
     private static ?self $live = null;
@@ -483,9 +500,10 @@ final class SuiteSkipRoster
      * green in every shape: CI's symlink farm with every gate unarmed judges
      * against the canary plus each dormant conditional (the live smoke and the
      * built-phar smoke), a packagist checkout adds the layout-conditional skip,
-     * and on a runner whose `phar.readonly` is armed the premise test joins the
-     * skipping set too; an armed operator or release run drops exactly the
-     * entries whose tests RUN, so their live assertions judge clean. Checks 1-3
+     * and on a runner whose `phar.readonly` is armed the premise test and the
+     * C-SES-6.a renamed-install arm join the skipping set too; an armed
+     * operator or release run drops exactly the entries whose tests RUN, so
+     * their live assertions judge clean. Checks 1-3
      * stay fully armed for every key on the effective roster either way.
      *
      * @return array<string,string>
@@ -508,6 +526,7 @@ final class SuiteSkipRoster
 
         if (self::pharWritingPossible()) {
             unset($effective[self::PHAR_PREMISE]);
+            unset($effective[self::PHAR_RENAME]);
         }
 
         return $effective;

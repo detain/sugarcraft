@@ -43,6 +43,19 @@ use SugarCraft\Code\Tests\Support\SuiteSkipRoster;
  * door from the outside, in child processes: dirty refused, detached HEAD
  * refused, `--vendor=monorepo` accepted loudly and verifiably built from
  * the working tree.
+ *
+ * C-SES-6.a — the renamed install. A phar handed to PHP under a name that
+ * does not end `.phar` (the `~/bin/candy-code` rename, or a symlink of it)
+ * arrives as an ordinary script: neither of the stub's archive identities is
+ * visible — Phar::running(false) is '' in stub context, and __FILE__ carries
+ * no suffix. The stub's third door calls Phar::mapPhar() with the build's own
+ * alias and boots the archive's sealed vendor; the miniature arm below mints
+ * a real archive around the REAL stub bytes and proves the renamed boot and
+ * the suffix control from child processes. The marker file also answers
+ * Phar::running(false) from INSIDE the archive, pinning the fact the version
+ * banner and SelfUpdate build on: under the alias mapping, inside code sees
+ * the real disk path of the running script — not the alias — so a renamed
+ * install self-updates the file it was actually launched from.
  */
 final class PharCompatTest extends TestCase
 {
@@ -315,6 +328,88 @@ final class PharCompatTest extends TestCase
     }
 
     // ------------------------------------------------------------------
+    // C-SES-6.a — the renamed install boots its own archive
+    // ------------------------------------------------------------------
+
+    /**
+     * The renamed-install door, end to end: real bin bytes as the stub, a
+     * marker vendor inside, and the copy launched under a suffix-less name —
+     * the exact shape that used to fall through to the filesystem candidates
+     * and exit 2. The MINI-BOOT line proves both halves at once: the require
+     * resolved INSIDE the archive (the fallback booted its own vendor), and
+     * `Phar::running(false)` from that inside frame answered the real disk
+     * path of the renamed script — the fact `Help::version()` and
+     * `SelfUpdate::run()` build on (they resolve the archive to read or to
+     * replace through exactly this call, and it is '' only in the stub's own
+     * top-level frames, which no shipped reader runs in).
+     */
+    public function testARenamedPharBootsItsOwnArchiveThroughTheMapPharFallback(): void
+    {
+        // Body-level gate on the premise's own predicate — the miniature
+        // needs the same new-Phar() mint, so the two keys ride and lift the
+        // roster together (SuiteSkipRoster::PHAR_RENAME).
+        if (!SuiteSkipRoster::pharWritingPossible()) {
+            $this->markTestSkipped('this process cannot mint a fixture phar (phar.readonly armed or ext-phar absent); the renamed-install boot needs the same mint as the premise arm');
+        }
+
+        $root = sys_get_temp_dir() . '/c-ses-6a-' . getmypid() . '-' . bin2hex(random_bytes(4));
+        self::assertTrue(mkdir($root, 0700, true));
+        $this->mintedPaths[] = $root;
+
+        // The alias is the string tools/build-phar.php gives the release
+        // archive (`new Phar($outArg, 0, 'candy-code.phar')`) — the pairing
+        // of the two literals is pinned in BinCandyCodeAutoloadGuardTest, so
+        // minting here under the same alias cannot silently diverge.
+        $sealed = $root . '/mini-candy-code.phar';
+        $phar = new \Phar($sealed, 0, 'candy-code.phar');
+        $phar->setStub(self::read('bin/candy-code') . "\n__HALT_COMPILER();");
+        $phar->addFromString(
+            'vendor/autoload.php',
+            "<?php\n"
+            . "fwrite(STDOUT, 'MINI-BOOT:' . \\Phar::running(false) . \"\\n\");\n"
+            . "exit(0);\n"
+        );
+        $phar->stopBuffering();
+        unset($phar);
+
+        // The install shape that motivated the step: byte-identical archive,
+        // suffix-less executable name.
+        $renamed = $root . '/candy-code';
+        self::assertTrue(copy($sealed, $renamed));
+
+        $boot = self::launch([\PHP_BINARY, $renamed], $this->freshPharHome());
+        self::assertSame(0, $boot['rc'], 'renamed-install boot rc/stderr: ' . $boot['err']);
+        self::assertSame(
+            'MINI-BOOT:' . $renamed . "\n",
+            $boot['out'],
+            'the renamed stub must boot the archive\'s own vendor, and from inside the archive '
+            . 'Phar::running(false) must answer the renamed file\'s real path — the address '
+            . 'SelfUpdate replaces and the banner reads metadata through'
+        );
+        self::assertSame('', $boot['err'], 'the fallback must not leak a warning on the renamed boot');
+
+        // Control one — the suffix shape, addressed through the OLD door,
+        // unchanged by the fallback: same marker, same real-path answer.
+        $suffixed = self::launch([\PHP_BINARY, $sealed], $this->freshPharHome());
+        self::assertSame(0, $suffixed['rc'], 'suffix control rc/stderr: ' . $suffixed['err']);
+        self::assertSame('MINI-BOOT:' . $sealed . "\n", $suffixed['out'], 'the suffix door must be untouched by the fallback');
+
+        // Control two — a symlink to the renamed copy resolves to its
+        // realpath, which carries no suffix either, so it rides the same new
+        // door. POSIX-only leg: creating a symlink on Windows needs a
+        // privilege the CI runners do not grant, and the rename leg above
+        // already proves the door this link merely routes to.
+        if (\DIRECTORY_SEPARATOR === '/') {
+            $link = $root . '/candy-code-link';
+            self::assertTrue(symlink($renamed, $link));
+
+            $viaLink = self::launch([\PHP_BINARY, $link], $this->freshPharHome());
+            self::assertSame(0, $viaLink['rc'], 'symlinked-install boot rc/stderr: ' . $viaLink['err']);
+            self::assertSame('MINI-BOOT:' . $renamed . "\n", $viaLink['out'], 'a symlink of the renamed install must boot the same archive and answer the target\'s real path');
+        }
+    }
+
+    // ------------------------------------------------------------------
     // LAW 3 — the integrity preflight refuses an unverifiable source tree
     // ------------------------------------------------------------------
 
@@ -527,6 +622,18 @@ final class PharCompatTest extends TestCase
         $stamped = Version::fromPharMetadata($phar);
         self::assertNotNull($stamped, 'a CANDY_CODE_PHAR release archive must carry a comparable metadata stamp');
         self::assertSame('candy-code ' . $stamped . "\n", $version['out'], 'the banner is the stamp — metadata read end to end');
+
+        // C-SES-6.a — the same release archive installed under a suffix-less
+        // name must answer the IDENTICAL banner: the stub's mapPhar fallback
+        // boots the archive's own vendor, the banner class loads from inside,
+        // and its Phar::running(false) resolves the renamed file — proving on
+        // the real artifact what the miniature above pins on a scratch mint.
+        $renamedDir = $this->freshPharHome();
+        $renamed = $renamedDir . '/candy-code';
+        self::assertTrue(copy($phar, $renamed), 'could not mint the renamed-install fixture');
+        $renamedBoot = self::launch([\PHP_BINARY, $renamed, '--version'], $this->freshPharHome());
+        self::assertSame(0, $renamedBoot['rc'], 'renamed release-phar boot rc/stderr: ' . $renamedBoot['err']);
+        self::assertSame('candy-code ' . $stamped . "\n", $renamedBoot['out'], 'a renamed release phar must boot its own archive and print its own stamp');
 
         // Stage 2 — a headless echo-provider turn lands as clean JSON with a
         // fresh HOME (offline: no provider selection inherited from the shell).
