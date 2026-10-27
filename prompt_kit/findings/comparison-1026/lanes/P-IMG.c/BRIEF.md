@@ -1,0 +1,52 @@
+### P-IMG.c — Web: Generate entry in the top bar
+- item: P-IMAGE-MENU (sources: owner pick)
+- kind: feature · effort S
+- approach:
+  - The web Generate panel is only a drawer tab and a palette row.
+  - Add a `generate` button to the top bar beside settings/about, shown only when `connection.canGenerateImage`. It opens `usePanelsStore().show('generate')`.
+  - The drawer is 28 rem, so the web popup is already not full width.
+  - C-WEB-3 adds the video tab inside the panel itself.
+- files.create: none
+- files.modify: `candy-code-web/src-web/App.vue` (topbar)
+- tests: create `candy-code-web/src-web/components/__tests__/topbarGenerate.spec.ts` (hidden without the capability; the click shows the panel)
+- docs/guards: web unit tests
+- serialized: [hot:candy-code-web/src-web/App.vue]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: none notable.
+
+## Notes for the orchestrator
+
+- **Layout chain (at most one per wave):** P-IMG.b → P-CTX.e → P-TABS.g. Each touches `src/Tui/Renderer.php`, and the last two also touch `src/Renderer.php`. The chain is encoded as `(serial: layout)` deps. No step touches `Chat::view()` itself.
+- **[chat] regions:**
+  - P-TABS.e: new `withNoticeDrain()`.
+  - P-CTX.d: new `measureContextCmd()` + session-surface arm.
+  - P-TABS.f: the ONLY constructor field, `tabHosted`; plus picker/palette/agent-open/`refuseWhileInFlight`.
+  - P-CTX.e: `handlePointer` `ctxmeter` arm.
+  - P-AGENT.b: `submitToAgents` + `draft()`/`withDraft()`.
+  - P-CTX.e and P-TABS.f can fall in one wave; their regions differ.
+- **Bootstrap:** P-TABS.d `chat()`→`buildChat()`/`tabChat()`, and P-AGENT.a `workspace()` (:1893). These are different methods but the same file.
+- **Protocol lanes:** P-CTX.f and P-AGENT.c must go in different waves.
+- **Hot files:**
+  - `candy-code/src/App/App.php`: P-TABS.d/e/f/g, P-CTX.e, P-AGENT.b. These are already chained by deps except P-CTX.e.
+  - `src/Tui/Pane.php` + `src/Tui/Components/MenuBar.php`: P-IMG.a, P-CTX.e, P-TABS.g.
+  - `src/Commands/KeyBindingRegistry.php` + `src/Tui/KeyboardHandler.php`: P-TABS.e, P-CTX.e, P-TABS.g, P-AGENT.b.
+  - `src/Host/TurnRunner.php`: P-CTX.d.
+  - `src/Agents/Live/AgentLiveRegistry.php`: P-AGENT.a.
+  - Web: `App.vue` (P-IMG.c), `StatusBar.vue` + `stores/contextSources.ts` (P-CTX.g), `SessionView.vue` (P-AGENT.d).
+- **Cross-area:**
+  - C-CTX-2 edits `web:stores/contextSources.ts` (`context.changed` reload); keep it out of P-CTX.g's wave.
+  - C-MCP-4 edits `src/Host/ContextSources.php` `answer()`; keep it out of P-CTX.f's wave.
+  - C-WEB-2 edits `StatusBar.vue`/`session.ts`; keep it out of P-CTX.g's wave.
+  - C-WEB-3 adds the GeneratePanel video tab, beside P-IMG.c (no file overlap).
+  - Any C-TUI-*/C-AGT-* step touching `Renderer.php`, `MenuBar.php`, `KeyBindingRegistry.php`, `TaskTool.php` or `AgentLiveRegistry.php` serializes against these steps.
+- **[commands] collision:** P-IMG.a (CommandRegistry/CommandSpec/4000-4040) and P-CTX.b (1350-context) are both [commands]. P-TABS.f adds a NEW file (`0105-close-tab.php`) plus a PaletteAction case.
+- **Rulings:** one, P-CTX.e: auto-dock the Context pane once on wide terminals (proposed default), or leave it off until the user docks it?
+- **No LATE items, no new fork sites, no E646 exposure.** Background tabs use the existing TurnRunner/EngineBackend fork path, so `tools/check-child-lifetimes.php` gains no row.
+- **Dormant code wired:** `SessionTabs::detachTab`/`reattachTab`/`updateTabSummary` (P-TABS.b/g) and the preset `color:` key (P-AGENT.a). The Chat's in-frame tab strip and `SessionTabState` stay live for standalone Chats; nothing is deleted.
+- **Could not verify (read-only):**
+  - the exact OpenCode v2 tab look; the vertical-plus-horizontal design follows the COMPARISON SES-12 note "vertical/horizontal, unread status" and the owner's wording;
+  - that `TabScope` covers every Cmd shape in the live tree; P-TABS.b's test must enumerate `Program::runCmd`'s sentinels;
+  - that Veil compositing over the shell frame (P-IMG.b) leaves no stale zone; that step's test pins it;
+  - the real class name of the "no message class claimed twice" route-parity test cited in P-CTX.d.
