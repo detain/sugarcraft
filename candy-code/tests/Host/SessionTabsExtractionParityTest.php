@@ -9,10 +9,12 @@ use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
+use SugarCraft\Code\App\Tabs\SessionDeck;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Host\SessionSwitch;
 use SugarCraft\Code\Host\SessionTabState;
 use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
+use SugarCraft\Code\Tui\SessionTab;
 use SugarCraft\Code\Tui\SessionTabs;
 
 /**
@@ -253,5 +255,56 @@ final class SessionTabsExtractionParityTest extends TestCase
         self::assertInstanceOf(SessionTabs::class, $payload['openTabs']);
         self::assertSame('fresh', $payload['openTabs']->activeTab()?->id, 'wherever a session comes to the front, its tab opens.');
         self::assertArrayHasKey('pendingCompactionId', $payload, 'resumed() must spread resets() — the latch list cannot be re-forgotten.');
+    }
+
+    public function testSessionTabCarriesTheAttentionSlotInTheDeckOrder(): void
+    {
+        $names = array_map(
+            static fn (\ReflectionParameter $parameter): string => $parameter->getName(),
+            (new \ReflectionClass(SessionTab::class))->getConstructor()->getParameters(),
+        );
+
+        // The deck's ledger row grew exactly one tail slot; anything
+        // appending to the constructor without adjudicating this roster
+        // (and the SessionDeck pins below) changes what "parked state"
+        // can store, so the shape is pinned, not described.
+        self::assertSame(
+            ['id', 'sessionName', 'isActive', 'lastActivityAt', 'agentSummary', 'isDetached', 'attention'],
+            $names,
+        );
+        self::assertSame('idle', (new SessionTab(id: 'r', sessionName: 'r'))->attention);
+    }
+
+    public function testSessionDeckIsTheSoleProductionDriverOfTheLedgerMutators(): void
+    {
+        $drivers = [
+            '->detachTab(' => [],
+            '->reattachTab(' => [],
+            '->updateTabSummary(' => [],
+            '->updateTabAttention(' => [],
+        ];
+
+        $root = \dirname(__DIR__, 2) . '/src';
+        $expected = substr((string) (new \ReflectionClass(SessionDeck::class))->getFileName(), strlen($root) + 1);
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS));
+        foreach ($files as $file) {
+            if (!$file instanceof \SplFileInfo || $file->getExtension() !== 'php') {
+                continue;
+            }
+            $source = (string) file_get_contents($file->getPathname());
+            foreach (array_keys($drivers) as $needle) {
+                if (str_contains($source, $needle)) {
+                    $drivers[$needle][] = substr($file->getPathname(), strlen($root) + 1);
+                }
+            }
+        }
+
+        foreach ($drivers as $needle => $found) {
+            self::assertSame(
+                [$expected],
+                $found,
+                $needle . ' had no production caller before P-TABS.b wired it; if a second driver is legitimate, roster it here deliberately rather than re-detaching a parked tab from somewhere the deck cannot audit.',
+            );
+        }
     }
 }

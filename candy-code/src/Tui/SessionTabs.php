@@ -234,6 +234,24 @@ final class SessionTabs
     }
 
     /**
+     * Write a tab's background attention state and return a new instance.
+     *
+     * Lives next to detach/reattach: the deck sets a state when work
+     * lands on a tab the user is not looking at, and the renderer reads
+     * it off {@see SessionTab::$attention}.
+     */
+    public function updateTabAttention(string $id, string $attention): self
+    {
+        if (!isset($this->tabsById[$id])) {
+            return $this;
+        }
+
+        $tab = $this->tabsById[$id];
+
+        return $this->mutate(['tabsById' => [...$this->tabsById, $id => $tab->withAttention($attention)], 'tabIds' => $this->tabIds]);
+    }
+
+    /**
      * Return the number of open tabs.
      */
     public function count(): int

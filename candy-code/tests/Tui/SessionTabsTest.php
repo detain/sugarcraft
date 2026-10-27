@@ -92,6 +92,23 @@ final class SessionTabsTest extends TestCase
         $this->assertSame('Working on auth', $tabs2->activeTab()?->agentSummary);
     }
 
+    public function testUpdateTabAttention(): void
+    {
+        $tabs = (new SessionTabs())->openTab('s1', 'Session 1');
+        $this->assertSame('idle', $tabs->activeTab()?->attention);
+
+        $tabs2 = $tabs->updateTabAttention('s1', 'waiting');
+        $this->assertSame('waiting', $tabs2->activeTab()?->attention);
+        // The ledger is immutable: the original row keeps its state.
+        $this->assertSame('idle', $tabs->activeTab()?->attention);
+    }
+
+    public function testUpdateTabAttentionUnknownIdIsANoOp(): void
+    {
+        $tabs = (new SessionTabs())->openTab('s1', 'Session 1');
+        $this->assertSame($tabs, $tabs->updateTabAttention('ghost', 'failed'));
+    }
+
     public function testCount(): void
     {
         $tabs = (new SessionTabs())

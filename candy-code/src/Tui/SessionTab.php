@@ -10,7 +10,8 @@ use DateTimeImmutable;
  * Immutable value object representing a single session tab.
  *
  * Each tab tracks its own session metadata including identity,
- * active state, detach/reattach lifecycle, and agent summary text.
+ * active state, detach/reattach lifecycle, agent summary text, and the
+ * background attention state it advertises while parked.
  *
  * Mirrors charmbracelet/crush Tab.
  */
@@ -23,6 +24,7 @@ final class SessionTab
      * @param DateTimeImmutable      $lastActivityAt Timestamp of last user or agent activity.
      * @param string|null            $agentSummary  Current agent summary text or null.
      * @param bool                   $isDetached    Whether the session is running in background.
+     * @param string                 $attention     Background attention state while the tab is parked.
      */
     public function __construct(
         public readonly string $id,
@@ -31,6 +33,7 @@ final class SessionTab
         public readonly DateTimeImmutable $lastActivityAt = new DateTimeImmutable(),
         public readonly ?string $agentSummary = null,
         public readonly bool $isDetached = false,
+        public readonly string $attention = 'idle',
     ) {
     }
 
@@ -67,6 +70,18 @@ final class SessionTab
     }
 
     /**
+     * Create a new SessionTab carrying a background attention state.
+     *
+     * The value comes from SessionDeck's attention vocabulary; the tab
+     * stores it verbatim because the renderer, not the value object,
+     * decides what each state looks like.
+     */
+    public function withAttention(string $attention): self
+    {
+        return $this->mutate(['attention' => $attention]);
+    }
+
+    /**
      * Create a new instance with the given changes merged in.
      *
      * Mirrors the repo-wide immutable+fluent `mutate()` convention (see
@@ -85,6 +100,7 @@ final class SessionTab
             'lastActivityAt' => $this->lastActivityAt,
             'agentSummary' => $this->agentSummary,
             'isDetached' => $this->isDetached,
+            'attention' => $this->attention,
         ], $changes));
     }
 
@@ -126,5 +142,13 @@ final class SessionTab
     public function isActive(): bool
     {
         return $this->isActive;
+    }
+
+    /**
+     * Return the tab's background attention state.
+     */
+    public function attention(): string
+    {
+        return $this->attention;
     }
 }
