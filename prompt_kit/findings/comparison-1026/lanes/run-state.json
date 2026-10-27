@@ -56,17 +56,10 @@
     "P-TABS.b",
     "P-TABS.c",
     "P-TABS.d",
-    "P-TABS.h"
+    "P-TABS.h",
+    "C-TOOL-7.a"
   ],
   "inflight": {
-    "C-TOOL-7.a": {
-      "stage": "clean",
-      "round": 2,
-      "worktree": "/home/sites/cc-cmp-C-TOOL-7.a",
-      "branch": "cc/C-TOOL-7.a",
-      "session": "ses_e82119e0affe7R3cHkENqkYWpS",
-      "note": "QUEUED for next welder call: C-TOOL-7.a 4-pick chain 3eb40269a+da99eeabb+2710d9d0b+b5f3aeefb, C-EXT-2.a 0c3ed3a6b + weld-fold dirname cure SkillTool.php:325/:525"
-    },
     "C-EXT-2.a": {
       "stage": "clean",
       "round": 2,
@@ -200,6 +193,18 @@
       "gates": "ShellContrast 14T/2408A EXACT; Window|SessionsPane|AgentColor 299T/4452A green (+1 assertion wobble vs report 4451); five-guard 133T/15647A ONLY the staleness pair",
       "note": "report-claimed DuplicatedTestHelperDrift CLIP collision NOT reproduced at weld \u2014 cured by a33919030 already on master; MenuOverlayFrameTest untouched by this lane so the CLIP rename did not collide",
       "prune": "worktree cc-cmp-cure-contrast + branch cc/cure-contrast after git-cherry proof"
+    },
+    "C-TOOL-7.a": {
+      "master_first_pick": "ccd7c37b2",
+      "picks": "3eb40269a->ccd7c37b2, da99eeabb->b4d89cdce, 2710d9d0b->f98e9cc32, b5f3aeefb->87dba649c",
+      "weld": "pending-read-back",
+      "base_era": "8d9814130",
+      "regen": "none (no Protocol/Command/tool-doc/Settings/web files in the chain)",
+      "bootstrap": "[bootstrap:backgroundShells] auto-merged clean over a992413b0; launch-<pid> dir + sweep intent landed, both sides kept",
+      "gates": "BackgroundShellRegistry 29T/225A EXACT builder claim (RECONCILED: junit shows 28 BackgroundShellRegistryTest methods + 1 BinCandyCodeWiringTest case the filter admits \u2014 reviewer's '32 methods' MISCOUNT, file holds 28); BashBackground|ShellOutput 23T/85A; DescriptorInheritanceGuard 15T/5111A; tools/check-child-lifetimes.php rc=0; five-guard 133T/15647A ONLY staleness pair (25,537 pinned vs live 26,0xx)",
+      "note": "lane-reported ShellContrastTest isolated red NOT reproduced \u2014 cured by 8d142a648 (cure-contrast) landed immediately before this weld",
+      "durations": "NO new row (existing test file only; no new *Test.php)",
+      "prune": "worktree cc-cmp-C-TOOL-7.a + branch cc/C-TOOL-7.a after git-cherry proof (all 4)"
     }
   },
   "carries": [
@@ -219,6 +224,7 @@
     "NEXT-WELDER QUEUE (lead ruling 10-27, do NOT weld this run): C-TOOL-7.a 4-pick chain b5f3aeefb, review-2 CLEAN, gate re-run duties in its REVIEW-2.md; C-EXT-2.a tip 0c3ed3a6b, review-2 CLEAN, weld folds two SkillTool.php comment cures :325/:525 dated \"weld: C-EXT-2.a cure \u2014 drop the false dirname(\"\") premise comments\"",
     "next welder call (single): cure-swcap + cure-contrast (master repairs, no \u00a74 mark, welded count unchanged) then C-TOOL-7.a + C-EXT-2.a per run-state notes; C-SES-6.a joins after r2 review",
     "cure-swcap landed c2477fe71 (pick of 2b250f827; SettingsWriterCensusTest buildChat re-key; lanes/cure-swcap/REPORT.md staged at weld; no \u00a74 mark, welded stays 57)",
-    "cure-contrast landed 8d142a648 (pick of 2ebf7d8ce; AgentColor owns window-kit Color construction, ShellContrast roster basename key; lanes/cure-contrast/REPORT.md staged at weld; no \u00a74 mark, welded stays 57)"
+    "cure-contrast landed 8d142a648 (pick of 2ebf7d8ce; AgentColor owns window-kit Color construction, ShellContrast roster basename key; lanes/cure-contrast/REPORT.md staged at weld; no \u00a74 mark, welded stays 57)",
+    "C-TOOL-7.a welded (ccd7c37b2/b4d89cdce/f98e9cc32/87dba649c, weld see weld_notes) \u2014 \u00a74 marked \u2705 ccd7c37b2 UNSTAGED; welded 57->58; NIT open: recorder markers .outd/.errd land at umask 0644 inside the 0700 dir (doctrine 0600) \u2014 optional sinkFiles() pre-create at closeout"
   ]
 }
