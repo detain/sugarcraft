@@ -10,7 +10,8 @@
     "C-MCP-1.a",
     "C-AGT-2.a",
     "C-AGT-1.a",
-    "C-SES-4.a"
+    "C-SES-4.a",
+    "C-SES-3.c"
   ],
   "inflight": {
     "C-SEC-2.b": {
@@ -35,12 +36,12 @@
       "session": null
     },
     "C-SES-3.b": {
-      "stage": "review",
-      "round": 1,
+      "stage": "fix",
+      "round": 2,
       "worktree": "/home/sites/cc-cmp-C-SES-3.b",
       "branch": "cc/C-SES-3.b",
       "session": null,
-      "note": "tip ce3637073 base 7949cc23d; NEW tests/Host/ShareHostCommandBufferTest.php for durations gate duty"
+      "note": "r1 FINDINGS: MINOR buffer-keystone finally/drain unpin + NIT revoke() bool ignore; out-of-scope MINOR ShareStore.php:216-226 expiry-guard = closeout ledger"
     },
     "C-SES-2.a": {
       "stage": "build",
@@ -48,14 +49,6 @@
       "worktree": "/home/sites/cc-cmp-C-SES-2.a",
       "branch": "cc/C-SES-2.a",
       "session": "ses_e841b992fffeYG5E2v3ZOThtPD"
-    },
-    "C-SES-3.c": {
-      "stage": "review",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-SES-3.c",
-      "branch": "cc/C-SES-3.c",
-      "session": null,
-      "note": "tip 37235db0c base 2e1efc430"
     },
     "C-SES-5.a": {
       "stage": "build",
@@ -69,7 +62,8 @@
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-AGT-2.c",
       "branch": "cc/C-AGT-2.c",
-      "session": null
+      "session": null,
+      "note": "builder died mid-stream @174@ blank return; branch zero commits, 5 dirty files \u2014 resumed same session"
     }
   },
   "blocked": [],
