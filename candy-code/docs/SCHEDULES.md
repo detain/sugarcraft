@@ -43,9 +43,13 @@ row and no cron anywhere: a tick asks the roster which rows are due.
 build does not write refuses to load, and says so in `/schedules` rather than
 half-trusting the rows.
 
-A hand-edited file is picked up on the next tick — the roster reloads whenever the
+A hand-edited file is picked up on the next pump — the roster reloads whenever the
 file's bytes actually change, so a row you add while the program is open fires on
-its own schedule without a restart.
+its own schedule without a restart. The pump has two cadences: anything live or
+enabled keeps the fast two-second tick, and a file-backed roster with nothing live
+and nothing enabled rides a slow thirty-second watch, so even a fully-disabled
+file revives itself from a hand-edit within half a minute of waking — never a
+relaunch.
 
 ## The row
 
@@ -56,9 +60,10 @@ its own schedule without a restart.
 | `prompt` | yes | The task the daemon runs. Never empty, never re-split on whitespace — a multi-line prompt stays multi-line. |
 | `root` | **yes, to fire** | The project directory the row belongs to. See [The project binding](#the-project-binding). |
 | `provider` | no | Pin the provider for this row's runs. Absent means whatever the host session's roster resolves. |
-| `permissionMode` | no | One of the [permission modes](PERMISSIONS.md) (`default`, `accept-edits`, `plan`, `auto`, `dont-ask`, `bypass-permissions`). Absent — or spelled unrecognisably — means the floor; see [The permission floor](#the-permission-floor). |
+| `permissionMode` | no | One of the [permission modes](PERMISSIONS.md) (`default`, `accept-edits`, `plan`, `auto`, `dont-ask`, `bypass-permissions`) — minus the two the ceiling refuses: a row that SPELLS `dont-ask` or `bypass-permissions` is skipped by name, because a schedule fires unattended and those modes answer a permission ask with no human in the loop. Absent — or spelled unrecognisably — means the floor; see [The permission floor](#the-permission-floor). |
 | `nextDue` | no | Unix seconds at which the row next becomes due. A row without it is armed one interval out, so a file you write at midnight does not fire immediately at midnight. |
 | `enabled` | no | `false` parks the row without deleting it. Defaults to `true`. |
+| `timeoutSeconds` | no | Wall-clock ceiling on one fired run, 60 up to 31,622,400 seconds. Absent means the background session's default of 3600. This bounds the daemon's whole run; no timeout anywhere on the schedule path bounds a model request. |
 
 An unknown key is tolerated; a malformed known key is not. A row that fails to
 parse is skipped **by name** while its siblings keep running, and the refusal is
@@ -123,6 +128,18 @@ recognise, it still loads and fires on the floor, and `/schedules` announces the
 substitution beside the row by name. The floor never rewrites what you asked for
 in silence.
 
+The floor, however, is the ceiling too. A file row that SPELLS a bypass-class mode
+— `bypass-permissions`, or the floor's own name `dont-ask` — is REFUSED at load:
+skipped by name, with the reason in the notes, exactly the posture the webhook
+loader takes (`SCHEDULES`-rows fire unattended, and those two modes answer a
+permission ask without a human; `--allow-bypass` is a promise about sessions a
+person drives, not about clocks). The distinction is trust, not capability: the
+floor is granted by the build's code to rows that say nothing, while a spelled
+mode would be granted by the file — and an edit to a file on disk, however it got
+there, is not a human answering a prompt. Omit `permissionMode` to get the floor.
+Rows the tool writes serialise the floor as a null `permissionMode` for the same
+reason: the file never carries a bypass-class spelling out of a healthy build.
+
 ## Locks, and why the same row fires once
 
 Before a host fires a persisted row it claims that row's own lock under
@@ -144,8 +161,11 @@ handling cannot roll back an edit another host just made.
 
 Missed slots collapse. A host that was down for a week fires **once** when it
 comes back and re-arms for the next live slot; the number of runs is bounded by
-the number of due slots, never by a timeout, and a slow daemon cannot make a row
-fire twice.
+the number of due slots and never by a timer on the firing path, and a slow
+daemon cannot make a row fire twice. What does bound a fire is the ordinary
+background-session ceiling on the daemon itself: 3600 seconds unless the row
+raises its own with `timeoutSeconds` — a wall-clock cap on the whole run, never
+a timeout on any individual model request.
 
 ## `/schedules`
 

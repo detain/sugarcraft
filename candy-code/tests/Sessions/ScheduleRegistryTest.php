@@ -95,13 +95,16 @@ final class ScheduleRegistryTest extends TestCase
     }
 
     /**
-     * AUT-1 follow-through (plan-verify-1026b f4): a row whose spelled
-     * permission mode this build does not know still LOADS on the floor (the
-     * permission-floor contract), but the coercion must never be silent —
-     * {@see ScheduleRegistry::load()} records a named note beside the row.
-     * The two negative legs matter just as hard: a real spelling rides
-     * unchanged (ownership posture) and an absent mode is the documented
-     * default, not a coercion, so neither may add a note.
+     * AUT-1 follow-through (plan-verify-1026b f4) as widened by C-AGT-7.a P3:
+     * a row whose spelled permission mode this build does not know still LOADS
+     * on the floor (the permission-floor contract), but the coercion must
+     * never be silent — {@see ScheduleRegistry::load()} records a named note
+     * beside the row. And a row that spells a BYPASS-CLASS mode is no longer
+     * coerced at all: it is refused at the file boundary, skipped BY NAME with
+     * the reason in the notes, while its siblings load and run untouched. The
+     * negative legs matter just as hard: a real spelling rides unchanged
+     * (ownership posture) and an absent mode is the documented default, so
+     * neither may add a note.
      */
     public function testACoercedModeSpellingLoadsOnTheFloorYetIsAnnouncedByName(): void
     {
@@ -110,6 +113,7 @@ final class ScheduleRegistryTest extends TestCase
             'schedules' => [
                 ['name' => 'typo', 'every' => 60, 'prompt' => 'p', 'permissionMode' => 'acceptEdits', 'root' => $this->dir],
                 ['name' => 'spelled-floor', 'every' => 60, 'prompt' => 'p', 'permissionMode' => 'dont-ask', 'root' => $this->dir],
+                ['name' => 'spelled-bypass', 'every' => 60, 'prompt' => 'p', 'permissionMode' => 'bypass-permissions', 'root' => $this->dir],
                 ['name' => 'named-real', 'every' => 60, 'prompt' => 'p', 'permissionMode' => 'plan', 'root' => $this->dir],
                 ['name' => 'minimal', 'every' => 60, 'prompt' => 'p', 'root' => $this->dir],
             ],
@@ -118,22 +122,29 @@ final class ScheduleRegistryTest extends TestCase
         $registry->load();
 
         $this->assertSame(
-            ['typo', 'spelled-floor', 'named-real', 'minimal'],
+            ['typo', 'named-real', 'minimal'],
             array_map(static fn (Schedule $r): string => $r->name, $registry->all()),
-            'a coercible row is never dropped for its bad spelling — only its mode is floored',
+            'the coercible row is never dropped for its bad spelling — only its mode is floored; the bypass-class rows are the ones that must not enter',
         );
+        $this->assertNull($registry->get('spelled-floor'), 'a spelled floor is REFUSED, not quietly granted — the floor comes from the code, not the file');
+        $this->assertNull($registry->get('spelled-bypass'));
         $this->assertSame('dont-ask', $registry->get('typo')?->permissionMode, 'the floor decides behavior, as ever');
         $this->assertSame('plan', $registry->get('named-real')?->permissionMode);
 
         $notes = $registry->loadErrors();
-        $this->assertCount(1, $notes, 'exactly the coerced spelling is announced; a real spelling and a documented default stay silent');
+        $this->assertCount(3, $notes, 'the coercion plus the two named refusals; a real spelling and a documented default stay silent');
         $this->assertStringContainsString("'typo'", $notes[0], 'the note names the row');
         $this->assertStringContainsString('"acceptEdits"', $notes[0], 'and the spelling that was refused');
         $this->assertStringContainsString('is not one of', $notes[0], 'naming what could be spelled instead');
         $this->assertStringContainsString('loaded', $notes[0], 'the note must say the row loaded — the neutral header relies on it');
 
+        $refusal = $notes[1] . "\n" . $notes[2];
+        $this->assertStringContainsString("'spelled-floor'", $refusal, 'the refusal names the skipped row');
+        $this->assertStringContainsString('is refused for schedules', $refusal, 'and says why, mirroring the webhook loader wording');
+        $this->assertStringContainsString("'spelled-bypass'", $refusal, 'both halves of the bypass class refuse');
+
         $registry->load();
-        $this->assertCount(1, $registry->loadErrors(), 'a reload re-derives the notes, never accumulates a pile');
+        $this->assertCount(3, $registry->loadErrors(), 'a reload re-derives the notes, never accumulates a pile');
     }
 
     public function testAnUnknownFileVersionRefusesToLoadRatherThanHalfTrusting(): void

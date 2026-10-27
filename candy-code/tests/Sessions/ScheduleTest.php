@@ -10,8 +10,10 @@ use SugarCraft\Code\Background\Schedule;
 
 /**
  * AUT-1 boundary rows: the parse that makes the rest of the schedule path
- * trust its data, and the overrun-skip arithmetic that is the ONLY bound on
- * this clock (due-counts, never timeouts — the E646 law).
+ * trust its data, the overrun-skip arithmetic that bounds the FIRE counts on
+ * this clock (due-counts on the firing path — the E646 law; the daemon a fire
+ * spawns carries the ordinary session run-bound, C-AGT-7.a P4), and the load
+ * ceiling that refuses bypass-class spellings (C-AGT-7.a P3).
  */
 final class ScheduleTest extends TestCase
 {
@@ -21,17 +23,39 @@ final class ScheduleTest extends TestCase
         $row = new Schedule(name: 'nightly', everySeconds: 86_400, prompt: 'run the tests', provider: 'sglang', nextDue: 1_000, root: $root);
         $back = Schedule::fromArray($row->toArray(), 500);
 
-        foreach (['name', 'everySeconds', 'prompt', 'provider', 'permissionMode', 'nextDue', 'enabled', 'root'] as $field) {
+        foreach (['name', 'everySeconds', 'prompt', 'provider', 'permissionMode', 'nextDue', 'enabled', 'root', 'timeoutSeconds'] as $field) {
             $this->assertSame($row->$field, $back->$field, "field {$field}");
         }
         $this->assertTrue($back->persisted, 'an on-disk row is persisted by definition');
+        $this->assertNull($row->timeoutSeconds, 'a row that names no bound round-trips as absent');
     }
 
-    public function testTheFileRowCarriesExactlyThePlannedEightKeys(): void
+    public function testTheFileRowCarriesExactlyThePlannedNineKeys(): void
     {
         $row = new Schedule(name: 'a', everySeconds: 60, prompt: 'p', nextDue: 0);
 
-        $this->assertSame(['name', 'every', 'prompt', 'provider', 'permissionMode', 'nextDue', 'enabled', 'root'], array_keys($row->toArray()));
+        $this->assertSame(['name', 'every', 'prompt', 'provider', 'permissionMode', 'nextDue', 'enabled', 'root', 'timeoutSeconds'], array_keys($row->toArray()));
+    }
+
+    /**
+     * C-AGT-7.a P3, the self-round-trip leg: the floor serialized as null is
+     * exactly what absence means, so a file this build writes re-loads on the
+     * floor — no note, no refusal. The refusal would fire if toArray spelled
+     * `dont-ask` back out, which is why the arm exists.
+     */
+    public function testTheFloorRoundTripsThroughTheFileAsAnAbsentMode(): void
+    {
+        $row = new Schedule(name: 'floored', everySeconds: 60, prompt: 'p');
+        $wire = $row->toArray();
+        $this->assertNull($wire['permissionMode'], 'the settled floor is never re-spelled into the file');
+
+        $back = Schedule::fromArray($wire, 500);
+        $this->assertSame(PermissionMode::DontAsk->value, $back->permissionMode);
+
+        // And a NON-floor mode keeps riding spelled, both directions.
+        $spelled = new Schedule(name: 'edits', everySeconds: 60, prompt: 'p', permissionMode: PermissionMode::AcceptEdits->value);
+        $this->assertSame(PermissionMode::AcceptEdits->value, $spelled->toArray()['permissionMode']);
+        $this->assertSame(PermissionMode::AcceptEdits->value, Schedule::fromArray($spelled->toArray(), 500)->permissionMode);
     }
 
     /** @return list<array{0: string}> */
@@ -128,8 +152,81 @@ final class ScheduleTest extends TestCase
         $this->assertSame(
             PermissionMode::BypassPermissions->value,
             (new Schedule(name: 'a', everySeconds: 60, prompt: 'p', permissionMode: PermissionMode::BypassPermissions->value))->permissionMode,
-            'a mode spelled by the operator rides unchanged',
+            'the CONSTRUCTOR stays permissive on purpose — its bypass rides are in-process grants; the file boundary refuses, see testASpelledBypassClassModeIsRefusedAtTheFileBoundary',
         );
+    }
+
+    /**
+     * C-AGT-7.a P3: the ceiling lives at fromArray, the trust boundary. Both
+     * bypass-class spellings (the ServerConfig pair the webhook loader uses)
+     * refuse the row BY NAME; null and absence stay the floor's silent door,
+     * and an unknown spelling is still the constructor's business (floor +
+     * load-time announcement), never a refusal.
+     */
+    public function testASpelledBypassClassModeIsRefusedAtTheFileBoundary(): void
+    {
+        foreach ([PermissionMode::DontAsk->value, PermissionMode::BypassPermissions->value] as $spelled) {
+            try {
+                Schedule::fromArray(['name' => 'a', 'every' => 60, 'prompt' => 'p', 'permissionMode' => $spelled], 0);
+                $this->fail('a spelled bypass-class mode was accepted: ' . $spelled);
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('is refused for schedules', $e->getMessage());
+                $this->assertStringContainsString($spelled, $e->getMessage());
+            }
+        }
+
+        $this->assertSame(
+            PermissionMode::DontAsk->value,
+            Schedule::fromArray(['name' => 'a', 'every' => 60, 'prompt' => 'p', 'permissionMode' => null], 0)->permissionMode,
+            'an explicit null names no mode — the floor, silently, as absence has always meant',
+        );
+        $this->assertSame(
+            PermissionMode::DontAsk->value,
+            Schedule::fromArray(['name' => 'a', 'every' => 60, 'prompt' => 'p', 'permissionMode' => 'god-mode'], 0)->permissionMode,
+            'the unknown spelling stays a coercion, not a refusal — load() announces it',
+        );
+    }
+
+    /**
+     * C-AGT-7.a P4: the optional per-row run bound. Absent means null the
+     * whole way to the spawner (the 3600 default is spawnSession's to own);
+     * a named bound round-trips, digit-strings parse like every other int on
+     * this row, and the bounds are whole minutes up to a year.
+     */
+    public function testTimeoutSecondsRoundTripsWithAnAbsentKeyMeaningTheSessionDefault(): void
+    {
+        $row = new Schedule(name: 'a', everySeconds: 60, prompt: 'p', timeoutSeconds: 7_200);
+        $wire = $row->toArray();
+        $this->assertSame(7_200, $wire['timeoutSeconds']);
+
+        $back = Schedule::fromArray($wire, 0);
+        $this->assertSame(7_200, $back->timeoutSeconds);
+
+        $this->assertSame(
+            7_200,
+            Schedule::fromArray(['name' => 'a', 'every' => 60, 'prompt' => 'p', 'timeoutSeconds' => '7200'], 0)->timeoutSeconds,
+            'a digit-string parses exactly like nextDue does',
+        );
+        $this->assertNull(
+            Schedule::fromArray(['name' => 'a', 'every' => 60, 'prompt' => 'p'], 0)->timeoutSeconds,
+            'absence is the session default, not zero and not a mirrored 3600',
+        );
+    }
+
+    public function testATimeoutOutsideWholeMinutesUpToAYearIsRefusedByName(): void
+    {
+        foreach ([59, 0, -1, Schedule::MAX_TIMEOUT_SECONDS + 1] as $bad) {
+            try {
+                new Schedule(name: 'a', everySeconds: 60, prompt: 'p', timeoutSeconds: $bad);
+                $this->fail('accepted timeout: ' . $bad);
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('"timeoutSeconds"', $e->getMessage());
+            }
+        }
+
+        // Both edges are legal; only the shape decides refusal.
+        $this->assertSame(Schedule::MIN_TIMEOUT_SECONDS, (new Schedule(name: 'a', everySeconds: 60, prompt: 'p', timeoutSeconds: Schedule::MIN_TIMEOUT_SECONDS))->timeoutSeconds);
+        $this->assertSame(Schedule::MAX_TIMEOUT_SECONDS, (new Schedule(name: 'a', everySeconds: 60, prompt: 'p', timeoutSeconds: Schedule::MAX_TIMEOUT_SECONDS))->timeoutSeconds);
     }
 
     public function testFromArrayArmsAnUnstampedRowOneIntervalOutNotImmediately(): void
@@ -152,6 +249,7 @@ final class ScheduleTest extends TestCase
             [['name' => 'a', 'every' => 60, 'prompt' => 'p', 'enabled' => 'yes'], 'enabled'],
             [['name' => 'a', 'every' => 60, 'prompt' => 'p', 'nextDue' => 'soon'], 'nextDue'],
             [['name' => 'a', 'every' => 60, 'prompt' => 'p', 'root' => 3], '"root"'],
+            [['name' => 'a', 'every' => 60, 'prompt' => 'p', 'timeoutSeconds' => 'fast'], 'timeoutSeconds'],
         ];
         foreach ($cases as [$row, $needle]) {
             try {
@@ -166,8 +264,9 @@ final class ScheduleTest extends TestCase
     public function testOverrunSkipFiresOnceAndReArmsForTheNextLiveSlot(): void
     {
         // A 10-minute row whose last slot was a week ago: next fire is the
-        // NEXT slot after now, not seven days of catch-up (E646: the bound is
-        // the due-count arithmetic, there is no queue and no timeout).
+        // NEXT slot after now, not seven days of catch-up (the bound on the
+        // FIRING path is the due-count arithmetic — no queue, no timer there;
+        // the daemon each fire spawns carries its own run-bound, C-AGT-7.a P4).
         $every = 600;
         $last = 1_000_000;
         $now = $last + 7 * 86_400 + 1;

@@ -33,7 +33,11 @@ use SugarCraft\Code\Tests\Support\ScriptedProvider;
  * - a persisted row whose previous daemon is still up is skipped-BUT-ADVANCED
  *   and never spawns a second time; once the daemon settles, the busy marker
  *   retires;
- * - the pump's tick subscription arms from the roster alone, with no daemons.
+ * - the pump's tick subscription arms from the roster alone, with no daemons;
+ * - and C-AGT-7.a: a file-backed roster that is quiet at launch arms the slow
+ *   thirty-second WATCH instead, never both timers at once, and that watch is
+ *   what revives a hand-edited file mid-session — including honouring the
+ *   bypass-class load refusal on the reload path, not just the cold one.
  *
  * Nothing here may reach `spawnSession()` for real (it would fork): every
  * persisted-row case parks the row behind a busy marker first.
@@ -46,6 +50,9 @@ final class ScheduleLoopFireTest extends TestCase
 {
     /** Chat's background-poll subscription id (test-side spelling, ReadOnlySessionTest::LOCK_RETRY precedent). */
     private const BACKGROUND_POLL = 'code.background-poll';
+
+    /** Chat's slow schedule-watch id, C-AGT-7.a — same spelling carve as above. */
+    private const SCHEDULE_WATCH = 'code.schedule-watch';
 
     private string $session;
 
@@ -173,6 +180,103 @@ final class ScheduleLoopFireTest extends TestCase
             $idle->subscriptions()?->has(self::BACKGROUND_POLL) ?? false,
             'an empty roster arms nothing',
         );
+    }
+
+    public function testTheSlowWatchArmsForAQuietFileAndNeverDoublesWithTheFastTick(): void
+    {
+        // C-AGT-7.a: a file-backed roster quiet at launch has no fast tick and
+        // no daemon — without the watch, `reloadIfChanged()` (which lives on
+        // the pump) would sleep until the next relaunch. The file's own wire
+        // keys are spelled as literals here, the same test-side carve the two
+        // subscription ids above carry.
+        $dir = $this->root . '/arms';
+        mkdir($dir, 0o700, true);
+        $quiet = ScheduleRegistry::atPath($dir . '/schedules.json', $dir);
+        $arms = (new Chat(backend: self::engine(null), scheduleRegistry: $quiet))->subscriptions();
+        self::assertTrue(
+            $arms?->has(self::SCHEDULE_WATCH) ?? false,
+            'a hand-editable roster breathes on the slow watch',
+        );
+        self::assertFalse(
+            $arms?->has(self::BACKGROUND_POLL) ?? false,
+            'nothing live and nothing enabled keeps the two-second tick off the loop',
+        );
+
+        // An in-memory roster has no external writer: a watch there burns a
+        // timer to poll nothing, so it arms neither tick.
+        $none = (new Chat(backend: self::engine(null), scheduleRegistry: ScheduleRegistry::inMemory()))->subscriptions();
+        self::assertFalse($none?->has(self::SCHEDULE_WATCH) ?? false, 'no file, no watch');
+        self::assertFalse($none?->has(self::BACKGROUND_POLL) ?? false);
+
+        // Once anything is enabled the fast arm answers and the watch is gone:
+        // the two are mutually exclusive by construction (elseif), never both
+        // ticking, whether the enabled row lives in memory or on disk.
+        $enabled = ScheduleRegistry::inMemory();
+        $enabled->add(new Schedule(name: 'loop-1', everySeconds: 60, prompt: 'p', nextDue: time() + 60, persisted: false));
+        $fast = (new Chat(backend: self::engine(null), scheduleRegistry: $enabled))->subscriptions();
+        self::assertTrue($fast?->has(self::BACKGROUND_POLL) ?? false);
+        self::assertFalse($fast?->has(self::SCHEDULE_WATCH) ?? false, 'the arms never both tick');
+
+        $fileRoster = ScheduleRegistry::atPath($dir . '/schedules.json', $dir);
+        $fileRoster->add(new Schedule(name: 'nightly', everySeconds: 60, prompt: 'p', nextDue: time() + 60, root: $dir));
+        $live = (new Chat(backend: self::engine(null), scheduleRegistry: $fileRoster))->subscriptions();
+        self::assertTrue($live?->has(self::BACKGROUND_POLL) ?? false);
+        self::assertFalse($live?->has(self::SCHEDULE_WATCH) ?? false);
+    }
+
+    public function testTheWatchTickRevivesAQuietFileAndHonoursTheLoadRefusal(): void
+    {
+        $dir = $this->root . '/revive';
+        mkdir($dir, 0o700, true);
+        $path = $dir . '/schedules.json';
+        $registry = ScheduleRegistry::atPath($path, $dir);
+        $supervisor = new BackgroundSupervisor();
+        $supervisor->addSession(self::backgroundSession());
+        $chat = new Chat(
+            backend: self::engine($this->session, $this->root),
+            backgroundSupervisor: $supervisor,
+            scheduleRegistry: $registry,
+        );
+        self::assertSame([], $registry->all(), 'fixture: the roster launched quiet');
+
+        // The hand-edit lands while the session believes it has nothing to
+        // watch fast. One row is due and parked behind a busy marker (the
+        // no-fork discipline of this file); the other spells a bypass-class
+        // mode and must not enter on the RELOAD path either — the refusal
+        // lives at the file boundary, and the boundary is the file boundary.
+        $registry->noteFired('nightly', 'bg1');
+        $bound = (string) realpath($dir);
+        file_put_contents($path, json_encode([
+            'version' => ScheduleRegistry::VERSION,
+            'schedules' => [
+                ['name' => 'nightly', 'every' => 60, 'prompt' => 'do the nightly thing', 'nextDue' => time() - 60, 'root' => $bound],
+                ['name' => 'midnight', 'every' => 60, 'prompt' => 'unattended overrun', 'permissionMode' => 'bypass-permissions', 'root' => $bound],
+            ],
+        ], \JSON_PRETTY_PRINT) ?: '');
+
+        [$next] = $chat->update(new BackgroundTickMsg());
+
+        $nightly = $registry->get('nightly');
+        self::assertNotNull($nightly, "the watch tick's reload landed the hand-written row");
+        self::assertGreaterThan(time(), $nightly->nextDue, 'due-and-busy skipped but advanced, exactly as the fast tick would have');
+        self::assertSame(['bg1'], array_keys($supervisor->getActiveSessions()), 'the parked marker held: nothing was spawned, no fork');
+        self::assertNotContains(
+            Lang::t('chat.schedule.fired', ['name' => 'nightly']),
+            array_map(static fn (Message $m): string => $m->content, $next->history),
+        );
+
+        self::assertNull($registry->get('midnight'), 'the spelled bypass-class row is refused on the reload path, not only the cold one');
+        $refusal = implode("\n", $registry->loadErrors());
+        self::assertStringContainsString("'midnight'", $refusal);
+        self::assertStringContainsString('is refused for schedules', $refusal, 'the note names the row and why, like the webhook refusal does');
+
+        $written = json_decode((string) file_get_contents($path), true, 512, \JSON_THROW_ON_ERROR);
+        self::assertSame(
+            ['nightly'],
+            array_column($written['schedules'], 'name'),
+            'the refusal propagates to disk: the rewritten file carries only the row that was allowed in',
+        );
+        self::assertGreaterThan(time(), $written['schedules'][0]['nextDue'], 'and the advance persisted through the watch tick');
     }
 
     // =====================================================================
