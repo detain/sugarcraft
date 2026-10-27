@@ -1042,7 +1042,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Ruling:** R-EXT-1. Does `allowed-tools` pre-approval apply only to user-tier skills and only to argument-scoped rules (never bare `Bash`/`Write`), with project, bundle … — see §6
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ext.md` → `### C-EXT-2.b`
 
-#### C-SES-4.b — Non-blocking export + wired `tick()` retry
+#### ✅ a3bf74a61 C-SES-4.b — Non-blocking export + wired `tick()` retry
 - **Item:** C-SES-4 (sources: OBS-1-P2, OBS-1-P3) · fix · MINOR · effort M
 - **What:** **Root cause.** POSTs are synchronous Guzzle calls, up to `CANDY_CODE_OTEL_TIMEOUT` each (`OtelSink.php:48-58`), made inside `consume()` on the TUI `update()` path. The `tick()` retry arm (`BatchEventSink.php:77-86`) has no …
 - **Files — create:** `candy-code/src/Observability/RetryingEventSink.php`, `candy-code/src/Observability/AsyncOtlpTransport.php`, `candy-code/src/App/TelemetryRetryTickMsg.php`

@@ -36,6 +36,7 @@
   "C-SES-3.b",
   "C-SES-3.c",
   "C-SES-4.a",
+  "C-SES-4.b",
   "C-SES-5.a",
   "C-SES-5.b",
   "C-SES-5.d",
@@ -365,6 +366,13 @@
    "regen": "gen-protocol-schema --check up to date (no drift commit)",
    "gates": "ServedRuntimeNoticeDrain 6T/29A exact; ServedRuntimeNoticeDrain|SessionHost 60T/300A OK; Host|Server 1621T/10747A 3F all in allowed set (AttachPaging 2F :94/:106 base-inherited + ChatHostLangCatalogue chat.effort.launch_unshaped); five-guard 133T/15696A pair-only (pinned 25,537 vs live)",
    "durations_owed": "ServedRuntimeNoticeDrainTest.php 6T row owed at gate"
+  },
+  "C-SES-4.b": {
+   "master": "a3bf74a61",
+   "pick": "0f0ffd928",
+   "regen": "none (no Protocol/web files)",
+   "gates": "Observability|Otel|BatchEventSink|TelemetryRetry 82T/353A OK exact; EnvRosterDrift 37T/37494A OK (+6A wobble vs lane-era 37488); five-guard 133T/15713A pair-only",
+   "durations_owed": "AsyncOtlpTransportTest.php + ChatTelemetryRetryTickTest.php rows owed at gate"
   }
  },
  "carries": [
