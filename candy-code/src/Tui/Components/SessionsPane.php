@@ -10,7 +10,6 @@ use SugarCraft\Code\Tui\Window\AgentColor;
 use SugarCraft\Code\Tui\Window\WindowEntry;
 use SugarCraft\Code\Tui\Window\WindowList;
 use SugarCraft\Code\Tui\Window\WindowRef;
-use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Style;
@@ -192,7 +191,7 @@ final class SessionsPane
             . Style::new()->foreground($agent->attention->color($theme))->render($glyph)
             . ($resolved === null
                 ? Style::new()->foreground($theme->shellForeground)->render(self::SEP . $name)
-                : Style::new()->foreground(Color::hex($resolved))->render(self::SEP . $name));
+                : Style::new()->foreground($resolved)->render(self::SEP . $name));
 
         return Width::string($line) > $inner ? Width::truncateAnsi($line, $inner) : $line;
     }

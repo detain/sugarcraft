@@ -31,15 +31,15 @@ final class AgentColorTest extends TestCase
             'cyan' => $theme->systemLabel,
         ];
         foreach ($expected as $word => $token) {
-            self::assertSame($token->toHex(), AgentColor::resolve($word, $theme), "the word {$word} must ride its token");
+            self::assertSame($token->toHex(), AgentColor::resolve($word, $theme)?->toHex(), "the word {$word} must ride its token");
         }
     }
 
     public function testResolutionIsCaseInsensitiveAndVocabularyIsWhatItClaims(): void
     {
         $theme = Theme::default();
-        self::assertSame(AgentColor::resolve('red', $theme), AgentColor::resolve('RED', $theme));
-        self::assertSame(AgentColor::resolve('red', $theme), AgentColor::resolve(' Red ', $theme));
+        self::assertSame(AgentColor::resolve('red', $theme)?->toHex(), AgentColor::resolve('RED', $theme)?->toHex());
+        self::assertSame(AgentColor::resolve('red', $theme)?->toHex(), AgentColor::resolve(' Red ', $theme)?->toHex());
 
         self::assertSame(
             ['blue', 'cyan', 'green', 'orange', 'pink', 'purple', 'red', 'yellow'],
@@ -62,23 +62,23 @@ final class AgentColorTest extends TestCase
 
         // Deterministic from the shipped theme: near-black clears the floor
         // against the foreground the chip name competes with...
-        self::assertSame('#000000', AgentColor::resolve('#000000', $theme));
+        self::assertSame('#000000', AgentColor::resolve('#000000', $theme)?->toHex());
         // ...while the foreground's own hex is contrast 1.0 — invisible text
         // — and any grey that washes out against it is refused the same way.
         self::assertNull(AgentColor::resolve($theme->shellForeground->toHex(), $theme));
         self::assertNull(AgentColor::resolve('#808080', $theme));
 
         // The refusal follows the theme, not a hard-coded list: re-measure
-        // the accepted hex against the same floor the lib uses.
+        // the accepted colour against the same floor the lib uses.
         $accepted = AgentColor::resolve('#000000', $theme);
-        self::assertIsString($accepted);
-        self::assertGreaterThanOrEqual(Theme::CONTRAST_MIN, Theme::contrast(Color::hex($accepted), $theme->shellForeground));
+        self::assertInstanceOf(Color::class, $accepted);
+        self::assertGreaterThanOrEqual(Theme::CONTRAST_MIN, Theme::contrast($accepted, $theme->shellForeground));
     }
 
     public function testAcceptedHexIsNormalizedToLowercase(): void
     {
         $theme = Theme::default();
-        self::assertSame('#000000', AgentColor::resolve('#000000', $theme));
+        self::assertSame('#000000', AgentColor::resolve('#000000', $theme)?->toHex());
 
         // 3-digit shorthand is NOT accepted: the kit's contract is the full
         // form, and #0f0-style guesses would expand silently.

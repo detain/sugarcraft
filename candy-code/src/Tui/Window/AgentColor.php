@@ -8,7 +8,7 @@ use SugarCraft\Code\Theme;
 use SugarCraft\Core\Util\Color;
 
 /**
- * The agent-preset `color:` vocabulary resolved to a paintable hex string.
+ * The agent-preset `color:` vocabulary resolved to a paintable Color.
  *
  * Presets and skill frontmatter name colours in two shapes: a small word set
  * (red/blue/green/yellow/purple/orange/pink/cyan), and a literal `#rrggbb`.
@@ -36,12 +36,12 @@ final class AgentColor
     /**
      * Resolve $vocab (a vocabulary word or a `#rrggbb` literal) against $theme.
      *
-     * @return ?string a lower-case `#rrggbb` (a word arrives as its theme
-     *                 token's current value, re-read per call so a `/theme`
-     *                 switch lands on the next frame), or null when the
-     *                 input names no legible colour
+     * @return ?Color a paintable colour (a word arrives as its theme token's
+     *                current value passed through the hex round-trip, re-read
+     *                per call so a `/theme` switch lands on the next frame),
+     *                or null when the input names no legible colour
      */
-    public static function resolve(?string $vocab, Theme $theme): ?string
+    public static function resolve(?string $vocab, Theme $theme): ?Color
     {
         if ($vocab === null || $vocab === '') {
             return null;
@@ -55,11 +55,22 @@ final class AgentColor
         }
 
         $token = self::tokenFor(strtolower($vocab), $theme);
-        if ($token !== null) {
-            return $token->toHex();
+        $hex = $token?->toHex() ?? self::legibleHex($vocab);
+        if ($hex === null) {
+            return null;
         }
 
-        return self::legibleHex($vocab, $theme);
+        // The roster's single construction site: this is where the window kit's
+        // preset hex strings become Colors, and consumers never re-derive one.
+        $colour = Color::hex($hex);
+        // The contrast floor guards the literal path only — a theme token is
+        // legible on the shell by the theme's own construction, and rounding
+        // it through hex and back must not then fail its own floor.
+        if ($token === null && Theme::contrast($colour, $theme->shellForeground) < Theme::CONTRAST_MIN) {
+            return null;
+        }
+
+        return $colour;
     }
 
     /** The theme token a vocabulary word names, or null for anything else. */
@@ -78,8 +89,8 @@ final class AgentColor
         };
     }
 
-    /** A `#rrggbb` literal kept only when it clears the contrast floor. */
-    private static function legibleHex(string $candidate, Theme $theme): ?string
+    /** A `#rrggbb` literal shape-validated and lower-cased, or null. */
+    private static function legibleHex(string $candidate): ?string
     {
         // Validate by walk rather than preg: a bracket-class pattern is a
         // glob-shaped literal for the tree's corpus figures.
@@ -87,11 +98,6 @@ final class AgentColor
             return null;
         }
         if (strspn(substr($candidate, 1), '0123456789abcdefABCDEF') !== 6) {
-            return null;
-        }
-
-        $colour = Color::hex($candidate);
-        if (Theme::contrast($colour, $theme->shellForeground) < Theme::CONTRAST_MIN) {
             return null;
         }
 

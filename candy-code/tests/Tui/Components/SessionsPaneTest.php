@@ -199,7 +199,7 @@ final class SessionsPaneTest extends TestCase
 
         $block = SessionsPane::renderModel($list, $theme, 50, 8);
 
-        $hex = AgentColor::resolve('red', $theme);
+        $hex = AgentColor::resolve('red', $theme)?->toHex();
         self::assertNotNull($hex, 'the vocab is a kit guarantee, not a hope');
         self::assertStringContainsString(
             Style::new()->foreground(Color::hex($hex))->render(' @explore'),

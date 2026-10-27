@@ -7,7 +7,6 @@ namespace SugarCraft\Code\Tui\Window;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Theme;
 use SugarCraft\Code\Tui\Components\PaneLabel;
-use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Style\Style;
@@ -359,7 +358,7 @@ final class WindowStrip
 
         $resolved = AgentColor::resolve($chip->ref->color, $theme);
         $nameStyle = $resolved !== null
-            ? Style::new()->foreground(Color::hex($resolved))
+            ? Style::new()->foreground($resolved)
             : Style::new()->foreground($theme->shellForeground);
         $marker = Style::new()->foreground($chip->attention->color($theme));
         $namePart = $density === self::DENSITY_ICON ? '' : substr($body, strlen(self::CHIP_PLAIN));

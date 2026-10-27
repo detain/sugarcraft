@@ -99,14 +99,18 @@ final class ShellContrastTest extends TestCase
     ];
 
     /**
-     * The one file under `src/Tui/` allowed to construct a Color, and why: it is
-     * the file that RESOLVES the background, so it necessarily builds one from
-     * the OSC 11 reply's r/g/b and one from a palette slot for each nominal
-     * pre-reply floor. It names no colour of the shell's own.
+     * The files under `src/Tui/` allowed to construct a Color, and why: each
+     * one is a colour RESOLVER that necessarily builds a Color from input the
+     * Theme cannot name, and none of them names a colour of the shell's own.
      *
      * @var list<string>
      */
-    private const COLOUR_CONSTRUCTORS_ALLOWED = ['TerminalBackground.php'];
+    private const COLOUR_CONSTRUCTORS_ALLOWED = [
+        'TerminalBackground.php',
+        // 2026-10-27: the window kit's colour component — AgentColor is where
+        // preset hex strings become Colors; consumers never construct.
+        'AgentColor.php',
+    ];
 
     /**
      * Every ratio in this file is measured against a background the test itself
