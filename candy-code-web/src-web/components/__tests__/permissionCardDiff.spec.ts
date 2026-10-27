@@ -59,3 +59,39 @@ describe('PermissionCard shows every edit and the raw arguments (C-SEC-2)', () =
     expect(wrapper.find('[data-testid="ask-arguments"] pre').text()).toContain('git push')
   })
 })
+
+describe('PermissionCard prefers the server-computed diff (C-SEC-2.b)', () => {
+  it('renders the ask.diff text with its real counts, not the snippet-relative mint', () => {
+    const diff = '--- a/src/a.ts\n+++ b/src/a.ts\n@@ -104,7 +104,7 @@\n l104\n-x = 1\n+x = 2\n safe()\n+exfiltrate()\n'
+    const wrapper = mount(PermissionCard, {
+      props: { ask: { ...batchedEdit(), diff } as PendingAsk, canAnswer: true },
+    })
+    const box = wrapper.find('[data-testid="ask-diff"]')
+    expect(box.exists()).toBe(true)
+    // File-absolute hunk grammar, and the size read off the text itself:
+    // two added, one removed — which the client mint of this payload cannot
+    // honestly say.
+    expect(box.find('summary').text()).toContain('server diff')
+    expect(box.find('summary').text()).toContain('(+2 −1)')
+    expect(box.find('summary').text()).not.toContain('snippet-relative')
+    expect(box.text()).toContain('@@ -104,7 +104,7 @@')
+  })
+
+  it('falls back to the client preview when no server diff arrived', () => {
+    const wrapper = mount(PermissionCard, {
+      props: { ask: { ...batchedEdit(), diff: '' } as PendingAsk, canAnswer: true },
+    })
+    expect(wrapper.find('[data-testid="ask-diff"] summary').text()).toContain('snippet-relative')
+    const absent = mount(PermissionCard, { props: { ask: batchedEdit(), canAnswer: true } })
+    expect(absent.find('[data-testid="ask-diff"] summary').text()).toContain('snippet-relative')
+  })
+
+  it('still keeps the raw arguments beside the server diff', () => {
+    const diff = '--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1,1 +1,1 @@\n-x = 1\n+x = 2\n'
+    const wrapper = mount(PermissionCard, {
+      props: { ask: { ...batchedEdit(), diff } as PendingAsk, canAnswer: true },
+    })
+    expect(wrapper.find('[data-testid="ask-diff"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="ask-arguments"] pre').text()).toContain('exfiltrate()')
+  })
+})

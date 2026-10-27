@@ -76,6 +76,7 @@ final class Definitions
                 'mode' => Schema::string(),
                 'options' => Schema::arrayOf(Schema::enum(['once', 'always', 'reject'])),
                 'alwaysScope' => Schema::map(Schema::string()),
+                'diff' => Schema::string()->describe('C-SEC-2.b: server-computed unified diff of the proposed call, confined to the session root and capped at 32 KiB (beyond it, an omitted note naming the change size, never silence); absent when the call has no previewable outcome. Has real file line numbers, unlike a client-minted snippet diff.'),
                 'origin' => Schema::object([
                     'agentId' => Schema::string(),
                     'agentName' => Schema::string(),

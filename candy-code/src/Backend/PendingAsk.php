@@ -75,6 +75,15 @@ final class PendingAsk
          * or for the model's own questions ({@see question()}).
          */
         public readonly string $alwaysAsks = '',
+        /**
+         * C-SEC-2.b: the server-computed unified diff of the proposed call
+         * ({@see \SugarCraft\Code\Permissions\AskDiffPreview}) — confined to the
+         * session root, capped, and ABSENT (null) when the call has no
+         * previewable outcome or the root cannot be established. Unlike the
+         * client's snippet-minted preview, its `@@` headers carry real file
+         * line numbers. Display only — replying never consults it.
+         */
+        public readonly ?string $diff = null,
     ) {
     }
 
@@ -139,7 +148,11 @@ final class PendingAsk
             // P-E2: which delegated run asked, when this process was told
             // (a relayed member's question); absent for the turn's own.
         ] + ($alwaysAsks === '' ? [] : ['alwaysAsks' => $alwaysAsks])
-            + (($origin = \SugarCraft\Code\Permissions\AskOrigin::current()) === null ? [] : ['origin' => $origin->toArray()]);
+            + (($origin = \SugarCraft\Code\Permissions\AskOrigin::current()) === null ? [] : ['origin' => $origin->toArray()])
+            // C-SEC-2.b: the diff of what will run, computed here against the
+            // real files — absent (the key, not a null value) when there is no
+            // previewable outcome.
+            + (($diff = \SugarCraft\Code\Permissions\AskDiffPreview::for($call->name(), $call->arguments(), $projectRoot)) === null ? [] : ['diff' => $diff]);
     }
 
     /**
@@ -256,6 +269,15 @@ final class PendingAsk
 
         $string = static fn (mixed $v): string => is_string($v) ? $v : '';
 
+        // C-SEC-2.b: the diff is a peer-supplied string on an un-validated
+        // channel — a shape check and the wire bound, or it is dropped. A
+        // dropped or absent value is the same as never having one; the card
+        // falls back to its client-side preview and the raw arguments.
+        $diff = $frame['diff'] ?? null;
+        if (!is_string($diff) || $diff === '' || strlen($diff) > \SugarCraft\Code\Permissions\AskDiffPreview::MAX_DIFF_BYTES) {
+            $diff = null;
+        }
+
         return new self(
             $askId,
             $toolCallId,
@@ -269,6 +291,7 @@ final class PendingAsk
             $settle,
             \SugarCraft\Code\Permissions\AskOrigin::fromArray($frame['origin'] ?? null),
             mb_strcut($string($frame['alwaysAsks'] ?? null), 0, 512, 'UTF-8'),
+            $diff,
         );
     }
 

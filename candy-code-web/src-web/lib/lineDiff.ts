@@ -265,3 +265,22 @@ function hunks(ops: Op[]): { from: number; to: number }[] {
   }
   return out
 }
+
+/**
+ * C-SEC-2.b: added/removed line counts read straight off a unified diff as
+ * written (the server-computed `ask.diff`), so the card's (+n −m) summary
+ * says the truth about the text it is showing instead of recounting the
+ * client's own snippet pairing. File-header lines (`---`/`+++`) name the
+ * files, not the change; anything else is context, hunk grammar, or an
+ * omitted-preview note and counts zero.
+ */
+export function diffCounts(text: string): { added: number; removed: number } {
+  let added = 0
+  let removed = 0
+  for (const line of text.split('\n')) {
+    if (line.startsWith('+++') || line.startsWith('---')) continue
+    if (line.startsWith('+')) added++
+    else if (line.startsWith('-')) removed++
+  }
+  return { added, removed }
+}

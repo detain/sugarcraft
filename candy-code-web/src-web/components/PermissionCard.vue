@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { keyArgument } from '../lib/format'
-import { askDiffPreview } from '../lib/lineDiff'
+import { askDiffPreview, diffCounts } from '../lib/lineDiff'
 import DiffView from './DiffView.vue'
 import MessageMarkdown from './MessageMarkdown.vue'
 import type { PendingAsk } from '../protocol/generated'
@@ -34,8 +34,21 @@ const alwaysLabel = computed(() => {
  * C-SEC-2: the raw arguments never hide behind that verdict — the arguments
  * `<details>` renders beside the preview always, so every byte the tool will
  * execute stays inspectable; the card is the security gate.
+ * C-SEC-2.b: the server's own diff wins whenever it is there — it was computed
+ * against the real file, so its `@@` headers and line counts are the change as
+ * it will land, where the client mint below can only speak of the snippet it
+ * was given. An absent, empty, or whitespace-only value falls back: the card
+ * must always show SOMETHING inspectable for an edit-shaped call.
  */
-const preview = computed(() => askDiffPreview(props.ask.tool, props.ask.arguments))
+const preview = computed(() => {
+  const server = (props.ask as { diff?: unknown }).diff
+  if (typeof server === 'string' && server.trim() !== '') {
+    const args = props.ask.arguments as Record<string, unknown>
+    const path = typeof args['file_path'] === 'string' ? args['file_path'] : props.ask.tool
+    return { label: `${path} (server diff)`, text: server, ...diffCounts(server) }
+  }
+  return askDiffPreview(props.ask.tool, props.ask.arguments)
+})
 
 /**
  * WEB-5a-iii: `AskUser` rides the permission channel, but its real choices live

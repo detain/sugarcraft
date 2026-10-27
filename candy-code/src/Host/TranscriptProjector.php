@@ -483,7 +483,9 @@ final class TranscriptProjector
             'alwaysScope' => $ask->alwaysScope,
             // P-E2: the delegated run that asked, when a sub-agent's question
             // was relayed up; absent for the turn's own.
-        ] + ($ask->origin === null ? [] : ['origin' => $ask->origin->toArray()]);
+        ] + ($ask->origin === null ? [] : ['origin' => $ask->origin->toArray()])
+            // C-SEC-2.b: the server-computed diff, absent when none.
+            + ($ask->diff === null ? [] : ['diff' => $ask->diff]);
     }
 
     /**

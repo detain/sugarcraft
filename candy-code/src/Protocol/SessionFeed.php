@@ -372,7 +372,9 @@ final class SessionFeed
             'mode' => $ask->mode,
             'options' => $ask->suggestions,
             'alwaysScope' => $ask->alwaysScope === [] ? new \stdClass() : $ask->alwaysScope,
-        ];
+            // C-SEC-2.b: the server-computed diff (real line numbers), absent
+            // when the call has no previewable outcome.
+        ] + ($ask->diff === null ? [] : ['diff' => $ask->diff]);
     }
 
     // ── hearing ────────────────────────────────────────────────────────

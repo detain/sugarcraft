@@ -5648,9 +5648,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             if ($interactive && $onEvent !== null) {
                 $fallback = $this->permissionApprover;
                 $mode = $this->permissionGate?->mode()->value ?? '';
-                $engine = $this->withPermissionApprover(static function (\SugarCraft\Code\Tools\ToolCall $call, \SugarCraft\Code\Hooks\HookResult $ask) use ($onEvent, $fallback, $mode): bool {
+                // C-SEC-2.b: the preview jail — same root the tools run under.
+                $askRoot = $this->root;
+                $engine = $this->withPermissionApprover(static function (\SugarCraft\Code\Tools\ToolCall $call, \SugarCraft\Code\Hooks\HookResult $ask) use ($onEvent, $fallback, $mode, $askRoot): bool {
                     $pending = PendingAsk::fromFrame(
-                        PendingAsk::describe($call, $ask, $mode),
+                        PendingAsk::describe($call, $ask, $mode, $askRoot),
                         static function (\SugarCraft\Code\Events\PermissionResolved $resolution) use ($onEvent): void {
                             $onEvent($resolution);
                         },

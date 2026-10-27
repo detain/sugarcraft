@@ -254,6 +254,39 @@ final class PathJail
     }
 
     /**
+     * Whether a WRITE of $path belongs under $root — the containment question
+     * a caller that previews a write must answer, composed from the two
+     * existing verdicts without a third copy of the algorithm.
+     *
+     * {@see resolve()} answers for a path that exists (or whose immediate
+     * parent does); {@see resolveForCreate()} covers the rest. Either verdict
+     * is accepted only when the path it vouched for really sits under the real
+     * root — the one exception {@see resolve()} carries, a spill file outside
+     * every root, is readable overflow, never a legitimate write target, and a
+     * preview whose write would land outside the root is exactly what this
+     * check exists to refuse. Fail-closed like every method here: null is a
+     * hard denial.
+     */
+    public static function confine(string $root, string $path): ?string
+    {
+        $rootReal = realpath($root);
+        if ($rootReal === false || self::unusable($root, $path)) {
+            return null;
+        }
+
+        $inside = static fn (string $candidate): bool =>
+            $candidate === $rootReal || str_starts_with($candidate, $rootReal . '/');
+
+        $existing = self::resolve($root, $path);
+        if ($existing !== null && $inside($existing)) {
+            return $existing;
+        }
+
+        $fresh = self::resolveForCreate($root, $path);
+        return $fresh !== null && $inside($fresh) ? $fresh : null;
+    }
+
+    /**
      * Collapse `.` and `..` segments without touching the filesystem, so a
      * traversal through a not-yet-existing directory still lands where it
      * really points. `..` at the top is dropped rather than escaping `/`,
