@@ -1,0 +1,25 @@
+### C-CTX-1.b — Cursor glob rules fire; disabled imported rules are explained
+- item: C-CTX-1 (sources: INT-2-P1, INT-2-P2)
+- kind: fix · MAJOR · effort S
+- approach:
+  - Root cause: `candy-code/src/Context/Rule.php:233-238` ANDs `alwaysApply` into `enabled`. Cursor's canonical Auto-Attached shape (`globs: src/**/*.ts` + `alwaysApply: false`) therefore parses as disabled, and `RuleLoader::load()` drops it (`RuleLoader.php:377`).
+  - A comma string such as `globs: a/*.ts, b/*.ts` also becomes one never-matching pattern (`Rule.php:277-283` → `stringListField()` :435-450).
+  - Fix: `alwaysApply: false` disables a rule only when it has no `paths`/`globs`. Path-scoped rules are already deferred to tool time (`Runtime.php:4583-4597`).
+  - Split comma-string globs into separate patterns, and record a `disabledBy: alwaysApply` reason on the rule.
+  - `RulesCommand` prints one aggregate hint: "N imported rules are off (`alwaysApply: false`, no globs); turn one on with `/rules <name>`". `RulesHostCommand` reuses that output.
+  - Document Cursor's mapping table in `docs/MEMORY.md` (:745-750).
+- files.create: none
+- files.modify: `candy-code/src/Context/Rule.php` (frontmatter parse, glob split), `candy-code/src/Commands/RulesCommand.php` (aggregate hint)
+- tests:
+  - modify `candy-code/tests/Context/RuleLoaderTest.php`:
+    - globs + `alwaysApply:false` → enabled, path-scoped, and absent from the standing splice;
+    - a comma glob → two patterns;
+    - the no-globs pin at :884-913 stays;
+  - modify `candy-code/tests/Commands/RulesCommandTest.php`: hint pin.
+- docs/guards: `candy-code/docs/MEMORY.md` (Cursor mapping table)
+- serialized: [lang:cmd.rules.alwaysapply_hint*] [docs:MEMORY.md] [hot:candy-code/src/Context/Rule.php]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: a project that used `alwaysApply:false` to keep a globbed rule OFF now gets it at tool time. The `/rules` toggle is the escape, and the hint names it.
+

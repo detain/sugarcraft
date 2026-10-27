@@ -19,7 +19,8 @@
     "C-PRV-1.c",
     "C-MCP-1.b",
     "C-EXT-1.b",
-    "C-SES-5.b"
+    "C-SES-5.b",
+    "C-CTX-1.b"
   ],
   "inflight": {
     "C-SEC-2.b": {
@@ -59,28 +60,27 @@
       "session": "ses_e83db374cffeLBzipP6vdRrrW6"
     },
     "C-SES-2.c": {
-      "stage": "review",
+      "stage": "clean",
       "round": 2,
       "worktree": "/home/sites/cc-cmp-C-SES-2.c",
       "branch": "cc/C-SES-2.c",
-      "session": "ses_e83c0e7f4ffeGNHrkvVm0G0rNl",
-      "note": "fix d89efd151 (8 del docblock); r2 review pending regen-cured filters"
-    },
-    "C-CTX-1.b": {
-      "stage": "clean",
-      "round": 2,
-      "worktree": "/home/sites/cc-cmp-C-CTX-1.b",
-      "branch": "cc/C-CTX-1.b",
       "session": null,
-      "note": "r2 CLEAN static tip 3cedf52a0; weld re-runs show --stat/authors/gates"
+      "note": "r2 CLEAN tip d89efd151; weld queued after C-CTX-1.b; welder regen protocol trio + web dist expected"
     },
     "C-SES-5.d": {
-      "stage": "build",
+      "stage": "review",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-SES-5.d",
       "branch": "cc/C-SES-5.d",
       "session": "ses_e83c8fc74ffebW5qkYXsIgeZyT",
-      "note": "base fd4f36875"
+      "note": "tip d4c136c40 base fd4f36875; NEW tools/tests CandyCodeImageCacheBustTest.php tools-guard no durations"
+    },
+    "C-TOOL-1.b": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-TOOL-1.b",
+      "branch": "cc/C-TOOL-1.b",
+      "session": "ses_e83be5b49ffezmEXm3WJ4QHhu6"
     }
   },
   "blocked": [],
