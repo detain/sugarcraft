@@ -1,0 +1,45 @@
+### C-PRV-1.a — `EffortGate`, a per-model shaper predicate, and Bedrock / Codex / claude-code effort
+- item: C-PRV-1 (sources: PRV-2-P1, p1-miss: Bedrock request-side thinking/effort, p1-miss: Codex parity (`-c model_reasoning_effort`))
+- kind: fix · MAJOR · effort M
+- approach:
+  - Root cause: `/effort` gates per provider, through the empty marker `ShapesReasoningEffort` (`candy-code/src/Providers/ShapesReasoningEffort.php:34`).
+  - But `OpenAIProvider` sends `reasoning_effort` only inside `isReasoningFamily()` (`OpenAIProvider.php:439-446, 477-494`). On `gpt-4o`, `gpt-4.1` and `gpt-5-chat-*` a "set" tier is silently dropped.
+  - Fix part 1: give the interface `shapesEffortFor(string $model): bool` and implement it in OpenAI, Anthropic, Vertex, Gemini and SGLang.
+  - Fix part 2: add `Providers\ThinkingCapability`, one per-family table of thinking support and output ceilings, for Anthropic and Gemini families. C-PRV-5.a reuses it.
+  - Fix part 3: add `Providers\EffortGate` with `verdict(ProviderInterface, model)`, which unwraps a FallbackProvider to its primary, and `shape()`, the status phrase now inlined in `Chat.php:12262-12271`.
+  - New shapers:
+    - **Bedrock** for Claude-family ids: Converse `additionalModelRequestFields.thinking {type: enabled, budget_tokens}`, with temperature dropped and `maxTokens` above the budget.
+    - **Codex:** `-c model_reasoning_effort=<level>` through `CodexInvocation::execArgs()`. The level map is verified against codex-cli 0.154.0.
+    - **claude-code:** `--effort <level>`, verified present in `claude --help` 2.1.311 (low, medium, high, xhigh, max).
+  - Rewrite the interface docblock's "deliberately NOT shapers" paragraph to match.
+- files.create: `candy-code/src/Providers/EffortGate.php`, `candy-code/src/Providers/ThinkingCapability.php`, `candy-code/tests/Providers/EffortGateTest.php`
+- files.modify:
+  - `candy-code/src/Providers/ShapesReasoningEffort.php`
+  - `candy-code/src/Providers/OpenAIProvider.php`
+  - `candy-code/src/Providers/AnthropicProvider.php`
+  - `candy-code/src/Providers/VertexProvider.php`
+  - `candy-code/src/Providers/GeminiProvider.php`
+  - `candy-code/src/Providers/SglangProvider.php`
+  - `candy-code/src/Providers/BedrockProvider.php` (`complete()`, `completeStream()`, `inferenceConfig()`)
+  - `candy-code/src/Providers/CodexProvider.php` (`options()`)
+  - `candy-code/src/Providers/CodexInvocation.php` (`execArgs()`)
+  - `candy-code/src/Providers/ClaudeCodeProvider.php` (`options()`)
+  - `candy-code/src/Providers/ClaudeCodeInvocation.php` (`printModeArgs()`)
+- tests:
+  - create EffortGateTest: provider × model roster, e.g. openai+gpt-4o false, openai+o3 true, gemini-2.0-flash false, bedrock+anthropic.claude-* true, bedrock+llama false;
+  - modify `candy-code/tests/Providers/EffortBudgetTest.php` (implementer roster pin);
+  - modify `candy-code/tests/Providers/BedrockProviderTest.php` (thinking field present for Claude, absent otherwise);
+  - modify `candy-code/tests/Providers/CodexProviderTest.php` (argv pin);
+  - modify `candy-code/tests/Providers/ClaudeCodeProviderTest.php` (argv pin);
+  - modify `candy-code/tests/Providers/OpenAIProviderTest.php`.
+- docs/guards:
+  - `candy-code/docs/ADDING_A_PROVIDER.md`: the shaper contract;
+  - lang `settings.reasoningEffort.help` names which provider/model pairs shape, then regenerate `candy-code/docs/SETTINGS.md` with `php tools/gen-settings-doc.php --write`, guarded by `candy-code/tests/Config/Settings/SettingsSchemaDocDriftTest.php`.
+- serialized: [lang:settings.reasoningEffort.*] [docs:SETTINGS.md] [docs:ADDING_A_PROVIDER.md] [hot:candy-code/src/Providers/OpenAIProvider.php] [hot:candy-code/src/Providers/AnthropicProvider.php] [hot:candy-code/src/Providers/BedrockProvider.php] [hot:candy-code/src/Providers/Codex*.php] [hot:candy-code/src/Providers/ClaudeCode*.php]
+- deps: none
+- phase: normal
+- ruling: none
+- risks:
+  - Bedrock thinking is fixture-pinned only, since the repo holds no AWS credentials. Say so in the docblock (house "pin what was measured").
+  - The codex level names must be read from the probed CLI, not guessed.
+
