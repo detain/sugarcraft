@@ -1,0 +1,28 @@
+### C-SEC-2.a — Web Edit card shows every edit and the raw arguments
+- item: C-SEC-2 (sources: WEB-5-P1, WEB-5-P4)
+- kind: fix · CRITICAL · effort S
+- approach:
+  - Root cause 1: `diffPairsFor()` (`candy-code-web/src-web/lib/lineDiff.ts:38-41`) returns only the top-level `old_string`/`new_string` pair whenever it is present. `Edit::editList()` (`candy-code/src/Tools/BuiltIn/Edit.php:441-471`) always runs the top-level pair as edit 1 and `edits[]` as edits 2..N, so the `edits`-only branch (:42-52) never matches a real call.
+  - Root cause 2: `PermissionCard.vue:113-120` renders the raw-arguments `<details>` as `v-else`, so it disappears whenever a preview exists.
+  - Fix in `lineDiff.ts`:
+    - Build the pair list as `[top-level pair, ...edits]`, in the same order as `editList`.
+    - Return `null` (raw-dump fallback) on any malformed entry, including an empty `old_string` in `edits` (Edit refuses those).
+    - Read `replace_all` as truthy, top-level and per entry, as `editList` does, and add "(replace all occurrences)" to that pair's label.
+    - Mark the `<summary>` as snippet-relative (WEB-5-P4) without changing the `@@` grammar that `DiffView` parses.
+  - Fix in `PermissionCard.vue`: always render the raw `arguments` `<details>`, beside the preview.
+- files.create: `candy-code-web/src-web/components/__tests__/permissionCardDiff.spec.ts`
+- files.modify: `candy-code-web/src-web/lib/lineDiff.ts` (`diffPairsFor`, `askDiffPreview` label), `candy-code-web/src-web/components/PermissionCard.vue` (template `ask-diff` / arguments block)
+- tests:
+  - modify `candy-code-web/src-web/lib/__tests__/lineDiff.spec.ts`:
+    - Rewrite the batched case (:21-37) to the real `{old_string,new_string,edits:[…]}` shape. Assert that every pair's lines appear (including `exfiltrate()`) and that the counts sum.
+    - A malformed extra entry gives null.
+    - A `replace_all` pair carries the label suffix.
+  - modify `candy-code-web/src-web/components/__tests__/permissionCardExtras.spec.ts:38`. It pins "no other `<details>` beside the diff", which is the defect, so flip it.
+  - The new spec asserts that `arguments` details exist next to `ask-diff`.
+- docs/guards: vitest (`--no-file-parallelism`). Rebuild web dist under the orchestrator's dist rule (see Notes). No PHP guard.
+- serialized: [hot:candy-code-web/src-web/components/PermissionCard.vue] [hot:candy-code-web/dist]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: the card grows taller for batched edits. The raw arguments sit in a collapsed `<details>`, so the card's default height is unchanged.
+

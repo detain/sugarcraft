@@ -197,7 +197,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-1.a`
 
-#### C-SEC-2.a — Web Edit card shows every edit and the raw arguments
+#### ✅ cc0c9644a C-SEC-2.a — Web Edit card shows every edit and the raw arguments
 - **Item:** C-SEC-2 (sources: WEB-5-P1, WEB-5-P4) · fix · CRITICAL · effort S
 - **What:** Root cause 1: `diffPairsFor()` (`candy-code-web/src-web/lib/lineDiff.ts:38-41`) returns only the top-level `old_string`/`new_string` pair whenever it is present. `Edit::editList()` …
 - **Files — create:** `candy-code-web/src-web/components/__tests__/permissionCardDiff.spec.ts`
