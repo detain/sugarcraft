@@ -611,8 +611,11 @@ final class TreeWideGuardRosterTest extends TestCase
         'Cli/RulesStateWiringTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         // DST-3: deleteTree() in tearDown() empties the sys_get_temp_dir()
         // release sandbox setUp() made; the globs assert the swap's .tmp-*
-        // sibling left no residue inside that same sandbox.
-        'Cli/SelfUpdateTest.php' => ['scandir($path)', "glob(\$this->livePharPath().'.tmp-'.\\chr(42))"],
+        // sibling left no residue inside that same sandbox. The $phar spelling
+        // is the same path read through a local ($phar = $this->livePharPath()
+        // at the 404-sweep legs); the derivation cannot follow the assignment,
+        // so both spellings of the identical walk carry their own licence.
+        'Cli/SelfUpdateTest.php' => ['scandir($path)', "glob(\$this->livePharPath().'.tmp-'.\\chr(42))", "glob(\$phar.'.tmp-'.\\chr(42))"],
         'Cli/SubcommandsMcpImportTest.php' => ['scandir($this->tempDir)'],
         'Commands/McpAuthLoginGuidanceTest.php' => ['glob($this->tempDir.\'/*\')'],
         // w3c (VIS-3): tearDown's removeTree() lists the temp home setUp() made.
