@@ -18,6 +18,7 @@ use SugarCraft\Code\ToolResult;
 use SugarCraft\Code\Tui\MediaForm\MediaForm;
 use SugarCraft\Code\Tui\Renderer as TuiRenderer;
 use SugarCraft\Image\Mosaic;
+use SugarCraft\Mouse\Mark;
 
 /**
  * P-IMAGE-MENU: the /generate popup is content-sized and centred, not a
@@ -217,6 +218,31 @@ final class MediaFormPopupSizeTest extends TestCase
         $zone = TuiRenderer::chromeZoneAt($left + $from + 1, $top + $zoneRow + 1);
         self::assertNotNull($zone, 'the painted tab is clickable at its offset');
         self::assertSame($zoneId, $zone->id);
+    }
+
+    public function testPadBandSweepsZoneTagsOutOfTheBackdropBeforeTheCellCut(): void
+    {
+        $cols = 24;
+        $rows = 3;
+        $band = "header row\n"
+            . 'aa ' . Mark::zone('strip:reviewer', 'live') . ' bb'
+            . "\nfooter row";
+
+        $padded = (string) (new \ReflectionMethod(TuiRenderer::class, 'padBand'))
+            ->invoke(null, $band, $cols, $rows);
+
+        $lines = explode("\n", $padded);
+        self::assertCount($rows, $lines);
+        foreach ($lines as $line) {
+            self::assertSame($cols, Width::string($line), 'every backdrop line is squared to the band width');
+            self::assertStringNotContainsString("\u{e000}", $line, 'no sentinel half rides into Veil to be split');
+            self::assertStringNotContainsString("\u{e001}", $line, 'no sentinel half rides into Veil to be split');
+        }
+
+        self::assertStringNotContainsString('strip:reviewer', $padded, 'no zone id bytes survive in the backdrop');
+        self::assertStringContainsString('live', $lines[1], 'the painted content between the sentinels survives');
+        self::assertStringContainsString('aa', $lines[1]);
+        self::assertStringContainsString('bb', $lines[1]);
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────

@@ -129,7 +129,6 @@ final class MediaFormWiringTest extends TestCase
 
     // ---- the SavePreset action, App to disk ------------------------------------------
 
-
     public function testSavePresetKeyWalksAppToDiskThroughTheWiredDoor(): void
     {
         $this->awArmHomeSandbox();

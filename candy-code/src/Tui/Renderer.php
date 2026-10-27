@@ -1016,10 +1016,13 @@ final class Renderer
      *   box, are the frame's only click targets.
      *
      * The box never over-reaches its band (`naturalSize` clamps against it),
-     * and the band's rows are sentinel-free by scanRoot's law, so Veil's
-     * own cell maths lands the box exactly where the zone offsets compute —
-     * no lift/restore dance is needed here for the reasons the chat overlay
-     * chain does it.
+     * and no lift/restore dance is needed here, unlike the chat overlay
+     * chain, because the rows Veil composites are already inert: chat rows
+     * shed their zones to scanRoot upstream, the band's own click targets
+     * are dropped with the registry, and `padBand()` sweeps any zone tag off
+     * what is left before the cell cut. With the backdrop sentinel-free,
+     * Veil's own cell maths lands the box exactly where the zone offsets
+     * compute.
      */
     private static function renderMediaForm(
         App $a,
@@ -1098,15 +1101,37 @@ final class Renderer
     }
 
     /**
+     * The `Mark::zone` tag grammar — byte-identical to the pattern the chat
+     * renderer's `scanRoot()` strip applies (Renderer's private
+     * `ZONE_MARKER_PATTERN`, duplicated here rather than promoted to public
+     * so neither renderer's private surface moves for the other's caller).
+     * Matches one whole tag: `U+E000` + optional `/` + id bytes + `U+E001`;
+     * the painted content BETWEEN a pair's open and close survives, the
+     * sentinels and the id bytes between them do not.
+     */
+    private const BAND_ZONE_TAG_PATTERN = '/\xEE\x80\x80\/?[A-Za-z0-9._:-]*\xEE\x80\x81/';
+
+    /**
      * Square a composed band to exactly `$cols` cells x `$paneRows` lines:
      * every line truncated then padded to the full width, and short bands
      * extended with blank full-width rows, so Veil's canvas maths (widest
      * line, line count) sees the whole band as its surface — the
      * {@see AgentDashboardPane}-shaped padCanvas law, widened to columns for
      * the popup's horizontal centring (P-IMAGE-MENU).
+     *
+     * The sweep first: `composeBand()`'s chat rows arrive sentinel-free
+     * because scanRoot already consumed their zones into the (about to be
+     * cleared) chat registry, but the split column and any future band
+     * producer may still carry `Mark::zone` tags. The backdrop is inert
+     * paint — its click targets were dropped with the registry — so a zone
+     * riding into Veil buys nothing and costs a straddle: Veil's cell-cut
+     * at the box edge can split a sentinel pair mid-row, and the stray
+     * U+E000/E001 half is what the chat chain needs lift/restore for.
+     * padBand refuses the whole game: no tag survives to be split.
      */
     private static function padBand(string $band, int $cols, int $paneRows): string
     {
+        $band = (string) preg_replace(self::BAND_ZONE_TAG_PATTERN, '', $band);
         $lines = [];
         foreach (array_slice(explode("\n", self::clipWidth($band, $cols)), 0, $paneRows) as $line) {
             $lines[] = Width::padRight($line, $cols);
