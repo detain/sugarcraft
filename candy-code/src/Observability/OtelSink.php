@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Observability;
 
 /**
- * Ungrouped OTLP/HTTP exporter: encodes events one POST per closed span.
+ * Ungrouped OTLP/HTTP exporter: one POST per render pass, each pass
+ * carrying every span it closed in a single body.
  *
  * Production installs {@see BatchEventSink} on top of this class; using it
  * bare is the debugging shape (every turn hits the wire the moment it
@@ -66,7 +67,7 @@ final class OtelSink implements EventSink
     public function consume(object $event): void
     {
         try {
-            foreach ($this->encodeAll([$event]) as $body) {
+            foreach ($this->encodeAll([[$event, null]]) as $body) {
                 $this->post($body);
             }
         } catch (\Throwable) {
@@ -87,24 +88,25 @@ final class OtelSink implements EventSink
     }
 
     /**
-     * Pure encode arm: renders every span the events close, touching no
-     * transport. Order-preserving, so a batch's bodies keep their causality.
+     * Pure encode arm: renders every span the batch closes, touching no
+     * transport. Order-preserving, and since OBS-1-P2 the whole batch's
+     * closed spans travel together in ONE body, each carrying the
+     * consume-time instant its events were stamped with (C-SES-4.a) — a
+     * bare {@see consume()} hands one pair with a null stamp, where
+     * observe and encode coincide anyway.
      *
-     * @param list<object> $events
+     * @param list<array{object, ?int}> $stampedEvents event + observed unix nanos
      *
-     * @return list<string> JSON bodies
+     * @return list<string> JSON bodies — at most one
      */
-    public function encodeAll(array $events): array
+    public function encodeAll(array $stampedEvents): array
     {
-        $bodies = [];
-        foreach ($events as $event) {
-            $body = $this->encoder->encode($event);
-            if (null !== $body) {
-                $bodies[] = json_encode($body, \JSON_THROW_ON_ERROR | \JSON_PRESERVE_ZERO_FRACTION);
-            }
+        $spans = $this->encoder->encodeMany($stampedEvents);
+        if ([] === $spans) {
+            return [];
         }
 
-        return $bodies;
+        return [json_encode($this->encoder->exportBody($spans), \JSON_THROW_ON_ERROR | \JSON_PRESERVE_ZERO_FRACTION)];
     }
 
     /** Renders every still-open span (shutdown arm) without posting it. */

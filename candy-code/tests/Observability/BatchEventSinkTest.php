@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Observability;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Events\SpendCapBreached;
 use SugarCraft\Code\Events\StepStarted;
+use SugarCraft\Code\Events\UsageUpdated;
 use SugarCraft\Code\Observability\BatchEventSink;
 use SugarCraft\Code\Observability\OtelSink;
 
@@ -24,10 +25,18 @@ final class BatchEventSinkTest extends TestCase
 
     private bool $endpointAccepts = true;
 
+    /** Consume-time clock fed through the seam (C-SES-4.a test surface). */
+    private int $clockNanos = 1_000;
+
+    /** Pid the owner-pid seam reports (OBS-1-P4 test surface). */
+    private int $pidAsSeen = 0;
+
     protected function setUp(): void
     {
         $this->bodies = [];
         $this->endpointAccepts = true;
+        $this->clockNanos = 1_000;
+        $this->pidAsSeen = \getmypid();
     }
 
     public function testBatchRendersOnCountAndNothingLeavesPerEventBeforeThat(): void
@@ -158,6 +167,99 @@ final class BatchEventSinkTest extends TestCase
         $shutdown->consume(new SpendCapBreached(1, INF, 1.0));
         $shutdown->flush();
         $this->assertSame(1, $shutdown->encodeFailureCount());
+    }
+
+    /**
+     * C-SES-4.a / OBS-1-P1: the span's duration is the gap between the two
+     * CONSUME instants, whatever the batch size — before the fix, events
+     * were stamped at the shared render instant and every batched span was
+     * about 0 ms long at the wrong time.
+     */
+    public function testSpanDurationIsTheConsumeTimeGapNotTheEncodeTimeGap(): void
+    {
+        $start = 1_700_000_000_123_456_789;
+        $gap = 250_000_000;
+
+        foreach ([2, 64] as $batchSize) {
+            $this->bodies = [];
+            $sink = $this->batchSinkSeamed($batchSize);
+
+            $this->clockNanos = $start;
+            $sink->consume(new StepStarted(1, 9));
+            $this->clockNanos = $start + $gap;
+            $sink->consume(new UsageUpdated(1, null, null));
+
+            if (64 === $batchSize) {
+                $sink->flush();
+            }
+
+            $this->assertCount(1, $this->bodies, "batch size {$batchSize}: the closed span leaves in one body");
+            $span = self::spansFromBody($this->bodies[0])[0];
+            $this->assertSame((string) $start, $span['startTimeUnixNano'], "batch size {$batchSize}");
+            $this->assertSame((string) ($start + $gap), $span['endTimeUnixNano'], "batch size {$batchSize}");
+        }
+    }
+
+    /**
+     * C-SES-4.a / OBS-1-P2 (the one-body half): a batch that closes K spans
+     * produces ONE transport call, not K.
+     */
+    public function testABatchOfClosedSpansLeavesInOneTransportCall(): void
+    {
+        $sink = $this->batchSinkSeamed(64);
+
+        for ($step = 1; $step <= 3; $step++) {
+            $sink->consume(new StepStarted($step, 9));
+            $sink->consume(new UsageUpdated($step, null, null));
+            $this->clockNanos += 1_000;
+        }
+        $this->assertSame([], $this->bodies, 'nothing leaves per event: 6 of 64, still buffered');
+
+        $sink->flush();
+        $this->assertCount(1, $this->bodies, 'three closed spans, one body, one POST');
+        $this->assertCount(3, self::spansFromBody($this->bodies[0]));
+    }
+
+    /**
+     * C-SES-4.a / OBS-1-P4: a forked child leaving through exit() must not
+     * re-flush the parent's copied batch.
+     */
+    public function testFlushFromAForeignPidSendsNothing(): void
+    {
+        $sink = $this->batchSinkSeamed(64);
+        $sink->consume(new StepStarted(1, 9));
+        $sink->consume(new UsageUpdated(1, null, null));
+
+        $this->pidAsSeen = \getmypid() + 1;
+        $sink->flush();
+        $this->assertSame([], $this->bodies, 'the foreign pid exported nothing');
+        $this->assertSame(2, $sink->pendingCount(), 'the batch stays the owner process\'s to flush');
+
+        $this->pidAsSeen = \getmypid();
+        $sink->flush();
+        $this->assertCount(1, $this->bodies, 'the owner flush still lands');
+    }
+
+    private function batchSinkSeamed(int $batchSize): BatchEventSink
+    {
+        return new BatchEventSink(
+            $this->collectorSink(),
+            $batchSize,
+            function (): int {
+                return $this->clockNanos;
+            },
+            function (): int {
+                return $this->pidAsSeen;
+            },
+        );
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private static function spansFromBody(string $body): array
+    {
+        return json_decode($body, true, 512, \JSON_THROW_ON_ERROR)['resourceSpans'][0]['scopeSpans'][0]['spans'];
     }
 
     private function collectorSink(): OtelSink

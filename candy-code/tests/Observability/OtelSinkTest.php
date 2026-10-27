@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Observability;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Events\SpendCapBreached;
 use SugarCraft\Code\Events\StepStarted;
+use SugarCraft\Code\Events\UsageUpdated;
 use SugarCraft\Code\Observability\OtelSink;
 
 /**
@@ -66,6 +67,33 @@ final class OtelSinkTest extends TestCase
 
         $this->assertCount(1, $bodies, 'the drain is not an infinite open-span fountain');
         $this->assertStringContainsString('"endTimeUnixNano"', $bodies[0]);
+    }
+
+    /**
+     * C-SES-4.a: encodeAll takes consume-time-stamped pairs and answers at
+     * most ONE body — every span the batch closed rides it, each keeping
+     * its own stamped instants (OBS-1-P1 + OBS-1-P2).
+     */
+    public function testEncodeAllCarriesEveryStampedSpanInOneBody(): void
+    {
+        $sink = OtelSink::withTransport(static fn (string $body): bool => true);
+
+        $bodies = $sink->encodeAll([
+            [new StepStarted(1, 5), 10],
+            [new UsageUpdated(1, null, null), 20],
+            [new StepStarted(2, 5), 30],
+            [new SpendCapBreached(2, 1.0, 0.5), 40],
+        ]);
+
+        $this->assertCount(1, $bodies, 'two closed spans, one body');
+        $spans = json_decode($bodies[0], true, 512, \JSON_THROW_ON_ERROR)['resourceSpans'][0]['scopeSpans'][0]['spans'];
+        $this->assertCount(2, $spans);
+        $this->assertSame('10', $spans[0]['startTimeUnixNano']);
+        $this->assertSame('20', $spans[0]['endTimeUnixNano'], 'the stamp, not the encode instant, ends the span');
+        $this->assertSame('30', $spans[1]['startTimeUnixNano']);
+        $this->assertSame('40', $spans[1]['endTimeUnixNano']);
+
+        $this->assertSame([], $sink->encodeAll([[new StepStarted(3, 5), 50]]), 'a batch that closes nothing renders no body');
     }
 
     public function testTransportExceptionsAreSwallowedLikeRefusals(): void

@@ -40,6 +40,11 @@ use SugarCraft\Code\Events\UsageUpdated;
  *   dropped while several steps are open at once (parallel agents).
  * - Unrecognised objects are dropped; the return value reports the closed
  *   spans produced by a call, so a caller can never emit a span twice.
+ * - A batch arrives through {@see encodeMany()} as consume-time-stamped
+ *   pairs (OBS-1-P1: spans are measured across the real event gap, never
+ *   the export instant) and returns its closed spans RAW, so exactly one
+ *   {@see exportBody()} call — one OTLP body, one POST — carries them all
+ *   (OBS-1-P2).
  *
  * Privacy law: identifiers, counters, durations, token totals and costs are
  * exported; payloads are NOT. No tool arguments, tool output tails, media
@@ -73,9 +78,52 @@ final class OtlpEncoder
      * Absorbs one event. Returns an OTLP export request body when this
      * call closed a span, null otherwise (event opened/annotated/dropped).
      *
+     * C-SES-4.a: $nowUnixNanos is the event's OBSERVED instant. A batched
+     * caller stamps at consume time and hands the value through; null
+     * keeps the single-shot shape, where observe and encode coincide.
+     *
      * @return ?array{resourceSpans: list<array<string, mixed>>}
      */
     public function encode(object $event, ?int $nowUnixNanos = null): ?array
+    {
+        $closed = $this->absorb($event, $nowUnixNanos);
+
+        return null === $closed ? null : $this->exportBody([$closed]);
+    }
+
+    /**
+     * OBS-1-P2 (the one-body half): absorbs a whole batch of consume-time-
+     * stamped events and returns EVERY span the batch closed, raw and in
+     * arrival order. The caller wraps them in a single {@see exportBody()},
+     * so one batch leaves in one POST instead of one POST per closed span.
+     * An empty list means the batch closed nothing (openings and
+     * annotations only).
+     *
+     * @param list<array{object, ?int}> $stampedEvents
+     *
+     * @return list<array<string, mixed>> rendered closed spans
+     */
+    public function encodeMany(array $stampedEvents): array
+    {
+        $spans = [];
+        foreach ($stampedEvents as [$event, $nanos]) {
+            $closed = $this->absorb($event, $nanos);
+            if (null !== $closed) {
+                $spans[] = $closed;
+            }
+        }
+
+        return $spans;
+    }
+
+    /**
+     * The shared absorb core of {@see encode()} and {@see encodeMany()}:
+     * state changes only, returning the raw rendered span when this event
+     * closed one.
+     *
+     * @return ?array<string, mixed>
+     */
+    private function absorb(object $event, ?int $nowUnixNanos): ?array
     {
         $nanos = $nowUnixNanos ?? self::wallClockNanos();
 
@@ -103,7 +151,7 @@ final class OtlpEncoder
         unset($this->openSpans[$step]);
         unset($span);
 
-        return self::exportBody([$closed], $this->resourceAttributes);
+        return $closed;
     }
 
     /**
@@ -128,7 +176,7 @@ final class OtlpEncoder
             unset($this->openSpans[$step]);
         }
 
-        return self::exportBody($spans, $this->resourceAttributes);
+        return $this->exportBody($spans);
     }
 
     /** How many spans are currently open (test/diagnostic surface). */
@@ -194,14 +242,19 @@ final class OtlpEncoder
     }
 
     /**
-     * @param array<string, string|int|bool|float> $resourceAttributes
+     * Wraps rendered spans into the OTLP request body this encoder's
+     * resource attributes describe. Public since C-SES-4.a: the batch arm
+     * hands {@see encodeMany()}'s spans here ONCE per batch, which is what
+     * makes one batch equal one POST.
+     *
+     * @param list<array<string, mixed>> $spans
      *
      * @return array{resourceSpans: list<array<string, mixed>>}
      */
-    private static function exportBody(array $spans, array $resourceAttributes): array
+    public function exportBody(array $spans): array
     {
         $attributes = [];
-        foreach (['service.name' => self::SERVICE_NAME] + $resourceAttributes as $key => $value) {
+        foreach (['service.name' => self::SERVICE_NAME] + $this->resourceAttributes as $key => $value) {
             $attributes[] = ['key' => (string) $key, 'value' => self::attributeValue($value)];
         }
 

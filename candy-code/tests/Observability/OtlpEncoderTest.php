@@ -253,6 +253,42 @@ final class OtlpEncoderTest extends TestCase
         $this->assertArrayHasKey('context.pressure_tokens', self::onlySpanAttributes($pressed->drainOpen(20)));
     }
 
+    /**
+     * C-SES-4.a / OBS-1-P2: encodeMany hands back the batch's closed spans
+     * RAW so the caller wraps them in exactly ONE exportBody — one POST per
+     * batch, each span keeping its stamped instants.
+     */
+    public function testEncodeManyReturnsEveryClosedSpanForOneExportBody(): void
+    {
+        $encoder = new OtlpEncoder(['session.id' => 'sess-9']);
+        $encoder->encode(new StepStarted(1, 5), 10);
+
+        $spans = $encoder->encodeMany([
+            [new UsageUpdated(1, null, self::pricedUsage()), 100],
+            [new StepStarted(2, 5), 200],
+            [new SpendCapBreached(2, 1.0, 0.5), 300],
+        ]);
+
+        $this->assertCount(2, $spans, 'both turns closed in this batch, nothing else');
+        $this->assertSame('100', $spans[0]['endTimeUnixNano']);
+        $this->assertSame('200', $spans[1]['startTimeUnixNano']);
+        $this->assertSame('300', $spans[1]['endTimeUnixNano']);
+        $this->assertSame(0, $encoder->openSpanCount(), 'encodeMany drains exactly what it renders');
+
+        $body = $encoder->exportBody($spans);
+        $this->assertCount(2, $body['resourceSpans'][0]['scopeSpans'][0]['spans'], 'one body carries the whole batch');
+        $resource = $body['resourceSpans'][0]['resource']['attributes'];
+        $this->assertSame('session.id', $resource[1]['key'], 'the batch body keeps the encoder\'s resource');
+    }
+
+    public function testEncodeManyClosesNothingWithoutClosingEvents(): void
+    {
+        $encoder = new OtlpEncoder();
+
+        $this->assertSame([], $encoder->encodeMany([[new StepStarted(1, 5), 10]]));
+        $this->assertSame(1, $encoder->openSpanCount(), 'the opening still opens; it just closes nothing');
+    }
+
     private static function pricedUsage(): Usage
     {
         return Usage::new(totalTokens: 100, costUsd: 0.02, unpricedModel: null)
