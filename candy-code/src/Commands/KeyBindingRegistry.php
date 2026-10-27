@@ -1358,6 +1358,7 @@ final class KeyBindingRegistry
         return [
             KeyBinding::new('menu.switch', '← / →', Lang::t('keys.menu.switch'), $c),
             KeyBinding::new('menu.move', '↑ / ↓', Lang::t('keys.menu.move'), $c),
+            KeyBinding::new('menu.submenu', '→ / ←', Lang::t('keys.menu.submenu'), $c),
             KeyBinding::new('menu.run', 'Enter', Lang::t('keys.menu.run'), $c),
             KeyBinding::new('menu.close', 'Esc', Lang::t('keys.menu.close'), $c),
         ];

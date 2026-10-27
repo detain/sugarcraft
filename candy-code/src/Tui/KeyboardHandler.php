@@ -587,6 +587,24 @@ final class KeyboardHandler
             return [$app->cyclePaneFocus(-1), null];
         }
 
+        // An OPEN menu takes the arrow/vim keys FIRST — before the Agent
+        // dashboard, the skill picker and the generic pane navigation, each of
+        // which claims up/down unconditionally. A key the menu answers returns
+        // from this block (bug 4: it used to fall through when the menu index
+        // was unchanged, so ↑/↓ while a menu was open moved the dashboard or
+        // the picker behind it). A key the menu declines -- MenuCursor::key()
+        // hands back the SAME cursor instance -- keeps falling through.
+        if (MenuBar::activeMenu() > 0) {
+            $before = MenuBar::cursor();
+            $step = MenuBar::handleKey($key);
+            if ($step->chosen !== null) {
+                return [$app, MenuBar::selectionMessage($step->chosen)];
+            }
+            if ($step->cursor !== $before) {
+                return [$app, null];
+            }
+        }
+
         // Agent view keyboard handling - before generic navigation
         if ($app->pane === Pane::Agents) {
             $result = $this->handleAgentViewKey($key, $app);
@@ -600,25 +618,6 @@ final class KeyboardHandler
             // disarm is re-applied to the app the fall-through keeps using.
             if ($key !== 's' && $app->agentsStopArmedAt !== null) {
                 $app = $app->withAgentsStopArmedAt(null);
-            }
-        }
-
-        // An OPEN menu takes the arrow/vim keys first. Ordered before the
-        // generic pane navigation below because that block claimed
-        // left/right/h/l unconditionally, so a menu could never be navigated
-        // even once something opened it.
-        $currentMenu = MenuBar::activeMenu();
-        if ($currentMenu > 0) {
-            $result = MenuBar::handleKey($key, $currentMenu);
-            // Persist the index handleKey() navigated to -- it is a pure
-            // function and this return value used to be dropped, so every
-            // move was computed and discarded.
-            MenuBar::activateMenu($result[0]);
-            if ($result[1] !== null) {
-                return [$app, $result[1]];
-            }
-            if ($result[0] !== $currentMenu) {
-                return [$app, null];
             }
         }
 

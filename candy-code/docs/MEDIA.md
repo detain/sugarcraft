@@ -82,7 +82,8 @@ variable for the real-server test is described in
 onto the same input schema the tool and the RPC use — one dialect, no
 command-only parameters.
 
-**`Ctrl+D`** — and bare `/generate`, and the palette row — open the
+**`Ctrl+D`** — and bare `/generate`, and the palette row, and the `F10`
+**Tools ▸ Generate image…** menu row — open the
 interactive generation form; the door is dead while another modal is up.
 The form's tabs are gated fail-closed by the server's declared kinds: the
 video tab appears only when `mediaKinds` names `video`. Engagement law: a

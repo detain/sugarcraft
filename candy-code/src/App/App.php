@@ -3477,7 +3477,9 @@ final class App implements Model
 
         $items = MenuBar::MENU_ITEM_ZONE_PREFIX;
         if (str_starts_with($zoneId, $items)) {
-            $selected = MenuBar::selectItem((int) substr($zoneId, strlen($items)));
+            // P-MENU.d: the zone suffix is the 1-based dotted dropdown path
+            // ('3', '3.1', …) the cascade paints — handed to selectItem() raw.
+            $selected = MenuBar::selectItem(substr($zoneId, strlen($items)));
 
             return $selected === null ? [$this, null] : $this->consumeShellCmd($selected);
         }
@@ -3554,22 +3556,37 @@ final class App implements Model
         if (str_starts_with($zoneId, $paneTabs)) {
             $pane = Pane::tryFrom(substr($zoneId, strlen($paneTabs)));
 
-            if ($pane === null || !$pane->dockable()) {
-                return $pane === Pane::Chat
-                    ? [$this->withPane(Pane::Chat), null]
-                    : [$this, null];
-            }
-
-            $wasDocked = $this->isDocked($pane);
-            $next = $this->togglePaneDocking($pane);
-
-            return [
-                $wasDocked ? $next : $next->withPane($pane),
-                $this->contextMeasureOnDock($pane, $wasDocked),
-            ];
+            return $pane === null ? [$this, null] : $this->togglePaneFromChrome($pane);
         }
 
         return [$this, null];
+    }
+
+    /**
+     * The ONE chrome door that docks/undocks a pane (P-MENU.d). The
+     * `panetab:` click arm above and the View > Panes menu rows' `pane:`
+     * dispatch both come through here, so toggling a pane from the keyboard
+     * and clicking its tab are the same code path — the equivalence
+     * MenuActionDispatchTest pins row for row. Chat's tab never toggles: the
+     * center column is always visible, so its press is a pure focus move.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function togglePaneFromChrome(Pane $pane): array
+    {
+        if (!$pane->dockable()) {
+            return $pane === Pane::Chat
+                ? [$this->withPane(Pane::Chat), null]
+                : [$this, null];
+        }
+
+        $wasDocked = $this->isDocked($pane);
+        $next = $this->togglePaneDocking($pane);
+
+        return [
+            $wasDocked ? $next : $next->withPane($pane),
+            $this->contextMeasureOnDock($pane, $wasDocked),
+        ];
     }
 
     /**
@@ -4136,6 +4153,30 @@ final class App implements Model
         MenuBar::closeMenu();
 
         if ($selected->item === '') {
+            return [$this, null];
+        }
+
+        // P-MENU.d: the kit rows arrive with their node id — the same
+        // `cmd:<name>` / `pane:<value>` vocabulary the click zones carry, so a
+        // selection by keyboard and by mouse enter through the SAME doors. The
+        // settings-view rule is dispatchMenuSelection's own: a row other than
+        // settings steps the view aside first.
+        if ($selected->action !== null) {
+            if (str_starts_with($selected->action, 'cmd:')) {
+                $name = substr($selected->action, strlen('cmd:'));
+
+                return ($name === 'settings' ? $this : $this->closeSettings())->runRegistryCommand($name);
+            }
+
+            if (str_starts_with($selected->action, 'pane:')) {
+                $pane = Pane::tryFrom(substr($selected->action, strlen('pane:')));
+                if ($pane === null) {
+                    return [$this->withError(Lang::t('tui.app.menu_no_command', ['item' => $selected->item])), null];
+                }
+
+                return $this->togglePaneFromChrome($pane);
+            }
+
             return [$this, null];
         }
 

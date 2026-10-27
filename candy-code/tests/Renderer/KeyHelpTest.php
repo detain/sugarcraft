@@ -1147,7 +1147,10 @@ final class KeyHelpTest extends TestCase
         // at 100x179. The docked context box (P-CTX.e) declared three ladder rows
         // under a fifteenth heading plus one meter click under the mouse heading
         // it already had: 180 lines, 149 -> 155 at 100x30, fitting at 100x185.
-        foreach ([[100, 30, 155], [100, 185, 0]] as [$cols, $rows, $expectedOverflow]) {
+        // The shell menu's submenu chord (P-MENU.d) declared `menu.submenu`:
+        // one row under a heading it already had: 181 lines, 155 -> 156 at
+        // 100x30, fitting at 100x186.
+        foreach ([[100, 30, 156], [100, 186, 0]] as [$cols, $rows, $expectedOverflow]) {
             [$open] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, '?'));
 
             $this->assertStringContainsString(
@@ -1211,8 +1214,8 @@ final class KeyHelpTest extends TestCase
                 "the scrolling footer spends 63 of the {$limit} columns available at cols={$cols} — one "
                 . 'column of margin, and it is this test that keeps it real',
             );
-            // 185 rows, not 80: the list is 180 content lines now (151 live
-            // rows, 15 headers, 14 separators; 174 before the Context pane's three ladder rows and its meter click, 173 before `chat.tool-row`, 172 before `chat.history-search`, 171 before `chat.repaint`, 170 before `permission.persist`,
+            // 186 rows, not 80: the list is 181 content lines now (152 live
+            // rows, 15 headers, 14 separators; 180 before `menu.submenu`, 174 before the Context pane's three ladder rows and its meter click, 173 before `chat.tool-row`, 172 before `chat.history-search`, 171 before `chat.repaint`, 170 before `permission.persist`,
             // 167 before `media.open_form` and its fourteenth heading, 156 before `/new`'s nine folder-picker keys, 155 before `permission.edit`, 151 before the N-P5 remainder's four settings keys, 150 before 5.7-2's `permission.choice`, 148 before N-P5's two settings keys, 147 before P-E3's Ctrl+X b, 146 before plan mode's Alt+M, 138 before P-D3's agent controls, 137 before the composer's row, 130 before the Agent View's rows, 120 before the settings editor's keys, 112 before the agents strip's rows, 110 before the two permission rows, 108 before 1.C-3's two rows, 107 before `chat.stop`, 98 before the settings
             // view's rows, 86 before the eleven session picker rows of
             // Appendix P-A2), and an 80-row terminal gives a
@@ -1222,7 +1225,7 @@ final class KeyHelpTest extends TestCase
             // arithmetic spelled out.
             $this->assertSame(
                 35,
-                Width::of($this->footer($this->chat('', $cols, 185))),
+                Width::of($this->footer($this->chat('', $cols, 186))),
                 'and the non-scrolling form, which is what a box tall enough for the whole list paints',
             );
         }

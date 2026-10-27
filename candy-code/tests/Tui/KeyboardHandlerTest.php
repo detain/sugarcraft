@@ -79,17 +79,15 @@ final class KeyboardHandlerTest extends TestCase
     }
 
     /**
-     * BOTH of MenuBar's statics, not just the menu index: `$activeItem` is the
-     * row cursor inside the open dropdown, and a test that moved it used to
-     * leak that row into every later test — the same leak this method exists to
-     * stop, one property over.
+     * MenuBar keeps its cursor — menu index AND dropdown rows — in one
+     * static (plus the fold of the last painted frame); {@see
+     * MenuBar::closeMenu()} resets BOTH, so no half-open submenu can leak
+     * into a later test — the same guard this method was written for, one
+     * property over.
      */
     private function resetMenuBarState(): void
     {
-        $reflection = new ReflectionClass(MenuBar::class);
-        foreach (['activeMenu', 'activeItem'] as $name) {
-            $reflection->getProperty($name)->setValue(null, 0);
-        }
+        MenuBar::closeMenu();
     }
 
     private function createApp(Pane $pane = Pane::Chat): App
@@ -1204,7 +1202,7 @@ final class KeyboardHandlerTest extends TestCase
      * "was anything reassigned?" check wants.
      *
      * What it finds today, and the sweep behind that number: 7 statics —
-     * `MenuBar::$activeMenu`/`$activeItem`, `Tui\Renderer::$chromeScanner`/
+     * `MenuBar::$cursor`/`$effective`, `Tui\Renderer::$chromeScanner`/
      * `$terminalSize`, `TerminalBackground::$observed`, and
      * `KeyBindingRegistry::$ctrlRuneMemo`/`$yieldedRuneMemo`. Cross-checked
      * against what the handler can actually write: its only mutating static
@@ -1345,7 +1343,7 @@ final class KeyboardHandlerTest extends TestCase
      * `handleKeyMsg()` returns `[$app, null]` immediately after calling
      * `MenuBar::openMenu()` on its F10 path, so this class already contains a
      * key with an unchanged App, a null command, and a menu bar that visibly
-     * pops open. `MenuBar::$activeMenu` and `$activeItem` are the two statics
+     * pops open. `MenuBar::$cursor` and `$effective` are the two statics
      * the shell routes real effects through today; the sweep is by discovery
      * rather than by name so the next one is covered before it is written.
      *
@@ -1375,11 +1373,11 @@ final class KeyboardHandlerTest extends TestCase
                 KeyBindingRegistry::chatCtrlRunesYieldedToShell();
                 $before = self::shellSubsystemStatics();
                 $this->assertArrayHasKey(
-                    MenuBar::class . '::$activeMenu',
+                    MenuBar::class . '::$cursor',
                     $before,
                     'fixture: the static sweep must find the statics the shell routes effects through',
                 );
-                $this->assertArrayHasKey(MenuBar::class . '::$activeItem', $before, 'fixture');
+                $this->assertArrayHasKey(MenuBar::class . '::$effective', $before, 'fixture');
 
                 $handled = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, $rune, ctrl: true), $app);
 
@@ -2016,13 +2014,15 @@ final class KeyboardHandlerTest extends TestCase
      */
     public function testAnOpenMenuOwnsTheKeyboard(): void
     {
-        $reflection = new ReflectionClass(MenuBar::class);
-        $property = $reflection->getProperty('activeMenu');
-        $property->setAccessible(true);
-        $property->setValue(null, 1);
+        MenuBar::openMenu(1);
 
-        // A plain letter that would otherwise be typed into the chat input.
-        $handled = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, 'z'), $this->createApp(Pane::Chat));
-        $this->assertNotNull($handled, 'an open menu claims every non-Chat-owned key');
+        // A movement the menu answers. Bug 4 (P-MENU.d) was that this key
+        // fell through to the pane underneath whenever the menu index did
+        // not change — the row moved AND the dashboard scrolled. The fixed
+        // block returns from it, so the spend is visible in the menu alone.
+        $handled = $this->handler->handleKeyMsg(new KeyMsg(KeyType::Down), $this->createApp(Pane::Chat));
+        $this->assertNotNull($handled, 'an open menu claims the keys it answers');
+        $this->assertSame(1, MenuBar::activeItem(), 'the key was spent on the menu rows');
+        MenuBar::closeMenu();
     }
 }

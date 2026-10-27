@@ -8,12 +8,12 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\Chat;
-use SugarCraft\Code\Commands\CommandRegistry;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Renderer as LiveRenderer;
 use SugarCraft\Code\Tui\Components\MenuBar;
 use SugarCraft\Code\Tui\Menu\MenuPanel;
+use SugarCraft\Code\Tui\Menu\ShellMenu;
 use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Tui\Renderer as TuiRenderer;
 use SugarCraft\Code\Tui\Settings\OpenSettingsMsg;
@@ -107,6 +107,12 @@ final class MenuOverlayFrameTest extends TestCase
         $zones = TuiRenderer::chromeScanner()->prefixed(MenuBar::MENU_ITEM_ZONE_PREFIX);
 
         foreach ($items as $row => $label) {
+            if ($label === '') {
+                // A separator row is painted furniture, never selectable,
+                // never marked — the kit registers zones for its rows only.
+                continue;
+            }
+
             $paintedRow = null;
             foreach ($lines as $i => $line) {
                 if (str_contains($line, '│ ' . $label)) {
@@ -115,7 +121,7 @@ final class MenuOverlayFrameTest extends TestCase
                 }
             }
 
-            $zone = $zones[MenuBar::MENU_ITEM_ZONE_PREFIX . $row] ?? null;
+            $zone = $zones[MenuBar::MENU_ITEM_ZONE_PREFIX . ($row + 1)] ?? null;
 
             // Paint ⇔ mark, row by row: a label visible in the frame must be
             // clickable, and a registered zone must sit on the row the panel
@@ -341,24 +347,14 @@ final class MenuOverlayFrameTest extends TestCase
         };
     }
 
-    /** The display name of the $index-th (1-based) derived menu. */
+    /** The display name of the $index-th (1-based) shell menu. */
     private function categoryLabel(int $index): string
     {
-        $names = [];
-        foreach (CommandRegistry::all() as $spec) {
-            $names[$spec->category] = true;
-        }
-
-        return array_keys($names)[$index - 1];
+        return ShellMenu::tree(null)->menus[$index - 1]->label;
     }
 
     private function menuCount(): int
     {
-        $names = [];
-        foreach (CommandRegistry::all() as $spec) {
-            $names[$spec->category] = true;
-        }
-
-        return count($names);
+        return count(ShellMenu::tree(null)->menus);
     }
 }

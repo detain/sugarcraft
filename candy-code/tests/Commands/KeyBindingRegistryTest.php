@@ -373,11 +373,15 @@ final class KeyBindingRegistryTest extends TestCase
      * pane: `contextPane.expand`, `contextPane.drill` and `contextPane.back`
      * in the new "Context pane" group, plus the status-bar meter row
      * `mouse.context-meter` — the keys and the click that drive the box.
+     *
+     * 151 -> 152 live (152 all), 15 groups, with P-MENU.d's submenu walk:
+     * `menu.submenu` — the row that opens the highlighted `▸` row and, on the
+     * other key of the same binding, closes it again.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(151, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(151, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(152, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(152, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(0, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(15, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }

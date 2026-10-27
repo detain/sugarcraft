@@ -4,161 +4,167 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tests\Tui;
 
+use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Commands\CommandRegistry;
+use SugarCraft\Code\Tui\Menu\ShellMenu;
 use SugarCraft\Code\Tui\Components\MenuBar;
 use SugarCraft\Code\Tui\Components\MenuSelectedMsg;
-use PHPUnit\Framework\TestCase;
-use ReflectionMethod;
 
+/**
+ * The bar's own arithmetic: which menu the cursor sits on, which row of it
+ * is highlighted, and what selecting a row raises. Since P-MENU.d the state
+ * is one {@see \SugarCraft\Code\Tui\Menu\MenuCursor} rather than an index
+ * pair, and the rows come from {@see ShellMenu}'s placement rather than from
+ * command categories — so these tests walk the cursor with the same keys a
+ * player presses, and read the dropdowns the tree actually paints.
+ */
 final class MenuBarTest extends TestCase
 {
-    /**
-     * Test that cycleMenu(1, 1) cycles from first to second menu.
-     * Verifies the forward cycling logic when at the first menu.
-     */
-    public function testCycleMenuForwardFromFirstToSecond(): void
+    protected function setUp(): void
     {
-        $result = $this->invokeCycleMenu(1, 1);
-        $this->assertSame(2, $result);
+        MenuBar::closeMenu();
+    }
+
+    protected function tearDown(): void
+    {
+        MenuBar::closeMenu();
+    }
+
+    /** The strip's menu count, read off the placement tree itself. */
+    private function menuCount(): int
+    {
+        return count(ShellMenu::tree(null)->menus);
+    }
+
+    public function testRightKeyCyclesFromFirstToSecondMenu(): void
+    {
+        MenuBar::openMenu(1);
+        MenuBar::handleKey('right');
+
+        $this->assertSame(2, MenuBar::getActiveMenu());
+    }
+
+    public function testRightKeyWrapsPastTheLastMenuToTheFirst(): void
+    {
+        MenuBar::openMenu($this->menuCount());
+        MenuBar::handleKey('right');
+
+        $this->assertSame(1, MenuBar::getActiveMenu(), 'the bar is a ring — the last menu walking right lands on the first');
+    }
+
+    public function testLeftKeyCyclesFromSecondToFirstMenu(): void
+    {
+        MenuBar::openMenu(2);
+        MenuBar::handleKey('left');
+
+        $this->assertSame(1, MenuBar::getActiveMenu());
+    }
+
+    public function testLeftKeyWrapsPastTheFirstMenuToTheLast(): void
+    {
+        MenuBar::openMenu(1);
+        MenuBar::handleKey('left');
+
+        $this->assertSame($this->menuCount(), MenuBar::getActiveMenu());
     }
 
     /**
-     * Test that cycling forward past the last menu wraps to the first.
-     * The menu count follows CommandRegistry's distinct categories, so the
-     * last index is derived rather than hard-coded.
+     * Selecting the highlighted row of an open menu raises the message for
+     * THAT row — the menu names the root it was painted under, the item
+     * carries the row's own label, and since P-MENU.d the action names the
+     * command by registry name rather than by label text.
      */
-    public function testCycleMenuForwardWrapsFromLastToFirst(): void
+    public function testSelectingTheFirstRowRaisesItsMessage(): void
     {
-        $result = $this->invokeCycleMenu($this->menuCount(), 1);
-        $this->assertSame(1, $result);
+        MenuBar::openMenu(1);
+        $msg = MenuBar::selectItem('1');
+
+        $this->assertInstanceOf(MenuSelectedMsg::class, $msg);
+        $this->assertSame('Session', $msg->menu);
+        $this->assertSame(MenuBar::getMenuItems('Session')[0], $msg->item);
+        $this->assertSame('cmd:new', $msg->action, 'the row /new belongs to — dispatched by name');
+        $this->assertSame(0, MenuBar::activeMenu(), 'selecting closes the menu');
+    }
+
+    public function testSelectingRowZeroIsNothingToSelect(): void
+    {
+        MenuBar::openMenu(1);
+
+        $this->assertNull(MenuBar::selectItem(0), 'the paths a click names are 1-based; 0 names no row');
+        $this->assertSame(1, MenuBar::getActiveMenu(), 'and the menu stays open — a refused click spends nothing');
+    }
+
+    public function testSelectingAnOutOfRangePathIsNothingToSelect(): void
+    {
+        MenuBar::openMenu(1);
+
+        $this->assertNull(MenuBar::selectItem('99'));
+        $this->assertNull(MenuBar::selectItem('1.99'));
+        $this->assertSame(1, MenuBar::getActiveMenu());
+    }
+
+    public function testSelectingWithNoMenuOpenReturnsNull(): void
+    {
+        $this->assertNull(MenuBar::selectItem('1'));
     }
 
     /**
-     * Test that cycleMenu(2, -1) cycles backwards from second to first.
-     * Verifies the backward cycling logic within normal bounds.
+     * The Session dropdown: the six session commands first (ISS-104: rows the
+     * palette never lists derive their label from the short description), the
+     * separator as its own row, then the three submenu titles — a submenu row
+     * is a row the bar PAINTS, and itemsOf is what the drift observations
+     * count rows through.
      */
-    public function testCycleMenuBackwardFromSecondToFirst(): void
-    {
-        $result = $this->invokeCycleMenu(2, -1);
-        $this->assertSame(1, $result);
-    }
-
-    /**
-     * Test that cycleMenu(1, -1) cycles backwards from first to last.
-     * Verifies the wrap-around when cycling backward past the first menu.
-     */
-    public function testCycleMenuBackwardWrapsFromFirstToLast(): void
-    {
-        $result = $this->invokeCycleMenu(1, -1);
-        $this->assertSame($this->menuCount(), $result);
-    }
-
-    /**
-     * Test that selectMenuItem returns MenuSelectedMsg with correct menu.
-     * Menu 1 is the first category CommandRegistry declares ("Session",
-     * owner of /new), and the item now names the highlighted ROW — an empty
-     * item is what made menu Enter undispatchable.
-     */
-    public function testSelectMenuItemReturnsCorrectMenuMsg(): void
-    {
-        $result = $this->invokeSelectMenuItem(1);
-
-        $this->assertIsArray($result);
-        $this->assertCount(2, $result);
-        $this->assertSame(1, $result[0]);
-        $this->assertInstanceOf(MenuSelectedMsg::class, $result[1]);
-        $this->assertSame('Session', $result[1]->menu);
-        $this->assertSame(MenuBar::getMenuItems('Session')[0], $result[1]->item);
-    }
-
-    /**
-     * Test that selectMenuItem(0) returns [0, null] for invalid index.
-     * Verifies that index 0 (below valid range) returns null for the msg.
-     */
-    public function testSelectMenuItemWithZeroIndexReturnsNullMsg(): void
-    {
-        $result = $this->invokeSelectMenuItem(0);
-
-        $this->assertIsArray($result);
-        $this->assertCount(2, $result);
-        $this->assertSame(0, $result[0]);
-        $this->assertNull($result[1]);
-    }
-
-    /**
-     * Test that selectMenuItem(99) returns [99, null] for out of range index.
-     * Verifies that an index beyond the menu count returns null for the msg.
-     */
-    public function testSelectMenuItemWithOutOfRangeIndexReturnsNullMsg(): void
-    {
-        $result = $this->invokeSelectMenuItem(99);
-
-        $this->assertIsArray($result);
-        $this->assertCount(2, $result);
-        $this->assertSame(99, $result[0]);
-        $this->assertNull($result[1]);
-    }
-
-    /**
-     * Test that getMenuItems returns the registry's rows for a valid menu.
-     * The 'Session' menu holds every CommandRegistry row in that category,
-     * in declaration order, labelled the way `CommandSpec::label()` reads it:
-     * the authored palette label where the row has one (ISS-104: the rows the
-     * palette never lists — and so never labelled — derive their text from the
-     * short description instead of falling back to the bare command name).
-     */
-    public function testGetMenuItemsReturnsArrayForValidMenu(): void
+    public function testGetMenuItemsReturnsThePlacementRowsForAValidMenu(): void
     {
         $items = MenuBar::getMenuItems('Session');
 
         $this->assertIsArray($items);
         $this->assertSame(
-            ['New session', 'New session…', 'Switch session', 'Pin or unpin session', 'Delete session…', 'Share session', 'Export transcript', 'Manually compact chat', 'Clear the transcript', 'Branch session', 'Rename session…', 'Restore an earlier', 'Take back the last', 'Step forward again', 'Show what changed', 'Run a task', 'List, enable, disable', 'Re-run a prompt', 'Clone', 'Work until a condition', 'Like /goal', 'Ask the title model', 'Continue in a new'],
-            $items
+            ['New session', 'New session…', 'Switch session', 'Rename session…', 'Pin or unpin session', 'Delete session…', '', 'Branch & fork', 'History', 'Share & export'],
+            $items,
         );
     }
 
     /**
-     * The menus must stay derived from CommandRegistry rather than drifting
-     * into a third hand-written command list beside the "/" popup and the
-     * Ctrl+P palette: every registry row has to be reachable from a menu.
+     * Every registry row the placement does not deliberately hide is
+     * reachable as a `cmd:` leaf somewhere in the tree — the same derivation
+     * the old per-category census proved, now proven over the nested shape
+     * (the `@more` slot collects whatever the placement did not name).
      */
     public function testEveryCommandRegistryRowAppearsInAMenu(): void
     {
+        $reachable = [];
+        foreach (ShellMenu::tree(null)->leaves() as $leaf) {
+            if (str_starts_with($leaf->id, 'cmd:')) {
+                $reachable[] = substr($leaf->id, 4);
+            }
+        }
+
         foreach (CommandRegistry::all() as $spec) {
+            if (in_array($spec->name, ShellMenu::HIDDEN, true)) {
+                $this->assertNotContains($spec->name, $reachable, "/{$spec->name} is hidden from the bar by R-MENU-1 — it must not leak back through @more");
+                continue;
+            }
+
             $this->assertContains(
-                $spec->label(),
-                MenuBar::getMenuItems($spec->category),
-                "/{$spec->name} is missing from the {$spec->category} menu",
+                $spec->name,
+                $reachable,
+                "/{$spec->name} is missing from every menu of the ShellMenu tree",
             );
         }
     }
 
     /**
-     * A menu name that is not a CommandRegistry category has no rows — the
-     * hand-written 'File'/'Edit'/'Help' tables the bar used to carry were
-     * labels no dispatcher answered.
+     * A menu name the tree does not carry has no rows — the hand-written
+     * 'File'/'Edit'/'Help' tables the bar used to carry were labels no
+     * dispatcher answered.
      */
-    public function testGetMenuItemsReturnsEmptyArrayForNonRegistryCategory(): void
+    public function testGetMenuItemsReturnsEmptyArrayForNonPlacementMenu(): void
     {
         $this->assertSame([], MenuBar::getMenuItems('File'));
     }
 
-    /** Distinct categories CommandRegistry declares, i.e. the menu count. */
-    private function menuCount(): int
-    {
-        $categories = [];
-        foreach (CommandRegistry::all() as $spec) {
-            $categories[$spec->category] = true;
-        }
-
-        return count($categories);
-    }
-
-    /**
-     * Test that getMenuItems returns empty array for invalid menu name.
-     * Verifies that a non-existent menu returns an empty array.
-     */
     public function testGetMenuItemsReturnsEmptyArrayForInvalidMenu(): void
     {
         $items = MenuBar::getMenuItems('NonExistentMenu');
@@ -167,47 +173,25 @@ final class MenuBarTest extends TestCase
         $this->assertEmpty($items);
     }
 
-    /**
-     * Test that MenuSelectedMsg stores menu and item correctly.
-     * Verifies the readonly properties are set via constructor.
-     */
     public function testMenuSelectedMsgStoresMenuAndItem(): void
     {
         $msg = new MenuSelectedMsg('Edit', 'Copy');
 
         $this->assertSame('Edit', $msg->menu);
         $this->assertSame('Copy', $msg->item);
+        $this->assertNull($msg->action, 'the pre-kit senders build label-only messages and keep the label-lookup door');
     }
 
-    /**
-     * Test that MenuSelectedMsg has readonly properties.
-     * Verifies that the class prevents mutation after construction.
-     */
+    public function testMenuSelectedMsgCarriesAnActionWhenGivenOne(): void
+    {
+        $msg = new MenuSelectedMsg('Tools', 'Generate image…', 'cmd:generate-form');
+
+        $this->assertSame('cmd:generate-form', $msg->action);
+    }
+
     public function testMenuSelectedMsgIsReadonly(): void
     {
         $reflection = new \ReflectionClass(MenuSelectedMsg::class);
         $this->assertTrue($reflection->isReadOnly());
-    }
-
-    /**
-     * Invokes the private static cycleMenu method via reflection.
-     */
-    private function invokeCycleMenu(int $currentMenu, int $direction): int
-    {
-        $method = new ReflectionMethod(MenuBar::class, 'cycleMenu');
-        $method->setAccessible(true);
-        return $method->invoke(null, $currentMenu, $direction);
-    }
-
-    /**
-     * Invokes the private static selectMenuItem method via reflection.
-     *
-     * @return array{0: int, 1: MenuSelectedMsg|null}
-     */
-    private function invokeSelectMenuItem(int $menuIndex): array
-    {
-        $method = new ReflectionMethod(MenuBar::class, 'selectMenuItem');
-        $method->setAccessible(true);
-        return $method->invoke(null, $menuIndex);
     }
 }

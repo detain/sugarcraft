@@ -126,15 +126,13 @@ final class AbandonedPaletteIsNotCompositedTest extends TestCase
     }
 
     /**
-     * MenuBar keeps its menu index and row cursor in statics; reset BOTH so
-     * an open menu can never leak into a later test (same guard as
+     * MenuBar keeps its cursor (menu index + dropdown rows) and last painted
+     * fold in statics; reset BOTH via the public door so an open menu can
+     * never leak into a later test (same guard as
      * KeyboardHandlerTest::resetMenuBarState()).
      */
     private function resetMenuBarState(): void
     {
-        $reflection = new ReflectionClass(MenuBar::class);
-        foreach (['activeMenu', 'activeItem'] as $name) {
-            $reflection->getProperty($name)->setValue(null, 0);
-        }
+        MenuBar::closeMenu();
     }
 }

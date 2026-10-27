@@ -12,12 +12,12 @@ use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\Chat;
-use SugarCraft\Code\Commands\CommandRegistry;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Renderer as LiveRenderer;
 use SugarCraft\Code\ToolResult;
 use SugarCraft\Code\Tui\Components\MenuBar;
+use SugarCraft\Code\Tui\Menu\ShellMenu;
 use SugarCraft\Code\Tui\Components\MenuSelectedMsg;
 use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Tui\Renderer as TuiRenderer;
@@ -113,11 +113,13 @@ final class MenuBarMouseTest extends TestCase
 
     public function testEveryPaintedMenuTitleGetsItsOwnZone(): void
     {
-        // 128 columns since the Context tab joined the strip: every tab
-        // costs the budget one more group, and the budget drops MENU NAMES
-        // first, which would silently shrink this test to one title at the
-        // 120 columns the seven-tab strip used to fit.
-        $frame = TuiRenderer::renderView($this->app(), 128, 30)->body;
+        // 160 columns: every tab costs the budget one more group, and below
+        // the fold width the budget sheds menu NAMES into a `»` title — which
+        // would silently shrink this test (index 3 would name the overflow
+        // title, not the third placement menu). 160 holds all five open.
+        $frame = TuiRenderer::renderView($this->app(), 160, 30)->body;
+
+        self::assertCount(5, TuiRenderer::chromeScanner()->prefixed(MenuBar::MENU_TITLE_ZONE_PREFIX), 'fixture: no fold at this width');
 
         $marked = TuiRenderer::chromeScanner()->prefixed(MenuBar::MENU_TITLE_ZONE_PREFIX);
         self::assertGreaterThan(1, count($marked), 'the bar draws more than one menu at 128 columns');
@@ -210,7 +212,7 @@ final class MenuBarMouseTest extends TestCase
 
         $label = MenuBar::getMenuItems($this->menuName(1))[1];
         [$col, $row] = $this->locate($frame, $label);
-        $zone = TuiRenderer::chromeScanner()->get(MenuBar::MENU_ITEM_ZONE_PREFIX . '1');
+        $zone = TuiRenderer::chromeScanner()->get(MenuBar::MENU_ITEM_ZONE_PREFIX . '2');
 
         self::assertInstanceOf(Zone::class, $zone);
         self::assertSame($row, $zone->startRow);
@@ -243,12 +245,13 @@ final class MenuBarMouseTest extends TestCase
     {
         MenuBar::openMenu(1);
 
-        $selected = MenuBar::selectItem(1);
+        // The path a click names is 1-based: '2' is the row index 1.
+        $selected = MenuBar::selectItem('2');
 
         self::assertInstanceOf(MenuSelectedMsg::class, $selected);
         self::assertSame($this->menuName(1), $selected->menu);
         self::assertSame(MenuBar::getMenuItems($this->menuName(1))[1], $selected->item);
-        self::assertSame(1, MenuBar::getActiveItem());
+        self::assertSame(0, MenuBar::getActiveMenu(), 'selecting through the click door closes the menu, the same as Enter');
     }
 
     public function testSelectItemRefusesRowsAndMenusThatDoNotExist(): void
@@ -318,7 +321,7 @@ final class MenuBarMouseTest extends TestCase
         $open = TuiRenderer::renderView($app, 120, 30)->body;
         $label = MenuBar::getMenuItems($this->menuName(1))[0];
         [$labelCol, $labelRow] = $this->locate($open, $label);
-        $itemZone = TuiRenderer::chromeScanner()->get(MenuBar::MENU_ITEM_ZONE_PREFIX . '0');
+        $itemZone = TuiRenderer::chromeScanner()->get(MenuBar::MENU_ITEM_ZONE_PREFIX . '1');
 
         self::assertInstanceOf(Zone::class, $itemZone);
         self::assertSame($labelRow, $itemZone->startRow);
@@ -393,12 +396,7 @@ final class MenuBarMouseTest extends TestCase
     /** The display name of the $index-th (1-based) menu the bar derives. */
     private function menuName(int $index): string
     {
-        $names = [];
-        foreach (CommandRegistry::all() as $spec) {
-            $names[$spec->category] = true;
-        }
-
-        return array_keys($names)[$index - 1];
+        return ShellMenu::tree(null)->menus[$index - 1]->label;
     }
 
     /** Strip sugar-mouse zone sentinels, leaving the painted bytes. */

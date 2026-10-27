@@ -210,14 +210,13 @@ final class TuiComponentTest extends TestCase
 
         $this->assertIsString($output);
         $this->assertNotEmpty($output);
-        // One menu per CommandRegistry category, so the bar can only
-        // advertise commands the app actually dispatches.
+        // The five menus ShellMenu::PLACEMENT declares, so the bar can only
+        // advertise commands the placement actually carries.
         $this->assertStringContainsString('Session', $output);
-        $this->assertStringContainsString('Model', $output);
-        $this->assertStringContainsString('Appearance', $output);
-        $this->assertStringContainsString('Agents', $output);
-        $this->assertStringContainsString('Workflow', $output);
-        $this->assertStringContainsString('Memory', $output);
+        $this->assertStringContainsString('Agent', $output);
+        $this->assertStringContainsString('Tools', $output);
+        $this->assertStringContainsString('View', $output);
+        $this->assertStringContainsString('App', $output);
     }
 
     // =========================================================================

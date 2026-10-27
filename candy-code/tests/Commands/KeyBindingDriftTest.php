@@ -290,7 +290,7 @@ final class KeyBindingDriftTest extends TestCase
      * The word forms of the arrow keys (`Up`/`Down`/`Left`/`Right`) were a
      * third undocumented hole and are now closed — they mattered most of the
      * near-misses probed, because eight `*.move` rows describe arrow movement
-     * (twenty-two rows carry an arrow GLYPH in their label; both counts are asserted
+     * (twenty-three rows carry an arrow GLYPH in their label; both counts are asserted
      * by {@see testTheArrowRowCountsThisFileQuotesAreStillRight()}, because they
      * were quoted as "four" here and nothing read them back), so
      * "Down moves the highlight" is the likeliest next prose regression. The
@@ -526,9 +526,9 @@ final class KeyBindingDriftTest extends TestCase
             . implode(', ', $move),
         );
         $this->assertCount(
-            22,
+            23,
             $arrowLabelled,
-            'KEYISH\'s docblock says twenty-two rows carry an arrow glyph in their label; it found: '
+            'KEYISH\'s docblock says twenty-three rows carry an arrow glyph in their label; it found: '
             . implode(', ', $arrowLabelled),
         );
         // Every `*.move` row is arrow-labelled, which is what makes the first
@@ -2283,6 +2283,23 @@ final class KeyBindingDriftTest extends TestCase
                 $this->claim($k[1], $this->app());
                 $this->assertSame(1, $this->activeMenuItem(), 'the second key must move DOWN');
             },
+            // The two keys of ONE row must land in two different places, and
+            // the pair the row names walks a submenu both ways: from View's
+            // first row (the Panes submenu) `→` enters it and the depth grows,
+            // `←` closes it again and the depth shrinks. With only the enter
+            // half wired the second press would sit the cursor back on the
+            // parent row and the observation would still pass, which is
+            // exactly the single-arm hole this file exists to refuse.
+            'menu.submenu' => function (array $k): void {
+                $this->openMenuAt(4);
+                $this->assertSame(1, $this->menuDepth(), 'fixture: a fresh menu shows one dropdown panel');
+
+                $this->claim($k[0], $this->app());
+                $this->assertSame(2, $this->menuDepth(), 'the first key must OPEN the highlighted submenu');
+
+                $this->claim($k[1], $this->app());
+                $this->assertSame(1, $this->menuDepth(), 'the second key must close the submenu again');
+            },
             'menu.run' => function (array $k): void {
                 MenuBar::openMenu(1);
                 [, $msg] = $this->claim($k[0], $this->app());
@@ -3313,9 +3330,15 @@ final class KeyBindingDriftTest extends TestCase
 
     private function activeMenuItem(): int
     {
-        $property = new \ReflectionProperty(MenuBar::class, 'activeItem');
+        $rows = MenuBar::cursor()->rows;
 
-        return (int) $property->getValue();
+        return $rows === [] ? 0 : $rows[array_key_last($rows)];
+    }
+
+    /** How many dropdown panels the open menu shows (bar row = 1). */
+    private function menuDepth(): int
+    {
+        return count(MenuBar::cursor()->rows);
     }
 
     private function resetClickTracker(): void
