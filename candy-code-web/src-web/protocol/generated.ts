@@ -523,10 +523,11 @@ export interface Methods {
   /** Answer a project-trust prompt (permission.asked with kind "trust"): grant or reject; a user-tier remember writes your own trustedProjectMcp list, a project-tier one is refused. */
   "context.trust": {
     params: {
+      sessionId: SessionId
       /** The trust prompt's id, as permission.asked (kind "trust") carried it. */
       askId: string
       decision: "grant" | "reject"
-      /** `user` writes the root into your own trustedProjectMcp list (effective next launch, like the TUI grant); `session` — or omitted — settles for this server only; `project` is refused: a project cannot grant itself trust (the permission.respond posture). */
+      /** `user` writes the root into your own trustedProjectMcp list (effective next launch, like the TUI grant) and refuses `trust_write_failed` — leaving the prompt open — when that write does not land; `session` — or omitted — settles for this server only; `project` is refused: a project cannot grant itself trust (the permission.respond posture). */
       remember?: "session" | "user" | "project"
     }
     result: {

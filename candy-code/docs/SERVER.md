@@ -440,7 +440,7 @@ it and the two tables below are generated from the code
 | `command.exec` | write | yes | `sessionId`, `name` | Run a slash command in a session (command files, and the built-ins that run headless). |
 | `command.list` | read |  | — | The slash commands a session knows, and where each runs. |
 | `context.sources` | read |  | `sessionId` | What the session's context is built from: instruction files, memory notes, skills, declared MCP servers, refused paths, and the token breakdown. |
-| `context.trust` | approve |  | `askId`, `decision` | Answer a project-trust prompt (permission.asked with kind "trust"): grant or reject; a user-tier remember writes your own trustedProjectMcp list, a project-tier one is refused. |
+| `context.trust` | approve |  | `sessionId`, `askId`, `decision` | Answer a project-trust prompt (permission.asked with kind "trust"): grant or reject; a user-tier remember writes your own trustedProjectMcp list, a project-tier one is refused. |
 | `files.changed` | read |  | — | The workspace's changed and untracked files. |
 | `files.diff` | read |  | — | The workspace's uncommitted changes to tracked files, as a unified diff. |
 | `files.read` | read |  | `path` | A file under the project root, read-only and size-capped. |

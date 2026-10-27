@@ -1990,6 +1990,9 @@
             "params": {
                 "type": "object",
                 "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
                     "askId": {
                         "type": "string",
                         "maxLength": 16,
@@ -2007,10 +2010,11 @@
                             "user",
                             "project"
                         ],
-                        "description": "`user` writes the root into your own trustedProjectMcp list (effective next launch, like the TUI grant); `session` — or omitted — settles for this server only; `project` is refused: a project cannot grant itself trust (the permission.respond posture)."
+                        "description": "`user` writes the root into your own trustedProjectMcp list (effective next launch, like the TUI grant) and refuses `trust_write_failed` — leaving the prompt open — when that write does not land; `session` — or omitted — settles for this server only; `project` is refused: a project cannot grant itself trust (the permission.respond posture)."
                     }
                 },
                 "required": [
+                    "sessionId",
                     "askId",
                     "decision"
                 ]
