@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\ShareCommand;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Share\ShareStore;
 
 /**
@@ -38,7 +39,7 @@ final class ShareCommandTest extends TestCase
 
         $this->assertSame(1, $exitCode);
         $this->assertStringContainsString("Invalid format 'invalid_format'", $output);
-        $this->assertStringContainsString('Usage: /share [md|html|json|text] [path] | /share serve [days] | /share revoke [token]', $output);
+        $this->assertStringContainsString('Usage: /share [md|html|json|text] [path] | /share serve [days] | /share list | /share revoke [token]', $output);
         $this->assertFalse(is_dir($this->exportsDir), 'a refused command writes nothing');
     }
 
@@ -283,6 +284,72 @@ final class ShareCommandTest extends TestCase
     }
 
     // =========================================================================
+    // /share list — the cross-session audit view (C-SES-3)
+    // =========================================================================
+
+    /**
+     * The whole point of C-SES-3: `list` reads {@see ShareStore::liveAll()},
+     * so shares published from OTHER sessions — and rows whose session is
+     * gone — are visible right where the operator decides to revoke them.
+     * Each row shows only the token's 12-char prefix: this output lands in
+     * the transcript, and a live token printed whole in a transcript is a
+     * capability leaked into every page that transcript is later shared as.
+     */
+    public function testListShowsEveryLiveShareAcrossSessionsWithItsLabel(): void
+    {
+        $sessions = new EnhancedSessionStore($this->scratch . '/live.db');
+        $sessions->createSession('home', 'p', 'm', name: 'Named Home');
+        $store = ShareStore::atPath($this->scratch . '/live.db');
+        $mine = $store->publish('home', 'html', '<p>mine</p>', 7);
+        $ghost = $store->publish('gone-forever', 'html', '<p>ghost</p>', 7);
+
+        [$exitCode, $output] = $this->share(['list'], store: $store);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('Live share pages:', $output);
+        $this->assertStringContainsString('Named Home', $output);
+        $this->assertStringContainsString('deleted session', $output);
+        $this->assertStringContainsString(substr($mine->token, 0, 12), $output);
+        $this->assertStringContainsString(substr($ghost->token, 0, 12), $output);
+        $this->assertStringContainsString($mine->format, $output);
+        $this->assertStringContainsString(gmdate('Y-m-d', $mine->expiresAt), $output);
+        $this->assertStringNotContainsString(substr($mine->token, 12), $output, 'the full token never reaches the transcript');
+        $this->assertStringNotContainsString(substr($ghost->token, 12), $output, 'the full token never reaches the transcript');
+    }
+
+    public function testListWithNothingPublishedSaysSoAndSucceeds(): void
+    {
+        [$exitCode, $output] = $this->share(['list'], store: ShareStore::atPath($this->scratch . '/session.db'));
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('No live share pages.', $output);
+    }
+
+    public function testListRefusesArguments(): void
+    {
+        [$exitCode, $output] = $this->share(['list', 'extra'], store: ShareStore::atPath($this->scratch . '/session.db'));
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('Too many arguments', $output);
+    }
+
+    /**
+     * `list` reads through the same store seam as every other verb, and a
+     * database that cannot be named is refused as a result, not a throw —
+     * the serve-side catch, widened to list and revoke by C-SES-3.
+     */
+    public function testListWithoutAnyStoreRefusesInsteadOfThrowing(): void
+    {
+        ob_start();
+        $exitCode = (new ShareCommand($this->exportsDir, null))
+            ->execute($this->createChatWithMessages(), ['list']);
+        $output = (string) ob_get_clean();
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('No session database is open', $output);
+    }
+
+    // =========================================================================
     // /share revoke
     // =========================================================================
 
@@ -327,9 +394,137 @@ final class ShareCommandTest extends TestCase
 
         $this->assertSame(1, $exitCode);
         $this->assertStringContainsString('several live share pages', $output);
-        $this->assertStringContainsString($first, $output);
-        $this->assertStringContainsString($second, $output);
+        $this->assertStringContainsString(substr($first, 0, 12), $output);
+        $this->assertStringContainsString(substr($second, 0, 12), $output);
+        $this->assertStringNotContainsString(substr($first, 12), $output, 'choice rows carry prefixes, like /share list');
         $this->assertNotNull($store->lookup($first), 'listing revokes nothing');
+    }
+
+    /**
+     * C-SES-3: the bare-revoke listing reads liveAll(), so a foreign
+     * session's live share shows up beside the current one instead of being
+     * invisible to the session the operator happens to be standing in.
+     */
+    public function testBareRevokeListsForeignSessionsLiveSharesToo(): void
+    {
+        $store = ShareStore::atPath($this->scratch . '/session.db');
+        $other = $store->publish('someone-else', 'html', '<p>x</p>', 7)->token;
+        $mine = $store->publish('', 'html', '<p>m</p>', 7)->token;
+
+        [$exitCode, $output] = $this->share(['revoke'], store: $store);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString(substr($other, 0, 12), $output);
+        $this->assertStringContainsString(substr($mine, 0, 12), $output);
+        $this->assertStringContainsString('deleted session', $output, 'a shares-only database labels every row honestly');
+        $this->assertNotNull($store->lookup($other));
+        $this->assertNotNull($store->lookup($mine));
+    }
+
+    /**
+     * The one-live-share shortcut is scoped to THIS session: with the only
+     * live page belonging to somebody else, a bare revoke lists it rather
+     * than silently killing a share this session never published.
+     */
+    public function testBareRevokeNeverAutoRevokesAnotherSessionsShare(): void
+    {
+        $store = ShareStore::atPath($this->scratch . '/session.db');
+        $other = $store->publish('someone-else', 'html', '<p>x</p>', 7)->token;
+
+        [$exitCode, $output] = $this->share(['revoke'], store: $store);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('several live share pages', $output);
+        $this->assertStringContainsString(substr($other, 0, 12), $output);
+        $this->assertNotNull($store->lookup($other), 'listing revokes nothing');
+    }
+
+    /**
+     * A listed 12-char prefix is accepted straight back by revoke — the
+     * listing hides the full token on purpose, so the handle the user can
+     * SEE has to be the handle they can USE.
+     */
+    public function testRevokeByUniquePrefixTakesThePageDown(): void
+    {
+        $store = ShareStore::atPath($this->scratch . '/session.db');
+        $token = $store->publish('', 'html', '<p>one</p>', 7)->token;
+
+        [$exitCode, $output] = $this->share(['revoke', substr($token, 0, 12)], store: $store);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('Revoked share ' . $token, $output, 'the reply names the whole token it killed');
+        $this->assertNull($store->lookup($token));
+    }
+
+    public function testRevokeByAnAmbiguousPrefixAsksForALongerOne(): void
+    {
+        $path = $this->scratch . '/session.db';
+        $store = ShareStore::atPath($path);
+        $store->publish('', 'html', '<p>table-maker</p>', 7);
+        // Two hand-written rows sharing their first twelve characters: real
+        // 128-bit tokens collide at 12 hex digits essentially never, and the
+        // ambiguity branch must still be pinned rather than argued away.
+        $shared = str_repeat('a', 12);
+        $colliders = [$shared . str_repeat('0', 20), $shared . str_repeat('1', 20)];
+        $pdo = new \PDO('sqlite:' . $path);
+        $insert = $pdo->prepare('INSERT INTO shares (token, session_id, format, html, created_at, expires_at, revoked_at)'
+            . ' VALUES (:token, :session_id, :format, :html, :created_at, :expires_at, NULL)');
+        foreach ($colliders as $token) {
+            $insert->execute([
+                ':token' => $token,
+                ':session_id' => '',
+                ':format' => 'html',
+                ':html' => '<p>collider</p>',
+                ':created_at' => time(),
+                ':expires_at' => time() + 7 * 86400,
+            ]);
+        }
+
+        [$exitCode, $output] = $this->share(['revoke', $shared], store: ShareStore::atPath($path));
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('begin with that prefix', $output);
+        $this->assertGreaterThanOrEqual(2, substr_count($output, $shared), 'both candidates are listed for a longer prefix');
+        foreach ($colliders as $token) {
+            $this->assertNotNull($store->lookup($token), 'an ambiguous prefix revokes nothing: ' . $token);
+        }
+    }
+
+    /** A shorter prefix is NOT a handle yet — six hex digits would collide by luck. */
+    public function testRevokeOfAShortPrefixIsRefusedLikeAnUnknownToken(): void
+    {
+        $store = ShareStore::atPath($this->scratch . '/session.db');
+        $token = $store->publish('', 'html', '<p>one</p>', 7)->token;
+
+        [$exitCode, $output] = $this->share(['revoke', substr($token, 0, 6)], store: $store);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('No live share page carries that token', $output);
+        $this->assertNotNull($store->lookup($token));
+    }
+
+    /**
+     * C-SES-9's SES-3-P3 half, command side: a missing or unopenable
+     * database surfaces as this command's own refusal — the serve-side
+     * catch, widened to revoke. Before the fix this threw through.
+     */
+    public function testRevokeWithoutAnyStoreRefusesInsteadOfThrowing(): void
+    {
+        ob_start();
+        $exitCode = (new ShareCommand($this->exportsDir, null))
+            ->execute($this->createChatWithMessages(), ['revoke', str_repeat('ab', 16)]);
+        $output = (string) ob_get_clean();
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('No session database is open', $output);
+
+        ob_start();
+        $bareExit = (new ShareCommand($this->exportsDir, null))
+            ->execute($this->createChatWithMessages(), ['revoke']);
+        $bareOutput = (string) ob_get_clean();
+
+        $this->assertSame(1, $bareExit);
+        $this->assertStringContainsString('No session database is open', $bareOutput);
     }
 
     public function testRevokeOfAnUnknownTokenIsRefusedWithoutSayingWhy(): void

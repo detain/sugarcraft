@@ -344,7 +344,7 @@ edit it by hand.
 | `/session-delete` | | | — | Open the session list to delete a session |
 | `/model` | ✓ | ✓ | `[provider [model]]` | Switch the active provider, or a provider and its model |
 | `/effort` | ✓ | | `[low\|medium\|high\|xhigh\|max\|auto]` | Read or set the reasoning effort tier |
-| `/share` | ✓ | | `[md\|html\|json] [path] \| serve [days] \| revoke [token]` | Export the session to a file, or serve and revoke share pages |
+| `/share` | ✓ | | `[md\|html\|json] [path] \| serve [days] \| list \| revoke [token]` | Export the session to a file, or serve and revoke share pages |
 | `/export` | ✓ | | `[md\|html\|json\|text] [file\|--path <file>]` | Export the transcript to a local file, raw bytes unredacted |
 | `/docs` | | | — | Open the documentation |
 | `/exit` | ✓ | ✓ | — | Quit the app |
@@ -662,8 +662,14 @@ revocation on every request. Because the row holds rendered HTML, later
 edits to the transcript never appear on a page already shared; publishing
 the new state is a second user act. `/share revoke [token]` takes a page
 down (unknown, expired and revoked tokens all answer the same 404, so the
-page cannot be probed); with no token it revokes the session's only live
-share, or lists the choices.
+page cannot be probed); the token may be given whole or as the 12-character
+prefix the listings show. `/share list` prints EVERY live page in the
+database — across all sessions, each labelled with its session, or
+`deleted session` once that row is gone — and a bare `revoke` shows the
+same full view when it cannot act: it revokes outright only when the single
+live page belongs to the current session, so a page published elsewhere is
+listed, never silently killed. Listings name pages by prefix only, so a
+captured transcript never leaks a whole live token.
 
 What keeps the table honest is not this page — no guard counts the rows here. It
 is `Commands\SlashDispatchTest::testEverySlashVisibleRegistryRowHasALiveDispatchHandler()`,

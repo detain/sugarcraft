@@ -42,7 +42,9 @@ use SugarCraft\Code\Tools\PathJail;
  * the WHY-LOCAL stance is preserved; only serving stays opt-in. Editing the
  * transcript afterwards changes nothing a reader sees; publishing the new
  * state is a second user act. `/share revoke [token]` kills a page on its
- * next request.
+ * next request — by whole token or by the prefix `/share list` shows — and
+ * `/share list` prints EVERY live page in the database, across all sessions,
+ * so what a machine is currently publishing is auditable from anywhere.
  *
  * THE UPLOADER IS RETIRED IN THIS COMMAND'S OWN WORDS. When
  * `CANDY_CODE_SHARE_UPLOAD_URL` (or a deprecated spelling) names a host,
@@ -66,6 +68,18 @@ final class ShareCommand
     /** Subcommand word that revokes a published snapshot. */
     public const REVOKE_WORD = 'revoke';
 
+    /** Subcommand word that lists every live snapshot, across all sessions. */
+    public const LIST_WORD = 'list';
+
+    /**
+     * How much of a token the listings show. A listing lands in the
+     * transcript, and a live token printed whole in a transcript is a
+     * capability leaked into every page that transcript is later shared as —
+     * twelve hex digits are a long enough handle to name a page unambiguously
+     * (revoke takes the prefix straight back) and too short to BE the key.
+     */
+    public const TOKEN_PREFIX_CHARS = 12;
+
     /**
      * @param ?string $exportsDir Where an export with no path lands; null is
      *        `~/.candy-code/exports` under an OWNED home (a seam for tests).
@@ -80,7 +94,7 @@ final class ShareCommand
 
     /**
      * @param list<string> $args Command arguments: [format] [path],
-     *        `serve [days]`, or `revoke [token]`
+     *        `serve [days]`, `list`, or `revoke [token]`
      */
     public function execute(Chat|CommandContext $chat, array $args = []): int
     {
@@ -89,6 +103,9 @@ final class ShareCommand
         $word = strtolower($args[0] ?? '');
         if ($word === self::SERVE_WORD) {
             return $this->serve($chat, array_slice($args, 1));
+        }
+        if ($word === self::LIST_WORD) {
+            return $this->list($chat, array_slice($args, 1));
         }
         if ($word === self::REVOKE_WORD) {
             return $this->revoke($chat, array_slice($args, 1));
@@ -200,9 +217,57 @@ final class ShareCommand
     }
 
     /**
-     * `/share revoke [token]` — kill a page on its next request. With no
-     * token, revoke the session's only live share when there is exactly one,
-     * and otherwise list what a token would choose between.
+     * `/share list` — EVERY live share page in the database, across all
+     * sessions (C-SES-3). The bare-revoke listing answers "what could THIS
+     * session take down"; this answers "what is published from this machine
+     * at all", which is the question an operator standing in any single
+     * session needs in front of them before deciding what to revoke. Rows
+     * name pages by their usable prefix, never by the whole token.
+     *
+     * @param list<string> $args
+     */
+    private function list(Chat|CommandContext $chat, array $args): int
+    {
+        if ($args !== []) {
+            $this->printError(Lang::t('cmd.share.too-many'));
+
+            return 1;
+        }
+
+        try {
+            $entries = $this->shareStoreFor($chat)->liveAll();
+        } catch (RuntimeException $e) {
+            $this->printError($e->getMessage());
+
+            return 1;
+        }
+
+        if ($entries === []) {
+            echo Lang::t('cmd.share.list.none') . "\n";
+
+            return 0;
+        }
+
+        echo Lang::t('cmd.share.list.header') . "\n";
+        foreach ($entries as $entry) {
+            echo $this->listRow($entry) . "\n";
+        }
+
+        return 0;
+    }
+
+    /**
+     * `/share revoke [token]` — kill a page on its next request. The token
+     * may be given whole or as the prefix {@see /share list} shows (a listed
+     * handle that could not be revoked would be a handle in name only); a
+     * bare `revoke` now lists EVERY live page in the database (C-SES-3),
+     * taking the outright-revoke shortcut only when the single live page
+     * belongs to THIS session — a foreign share is never silently killed by
+     * a session that did not publish it.
+     *
+     * SES-3-P3: a database that cannot be opened is refused as a result, the
+     * serve-side catch widened over revoke and list. Before, the throw
+     * escaped through ShareHostCommand's still-open capture buffer.
      *
      * @param list<string> $args
      */
@@ -213,11 +278,56 @@ final class ShareCommand
 
             return 1;
         }
-        $store = $this->shareStoreFor($chat);
 
-        if ($args !== []) {
-            if ($store->revoke($args[0])) {
-                echo Lang::t('cmd.share.revoked', ['token' => $args[0]]) . "\n";
+        try {
+            $store = $this->shareStoreFor($chat);
+
+            if ($args !== []) {
+                return $this->revokeOne($store, strtolower($args[0]));
+            }
+
+            $entries = $store->liveAll();
+            if ($entries === []) {
+                $this->printError(Lang::t('cmd.share.revoke-none'));
+
+                return 1;
+            }
+            $current = $chat->currentSessionId() ?? '';
+            if (count($entries) === 1 && $entries[0]['record']->sessionId === $current) {
+                $token = $entries[0]['record']->token;
+                $store->revoke($token);
+                echo Lang::t('cmd.share.revoked', ['token' => $token]) . "\n";
+
+                return 0;
+            }
+
+            echo Lang::t('cmd.share.revoke-many') . "\n";
+            foreach ($entries as $entry) {
+                echo $this->listRow($entry) . "\n";
+            }
+
+            return 1;
+        } catch (RuntimeException $e) {
+            $this->printError($e->getMessage());
+
+            return 1;
+        }
+    }
+
+    /**
+     * Resolve one named page — whole token, or a prefix at least as long as
+     * {@see TOKEN_PREFIX_CHARS} — and revoke exactly what it names. Fewer
+     * than twelve hex digits is not a handle yet and is refused the way an
+     * unknown token is; more candidates than one ask for a longer prefix
+     * rather than guessing which page the user meant.
+     *
+     * @throws RuntimeException When the revoke write itself fails.
+     */
+    private function revokeOne(ShareStore $store, string $named): int
+    {
+        if (preg_match('/^[0-9a-f]{32}$/', $named) === 1) {
+            if ($store->revoke($named)) {
+                echo Lang::t('cmd.share.revoked', ['token' => $named]) . "\n";
 
                 return 0;
             }
@@ -226,26 +336,71 @@ final class ShareCommand
             return 1;
         }
 
-        $live = $store->liveForSession($chat->currentSessionId() ?? '');
-        if ($live === []) {
-            $this->printError(Lang::t('cmd.share.revoke-none'));
+        if (preg_match('/^[0-9a-f]{' . self::TOKEN_PREFIX_CHARS . ',31}$/', $named) === 1) {
+            $candidates = [];
+            foreach ($store->liveAll() as $entry) {
+                if (str_starts_with($entry['record']->token, $named)) {
+                    $candidates[] = $entry;
+                }
+            }
+            if (count($candidates) === 1) {
+                $token = $candidates[0]['record']->token;
+                $store->revoke($token);
+                echo Lang::t('cmd.share.revoked', ['token' => $token]) . "\n";
 
-            return 1;
-        }
-        if (count($live) === 1) {
-            $store->revoke($live[0]->token);
-            echo Lang::t('cmd.share.revoked', ['token' => $live[0]->token]) . "\n";
+                return 0;
+            }
+            if ($candidates !== []) {
+                echo Lang::t('cmd.share.revoke-ambiguous') . "\n";
+                foreach ($candidates as $entry) {
+                    echo $this->listRow($entry) . "\n";
+                }
 
-            return 0;
+                return 1;
+            }
         }
 
-        echo Lang::t('cmd.share.revoke-many') . "\n";
-        foreach ($live as $record) {
-            echo '  ' . $record->token . '  (' . $record->format . ', '
-                . gmdate('Y-m-d', $record->expiresAt) . ")\n";
-        }
+        $this->printError(Lang::t('cmd.share.revoke-unknown'));
 
         return 1;
+    }
+
+    /**
+     * One audit row: the token's usable prefix, who the page belongs to,
+     * when it dies, in what format.
+     *
+     * @param array{record: \SugarCraft\Code\Share\ShareRecord, sessionName: ?string, orphan: bool} $entry
+     */
+    private function listRow(array $entry): string
+    {
+        $record = $entry['record'];
+        $session = $entry['orphan']
+            ? Lang::t('cmd.share.list.deleted-session')
+            : ($entry['sessionName'] === null || $entry['sessionName'] === ''
+                ? Lang::t('cmd.share.list.unnamed-session')
+                : $entry['sessionName']);
+
+        return Lang::t('cmd.share.list.row', [
+            'token' => substr($record->token, 0, self::TOKEN_PREFIX_CHARS),
+            'session' => $this->printableLabel($session),
+            'expires' => gmdate('Y-m-d', $record->expiresAt),
+            'format' => $record->format,
+        ]);
+    }
+
+    /**
+     * The session name is read out of a database an operator can hand-edit,
+     * so it is swept of control characters (which could forge terminal state
+     * in the transcript) and capped in codepoints before it is printed.
+     */
+    private function printableLabel(string $label): string
+    {
+        $label = trim((string) preg_replace('/[\x00-\x1f\x7f]+/', ' ', $label));
+        if (preg_match('/^.{0,60}/us', $label, $m) === 1) {
+            return $m[0];
+        }
+
+        return substr($label, 0, 60);
     }
 
     /**
