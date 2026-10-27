@@ -52,7 +52,7 @@ function openHistory(): void {
 }
 
 async function undoTo(revision: MemoryRevision): Promise<void> {
-  if (typeof window !== 'undefined' && !window.confirm(`Undo the memory store to ${revision.shortSha} ("${revision.subject}")? Every note is replaced by that commit's state.`)) return
+  if (typeof window !== 'undefined' && !window.confirm(`Undo the memory store to ${revision.shortSha} ("${revision.subject}")? The home store's notes are replaced by that commit's state.`)) return
   await act(async () => {
     await memory.undo(revision.sha)
     await memory.log()
