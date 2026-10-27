@@ -5,6 +5,7 @@ import { sessionLabel } from '../approvals/attention'
 import { loadTabChord, matchesTabChord, nextTabChord, saveTabChord, tabChordLabel, tabDigit, type TabChord } from '../../lib/tabChord'
 import { useApprovalsStore } from '../../stores/approvals'
 import { useLayoutStore, type Showing } from '../../stores/layout'
+import { useNewSessionStore } from '../../stores/newSession'
 import { useSessionsStore } from '../../stores/sessions'
 
 /**
@@ -13,6 +14,11 @@ import { useSessionsStore } from '../../stores/sessions'
  * session's status and its open questions. A configurable chord + a physical
  * digit picks a tab (ISS-106; Alt+digit by default, cycled from the strip).
  *
+ * A trailing `+` starts a new session (P-TABS.h): the same picker-aware
+ * `newSession.start()` the dashboard uses, then routes to the fresh tab. A
+ * tab whose session finished while it was not the active one carries an
+ * unseen badge, cleared by selecting the session ({@see useLayoutStore}).
+ *
  * It is also where the page tells the server what is on screen
  * (`client.viewing`): the open session in the tabs view; every tile in the
  * grid, narrated but the focused one.
@@ -20,6 +26,7 @@ import { useSessionsStore } from '../../stores/sessions'
 const layout = useLayoutStore()
 const sessions = useSessionsStore()
 const approvals = useApprovalsStore()
+const newSession = useNewSessionStore()
 const route = useRoute()
 const router = useRouter()
 
@@ -54,6 +61,21 @@ function close(id: string): void {
 function toGrid(): void {
   layout.setMode('grid')
   void router.push({ name: 'grid' })
+}
+
+const starting = ref(false)
+
+/** P-TABS.h: `+` starts a session (through the picker when the server offers one). */
+async function create(): Promise<void> {
+  starting.value = true
+  try {
+    const summary = await newSession.start()
+    if (summary) void router.push({ name: 'session', params: { id: summary.id } })
+  } catch {
+    // The sessions store's own error surfaces where the failure happened.
+  } finally {
+    starting.value = false
+  }
 }
 
 function toTabs(): void {
@@ -140,9 +162,11 @@ onBeforeUnmount(() => {
           <span class="dot" :class="status(id)" aria-hidden="true" />
           <span class="name">{{ title(id) }}</span>
           <span v-if="approvals.countFor(id) > 0" class="badge" data-testid="tab-ask-badge">{{ approvals.countFor(id) }}</span>
+          <span v-else-if="layout.unseen[id] === true" class="fin" aria-label="finished since you last looked" data-testid="tab-unseen" title="Finished since you last looked" />
         </button>
         <button type="button" class="x" :aria-label="`Close ${title(id)}`" data-testid="tab-close" @click="close(id)">&#10005;</button>
       </div>
+      <button type="button" class="new-tab" data-testid="new-session-tab" :disabled="starting" title="Start a new session" @click="create">&#43;</button>
     </div>
     <div class="modes" role="group" aria-label="Layout">
       <button type="button" class="chord" data-testid="tab-chord" title="Key chord that picks a tab — click to cycle (the digit is the physical key, so laptop Option and AZERTY glyphs do not get in the way)" @click="cycleChord()">tabs: {{ tabChordLabel(chord) }}+1</button>
@@ -234,6 +258,30 @@ onBeforeUnmount(() => {
   padding: 0 0.35rem;
   font-size: 0.75rem;
   font-weight: 700;
+}
+/* P-TABS.h: the unseen-finished mark — a dot in the accent colour, so a tab
+   that completed while you were elsewhere catches the eye until you look. */
+.fin {
+  flex: none;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.new-tab {
+  flex: none;
+  align-self: center;
+  border: 1px dashed var(--line);
+  background: none;
+  border-radius: 6px;
+  color: var(--muted);
+  padding: 0.15rem 0.6rem;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+.new-tab:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .modes {
   flex: none;

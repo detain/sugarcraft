@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { flush, helloResult } from '../../__tests__/fakes'
-import { Wire } from '../../components/grid/__tests__/harness'
+import { summary, Wire } from '../../components/grid/__tests__/harness'
 import { MAX_TABS, MAX_TILES, useLayoutStore } from '../layout'
 
 beforeEach(() => {
@@ -86,6 +86,63 @@ describe('layout: tabs and tiles', () => {
     const layout = useLayoutStore()
     expect(layout.tabs).toEqual([])
     expect(layout.mode).toBe('tabs')
+  })
+})
+
+describe('layout: unseen finished (P-TABS.h)', () => {
+  it('marks a non-active session that goes busy then idle, and clears it on select', async () => {
+    const wire = await Wire.connect()
+    const layout = useLayoutStore()
+    layout.focus('a')
+    layout.openTab('b')
+
+    wire.serverEvent('session.updated', summary('b', { status: 'busy' }))
+    await flush()
+    expect(layout.unseen).toEqual({})
+
+    wire.serverEvent('session.updated', summary('b', { status: 'idle' }))
+    await flush()
+    expect(layout.unseen).toEqual({ b: true })
+
+    layout.focus('b')
+    expect(layout.unseen).toEqual({})
+  })
+
+  it('spares the active session, and forgets sessions whose tabs go away', async () => {
+    const wire = await Wire.connect()
+    const layout = useLayoutStore()
+    layout.focus('a')
+    layout.openTab('b')
+
+    wire.serverEvent('session.updated', summary('a', { status: 'busy' }))
+    wire.serverEvent('session.updated', summary('b', { status: 'busy' }))
+    await flush()
+    wire.serverEvent('session.updated', summary('a', { status: 'idle' }))
+    wire.serverEvent('session.updated', summary('b', { status: 'idle' }))
+    await flush()
+    expect(layout.unseen).toEqual({ b: true })
+
+    layout.closeTab('b')
+    expect(layout.unseen).toEqual({})
+
+    layout.openTab('c')
+    wire.serverEvent('session.updated', summary('c', { status: 'busy' }))
+    await flush()
+    wire.serverEvent('session.updated', summary('c', { status: 'idle' }))
+    await flush()
+    expect(layout.unseen).toEqual({ c: true })
+    layout.pruneTabs((id) => id !== 'c')
+    expect(layout.unseen).toEqual({})
+  })
+
+  it('is not planted by the first status seen for a session', async () => {
+    const wire = await Wire.connect()
+    const layout = useLayoutStore()
+    layout.focus('a')
+    layout.openTab('b')
+    wire.serverEvent('session.updated', summary('b', { status: 'idle' }))
+    await flush()
+    expect(layout.unseen).toEqual({})
   })
 })
 

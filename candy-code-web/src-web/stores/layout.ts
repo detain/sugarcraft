@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { useConnectionStore } from './connection'
+import { useSessionsStore } from './sessions'
 import { readJson, writeJson } from './storage'
 
 const DRAFT_LIMIT = 50
@@ -44,6 +45,7 @@ function strings(value: unknown): string[] {
  */
 export const useLayoutStore = defineStore('layout', () => {
   const connection = useConnectionStore()
+  const sessions = useSessionsStore()
 
   const sidebarOpen = ref(false)
   const approvalsOpen = ref(false)
@@ -62,6 +64,34 @@ export const useLayoutStore = defineStore('layout', () => {
   watch(tabs, (ids) => writeJson('tabs', ids))
   watch(mode, (value) => writeJson('mode', value))
   watch(focused, (id) => writeJson('focused', id))
+
+  // P-TABS.h: a session that finished (busy → idle) while it was not the
+  // active one has news the viewer has not seen; the tab strip badges it, and
+  // selecting the session (or closing its tab) settles the debt. Deliberately
+  // not persisted — after a reload the badge would be stale at once.
+  const unseen = ref<Record<string, boolean>>({})
+  const lastStatus = new Map<string, string>()
+
+  function clearUnseen(sessionId: string): void {
+    if (unseen.value[sessionId] === undefined) return
+    const next = { ...unseen.value }
+    delete next[sessionId]
+    unseen.value = next
+  }
+
+  watch(() => sessions.byId, (index) => {
+    let marked: Record<string, boolean> | null = null
+    for (const [id, summary] of Object.entries(index)) {
+      const prev = lastStatus.get(id)
+      if (prev === summary.status) continue
+      lastStatus.set(id, summary.status)
+      if (prev === 'busy' && summary.status === 'idle' && id !== focused.value) {
+        marked ??= { ...unseen.value }
+        marked[id] = true
+      }
+    }
+    if (marked !== null) unseen.value = marked
+  })
 
   function draft(sessionId: string): string {
     return drafts.value[sessionId] ?? ''
@@ -106,12 +136,16 @@ export const useLayoutStore = defineStore('layout', () => {
     if (at < 0) return focused.value
     const next = tabs.value.filter((id) => id !== sessionId)
     tabs.value = next
+    clearUnseen(sessionId)
     if (focused.value === sessionId) focused.value = next[Math.min(at, next.length - 1)] ?? null
     return focused.value
   }
 
   function focus(sessionId: string | null): void {
-    if (sessionId !== null) openTab(sessionId)
+    if (sessionId !== null) {
+      openTab(sessionId)
+      clearUnseen(sessionId)
+    }
     focused.value = sessionId
   }
 
@@ -131,6 +165,7 @@ export const useLayoutStore = defineStore('layout', () => {
   /** Forget tabs whose sessions are gone (deleted, or another root's after a restart). */
   function pruneTabs(known: (sessionId: string) => boolean): void {
     const next = tabs.value.filter(known)
+    for (const id of Object.keys(unseen.value)) if (!next.includes(id)) clearUnseen(id)
     if (next.length === tabs.value.length) return
     tabs.value = next
     if (focused.value !== null && !next.includes(focused.value)) focused.value = next[0] ?? null
@@ -178,6 +213,7 @@ export const useLayoutStore = defineStore('layout', () => {
     lastSessionId,
     drafts,
     tabs,
+    unseen,
     mode,
     focused,
     tiles,
