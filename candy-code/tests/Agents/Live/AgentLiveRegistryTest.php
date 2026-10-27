@@ -274,10 +274,6 @@ final class AgentLiveRegistryTest extends TestCase
     }
 
     /**
-     * @param list<ActivityItem> $items
-     * @param array<string, int|float> $stats
-     */
-    /**
      * P-AGENT.a: the v2 frames carry their parent session and the workspace
      * seeds a name-keyed colour resolver — both ride onto the folded state so
      * scoped views and painted surfaces have something to read. A frame
@@ -298,6 +294,10 @@ final class AgentLiveRegistryTest extends TestCase
         self::assertSame(['run_s1'], array_values(array_map(static fn ($s): string => $s->id, $registry->forSession('ses_top'))));
     }
 
+    /**
+     * @param list<ActivityItem> $items
+     * @param array<string, int|float> $stats
+     */
     private static function frame(string $op, string $id, int $seq, string $call, array $items = [], array $stats = []): SubAgentActivity
     {
         return new SubAgentActivity($op, $id, 'explore', '', $seq, '', parentCallId: $call, items: $items, stats: $stats);

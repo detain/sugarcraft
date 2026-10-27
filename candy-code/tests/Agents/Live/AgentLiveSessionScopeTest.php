@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Agents\Live;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\Live\AgentLiveRegistry;
 use SugarCraft\Code\Agents\Live\AgentLiveState;
+use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Events\SubAgentActivity;
 use SugarCraft\Code\Tui\AgentStrip;
 
@@ -119,6 +120,42 @@ final class AgentLiveSessionScopeTest extends TestCase
 
         self::assertSame('ses_a', $live->get('run_a')?->parentSessionId, 'a frame that omits the attribute does not clear what an earlier frame carried');
         self::assertSame(['run_a'], self::runIds($live->forSession('ses_a')), 'the finished run is still listable in its own session view for the linger');
+    }
+
+    /**
+     * The seed itself, pinned at the launch (the lane-ab pool-constitution
+     * shape): a real `Bootstrap::workspace()` — not a test-side construction
+     * — must hand the folded roster its colour resolver. Every unit pin
+     * above arms the resolver by hand, so without this one the withColorResolver
+     * line could be deleted from the production seed and the whole suite
+     * would stay green while every live run paints unaccented.
+     */
+    public function testTheProductionLaunchSeedsTheRegistryWithAColorResolver(): void
+    {
+        $dir = sys_get_temp_dir() . '/crush-agent-live-seed-' . bin2hex(random_bytes(6));
+        mkdir($dir . '/home', 0o700, true);
+        mkdir($dir . '/repo', 0o700, true);
+
+        $home = getenv('HOME');
+        $serverHome = $_SERVER['HOME'] ?? null;
+        putenv('HOME=' . $dir . '/home');
+        $_SERVER['HOME'] = $dir . '/home';
+
+        try {
+            $registry = Bootstrap::workspace($dir . '/repo')->service(AgentLiveRegistry::class);
+            self::assertInstanceOf(AgentLiveRegistry::class, $registry);
+
+            $resolver = (new \ReflectionProperty(AgentLiveRegistry::class, 'colorResolver'))->getValue($registry);
+            self::assertInstanceOf(\Closure::class, $resolver, 'the workspace seed carries the preset-colour resolver through to the folded roster');
+        } finally {
+            $home === false ? putenv('HOME') : putenv('HOME=' . $home);
+            if ($serverHome === null) {
+                unset($_SERVER['HOME']);
+            } else {
+                $_SERVER['HOME'] = $serverHome;
+            }
+            exec('rm -rf ' . escapeshellarg($dir) . ' 2>&1');
+        }
     }
 
     /**
