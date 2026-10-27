@@ -7786,7 +7786,7 @@ final class Chat implements Model
      * deduped through the launch-warning shelf's once-set, because this
      * door re-applies idempotently and an unrelated `/set` must not reprint
      * it. A nonsense stored string resolves to that same null and asks for
-     * nothing, row included.
+     * nothing, silently, exactly like a cleared tier.
      */
     private function withEngineSettings(): self
     {
