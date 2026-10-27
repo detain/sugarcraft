@@ -84,7 +84,8 @@
     "C-AGT-7.c",
     "C-CTX-6.d",
     "C-MCP-6.a",
-    "C-PRV-5.a"
+    "C-PRV-5.a",
+    "C-SEC-5.c"
   ],
   "inflight": {
     "P-MENU.d": {
@@ -112,15 +113,6 @@
       "branch": "cc/C-CTX-6.a",
       "session": "ses_e80b07d58ffeEXuHBBHSWaGQmJ",
       "note": "r1 CLEAN 57T/283A + 461T/22159A pair-only; DUR none; carry SessionHost:1055 release no alarm-cancel (base shape) + BRIEF stale App.php cite",
-      "ts": "2026-10-27T22:22:46.006182+00:00"
-    },
-    "C-SEC-5.c": {
-      "stage": "clean",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-SEC-5.c",
-      "branch": "cc/C-SEC-5.c",
-      "session": "ses_e80b0396dffedxYm5oKlv4esUL",
-      "note": "r1 CLEAN TrustDialog 12T/15706A Tui 1627T/1 base-foreign pair-only; DUR TrustDialogTest 12T; reconcile REPORT +15-vs-13 key claim at weld",
       "ts": "2026-10-27T22:22:46.006182+00:00"
     },
     "C-EXT-2.b": {
@@ -458,6 +450,14 @@
       "regen": "no-op (cmd/tool/settings --check all up-to-date rc0; SETTINGS.md change is hand prose outside generated regions; no src/Protocol or candy-code-web files)",
       "gates": "ThinkingCeiling 20T/51A EXACT; provider siblings (reviewer filter) 247T/739A EXACT; SettingsSchemaDocDrift|DocFigureProseDrift|TrustKey 128T/4684A 0F (+11A wobble); five-guard 133T/15773A failures=2 = staleness pair ONLY (25537 vs 26216)",
       "durations_owed": "NEW tests/Providers/ThinkingCeilingTest.php (20T) - LIST ONLY, closeout duty"
+    },
+    "C-SEC-5.c": {
+      "master": "2a24daeba",
+      "pick": "2a24daeba",
+      "regen": "no-op (cmd/tool/settings --check up-to-date rc0; en.php append only, no generated docs/protocol/web files)",
+      "gates": "TrustDialogTest 12T/15706A EXACT; --filter TrustDialog 13T/15712A (13th = BinCandyCodeWiringTest dataset 'Tui/TrustDialog.php'); TuiLang|LangParity 16T/4231A; five-guard 133T/15781A failures=2 = staleness pair ONLY",
+      "durations_owed": "NEW tests/Tui/TrustDialogTest.php (12T) - LIST ONLY, closeout duty",
+      "report_corrections": "en.php +13 keys (claim +15 wrong); extra row = BinCandyCodeWiringTest dataset, not AccessorDeprecationTest (REVIEW-1 NIT)"
     }
   },
   "carries": [
@@ -505,7 +505,8 @@
     "C-AGT-7.c r1 CLEAN with gates run (25,537 vs live 26,129 pair-only; foreign Lang red base-proven); queued behind AGT-3.b/CTX-6.c welder",
     "C-CTX-6.d DUR duty for closeout gate: scripts/parallel-tests-durations.tsv row for candy-code/tests/Chat/MemoryOpenJournalTest.php (new file, 3T; lanes never edit durations.tsv)",
     "C-MCP-6.a weld: NEW candy-code tests/MCP/SseMcpServerForkTlsTest.php + tests/Chat/McpLoginForkTest.php rows owe durations.tsv at the closeout gate (welder does NOT edit durations.tsv). Welded-tree gate live 2215T/0F (lane report claimed 2219; +4 = filter-count wobble, both new files verified running: Sse 3T, McpLoginFork 11T); doc-guard trio 128T/4684A; gens --check up-to-date rc0 x3.",
-    "C-PRV-5.a weld: NEW candy-code/tests/Providers/ThinkingCeilingTest.php (20T) owes a durations.tsv row at the closeout gate (welder does NOT edit durations.tsv). Welded-tree gates EXACT: ThinkingCeiling 20T/51A; provider siblings --filter 'ThinkingCeiling|AnthropicExtendedThinking|VertexGeminiOutputBudget|GeminiProvider|EffortGate|ProviderFactory' 247T/739A (reviewer filter reproduced exactly); doc trio 128T/4684A (+11A wobble vs 4673 claim, 0F); five-guard 133T pair-only (25,537 vs live 26,216)."
+    "C-PRV-5.a weld: NEW candy-code/tests/Providers/ThinkingCeilingTest.php (20T) owes a durations.tsv row at the closeout gate (welder does NOT edit durations.tsv). Welded-tree gates EXACT: ThinkingCeiling 20T/51A; provider siblings --filter 'ThinkingCeiling|AnthropicExtendedThinking|VertexGeminiOutputBudget|GeminiProvider|EffortGate|ProviderFactory' 247T/739A (reviewer filter reproduced exactly); doc trio 128T/4684A (+11A wobble vs 4673 claim, 0F); five-guard 133T pair-only (25,537 vs live 26,216).",
+    "C-SEC-5.c weld: NEW candy-code/tests/Tui/TrustDialogTest.php (12T) owes a durations.tsv row at the closeout gate. Welder REPORT corrections committed with the evidence: en.php adds 13 tui.trust.* keys (not +15; git show --numstat +13, 13 quoted keys) and the extra --filter TrustDialog row is BinCandyCodeWiringTest dataset \"Tui/TrustDialog.php\" (not AccessorDeprecationTest) per REVIEW-1 NIT. Gates EXACT: TrustDialogTest 12T/15706A (filter TrustDialog = 13T/15712A with the integration row); TuiLang|LangParity 16T/4231A; five-guard 133T pair-only; gens --check up-to-date x3."
   ],
-  "updated": "2026-10-27T22:37:14.035028+00:00"
+  "updated": "2026-10-27T22:41:30.582718+00:00"
 }
