@@ -203,6 +203,8 @@ export interface PendingAsk {
   mode?: string
   options: ("once" | "always" | "reject")[]
   alwaysScope?: Record<string, string>
+  /** C-SEC-2.b: server-computed unified diff of the proposed call, confined to the session root and capped at 32 KiB (beyond it, an omitted note naming the change size, never silence); absent when the call has no previewable outcome. Has real file line numbers, unlike a client-minted snippet diff. */
+  diff?: string
   /** The delegated run that asked, when a sub-agent's question was relayed; absent for the turn's own. */
   origin?: {
     agentId: string
@@ -1574,6 +1576,8 @@ export interface Events {
     mode?: string
     options: ("once" | "always" | "reject")[]
     alwaysScope?: Record<string, string>
+    /** C-SEC-2.b: server-computed unified diff of the proposed call, confined to the session root and capped at 32 KiB (beyond it, an omitted note naming the change size, never silence); absent when the call has no previewable outcome. Has real file line numbers, unlike a client-minted snippet diff. */
+    diff?: string
     /** The delegated run that asked, when a sub-agent's question was relayed; absent for the turn's own. */
     origin?: {
       agentId: string
