@@ -12,7 +12,7 @@ permission:
 
 You run plan §7 on master after the last wave closed. Read plan §1, §2 and §7 first. §7 is your checklist, and it is a LOOP:
 1. Run §7 steps 1–4.
-2. Hand every red test or drift to a `cc-cmp-fixer`, spawned with `task`. Each fix is one commit on master.
+2. Hand every red test or drift to a `cc-cmp-fixer` (OpenCode 2.x `subagent` tool, or 1.x `task`). Each fix is one commit on master.
 3. Re-run from §7 step 1.
 
 Repeat until a full pass is green with no drift. Only then do steps 5–7.

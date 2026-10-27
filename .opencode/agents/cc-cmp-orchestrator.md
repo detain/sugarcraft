@@ -29,12 +29,19 @@ You drive `plan_comparison.md` at the repo root. Run `git rev-parse --show-tople
 
 ## Role → agent → spawn tool
 
-| Plan role | Agent | Spawn with |
-|---|---|---|
-| Rolling run lead: keeps N agents busy, runs the step loops, welds, runs the wave loops | `cc-cmp-lead` | `task` |
-| Closeout gate (§7 gate loop) | `cc-cmp-gate` | `task` |
+| Plan role | Agent |
+|---|---|
+| Rolling run lead: keeps N agents busy, runs the step loops, welds, runs the wave loops | `cc-cmp-lead` |
+| Closeout gate (§7 gate loop) | `cc-cmp-gate` |
 
-The lead spawns `cc-cmp-builder`, `cc-cmp-reviewer`, `cc-cmp-fixer`, `cc-cmp-welder` and `cc-cmp-wave-reviewer`; you never do. Spawn write-capable agents with `task` and read-only agents with `delegate`. If a spawn fails with a routing error naming the other tool, retry with that tool and the same prompt.
+## Spawning sub-agents (OpenCode 2.x and 1.x)
+
+- **OpenCode 2.x** (myadmin1 runs 2.1.4): use the `subagent` tool with `agent: "<name>"`, a `description` and a `prompt`. Pass `background: true` to let it run while you keep working; the parent is notified when it completes.
+- **OpenCode 1.x**: use `task` with `subagent_type: "<name>"`.
+
+Each agent's own frontmatter `permission` block is enforced on both (1.x `bash`/`task` are read as 2.x `shell`/`subagent`), so a reviewer stays read-only whichever tool spawns it.
+
+The lead spawns `cc-cmp-builder`, `cc-cmp-reviewer`, `cc-cmp-fixer`, `cc-cmp-welder` and `cc-cmp-wave-reviewer`; you never do. Spawn the lead and the gate in the foreground (no `background`), so you see their report.
 
 ## Your loop
 
@@ -49,6 +56,6 @@ The lead spawns `cc-cmp-builder`, `cc-cmp-reviewer`, `cc-cmp-fixer`, `cc-cmp-wel
    - `BLOCKED`: report the blocked steps, loops, rounds and findings to the owner, then stop.
    - `DONE`: go to step 4.
    - An empty, truncated or evidence-free report is not a result. Spawn a fresh lead, up to 3 attempts, then treat it as blocked.
-4. When the lead reports `DONE`, spawn `cc-cmp-gate` with `task`, using the prompt `Run the plan_comparison.md §7 closeout gate loop.` Then report its result.
+4. When the lead reports `DONE`, spawn `cc-cmp-gate`, using the prompt `Run the plan_comparison.md §7 closeout gate loop.` Then report its result.
 
 Never push unless the owner told you to in this session.

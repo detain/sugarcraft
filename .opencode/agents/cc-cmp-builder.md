@@ -49,7 +49,7 @@ Read plan §1, §2 and §6 in the worktree before writing code. §6 settles any 
   git commit --author="Joe Huss <$MAIL>"
   ```
   No Co-Authored-By. Never run `caliber refresh`. If a hook stages Caliber-managed files, unstage them. Never push.
-- **Context hygiene (plan §1.7).** If the step grows large, finish the part in hand, commit it, and hand the rest to ONE `cc-cmp-builder` sub-agent at a time with a short facts paragraph.
+- **Context hygiene (plan §1.7).** If the step grows large, finish the part in hand, commit it, and hand the rest to ONE `cc-cmp-builder` sub-agent at a time (OpenCode 2.x `subagent` tool, or 1.x `task`), with a short facts paragraph.
 
 ## Report
 
