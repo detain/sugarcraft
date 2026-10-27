@@ -1,0 +1,74 @@
+### C-AGT-7.c — Webhook mode clamp + hygiene
+- item: C-AGT-7 (sources: AUT-6-P2, AUT-6-P3)
+- kind: fix · MINOR/NIT · effort S
+- approach:
+  - AUT-6-P2: `answersAsksWithoutAHuman()` (`src/Server/ServerConfig.php:574`) classes the strictest mode, `dont-ask`, with bypass. Hooks refuse it (:753), and `hookPermissionModeFallback()` (:592) widens a dont-ask server's hooks to `default`. Add `hookRefusesMode()`, which refuses bypass only, and use it at :753. Make the fallback the stricter of the server's mode and `default`, via `PermissionMode::strictness()`. Correct the :590 docblock: hooks spawned with `askTimeoutSeconds` do reach the approvals relay.
+  - AUT-6-P3: move the `PromptFence::escape()` splice inside `handle()`'s try (`HookWebhooks.php:130-136`), so a PCRE failure gives the generic 503. Add a per-hook global rate window beside the per-address one, and say "per address, and per hook overall" in `docs/SERVER.md`.
+- files.create: none
+- files.modify: `candy-code/src/Server/ServerConfig.php` (`hookRefusesMode`, `hookPermissionModeFallback`, `webhooksValue`), `candy-code/src/Server/Http/HookWebhooks.php` (`handle`, `admit`), `candy-code/lang/en.php` (`settings.webhooks.help` rate wording), `candy-code/docs/SERVER.md` (:299)
+- tests: modify `candy-code/tests/Server/ServerConfigHookModeInheritanceTest.php` (flip :54: a dont-ask server's hooks stay dont-ask), `candy-code/tests/Server/ServerConfigWebhooksTest.php` (a `dont-ask` hook is accepted; bypass is still refused), `candy-code/tests/Server/HookWebhooksTest.php` (global rate across addresses; a throwing escape → 503)
+- docs/guards: `docs/SERVER.md`
+- serialized: [hot:candy-code/src/Server/Http/HookWebhooks.php] [hot:candy-code/src/Server/ServerConfig.php] [lang: `settings.webhooks.*`] [docs:SERVER.md]
+- deps: C-AGT-1.c
+- phase: normal
+- ruling: none
+- risks: an acceptEdits or auto server now hands mode-less hooks `default`, which is narrower than today. That is intended; the docs must state it.
+
+---
+
+## Notes for the orchestrator
+
+- **Step counts.** C-AGT-4 has 5 steps and C-AGT-5 has 8, above the brief's 2–4 for an L item. Each bundles three to seven independent features: primary agents, `@agent`, cross-session messaging; Schedule tool, add/table, heartbeat, inbound signatures, outbound core and wiring, GitLab, bot. Each step is one cohesive S/M lane. Merging any two would turn an M into an L, or pin a core lane to a serialized file.
+- **Item ordering honoured.** C-AGT-1 → C-AGT-5: every 5.x depends on 1.x, directly or transitively. C-AGT-2 → C-AGT-6: every 6.x depends on 2.a and 2.b. C-AGT-3 → C-AGT-4: 4.a and 4.d depend on 3.a and 3.b, and the rest chain through them.
+- **P-AGENT-ATTACH shared files** (flagged as asked):
+  - `candy-code/src/Chat.php` `handleAgentsCommand` (:12930): its live-run → Agent View branch is theirs, the `use` verb is C-AGT-4.b's;
+  - `candy-code/src/Commands/AgentsCommand.php` and `candy-code/src/Host/Commands/AgentsHostCommand.php`;
+  - `candy-code/src/Renderer.php` (status line);
+  - `candy-code/src/Protocol/Methods/AgentsMethods.php` (C-AGT-4.c adds `mode` to `agents.list`; they likely touch `agents.message`/`agents.transcript`);
+  - `candy-code-web/src-web/stores/agents/`;
+  - `candy-code/src/Agents/AgentManager.php`.
+  - Never schedule C-AGT-4.b or C-AGT-4.c in the same wave as P-AGENT-ATTACH's wiring and protocol steps.
+- **Hot files spanning my steps.**
+  - `candy-code/src/Host/SessionHost.php`: 1.b, 2.b, 4.b, 4.d, 4.e.
+  - `candy-code/src/Protocol/ServerContext.php`: 1.b, 4.c, 5.f, 6.e. Also C-SES-4's serve OTel and probably P-SESSION-TABS.
+  - `candy-code/src/Attachments/ContextMentions.php`: 2.a, 4.d, 6.b, 6.d. Also any C-MCP `@mcp:` work.
+  - `candy-code/src/Server/Http/HookWebhooks.php` and `src/Server/ServerConfig.php`: 1.c → 7.c → 5.d, chained.
+  - `candy-code/src/Agents/AgentManager.php`: 3.a, 3.b, 4.a.
+  - `candy-code/src/Chat/Handlers/HandlesTurnCompletion.php`: 2.b, 5.f.
+  - `candy-code-web/src-web/components/StatusBar.vue`: 4.c, 6.e, and C-WEB-4's branch badge.
+  - `candy-code/src/Host/TurnController.php`: 4.d, and C-WEB-2's skill hoist.
+  - `candy-code/src/Permissions/PermissionGate.php`: 4.e, and the C-SEC items.
+- **`candy-code-web/dist/` is committed (9 files, hashed names).** Every web lane (4.c, 4.d, 5.b, 6.e) rebuilds it, so concurrent web lanes conflict there. Have the weld rebuild dist once per wave instead of each lane.
+- **New doc page.** C-AGT-1.a creates `candy-code/docs/SCHEDULES.md` plus its `docs/README.md` index row. Later edits are 1.b, 5.a, 5.b, 5.c and 7.a, all chained through deps.
+- **Catalog.** C-AGT-5.a claims built-in position **41** (`Schedule`); positions 39 and 40 are `mcp_list` and `mcp_call`. Confirm no other non-LATE area claims 41. C-TOOL-6's new tools are LATE and should start at 42+.
+- **Cross-area deps.**
+  - C-WEB-2's `ReviewHostCommand` must come after C-AGT-2.a (reuse `ReviewCommand::refError()`) and C-AGT-2.b (submit with `SubmitOptions::withModeCeiling(Plan)`, so served reviews are clamped too).
+  - C-AGT-6.e needs C-WEB-4's `SessionSummary.branch`.
+  - C-AGT-5.c leaves heartbeat web push to C-WEB-5 (LATE); there is no dependency in either direction.
+  - C-SES-1 (SES-1-P1) and C-AGT-7.b both edit the `NonInteractive.php` persist block ([headless]).
+  - C-SES-6 (installer) may also edit README "Install as a user", which C-AGT-2.c rewrites.
+- **Picks to tell.**
+  - P-SESSION-TABS must key the TUI's ephemeral `/loop` pump and C-AGT-4.e's mailbox drain on the active tab's session id; C-AGT-1.b adds `ScheduleRegistry::dueEphemeralFor()`.
+  - P-CTX-BREAKDOWN gets an `agent-instructions` row from C-AGT-4.a's new prompt section (the "custom agents" line).
+- **Rulings.** R13 gates C-AGT-5.h (bot), C-AGT-6.d (`/pr` and `/review --pr` via `gh`) and C-AGT-6.e (PR chips). C-AGT-2.b needs no ruling, but it narrows `/review` to read-only; the owner may veto.
+- **Design constraint the lanes must not miss.** Every turn's tools run in a `pcntl_fork()`ed child. So the Schedule tool (5.a) writes persisted rows only, and cross-session messages (4.e) go through a disk mailbox; in-memory registry or hub calls from a tool would vanish with the child.
+- **Not verified (read-only pass).**
+  - Whether the fork-child tool executor dispatches through `resolveGrantedTools()`'s instances (3.a says how to check).
+  - Whether `McpClient` survives `clone` without a `__clone` (3.a).
+  - The exact flag-mirror test for `bin/candy-code`'s `$strictValueFlags` (6.c).
+  - Whether `ProtocolSchemaDriftTest` pins the SessionSummary field set (4.c, 6.e).
+  - The `release-phar.yml` asset names (5.g).
+  - GIT-2-P1's install failure was not executed (no composer run allowed).
+- **New test files for the durations TSV (candy-code suite):**
+  - Host: `tests/Host/SessionHostLoopFireTest.php`, `tests/Host/SessionHostModeCeilingTest.php`.
+  - Server: `tests/Server/HookWebhooksBodyCapStackTest.php`, `tests/Server/HookWebhooksSignatureTest.php`.
+  - Agents: `tests/Agents/McpDispatcherPresetScopeTest.php`, `tests/Agents/PrimaryAgentTest.php`, `tests/Agents/Live/SessionMailboxTest.php`.
+  - Memory: `tests/Memory/AgentMemoryTest.php`.
+  - Tools: `tests/Tools/TaskToolAgentMemoryTest.php`, `tests/Tools/SendMessageCrossSessionTest.php`, `tests/Tools/BuiltIn/ScheduleToolTest.php`.
+  - Chat: `tests/Chat/PrimaryAgentSwitchTest.php`, `tests/Chat/HeartbeatScheduleTest.php`.
+  - Background: `tests/Background/ScheduleFactoryTest.php`.
+  - Automation: `tests/Automation/OutboundWebhookConfigTest.php`, `tests/Automation/WebhookSignerTest.php`, `tests/Automation/WebhookDispatcherTest.php`, `tests/Automation/OutboundWebhookWiringTest.php`.
+  - Host commands: `tests/Host/Commands/CommitHostCommandTest.php`, `tests/Host/Commands/PrHostCommandTest.php`.
+  - Cli: `tests/Cli/MainWorktreeTest.php`.
+  - Workspace: `tests/Workspace/GhRunnerTest.php`, `tests/Workspace/PrStatusCacheTest.php`.
+  - All paths are under `candy-code/`. The `tools/tests/*` and web `*.spec.ts` files run outside that suite.
