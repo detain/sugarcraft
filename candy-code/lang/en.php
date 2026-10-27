@@ -143,6 +143,7 @@ return [
     'cli.bundles.install.clone_timeout' => 'git clone of {source} ran past {seconds}s and was killed with its process group',
     'cli.bundles.install.exists' => 'bundles install: a bundle named {name} is already installed at {dest}; the install refused to overwrite it',
     'cli.bundles.install.invalid_name' => 'bundles install: the bundle name {name} is not a single safe path segment, so nothing was written',
+    'cli.bundles.install.link_refused' => 'bundles install: {source} contains the symbolic link {link}, and a bundle that carries links is refused — nothing was installed',
     'cli.bundles.install.missing_git' => 'bundles install: git was not found on PATH, so {source} cannot be cloned',
     'cli.bundles.install.needs_source' => 'bundles install: give a bundle directory or a git URL',
     'cli.bundles.install.no_home' => 'bundles install: this process has no home directory it can confirm it owns, and the bundle root could not be created there',

@@ -1648,8 +1648,11 @@ final class Subcommands
         $scratch = null;
         if (is_dir($source)) {
             $scratch = $root . '/.install-' . \uniqid('', true);
-            if (!self::copyBundleTree($source, $scratch)) {
-                self::bundlesLine(Lang::t('cli.bundles.install.read_failed', ['source' => $source]));
+            $stage = self::copyBundleTree($source, $scratch);
+            if ($stage['ok'] !== true) {
+                self::bundlesLine($stage['link'] === ''
+                    ? Lang::t('cli.bundles.install.read_failed', ['source' => $source])
+                    : Lang::t('cli.bundles.install.link_refused', ['source' => $source, 'link' => $stage['link']]));
                 self::removeTree($scratch);
 
                 return NonInteractive::EXIT_FAILURE;
@@ -1707,8 +1710,11 @@ final class Subcommands
         if (!@\rename($staged, $dest)) {
             // Cross-device or non-directory root: fall back to the same
             // copy used for path sources, then drop the scratch.
-            if (!self::copyBundleTree($staged, $dest)) {
-                self::bundlesLine(Lang::t('cli.bundles.install.read_failed', ['source' => $source]));
+            $fallback = self::copyBundleTree($staged, $dest);
+            if ($fallback['ok'] !== true) {
+                self::bundlesLine($fallback['link'] === ''
+                    ? Lang::t('cli.bundles.install.read_failed', ['source' => $source])
+                    : Lang::t('cli.bundles.install.link_refused', ['source' => $source, 'link' => $fallback['link']]));
                 self::removeTree($dest);
                 self::removeTree($scratch);
 
@@ -1723,20 +1729,27 @@ final class Subcommands
     }
 
     /**
-     * The default clone: argv-array `git -c protocol.ext.allow=never clone
-     * --quiet --depth 1 --no-tags` (no shell: URL quoting is argv's job, and
-     * `--` ends option parsing so a URL beginning with `-` stays a URL),
-     * wrapped by {@see ProcessContainment::spawnSpec()} so the clone leads
-     * its own session and dies in its own group.
+     * The default clone: argv-array `git -c protocol.ext.allow=never -c
+     * core.symlinks=false clone --quiet --depth 1 --no-tags` (no shell: URL
+     * quoting is argv's job, and `--` ends option parsing so a URL beginning
+     * with `-` stays a URL), wrapped by {@see ProcessContainment::spawnSpec()}
+     * so the clone leads its own session and dies in its own group.
      *
-     * INT-M1: the `-c` leg IS the transport door, and it is part of the argv
-     * on purpose. {@see self::looksLikeGitUrl()} admits any string ending in
-     * `.git`, so the shape `ext::sh -c …x.git` reaches this spawn as what git
-     * parses as a remote helper URL. Modern git refuses the ext transport for
-     * user-initiated fetches by default, but a command-line `-c` outranks
+     * INT-M1: the first `-c` leg IS the transport door, and it is part of the
+     * argv on purpose. {@see self::looksLikeGitUrl()} admits any string ending
+     * in `.git`, so the shape `ext::sh -c …x.git` reaches this spawn as what
+     * git parses as a remote helper URL. Modern git refuses the ext transport
+     * for user-initiated fetches by default, but a command-line `-c` outranks
      * both an inherited `GIT_ALLOW_PROTOCOL` and any older git's defaults —
      * the refusal then belongs to THIS spawn, not to the version and not to
      * the operator's environment.
+     *
+     * PLG-1: the second `-c` leg is the symlink belt. `core.symlinks=false`
+     * makes git check symbolic links out as plain working-tree files instead
+     * of live links, so the scratch can never hold a link for the cleanup
+     * walk to follow or for a later load to read through. The cleanup walk
+     * refuses to follow links regardless ({@see self::removeTree()}); this
+     * belt just keeps the honest shape out of the tree in the first place.
      *
      * @return array{ok: bool, detail: string}
      */
@@ -1746,7 +1759,7 @@ final class Subcommands
             // `@`: with no wrapper a failed exec raises E_WARNING from
             // proc_open() itself; the answer below is by return value.
             $process = @\proc_open(
-                ProcessContainment::spawnSpec(['git', '-c', 'protocol.ext.allow=never', 'clone', '--quiet', '--depth', '1', '--no-tags', '--', $url, $scratch]),
+                ProcessContainment::spawnSpec(['git', '-c', 'protocol.ext.allow=never', '-c', 'core.symlinks=false', 'clone', '--quiet', '--depth', '1', '--no-tags', '--', $url, $scratch]),
                 [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
                 $pipes,
                 null,
@@ -1873,16 +1886,31 @@ final class Subcommands
     /**
      * Recursive copy that skips every `.git` directory: a bundle ships
      * content, not the vendor's repository history.
+     *
+     * PLG-1-P3: the walk refuses — naming the first link it meets — rather
+     * than copying through one. `\is_dir()` and `\copy()` both FOLLOW a
+     * symlink, so a permissive copy would read whatever the bundle points
+     * at outside itself (an installed bundle is loaded as configuration,
+     * so smuggling an escaping link in is a content-forgery channel) and a
+     * self-referential link would send this recursion round in circles.
+     * The loaders downstream already refuse escaping links at read time;
+     * refusing here stops the escape at the door instead, and terminates
+     * the cyclic shape by construction.
+     *
+     * @return array{ok: bool, link: string} `link` is the path of the
+     *                                       refused symlink, or '' when
+     *                                       the failure was an ordinary
+     *                                       I/O one (or there was none)
      */
-    private static function copyBundleTree(string $from, string $to): bool
+    private static function copyBundleTree(string $from, string $to): array
     {
         if (!@\mkdir($to, 0700, true) && !\is_dir($to)) {
-            return false;
+            return ['ok' => false, 'link' => ''];
         }
 
         $entries = @\scandir($from);
         if ($entries === false) {
-            return false;
+            return ['ok' => false, 'link' => ''];
         }
 
         foreach ($entries as $entry) {
@@ -1897,28 +1925,47 @@ final class Subcommands
             $src = $from . '/' . $entry;
             $dst = $to . '/' . $entry;
 
+            if (\is_link($src)) {
+                return ['ok' => false, 'link' => $src];
+            }
+
             if (\is_dir($src)) {
-                if (!self::copyBundleTree($src, $dst)) {
-                    return false;
+                $sub = self::copyBundleTree($src, $dst);
+                if ($sub['ok'] !== true) {
+                    return $sub;
                 }
 
                 continue;
             }
 
             if (!@\copy($src, $dst)) {
-                return false;
+                return ['ok' => false, 'link' => ''];
             }
         }
 
-        return true;
+        return ['ok' => true, 'link' => ''];
     }
 
     /**
      * Best-effort scratch cleanup: this verb creates only inside its own
      * root, so removing is bounded by paths it minted.
+     *
+     * PLG-1-P1: the bound is a path-prefix bound, which `\is_dir()` alone
+     * does not give — `is_dir()` FOLLOWS symlinks, so a scratch holding
+     * `x -> ../../..` sent this walker through the door of whatever the
+     * link resolved to, deleting it on the way back out. A real clone
+     * failure with such a link in the scratch emptied the user's home
+     * directory. Every link is therefore unlinked AS a link and never
+     * descended, whatever it points at.
      */
     private static function removeTree(string $path): void
     {
+        if (\is_link($path)) {
+            @\unlink($path);
+
+            return;
+        }
+
         if (!\is_dir($path)) {
             return;
         }
@@ -1928,6 +1975,12 @@ final class Subcommands
             foreach ($entries as $entry) {
                 if ($entry !== '.' && $entry !== '..') {
                     $child = $path . '/' . $entry;
+                    if (\is_link($child)) {
+                        @\unlink($child);
+
+                        continue;
+                    }
+
                     \is_dir($child) ? self::removeTree($child) : @\unlink($child);
                 }
             }
