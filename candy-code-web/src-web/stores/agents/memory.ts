@@ -10,6 +10,12 @@ export type MemoryScope = (typeof MEMORY_SCOPES)[number]
 /** What `memory.add` did: where the note landed, and whether a project note had to fall back. */
 export type MemoryAddResult = MethodResult<'memory.add'>
 
+/** One `memory.log` row: a home-store commit `memory.undo` can restore. */
+export type MemoryRevision = MethodResult<'memory.log'>['items'][number]
+
+/** What `memory.undo` did: the revision restored, and the commit that recorded it. */
+export type MemoryUndoResult = MethodResult<'memory.undo'>
+
 /**
  * The notes `/memory` keeps (roadmap O-6c, `memory.*`): one scope's notes at
  * a time, a search across every scope, and add / edit / delete. Notes belong
@@ -25,6 +31,8 @@ export const useMemoryStore = defineStore('memory', () => {
   const entries = ref<MemoryEntry[]>([])
   const query = ref('')
   const loading = ref(false)
+  const historyLoading = ref(false)
+  const revisions = ref<MemoryRevision[]>([])
   const error = ref<string | null>(null)
 
   async function load(next: MemoryScope = scope.value): Promise<void> {
@@ -75,5 +83,34 @@ export const useMemoryStore = defineStore('memory', () => {
     entries.value = entries.value.filter((entry) => entry.id !== id)
   }
 
-  return { scope, entries, query, loading, error, load, search, add, edit, remove }
+  /**
+   * The home store's commit history, newest first — the revisions `undo`
+   * names. Like `/memory log`, `memory.log` commits pending changes first,
+   * so the history ends at what is on disk now; that is also why the panel
+   * opens this tab on demand rather than loading it on every mount.
+   */
+  async function log(limit?: number): Promise<void> {
+    historyLoading.value = true
+    try {
+      revisions.value = (await connection.request('memory.log', limit === undefined ? {} : { limit })).items
+      error.value = null
+    } catch (failure) {
+      error.value = describe(failure)
+    } finally {
+      historyLoading.value = false
+    }
+  }
+
+  /**
+   * Restore the home store to `revision` (omitted: the state before its
+   * newest commit); the restore is itself recorded as a new commit. The
+   * notes on disk changed with it, so the current scope list reloads.
+   */
+  async function undo(revision?: string): Promise<MemoryUndoResult> {
+    const result = await connection.request('memory.undo', revision === undefined ? {} : { revision })
+    await reload()
+    return result
+  }
+
+  return { scope, entries, query, loading, error, revisions, historyLoading, load, search, add, edit, remove, log, undo }
 })

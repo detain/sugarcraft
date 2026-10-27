@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { MEMORY_SCOPES, useMemoryStore, type MemoryScope } from '../../stores/agents/memory'
+import { MEMORY_SCOPES, useMemoryStore, type MemoryRevision, type MemoryScope } from '../../stores/agents/memory'
 import { useConnectionStore } from '../../stores/connection'
 import { describe } from '../../stores/session'
 
@@ -10,7 +10,11 @@ import { describe } from '../../stores/session'
  * tab it was written in. Since ISS-020 a `project` tab lists both stores and
  * badges each note with its source: `repo` notes live in the checkout and are
  * shared with teammates, `home` notes are private to this machine. A note
- * that could not land in the repository says so.
+ * that could not land in the repository says so. A History tab beside the
+ * scope tabs lists the home store's `memory.log` commits — loaded when the
+ * tab opens, not on mount, because the log commits pending notes first — and
+ * each row offers a confirmed `memory.undo` back to that revision, but only
+ * with write scope; the note list reloads after an undo.
  */
 const memory = useMemoryStore()
 const connection = useConnectionStore()
@@ -20,6 +24,7 @@ const editing = ref<string | null>(null)
 const editText = ref('')
 const error = ref<string | null>(null)
 const notice = ref('')
+const tab = ref<'notes' | 'history'>('notes')
 const canWrite = computed(() => connection.scopes.includes('write'))
 
 onMounted(() => void memory.load())
@@ -35,8 +40,23 @@ async function act(action: () => Promise<unknown>): Promise<void> {
 }
 
 function pick(scope: MemoryScope): void {
+  tab.value = 'notes'
   query.value = ''
   void memory.load(scope)
+}
+
+/** `memory.log` commits pending notes first, so the history opens on demand. */
+function openHistory(): void {
+  tab.value = 'history'
+  void memory.log()
+}
+
+async function undoTo(revision: MemoryRevision): Promise<void> {
+  if (typeof window !== 'undefined' && !window.confirm(`Undo the memory store to ${revision.shortSha} ("${revision.subject}")? Every note is replaced by that commit's state.`)) return
+  await act(async () => {
+    await memory.undo(revision.sha)
+    await memory.log()
+  })
 }
 
 async function add(): Promise<void> {
@@ -77,12 +97,24 @@ async function remove(id: string): Promise<void> {
         :key="scope"
         type="button"
         role="tab"
-        :aria-selected="memory.query === '' && memory.scope === scope"
-        :class="{ on: memory.query === '' && memory.scope === scope }"
+        :aria-selected="tab === 'notes' && memory.query === '' && memory.scope === scope"
+        :class="{ on: tab === 'notes' && memory.query === '' && memory.scope === scope }"
         :data-testid="`memory-scope-${scope}`"
         @click="pick(scope)"
       >{{ scope }}</button>
+      <button
+        type="button"
+        role="tab"
+        aria-label="Memory history"
+        :aria-selected="tab === 'history'"
+        :class="{ on: tab === 'history' }"
+        data-testid="memory-tab-history"
+        @click="openHistory"
+      >history</button>
     </div>
+    <p v-if="error || memory.error" class="error" role="alert">{{ error || memory.error }}</p>
+    <p v-if="notice" class="notice" role="status" data-testid="memory-notice">{{ notice }}</p>
+    <template v-if="tab === 'notes'">
     <form class="search" role="search" @submit.prevent="memory.search(query)">
       <input v-model="query" type="search" placeholder="Search every scope…" aria-label="Search notes" data-testid="memory-search">
     </form>
@@ -90,8 +122,6 @@ async function remove(id: string): Promise<void> {
       <textarea v-model="draft" rows="2" :placeholder="`A new ${memory.scope} note…`" aria-label="New note" data-testid="memory-draft" />
       <button type="submit" class="primary" :disabled="draft.trim() === ''" data-testid="memory-add">Add</button>
     </form>
-    <p v-if="error || memory.error" class="error" role="alert">{{ error || memory.error }}</p>
-    <p v-if="notice" class="notice" role="status" data-testid="memory-notice">{{ notice }}</p>
     <p v-if="memory.entries.length === 0 && !memory.loading" class="empty">{{ memory.query ? 'No note matches.' : `No ${memory.scope} notes.` }}</p>
     <ul class="notes">
       <li v-for="entry in memory.entries" :key="entry.id" data-testid="memory-entry" :data-id="entry.id">
@@ -115,6 +145,18 @@ async function remove(id: string): Promise<void> {
         </template>
       </li>
     </ul>
+    </template>
+    <template v-else>
+      <p v-if="memory.revisions.length === 0 && !memory.historyLoading" class="empty">No memory history yet.</p>
+      <ul class="revisions" data-testid="memory-history">
+        <li v-for="revision in memory.revisions" :key="revision.sha" data-testid="memory-revision" :data-sha="revision.sha">
+          <p class="meta"><span data-testid="memory-rev-sha">{{ revision.shortSha }}</span> · <span>{{ revision.committedAt }}</span> · <span data-testid="memory-rev-subject">{{ revision.subject }}</span></p>
+          <div v-if="canWrite" class="actions">
+            <button type="button" class="link" data-testid="memory-undo" @click="undoTo(revision)">undo to this revision</button>
+          </div>
+        </li>
+      </ul>
+    </template>
   </div>
 </template>
 
@@ -175,14 +217,16 @@ textarea {
   font-size: 0.75rem;
   color: var(--muted);
 }
-.notes {
+.notes,
+.revisions {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
   gap: 0.5rem;
 }
-.notes li {
+.notes li,
+.revisions li {
   padding: 0.4rem 0.5rem;
   border: 1px solid var(--line);
   border-radius: 6px;

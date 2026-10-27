@@ -110,7 +110,8 @@ documents the protocol and the UI).
   agent's todo list, live; **Background** — `/bg` sessions with output, stop
   and *send to this session*; **Workflows** — run one, and the session's
   `/workflow` and `Workflow` tool runs; **Memory** — notes per scope, search,
-  add, edit, delete; **Rules** — the permission policy in the open (mode and
+  add, edit, delete, and a history tab listing the home store's commits with a
+  confirmed undo (write scope); **Rules** — the permission policy in the open (mode and
   its source, allow/ask/deny rules, grants picked up as the session ran;
   read-only — the dials live in the status bar and settings); **Catalog** —
   every agent this server can delegate a run as, with model, provider and
