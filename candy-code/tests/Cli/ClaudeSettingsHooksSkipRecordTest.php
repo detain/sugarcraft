@@ -134,8 +134,66 @@ final class ClaudeSettingsHooksSkipRecordTest extends TestCase
         $this->assertStringContainsString("no candy-code hook event matches 'Notification'", $notices[0]);
         $this->assertStringContainsString("typed 'prompt'", $notices[0]);
         $this->assertStringContainsString("carrying 'if'", $notices[0]);
-        $this->assertStringContainsString('3 hook group(s) across 1 file(s)', $notices[0]);
+        // C-EXT-1.b round 2 (rv1 MINOR): the figure was '3' here, because
+        // the single PreToolUse group carried TWO names ('prompt' and 'if')
+        // and the old row summed the per-name counters.  Two physical groups
+        // contributed no guard in this file — the Notification one and the
+        // PreToolUse one — and that is what the row now says.
+        $this->assertStringContainsString('2 hook group(s) across 1 file(s)', $notices[0]);
         $this->assertStringContainsString('were skipped', $notices[0]);
+    }
+
+    /**
+     * THE discriminating leg for the round-2 fix: one group carrying two
+     * DIFFERENT skips is one group in the aggregate.  The per-name records
+     * keep their original meaning (how often that name was skipped, summed
+     * to two here) — the launch row is built from
+     * {@see ClaudeSettingsHooks::skippedGroups()}, the distinct
+     * file+event+group census, so it cannot double-count.
+     */
+    public function testAGroupCarryingTwoDifferentSkipsCountsOnceInTheAggregate(): void
+    {
+        ClaudeSettingsHooks::parse(
+            '{"hooks":{"PreToolUse":[{"hooks":[{"type":"prompt","command":"be smart"},'
+            . '{"type":"command","command":"./gate.sh","if":"Bash(ls)"}]}]}}',
+            '/home/user/.claude/settings.json',
+        );
+
+        $entries = ClaudeSettingsHooks::skippedEntries();
+        $this->assertSame(['prompt', 'if'], array_keys($entries));
+        $this->assertSame(
+            2,
+            $entries['prompt']['groups'] + $entries['if']['groups'],
+            'the per-name tally still counts skips (it is a diagnostic, not the row)',
+        );
+        $this->assertCount(1, ClaudeSettingsHooks::skippedGroups(), 'the census counts the group once');
+
+        Bootstrap::reportSkippedClaudeSettingsEvents();
+
+        $notices = Bootstrap::launchNotices();
+        $this->assertCount(1, $notices);
+        $this->assertStringContainsString(', so 1 hook group(s) across 1 file(s) ', $notices[0]);
+    }
+
+    /**
+     * The other polarity of the same census: two groups carrying the SAME
+     * skip name in the same file are two groups — the fix dedupes physical
+     * groups, it does not collapse the announcement into one per name.
+     */
+    public function testTwoGroupsCarryingTheSameSkipStillCountAsTwoGroups(): void
+    {
+        ClaudeSettingsHooks::parse(
+            '{"hooks":{"PreToolUse":[{"hooks":[{"type":"prompt","command":"be smart"}]},'
+            . '{"matcher":"Bash","hooks":[{"type":"prompt","command":"be smarter"}]}]}}',
+            '/home/user/.claude/settings.json',
+        );
+
+        Bootstrap::reportSkippedClaudeSettingsEvents();
+
+        $notices = Bootstrap::launchNotices();
+        $this->assertCount(1, $notices);
+        $this->assertStringContainsString(', so 2 hook group(s) across 1 file(s) ', $notices[0]);
+        $this->assertStringContainsString("typed 'prompt'", $notices[0]);
     }
 
     private function resetNoticeStatics(): void

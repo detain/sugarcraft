@@ -107,8 +107,10 @@ does. Differences that are this loader's own:
   widening it is a separate decision; refusing a whole launch over one
   unmappable name in a foreign vendor's file gave that file the blast radius
   of an outage. Each skip is recorded, and one aggregate launch notice names
-  the skipped events, entry types and off-dialect keys together with their
-  group counts and the files they came from.
+  the skipped events, entry types and off-dialect keys together with the
+  number of distinct hook groups they came from (a group carrying two
+  different skips is one group that contributed no guard) and the files
+  those groups belong to.
 
 ---
 

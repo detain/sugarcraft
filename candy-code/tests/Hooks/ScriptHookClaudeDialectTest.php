@@ -79,7 +79,7 @@ final class ScriptHookClaudeDialectTest extends TestCase
 
         $rows = RuntimeNoticeSink::drain();
         self::assertCount(1, $rows, 'the downgrade is announced exactly once');
-        self::assertStringContainsString('cc:PreToolUse:0', $rows[0]);
+        self::assertStringContainsString('cc:user:PreToolUse:0', $rows[0]);
         self::assertStringContainsString('exited 1', $rows[0]);
         self::assertStringContainsString('my optional lint died', $rows[0]);
         self::assertStringContainsString('proceeded', $rows[0]);
@@ -230,7 +230,7 @@ final class ScriptHookClaudeDialectTest extends TestCase
     public function testFromConfigReadsThePairAndDefaultsToNative(): void
     {
         $stamped = ScriptHook::fromConfig([
-            'name' => 'cc:PreToolUse:3',
+            'name' => 'cc:project:PreToolUse:3',
             'event' => 'PreToolUse',
             'command' => 'exit 0',
             'dialect' => ScriptHook::DIALECT_CLAUDE,
@@ -340,7 +340,11 @@ final class ScriptHookClaudeDialectTest extends TestCase
     private function claudeRow(string $command, float $timeoutSeconds = 5.0, bool $advisory = false): ScriptHook
     {
         return ScriptHook::fromConfig([
-            'name' => 'cc:PreToolUse:0',
+            // The name shape {@see \SugarCraft\Code\Hooks\ClaudeSettingsHooks}
+            // mints since C-EXT-1.b: tier-qualified `cc:{scope}:{event}:{index}`
+            // (rv1 NIT — a bare `cc:PreToolUse:0` is a name production can no
+            // longer produce, and a fixture is what a reader copies).
+            'name' => 'cc:user:PreToolUse:0',
             'event' => 'PreToolUse',
             'matcher' => '.*',
             'command' => $command,

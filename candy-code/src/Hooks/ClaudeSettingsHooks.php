@@ -152,6 +152,28 @@ final class ClaudeSettingsHooks
      */
     private static array $skippedEntries = [];
 
+    /**
+     * The PHYSICAL groups whose every usable entry was skipped because the
+     * group's EVENT had no case (C-EXT-1.b round 2): keyed
+     * `source\0event\0group-index`, so the same group can never be counted
+     * twice no matter how many names were recorded for it. The per-name
+     * `groups` counters above stay what they always were — a diagnostic of
+     * how often one name was skipped — and are deliberately NOT what the
+     * launch row's group figure is built from: summing them double-counts a
+     * group that carried two different skips.
+     *
+     * @var array<string, true>
+     */
+    private static array $skippedEventGroups = [];
+
+    /**
+     * Same census for the entry-level skips ({@see $skippedEntries}): one key
+     * per group that carried at least one off-dialect type or key.
+     *
+     * @var array<string, true>
+     */
+    private static array $skippedEntryGroups = [];
+
     /** Keys a CC hook group may carry. */
     private const GROUP_KEYS = ['matcher', 'hooks'];
 
@@ -297,10 +319,14 @@ final class ClaudeSettingsHooks
                 // is best-effort over whatever shape the groups list has —
                 // an unmappable event's payload is never executed, so only
                 // the NAME is owed to the user with any precision.
-                $groupsCount = is_array($groups) && array_is_list($groups) ? count($groups) : 0;
+                $shape = is_array($groups) && array_is_list($groups) ? $groups : [];
                 self::$skippedEvents[$event]['groups'] =
-                    (self::$skippedEvents[$event]['groups'] ?? 0) + $groupsCount;
+                    (self::$skippedEvents[$event]['groups'] ?? 0) + count($shape);
                 self::$skippedEvents[$event]['files'][$source] = true;
+                foreach (array_keys($shape) as $groupIndex) {
+                    self::$skippedEventGroups["{$source}\0{$event}\0{$groupIndex}"] = true;
+                }
+
                 continue;
             }
 
@@ -310,7 +336,7 @@ final class ClaudeSettingsHooks
                 );
             }
 
-            foreach ($groups as $group) {
+            foreach ($groups as $groupIndex => $group) {
                 if (!is_array($group) || array_is_list($group)) {
                     throw new \InvalidArgumentException(
                         "{$source}: every entry under `hooks.{$event}` must be an object with a `hooks` list.",
@@ -435,6 +461,15 @@ final class ClaudeSettingsHooks
                     $advisoryByName["cc:{$scope}:{$event}:{$index}"] = $async;
                 }
 
+                if ($groupSkips !== []) {
+                    // ONE physical group, however many different names it
+                    // carried (C-EXT-1.b round 2): this is the census the
+                    // launch row's group figure is built from, so a group
+                    // holding a `prompt` entry AND an `if` key is one group
+                    // that contributed no guard, not two.
+                    self::$skippedEntryGroups["{$source}\0{$event}\0{$groupIndex}"] = true;
+                }
+
                 foreach ($groupSkips as $skipped => $kind) {
                     // One record per name per group that carried it, whatever
                     // number of entries inside the group repeated the skip.
@@ -499,6 +534,24 @@ final class ClaudeSettingsHooks
     }
 
     /**
+     * The distinct physical hook groups this process's CC parses skipped
+     * anything in (C-EXT-1.b, round 2) — the census behind the launch row's
+     * "%d hook group(s)". Keyed `source\0event\0group-index`; the union of
+     * the two per-kind sets is what makes the figure honest: a group that
+     * carried two different skips is still one group, which summing the
+     * per-name `groups` counters would have double-counted.
+     *
+     * @return array<string, true>
+     */
+    public static function skippedGroups(): array
+    {
+        // `+` rather than array_merge: unreachable today (an unmapped event
+        // never reaches the entry walk) but cheap insurance that one physical
+        // group is one key whatever record claimed it.
+        return self::$skippedEventGroups + self::$skippedEntryGroups;
+    }
+
+    /**
      * Test seam: the record is process-scoped launch state, and suites that
      * mint their own CC files need their own view of it.
      */
@@ -506,14 +559,18 @@ final class ClaudeSettingsHooks
     {
         self::$skippedEvents = [];
         self::$skippedEntries = [];
+        self::$skippedEventGroups = [];
+        self::$skippedEntryGroups = [];
     }
 
     /**
      * Test seam for {@see skippedEntries()} when a suite needs the entry
-     * record alone; {@see resetSkippedEventsForTesting()} clears both.
+     * record alone; {@see resetSkippedEventsForTesting()} clears both. The
+     * entry group census belongs to that record and clears with it.
      */
     public static function resetSkippedEntriesForTesting(): void
     {
         self::$skippedEntries = [];
+        self::$skippedEntryGroups = [];
     }
 }

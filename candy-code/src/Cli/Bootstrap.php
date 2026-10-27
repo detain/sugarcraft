@@ -852,7 +852,11 @@ final class Bootstrap
      * speak. The first conversion is the clause list assembled by
      * {@see reportSkippedClaudeSettingsEvents()}; it opens with the event
      * clause whenever events were skipped, so a file that skipped only
-     * events reads the same as before this step. NOT LISTED in the catalogue
+     * events reads the same as before this step. The group figure is a
+     * CENSUS OF DISTINCT PHYSICAL GROUPS
+     * ({@see \SugarCraft\Code\Hooks\ClaudeSettingsHooks::skippedGroups()}),
+     * not a tally of skips: one group that carried two off-dialect names is
+     * one group contributing no guard (C-EXT-1.b, round 2). NOT LISTED in the catalogue
      * below, ON PURPOSE, the standing {@see STDERR_LINE_FORMAT} already has:
      * the English constant IS the row, and a closeout may mint the locale key.
      */
@@ -9774,14 +9778,19 @@ public static function useMaxCost(?string $maxCost): void
         }
 
         $clauses = [];
-        $groups = 0;
         $files = [];
+
+        // The group figure is a DISTINCT-GROUP census
+        // ({@see \SugarCraft\Code\Hooks\ClaudeSettingsHooks::skippedGroups()}),
+        // not a sum of the per-name `groups` counters: one group holding a
+        // `prompt` entry and an `if` key carried two skips but is one group
+        // that contributes no guard (C-EXT-1.b, round 2).
+        $groups = \count(ClaudeSettingsHooks::skippedGroups());
 
         if ($events !== []) {
             $names = [];
             foreach ($events as $event => $seen) {
                 $names[] = $event;
-                $groups += $seen['groups'];
                 $files += $seen['files'];
             }
 
@@ -9791,7 +9800,6 @@ public static function useMaxCost(?string $maxCost): void
         $types = [];
         $keys = [];
         foreach ($entries as $skipped => $seen) {
-            $groups += $seen['groups'];
             $files += $seen['files'];
 
             if ($seen['kind'] === 'type') {

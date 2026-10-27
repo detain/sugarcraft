@@ -554,7 +554,11 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // only format stays named; the rest are the three accumulator keys the
         // two foreaches read, the two new clause openings, the quote pair that
         // wraps each name list with its joiner, and the clause joiner.
-        'reportSkippedClaudeSettingsEvents' => ["'groups'", "'files'", "'no candy-code hook event matches '", "\"'\"", "\"', '\"", "'kind'", "'type'", "'candy-code cannot run hook entries typed '", "'candy-code cannot run hook entries carrying '", "'; '"],
+        // C-EXT-1.b round 2: the group figure stopped being read out of the
+        // records (`$seen['groups']`) and became the distinct-group census
+        // `ClaudeSettingsHooks::skippedGroups()`, so the body holds no
+        // `'groups'` literal any more.
+        'reportSkippedClaudeSettingsEvents' => ["'files'", "'no candy-code hook event matches '", "\"'\"", "\"', '\"", "'kind'", "'type'", "'candy-code cannot run hook entries typed '", "'candy-code cannot run hook entries carrying '", "'; '"],
         // The R16 follow-up: the path separator and the `~/` the home log is
         // spelled with; both sentences are named constants.
         'reportTuiErrorLogFallback' => ["'/'", "'~/'"],
