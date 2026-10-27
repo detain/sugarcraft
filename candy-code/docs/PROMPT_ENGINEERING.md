@@ -607,6 +607,31 @@ How each user-facing surface reaches the model, and where it does not reach:
   it lands in transcript content, no fence and therefore no escape applies to it — another reason
   the prompt layers keep their one escape authority.
 
+## Dumping the exact bytes
+
+The page argues what the assembled prompt should be; `/context --raw [path]` shows you what it
+is. The command asks the backend for the very string and tool list the next request would carry —
+`EngineBackend::dumpSystemPrompt()` returns the prompt assembled through
+`Runtime::assembledSystemPrompt()`, the same fold the `/context` panel prices its section rows
+from, so a dump and a panel reading can never disagree about one byte — and writes it as two
+files: a `.json` carrying `{prompt, tools}` with each tool in wire shape (`name`, `description`,
+`input_schema`), and a `.txt` carrying the prompt body alone. Both land atomically at mode 0600:
+an assembled prompt embeds the project's own paths, memory notes and instruction files, and that
+text belongs to the operator only.
+
+Target selection follows the `/export` rules exactly — one shelf, one jail: a bare `--raw` writes
+a `prompt-`-prefixed, session-and-time-stamped pair under the owned home's exports shelf; a named
+path is jailed to the project root with a fallback to the home shelf, and a name that escapes both
+(a `../` spelling, an absolute path outside either root) is refused before a byte is written. The
+reply row quotes only the two file names and their sizes — the transcript keeps the pointer, never
+the prompt body, because the body is the largest instruction-shaped text the session holds and
+re-printing it into the transcript would feed it back as history.
+
+The capability is opt-in: a backend that does not assemble its own prompt (an echo or command
+passthrough) carries no `DumpsSystemPrompt` door, and the command refuses it by name rather than
+inventing bytes around it — `/context` without `--raw` still reports what such a session's panel
+can measure.
+
 ## Guards that police this page
 
 This file joins the docs census every drift guard walks, so a claim here that stops being true
