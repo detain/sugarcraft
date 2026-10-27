@@ -29,10 +29,10 @@ use SugarCraft\Code\Tests\Support\SuiteSkipRoster;
  * under the round ruling; the premise arm below pins the measured asymmetry
  * itself so the conversion's reason survives even if nobody re-reads this.
  *
- * The realpath trap stays a DISCLOSURE, not a pin: `realpath('phar://…')`
- * returns false, so AgentPresetRegistry's bundled-example preset scan
- * degrades to invisible inside a phar (home/project preset roots are real
- * paths and work). Ruling: disclose, do not edit — see the lane REPORT.
+ * The realpath trap was a disclosure until C-SES-9.c fixed it:
+ * bundledPresetsDirectory() now answers the is_dir-proofed phar:// path
+ * (Ruling superseded — see lanes/C-SES-9.c). Home/project preset roots are
+ * real paths and were never affected.
  *
  * LAW 3 — the build REFUSES an unverifiable source tree (rev-w2j2 MAJOR-2).
  * The metadata commit stamp is disclosure, not integrity: without a
