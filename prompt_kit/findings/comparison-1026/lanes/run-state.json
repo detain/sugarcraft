@@ -67,7 +67,8 @@
   "C-AGT-7.a",
   "P-AGENT.a",
   "P-CTX.e",
-  "C-WEB-3.a"
+  "C-WEB-3.a",
+  "C-SES-9.d"
  ],
  "inflight": {
   "C-TOOL-7.c": {
@@ -125,15 +126,6 @@
    "branch": "cc/C-SES-4.b",
    "session": "ses_e813dfafcffeF9bXZo0lEfcU4y",
    "note": "ses_e813dfafcffeF9bXZo0lEfcU4y"
-  },
-  "C-SES-9.d": {
-   "stage": "build",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-SES-9.d",
-   "branch": "cc/C-SES-9.d",
-   "session": "ses_e813dfafbffeS94T07XwUaWnB6",
-   "tip": "06a599a96",
-   "note": "LANDED @1307@: 4 files +329/-26 ymls + NEW tools/tests/WorkflowRunInterpolationTest.php 3T (tools-guards, NO candy-code durations row); red-before 2F->green, tools battery 489T/2578A, five-guard pair-only; reviewer next"
   },
   "C-WEB-3.b": {
    "stage": "review",
@@ -351,7 +343,8 @@
    "durations_owed": "candy-code/tests/Agents/Live/AgentLiveSessionScopeTest.php + candy-code/tests/Tui/AgentColorPaintTest.php",
    "reviews": "r1 4 findings -> fix 5d78ddb7b (stage review r2 ses_e81a6d5e6ffeO5PdDIJbvSufoY per lead) -> r2 CLEAN"
   },
-  "C-WEB-3.a": "WELDED 2026-10-27 master e651724ca+fd18fcf7b (picks 0077bb9b0 build + bf24c197d r2 cure, base 86f43fae2, clean zero conflicts; %ae/%ce 1/1 detain, zero trailers). DISCLOSURE: r2 1-line confirm-text cure LEAD-ACCEPTED without fresh review (reviewer wording verbatim, git-show-proven 1 file; r1 REVIEW-1 CLEAN-except-that-MINOR). Regen: PHP gens --check/--write all up to date (no-op); gen-protocol-schema SKIPPED (no src/Protocol touch, git-diff proven); npm gen:protocol zero delta; dist rebuild commit 74b298fae (welder duty). Gates: vitest serial trio memoryHistory+panels+stores = 3 files/23 tests EXACT; vue-tsc --build = exactly the 6 foreign TS2554 (statusBar 2 + reducer 4), zero lane errors; five-guard 133T/15682A F2 staleness pair only (25,537 pinned vs 26,093 live). DURATIONS: none (vitest-side spec). CARRY: dormantRoster row-drop duty at C-WEB-3.g. \u00a74 mark \u2705 e651724ca UNSTAGED. Cherry proof pending prune."
+  "C-WEB-3.a": "WELDED 2026-10-27 master e651724ca+fd18fcf7b (picks 0077bb9b0 build + bf24c197d r2 cure, base 86f43fae2, clean zero conflicts; %ae/%ce 1/1 detain, zero trailers). DISCLOSURE: r2 1-line confirm-text cure LEAD-ACCEPTED without fresh review (reviewer wording verbatim, git-show-proven 1 file; r1 REVIEW-1 CLEAN-except-that-MINOR). Regen: PHP gens --check/--write all up to date (no-op); gen-protocol-schema SKIPPED (no src/Protocol touch, git-diff proven); npm gen:protocol zero delta; dist rebuild commit 74b298fae (welder duty). Gates: vitest serial trio memoryHistory+panels+stores = 3 files/23 tests EXACT; vue-tsc --build = exactly the 6 foreign TS2554 (statusBar 2 + reducer 4), zero lane errors; five-guard 133T/15682A F2 staleness pair only (25,537 pinned vs 26,093 live). DURATIONS: none (vitest-side spec). CARRY: dormantRoster row-drop duty at C-WEB-3.g. \u00a74 mark \u2705 e651724ca UNSTAGED. Cherry proof pending prune.",
+  "C-SES-9.d": "WELDED 2026-10-27 master fc5523777 (pick of 06a599a96, lane base 86f43fae2, onto fd13b3480; clean zero conflicts; file-set git-show-proven = 3 .github/workflows ymls + NEW tools/tests/WorkflowRunInterpolationTest.php, %ae/%ce 1/1 detain, zero trailers; review r1 CLEAN 0C/0M). Regen SKIPPED: lane touches no candy-code src/docs/web (diff-tree proven); gen-command-docs/gen-tool-docs/gen-settings-doc --check all 'up to date' rc0; gen-protocol-schema + npm/web build SKIPPED per brief. Gates: tools battery 489T/2578A OK EXACT (WorkflowRunInterpolationTest 3T EXECUTING, not skipped); filter 'WorkflowRunInterpolation' 3T/134A green; five-guard 133T/15682A F2 = staleness pair only (25,537 pinned vs 26,093 live, closeout re-pin duty). DUR: new file is tools/tests = NO candy-code durations.tsv row (precedent CandyCodeImageCacheBustTest, C-AGT-2.c); tools-guards job scans tools/tests/ dynamically; grep confirms 0 rows for the class. \u00a74 mark \u2705 fc5523777 UNSTAGED."
  },
  "carries": [
   "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest \u2014 closeout gate duty",
