@@ -1,0 +1,24 @@
+### C-CTX-1.a — Prime the instruction-diff tracker before the turn forks
+- item: C-CTX-1 (sources: CTX-3-P1)
+- kind: fix · MAJOR · effort M
+- approach:
+  - Root cause: `Runtime::instructionDiff()` (`candy-code/src/Runtime.php:5742-5754`) memoises `InstructionDiffTracker::capture($loader)` on the first `turnContext()`, and that runs only inside the forked child.
+  - `EngineBackend::beginSessionTurn()` (`candy-code/src/Backend/EngineBackend.php:2843-2860`) primes only `primeSessionPrompt()`.
+  - So every child captures "frozen = current disk" (`InstructionDiffTracker.php:177-190`), `recheck()` finds nothing, and the memo dies with the child. This was reproduced: on a forked turn 2 the diff is absent.
+  - Fix: add a public `Runtime::primeInstructionDiff(App)` that fills the same `instruction-diffs:<loader id>` slot of the shared `SessionPromptMemo` in the parent.
+  - Call it in `beginSessionTurn()` right after `primeSessionPrompt()`, inside the same try/catch. Also call it beside the `summariseAsync()` prime (`EngineBackend.php:4425`), so a summary fork never captures post-edit bytes.
+  - Update the tracker docblock's capture-window limit (`:67-71`).
+  - What the user sees: a CLAUDE.md edit made mid-session reaches the model on the next TUI or served turn.
+- files.create: none
+- files.modify:
+  - `candy-code/src/Runtime.php` (new `primeInstructionDiff()`, `instructionDiff()`)
+  - `candy-code/src/Backend/EngineBackend.php` (`beginSessionTurn()`, the `summariseAsync()` prime)
+  - `candy-code/src/Context/InstructionDiffTracker.php` (docblock)
+- tests: modify `candy-code/tests/Providers/PromptPrefixByteStabilityTest.php`. Add a fork-path twin of `testAMidSessionInstructionEditRidesTheTailRowAndNotTheFrozenPrefix` that drives `completeAsync()` twice (skipped without pcntl). On turn 2 the diff is present and the frozen prefix bytes are unchanged.
+- docs/guards: none
+- serialized: [runtime:primeInstructionDiff (new), instructionDiff] [hot:candy-code/src/Backend/EngineBackend.php] [hot:candy-code/src/Context/InstructionDiffTracker.php]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: the prime only helps if the parent and child share one `SessionPromptMemo` instance. The test must therefore go through `completeAsync()`, not a direct Runtime call.
+

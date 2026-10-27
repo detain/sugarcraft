@@ -1,0 +1,10 @@
+# C-CTX-1.a round 1 — verdict CLEAN (static; reviewer shell refused php; builder gates cross-checked by hand)
+VERDICT: CLEAN
+
+Verification notes (static-only — reviewer shell refused php execution; gates taken from builder's on-disk REPORT, cross-checked by hand):
+- **Scope/regions:** exactly the 4 block-declared files; design-prv-ctx.md:104 DOES list Runtime.php, so the spawn-prompt parenthetical was the drift — deviation correctly taken and disclosed. Runtime hunks confined to 5749–5802 (claimed `[runtime:primeInstructionDiff, instructionDiff]` region); EngineBackend hunks inside `beginSessionTurn()` (docblock+try) and the `summariseAsync()` prime (:4448–4457, inside the method); Tracker = docblock :65–80 only.
+- **Memo key byte-identity:** single code-site `'instruction-diffs:' . spl_object_id($loader)` via shared private `instructionTracker()` (Runtime.php:5776); grep confirms no second spelling. Wiring proven real: `newRuntime()` binds the shared memo (EngineBackend.php:2782), `sessionApp()` carries the loader (:2802), loader refresh precedes prime (:2874–2882).
+- **Byte-stability law:** prime fills only, never rechecks (parent `seen` untouched); new test polarity is honest — turn-1 asserts HEADER ABSENT (non-diff session unmoved), cross-turn asserts systemPrompt byte-identical, slab carries no 'Gamma rule', and all turn-1 wire rows byte-identical in turn-2. Sync-path test untouched.
+- **Regression teeth:** pcntl-gated fork twin of the named test, disk-recorded requests (child `$requests` never reach parent — correct fork-test idiom); mutation (prime line commented) reddens exactly the tail-row assertion; report documents cp-revert RED-pre.
+- **Author law:** %ae/%ce both detain@interserver.net, zero trailers; no weld-only files, no suite-figure/durations touched; staleness pair-only in five-guard is the §1.5-expected shape; no §1.9 glob/Refused-shaped literals; E646 clean (30s watchdog is test-side drain guard).
+- **§6:** C-CTX-1.a carries no ruling; §6.2 defaults unaffected.

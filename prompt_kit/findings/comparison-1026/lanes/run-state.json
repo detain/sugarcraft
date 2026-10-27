@@ -30,7 +30,8 @@
     "C-SEC-4.a",
     "C-SES-2.b",
     "P-CTX.a",
-    "P-TABS.b"
+    "P-TABS.b",
+    "C-CTX-1.a"
   ],
   "inflight": {
     "C-SEC-3.a": {
@@ -38,21 +39,80 @@
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-SEC-3.a",
       "branch": "cc/C-SEC-3.a",
-      "session": "ses_e84274411ffewFZNgcHphKfC6h"
+      "session": "ses_e82912453ffeA5y02RHgUZgNlr",
+      "note": "re-cut fresh builder @584@ \u2014 prior recorded ID was phantom mixup (dead W1 reviewer session); branch still zero commits base 4f657c755"
     },
     "C-PRV-1.a": {
       "stage": "build",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-PRV-1.a",
       "branch": "cc/C-PRV-1.a",
-      "session": "ses_e8427015dffeDUoP7FUfbQf7Pq"
+      "session": "ses_e8290a966ffeW0oT00RaIUibwc",
+      "note": "re-cut fresh builder @590@ \u2014 prior recorded ID phantom (dead C-AGT-1.a reviewer); branch zero commits base 4f657c755"
     },
     "P-TABS.d": {
-      "stage": "build",
-      "round": 1,
+      "stage": "fix",
+      "round": 2,
       "worktree": "/home/sites/cc-cmp-P-TABS.d",
       "branch": "cc/P-TABS.d",
-      "session": "ses_e82bfb651ffeITeZC6TxecHG9w"
+      "session": null,
+      "tip": "068b6f48e764b258e2ad2f69bb299a45f6291ac4",
+      "reviewer": "ses_e82938b84",
+      "weld_note": "no regen; gates Bootstrap|Launch|TabChat 1067T/6104A + Session|Chat 3314T/26727A (1F foreign RemoteBackend disclose); NEW TabChatFactoryTest durations; roster/drift guard set run (TEST-touching picks!)",
+      "note": "r1 1 MINOR step-local Bootstrap.php:1729 @return mint-optional docblock; fixer r2 one-line; gates measured at review (TabChat 9T/31A, 1067T/6104A, pair-only 25,702, RemoteBackend 1F foreign identical)"
+    },
+    "C-SEC-4.b": {
+      "stage": "fix",
+      "round": 2,
+      "worktree": "/home/sites/cc-cmp-C-SEC-4.b",
+      "branch": "cc/C-SEC-4.b",
+      "tip": "ee24cbcde",
+      "note": "r1 1 MAJOR web-spec type: contextTrustRouting.spec.ts:70 respondTrust(null) vs non-nullable TrustRemember + :76 vacuous null pin; fix = reject/session line-pair, then vue-tsc proof; weld reruns php+vitest",
+      "session": null
+    },
+    "C-WEB-1.d": {
+      "stage": "clean",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-WEB-1.d",
+      "branch": "cc/C-WEB-1.d",
+      "session": null,
+      "tip": "871f018ff",
+      "reviewer": "ses_e82938b85",
+      "weld_note": "no regen; gates TranscriptProjectorMedia|MediaMethods|MediaStore|ReadPathCensus 79T/861A; no new files",
+      "note": "r1 CLEAN measured (79T/861A, pair-only). WELD: plain pick 871f018ff, NO regen (no Protocol/web files \u2014 verify), merged gates TranscriptProjectorMedia|MediaMethods|MediaStore|ReadPathCensus 79T/861A + five-guard pair-only, no new test files (no durations row), \u00a74 unstaged, evidence 3 lane files+run-state"
+    },
+    "P-IMG.b": {
+      "stage": "fix",
+      "round": 2,
+      "worktree": "/home/sites/cc-cmp-P-IMG.b",
+      "branch": "cc/P-IMG.b",
+      "session": null,
+      "tip": "2daed61e8",
+      "reviewer": "ses_e82938b83",
+      "weld_note": "no regen; gates per brief + EnvRoster base-red verify; +8T",
+      "note": "r1 1 MINOR step-local (Renderer.php:1019 sentinel-free docblock false under live-agent split; Veil can split zone pairs) + NIT blank line MediaFormWiringTest:131; fixer r2 choose honest strip-or-amend, weld re-runs 1667T/71,647A battery"
+    },
+    "C-WEB-1.a": {
+      "stage": "clean",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-WEB-1.a",
+      "branch": "cc/C-WEB-1.a",
+      "session": null,
+      "tip": "6f07646c8",
+      "reviewer": "ses_e82938b86",
+      "weld_note": "REGEN trio+dist (protocol lane): gen-protocol-schema --write + npm gen:protocol + npm build welder-only; gates SessionSummaryModelOverlay|WebTwoHostCommands|SessionHost|ServerContext + drift guards 15T/455A; NEW SessionSummaryModelOverlayTest durations; AttachPaging 2F foreign disclose",
+      "note": "r1 CLEAN 2 NITs non-blocking; weld: regen trio+dist sequential (protocol lane), gates Host pair+guards, NEW SessionSummaryModelOverlayTest 4T durations, dropFeed disclosure + :39 numeral NIT = carry"
+    },
+    "P-CTX.c": {
+      "stage": "clean",
+      "round": 2,
+      "worktree": "/home/sites/cc-cmp-P-CTX.c",
+      "branch": "cc/P-CTX.c",
+      "session": null,
+      "tip": "d807cf3e27582644607334f3e5726915ee841446",
+      "reviewer": "ses_e82938b94",
+      "weld_note": "NEW tests/Context? locate ContextPaneTest.php path at weld for durations duty; gates ContextPane 12T/388A + TuiLang|LangParity + ShellContrast; regen no-op; [lang tui.context.*]",
+      "note": "r2 CLEAN. WELD queue: plain picks 6a69bf018+ d807cf3e2 both (build+fix chain); NO regen; gates --filter ContextPane 12T/388A + SymbolCitation|DuplicatedDocBlock + five-guard pair-only; NEW ContextPaneTest.php DURATIONS duty (+12T); evidence 4 lane files+run-state; cherry proof; prune"
     }
   },
   "blocked": [],
@@ -71,6 +131,14 @@
       "regen": "no-op (cmd/tool/settings all up to date; no schema/web)",
       "gates": "TabScope|SessionDeck|SessionTab 142T/1190A OK; drift-quartet 56T/20837A OK; five-guard 133T pair-only (pinned 25,537 vs live 25,777 \u2014 closeout re-pin)",
       "durations_owed": "NEW candy-code tests/App/Tabs/TabScopeTest.php (14) + SessionDeckTest.php (12) \u2014 LIST ONLY, durations.tsv is closeout duty"
+    },
+    "C-CTX-1.a": {
+      "master": "893f271cf",
+      "pick": "893f271cf",
+      "regen": "no-op (cmd/tool/settings --write/--check all up to date; no schema/web)",
+      "gates": "builder file-path gate 19T/117A OK exact; ReadPathCensus|StderrEmitterCensus 114T/20639A 0F (2 foreign AccessorDeprecationTest phpunit deprecations); five-guard 133T/15437A pair-only (pinned 25,537 vs live 25,778 - closeout re-pin)",
+      "welded_note": "gates exact / pair-only @ weld",
+      "durations_owed": "none - NO new candy-code *Test.php in pick"
     }
   }
 }
