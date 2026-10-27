@@ -70,3 +70,7 @@ line), green post-fix.
   Co-Authored-By, tree clean. Existing test file → no durations duty; no
   suite-figure/README/caliber touches; not pushed. [NIT] DetectsCapabilities
   probe left untouched per ruling (out-of-scope, report-only).
+
+CURE 2026-10-27 (weld gate): TreeWideGuardRosterTest red from this lane's r2 anchor
+(:249 Grep.php source read) rostered in 30d4f91cb; Grep filter 223T/134,694A green,
+remaining roster Fs are the disclosed foreign Cli/SelfUpdateTest globs only.
