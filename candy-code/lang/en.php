@@ -3355,4 +3355,15 @@ TXT,
     'tui.window.summary' => '{sessions} windows · {attention} need attention',
     'tui.window.summary.none' => 'no windows open',
     // --- end tui.window (P-TABS.a) ---
+
+    // --- begin tui.sessions (P-TABS.c) ---
+    // Strings of the vertical sessions pane in
+    // src/Tui/Components/SessionsPane.php. Same census law as the block
+    // above (TuiLangTest): quoted keys ride the source, source literals
+    // live here.
+    'tui.sessions.new' => '＋ New session',
+    'tui.sessions.title' => 'Sessions',
+    'tui.sessions.unnamed' => 'session',
+    'tui.sessions.agents' => '{count} agents',
+    // --- end tui.sessions (P-TABS.c) ---
 ];
