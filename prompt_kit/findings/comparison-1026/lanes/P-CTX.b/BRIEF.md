@@ -1,0 +1,21 @@
+### P-CTX.b — `/context --raw [path]` prompt dump (GAP-PRM-15)
+- item: P-CTX-BREAKDOWN (sources: GAP-PRM-15)
+- kind: gap · effort S
+- approach:
+  - There is no raw system-prompt dump today. `Runtime::buildSystemPrompt()` is private (`src/Runtime.php:4362`).
+  - Add a public one-line `Runtime::assembledSystemPrompt(App)`, and a new opt-in `Backend\DumpsSystemPrompt` capability (not a `Backend` method; third-party backends keep loading, as `ReportsPromptSections` does). `EngineBackend` implements it, returning `{prompt, tools[name, description, input_schema]}` from the same `sessionApp()->withTools(turnTools())` build.
+  - `ContextHostCommand` parses `--raw [path]` and writes JSON plus a `.txt` prompt, 0600 atomic, under the `/export` jail and naming rules (`src/Commands/ExportCommand.php:49-58,191`).
+    - It replies with the path and sizes.
+    - A non-dumping backend gets a named refusal.
+  - The TUI gets it free (`Chat::handleContextCommand` runs the host command, `src/Chat.php:11983`).
+  - The spec gains an `argumentHint`.
+- files.create: `candy-code/src/Backend/DumpsSystemPrompt.php`
+- files.modify: `candy-code/src/Runtime.php` (accessor beside `buildSystemPrompt()`), `candy-code/src/Backend/EngineBackend.php` (implements), `candy-code/src/Host/Commands/ContextHostCommand.php` (`run()`), `candy-code/builtin-commands/1350-context.php` (`argumentHint`), `candy-code/lang/en.php` (`cmd.context.hint`, `cmd.context.raw.*`), `candy-code/docs/COMMANDS.md` (regenerated), `candy-code/docs/PROMPT_ENGINEERING.md` (how to dump)
+- tests: create `candy-code/tests/Host/Commands/ContextRawDumpTest.php` (mode 0600; `../` refused by the jail; the dumped prompt's byte length equals the `promptSectionSizes()` byte sum; a non-engine backend is refused)
+- docs/guards: `docs/COMMANDS.md` via `tools/gen-command-docs.php --write` with `tests/Commands/CommandDocsDriftTest.php`; `docs/PROMPT_ENGINEERING.md`
+- serialized: [runtime] [commands] (existing row `1350-context.php`) [lang] (prefix `cmd.context.raw.`) [docs:COMMANDS.md] [docs:PROMPT_ENGINEERING.md]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: the dump holds instruction-file bodies. Keep it 0600, jailed, and never print the body into the transcript.
+
