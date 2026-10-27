@@ -1,0 +1,38 @@
+### P-CTX.a — Context attribution by category (core + `/context` text)
+- item: P-CTX-BREAKDOWN (sources: owner pick; PRM-12; CC `/context` grid, `comp-claude-code.md` PRM-12 row)
+- kind: feature · effort M
+- approach:
+  - **What exists.** `ContextBreakdown` (`src/Context/ContextBreakdown.php:94-105`) knows the per-label prompt layers (`Runtime::promptSectionSizes()`, `src/Runtime.php:4389`), a single tools figure, history, pruning and cache.
+  - **New `ContextCategory` enum and `ContextCategories::from(ContextBreakdown, ?iterable $tools, ?CompactorConfig)`.** They attribute every token to CC-style categories:
+    - System prompt: `base`, `maxims`, `tool-guidance` minus the agents roster, `system-reminder`, `env`, and any unknown label.
+    - System tools: built-in schemas.
+    - MCP tools: `mcp__<server>__*` bridges plus `mcp_list`/`mcp_call`, with per-server sub-rows.
+    - Custom agents: the `<available-agents>` suffix of the Task tool's `promptGuidance()`, cut at `TaskTool::AGENTS_OPEN` (`src/Tools/BuiltIn/TaskTool.php:283`).
+    - Memory files: `user-rules` + `project-instructions`, with per-file sub-rows from `instructionFiles`.
+    - Project memory: `project-memory`.
+    - Repository map: `repo-map` + the symbol map.
+    - Skills: `skills` + `available-skills`.
+    - Messages: history − pruned, with the largest-5 sub-rows.
+    - Autocompact buffer: `window − backgroundCompactionTokenThreshold(window)` when `autoCompacts()` (`src/Context/CompactorConfig.php:511,761`).
+    - Free space.
+  - MCP server instructions are listed as "not sent". candy-code injects none, so the row is honest rather than a fake 0.
+  - `bar(int cells)` apportions cells by largest remainder, so the bar sums exactly to the width.
+  - `ContextBreakdown::measure` splits MCP from built-in tools (it gains `mcpToolCount`/`mcpToolTokens`/`mcpServers`/`agentsTokens`; the named args default null). `ContextSources::measure` passes `EngineBackend::compactorConfig()` (:1226) and the same tool list `promptSectionSizes()` prices (`EngineBackend.php:2810`).
+  - `/context` opens with a "By category" block (bar + rows). The serialization is untouched here (that is the protocol step).
+- files.create: `candy-code/src/Context/ContextCategory.php`, `candy-code/src/Context/ContextCategories.php`
+- files.modify: `candy-code/src/Context/ContextBreakdown.php` (`measure()`, new fields), `candy-code/src/Host/ContextSources.php` (`measure()` only), `candy-code/src/Commands/ContextCommand.php` (`compose()`), `candy-code/src/Backend/EngineBackend.php` (public `promptTools()` accessor if `tools()` differs from `turnTools()`), `candy-code/lang/en.php` (`cmd.context.category.*`), `candy-code/docs/CONTEXT.md` (the `/context` section)
+- tests:
+  - create `candy-code/tests/Context/ContextCategoriesTest.php`:
+    - every label `promptSectionSizes()` can emit maps to its category (fixture from a real Runtime build), and an unknown label → System;
+    - the categories sum to `totalTokens()`;
+    - the bar sums to the cells;
+    - the agents roster is moved out of tool-guidance;
+    - the buffer is 0 when compaction is off;
+  - modify `candy-code/tests/Commands/ContextCommandTest.php`, `candy-code/tests/Chat/ContextCommandsTest.php`.
+- docs/guards: `docs/CONTEXT.md` (prose; no roster guard)
+- serialized: [lang] (prefix `cmd.context.category.`) [docs:CONTEXT.md]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: the token figures stay script-weighted estimates. The labels must print `~`, and the free space never goes negative when the estimate over-runs.
+

@@ -28,7 +28,8 @@
   "C-SEC-2.b",
   "C-SES-5.d",
   "C-SEC-4.a",
-  "C-SES-2.b"
+  "C-SES-2.b",
+  "P-CTX.a"
  ],
  "inflight": {
   "C-SEC-3.a": {
@@ -44,14 +45,6 @@
    "worktree": "/home/sites/cc-cmp-C-PRV-1.a",
    "branch": "cc/C-PRV-1.a",
    "session": "ses_e8427015dffeDUoP7FUfbQf7Pq"
-  },
-  "P-CTX.a": {
-   "stage": "clean",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-P-CTX.a",
-   "branch": "cc/P-CTX.a",
-   "session": null,
-   "note": "r1 CLEAN tip 06a8352ed base 4e3535ed4; WELD gates re-run --filter Context 1815T/7425A + five-guard pair-only; NEW ContextCategoriesTest durations duty; 3 NITs non-blocking; regen no-op expected (no Protocol/web touched)"
   },
   "P-TABS.b": {
    "stage": "build",
