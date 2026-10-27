@@ -15,17 +15,17 @@ use PHPUnit\Framework\TestCase;
  * for the NARROWER, production shape of the same disease: a catch clause in
  * candy-code/src whose body contains NOTHING — no statement, not even a comment.
  *
- * A bare-empty catch is not automatically a bug. Every one of the eleven sites
+ * A bare-empty catch is not automatically a bug. Every one of the twelve sites
  * below is defensible on inspection (teardown close, best-effort listener,
  * rethrow-after-rollback, fail-open probe ladder — each carries its one-line
  * justification on its roster row). What is NOT acceptable is for the tree to
- * hold eleven such sites with no census, because the shape's whole danger is
+ * hold twelve such sites with no census, because the shape's whole danger is
  * that it is silent by construction: the twelfth one, planted by the next
  * lane in a hot path, will be invisible until the exception it ate matters.
  *
  * POLITY (mirrors the house site-keyed roster shape; keys are
  * `<relative-file>::<enclosing-method>` with a per-key count, because three of
- * the eleven share CapabilityDiscoverer::probe):
+ * the twelve share CapabilityDiscoverer::probe):
  *
  *   - a bare-empty catch NOT on the roster → RED, named (fail closed: growth
  *     is exactly what this guard is for);
@@ -57,7 +57,7 @@ use PHPUnit\Framework\TestCase;
 final class SwallowingCatchSrcCensusTest extends TestCase
 {
     /**
-     * The eleven live sites, each re-verified against the tree at mint time
+     * The twelve live sites, each re-verified against the tree at mint time
      * (line numbers drift; file plus method identity is the durable key). The
      * §ROSTER of the source inventory carried file:line only; method names here
      * are the scanner's own attribution, checked against the file layouts.
@@ -96,6 +96,10 @@ final class SwallowingCatchSrcCensusTest extends TestCase
         'src/Server/Workspace/WorkspaceHostClient.php::exited' => [
             1,
             'exit listeners run best-effort when the host reports exit; identical polity to the gone row above',
+        ],
+        'src/Session/EnhancedSessionStore.php::usageRollups' => [
+            1,
+            'a failed ROLLBACK inside the fold-error handler must not replace the original error, which the enclosing catch rethrows on the next line; C-SES-9.a, adjudicated 2026-10-27 (cc/cure-swallow) as the same polity as the immediateTransaction row below',
         ],
         'src/Session/SessionStore.php::immediateTransaction' => [
             1,
