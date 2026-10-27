@@ -281,6 +281,15 @@ final class TtyStreamArgumentCensusTest extends TestCase
         self::assertSame(
             [
                 'src/Tui/Renderer.php: constant:STDOUT',
+                // C-PRV-1.c login key read: `new Tty(\STDIN)` in
+                // src/Cli/Subcommands.php::openLoginTtyHandle() is the raw-mode
+                // handle behind the echo-off API-key prompt. Adjudicated 2026-10-27
+                // (cc/cure-swallow): \STDIN is PHP's own descriptor-0 resource, a
+                // real stream that cannot be null; the mode switch is undone in the
+                // caller's `finally` on every exit path, and the suite never reaches
+                // the site because the $loginKeyRead/$loginTty seams stand in for it
+                // (pinned by LoginSubcommandTest::testThePasteSeamLeavesTheTtyHandleUntouched).
+                'src/Cli/Subcommands.php: constant:\STDIN',
                 // lane-G's fallback-isolation keystone probes the LIVE window:
                 // `new Tty(STDOUT)` at tests/TerminalSizeFallbackIsolationTest.php
                 // is reached only past a `stream_isatty(STDOUT)` early-return, so
