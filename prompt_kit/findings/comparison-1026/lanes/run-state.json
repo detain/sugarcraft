@@ -42,7 +42,9 @@
     "P-IMG.b",
     "P-MENU.a",
     "P-TABS.a",
-    "C-SEC-3.b"
+    "C-SEC-3.b",
+    "C-WEB-1.b",
+    "P-IMG.c"
   ],
   "inflight": {
     "P-CTX.d": {
@@ -60,24 +62,6 @@
       "branch": "cc/P-CTX.b",
       "session": "ses_e825830e2ffeilvtDVze0LF0Fi",
       "note": "disk-verified tips 9a6ebd207+e34dd4938 base 5f740e62a clean; NEW ContextRawDumpTest 7T DUR duty; gates builder: 35T filter OK, gen-command-docs --check rc0, TrustKey|DocFigure 109T, pair-only 25,835; red-before 7/7; r1 review axes: jail/0600-before-write, byte-exactness of assembledSystemPrompt, file-only no echo, doc honesty, vacuity legs"
-    },
-    "C-WEB-1.b": {
-      "stage": "clean",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-WEB-1.b",
-      "branch": "cc/C-WEB-1.b",
-      "session": "ses_e82572a3affe2xBZQRSwfn270h",
-      "note": "disk-verified tip 07787590f base da772ff56, 2 files +47/-1 (StatusBar.vue write-back + 3 pins), tree clean; builder gates: pre-fix 2F/8P on pins 1+3, post 10/10, vue-tsc rc0; NO dist (welder rebuilds); no new spec files. r1 review axes: race-safety vs :value binding (flicker judgment), unconditional reset disclosed, pin non-vacuity, scope. NOTE: builder notification @835@ arrived AFTER lead already verified disk + dispatched reviewer — duplicate delivery, no re-dispatch.",
-      "weld_note": "pick 07787590f (base da772ff56, 2 files +47/-1); r1 CLEAN (reviewer ran vitest 10/10 serial); WELD duties: cd candy-code-web && npm run build (dist commit-if-changed per §2, welder-only), vitest full serial leg; php-side gates none (no PHP files); §4 mark UNSTAGED; evidence lanes/C-WEB-1.b/{BRIEF,REPORT,REVIEW-1}.md + run-state; cherry proof; prune"
-    },
-    "P-IMG.c": {
-      "stage": "clean",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-P-IMG.c",
-      "branch": "cc/P-IMG.c",
-      "session": "ses_e8256a9c0ffeqo7NOq2Efh3dzl",
-      "note": "disk-verified 26760f05b base da772ff56, 2 files +86 (App.vue +3, NEW topbarGenerate.spec.ts 4T = gate vitest-roster attention, welder lists); builder gates 4/4+11/11 vue-tsc+eslint rc0, mutation reddens exactly 2 hidden tests; no dist",
-      "weld_note": "pick 26760f05b (base da772ff56 era; App.vue +3, NEW src-web/components/__tests__/topbarGenerate.spec.ts); r1 CLEAN. WELD duties: npm run build dist commit-if-changed (welder-only), vitest serial topbarGenerate+statusBar specs, §4 mark UNSTAGED, evidence 3 files + run-state, cherry proof, prune. DUR note: vitest-side spec roster observation only."
     }
   },
   "blocked": [],
@@ -127,7 +111,9 @@
     "P-IMG.b": "welded by welder agent at 6caf1052d; tests/Tui+tests/App 1707T/72196A OK, EnvRoster reds absent, five-guard pair-only",
     "P-MENU.a": "welded by welder agent at c1267a71a; Menu filter 209T/2736A OK, check-one-type-per-file RC=0 (62 libs/3170 files/0 problems), five-guard pair-only; NIT carries accepted (MenuNode new-self, MenuCascade hover row-0, sampled sweep widths)",
     "P-TABS.a": "welded by welder agent at eecf4d5b0; Window 288T/2990A OK, TuiLang|LangParity 16T/4132A OK, five-guard pair-only; en.php auto-merged both-sides",
-    "C-SEC-3.b": "WELDED 2026-10-27 master 393635d2c (pick acb746a59, plain cherry-pick, clean; 5 files +20/-16). Regen no-op (command/tool/settings gens up to date). Gates at weld: CommandShellPosture|TurnControllerBundle 13T/39A OK; wide CommandShellPosture|TurnController 35T/143A OK (builder 135T filter-era); TrustKey|DocFigure 109T/4486A OK; five-guard 133T/15572A F2 staleness pair only (25,537 pinned vs 25,934 live). PARTIAL by design: foreign-row/doc-truth half landed; opt-in half carried to C-SEC-3.c after C-EXT-4.c (row-identity gap). NO new candy-code test files -> no durations row. §4 mark ✅ 393635d2c UNSTAGED. Cherry proof '-'; worktree+branch pruned."
+    "C-SEC-3.b": "WELDED 2026-10-27 master 393635d2c (pick acb746a59, plain cherry-pick, clean; 5 files +20/-16). Regen no-op (command/tool/settings gens up to date). Gates at weld: CommandShellPosture|TurnControllerBundle 13T/39A OK; wide CommandShellPosture|TurnController 35T/143A OK (builder 135T filter-era); TrustKey|DocFigure 109T/4486A OK; five-guard 133T/15572A F2 staleness pair only (25,537 pinned vs 25,934 live). PARTIAL by design: foreign-row/doc-truth half landed; opt-in half carried to C-SEC-3.c after C-EXT-4.c (row-identity gap). NO new candy-code test files -> no durations row. §4 mark ✅ 393635d2c UNSTAGED. Cherry proof '-'; worktree+branch pruned.",
+    "C-WEB-1.b": "WELDED 2026-10-27 master 34a295d2d (pick 07787590f, clean; StatusBar.vue +8/-1 + 3 pins). dist regen commit 21d7d039b (welder-only; amended to carry the two new hashed bundles — rename-detected, dist status clean). vitest serial: statusBar 10/10, protocol generated.spec 3/3 (dormantRoster.spec.ts does not exist yet — C-WEB-3.g pending). No PHP files -> no php gates. NO new spec files. §4 mark ✅ 34a295d2d UNSTAGED. Cherry proof '-'; worktree+branch pruned.",
+    "P-IMG.c": "WELDED 2026-10-27 master a28779b00 (pick 26760f05b, clean; App.vue +3 + NEW src-web/components/__tests__/topbarGenerate.spec.ts). dist regen commit 8604d79d9 (welder-only, clean). vitest serial topbarGenerate+statusBar 14/14 green (4 new + 10 status-bar; brief's 11 was a builder-era recount, actual 10, all pass). PHP gates N/A. §4 mark ✅ a28779b00 UNSTAGED. Vitest-roster attention: NEW topbarGenerate.spec.ts (observation only, no durations.tsv involvement). Cherry proof '-'; worktree+branch pruned."
   },
   "carries": [
     "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest — closeout gate duty",
