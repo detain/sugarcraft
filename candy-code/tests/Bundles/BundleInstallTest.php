@@ -294,9 +294,9 @@ final class BundleInstallTest extends TestCase
 
     /**
      * PLG-1-P3: a scratch holding a link that points AT the scratch recursed
-     * forever in the pre-fix removeTree() — before the fix this was a crash,
-     * not a failure. The link is unlinked, never descended, and the verb
-     * terminates with its scratch gone.
+     * in the pre-fix removeTree() until the kernel's ELOOP ceiling stopped
+     * the descent. The refusal now unlinks the link as a link and never
+     * descends, and the verb terminates with its scratch gone.
      */
     public function testACyclicScratchLinkTerminatesInsteadOfRecursingForever(): void
     {
