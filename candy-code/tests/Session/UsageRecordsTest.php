@@ -355,6 +355,53 @@ final class UsageRecordsTest extends TestCase
         self::assertTrue($store->appendUsageRecord('old', Usage::new(10, 0.001), 'm'), 'a reaped id is just an id again');
     }
 
+    public function testTheTombstoneReadToleratesItsLedgerBeingGone(): void
+    {
+        // The tolerance half of the SES-1-P5 risk law. sessionTombstoned()
+        // answers "nothing was ever deleted" when its table cannot be read
+        // (PDOException catch), because a database no store carrying this
+        // schema has ever opened — a legacy file — must behave EXACTLY as
+        // every append predating the ledger did: lazy mint serves the id.
+        // No other test here can ever reach that catch: the constructor's
+        // CREATE TABLE IF NOT EXISTS guarantees the table exists for every
+        // append run post-construction, so dropping it out from under a
+        // live store is the only faithful way to visit a legacy file.
+        $store = new EnhancedSessionStore($this->dbPath);
+        $store->createSession('s1', 'p', 'm');
+        $store->deleteSession('s1');
+
+        $pdo = new PDO('sqlite:' . $this->dbPath);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        // Row-absence leg: the mark, not some session-row residue, is what
+        // refuses the mint — with the entry gone by hand (the reap law's
+        // endpoint, taken directly), the id is just an id again.
+        $unmark = $pdo->prepare('DELETE FROM session_tombstones WHERE id = ?');
+        $unmark->execute(['s1']);
+        self::assertTrue($store->appendUsageRecord('s1', Usage::new(50, 0.01), 'm'));
+        self::assertNotNull($store->session('s1'), 'the unmarked id lazy-mints its row');
+
+        // Table-absence leg: a file the tombstone read cannot even name.
+        // The mark taken while the table still existed must be as invisible
+        // as if it had never been — "nothing was ever deleted" is the honest
+        // answer for such a file, unknown ids and marked ids alike.
+        $store->createSession('s2', 'p', 'm');
+        $store->deleteSession('s2');
+        $pdo->exec('DROP TABLE session_tombstones');
+
+        self::assertTrue(
+            $store->appendUsageRecord('unknown', Usage::new(100, 0.02), 'test-model'),
+            'the missing ledger must not fail-soft the append into a lost row',
+        );
+        self::assertTrue($store->appendUsageRecord('s2', Usage::new(10, 0.001), 'test-model'));
+
+        $row = $store->session('unknown');
+        self::assertNotNull($row);
+        self::assertSame('candy-code', $row['provider']);
+        self::assertSame('unknown', $row['model']);
+        self::assertSame(3, (int) $pdo->query('SELECT COUNT(*) FROM usage_records')->fetchColumn());
+    }
+
     public function testTheWindowedFoldScansByTheTimestampIndexItNowCarries(): void
     {
         // SES-1-P6 as the planner sees it: the OBS-3 window (`/usage all`
