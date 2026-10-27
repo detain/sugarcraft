@@ -277,6 +277,27 @@ final class AgentLiveRegistryTest extends TestCase
      * @param list<ActivityItem> $items
      * @param array<string, int|float> $stats
      */
+    /**
+     * P-AGENT.a: the v2 frames carry their parent session and the workspace
+     * seeds a name-keyed colour resolver — both ride onto the folded state so
+     * scoped views and painted surfaces have something to read. A frame
+     * without the attribute lands the empty attribution, never a guess.
+     */
+    public function testTheFoldRidesTheFramesSessionAndTheSeedColorsIt(): void
+    {
+        $registry = AgentLiveRegistry::new(static fn (): float => 50.0);
+        $registry->withColorResolver(static fn (string $name): ?string => $name === 'explore' ? 'red' : null);
+
+        $registry->apply(new SubAgentActivity('started', 'run_s1', 'explore', 'a task', 1, '', parentCallId: 'tc_9', parentSessionId: 'ses_top'));
+        self::assertSame('ses_top', $registry->get('run_s1')?->parentSessionId);
+        self::assertSame('red', $registry->get('run_s1')?->color);
+
+        $registry->apply(new SubAgentActivity('started', 'run_s2', 'explore', 'a task', 1, '', parentCallId: 'tc_10'));
+        self::assertSame('', $registry->get('run_s2')?->parentSessionId, 'an unattributed fold is the empty string, visible only to the whole view');
+        self::assertCount(2, $registry->all());
+        self::assertSame(['run_s1'], array_values(array_map(static fn ($s): string => $s->id, $registry->forSession('ses_top'))));
+    }
+
     private static function frame(string $op, string $id, int $seq, string $call, array $items = [], array $stats = []): SubAgentActivity
     {
         return new SubAgentActivity($op, $id, 'explore', '', $seq, '', parentCallId: $call, items: $items, stats: $stats);

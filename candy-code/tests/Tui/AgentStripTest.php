@@ -302,6 +302,18 @@ final class AgentStripTest extends TestCase
         ))->withSize(100, 30);
     }
 
+    public function testItemsForScopesTheRowToASessionAndNullKeepsEveryRun(): void
+    {
+        $live = $this->registry();
+        $live->apply(new SubAgentActivity(SubAgentActivity::OP_STARTED, 'r1', 'explore', 'a task', 1, '', parentCallId: 'call_1', parentSessionId: 'ses_a'));
+        $live->apply(new SubAgentActivity(SubAgentActivity::OP_STARTED, 'r2', 'reviewer', 'a task', 1, '', parentCallId: 'call_2', parentSessionId: 'ses_b'));
+
+        $this->assertSame(['r1'], self::ids(AgentStrip::itemsFor($live, [], 'ses_a')));
+        $this->assertSame(['r2'], self::ids(AgentStrip::itemsFor($live, [], 'ses_b')));
+        $this->assertSame(AgentStrip::items($live), AgentStrip::itemsFor($live, [], null), 'the serve law: null answers exactly what items() answers');
+        $this->assertSame([], AgentStrip::itemsFor($live, ['r1' => true], 'ses_a'), 'dismissal is filter law inside a scoped view too');
+    }
+
     private function registry(): AgentLiveRegistry
     {
         return AgentLiveRegistry::new(fn (): float => $this->now);
