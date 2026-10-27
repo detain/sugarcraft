@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Server;
 
 use PHPUnit\Framework\TestCase;
+use Psr\Http\Message\ResponseInterface;
 use React\EventLoop\Loop;
+use React\Http\Message\ServerRequest as HttpRequest;
 use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Server\Auth\AuthContext;
 use SugarCraft\Code\Server\Auth\RateLimiter;
@@ -233,6 +235,92 @@ final class HookWebhooksTest extends TestCase
         self::assertStringStartsWith('HTTP/1.1 503', $answer);
         self::assertStringContainsString('"kind":"hook_unavailable"', $answer);
         self::assertStringNotContainsString('/home/operator', $answer, 'the cause names a private path; it stays out of the answer (its log line is Serve\'s own)');
+    }
+
+    /**
+     * C-AGT-1: the EXACT shape RequestBodyBufferMiddleware hands downstream for
+     * an over-cap body — the Content-Length survives, the body itself is
+     * swapped for an empty buffer. Splicing that nothing into the prompt would
+     * bill a turn for it, so the handler reads the pair and answers 413 before
+     * the splice; $run must never be invoked on this path.
+     */
+    public function testAnOverCapDeclaredBodyIsRefusedFortyThirteenNotSpliced(): void
+    {
+        $answer = $this->deliver(['content-length' => '70000'], '');
+
+        self::assertSame(413, $answer->getStatusCode());
+        self::assertStringContainsString('"kind":"payload_too_large"', (string) $answer->getBody());
+        self::assertSame([], $this->deliveries, 'the refusal precedes admission: $run is never invoked');
+    }
+
+    /**
+     * The declaration leg alone: a Content-Length past the cap 413s even when
+     * some bytes survived (only reachable through a crafted request — the
+     * middleware discards past-cap bodies — which is exactly why the leg does
+     * not lean on the empty-buffer leg to stay honest).
+     */
+    public function testAnOverCapDeclarationIsRefusedEvenWithBodyBytes(): void
+    {
+        $answer = $this->deliver(['content-length' => (string) (ServerConfig::MAX_API_BODY_BYTES + 1)], 'x');
+
+        self::assertSame(413, $answer->getStatusCode());
+        self::assertSame([], $this->deliveries);
+    }
+
+    /**
+     * The empty-buffer leg: a chunked delivery (no Content-Length to test)
+     * whose buffered body arrived as '' came through the middleware's
+     * overflow discard — refuse, do not splice.
+     */
+    public function testAChunkedBodyThatArrivedEmptyIsRefusedFortyThirteen(): void
+    {
+        $answer = $this->deliver(['transfer-encoding' => 'chunked'], '');
+
+        self::assertSame(413, $answer->getStatusCode());
+        self::assertSame([], $this->deliveries);
+    }
+
+    /**
+     * The negative control that keeps the guard narrow: a delivery declared
+     * bodyless (Content-Length: 0) is an ORDINARY no-payload webhook, and a
+     * real body inside the cap splices as it always has.
+     */
+    public function testABodylessDeclarationStillSplices(): void
+    {
+        $empty = $this->deliver(['content-length' => '0'], '');
+        self::assertSame(200, $empty->getStatusCode());
+
+        $small = $this->deliver(['content-length' => '5'], 'hello');
+        self::assertSame(200, $small->getStatusCode());
+        self::assertCount(2, $this->deliveries);
+        self::assertSame('Look at  now', $this->deliveries[0]['prompt'], 'the empty no-payload delivery splices as it always did');
+        self::assertSame('Look at hello now', $this->deliveries[1]['prompt'], 'an in-cap body rides the fence escape untouched');
+    }
+
+    /**
+     * Drive the handler directly with the request shape the buffering
+     * middleware produces (headers kept, buffer swapped) so each leg of the
+     * 413 guard gets its own discriminating case.
+     *
+     * @param array<string,string> $headers
+     */
+    private function deliver(array $headers, string $body): ResponseInterface
+    {
+        $handler = HookWebhooks::new(
+            ['deploy' => ['secret' => self::SECRET, 'prompt' => 'Look at {{payload}} now', 'permissionMode' => null, 'rate' => 5]],
+            $this->run,
+            function (): float {
+                return $this->now;
+            },
+        );
+        $request = new HttpRequest(
+            'POST',
+            'http://127.0.0.1/api/hooks/deploy',
+            ['x-candy-code-hook' => self::SECRET] + $headers,
+            $body,
+        );
+
+        return $handler->handle($request, 'deploy', '127.0.0.1');
     }
 
     /**

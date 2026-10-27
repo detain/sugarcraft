@@ -9,6 +9,7 @@ use Psr\Http\Message\ServerRequestInterface;
 use SugarCraft\Code\Context\PromptFence;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Server\Auth\RateLimiter;
+use SugarCraft\Code\Server\ServerConfig;
 
 /**
  * AUT-6: inbound webhooks — `POST /api/hooks/{name}` turns one configured
@@ -124,10 +125,21 @@ final class HookWebhooks
             return Responses::error(429, 'rate_limited', 'this hook is over its delivery rate from this address', ['Retry-After' => (string) self::WINDOW_SECONDS]);
         }
 
-        // The body arrives whole and capped: RequestBodyBufferMiddleware put
-        // MAX_API_BODY_BYTES (64 KiB) in front of the router, so this needs no
-        // read loop and cannot see a partial splice.
+        // The body arrives whole but NOT truthfully: RequestBodyBufferMiddleware
+        // (MAX_API_BODY_BYTES in front of the router) does not REFUSE an
+        // over-limit body — it swaps in an empty one and calls on, so a 70 KiB
+        // push would otherwise splice a fence-escaped nothing into the prompt
+        // and bill the turn anyway. An over-cap declaration, or a declared
+        // body that arrived as '' (dropped by that swap, or shorted by a lying
+        // Content-Length), is answered 413 here; $run never sees it. A body
+        // declared absent (Content-Length: 0, no chunked framing) may stay
+        // empty — that is an ordinary no-payload delivery, not a lost one.
+        $declared = (int) $request->getHeaderLine('content-length');
         $body = (string) $request->getBody();
+        if ($declared > ServerConfig::MAX_API_BODY_BYTES
+            || ('' === $body && ($declared > 0 || 'chunked' === \strtolower($request->getHeaderLine('transfer-encoding'))))) {
+            return Responses::error(413, 'payload_too_large', 'the webhook body is larger than the server accepts');
+        }
         $prompt = \str_contains($hook['prompt'], self::PAYLOAD_PLACEHOLDER)
             ? \str_replace(self::PAYLOAD_PLACEHOLDER, PromptFence::escape($body), $hook['prompt'])
             : $hook['prompt'] . self::UNTRUSTED_LABEL . PromptFence::escape($body);
