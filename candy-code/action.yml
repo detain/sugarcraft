@@ -55,7 +55,7 @@ inputs:
     required: false
     default: ''
   candy-code-version:
-    description: 'Composer version constraint for sugarcraft/candy-code. Pin it — dev-master moves, and in a workflow the pin is the only thing between you and whatever landed on Packagist since your last run.'
+    description: 'Composer version constraint for sugarcraft/candy-code, installed with composer create-project (root semantics; see docs/CI.md). Pin it — dev-master moves, and in a workflow the pin is the only thing between you and whatever landed on Packagist since your last run. The only real pin today is dev-master#<split-repo-commit-sha>, and it pins candy-code ONLY: its sugarcraft/* sibling dependencies still resolve dev-master independently of it.'
     required: false
     default: 'dev-master'
   fail-on-error:
@@ -100,10 +100,19 @@ runs:
         CANDY_CODE_CONSTRAINT: ${{ inputs.candy-code-version }}
       run: |
         set -euo pipefail
-        composer global require --no-interaction --no-progress --no-scripts \
-          "sugarcraft/candy-code:${CANDY_CODE_CONSTRAINT}"
-        # Make the global vendor bin visible to later steps.
-        printf '%s\n' "$(composer global config bin-dir --absolute --quiet)" >> "$GITHUB_PATH"
+        # create-project, deliberately not the global-config require: the
+        # global composer.json is a `stable` root, candy-code requires its
+        # sugarcraft/* siblings as "@dev" (stability flags in a NON-root
+        # manifest are ignored), and Packagist carries no stable sibling —
+        # a global-config install of this package cannot resolve.
+        # create-project makes the package's own dev-stability manifest the
+        # composer root, so the same constraints resolve as written.
+        # --no-scripts keeps the doctrine: the install leg runs no code
+        # beyond composer itself.
+        composer create-project --no-dev --prefer-dist --no-progress --no-scripts --no-interaction \
+          "sugarcraft/candy-code:${CANDY_CODE_CONSTRAINT}" "$RUNNER_TEMP/candy-code"
+        # Make the installed binary visible to later steps.
+        printf '%s\n' "$RUNNER_TEMP/candy-code/bin" >> "$GITHUB_PATH"
 
     - name: 'Run candy-code headless'
       shell: bash

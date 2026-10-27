@@ -143,13 +143,24 @@ beside it. `candy-code doctor` checks all of this for you.
 
 ### Install as a user
 
-To put `candy-code` on your PATH without a project of your own:
+To put `candy-code` on your PATH without a project of your own, install it
+the way its own GitHub Action does — `create-project` makes the package's own
+`minimum-stability: dev` manifest the composer root, so its `sugarcraft/*`
+sibling requirements resolve as written:
 
 ```bash
-composer global require sugarcraft/candy-code
-export PATH="$HOME/.config/composer/vendor/bin:$PATH"   # older Composer: ~/.composer/vendor/bin
+composer create-project --no-dev --prefer-dist sugarcraft/candy-code "$HOME/.candy-code"
+export PATH="$HOME/.candy-code/bin:$PATH"
 candy-code doctor
 ```
+
+`composer global require sugarcraft/candy-code` does **not** work today: the
+global `composer.json` is a `stable` root, the sibling libraries have no
+stable releases on Packagist, and per-package `@dev` stability flags in a
+non-root manifest are ignored by composer — the resolution simply cannot
+succeed. If you still want the global form, run `composer global config
+minimum-stability dev` and `composer global config prefer-stable true` first,
+and know that changes how every later global install resolves.
 
 If instead you cloned the `sugarcraft` monorepo, note what you have: it is the
 contributor workspace for all 62 SugarCraft libraries, with `candy-code` as one

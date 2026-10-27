@@ -1,0 +1,77 @@
+name: CandyCode action self-test
+
+# End-to-end proof for the shipped composite action at candy-code/action.yml.
+# This job `uses: ./candy-code` — the real action, from the real checkout, and
+# asserts the real contract: install leg resolves, the headless run exits 0,
+# the envelope parses into outputs with a non-empty result.
+#
+# WHAT IT PROVES AND WHAT IT DOES NOT. The action installs `sugarcraft/
+# candy-code` from Packagist — the split repo, at dev-master — so this job
+# proves the install leg and the envelope plumbing of the ACTION, not the
+# unmerged PHP of the PR that triggered it. That is the point: the failure
+# this workflow exists to catch (the install leg that could never resolve,
+# found by reading action.yml in plan_comparison C-AGT-2) was invisible to
+# every PHP job because no job ever ran the action. A broken action.yml now
+# reddens the next push to the files it lives beside.
+#
+# THE PROVIDER IS THE OFFLINE ECHO. No credential env is set anywhere in this
+# file and the action passes no secrets, so the run lands on the offline
+# EchoProvider (ENVIRONMENT.md: no provider selected -> EchoProvider) through
+# the full engine — zero network spend, zero keys, and `plan` mode keeps the
+# refusal floor identical to the documented default.
+
+on:
+  push:
+    paths:
+      - 'candy-code/action.yml'
+      - 'candy-code/docs/CI.md'
+  pull_request:
+    paths:
+      - 'candy-code/action.yml'
+      - 'candy-code/docs/CI.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: candy-code-action-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  self-test:
+    name: 'Run sugarcraft/candy-code action.yml against itself'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Full-SHA pin, the same doctrine the action's own header comment
+      # demands of every third-party action.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+
+      - name: 'Drive the shipped action (offline echo, plan mode)'
+        id: headless
+        uses: ./candy-code
+        with:
+          prompt: 'Reply with exactly the word SELFTEST and nothing else.'
+          permission-mode: plan
+
+      - name: 'Assert exit-code 0 and a non-empty result'
+        # Doctrine dogfooded: the outputs cross into the shell through env:
+        # only, never interpolated into the script text below.
+        env:
+          EXIT_CODE: ${{ steps.headless.outputs.exit-code }}
+          RESULT: ${{ steps.headless.outputs.result }}
+          ERROR_TYPE: ${{ steps.headless.outputs.error-type }}
+          ERROR_MESSAGE: ${{ steps.headless.outputs.error-message }}
+        run: |
+          set -uo pipefail
+          echo "exit-code=$EXIT_CODE error=[$ERROR_TYPE] $ERROR_MESSAGE"
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "::error::self-test: candy-code run exited $EXIT_CODE, expected 0 (error: $ERROR_TYPE $ERROR_MESSAGE)"
+            exit 1
+          fi
+          if [ -z "$RESULT" ]; then
+            echo "::error::self-test: envelope result is empty on an exit-0 echo run — the envelope parse or the EchoProvider answer changed shape"
+            exit 1
+          fi
+          echo "result (first 200 chars): ${RESULT:0:200}"

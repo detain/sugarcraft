@@ -23,8 +23,13 @@ canonical location GitHub looks in:
 ```
 
 The action is a `composite` — no Node runtime, no Docker. It installs PHP 8.3 (pinned action SHA),
-`composer global require`s `sugarcraft/candy-code` at the version you pin, runs one headless turn,
-and parses the JSON envelope into the step summary and step outputs. It deliberately does **not**
+installs `sugarcraft/candy-code` at the version you pin via `composer create-project` into the
+runner temp dir and adds its `bin/` to `PATH`, runs one headless turn, and parses the JSON envelope
+into the step summary and step outputs. `create-project` is root semantics on purpose: the package's
+own `minimum-stability: dev` manifest becomes the composer root, so its `"sugarcraft/*": "@dev"`
+sibling requirements resolve as written — a `composer global require` cannot install this package
+at all today, because the global root is `stable` and the siblings have no stable releases. It
+deliberately does **not**
 post PR comments — commenting needs `pull-requests: write`, and an action that reviews untrusted
 code should hold no token that can write to the pull request that supplied it. The caller posts.
 
@@ -37,7 +42,7 @@ code should hold no token that can write to the pull request that supplied it. T
 | `max-cost` | `1.00` | `--max-cost` ceiling in USD. A runaway or prompt-injected turn is stopped by the bill. |
 | `model` | *(empty)* | `--model` override; empty inherits the configured default. |
 | `args` | *(empty)* | Extra space-separated `candy-code` flags. Caller-owned text — never build it from PR content. |
-| `candy-code-version` | `dev-master` | Composer constraint for the Packagist install. Pin a released version in anything you care about. |
+| `candy-code-version` | `dev-master` | Composer constraint for the `create-project` install. Pin a released version in anything you care about. The only real pin today is `dev-master#<split-repo-commit-sha>`, and it pins candy-code only — its `sugarcraft/*` siblings still resolve their own `dev-master` independently. |
 | `fail-on-error` | `true` | Fail the step on a non-zero `candy-code` exit. `false` keeps going so your own steps can read the outputs. |
 
 ### Outputs
@@ -158,11 +163,11 @@ is the threat model — so the containment is what the agent can *do*, not what 
 
 ## Running the headless binary without the action
 
-Everything the action does is one command:
+Everything the action does is two commands:
 
 ```sh
-composer global require sugarcraft/candy-code
-candy-code -p "summarize this repo" --output-format json \
+composer create-project --no-dev --prefer-dist sugarcraft/candy-code /tmp/candy-code
+PATH="/tmp/candy-code/bin:$PATH" candy-code -p "summarize this repo" --output-format json \
   --permission-mode plan --max-cost 1.00 --root "$PWD"
 ```
 
@@ -174,5 +179,11 @@ modes themselves in [PERMISSIONS.md](PERMISSIONS.md).
 
 `.github/` workflows are guarded by the monorepo CI; `action.yml` itself is a plain composite and
 is checked with [actionlint](https://github.com/rhysd/actionlint) (`actionlint candy-code/action.yml
--parse-only` suffices for syntax). There is no repo test surface for it by design — zero PHP, zero
-fixtures, zero suite figures; the doctrine above is the test.
+-parse-only` suffices for syntax). It now has a real repo test surface, in two layers:
+`tools/tests/ActionYmlInstallTest.php` (the `tools-guards` job) pins the install leg to the
+resolvable `create-project` shape and fails the build if any `${{ inputs.* }}` ever interpolates
+into a `run:` body, and `.github/workflows/candy-code-action-selftest.yml` runs the shipped action
+end-to-end — offline echo provider, `plan` mode — whenever `action.yml` or this page changes,
+asserting exit code 0 and a non-empty `result`. The self-test installs from Packagist's split repo,
+so it proves the install leg and the envelope, not unmerged PHP; the doctrine above is still what
+keeps the payload itself honest.
