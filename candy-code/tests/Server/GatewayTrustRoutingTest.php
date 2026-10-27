@@ -90,12 +90,24 @@ final class GatewayTrustRoutingTest extends TestCase
 
         $askId = (string) $data['askId'];
         $settled = $this->call($client, 'context.trust', ['sessionId' => $sessionId, 'askId' => $askId, 'decision' => 'grant']);
-        self::assertSame(['askId' => $askId, 'status' => 'granted', 'persisted' => false], $settled, 'the answer reached the child that asked');
+
+        // The gateway stamps provenance on EVERY routed result — Gateway::forward
+        // annotates `$result->root ??= $root` — so the answer that came back is
+        // four keys. Keeping full-shape strictness (the same posture as the
+        // prompt-event leg above asserting $data['root']) is what pins the
+        // routing: the child that owns this root answered it, not the primary.
+        self::assertSame(
+            ['askId' => $askId, 'status' => 'granted', 'persisted' => false, 'root' => $this->other],
+            $settled,
+            'the answer reached the child that asked',
+        );
 
         // The CHILD settled its own record: a second answer is refused as
         // already-resolved there, and a later measurement reads the settled
-        // truth back — routing, not luck, is what made both possible.
-        $again = $client->request('context.trust', ['sessionId' => $sessionId, 'askId' => $askId, 'decision' => 'grant']);
+        // truth back — routing, not luck, is what made both possible. (The
+        // refusal is a CHILD answer, so it must be waited for like every
+        // other routed reply.)
+        $again = $this->reply($client, 'context.trust', ['sessionId' => $sessionId, 'askId' => $askId, 'decision' => 'grant']);
         self::assertSame(-32009, $again['error']['code']);
         self::assertSame('already_resolved', $again['error']['data']['kind']);
         self::assertSame('granted', $this->call($client, 'context.sources', ['sessionId' => $sessionId])['trust']['status']);
@@ -140,8 +152,25 @@ final class GatewayTrustRoutingTest extends TestCase
     }
 
     /**
-     * A call that may be answered later (it waits on a child): run the loop
-     * until its response arrives.
+     * Send a call whose answer may be an error (a routed child settles its
+     * own asks, and the gateway's replies are async by nature), run the loop
+     * until that response arrives, and return the WHOLE reply envelope.
+     *
+     * @param array<string, mixed> $params
+     *
+     * @return array<string, mixed>
+     */
+    private function reply(WireClient $client, string $method, array $params = []): array
+    {
+        $client->raw((string) \json_encode(['jsonrpc' => '2.0', 'id' => $id = 'w' . \bin2hex(\random_bytes(4)), 'method' => $method, 'params' => $params === [] ? new \stdClass() : $params]));
+        self::assertTrue($this->runUntil(static fn (): bool => $client->response($id) !== null, 40.0), $method . ' was never answered');
+
+        return (array) $client->response($id);
+    }
+
+    /**
+     * A call that must succeed: run the loop until its answer arrives and
+     * return its `result` arm.
      *
      * @param array<string, mixed> $params
      *
@@ -149,9 +178,7 @@ final class GatewayTrustRoutingTest extends TestCase
      */
     private function call(WireClient $client, string $method, array $params = []): array
     {
-        $client->raw((string) \json_encode(['jsonrpc' => '2.0', 'id' => $id = 'w' . \bin2hex(\random_bytes(4)), 'method' => $method, 'params' => $params === [] ? new \stdClass() : $params]));
-        self::assertTrue($this->runUntil(static fn (): bool => $client->response($id) !== null, 40.0), $method . ' was never answered');
-        $response = (array) $client->response($id);
+        $response = $this->reply($client, $method, $params);
         self::assertArrayHasKey('result', $response, $method . ' failed: ' . \json_encode($response));
 
         return (array) $response['result'];
