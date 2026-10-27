@@ -164,15 +164,6 @@
    "note": "r1 CLEAN 0/0/0+2NIT (shadow census continue; liveness memo-only never-launch; 7-key ksort wire; 14T/127A; drift 12T/331A/1F = restore-by-design, weld regen; vitest 21/21; TS2339 transient pre-regen). WELD: regen trio+dist, DUR ContextSourcesMcpUserTierTest 4T, §4 unstaged",
    "ts": "2026-10-27T23:25:16.138992+00:00"
   },
-  "cure-w7": {
-   "stage": "clean",
-   "round": 1,
-   "session": "IN-WELDER batch-3",
-   "worktree": "/home/sites/cc-cmp-cure-w7",
-   "branch": "cc/cure-w7",
-   "note": "cure landed 08862c003 (gate saveTranscript return / appendSessionEvent return 0 on sessionTombstoned; red-before 2F green-after 23T/108A; polarity keepers 61T/306A; pair-only 26,272; no DUR). WELD: quick pick, gates Session|Usage|Tombstone; then W7 r2 re-review",
-   "ts": "2026-10-27T23:25:16.138992+00:00"
-  },
   "P-MENU.e": {
    "stage": "build",
    "round": 1,
@@ -516,7 +507,8 @@
    "evidence": "lanes/P-MENU.d/{BRIEF,REPORT,REVIEW-1,REVIEW-2}.md all persisted; r2 CLEAN per lead dispatch",
    "prune": "cherry proof both '-'; worktree+branch pruned"
   },
-  "C-MCP-4.a": "WELDED 2026-10-27 master a6fa47900 + regen 9f02221a0 (pick of ab5d60359, lane base 33d015d4a, onto 8eab506d9; clean zero conflicts; %ae/%ce separate greps 1/1 detain@interserver.net, zero Co-Authored trailers; 6 files +374/-30). PROTOCOL REGEN commit 9f02221a0: gen-protocol-schema --write rewrote docs/protocol/candy-code.v1.schema.json (SERVER.md byte-unchanged, rc0); npm run gen:protocol rewrote src-web/protocol/generated.ts; npm run build CHANGED dist bundle hashes (index-qVoNgm2E.js/index-DRzy8kqq.css -> index-BNRf2D_W.js/index-CMMCaNxg.css) - dist/index.html+manifest.json+assets committed in the same regen commit. Gates post-regen (plain pipe cwd candy-code env -u LINES -u COLUMNS): --filter 'ContextSources|ContextSourcesMcpUserTier|ProtocolSchemaDrift|ServerProtocolDocumentationDrift' = Tests: 26, Assertions: 459 OK (2 pre-existing deprecations) GREEN (14T-class + drift pair 12T, brief's '331A' figure is the pre-regen RED; regen-green rides the 459 total); vitest --no-file-parallelism contextPanel.spec + src-web/stores = 18 files/154 passed 0 failed; generated.spec.ts 3/3 (dormantRoster.spec.ts NOT YET EXISTENT - C-WEB-3.g creates it, no row owed); vue-tsc -b --force = exactly the 6 foreign TS2554s (reducer.spec :307/:312/:317/:320 + statusBar.spec :200/:209), zero lane errors; gen-command-docs/gen-tool-docs/gen-settings-doc/gen-protocol-schema --check all up-to-date rc0; five-guard 133T/15816A F2 = staleness pair ONLY (pinned 25,537 vs live 26,274 - closeout re-pin). DUR DUTY: NEW candy-code/tests/Protocol/ContextSourcesMcpUserTierTest.php (4T) - LIST ONLY, durations.tsv is closeout gate duty. §4 mark ✅ a6fa47900 left UNSTAGED. Reviewer NITs N1/N2 report-only (tests 1-3 read process-cold memo; report regen/committed figure pairing note)."
+  "C-MCP-4.a": "WELDED 2026-10-27 master a6fa47900 + regen 9f02221a0 (pick of ab5d60359, lane base 33d015d4a, onto 8eab506d9; clean zero conflicts; %ae/%ce separate greps 1/1 detain@interserver.net, zero Co-Authored trailers; 6 files +374/-30). PROTOCOL REGEN commit 9f02221a0: gen-protocol-schema --write rewrote docs/protocol/candy-code.v1.schema.json (SERVER.md byte-unchanged, rc0); npm run gen:protocol rewrote src-web/protocol/generated.ts; npm run build CHANGED dist bundle hashes (index-qVoNgm2E.js/index-DRzy8kqq.css -> index-BNRf2D_W.js/index-CMMCaNxg.css) - dist/index.html+manifest.json+assets committed in the same regen commit. Gates post-regen (plain pipe cwd candy-code env -u LINES -u COLUMNS): --filter 'ContextSources|ContextSourcesMcpUserTier|ProtocolSchemaDrift|ServerProtocolDocumentationDrift' = Tests: 26, Assertions: 459 OK (2 pre-existing deprecations) GREEN (14T-class + drift pair 12T, brief's '331A' figure is the pre-regen RED; regen-green rides the 459 total); vitest --no-file-parallelism contextPanel.spec + src-web/stores = 18 files/154 passed 0 failed; generated.spec.ts 3/3 (dormantRoster.spec.ts NOT YET EXISTENT - C-WEB-3.g creates it, no row owed); vue-tsc -b --force = exactly the 6 foreign TS2554s (reducer.spec :307/:312/:317/:320 + statusBar.spec :200/:209), zero lane errors; gen-command-docs/gen-tool-docs/gen-settings-doc/gen-protocol-schema --check all up-to-date rc0; five-guard 133T/15816A F2 = staleness pair ONLY (pinned 25,537 vs live 26,274 - closeout re-pin). DUR DUTY: NEW candy-code/tests/Protocol/ContextSourcesMcpUserTierTest.php (4T) - LIST ONLY, durations.tsv is closeout gate duty. §4 mark ✅ a6fa47900 left UNSTAGED. Reviewer NITs N1/N2 report-only (tests 1-3 read process-cold memo; report regen/committed figure pairing note).",
+  "cure-w7": "MASTER REPAIR 2026-10-27 d3395595e (pick of 08862c003, lane base 8eab506d9; clean zero conflicts; 2 files: candy-code/src/Session/EnhancedSessionStore.php +31/-1, candy-code/tests/Session/UsageRecordsTest.php +54/0; %ae/%ce separate greps 1/1 detain@interserver.net, zero Co-Authored trailers). NOT a plan step: no §4 mark, welded count unchanged (90). Gates (plain pipe cwd candy-code env -u LINES -u COLUMNS): --filter 'UsageRecords|SessionStore|Tombstone' = Tests: 130, Assertions: 477 OK (2 pre-existing deprecations) EXACT; --filter 'SessionEventsTable|TranscriptResume|EventLog|DebouncedTranscript|ShareStore' = Tests: 61, Assertions: 306 OK EXACT; gen-command-docs/gen-tool-docs/gen-settings-doc --check all up-to-date rc0 (lane touched no docs); five-guard 133T/15816A F2 = staleness pair ONLY (25,537 pinned vs live - closeout re-pin). DUR: no new *Test.php (pins ride existing UsageRecordsTest). inflight entry removed at this weld."
  },
  "carries": [
   "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest — closeout gate duty",
@@ -571,7 +563,8 @@
   "DUR row owed at closeout gate: candy-code/tests/Host/Commands/HooksHostCommandLiveChainTest.php (4T)",
   "DUR rows owed at closeout gate (P-MENU.d): candy-code/tests/Tui/MenuReachabilityTest.php (14T), candy-code/tests/Tui/MenuKeyboardOwnershipTest.php (5T), candy-code/tests/App/MenuActionDispatchTest.php (9T)",
   "P-MENU.d -> P-MENU.e HANDOFF (explicit): fold-budget non-monotonic MINOR is a RECORDED P-MENU.e carry - the P-MENU.e dispatch brief MUST pick it up; weld made NO code change per lead ruling (weld note only)",
-  "DUR row owed at gate: candy-code/tests/Protocol/ContextSourcesMcpUserTierTest.php (4T)"
+  "DUR row owed at gate: candy-code/tests/Protocol/ContextSourcesMcpUserTierTest.php (4T)",
+  "W7 r1 MINOR resurrect seam cured on master: saveTranscript/appendSessionEvent refuse tombstoned ids, red-first pins in UsageRecordsTest; EventLog refused-seq-0 broadcast seam noted report-only"
  ],
- "updated": "2026-10-27T23:30:08.510214+00:00"
+ "updated": "2026-10-27T23:36:23.930716+00:00"
 }
