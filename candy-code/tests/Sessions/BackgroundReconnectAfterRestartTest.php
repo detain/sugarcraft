@@ -289,7 +289,9 @@ final class BackgroundReconnectAfterRestartTest extends TestCase
         // Pinned off the source rather than by launching: a second
         // Bootstrap::chat()-launching file destabilises the load-sensitive
         // forked-completion tests (see RulePathScopingWiringTest).
-        $method = new \ReflectionMethod(Bootstrap::class, 'chat');
+        // P-TABS.d: the Chat construction moved into buildChat() (chat() is
+        // now its one-line launch delegate); the pin travels with the body.
+        $method = new \ReflectionMethod(Bootstrap::class, 'buildChat');
         $lines = file((string) $method->getFileName());
         $body = implode('', array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
 

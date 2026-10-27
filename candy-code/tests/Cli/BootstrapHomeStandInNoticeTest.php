@@ -68,7 +68,10 @@ final class BootstrapHomeStandInNoticeTest extends TestCase
     {
         $bootstrapFile = \dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php';
         $lines = file($bootstrapFile);
-        $method = new \ReflectionMethod(Bootstrap::class, 'chat');
+        // P-TABS.d: the drain moved with the extraction — chat() is now a
+        // one-line delegate and buildChat() carries the body (launch-gated, so
+        // tabChat() cannot reach it). The pin travels with the code.
+        $method = new \ReflectionMethod(Bootstrap::class, 'buildChat');
         // E325 direction one (plan_comparison W4 weld): reflection's line
         // numbers address the file the method is DECLARED in while the scrape
         // reads one named path. True by construction today; asserted so a
@@ -77,15 +80,15 @@ final class BootstrapHomeStandInNoticeTest extends TestCase
         $this->assertSame(
             $bootstrapFile,
             $method->getFileName(),
-            'chat() is no longer declared in ' . $bootstrapFile . '; read the body from'
+            'buildChat() is no longer declared in ' . $bootstrapFile . '; read the body from'
                 . ' $method->getFileName() or keep the drain where it is.',
         );
-        $slice = self::declaredSlice($lines, 'chat', $method->getStartLine(), $method->getEndLine());
+        $slice = self::declaredSlice($lines, 'buildChat', $method->getStartLine(), $method->getEndLine());
 
         $this->assertSame(
             1,
             substr_count($slice, 'self::reportHomeDirectoryStandIn();'),
-            'chat() must drain the stand-in row exactly once — every other launch mode builds through chat()',
+            'chat() builds through buildChat(), which must drain the stand-in row exactly once — every other launch mode builds the same way',
         );
     }
 

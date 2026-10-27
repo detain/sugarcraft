@@ -1119,6 +1119,17 @@ final class Bootstrap
     private static array $projectTierRefusals = [];
 
     /**
+     * P-TABS.d: the workspace memo {@see sharedWorkspace()} reads — the
+     * instance the launch's {@see describeWorkspace()} left behind, with the
+     * root it was described for so a tab aimed at another root falls back to
+     * a fresh describe instead of riding the wrong workspace.
+     */
+    private static ?\SugarCraft\Code\Host\WorkspaceContext $memoWorkspace = null;
+
+    /** @see self::$memoWorkspace — the root the memoized workspace describes. */
+    private static ?string $memoWorkspaceRoot = null;
+
+    /**
      * The subset of {@see $projectTierRefusals} already reported.
      *
      * @var array<string, true>
@@ -1192,6 +1203,45 @@ final class Bootstrap
      */
     public static function chat(?string $root = null): Chat
     {
+        return self::buildChat($root, null, true);
+    }
+
+    /**
+     * P-TABS.d: the tab strip's session factory — one Chat per tab, built on
+     * the SAME workspace the launch described (the {@see sharedWorkspace()}
+     * memo), so opening a tab costs no re-scan of config, skills, hooks or
+     * agents.
+     *
+     * `$sessionId` names an existing session to load — its transcript is read
+     * from the store and its single-writer lock is taken, and a session
+     * another process already holds opens through the SAME read-only window
+     * {@see Chat::withSessionLocking()} gives the launch — or null to open a
+     * freshly-minted row, lazily as at launch (ISS-102).
+     *
+     * A tab carries NONE of the launch's traffic: no launch notices are
+     * seeded, the runtime-notice inbox is not drained (`drainsRuntimeNotices:
+     * false` — the launch's Chat owns that destructive read, E171), the
+     * process decisions the launch made (status line, media render mode,
+     * static spinner) are not re-run because each CLEARS as well as sets, and
+     * the refusal/skip/override reports belong to the launch that armed them.
+     * Each tab gets its own `liveToolEvents` ArrayObject from Chat's
+     * constructor default, so its pump lineage is its own.
+     */
+    public static function tabChat(?string $root, ?string $sessionId): Chat
+    {
+        return self::buildChat($root, $sessionId, false);
+    }
+
+    /**
+     * The body {@see chat()} carried before P-TABS.d, shared with the tab
+     * path. `$launch` decides: whether the workspace is described fresh or
+     * taken from the memo, whether the session opens through the launch-mode
+     * ladder ({@see openSession()}) or the tab's direct store read
+     * ({@see openTabSession()}), whether Chat is appointed the notice drainer,
+     * and whether the notice/report/drain tail runs at all.
+     */
+    private static function buildChat(?string $root, ?string $sessionId, bool $launch): Chat
+    {
         // `?: null` rather than a bare `getcwd()`: the call can fail (deleted
         // cwd, permissions), every $root consumer below is typed ?string, and
         // the one layer that genuinely needs a string — {@see requireRoot()},
@@ -1205,7 +1255,9 @@ final class Bootstrap
         // the workflow engine and the runtime-notice inbox — so a host that runs
         // sessions without a TUI builds exactly what this launch does. What stays
         // here is the session this window opens and the Chat that paints it.
-        $workspace = self::workspace($root);
+        $workspace = $launch
+            ? self::describeWorkspace($root)
+            : self::sharedWorkspace($root);
         $userConfig = $workspace->userConfig;
         $sessionStore = $workspace->sessionStore ?? throw new \LogicException('workspace() builds a session store');
         $agentManager = $workspace->agentManager;
@@ -1218,25 +1270,34 @@ final class Bootstrap
         // path {@see \SugarCraft\Code\Renderer}'s docblock names as also
         // live) has to get it too.
         //
-        // ALWAYS CALLED, including when nothing is configured: the call CLEARS
-        // as well as sets, and a process that builds a second Chat against
-        // different settings must not keep painting the first one's text. In a
-        // test suite that runs many launches in one process this is the only
-        // thing standing between them.
+        // CALLED ON EVERY LAUNCH, including when nothing is configured: the
+        // call CLEARS as well as sets, and a process that builds a second
+        // Chat against different settings must not keep painting the first
+        // one's text. In a test suite that runs many launches in one process
+        // this is the only thing standing between them.
         //
         // $root, not `getcwd()`: a `git`-shaped status command must report the
         // repository the session was launched against. `--root <lib>` in a
         // monorepo is exactly the case where the two differ.
-        StatusLineCommand::configure($userConfig, $root);
+        //
+        // P-TABS.d: gated on the launch. A tab rides the launch's memoized
+        // workspace and its $userConfig, so re-running a call that clears as
+        // well as sets could only re-state the same decision — or, after a
+        // mid-session change to the live one, roll it back. {@see tabChat()}.
+        if ($launch) {
+            StatusLineCommand::configure($userConfig, $root);
+        }
 
         // W2.2 (crush_media §8.7 gap-1): the resolved `ui.imageRenderMode`
         // becomes a process decision BEFORE the first image-bearing probe,
         // because the same statement chain below threads `ToolResult::mosaic()`
         // into Chat and ToolResult memoizes per mode from then on. Same
-        // always-called, clear-as-well-as-set shape as the statusLine line
+        // launch-called, clear-as-well-as-set shape as the statusLine line
         // above it: a second launch in one process must not keep painting
-        // with the first one's mode.
-        self::applyMediaRenderMode($userConfig);
+        // with the first one's mode — and a tab must not repaint at all.
+        if ($launch) {
+            self::applyMediaRenderMode($userConfig);
+        }
 
         // rv1014 FX1 (carries rv-a11y-4): the reduced-motion switch lands on the
         // same launch funnel, one line, before any frame can index the spinner.
@@ -1245,14 +1306,20 @@ final class Bootstrap
         // opt-in env reads speak; unset or any other word leaves the spinner
         // animating. Gated inside AgentLiveRegistry so every drawing surface
         // goes static at once (see {@see \SugarCraft\Code\Agents\Live\AgentLiveRegistry::$staticSpinner}).
-        \SugarCraft\Code\Agents\Live\AgentLiveRegistry::setStaticSpinner(
-            EnvBool::isTrue(getenv('CANDY_CODE_REDUCED_MOTION')),
-        );
+        if ($launch) {
+            \SugarCraft\Code\Agents\Live\AgentLiveRegistry::setStaticSpinner(
+                EnvBool::isTrue(getenv('CANDY_CODE_REDUCED_MOTION')),
+            );
+        }
 
         // The session this window runs in, opened on the workspace's ONE store:
         // seedSession() is what makes /sessions, the tab strip, /branch and the
         // auto-title call reachable at all on a real run (crush_feat.md §5 E1).
-        $opened = self::openSession($sessionStore, ...self::selectedProviderLabel());
+        // P-TABS.d: a tab names its session (or null for a fresh lazy mint) and
+        // goes through {@see openTabSession()} — no launch-mode ladder.
+        $opened = $launch
+            ? self::openSession($sessionStore, ...self::selectedProviderLabel())
+            : self::openTabSession($sessionStore, $sessionId);
         $sessionId = $opened['id'];
         $sessionName = $opened['name'];
 
@@ -1421,8 +1488,9 @@ final class Bootstrap
             // `drain()` is destructive — a second Chat that polled would steal
             // rows rather than duplicate them — and this method (with the
             // workspace() it calls first) is the only place in `src/` that
-            // does either.
-            drainsRuntimeNotices: true,
+            // does either. P-TABS.d: the appointment stays with the launch
+            // alone; a tab passes false and never polls the shared inbox.
+            drainsRuntimeNotices: $launch,
             // The instance the backend above got too — see the block there. This is
             // the argument that makes `/rules` reach the prompt rather than merely
             // decorate the transcript.
@@ -1434,6 +1502,21 @@ final class Bootstrap
             // none of them adds constructor state here.
             workspace: $workspace,
         );
+
+        if (!$launch) {
+            // P-TABS.d: the tab takes its single-writer session lock — the
+            // same audit SES-3(b) door the launch uses below, so a tab opened
+            // on a session another process (or the launch itself) already
+            // holds lands in Chat's existing read-only window — and carries
+            // none of the launch's traffic. The notices, refusals, skips,
+            // overrides and the narrowed-grant drain belong to the launch
+            // that armed them; `workspace()` resets the lists they collect
+            // into, which is why the tab rides the memo instead of calling it
+            // again. Each Chat here already carries its own `liveToolEvents`
+            // ArrayObject (Chat's constructor default), so the tab's pump
+            // lineage is its own.
+            return $chat->withSessionLocking();
+        }
 
         // Drained AFTER construction for the same reason the workflow registry's
         // refusals are: the walk happens inside the constructor, so there is
@@ -1598,6 +1681,91 @@ final class Bootstrap
         // is the first thing the user does, and Esc leaves a usable chat.
         return $opened['picker'] ? $chat->withSessionPickerOpen() : $chat;
     }
+
+    /**
+     * P-TABS.d: the tab path's workspace memo read — the instance the launch
+     * (or an earlier tab, or this method's own cold fallback) described, for
+     * as long as the root matches. A cold process with no launch to ride is
+     * the one case that still pays a full {@see workspace()} describe, and
+     * memoizes it so the next tab does not; a tab aimed at a DIFFERENT root
+     * falls back the same way rather than riding the wrong workspace.
+     */
+    private static function sharedWorkspace(?string $root): \SugarCraft\Code\Host\WorkspaceContext
+    {
+        if (self::$memoWorkspace !== null && self::$memoWorkspaceRoot === $root) {
+            return self::$memoWorkspace;
+        }
+
+        return self::describeWorkspace($root);
+    }
+
+    /**
+     * P-TABS.d: describe a fresh workspace and leave it on the tab memo. The
+     * launch path of {@see buildChat()} always comes through here: a second
+     * launch still re-describes — `workspace()`'s own one-process-one-root
+     * law (Appendix O §4.1) — and the memo simply follows it.
+     */
+    private static function describeWorkspace(?string $root): \SugarCraft\Code\Host\WorkspaceContext
+    {
+        $workspace = self::workspace($root);
+        self::$memoWorkspace = $workspace;
+        self::$memoWorkspaceRoot = $root;
+
+        return $workspace;
+    }
+
+    /**
+     * P-TABS.d: the tab path's session open — the {@see openSession()} shape
+     * without the launch-mode ladder, the attach probe or the picker. A named
+     * session with a row is read from the store (its transcript loads, and
+     * the caller takes its lock through {@see Chat::withSessionLocking()}, so
+     * a row another process holds opens read-only exactly as at launch); a
+     * named session with no row and an unnamed tab both mint LAZILY, under
+     * the given id or a fresh one — the ISS-102 shape, so an empty tab leaves
+     * no record behind.
+     *
+     * @return array{id: string, name: ?string, history: list<\SugarCraft\Code\Message>, picker: bool, mint: ?\Closure}
+     */
+    private static function openTabSession(SessionStore|EnhancedSessionStore $store, ?string $sessionId): array
+    {
+        if ($sessionId !== null) {
+            $row = $store->session($sessionId);
+            if ($row !== null) {
+                return [
+                    'id' => $sessionId,
+                    'name' => \is_string($row['name'] ?? null) && $row['name'] !== '' ? $row['name'] : null,
+                    'history' => Chat::loadTranscript($store, $sessionId),
+                    'picker' => false,
+                ];
+            }
+            $id = $sessionId;
+        } else {
+            $id = bin2hex(random_bytes(8));
+        }
+
+        [$provider, $model] = self::selectedProviderLabel();
+        $cwd = getcwd() ?: null;
+        $branch = $cwd === null ? null : SessionStore::gitBranchAt($cwd);
+        // ISS-102 shape: the row itself is minted only when the tab first
+        // dispatches a real prompt, and the defensive re-read keeps an
+        // arriving row's own metadata if anything else created it first.
+        $mint = static function () use ($store, $id, $provider, $model, $cwd, $branch): void {
+            if ($store->session($id) !== null) {
+                return;
+            }
+            $store->createSession($id, $provider, $model, null, null, $cwd, $branch);
+        };
+        if ($store instanceof EnhancedSessionStore) {
+            try {
+                $store->pruneEmptySessions($id);
+            } catch (\Throwable) {
+                // Housekeeping only; opening a tab never fails over it.
+            }
+        }
+
+        return ['id' => $id, 'name' => null, 'history' => [], 'picker' => false, 'mint' => $mint];
+    }
+
     /**
      * The non-UI half of {@see chat()}: everything a session needs from its
      * project root that is not a screen, as one {@see \SugarCraft\Code\Host\WorkspaceContext}

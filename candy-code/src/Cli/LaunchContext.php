@@ -2323,6 +2323,14 @@ final class LaunchContext
                 ($writer = $chat->workspace()?->service(\SugarCraft\Code\Config\Settings\SettingsWriter::class)) instanceof \SugarCraft\Code\Config\Settings\SettingsWriter
                     ? $writer
                     : self::settingsWriter($root),
+            )
+            // P-TABS.d: the tab strip's session factory (field only — the
+            // routing lands in P-TABS.e). Each call hands Bootstrap::tabChat()
+            // this launch's root, so every tab rides the workspace the launch
+            // described: an existing id loads that session, null mints a fresh
+            // tab lazily, and a session another process holds opens read-only.
+            ->withTabFactory(
+                static fn (?string $sessionId): \SugarCraft\Code\Chat => Bootstrap::tabChat($root, $sessionId),
             );
     }
 

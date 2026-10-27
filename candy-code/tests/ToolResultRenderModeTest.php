@@ -282,17 +282,21 @@ final class ToolResultRenderModeTest extends TestCase
 
     public function testTheProductionLaunchWiresTheModeBeforeThreadingTheMosaic(): void
     {
-        // Structural pin on Bootstrap::chat(): exactly one setter-call region
-        // (review brief), and it runs BEFORE the `mosaic:` argument memoizes
-        // the first probe — after that point the wrong mode would stick.
-        $method = new \ReflectionMethod(Bootstrap::class, 'chat');
+        // Structural pin on Bootstrap's launch build: exactly one setter-call
+        // region (review brief), and it runs BEFORE the `mosaic:` argument
+        // memoizes the first probe — after that point the wrong mode would
+        // stick. P-TABS.d: the construction moved into buildChat(), where the
+        // call sits launch-gated (tabChat() must NOT re-apply it); the pin
+        // travels with the body and the gate keeps the semantics it names.
+        $method = new \ReflectionMethod(Bootstrap::class, 'buildChat');
         $file = file($method->getFileName());
         self::assertIsArray($file);
         $slice = implode('', array_slice($file, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
 
         // Line-anchored (no leading `//` possible) so commenting the call out
-        // reddens this pin instead of still matching as a substring.
-        self::assertSame(1, preg_match_all('/^ {8}self::applyMediaRenderMode\(\$userConfig\);$/m', $slice));
+        // reddens this pin instead of still matching as a substring; the
+        // width is open past one because P-TABS.d nested the call one level.
+        self::assertSame(1, preg_match_all('/^ +self::applyMediaRenderMode\(\$userConfig\);$/m', $slice));
         $wiring = strpos($slice, 'self::applyMediaRenderMode($userConfig);');
         $threading = strpos($slice, 'mosaic: ToolResult::mosaic(),');
         self::assertNotFalse($threading);

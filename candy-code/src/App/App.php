@@ -518,6 +518,14 @@ final class App implements Model
          * touched by hand. Process-lifetime, rides every mutate.
          */
         public readonly PaneAutoShow $paneAutoShow = new PaneAutoShow(),
+        /**
+         * P-TABS.d: the tab strip's session factory — `LaunchContext::app()`
+         * installs a closure over {@see \SugarCraft\Code\Cli\Bootstrap::tabChat()}
+         * for the launch's root; null means this App was built without one.
+         * Field only: nothing routes through it until the tab strip lands
+         * (P-TABS.e). Rides every mutate.
+         */
+        public readonly ?\Closure $tabFactory = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -1939,6 +1947,15 @@ final class App implements Model
     public function withPaneAutoShow(PaneAutoShow $v): self
     {
         return $this->mutate(paneAutoShow: $v);
+    }
+
+    /**
+     * P-TABS.d: install the tab strip's session factory (field only — the
+     * routing lands in P-TABS.e).
+     */
+    public function withTabFactory(?\Closure $v): self
+    {
+        return $this->mutate(tabFactory: $v);
     }
 
     public function withCompactorConfig(?CompactorConfig $v): self
@@ -4903,6 +4920,7 @@ final class App implements Model
             toolWalkState: array_key_exists('toolWalkState', $changes) ? $changes['toolWalkState'] : $this->toolWalkState,
             agentPaused: array_key_exists('agentPaused', $changes) ? $changes['agentPaused'] : $this->agentPaused,
             paneAutoShow: array_key_exists('paneAutoShow', $changes) ? $changes['paneAutoShow'] : $this->paneAutoShow,
+            tabFactory: array_key_exists('tabFactory', $changes) ? $changes['tabFactory'] : $this->tabFactory,
         );
     }
 }

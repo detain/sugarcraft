@@ -127,7 +127,9 @@ final class BootstrapTerminalGuidanceNoticeTest extends TestCase
     {
         $bootstrapFile = \dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php';
         $lines = file($bootstrapFile);
-        $method = new \ReflectionMethod(Bootstrap::class, 'chat');
+        // P-TABS.d: the guidance drain moved into buildChat() with the
+        // extraction (launch-gated, so tabChat() never reaches it).
+        $method = new \ReflectionMethod(Bootstrap::class, 'buildChat');
         // E325 direction one (plan_comparison W4 weld): reflection's line
         // numbers address the file the method is DECLARED in while the scrape
         // reads one named path. True by construction today; asserted so a
@@ -136,15 +138,15 @@ final class BootstrapTerminalGuidanceNoticeTest extends TestCase
         $this->assertSame(
             $bootstrapFile,
             $method->getFileName(),
-            'chat() is no longer declared in ' . $bootstrapFile . '; read the body from'
+            'buildChat() is no longer declared in ' . $bootstrapFile . '; read the body from'
                 . ' $method->getFileName() or keep the drain where it is.',
         );
-        $slice = self::declaredSlice($lines, 'chat', $method->getStartLine(), $method->getEndLine());
+        $slice = self::declaredSlice($lines, 'buildChat', $method->getStartLine(), $method->getEndLine());
 
         $this->assertSame(
             1,
             substr_count($slice, 'self::reportTerminalGuidance();'),
-            'chat() must drain the guidance row exactly once, defaulting to the live stdout answer',
+            'chat() builds through buildChat(), which must drain the guidance row exactly once, defaulting to the live stdout answer',
         );
     }
 
