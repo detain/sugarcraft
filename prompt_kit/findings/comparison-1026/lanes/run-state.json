@@ -10,6 +10,7 @@
   "C-AGT-7.a",
   "C-CTX-1.a",
   "C-CTX-1.b",
+  "C-CTX-2.a",
   "C-CTX-2.b",
   "C-EXT-1.a",
   "C-EXT-1.b",
@@ -46,6 +47,7 @@
   "C-TOOL-1.b",
   "C-TOOL-1.c",
   "C-TOOL-7.a",
+  "C-TOOL-7.c",
   "C-WEB-1.a",
   "C-WEB-1.b",
   "C-WEB-1.c",
@@ -70,8 +72,7 @@
   "P-TABS.b",
   "P-TABS.c",
   "P-TABS.d",
-  "P-TABS.h",
-  "C-TOOL-7.c"
+  "P-TABS.h"
  ],
  "inflight": {
   "C-AGT-3.b": {
@@ -83,12 +84,12 @@
    "note": "ORIGINAL builder alive+writing (twin ses_e811f5381 stood down CLOSED @1380@). Owes 2 new test files (AgentMemoryTest + TaskToolAgentMemoryTest DUR) + guards + commit."
   },
   "C-SEC-5.a": {
-   "stage": "review",
+   "stage": "clean",
    "round": 2,
    "worktree": "/home/sites/cc-cmp-C-SEC-5.a",
    "branch": "cc/C-SEC-5.a",
-   "session": "pending-r2-dispatch",
-   "note": "fix r2 landed 86cc08349 (3 files +36/-3: Bootstrap MCP-door error Lang::t cli.mcp.trust.not_granted + pin testAnAbsentConfigStillExplainsTheRefusalThroughDoor red-first + TrustTarget docblock; NIT-2 skipped per ruling). r2 reviewer on fix scope; after CLEAN weld: chain 59d84834d+86cc08349 base 86f43fae2-era, gates ProjectTrust|BootstrapProjectTrustGrant 22T/80A-class + TrustKey|DocFigure 109T/4499A + pair-only; DUR ProjectTrustCensusTest 8T + BootstrapProjectTrustGrantTest 9T."
+   "session": "closed",
+   "note": "r2 CLEAN gates RUN. Weld chain 59d84834d+86cc08349, gates ProjectTrust-family 22T/80A + TrustKey|DocFigure 109T/4499A + pair-only; DUR ProjectTrustCensusTest 8T + BootstrapProjectTrustGrantTest 9T; \u00a74 first-pick unstaged; evidence 4 files."
   },
   "P-MENU.d": {
    "stage": "build",
@@ -107,28 +108,44 @@
    "note": "r1 CLEAN persisted. WELD after C-TOOL-7.c: plain pick 0aea27278, gen-protocol-schema --check commit-only-on-drift, gates ServedRuntimeNoticeDrain|SessionHost 6T/29A + family 131T/7226A + Host|Server 732T/6316A (AttachPaging :94/:106 2F base-inherited disclose) + pair-only; DUR ServedRuntimeNoticeDrainTest.php 6T; evidence 3 files."
   },
   "C-SES-4.b": {
-   "stage": "review",
+   "stage": "clean",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-SES-4.b",
    "branch": "cc/C-SES-4.b",
-   "session": "ses_e81179a54ffeifB2iKtKdmw8Tg",
-   "note": "build 0f0ffd928 (11 files +915/-11, RetryingEventSink/AsyncOtlpTransport/TelemetryRetryTickMsg NEW). DUR rows: AsyncOtlpTransportTest + ChatTelemetryRetryTickTest. EnvRoster rows in-step green."
+   "session": "closed",
+   "note": "r1 CLEAN gates RUN. Weld: plain pick 0f0ffd928, no regen, gates Otel-family 82T/353A + EnvRosterDrift 37T + pair-only; DUR AsyncOtlpTransportTest + ChatTelemetryRetryTickTest; \u00a74 unstaged; evidence 3 files."
   },
   "C-WEB-3.c": {
-   "stage": "build",
-   "round": 1,
+   "stage": "fix",
+   "round": 2,
    "worktree": "/home/sites/cc-cmp-C-WEB-3.c",
    "branch": "cc/C-WEB-3.c",
-   "session": "ses_e81179a5dffeOOVN4xrqJP6LvH",
-   "note": "RESUMED disk-grounded @1387@ over 2 dirty files (workflows.ts + WorkflowPanel.vue); owes workflowStatus.spec.ts 3 pins + vitest + one commit. npm ci done. Second empty return => fresh cut. vitest-side spec, NO dist."
+   "session": "ses_e81088343ffeg9UNbN7UA1c4Q0",
+   "note": "fix r2 running (spec:98-102 drop-id pin). Post-clean weld w/ dist rebuild; vitest-side DUR note."
   },
   "C-SES-5.c": {
-   "stage": "review",
+   "stage": "clean",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-SES-5.c",
    "branch": "cc/C-SES-5.c",
-   "session": "ses_e8110314dffea6tHe12MaHUlhO",
-   "note": "build 205766e13 (3 workflow ymls: checksum-before-sign, .sha256.sig sidecar sign per C-SES-5.b SelfUpdate contract, phar-dev verify-line rewrite). r1 reviewer axes incl sidecar payload EXACT match to SelfUpdate leg + C-SES-9.d guard compliance. tools-guards, no candy-code DUR. gates tools battery 489T/2578A."
+   "session": "closed",
+   "note": "r1 CLEAN (sidecar-sign contract match to SelfUpdate verified). Weld: pick 205766e13, tools battery 489T/2578A, pair-only, no candy-code DUR (tools-guards); optional :319 generic-overclaim NIT cure at weld; \u00a74 unstaged; evidence 3 files."
+  },
+  "P-AGENT.d": {
+   "stage": "build",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-P-AGENT.d",
+   "branch": "cc/P-AGENT.d",
+   "session": "ses_e810d1fb8ffeSZd0vXLOkDvP1m",
+   "note": "web agents parity; cut from e36d86d84; npm ci log /tmp/opencode/cc-cmp-npm-P-AGENT.d.log."
+  },
+  "C-WEB-3.d": {
+   "stage": "build",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-C-WEB-3.d",
+   "branch": "cc/C-WEB-3.d",
+   "session": "ses_e810d1fb7ffeklyMB3RnMj3Hby",
+   "note": "workspace.close first caller; cut from e36d86d84; npm ci log /tmp/opencode/cc-cmp-npm-C-WEB-3.d.log."
   }
  },
  "blocked": [],
@@ -341,7 +358,14 @@
   "C-SES-9.d": "WELDED 2026-10-27 master fc5523777 (pick of 06a599a96, lane base 86f43fae2, onto fd13b3480; clean zero conflicts; file-set git-show-proven = 3 .github/workflows ymls + NEW tools/tests/WorkflowRunInterpolationTest.php, %ae/%ce 1/1 detain, zero trailers; review r1 CLEAN 0C/0M). Regen SKIPPED: lane touches no candy-code src/docs/web (diff-tree proven); gen-command-docs/gen-tool-docs/gen-settings-doc --check all 'up to date' rc0; gen-protocol-schema + npm/web build SKIPPED per brief. Gates: tools battery 489T/2578A OK EXACT (WorkflowRunInterpolationTest 3T EXECUTING, not skipped); filter 'WorkflowRunInterpolation' 3T/134A green; five-guard 133T/15682A F2 = staleness pair only (25,537 pinned vs 26,093 live, closeout re-pin duty). DUR: new file is tools/tests = NO candy-code durations.tsv row (precedent CandyCodeImageCacheBustTest, C-AGT-2.c); tools-guards job scans tools/tests/ dynamically; grep confirms 0 rows for the class. \u00a74 mark \u2705 fc5523777 UNSTAGED.",
   "P-AGENT.c": "WELDED 2026-10-27 master e68d0e69b (pick of 21c8fd6c5, lane base 86f43fae2, onto 58189bcc8; clean zero conflicts; file-set git-show-proven = AgentsMethods.php + MethodSchemas.php + ProtocolFixture.php + NEW tests/Server/AgentsColorAndInterruptTest.php; %ae/%ce 1/1 detain, zero trailers; review REVIEW-1.md consumed). PROTOCOL LANE: trio was restored pre-commit by lane; welder regenerated \u2014 regen commit 2392ed1d2 (docs/protocol/candy-code.v1.schema.json + candy-code-web/src-web/protocol/generated.ts; docs/SERVER.md NOT changed \u2014 drift guard green without it; dist bundle hashes UNCHANGED, build byte-identical). Gates: filter AgentsColorAndInterrupt 4T/18A green; ProtocolSchemaDrift|ServerProtocolDocumentationDrift 12T/332A GREEN post-regen; filter Agents 1693T/11858A 0F (disclosed -16A vs briefed ~11874, green); vitest generated.spec.ts 3/3 serial; five-guard 133T/15689A F2 = staleness pair only (pinned 25,537 vs live 26,097 = +4 new tests, closeout re-pin). DUR DUTY: NEW candy-code/tests/Server/AgentsColorAndInterruptTest.php (4T) needs a scripts/parallel-tests-durations.tsv row at closeout (welder forbidden from that file). \u00a74 mark \u2705 e68d0e69b UNSTAGED.",
   "C-WEB-3.b": "WELDED 2026-10-27 master bb8878195+cd7e8b766+df322c2c7 (picks 75f8f4a9d build + c0715ebc0 r2 cure, lane base 86f43fae2, onto 0a9421bfa; clean zero conflicts; web-only 8 files +488/-6 then +2 files +74/-12; dist rebuilt same era commit df322c2c7; gates vitest 4 files/42 green, vue-tsc 6 foreign TS2554 only, phpunit FilesMethods 1T/6A green, five-guard staleness pair 25537-vs-26097 only. %ae/%ce detain, zero trailers). DUR none; filesPanel.spec.ts vitest-side; dormantRoster rows (files.read) owed at C-WEB-3.g carry",
-  "C-TOOL-7.c": "WELDED 2026-10-27 master e36d86d84 (pick of 17f98223d, lane base 86f43fae2, onto 364ea4606; clean zero conflicts, en.php auto-merge; 4 files = LspLauncher.php + Bootstrap.php [bootstrap:lspClient region only] + lang/en.php + tests/LSP/LspLauncherAutoDetectTest.php; %ae/%ce separate greps 1/1 detain@interserver.net, zero Co-Authored trailers; review REVIEW-1.md r1 CLEAN consumed). NO regen duty verified: gen-settings-doc/gen-command-docs/gen-tool-docs --check all up-to-date, no regen commit. Gates: Lsp 314T/1326A OK; SettingsSchemaDocDrift 19T/179A OK; five-guard 133T/15689A F2 = ReadmeSuiteFigureDrift staleness pair only (25,537 pinned vs 26,099 live, closeout re-pin duty). \u00a74 mark \u2705 e36d86d84 UNSTAGED. no DUR (no new test file); seam COMPARISON.md:3435 cites-drift = closeout carry."
+  "C-TOOL-7.c": "WELDED 2026-10-27 master e36d86d84 (pick of 17f98223d, lane base 86f43fae2, onto 364ea4606; clean zero conflicts, en.php auto-merge; 4 files = LspLauncher.php + Bootstrap.php [bootstrap:lspClient region only] + lang/en.php + tests/LSP/LspLauncherAutoDetectTest.php; %ae/%ce separate greps 1/1 detain@interserver.net, zero Co-Authored trailers; review REVIEW-1.md r1 CLEAN consumed). NO regen duty verified: gen-settings-doc/gen-command-docs/gen-tool-docs --check all up-to-date, no regen commit. Gates: Lsp 314T/1326A OK; SettingsSchemaDocDrift 19T/179A OK; five-guard 133T/15689A F2 = ReadmeSuiteFigureDrift staleness pair only (25,537 pinned vs 26,099 live, closeout re-pin duty). \u00a74 mark \u2705 e36d86d84 UNSTAGED. no DUR (no new test file); seam COMPARISON.md:3435 cites-drift = closeout carry.",
+  "C-CTX-2.a": {
+   "master": "6ce6df1f0",
+   "pick": "0aea27278",
+   "regen": "gen-protocol-schema --check up to date (no drift commit)",
+   "gates": "ServedRuntimeNoticeDrain 6T/29A exact; ServedRuntimeNoticeDrain|SessionHost 60T/300A OK; Host|Server 1621T/10747A 3F all in allowed set (AttachPaging 2F :94/:106 base-inherited + ChatHostLangCatalogue chat.effort.launch_unshaped); five-guard 133T/15696A pair-only (pinned 25,537 vs live)",
+   "durations_owed": "ServedRuntimeNoticeDrainTest.php 6T row owed at gate"
+  }
  },
  "carries": [
   "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest \u2014 closeout gate duty",

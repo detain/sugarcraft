@@ -1,0 +1,28 @@
+### C-CTX-2.a — Drain the runtime-notice sink in serve
+- item: C-CTX-2 (sources: GAP-MEM-10w, k1-sum (a), k1-dorm#1, MOD-14 web)
+- kind: dormant-wire · MAJOR · effort S
+- approach:
+  - Root cause: serve arms the process sink in `Bootstrap::workspace()` (`candy-code/src/Cli/Bootstrap.php:1678-1679`), but the only `drain()` is `Chat::pumpRuntimeNotices()` (`candy-code/src/Chat.php:18636`). On served sessions, recall rows, FallbackProvider switch notices and parser warnings vanish.
+  - The per-session seam already exists and has no production caller: `NoticeSink` instances plus `RuntimeNoticeSink::using()` (`RuntimeNoticeSink.php:715`), which a fork pins through `enterForkedChild()` (`EngineBackend.php:3835`).
+  - Each `SessionHost` owns its own `NoticeSink`. It is armed cross-fork only when the workspace sink is armed, so tests and embedders stay unarmed.
+  - Every fork the host starts runs under `RuntimeNoticeSink::using($this->notices, …)`: `dispatch()` around `runner()->start()` and `$run()`, `requestAheadOfNeed()`, and `scheduleGoalJudge()`.
+  - `TurnRunner::start()` receives `notices: $this->notices` instead of the shared `workspace->notices` (`SessionHost.php:1785`).
+  - Draining happens on a `notifyOnceWhenPending()` wake (re-armed every time), in `pump()`, and on settle. Each drained row goes through `appendMessageRow(Message::notice(...))`, so it is uiOnly, saved, and announced as `message.created` with kind `notice`, which the web reducer already renders.
+  - `release()` resets the sink, closing its two fds.
+- files.create: `candy-code/tests/Host/ServedRuntimeNoticeDrainTest.php`
+- files.modify: `candy-code/src/Host/SessionHost.php` (`new()`/constructor, `dispatch()`, `requestAheadOfNeed()`, `scheduleGoalJudge()`, `pump()`, `settleWith()`, `release()`, new private `pumpRuntimeNotices()`)
+- tests: create ServedRuntimeNoticeDrainTest. It pins:
+  - a turn whose backend records a notice lands exactly one uiOnly notice row and one `message.created` event with kind `notice`;
+  - two hosts on one workspace never see each other's rows;
+  - an unarmed workspace leaves the host sink unarmed;
+  - `release()` closes the fds.
+- docs/guards:
+  - `candy-code/docs/SERVER.md` (### Events): notice rows on served sessions;
+  - `candy-code/docs/MEMORY.md` L455-458: the recall row is drained by `Chat::pumpRuntimeNotices()` and, on serve, by `SessionHost`;
+  - no drift guard moves.
+- serialized: [docs:SERVER.md] [docs:MEMORY.md] [hot:candy-code/src/Host/SessionHost.php]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: a parent-side notice raised outside a host's `using()` window (e.g. MCP startup in the workspace process) still lands on the undrained workspace sink. This is stated in SERVER.md and not fixed here.
+

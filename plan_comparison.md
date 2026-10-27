@@ -820,7 +820,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** P-CTX.a (W4)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-CTX.f`
 
-#### C-TOOL-7.c — LSP auto-detect project-trust gate
+#### ✅ e36d86d84 C-TOOL-7.c — LSP auto-detect project-trust gate
 - **Item:** C-TOOL-7 (sources: EDT-2-P1) · fix · MINOR · effort S
 - **What:** Root cause `candy-code/src/LSP/LspLauncher.php:107-147` (`AUTO_TABLE`) and `fromConfig()` :172. With user-tier `lspAutoDetect` on, any opened repo's `Cargo.toml` starts rust-analyzer (which runs `build.rs` and proc-macros), and …
 - **Files — create:** none
@@ -894,7 +894,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-CTX.e`
 - **Note (2026-10-27):** auto-dock ≥120 honoured (R-MENU family, decided ON); first-dock fires once per process after the ≥80 pane floor lands the pane at ~160 cols; refusal retries on later resize.
 
-#### P-AGENT.c — Protocol: `agents.list` colour + `agents.message` mode
+#### ✅ e68d0e69b P-AGENT.c — Protocol: `agents.list` colour + `agents.message` mode
 - **Item:** P-AGENT-ATTACH (sources: k1-dorm#3, CLAW-new#7) · feature · effort S
 - **What:** `agents.list` items gain an optional `color` (the preset's, resolved through `AgentColor` to a hex or omitted). `agents.message` gains an optional `mode: steer|interrupt` (default steer). `AgentsMethods` passes it to …
 - **Files — create:** none
@@ -1019,7 +1019,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** P-AGENT.c (W7)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-AGENT.d`
 
-#### C-CTX-2.a — Drain the runtime-notice sink in serve
+#### ✅ 6ce6df1f0 C-CTX-2.a — Drain the runtime-notice sink in serve
 - **Item:** C-CTX-2 (sources: GAP-MEM-10w, k1-sum (a), k1-dorm#1, MOD-14 web) · dormant-wire · MAJOR · effort S
 - **What:** Root cause: serve arms the process sink in `Bootstrap::workspace()` (`candy-code/src/Cli/Bootstrap.php:1678-1679`), but the only `drain()` is `Chat::pumpRuntimeNotices()` (`candy-code/src/Chat.php:18636`). On served sessions, …
 - **Files — create:** `candy-code/tests/Host/ServedRuntimeNoticeDrainTest.php`
@@ -1064,7 +1064,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-9.c`
 
-#### C-SES-9.d — Release workflows pass tags/inputs via `env:`
+#### ✅ fc5523777 C-SES-9.d — Release workflows pass tags/inputs via `env:`
 - **Item:** C-SES-9 (sources: DST-1-P4) · fix · NIT · effort S
 - **What:** **Root cause.** `${{ github.event.inputs.tag }}` and `${{ steps.*.outputs.* }}` are interpolated straight into `run:` scripts: `release-phar.yml:50-51`, `:62`, `:88`, `:91`, `:206`; `release-app-phar.yml:64-65`, `:97`, `:114`, …
 - **Files — create:** `tools/tests/WorkflowRunInterpolationTest.php`
@@ -1075,7 +1075,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-9.d`
 
-#### C-WEB-3.a — Memory History & Undo (`memory.log`/`memory.undo`)
+#### ✅ e651724ca C-WEB-3.a — Memory History & Undo (`memory.log`/`memory.undo`)
 - **Item:** C-WEB-3 (sources: k1-dorm#4, k3-dorm#3, WEB-1-P1, p2-miss: WEB-1 residual dormant methods) · dormant-wire · S
 - **What:** **Gap.** `memory.log` and `memory.undo` (`candy-code/src/Protocol/MethodSchemas`/`MemoryMethods.php:70-71`) have no browser caller. **Store.** `stores/agents/memory.ts` gains `log(limit)` and `undo(revision?)`. **Panel.** …
 - **Files — create:** `candy-code-web/src-web/components/panels/__tests__/memoryHistory.spec.ts`
@@ -1086,7 +1086,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web.md` → `### C-WEB-3.a`
 
-#### C-WEB-3.b — Files panel + read-only file viewer (`files.read`)
+#### ✅ bb8878195 C-WEB-3.b — Files panel + read-only file viewer (`files.read`)
 - **Item:** C-WEB-3 (sources: k3-dorm#3 (`files.read`), p2-miss: WEB-8 Files panel, WEB-1-P1) · dormant-wire · M
 - **What:** **FilesPanel.** A new Files side panel: a search box over the existing `fs.search`, through `stores/session.ts searchFiles()`; empty lists the front of the project. Clicking a row opens a shared `FileViewer`. **FileViewer.** Uses …
 - **Files — create:** `candy-code-web/src-web/components/panels/FilesPanel.vue`, `candy-code-web/src-web/components/FileViewer.vue`, `candy-code-web/src-web/components/panels/__tests__/filesPanel.spec.ts`
