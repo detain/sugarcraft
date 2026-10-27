@@ -316,7 +316,7 @@ jobs:
           assets=("dist/$app.phar" "dist/$app.phar.sha256")
           if [ -f "dist/$app.phar.minisig" ]; then
             assets+=("dist/$app.phar.minisig" "dist/$app.phar.minisig.sha256" "dist/$app.phar.sha256.sig")
-            signed="Signed with the sugarcraft-wide key (verify the chain: check $app.phar.sha256.sig — a sodium detached signature over the sidecar body — against the public half pinned in the app's source, then sha256sum -c $app.phar.sha256 on the archive; the legacy raw-byte $app.phar.minisig rides along for older clients, and a plain sha256sum -c of it would prove integrity only, never authenticity)."
+            signed="Signed with the sugarcraft-wide key (verify the chain: check $app.phar.sha256.sig — a sodium detached signature over the sidecar body — against the public half pinned in the self-update apps' source (candy-code and candy-top — the only apps that pin the key), then sha256sum -c $app.phar.sha256 on the archive; the legacy raw-byte $app.phar.minisig rides along for older clients, and a plain sha256sum -c of it would prove integrity only, never authenticity)."
           else
             signed="Unsigned in this build (no SUGARCRAFT_SIGNING_KEY on the runner at build time)."
           fi
