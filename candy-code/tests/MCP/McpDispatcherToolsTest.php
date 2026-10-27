@@ -77,6 +77,7 @@ final class McpDispatcherToolsTest extends TestCase
         $listSchema = $list->inputSchema();
         $this->assertSame('object', $listSchema['type']);
         $this->assertArrayHasKey('server', $listSchema['properties']);
+        $this->assertArrayHasKey('tool', $listSchema['properties'], 'C-MCP-6.a: the exact-name lookup door is part of the declared shape');
         $this->assertSame([], $listSchema['required']);
 
         $callSchema = $call->inputSchema();
@@ -115,6 +116,66 @@ final class McpDispatcherToolsTest extends TestCase
 
         $bad = $shape->listTool()->execute(['server' => 7]);
         $this->assertTrue($bad->isError());
+    }
+
+    /**
+     * C-MCP-6.a: a roster whose full schema text rides above the output cap
+     * answers with a names-only overview plus the fetch pointer, and the
+     * "tool" argument then brings each exact schema back — reachable, not
+     * truncated away.
+     */
+    public function testAnOverCapRosterAnswersNamesAndTheToolArgumentFetchesSchemas(): void
+    {
+        $srv = $this->dispatchServer();
+        $names = [];
+        for ($i = 0; $i < 24; ++$i) {
+            $names[] = 'fat_tool_' . $i;
+        }
+        $shape = $this->lazyShape($this->fatSet($srv, ...$names));
+
+        $roster = $shape->listTool()->execute(['id' => 'cap']);
+        $this->assertFalse($roster->isError());
+        $this->assertStringContainsString('ride above the mcp_list output cap', $roster->content());
+        $this->assertStringContainsString('call mcp_list with "tool"', $roster->content(), 'the overview teaches the fetch door');
+        foreach ($names as $name) {
+            $this->assertStringContainsString('- ' . $name, $roster->content(), 'every tool is named in the overview');
+        }
+        $this->assertStringNotContainsString('"note"', $roster->content(), 'no schema JSON survives into a names-only overview');
+        $this->assertStringNotContainsString('xxx', $roster->content(), 'the fat descriptions are the weight the overview sheds');
+
+        $one = $shape->listTool()->execute(['id' => 'fetch', 'tool' => 'fat_tool_3']);
+        $this->assertFalse($one->isError());
+        $this->assertSame('fetch', $one->toolCallId());
+        $this->assertStringContainsString('- fat_tool_3: first x', $one->content());
+        $this->assertStringContainsString('arguments:', $one->content());
+        $this->assertStringContainsString('"note"', $one->content(), 'the fetched entry carries the exact schema');
+        $this->assertStringNotContainsString('- fat_tool_4', $one->content(), 'the lookup answers ONLY the named tool');
+
+        $badTool = $shape->listTool()->execute(['tool' => 7]);
+        $this->assertTrue($badTool->isError(), 'a non-string tool name is refused in the server-arm shape');
+        $this->assertStringContainsString('must be a string', $badTool->content());
+
+        $miss = $shape->listTool()->execute(['tool' => 'no_such_tool']);
+        $this->assertFalse($miss->isError(), 'a wrong name is information, not a failure — the empty-server-filter polarity');
+        $this->assertStringContainsString('no_such_tool', $miss->content());
+    }
+
+    public function testTheServerFilterSurvivesTheOverCapOverview(): void
+    {
+        $srvA = $this->dispatchServer();
+        $srvB = $this->dispatchServer();
+        $namesA = [];
+        for ($i = 0; $i < 24; ++$i) {
+            $namesA[] = 'a_tool_' . $i;
+        }
+        $shape = $this->lazyShape([...$this->fatSet($srvA, ...$namesA), ...$this->fatSet($srvB, 'b_tool')]);
+
+        $hit = $shape->listTool()->execute(['server' => $srvA]);
+        $this->assertStringContainsString('ride above the mcp_list output cap', $hit->content(), 'the filtered slice itself rides over the cap');
+        $this->assertStringContainsString('Server ' . $srvA . ':', $hit->content());
+        $this->assertStringNotContainsString('Server ' . $srvB . ':', $hit->content(), 'the filtered overview keeps the filter');
+        $this->assertStringNotContainsString('b_tool', $hit->content());
+        $this->assertStringContainsString('- a_tool_23', $hit->content());
     }
 
     // ---- mcp_call refusals (frozen roster discipline) --------------------------

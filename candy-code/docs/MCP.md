@@ -692,7 +692,10 @@ tools:
 
 - **`mcp_list`** (position 39) answers the deferred roster — server, tool,
   description, and the schema the model needs to build arguments. Pass a
-  `server` to see one server; no arguments for everything.
+  `server` to see one server, or a `tool` to see exactly one tool's entry with
+  its schema; no arguments for everything. A roster whose full schemas would
+  overflow the tool's output cap comes back as names only, and each schema is
+  then fetched by name through `tool`.
 - **`mcp_call`** (position 40) runs one of them:
   `mcp_call(server, tool, arguments)`. The call goes through the exact same
   `McpClient::callTool()` path a bridge uses, so the router's allow/deny still

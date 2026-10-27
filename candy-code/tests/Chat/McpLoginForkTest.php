@@ -107,9 +107,52 @@ final class McpLoginForkTest extends TestCase
         self::assertSame(McpLoginProgressMsg::PHASE_GONE, $gone?->phase);
     }
 
+    /**
+     * C-MCP-6.a, the exact OAuthLoopbackFlow.php print shape (the sentence
+     * line backticks the SERVER url, then a blank line, then the authorize
+     * URL alone on an indented line — :158-160). The old scheme announced the
+     * WRONG url (first regex hit was the backticked server sentence) and
+     * could not announce a >1500-byte authorize URL at all (the tail window
+     * had already scrolled its line start past). The scan buffer holds the
+     * output un-truncated up to the announce and matches only a
+     * URL-consisting line.
+     */
+    public function testTheAuthorizeUrlIsAnnouncedIntactPastTheServerUrlLine(): void
+    {
+        $serverUrl = 'https://mcp.example.test/sse';
+        // The '?' rides via chr(): a bare one here makes this literal
+        // glob-shaped and moves the GlobDialect corpus census (the harvest
+        // admits each shape into BOTH corpora) — house GlobDialect law.
+        $authorize = 'https://auth.example.test/authorize' . chr(63) . 'client_id=' . str_repeat('a', 1600)
+            . '&scope=all&state=' . str_repeat('b', 200)
+            . '&code_challenge=' . str_repeat('c', 200)
+            . '&redirect_uri=http%3A%2F%2F127.0.0.1%3A41239%2Fcb';
+        $this->stubChild(
+            'echo "  Open this URL in a browser to authorize `' . $serverUrl . '`:\n";'
+            . ' echo "\n";'
+            . ' echo "    ' . $authorize . '\n";',
+        );
+
+        [$notice, $armed] = McpLoginFork::arm('w4clong', []);
+        self::assertTrue($armed, $notice);
+
+        $url = $this->pollFor('w4clong', static fn (McpLoginProgressMsg $m): bool => $m->phase === McpLoginProgressMsg::PHASE_URL);
+        self::assertSame($authorize, $url->text, 'the announce is the authorize URL itself, intact');
+        self::assertStringNotContainsString('mcp.example.test', $url->text, 'the backticked server URL is never the announcement');
+        self::assertSame(41239, McpLoginFork::redirectPort('w4clong'), 'the redirect_uri port rides the announce for C-MCP-4.c');
+
+        $done = $this->pollFor('w4clong', static fn (McpLoginProgressMsg $m): bool => $m->phase === McpLoginProgressMsg::PHASE_DONE);
+        self::assertSame(0, $done->exitCode);
+        self::assertSame(41239, McpLoginFork::redirectPort('w4clong'), 'the port outlives the slot — the correlation leg reads it after done');
+    }
+
     public function testUrlIsAnnouncedOnceNotOnEveryBeat(): void
     {
-        $this->stubChild('echo "http://127.0.0.1:1/x\n"; usleep(200000);');
+        // C-MCP-6.a in-step: the stub URL now rides a line of its own with
+        // leading whitespace — the ONLY shape a real OAuthLoopbackFlow child
+        // prints, and the shape the announce now matches (a bare URL at
+        // column 0 is not that sentence layout).
+        $this->stubChild('echo "  http://127.0.0.1:1/x\n"; usleep(200000);');
 
         [$notice, $armed] = McpLoginFork::arm('w4conce', []);
         self::assertTrue($armed, $notice);

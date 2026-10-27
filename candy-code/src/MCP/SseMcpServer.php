@@ -54,7 +54,10 @@ use SugarCraft\McpClient\RequestIdSequence;
  * forked child makes establishes that child's own session (its own GET, its
  * own `initialize`) before POSTing; the parent's stream is never read from,
  * and closing the child's duplicated fd cannot disturb the parent's
- * independent descriptor.
+ * independent descriptor. Nor does the child ever CLOSE the inherited socket
+ * by replacing it (C-MCP-6.a): destroying a TLS stream resource runs
+ * SSL_shutdown first — a close_notify on the parent's still-live session —
+ * so a socket this process did not open is retained, not closed.
  *
  * A DROPPED STREAM is a dead session in flight: the interrupted call fails
  * (never resent — the server may already be running the work), and recovery
@@ -130,6 +133,20 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
 
     /** @var resource|null the persistent GET socket, this process's own */
     private $socket = null;
+
+    /** Pid that CREATED the CURRENT {@see $socket}. Deliberately distinct from
+     *  {@see $sessionPid}: that one is claimed before the establish legs run,
+     *  so only this stamp still knows who owns the held descriptor — exactly
+     *  the question the C-MCP-6.a retain-instead-of-close rule asks at
+     *  replace time. */
+    private ?int $socketOpenerPid = null;
+
+    /** @var list<resource> sockets taken over WITHOUT being opened by this
+     *  process, held by reference for the rest of its life so no fclose ever
+     *  runs on a dup of the parent's connection (for a TLS stream that
+     *  destructor is SSL_shutdown — C-MCP-6.a). Releasing them at process
+     *  exit is the kernel's job. */
+    private array $retainedSockets = [];
 
     private ?SseLineParser $parser = null;
 
@@ -410,7 +427,13 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
             }
             $request .= "\r\n";
 
+            if (\is_resource($this->socket) && $this->socketOpenerPid !== ($this->pidProvider)()) {
+                // C-MCP-6.a: this handle is the PARENT's connection inherited
+                // across the fork — hold it, never let its destructor fire.
+                $this->retainedSockets[] = $this->socket;
+            }
             $this->socket = $socket;
+            $this->socketOpenerPid = ($this->pidProvider)();
             $this->writeRequest($request);
 
             [$status, $reason, $head] = $this->readHead();
@@ -1175,9 +1198,16 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
     private function closeStream(): void
     {
         if (\is_resource($this->socket)) {
-            $this->closeSocket($this->socket);
+            if ($this->socketOpenerPid === ($this->pidProvider)()) {
+                $this->closeSocket($this->socket);
+            } else {
+                // C-MCP-6.a defense-in-depth: an inherited handle dropped
+                // before this process ever opened its own is retained too.
+                $this->retainedSockets[] = $this->socket;
+            }
         }
         $this->socket = null;
+        $this->socketOpenerPid = null;
         $this->parser = null;
         $this->postTarget = null;
         $this->sessionPid = null;

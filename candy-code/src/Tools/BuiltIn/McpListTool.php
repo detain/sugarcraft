@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tools\BuiltIn;
 
+use SugarCraft\Code\MCP\McpTool;
 use SugarCraft\Code\MCP\McpToolShape;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;
@@ -78,6 +79,8 @@ final readonly class McpListTool implements Tool, BuildsFromCatalog, TakesToolCa
         return "List the MCP tools this session reaches through mcp_call instead of as first-class tools, "
             . 'each with its input schema so you can build the arguments. '
             . 'Call with no arguments for everything; pass "server" to see one server\'s tools. '
+            . 'Pass "tool" to see exactly one tool\'s entry, schema included. '
+            . 'A roster whose full schemas ride above the output cap comes back as names only — fetch each schema that way. '
             . 'Run a listed tool with mcp_call(server, tool, arguments).';
     }
 
@@ -92,6 +95,13 @@ final readonly class McpListTool implements Tool, BuildsFromCatalog, TakesToolCa
                 'server' => [
                     'type' => 'string',
                     'description' => 'Optional: list only this server\'s deferred tools.',
+                ],
+                // C-MCP-6.a: the schemas are what this tool defers, so the
+                // per-tool lookup is how a model gets ONE back without
+                // paying for the whole roster (or eating the output cap).
+                'tool' => [
+                    'type' => 'string',
+                    'description' => 'Optional: print exactly this tool\'s entry, schema included — the way to fetch one schema from a names-only overview.',
                 ],
             ],
             // The house schema shape: `required` always present, empty here
@@ -111,8 +121,40 @@ final readonly class McpListTool implements Tool, BuildsFromCatalog, TakesToolCa
                 isError: true,
             );
         }
+        $tool = $args['tool'] ?? null;
+        if ($tool !== null && !is_string($tool)) {
+            return new ToolResult(
+                toolCallId: $id,
+                content: 'Error: mcp_list "tool" must be a string naming one deferred tool.',
+                isError: true,
+            );
+        }
+
+        // C-MCP-6.a: one exact-name entry, schema included, on demand. The
+        // miss answers as information (the same non-failure polarity the
+        // empty-server filter keeps) — a wrong name is a wrong guess, not a
+        // broken tool.
+        if ($tool !== null && $tool !== '') {
+            $lines = [];
+            foreach ($this->shape->dispatchedDescriptors as $descriptor) {
+                if ($descriptor->name === $tool) {
+                    $lines[] = 'Server ' . $descriptor->serverName . ':';
+                    $lines[] = self::schemaLine($descriptor);
+                }
+            }
+            $content = $lines === []
+                ? sprintf('No deferred MCP tool named "%s" (mcp_list answers the roster).', $tool)
+                : implode("\n", $lines);
+
+            return new ToolResult(
+                toolCallId: $id,
+                content: $this->truncateOutput($content, self::DEFAULT_MAX_OUTPUT_BYTES),
+            );
+        }
 
         $lines = [];
+        $names = [];
+        $count = 0;
         $current = null;
         foreach ($this->shape->dispatchedDescriptors as $descriptor) {
             if ($filter !== null && $filter !== '' && $descriptor->serverName !== $filter) {
@@ -121,27 +163,51 @@ final readonly class McpListTool implements Tool, BuildsFromCatalog, TakesToolCa
             if ($descriptor->serverName !== $current) {
                 $current = $descriptor->serverName;
                 $lines[] = 'Server ' . $current . ':';
+                $names[] = 'Server ' . $current . ':';
             }
-            $schema = json_encode(
-                $descriptor->inputSchema,
-                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE,
-            );
-            $summary = preg_replace('/\s+/', ' ', $descriptor->description) ?? $descriptor->description;
-            $lines[] = '- ' . $descriptor->name . ($summary === ''
-                ? ''
-                : ': ' . $summary)
-                . ($schema === false ? '' : ' arguments: ' . $schema);
+            $count++;
+            $lines[] = self::schemaLine($descriptor);
+            $names[] = '- ' . $descriptor->name;
         }
 
-        $content = $lines === []
-            ? ($filter === null || $filter === ''
+        if ($lines === []) {
+            $content = $filter === null || $filter === ''
                 ? 'No deferred MCP tools: every configured server is below the schema-token floor or marked eager.'
-                : sprintf('No deferred MCP tools on server "%s" (it may be eager, or not exist).', $filter))
-            : implode("\n", $lines);
+                : sprintf('No deferred MCP tools on server "%s" (it may be eager, or not exist).', $filter);
+        } else {
+            $content = implode("\n", $lines);
+            if (strlen($content) > self::DEFAULT_MAX_OUTPUT_BYTES) {
+                // The full schema text could not survive the cap anyway, and
+                // a truncateOutput() cut through a JSON Schema is the worst
+                // answer this tool can give. C-MCP-6.a: a names-only
+                // overview, pointer included, and the schemas ride along one
+                // "tool" call at a time. The cap stays the final guard.
+                $content = sprintf(
+                    '%d deferred MCP tools ride above the mcp_list output cap — listed by name here;'
+                    . ' call mcp_list with "tool" set to a name below for its exact schema.',
+                    $count,
+                ) . "\n" . implode("\n", $names);
+            }
+        }
 
         return new ToolResult(
             toolCallId: $id,
             content: $this->truncateOutput($content, self::DEFAULT_MAX_OUTPUT_BYTES),
         );
+    }
+
+    /** One roster line with the FULL schema: name, one-line summary, JSON. */
+    private static function schemaLine(McpTool $descriptor): string
+    {
+        $schema = json_encode(
+            $descriptor->inputSchema,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE,
+        );
+        $summary = preg_replace('/\s+/', ' ', $descriptor->description) ?? $descriptor->description;
+
+        return '- ' . $descriptor->name . ($summary === ''
+            ? ''
+            : ': ' . $summary)
+            . ($schema === false ? '' : ' arguments: ' . $schema);
     }
 }

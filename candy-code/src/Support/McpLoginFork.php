@@ -35,6 +35,21 @@ final class McpLoginFork
     public const TAIL_MAX_BYTES = 1500;
 
     /**
+     * How much of the child's output is scanned for the login URL. This is a
+     * flood bound, not a window: the URL rides to the FRONT of the buffer and
+     * nothing before it is ever discarded (C-MCP-6.a). The old scheme scanned
+     * only the last 1500 bytes with a bare first-match regex, and that is
+     * doubly wrong for a real `mcp auth login` child — OAuthLoopbackFlow
+     * prints its authorize URL on a line of its own AFTER a line that
+     * backticks the server URL, so a first-anywhere match announced the wrong
+     * URL, and a 2 KB authorize URL (client_id, scope, state and PKCE riding
+     * the query) fell out of a tail that had already scrolled past the line
+     * start. The announce now matches ONLY a line consisting of nothing but
+     * one URL — the shape OAuthLoopbackFlow emits.
+     */
+    public const SCAN_MAX_BYTES = 65536;
+
+    /**
      * Test seam: replaces the argv handed to the child. Production never
      * sets it; a test may point the slot at a stub script so the whole
      * announce/poll/exit chain runs without OAuth.
@@ -44,9 +59,19 @@ final class McpLoginFork
     public static ?\Closure $argvOverride = null;
 
     /**
-     * @var array<string, array{proc: mixed, out: mixed, err: mixed, tail: string, urlSent: bool}>
+     * @var array<string, array{proc: mixed, out: mixed, err: mixed, tail: string, scan: string, urlSent: bool}>
      */
     private static array $slots = [];
+
+    /**
+     * Loopback ports parsed out of the redirect_uri of each announced login
+     * URL, kept past the slot's death so the correlation leg (C-MCP-4.c) can
+     * still ask which port its server was told to call back on. Cleared on
+     * re-arm and by {@see releaseAll}.
+     *
+     * @var array<string, ?int>
+     */
+    private static array $redirectPorts = [];
 
     private function __construct()
     {
@@ -91,7 +116,8 @@ final class McpLoginFork
 
         \stream_set_blocking($pipes[1], false);
         \stream_set_blocking($pipes[2], false);
-        self::$slots[$server] = ['proc' => $proc, 'out' => $pipes[1], 'err' => $pipes[2], 'tail' => '', 'urlSent' => false];
+        self::$slots[$server] = ['proc' => $proc, 'out' => $pipes[1], 'err' => $pipes[2], 'tail' => '', 'scan' => '', 'urlSent' => false];
+        self::$redirectPorts[$server] = null;
 
         return [Lang::t('cmd.mcp-auth.login-armed', ['server' => $server]), true];
     }
@@ -114,12 +140,21 @@ final class McpLoginFork
             $chunk = \fread($slot[$pipe], 65536);
             if (\is_string($chunk) && $chunk !== '') {
                 $slot['tail'] = \substr($slot['tail'] . $chunk, -self::TAIL_MAX_BYTES);
+                if (!$slot['urlSent']) {
+                    // Head-trimmed: the announce happens at the FIRST URL line,
+                    // so only ever-growing pre-URL noise may be dropped (C-MCP-6.a).
+                    $slot['scan'] = \substr($slot['scan'] . $chunk, 0, self::SCAN_MAX_BYTES);
+                }
             }
         }
 
-        if (!$slot['urlSent'] && \preg_match('~https://\S+|http://\S+~', $slot['tail'], $m) === 1) {
+        // Announce ONLY a line that consists of nothing but one URL — the shape
+        // OAuthLoopbackFlow prints. The old bare first-match grabbed the
+        // backticked SERVER url from the sentence above it (C-MCP-6.a).
+        if (!$slot['urlSent'] && \preg_match('~^\s+(https?://\S+)\s*$~m', $slot['scan'], $m) === 1) {
             $slot['urlSent'] = true;
-            $url = $m[0];
+            $url = $m[1];
+            self::$redirectPorts[$server] = self::redirectPortFromAuthorizeUrl($url);
 
             return new McpLoginProgressMsg($server, McpLoginProgressMsg::PHASE_URL, $url);
         }
@@ -139,6 +174,39 @@ final class McpLoginFork
     public static function isArmed(string $server): bool
     {
         return isset(self::$slots[$server]);
+    }
+
+    /**
+     * The loopback port the announced login URL asked the browser to call
+     * back on, parsed from its `redirect_uri` — the handle C-MCP-4.c
+     * correlates a hit callback against, readable while the slot lives and
+     * after the done beat retires it. Null when nothing was announced yet or
+     * the URL carried no parseable redirect_uri.
+     */
+    public static function redirectPort(string $server): ?int
+    {
+        return self::$redirectPorts[$server] ?? null;
+    }
+
+    /**
+     * `…?…&redirect_uri=http%3A%2F%2F127.0.0.1%3A41239%2Fcb…` → 41239-style
+     * int, or null. Parse failures answer null; this is a report aid beside a
+     * URL that was already announced, never a gate.
+     */
+    private static function redirectPortFromAuthorizeUrl(string $url): ?int
+    {
+        $query = \parse_url($url, \PHP_URL_QUERY);
+        if (!\is_string($query) || $query === '') {
+            return null;
+        }
+        \parse_str($query, $params);
+        $redirect = $params['redirect_uri'] ?? null;
+        if (!\is_string($redirect)) {
+            return null;
+        }
+        $port = \parse_url($redirect, \PHP_URL_PORT);
+
+        return $port === null ? null : (int) $port;
     }
 
     /**
@@ -166,6 +234,7 @@ final class McpLoginFork
             @\proc_close($slot['proc']);
         }
         self::$slots = [];
+        self::$redirectPorts = [];
         self::$argvOverride = null;
     }
 
