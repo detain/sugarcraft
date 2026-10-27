@@ -295,7 +295,18 @@ final class ShareCommand
             $current = $chat->currentSessionId() ?? '';
             if (count($entries) === 1 && $entries[0]['record']->sessionId === $current) {
                 $token = $entries[0]['record']->token;
-                $store->revoke($token);
+                // The write is ANSWERED, not assumed: `revoke()` reports false
+                // when no live row carried the token at the moment the UPDATE
+                // ran, which is the concurrent-revoke edge (another window
+                // took it down after liveAll() read it) and the hand-edited
+                // database alike. Claiming 'Revoked' over a false would print
+                // a write that never happened, so the shortcut refuses with
+                // the same no-oracle words the named paths use.
+                if (!$store->revoke($token)) {
+                    $this->printError(Lang::t('cmd.share.revoke-unknown'));
+
+                    return 1;
+                }
                 echo Lang::t('cmd.share.revoked', ['token' => $token]) . "\n";
 
                 return 0;
@@ -345,7 +356,14 @@ final class ShareCommand
             }
             if (count($candidates) === 1) {
                 $token = $candidates[0]['record']->token;
-                $store->revoke($token);
+                // Same answer-check as the whole-token arm above: a row that
+                // was live for the read and gone for the write is refused,
+                // not announced as revoked, whatever spelling named it.
+                if (!$store->revoke($token)) {
+                    $this->printError(Lang::t('cmd.share.revoke-unknown'));
+
+                    return 1;
+                }
                 echo Lang::t('cmd.share.revoked', ['token' => $token]) . "\n";
 
                 return 0;

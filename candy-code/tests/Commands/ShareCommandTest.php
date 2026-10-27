@@ -384,6 +384,28 @@ final class ShareCommandTest extends TestCase
         $this->assertNull($store->lookup($match[1]));
     }
 
+    /**
+     * Round-2 review (finding 2): the bare shortcut's write is ANSWERED, not
+     * assumed. The row is live when `liveAll()` reads it and gone by the time
+     * the UPDATE runs — another window revoked it in between, or a foreign
+     * database carries a token this store's own shape guard will not write
+     * (here: 40 hex digits, so `ShareStore::revoke()` refuses before touching
+     * SQL and answers false). Pre-fix the command printed "Revoked share …"
+     * and exited 0 over a write that never happened.
+     */
+    public function testBareRevokeRefusesInsteadOfClaimingAWriteThatDidNotHappen(): void
+    {
+        $path = $this->scratch . '/session.db';
+        $ghost = str_repeat('ab', 20);
+        $this->plantLiveRow($path, $ghost);
+
+        [$exitCode, $output] = $this->share(['revoke'], store: ShareStore::atPath($path));
+
+        $this->assertSame(1, $exitCode, 'a false revoke() is a refusal, not a success');
+        $this->assertStringContainsString('No live share page carries that token', $output);
+        $this->assertStringNotContainsString('Revoked share', $output, 'the command never claims a write the store refused');
+    }
+
     public function testRevokeWithoutATokenListsTheChoicesWhenSeveralAreLive(): void
     {
         $store = ShareStore::atPath($this->scratch . '/session.db');
@@ -454,6 +476,26 @@ final class ShareCommandTest extends TestCase
         $this->assertSame(0, $exitCode);
         $this->assertStringContainsString('Revoked share ' . $token, $output, 'the reply names the whole token it killed');
         $this->assertNull($store->lookup($token));
+    }
+
+    /**
+     * Round-2 review (finding 2), the named-prefix arm: the same answer-check
+     * the whole-token arm already performed. A unique 12-char prefix resolves
+     * to a row whose full token the store will not write (40 hex digits), so
+     * `revoke()` answers false and the command refuses with the no-oracle
+     * wording — it does not echo `Revoked share` for a page still live.
+     */
+    public function testRevokeByUniquePrefixRefusesWhenTheWriteIsAnsweredFalse(): void
+    {
+        $path = $this->scratch . '/session.db';
+        $ghost = str_repeat('ab', 20);
+        $this->plantLiveRow($path, $ghost);
+
+        [$exitCode, $output] = $this->share(['revoke', substr($ghost, 0, 12)], store: ShareStore::atPath($path));
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('No live share page carries that token', $output);
+        $this->assertStringNotContainsString('Revoked share', $output);
     }
 
     public function testRevokeByAnAmbiguousPrefixAsksForALongerOne(): void
@@ -552,6 +594,28 @@ final class ShareCommandTest extends TestCase
     // =========================================================================
     // Helper Methods
     // =========================================================================
+
+    /**
+     * Plant exactly one LIVE row carrying $token in the `shares` table of the
+     * database at $path, by way of a real publish act and a hand-edit of its
+     * token afterwards — the shape a foreign or hand-edited database leaves
+     * behind, and the shape whose consequence round 2 pinned: `liveAll()`
+     * lists it, `ShareStore::revoke()` refuses to write it and answers false.
+     * The store's own CREATE TABLE runs through publish(), so the test never
+     * duplicates the schema.
+     */
+    private function plantLiveRow(string $path, string $token): void
+    {
+        $store = ShareStore::atPath($path);
+        $served = $store->publish('', 'html', '<p>planted</p>', 7)->token;
+
+        $statement = (new \PDO('sqlite:' . $path))->prepare('UPDATE shares SET token = :token WHERE token = :served');
+        $statement->execute([':token' => $token, ':served' => $served]);
+
+        $listed = ShareStore::atPath($path)->liveAll();
+        $this->assertCount(1, $listed, 'the fixture is a single live row');
+        $this->assertSame($token, $listed[0]['record']->token, 'the fixture lists under the hand-edited token');
+    }
 
     /**
      * The name of a retired upload variable, or null. Read directly because

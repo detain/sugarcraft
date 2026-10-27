@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Host;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Host\Commands\CommandContext;
 use SugarCraft\Code\Host\Commands\ShareHostCommand;
+use SugarCraft\Code\Host\TranscriptStore;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Session\EnhancedSessionStore;
@@ -112,6 +113,43 @@ final class ShareHostCommandBufferTest extends TestCase
         $this->assertStringContainsString('Home One', $result->rows[1]->content);
         $this->assertStringContainsString(substr($token, 0, 12), $result->rows[1]->content);
         $this->assertStringNotContainsString(substr($token, 12), $result->rows[1]->content);
+    }
+
+    /**
+     * Round-2 review (finding 1): the `finally` half of the keystone, which
+     * no other leg in this file reaches. Every database failure the suite can
+     * fabricate is a RuntimeException — `PDOException` extends it — and
+     * `ShareCommand` absorbs those inside its OWN catch, so a reverted
+     * `finally` (the two cleanup statements moved back to straight-line code)
+     * leaves the rest of the gate green. Here the throw is not absorbable: a
+     * store whose connection never happened raises a plain `\Error` out of
+     * `path()` (an uninitialized typed property), which escapes the command's
+     * catches and escapes `run()`. What the leg pins is the state `run()`
+     * hands back with it: the buffer level it found, not that level plus an
+     * open capture buffer that would eat every later host write on the
+     * connection — the defect the `finally` exists to prevent.
+     */
+    public function testAnUnabsorbableThrowStillHandsBackAFlatBufferLevel(): void
+    {
+        $broken = (new \ReflectionClass(EnhancedSessionStore::class))->newInstanceWithoutConstructor();
+        $context = CommandContext::new(
+            history: [Message::user('hi'), Message::assistant('hello')],
+            sessionId: 'home',
+            root: $this->dir,
+            sessionStore: $broken,
+            transcripts: TranscriptStore::new(null),
+        );
+
+        $level = ob_get_level();
+        $thrown = null;
+        try {
+            (new ShareHostCommand())->run($context, '/share list');
+        } catch (\Throwable $error) {
+            $thrown = $error;
+        }
+
+        $this->assertInstanceOf(\Error::class, $thrown, 'an \Error is beyond ShareCommand\'s catches, so run() must not absorb it either');
+        $this->assertSame($level, ob_get_level(), 'the capture buffer is closed even on the throw-through path');
     }
 
     /**
