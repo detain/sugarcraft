@@ -316,8 +316,9 @@ final class Bootstrap
         'availableProviders' => 1,
         'checkPolicyFreshness' => 1,
         'reportKeybindingCollisions' => 1,
-        // v1:F-1: one aggregate row over every unknown event in every CC file
-        // the launch parsed — names, groups and files are counted INTO the row,
+        // v1:F-1, widened by C-EXT-1.b: one aggregate row over every unknown
+        // event and every unsupported entry type or key in every CC file the
+        // launch parsed — names, groups and files are counted INTO the row,
         // never per entry.
         'reportSkippedClaudeSettingsEvents' => 1,
         // v1:m-1: one row, message-identity de-duped, whatever how many reads
@@ -843,15 +844,20 @@ final class Bootstrap
     public const MAC_ALT_NOTICE_TEXT = 'Alt chords may be disabled on this Mac terminal: enable "Use Option as Meta key" (Terminal.app) or "Left Option: Esc+" (iTerm2), or run /keys reload after choosing Ctrl aliases — see docs/SETTINGS.md (a Kitty-speaking terminal needs neither)';
 
     /**
-     * v1:F-1: one aggregate row draining
-     * {@see \SugarCraft\Code\Hooks\ClaudeSettingsHooks::skippedEvents()} —
+     * v1:F-1, widened by C-EXT-1.b: one aggregate row draining
+     * {@see \SugarCraft\Code\Hooks\ClaudeSettingsHooks::skippedEvents()} and
+     * {@see \SugarCraft\Code\Hooks\ClaudeSettingsHooks::skippedEntries()} —
      * events a foreign Claude Code settings file asked for that candy-code
-     * has no case for. NOT LISTED in the catalogue below, ON PURPOSE, the
-     * standing {@see STDERR_LINE_FORMAT} already has: the English constant IS
-     * the row, and a closeout may mint the locale key.
+     * has no case for, plus the entry types and keys this dialect does not
+     * speak. The first conversion is the clause list assembled by
+     * {@see reportSkippedClaudeSettingsEvents()}; it opens with the event
+     * clause whenever events were skipped, so a file that skipped only
+     * events reads the same as before this step. NOT LISTED in the catalogue
+     * below, ON PURPOSE, the standing {@see STDERR_LINE_FORMAT} already has:
+     * the English constant IS the row, and a closeout may mint the locale key.
      */
     public const CLAUDE_SETTINGS_SKIPPED_EVENTS_NOTICE_FORMAT =
-        'Claude Code settings: no candy-code hook event matches %s, so %d hook group(s) across %d file(s) '
+        'Claude Code settings: %s, so %d hook group(s) across %d file(s) '
         . 'contribute no guard and were skipped; everything else in those files loaded';
 
     /**
@@ -4397,10 +4403,15 @@ public static function useMaxCost(?string $maxCost): void
         $configDir = static fn (): string => self::trustedConfigDirPath();
         $userConfigPath = $configDir() . '/config.json';
         $userHooksPath = $configDir() . '/hooks.yaml';
+        // C-EXT-1.b: the user's `.claude/settings.json` feeds the same hook
+        // chain as `hooks.yaml` with no gate at all, yet INT-4-P2's record
+        // never hashed it — a silent edit there was exactly the gap.
+        $userClaudePath = self::userClaudeSettingsFile();
 
         $previous = PolicySnapshot::read($configDir);
         $currentConfig = PolicySnapshot::fingerprint($userConfigPath);
         $currentHooks = PolicySnapshot::fingerprint($userHooksPath);
+        $currentClaude = PolicySnapshot::fingerprint($userClaudePath);
 
         $trustedRoots = self::trustedProjectHookRoots(self::permissionConfig());
         $projectHookIdentities = [];
@@ -4436,7 +4447,9 @@ public static function useMaxCost(?string $maxCost): void
         }
 
         $userChanged = $previous !== null
-            && ($currentConfig !== $previous['userConfig'] || $currentHooks !== $previous['userHooks']);
+            && ($currentConfig !== $previous['userConfig']
+                || $currentHooks !== $previous['userHooks']
+                || $currentClaude !== $previous['userClaudeSettings']);
 
         // ISS-090(a): a trusted repo's hooks.yaml GAINING entries is exactly
         // the event the entry filter exists for, and it used to arm nothing —
@@ -4462,6 +4475,7 @@ public static function useMaxCost(?string $maxCost): void
             'version' => PolicySnapshot::VERSION,
             'userConfig' => $currentConfig,
             'userHooks' => $currentHooks,
+            'userClaudeSettings' => $currentClaude,
             'trustedRoots' => $trustedRoots,
             'projectHooks' => $projectHookIdentities,
         ]);
@@ -4481,7 +4495,8 @@ public static function useMaxCost(?string $maxCost): void
     /**
      * Whether THIS launch is quarantining freshly-seen project policy
      * (rv-sec-3). True only when the last launch's snapshot exists and the
-     * user's config.json or hooks.yaml hashed differently, or a trusted
+     * user's config.json, hooks.yaml or `.claude/settings.json` hashed
+     * differently, or a trusted
      * project's hooks.yaml carries identities the last launch never saw —
      * see {@see checkPolicyFreshness()}.
      */
@@ -6038,7 +6053,7 @@ public static function useMaxCost(?string $maxCost): void
             }
 
             LaunchContext::rememberHookFileEntries($path, ClaudeSettingsHooks::isClaudeSettingsPath($path)
-                ? ClaudeSettingsHooks::fromFile($path)
+                ? ClaudeSettingsHooks::fromFile($path, self::claudeSettingsScope($path))
                 : HookConfig::loadFromFile($path));
         }
 
@@ -6046,10 +6061,30 @@ public static function useMaxCost(?string $maxCost): void
     }
 
     /**
+     * Which tier a CC settings path belongs to (C-EXT-1.b): the scope segment
+     * of the generated `cc:{scope}:{event}:{index}` names. `~/.claude/
+     * settings.json` — the one this launch loads ungated — is USER; under a
+     * trusted project root, `settings.local.json` is LOCAL and the shared
+     * settings file is PROJECT. Identity is by path, not by wish: the user
+     * file reached through a project's `.claude` directory (HOME inside the
+     * repo) keeps the USER tier, matching the dedup in {@see hookFiles()}.
+     */
+    private static function claudeSettingsScope(string $path): string
+    {
+        if ($path === self::userClaudeSettingsFile()) {
+            return ClaudeSettingsHooks::SCOPE_USER;
+        }
+
+        return basename($path) === ClaudeSettingsHooks::LOCAL_FILE_NAME
+            ? ClaudeSettingsHooks::SCOPE_LOCAL
+            : ClaudeSettingsHooks::SCOPE_PROJECT;
+    }
+
+    /**
      * rv-sec-3 one-launch quarantine filter for one hook file's entries.
      *
-     * While the policy snapshot says the user's config or hooks changed since
-     * the previous launch, PROJECT-tier entries that launch never saw do not
+     * While the policy snapshot says the user's config, hooks or
+     * `.claude/settings.json` changed since the previous launch, PROJECT-tier entries that launch never saw do not
      * load this time. The user's own files — `hooks.yaml` and the
      * `.claude/settings.json` beside it — are never entry-filtered; the
      * launch notice IS the consent there; a repository's file is the one
@@ -9717,11 +9752,13 @@ public static function useMaxCost(?string $maxCost): void
     }
 
     /**
-     * Drain the v1:F-1 skip-and-record accumulator: an event a foreign
+     * Drain the skip-and-record accumulators: an event a foreign
      * Claude Code settings file names that {@see \SugarCraft\Code\Hooks\HookEvent}
      * has no case for is skipped at parse
-     * ({@see ClaudeSettingsHooks}) and announced HERE as ONE aggregate row
-     * whatever the count — the {@see reportSkillSkips()} contract. Reached
+     * ({@see ClaudeSettingsHooks}), and since C-EXT-1.b so are entries of an
+     * unsupported string `type` and entries carrying keys this dialect does
+     * not speak. All of it is announced HERE as ONE aggregate row whatever
+     * the count — the {@see reportSkillSkips()} contract. Reached
      * from chat()'s drain block, which runs AFTER workspace() construction
      * read every hook file, so one call sees every parse the launch made.
      * Supersedes the old hard refusal for the CC dialect ONLY (R3's native
@@ -9730,24 +9767,52 @@ public static function useMaxCost(?string $maxCost): void
      */
     public static function reportSkippedClaudeSettingsEvents(): void
     {
-        $skipped = ClaudeSettingsHooks::skippedEvents();
-        if ($skipped === []) {
+        $events = ClaudeSettingsHooks::skippedEvents();
+        $entries = ClaudeSettingsHooks::skippedEntries();
+        if ($events === [] && $entries === []) {
             return;
         }
 
-        $names = [];
+        $clauses = [];
         $groups = 0;
         $files = [];
-        foreach ($skipped as $event => $seen) {
-            $names[] = $event;
+
+        if ($events !== []) {
+            $names = [];
+            foreach ($events as $event => $seen) {
+                $names[] = $event;
+                $groups += $seen['groups'];
+                $files += $seen['files'];
+            }
+
+            $clauses[] = 'no candy-code hook event matches ' . "'" . implode("', '", $names) . "'";
+        }
+
+        $types = [];
+        $keys = [];
+        foreach ($entries as $skipped => $seen) {
             $groups += $seen['groups'];
             $files += $seen['files'];
+
+            if ($seen['kind'] === 'type') {
+                $types[] = $skipped;
+            } else {
+                $keys[] = $skipped;
+            }
+        }
+
+        if ($types !== []) {
+            $clauses[] = 'candy-code cannot run hook entries typed ' . "'" . implode("', '", $types) . "'";
+        }
+
+        if ($keys !== []) {
+            $clauses[] = 'candy-code cannot run hook entries carrying ' . "'" . implode("', '", $keys) . "'";
         }
 
         self::warnLaunchRows([
             \sprintf(
                 self::CLAUDE_SETTINGS_SKIPPED_EVENTS_NOTICE_FORMAT,
-                "'" . implode("', '", $names) . "'",
+                implode('; ', $clauses),
                 $groups,
                 \count($files),
             ),

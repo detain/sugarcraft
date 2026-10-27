@@ -620,7 +620,7 @@ YAML);
 
         $hooks = $this->chainOf(Bootstrap::backend($this->project));
 
-        $this->assertInstanceOf(ScriptHook::class, $hooks->hook('PreToolUse', 'cc:PreToolUse:0'));
+        $this->assertInstanceOf(ScriptHook::class, $hooks->hook('PreToolUse', 'cc:user:PreToolUse:0'));
     }
 
     /**
@@ -635,7 +635,7 @@ YAML);
         $hooks = $this->chainOf(Bootstrap::backend($this->project));
 
         $this->assertSame(
-            ['protect-files', 'confirm-rm', 'from-home', 'cc:PreToolUse:0'],
+            ['protect-files', 'confirm-rm', 'from-home', 'cc:user:PreToolUse:0'],
             $this->namesOn($hooks, 'PreToolUse'),
         );
     }
@@ -656,7 +656,7 @@ YAML);
         $hooks->preToolUse($this->context('Bash', ['command' => 'ls']));
 
         $this->assertFileDoesNotExist($marker, 'a project settings file nobody opted into must never run its hooks');
-        $this->assertNotContains('cc:PreToolUse:0', $this->namesOn($hooks, 'PreToolUse'));
+        $this->assertNotContains('cc:project:PreToolUse:0', $this->namesOn($hooks, 'PreToolUse'));
     }
 
     public function testATrustedProjectClaudeSettingsFileDoesExecuteOnAToolCall(): void
@@ -669,7 +669,7 @@ YAML);
         $hooks->preToolUse($this->context('Bash', ['command' => 'ls']));
 
         $this->assertFileExists($marker, 'the opt-in has to actually opt in');
-        $this->assertContains('cc:PreToolUse:0', $this->namesOn($hooks, 'PreToolUse'));
+        $this->assertContains('cc:project:PreToolUse:0', $this->namesOn($hooks, 'PreToolUse'));
     }
 
     /**
@@ -688,7 +688,7 @@ YAML);
         $hooks = $this->chainOf(Bootstrap::backend($this->project));
 
         $this->assertFileDoesNotExist($marker, 'the override file is not a side door around the trust list');
-        $this->assertNotContains('cc:PreToolUse:0', $this->namesOn($hooks, 'PreToolUse'));
+        $this->assertNotContains('cc:local:PreToolUse:0', $this->namesOn($hooks, 'PreToolUse'));
     }
 
     public function testTheLocalOverrideFileLoadsWhenItsRootIsTrusted(): void
@@ -701,7 +701,7 @@ YAML);
         $hooks->preToolUse($this->context('Bash', ['command' => 'ls']));
 
         $this->assertFileExists($marker, 'the opt-in has to actually opt in, override file included');
-        $this->assertContains('cc:PreToolUse:0', $this->namesOn($hooks, 'PreToolUse'));
+        $this->assertContains('cc:local:PreToolUse:0', $this->namesOn($hooks, 'PreToolUse'));
     }
 
     /**
@@ -732,26 +732,33 @@ YAML);
     }
 
     /**
-     * One hook of a newer type refuses the LAUNCH by name. Silent registration
-     * would run the wrong meaning; silent skipping would hand back exactly the
-     * silently-shortened guard chain {@see \SugarCraft\Code\Cli\Bootstrap::hookFiles()} exists to close.
+     * C-EXT-1.b moved the boundary again: an entry of an unsupported TYPE is
+     * skipped and recorded, like an unknown event — the chain loses the hook it
+     * cannot run, and the launch notice names it, but one vendor-side feature
+     * flag in a foreign file no longer bricks every launch mode. A command
+     * entry in the same file still registers, under its tier-qualified name.
      */
-    public function testAClaudeHookOfANonCommandTypeRefusesTheStart(): void
+    public function testAClaudeHookOfANonCommandTypeIsSkippedAndRecorded(): void
     {
         $this->writeUserClaudeSettings((string) json_encode([
             'hooks' => [
                 'PreToolUse' => [
-                    ['matcher' => 'Bash', 'hooks' => [['type' => 'prompt', 'command' => 'true']]],
+                    [
+                        'matcher' => 'Bash',
+                        'hooks' => [
+                            ['type' => 'prompt', 'command' => 'true'],
+                            ['type' => 'command', 'command' => 'true'],
+                        ],
+                    ],
                 ],
             ],
         ]));
 
-        try {
-            Bootstrap::backend($this->project);
-            $this->fail('a hook this port cannot run may not launch as a silent no-op');
-        } catch (PermissionConfigException $e) {
-            $this->assertStringContainsString('prompt', $e->getMessage());
-        }
+        $chain = $this->chainOf(Bootstrap::backend($this->project));
+
+        $this->assertContains('cc:user:PreToolUse:0', $this->namesOn($chain, 'PreToolUse'), 'the command sibling still loads');
+        $this->assertArrayHasKey('prompt', ClaudeSettingsHooks::skippedEntries(), 'the skipped type is recorded, not silent');
+        $this->assertSame('type', ClaudeSettingsHooks::skippedEntries()['prompt']['kind']);
     }
 
     /**
@@ -777,8 +784,8 @@ YAML);
 
         $hooks = $this->chainOf(Bootstrap::backend($this->project));
 
-        $this->assertContains('cc:PreToolUse:0', $this->namesOn($hooks, 'PreToolUse'));
-        $this->assertNotContains('cc:Notification:0', $this->namesOn($hooks, 'Notification'));
+        $this->assertContains('cc:user:PreToolUse:0', $this->namesOn($hooks, 'PreToolUse'));
+        $this->assertNotContains('cc:user:Notification:0', $this->namesOn($hooks, 'Notification'));
         $this->assertArrayHasKey('Notification', ClaudeSettingsHooks::skippedEvents(), 'the skip is recorded, not silent');
     }
 
@@ -811,7 +818,7 @@ YAML);
 
         $hooks = $this->chainOf(Bootstrap::backend($this->project));
 
-        $this->assertContains('cc:PreToolUse:0', $this->namesOn($hooks, 'PreToolUse'), 'unknown neighbours no longer veto known ones');
+        $this->assertContains('cc:user:PreToolUse:0', $this->namesOn($hooks, 'PreToolUse'), 'unknown neighbours no longer veto known ones');
 
         $record = ClaudeSettingsHooks::skippedEvents();
         $this->assertSame(['Bogus', 'StopFailure'], array_keys($record));
@@ -842,7 +849,7 @@ YAML);
         $chain = $this->chainOf(Bootstrap::backend($this->project));
 
         $this->assertSame(
-            ['protect-files', 'confirm-rm', 'cc:PreToolUse:0'],
+            ['protect-files', 'confirm-rm', 'cc:user:PreToolUse:0'],
             $this->namesOn($chain, 'PreToolUse'),
             'the hooks key loads; nothing else in the file joins the chain',
         );
@@ -856,24 +863,48 @@ YAML);
     }
 
     /**
-     * The `cc:{event}:{index}` names are generated per FILE, so a user file and
-     * a trusted project file that both carry one `PreToolUse` group produce the
-     * same name — and the already-registered guard refuses the launch exactly
-     * as it refuses a collision inside one file. A hook chain adds; it never
-     * quietly displaces. Disclosed consequence of the naming scheme in
+     * C-EXT-1.b's naming: every generated row is qualified by the TIER its
+     * file was loaded from, so the per-file-index collision the old
+     * `cc:{event}:{index}` spelling produced — a user file and a trusted
+     * project file both minting `cc:PreToolUse:0` and taking the launch down
+     * — is gone. All three settings files register side by side, and every
+     * generated name matches the documented shape. Disclosed consequence in
      * {@see \SugarCraft\Code\Hooks\ClaudeSettingsHooks}.
      */
-    public function testTwoClaudeSettingsFilesNamingTheSameGeneratedEntryRefuseTheStart(): void
+    public function testClaudeSettingsFilesFromDifferentTiersRegisterSideBySide(): void
     {
         $this->writeUserClaudeSettings($this->nestedCommandHook('Bash', 'true'));
         $this->trustProject();
         $this->writeProjectClaudeSettings('settings.json', $this->nestedCommandHook('Edit', 'true'));
+        $this->writeProjectClaudeSettings('settings.local.json', $this->nestedCommandHook('Write', 'true'));
+
+        $names = $this->namesOn($this->chainOf(Bootstrap::backend($this->project)), 'PreToolUse');
+
+        $this->assertSame(
+            ['protect-files', 'confirm-rm', 'cc:user:PreToolUse:0', 'cc:project:PreToolUse:0', 'cc:local:PreToolUse:0'],
+            $names,
+        );
+        foreach (array_slice($names, 2) as $generated) {
+            $this->assertMatchesRegularExpression('/^cc:(user|project|local):[A-Za-z]+:\d+$/', $generated);
+        }
+    }
+
+    /**
+     * The collision law itself survives the new names: `cc:` rows are still
+     * ordinary chain members, so a hand-written user `hooks.yaml` entry that
+     * CLAIMS a generated name is a duplicate guard, and a hook chain adds —
+     * it never quietly displaces. Same refusal, same name, one tier later.
+     */
+    public function testAHooksYamlEntryClaimingAGeneratedClaudeNameStillRefusesTheStart(): void
+    {
+        $this->writeUserHooks("hooks:\n  PreToolUse:\n    - name: cc:user:PreToolUse:0\n      command: 'true'\n");
+        $this->writeUserClaudeSettings($this->nestedCommandHook('Bash', 'true'));
 
         try {
             Bootstrap::backend($this->project);
-            $this->fail('the second cc:PreToolUse:0 may not silently win or silently lose');
+            $this->fail('a claimed cc: name may not silently win or silently lose');
         } catch (PermissionConfigException $e) {
-            $this->assertStringContainsString('cc:PreToolUse:0', $e->getMessage());
+            $this->assertStringContainsString('cc:user:PreToolUse:0', $e->getMessage());
         }
     }
 
@@ -894,7 +925,7 @@ YAML);
             1,
             count(array_filter(
                 $this->namesOn($chain, 'PreToolUse'),
-                static fn (string $name): bool => $name === 'cc:PreToolUse:0',
+                static fn (string $name): bool => $name === 'cc:user:PreToolUse:0',
             )),
         );
     }

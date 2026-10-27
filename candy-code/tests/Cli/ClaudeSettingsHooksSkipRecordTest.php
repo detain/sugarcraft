@@ -112,6 +112,32 @@ final class ClaudeSettingsHooksSkipRecordTest extends TestCase
         $this->assertCount(1, Bootstrap::launchNotices(), 'the seam de-dupes by message identity, so a re-drain costs nothing');
     }
 
+    /**
+     * C-EXT-1.b widened the SAME one row: entries of an unsupported type and
+     * entries carrying an off-dialect key join the skipped event names in
+     * naming what contributed no guard. One parse, one drain, still exactly
+     * one aggregate row — the launch-cap census entry stays 1.
+     */
+    public function testTheAggregateNamesSkippedEntryTypesAndKeysBesideEvents(): void
+    {
+        ClaudeSettingsHooks::parse(
+            '{"hooks":{"Notification":[{"hooks":[{"type":"command","command":"./a.sh"}]}],'
+            . '"PreToolUse":[{"hooks":[{"type":"prompt","command":"be smart"},'
+            . '{"type":"command","command":"./gate.sh","if":"Bash(ls)"}]}]}}',
+            '/home/user/.claude/settings.json',
+        );
+
+        Bootstrap::reportSkippedClaudeSettingsEvents();
+
+        $notices = Bootstrap::launchNotices();
+        $this->assertCount(1, $notices);
+        $this->assertStringContainsString("no candy-code hook event matches 'Notification'", $notices[0]);
+        $this->assertStringContainsString("typed 'prompt'", $notices[0]);
+        $this->assertStringContainsString("carrying 'if'", $notices[0]);
+        $this->assertStringContainsString('3 hook group(s) across 1 file(s)', $notices[0]);
+        $this->assertStringContainsString('were skipped', $notices[0]);
+    }
+
     private function resetNoticeStatics(): void
     {
         foreach ([

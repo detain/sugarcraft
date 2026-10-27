@@ -51,6 +51,7 @@ final class PolicySnapshotTest extends TestCase
             'version' => PolicySnapshot::VERSION,
             'userConfig' => str_repeat('a', 64),
             'userHooks' => null,
+            'userClaudeSettings' => str_repeat('c', 64),
             'trustedRoots' => ['/srv/project'],
             'projectHooks' => ['/srv/project' => ['guard|PreToolUse|true']],
         ];
@@ -65,6 +66,7 @@ final class PolicySnapshotTest extends TestCase
             'version' => PolicySnapshot::VERSION,
             'userConfig' => null,
             'userHooks' => null,
+            'userClaudeSettings' => null,
             'projectHooks' => [],
         ]);
 
@@ -89,6 +91,7 @@ final class PolicySnapshotTest extends TestCase
             'version' => PolicySnapshot::VERSION,
             'userConfig' => null,
             'userHooks' => null,
+            'userClaudeSettings' => null,
             'projectHooks' => [],
         ];
 
@@ -96,8 +99,14 @@ final class PolicySnapshotTest extends TestCase
             'not json' => '{not json',
             'a list, not an object' => '[]',
             'foreign version' => (string) json_encode(['version' => 99] + $good),
-            'missing userConfig' => (string) json_encode(['version' => 1, 'userHooks' => null, 'projectHooks' => []]),
-            'projectHooks not array' => (string) json_encode(['version' => 1, 'userConfig' => null, 'userHooks' => null, 'projectHooks' => 'nope']),
+            // C-EXT-1.b: the user's own `.claude/settings.json` joined the
+            // fingerprint set, so the shape gate names it too — and a record
+            // written by the PREVIOUS schema cannot carry it, which is the
+            // intended one-time reset (below), not corruption.
+            'missing userConfig' => (string) json_encode(['version' => PolicySnapshot::VERSION, 'userHooks' => null, 'userClaudeSettings' => null, 'projectHooks' => []]),
+            'missing userClaudeSettings' => (string) json_encode(['version' => PolicySnapshot::VERSION, 'userConfig' => null, 'userHooks' => null, 'projectHooks' => []]),
+            'the pre-C-EXT-1.b version 1 record' => (string) json_encode(['version' => 1] + $good),
+            'projectHooks not array' => (string) json_encode(['version' => PolicySnapshot::VERSION, 'userConfig' => null, 'userHooks' => null, 'userClaudeSettings' => null, 'projectHooks' => 'nope']),
         ];
 
         foreach ($cases as $label => $bytes) {
@@ -119,6 +128,7 @@ final class PolicySnapshotTest extends TestCase
             'version' => PolicySnapshot::VERSION,
             'userConfig' => str_repeat('b', 64),
             'userHooks' => null,
+            'userClaudeSettings' => null,
             'projectHooks' => [],
         ]));
 

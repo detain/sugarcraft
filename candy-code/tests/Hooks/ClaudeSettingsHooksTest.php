@@ -59,7 +59,7 @@ final class ClaudeSettingsHooksTest extends TestCase
 
     public function testNoFileIsNoHooks(): void
     {
-        $this->assertSame([], ClaudeSettingsHooks::fromFile($this->dir . '/.claude/settings.json'));
+        $this->assertSame([], ClaudeSettingsHooks::fromFile($this->dir . '/.claude/settings.json', ClaudeSettingsHooks::SCOPE_USER));
     }
 
     public function testAPathThatExistsWithoutBeingAFileRefuses(): void
@@ -67,7 +67,7 @@ final class ClaudeSettingsHooksTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessageMatches('/exists but is not a readable file/');
 
-        ClaudeSettingsHooks::fromFile($this->dir . '/.claude');
+        ClaudeSettingsHooks::fromFile($this->dir . '/.claude', ClaudeSettingsHooks::SCOPE_USER);
     }
 
     public function testAFileThatCannotBeReadRefuses(): void
@@ -84,7 +84,7 @@ final class ClaudeSettingsHooksTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessageMatches('/could not be read/');
 
-        ClaudeSettingsHooks::fromFile($path);
+        ClaudeSettingsHooks::fromFile($path, ClaudeSettingsHooks::SCOPE_USER);
     }
 
     public function testFromReadsTheRealFileThroughTheParser(): void
@@ -94,9 +94,37 @@ final class ClaudeSettingsHooksTest extends TestCase
             'hooks' => ['Stop' => [['hooks' => [['type' => 'command', 'command' => './done.sh']]]]],
         ]));
 
-        $rows = ClaudeSettingsHooks::fromFile($path);
+        $rows = ClaudeSettingsHooks::fromFile($path, ClaudeSettingsHooks::SCOPE_USER);
 
-        $this->assertSame(['cc:Stop:0'], array_column($rows, 'name'));
+        $this->assertSame(['cc:user:Stop:0'], array_column($rows, 'name'));
+    }
+
+    /**
+     * C-EXT-1.b: the scope is a tier, not a free-text label — a wrong
+     * spelling would name rows into a namespace that does not exist, which
+     * is the collision the segment exists to prevent. It refuses, and the
+     * refusal does not depend on whether the file is even there.
+     */
+    public function testAnUnknownScopeRefusesEvenForAFileThatIsNotThere(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/is not a Claude settings tier/');
+
+        ClaudeSettingsHooks::fromFile($this->dir . '/.claude/settings.json', 'global');
+    }
+
+    public function testTheProjectAndLocalScopesNameTheirOwnRows(): void
+    {
+        $json = '{"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"./x.sh"}]}]}}';
+
+        $this->assertSame(
+            ['cc:project:PreToolUse:0'],
+            array_column(ClaudeSettingsHooks::parse($json, 'a project settings.json', ClaudeSettingsHooks::SCOPE_PROJECT), 'name'),
+        );
+        $this->assertSame(
+            ['cc:local:PreToolUse:0'],
+            array_column(ClaudeSettingsHooks::parse($json, 'a local settings file', ClaudeSettingsHooks::SCOPE_LOCAL), 'name'),
+        );
     }
 
     // =========================================================================
@@ -142,17 +170,17 @@ final class ClaudeSettingsHooksTest extends TestCase
         $flat = <<<'YAML'
 hooks:
   PreToolUse:
-    - name: cc:PreToolUse:0
+    - name: cc:user:PreToolUse:0
       matcher: Bash
       command: ./guard.sh
       timeout: 5
-    - name: cc:PreToolUse:1
+    - name: cc:user:PreToolUse:1
       matcher: Bash
       command: ./second.sh
-    - name: cc:PreToolUse:2
+    - name: cc:user:PreToolUse:2
       command: ./no-matcher.sh
   Stop:
-    - name: cc:Stop:0
+    - name: cc:user:Stop:0
       command: ./stop.sh
 YAML;
 
@@ -173,10 +201,10 @@ YAML;
         );
 
         $this->assertSame([
-            'cc:PreToolUse:0' => ['dialect' => ScriptHook::DIALECT_CLAUDE, 'advisory' => false],
-            'cc:PreToolUse:1' => ['dialect' => ScriptHook::DIALECT_CLAUDE, 'advisory' => false],
-            'cc:PreToolUse:2' => ['dialect' => ScriptHook::DIALECT_CLAUDE, 'advisory' => false],
-            'cc:Stop:0' => ['dialect' => ScriptHook::DIALECT_CLAUDE, 'advisory' => false],
+            'cc:user:PreToolUse:0' => ['dialect' => ScriptHook::DIALECT_CLAUDE, 'advisory' => false],
+            'cc:user:PreToolUse:1' => ['dialect' => ScriptHook::DIALECT_CLAUDE, 'advisory' => false],
+            'cc:user:PreToolUse:2' => ['dialect' => ScriptHook::DIALECT_CLAUDE, 'advisory' => false],
+            'cc:user:Stop:0' => ['dialect' => ScriptHook::DIALECT_CLAUDE, 'advisory' => false],
         ], $stamped, 'the stamp is the whole of the difference: a claude row, and none of these asked to be advisory');
     }
 
@@ -206,7 +234,7 @@ YAML;
         ]));
 
         $this->assertSame([[
-            'name' => 'cc:PreToolUse:0',
+            'name' => 'cc:user:PreToolUse:0',
             'event' => 'PreToolUse',
             'matcher' => 'Edit',
             'command' => './x.sh',
@@ -263,7 +291,7 @@ YAML;
         ]));
 
         $this->assertSame(
-            ['cc:PreToolUse:0' => true, 'cc:PreToolUse:1' => false, 'cc:PreToolUse:2' => false],
+            ['cc:user:PreToolUse:0' => true, 'cc:user:PreToolUse:1' => false, 'cc:user:PreToolUse:2' => false],
             array_combine(array_column($rows, 'name'), array_column($rows, 'advisory')),
         );
         $this->assertSame(
@@ -367,28 +395,31 @@ YAML;
     }
 
     /**
-     * The refusal on an off-dialect key has to list the accepted ones, because
-     * that list is the only place a reader of a wrong file learns the format.
-     * It is derived from the const, so growing the set without growing the
-     * message fails here.
+     * C-EXT-1.b moved the boundary an off-dialect KEY sits on: from
+     * launch-refusal to skip-and-record. The entry is skipped WHOLE (a hook
+     * with keys we cannot interpret is not a hook we can run), every unknown
+     * key is named in the record — so nothing is skipped quietly — and the
+     * accepted-key list itself stays pinned by
+     * {@see testTheDocNamesExactlyTheKeysThisParserAccepts()}, which is the
+     * place a reader of a wrong file learns the format now that the refusal
+     * sentence is gone.
      */
-    public function testTheRefusalNamesEveryKeyThisDialectAccepts(): void
+    public function testEveryOffDialectKeyIsSkippedAndNamedIndividually(): void
     {
-        try {
-            ClaudeSettingsHooks::parse('{"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"./x.sh","nope":1}]}]}}');
-            $this->fail('an off-dialect hook key must refuse the launch');
-        } catch (\InvalidArgumentException $e) {
-            $this->assertMatchesRegularExpression('/is not a key a hook under/', $e->getMessage());
-            $this->assertMatchesRegularExpression('/\(valid keys are ([^)]+)\)/', $e->getMessage());
-            preg_match("/\(valid keys are ([^)]+)\)/", $e->getMessage(), $clause);
-            preg_match_all("/'([A-Za-z]+)'/", $clause[1], $spelled);
+        $rows = ClaudeSettingsHooks::parse(
+            '{"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"./x.sh","nope":1,"if":"Bash"}]}]}}',
+            '/home/u/.claude/settings.json',
+        );
 
-            $accepted = (new \ReflectionClassConstant(ClaudeSettingsHooks::class, 'ENTRY_KEYS'))->getValue();
-            $this->assertSame(
-                $accepted,
-                $spelled[1],
-                'the refusal must spell exactly the keys the parser accepts, in the const order',
-            );
+        $this->assertSame([], $rows, 'an entry carrying off-dialect keys contributes no row');
+
+        $record = ClaudeSettingsHooks::skippedEntries();
+        $this->assertSame(['nope', 'if'], array_keys($record), 'BOTH unknown keys are named, not just the first');
+        foreach ($record as $key => $seen) {
+            $this->assertSame('key', $seen['kind'], "'{$key}' was skipped as an off-dialect key");
+            $this->assertSame(1, $seen['groups']);
+            $this->assertSame(['PreToolUse'], array_keys($seen['events']));
+            $this->assertArrayHasKey('/home/u/.claude/settings.json', $seen['files']);
         }
     }
 
@@ -401,7 +432,7 @@ YAML;
             ]],
         ]));
 
-        $this->assertSame(['cc:PostToolUse:0', 'cc:PostToolUse:1', 'cc:PostToolUse:2'], array_column($rows, 'name'));
+        $this->assertSame(['cc:user:PostToolUse:0', 'cc:user:PostToolUse:1', 'cc:user:PostToolUse:2'], array_column($rows, 'name'));
         // ...and a second event restarts its own numbering.
         $rows = ClaudeSettingsHooks::parse((string) json_encode([
             'hooks' => [
@@ -410,7 +441,7 @@ YAML;
             ],
         ]));
 
-        $this->assertSame(['cc:Stop:0', 'cc:SessionStart:0'], array_column($rows, 'name'));
+        $this->assertSame(['cc:user:Stop:0', 'cc:user:SessionStart:0'], array_column($rows, 'name'));
     }
 
     // =========================================================================
@@ -489,37 +520,55 @@ YAML;
     }
 
     /**
-     * An off-dialect key still refuses the launch. C-EXT-1 moved the boundary
-     * from three keys to five, so the example is a key NO dialect has —
-     * `async` is accepted now, by
-     * {@see testAsyncTrueMarksTheRowAdvisoryAndItsSiblingUnmarked()} — and the
-     * law behind this test is unchanged: a key this loader has never heard of
-     * means a hook it cannot know the meaning of, so nothing runs.
+     * C-EXT-1.b moved this boundary too: the whole ENTRY that carries an
+     * off-dialect key is skipped and recorded by key name (no row, loud on
+     * the aggregate), and nothing else in the group or file is forfeited —
+     * the sibling that speaks only recognised keys still registers under its
+     * scoped name. The law that survives unchanged is "never run silently":
+     * the skipped entry contributes no row either way.
      */
-    public function testAHookKeyOutsideTheDialectRefuses(): void
+    public function testAHookKeyOutsideTheDialectSkipsTheEntryAndKeepsItsSibling(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessageMatches('/is not a key a hook under/');
+        $rows = ClaudeSettingsHooks::parse(
+            '{"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"./x.sh","nope":1},{"type":"command","command":"./ok.sh"}]}]}}',
+            '/home/u/.claude/settings.json',
+        );
 
-        ClaudeSettingsHooks::parse('{"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"./x.sh","nope":1}]}]}}');
+        $this->assertSame(['cc:user:PreToolUse:0'], array_column($rows, 'name'));
+        $this->assertSame('./ok.sh', $rows[0]['command']);
+
+        $record = ClaudeSettingsHooks::skippedEntries();
+        $this->assertSame(['nope'], array_keys($record));
+        $this->assertSame('key', $record['nope']['kind']);
+        $this->assertSame(1, $record['nope']['groups']);
+        $this->assertArrayHasKey('/home/u/.claude/settings.json', $record['nope']['files']);
     }
 
     /**
-     * THE polarity flip this item exists to make. CC grew `prompt`/`agent`
-     * hooks — kinds with no exit-code verdict for this chain to read. Running
-     * one would not be the guard the author wrote, and skipping it quietly is
-     * the silently-shorter chain {@see ClaudeSettingsHooks} was built to
-     * refuse. So: name it, name the file, stop the launch.
+     * THE polarity flip this item exists to make. CC grew `prompt`/`agent`/
+     * `http`/`mcp_tool` hooks — kinds with no exit-code verdict for this chain
+     * to read. Running one would not be the guard the author wrote, and
+     * skipping it quietly is the silently-shorter chain; but refusing a whole
+     * launch over a type this loader does not speak gave one vendor's settings
+     * file the blast radius of an outage (the same v1:F-1 reasoning that
+     * covered events). So: SKIP the entry, RECORD it by type name, and let
+     * everything else in the file load.
      */
-    public function testAHookOfAnotherTypeRefusesLoudlyAndNamesItself(): void
+    public function testAHookOfAnotherTypeIsSkippedAndRecordedAndNamesItself(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessageMatches("/type 'prompt'/");
-
-        ClaudeSettingsHooks::parse(
-            '{"hooks":{"PreToolUse":[{"hooks":[{"type":"prompt","command":"be smart"}]}]}}',
+        $rows = ClaudeSettingsHooks::parse(
+            '{"hooks":{"PreToolUse":[{"hooks":[{"type":"prompt","command":"be smart"},{"type":"command","command":"./guard.sh"}]}]}}',
             '/home/u/.claude/settings.json',
         );
+
+        $this->assertSame(['cc:user:PreToolUse:0'], array_column($rows, 'name'));
+
+        $record = ClaudeSettingsHooks::skippedEntries();
+        $this->assertSame(['prompt'], array_keys($record));
+        $this->assertSame('type', $record['prompt']['kind']);
+        $this->assertSame(1, $record['prompt']['groups']);
+        $this->assertSame(['PreToolUse'], array_keys($record['prompt']['events']));
+        $this->assertArrayHasKey('/home/u/.claude/settings.json', $record['prompt']['files']);
     }
 
     public function testAMissingTypeRefusesRatherThanDefaulting(): void
@@ -545,7 +594,7 @@ YAML;
             ],
         ]));
 
-        $this->assertSame(['cc:Stop:0'], array_column($rows, 'name'));
+        $this->assertSame(['cc:user:Stop:0'], array_column($rows, 'name'));
         $this->assertSame(['Notification'], array_keys(ClaudeSettingsHooks::skippedEvents()));
         $this->assertSame(1, ClaudeSettingsHooks::skippedEvents()['Notification']['groups']);
     }
@@ -562,9 +611,9 @@ YAML;
 
         // THE POLARITY v1:F-1 EXISTS FOR: a foreign file naming an event
         // candy-code has never heard of must not brick the launch.
-        $rows = ClaudeSettingsHooks::fromFile($path);
+        $rows = ClaudeSettingsHooks::fromFile($path, ClaudeSettingsHooks::SCOPE_USER);
 
-        $this->assertSame(['cc:PreToolUse:0'], array_column($rows, 'name'));
+        $this->assertSame(['cc:user:PreToolUse:0'], array_column($rows, 'name'));
         $skipped = ClaudeSettingsHooks::skippedEvents();
         $this->assertSame(['StopFailure'], array_keys($skipped));
         $this->assertArrayHasKey($path, $skipped['StopFailure']['files']);

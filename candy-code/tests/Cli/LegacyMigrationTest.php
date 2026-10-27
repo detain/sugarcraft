@@ -93,6 +93,10 @@ final class LegacyMigrationTest extends TestCase
             'version' => PolicySnapshot::VERSION,
             'userConfig' => PolicySnapshot::fingerprint($old . '/config.json'), // @rename-keep
             'userHooks' => PolicySnapshot::fingerprint($old . '/hooks.yaml'), // @rename-keep
+            // C-EXT-1.b made the user settings file part of the fingerprint
+            // set; the moved bytes must keep matching it too (unseeded here,
+            // so this rides as null — the same shape a missing file records).
+            'userClaudeSettings' => PolicySnapshot::fingerprint($old . '/.claude/settings.json'), // @rename-keep
             'trustedRoots' => [$this->home],
             'projectHooks' => [],
         ];
@@ -107,6 +111,7 @@ final class LegacyMigrationTest extends TestCase
         // match the moved bytes, so the launch-time comparison sees no change.
         self::assertSame($record['userConfig'], PolicySnapshot::fingerprint($new . '/config.json'));
         self::assertSame($record['userHooks'], PolicySnapshot::fingerprint($new . '/hooks.yaml'));
+        self::assertSame($record['userClaudeSettings'], PolicySnapshot::fingerprint($new . '/.claude/settings.json'));
         self::assertSame('{"model":"probe"}', file_get_contents($new . '/config.json'));
     }
 

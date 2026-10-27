@@ -59,15 +59,27 @@ the SAME validator — event-name check, matcher compilation, positive-finite
 `timeout` — so the file format section below applies to it, with the one
 exception that this format's two extra keys are stamped onto the row only
 *after* that validator has passed it. Names are
-generated as `cc:{event}:{index}` (CC entries carry no `name`); the `cc:`
-prefix means these entries can never claim a `hooks.yaml` guard's name.
-Differences that are this loader's own:
+generated as `cc:{scope}:{event}:{index}` (CC entries carry no `name`), where
+the scope says which tier the file was loaded from: `user` for
+`~/.claude/settings.json`, `project` for a trusted project's
+`.claude/settings.json`, `local` for its `.claude/settings.local.json`. The
+`cc:` prefix means these entries can never claim a `hooks.yaml` guard's name,
+and the scope segment means two files in DIFFERENT tiers that name the same
+event at the same index no longer collide; a hand-written `hooks.yaml` entry
+that claims one of these generated names still does, and that collision
+refuses the launch exactly as a native name collision
+does. Differences that are this loader's own:
 
-- `type` must be `command`. The newer `prompt`/`agent` types have no exit-code
-  verdict to read, so one refuses the launch by name rather than being skipped
-  quietly or run with the wrong meaning.
+- `type` runs only `command`. The newer `prompt`, `agent`, `http` and
+  `mcp_tool` types have no exit-code verdict to read; an entry with such a
+  string `type` is SKIPPED and RECORDED — it contributes no guard, and the
+  launch notice names the type, so nothing is skipped quietly. A `type` that
+  is missing or not a string is not a dialect this loader recognises at all
+  and still refuses the launch by name.
 - An entry may carry five keys: `type`, `command`, `timeout`, `statusMessage`
-  and `async`. Anything else still refuses the launch by name. The two beyond
+  and `async`. An entry carrying any other key — CC grows them, `if` and
+  `once` are real today — is skipped whole and every off-dialect key is named
+  on the same launch notice, never run silently. The two beyond
   the native three have no `hooks.yaml` equivalent to refuse *them*, so each
   lands on a native slot rather than being dropped:
   - **`statusMessage` becomes the entry's `description`** — the same text
@@ -90,9 +102,13 @@ Differences that are this loader's own:
 - Relative commands are NOT anchored to the settings file's directory: Claude
   Code runs hooks with the project as cwd, and candy-code's script hooks
   already spawn there.
-- The `Notification` event is recognised and SKIPPED: the hook chain has no
-  such event yet, and widening it is a separate decision. Every other unknown
-  event still refuses the launch.
+- Events candy-code has no case for are recognised and SKIPPED — `Notification`
+  and every other unknown name alike. The hook chain has no such event, and
+  widening it is a separate decision; refusing a whole launch over one
+  unmappable name in a foreign vendor's file gave that file the blast radius
+  of an outage. Each skip is recorded, and one aggregate launch notice names
+  the skipped events, entry types and off-dialect keys together with their
+  group counts and the files they came from.
 
 ---
 

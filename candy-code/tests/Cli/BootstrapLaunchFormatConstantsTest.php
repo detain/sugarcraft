@@ -549,10 +549,12 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // Audit R12: both sentences are named constants and both keys are, so
         // the body holds no literal at all.
         'reportNonsenseLimits' => [],
-        // v1:F-1: the only format is named; the rest are the two accumulator
-        // keys the foreach reads, and the quote pair that wraps the event-name
-        // list with its joiner.
-        'reportSkippedClaudeSettingsEvents' => ["'groups'", "'files'", "\"'\"", "\"', '\""],
+        // v1:F-1 named the format; C-EXT-1.b widened the same one row to name
+        // skipped entry types and off-dialect keys beside skipped events. The
+        // only format stays named; the rest are the three accumulator keys the
+        // two foreaches read, the two new clause openings, the quote pair that
+        // wraps each name list with its joiner, and the clause joiner.
+        'reportSkippedClaudeSettingsEvents' => ["'groups'", "'files'", "'no candy-code hook event matches '", "\"'\"", "\"', '\"", "'kind'", "'type'", "'candy-code cannot run hook entries typed '", "'candy-code cannot run hook entries carrying '", "'; '"],
         // The R16 follow-up: the path separator and the `~/` the home log is
         // spelled with; both sentences are named constants.
         'reportTuiErrorLogFallback' => ["'/'", "'~/'"],

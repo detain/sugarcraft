@@ -116,6 +116,53 @@ final class PolicyFreshnessQuarantineTest extends TestCase
         $this->assertContains('repo-new', $names3, 'quarantine is one launch, not a veto — permanence would brick legitimate edits');
     }
 
+    /**
+     * C-EXT-1.b: the user's own `~/.claude/settings.json` joined the
+     * fingerprint set. An edit to it between launches raises the same drift
+     * notice a `config.json` or `hooks.yaml` edit raises — and the changed
+     * row still loads on the drifted launch, because the user tier is never
+     * entry-quarantined (the same consent law that lets `home-new` above
+     * through on the drifted launch).
+     */
+    public function testAnEditToTheUserClaudeSettingsFileRaisesTheDriftNotice(): void
+    {
+        $settingsDir = $this->home . '/.claude';
+        mkdir($settingsDir, 0700, true);
+        file_put_contents(
+            $settingsDir . '/settings.json',
+            '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"./one.sh"}]}]}}'
+        );
+
+        $names1 = $this->launchHookChain();
+        $this->assertContains('cc:user:PreToolUse:0', $names1);
+        $this->assertStringNotContainsString(
+            'changed since the last launch',
+            implode("\n", Bootstrap::launchNotices()),
+            'a baseline launch must not cry policy drift at an untouched box'
+        );
+
+        file_put_contents(
+            $settingsDir . '/settings.json',
+            '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"./two.sh"}]}]}}'
+        );
+
+        $this->resetFreshnessStatics();
+        $names2 = $this->launchHookChain();
+        $notices = implode("\n", Bootstrap::launchNotices());
+
+        $this->assertStringContainsString(
+            'changed since the last launch',
+            $notices,
+            'the user settings file is policy state now — editing it has to be announced'
+        );
+        $this->assertStringNotContainsString(
+            'carries entries the last launch never saw',
+            $notices,
+            'a user-tier change is consent by authorship, never a project quarantine'
+        );
+        $this->assertContains('cc:user:PreToolUse:0', $names2, 'the changed user hook loads on the same launch that announces it');
+    }
+
     public function testAnAbsentPriorSnapshotNeverQuarantines(): void
     {
         $this->writeProjectHooks("hooks:\n  PreToolUse:\n    - name: day-one\n      command: 'true'\n");

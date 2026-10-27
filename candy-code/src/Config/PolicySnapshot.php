@@ -16,9 +16,12 @@ use SugarCraft\Core\Util\AtomicJsonFile;
  * signal in between. A checked-out project's `hooks.yaml` has the same shape
  * one level worse: entering a directory is the edit.
  *
- * THE RECORD. At every launch that reads a policy we fingerprint the three
- * sources it consulted — the user config file, the user hooks file, and each
- * trusted project's hooks file as the exact entry identities (name|event|
+ * THE RECORD. At every launch that reads a policy we fingerprint the four
+ * sources it consulted — the user config file, the user hooks file, the
+ * user's own `~/.claude/settings.json` (C-EXT-1.b: it feeds the same
+ * hook chain as `hooks.yaml`, so a silent edit to it was exactly the gap
+ * INT-4-P2 closed for the other two), and each trusted project's hooks file
+ * as the exact entry identities (name|event|
  * command) that loaded — into a 0600 JSON state file next to the config. At
  * the NEXT launch, a hash that differs from the snapshot means the policy
  * changed while no candy-code process was watching, and the answer is not to
@@ -40,8 +43,13 @@ use SugarCraft\Core\Util\AtomicJsonFile;
  */
 final class PolicySnapshot
 {
-    /** Schema of the state file itself; bumped only with a shape change. */
-    public const VERSION = 1;
+    /**
+     * Schema of the state file itself; bumped only with a shape change.
+     * 1→2 adds the `userClaudeSettings` fingerprint (C-EXT-1.b); a record
+     * still on 1 reads as null, which is the intended one-time baseline
+     * reset — a first launch after upgrade has nothing to falsely accuse.
+     */
+    public const VERSION = 2;
 
     public const FILE_NAME = 'policy-snapshot.json';
 
@@ -72,9 +80,11 @@ final class PolicySnapshot
      * treats a missing list as "no root-level quarantine, entry-level only")
      * rather than refused, so a record written by a sibling build that has not
      * grown the field yet stays loadable instead of silently resetting the
-     * baseline.
+     * baseline. `userClaudeSettings` is NOT given that courtesy: it rides the
+     * VERSION 2 bump, and the version gate above is the deliberate one-time
+     * reset for every pre-bump record.
      *
-     * @return array{version: int, userConfig: ?string, userHooks: ?string, trustedRoots?: list<string>, projectHooks: array<string, list<string>>}|null
+     * @return array{version: int, userConfig: ?string, userHooks: ?string, userClaudeSettings: ?string, trustedRoots?: list<string>, projectHooks: array<string, list<string>>}|null
      */
     public static function read(callable $configDir): ?array
     {
@@ -93,11 +103,12 @@ final class PolicySnapshot
             || ($data['version'] ?? null) !== self::VERSION
             || !array_key_exists('userConfig', $data)
             || !array_key_exists('userHooks', $data)
+            || !array_key_exists('userClaudeSettings', $data)
             || !is_array($data['projectHooks'] ?? null)) {
             return null;
         }
 
-        /** @var array{version: int, userConfig: ?string, userHooks: ?string, projectHooks: array<string, list<string>>} $data */
+        /** @var array{version: int, userConfig: ?string, userHooks: ?string, userClaudeSettings: ?string, projectHooks: array<string, list<string>>} $data */
         return $data;
     }
 
@@ -122,7 +133,7 @@ final class PolicySnapshot
      * policy text itself never lands world-readable even though only hashes
      * and entry identities live here.
      *
-     * @param array{version: int, userConfig: ?string, userHooks: ?string, projectHooks: array<string, list<string>>} $record
+     * @param array{version: int, userConfig: ?string, userHooks: ?string, userClaudeSettings: ?string, projectHooks: array<string, list<string>>} $record
      */
     public static function write(callable $configDir, array $record): void
     {

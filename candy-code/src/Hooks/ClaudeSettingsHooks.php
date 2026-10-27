@@ -17,16 +17,23 @@ use Symfony\Component\Yaml\Yaml;
  * {"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"./guard.sh","timeout":60}]}]}}
  * ```
  *
- * Each inner hook becomes one row named `cc:{event}:{index}` — CC entries
- * carry no `name`, and {@see HookRegistry} keys by event+name, so the
- * generated name is what keeps two inner hooks on one event from collapsing
- * into one registration (the exact reason {@see HookConfig} made `name` a
- * key). The `cc:` prefix means a CC entry can never claim a native
- * `hooks.yaml` guard's name and never collides with the reserved built-in
- * names; two CC FILES defining the same event at the same index do collide,
- * and {@see HookManager::loadEntries()} refuses that launch-wide exactly as
- * it refuses a native name collision — a hook chain adds, it does not
- * replace.
+ * Each inner hook becomes one row named `cc:{scope}:{event}:{index}` — CC
+ * entries carry no `name`, and {@see HookRegistry} keys by event+name, so
+ * the generated name is what keeps two inner hooks on one event from
+ * collapsing into one registration (the exact reason {@see HookConfig} made
+ * `name` a key). The scope segment names the TIER the file was loaded from:
+ * `user` for `~/.claude/settings.json`, `project` for a trusted project's
+ * `.claude/settings.json`, `local` for its `.claude/settings.local.json`.
+ * The SAME event at the SAME index in two different tiers therefore each
+ * keeps its row instead of refusing the launch (C-EXT-1.b — under the old
+ * `cc:{event}:{index}` spelling a user file and a project file agreeing on
+ * one name took the whole launch down). The `cc:` prefix means a CC entry
+ * can never claim a native `hooks.yaml` guard's name and never collides with
+ * the reserved built-in names; a hand-written `hooks.yaml` entry that CLAIMS
+ * one of these generated names does collide, and
+ * {@see HookManager::loadEntries()}
+ * refuses that launch-wide exactly as it refuses a native name collision —
+ * a hook chain adds, it does not replace.
  *
  * VALIDATION IS NOT RE-IMPLEMENTED. The flattened entries are normalised
  * into the native document shape and handed to {@see HookConfig::parse()}
@@ -46,12 +53,18 @@ use Symfony\Component\Yaml\Yaml;
  * anything that is malformed LOUDLY refuses the launch, only a file that is
  * not there is a no-op.
  *
- * `type` IS ONLY `command`. CC's newer prompt/agent hook types have no
- * exit-code verdict to read, so running them (or skipping them quietly)
- * would not be the hook the author wrote — an unknown type refuses the
- * launch by name.
+ * `type` RUNS ONLY `command`; the rest of the type question is
+ * SKIP-AND-RECORD (C-EXT-1.b widened what v1:F-1 had covered). CC's newer
+ * `prompt`, `agent`, `http` and `mcp_tool` types have no exit-code verdict
+ * for candy-code to read, so running them would not be the guard the author
+ * wrote — but a whole launch refusing over a type this loader simply does
+ * not speak gave one vendor's settings file the blast radius of a hard
+ * outage again. An entry with a STRING type that is not `command` now
+ * contributes no row and is RECORDED by type name for the same
+ * launch-notice aggregate. A MISSING or non-string `type` is not a dialect
+ * candy-code recognises at all, and still refuses the launch by name.
  *
- * SKIP-AND-RECORD FOR UNKNOWN EVENTS (v1:F-1, remediation round): CC's
+ * SKIP-AND-RECORD FOR WHAT CANNOT RUN (v1:F-1, widened by C-EXT-1.b): CC's
  * `Notification` event has no {@see HookEvent} case, and neither do the
  * newer events CC keeps shipping (plan ruling R3 for the native dialect
  * stands untouched). A FOREIGN file is not candy-code's to enforce against:
@@ -60,8 +73,12 @@ use Symfony\Component\Yaml\Yaml;
  * So an event with no case contributes no rows and is RECORDED — event name
  * and source file — for {@see \SugarCraft\Code\Cli\Bootstrap} to drain as
  * one launch-notice aggregate; a guard that cannot be mapped still never
- * runs silently. Everything ELSE about a foreign `hooks` block keeps the
- * loud law: malformed JSON, bad group keys, non-`command` types and
+ * runs silently. The same verdict now covers what sits INSIDE a recognised
+ * event: entries of an unsupported string `type`, and entries carrying keys
+ * this dialect does not speak (`if`, `once`, anything outside
+ * {@see ENTRY_KEYS}), are skipped whole and recorded by name on the same
+ * aggregate. Everything ELSE about a foreign `hooks` block keeps the loud
+ * law: malformed JSON, bad group keys, a missing or non-string `type` and
  * HookConfig's own verdicts refuse the launch by name, because those files
  * DID ask for a guard and candy-code cannot honestly run half of one.
  * The native `hooks.yaml` keeps the hard event refusal unchanged — that
@@ -91,10 +108,28 @@ use Symfony\Component\Yaml\Yaml;
  */
 final class ClaudeSettingsHooks
 {
+    /** Basename of the shared Claude Code settings file. */
+    public const SETTINGS_FILE_NAME = 'settings.json';
+
+    /** Basename of Claude Code's machine-local settings file. */
+    public const LOCAL_FILE_NAME = 'settings.local.json';
+
     /**
      * Basenames, under a `.claude` directory, whose `hooks` block is read.
      */
-    public const FILENAMES = ['settings.json', 'settings.local.json'];
+    public const FILENAMES = [self::SETTINGS_FILE_NAME, self::LOCAL_FILE_NAME];
+
+    /** The name's scope segment for `~/.claude/settings.json`. */
+    public const SCOPE_USER = 'user';
+
+    /** The name's scope segment for a trusted project's `settings.json`. */
+    public const SCOPE_PROJECT = 'project';
+
+    /** The name's scope segment for a project's `settings.local.json`. */
+    public const SCOPE_LOCAL = 'local';
+
+    /** Every scope {@see fromFile()} and {@see parse()} accept. */
+    public const SCOPES = [self::SCOPE_USER, self::SCOPE_PROJECT, self::SCOPE_LOCAL];
 
     /**
      * Events seen in a CC file that {@see HookEvent} has no case for, keyed
@@ -105,6 +140,17 @@ final class ClaudeSettingsHooks
      * @var array<string, array{groups: int, files: array<string, true>}>
      */
     private static array $skippedEvents = [];
+
+    /**
+     * Entry-level skips (C-EXT-1.b): hook types that are not `command` and
+     * keys this dialect does not speak, keyed by the skipped name — what kind
+     * of skip it was first seen as, how many groups carried it, under which
+     * events, and in which files. Drains on the same aggregate as
+     * {@see $skippedEvents}.
+     *
+     * @var array<string, array{kind: string, groups: int, events: array<string, true>, files: array<string, true>}>
+     */
+    private static array $skippedEntries = [];
 
     /** Keys a CC hook group may carry. */
     private const GROUP_KEYS = ['matcher', 'hooks'];
@@ -133,13 +179,20 @@ final class ClaudeSettingsHooks
      * Load hooks from a CC settings file, or nothing at all when there is no
      * file — the exact polarity {@see HookConfig::loadFromFile()} documents.
      *
+     * @param string $scope which tier the file is — one of {@see SCOPES};
+     *        it becomes the scope segment of every generated row name so two
+     *        tiers naming one event at one index no longer collide
+     *
      * @return list<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool, dialect: string, advisory: bool}>
      *
+     * @throws \InvalidArgumentException when $scope is not a tier this loader speaks
      * @throws \RuntimeException when the file exists and cannot be read
      * @throws \InvalidArgumentException when the file exists and cannot be used
      */
-    public static function fromFile(string $path): array
+    public static function fromFile(string $path, string $scope): array
     {
+        self::guardScope($scope);
+
         if (!is_file($path)) {
             if (file_exists($path) || is_link($path)) {
                 throw new \RuntimeException(
@@ -157,19 +210,37 @@ final class ClaudeSettingsHooks
             );
         }
 
-        return self::parse($content, $path);
+        return self::parse($content, $path, $scope);
+    }
+
+    /**
+     * The scope is launch-wide registration state, not a label to guess at:
+     * a wrong spelling would silently merge one tier's rows into another's
+     * namespace, which is the collision this segment exists to prevent.
+     */
+    private static function guardScope(string $scope): void
+    {
+        if (!\in_array($scope, self::SCOPES, true)) {
+            throw new \InvalidArgumentException(
+                "'{$scope}' is not a Claude settings tier (valid scopes are 'user', "
+                . "'project' and 'local'); refusing rather than naming rows into the wrong tier.",
+            );
+        }
     }
 
     /**
      * @param string $source what to call the content in an error message — a
      *        path when there is one, so the report names the file to fix
+     * @param string $scope the tier rows are named for (see {@see fromFile()})
      *
      * @return list<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool, dialect: string, advisory: bool}>
      *
      * @throws \InvalidArgumentException when the content is not usable
      */
-    public static function parse(string $content, string $source = 'Claude Code settings'): array
+    public static function parse(string $content, string $source = 'Claude Code settings', string $scope = self::SCOPE_USER): array
     {
+        self::guardScope($scope);
+
         try {
             $data = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
         } catch (\JsonException $e) {
@@ -209,9 +280,9 @@ final class ClaudeSettingsHooks
         $document = [];
 
         // Which generated row names asked for a verdict that may not block,
-        // keyed by the `cc:{event}:{index}` name above. Collected during the
-        // walk and applied after the native validator has had its say, because
-        // the validator returns the rows this ends up stamping.
+        // keyed by the `cc:{scope}:{event}:{index}` name above. Collected
+        // during the walk and applied after the native validator has had its
+        // say, because the validator returns the rows this ends up stamping.
         $advisoryByName = [];
 
         foreach ($events as $event => $groups) {
@@ -268,6 +339,12 @@ final class ClaudeSettingsHooks
                     );
                 }
 
+                // What this group holds that cannot run, keyed by skipped
+                // name => the kind of skip it was FIRST seen as (C-EXT-1.b).
+                // Recorded once per group so the aggregate's group count
+                // stays honest when several entries repeat one skip.
+                $groupSkips = [];
+
                 foreach ($group['hooks'] as $entry) {
                     if (!is_array($entry) || array_is_list($entry)) {
                         throw new \InvalidArgumentException(
@@ -277,27 +354,45 @@ final class ClaudeSettingsHooks
 
                     $unknownKeys = array_diff(array_keys($entry), self::ENTRY_KEYS);
                     if ($unknownKeys !== []) {
-                        throw new \InvalidArgumentException(
-                            "{$source}: '" . implode("', '", array_map('strval', $unknownKeys))
-                            . "' is not a key a hook under `hooks.{$event}` has (valid keys are 'type', "
-                            . "'command', 'timeout', 'statusMessage' and 'async'); refusing rather than "
-                            . 'registering a hook that is not the one you wrote.',
-                        );
+                        // Skip-and-record whole (C-EXT-1.b): CC grows keys on
+                        // real hooks (`if`, `once`), and a foreign file that
+                        // asks for behaviour this dialect cannot speak is the
+                        // same outage blast radius as an unmappable event or
+                        // type — but the entry is STILL never run silently:
+                        // every unknown key is named on the launch aggregate,
+                        // and the entry contributes no row either way. The
+                        // group itself stays valid, so nothing else in the
+                        // file is forfeited.
+                        foreach ($unknownKeys as $key) {
+                            $groupSkips[\strval($key)] = 'key';
+                        }
+
+                        continue;
                     }
 
                     $type = $entry['type'] ?? null;
                     if ($type !== 'command') {
-                        throw new \InvalidArgumentException(
-                            "{$source}: a hook under `hooks.{$event}` has type "
-                            . (\is_string($type) ? "'{$type}'" : get_debug_type($type))
-                            . "; candy-code runs Claude Code hooks of type 'command' only, and running "
-                            . 'the others anyway — or skipping them quietly — would not be the guard you wrote.',
-                        );
+                        if (!\is_string($type)) {
+                            // A missing or non-string type is not a dialect
+                            // candy-code recognises at all — that stays loud.
+                            throw new \InvalidArgumentException(
+                                "{$source}: a hook under `hooks.{$event}` has type "
+                                . (\is_string($type) ? "'{$type}'" : get_debug_type($type))
+                                . "; candy-code runs Claude Code hooks of type 'command' only, and running "
+                                . 'the others anyway — or skipping them quietly — would not be the guard you wrote.',
+                            );
+                        }
+
+                        // Skip-and-record by type name (C-EXT-1.b), same
+                        // reasoning as the unknown-key arm above.
+                        $groupSkips[$type] = 'type';
+
+                        continue;
                     }
 
                     $index = $document[$event]['count'] ?? 0;
                     $row = [
-                        'name' => "cc:{$event}:{$index}",
+                        'name' => "cc:{$scope}:{$event}:{$index}",
                         // CC spells "every tool" as `*` (or empty, or absent);
                         // the native default is the regex that means it.
                         'matcher' => $matcher === '' || $matcher === '*' ? '.*' : $matcher,
@@ -337,7 +432,17 @@ final class ClaudeSettingsHooks
 
                     $document[$event]['count'] = $index + 1;
                     $document[$event]['rows'][] = $row;
-                    $advisoryByName["cc:{$event}:{$index}"] = $async;
+                    $advisoryByName["cc:{$scope}:{$event}:{$index}"] = $async;
+                }
+
+                foreach ($groupSkips as $skipped => $kind) {
+                    // One record per name per group that carried it, whatever
+                    // number of entries inside the group repeated the skip.
+                    self::$skippedEntries[$skipped]['kind'] ??= $kind;
+                    self::$skippedEntries[$skipped]['groups'] =
+                        (self::$skippedEntries[$skipped]['groups'] ?? 0) + 1;
+                    self::$skippedEntries[$skipped]['events'][$event] = true;
+                    self::$skippedEntries[$skipped]['files'][$source] = true;
                 }
             }
         }
@@ -383,11 +488,32 @@ final class ClaudeSettingsHooks
     }
 
     /**
+     * The unsupported entry types and keys this process's CC parses have
+     * skipped so far (C-EXT-1.b).
+     *
+     * @return array<string, array{kind: string, groups: int, events: array<string, true>, files: array<string, true>}>
+     */
+    public static function skippedEntries(): array
+    {
+        return self::$skippedEntries;
+    }
+
+    /**
      * Test seam: the record is process-scoped launch state, and suites that
      * mint their own CC files need their own view of it.
      */
     public static function resetSkippedEventsForTesting(): void
     {
         self::$skippedEvents = [];
+        self::$skippedEntries = [];
+    }
+
+    /**
+     * Test seam for {@see skippedEntries()} when a suite needs the entry
+     * record alone; {@see resetSkippedEventsForTesting()} clears both.
+     */
+    public static function resetSkippedEntriesForTesting(): void
+    {
+        self::$skippedEntries = [];
     }
 }
