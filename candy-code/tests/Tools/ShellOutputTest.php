@@ -111,16 +111,53 @@ final class ShellOutputTest extends TestCase
         $text = $result->content();
         self::assertStringStartsWith('shell ' . $id . ' — finished (exit 3)', $text);
         // An explicit window is honoured byte-for-byte: stdout fills it, the
-        // cursor lands at 4, and nothing is silently destroyed — the next
-        // step from 4 collects stderr (the walk never skips inside a window).
+        // token lands at 4.0, and nothing is silently destroyed — the next
+        // step from the token collects stderr (the walk never skips inside
+        // a window).
         self::assertStringContainsString('AAAA', $text);
-        self::assertStringContainsString('[cursor: 4]', $text);
+        self::assertStringContainsString('[cursor: 4.0]', $text);
 
-        $next = $this->tool($registry)->execute(['shell_id' => $id, 'cursor' => 4, 'max_bytes' => 4]);
+        $next = $this->tool($registry)->execute(['shell_id' => $id, 'cursor' => '4.0', 'max_bytes' => 4]);
         self::assertFalse($next->isError());
         self::assertStringContainsString('[stderr]', $next->content());
         self::assertStringContainsString('BBBB', $next->content());
-        self::assertStringContainsString('[cursor: 8]', $next->content());
+        self::assertStringContainsString('[cursor: 4.4]', $next->content());
+    }
+
+    public function testTheSchemaAdvertisesTheTwoPartCursorToken(): void
+    {
+        $cursor = $this->tool()->inputSchema()['properties']['cursor'];
+        self::assertSame('string', $cursor['type'], 'the cursor is the opaque "<stdout>.<err>" token (C-TOOL-1)');
+        self::assertStringContainsString('.<stderr>', $cursor['description'], 'the description teaches the token shape the answer paints');
+    }
+
+    public function testALegacyIntegerCursorStillThreadsAFrozenStdout(): void
+    {
+        // A cursor threaded before the upgrade must keep working on the
+        // frozen-stdout shape the legacy arithmetic was exact for.
+        $registry = $this->registry();
+        $started = $registry->start('printf AAAA; printf BBBB >&2', 'legacy int');
+        $id = (string) $started['shell']['id'];
+        $this->settle($registry, $id);
+
+        $result = $this->tool($registry)->execute(['shell_id' => $id, 'cursor' => 4, 'max_bytes' => 4]);
+        self::assertFalse($result->isError());
+        self::assertStringContainsString('BBBB', $result->content(), 'the legacy combined offset decodes to stdout 4 / stderr 0');
+        self::assertStringContainsString('[cursor: 4.4]', $result->content(), 'the answer continues in the token shape');
+    }
+
+    public function testAnUnparsableCursorReadsFromTheStart(): void
+    {
+        $registry = $this->registry();
+        $started = $registry->start('printf AAAA; printf BBBB >&2', 'junk cursor');
+        $id = (string) $started['shell']['id'];
+        $this->settle($registry, $id);
+
+        $result = $this->tool($registry)->execute(['shell_id' => $id, 'cursor' => 'not-a-cursor']);
+        self::assertFalse($result->isError());
+        self::assertStringContainsString('AAAA', $result->content(), 'garbage never silently picks a position — it restarts');
+        self::assertStringContainsString('BBBB', $result->content());
+        self::assertStringContainsString('[cursor: 4.4]', $result->content());
     }
 
     public function testAQuietWindowPaintsTheEmptyNoticeInsteadOfNothing(): void
@@ -152,7 +189,7 @@ final class ShellOutputTest extends TestCase
         $head = substr($result->content(), 0, 200);
         self::assertStringContainsString('older bytes skipped', $head);
         self::assertStringContainsString('(72000 unread bytes were available)', $head);
-        self::assertSame('[cursor: 72000]', substr(trim($result->content()), -15));
+        self::assertSame('[cursor: 72000.0]', substr(trim($result->content()), -17));
     }
 
     public function testTheRunStateIsNarratedHonestlyMidFlight(): void

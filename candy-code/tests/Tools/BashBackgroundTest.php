@@ -112,5 +112,11 @@ final class BashBackgroundTest extends TestCase
         self::assertSame('finished', $settled['state']);
         self::assertSame(0, $settled['exitCode']);
         self::assertStringContainsString('late-output', (string) $registry->read($id)['stdout'], 'the detached command really ran, into the registry sinks');
+
+        $threaded = $registry->read($id);
+        self::assertMatchesRegularExpression('/^\d+\.\d+$/', (string) $threaded['cursor'], 'the Bash handoff threads the two-part cursor token (C-TOOL-1)');
+        $drained = $registry->read($id, (string) $threaded['cursor']);
+        self::assertSame('', (string) $drained['stdout'], 'the token resumes exactly where the answer ended — no replay, no skip');
+        self::assertSame('', (string) $drained['stderr']);
     }
 }

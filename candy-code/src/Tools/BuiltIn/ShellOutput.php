@@ -19,20 +19,23 @@ use SugarCraft\Code\Tools\ToolResult;
  * `run_in_background` (SHL-1).
  *
  * CURSOR SEMANTICS are the whole design: the answer is everything written
- * since the byte offset the caller last saw, so following a long build is
+ * since the cursor the caller last saw, so following a long build is
  * `ShellOutput(shell_id, cursor)` repeated, never a re-read of a growing
- * file. The cursor spans stdout THEN stderr as one monotone offset — one
- * number to thread, no per-stream bookkeeping the model can get wrong.
- * Tail-wins applies only to a FRESH read that chooses no window: an
- * oversized backlog answers its NEWEST bytes and admits how many older ones
- * were skipped. Once the caller threads a cursor (or sets max_bytes) the
- * read is pagination — every byte at or above the cursor is owed and
- * nothing is destroyed; a huge backlog is walked with more steps. Cursor
- * values past the end of a log that has since SHRUNK (a shell truncating
- * its own output) restart at the true end; when only stdout shrinks, the
- * streams' offsets are recomputed independently and stderr resumes where
- * the caller left it — re-read bytes beat silently stranded ones. The
- * cursor never rewinds and never lies about position.
+ * file. The cursor is a two-part token — `"<stdout offset>.<stderr
+ * offset>"`, one offset per stream, each advancing in its own file — so
+ * interleaved growth of the two streams can never skip one's bytes or
+ * replay the other's (C-TOOL-1); a bare integer still decodes with the
+ * legacy combined arithmetic, exact while stdout is frozen, which keeps a
+ * cursor threaded before the upgrade working. Tail-wins applies only to a
+ * FRESH read that chooses no window: an oversized backlog answers its
+ * NEWEST bytes and admits how many older ones were skipped. Once the
+ * caller threads a cursor (or sets max_bytes) the read is pagination —
+ * every byte at or above the cursor is owed and nothing is destroyed; a
+ * huge backlog is walked with more steps. An offset past the end of a
+ * stream that has since SHRUNK (a shell truncating its own output)
+ * restarts at that stream's true end, and because the other stream's
+ * offset is its own, a shrink can never strand unread bytes. The cursor
+ * never rewinds and never lies about position.
  *
  * The state line is honest about what the launch can see: a shell with no
  * exit file yet reports `running` (or `unknown` when even the process is
@@ -73,7 +76,7 @@ final readonly class ShellOutput implements Tool, BuildsFromCatalog, TakesToolCa
 
     public function description(): string
     {
-        return 'Read the output of a background shell started with Bash(run_in_background: true). Pass the shell_id Bash returned and the cursor from the previous answer to read only what is new since; with no cursor you get the tail of the backlog (skippedBytes says how much older output was too large to include). The answer ends with the next cursor to pass and the shell\'s state (running, finished with its exit code, stopped, or expired).';
+        return 'Read the output of a background shell started with Bash(run_in_background: true). Pass the shell_id Bash returned and the cursor from the previous answer to read only what is new since; the cursor is a pair "<stdout>.<stderr>", one offset per stream — pass it back exactly as given. With no cursor you get the tail of the backlog (skippedBytes says how much older output was too large to include). The answer ends with the next cursor to pass and the shell\'s state (running, finished with its exit code, stopped, or expired).';
     }
 
     public function inputSchema(): array
@@ -86,9 +89,8 @@ final readonly class ShellOutput implements Tool, BuildsFromCatalog, TakesToolCa
                     'description' => 'The id Bash returned when it started the shell (sh-xxxxxxxx).',
                 ],
                 'cursor' => [
-                    'type' => 'integer',
-                    'description' => 'Byte offset to read from — pass the cursor from the previous ShellOutput answer. Omit (or 0) to read from the start of the backlog.',
-                    'minimum' => 0,
+                    'type' => 'string',
+                    'description' => 'Cursor to read from — pass back the exact [cursor: <stdout>.<stderr>] token from the previous ShellOutput answer (one offset per stream). Omit (or "0.0") to read from the start of the backlog. A bare integer is still accepted and read as the legacy combined offset.',
                 ],
                 'max_bytes' => [
                     'type' => 'integer',
@@ -113,7 +115,7 @@ final readonly class ShellOutput implements Tool, BuildsFromCatalog, TakesToolCa
         if ($this->registry === null) {
             return $this->refuse('no background shell registry is attached to this launch');
         }
-        $cursor = self::nonNegativeInt($args['cursor'] ?? null, 0);
+        $cursor = self::parseCursor($args['cursor'] ?? null);
         $maxBytes = isset($args['max_bytes']) && \is_int($args['max_bytes']) ? $args['max_bytes'] : null;
 
         $answer = $this->registry->read($id, $cursor, $maxBytes);
@@ -179,7 +181,7 @@ final readonly class ShellOutput implements Tool, BuildsFromCatalog, TakesToolCa
         }
 
         return $head . ($notes === [] ? '' : ' — ' . implode('; ', $notes)) . "\n" . $body . "\n"
-            . sprintf('[cursor: %d]', (int) $answer['cursor']);
+            . sprintf('[cursor: %s]', (string) $answer['cursor']);
     }
 
     private function refuse(string $reason): ToolResult
@@ -187,12 +189,24 @@ final readonly class ShellOutput implements Tool, BuildsFromCatalog, TakesToolCa
         return new ToolResult(toolCallId: '', content: $reason, isError: true);
     }
 
-    private static function nonNegativeInt(mixed $raw, int $fallback): int
+    /**
+     * Accept the cursor spellings a caller can honestly bring: the token
+     * this tool handed out (`"<out>.<err>"`), a legacy combined integer or
+     * digit string, and nothing at all. Anything else reads from the start
+     * — the door never silently picks a position it cannot name.
+     */
+    private static function parseCursor(mixed $raw): int|string
     {
-        if (is_string($raw) && preg_match('/^\s*\d+\s*$/', $raw) === 1) {
-            $raw = (int) trim($raw);
+        if (\is_int($raw)) {
+            return \max(0, $raw);
+        }
+        if (\is_string($raw) && \preg_match('/^\s*(\d+)\.(\d+)\s*$/', $raw) === 1) {
+            return \trim($raw);
+        }
+        if (\is_string($raw) && \preg_match('/^\s*\d+\s*$/', $raw) === 1) {
+            return (int) \trim($raw);
         }
 
-        return \is_int($raw) && $raw >= 0 ? $raw : $fallback;
+        return 0;
     }
 }

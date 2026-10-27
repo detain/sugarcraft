@@ -72,7 +72,11 @@ use SugarCraft\Code\Support\ProcessContainment;
  * before any payload — the `MediaStore` doctrine — and a shell's third file,
  * `<id>.exit`, is written LAST by the spawn wrapper itself. The exit file's
  * EXISTENCE-and-contents are the durable "settled" marker: no reader is
- * needed to learn that a shell finished, only to learn its code.
+ * needed to learn that a shell finished, only to learn its code. Reading
+ * them threads {@see read()}'s two-part cursor token — one offset per
+ * stream, each advancing in its own file — so interleaved growth of the
+ * two files can never skip one stream's bytes or replay the other's
+ * (C-TOOL-1).
  *
  * THE FILES ARE CAPPED AND SWEPT. An uncapped writer filled the filesystem
  * inside the lifetime wall — `while :; do cat /dev/zero; done` needs minutes,
@@ -317,10 +321,6 @@ final class BackgroundShellRegistry
             'spawnedAt' => \microtime(true),
             'exitCode' => null,
             'exitNote' => null,
-            // The stdout size the last read() mapped a cursor against; the
-            // shrink detection in read() needs a remembered size to tell a
-            // truncation from a caller's stale arithmetic.
-            'lastStdoutSize' => null,
             'stopped' => false,
             'expired' => false,
         ];
@@ -453,97 +453,77 @@ final class BackgroundShellRegistry
     }
 
     /**
-     * The output of one shell from `$cursor` forward — a byte offset over
-     * stdout THEN stderr, in that order, so a caller threads ONE number
-     * through repeated reads. At most $maxBytes (clamped to
+     * The output of one shell from `$cursor` forward — a TWO-PART token
+     * `"<stdout offset>.<stderr offset>"`, one offset per stream, each
+     * advancing in its own file. At most $maxBytes (clamped to
      * {@see MAX_READ_BYTES}, default {@see DEFAULT_READ_BYTES}) come back.
-     * Only a DEFAULT fresh read is tail-wins: when its backlog exceeds the
-     * budget the OLDEST bytes are skipped and `skippedBytes` says how many.
-     * An explicit window or a threaded cursor paginates without skipping —
-     * pagination never destroys unread output. The returned `cursor` is the
-     * exact offset just past the last byte handed back; it never rewinds and
-     * never lies about position. A cursor past the end of a log that has
-     * since SHRUNK entirely restarts at the true end; when STDOUT ALONE
-     * shrinks beneath a threaded cursor, the per-stream offsets are computed
-     * independently — stderr resumes where the caller actually left it
-     * instead of at the fiction the global number now implies (SHL-1).
+     * A bare integer is a legacy combined offset and decodes with today's
+     * arithmetic (stdout first, the remainder stderr) — exact only while
+     * stdout is frozen at decode time, which is precisely why the token
+     * replaced it (C-TOOL-1: a single global offset skipped stdout bytes
+     * written after stderr had been read, and replayed those stderr
+     * bytes). Only a DEFAULT fresh read is tail-wins: when its backlog
+     * exceeds the budget the OLDEST bytes are skipped and `skippedBytes`
+     * says how many. An explicit window or a threaded cursor paginates
+     * without skipping — pagination never destroys unread output. The
+     * returned `cursor` is the token just past the last byte handed back
+     * for EACH stream; it never rewinds and never lies about position.
+     * An offset past the end of a log that has since SHRUNK clamps to that
+     * stream's true end; because the other stream's offset is its own, a
+     * shrink can never strand unread bytes of it — the per-stream rule
+     * absorbs what the old `lastStdoutSize` remap existed for (SHL-1).
      *
-     * @return array{ok: bool, error?: string, stdout?: string, stderr?: string, cursor?: int, skippedBytes?: int, bytesAvailable?: int, state?: string, exitCode?: ?int, exitNote?: ?string, expired?: bool}
+     * @return array{ok: bool, error?: string, stdout?: string, stderr?: string, cursor?: string, skippedBytes?: int, bytesAvailable?: int, state?: string, exitCode?: ?int, exitNote?: ?string, expired?: bool}
      */
-    public function read(string $shellId, int $cursor = 0, ?int $maxBytes = null): array
+    public function read(string $shellId, int|string $cursor = 0, ?int $maxBytes = null): array
     {
         $row = $this->status($shellId);
         if ($row === null) {
             return ['ok' => false, 'error' => 'no background shell ' . $shellId . ' is registered by this launch'];
         }
         $limit = $maxBytes === null ? self::DEFAULT_READ_BYTES : \max(0, \min(self::MAX_READ_BYTES, $maxBytes));
-        $cursor = \max(0, $cursor);
 
         $stdoutSize = (int) (@filesize((string) $row['stdoutPath']) ?: 0);
         $stderrSize = (int) (@filesize((string) $row['stderrPath']) ?: 0);
-        // The raw entry cursor, kept before any clamping: the shrink remap
-        // below needs to know where the caller actually stood.
-        $entryCursor = $cursor;
-        $lastStdoutSize = isset($row['lastStdoutSize']) && \is_int($row['lastStdoutSize']) ? $row['lastStdoutSize'] : null;
         // filesize() can only fail on a vanished sink; a vanished sink reads
         // as zero bytes, which is the honest "nothing there" answer.
         $available = $stdoutSize + $stderrSize;
+
+        [$stdoutOffset, $stderrOffset, $isFresh] = self::decodeCursor($cursor, $stdoutSize, $stderrSize);
+
         $skipped = 0;
-        if ($cursor > $available) {
-            // The files got SMALLER under a monotone cursor (a shell that
-            // truncated its own log): restart at the only offset that reads.
-            $cursor = $available;
-        }
-        $remaining = $available - $cursor;
-        if ($maxBytes === null && $cursor === 0 && $remaining > $limit) {
+        if ($maxBytes === null && $isFresh && $available > $limit) {
             // Tail-wins applies to a DEFAULT fresh read: nobody chose a
             // window, and the newest output is the useful answer, so the
-            // oldest bytes are skipped and `skippedBytes` says how many.
-            // Once the caller threads a cursor — or asks for an explicit
-            // window — pagination owes every byte at or above the cursor;
-            // dropping some to honour the budget would silently destroy
-            // unread output. A huge backlog is simply walked with more steps.
-            $skipped = $remaining - $limit;
-            $cursor += $skipped;
+            // oldest bytes — stdout's head first, then stderr's — are
+            // skipped and `skippedBytes` says how many. Once the caller
+            // threads a cursor — or asks for an explicit window —
+            // pagination owes every byte at or above the cursor; dropping
+            // some to honour the budget would silently destroy unread
+            // output. A huge backlog is simply walked with more steps.
+            $skipped = $available - $limit;
+            $stdoutOffset = \min($skipped, $stdoutSize);
+            $stderrOffset = \max(0, \min($skipped - $stdoutSize, $stderrSize));
         }
+        // The per-stream clamp: an offset past the end of a log that has
+        // since shrunk restarts at that stream's true end, and the OTHER
+        // stream keeps its own offset — nothing is stranded by arithmetic
+        // against a file that no longer exists (C-TOOL-1 collapses the old
+        // global clamp and the SHL-1 `lastStdoutSize` remap into this).
+        $stdoutOffset = \max(0, \min($stdoutOffset, $stdoutSize));
+        $stderrOffset = \max(0, \min($stderrOffset, $stderrSize));
 
-        // The cursor is one monotone offset over the CONCATENATION
-        // stdout-then-stderr: each file's slice starts at the cursor measured
-        // from that stream's own beginning, so the per-file offsets are the
-        // cursor clamped into stdout and the cursor-minus-stdout-size clamped
-        // into stderr (never negative, never past a stream's end) — offsets
-        // computed INDEPENDENTLY against each stream's own size, because the
-        // combined arithmetic below only holds while both streams grow.
-        $stdoutOffset = \min($cursor, $stdoutSize);
-        $stderrOffset = \max(0, \min($cursor - $stdoutSize, $stderrSize));
-        if (\is_int($lastStdoutSize) && $lastStdoutSize > $stdoutSize && $entryCursor > $stdoutSize && $entryCursor <= $lastStdoutSize + $stderrSize) {
-            // STDOUT ALONE SHRANK beneath a cursor that had been inside it
-            // (SHL-1): the global cursor's stderr arithmetic was computed
-            // against the OLD stdout size, so re-deriving it from the shrunk
-            // size (or clamping to the combined end) would silently strand
-            // stderr bytes the caller never read — and pagination never
-            // destroys unread output. The caller's position in STDERR's own
-            // space is exactly what the remembered layout said it was; the
-            // truncated stdout is read from EOF onward. At the end of this
-            // read the cursor lands on the new true end (stdout size +
-            // stderr progress), which for a shrunk log is the honest
-            // position — the never-rewinds law speaks of unshrunk space.
-            $stdoutOffset = $stdoutSize;
-            $stderrOffset = \max(0, \min($entryCursor - $lastStdoutSize, $stderrSize));
-        }
         $stdout = $this->sliceFrom((string) $row['stdoutPath'], $stdoutOffset, $limit);
         $stderrBudget = $limit - \strlen($stdout['bytes']);
         $stderr = $this->sliceFrom((string) $row['stderrPath'], $stderrOffset, $stderrBudget);
-        $this->rows[$shellId]['lastStdoutSize'] = $stdoutSize;
-        // The answered cursor is the global offset just past the last byte
-        // handed back, RECOMPUTED from the per-file offsets rather than
-        // advanced from the entry cursor — identical arithmetic while both
-        // streams grow (the offsets start at the entry cursor), and the true
-        // end rather than a fiction once one of them has shrunk. A window
-        // that only fits part of stdout leaves stderr pending — the next
-        // step from the advanced cursor collects it. Advancing past
-        // unreturned bytes would silently strand a stream.
-        $nextCursor = $stdoutOffset + \strlen($stdout['bytes']) + $stderrOffset + \strlen($stderr['bytes']);
+        // The answered cursor is the token just past the last byte handed
+        // back in EACH file, recomputed from the per-file reads rather than
+        // advanced from the entry offsets — the true end rather than a
+        // fiction once a stream has shrunk. A window that only fits part of
+        // stdout leaves stderr pending — the next step from the returned
+        // token collects it. Advancing past unreturned bytes would silently
+        // strand a stream.
+        $nextCursor = $stdout['cursor'] . '.' . $stderr['cursor'];
 
         return [
             'ok' => true,
@@ -912,6 +892,33 @@ final class BackgroundShellRegistry
     }
 
     /**
+     * Turn the cursor a caller threaded into a pair of per-stream offsets.
+     * The token `"<out>.<err>"` (C-TOOL-1) carries each stream's own
+     * offset; a bare integer — or digit string — is a pre-upgrade combined
+     * offset decoded with today's arithmetic (stdout first, the remainder
+     * stderr), which keeps a cursor threaded before the upgrade working on
+     * a frozen stdout and is exact only there. An unparsable cursor starts
+     * fresh at zero rather than silently picking a position. The third
+     * element says whether the read is FRESH (both offsets at zero), which
+     * is the only read the tail-wins default may serve.
+     *
+     * @return array{0: int, 1: int, 2: bool}
+     */
+    private static function decodeCursor(int|string $cursor, int $stdoutSize, int $stderrSize): array
+    {
+        if (\is_string($cursor) && \preg_match('/^\s*(\d+)\.(\d+)\s*$/', $cursor, $parts) === 1) {
+            $out = (int) $parts[1];
+            $err = (int) $parts[2];
+            return [$out, $err, $out === 0 && $err === 0];
+        }
+        $combined = \is_int($cursor)
+            ? \max(0, $cursor)
+            : (\is_string($cursor) && \preg_match('/^\s*\d+\s*$/', $cursor) === 1 ? (int) \trim($cursor) : 0);
+
+        return [\min($combined, $stdoutSize), \max(0, \min($combined - $stdoutSize, $stderrSize)), $combined === 0];
+    }
+
+    /**
      * Read up to $limit bytes of $path starting at $cursor.
      *
      * @return array{bytes: string, cursor: int}
@@ -1049,10 +1056,6 @@ final class BackgroundShellRegistry
             'exitPath' => $paths['exit'],
             'spawnedAt' => (float) $row['spawnedAt'],
             'exitCode' => $exitCode,
-            // The shrink memory belongs to the process that READ the files;
-            // a merged row carries its own if it has one, and nothing
-            // downstream may invent it.
-            'lastStdoutSize' => isset($row['lastStdoutSize']) && \is_int($row['lastStdoutSize']) && $row['lastStdoutSize'] >= 0 ? $row['lastStdoutSize'] : null,
             'stopped' => ($row['stopped'] ?? false) === true,
             'expired' => ($row['expired'] ?? false) === true,
         ];

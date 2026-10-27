@@ -125,7 +125,7 @@ final class BackgroundShellRegistryTest extends TestCase
         }
     }
 
-    public function testTheCursorThreadsStdoutThenStderrAsOneMonotoneOffset(): void
+    public function testTheCursorThreadsStdoutThenStderrInsideTheirOwnFiles(): void
     {
         $registry = $this->registry();
         $started = $registry->start('printf AAAA; printf BBBB >&2', 'two streams');
@@ -135,22 +135,22 @@ final class BackgroundShellRegistryTest extends TestCase
         $first = $registry->read($id, 0, 4);
         self::assertSame('AAAA', $first['stdout']);
         self::assertSame('', $first['stderr']);
-        self::assertSame(4, $first['cursor']);
+        self::assertSame('4.0', $first['cursor'], 'the token carries each stream\'s own offset');
 
         $second = $registry->read($id, $first['cursor'], 4);
         self::assertSame('', $second['stdout']);
         self::assertSame('BBBB', $second['stderr']);
-        self::assertSame(8, $second['cursor']);
+        self::assertSame('4.4', $second['cursor']);
 
         $third = $registry->read($id, $second['cursor'], 4);
         self::assertSame('', $third['stdout']);
         self::assertSame('', $third['stderr']);
-        self::assertSame(8, $third['cursor'], 'reading past the end answers empty and keeps the cursor at the end');
+        self::assertSame('4.4', $third['cursor'], 'reading past the end answers empty and keeps the cursor at the end');
 
         $again = $registry->read($id, $third['cursor'], 4);
         self::assertSame('', $again['stdout']);
         self::assertSame('', $again['stderr']);
-        self::assertSame(8, $again['cursor'], 're-reading past the end is idempotent — the cursor never wanders');
+        self::assertSame('4.4', $again['cursor'], 're-reading past the end is idempotent — the cursor never wanders');
     }
 
     public function testADefaultFreshReadAnswersTheNewestBytesAndSaysHowManyWereSkipped(): void
@@ -168,14 +168,14 @@ final class BackgroundShellRegistryTest extends TestCase
         self::assertSame(6144, $answer['skippedBytes'], '71680 - 65536');
         self::assertSame(65536, \strlen($answer['stdout']), 'the default budget answers at full size');
         self::assertStringEndsWith('NEWEST', $answer['stdout'], 'the newest bytes win the tail');
-        self::assertSame(71680, $answer['cursor'], 'the cursor lands at the end, never rewound');
+        self::assertSame('71680.0', $answer['cursor'], 'the cursor lands at the end, never rewound');
 
         // An EXPLICIT window at cursor 0 is pagination, not a tail request:
         // it reads from the very beginning and skips nothing.
         $paged = $registry->read($id, 0, 20);
         self::assertSame('OLDERXXXXXXXXXNEWEST', $paged['stdout'], 'pagination starts at the head');
         self::assertSame(0, $paged['skippedBytes'], 'an explicit window never destroys unread output');
-        self::assertSame(20, $paged['cursor']);
+        self::assertSame('20.0', $paged['cursor']);
     }
 
     public function testACursorPastAShrunkLogRestartsAtTheTrueEnd(): void
@@ -187,7 +187,7 @@ final class BackgroundShellRegistryTest extends TestCase
 
         $answer = $registry->read($id, 10_000);
         self::assertSame('', $answer['stdout']);
-        self::assertSame(16, $answer['cursor'], 'the true end of LONGER-THAN-NEXT is 16 bytes');
+        self::assertSame('16.0', $answer['cursor'], 'a legacy combined offset past the end clamps to the true end of LONGER-THAN-NEXT, 16 bytes');
         self::assertSame(0, $answer['skippedBytes']);
     }
 
@@ -654,16 +654,14 @@ final class BackgroundShellRegistryTest extends TestCase
         $receiver = $this->registry();
         $receiver->merge($export);
         self::assertSame($grouped, $receiver->status($id)['grouped'], 'a merged row keeps its spawn-time honesty');
-        self::assertArrayHasKey('lastStdoutSize', $receiver->status($id));
 
-        // A pre-SHL-1 export has no keys to carry: parseRow's defaults answer
-        // the CONSERVATIVE thing — not grouped, no remembered layout.
+        // A pre-SHL-1 export has no key to carry: parseRow's default answers
+        // the CONSERVATIVE thing — not grouped.
         $legacy = $export;
-        unset($legacy[$id]['grouped'], $legacy[$id]['lastStdoutSize']);
+        unset($legacy[$id]['grouped']);
         $older = $this->registry();
         $older->merge($legacy);
         self::assertFalse($older->status($id)['grouped']);
-        self::assertNull($older->status($id)['lastStdoutSize']);
 
         $answer = $registry->stop($id);
         self::assertTrue($answer['found']);
@@ -688,25 +686,98 @@ final class BackgroundShellRegistryTest extends TestCase
             self::assertTrue($first['ok']);
             self::assertSame(str_repeat('A', 512), $first['stdout']);
             self::assertSame('', $first['stderr']);
-            self::assertSame(512, $first['cursor']);
+            self::assertSame('512.0', $first['cursor']);
 
-            $second = $registry->read($id, 512, 512);
+            $second = $registry->read($id, '512.0', 512);
             self::assertSame(str_repeat('A', 288), $second['stdout']);
             self::assertSame(str_repeat('B', 224), $second['stderr']);
-            self::assertSame(1024, $second['cursor']);
+            self::assertSame('800.224', $second['cursor']);
 
             // The shell truncates its own stdout beneath the threaded cursor.
             self::assertSame(100, (int) file_put_contents($stdoutPath, str_repeat('A', 100)));
 
-            $third = $registry->read($id, 512, 4096);
+            $third = $registry->read($id, '800.224', 4096);
             self::assertSame('', $third['stdout'], 'the truncated remainder is gone — the honest read is EOF on that stream');
-            self::assertSame(str_repeat('B', 500), $third['stderr'], 'the 276 stderr bytes the caller never saw must arrive, not be skipped by arithmetic against a stdout that no longer exists');
-            self::assertSame(600, $third['cursor'], 'the cursor lands on the new true end: the shrunk space never lied forward');
+            self::assertSame(str_repeat('B', 276), $third['stderr'], 'the 276 stderr bytes the caller never saw must arrive, not be skipped by arithmetic against a stdout that no longer exists — and the 224 already delivered must not replay');
+            self::assertSame('100.500', $third['cursor'], 'each stream lands on its own true end: the shrunk space never lied forward');
 
-            $fourth = $registry->read($id, 600, 4096);
+            $fourth = $registry->read($id, '100.500', 4096);
             self::assertSame('', $fourth['stdout']);
             self::assertSame('', $fourth['stderr']);
-            self::assertSame(600, $fourth['cursor']);
+            self::assertSame('100.500', $fourth['cursor']);
+        } finally {
+            $registry->stop($id);
+        }
+    }
+
+    public function testInterleavedGrowthDeliversEveryByteExactlyOnce(): void
+    {
+        // C-TOOL-1 regression. The cursor used to be ONE global offset
+        // split as min(cursor, stdoutSize) / cursor - stdoutSize, which is
+        // valid only while stdout stays frozen. A shell that writes both
+        // streams, pauses, then writes BOTH AGAIN makes the old split skip
+        // stdout's second burst (the cursor already sat at the old stdout
+        // size) and replay stderr's first burst (the remainder arithmetic
+        // restarts it from the beginning). A two-part cursor advances each
+        // stream in its own file, so threading it delivers every byte of
+        // every stream exactly once, in order, across interleaved growth.
+        $registry = $this->registry();
+        // The gate lives in its own subdirectory: tearDown's sweep treats
+        // every root entry as a directory it may clear (a shape this file
+        // predates), so a bare gate file at root level would make its
+        // scandir emit a PHP warning on cleanup.
+        $gateDir = $this->root . '/gate-' . bin2hex(random_bytes(4));
+        mkdir($gateDir, 0o700, true);
+        $gate = $gateDir . '/go';
+        $started = $registry->start(
+            'printf O1; printf E1 >&2; while [ ! -f ' . escapeshellarg($gate) . ' ]; do sleep 0.05; done; printf O2; printf E2 >&2',
+            'interleaved',
+        );
+        self::assertTrue($started['ok'], (string) ($started['error'] ?? ''));
+        $id = (string) $started['shell']['id'];
+
+        try {
+            // Burst one has landed in BOTH files before the first read —
+            // this is the frozen-stdout-in-the-wrong-sense shape the old
+            // arithmetic could not thread.
+            self::assertTrue($this->waitFor($registry, static function (BackgroundShellRegistry $r) use ($id): bool {
+                \clearstatcache();
+                $a = $r->read($id, 0, 1024);
+                return \strlen((string) $a['stdout']) >= 2 && \strlen((string) $a['stderr']) >= 2;
+            }));
+            $first = $registry->read($id, 0, 1024);
+            self::assertSame('O1', $first['stdout']);
+            self::assertSame('E1', $first['stderr']);
+            self::assertMatchesRegularExpression('/^\d+\.\d+$/', (string) $first['cursor'], 'the cursor is the two-part token, one offset per stream (C-TOOL-1)');
+            self::assertSame('2.2', (string) $first['cursor'], 'two bytes consumed in each file');
+
+            file_put_contents($gate, 'go');
+            // Wait for burst two through the registry's own read, with the
+            // stat cache cleared: a bare filesize() poll loop can cache the
+            // pre-growth size and never refresh (only stream opens do),
+            // and the shell's `[ -f ]` gate loop reads the real filesystem.
+            self::assertTrue($this->waitFor($registry, static function (BackgroundShellRegistry $r) use ($id): bool {
+                \clearstatcache();
+                $late = $r->read($id, 0, 1024);
+                return \strlen((string) $late['stdout']) >= 4 && \strlen((string) $late['stderr']) >= 4;
+            }), 'the second burst lands after stderr was already read — the exact interleaving the old split mis-threaded');
+
+            $second = $registry->read($id, $first['cursor'], 1024);
+            self::assertSame('O2', $second['stdout'], 'stdout bytes written AFTER the cursor was taken must not be skipped');
+            self::assertSame('E2', $second['stderr'], 'stderr bytes already delivered must not be replayed');
+
+            self::assertTrue($this->waitFor($registry, static fn (BackgroundShellRegistry $r): bool => ($r->status($id)['state'] ?? '') === 'finished'));
+            $row = $registry->status($id);
+            self::assertSame(
+                file_get_contents((string) $row['stdoutPath']),
+                $first['stdout'] . $second['stdout'],
+                'threading the cursor concatenates to the stdout file, byte for byte',
+            );
+            self::assertSame(
+                file_get_contents((string) $row['stderrPath']),
+                $first['stderr'] . $second['stderr'],
+                'threading the cursor concatenates to the stderr file, byte for byte',
+            );
         } finally {
             $registry->stop($id);
         }
