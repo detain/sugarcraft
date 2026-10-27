@@ -11,7 +11,9 @@ export type WorkflowRun = MethodResult<'workflow.runs'>['items'][number]
  * `workflow.list` on every handshake; `workflow.runs` per session when a panel
  * shows it, and again whenever that session's turn ends or a `Workflow` tool
  * call starts or finishes — a `/workflow` run is a turn, and the model's own
- * `Workflow` tool runs are tool calls.
+ * `Workflow` tool runs are tool calls. While a run is open, the panel polls
+ * its live status with `workflow.status` (a run's transcript-derived row
+ * goes stale mid-flight, so the engine answers this one directly).
  */
 export const useWorkflowsStore = defineStore('workflows', () => {
   const connection = useConnectionStore()
@@ -47,6 +49,20 @@ export const useWorkflowsStore = defineStore('workflows', () => {
     }
   }
 
+  /**
+   * Run $workflowId's live status, or null when the read fails or the run is
+   * gone. A background poll's failure deliberately does not set `error`: the
+   * next event-driven `loadRuns` re-derives the row, and a panel left open
+   * through a flaky moment would otherwise repeat the notice every poll.
+   */
+  async function status(workflowId: string): Promise<MethodResult<'workflow.status'>['status'] | null> {
+    try {
+      return (await connection.request('workflow.status', { workflowId })).status
+    } catch {
+      return null
+    }
+  }
+
   /** Start workflow $name in $sessionId; $vars become its `key=value` context. */
   async function run(sessionId: string, name: string, vars: Record<string, string> = {}): Promise<void> {
     await connection.request('workflow.run', Object.keys(vars).length === 0 ? { sessionId, name } : { sessionId, name, vars })
@@ -76,7 +92,7 @@ export const useWorkflowsStore = defineStore('workflows', () => {
     }
   })
 
-  return { available, names, runs, error, load, runsFor, loadRuns, run, pause, resume }
+  return { available, names, runs, error, load, runsFor, loadRuns, status, run, pause, resume }
 })
 
 /**

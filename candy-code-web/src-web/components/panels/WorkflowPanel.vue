@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useWorkflowsStore, parseVars, type WorkflowRun } from '../../stores/agents/workflows'
 import { useConnectionStore } from '../../stores/connection'
 import { describe, useSessionStore } from '../../stores/session'
@@ -10,9 +10,16 @@ import MessageMarkdown from '../MessageMarkdown.vue'
  * the session's turn, exactly as `/workflow run` — and the session's runs,
  * the `/workflow` ones and the model's own `Workflow` tool calls alike,
  * newest first, each with its report; a paused one resumes from here, a
- * running one pauses before its next stage.
+ * running one pauses before its next stage. While a run is open, its live
+ * status is polled every `STATUS_POLL_MS`; a terminal one reloads the runs
+ * so the finished row carries its report.
  */
 const props = defineProps<{ sessionId: string }>()
+
+/** How often an open running row's live status is re-read while the panel is open. */
+const STATUS_POLL_MS = 2000
+/** The statuses that end a run; reaching one reloads the rows and stops the poll. */
+const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled'])
 
 const workflows = useWorkflowsStore()
 const connection = useConnectionStore()
@@ -24,10 +31,41 @@ const busy = computed(() => useSessionStore(props.sessionId).busy)
 const canWrite = computed(() => connection.scopes.includes('write'))
 const runs = computed(() => [...workflows.runsFor(props.sessionId)].reverse())
 
-watch(() => props.sessionId, (id) => void workflows.loadRuns(id), { immediate: true })
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+function stopPolling(): void {
+  if (pollTimer !== null) clearInterval(pollTimer)
+  pollTimer = null
+}
+
+watch(() => props.sessionId, (id) => {
+  // A session change re-reads from scratch; the poll re-arms only if the new
+  // session's rows hold an open running one.
+  stopPolling()
+  void workflows.loadRuns(id)
+}, { immediate: true })
 watch(() => workflows.names, (names) => {
   if (name.value === '' && names.length > 0) name.value = names[0] ?? ''
 }, { immediate: true })
+
+/** The newest open running row the engine can answer about, or null. A `tool`
+ * run whose row carries no `workflowId` stays unpolled: there is nothing to ask. */
+const polled = computed(() => runs.value.find((run) => run.running && run.workflowId)?.workflowId ?? null)
+
+async function pollStatus(workflowId: string): Promise<void> {
+  const status = await workflows.status(workflowId)
+  if (status === null || !TERMINAL_STATUSES.has(status)) return
+  stopPolling()
+  void workflows.loadRuns(props.sessionId)
+}
+
+watch(polled, (workflowId) => {
+  stopPolling()
+  if (workflowId !== null) pollTimer = setInterval(() => void pollStatus(workflowId), STATUS_POLL_MS)
+}, { immediate: true })
+
+// Closing the panel destroys it; the interval must not outlive the view.
+onBeforeUnmount(stopPolling)
 
 async function act(action: () => Promise<unknown>): Promise<void> {
   error.value = null
