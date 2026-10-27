@@ -256,10 +256,12 @@ export interface SessionSummary {
   updatedAt?: string | null
   turns?: number | null
   preview?: string | null
+  snippet?: string | null
   open: boolean
   status: "closed" | "idle" | "busy" | "waiting_permission"
   permissionMode?: PermissionMode | null
   spentUsd?: number | null
+  spendUnpriced?: boolean
   /** Set by the serve gateway on a session another project root's workspace host answered for (roadmap O-7). */
   root?: string
 }
@@ -299,6 +301,7 @@ export interface Usage {
   cacheCreationTokens?: number | null
   reasoningTokens?: number | null
   costUsd?: number
+  unpricedModel?: string | null
 }
 
 /** Every method: its params and its result. */

@@ -1025,6 +1025,12 @@
                         "null"
                     ]
                 },
+                "snippet": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
                 "open": {
                     "type": "boolean"
                 },
@@ -1052,6 +1058,9 @@
                         "null"
                     ],
                     "minimum": 0
+                },
+                "spendUnpriced": {
+                    "type": "boolean"
                 },
                 "root": {
                     "type": "string",
@@ -1217,6 +1226,12 @@
                 "costUsd": {
                     "type": "number",
                     "minimum": 0
+                },
+                "unpricedModel": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
                 }
             }
         }
