@@ -1,0 +1,22 @@
+### P-TABS.d — Tab-Chat factory (`Bootstrap::tabChat`)
+- item: P-SESSION-TABS (sources: GAP-SES-12)
+- kind: feature · effort M
+- approach:
+  - `Bootstrap::chat()` (`src/Cli/Bootstrap.php:1183`) is the only Chat constructor. It also seeds launch notices, opens/locks the launch session and arms the notice drain (`drainsRuntimeNotices: true`, :1415).
+  - Extract its body into `private static buildChat(?string $root, ?string $sessionId, bool $launch)`. Then add `public static tabChat(?string $root, ?string $sessionId): Chat`, which:
+    - shares the memoized `workspace($root)`;
+    - opens the given session (load its transcript, take its lock; a lock held by another process gives the existing read-only window) or a lazily minted new one;
+    - seeds no launch notices;
+    - sets `drainsRuntimeNotices: false`;
+    - gets a fresh `liveToolEvents` ArrayObject, so it has its own pump lineage.
+  - `LaunchContext::app()` (`src/Cli/LaunchContext.php:2184`) hands the App a factory closure: `App::withTabFactory(?Closure)` (field only; the routing lands in P-TABS.e).
+- files.create: none
+- files.modify: `candy-code/src/Cli/Bootstrap.php` (`chat()` → `buildChat()` + `tabChat()`), `candy-code/src/Cli/LaunchContext.php` (`app()`), `candy-code/src/App/App.php` (constructor field `tabFactory`, `withTabFactory()`, mutate carry)
+- tests: create `candy-code/tests/Cli/TabChatFactoryTest.php` (the same workspace instance; a distinct liveToolEvents identity; no launch notices; drain off; an existing id loads its transcript; the second tab for a locked session goes read-only)
+- docs/guards: none
+- serialized: [bootstrap:chat] [hot:candy-code/src/Cli/LaunchContext.php] [hot:candy-code/src/App/App.php]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: `chat()` sets process statics (StatusLineCommand, media render mode, static spinner). `tabChat()` must not re-run anything that clears launch state. Pin it in the test.
+
