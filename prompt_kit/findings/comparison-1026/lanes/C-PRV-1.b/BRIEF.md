@@ -1,0 +1,21 @@
+### C-PRV-1.b — Honest `/effort` and an honest launch tier
+- item: C-PRV-1 (sources: PRV-2-P1)
+- kind: fix · MAJOR · effort S
+- approach:
+  - `Chat::handleEffortCommand()` (`Chat.php:12234-12310`) asks `EffortGate::verdict($provider, $engine->model())`. It refuses per model (`chat.effort.unsupported_model`) and takes its status shape from `EffortGate::shape()`.
+  - Correct the false claim "rides the reasoning-effort field of every request" (`lang/en.php:1872`).
+  - `Chat::withEngineSettings()`, which re-applies after a `/model` or provider switch, applies a persisted tier only where it shapes, and says so once with a uiOnly row.
+  - At launch, `LaunchContext::withResolvedReasoningEffort()` (`LaunchContext.php:2076-2081`) returns the engine untouched plus a reason when the configured tier would not shape. `Bootstrap::withResolvedReasoningEffort()` records that reason through `warnLaunchRows()`.
+  - Result: a tier persisted on anthropic is no longer silently applied after switching to `custom`.
+- files.create: `candy-code/tests/Cli/LaunchEffortNoticeTest.php`
+- files.modify: `candy-code/src/Chat.php` (`handleEffortCommand()`, `withEngineSettings()`), `candy-code/src/Cli/LaunchContext.php` (`withResolvedReasoningEffort()`), `candy-code/src/Cli/Bootstrap.php` (`withResolvedReasoningEffort()`)
+- tests:
+  - modify `candy-code/tests/Chat/EffortCommandTest.php`: openai+gpt-4o refuses and persists nothing; openai+o3 sets.
+  - create LaunchEffortNoticeTest: a persisted tier on a `custom` provider gives one launch row and an engine with no tier.
+- docs/guards: `candy-code/docs/SETTINGS.md` hand prose for `reasoningEffort` (outside generated regions)
+- serialized: [chat:handleEffortCommand, withEngineSettings] [bootstrap:withResolvedReasoningEffort] [lang:chat.effort.*] [docs:SETTINGS.md] [hot:candy-code/src/Cli/LaunchContext.php]
+- deps: C-PRV-1.a
+- phase: normal
+- ruling: none
+- risks: C-WEB-2's `EffortHostCommand` (other area) must use `EffortGate` too, or the web reopens the same hole. See Notes.
+
