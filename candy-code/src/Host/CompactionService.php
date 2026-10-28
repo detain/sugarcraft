@@ -2448,6 +2448,67 @@ final class CompactionService
         );
     }
 
+    /** Rows at the end of a refused conversation the overflow retry keeps verbatim. */
+    public const CLIP_KEEP_RECENT_ROWS = 8;
+
+    /** Characters kept from the head of an older tool output by {@see clipOlderToolOutputs()}. */
+    public const CLIP_HEAD_CHARS = 900;
+
+    /** Characters kept from the tail of an older tool output by {@see clipOlderToolOutputs()}. */
+    public const CLIP_TAIL_CHARS = 300;
+
+    /**
+     * Older tool outputs cut to head and tail, the newest exchanges kept whole.
+     *
+     * The rescue the summary retry sends when the COMPACTION REQUEST ITSELF
+     * overflows the window (C-CTX-5.a): tool-result rows are the fattest
+     * entries in a session and the least load-bearing once their turn is
+     * settled — the assistant rows beside them already record what was done
+     * with them — so clipping them shrinks the request materially while every
+     * exchange's structure, the summarisation instruction at the end, and the
+     * newest {@see CLIP_KEEP_RECENT_ROWS} rows ride verbatim. The newest rows
+     * are never touched because the tail of the conversation is what the next
+     * turn still reasons from.
+     *
+     * Deterministic and pure: a row whose content already fits head plus tail
+     * passes through as the very same object, and only rows that CARRY tool
+     * results are candidates. Clipped rows are copies made through
+     * {@see messageWithContent()}, so every other field — step identity,
+     * turn transcript, the hidden-in-place original's uiOnly mark — survives
+     * exactly as the intra-exchange rescue promises it must.
+     *
+     * @param list<Message> $history
+     * @return list<Message>
+     */
+    public static function clipOlderToolOutputs(
+        array $history,
+        int $keepRecentRows = self::CLIP_KEEP_RECENT_ROWS,
+        int $headChars = self::CLIP_HEAD_CHARS,
+        int $tailChars = self::CLIP_TAIL_CHARS,
+    ): array {
+        $cut = count($history) - max(0, $keepRecentRows);
+        if ($cut <= 0) {
+            return $history;
+        }
+
+        $clipped = $history;
+        foreach ($history as $index => $row) {
+            if ($index >= $cut || $row->toolResults === []) {
+                continue;
+            }
+            $length = mb_strlen($row->content);
+            if ($length <= $headChars + $tailChars) {
+                continue;
+            }
+            $content = mb_substr($row->content, 0, $headChars)
+                . "\n[older tool output clipped - " . ($length - $headChars - $tailChars) . " characters omitted]\n"
+                . mb_substr($row->content, -$tailChars);
+            $clipped[$index] = self::messageWithContent($row, $content);
+        }
+
+        return $clipped;
+    }
+
     /**
      * The notice the intra-exchange rescue writes when truncating oversized
      * messages lets a turn through (prompt_plan.md P4.S4, backlog §12.2 E18).

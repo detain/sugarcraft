@@ -172,6 +172,24 @@ display-only: they stay in your transcript (and in the saved session), the
 summary rows take their place in what the model reads, and a boundary notice
 says the model now reads a summary.
 
+**When the summary call itself fails.** A summarisation request is the largest
+call the session makes, so it can overflow the window it is measuring, and a
+configured `summaryModel` can name a model the provider no longer serves.
+Neither answer is final the way it used to be: the cache-reusing summary
+backend retries each once. An overflow is retried against the same model with
+the *older* tool outputs clipped to their first and last stretch — the newest
+exchanges stay verbatim, because they are what the summary is being asked to
+carry forward. A non-transient refusal from an overridden `summaryModel` (an
+unknown model, a client error) is retried once on the conversation's own
+model, which is the one the session's cache is warm for. Every other failure —
+a transient refusal, a cancellation, a second failure after one of these
+retries — folds heuristically exactly as before, and the parked or ahead-of-need
+turn proceeds on that fold. The budget is bounded: one retry per summary call,
+at most one extra billed call, never a retry storm. And no timeout is added
+for any of it: a hung summary call still dies on the existing stall ceiling,
+not on a total request deadline (the standing rule against blanket LLM
+timeouts).
+
 ### `/compact`
 
 `/compact [focus]` compacts now, whatever the tiers say. The focus text steers

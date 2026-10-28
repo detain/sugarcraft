@@ -6,7 +6,10 @@ namespace SugarCraft\Code\Backend;
 
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\Backend;
+use SugarCraft\Code\Host\CompactionService;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Providers\ContextOverflow;
+use SugarCraft\Code\Providers\TransientFailure;
 
 /**
  * The session's summary backend (roadmap 2.4-2): compaction summaries reuse
@@ -67,6 +70,84 @@ final class CacheReusingSummaryBackend implements Backend, SummarisesWithCache
 
     public function summariseAsync(array $history, string $instruction, ?CancellationToken $cancellation = null): PromiseInterface
     {
-        return $this->engine->summariseAsync($history, $instruction, $cancellation);
+        return $this->engine->summariseAsync($history, $instruction, $cancellation)
+            ->then(null, fn (\Throwable $error): PromiseInterface => $this->retrySummaryOnce(
+                $error,
+                $history,
+                $instruction,
+                $cancellation,
+            ));
+    }
+
+    /**
+     * The one retry a failed summary request is worth, or the original error.
+     *
+     * Two failures used to fold heuristically on the FIRST try and stay folded
+     * even though each has a cheap second shape (C-CTX-5.a):
+     *
+     *  - The compaction request OVERFLOWS the window itself — the history grew
+     *    so large that even the summariser cannot read it. Retrying the same
+     *    bytes is pointless, but {@see CompactionService::clipOlderToolOutputs()}
+     *    cuts the session's fattest, least load-bearing rows (old tool outputs)
+     *    to head and tail and keeps the newest exchanges whole, which is the
+     *    same rescue the manual overflow notice recommends, automated.
+     *  - A configured `summaryModel` that is simply UNAVAILABLE (unknown model,
+     *    a 4xx refusal) should not fold the session when the session's own
+     *    model demonstrably answers — the conversation rode it moments ago. One
+     *    retry with the override dropped ({@see EngineBackend::withSummaryModel()})
+     *    asks the model that is known to work.
+     *
+     * Everything else — transient failures (the engine's own retry policy
+     * owns those), a cancelled token, any error that is neither overflow nor a
+     * failing override — rethrows unchanged, and the caller's heuristic fold
+     * lands exactly as before.
+     *
+     * BUDGET: at most ONE extra billed call per summary. The handler is
+     * attached to the FIRST rejection only; the retry's own promise carries its
+     * result (success or failure) straight through without re-entering here.
+     *
+     * HONEST SCOPE — the fork flattens classes: when {@see EngineBackend} runs
+     * the summary in a forked worker, the child's typed exception arrives here
+     * as a plain {@see \RuntimeException} carrying only the provider's message
+     * text. The overflow leg still fires because {@see ContextOverflow} falls
+     * back to wording patterns; the fallback leg fires because the flattened
+     * text classifies as non-transient under
+     * {@see TransientFailure::isTransient()} (which never consults text). The
+     * accepted trade: on that path a flattened 429 or 5xx spends the one
+     * session-model retry too — still capped at one call, and the alternative
+     * is folding when the session model was never asked.
+     *
+     * E646: no timeout is added anywhere here. Each leg answers a REFUSED call;
+     * a call that never answers still dies on the engine's existing stall
+     * ceiling, and 408/504/stall rejections ride the unchanged fold.
+     *
+     * @param list<Message> $history
+     */
+    private function retrySummaryOnce(
+        \Throwable $error,
+        array $history,
+        string $instruction,
+        ?CancellationToken $cancellation,
+    ): PromiseInterface {
+        if ($cancellation?->isCancelled() === true) {
+            // Nothing may be dispatched on a dead turn; reject as today.
+            throw $error;
+        }
+
+        if (ContextOverflow::matches($error)) {
+            return $this->engine->summariseAsync(
+                CompactionService::clipOlderToolOutputs($history),
+                $instruction,
+                $cancellation,
+            );
+        }
+
+        if ($this->engine instanceof EngineBackend
+            && $this->engine->summaryModel() !== null
+            && !TransientFailure::isTransient($error)) {
+            return $this->engine->withSummaryModel(null)->summariseAsync($history, $instruction, $cancellation);
+        }
+
+        throw $error;
     }
 }
