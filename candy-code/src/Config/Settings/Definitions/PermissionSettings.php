@@ -65,6 +65,30 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.autoReview.label'))
                 ->withHelp(Lang::t('settings.autoReview.help'))
                 ->withReaderSymbol(Bootstrap::class . '::permissionGate'),
+            // C-SEC-7.d: what the auto reviewer reviews and what it reviews
+            // it with. User tier only like the switch itself — a repository
+            // may neither widen the paid-call scope nor point the reviewer at
+            // a model of its choosing. `shell` is the ISS-013 law unchanged;
+            // `writes` and `all` trade money for coverage and are the
+            // operator's decision, not the checkout's. No env var and no CLI
+            // flag on either: a stray spelling in a shared shell profile must
+            // not start a paid review loop.
+            SettingDefinition::new(PermissionGate::AUTO_REVIEW_SCOPE_SETTING, SettingType::Enum, 'shell')
+                ->withCategory(SettingCategory::Permissions)
+                ->withRiskClass(RiskClass::Spend)
+                ->withLayered()
+                ->withEnumValues(PermissionGate::AUTO_REVIEW_SCOPES)
+                ->withApplyMode(ApplyMode::Live)
+                ->withLabel(Lang::t('settings.autoReviewScope.label'))
+                ->withHelp(Lang::t('settings.autoReviewScope.help'))
+                ->withReaderSymbol(PermissionGate::class . '::autoReviewScope'),
+            SettingDefinition::new('autoReviewModel', SettingType::String, '')
+                ->withCategory(SettingCategory::Permissions)
+                ->withRiskClass(RiskClass::Spend)
+                ->withLayered()
+                ->withLabel(Lang::t('settings.autoReviewModel.label'))
+                ->withHelp(Lang::t('settings.autoReviewModel.help'))
+                ->withReaderSymbol(Bootstrap::class . '::permissionGate'),
             // Roadmap N-P4g: Auto's circuit breaker, promoted from the gate's
             // constants. User tier only (Security): a repository raising them
             // would let a run of blocked calls go on longer before a person

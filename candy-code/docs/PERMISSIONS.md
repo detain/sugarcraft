@@ -539,7 +539,10 @@ explicit rule still comes first — `Allow mcp__git__*` grants those tools under
 
 **The exec reviewer.** `"autoReview": true` in your own `config.json` or
 `settings.json` (never a project file: every review is a paid call) sends each
-call in that second group to the title model (`titleModel`), with the
+call in that second group to the reviewer model — the title model (`titleModel`),
+unless your user-tier `autoReviewModel` names another `provider/model` to answer
+on; one that cannot be built, is not a string, or is not spelled `provider/model`
+warns once on stderr and leaves the reviewer off — with the
 conversation so far, before it is denied. It answers with one JSON object —
 `{"decision":"allow|deny|ask","risk":"low|medium|high|unknown","rationale":"…"}`
 — so `git push --force` to the feature branch you asked it to rewrite can run,
@@ -552,8 +555,15 @@ error or a launch with no provider to review with all mean **ask**, never
 allow. The prompt or refusal you see names the category and the reviewer's
 one-line reason. The review call has the provider's connect timeout and no
 total timeout; it runs once per reviewed call — every flagged non-security
-call and, when `autoReview` is on, every non-read-only shell command the
-pattern list passed, where it can only narrow what would run.
+call and, when `autoReview` is on, every call the pattern list passed that your
+user-tier `autoReviewScope` names: `shell` (the default) covers every
+non-read-only shell command, `writes` adds `Edit`, `Write`, `ApplyPatch` and
+`WebFetch` — shown to the reviewer with their capped pending diff for the
+write tools, not their raw arguments (`WebFetch` has no diff, so it rides as
+its url plus arguments) — and `all` reviews every passed call; an unknown
+spelling is read as `shell`, and either way the reviewer can only narrow what
+would run.
+Each review is a paid call, so `writes` and `all` multiply the charges.
 
 ### `auto`'s circuit breaker
 

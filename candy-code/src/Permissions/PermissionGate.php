@@ -163,9 +163,24 @@ final class PermissionGate
      * breaker, the second has to read honestly to a model being asked to judge
      * a call nothing flagged — telling it the classifier "flagged it as
      * unflagged" would invite exactly the hallucinated risk it must not invent.
+     * C-SEC-7.d adds the pair for a non-shell call the `autoReviewScope`
+     * widened in — same self-denial law, different words.
      */
     private const UNFLAGGED_REVIEW_CATEGORY = 'unflagged-shell';
     private const UNFLAGGED_REVIEW_BASIS = 'nothing — the pattern list passed this call, and auto mode reviews shell anyway';
+    private const UNFLAGGED_REVIEW_CATEGORY_OTHER = 'unflagged-review';
+    private const UNFLAGGED_REVIEW_BASIS_OTHER = 'nothing — the pattern list passed this call, and the autoReviewScope includes it';
+
+    /**
+     * C-SEC-7.d: the user-tier scope key naming which pattern-list-passed
+     * calls auto mode reviews, its three accepted spellings, and the
+     * read-write set `writes` adds to the shell-subject pair. `WebFetch`
+     * rides as a literal because it has no NAME constant of its own, and
+     * listing it here is the only place its reviewed-by-scope name lives.
+     */
+    public const AUTO_REVIEW_SCOPE_SETTING = 'autoReviewScope';
+    public const AUTO_REVIEW_SCOPES = ['shell', 'writes', 'all'];
+    public const AUTO_REVIEW_WRITE_TOOLS = ['Edit', 'Write', ApplyPatch::NAME, 'WebFetch'];
 
     // -------------------------------------------------------------------------
     // Auto-mode circuit breaker state
@@ -1076,16 +1091,20 @@ final class PermissionGate
 
         // ISS-013: the pattern list is a list of spellings, and download-and-
         // execute shapes (`bash <(curl …)`, `curl … | python3`) are spellings
-        // it misses. When a reviewer is configured (`autoReview`), a SHELL
-        // call it passed is put to the reviewer anyway — the one call path
-        // where the cheap model widens coverage instead of only softening a
-        // block. Read-only auto-allowed lines stay the fast path they have
-        // always been, and non-shell tools keep the classifier-only verdict:
-        // the issue asks for every non-read-only shell call, not for a paid
-        // review of every `Edit`.
-        $unflaggedReview = $category === null && $this->autoReviewsUnflaggedShell($call, $projectRoot);
+        // it misses. When a reviewer is configured (`autoReview`), a call the
+        // list passed is put to the reviewer anyway — the one call path where
+        // the cheap model widens coverage instead of only softening a block.
+        // C-SEC-7.d generalises which calls that covers: `autoReviewScope`
+        // stays `shell` by default (byte-identical to the ISS-013 law), and
+        // only a widening spelling — `writes` or `all` — sends more than
+        // shell-subject tools, at one paid call each. Read-only auto-allowed
+        // lines stay the fast path they have always been.
+        $unflaggedReview = $category === null && $this->autoReviewsUnflagged($call, $projectRoot);
+        $unflaggedShell = $unflaggedReview && ShellSubjectTools::covers($call->name);
         if ($unflaggedReview) {
-            $category = self::UNFLAGGED_REVIEW_CATEGORY;
+            $category = $unflaggedShell
+                ? self::UNFLAGGED_REVIEW_CATEGORY
+                : self::UNFLAGGED_REVIEW_CATEGORY_OTHER;
         }
 
         // Action is safe — reset counters and allow
@@ -1118,8 +1137,11 @@ final class PermissionGate
         if ($this->reviewer !== null) {
             $verdict = $this->reviewer->review(
                 $call,
-                $unflaggedReview ? self::UNFLAGGED_REVIEW_BASIS : $category,
+                $unflaggedReview
+                    ? ($unflaggedShell ? self::UNFLAGGED_REVIEW_BASIS : self::UNFLAGGED_REVIEW_BASIS_OTHER)
+                    : $category,
                 $sessionId,
+                $projectRoot,
             );
             $this->lastAutoReason .= '; ' . $verdict->describe();
             if ($verdict->decision === PermissionDecision::Allow) {
@@ -1157,16 +1179,51 @@ final class PermissionGate
 
     /**
      * Whether a call the pattern list passed still goes to the reviewer
-     * (ISS-013): a shell-subject tool, a reviewer configured, and not a
-     * read-only line the auto-allow already covers. `Bash` and `PtyRun` are
-     * where an attacker's spelling lives; a reviewer per `Edit` would be a
-     * paid call per keystroke of the agent's own work.
+     * (ISS-013, scoped by C-SEC-7.d): a reviewer must be configured, the
+     * {@see autoReviewScope} setting must name this call, and a read-only
+     * shell line the auto-allow already covers stays the fast path. Under
+     * the default `shell` scope this is the original law verbatim: `Bash`
+     * and `PtyRun` are where an attacker's spelling lives, and a reviewer
+     * per `Edit` would be a paid call per keystroke of the agent's own
+     * work. `writes` adds the file-writing tools and `WebFetch` — for a
+     * person who wants the model to read every change before it lands —
+     * and `all` names every call the list passed. A scope that is unset,
+     * not a string, or spelled outside the three known values is treated
+     * as `shell`: the narrowest paid-review set wins, because widening
+     * this door costs money and never should happen on a guess.
      */
-    private function autoReviewsUnflaggedShell(ToolCall $call, ?string $projectRoot): bool
+    private function autoReviewsUnflagged(ToolCall $call, ?string $projectRoot): bool
     {
-        return $this->reviewer !== null
-            && ShellSubjectTools::covers($call->name)
-            && !$this->isAutoAllowedReadOnlyBash($call, $projectRoot);
+        if ($this->reviewer === null) {
+            return false;
+        }
+        if (ShellSubjectTools::covers($call->name)) {
+            return !$this->isAutoAllowedReadOnlyBash($call, $projectRoot);
+        }
+
+        return match (self::autoReviewScope()) {
+            'writes' => in_array($call->name, self::AUTO_REVIEW_WRITE_TOOLS, true),
+            'all' => true,
+            default => false,
+        };
+    }
+
+    /**
+     * The live `autoReviewScope` value, normalised. Never fatal: a settings
+     * read that cannot resolve (no schema entry yet mid-boot, a corrupt
+     * store) answers `shell` — the fail-closed narrowest scope.
+     */
+    private static function autoReviewScope(): string
+    {
+        try {
+            $value = UiSettings::value(self::AUTO_REVIEW_SCOPE_SETTING);
+        } catch (\Throwable) {
+            return 'shell';
+        }
+
+        return is_string($value) && in_array($value, self::AUTO_REVIEW_SCOPES, true)
+            ? $value
+            : 'shell';
     }
 
     /**

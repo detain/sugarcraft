@@ -30,10 +30,13 @@ use SugarCraft\Code\ToolCall;
  * finding ({@see PermissionGate::SECURITY_CATEGORIES} always ask the person,
  * whatever a reviewer would say — the most restrictive verdict wins).
  * What it does see: every flagged non-security call — where it can turn a
- * block into an allow or a question — and, since ISS-013, every non-read-only
- * shell command the classifier PASSED, where it can only narrow what would
- * run (the pattern list misses download-and-execute spellings it never
- * flag). On both paths it can never widen a deny the security list owns.
+ * block into an allow or a question — and, since ISS-013 as scoped by
+ * C-SEC-7.d, every call the classifier PASSED that the user's
+ * `autoReviewScope` names — the default `shell` keeps that to the
+ * non-read-only shell commands (the pattern list misses download-and-
+ * execute spellings it never flag), and the widened spellings add the
+ * write tools with their pending diff (`AskDiffPreview`) in the call block.
+ * On both paths it can never widen a deny the security list owns.
  *
  * NEVER THROWS, and never fails open: no backend reply, a provider error or a
  * reply that is not the JSON object is {@see ReviewVerdict::unavailable()},
@@ -43,8 +46,13 @@ use SugarCraft\Code\ToolCall;
  * completion can legitimately take a long time and a timed-out review would
  * only become a question anyway.
  *
- * ONLY EVER THE TITLE BACKEND (audit 15b-12's rule for every side call): a
- * reviewer that could act would be a second agent.
+ * ONLY EVER A TOOL-LESS BACKEND (audit 15b-12's rule for every side call): a
+ * reviewer that could act would be a second agent. The backend is the title
+ * backend by default, and since C-SEC-7.d the user's `autoReviewModel` can
+ * name another `provider/model` for it — the override picks the model, never
+ * the tools: whatever provider it resolves to, the reviewer is built with
+ * hooks disabled and no tool list, the same shape {@see
+ * \SugarCraft\Code\Cli\Bootstrap::permissionGate()} builds the title one with.
  *
  * The transcript comes from an injected source keyed by session id
  * ({@see withTranscript()}); without one, or for a call with no session (a
@@ -120,13 +128,23 @@ final readonly class ExecReviewer
      * The review request: the rules as the system turn, then the flagged call,
      * why it was flagged and the conversation in one user turn.
      *
+     * The optional tail is C-SEC-7.d: a call judged under a widened
+     * `autoReviewScope` can be a `Write`, an `Edit`, an `ApplyPatch` or a
+     * `WebFetch` — and a reviewer asked about a `Write` with only the JSON in
+     * front of it is asked to guess. With a project root supplied, the same
+     * capped preview the human's ask frame gets ({@see AskDiffPreview::for()})
+     * rides into the call block; the shell-subject rendering is untouched, so
+     * the ISS-013 prompt stays byte-identical. A diff is untrusted content
+     * like everything else in the block — file bytes never executed, escaped
+     * and head-clipped — and the verdict rules already say an unreadable call
+     * is not an allowed one.
+     *
      * @param array<int, Message> $history
      * @return list<Message>
      */
-    public function request(ToolCall $call, string $category, array $history): array
+    public function request(ToolCall $call, string $category, array $history, ?string $projectRoot = null): array
     {
-        $arguments = json_encode($call->arguments, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE);
-        $callText = self::untrusted('tool: ' . $call->name . "\narguments: " . ($arguments === false ? '{}' : $arguments), self::MAX_CALL_CHARS, false);
+        $callText = self::renderCall($call, $projectRoot);
 
         $digest = $history === [] ? '' : TranscriptDigest::of($history, 'untrusted-transcript');
         $transcript = $digest === ''
@@ -145,9 +163,43 @@ final readonly class ExecReviewer
     }
 
     /**
+     * The call block: the tool name, its arguments — or, for a non-shell
+     * write tool with a project root, the path and the pending diff in place
+     * of the raw argument dump, because the change is what the reviewer is
+     * being asked about. `AskDiffPreview` confines every path it reads and
+     * caps the text itself; the whole block is then escaped and clipped.
+     */
+    private static function renderCall(ToolCall $call, ?string $projectRoot): string
+    {
+        $arguments = json_encode($call->arguments, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE);
+        $plain = 'tool: ' . $call->name . "\narguments: " . ($arguments === false ? '{}' : $arguments);
+
+        // Shell-subject calls keep the ISS-013 rendering byte for byte.
+        if (ShellSubjectTools::covers($call->name)) {
+            return self::untrusted($plain, self::MAX_CALL_CHARS, false);
+        }
+
+        $head = 'tool: ' . $call->name;
+        foreach (['file_path' => 'path', 'url' => 'url'] as $arg => $label) {
+            $value = $call->arguments[$arg] ?? null;
+            if (is_string($value) && $value !== '') {
+                $head .= "\n" . $label . ': ' . $value;
+                break;
+            }
+        }
+
+        $diff = AskDiffPreview::for($call->name, $call->arguments, $projectRoot);
+        $text = $diff === null
+            ? $head . "\narguments: " . ($arguments === false ? '{}' : $arguments)
+            : $head . "\ndiff:\n" . $diff;
+
+        return self::untrusted($text, self::MAX_CALL_CHARS, false);
+    }
+
+    /**
      * Review one flagged call. Never throws: every failure is an Ask.
      */
-    public function review(ToolCall $call, string $category, ?string $sessionId = null): ReviewVerdict
+    public function review(ToolCall $call, string $category, ?string $sessionId = null, ?string $projectRoot = null): ReviewVerdict
     {
         $history = [];
         if ($this->transcript !== null && $sessionId !== null && $sessionId !== '') {
@@ -159,7 +211,7 @@ final readonly class ExecReviewer
         }
 
         try {
-            $reply = $this->backend->complete($this->request($call, $category, $history));
+            $reply = $this->backend->complete($this->request($call, $category, $history, $projectRoot));
         } catch (\Throwable $e) {
             $message = trim(preg_replace('/\s+/u', ' ', $e->getMessage()) ?? '');
 

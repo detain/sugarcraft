@@ -7099,16 +7099,55 @@ public static function useMaxCost(?string $maxCost): void
         // belongs to from the session store (best effort: a session not yet
         // saved is reviewed on the call alone). No provider to review with is
         // said out loud: flagged calls then stay denied, as without the key.
+        //
+        // C-SEC-7.d adds the two companions, user-tier for the same money
+        // reason: `autoReviewScope` says WHICH passed calls get reviewed
+        // (read where it acts — PermissionGate::autoReviewsUnflagged()), and
+        // `autoReviewModel` says WHAT reviews them — a `provider/model` pair
+        // built tool-less exactly the way {@see titleBackend()} builds its
+        // own, with the named provider instead of the selected one. A model
+        // that cannot be spelled or built is said out loud once and leaves
+        // the reviewer OFF: a review costs real money on somebody's
+        // credentials, so a half-understood override must not silently pick
+        // a different one to burn.
         $reviewer = null;
         $autoReview = self::readUserConfig()['autoReview'] ?? null;
         if ($autoReview !== null && !is_bool($autoReview)) {
             self::warnPermissionConfigOnce(Lang::t('cli.warn.auto_review_not_bool'));
         } elseif ($autoReview === true) {
-            $titleBackend = self::titleBackend();
-            if ($titleBackend === null) {
-                self::warnPermissionConfigOnce(Lang::t('cli.warn.auto_review_no_provider'));
+            $reviewBackend = null;
+            $reviewModel = self::readUserConfig()['autoReviewModel'] ?? null;
+            if ($reviewModel !== null && !is_string($reviewModel)) {
+                self::warnPermissionConfigOnce(Lang::t('cli.warn.auto_review_model_not_string'));
+            } elseif (is_string($reviewModel) && trim($reviewModel) !== '') {
+                $slash = strpos(trim($reviewModel), '/');
+                if ($slash === false || $slash === 0 || $slash === strlen(trim($reviewModel)) - 1) {
+                    self::warnPermissionConfigOnce(Lang::t('cli.warn.auto_review_model_bad_shape'));
+                } else {
+                    [$overrideProvider, $overrideModel] = array_map('trim', explode('/', trim($reviewModel), 2));
+                    try {
+                        $factory = new ProviderFactory();
+                        $config = self::providerConfigFor($overrideProvider, $factory);
+                        $config['model'] = $overrideModel;
+                        // The reviewer titles nothing and summarises nothing:
+                        // it answers one JSON question, so it runs without a
+                        // thinking budget exactly as titleBackend() does —
+                        // the empty string is what both parsers read as off.
+                        $config['thinkingBudget'] = '';
+                        $reviewBackend = new EngineBackend($factory->create($config), $overrideModel, hooksDisabled: true);
+                    } catch (\Throwable) {
+                        self::warnPermissionConfigOnce(Lang::t('cli.warn.auto_review_model_unusable'));
+                        $reviewBackend = null;
+                    }
+                }
             } else {
-                $reviewer = \SugarCraft\Code\Permissions\ExecReviewer::new($titleBackend)->withTranscript(
+                $reviewBackend = self::titleBackend();
+                if ($reviewBackend === null) {
+                    self::warnPermissionConfigOnce(Lang::t('cli.warn.auto_review_no_provider'));
+                }
+            }
+            if ($reviewBackend !== null) {
+                $reviewer = \SugarCraft\Code\Permissions\ExecReviewer::new($reviewBackend)->withTranscript(
                     static fn (string $sessionId): array => \SugarCraft\Code\Host\TranscriptStore::new(self::sessionStore(prune: false))->load($sessionId),
                 );
             }

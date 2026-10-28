@@ -228,10 +228,12 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * application does not write one. `Bootstrap`'s warnings are handed to
  * {@see \SugarCraft\Code\Cli\Bootstrap::STDERR_LINE_FORMAT}, which adds the
  * prefix on the way out, so the message literals are invisible to a scan for
- * it — FORTY call sites in `src/Cli/Bootstrap.php` (f-app-launch 2026-10-14
+ * it — FORTY-THREE call sites in `src/Cli/Bootstrap.php` (f-app-launch 2026-10-14
  * added three: the rv-sec-1 bypass banner, the rv-sec-3 policy-freshness notice
  * and the rv-enduser-1 unselectable-override row; PLG-1 added three more: the
- * bundles() warning drain and the two declined-surface notices), each producing a
+ * bundles() warning drain and the two declined-surface notices, and C-SEC-7.d
+ * three more still: autoReviewModel's not-a-string, bad-shape and unusable
+ * warnings), each producing a
  * distinct `candy-code: ` line, against a channel-4 credit of eight for that
  * file (ISS-026's envelope-carrying resume notice joined the six as a raw
  * fwrite line, and its rv6 `--resume` pick twin joined the seven). Off by
@@ -587,7 +589,13 @@ final class StderrEmitterCensusTest extends TestCase
         // all THREE on the transcript seam: each names something the session
         // can no longer do with a bundle's surface (read it, run its hooks,
         // talk to its servers), which is exactly channel 5's subject.
-        'src/Cli/Bootstrap.php' => 40,
+        // +3 in C-SEC-7.d: autoReviewModel's three once-per-process warnings
+        // (not a string; not spelled provider/model; a provider this build
+        // cannot configure). Stderr only, same shape as autoReview's pair:
+        // the override is malformed, the session is intact, and the reviewer
+        // simply stays OFF rather than burning money on a half-understood
+        // guess.
+        'src/Cli/Bootstrap.php' => 43,
     ];
 
     /**
@@ -1754,7 +1762,7 @@ final class StderrEmitterCensusTest extends TestCase
                 . 'without the sibling census noticing; do not bump either number until you know which.',
         );
         self::assertSame(1, $direct, 'the number of warnings that go to stderr and bypass the once-guard moved');
-        self::assertSame(8, $once, 'the number of stderr-only, once-per-process warnings moved');
+        self::assertSame(11, $once, 'the number of stderr-only, once-per-process warnings moved');
         self::assertSame(
             self::PREFIXED_WRITER_SITES['src/Cli/Bootstrap.php'],
             $direct + $once + $seam,

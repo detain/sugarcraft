@@ -9,11 +9,14 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Config\Settings\SessionSettings;
+use SugarCraft\Code\Config\Settings\UiSettings;
 use SugarCraft\Code\Permissions\ExecReviewer;
 use SugarCraft\Code\Permissions\PermissionDecision;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\SafetyClassifier;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\ToolCall;
 
 /**
@@ -33,8 +36,28 @@ use SugarCraft\Code\ToolCall;
  */
 final class UnflaggedShellReviewTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     /** A command the pattern list passes and the read-only set does not cover. */
     private const MAKE = 'make -j4';
+
+    protected function setUp(): void
+    {
+        // C-SEC-7.d: the gate reads `autoReviewScope` from the settings stack
+        // where it acts, so these pins run against an empty HOME — an
+        // ambient `autoReviewScope: writes` in the runner's own settings
+        // must not re-shape a test whose whole subject is the SHELL scope.
+        $this->useHomeSandbox(sys_get_temp_dir() . '/usr-home-' . bin2hex(random_bytes(6)), false);
+        SessionSettings::reset();
+        UiSettings::forget();
+    }
+
+    protected function tearDown(): void
+    {
+        SessionSettings::reset();
+        UiSettings::forget();
+        $this->restoreHomeSandbox();
+    }
 
     public function testAnUnflaggedShellCallGoesToTheReviewerAndItsAllowRunsIt(): void
     {

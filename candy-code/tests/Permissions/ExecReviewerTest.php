@@ -9,6 +9,8 @@ use PHPUnit\Framework\TestCase;
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
+use SugarCraft\Code\Config\Settings\SessionSettings;
+use SugarCraft\Code\Config\Settings\UiSettings;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\Message;
@@ -20,16 +22,40 @@ use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionRule;
 use SugarCraft\Code\Permissions\ReviewVerdict;
 use SugarCraft\Code\Permissions\SafetyClassifier;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\ToolCall;
 
 /**
  * Roadmap 5.11-2: the `auto` exec reviewer and the split it sits behind —
  * security findings always ask, every other flagged call is the reviewer's
  * (when on) or a strike (when off), and a reviewer that cannot answer asks.
+ *
+ * C-SEC-7.d adds the render half: under a widened `autoReviewScope` a passed
+ * non-shell call reaches the reviewer too, and an Edit or Write must be seen
+ * with its pending diff rather than its raw arguments alone.
  */
 final class ExecReviewerTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private const FORCE_PUSH = 'git push --force origin feature/x';
+
+    protected function setUp(): void
+    {
+        // C-SEC-7.d: some pins here drive the GATE, which now reads
+        // `autoReviewScope` where it acts — run against an empty HOME so an
+        // ambient widening in the runner's own settings cannot leak in.
+        $this->useHomeSandbox(sys_get_temp_dir() . '/ervw-home-' . bin2hex(random_bytes(6)), false);
+        SessionSettings::reset();
+        UiSettings::forget();
+    }
+
+    protected function tearDown(): void
+    {
+        SessionSettings::reset();
+        UiSettings::forget();
+        $this->restoreHomeSandbox();
+    }
 
     // ── the verdict ─────────────────────────────────────────────────────
 
@@ -138,6 +164,82 @@ final class ExecReviewerTest extends TestCase
         self::assertSame(PermissionDecision::Ask, $verdict->decision);
         self::assertStringContainsString('connect timed out', $verdict->rationale);
         self::assertSame(PermissionDecision::Ask, ExecReviewer::new(self::backend('I think it is fine'))->review(new ToolCall('Bash', []), 'c')->decision);
+    }
+
+    // ── the render of a non-shell call (C-SEC-7.d) ──────────────────────
+
+    public function testAnEditWithoutAProjectRootStillShowsItsArguments(): void
+    {
+        $reviewer = ExecReviewer::new(self::backend('{}'));
+        $target = '/probe-dir-' . bin2hex(random_bytes(6)) . '/x.txt';
+
+        $request = $reviewer->request(
+            new ToolCall('Edit', ['file_path' => $target, 'old_string' => 'one', 'new_string' => 'two']),
+            'c',
+            [],
+        );
+
+        $user = $request[1]->content;
+        self::assertStringContainsString("tool: Edit\npath: " . $target, $user, 'the subject path rides the head');
+        self::assertStringContainsString('arguments:', $user, 'with no root the diff is impossible; the args stand');
+        self::assertStringNotContainsString('diff:', $user);
+    }
+
+    public function testAnEditWithAPendingDiffInProjectRidesTheDiffNotTheArguments(): void
+    {
+        $root = sys_get_temp_dir() . '/ervw-root-' . bin2hex(random_bytes(6));
+        mkdir($root, 0o700);
+        try {
+            $marker = 'ervw-marker-' . bin2hex(random_bytes(6));
+            $request = ExecReviewer::new(self::backend('{}'))->request(
+                new ToolCall('Write', ['file_path' => $root . '/note.txt', 'content' => 'created by ' . $marker]),
+                'c',
+                [],
+                $root,
+            );
+
+            $user = $request[1]->content;
+            self::assertStringContainsString('diff:', $user, 'the reviewer of a write sees the change');
+            self::assertStringContainsString($marker, $user, 'the pending content rides the capped diff');
+            self::assertStringNotContainsString('arguments:', $user, 'the diff replaces the raw argument dump');
+        } finally {
+            @unlink($root . '/note.txt');
+            @rmdir($root);
+        }
+    }
+
+    public function testAWriteOutsideTheProjectGetsNoDiffAndKeepsItsArguments(): void
+    {
+        $root = sys_get_temp_dir() . '/ervw-root-' . bin2hex(random_bytes(6));
+        mkdir($root, 0o700);
+        try {
+            $request = ExecReviewer::new(self::backend('{}'))->request(
+                new ToolCall('Write', ['file_path' => $root . '/../outside.txt', 'content' => 'x']),
+                'c',
+                [],
+                $root,
+            );
+
+            $user = $request[1]->content;
+            self::assertStringNotContainsString('diff:', $user, 'a path the jail refuses shows no preview, fail-closed');
+            self::assertStringContainsString('arguments:', $user);
+        } finally {
+            @rmdir($root);
+        }
+    }
+
+    public function testShellCallsRenderExactlyAsTheyDidBeforeTheScopeWidened(): void
+    {
+        $reviewer = ExecReviewer::new(self::backend('{}'));
+
+        // The byte law: `shell` is the default scope and its rendering is
+        // frozen — a widened scope must not re-shape what a shell review
+        // already said. No `path:`/`diff:` head is added to shell subjects.
+        $withRoot = $reviewer->request(new ToolCall('Bash', ['command' => self::FORCE_PUSH]), 'c', [], '/some/root');
+        $without = $reviewer->request(new ToolCall('Bash', ['command' => self::FORCE_PUSH]), 'c', []);
+
+        self::assertSame($without[1]->content, $withRoot[1]->content);
+        self::assertStringNotContainsString('diff:', $withRoot[1]->content);
     }
 
     // ── the gate ────────────────────────────────────────────────────────

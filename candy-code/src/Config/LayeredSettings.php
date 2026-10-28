@@ -538,6 +538,8 @@ final class LayeredSettings
         'env.diffMaxBytes',
         'contextWindow',
         'autoReview',
+        'autoReviewScope',
+        'autoReviewModel',
         'permissions.autoStrikeLimit',
         'permissions.autoTotalLimit',
         'permissions.autoAllowReadOnly',
