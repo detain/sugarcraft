@@ -1586,7 +1586,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-EXT-2.b (W8)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ext.md` → `### C-EXT-2.e`
 
-#### C-WEB-7.c — Paged `session.export` + memoized non-git `fs.search` walk
+#### ✅ 1aab5f2f9 C-WEB-7.c — Paged `session.export` + memoized non-git `fs.search` walk
 - **Item:** C-WEB-7 (sources: WEB-1-P2, WEB-5-P3 (server half), p2-miss: web session export over 4 MiB) · fix · MINOR · effort M
 - **What:** **Root cause, export (WEB-1-P2).** `SessionMethods::export()` (`candy-code/src/Protocol/Methods/SessionMethods.php:237-258`) returns the whole rendered transcript in one answer. `Dispatcher::answer()` …
 - **Files — create:** `candy-code/src/Attachments/WorkspaceWalk.php`, `candy-code/tests/Server/SessionExportPagingTest.php`, `candy-code/tests/Attachments/WorkspaceWalkTest.php`, `candy-code-web/src-web/stores/__tests__/sessionsExportPaging.spec.ts`

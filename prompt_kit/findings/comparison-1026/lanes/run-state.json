@@ -130,7 +130,8 @@
     "C-WEB-3.e",
     "C-EXT-4.a",
     "C-EXT-2.e",
-    "C-WEB-7.d"
+    "C-WEB-7.d",
+    "C-WEB-7.c"
   ],
   "inflight": {
     "C-TOOL-4.a": {
@@ -148,12 +149,6 @@
       "branch": "cc/C-AGT-4.a",
       "tip": "1cee96571",
       "note": "r2 CLEAN 0C/0M (REVIEW-2.md on disk in lane dir; all 5 REVIEW-1 cures blob-verified at 1cee96571; phantom b83a58d4d discarded). WELD ROSTER: 1 durations row tests/Agents/PrimaryAgentTest.php (10T junit recount), no regen, WELD carries 6.1 C-AGT-4.b inert-subtask deferral note + suite-figure +10T closeout; wave W14 \u2014 weld AFTER W13 cleans (EXT-2.e first, then WEB-7.d/MCP-3.a reviews)"
-    },
-    "C-WEB-7.c": {
-      "stage": "clean",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-WEB-7.c",
-      "branch": "cc/C-WEB-7.c"
     },
     "C-MCP-3.a": {
       "stage": "review",
@@ -678,12 +673,20 @@
       "note": "weld cures (Chat.php 615-era cite 13->16, :10049 blank-line) NOT applied \u2014 grep proof negative on merged tree, recorded in WELD.md"
     },
     "C-WEB-7.d": {
-      "master": "<to-be-stamped>",
+      "master": "86ae99b7c",
       "pick": "04c99e248 -> 7b730e485 (CLEAN; 6 files +202/-22)",
       "regen": "rider 595dd738f (gen-protocol-schema --write + web gen:protocol + npm build; dist via rider ONLY; schema drift red pre-rider -> green post)",
       "gates": "AskUserChoicesWire 3T/32A; adjacency 28T/229A; drift pair 12T/332A green post-rider; vitest permissionCardExtras 9/9",
       "durations": "522bf2ccc \u2014 1 row AskUserChoicesWireTest.php 1.110 32 (3T junit recount); tsv 1501 rows",
-      "note": "web dist law honored; no dormantRoster action (C-WEB-3.g unwelded); cherry '-' proof pending"
+      "note": "web dist law honored; no dormantRoster action (C-WEB-3.g unwelded); cherry '-' PROOF (04c99e248); branch+worktree pruned"
+    },
+    "C-WEB-7.c": {
+      "master": "<to-be-stamped>",
+      "pick": "82ad9c081 -> 1aab5f2f9 (CLEAN; 13 files +951/-79; export paging + WorkspaceWalk)",
+      "regen": "rider 62b58abd9 (schema --write incl SERVER.md generated session.export row; sanctioned :378 hand hunk untouched; web gen:protocol + build; dist via rider ONLY; builder gate 1F pre-rider -> 63T/1099A green post)",
+      "gates": "builder 63T/1098A 1F(schema by-design) -> post-rider 63T/1099A OK; new files 17T/79A OK; guards 130T/16115A 1F = thirty-seven standing ONLY; vitest 19/19 serial (16 lane + generated.spec 3)",
+      "durations": "004bc7240 \u2014 2 rows SessionExportPagingTest 3.030 61 (10T) + WorkspaceWalkTest 0.043 18 (7T junit recount); tsv 1503",
+      "note": "brief 16094A predates upstream doc moves (measured 16115A, count 130T exact); ContainedPathInventory 2F + staleness pair standing-inherited per lane REPORT, not this pick"
     }
   },
   "carries": [
@@ -829,8 +832,8 @@
     "C-TOOL-4.a (W14, 1 row DoctorSandboxProbeTest 10T)",
     "C-AGT-4.a (W14, after r2, 1 row PrimaryAgentTest)"
   ],
-  "tip": "522bf2ccc",
-  "welded_count": 131,
+  "tip": "004bc7240",
+  "welded_count": 132,
   "tick": "87-disk-reconciled: W11 REALY closed@341f66404; trio MCP2b+TOOL5b+WEB3f real to 0b3c4ba21 (welded=122); W13/14 welds PENDING; phantom-atlas @b73@ correction: c3178096f/4d263705a/8d8c75678 GHOSTS, cure real 23fa8ab8e",
   "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
   "blocked_notes": {
