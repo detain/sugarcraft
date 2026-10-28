@@ -848,6 +848,7 @@ candy-code/tests/Tui/Settings/SettingsSaveFlowTest.php	0.043	10
 candy-code/tests/Attachments/WorkspaceWalkTest.php	0.043	18
 candy-code/tests/Cli/RulesStateWiringTest.php	0.042	5
 candy-code/tests/Tools/UndecidableIgnoreRuleNoteTest.php	0.042	6
+candy-code/tests/Background/ScheduleCrossRootDeleteTest.php	0.042	8
 candy-code/tests/Context/Sections/MaximsSectionTest.php	0.041	9
 candy-code/tests/Tui/MediaForm/MediaFormKeysTest.php	0.041	12
 candy-code/tests/Cli/BootstrapLayeredSettingsTest.php	0.040	53
