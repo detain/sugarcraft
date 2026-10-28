@@ -213,6 +213,35 @@ a refusal each send from then on. The budget converts that dead session into a
 named, re-attachable withholding; providers that take no documents at all are
 governed by the capability notice instead, and spend no budget.
 
+### PDFs Read through the tool (C-TOOL-2)
+
+Read has a second document door. When it opens a PDF it first asks the host
+for a text extractor (`pdftotext -layout`, run through the same captured
+subprocess helper the search tools use — no second spawn machinery), and when
+the extractor answers, the result is a page of numbered extracted text under
+the 262,144-byte text-page contract, paged with the ordinary `offset`/`limit`
+arguments. That road carries no bytes at all: one road per read, never a text
+page and a duplicate document in the same result.
+
+When no extractor answers, the PDF itself rides back inside the tool result
+— but only within `AnthropicMessagesWire::TOOL_RESULT_DOCUMENT_MAX_BYTES`
+(1,048,576 bytes), an order of magnitude below the 20,971,520-byte
+@-mention cap above. The asymmetry is a re-send law: a document-capable wire
+replays the result block on every follow-up call of its turn and base64
+inflates the bytes by a third on the way out, while a user attachment is a
+one-shot named by the human and budgeted separately by the session's 30 MiB
+base64 sum. Past the result budget the answer is the notice only — never
+truncated bytes, because half a PDF is unparseable here exactly as it is for
+attachments.
+
+On the wire the carried bytes reach Anthropic-family models as a real
+`document` block inside the `tool_result` row, re-sniffed for the `%PDF-`
+magic before emission and spelled by the one shared `anthropicDocument()`
+encoder, so a PDF entering through either door presents identically. The
+OpenAI-style chat `role: tool` string stays the documented decline, the
+Responses-API sibling owns that leg, and Gemini/Bedrock carry no tool calls
+to attach to at all.
+
 ## Security posture
 
 Media egress is pinned to the configured origin rather than run through the

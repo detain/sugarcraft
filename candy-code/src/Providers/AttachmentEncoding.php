@@ -85,15 +85,11 @@ final class AttachmentEncoding
             $blocks[] = self::anthropicImage((string) $image->mimeType, (string) $image->data);
         }
         foreach ($message->documents() as $document) {
-            $blocks[] = [
-                'type' => 'document',
-                'title' => $document->name(),
-                'source' => [
-                    'type' => 'base64',
-                    'media_type' => (string) $document->mimeType,
-                    'data' => base64_encode((string) $document->data),
-                ],
-            ];
+            $blocks[] = self::anthropicDocument(
+                (string) $document->mimeType,
+                (string) $document->data,
+                $document->name(),
+            );
         }
 
         return $blocks;
@@ -111,6 +107,30 @@ final class AttachmentEncoding
     {
         return [
             'type' => 'image',
+            'source' => [
+                'type' => 'base64',
+                'media_type' => $mediaType,
+                'data' => base64_encode($bytes),
+            ],
+        ];
+    }
+
+    /**
+     * The Anthropic family's base64 `document` block, in exactly one
+     * spelling: the user-attachment leg above (CTX-2) and the
+     * document-gated `tool_result` leg in {@see
+     * \SugarCraft\Code\Providers\Concerns\AnthropicMessagesWire} share it (it
+     * replaced the inline array this leg used to hand-build — byte-identical
+     * output), so a PDF entering through either door presents identically
+     * (C-TOOL-2).
+     *
+     * @return array{type: string, title: string, source: array{type: string, media_type: string, data: string}}
+     */
+    public static function anthropicDocument(string $mediaType, string $bytes, string $title): array
+    {
+        return [
+            'type' => 'document',
+            'title' => $title,
             'source' => [
                 'type' => 'base64',
                 'media_type' => $mediaType,

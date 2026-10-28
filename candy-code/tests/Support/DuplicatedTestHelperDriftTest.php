@@ -2670,6 +2670,8 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'WINDOW' => 'The parked-compaction and rewind suites drive Chat through the same context-window size so both reach the same compaction threshold.',
         'STUBBORN_SERVER' =>
             'The two shutdown suites drive the same stubborn child stub verbatim; the fixture belongs behind a provider, and the row says so until it moves.',
+        'VERTEX_MODEL' =>
+            'The tool-result wire siblings (the image-leg suite and the C-TOOL-2 document-leg suite) send the same Vertex Anthropic model id; it is the request label the rawPredict arm forwards, not a fixture either suite asserts on — the MODEL shape at a different dialect. The differing CAPTION pair lives on the drift map.',
     ];
 
     /**
@@ -2712,6 +2714,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'GENERATION' => 'The live agent-lines suite stamps its own turn generation; any value works as long as each suite is self-consistent. The identical pair lives on the duplication map.',
         'WINDOW' => 'The absolute-threshold suite sizes a 1M-token window, the case roadmap 2.9 exists for; the compaction suites drive a small one. The identical trio lives on the duplication map.',
         'NOW' => 'Two unrelated fixed clocks: a Unix timestamp for the model-metadata cache age, a small float for the agent line\'s elapsed time.',
+        'CAPTION' => 'The tool-result wire siblings each feed their own leg\'s caption text (an image caption against a PDF caption) as the tool_result payload; the values differ because the leg under test does, and the shared VERTEX_MODEL pair lives on the duplication map.',
     ];
 
     /**

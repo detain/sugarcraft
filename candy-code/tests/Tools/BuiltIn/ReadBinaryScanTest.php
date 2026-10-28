@@ -26,6 +26,16 @@ use SugarCraft\Code\Tools\ReadLedger;
  * refusal rows stay byte-true, and over-cap images keep the old refusal —
  * the flip is the cap's inside, not a deletion of the notice.
  *
+ * THE PDF POLARITY FLIPPED HERE TOO, again deliberately (C-TOOL-2.d): the
+ * SHL-3 T3 pins asserted a PDF answered with the document NOTICE pointing at
+ * roads the model cannot walk (@-mentions are user input). The result is now
+ * the carried document itself — documentBytes/documentName ride the same
+ * codecs the image trio rides, and the caption states its own visibility
+ * condition. These legs inject `pdfTextAvailable: false` to pin the carry
+ * door deterministically on any host (the extractor door, and its fall-back
+ * through the same fixtures, belong to ReadPdfTextTest); the magic-before-NUL
+ * arm order stays pinned right here.
+ *
  * The refusal pair matters: test 7 (floor, no refusal) pins the new arm and
  * test 8 (exact count still refuses) pins that the arm did not arrive by
  * deleting the guard.
@@ -154,37 +164,42 @@ final class ReadBinaryScanTest extends TestCase
         self::assertStringNotContainsString('1: ', $result->content());
     }
 
-    public function testAPdfAnswersWithTheDocumentNoticeEvenThoughItsStreamIsFullOfNuls(): void
+    public function testAPdfAnswersWithTheCarriedDocumentEvenThoughItsStreamIsFullOfNuls(): void
     {
         // The arm ORDER is the pin: PDF streams carry NUL bytes by design, so
         // if the NUL leg fired first this fixture would answer with the
-        // generic note and the model would never hear about the two roads its
-        // text CAN take (document block via @-mention, pdftotext via Bash).
+        // generic note and the document would never ride the result. Seam
+        // pinned false: this leg is the carry door; the extractor door and
+        // its fall-back through this same fixture shape are ReadPdfTextTest's.
         $pdf = "%PDF-1.4\n" . str_repeat("\x00", 64) . "trailer\n%%EOF\n";
         $path = $this->file('spec.pdf', $pdf);
 
-        $result = (new Read())->execute(['file_path' => $path]);
+        $result = (new Read(pdfTextAvailable: false))->execute(['file_path' => $path]);
 
-        self::assertFalse($result->isError(), 'the notice is an answer, not a failure');
+        self::assertFalse($result->isError(), 'a carried document is an answer, not a failure');
         self::assertFalse($result->hasImage(), 'PDF bytes are a document, never an image — there is no in-tree rasterizer and none is faked');
+        self::assertTrue($result->hasDocument(), 'C-TOOL-2: the in-cap PDF rides the result');
+        self::assertSame($pdf, $result->documentBytes(), 'the whole file, uncut — a cut PDF is not a PDF');
+        self::assertSame('spec.pdf', $result->documentName(), 'the block title is the basename, not the jail path');
         self::assertStringContainsString('Binary PDF document', $result->content());
-        self::assertStringContainsString('document block', $result->content());
-        self::assertStringContainsString(number_format(FileMentions::DOCUMENT_MAX_BYTES) . '-byte document cap', $result->content());
-        self::assertStringContainsString('pdftotext ' . $path . ' -', $result->content(), 'the notice names the Bash escape hatch with the real path');
+        self::assertStringContainsString('document blocks', $result->content(), 'the caption names the wire door the bytes may ride');
+        self::assertStringNotContainsString('@', $result->content(), 'no road the MODEL cannot walk is promised — @-mentions are user input');
         self::assertStringNotContainsString('NUL byte', $result->content(), 'the magic answer wins over the payload smell');
         self::assertStringNotContainsString('1: ', $result->content());
     }
 
-    public function testAPdfWithoutNulBytesStillAnswersWithTheDocumentNotice(): void
+    public function testAPdfWithoutNulBytesStillCarriesTheDocument(): void
     {
-        // The notice must key on the magic, not on the NUL heuristic that the
+        // Carrying must key on the magic, not on the NUL heuristic that the
         // leg below it uses: an all-ASCII PDF stub is still a PDF.
         $pdf = "%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n";
         $path = $this->file('clean.pdf', $pdf);
 
-        $result = (new Read())->execute(['file_path' => $path]);
+        $result = (new Read(pdfTextAvailable: false))->execute(['file_path' => $path]);
 
         self::assertFalse($result->hasImage());
+        self::assertTrue($result->hasDocument());
+        self::assertSame($pdf, $result->documentBytes());
         self::assertStringContainsString('Binary PDF document', $result->content());
         self::assertStringNotContainsString('NUL byte', $result->content());
     }

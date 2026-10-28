@@ -3714,6 +3714,8 @@ final class Runtime
         // imageBytes/imageProtocol thread an image-bearing ToolResult
         // (e.g. Doctor's capability swatch) through to EngineBackend
         // (W1.G2 reachability fix) instead of being dropped here.
+        // documentBytes/documentName thread an in-cap PDF the same way
+        // (C-TOOL-2).
         return self::resultMessage($toolCall, $result);
     }
 
@@ -3748,6 +3750,10 @@ final class Runtime
             // turn sum and spend cap on this message, so this builder — the
             // only one — must never drop it.
             $result->usage(),
+            // C-TOOL-2: the document pair threads exactly like the image
+            // pair above — the wire leg reads them off the typed accessors.
+            $result->documentBytes(),
+            $result->documentName(),
         );
     }
 
@@ -4027,6 +4033,10 @@ final class Runtime
             // string, so it survives allowed_classes => false. A tool that
             // DECLARES a refusal in the child keeps it across the fork.
             'denial' => $result->denial()?->value,
+            // C-TOOL-2: raw PDF bytes cross the same native-binary-safe
+            // serialize frame as imageBytes — no base64 step here either.
+            'documentBytes' => $result->documentBytes(),
+            'documentName' => $result->documentName(),
         ];
     }
 
@@ -4051,6 +4061,8 @@ final class Runtime
             // Tolerant like every other key: absent (an older frame) or not a
             // known backing value decodes as "not a refusal", never a throw.
             denial: is_string($encoded['denial'] ?? null) ? DenialKind::tryFrom($encoded['denial']) : null,
+            documentBytes: is_string($encoded['documentBytes'] ?? null) ? $encoded['documentBytes'] : null,
+            documentName: is_string($encoded['documentName'] ?? null) ? $encoded['documentName'] : null,
         );
     }
 

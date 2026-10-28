@@ -21,6 +21,15 @@ final readonly class ToolResultMessage implements Message
      * audit B4) the same way, to the one loop that sums a turn's spend and
      * checks the spend cap ({@see \SugarCraft\Code\Backend\EngineBackend}).
      * It is accounting only: {@see toArray()} — the provider wire — omits it.
+     *
+     * $documentBytes/$documentName carry an in-budget PDF {@see
+     * \SugarCraft\Code\Tools\BuiltIn\Read} returned when no host text
+     * extractor answered it (C-TOOL-2, GAP-TL-20). Same in-turn doctrine as
+     * the image pair: the wire leg reads them through typed accessors while
+     * the bytes live in the child-side loop, and a parent-side history
+     * replay rebuilds these rows text-only — neither media ever survives a
+     * reload as bytes, which is why {@see toTypedMessages()}-era replay
+     * sites construct this type positionally without them.
      */
     public function __construct(
         private string $toolCallId,
@@ -29,6 +38,8 @@ final readonly class ToolResultMessage implements Message
         private ?string $imageBytes = null,
         private ?string $imageProtocol = null,
         private ?Usage $usage = null,
+        private ?string $documentBytes = null,
+        private ?string $documentName = null,
     ) {}
 
     public function role(): string
@@ -60,6 +71,8 @@ final readonly class ToolResultMessage implements Message
             $this->imageBytes,
             $this->imageProtocol,
             $this->usage,
+            $this->documentBytes,
+            $this->documentName,
         );
     }
 
@@ -81,6 +94,21 @@ final readonly class ToolResultMessage implements Message
     public function hasImage(): bool
     {
         return $this->imageBytes !== null;
+    }
+
+    public function documentBytes(): ?string
+    {
+        return $this->documentBytes;
+    }
+
+    public function documentName(): ?string
+    {
+        return $this->documentName;
+    }
+
+    public function hasDocument(): bool
+    {
+        return $this->documentBytes !== null;
     }
 
     /** Provider spend the tool itself incurred, or null. */

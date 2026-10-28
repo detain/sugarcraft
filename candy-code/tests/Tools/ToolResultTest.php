@@ -232,4 +232,72 @@ final class ToolResultTest extends TestCase
 
         $this->assertFalse($result->hasImage());
     }
+
+    // =========================================================================
+    // Document field tests (C-TOOL-2: the Read PDF tool-result leg)
+    // =========================================================================
+
+    public function testDocumentFieldsDefaultToNull(): void
+    {
+        $result = new ToolResult('call_1', 'Content');
+
+        $this->assertNull($result->documentBytes());
+        $this->assertNull($result->documentName());
+        $this->assertFalse($result->hasDocument());
+    }
+
+    public function testCanBeCreatedWithDocumentFields(): void
+    {
+        $result = new ToolResult(
+            toolCallId: 'call_doc',
+            content: 'Binary PDF document, 72 bytes',
+            documentBytes: "%PDF-1.4\nplan",
+            documentName: 'plan.pdf',
+        );
+
+        $this->assertTrue($result->hasDocument());
+        $this->assertSame("%PDF-1.4\nplan", $result->documentBytes());
+        $this->assertSame('plan.pdf', $result->documentName());
+    }
+
+    public function testHasDocumentIsTrueEvenWithoutAName(): void
+    {
+        // The name is a title, not a gate: bytes alone make a document result.
+        $result = new ToolResult('call_doc', 'caption', false, null, null, null, null, null, null, null, "%PDF-1.4\n");
+
+        $this->assertTrue($result->hasDocument());
+        $this->assertNull($result->documentName());
+    }
+
+    public function testMutateCarriesTheDocumentPair(): void
+    {
+        // mutate() rebuilds from get_object_vars(), so every with*() carrier
+        // must keep the document legs alive exactly like the image trio.
+        $result = new ToolResult(
+            toolCallId: 'call_doc',
+            content: 'caption',
+            documentBytes: "%PDF-1.4\nbody",
+            documentName: 'spec.pdf',
+        );
+
+        $clipped = $result->withContent('shorter');
+        $this->assertTrue($clipped->hasDocument());
+        $this->assertSame("%PDF-1.4\nbody", $clipped->documentBytes());
+        $this->assertSame('spec.pdf', $clipped->documentName());
+    }
+
+    public function testToArrayStaysTheWireShapeWithDocumentsSet(): void
+    {
+        // The document fields join the image fields' exclusion: the typed
+        // accessors feed the Anthropic wire leg, toArray stays the plain
+        // tool-call receipt every other reader parses.
+        $result = new ToolResult('call_doc', 'caption', false, null, null, null, null, null, null, null, "%PDF-1.4\n", 'plan.pdf');
+
+        $this->assertSame([
+            'tool_call_id' => 'call_doc',
+            'content' => 'caption',
+            'is_error' => false,
+            'duration_ms' => null,
+        ], $result->toArray());
+    }
 }

@@ -89,6 +89,24 @@ trait AnthropicMessagesWire
      */
     public const TOOL_RESULT_IMAGE_MAX_BYTES = 256 * 1024;
 
+    /**
+     * C-TOOL-2 (GAP-TL-20): how many RAW bytes a PDF riding a tool_result may
+     * carry to enter the model's context as a `document` block. One mebibyte,
+     * an ORDER OF MAGNITUDE below the 20MiB user @-mention cap
+     * ({@see FileMentions::DOCUMENT_MAX_BYTES}) — and deliberately not that
+     * cap: a user attachment is one-shot and user-controlled with its own
+     * session budget ({@see \SugarCraft\Code\Backend\EngineBackend::DOCUMENT_BASE64_BUDGET}),
+     * while a tool result's bytes re-send on EVERY follow-up provider call of
+     * the turn they live in, and base64 inflates them ×1.33 on the wire. A
+     * 20MiB PDF re-sent every step would price a single Read at thousands of
+     * wasted tokens; 1MiB keeps the worst realistic spec-sheet PDF useful and
+     * the repeat cost bounded. Pinned below the user cap by test. A PDF over
+     * this budget answers with caption text only, never truncated bytes — a
+     * cut PDF is not a PDF, the same doctrine as the image leg — and the
+     * caption states its own visibility, so nothing is silently lost.
+     */
+    public const TOOL_RESULT_DOCUMENT_MAX_BYTES = 1024 * 1024;
+
     private const PUBLISHER_ANTHROPIC = 'anthropic';
     private const PUBLISHER_GOOGLE = 'google';
 
@@ -800,11 +818,24 @@ trait AnthropicMessagesWire
     {
         if ($msg instanceof ToolResultMessage) {
             $content = $msg->content();
+
+            // C-TOOL-2: media blocks append after the text, in the order
+            // image, document; a lone block keeps the array-without-text
+            // shape, and a result with NO media keeps the plain-string shape
+            // byte-for-byte (both pinned by test).
+            $media = [];
             $image = $this->toolResultImage($msg);
             if ($image !== null) {
-                $content = $content === '' ? [$image] : [
+                $media[] = $image;
+            }
+            $document = $this->toolResultDocument($msg);
+            if ($document !== null) {
+                $media[] = $document;
+            }
+            if ($media !== []) {
+                $content = $content === '' ? $media : [
                     ['type' => 'text', 'text' => $content],
-                    $image,
+                    ...$media,
                 ];
             }
 
@@ -881,6 +912,14 @@ trait AnthropicMessagesWire
      */
     abstract public function supportsVision(): bool;
     /**
+     * The using class answers for itself: PDFs ride the wire only for a
+     * document-capable model (C-TOOL-2). Both users already implement it
+     * from {@see \SugarCraft\Code\Providers\ProviderInterface}; the
+     * declaration here exists so this trait's call is defined, exactly as
+     * the vision hook above is for its own.
+     */
+    abstract public function supportsDocuments(): bool;
+    /**
      * SHL-3 T2: the pixels a tool carried (T1: Read's in-cap image) enter the
      * model's context as an `image` block inside this `tool_result` — under an
      * explicit chain of decisions, each falling back to the caption text
@@ -930,6 +969,46 @@ trait AnthropicMessagesWire
         }
 
         return AttachmentEncoding::anthropicImage($mediaType, $bytes);
+    }
+    /**
+     * C-TOOL-2 (GAP-TL-20): the PDF a tool carried enters the model's
+     * context as a `document` block inside this `tool_result`, under the
+     * same explicit chain as {@see toolResultImage()} — error rows are text
+     * by construction, the tool must have carried bytes, this provider must
+     * accept documents, the bytes must sit within {@see
+     * TOOL_RESULT_DOCUMENT_MAX_BYTES}, and the `%PDF-` header is RE-SNIFFED
+     * rather than trusted, so forged or rotted payload bytes stay caption
+     * text instead of becoming a 400 from the API. The encoder is the
+     * user-attachment leg's own ({@see AttachmentEncoding::anthropicDocument()}),
+     * so a PDF entering through either door presents identically.
+     *
+     * ONE ROAD PER READ: when a host text extractor answers, Read returns
+     * numbered text and carries NO bytes, so no block is emitted here — the
+     * document block is the wire's second door, not a third copy of what the
+     * text already said. The OpenAI-family decline is by construction, same
+     * story as the image leg's: those wires' `role: "tool"` rows are
+     * string-only, so the caption travels alone; the Responses sibling is
+     * C-TOOL-2.g's page, not this trait's.
+     *
+     * @return ?array<string, mixed>
+     */
+    private function toolResultDocument(ToolResultMessage $msg): ?array
+    {
+        if ($msg->isError() || !$msg->hasDocument() || !$this->supportsDocuments()) {
+            return null;
+        }
+
+        $bytes = (string) $msg->documentBytes();
+        if ($bytes === '' || strlen($bytes) > self::TOOL_RESULT_DOCUMENT_MAX_BYTES) {
+            return null;
+        }
+
+        $mediaType = FileMentions::sniffDocument($bytes);
+        if ($mediaType === null) {
+            return null;
+        }
+
+        return AttachmentEncoding::anthropicDocument($mediaType, $bytes, (string) $msg->documentName());
     }
     /**
      * Assistant tool calls have to be replayed back to Anthropic as `tool_use`

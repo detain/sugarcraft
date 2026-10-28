@@ -344,6 +344,48 @@ final class PromptStabilityTest extends TestCase
         $this->assertStringStartsWith(substr($first, 0, -1), self::messagesBytes($this->rawBody(1)));
     }
 
+    /**
+     * C-TOOL-2: the document leg earns the same prefix discipline from the
+     * same OpenAI-family wire. A carried PDF must stay out of `role: "tool"`
+     * rows entirely (the decline is recorded in
+     * {@see \SugarCraft\Code\Providers\Concerns\AnthropicMessagesWire::toolResultDocument()}:
+     * the rows are string-only here, and a smuggled follow-up turn would
+     * forge user authorship), and its presence must STILL extend the byte
+     * prefix strictly — the caption is the whole answer, and the whole
+     * answer stays cacheable.
+     */
+    public function testADocumentBearingToolResultExtendsThePrefixAsCaptionTextOnly(): void
+    {
+        $provider = $this->provider();
+        $pdf = "%PDF-1.4\n" . str_repeat('a', 64);
+        $caption = 'Binary PDF document, 73 bytes — caption';
+
+        $turnOne = [
+            new UserMessage('read the spec'),
+            new ToolResultMessage(
+                toolCallId: 'tu_1',
+                content: $caption,
+                documentBytes: $pdf,
+                documentName: 'plan.pdf',
+            ),
+        ];
+        $provider->complete(new CompleteRequest(
+            model: SglangProvider::DEFAULT_MODEL,
+            messages: $turnOne,
+            systemPrompt: self::SYSTEM_PROMPT,
+        ));
+        $provider->complete(new CompleteRequest(
+            model: SglangProvider::DEFAULT_MODEL,
+            messages: [...$turnOne, new AssistantMessage('noted'), new UserMessage('thanks')],
+            systemPrompt: self::SYSTEM_PROMPT,
+        ));
+
+        $first = self::messagesBytes($this->rawBody(0));
+        $this->assertStringNotContainsString('base64', $first, 'the carried document stays out of this wire family entirely — no smuggled block encoding');
+        $this->assertStringNotContainsString('%PDF', $first, 'the bytes do not ride raw either; the caption is the whole answer');
+        $this->assertStringStartsWith(substr($first, 0, -1), self::messagesBytes($this->rawBody(1)));
+    }
+
     public function testToolSchemaSerializationIsByteStableAcrossTurns(): void
     {
         $tools = [new StablePrefixRealToolStub(), new StablePrefixEmptyToolStub()];

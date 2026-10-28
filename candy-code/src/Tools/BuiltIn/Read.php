@@ -6,11 +6,14 @@ namespace SugarCraft\Code\Tools\BuiltIn;
 
 use SugarCraft\Code\Agents\PathJail as AgentPathJail;
 use SugarCraft\Code\Attachments\FileMentions;
+use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Context\RulePathNudge;
 use SugarCraft\Code\LSP\LspClient;
+use SugarCraft\Code\Providers\AnthropicProvider;
 use SugarCraft\Code\Skills\SkillPathNudge;
 use SugarCraft\Code\Tools\CarriesSessionState;
+use SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Code\Tools\ParallelSafe;
 use SugarCraft\Code\Tools\PromptGuidance;
@@ -34,6 +37,7 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
     use RebindsInstructionLoader;
     use RebindsWorktreeJail;
     use TruncatesOutput;
+    use CapturesProcessOutput;
 
     /**
      * The hard ceiling on one call's page, and the base the instruction and
@@ -102,6 +106,16 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
     private const OUTLINE_MAX_BYTES = 8 * 1024;
 
     /**
+     * C-TOOL-2: wall bound on one `pdftotext` run — a hang-guard on a LOCAL
+     * parse, not a request timeout (E646 forbids blanket timeouts on LLM
+     * calls; a subprocess drain is exactly what {@see
+     * \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput}'s bounded
+     * capture exists to survive). A run that overruns answers through the
+     * same fall-back as a failing one: the document leg, loudly captioned.
+     */
+    private const PDF_TEXT_TIMEOUT_SECONDS = 30.0;
+
+    /**
      * $skillNudge turns a skill's `paths:` frontmatter into a live signal
      * (crush_feat.md section 7 E4): reading a file a skill scopes itself to
      * announces that skill once, the way Claude Code loads skills on first
@@ -127,6 +141,17 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // `readPageBytes` settings, through withReadLimits().
         private int $pageLines = self::PAGE_LINES,
         private int $pageByteLimit = self::PAGE_BYTES,
+        // C-TOOL-2: whether this host answers `pdftotext`. Null asks the
+        // host at read time through Bootstrap::capabilityPresent() — a
+        // memoized stat walk, never a subprocess, per the trait's own
+        // failOnWarning doctrine. An explicit bool pins the answer for
+        // tests and for a caller that already knows. description() NEVER
+        // consults it: the prompt must not become a function of the shell
+        // (the DetectsCapabilities carrier rule), so the tool text states
+        // both outcomes of the PDF branch and the result says which one it
+        // got — unlike Grep/Glob, whose boot factory carries the bool,
+        // because ToolBuildContext is not this lane's file to widen.
+        private ?bool $pdfTextAvailable = null,
     ) {}
 
     /**
@@ -278,8 +303,10 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             . 'ride to the human-visible tool-result channel, and on a vision-capable wire within the '
             . number_format(FileMentions::TEXT_MAX_BYTES) . '-byte model budget they also enter your context as an image block — '
             . 'describe them when you see them, and when you do not, reason from the file\'s path and name instead. A PDF comes back '
-            . 'as a notice: its text reaches you by mentioning the file where the wire carries document blocks, or by '
-            . 'extracting it with Bash `pdftotext <path> -`. Prefer this over `cat`/`head` through Bash: '
+            . 'as a page of its extracted text when this host has a PDF text extractor, and otherwise as the document '
+            . 'itself within a ' . number_format(AnthropicProvider::TOOL_RESULT_DOCUMENT_MAX_BYTES)
+            . '-byte result budget, which a document-capable wire renders as a real document block; when neither fits, '
+            . 'the result is a notice that says so — never mojibake lines. Prefer this over `cat`/`head` through Bash: '
             . implode('; ', $advantages) . '.';
     }
 
@@ -443,8 +470,11 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // truncated bytes (a cut PNG is not a PNG — the same doctrine
         // FileMentions::read() applies to @-mentions, and the same cap
         // constant, reused rather than re-invented).
+        // C-TOOL-2: the PDF branch gained the same two doors — when a host
+        // extractor answers it comes back as numbered text, and when it does
+        // not the in-budget bytes ride the result to a document-gated wire.
         if (is_file($path)) {
-            $binary = self::binaryAnswer($path, $args['id'] ?? '');
+            $binary = $this->binaryAnswer($path, $args['id'] ?? '', $offset, $limit);
             if ($binary !== null) {
                 return $binary;
             }
@@ -707,7 +737,7 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
      * A failed open answers null — the read below produces the real error,
      * with the message callers and their tests already know.
      */
-    private static function binaryAnswer(string $path, string $callId): ?ToolResult
+    private function binaryAnswer(string $path, string $callId, ?int $offset, ?int $limit): ?ToolResult
     {
         $handle = @fopen($path, 'rb');
         if ($handle === false) {
@@ -748,20 +778,15 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             }
 
             if (FileMentions::sniffDocument($head) !== null) {
-                // SHL-3 T3: a PDF is a DOCUMENT, not an image — pixels would
-                // need an in-tree rasterizer, and there is none (DECLINED), so
-                // Read never carries PDF bytes as imageBytes. The notice names
-                // the two roads the text CAN take: the AttachmentType::Document
-                // plumbing (a @-mention renders a `document` block on the
-                // wires that accept it — CTX-2), or pdftotext through Bash.
-                return new ToolResult(
-                    toolCallId: $callId,
-                    content: "Binary PDF document, $shown — not shown as text (a PDF has no lines to number). "
-                        . 'Mention the file (@' . $path . ') where the wire carries attachments to send it as a document block '
-                        . 'up to the ' . number_format(FileMentions::DOCUMENT_MAX_BYTES) . '-byte document cap, or extract its text '
-                        . 'with Bash `pdftotext ' . $path . ' -`.',
-                    isError: false,
-                );
+                // C-TOOL-2 (GAP-TL-20): a PDF is a DOCUMENT, not an image —
+                // pixels would need an in-tree rasterizer, and there is none
+                // (SHL-3 T3 DECLINED), so Read never carries PDF bytes as
+                // imageBytes. Where SHL-3 T3 answered with a notice that
+                // pointed at roads the MODEL could not walk (@-mentions are a
+                // user input feature), the document now takes the two doors
+                // that exist: the host extractor's text, or the bytes riding
+                // this result to a document-capable wire.
+                return $this->pdfAnswer($path, $head, $handle, $stat, $shown, $callId, $offset, $limit);
             }
 
             if (str_contains($head, "\0")) {
@@ -806,6 +831,157 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             . 'and on a vision-capable wire within the model budget its pixels enter your context too. '
             . 'If you can see the image, describe what it shows; if you cannot, reason from its path and name, '
             . 'or ask the user.';
+    }
+
+    /** C-TOOL-2: does this host answer `pdftotext`? Seam first, probe second. */
+    private function pdfTextCapable(): bool
+    {
+        return $this->pdfTextAvailable ?? Bootstrap::capabilityPresent('pdftotext');
+    }
+
+    /**
+     * C-TOOL-2 (GAP-TL-20): the PDF branch of {@see binaryAnswer()}, run
+     * while the sniffed handle is still open. Two doors, in the order that
+     * costs the context least:
+     *
+     *   1. the host extractor: `pdftotext -layout <path> -` through the ONE
+     *      bounded-capture codec the fleet already owns ({@see
+     *      CapturesProcessOutput::runCaptured()} — no second spawn site,
+     *      §1.10), its output capped at the 256KiB text-page contract
+     *      ({@see FileMentions::TEXT_MAX_BYTES}) and paged with the call's
+     *      own offset/limit like any other text; or
+     *   2. the bytes themselves, riding this result as documentBytes to the
+     *      document-gated, budget-gated `document` block
+     *      ({@see AnthropicProvider::TOOL_RESULT_DOCUMENT_MAX_BYTES}) —
+     *      carried whole or not at all, the cut-PDF doctrine the image leg
+     *      above already keeps.
+     *
+     * ONE ROAD PER READ: a successful extraction carries NO bytes, so a PDF
+     * never pays for itself twice in the same turn's history. The extractor
+     * answering non-zero, timing out, or yielding nothing (a scan with no
+     * text layer) falls through to door two, and the caption names which
+     * door closed.
+     *
+     * @param array<string, int>|false $stat
+     * @param resource $handle
+     */
+    private function pdfAnswer(string $path, string $head, $handle, array|false $stat, string $shown, string $callId, ?int $offset, ?int $limit): ?ToolResult
+    {
+        if ($this->pdfTextCapable()) {
+            $run = $this->runCaptured(
+                'pdftotext -layout ' . escapeshellarg($path) . ' -',
+                null,
+                FileMentions::TEXT_MAX_BYTES,
+                self::PDF_TEXT_TIMEOUT_SECONDS,
+            );
+
+            // pdftotext closes every page with a form feed; it is a page
+            // delimiter, not a line of the document, and would otherwise be
+            // numbered into the answer.
+            $text = str_replace("\f", '', (string) $run['stdout']);
+            if ((int) $run['exitCode'] === 0 && $run['timedOut'] !== true && trim($text) !== '') {
+                return $this->pageExtracted($callId, $text, $offset, $limit, $path, (int) ($run['stdoutDropped'] ?? 0) > 0 || (int) ($run['truncatedBytes'] ?? 0) > 0);
+            }
+
+            $why = $run['timedOut'] === true
+                ? 'the text extractor on this host timed out on it'
+                : 'the text extractor on this host answered nothing usable for it';
+        } else {
+            $why = 'no text extractor is available on this host';
+        }
+
+        $size = $stat !== false ? (int) $stat['size'] : PHP_INT_MAX;
+        if ($size > FileMentions::DOCUMENT_MAX_BYTES || $size > AnthropicProvider::TOOL_RESULT_DOCUMENT_MAX_BYTES) {
+            return new ToolResult(
+                toolCallId: $callId,
+                content: "Binary PDF document, $shown — not shown as text (a PDF has no lines to number), and $why. "
+                    . 'The file is also over the ' . number_format(AnthropicProvider::TOOL_RESULT_DOCUMENT_MAX_BYTES)
+                    . '-byte result budget, so its bytes were not carried either.',
+                isError: false,
+            );
+        }
+
+        $bytes = $head . (string) stream_get_contents($handle);
+
+        return new ToolResult(
+            toolCallId: $callId,
+            content: self::documentCaption($path, $size, $why),
+            isError: false,
+            documentBytes: $bytes,
+            documentName: basename($path),
+        );
+    }
+
+    /**
+     * The model-facing caption of a carried PDF, shaped like {@see
+     * imageCaption()}: what it is, how big, where it is, and the honest
+     * visibility boundary — whether the MODEL also sees the document is
+     * decided per wire, so the caption states the condition rather than
+     * either polarity as fact. $why names the door that closed (no
+     * extractor, or one that answered nothing) — an instruction to ignore a
+     * document the wire did deliver would lie to a model looking straight at
+     * it, and unlike the pre-C-TOOL-2 notice it promises no road the model
+     * cannot walk: an @-mention is something the USER types, not the tool.
+     */
+    private static function documentCaption(string $path, int $size, string $why): string
+    {
+        return 'Binary PDF document, ' . number_format($size) . " bytes at $path — $why, so the bytes ride "
+            . 'this result; on a wire that accepts document blocks within its model budget the document '
+            . 'enters your context, otherwise this caption travels alone. If you can read the document, '
+            . 'answer from it; if you cannot, reason from its path and name, or ask the user.';
+    }
+
+    /**
+     * Page extracted text with the call's own offset/limit, in the same
+     * `N: ` shape, byte budget, and continuation footer {@see readPage()}
+     * gives a file. Simpler than readPage by design: the text already sits
+     * in memory under the 256KiB capture cap, so no two-pass streaming is
+     * needed — the line count is exact and the offset refusal can name it
+     * (an error result, as readPage's throw becomes through the caller's
+     * error handler). $cappedExtractor appends the honesty note when the
+     * extractor's own output was cut: paging reaches every captured line
+     * and no further.
+     */
+    private function pageExtracted(string $callId, string $text, ?int $offset, ?int $limit, string $path, bool $cappedExtractor): ToolResult
+    {
+        $lines = explode("\n", $text);
+        if (($lines[count($lines) - 1] ?? '') === '' && $lines !== []) {
+            array_pop($lines);
+        }
+        $total = count($lines);
+        $start = $offset ?? 1;
+        if ($start > $total) {
+            return new ToolResult(
+                toolCallId: $callId,
+                content: "Error: offset {$start} is past the end of {$path}, which has {$total} " . ($total === 1 ? 'line' : 'lines'),
+                isError: true,
+            );
+        }
+
+        $want = $limit ?? $this->pageLines;
+        $budget = $this->pageBytes();
+        $page = '';
+        $last = $start - 1;
+        for ($i = $start; $i <= $total && $i < $start + $want; $i++) {
+            $row = $i . ': ' . $lines[$i - 1] . "\n";
+            if ($page !== '' && strlen($page) + strlen($row) > $budget) {
+                break;
+            }
+            $page .= $row;
+            $last = $i;
+        }
+
+        if ($last < $total) {
+            $span = $last === $start ? "line {$start}" : "lines {$start}-{$last}";
+            $page .= "\n\n[{$span} of {$total} — call Read with offset=" . ($last + 1) . ' to continue]';
+        }
+        if ($cappedExtractor) {
+            $page .= "\n\n[pdftotext output reached the " . number_format(FileMentions::TEXT_MAX_BYTES)
+                . '-byte extraction cap — every line of the captured text is pageable above, and no line '
+                . 'past it was captured]';
+        }
+
+        return new ToolResult(toolCallId: $callId, content: $page, isError: false);
     }
 
     /**

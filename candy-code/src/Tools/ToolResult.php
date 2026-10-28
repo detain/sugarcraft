@@ -43,6 +43,15 @@ final readonly class ToolResult
      * reported as a policy refusal of a command that had in fact executed.
      * The text still opens with {@see DenialKind::reason()}'s prefix for the
      * model and a human; it is just no longer what anything classifies on.
+     *
+     * $documentBytes/$documentName carry an in-budget PDF a {@see
+     * \SugarCraft\Code\Tools\BuiltIn\Read} returned because no host text
+     * extractor answered it (C-TOOL-2, GAP-TL-20). They thread the SAME
+     * codecs as the image trio — Runtime's settle/resultMessage, the fork
+     * event frame, and the typed accessors — and reach the wire only through
+     * {@see \SugarCraft\Code\Providers\Concerns\AnthropicMessagesWire::toolResultDocument()},
+     * which re-sniffs the bytes and enforces the tool-result document budget.
+     * $documentName is the basename the document block is titled with.
      */
     public function __construct(
         private string $toolCallId,
@@ -55,6 +64,8 @@ final readonly class ToolResult
         private ?string $diff = null,
         private ?Usage $usage = null,
         private ?DenialKind $denial = null,
+        private ?string $documentBytes = null,
+        private ?string $documentName = null,
     ) {}
 
     /**
@@ -110,6 +121,21 @@ final readonly class ToolResult
     public function hasImage(): bool
     {
         return $this->imageBytes !== null;
+    }
+
+    public function documentBytes(): ?string
+    {
+        return $this->documentBytes;
+    }
+
+    public function documentName(): ?string
+    {
+        return $this->documentName;
+    }
+
+    public function hasDocument(): bool
+    {
+        return $this->documentBytes !== null;
     }
 
     /** Raw unified diff produced by an edit-shaped tool, or null. */
@@ -178,13 +204,13 @@ final readonly class ToolResult
 
     /**
      * The provider wire-shape only -- $diff is deliberately absent, exactly
-     * like the image fields: it is renderer-side presentation data, and
-     * inlining a whole unified diff here would duplicate it into every
-     * chat-completion request's token budget. $usage is absent for the same
-     * reason: it is accounting, not something the model reads. So is
-     * $denial: the model reads the refusal in the text, which still opens
-     * with the kind's prefix, and the structural kind is for the parties
-     * that must not trust that text (audit F-P8).
+     * like the image fields and the document fields: it is renderer-side
+     * presentation data, and inlining a whole unified diff here would
+     * duplicate it into every chat-completion request's token budget. $usage
+     * is absent for the same reason: it is accounting, not something the
+     * model reads. So is $denial: the model reads the refusal in the text,
+     * which still opens with the kind's prefix, and the structural kind is
+     * for the parties that must not trust that text (audit F-P8).
      */
     public function toArray(): array
     {

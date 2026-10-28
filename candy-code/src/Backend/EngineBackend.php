@@ -5653,6 +5653,14 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // ordinary error row. Its backing value — a plain string, safe
             // under allowed_classes => false.
             'denial' => $event->result->denial()?->value,
+            // C-TOOL-2: document bytes/name cross the same raw-binary-safe
+            // event frame as imageBytes (serialize() round-trips plain
+            // strings natively; allowed_classes => false is unaffected).
+            // The result frame's root-Message image fields are NOT extended:
+            // they feed the TUI's image paint, a PDF needs no paint, and the
+            // parent-side replay rebuilds tool rows text-only either way.
+            'documentBytes' => $event->result->documentBytes(),
+            'documentName' => $event->result->documentName(),
         ];
     }
 
@@ -5786,6 +5794,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             usage: Usage::fromArray($encoded['usage'] ?? null),
             // Absent (an older frame) or not a known kind: not a refusal.
             denial: is_string($encoded['denial'] ?? null) ? DenialKind::tryFrom($encoded['denial']) : null,
+            // C-TOOL-2: tolerant like the image trio — an older frame simply
+            // carries no document.
+            documentBytes: is_string($encoded['documentBytes'] ?? null) ? $encoded['documentBytes'] : null,
+            documentName: is_string($encoded['documentName'] ?? null) ? $encoded['documentName'] : null,
         ));
     }
 
