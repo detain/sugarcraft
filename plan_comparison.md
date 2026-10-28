@@ -1791,7 +1791,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-TOOL-3.c (W13)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tool.md` → `### C-TOOL-3.d`
 
-#### C-TUI-2.a — Highlighter language breadth + path→language
+#### ✅ ba057cad2 C-TUI-2.a — Highlighter language breadth + path→language
 - **Item:** C-TUI-2 (sources: GAP-UI-04) · gap · effort M
 - **What:** RegexHighlighter ships seven keyword sets: php, js, ts, python, go, bash and sql (`sugar-core/src/Syntax/RegexHighlighter.php:42-96`). Add rust, java, c/cpp, ruby, yaml and html/css, with aliases (`rs`, `cc`/`h`/`hpp`, `rb`, …
 - **Files — create:** none
