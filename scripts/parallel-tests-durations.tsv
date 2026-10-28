@@ -332,6 +332,7 @@ candy-code/tests/App/DockDragBytePathTest.php	0.732	14
 candy-code/tests/Tools/BuiltIn/UnifiedDiffBoundedMemoryTest.php	0.729	5
 candy-code/tests/Chat/McpLoginForkTest.php	0.728	8
 candy-code/tests/Backend/TurnInboxDrainTest.php	0.727	8
+candy-code/tests/Chat/StartupSummaryGatherTest.php	0.727	6
 candy-code/tests/Cli/DoctorBypassNoticeProbeTest.php	0.726	4
 candy-code/tests/Session/SessionForkTest.php	0.724	10
 candy-code/tests/Hooks/BuiltIn/PostEditLintHookTest.php	0.722	17
