@@ -12280,9 +12280,9 @@ final class Chat implements Model
     /**
      * `/status` (OBS-2): where this session stands, read off the app's own
      * stores ({@see \SugarCraft\Code\Host\Commands\StatusHostCommand}). The
-     * tracker and cap are the two facts CommandContext cannot carry — they are
-     * per-Chat state, which is exactly why the TUI hands them in while any
-     * other host lets the durable ledger answer instead.
+     * tracker and cap are per-Chat state: the TUI hands in its own pair, while
+     * serve's no-argument build rides the context pair that
+     * `SessionHost::commandContext()` fills (C-SES-9).
      *
      * @return array{0: self, 1: ?\Closure}
      */

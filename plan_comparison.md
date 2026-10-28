@@ -1410,7 +1410,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-1.b`
 
-#### C-SES-9.b — Serve `/status` prints live spend and cap
+#### ✅ b2b049b5b C-SES-9.b — Serve `/status` prints live spend and cap
 - **Item:** C-SES-9 (sources: OBS-2-P1) · fix · MINOR · effort S
 - **What:** **Root cause.** Serve constructs `StatusHostCommand` with no arguments, through `withHostCommand(StatusHostCommand::class)` in `builtin-commands/1340-status.php`. It therefore prints `cmd.status.spend.untracked` …
 - **Files — create:** none
