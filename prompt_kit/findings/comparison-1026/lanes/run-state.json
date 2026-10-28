@@ -165,7 +165,7 @@
    "branch": "cc/C-EXT-4.b"
   },
   "C-EXT-5.a": {
-   "stage": "build",
+   "stage": "review",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-EXT-5.a",
    "branch": "cc/C-EXT-5.a"
@@ -183,13 +183,13 @@
    "branch": "cc/C-MCP-4.b"
   },
   "C-PRV-2.b": {
-   "stage": "build",
+   "stage": "review",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-PRV-2.b",
    "branch": "cc/C-PRV-2.b"
   },
   "C-SEC-6.a": {
-   "stage": "build",
+   "stage": "review",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-SEC-6.a",
    "branch": "cc/C-SEC-6.a"
@@ -201,15 +201,13 @@
    "branch": "cc/C-SEC-7.d"
   },
   "C-SEC-8.c": {
-   "stage": "build",
+   "stage": "review",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-SEC-8.c",
    "branch": "cc/C-SEC-8.c"
   }
  },
- "blocked": [
-  "C-AGT-5.b"
- ],
+ "blocked": [],
  "extra_agents": 0,
  "waves_closed": [
   1,
@@ -941,7 +939,7 @@
  "weld_queue": [
   "C-CTX-4.c"
  ],
- "tip": "e4a705244",
+ "tip": "18b0a520fd8fe974003940fcb41d0d59bfb6ff99",
  "welded_count": 150,
  "tick": "87-disk-reconciled: W11 REALY closed@341f66404; trio MCP2b+TOOL5b+WEB3f real to 0b3c4ba21 (welded=122); W13/14 welds PENDING; phantom-atlas @b73@ correction: c3178096f/4d263705a/8d8c75678 GHOSTS, cure real 23fa8ab8e",
  "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
@@ -990,7 +988,11 @@
   "W16plus": "scheduler offers W16 (P-TABS.g owner-instructed exception in flight; other 9 W16 steps NEVER start per cap)",
   "phantom_law": "several compressed summaries (f4d48b051 chain, WEB-3.h weld, 097e70c6f tip, AGT-7.c agent-pane prose) were CONFABULATED; disk greps above are truth — re-cat-file every hash every decision",
   "stopped_2026-10-29": "All actionable scope work through W15 (+ owner-instructed P-TABS.g exception) is landed: welded=150, waves_closed [1..13]. W14 and W15 are each 9/10 welded; the only missing members are C-AGT-5.b (owner-gated ruling, blocked_notes) and C-AGT-5.c (cascade). Scheduler offers only W16+ steps, which the owner hard cap forbids this lead from starting. RESUME RECIPE for next lead (W16-W20): (1) obtain owner ruling on C-AGT-5.b delete-scope question (blocked_notes verbatim; options (a) root-scope guard, (b) keep+document), then build/weld 5.b -> run W14 wave loop (fresh cc-cmp-wave-reviewer; W14 members per §3 line 150 all welded+marked) -> §3 close W14; (2) C-AGT-5.c unblocks -> build/review/weld; then W15 final member done -> W15 wave loop -> §3 close W15; (3) W16 band: P-TABS.g already WELDED at d489f425f/weld 8d5e95c78 (lane evidence in lanes/P-TABS.g/, §4 mark at plan line 1927) - do NOT re-do it; start W16 steps via scheduler, close §3 W16 only when all 10 landed + loop clean; (4) §7 closeout duties accumulate: K=24 battery + suite-figure re-pin (staleness pair live ~27k vs pinned 25,537; per-lane deltas in lanes/*/WELD.md), gen-docs/gen-ansi/gen-protocol.mjs --check, path-repos/child-lifetimes rc0, mac_alt plan-tag fold, d95f2486c WELD backfill, fa14b82c6 self-commit note, EXT-2.d durations 0.051-vs-0.224 re-measure, TOOL-5.b phantom-review-chain record, thirty-seven/forty-six benign, FeatWiring docblock truth-flip (out-of-scope MINOR from C-CTX-4.c r1), ToolPalette fifteen prose §7; (5) standing foreign reds list in this file.standing_reds_add - never attribute to new lanes without base proof. HARNESS LAWS that saved this run: re-cat-file EVERY hash including your own summaries (d325896b0/055232353/f115298f4/welder4 5/5 = phantom-report family; last raw shell output wins on probe contradiction); one welder at a time, lead completes ceremony only with pick verified landed + no live writer (102021de6/8d5e95c78 precedents); blocked[] entries MUST be strings; run-state key-set re-verify vs git branch --list cc/* every tick (drop-detection).",
-  "owner_continue_2026-10-29": "Owner @1085@ 'continue' after LATE-RULINGS-NEEDED = rolling run extended into W16 band (9 builders launched at e4a705244 per scheduler --slots 10). C-AGT-5.b/5.c REMAIN blocked pending explicit delete-scope ruling (bare continue != letter answer). W14/W15 loops stay owner-gated."
+  "owner_continue_2026-10-29": "Owner @1085@ 'continue' after LATE-RULINGS-NEEDED = rolling run extended into W16 band (9 builders launched at e4a705244 per scheduler --slots 10). C-AGT-5.b/5.c REMAIN blocked pending explicit delete-scope ruling (bare continue != letter answer). W14/W15 loops stay owner-gated.",
+  "wind_down_plan": "After W15 §3 close: batch final run-state (STOPPED-at-scope-end, waves_closed [1..15], W16 live ledger, resume recipe for W16-W20) + commit + return scope report. W16 §3 close + wave loop belongs to the NEXT lead; the nine W16 lanes (CTX-2.d, EXT-4.b, EXT-5.a, MCP-3.b, MCP-4.b, PRV-2.b, SEC-6.a, SEC-7.d, SEC-8.c) finish review+weld under this lead."
  },
- "laws_owner_2026_10_29": "Standing law (owner 2026-10-29): fill ALL 10 slots EVERY tick with safe work available RIGHT NOW (builders within scope cap, due reviewers, due fixers, welder while welds due) - NEVER reserve a spot for a 'future reviewer/welder'; between welds the welder slot builds. Refill same-tick on notifications. Scheduler free_slots=0 means the cap is honored, not an idle reservation."
+ "laws_owner_2026_10_29": "Standing law (owner 2026-10-29): fill ALL 10 slots EVERY tick with safe work available RIGHT NOW (builders within scope cap, due reviewers, due fixers, welder while welds due) - NEVER reserve a spot for a 'future reviewer/welder'; between welds the welder slot builds. Refill same-tick on notifications. Scheduler free_slots=0 means the cap is honored, not an idle reservation.",
+ "rulings": {
+  "C-AGT-5.b": "(a) ROOT-SCOPE the delete guard (owner 2026-10-29, blocker 15). Chain: build 5.b -> loop clean -> weld -> W14 wave loop -> close W14 in §3; then 5.c -> weld -> W15 loop -> close W15. Then wind down: run-state STOPPED-at-scope-end + scope report; do NOT start W17+; live W16 lanes finish + weld under this lead, hand documented to next lead. Keep 10 busy (no-reservation law)."
+ }
 }

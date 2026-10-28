@@ -4158,7 +4158,10 @@ C-TUI-6:
 - **l — Voice endpoint.** No default endpoint; voice off until a user-tier sets `voice.baseUrl`; audio never leaves the machine by default.
 - **m — Push-to-talk key.** Alt+V.
 
-No further owner questions outstanding for LATE.
+C-AGT-5 (owner, 2026-10-29): **C-AGT-5.b = option (a) ROOT-SCOPE.**
+- **b — Schedule delete scope.** The ScheduleFactory delete guard is ROOT-SCOPED: a model-created row belonging to ANOTHER project root may NOT be deleted without the include_operator_rows door; same-root model-row deletes stay unrestricted; operator rows unchanged. Closes the C-AGT-5.a r1 MINOR-2 carry; releases the W14 loop and the C-AGT-5.c cascade.
+
+No further owner questions outstanding (LATE rulings answered 2026-10-28; C-AGT-5.b answered 2026-10-29).
 
 ## 7. Closeout gate (one gate agent, after the last wave)
 
