@@ -305,7 +305,7 @@ else
 	page=1
 	next="$API_URL"
 	while [ -n "$next" ] && [ "$page" -le "$RELEASE_PAGE_LIMIT" ]; do
-		curl -fsSL -D "$TMP/headers-$page" "$next" >"$TMP/page-$page.json" ||
+		curl -fsSL -D "$TMP/headers-$page" -- "$next" >"$TMP/page-$page.json" ||
 			die "could not fetch the GitHub release list (page $page)"
 		printf '%s\n' "$TMP/page-$page.json" >>"$TMP/pages"
 		next=$(sed -n 's/.*<\([^>]*\)>;[^,]*rel="next".*/\1/p' "$TMP/headers-$page" | head -n 1)

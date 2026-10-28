@@ -606,6 +606,14 @@ final class TreeWideGuardRosterTest extends TestCase
         'Cli/DoctorSandboxProbeTest.php' => ['RecursiveDirectoryIterator($this->tmpDir,\FilesystemIterator::SKIP_DOTS)'],
         // tearDown() unlinks and rmdir's the sys_get_temp_dir() poison catalogue setUp() made (E453 pin).
         'Cli/HelpTest.php' => ['glob($this->poisonDir.\'/*.php\')'],
+        // C-SES-6.c: tearDown() sweeps the cc_ses6c_hb_* tree the test mkdir'd
+        // under sys_get_temp_dir() before its own rmdir — the glob is that
+        // listing walk, it never leaves the test's sandbox.
+        'Cli/HomebrewFormulaTest.php' => ['glob($this->root.\'/*\')'],
+        // C-SES-6.c: purgeFixtureTree() empties the sys_get_temp_dir() release
+        // sandbox and mirror trees the install-script test built (via the same
+        // CHILD_FIRST unlink-then-rmdir shape as the other SKIP_DOTS rows).
+        'Cli/InstallScriptTest.php' => ['RecursiveDirectoryIterator($path,\FilesystemIterator::SKIP_DOTS)'],
         // C-AGT-7.b (449b0f248): removeCarriedTree() empties the scratch tree the
         // resume witness leaves behind (db, WAL sidecars, child script, both
         // homes) — unlink-first recursion, the dot-glob being its listing walk.
