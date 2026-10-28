@@ -473,6 +473,16 @@ final class ReadPathCensusTest extends TestCase
                 . 'would reach, so the snapshot never admits a path the caller did not already '
                 . 'trust it to hash',
         ],
+        'Config/ProviderKeyStore.php|file_get_contents' => [
+            'CALLER_SUPPLIED — `store()`\'s providers-map merge-read: Bootstrap::userConfigPath(), '
+                . 'the operator\'s own config file — the same read `login` performs (credited on the '
+                . 'Cli/Subcommands.php row) — decoded only to keep the other providers\' entries when '
+                . 'the map is rewritten through Bootstrap::writeUserConfig(); the corrupt-config '
+                . 'branch refuses, never repairs (C-TUI-5.d extraction)',
+            'CALLER_SUPPLIED — `store()`\'s write-back re-read: the SAME path, re-read only to confirm '
+                . 'the slot settled before any success is promised (writeUserConfig() can bail '
+                . 'unwritten); the never-fabricate law lifted from Subcommands::loginStoreKey',
+        ],
         'Config/StatusLineCommand.php|file_get_contents' => [
             'SELF_LOCATED — collect(): the status-line child\'s result payload, the name '
                 . 'Support\\ToolIpcFiles::reserve() created for this run, read once after the '
@@ -1193,6 +1203,12 @@ final class ReadPathCensusTest extends TestCase
             'PROCESS_DERIVED — the AppArmor userns sysctl (C-TOOL-4.a): the kernel interface named by '
                 . 'appArmorRestrictsUserns()\'s parameter default, read bounded at 16 bytes; the content '
                 . 'is the kernel\'s own, the path is a test seam, and nothing model-supplied reaches either',
+        ],
+        'Tui/FirstRunWizard/FirstRunWizard.php|file_get_contents' => [
+            'OWNED_HOME — readStamp(): the one-line dismissal stamp this class itself wrote under the '
+                . '~/.candy-code/cache root HomeDirectory::owned() establishes (tests hand a temp path '
+                . 'to the shouldOffer()/markDismissed() seam); an unreadable or empty body reads as '
+                . '"no stamp" and fails soft toward OFFERING the wizard again, never as data consumed',
         ],
         'Workflows/WorkflowEngine.php|file_get_contents' => [
             'SELF_LOCATED — a pause file this engine wrote',

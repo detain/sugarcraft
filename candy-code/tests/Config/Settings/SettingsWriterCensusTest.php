@@ -23,6 +23,10 @@ use PHPUnit\Framework\TestCase;
  *    itself);
  *  - that `candy-code login` persists a typed provider key through the same
  *    door (`Subcommands::loginStoreKey()`, plan_comparison W4 PRV-4);
+ *  - and the first-run wizard's host persists its typed key through the same
+ *    door as well (`Config/ProviderKeyStore::store()` — the C-TUI-5.d
+ *    extraction of `loginStoreKey`'s persist half, credited as its own door
+ *    while `login` still carries the inline copy);
  *  - that {@see \SugarCraft\Code\Config\Settings\SettingsWriter} is built in
  *    one place, `LaunchContext::settingsWriter()` (body moved there in the
  *    S1b composition split, W7-E C5; `Bootstrap::settingsWriter()` is its
@@ -63,6 +67,10 @@ final class SettingsWriterCensusTest extends TestCase
         // instead of persisting a dead `[]`, and the disable arm's append.
         // A glob-shaped name is refused before any of the three is reached.
         'Commands/McpAuthCommand.php::persistSessionToggle' => 3,
+        // C-TUI-5.d: the first-run wizard's persist door, extracted from
+        // loginStoreKey's write half — its own door until a wiring step
+        // re-points `login` itself here (both are credited meanwhile).
+        'Config/ProviderKeyStore.php::store' => 1,
     ];
 
     public function testConfigJsonIsWrittenOnlyThroughItsKnownDoors(): void

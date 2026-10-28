@@ -3662,4 +3662,16 @@ TXT,
     'host.commit.failed' => 'Nothing was committed: {reason}.',
     'host.commit.no_reason' => 'no reason given',
     // --- end commit (C-AGT-6.a) ---
+    // --- tui.wizard (C-TUI-5.d: first-run wizard core) ---
+    // Census law (TuiLangTest): every quoted tui. key in src lives here and
+    // every key here is asked by src. Strings of the two-step provider setup
+    // in src/Tui/FirstRunWizard/FirstRunWizard.php.
+    'tui.wizard.title' => 'Welcome to candy-code — let\'s set up a provider.',
+    'tui.wizard.step_provider' => 'Choose a provider:',
+    'tui.wizard.step_key' => 'Paste the {provider} API key (it echoes masked and is never logged):',
+    'tui.wizard.hint_provider' => '(←/→ choose · enter continue · s skip · esc cancel)',
+    'tui.wizard.hint_key' => '(enter store · tab run {command} later · esc cancel)',
+    'tui.wizard.key_empty' => 'Nothing typed yet — enter stores nothing.',
+    'tui.wizard.key_chars' => 'The typed text contains control characters; the key was not accepted.',
+    // --- end tui.wizard ---
 ];
