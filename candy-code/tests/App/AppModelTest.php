@@ -93,6 +93,43 @@ final class AppModelTest extends TestCase
         $this->assertInstanceOf(Model::class, $this->app());
     }
 
+    /**
+     * P-TABS.e: the deck is armed once by the first update of a launch that
+     * carries a tabFactory, and nothing about it is lost on later
+     * transitions — every mutate must carry it exactly like `chat`.
+     */
+    public function testDeckArmsOnceAndRidesEveryMutate(): void
+    {
+        $armed = $this->app()
+            ->withChat(new Chat())
+            ->withTabFactory(static fn (?string $sessionId): Chat => new Chat());
+
+        [$first] = $armed->update(new WindowSizeMsg(100, 30));
+        $deck = $first->deck;
+        $this->assertNotNull($deck, 'a factory-carrying launch arms its deck at the first update');
+        $this->assertSame('tab-1', $deck->activeKey());
+
+        [$second] = $first->update(new WindowSizeMsg(100, 30));
+        $this->assertSame($deck, $second->deck, 'arming is idempotent — the deck is seeded once');
+
+        $afterWithers = $second->withPane(Pane::Tools)->withStatus('x')->withModel('m2');
+        $this->assertSame($deck, $afterWithers->deck, 'a field missing from mutate() would drop the deck here');
+    }
+
+    /**
+     * P-TABS.e other polarity: without a tabFactory nothing arms — the
+     * single-chat shape (every non-tab launch) stays byte-for-byte the one
+     * this file has always pinned.
+     */
+    public function testDeckStaysNullWithoutATabFactory(): void
+    {
+        $app = $this->app()->withChat(new Chat());
+        [$first] = $app->update(new WindowSizeMsg(100, 30));
+        [$second] = $first->update(new WindowSizeMsg(90, 24));
+        $this->assertNull($second->deck);
+        $this->assertSame(90, $second->cols);
+    }
+
     public function testChatDefaultsToNullAndIsThreadedThroughMutate(): void
     {
         $app = $this->app();

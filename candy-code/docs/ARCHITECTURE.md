@@ -260,7 +260,21 @@ already carries the seeded session row, the title backend, the memory store and
 the guard chain; seeding it twice would create a second session row per launch.
 
 `App` copies no state out of the hosted chat except `withSessionId()`, which is
-read back off it rather than re-derived, so the two cannot disagree. Its Tools
+read back off it rather than re-derived, so the two cannot disagree. Since
+P-TABS.e the shell hosts **many** chats: when the launch carries a tab factory,
+`armDeck()` seeds a `SessionDeck` (`src/App/Tabs/`) whose active entry is the
+foreground `Chat` and whose parked entries are chats whose turns keep streaming
+in the background. Every `Cmd` a hosted chat returns rides out wrapped by
+`TabScope::cmd()` so its producers re-enter as `TabScopedMsg` and route to the
+tab that owns them; App-level commands stay unscoped, and `App::update()`
+unwraps a scoped message whose tab is foreground again. A switch parks the old
+chat (dropping its notice-drain appointment through `Chat::withNoticeDrain()` —
+exactly one tab drains the shared workspace's runtime notices at a time),
+unparks or factory-builds the target, and replays the window size onto it.
+Parked tabs keep their tool-event pump, transcript flush and lock-retry
+subscriptions (prefixed `tab:` so ids cannot collide) but lose the
+foreground-only polls — background/schedule watch and the status line — which
+would otherwise double-fire against process-shared state. Its Tools
 and Skills panes hold **display** copies; the engine's authoritative tool list
 and skill registry live inside the hosted chat's backend.
 

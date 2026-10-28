@@ -1476,10 +1476,13 @@ final class Chat implements Model
          * condition was wrong: an idle Chat that never owned the inbox has
          * nothing to poll for.
          *
-         * SET IN EXACTLY ONE PLACE — {@see \SugarCraft\Code\Cli\Bootstrap::chat()},
+         * SET AT LAUNCH IN EXACTLY ONE PLACE — {@see \SugarCraft\Code\Cli\Bootstrap::chat()},
          * which is also the only caller of `RuntimeNoticeSink::arm()` in
          * `src/`. Appointing the reader and opening the inbox are the same
-         * decision and are made in the same method.
+         * decision and are made in the same method. The one post-launch
+         * writer is {@see \SugarCraft\Code\Chat::withNoticeDrain()}, which
+         * moves the appointment across the tab deck (P-TABS.e) and keeps the
+         * one-owner law by never appointing two at once.
          */
         private readonly bool $drainsRuntimeNotices = false,
     /**
@@ -9256,6 +9259,31 @@ final class Chat implements Model
         }
 
         return $this->mutate(['history' => [...$this->history, ...$messages]]);
+    }
+
+    /**
+     * Appoints (or dismisses) this Chat as the reader of the shared runtime
+     * notice inbox — the `drainsRuntimeNotices` field's flag, moved.
+     *
+     * The field's own docblock tells the LAUNCH law: Bootstrap::chat() is the
+     * one place that sets it, because appointing the reader and opening the
+     * inbox are the same decision. P-TABS.e adds the one post-launch writer
+     * that law cannot survive: `App::switchTab()` moves the appointment with
+     * exactly one true owner across the deck, dismissing the parked tab's
+     * Chat (`false`) and arming the incoming one (`true`). It cannot be
+     * decided once at launch because the foreground tab is not known at
+     * launch, and it cannot be two tabs at once because the notice sink is a
+     * workspace resource shared by every tab Chat (C-TOOL-3.c) — two drain
+     * owners would each pop half a batch and the transcript rows would
+     * interleave across tabs. The queue is workspace-global, not per-tab
+     * (every deck Chat shares one sink — C-TOOL-3.c): a row produced while
+     * its tab is parked surfaces in whichever tab holds the drain
+     * appointment at that moment, not necessarily the tab that produced
+     * it — the same law `docs/ARCHITECTURE.md` states for the deck.
+     */
+    public function withNoticeDrain(bool $drains): self
+    {
+        return $this->mutate(['drainsRuntimeNotices' => $drains]);
     }
 
     /**

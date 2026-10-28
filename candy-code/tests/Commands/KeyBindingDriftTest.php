@@ -13,10 +13,12 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\App\SelectSkillMsg;
+use SugarCraft\Code\App\Tabs\OpenTabMsg;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Chat;
@@ -1058,11 +1060,24 @@ final class KeyBindingDriftTest extends TestCase
                 $chat = $this->chatWithSessions(3);
                 [$next] = $chat->update($k[0]);
                 $this->assertSame($this->neighbourSessionId($chat, 1), $next->currentSessionId());
+                // P-TABS.e deck-mode half: with a deck armed (a tabFactory is
+                // installed, which every real TUI launch has), the same chord
+                // switches the deck instead — from the third tab forward it
+                // lands on the first, and the tab it leaves stays parked with
+                // its own model.
+                [$deckApp] = $this->deckSeededApp(3)->update($k[0]);
+                $this->assertSame('tab-1', $deckApp->deck?->activeKey());
+                $this->assertInstanceOf(Chat::class, $deckApp->deck?->model('tab-3'));
             },
             'chat.session-cycle-prev' => function (array $k): void {
                 $chat = $this->chatWithSessions(3);
                 [$prev] = $chat->update($k[0]);
                 $this->assertSame($this->neighbourSessionId($chat, -1), $prev->currentSessionId());
+                // P-TABS.e deck-mode half: backwards from the third tab lands
+                // on the second — the direction the forward half above cannot
+                // show on its own.
+                [$deckApp] = $this->deckSeededApp(3)->update($k[0]);
+                $this->assertSame('tab-2', $deckApp->deck?->activeKey());
             },
             'chat.keys' => function (array $k): void {
                 [$next] = $this->chat()->update($k[0]);
@@ -1159,6 +1174,14 @@ final class KeyBindingDriftTest extends TestCase
             'shell.new-session' => function (array $k): void {
                 [, $cmd] = $this->claim($k[0], $this->app());
                 $this->assertInstanceOf(NewSessionCmd::class, $cmd);
+                // P-TABS.e deck-mode half: with a deck armed the chord opens
+                // the tab itself instead of surfacing the legacy command —
+                // the count grows, the new slot is active, and the previous
+                // foreground stays parked with its model.
+                [$after] = $this->deckSeededApp(1)->update($k[0]);
+                $this->assertSame(2, $after->deck?->count());
+                $this->assertSame('tab-2', $after->deck?->activeKey());
+                $this->assertInstanceOf(Chat::class, $after->deck?->model('tab-1'));
             },
             'shell.palette' => function (array $k): void {
                 [, $cmd] = $this->claim($k[0], $this->app());
@@ -2759,6 +2782,26 @@ final class KeyBindingDriftTest extends TestCase
     private function app(): App
     {
         return App::new($this->provider, 'test-model');
+    }
+
+    /**
+     * A deck-armed App (P-TABS.e): a foreground Chat plus a tab factory,
+     * seeded through its first update so the deck exists, then opened up to
+     * `$tabs` slots — the active one is the last opened. The two
+     * `chat.session-cycle` chords and `shell.new-session` answer against this
+     * shape rather than the legacy single-chat one.
+     */
+    private function deckSeededApp(int $tabs): App
+    {
+        $app = $this->app()
+            ->withChat($this->chat())
+            ->withTabFactory(fn (?string $sessionId): Chat => $this->chat());
+        [$app] = $app->update(new WindowSizeMsg(100, 30));
+        for ($i = 2; $i <= $tabs; $i++) {
+            [$app] = $app->update(new OpenTabMsg());
+        }
+
+        return $app;
     }
 
     /**

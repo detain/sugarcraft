@@ -292,7 +292,8 @@ all one component tree — not two parallel UIs.
 | `Page Up` / `Page Down` | Scroll the transcript a screenful |
 | `Tab` | Cycle focus over the **docked** panes — or complete a command, path or skill mention while chat holds focus — see the fine print below. |
 | `Shift+Tab` | Cycle pane focus backwards (same docked list) |
-| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Cycle sessions |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Cycle sessions — since the many-Chats deck a switch parks the streaming one and brings the other up, so a turn keeps running in the background |
+| `Ctrl+N` | Start a fresh session, keeping this one open (the deck gives it a new slot) |
 | `Ctrl+L` | Repaint the whole frame - clears and redraws chat, transcript and every pane from current state (registry row `chat.repaint`) |
 | `F10` | Open the menu bar |
 | `y` / `n` / `a` / `p` / `e` / `r` / `x` | Answer a permission prompt: allow once, refuse, allow for the session, save a rule, edit the scope first, refuse with a note, refuse and stop — see the fine print below. |
@@ -1056,7 +1057,14 @@ this run **opened** — the launch session plus whatever you reached for (the
 picker, `Ctrl+Tab`, a click, the palette's **New session**, `/branch`, a landed
 background handoff) — with the current one bracketed, and `Ctrl+Tab` cycles
 exactly those tabs; the `★` pinned chrome lives in the picker, which stays the
-whole-store catalog. A plain launch writes no session record: the row appears
+whole-store catalog. Inside the deck each tab hosts its own `Chat`: switching
+parks the old one mid-turn (its stream, tool pump and transcript flush keep
+running; a parked permission prompt raises that tab's waiting attention state
+instead of stealing the screen), and `Ctrl+N` opens a fresh session without touching
+the current one. Closing a busy tab is a two-press act — the first press
+announces it, the second within three seconds cancels the turn, flushes the
+transcript and releases the row; quitting with a busy background tab asks once
+the same way. A plain launch writes no session record: the row appears
 the first time a prompt goes out (`/branch` and `/fork` mint it first when they
 need it), so quitting an empty launch leaves nothing behind. A tool call that was still
 running when its session was last saved comes back marked interrupted.

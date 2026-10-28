@@ -25,6 +25,12 @@ use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentResult;
 use SugarCraft\Code\Agents\AgentWorkerPool;
 use SugarCraft\Code\Agents\SubAgent;
+use SugarCraft\Code\App\Tabs\CloseTabMsg;
+use SugarCraft\Code\App\Tabs\CycleTabMsg;
+use SugarCraft\Code\App\Tabs\OpenTabMsg;
+use SugarCraft\Code\App\Tabs\SessionDeck;
+use SugarCraft\Code\App\Tabs\TabScopedMsg;
+use SugarCraft\Code\App\Tabs\TabScope;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\CommandRegistry;
@@ -156,6 +162,34 @@ final class App implements Model
 
     /** The idle watch's tick id — single per app, no keying needed. */
     public const IDLE_COMPACT_SUBSCRIPTION = 'idle-compact';
+
+    /**
+     * How long a busy tab's close stays armed for its confirming press
+     * (P-TABS.e). Three seconds: long enough to read the status row and
+     * press again, short enough that an abandoned arm silently expires
+     * rather than silently closing a streaming tab minutes later.
+     */
+    private const TAB_CLOSE_ARM_SECONDS = 3.0;
+
+    /**
+     * Subscription ids a PARKED tab's Chat must never declare (P-TABS.e).
+     * The background-poll and schedule-watch ticks both pump the SHARED
+     * workspace supervisor (C-TOOL-3.c), so every parked tab declaring them
+     * would multiply one poll across the deck; the status line is one
+     * bottom-of-screen strip, foreground-only by physics. Their Chat-side
+     * ids live in private consts on {@see Chat} — this list names the same
+     * strings; {@see TabScopedRoutingTest} pins the behaviour (which ids the
+     * deck keeps) independently of the spelling. The notice poll needs no
+     * entry: {@see Chat::withNoticeDrain()} already dismisses parked tabs
+     * from the one-owner inbox, and its poll rides that flag.
+     *
+     * @var list<string>
+     */
+    private const FOREGROUND_ONLY_TAB_SUBSCRIPTIONS = [
+        'code.background-poll',
+        'code.schedule-watch',
+        'code.status-line',
+    ];
 
     /**
      * Log windows read at once when a view opens, so a finished run's whole
@@ -537,8 +571,10 @@ final class App implements Model
          * P-TABS.d: the tab strip's session factory — `LaunchContext::app()`
          * installs a closure over {@see \SugarCraft\Code\Cli\Bootstrap::tabChat()}
          * for the launch's root; null means this App was built without one.
-         * Field only: nothing routes through it until the tab strip lands
-         * (P-TABS.e). Rides every mutate.
+         * Since P-TABS.e this is the DECK's arming signal: a launch carrying
+         * one gets a {@see SessionDeck} seeded from the foreground Chat at
+         * its first update ({@see armDeck()}); a launch without one keeps
+         * the single-chat shape untouched. Rides every mutate.
          */
         public readonly ?\Closure $tabFactory = null,
         /**
@@ -553,6 +589,32 @@ final class App implements Model
          * null for the flat category list.
          */
         public readonly ?ContextCategory $contextDrill = null,
+        /**
+         * P-TABS.e: the many-Chats deck — one {@see Chat} in the foreground
+         * plus parked turns still streaming in the background. Null means
+         * this App has no deck (every launch until a tabFactory exists at
+         * arm time): routing stays the single-chat shape byte-for-byte.
+         * Armed lazily by {@see armDeck()} on the first update once a
+         * tabFactory is installed. Rides every mutate.
+         */
+        public readonly ?SessionDeck $deck = null,
+        /**
+         * P-TABS.e: the busy tab whose close is armed, as
+         * `[key => string, at => float]`, or null when nothing is armed.
+         * {@see TAB_CLOSE_ARM_SECONDS} bounds how long the arm lives; the
+         * confirming press closes, switching tabs or arming a different
+         * target clears it early, and anything else lets it expire.
+         *
+         * @var array{key: string, at: float}|null
+         */
+        public readonly ?array $pendingTabClose = null,
+        /**
+         * P-TABS.e: whether the one "quit while a background tab is still
+         * streaming" notice has been spent this session (ask ONCE, per the
+         * plan — the second press quits unconditionally). Rides every
+         * mutate; spent, never re-armed, by design.
+         */
+        public readonly bool $tabQuitWarned = false,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -2782,6 +2844,25 @@ final class App implements Model
      */
     public function update(CoreMsg $msg): array
     {
+        // P-TABS.e: the deck arms itself once, on the first message, on any
+        // launch that carries a tabFactory. Arming here (not in
+        // LaunchContext::app()) keeps that builder untouched and seeds from
+        // the live foreground Chat — the only place the launch's session id
+        // and tab name are known. With no factory the check is a single
+        // null read and the shell below runs exactly as it did before.
+        return $this->armDeck()->updateShell($msg);
+    }
+
+    /**
+     * The shell's message routing — see the class docblock and
+     * {@see update()} for the contract. Public only through {@see update()};
+     * the wrapper above adds the one deck-arming check so this body never
+     * has to.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function updateShell(CoreMsg $msg): array
+    {
         // P-MENU.e hover: the bar's menus highlight rows under the pointer,
         // and button-less motion is reported ONLY in all-motion mouse mode —
         // CellMotion (the Chat's steady state) never sends it. So ONE
@@ -2834,6 +2915,17 @@ final class App implements Model
             $msg instanceof \SugarCraft\Code\App\CloseAgentViewMsg => $this->closeAgentView()->delegateToChat($msg),
             // P-D2: the chat's answer to the Agent View composer's send.
             $msg instanceof \SugarCraft\Code\App\AgentMessageSentMsg => [$this->recordAgentMessage($msg), null],
+            // P-TABS.e: the deck's four routes. A scoped message is either
+            // the foreground's own (unwrap, re-enter — every guard above
+            // runs) or a parked tab's (route to the parked model, never the
+            // foreground's Chat). Quit gets a deck-aware arm here: with no
+            // deck, or after the one ask, it falls to the SAME
+            // delegateToChat default the pre-deck tree used.
+            $msg instanceof TabScopedMsg => $this->handleTabScoped($msg),
+            $msg instanceof OpenTabMsg => $this->handleOpenTab($msg),
+            $msg instanceof CloseTabMsg => $this->handleCloseTab($msg),
+            $msg instanceof CycleTabMsg => $this->handleCycleTab($msg),
+            $msg instanceof \SugarCraft\Core\Msg\QuitMsg => $this->handleQuit($msg),
             $msg instanceof KeyMsg => $this->handleKey($msg),
             $msg instanceof MouseMsg => $this->handleShellMouse($msg),
             $msg instanceof BackgroundColorMsg => $this->observeBackground($msg),
@@ -3840,6 +3932,25 @@ final class App implements Model
             return $this->driveVideoPlayer($msg);
         }
 
+        // P-TABS.e: the deck answers its two chords before anyone else —
+        // placed AFTER every modal gate above (a modal owns the keyboard,
+        // deck included) and BEFORE dispatchKey, because the shell routes
+        // Tab-with-modifiers down to Chat, where a streaming turn REFUSES
+        // the cycle (`refuseWhileInFlight`). The whole point of the deck is
+        // that switching away from a streaming turn is always legal, so the
+        // refusal must never hear this press at all. With no deck the
+        // chords fall through unchanged: legacy Ctrl+Tab still cycles
+        // Chat's own strip, legacy Ctrl+N still runs the palette action.
+        if ($this->deck !== null) {
+            if ($msg->type === KeyType::Tab && $msg->ctrl && $this->deck->count() > 1) {
+                return $this->handleCycleTab(new CycleTabMsg($msg->shift ? -1 : 1));
+            }
+
+            if ($msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'n') {
+                return $this->handleOpenTab(new OpenTabMsg());
+            }
+        }
+
         $handled = $this->dispatchKey($msg);
 
         if ($handled === null) {
@@ -4271,7 +4382,12 @@ final class App implements Model
             $cmd instanceof SourceSkillCmd => self::withoutEngineCmd($this->dispatch(new OpenSkillPickerMsg())),
             $cmd instanceof MenuSelectedMsg => $this->dispatchMenuSelection($cmd),
             $cmd instanceof CommandPaletteCmd => $this->feedChat([self::ctrl('p')]),
-            $cmd instanceof NewSessionCmd => $this->runRegistryCommand('new'),
+            $cmd instanceof NewSessionCmd => $this->deck !== null
+                // P-TABS.e: with a deck, "New session" is a new TAB — the
+                // same route the Ctrl+N chord takes. Without one it stays
+                // the palette action on the single Chat, byte-for-byte.
+                ? $this->handleOpenTab(new OpenTabMsg())
+                : $this->runRegistryCommand('new'),
             $cmd instanceof ProviderSelectCmd => $this->runRegistryCommand('model'),
             // Chat's Escape is the live "cancel the in-flight turn" binding.
             $cmd instanceof CancelCmd => $this->feedChat([new KeyMsg(KeyType::Escape)]),
@@ -4427,7 +4543,14 @@ final class App implements Model
         // uses — without it, content a command lands (a provider list under
         // an agent run, say) keeps its pane side-logged until the next
         // unrelated keystroke docks it.
-        return [$next === $this->chat ? $this : $this->withChat($next)->autoEnablePanes(), $cmd];
+        $app = $next === $this->chat ? $this : $this->withChat($next)->autoEnablePanes();
+        // P-TABS.e: the command ran on the FOREGROUND Chat, so its Cmd
+        // takes the foreground's deck key and its session mint rekeys the
+        // deck — exactly the delegateToChat rule, at the command's own
+        // return.
+        $app = $app->rekeyDeck();
+
+        return [$app, $app->scopeForegroundCmd($cmd)];
     }
 
     /** A Ctrl+<rune> chord as the live terminal decoder delivers it. */
@@ -4732,11 +4855,20 @@ final class App implements Model
 
         [$next, $cmd] = $this->chat->update($msg);
 
+        // P-TABS.e: a Cmd the foreground Chat returns is tagged with the
+        // deck key that owns it, so its produced Msgs come back wrapped and
+        // can never be applied to a tab the user switched to in the
+        // meantime. No deck → TabScope never sees it, identity behaviour.
+        // The rekey rides the same rule: `/branch` and a mint move the
+        // FOREGROUND tab's session in place, and the deck must not go on
+        // claiming the old id.
         if (!$next instanceof Chat || $next === $this->chat) {
-            return [$this, $cmd];
+            return [$this, $this->scopeForegroundCmd($cmd)];
         }
 
-        return [$this->withChat($next)->autoEnablePanes(), $cmd];
+        $app = $this->withChat($next)->autoEnablePanes()->rekeyDeck();
+
+        return [$app, $app->scopeForegroundCmd($cmd)];
     }
 
     /**
@@ -5033,6 +5165,36 @@ final class App implements Model
     {
         $subscriptions = $this->chat?->subscriptions();
 
+        // P-TABS.e: parked tabs keep pumping their own work — a live turn's
+        // tool-event poll, its transcript flush, its session-lock retry —
+        // each id welded to the tab that produced it, so the reconciliation
+        // in Program sees one stable entry per tab per need and a switch
+        // never tears down another tab's pump. The ids on
+        // FOREGROUND_ONLY_TAB_SUBSCRIPTIONS are dropped for parked tabs:
+        // they poll SHARED workspace state the foreground already polls, or
+        // draw the one status line.
+        if ($this->deck !== null) {
+            $all = $subscriptions?->all() ?? [];
+
+            foreach ($this->deck->keys() as $key) {
+                if ($key === $this->deck->activeKey()) {
+                    continue;
+                }
+
+                $parked = $this->deck->model($key);
+                if (!$parked instanceof Chat) {
+                    continue;
+                }
+
+                $scoped = TabScope::subscriptions($key, $parked->subscriptions(), self::FOREGROUND_ONLY_TAB_SUBSCRIPTIONS);
+                if ($scoped !== null) {
+                    $all = [...$all, ...$scoped->all()];
+                }
+            }
+
+            $subscriptions = new Subscriptions($all);
+        }
+
         // P-C2: the open Agent View's tail tick — declared only while a view
         // is open, keyed by the run so switching runs cancels the old tick.
         // The tick re-sends the open run's OpenAgentViewMsg, which reads what
@@ -5253,6 +5415,387 @@ final class App implements Model
     }
 
     /**
+     * Seed the deck once, on the first update of a launch that carries a
+     * tabFactory (P-TABS.e). The foreground Chat at that moment IS the
+     * launch's first tab; its session id may still be null (a fresh session
+     * mints on first persist), and the sentinel for "not yet minted" is the
+     * empty string — {@see rekeyDeck()} replaces it the moment the id is
+     * real. A factory-less launch returns `$this` forever: one null check,
+     * zero new instances, the pre-deck tree untouched.
+     */
+    private function armDeck(): self
+    {
+        if ($this->deck !== null || $this->tabFactory === null || !$this->chat instanceof Chat) {
+            return $this;
+        }
+
+        return $this->mutate(deck: SessionDeck::forLaunch(
+            'tab-1',
+            $this->chat->currentSessionId() ?? '',
+            $this->chat->openTabs()->activeTab()?->name ?? Lang::t('tabs.name_new'),
+        ));
+    }
+
+    /** The next minted deck key — deck keys are stable, never reused. */
+    private function nextTabKey(): string
+    {
+        $highest = 0;
+        foreach ($this->deck?->keys() ?? [] as $key) {
+            if (preg_match('/^tab-([0-9]+)$/', $key, $m) === 1) {
+                $highest = max($highest, (int) $m[1]);
+            }
+        }
+
+        return 'tab-' . ($highest + 1);
+    }
+
+    /**
+     * Tag a foreground Chat's Cmd with the deck key that owns it, so every
+     * Msg its producers fire come back wrapped and route to THIS tab even
+     * after the user switches. No deck → the Cmd passes through untouched.
+     */
+    private function scopeForegroundCmd(?\Closure $cmd): ?\Closure
+    {
+        $key = $this->deck?->activeKey();
+
+        return $key === null ? $cmd : TabScope::cmd($key, $cmd);
+    }
+
+    /**
+     * Follow a foreground session move that happened IN PLACE under the
+     * active tab — `/branch`, the first-persist mint, a picker adoption.
+     * The deck key never changes; only its session id does.
+     */
+    private function rekeyDeck(): self
+    {
+        $key = $this->deck?->activeKey();
+        if ($key === null || !$this->chat instanceof Chat) {
+            return $this;
+        }
+
+        $session = $this->chat->currentSessionId();
+        if ($session === null || $this->deck->sessionOf($key) === $session) {
+            return $this;
+        }
+
+        return $this->mutate(deck: $this->deck->rekey($key, $session));
+    }
+
+    /**
+     * Move the foreground to $toKey: park the leaving Chat (its turn keeps
+     * running — parking is a bookkeeping move, not a pause), unpark or
+     * factory-build the target, hand it the notice-drain appointment and
+     * the shell's current window size, and clear any spent close arm.
+     *
+     * The window-size replay goes straight to the Chat, not through
+     * `handleWindowSize()`: the App's own rows/cols are already
+     * authoritative (this is not a resize), and the Chat only needs the
+     * frame it was last at re-stated — a parked turn rendered nothing, so
+     * the first draw after unpark would otherwise be sized for a terminal
+     * the tab never saw.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function switchTab(string $toKey): array
+    {
+        $deck = $this->deck;
+        $from = $deck?->activeKey();
+        if ($deck === null || !$deck->has($toKey) || $toKey === $from || !$this->chat instanceof Chat) {
+            return [$this, null];
+        }
+
+        $deck = $deck->park($from, $this->chat->withNoticeDrain(false));
+        [$deck, $model] = $deck->unpark($toKey);
+
+        $target = $model instanceof Chat
+            ? $model
+            : ($this->tabFactory !== null ? ($this->tabFactory)($deck->sessionOf($toKey)) : null);
+        if (!$target instanceof Chat) {
+            return [$this, null];
+        }
+
+        [$sized, $sizeCmd] = $target->withNoticeDrain(true)->update(new WindowSizeMsg($this->cols, $this->rows));
+        if ($sized instanceof Chat) {
+            $target = $sized;
+        }
+
+        $deck = $deck->attention(
+            $toKey,
+            $target->inFlight || $target->pendingPermission() !== null
+                ? ($target->pendingPermission() !== null ? SessionDeck::ATTENTION_WAITING : SessionDeck::ATTENTION_WORKING)
+                : SessionDeck::ATTENTION_IDLE,
+        );
+
+        return [$this->withChat($target)->autoEnablePanes()->mutate(deck: $deck, pendingTabClose: null), $sizeCmd];
+    }
+
+    /**
+     * Route one wrapped message. Foreground-scoped: unwrap and re-enter the
+     * shell's match so every guard runs exactly as it would have unwrapped.
+     * Parked: hand the inner Msg to the parked model, keep its reply in the
+     * deck, and refresh the tab's attention — a settled parked turn is
+     * UNSEEN, an error FAILED, a surfaced permission prompt WAITING, a live
+     * turn WORKING. A parked tab can never pop a shell modal: the three
+     * shell-claimed open messages raise attention instead of opening, and
+     * the run-keyed {@see \SugarCraft\Code\App\AgentMessageSentMsg} is the
+     * documented exception — the Agent View it feeds is global, not
+     * per-tab, so dropping it would lose a message the foreground itself
+     * would have recorded.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleTabScoped(TabScopedMsg $msg): array
+    {
+        $deck = $this->deck;
+        if ($deck === null) {
+            return [$this, null];
+        }
+
+        if ($msg->tabKey() === $deck->activeKey()) {
+            return $this->update($msg->inner());
+        }
+
+        $model = $deck->model($msg->tabKey());
+        if (!$model instanceof Chat) {
+            return [$this, null];
+        }
+
+        $inner = $msg->inner();
+        if ($inner instanceof OpenMediaFormMsg || $inner instanceof OpenSettingsMsg
+            || $inner instanceof \SugarCraft\Code\App\OpenAgentViewMsg) {
+            return [$this->mutate(deck: $deck->attention($msg->tabKey(), SessionDeck::ATTENTION_WAITING)), null];
+        }
+
+        if ($inner instanceof \SugarCraft\Code\App\AgentMessageSentMsg) {
+            // The exception this method promises: the Agent View ledger is
+            // global, keyed by run. Chat only PRODUCES these rows (its own
+            // match ignores them), so routing one into the parked model
+            // would silently drop a row the foreground would have kept —
+            // record it here, where the shell's unwrapped arm does.
+            return [$this->recordAgentMessage($inner), null];
+        }
+
+        [$next, $cmd] = $model->update($inner);
+        if (!$next instanceof Chat) {
+            $next = $model;
+        }
+
+        $deck = $deck->park($msg->tabKey(), $next)->attention($msg->tabKey(), $this->attentionFor($next, $inner));
+        $session = $next->currentSessionId();
+        if ($session !== null && $deck->sessionOf($msg->tabKey()) !== $session) {
+            $deck = $deck->rekey($msg->tabKey(), $session);
+        }
+
+        return [$this->mutate(deck: $deck), TabScope::cmd($msg->tabKey(), $cmd)];
+    }
+
+    /** The attention state a parked tab deserves after one routed message. */
+    private function attentionFor(Chat $chat, CoreMsg $settled): string
+    {
+        if ($chat->pendingPermission() !== null) {
+            return SessionDeck::ATTENTION_WAITING;
+        }
+
+        if ($settled instanceof ErrorMsg) {
+            return SessionDeck::ATTENTION_FAILED;
+        }
+
+        if ($settled instanceof \SugarCraft\Code\App\AssistantMsg && !$chat->inFlight) {
+            return SessionDeck::ATTENTION_UNSEEN;
+        }
+
+        return $chat->inFlight || $chat->isStreaming()
+            ? SessionDeck::ATTENTION_WORKING
+            : SessionDeck::ATTENTION_IDLE;
+    }
+
+    /**
+     * Open a tab: park the foreground (drain appointment included), mint the
+     * next key, build the Chat through the launch's factory — sized and
+     * appointed — and make it active. `sessionId` null is a FRESH session
+     * (mints on first persist; {@see handleTabScoped()} rekeys it in place).
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleOpenTab(OpenTabMsg $msg): array
+    {
+        $deck = $this->deck;
+        if ($deck === null || $this->tabFactory === null || !$this->chat instanceof Chat) {
+            return [$this, null];
+        }
+
+        $key = $this->nextTabKey();
+        $target = ($this->tabFactory)($msg->sessionId);
+        if (!$target instanceof Chat) {
+            // A factory that answers with something other than a Chat is a
+            // wiring bug, not a user event: refuse the open, change nothing.
+            return [$this, null];
+        }
+
+        $from = $deck->activeKey();
+        if ($from !== null) {
+            $deck = $deck->park($from, $this->chat->withNoticeDrain(false));
+        }
+
+        // P-TABS.f note: `''` is the not-yet-minted sentinel — two id-less fresh tabs briefly share it until their first persist rekeys them.
+        $deck = $deck->open($key, $msg->sessionId ?? '', $msg->sessionName ?? Lang::t('tabs.name_new'));
+
+        [$sized, $sizeCmd] = $target->withNoticeDrain(true)->update(new WindowSizeMsg($this->cols, $this->rows));
+        if ($sized instanceof Chat) {
+            $target = $sized;
+        }
+
+        return [$this->withChat($target)->autoEnablePanes()->mutate(deck: $deck), $sizeCmd];
+    }
+
+    /**
+     * Close a tab. Closing a BUSY tab needs a second press within
+     * {@see TAB_CLOSE_ARM_SECONDS} naming the same tab — the first press
+     * only arms and says so in the status row, because silently killing a
+     * streaming turn is the kind of loss a user must see coming. The
+     * confirming press cancels the turn (Chat's own Escape arm), flushes the
+     * transcript, and drops the tab; closing the FOREGROUND first moves
+     * away (a switch parks it exactly like Ctrl+Tab would), then the same
+     * parked path removes it. The deck never closes its last tab — that
+     * refusal is {@see SessionDeck::close()}'s, enforced here too.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleCloseTab(CloseTabMsg $msg): array
+    {
+        $deck = $this->deck;
+        if ($deck === null || $deck->count() <= 1) {
+            return [$this, null];
+        }
+
+        $key = $msg->tabKey ?? $deck->activeKey();
+        if ($key === null || !$deck->has($key)) {
+            return [$this, null];
+        }
+
+        $isForeground = $key === $deck->activeKey();
+        $model = $isForeground ? $this->chat : $deck->model($key);
+        $busy = $model instanceof Chat && ($model->inFlight || $model->isStreaming());
+
+        if ($busy) {
+            $armed = $this->pendingTabClose;
+            if (!is_array($armed) || $armed['key'] !== $key || (microtime(true) - $armed['at']) > self::TAB_CLOSE_ARM_SECONDS) {
+                return [
+                    $this
+                        ->mutate(pendingTabClose: ['key' => $key, 'at' => microtime(true)])
+                        ->withStatus(Lang::t('tabs.close_arm')),
+                    null,
+                ];
+            }
+        }
+
+        if ($isForeground) {
+            $moved = $deck->cycle(1)->activeKey();
+            if ($moved === null || $moved === $key) {
+                return [$this, null];
+            }
+
+            [$switched, $switchCmd] = $this->switchTab($moved);
+            if ($switched === $this) {
+                return [$this, null];
+            }
+
+            // switchTab() clears the arm as part of making the switch (a
+            // switch is a fresh action); the recursion into the parked branch
+            // must still carry it, or press two would only re-arm instead of
+            // closing the tab the user just confirmed away.
+            $carried = $switched->mutate(pendingTabClose: $this->pendingTabClose);
+
+            [$closed, $closeCmd] = $carried->handleCloseTab(new CloseTabMsg($key));
+
+            return [$closed, CoreCmd::batch($switchCmd, $closeCmd)];
+        }
+
+        if ($model instanceof Chat) {
+            if ($busy) {
+                // Best-effort synchronous cancel: the turn's token must be
+                // released NOW because the tab is about to lose its routing
+                // — a scoped Cmd for a closed key can never be delivered,
+                // and dropping it un-cancelled would orphan the fork until
+                // the process exits. The Cmd chain runs against the dying
+                // model only to fire its side effects; its bookkeeping
+                // returns are uninteresting a step before the tab is gone.
+                for ($guard = 0; $guard < 4 && ($model->inFlight || $model->isStreaming()); $guard++) {
+                    $result = $model->update(new KeyMsg(KeyType::Escape));
+                    $model = $result[0] instanceof Chat ? $result[0] : $model;
+                    if ($result[1] !== null) {
+                        $result[1]();
+                    }
+                }
+            }
+
+            $model->flushTranscript();
+        }
+
+        [$closed] = $deck->close($key);
+
+        return [$this->mutate(deck: $closed, pendingTabClose: null), null];
+    }
+
+    /**
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleCycleTab(CycleTabMsg $msg): array
+    {
+        $deck = $this->deck;
+        if ($deck === null || $deck->count() <= 1) {
+            return [$this, null];
+        }
+
+        $target = $deck->cycle($msg->delta)->activeKey();
+        if ($target === null || $target === $deck->activeKey()) {
+            return [$this, null];
+        }
+
+        return $this->switchTab($target);
+    }
+
+    /**
+     * Quit with busy background tabs asks ONCE (P-TABS.e): the first press
+     * spends {@see $tabQuitWarned} and lands a status row instead of
+     * forwarding; every press after — or any press with nothing streaming —
+     * runs the pre-deck route, `delegateToChat`, untouched. Asking once and
+     * never re-arming is the plan's shape: a user who waits for the notice
+     * and presses again has read it.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleQuit(\SugarCraft\Core\Msg\QuitMsg $msg): array
+    {
+        if ($this->deck !== null && !$this->tabQuitWarned && $this->deckHasBusyBackground()) {
+            return [$this->mutate(tabQuitWarned: true)->withStatus(Lang::t('tabs.quit_arm')), null];
+        }
+
+        return $this->delegateToChat($msg);
+    }
+
+    /** Any PARKED tab still holding a turn? (Foreground busy is Chat's own quit story.) */
+    private function deckHasBusyBackground(): bool
+    {
+        if ($this->deck === null) {
+            return false;
+        }
+
+        foreach ($this->deck->keys() as $key) {
+            if ($key === $this->deck->activeKey()) {
+                continue;
+            }
+
+            $model = $this->deck->model($key);
+            if ($model instanceof Chat && ($model->inFlight || $model->isStreaming())) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Rebuild the immutable App with the named changes applied.
      *
      * Uses array_key_exists (not ??) so that nullable fields — error,
@@ -5319,6 +5862,9 @@ final class App implements Model
             tabFactory: array_key_exists('tabFactory', $changes) ? $changes['tabFactory'] : $this->tabFactory,
             contextPaneExpanded: array_key_exists('contextPaneExpanded', $changes) ? $changes['contextPaneExpanded'] : $this->contextPaneExpanded,
             contextDrill: array_key_exists('contextDrill', $changes) ? $changes['contextDrill'] : $this->contextDrill,
+            deck: array_key_exists('deck', $changes) ? $changes['deck'] : $this->deck,
+            pendingTabClose: array_key_exists('pendingTabClose', $changes) ? $changes['pendingTabClose'] : $this->pendingTabClose,
+            tabQuitWarned: array_key_exists('tabQuitWarned', $changes) ? $changes['tabQuitWarned'] : $this->tabQuitWarned,
         );
     }
 }
