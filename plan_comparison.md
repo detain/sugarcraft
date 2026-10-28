@@ -2001,7 +2001,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-PRV-2.a (W14)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-PRV-2.b`
 
-#### C-SEC-6.a — Saved-rule service and `/permissions saved` / `forget`
+#### ✅ be226b2b03a94ae22db8d8145410c45b54a7e3a0 C-SEC-6.a — Saved-rule service and `/permissions saved` / `forget`
 - **Item:** C-SEC-6 (sources: OC-new#3, GAP-PER-04) · gap · effort M
 - **What:** Saved "always" grants (`p` → `permissionRules` in the user config) can only be added today. The one writer is `PermissionPrompt::persistRules()` (`src/Permissions/PermissionPrompt.php:262-305`). Extract a `SavedRules` service: …
 - **Files — create:** `candy-code/src/Permissions/SavedRules.php`

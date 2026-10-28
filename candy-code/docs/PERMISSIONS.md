@@ -922,12 +922,12 @@ situations, not two:
     session grant `a` records rides along, so it is live this turn too; a save
     that cannot land (no write door, a value the launch would not load whole)
     is reported in the transcript and never fatal. The list is not write-only:
-    `/permissions saved` numbers every stored entry, and `/permissions forget
-    <n>` — or `<pattern>`, the exact saved pattern, spaces and no quoting —
-    takes one out. A forgetting lands **at the next launch**: the live gate
-    reads `permissionRules` once when the session starts, so what decides
-    *this* session tightens only through `/permissions mode <name>` (the
-    command's own answer says the same thing).
+    `/permissions saved` numbers the rows the launch would load, and
+    `/permissions forget <n>` — or `<pattern>`, the exact saved pattern,
+    spaces and no quoting — takes one out. A forgetting lands **at the next
+    launch**: the live gate reads `permissionRules` once when the session
+    starts, so what decides *this* session tightens only through `/permissions
+    mode <name>` (the command's own answer says the same thing).
   - `e` **edits the scope** before it is remembered: the draft box is
     prefilled with what `a` would remember — one pattern, or for a per-part
     grant a **comma-separated list** (`npm test *, tail *`; a comma followed
