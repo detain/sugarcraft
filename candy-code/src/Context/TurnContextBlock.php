@@ -284,7 +284,7 @@ final readonly class TurnContextBlock
      *
      * @param string $today      the ambient date as `YYYY-MM-DD`
      * @param string $frozenDate the date `<env>` renders, as `YYYY-MM-DD`;
-     *                           equal strings carry the row, different ones clear it
+     *                           different strings carry the row, equal ones clear it
      */
     public function withCurrentDate(string $today, string $frozenDate): self
     {

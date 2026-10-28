@@ -84,10 +84,11 @@ final class ModelMetadata
      * STALENESS LAW. Every row must be a cutoff the provider published and
      * that time has since confirmed — i.e. a model generation whose successors
      * are already public. Current-generation and fast-moving families
-     * (claude, gpt-5.x, deepseek, qwen, minimax, llama, gemini-2 and later)
-     * are DELIBERATELY absent, not awaiting a confident value; verify against
-     * the provider before adding one. Reviewed 2026-10-28 against the OpenAI
-     * and Google model documentation.
+     * (claude, gpt-5.x, deepseek, qwen, minimax, llama, gemini at every
+     * generation) are DELIBERATELY absent, not awaiting a confident value;
+     * verify against the provider before adding one. Reviewed 2026-10-28
+     * against the OpenAI model documentation; the one Google candidate was
+     * dropped 2026-10-29 for the disagreement noted in the table.
      *
      * MATCH ORDER. Rows are consulted in declaration order, so a token that
      * contains another row's token (e.g. a future `llama-3.1` before
@@ -99,7 +100,12 @@ final class ModelMetadata
         'gpt-4o' => 'October 2023',
         'o1-preview' => 'October 2023',
         'o1-mini' => 'October 2023',
-        'gemini-1.5' => 'October 2023',
+        // gemini-1.5 deliberately ABSENT (review round 1, 2026-10-29): Google's
+        // own authoritative sources disagree on its cutoff — the 1.5 tech report
+        // gives a November 2023 pre-training cutoff, the model docs' "Knowledge
+        // cutoff" field says May 2024. No published, confirmed value survives the
+        // staleness law above, so the row is dropped rather than picked: the
+        // family takes the unknown path and renders nothing.
     ];
 
     /**

@@ -271,11 +271,14 @@ final class EnvironmentBlockTest extends TestCase
      * An unknown family renders NOTHING — the risk law of the hand-kept
      * table: a confidently wrong cutoff inside the trusted `<env>` block is
      * worse than no cutoff, so absence is the designed answer (the golden
-     * fixture's claude model takes this branch).
+     * fixture's claude model takes this branch). `gemini-1.5-pro` joins the
+     * set from round 1: Google's own sources disagree on its cutoff (tech
+     * report pre-training November 2023 vs docs knowledge-cutoff May 2024),
+     * so the row was dropped rather than picked — see the table comment.
      */
     public function testCaptureRendersNoCutoffLineForAnUnknownFamily(): void
     {
-        foreach (['claude-sonnet-4-6', 'gpt-4', 'deepseek-v4', 'llama-3.1-70b', ''] as $model) {
+        foreach (['claude-sonnet-4-6', 'gpt-4', 'deepseek-v4', 'llama-3.1-70b', 'gemini-1.5-pro', ''] as $model) {
             $output = EnvironmentBlock::capture($this->tempDir, $model)->render();
             $this->assertStringNotContainsString('Knowledge cutoff', $output, "model '{$model}' must not gain a cutoff line");
         }
@@ -288,7 +291,7 @@ final class EnvironmentBlockTest extends TestCase
      */
     public function testTheCutoffLineIsFrozenIntoEveryDerivedCopy(): void
     {
-        $block = EnvironmentBlock::capture($this->tempDir, 'Gemini-1.5-Pro');
+        $block = EnvironmentBlock::capture($this->tempDir, 'OpenAI/GPT-4O');
 
         $this->assertStringContainsString('Knowledge cutoff: October 2023', $block->withVolatile(false)->render());
         $this->assertStringContainsString('Knowledge cutoff: October 2023', $block->withWriteSinceLastRender(false)->render());

@@ -5969,6 +5969,10 @@ final class Runtime
      * row, never the message-0 assembly — so a mid-session edit to a root
      * instruction file reaches the model as a bounded delta while the frozen
      * slab keeps its bytes ({@see instructionDiff()}).
+     *
+     * C-CTX-4: the live `Current date:` row is read in the host's timezone
+     * (a plain `new \DateTimeImmutable()` — the same basis `<env>` froze its
+     * date on), so it flips at host-local midnight, never UTC midnight.
      */
     public function turnContext(App $app): Context\TurnContextBlock
     {
