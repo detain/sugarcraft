@@ -1758,7 +1758,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ext.md` → `### C-EXT-4.a`
 
-#### C-PRV-2.a — OpenAI Responses wire (core)
+#### ✅ b4ff5dec3 C-PRV-2.a — OpenAI Responses wire (core)
 - **Item:** C-PRV-2 (sources: GAP-MOD-02, p1-miss: OpenAI Responses API) · gap · effort M
 - **What:** Today there is Chat Completions only. The vendored `openai-php/client` ^0.10 has no Responses resource. Add an opt-in `api: "responses"` key on `openai` blocks. A new trait, `Concerns\OpenAiResponsesWire`, speaks `POST …
 - **Files — create:** `candy-code/src/Providers/Concerns/OpenAiResponsesWire.php`, `candy-code/tests/Providers/OpenAiResponsesWireTest.php`
