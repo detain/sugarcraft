@@ -1,0 +1,38 @@
+### C-PRV-2.c — First-class `azure` and `openrouter` provider types
+- item: C-PRV-2 (sources: GAP-MOD-05/06)
+- kind: gap · effort M
+- approach: Both types are reachable today only through an undocumented `custom` block.
+  - `azure` reuses `OpenAIProvider` (Chat Completions, or `api: responses` once C-PRV-2.a exists):
+    - keys: `resource` or `baseUrl`, plus `apiKey`/`AZURE_OPENAI_API_KEY`;
+    - base `https://{resource}.openai.azure.com/openai/v1/` with an `api-key` header and no `Authorization` header;
+    - `name()` returns `azure` so cost, effort and error copy name it correctly.
+  - `openrouter` is a `CustomProvider` preset:
+    - base `https://openrouter.ai/api/v1`, `OPENROUTER_API_KEY`;
+    - `HTTP-Referer`/`X-Title` headers, which needs a `headers` key on custom blocks;
+    - `/models` through `HasModelCatalog`.
+  - Add both to `availableTypes()`, `TYPE_SCHEMAS`, `defaultConfig()`, `REQUIRED_KEY_ENVS`, and `candy-code login`'s `LOGIN_KEY_ENVS` (`Subcommands.php:794-798`).
+- files.create: `candy-code/tests/Providers/AzureOpenRouterTypesTest.php`
+- files.modify:
+  - `candy-code/src/Providers/ProviderFactory.php` (`availableTypes()`, `TYPE_SCHEMAS`, `defaultConfig()`, `REQUIRED_KEY_ENVS`, create match + two builders)
+  - `candy-code/src/Providers/OpenAIProvider.php` (configurable `name`)
+  - `candy-code/src/Providers/CustomProvider.php` (`headers`, `HasModelCatalog`)
+  - `candy-code/src/Cli/Subcommands.php` (`LOGIN_KEY_ENVS`)
+  - `candy-code/README.md` (L176 type list "nine type keys" → eleven; provider table near L1595)
+  - `candy-code/docs/ARCHITECTURE.md` (Providers section roster)
+  - `candy-code/docs/ENVIRONMENT.md` (two key vars)
+  - `candy-code/docs/ADDING_A_PROVIDER.md`
+- tests:
+  - create AzureOpenRouterTypesTest: Azure base URL and `api-key` header pin with no Authorization; OpenRouter headers and catalog;
+  - modify `candy-code/tests/Providers/ProviderFactoryTest.php`;
+  - `candy-code/tests/Providers/ProviderErrorCopyTest.php` iterates `availableTypes()`, so add the error-copy lang keys it needs.
+- docs/guards:
+  - `candy-code/tests/Config/DocFigureProseDriftTest.php::testProvidersSectionRosterDividesTheFactoryItDocuments` (ARCHITECTURE roster);
+  - `candy-code/tests/Config/EnvRosterDriftTest.php` (ENVIRONMENT.md);
+  - README L176 prose;
+  - `candy-code/tests/Cli/LoginSubcommandTest.php` (new types accepted).
+- serialized: [headless] [docs:README.md] [docs:ARCHITECTURE.md] [docs:ENVIRONMENT.md] [docs:ADDING_A_PROVIDER.md] [lang:provider.* error copy] [hot:candy-code/src/Providers/ProviderFactory.php] [hot:candy-code/src/Providers/OpenAIProvider.php]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: if C-PRV-1.c runs in the same wave, both edit `Subcommands.php` ([headless]). The orchestrator must put them in different waves.
+

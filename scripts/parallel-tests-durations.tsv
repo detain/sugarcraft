@@ -665,6 +665,7 @@ candy-code/tests/Backend/InTurnCompressionTest.php	0.110	6
 candy-code/tests/MCP/McpClientUserMergeTest.php	0.110	9
 candy-code/tests/MCP/McpNestedArgumentsWireTest.php	0.109	2
 candy-code/tests/Memory/CompactionJournalTest.php	0.109	11
+candy-code/tests/Providers/AzureOpenRouterTypesTest.php	0.108	21
 candy-code/tests/Cli/BootstrapMcpTrustPinsTest.php	0.107	5
 candy-code/tests/Cli/ConsolePermissionApproverWiringTest.php	0.107	13
 candy-code/tests/Context/RuleLoaderTest.php	0.107	35

@@ -2061,7 +2061,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-CTX-6.a (W10)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-5.c`
 
-#### C-PRV-2.c — First-class `azure` and `openrouter` provider types
+#### ✅ ac5eb1749 C-PRV-2.c — First-class `azure` and `openrouter` provider types
 - **Item:** C-PRV-2 (sources: GAP-MOD-05/06) · gap · effort M
 - **What:** Both types are reachable today only through an undocumented `custom` block. `azure` reuses `OpenAIProvider` (Chat Completions, or `api: responses` once C-PRV-2.a exists): keys: `resource` or `baseUrl`, plus …
 - **Files — create:** `candy-code/tests/Providers/AzureOpenRouterTypesTest.php`
