@@ -11,6 +11,12 @@ import {
     readPastedImages,
     type PastedImage,
 } from "../lib/paste";
+import {
+    createDictation,
+    dictationNoticeFor,
+    dictationSupported,
+    type Dictation,
+} from "../lib/dictation";
 
 const props = defineProps<{
     modelValue: string;
@@ -242,7 +248,92 @@ function onInput(event: Event): void {
     emit("update:modelValue", (event.target as HTMLTextAreaElement).value);
 }
 
+/**
+ * C-TUI-6.k: Web Speech dictation. The mic appears only where the browser
+ * has the API and the page is a secure context; the audio is heard by the
+ * BROWSER vendor's speech service and never reaches the candy-code server
+ * (the button's title says so). Interim text shows as a dim hint under the
+ * textarea; a final utterance is inserted at the caret — dictation never
+ * sends on its own. A lone Esc stops it, like the TUI's key.
+ */
+const canDictate = ref(dictationSupported(window));
+const listening = ref(false);
+const interim = ref("");
+const dictationNotice = ref("");
+let dictation: Dictation | null = null;
+
+/** The final text lands between the caret's ends; the parent owns the draft. */
+function insertDictated(text: string): void {
+    const value = props.modelValue;
+    const el = input.value;
+    if (el === null) {
+        emit("update:modelValue", value + text);
+        return;
+    }
+    const start = el.selectionStart ?? value.length;
+    const end = el.selectionEnd ?? value.length;
+    emit("update:modelValue", value.slice(0, start) + text + value.slice(end));
+}
+
+function stopDictation(): void {
+    listening.value = false;
+    interim.value = "";
+    dictation?.stop();
+}
+
+function toggleDictation(): void {
+    if (listening.value) {
+        stopDictation();
+        return;
+    }
+    dictationNotice.value = "";
+    interim.value = "";
+    // Explicit window: the component and its tests share this one object.
+    dictation = createDictation(
+        {
+            lang: navigator.language,
+            onInterim: (text) => {
+                interim.value = text;
+            },
+            onFinal: (text) => {
+                interim.value = "";
+                insertDictated(text);
+            },
+            onError: (code) => {
+                dictationNotice.value = dictationNoticeFor(code);
+                if (code === "already-running") {
+                    // The session died before it ever ran; the mic must not
+                    // stay lit while the notice says it is already running.
+                    listening.value = false;
+                }
+            },
+            onEnd: () => {
+                listening.value = false;
+                interim.value = "";
+            },
+        },
+        window,
+    );
+    if (dictation === null) {
+        // Detection said yes, the platform said no: drop the button.
+        canDictate.value = false;
+        return;
+    }
+    listening.value = true;
+    dictation.start();
+}
+
+onBeforeUnmount(() => {
+    dictation?.stop();
+});
+
 function onKeydown(event: KeyboardEvent): void {
+    if (event.key === "Escape" && listening.value) {
+        // While dictation runs, a lone Esc is its stop key (C-TUI-6.k).
+        event.preventDefault();
+        stopDictation();
+        return;
+    }
     if (
         event.ctrlKey &&
         !event.metaKey &&
@@ -387,8 +478,37 @@ defineExpose({ focus: () => input.value?.focus() });
                 @keydown="onKeydown"
                 @paste="onPaste"
             />
+            <div
+                v-if="interim !== ''"
+                class="dictation-hint"
+                aria-live="polite"
+                data-testid="composer-dictation-hint"
+            >
+                {{ interim }}
+            </div>
+            <div
+                v-if="dictationNotice !== ''"
+                class="dictation-notice"
+                aria-live="polite"
+                data-testid="composer-dictation-notice"
+            >
+                {{ dictationNotice }}
+            </div>
         </div>
         <div class="controls">
+            <button
+                v-if="canDictate"
+                type="button"
+                class="mic"
+                :class="{ live: listening }"
+                :aria-pressed="listening"
+                :aria-label="listening ? 'Stop dictation' : 'Dictate'"
+                title="Dictate — your browser's speech service hears this audio; the candy-code server does not."
+                data-testid="composer-mic"
+                @click="toggleDictation"
+            >
+                {{ listening ? "Dictating…" : "Dictate" }}
+            </button>
             <select
                 v-if="busy"
                 v-model="delivery"
@@ -532,6 +652,18 @@ textarea:focus {
     color: var(--muted);
     overflow: hidden;
     text-overflow: ellipsis;
+}
+.mic.live {
+    border-color: var(--error);
+    color: var(--error);
+}
+.dictation-hint {
+    color: var(--muted);
+    font-style: italic;
+    overflow-wrap: anywhere;
+}
+.dictation-notice {
+    color: var(--error);
 }
 @media (max-width: 600px) {
     .composer {
