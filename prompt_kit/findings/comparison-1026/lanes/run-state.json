@@ -165,45 +165,30 @@
   "C-SES-6.b",
   "C-CTX-5.c",
   "C-TOOL-2.d",
-  "C-TOOL-3.e"
+  "C-TOOL-3.e",
+  "C-SES-6.c"
  ],
  "inflight": {
   "P-AGENT.b": {
-   "stage": "review",
+   "stage": "clean",
    "round": 2,
    "worktree": "/home/sites/cc-cmp-P-AGENT.b",
    "branch": "cc/P-AGENT.b",
-   "session": "ses_e7c63fdfaffev7sWJ7mm4JUwOh",
-   "commit": "552cc4e71",
-   "review_session": "ses_e7c1bc44dffex3rAJOO45vxD9R",
-   "fixer_session": "ses_e7c286b14ffeyWNgGMATx8Zv7N",
-   "note": "fix r1 552cc4e71 (KeyHelp roster, [$app,null] pin, docblock, REPORT stamp); MAJOR-2 lead-accepted; welder rebases onto post-878047472",
-   "build_commits": "19830f687+552cc4e71"
+   "notes": "r2 CLEAN 0C/0M/0m @552cc4e71 (REVIEW-2.md canonical). WELD-BATCH-3 duties: rebase-pick 19830f687+552cc4e71 onto post-878047472 master, re-run both lanes gates (361T/5065A + KeyHelp 63T/5F-standing + KeyBindingDrift 224T), durations rows AgentWindowViewportTest+AgentInterruptSendTest, +14T carry, roster-still-6 check, stash@{0} dup droppable. Unblocks C-AGT-4.b."
   },
   "C-SES-8.c": {
-   "stage": "fix",
-   "round": 1,
+   "stage": "clean",
+   "round": 2,
    "worktree": "/home/sites/cc-cmp-C-SES-8.c",
    "branch": "cc/C-SES-8.c",
-   "session": "ses_e7c245d4dffeNG8CLQnaWRuPrH",
-   "note": "blank x3 -> same-session continue resumes (owner rule), attempt 3 of 10",
-   "blanks": 3,
-   "commit": "e2759d081",
-   "review_session": "ses_e7c316b39ffdWpAT4TEkLTa5lO",
-   "fixer_session": "ses_e7c245d4dffeNG8CLQnaWRuPrH",
-   "review_verdict": "r1 FINDINGS 0C/0M/1m/2n (REVIEW-1.md)"
+   "notes": "r2 CLEAN 0C/0M/0m/0n @cc8ea765f (old base cf0cfd0be; pick range e2759d081..cc8ea765f, 2 commits). Welder carries: durations rows InsightsCommandTest+InsightsHostCommandTest, +15T carry, \u00a74 cites cc8ea765f, OneSided roster accusation routes to C-CTX-4.c owner (closeout)."
   },
   "C-SES-8.f": {
-   "stage": "review",
+   "stage": "clean",
    "round": 2,
    "worktree": "/home/sites/cc-cmp-C-SES-8.f",
    "branch": "cc/C-SES-8.f",
-   "session": "ses_e7c63fdf3ffeaiZO4c7WxDPHO1",
-   "commit": "f9f079205",
-   "review_session": "ses_e7c210419ffep9qWAqpAH8vUeC",
-   "tip": "25c91d6eb",
-   "fixer_session": "ses_e7c25eeccffepD7w7ByLeY8hMm",
-   "note": "fix r1 landed f9f079205 (docblock+pin, REPORT restamped); README:621 jsonl DOC-ROW = weld/closeout carry; weld range 25c91d6eb..f9f079205"
+   "notes": "r2 CLEAN 0C/0M/0m (REVIEW-2.md canonical). Weld range 25c91d6eb..f9f079205 (2 commits), \u00a74 cites f9f079205. Carries: README:621 jsonl DOC-ROW at weld; no durations row (+2A existing file)."
   },
   "C-TOOL-5.a": {
    "stage": "build",
@@ -216,13 +201,12 @@
    "note": "2 prior incarnations harness-dead zero writes; worktree clean at 878047472"
   },
   "C-TUI-2.d": {
-   "stage": "build",
-   "round": 0,
+   "stage": "review",
+   "round": 1,
    "worktree": "/home/sites/cc-cmp-C-TUI-2.d",
    "branch": "cc/C-TUI-2.d",
-   "session": "ses_e7c2a7e93ffeefdnidNLOzvL1Q",
-   "base": "878047472",
-   "libs": "candy-code,sugar-diff"
+   "session": "ses_e7c115d4cffeV4qnDudHWJP7C0",
+   "notes": "build c49418587 (parent 878047472, 9 files +1279/-4). r1 reviewer live."
   },
   "C-TUI-3.c": {
    "stage": "clean",
@@ -230,17 +214,14 @@
    "worktree": "/home/sites/cc-cmp-C-TUI-3.c",
    "branch": "cc/C-TUI-3.c",
    "session": "ses_e7c239aa3ffekIEhvYVm70DzdV",
-   "notes": "r1 reviewer#1: 0C/0M/1 out-of-scope MINOR/1 NIT, WELDABLE. tip 4ccfb9ce4 (parent 878047472, 5 files +563, 9T/90A, LangParity 7/2998, TuiLang 9/1414). Welder carries: durations MessagePickerTest row, +9T carry, KeyHelpTest base-reds roster note (standing, not-lane). Twin reviewer ses_e7c20baa2ffe still live on same tip \u2014 stricter verdict wins, downgrade to fix if it lands step-local findings."
+   "notes": "BOTH r1 reviewers CLEAN (0C/0M; twin verdicts agree). WELD-READY tip 4ccfb9ce4. Welder carries: durations MessagePickerTest row, +9T/+90A, KeyHelpTest base-reds standing."
   },
   "C-TUI-3.f": {
-   "stage": "build",
-   "round": 0,
+   "stage": "clean",
+   "round": 1,
    "worktree": "/home/sites/cc-cmp-C-TUI-3.f",
    "branch": "cc/C-TUI-3.f",
-   "session": "ses_e7c2a7e91ffe3n3bz4B1KQGXTg",
-   "base": "878047472",
-   "libs": "candy-code",
-   "resumes": 1
+   "notes": "r1: 0C/0M/1 step-local MINOR (RecapHostCommand.php:16-19 docblock overclaims recap-voiced TUI row \u2014 Chat.php:12010 drops Async describe mapper; default btw heading lands until 3.g registers) + 2 NITs (REPORT HostErrorRowFlag 31-not-33; host.recap.failed failureKey unpinned, btw-mirrored). CURE AT WELD (C-SES-4.c fold-in precedent): qualify docblock + REPORT stamp, no re-review round. Welder carries: durations RecapHostCommandTest row, +4T, \u00a74 cites 033ba8947, 3.g brief seam note, optional failureKeyRoster add."
   },
   "C-TUI-5.d": {
    "stage": "build",
@@ -253,15 +234,58 @@
    "resumes": 1,
    "notes": "live builder = RE-CUT ses_e7c27b478ffe (worktree progress verified @222: ProviderKeyStore.php + FirstRunWizard/ untracked, en.php+census tests dirty). Old original ses_e7c2a7e8fffe blank-returned post-recut: RETIRED, do NOT resume (double-writer hazard)."
   },
-  "C-SES-6.c": {
-   "stage": "clean",
-   "tip": "bcb1769f6",
-   "note": "r2 CLEAN, weld batch-2"
-  },
   "C-PRV-2.c": {
    "stage": "clean",
    "tip": "b08ca9605",
    "note": "r2 CLEAN, weld batch-2"
+  },
+  "C-WEB-4.b": {
+   "stage": "build",
+   "round": 0,
+   "worktree": "/home/sites/cc-cmp-C-WEB-4.b",
+   "branch": "cc/C-WEB-4.b",
+   "session": "ses_e7c27b501ffeBETBU1SfvxNwBy",
+   "notes": "(key was clobbered by welder run-state write; builder live)"
+  },
+  "C-WEB-4.c": {
+   "stage": "build",
+   "round": 0,
+   "worktree": "/home/sites/cc-cmp-C-WEB-4.c",
+   "branch": "cc/C-WEB-4.c",
+   "session": "ses_e7c182aeeffejFXzGqROLS9Sbc",
+   "notes": "base eed6630d3; npm ci+refresh done; dist rides lane commit per brief; ToolCard.vue hot-serialized (4.b elsewhere)."
+  },
+  "C-SES-4.d": {
+   "stage": "build",
+   "round": 0,
+   "worktree": "/home/sites/cc-cmp-C-SES-4.d",
+   "branch": "cc/C-SES-4.d",
+   "session": "ses_e7c144829ffem8k5olP3KC62N1",
+   "notes": "base da284586a. Brief honors \u00a76.3 owner ruling on serve OTel (ruling wins over design block if contradiction; builder must quote it). Durations row SessionHostOtelFoldTest owed at weld. Bootstrap workspace()/chat-comment regions only."
+  },
+  "C-TUI-2.c": {
+   "stage": "build",
+   "round": 0,
+   "worktree": "/home/sites/cc-cmp-C-TUI-2.c",
+   "branch": "cc/C-TUI-2.c",
+   "session": "ses_e7c1074d2ffeMSSFckwqe4HDx2",
+   "notes": "base da284586a. diffStyle setting multi-guard move; width-invariant pin load-bearing."
+  },
+  "C-WEB-4.d": {
+   "stage": "build",
+   "round": 0,
+   "worktree": "/home/sites/cc-cmp-C-WEB-4.d",
+   "branch": "cc/C-WEB-4.d",
+   "session": "pending-npm-ci",
+   "notes": "base 24d746501; npm ci in flight (bg shell). StatusBar.vue+reducer.ts hot; reducer edit = 2 arms + 1 field only (cross-area hot file). dist rides lane commit."
+  },
+  "C-WEB-4.e": {
+   "stage": "build",
+   "round": 0,
+   "worktree": "/home/sites/cc-cmp-C-WEB-4.e",
+   "branch": "cc/C-WEB-4.e",
+   "session": "pending-npm-ci",
+   "notes": "base 24d746501; npm ci in flight (bg shell). [protocol] serialized: TurnMethods+MethodSchemas+trio regen (schema/SERVER.md/generated.ts)+Composer.vue+paste.ts+session.ts; NEW SessionSendDocumentsTest.php -> durations row at weld; welder re-derives trio once on merged tree (C-TOOL-3.e precedent)."
   }
  },
  "blocked": [],
@@ -1084,8 +1108,8 @@
   ]
  },
  "tip": "0f58a906f",
- "welded_count": 166,
- "tick": "118: C-TUI-3.c stage=clean (reviewer#1 weldable; twin r1 pending). C-TUI-5.d original retired, recut live building. welder still on C-TOOL-3.e weld-mark. batch-2 queue: C-SES-6.c, C-PRV-2.c, C-TUI-3.c, + lands as reviews close.",
+ "welded_count": 167,
+ "tick": "batch-2 weld: C-SES-6.c welded (welder subagent). queue: C-SES-6.c, C-PRV-2.c, C-SES-8.f, C-TUI-3.c (welding in order).",
  "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
  "blocked_notes": {
   "C-AGT-5.b": "OWNER RULING NEEDED (gates W14 full closure + C-AGT-5.c cascade in W15): C-AGT-5.a r1 MINOR-2 \u2014 ScheduleFactory delete guard is createdBy-scoped, not root-scoped, so a model-created row in ANOTHER root can be deleted without include_operator_rows. Options (a) root-scope the guard (stricter; may break legit cross-root cleanup), (b) keep createdBy-scope + document. Per C-AGT-5.a r2 CLEAN the lane shipped as-designed; ruling owed before any rebuild of 5.b."
@@ -1240,7 +1264,7 @@
  "note": "W15 FULLY WELDED \u2014 wave loop r1 next",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
  "laws_premise_correction": "2026-10-29: plan_comparison.md is TRACKED (ls-files + full weld history commit its marks). \u00a73/\u00a74 progress marks MUST be committed with the weld. The never-stage rule applies ONLY to root ./run-state.json stray, ./escalated, and foreign dirt.",
- "master_tip": "eed6630d3",
+ "master_tip": "c7ee812b9",
  "prestage_w18": {
   "briefs": "all 10 extracted to lanes/<id>/BRIEF.md",
   "notes": {

@@ -59,6 +59,7 @@ candy-code/tests/Config/AccessorDeprecationTest.php	5.117	729
 candy-code/tests/Support/InterpolationOpenerTokenTest.php	5.109	6
 candy-code/tests/Cli/LoginSubcommandTest.php	5.097	17
 candy-code/tests/Support/ProcessUniqueTempNameTest.php	5.035	17
+candy-code/tests/Cli/InstallScriptTest.php	4.959	13
 candy-code/tests/Integration/ParallelToolCallsTest.php	4.956	27
 candy-code/tests/Backend/TaskSpendPropagationTest.php	4.927	13
 candy-code/tests/Backend/EngineBackendTest.php	4.923	35
@@ -207,6 +208,7 @@ candy-code/tests/Tools/TaskToolPresetPermissionModeTest.php	1.483	6
 candy-code/tests/Runtime/ThinkingBlocksProductionFoldTest.php	1.480	8
 candy-code/tests/Tools/TaskToolProgressFramesTest.php	1.480	14
 candy-code/tests/Workflows/WorkflowEngineCancellationTest.php	1.469	6
+candy-code/tests/Cli/HomebrewFormulaTest.php	1.424	7
 candy-code/tests/Server/SendImagesTest.php	1.409	6
 candy-code/tests/Support/FixtureLifetimeCensusTest.php	1.406	3
 candy-code/tests/Workflows/WorkflowToolsHandoffTest.php	1.398	11

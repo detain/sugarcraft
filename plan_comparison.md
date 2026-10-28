@@ -2094,7 +2094,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SES-9.c (W8)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-6.b`
 
-#### C-SES-6.c — `install.sh` + Homebrew formula generator
+#### ✅ 24d746501 C-SES-6.c — `install.sh` + Homebrew formula generator
 - **Item:** C-SES-6 (sources: GAP-PLAT-03, p2-miss: packaging channels) · gap · effort M
 - **What:** **`tools/install.sh`** (POSIX sh) does six things: 1. checks for `php` 8.3+; 2. resolves the latest `candy-code/v*` release, or `--channel dev`; 3. downloads the `.phar`, `.sha256` and `.sha256.sig` (falling back to `.minisig`); …
 - **Files — create:** `candy-code/tools/install.sh`, `candy-code/packaging/homebrew/candy-code.rb.tmpl`, `candy-code/tests/Cli/InstallScriptTest.php`, `candy-code/tests/Cli/HomebrewFormulaTest.php`
