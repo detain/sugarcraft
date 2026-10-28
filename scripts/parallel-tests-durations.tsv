@@ -538,6 +538,7 @@ candy-code/tests/Renderer/StatusBarModelAndReadOnlyTest.php	0.239	10
 candy-code/tests/Renderer/FocusedToolRowHighlightTest.php	0.239	10
 candy-code/tests/Backend/TurnContextPersistedTest.php	0.238	3
 candy-code/tests/Permissions/AlwaysAllowReliabilityTest.php	0.238	5
+candy-code/tests/Workspace/GhRunnerTest.php	0.238	6
 candy-code/tests/SuiteRootRunRefusalTest.php	0.237	4
 candy-code/tests/Context/RepoMapBlockTest.php	0.236	68
 candy-code/tests/App/TabScopedRoutingTest.php	0.236	8
@@ -954,6 +955,7 @@ candy-code/tests/SessionSaveLockTest.php	0.020	2
 candy-code/tests/Skills/SkillDiscoveryTest.php	0.020	21
 candy-code/tests/Tools/ProcessOutputCaptureTest.php	0.020	4
 candy-code/tests/Tui/MediaForm/ImageSectionIngressTest.php	0.020	5
+candy-code/tests/Chat/PrCommandTest.php	0.019	6
 candy-code/tests/ChatInputCursorTest.php	0.019	31
 candy-code/tests/Cli/ArgvParserTest.php	0.019	134
 candy-code/tests/Context/ModelFamilyPromptTest.php	0.019	32
@@ -1244,6 +1246,7 @@ candy-code/tests/Hooks/HookEventTest.php	0.003	35
 candy-code/tests/Hooks/HookResultTest.php	0.003	33
 candy-code/tests/Hooks/PermissionGateHookTest.php	0.003	15
 candy-code/tests/Hooks/PostToolUseAttributionTest.php	0.003	12
+candy-code/tests/Host/Commands/PrHostCommandTest.php	0.003	3
 candy-code/tests/MCP/GitOperationResultTest.php	0.003	24
 candy-code/tests/MCP/McpClientClaudeTypeFactoryTest.php	0.003	5
 candy-code/tests/MCP/StdioMcpServerClosedPipeGuardTest.php	0.003	1
