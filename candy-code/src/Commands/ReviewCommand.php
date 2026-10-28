@@ -13,9 +13,10 @@ use SugarCraft\Code\Workspace\GitRunner;
  * canned review prompts, dispatched as ordinary turns the way {@see InitCommand} is.
  *
  * NOT A DIFF GENERATOR. The prompt ends in the `@diff` mention — `@diff:<ref>`
- * when the command names a revision — and the mention scanner attaches the
+ * when the command names a revision (single tree-ish or, since C-AGT-6.b, a
+ * `A..B`/`A...B` range of them) — and the mention scanner attaches the
  * diff exactly as it does for typed prose: one diff-reading code path, the
- * same plumbing flags, the same timeouts, and the result rides into the turn
+ * same safety flags, the same timeouts, and the result rides into the turn
  * as an attachment rather than as text the model may misread. Unlike
  * InitCommand — whose prompt is kept free of `@` on purpose — this one
  * INVITES the scanner; the mention is the whole point. The Chat handlers
@@ -115,11 +116,14 @@ final class ReviewCommand
      * order the scanner itself enforces them:
      *
      * 1. the {@see ContextMentions::isDiffRef()} round trip — a spelling the
-     *    mention scanner would trim back or refuse as a keyword (a range, an
-     *    unclosed reflog address) can never attach, and
-     * 2. a bounded `git rev-parse --verify <ref>^{tree}` — a well-spelled ref
-     *    that resolves to nothing would fail `diff-index` just as quietly, so
-     *    the turn is refused BEFORE it is billed.
+     *    mention scanner would trim back or refuse as a keyword (a malformed
+     *    range, an unclosed reflog address) can never attach, and
+     * 2. a bounded `git rev-parse --verify <side>^{tree}` — a well-spelled ref
+     *    that resolves to nothing would fail the diff just as quietly, so the
+     *    turn is refused BEFORE it is billed. A range (`A..B`, `A...B` — the
+     *    spellings C-AGT-6.b admitted) is pre-resolved side by side, because
+     *    git only reports a half-known range at diff time, which for a
+     *    COMMAND is after the turn was spent.
      *
      * An empty ref means the bare command and is always allowed; where git is
      * not available at all the second gate abstains — the scanner's own
@@ -141,22 +145,28 @@ final class ReviewCommand
             return null;
         }
 
-        $resolved = GitRunner::new($root)
+        $git = GitRunner::new($root)
             ->withInheritedGitEnv()
-            ->withTimeout(ContextMentions::DIFF_TIMEOUT_SECONDS)
-            ->capture(4096, 'rev-parse', '--verify', $ref . '^{tree}');
+            ->withTimeout(ContextMentions::DIFF_TIMEOUT_SECONDS);
 
-        // A spent capture budget (`capture()` reports it as exitCode 124 +
-        // `timedOut`, not as a resolution) answers with the SAME bad-ref row
-        // as a genuine non-zero `rev-parse`, deliberately: the gate's
-        // question is "may this ref carry a billed turn", and an UNVERIFIED
-        // ref fails that question exactly like an unresolvable one —
-        // fail-closed. Naming the timeout in its own row would need a new
-        // `cmd.review.*` key and a second refusal shape no test can reach
-        // without a five-second wall-clock; the transcript answer stays
-        // honest in the direction that matters (no turn was billed).
-        return $resolved['timedOut'] || $resolved['exitCode'] !== 0
-            ? Lang::t('cmd.review.bad-ref', ['ref' => $ref])
-            : null;
+        $sides = ContextMentions::diffRangeSides($ref);
+        foreach ($sides === null ? [$ref] : [$sides[0], $sides[1]] as $side) {
+            $resolved = $git->capture(4096, 'rev-parse', '--verify', $side . '^{tree}');
+
+            // A spent capture budget (`capture()` reports it as exitCode 124 +
+            // `timedOut`, not as a resolution) answers with the SAME bad-ref row
+            // as a genuine non-zero `rev-parse`, deliberately: the gate's
+            // question is "may this ref carry a billed turn", and an UNVERIFIED
+            // ref fails that question exactly like an unresolvable one —
+            // fail-closed. Naming the timeout in its own row would need a new
+            // `cmd.review.*` key and a second refusal shape no test can reach
+            // without a five-second wall-clock; the transcript answer stays
+            // honest in the direction that matters (no turn was billed).
+            if ($resolved['timedOut'] || $resolved['exitCode'] !== 0) {
+                return Lang::t('cmd.review.bad-ref', ['ref' => $ref]);
+            }
+        }
+
+        return null;
     }
 }

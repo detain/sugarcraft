@@ -22,7 +22,9 @@ use SugarCraft\Code\Workspace\GitRunner;
  *
  *  - `@diff` — the working tree's changes to tracked files against `HEAD`
  *    (staged and unstaged together); `@diff:<ref>` against another commit,
- *    branch or tag. Untracked files are not in it, and the block says so.
+ *    branch or tag; and — since C-AGT-6.b — the two committed-range spellings
+ *    `@diff:A..B` (A to B) and `@diff:A...B` (from their common ancestor to B).
+ *    Untracked files are not in any of them, and the block says so.
  *  - `@session:<id>` — another session's conversation, by id, name or a
  *    unique id prefix (the `--resume` rule, {@see SessionResolver}).
  *  - `@https://…` / `@http://…` — a web page, fetched through
@@ -90,25 +92,75 @@ final class ContextMentions
      * a command can never submit a diff mention the scanner would refuse to
      * attach and the review would silently run against nothing). The check is
      * the full walk, not just the pattern: a spelling the trailing-punctuation
-     * trim would cut back (`HEAD@{1`, a path that cannot close) is refused, as
-     * is a range (`base..HEAD`) — the diff runner resolves a single tree-ish,
-     * so a range would fail `diff-index` and attach nothing.
+     * trim would cut back (`HEAD@{1`, a path that cannot close) is refused.
+     * Since C-AGT-6.b a range survives in exactly its two git shapes — `A..B`
+     * and `A...B`, each side itself surviving this walk — because {@see
+     * diff()} learned to run those against git; a malformed range (`a..`,
+     * `a..b..c`, a side that reads as an option) is refused here, at the
+     * scanner's door, the same way a misspelled single ref always was.
      */
     public static function isDiffRef(string $ref): bool
     {
-        if ($ref === '' || \str_contains($ref, '..') || preg_match(self::REF_PATTERN, $ref) !== 1) {
+        if ($ref === '' || preg_match(self::REF_PATTERN, $ref) !== 1) {
             return false;
         }
 
-        // A reflog address the user never closed (`HEAD@{1`) survives the
-        // trim untouched — nothing trims it back — but git can never resolve
-        // it, so the turn would bill against a diff that fails to attach.
-        // Refuse the dangling spelling here, at the scanner's door.
-        if (\substr_count($ref, '@{') > \substr_count($ref, '}')) {
+        $sides = self::diffRangeSides($ref);
+        if ($sides !== null) {
+            if (!self::isRefSide($sides[0]) || !self::isRefSide($sides[1])) {
+                return false;
+            }
+        } elseif (\substr_count($ref, '@{') > \substr_count($ref, '}')) {
+            // A reflog address the user never closed (`HEAD@{1`) survives the
+            // trim untouched — nothing trims it back — but git can never resolve
+            // it, so the turn would bill against a diff that fails to attach.
+            // Refuse the dangling spelling here, at the scanner's door. Each
+            // side of a range carries its own brace check in isRefSide().
             return false;
         }
 
         return self::trimmed('diff:' . $ref) === 'diff:' . $ref;
+    }
+
+    /**
+     * The two sides of a `@diff` range, cut the way git cuts them: the
+     * three-dot spelling is looked for first, so `a...b` cuts at its `...` and
+     * a plain `..`-bearing spelling cuts at its first `..`. Returns
+     * [left, right, threeDot] for ANY separator-bearing spelling — including
+     * malformed ones (`a..`, `a..b..c`) whose sides the caller must still run
+     * through {@see isRefSide()} — and null when $ref is no range at all.
+     *
+     * @return ?array{0: string, 1: string, 2: bool}
+     */
+    public static function diffRangeSides(string $ref): ?array
+    {
+        $cut = \strpos($ref, '...');
+        if ($cut !== false) {
+            return [\substr($ref, 0, $cut), \substr($ref, $cut + 3), true];
+        }
+        $cut = \strpos($ref, '..');
+        if ($cut === false) {
+            return null;
+        }
+
+        return [\substr($ref, 0, $cut), \substr($ref, $cut + 2), false];
+    }
+
+    /**
+     * One side of a `@diff` range: what {@see isDiffRef()} accepts as a whole
+     * single ref, plus the rejections a range spelling makes possible that a
+     * single one never offers — an empty side, a side carrying the separator
+     * again, and a side that could read to git as an option or a hidden path
+     * (leading dash or dot).
+     */
+    private static function isRefSide(string $side): bool
+    {
+        return $side !== ''
+            && !\str_starts_with($side, '-')
+            && !\str_starts_with($side, '.')
+            && !\str_contains($side, '..')
+            && \substr_count($side, '@{') <= \substr_count($side, '}')
+            && preg_match(self::REF_PATTERN, $side) === 1;
     }
 
     /**
@@ -117,6 +169,31 @@ final class ContextMentions
      * tool or textconv driver can run.
      */
     private const DIFF_FLAGS = ['-M', '--shortstat', '--patch', '--no-ext-diff', '--no-textconv', '--no-color'];
+
+    /**
+     * Flags on the RANGE diff read (C-AGT-6.b) — the same three safety flags
+     * DIFF_FLAGS exists for (no external diff tool, no textconv driver, no
+     * color) plus `-M` and `--patch`, which force readable text even when
+     * repository config would rather not. `--shortstat` is deliberately not
+     * carried: the range head already says what the block is, and the leg
+     * must run on git builds that predate `diff --merge-base`, where the
+     * fallback in {@see diffRange()} is a second spelling, not a failure.
+     */
+    private const RANGE_DIFF_FLAGS = ['--no-ext-diff', '--no-textconv', '--no-color', '-M', '--patch'];
+
+    /**
+     * git's usage-error status. `diff --merge-base` is unknown syntax before
+     * git 2.31 and answers with exactly this, which is how the three-dot leg
+     * tells "old git, fall back" from "bad revision, refuse" (a bad revision
+     * answers 128).
+     */
+    private const THREE_DOT_USAGE_FALLBACK = 129;
+
+    /**
+     * A raw object id — the only answer from `merge-base` the fallback leg
+     * hands back to git as an argument (the empty-tree check's shape).
+     */
+    private const OBJECT_ID_PATTERN = '/\A[0-9a-f]{40}(?:[0-9a-f]{24})?\z/';
 
     /**
      * @param \Closure(): (SessionStore|EnhancedSessionStore|null)|null $sessionStore
@@ -243,7 +320,11 @@ final class ContextMentions
     }
 
     /**
-     * `@diff` / `@diff:<ref>`: `git diff-index <ref>` over the project root.
+     * `@diff` / `@diff:<ref>`: the diff against one tree-ish via plumbing
+     * `diff-index`, or — since C-AGT-6.b — a committed range `A..B` / `A...B`
+     * via {@see diffRange()}. Same bounds either way: {@see
+     * DIFF_TIMEOUT_SECONDS} on git, {@see TEXT_MAX_BYTES} on the text,
+     * untracked files out.
      *
      * @return array{0: ?Attachment, 1: ?string}
      */
@@ -252,6 +333,16 @@ final class ContextMentions
         $ref = $keyword === 'diff' ? 'HEAD' : substr($keyword, 5);
         if (preg_match(self::REF_PATTERN, $ref) !== 1) {
             return [null, sprintf('@%s was not attached: "%s" is not a git revision.', self::shown($keyword), self::shown($ref))];
+        }
+        $sides = self::diffRangeSides($ref);
+        if ($sides !== null) {
+            if (!self::isRefSide($sides[0]) || !self::isRefSide($sides[1])) {
+                // A malformed range never reaches git: it is refused with the
+                // same notice a malformed single ref earns, before any spawn.
+                return [null, sprintf('@%s was not attached: "%s" is not a git revision.', self::shown($keyword), self::shown($ref))];
+            }
+
+            return $this->diffRange($keyword, $ref, $sides[0], $sides[1], $sides[2]);
         }
         if (!\function_exists('proc_open') || !GitRunner::available()) {
             return [null, sprintf('@%s was not attached: git is not available here.', self::shown($keyword))];
@@ -287,6 +378,110 @@ final class ContextMentions
             'git diff %s — staged and unstaged changes to tracked files (untracked files are not included)',
             $ref,
         );
+
+        return $this->attachDiff($keyword, $header, $captured);
+    }
+
+    /**
+     * `@diff:A..B` / `@diff:A...B` (C-AGT-6.b): the committed changes between
+     * two revisions, via `git diff A B` — two named commits, so the working
+     * tree can neither enter nor race the snapshot — or, for the three-dot
+     * spelling, from the common ancestor of the two sides to B.
+     *
+     * Porcelain, not plumbing, because plumbing has no two-tree-ish form, and
+     * porcelain answers to repository config — so {@see RANGE_DIFF_FLAGS}
+     * carries the very safety flags DIFF_FLAGS exists for: the hostile
+     * `diff.external` test pins that the config cannot run a script through
+     * this path. Every capture ends in `--`, git's own "everything before me
+     * is a revision" line: without it a side that names a tracked PATH (`HEAD..f.txt`
+     * is a plausible spelling) makes porcelain answer with the working-tree
+     * path-diff under the committed-changes header, and with it that side is
+     * read as the revision it was meant to be — so it fails 128 and the
+     * mention refuses. Unresolvable sides are normally refused upstream (the
+     * scanner's notice, or `/review`'s pre-resolution before the turn); the
+     * exit-code ladder here is the same one the single-ref leg answers with.
+     *
+     * @return array{0: ?Attachment, 1: ?string}
+     */
+    private function diffRange(string $keyword, string $ref, string $from, string $to, bool $threeDot): array
+    {
+        if (!\function_exists('proc_open') || !GitRunner::available()) {
+            return [null, sprintf('@%s was not attached: git is not available here.', self::shown($keyword))];
+        }
+
+        $git = GitRunner::new($this->root)->withInheritedGitEnv()->withTimeout(self::DIFF_TIMEOUT_SECONDS);
+
+        if ($threeDot) {
+            $captured = $git->capture(self::TEXT_MAX_BYTES, 'diff', '--merge-base', ...[...self::RANGE_DIFF_FLAGS, $from, $to, '--']);
+            if (!$captured['timedOut'] && $captured['exitCode'] === self::THREE_DOT_USAGE_FALLBACK) {
+                // `diff --merge-base` arrived in git 2.31. On an older git the
+                // whole call is a usage error, so the same comparison is
+                // rebuilt in two plumbing steps: `merge-base` for the common
+                // ancestor, then `diff` from that ancestor.
+                $base = $git->capture(4096, 'merge-base', $from, $to);
+                $ancestor = $base['timedOut'] || $base['exitCode'] !== 0 ? '' : trim($base['stdout']);
+                if (preg_match(self::OBJECT_ID_PATTERN, $ancestor) !== 1) {
+                    // No ancestor is the range failing, and the notice says so
+                    // with git's first line; an ancestor is always a raw object
+                    // id, and anything else — a prompt or a crash note riding
+                    // stdout — is refused, never handed back to git as an
+                    // argument.
+                    $why = trim(strtok(self::flat($base['stderr']), "\n") ?: self::flat($base['stdout']));
+
+                    return [null, sprintf(
+                        '@%s was not attached: git could not diff against %s%s.',
+                        self::shown($keyword),
+                        self::shown($ref),
+                        $why === '' ? '' : ' (' . self::shown($why) . ')',
+                    )];
+                }
+                $captured = $git->capture(self::TEXT_MAX_BYTES, 'diff', ...[...self::RANGE_DIFF_FLAGS, $ancestor, $to, '--']);
+            }
+        } else {
+            $captured = $git->capture(self::TEXT_MAX_BYTES, 'diff', ...[...self::RANGE_DIFF_FLAGS, $from, $to, '--']);
+        }
+
+        if ($captured['timedOut']) {
+            return [null, sprintf('@%s was not attached: git did not answer within %gs.', self::shown($keyword), self::DIFF_TIMEOUT_SECONDS)];
+        }
+        if ($captured['exitCode'] !== 0) {
+            $why = trim(strtok(self::flat($captured['stderr']), "\n") ?: '');
+
+            return [null, sprintf(
+                '@%s was not attached: git could not diff against %s%s.',
+                self::shown($keyword),
+                self::shown($ref),
+                $why === '' ? '' : ' (' . self::shown($why) . ')',
+            )];
+        }
+
+        $header = $threeDot
+            ? sprintf(
+                'git diff %s...%s — committed changes since the common ancestor of the two sides (the working tree and untracked files are not included)',
+                $from,
+                $to,
+            )
+            : sprintf(
+                'git diff %s..%s — committed changes from %s to %s (the working tree and untracked files are not included)',
+                $from,
+                $to,
+                $from,
+                $to,
+            );
+
+        return $this->attachDiff($keyword, $header, $captured);
+    }
+
+    /**
+     * Frame one captured diff — the shared tail of the single-ref and range
+     * legs: the honest empty answer, the byte-bound truncation, the attachment.
+     *
+     * @param array{stdout: string, stdoutDropped: int} $captured
+     *
+     * @return array{0: Attachment, 1: ?string}
+     */
+    private function attachDiff(string $keyword, string $header, array $captured): array
+    {
         $body = $captured['stdout'] === '' ? '(no changes)' : rtrim($captured['stdout'], "\n");
         $notice = null;
         if ($captured['stdoutDropped'] > 0) {

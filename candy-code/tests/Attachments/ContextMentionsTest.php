@@ -107,6 +107,129 @@ final class ContextMentionsTest extends TestCase
         self::assertStringContainsString('was not attached', $unclosed['notices'][0]);
     }
 
+    public function testATwoDotRangeAttachesTheCommittedDiffBetweenTheSides(): void
+    {
+        // C-AGT-6.b: `A..B` is the reviewable range — a tree-to-tree
+        // comparison of two named commits, so the working tree can neither
+        // enter nor race the snapshot, and untracked files were never in it.
+        $this->repoWithTwoBranches();
+
+        $r = ContextMentions::new($this->root)->resolve('review @diff:base..HEAD');
+
+        self::assertSame([], $r['notices']);
+        self::assertSame('@diff:base..HEAD', $r['attachments'][0]->path);
+        $data = (string) $r['attachments'][0]->data;
+        self::assertStringContainsString('git diff base..HEAD — committed changes from base to HEAD', $data);
+        self::assertStringContainsString('untracked files are not included', $data);
+        self::assertStringContainsString("+echo 'main-only';", $data);
+        // Two-dot compares the side trees directly: what only `base` carries
+        // rides as a removal — the divergence is the whole answer.
+        self::assertStringContainsString("-echo 'base-only';", $data);
+        self::assertStringNotContainsString('untracked-secret', $data);
+    }
+
+    public function testAThreeDotRangeAttachesOnlyTheChangesSinceTheCommonAncestor(): void
+    {
+        // `A...B` is B's own story since the two sides parted; what only the
+        // base side added predates the ancestor and stays out of the review.
+        $this->repoWithTwoBranches();
+
+        $r = ContextMentions::new($this->root)->resolve('review @diff:base...HEAD');
+
+        self::assertSame([], $r['notices']);
+        self::assertSame('@diff:base...HEAD', $r['attachments'][0]->path);
+        $data = (string) $r['attachments'][0]->data;
+        self::assertStringContainsString('git diff base...HEAD — committed changes since the common ancestor of the two sides', $data);
+        self::assertStringContainsString('untracked files are not included', $data);
+        self::assertStringContainsString("+echo 'main-only';", $data);
+        self::assertStringNotContainsString('base-only', $data);
+    }
+
+    public function testARangeOfOneCommitAgainstItselfIsTheHonestEmptyAnswer(): void
+    {
+        $this->repoWithTwoBranches();
+
+        $r = ContextMentions::new($this->root)->resolve('@diff:base..base');
+
+        self::assertSame([], $r['notices']);
+        self::assertStringContainsString('(no changes)', (string) $r['attachments'][0]->data);
+    }
+
+    public function testAMalformedRangeIsRefusedBeforeGitAndADeadSideBecomesANotice(): void
+    {
+        // The two git shapes and nothing else: an empty side, a doubled
+        // separator, four dots. Each refuses with the SAME notice a malformed
+        // single ref always earned — before any spawn. A well-spelled range
+        // whose side does not resolve runs and answers like the dead single
+        // ref beside it.
+        $this->repoWithTwoBranches();
+
+        foreach (['@diff:..HEAD', '@diff:base..HEAD..HEAD', '@diff:base....HEAD'] as $spelling) {
+            $r = ContextMentions::new($this->root)->resolve($spelling);
+            self::assertSame([], $r['attachments'], $spelling . ' is not a range git can run');
+            self::assertStringContainsString('is not a git revision', $r['notices'][0], $spelling);
+        }
+
+        // A range spelling that ENDS in its separator is indistinguishable
+        // from a single ref trailed by sentence dots, and the trim law -
+        // older than ranges - wins: it attaches what it always attached.
+        $dangling = ContextMentions::new($this->root)->resolve('@diff:base..');
+        self::assertSame([], $dangling['notices']);
+        self::assertSame('@diff:base', $dangling['attachments'][0]->path);
+
+        $missing = ContextMentions::new($this->root)->resolve('@diff:no-such-branch..HEAD');
+        self::assertSame([], $missing['attachments']);
+        self::assertStringContainsString('git could not diff against no-such-branch..HEAD', $missing['notices'][0]);
+    }
+
+    public function testAPathSideOfARangeRefusesInsteadOfAttachingAWorkingTreeDiff(): void
+    {
+        // C-AGT-6.b round 2: a side that names a tracked PATH (`HEAD..app.php`
+        // is a plausible spelling) was no revision at all, and porcelain made
+        // it a working-tree comparison - `git diff HEAD app.php` succeeds and
+        // answers with the dirty file's UNCOMMITTED text under the header that
+        // promises committed changes. Each range capture now ends in `--`,
+        // git's own "everything before me is a revision" line, so the path
+        // side is read as a revision, fails 128, and the mention refuses with
+        // the same notice a dead revision earns - on either separator.
+        $this->repoWithTwoBranches();
+        file_put_contents($this->root . '/app.php', "<?php\necho 'working-tree only';\n");
+
+        foreach (['HEAD..app.php', 'HEAD...app.php'] as $ref) {
+            $r = ContextMentions::new($this->root)->resolve('review @diff:' . $ref);
+            self::assertSame([], $r['attachments'], $ref . ' names a path, not a revision');
+            self::assertStringContainsString('git could not diff against ' . $ref, $r['notices'][0]);
+        }
+
+        // The third capture - the pre-2.31 `merge-base` fallback - cannot be
+        // reached with a path side (its `merge-base HEAD app.php` step refuses
+        // before any diff runs), so its `--` is defense-in-depth and the only
+        // honest pin is the shape: all three range captures carry it.
+        $src = (string) file_get_contents((new \ReflectionClass(ContextMentions::class))->getFileName());
+        self::assertSame(2, substr_count($src, "[...self::RANGE_DIFF_FLAGS, \$from, \$to, '--']"));
+        self::assertSame(1, substr_count($src, "[...self::RANGE_DIFF_FLAGS, \$ancestor, \$to, '--']"));
+    }
+
+    public function testAHostileDiffExternalCannotRunThroughTheRangeLeg(): void
+    {
+        // The range leg is porcelain, and porcelain answers to repository
+        // config — an adversarial repo could point `diff.external` at a
+        // script. The three safety flags DIFF_FLAGS exists for ride here for
+        // exactly this: the tool never runs, and the real patch still attaches.
+        $this->repoWithTwoBranches();
+        $marker = $this->root . '/ext-ran.marker';
+        $script = $this->root . '/ext.sh';
+        file_put_contents($script, "#!/bin/sh\ntouch " . escapeshellarg($marker) . "\n");
+        chmod($script, 0o755);
+        $this->git('config', 'diff.external', $script);
+
+        $r = ContextMentions::new($this->root)->resolve('review @diff:base..HEAD');
+
+        self::assertSame([], $r['notices']);
+        self::assertStringContainsString('@@', (string) $r['attachments'][0]->data, 'the real patch still rides');
+        self::assertFileDoesNotExist($marker);
+    }
+
     public function testAtDiffInARepositoryWithNoCommitShowsTheStagedFilesAgainstTheEmptyTree(): void
     {
         $this->requireGit();
@@ -303,6 +426,27 @@ final class ContextMentionsTest extends TestCase
         file_put_contents($this->root . '/app.php', "<?php\necho 'first';\n");
         $this->git('add', 'app.php');
         $this->git('commit', '-qm', 'first');
+    }
+
+    /**
+     * `main` carries a commit `base` never had and `base` one `main` never
+     * had — the two-dot range shows both sides of that divergence, the
+     * three-dot one only main's — plus one untracked file, which belongs to
+     * neither leg.
+     */
+    private function repoWithTwoBranches(): void
+    {
+        $this->repoWithOneCommit();
+        $this->git('branch', 'base');
+        file_put_contents($this->root . '/main.php', "<?php\necho 'main-only';\n");
+        $this->git('add', 'main.php');
+        $this->git('commit', '-qm', 'main-only');
+        $this->git('checkout', '-q', 'base');
+        file_put_contents($this->root . '/base.php', "<?php\necho 'base-only';\n");
+        $this->git('add', 'base.php');
+        $this->git('commit', '-qm', 'base-only');
+        $this->git('checkout', '-q', 'main');
+        file_put_contents($this->root . '/u.txt', "untracked-secret\n");
     }
 
     private function requireGit(): void

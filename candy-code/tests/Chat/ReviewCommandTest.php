@@ -115,6 +115,26 @@ final class ReviewCommandTest extends TestCase
         return $root;
     }
 
+    /**
+     * A repo where `base` stayed at the first commit and `main` moved ahead:
+     * `base..HEAD` names a non-empty committed range (C-AGT-6.b).
+     */
+    private function reviewRepoWithBaseBranch(): string
+    {
+        $this->requireGit();
+        $root = $this->sandbox . '/range-' . bin2hex(random_bytes(4));
+        mkdir($root, 0o777, true);
+        $this->runReviewGit($root, 'init', '-q');
+        file_put_contents($root . '/f.txt', "first\n");
+        $this->runReviewGit($root, 'add', 'f.txt');
+        $this->runReviewGit($root, 'commit', '-qm', 'first');
+        $this->runReviewGit($root, 'branch', 'base');
+        file_put_contents($root . '/f.txt', "first\nsecond\n");
+        $this->runReviewGit($root, 'commit', '-qam', 'second');
+
+        return $root;
+    }
+
     /** One commit, no remote — `@{u}` cannot resolve here. */
     private function reviewRepoWithOneCommitNoRemote(): string
     {
@@ -205,25 +225,53 @@ final class ReviewCommandTest extends TestCase
         self::assertStringEndsWith(ReviewCommand::DIFF_MENTION, $prompts[0]);
     }
 
-    public function testARangeRefStartsNoTurnAndAnswersWithTheBadRefRow(): void
+    public function testARangeRefAssemblesThePromptAndAttachesThroughTheScanner(): void
     {
-        // C-AGT-2 (GIT-1-P1): `main..HEAD` is not a tree-ish — `diff-index`
-        // takes ONE, so the mention never attached and the review still
-        // billed. Until C-AGT-6.b re-admits ranges properly, the command
-        // refuses the form before submitting.
-        $next = $this->submit('/review main..HEAD');
+        // C-AGT-6.b re-admits ranges: `base..HEAD` is a reviewable comparison
+        // again, not a refusal. The prompt row carries the range mention and
+        // the scanner attaches the committed diff exactly as it does a typed
+        // one — the command and the mention share the one diff-reading path.
+        $root = $this->reviewRepoWithBaseBranch();
+        $next = $this->submitAtRoot('/review base..HEAD', $root);
 
-        self::assertFalse($next->inFlight, 'a range must not begin a turn');
+        self::assertTrue($next->inFlight);
+        $prompts = self::userPrompts($next);
+        self::assertCount(1, $prompts);
+        self::assertStringEndsWith('@diff:base..HEAD', $prompts[0]);
+        self::assertSame('@diff:base..HEAD', $this->submittedRow($next)->attachments[0]->path);
+        self::assertStringContainsString('+second', (string) $this->submittedRow($next)->attachments[0]->data);
+    }
+
+    public function testARangeWithAnUnresolvableSideIsRefusedBeforeTheTurn(): void
+    {
+        // refError's second gate learned the new shape: it pre-resolves EACH
+        // side, so a range whose base does not exist answers loudly instead
+        // of billing a turn whose diff attaches nothing.
+        $root = $this->reviewRepoWithTwoCommits();
+        $next = $this->submitAtRoot('/review nope..HEAD', $root);
+
+        self::assertFalse($next->inFlight, 'a range with a dead side must not begin a turn');
         $last = $next->history[count($next->history) - 1];
         self::assertSame(Role::Assistant, $last->role);
         self::assertStringContainsString('is not a git revision', $last->content);
-        // The command echo is itself a user row; what must be absent is the
-        // review PROMPT row — the turn that would have been billed.
         self::assertNotContains(
-            ReviewCommand::prompt('main..HEAD'),
+            ReviewCommand::prompt('nope..HEAD'),
             self::userPrompts($next),
             'no review prompt was submitted',
         );
+    }
+
+    public function testAMalformedRangeIsRefusedAtTheScannerGateNotByGit(): void
+    {
+        // isDiffRef re-admits ranges in their two git shapes only; a
+        // three-sided one is refused by the command's FIRST gate, so the
+        // answer needs no repository and no git at all.
+        $next = $this->submit('/review base..HEAD..HEAD');
+
+        self::assertFalse($next->inFlight, 'a malformed range must not begin a turn');
+        $last = $next->history[count($next->history) - 1];
+        self::assertSame(Role::Assistant, $last->role);
+        self::assertStringContainsString('is not a git revision', $last->content);
     }
 
     public function testAReflogAddressScopesTheClosingMentionAndAttaches(): void
@@ -308,10 +356,36 @@ final class ReviewCommandTest extends TestCase
         self::assertTrue(ContextMentions::isDiffRef('@{u}'), 'the upstream spelling is one token');
         self::assertFalse(ContextMentions::isDiffRef('HEAD,'), 'a comma would be trimmed away');
         self::assertFalse(ContextMentions::isDiffRef('HEAD@{1'), 'an unclosed brace is not a ref');
-        self::assertFalse(ContextMentions::isDiffRef('main..HEAD'), 'diff-index takes one tree-ish; ranges wait for C-AGT-6.b');
+        // C-AGT-6.b: the two git range shapes re-entered the accepted set,
+        // each side checked on its own; everything SHORT of those shapes —
+        // a missing side, a doubled separator, four dots — is still refused.
+        self::assertTrue(ContextMentions::isDiffRef('main..HEAD'), 'two-dot is a committed range');
+        self::assertTrue(ContextMentions::isDiffRef('main...HEAD'), 'three-dot is the merge-base spelling of it');
+        self::assertTrue(ContextMentions::isDiffRef('@{u}..HEAD'), 'a range may lean on the upstream spelling');
+        self::assertTrue(ContextMentions::isDiffRef('HEAD@{1}..HEAD'), 'brace balance is judged per side');
+        self::assertFalse(ContextMentions::isDiffRef('main..'), 'a range needs both sides');
+        self::assertFalse(ContextMentions::isDiffRef('..main'), 'as does its left');
+        self::assertFalse(ContextMentions::isDiffRef('main..HEAD..HEAD'), 'git has no three-sided range');
+        self::assertFalse(ContextMentions::isDiffRef('main....HEAD'), 'four dots are not a separator');
+        self::assertFalse(ContextMentions::isDiffRef('HEAD@{1..HEAD'), 'a dangling brace side is no side');
         self::assertFalse(ContextMentions::isDiffRef(''), 'an empty ref never reaches this call, but the pattern rejects it anyway');
         self::assertFalse(ContextMentions::isDiffRef('-x'), 'a leading dash could read as an option');
         self::assertFalse(ContextMentions::isDiffRef('two words'), 'a spaced ref is not one revision');
+    }
+
+    public function testDiffRangeSidesCutsTheTwoGitShapesBeforeAnyValidation(): void
+    {
+        // The cut is syntax, the judgement is owed to the caller: sides come
+        // back even for malformed shapes, so isDiffRef, the scanner's notice
+        // and refError's pre-resolution all read the SAME split.
+        self::assertSame(['base', 'HEAD', false], ContextMentions::diffRangeSides('base..HEAD'));
+        self::assertSame(['base', 'HEAD', true], ContextMentions::diffRangeSides('base...HEAD'));
+        self::assertNull(ContextMentions::diffRangeSides('HEAD'), 'no separator is not a range');
+        self::assertNull(ContextMentions::diffRangeSides('HEAD~1'));
+        self::assertNull(ContextMentions::diffRangeSides('@{u}'));
+        self::assertSame(['base', '', false], ContextMentions::diffRangeSides('base..'));
+        self::assertSame(['', 'HEAD', false], ContextMentions::diffRangeSides('..HEAD'));
+        self::assertSame(['base', '.HEAD', true], ContextMentions::diffRangeSides('base....HEAD'));
     }
 
     // =====================================================================
