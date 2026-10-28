@@ -137,7 +137,8 @@
   "C-MCP-3.a",
   "C-PRV-2.a",
   "P-TABS.e",
-  "C-TUI-2.a"
+  "C-TUI-2.a",
+  "C-TUI-2.b"
  ],
  "inflight": {
   "C-SES-7.a": {
@@ -157,12 +158,6 @@
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-WEB-3.g",
    "branch": "cc/C-WEB-3.g"
-  },
-  "C-TUI-2.b": {
-   "stage": "review",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-TUI-2.b",
-   "branch": "cc/C-TUI-2.b"
   },
   "C-WEB-4.a": {
    "stage": "build",
@@ -860,7 +855,7 @@
   "C-WEB-3.g 0df1f0af0 (W15; r1 CLEAN 0C/0M/0m; collect /tmp/opencode/cc-cmp-lanes/C-WEB-3.g/ REVIEW-1+FIX-1 at weld; NO tsv rows vitest-only; NO dist rider; merged vitest dormantRoster+shutdownDormant 6/6 serial; roster details in this note; weld after bundle ses_e7db2ebe9 returns)"
  ],
  "tip": "55d66b158",
- "welded_count": 138,
+ "welded_count": 139,
  "tick": "87-disk-reconciled: W11 REALY closed@341f66404; trio MCP2b+TOOL5b+WEB3f real to 0b3c4ba21 (welded=122); W13/14 welds PENDING; phantom-atlas @b73@ correction: c3178096f/4d263705a/8d8c75678 GHOSTS, cure real 23fa8ab8e",
  "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
  "blocked_notes": {
