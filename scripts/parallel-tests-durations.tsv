@@ -735,6 +735,7 @@ candy-code/tests/Tui/Settings/SettingsFilesAndProfilesTest.php	0.065	16
 candy-code/tests/Integration/ArchitectureAssemblyOrderTest.php	0.064	2
 candy-code/tests/Providers/EffortBudgetTest.php	0.064	7
 candy-code/tests/Tui/Settings/SettingsEditorTest.php	0.063	11
+candy-code/tests/Support/MacAltNoticeStampTest.php	0.063	5
 candy-code/tests/Server/HelloDefaultDeliveryTest.php	0.062	2
 candy-code/tests/Skills/ProposedSkillsTest.php	0.062	14
 candy-code/tests/Tools/PathJailContractParityTest.php	0.062	52
