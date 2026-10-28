@@ -11,9 +11,11 @@ use SugarCraft\Code\Host\SessionSnapshot;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Protocol\CallContext;
+use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\EventEnvelope;
 use SugarCraft\Code\Protocol\EventType;
+use SugarCraft\Code\Protocol\JsonRpc;
 use SugarCraft\Code\Protocol\MethodRegistry;
 use SugarCraft\Code\Protocol\MethodSpec;
 use SugarCraft\Code\Protocol\Params;
@@ -41,6 +43,23 @@ final class SessionMethods
     /** How many leading hex chars of a token `session.shares` rows echo for display. */
     public const SHARE_TOKEN_PREFIX_CHARS = 8;
 
+    /** Smallest `session.export` page a client may ask for (one 64 KiB block). */
+    public const EXPORT_MIN_PAGE_BYTES = 65_536;
+
+    /** Largest `session.export` page a client may ask for (the `tool.output` slice bound). */
+    public const EXPORT_MAX_PAGE_BYTES = 1_048_576;
+
+    /**
+     * Bytes a paged export keeps off the frame cap: the JSON-RPC envelope,
+     * and the headroom one raw control byte needs after escaping (a page of
+     * them inflates about six-fold, which would otherwise trip the
+     * dispatcher's `too_large` bound again on the shrink pass).
+     */
+    public const EXPORT_FRAME_HEADROOM_BYTES = 65_536;
+
+    /** A paging revision is one xxh128 hex string; nothing longer is read. */
+    private const EXPORT_REVISION_MAX_CHARS = 64;
+
     private function __construct()
     {
     }
@@ -56,7 +75,7 @@ final class SessionMethods
         $registry->add(MethodSpec::new('session.fork', Scope::Write, 'Branch a session into a new one carrying its transcript.', self::fork(...), true));
         $registry->add(MethodSpec::new('session.close', Scope::Write, 'Release a session (refused while a turn runs unless force).', self::close(...), true));
         $registry->add(MethodSpec::new('session.delete', Scope::Write, 'Delete a session and its history.', self::delete(...), true));
-        $registry->add(MethodSpec::new('session.export', Scope::Read, 'A session\'s transcript as markdown, json or text.', self::export(...)));
+        $registry->add(MethodSpec::new('session.export', Scope::Read, 'A session\'s transcript as markdown, json or text; limit/offset page it and revision guards the walk.', self::export(...)));
         $registry->add(MethodSpec::new('session.setMode', Scope::Write, 'The permission mode the session\'s next turns run in.', self::setMode(...), true));
         $registry->add(MethodSpec::new('session.share', Scope::Write, 'Publish an HTML snapshot of a session as a self-hosted share page at /s/{token}.', self::share(...), true));
         $registry->add(MethodSpec::new('session.shares', Scope::Read, 'The live share pages of one session, or of every session when sessionId is absent.', self::shares(...)));
@@ -247,11 +266,36 @@ final class SessionMethods
         return ['deleted' => $deleted];
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * `session.export` — the transcript in one of three renderings, in one
+     * answer or paged (plan_comparison C-WEB-7.c, source WEB-1-P2).
+     *
+     * Without `limit` the answer is the historical unpaged `{format, content}`
+     * byte-for-byte (the ISS-058 rule {@see \SugarCraft\Code\Tests\Server\SnapshotPagingTest}
+     * pins for snapshots), and a transcript over the frame cap still answers
+     * the dispatcher's `too_large` — exactly as before, because nothing here
+     * changed that path.
+     *
+     * With `limit` the answer pages by BYTE offset into the rendered text,
+     * the way `tool.output` pages a tool's output ({@see ToolMethods::output}),
+     * plus the revision guard that transcript paging needs and slice paging
+     * does not: a running turn or a compaction can reshape the rendering
+     * mid-walk, and JSON pages cut from two different renders splice into
+     * garbage, so a page 2+ carrying a stale `revision` is refused with
+     * Conflict/`export_changed` and the client restarts from offset 0.
+     * The server computes `nextOffset` from the bytes IT cut, so a client
+     * never has to byte-count text that `JSON_INVALID_UTF8_SUBSTITUTE` may
+     * have rewritten in transit.
+     *
+     * @return array<string, mixed>
+     */
     private static function export(CallContext $call, Params $params): array
     {
         $sessionId = self::sessionId($params);
         $format = $params->enum('format', ['markdown', 'json', 'text'], 'markdown');
+        $offset = $params->optionalInt('offset', 0) ?? 0;
+        $limit = $params->optionalInt('limit', self::EXPORT_MIN_PAGE_BYTES, self::EXPORT_MAX_PAGE_BYTES);
+        $revision = $params->optionalString('revision', self::EXPORT_REVISION_MAX_CHARS);
         $host = $call->server->hub()->get($sessionId);
         if ($host !== null) {
             $rows = $host->history();
@@ -263,12 +307,57 @@ final class SessionMethods
             $rows = SessionHost::transcriptsFor($workspace)->load($sessionId);
         }
         $rows = \array_values(\array_filter($rows, static fn (Message $row): bool => $row->userVisible));
-
-        return ['format' => $format, 'content' => match ($format) {
+        $text = match ($format) {
             'json' => Exporter::toJson($rows),
             'text' => Exporter::toText($rows),
             default => Exporter::toMarkdown($rows),
-        }];
+        };
+        if ($limit === null) {
+            return ['format' => $format, 'content' => $text];
+        }
+
+        $full = \hash('xxh128', $text);
+        if ($revision !== null && $revision !== $full) {
+            throw RpcError::of(ErrorCode::Conflict, 'the session changed since the export began; start again', 'export_changed');
+        }
+
+        $total = \strlen($text);
+        $start = self::backToLeadByte($text, \min($offset, $total));
+        // Cut at most the requested page, then shrink while the ESCAPED
+        // payload would not fit the frame: a page of control bytes escapes
+        // about six-fold. The wrapper key in the probe encode is constant
+        // overhead far inside the headroom; the escaping — the six-fold part
+        // — is exactly what `JsonRpc::encode` puts on the wire.
+        $budget = Dispatcher::MAX_SERVER_FRAME_BYTES - self::EXPORT_FRAME_HEADROOM_BYTES;
+        $slice = \mb_strcut($text, $start, \min($limit, $total - $start), 'UTF-8');
+        while ($slice !== '' && \strlen(JsonRpc::encode(['c' => $slice])) > $budget) {
+            $slice = \mb_strcut($text, $start, \intdiv(\strlen($slice), 2), 'UTF-8');
+        }
+        $next = $start + \strlen($slice);
+
+        return [
+            'format' => $format,
+            'content' => $slice,
+            'offset' => $start,
+            'nextOffset' => $next,
+            'total' => $total,
+            'more' => $next < $total,
+            'revision' => $full,
+        ];
+    }
+
+    /**
+     * $offset backed up to (or left at) a UTF-8 lead byte, so a page never
+     * opens with the tail of a codepoint the previous page already carried
+     * its head of. A byte at an offset past the text needs no backing.
+     */
+    private static function backToLeadByte(string $text, int $offset): int
+    {
+        while ($offset > 0 && $offset < \strlen($text) && (\ord($text[$offset]) & 0xC0) === 0x80) {
+            --$offset;
+        }
+
+        return $offset;
     }
 
     /**

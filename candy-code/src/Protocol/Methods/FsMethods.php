@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Protocol\Methods;
 
 use SugarCraft\Code\Attachments\MentionIndex;
+use SugarCraft\Code\Attachments\WorkspaceWalk;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Protocol\CallContext;
 use SugarCraft\Code\Protocol\ErrorCode;
@@ -52,14 +53,8 @@ final class FsMethods
     /** Rows one `fs.search` may answer at most (the TUI popup's own cap). */
     public const SEARCH_MAX_LIMIT = MentionIndex::POPUP_LIMIT;
 
-    /** Directories and files one walk-answered `fs.search` reads at most. */
-    private const WALK_MAX_ENTRIES = 20_000;
-
-    /** Candidate paths a walk gathers at most before ranking. */
+    /** Candidate paths a walk-answered search ranks at most. */
     private const WALK_MAX_CANDIDATES = 5_000;
-
-    /** How deep below the workspace root the walk looks. */
-    private const WALK_MAX_DEPTH = 24;
 
     private function __construct()
     {
@@ -150,13 +145,20 @@ final class FsMethods
     }
 
     /**
-     * Root-relative paths of the regular files under the workspace root,
-     * path-sorted: the non-git listing the ranked search reads. Dot entries
-     * are skipped unless asked (so `.git` never surfaces its internals),
-     * links are never followed (a link to outside is not a file of this
-     * workspace), and the walk stops at {@see WALK_MAX_ENTRIES} read entries,
-     * {@see WALK_MAX_CANDIDATES} candidates or {@see WALK_MAX_DEPTH} levels —
-     * a huge tree answers with a cut list, not with a stalled server.
+     * The non-git listing the ranked search reads: the memoized files of
+     * {@see WorkspaceWalk::listing()}, narrowed to the first
+     * {@see WALK_MAX_CANDIDATES} that carry the needle case-insensitively in
+     * walk order, then path-sorted.
+     *
+     * The same result set the early-stopping walk produced: that walk
+     * collected matching files in walk order, stopped at
+     * {@see WorkspaceWalk::MAX_ENTRIES} entries read or
+     * {@see WALK_MAX_CANDIDATES} candidates, and sorted what it had — and the
+     * head slice of matches in walk order is the same whether the stop
+     * happens mid-walk or as a slice after the full listing. The difference
+     * is the loop the search no longer pays: the needle screen runs over the
+     * memo, so keystrokes inside the {@see WorkspaceWalk::TTL_SECONDS} window
+     * re-filter one walk instead of re-walking the tree on the serve loop.
      *
      * @return list<string>
      */
@@ -164,56 +166,14 @@ final class FsMethods
     {
         $needle = \mb_strtolower($query);
         $paths = [];
-        $read = 0;
-
-        /** @var list<array{0: string, 1: int}> $stack absolute directory, depth */
-        $stack = [[$root, 0]];
-        while ($stack !== [] && \count($paths) < self::WALK_MAX_CANDIDATES) {
-            /** @var array{0: string, 1: int} $frame */
-            $frame = \array_pop($stack);
-            [$dir, $depth] = $frame;
-            // Every frame is built by concatenating non-link components onto
-            // the resolved root (links are skipped at readdir below), so it is
-            // inside by construction; the re-check is the browser's own
-            // discipline stated out loud, guarding a future edit that lets a
-            // component become attacker-influenced.
-            if (!ContainedPath::within($dir, $root)) {
+        foreach (WorkspaceWalk::listing($root, $showHidden) as $relative) {
+            if ($needle !== '' && !\str_contains(\mb_strtolower($relative), $needle)) {
                 continue;
             }
-            $handle = @\opendir($dir);
-            if ($handle === false) {
-                continue;
+            $paths[] = $relative;
+            if (\count($paths) >= self::WALK_MAX_CANDIDATES) {
+                break;
             }
-            while (($entry = \readdir($handle)) !== false) {
-                if (++$read > self::WALK_MAX_ENTRIES || \count($paths) >= self::WALK_MAX_CANDIDATES) {
-                    \closedir($handle);
-
-                    return self::sortedRelative($paths);
-                }
-                if ($entry === '.' || $entry === '..' || ($entry[0] === '.' && !$showHidden)) {
-                    continue;
-                }
-                $absolute = $dir . '/' . $entry;
-                if (\is_link($absolute)) {
-                    continue;
-                }
-                if (\is_dir($absolute)) {
-                    if ($depth < self::WALK_MAX_DEPTH) {
-                        $stack[] = [$absolute, $depth + 1];
-                    }
-
-                    continue;
-                }
-                if (!\is_file($absolute)) {
-                    continue;
-                }
-                $relative = \substr($absolute, \strlen($root) + 1);
-                if ($needle !== '' && !\str_contains(\mb_strtolower($relative), $needle)) {
-                    continue;
-                }
-                $paths[] = $relative;
-            }
-            \closedir($handle);
         }
 
         return self::sortedRelative($paths);

@@ -269,6 +269,12 @@ final class ReadPathCensusTest extends TestCase
             'NAMES_ONLY — complete() lists one directory\'s names for Tab completion of a mention; '
                 . 'the read is resolve()\'s, on submit',
         ],
+        'Attachments/WorkspaceWalk.php|opendir' => [
+            'CONTAINED — collect() re-checks every frame with ContainedPath::within() before '
+                . 'listing it, and every frame is built by concatenating non-link components '
+                . 'onto the resolved walk root; the sink moved out of FsMethods at C-WEB-7.c and '
+                . 'the memo keys on the resolved root, so caching never widens containment',
+        ],
         'Bundles/Bundle.php|file_get_contents' => [
             'CONTAINED_UPSTREAM:Bundles/BundleDiscovery.php — a bundle\'s manifest.json, read by '
                 . 'fromDir() and readManifest() only at paths that ride the directory discovery '
@@ -756,11 +762,6 @@ final class ReadPathCensusTest extends TestCase
                 . 'resolves outside it and is refused, and the fd is read in bounded slices, never whole',
             'SELF_LOCATED — the ledger atomic-publish temp (.partial beside jobs/<jobId>.json the method '
                 . 'itself mints from the MediaJob id, xb + 0600 + rename), never caller-supplied',
-        ],
-        'Protocol/Methods/FsMethods.php|opendir' => [
-            'CONTAINED — walk() re-checks every frame with ContainedPath::within() before '
-                . 'listing it, and every frame is built by concatenating non-link components '
-                . 'onto the resolved search root',
         ],
         'Protocol/Methods/MediaMethods.php|file_get_contents' => [
             'SELF_LOCATED — generate.status reads back only the jobs/<jobId>.json ledger this class wrote '

@@ -1,12 +1,24 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { Events, MethodResult, PermissionMode, SessionSummary } from '../protocol/generated'
+import { ProtocolError } from '../protocol/jsonrpc'
 import { useConnectionStore } from './connection'
 
 const PAGE = 200
 const MAX_PAGES = 10
 /** C-SES-2.c: keystrokes inside this window collapse into one server round trip. */
 const SEARCH_DEBOUNCE_MS = 250
+/** C-WEB-7.c: the biggest export page the server will cut (its own maximum). */
+const EXPORT_PAGE_BYTES = 1_048_576
+
+/** A `session.export` answer: the unpaged pair, or a page with its coordinates. */
+type ExportPage = MethodResult<'session.export'> & {
+  offset?: number
+  nextOffset?: number
+  total?: number
+  more?: boolean
+  revision?: string
+}
 
 /** One live share page, as `session.shares` lists it (C-WEB-3.e). */
 export type SessionShareRow = MethodResult<'session.shares'>['items'][number]
@@ -121,9 +133,58 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (current) put({ ...current, status: 'closed' })
   }
 
-  /** WEB-1a: the transcript rendered server-side, in the format asked for. */
+  /**
+   * WEB-1a: the transcript rendered server-side, in the format asked for.
+   *
+   * C-WEB-7.c (WEB-1-P2): a long transcript no longer rides one frame. The
+   * walk asks for `limit`-sized byte pages, advances by the server's
+   * `nextOffset` (a client never byte-counts text JSON substitution may
+   * rewrite in transit), and echoes the first page's `revision` from page 2
+   * on so pages from two renders can never splice: a session that changed
+   * mid-walk answers `export_changed`, and the whole walk restarts once from
+   * offset 0. A second conflict rethrows — SessionSidebar's existing error
+   * line is where it surfaces. An answer without `more` (any pre-paging
+   * server, and every test double) joins as the single page it is, so the
+   * `{ format, content }` seam this store always offered is unchanged.
+   */
   async function exportTranscript(sessionId: string, format: 'markdown' | 'json' | 'text'): Promise<{ format: string; content: string }> {
-    return connection.request('session.export', { sessionId, format })
+    const parts: string[] = []
+    let offset = 0
+    let revision: string | undefined
+    let restarted = false
+    for (;;) {
+      let page: ExportPage
+      try {
+        page = (await connection.request('session.export', {
+          sessionId,
+          format,
+          offset,
+          limit: EXPORT_PAGE_BYTES,
+          ...(revision === undefined ? {} : { revision }),
+        })) as ExportPage
+      } catch (error) {
+        if (error instanceof ProtocolError && error.kind === 'export_changed' && !restarted) {
+          restarted = true
+          parts.length = 0
+          offset = 0
+          revision = undefined
+          continue
+        }
+        throw error
+      }
+      parts.push(page.content)
+      if (!page.more) {
+        return { format, content: parts.join('') }
+      }
+      const next = page.nextOffset ?? 0
+      if (next <= offset) {
+        throw new Error('session.export answered `more` without advancing its offset')
+      }
+      offset = next
+      if (page.revision !== undefined) {
+        revision = page.revision
+      }
+    }
   }
 
   /**

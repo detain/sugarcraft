@@ -183,8 +183,22 @@ final class MethodSchemas
                 Schema::object(['deleted' => Schema::arrayOf(Schema::ref(D::SESSION_ID))], ['deleted']),
             ],
             'session.export' => [
-                Schema::object([...$sid, 'format' => Schema::enum(['markdown', 'json', 'text'])], ['sessionId']),
-                Schema::object(['format' => Schema::enum(['markdown', 'json', 'text']), 'content' => Schema::string()], ['format', 'content']),
+                Schema::object([
+                    ...$sid,
+                    'format' => Schema::enum(['markdown', 'json', 'text']),
+                    'offset' => Schema::integer(0)->describe('Byte offset into the rendered transcript; the page backs up to a UTF-8 lead byte. Only read with limit.'),
+                    'limit' => Schema::integer(SessionMethods::EXPORT_MIN_PAGE_BYTES, SessionMethods::EXPORT_MAX_PAGE_BYTES)->describe('Ask for a page instead of the whole transcript; the answer shrinks further if the page would not fit the frame. Omitted: one unpaged answer.'),
+                    'revision' => Schema::string(64)->describe('The revision a previous page reported; a page 2+ whose session re-rendered is refused export_changed so pages from two renders can never splice.'),
+                ], ['sessionId']),
+                Schema::object([
+                    'format' => Schema::enum(['markdown', 'json', 'text']),
+                    'content' => Schema::string(),
+                    'offset' => Schema::integer(0)->describe('The lead-byte-aligned byte this page starts at.'),
+                    'nextOffset' => Schema::integer(0)->describe('Where the next page begins; the offset to send back (computed by the server, never by re-encoding the text).'),
+                    'total' => Schema::integer(0)->describe('Total bytes of the rendered transcript this revision covers.'),
+                    'more' => Schema::boolean()->describe('False on the last page; join the contents seen so far.'),
+                    'revision' => Schema::string(64)->describe('xxh128 of the whole rendered transcript; echo it on the next page.'),
+                ], ['format', 'content']),
             ],
             'session.share' => [
                 Schema::object([...$sid, 'days' => Schema::integer(1, ShareStore::MAX_EXPIRY_DAYS)], ['sessionId']),

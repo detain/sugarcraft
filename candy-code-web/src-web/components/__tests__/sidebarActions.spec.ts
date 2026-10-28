@@ -113,7 +113,8 @@ describe('session-row menu (WEB-1a)', () => {
     })
     await wrapper.find('[data-testid="row-menu-s1"]').trigger('click')
     await wrapper.find('[data-testid="row-export-markdown-s1"]').trigger('click')
-    expect(wire.sent('session.export').at(-1)?.params).toEqual({ sessionId: 's1', format: 'markdown' })
+    // C-WEB-7.c: the export walk pages; a `more`-less answer is one whole page.
+    expect(wire.sent('session.export').at(-1)?.params).toEqual({ sessionId: 's1', format: 'markdown', offset: 0, limit: 1_048_576 })
     wire.answer('session.export', { format: 'markdown', content: '# transcript' })
     await settle()
     expect(createObjectURL).toHaveBeenCalledTimes(1)

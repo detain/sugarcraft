@@ -176,6 +176,9 @@ final class ContainedPathInventoryTest extends TestCase
         'Agents/ForeignAgentPresetRegistry.php' => 2,
         'Agents/WorktreeConfig.php' => 2,
         'Agents/WorktreeManager.php' => 2,
+        // C-WEB-7.c: the non-git walk's per-frame containment re-check moved
+        // with the walk into the memoized lister.
+        'Attachments/WorkspaceWalk.php' => 1,
         'Bundles/BundleDiscovery.php' => 1,
         // C-EXT-4.a: the provenance record is read inside the boundary the
         // caller names, never through a link out of it.
@@ -207,7 +210,6 @@ final class ContainedPathInventoryTest extends TestCase
         'Host/Commands/MemoryCommand.php' => 1,
         'MCP/GitCommandHandlers.php' => 2,
         'Memory/ForeignMemoryImporter.php' => 2,
-        'Protocol/Methods/FsMethods.php' => 1,
         'Providers/ProviderFactory.php' => 2,
         'Server/Http/StaticFiles.php' => 1,
         'Skills/ProposedSkills.php' => 1,

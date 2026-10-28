@@ -59,7 +59,9 @@ describe('sessions store row actions (WEB-1a)', () => {
   it('exports through session.export with the asked-for format', async () => {
     const { wire, sessions } = await connected()
     const pending = sessions.exportTranscript('s1', 'json')
-    expect(wire.sent('session.export').at(-1)?.params).toEqual({ sessionId: 's1', format: 'json' })
+    // C-WEB-7.c: the walk always asks for a page; an answer without `more`
+    // joins as the single page it is, byte-for-byte the historical shape.
+    expect(wire.sent('session.export').at(-1)?.params).toEqual({ sessionId: 's1', format: 'json', offset: 0, limit: 1_048_576 })
     await wire.answer('session.export', { format: 'json', content: '{"messages":[]}' })
     await expect(pending).resolves.toEqual({ format: 'json', content: '{"messages":[]}' })
   })
