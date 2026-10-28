@@ -1924,7 +1924,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - protocol lanes: C-CTX-2.d (weld regenerates schema → SERVER.md → generated.ts once)
 - Bootstrap.php method claims: C-SEC-7.d (permissionGate)
 
-#### P-TABS.g — Shell window strip + Sessions pane, attention badges, OSC 2 title (GAP-UI-N6)
+#### ✅ d489f425f407c2768d9679a70dde6b271edee6f9 P-TABS.g — Shell window strip + Sessions pane, attention badges, OSC 2 title (GAP-UI-N6)
 - **Item:** P-SESSION-TABS (sources: GAP-UI-N6, GAP-SES-12) · gap · effort M
 - **What:** `App::windowList()` builds the `WindowList` from the deck: tab names, attention and the summary through `SessionTabs::updateTabSummary` (`⠋ step 4 · 2 agents` from `AgentLiveRegistry::forSession`). **Horizontal.** …
 - **Files — create:** none
