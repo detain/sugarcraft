@@ -486,6 +486,7 @@ candy-code/tests/Tools/ShellOutputTest.php	0.322	8
 candy-code/tests/MCP/McpFrameCapTest.php	0.316	3
 candy-code/tests/Backend/MemoryFlushBeforeCompactionTest.php	0.314	11
 candy-code/tests/Chat/MentionFilePopupTest.php	0.314	10
+candy-code/tests/Automation/WebhookDispatcherTest.php	0.314	80
 candy-code/tests/Backend/EngineBackendReapTest.php	0.312	12
 candy-code/tests/Chat/EffortCommandTest.php	0.312	11
 candy-code/tests/Context/EnvironmentBlockGitConfigIsolationTest.php	0.312	4
@@ -806,6 +807,7 @@ candy-code/tests/Permissions/ReadOnlySedAndLoopsTest.php	0.051	75
 candy-code/tests/Host/Commands/SkillsEnableDisableTest.php	0.051	7
 candy-code/tests/Bundles/BundleRecommenderTest.php	0.051	10
 candy-code/tests/Skills/BuiltInSkillsTest.php	0.050	116
+candy-code/tests/Automation/OutboundWebhookConfigTest.php	0.05	59
 candy-code/tests/Context/Compaction/SummarySafeguardTest.php	0.049	11
 candy-code/tests/MCP/McpElicitationTest.php	0.049	14
 candy-code/tests/Sessions/ScheduleTest.php	0.049	20
@@ -1283,6 +1285,7 @@ candy-code/tests/Tui/SessionTabTest.php	0.003	19
 candy-code/tests/Tui/SplitPaneRendererTest.php	0.003	30
 candy-code/tests/Util/ExporterTest.php	0.003	27
 candy-code/tests/Session/Import/TranscriptReadersTest.php	0.003	14
+candy-code/tests/Automation/WebhookSignerTest.php	0.003	20
 candy-code/tests/Agents/AgentManagerProjectionTest.php	0.002	11
 candy-code/tests/Agents/AgentPoolConfigTest.php	0.002	20
 candy-code/tests/Agents/AgentPresetFieldCarryTest.php	0.002	15
