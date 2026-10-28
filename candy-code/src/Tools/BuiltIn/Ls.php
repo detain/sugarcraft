@@ -240,25 +240,22 @@ final readonly class Ls implements Tool, AcceptsWorktreeJail, ParallelSafe, Buil
             $rules = $rules->withGitignore(false);
         }
 
-        [$entries, $ignored, $escaped] = $this->collect($baseDir, $jailRoot, $includeHidden, $rules);
+        [$entries, $total, $ignored, $escaped] = $this->collect($baseDir, $jailRoot, $includeHidden, $rules);
 
+        // collect() has already stopped at maxEntries, so every entry it
+        // returned is printed and the not-shown remainder is a counter, not
+        // a skipped loop.
         $output = '';
-        $shown = 0;
-        $capped = false;
         foreach ($entries as $absolute) {
-            if ($shown >= $this->maxEntries) {
-                $capped = true;
-                break;
-            }
             $output .= $absolute . (is_dir($absolute) ? '/' : '') . "\n";
-            $shown++;
         }
 
-        if ($capped) {
+        if ($total > count($entries)) {
             $output .= sprintf(
-                "... [truncated: stopped after %d entries. This list is PARTIAL, not the complete answer "
+                "... [truncated: stopped after %d entries; %d more entries not shown. This list is PARTIAL, not the complete answer "
                 . "— point path at a subdirectory to see its entries, or use Glob to search the tree by name.]\n",
-                $this->maxEntries,
+                count($entries),
+                $total - count($entries),
             );
         }
 
@@ -303,16 +300,37 @@ final readonly class Ls implements Tool, AcceptsWorktreeJail, ParallelSafe, Buil
     }
 
     /**
-     * One pass over the directory: hidden/ignored filtering happens during the
-     * walk (the walk IS the cost being bounded), the jail's realpath filter
-     * runs per entry, and the result is name-sorted by basename so the listing
-     * reads like a directory and not like readdir()'s inode order.
+     * One pass over the directory whose RETENTION is bounded, not just its
+     * reading: hidden/ignored filtering and the jail's realpath test still
+     * run per entry — the ignored and escaped counts must be exact, so no
+     * entry may dodge them — but surviving paths are no longer accumulated
+     * and `usort`ed whole. Only the `maxEntries` smallest basenames are
+     * kept, in a max-heap whose root is the largest name retained: a smaller
+     * arrival evicts the root and takes its slot, a larger one is dropped on
+     * the spot. Basenames are unique inside a directory, so that eviction
+     * rule reproduces the strcmp prefix exactly — the listing still reads
+     * like a directory and not like readdir()'s inode order, entry for
+     * entry — while the memory a listing costs is O(maxEntries) instead of
+     * O(directory size). The walk was never the cost the cap bounded (that
+     * earlier docblock claimed it was); the collect-then-sort was.
      *
-     * @return array{0: list<string>, 1: int, 2: int} [sorted absolute paths, gitignored count, jail-escaped count]
+     * @return array{0: list<string>, 1: int, 2: int, 3: int} [up to maxEntries absolute paths in basename order, total entries that passed the filters, gitignored count, jail-escaped count]
      */
     private function collect(string $baseDir, ?string $jailRoot, bool $includeHidden, IgnoreRules $rules): array
     {
-        $entries = [];
+        // SplMaxHeap over [basename, path] pairs, compared by name so the
+        // WORST kept entry sits at the root and eviction is one extract().
+        // compare() points higher-priority (lexicographically larger) first,
+        // which is exactly the entry the bounded window must lose.
+        $kept = new class extends \SplMaxHeap {
+            /** @param array{0: string, 1: string} $a @param array{0: string, 1: string} $b */
+            protected function compare(mixed $a, mixed $b): int
+            {
+                return strcmp($a[0], $b[0]);
+            }
+        };
+
+        $total = 0;
         $ignored = 0;
         $escaped = 0;
 
@@ -331,6 +349,8 @@ final readonly class Ls implements Tool, AcceptsWorktreeJail, ParallelSafe, Buil
             // the vocabulary the jail is promising, so its entry goes (and the
             // count says so). Same realpath test Glob's withinRoot() applies
             // to matched paths; inlined only because the count feeds a note.
+            // It stays a full-walk test for the same reason: the escaped count
+            // must be exact, so no heap admission can defer it.
             if ($jailRoot !== null) {
                 $real = realpath($absolute);
                 if ($real === false
@@ -341,12 +361,25 @@ final readonly class Ls implements Tool, AcceptsWorktreeJail, ParallelSafe, Buil
                 }
             }
 
-            $entries[] = $absolute;
+            $total++;
+
+            $name = basename($absolute);
+            if ($kept->count() < $this->maxEntries) {
+                $kept->insert([$name, $absolute]);
+            } elseif ($kept->count() > 0 && strcmp($name, $kept->top()[0]) < 0) {
+                $kept->extract();
+                $kept->insert([$name, $absolute]);
+            }
         }
 
-        usort($entries, static fn (string $a, string $b): int => strcmp(basename($a), basename($b)));
+        // Extract drains largest-first, so reversing yields the same strcmp
+        // order the old usort printed.
+        $entries = [];
+        while (!$kept->isEmpty()) {
+            $entries[] = $kept->extract()[1];
+        }
 
-        return [$entries, $ignored, $escaped];
+        return [array_reverse($entries), $total, $ignored, $escaped];
     }
 
     /**

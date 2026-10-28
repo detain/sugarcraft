@@ -262,6 +262,65 @@ final class LsTest extends TestCase
         $this->assertLessThanOrEqual(4096, strlen($tight->content()));
     }
 
+    public function testHugeDirectoryKeepsTheFirstNByNameWithoutHoldingAll(): void
+    {
+        // SHL-2-P1 pin: the entry cap used to apply AFTER collect() had
+        // accumulated and usort'ed every surviving path, so listing a 20k
+        // directory retained 20k strings per call no matter how short the
+        // answer was allowed to be. The bounded heap changes the COST and
+        // must not change the ANSWER, so the pins run from both ends.
+        $huge = $this->root . '/wide';
+        mkdir($huge);
+        $count = 20_000;
+        $shown = 50;
+
+        // str_pad makes strcmp order equal numeric order, and multiplying
+        // the index by a prime coprime with $count is a bijection onto
+        // 0..$count-1: the 20k names are exactly one per residue, and the
+        // creation order is thoroughly scrambled against the sort order, so
+        // a wrong heap eviction cannot hide behind readdir() luck. The
+        // expected prefix is therefore derived from that arithmetic alone —
+        // no filesystem walk and no tool call feeds the oracle.
+        for ($i = 0; $i < $count; $i++) {
+            fclose(fopen($huge . '/entry-' . str_pad((string)(($i * 7919) % $count), 6, '0', STR_PAD_LEFT), 'x'));
+        }
+
+        $expected = [];
+        for ($k = 0; $k < $shown; $k++) {
+            $expected[] = $huge . '/entry-' . str_pad((string)$k, 6, '0', STR_PAD_LEFT);
+        }
+
+        // Warm-up listing through the identical paths (autoloader, the heap
+        // class, allocator arenas) so the peak window below measures only
+        // the 20k walk's retention, never a one-time class cost.
+        $this->listing($huge, maxEntries: 3);
+
+        $baseline = memory_get_usage(false);
+        memory_reset_peak_usage();
+        $cappedResult = $this->listing($huge, maxEntries: $shown);
+        $cappedHeld = memory_get_peak_usage(false) - $baseline;
+
+        // Answer legs: the first N are exactly what a full sort would print
+        // (the name set is known, so this IS the full-sort prefix), and the
+        // entries beyond the window are counted, not silently dropped.
+        $this->assertSame($expected, $this->entries($cappedResult));
+        $this->assertStringContainsString(
+            'stopped after 50 entries; ' . ($count - $shown) . ' more entries not shown',
+            $cappedResult->content(),
+        );
+
+        // Cost leg: a collect-all implementation retains the 20k path
+        // strings inside this window (4.3 MB of emalloc peak at this
+        // fixture, measured under a faithful collect-all mutant); the heap
+        // window retains 50 pairs plus the printed text (~24 KB measured).
+        // The bound sits in the gap.
+        $this->assertLessThan(
+            1_500_000,
+            $cappedHeld,
+            'a capped listing must not retain every entry it walked',
+        );
+    }
+
     // =========================================================================
     // Jail and bad requests — Glob's error vocabulary, asserted per tool
     // =========================================================================
