@@ -370,9 +370,12 @@ nobody infers them from the shape of the code:
 ### The TUI picker is a session-scoped body carry
 
 The skill picker (opened from the TUI via `SourceSkillCmd` →
-`OpenSkillPickerMsg` → `App::handleSelectSkill()`) enables the chosen skill **in
-memory for the running session only** — it writes no config key, so it does not
-survive a restart. What it appends to `App::$enabledSkills` is still the
+`OpenSkillPickerMsg` → `App::handleSelectSkill()`) toggles the chosen skill **in
+memory for the running session only** — selecting it enables the skill, and
+re-selecting an enabled one drops it again (the enable leg runs through
+`SkillManager::enable()`; the drop leg mirrors it and also removes the body from
+the chat backend's carry). Neither leg writes a config key, so neither survives
+a restart; the persisting switch is [`/skills enable|disable`](#turning-skills-off-and-back-on-from-the-command). What it appends to `App::$enabledSkills` is still the
 **registry** object — a stage-1 manifest row with empty content — but that is
 no longer the end of the story: at every prompt build, `Skill::withBodyResolved()`
 grafts the body from the row's own `sourcePath`, so the spliced section carries
@@ -383,6 +386,20 @@ enabled skill is never invisible through both channels. Resolution happens at
 build time, not carry time, so a mid-session edit of the SKILL.md is reflected
 on the next turn. The `Skill` tool remains the model-invoked channel; the
 picker is the user-invoked one.
+
+### Turning skills off (and back on) from the command
+
+The persisted half of the switch lives in the `/skills` host command:
+`/skills disable <name>` and `/skills enable <name>` rewrite the user-tier
+`disabledSkills` list through the same settings writer the settings view saves
+with (see [Saving from the settings view](SETTINGS.md#saving-from-the-settings-view)),
+and then flip the live registry for the rest of the launch. An unknown name is
+refused outright — nothing is written — and a tier-refused or failing write
+refuses the same way, so the table and the file never disagree. Because one
+launch shares one registry with its forked children, a disable that lands
+mid-turn is still read as enabled by that turn's children; the persisted truth
+applies at the next launch, and a bare `/skills` listing reports the new flag
+as soon as the write lands. The name is case-exact, like the row it flips.
 
 ### Auto-matching a skill into the prompt is deliberately dormant
 

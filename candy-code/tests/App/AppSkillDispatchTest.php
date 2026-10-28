@@ -184,7 +184,8 @@ final class AppSkillDispatchTest extends TestCase
 
         [$again] = $next->update(new SelectSkillMsg('palette-skill'));
         $twice = array_map(fn (Skill $s): string => $s->name, $again->chat->backend()->skills());
-        $this->assertCount(1, $twice, 're-selecting the same skill does not duplicate the layer');
+        $this->assertSame([], $twice, 'C-EXT-2.d: re-selecting an enabled skill toggles it off — the model drops it the same turn the shell does');
+        $this->assertSame([], array_map(fn (Skill $s): string => $s->name, $again->enabledSkills));
     }
 
     public function testAChatlessAppKeepsSkillEnablementShellOnlyAndNeverFatals(): void
@@ -224,8 +225,13 @@ final class AppSkillDispatchTest extends TestCase
         $this->assertNotContains('system-only-skill', $names);
     }
 
-    public function testSelectSkillMsgDoesNotDuplicateAnAlreadyEnabledSkill(): void
+    public function testReSelectingAnEnabledSkillTogglesItOffForTheSession(): void
     {
+        // C-EXT-2.d: the picker is the session half of the switch. Selecting
+        // an already-enabled skill now DISABLES it (through the one canonical
+        // SkillManager::disable filter) and closes the picker — it never
+        // duplicates a layer, and it never touches the persisted
+        // `disabledSkills` list, which is `/skills disable`'s job.
         // Arrange
         $registry = new SkillRegistry();
         $palette = $this->skillFromYaml("description: Palette skill\nuser-invocable: true", 'palette-skill');
@@ -238,7 +244,8 @@ final class AppSkillDispatchTest extends TestCase
         [$next] = $app->update(new SelectSkillMsg('palette-skill'));
 
         // Assert
-        $this->assertCount(1, $next->enabledSkills);
+        $this->assertCount(0, $next->enabledSkills);
+        $this->assertSame([], $next->skillPickerOptions, 'the toggle answers inside the picker, closing it like the enable does');
     }
 
     // -------------------------------------------------------------------------

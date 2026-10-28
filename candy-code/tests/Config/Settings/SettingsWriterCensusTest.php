@@ -33,9 +33,11 @@ use PHPUnit\Framework\TestCase;
  *    `AtomicJsonFile`;
  *  - who SAVES through the writer (`write()`, `grantTrust()`, `revokeTrust()`):
  *    the settings view's save and its trust action (`App`), `/model`'s model
- *    choice (`ModelChoice::persist()`), and the server's `settings.set`
- *    (`SettingsMethods::set()`, the web UI's settings form — roadmap O-6b).
- *    `docs/SETTINGS.md` "Saving from the settings view" names the same three.
+ *    choice (`ModelChoice::persist()`), the server's `settings.set`
+ *    (`SettingsMethods::set()`, the web UI's settings form — roadmap O-6b),
+ *    and the `/rendermode` and `/skills enable|disable` host commands (the
+ *    render door is described in `docs/MEDIA.md`; `docs/SETTINGS.md`
+ *    "Saving from the settings view" names the settings-file doors).
  *
  * A new caller of any of these reds here by EXISTING, which is the point: a
  * fifth door into `config.json` has to be written down, with its docs.
@@ -154,6 +156,12 @@ final class SettingsWriterCensusTest extends TestCase
             // settings key, which is why it takes the host command's writer
             // rather than touching AtomicJsonFile itself.
             'Host/Commands/RenderModeHostCommand.php::run->write' => 1,
+            // C-EXT-2.d: `/skills enable|disable` writes the toggled
+            // disabledSkills list through the sanctioned writer — the second
+            // command door into a settings key, and it takes the host
+            // command's writer rather than touching the file itself for the
+            // same reason /rendermode's row does.
+            'Host/Commands/SkillsHostCommand.php::toggleSkill->write' => 1,
             'Permissions/PermissionPrompt.php::persistRules->write' => 1,
             'Protocol/Methods/SettingsMethods.php::set->write' => 1,
             // N-P5: a settings PROFILE, not a settings file — its write is

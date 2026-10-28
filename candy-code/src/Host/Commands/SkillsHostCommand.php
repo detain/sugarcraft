@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Host\Commands;
 
+use SugarCraft\Code\Config\Settings\SettingsTier;
+use SugarCraft\Code\Config\Settings\SettingsWriter;
 use SugarCraft\Code\Commands\TranscriptTable;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Skills\ProposedSkills;
@@ -26,6 +28,16 @@ use SugarCraft\Code\Skills\SkillRegistry;
  * (roadmap 5.4-3, the opt-in `memory.dreamProposeSkills` mode); `/skills
  * accept <name> [--replace]` promotes one into `~/.candy-code/skills/<name>/`,
  * `/skills reject <name>` deletes it.
+ *
+ * `/skills enable <name>` and `/skills disable <name>` (C-EXT-2.d) are the
+ * command half of the on/off switch: they rewrite the user tier's
+ * `disabledSkills` list through the workspace's {@see SettingsWriter} — the
+ * same sanctioned door the settings view saves through — AND flip the
+ * launch's live {@see SkillRegistry}, so the change bites this session now
+ * and every later launch at boot. An unknown name is refused whole: neither
+ * file nor registry moves. One launch's registry is shared with its forked
+ * children, so a disable mid-turn is read by those children as still-on; the
+ * next launch's boot discovery carries the truth.
  *
  * THE ONLY PROMOTION PATH. A draft is model output written by an unattended
  * turn; making it a skill turns it into prompt text every later session reads
@@ -87,6 +99,12 @@ final class SkillsHostCommand implements HostCommand
                 'accept' => $this->accept($context, $drafts, $text, \array_slice($words, 1)),
                 'reject' => \count($words) === 2
                     ? $this->reject($drafts, $text, $words[1])
+                    : CommandResult::failure($text, self::usage(), 2),
+                // C-EXT-2.d: exactly one name, spelled with the case the
+                // discovery registered — the same no-case-folding law the
+                // installed table's On column answers under.
+                'enable', 'disable' => \count($words) === 2
+                    ? $this->toggleSkill($context, $text, $sub, $words[1])
                     : CommandResult::failure($text, self::usage(), 2),
                 default => CommandResult::failure($text, self::usage(), 2),
             };
@@ -269,5 +287,71 @@ final class SkillsHostCommand implements HostCommand
         $drafts->reject($name);
 
         return CommandResult::reply($text, Lang::t('host.skills.rejected', ['name' => $name]));
+    }
+
+    /**
+     * The on/off switch, both halves in one action: the persisted user-tier
+     * list AND the launch's live registry. The name is checked against the
+     * registry the session runs — the workspace's own when one is reachable
+     * (the TUI and serve both carry it; `names()` includes registered-but-
+     * disabled rows, so an already-off skill can be named for the enable
+     * verb), else a fresh discovery in the shape
+     * {@see self::installedListing()} runs, so the refusal of an unknown name
+     * is honest in every driver. The write rides the sanctioned
+     * {@see SettingsWriter} door; a throw there is a failure notice, never a
+     * fatal, and the live flip happens only after the file agrees.
+     */
+    private function toggleSkill(CommandContext $context, string $text, string $verb, string $name): CommandResult
+    {
+        $disable = $verb === 'disable';
+
+        $registry = $context->workspace?->skills;
+        $live = $registry instanceof SkillRegistry;
+        if (!$live) {
+            $registry = new SkillRegistry();
+            (new SkillManager(new SkillLoader(), $registry))->loadAll(
+                $context->projectRoot(),
+                \SugarCraft\Code\Cli\Bootstrap::bundles($context->projectRoot()),
+            );
+        }
+        if (!\in_array($name, $registry->names(), true)) {
+            return CommandResult::failure($text, Lang::t('host.skills.toggle_unknown', ['name' => PermissionsCommand::reportField($name)]), 1);
+        }
+
+        $writer = $context->workspace?->service(SettingsWriter::class);
+        if (!$writer instanceof SettingsWriter) {
+            return CommandResult::failure($text, Lang::t('host.skills.no_writer'), 1);
+        }
+
+        $current = $writer->current(SettingsTier::You)['disabledSkills'] ?? [];
+        $list = \is_array($current) ? \array_values(\array_filter($current, 'is_string')) : [];
+        if ($disable) {
+            if (!\in_array($name, $list, true)) {
+                $list[] = $name;
+            }
+        } else {
+            $list = \array_values(\array_filter($list, static fn(string $entry): bool => $entry !== $name));
+        }
+
+        $refusal = $writer->refusal(SettingsTier::You, 'disabledSkills', $list);
+        if ($refusal !== null) {
+            return CommandResult::failure($text, $refusal, 1);
+        }
+
+        try {
+            $writer->write(SettingsTier::You, ['disabledSkills' => $list]);
+        } catch (\Throwable $e) {
+            return CommandResult::failure($text, Lang::t('host.skills.write_failed', ['error' => PermissionsCommand::reportField($e->getMessage())]), 1);
+        }
+
+        if ($live) {
+            if ($disable) {
+                $registry->disable($name);
+            } else {
+                $registry->enable($name);
+            }
+        }
+
+        return CommandResult::reply($text, Lang::t($disable ? 'host.skills.disabled_now' : 'host.skills.enabled_now', ['name' => PermissionsCommand::reportField($name)]));
     }
 }

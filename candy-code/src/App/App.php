@@ -42,6 +42,8 @@ use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Skills\Skill;
 use SugarCraft\Code\Skills\SkillFork;
+use SugarCraft\Code\Skills\SkillLoader;
+use SugarCraft\Code\Skills\SkillManager;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Theme;
 use SugarCraft\Code\Tools\Tool;
@@ -4981,8 +4983,12 @@ final class App implements Model
     }
 
     /**
-     * Select a skill from an open picker by name, enabling it for the
-     * conversation. Re-validates against the user-invocable filter rather
+     * Select a skill from an open picker by name, toggling it for the
+     * conversation: an un-enabled skill is enabled, a re-selected enabled one
+     * is switched off for the session (C-EXT-2.d, through the same
+     * {@see SkillManager} pair that owns the vocabulary — the picker never
+     * touches the persisted `disabledSkills` list; that is `/skills
+     * disable`'s door). Re-validates against the user-invocable filter rather
      * than trusting the caller-supplied name, so a skill that opted out of
      * user invocation can never be enabled through this path even if the
      * picker's own options were bypassed.
@@ -5010,7 +5016,24 @@ final class App implements Model
                 break;
             }
         }
-        $enabledSkills = $alreadyEnabled ? $this->enabledSkills : [...$this->enabledSkills, $skill];
+
+        // C-EXT-2.d: both directions of the picker route through the
+        // {@see SkillManager} that owns the enabled-set vocabulary — the
+        // accessor pair that shipped dormant until now. Re-selecting an
+        // enabled skill toggles it OFF for the session; only `/skills
+        // disable` touches the persisted `disabledSkills` list, which is the
+        // documented split (the picker is the session half of the switch).
+        $manager = new SkillManager(new SkillLoader(), $this->availableSkills);
+        if ($alreadyEnabled) {
+            $closed = $manager->disable($this, $skill->name)->mutate(
+                skillPickerOptions: [],
+                skillPickerIndex: 0,
+                status: Lang::t('tui.app.skill_disabled', ['name' => $skill->name]),
+                error: null,
+            );
+
+            return [$this->dropSelectedSkill($skill, $closed), null];
+        }
 
         // A `context: fork` skill is still ENABLED — the Skill tool's fork
         // branch needs the skill registered and invocable, and
@@ -5024,8 +5047,7 @@ final class App implements Model
             ? Lang::t('tui.app.skill_fork', ['name' => $skill->name])
             : Lang::t('tui.app.skill_enabled', ['name' => $skill->name]);
 
-        $next = $this->mutate(
-            enabledSkills: $enabledSkills,
+        $next = $manager->enable($this, $skill->name)->mutate(
             skillPickerOptions: [],
             skillPickerIndex: 0,
             status: $status,
@@ -5066,6 +5088,31 @@ final class App implements Model
         }
 
         return $next->withChat($chat->withBackend($backend->withSkills([...$backend->skills(), $skill])));
+    }
+
+    /**
+     * The disable twin of {@see carrySelectedSkill()} (C-EXT-2.d): a skill the
+     * picker toggles off leaves the engine's per-turn splice list too, so the
+     * next turn's prompt drops it exactly when the status line says it did.
+     * No chat, no engine-carried list, no change — the same guards the carry
+     * runs, mirrored.
+     */
+    private function dropSelectedSkill(Skill $skill, self $next): self
+    {
+        $chat = $this->chat;
+        if ($chat === null) {
+            return $next;
+        }
+        $backend = $chat->backend();
+        if (!$backend instanceof EngineBackend) {
+            return $next;
+        }
+        $kept = \array_values(\array_filter(
+            $backend->skills(),
+            static fn(Skill $carried): bool => $carried->name !== $skill->name,
+        ));
+
+        return $next->withChat($chat->withBackend($backend->withSkills($kept)));
     }
 
     /**

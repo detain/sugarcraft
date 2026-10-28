@@ -1286,7 +1286,8 @@ its own. It is **not** `Chat`'s config-change door, so that door still carries
 exactly `provider` and `theme`; `SettingsWriterCensusTest` pins who may write
 `config.json` at all, and who saves through the writer: this view (its save and
 its trust action), `/model`'s model choice, the server's `settings.set` — the
-web UI's settings form — and the permission modal's `p`, which appends the
+web UI's settings form — `/skills enable` and `/skills disable`, which rewrite
+your `disabledSkills` list, and the permission modal's `p`, which appends the
 scope it saves to `permissionRules` (see
 [`PERMISSIONS.md`](PERMISSIONS.md#ask-needs-somewhere-to-ask)). That form
 is generated from the same

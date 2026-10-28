@@ -379,7 +379,7 @@ edit it by hand.
 | `/usage` | ✓ | | `[7\|30\|all]` | Show the durable spend ledger folded by day and model |
 | `/workflow` | ✓ | | — | Run, pause, resume, or inspect a workflow |
 | `/memory` | ✓ | | — | Add, list, search, edit, import, clear, or restore memory entries, and show their history |
-| `/skills` | ✓ | | `[installed\|proposed\|accept <name> [--replace]\|reject <name>]` | List the invocable skills, or review the dream pass drafts: accept or reject one |
+| `/skills` | ✓ | | `[installed\|proposed\|accept <name> [--replace]\|reject <name>\|enable <name>\|disable <name>]` | List the invocable skills, switch them on or off, or review the dream pass drafts: accept or reject one |
 | `/init` | ✓ | | `[focus]` | Study this project and write or improve its AGENTS.md |
 | `/branch` | ✓ | | — | Fork the current session into a new branch |
 | `/rename` | ✓ | | `[<name>\|--auto]` | Rename the current session |
@@ -632,7 +632,11 @@ it off, how many same-named files it shadowed, and its one-line description.
 `/skills proposed` reviews the skill drafts the dream pass proposes when
 `memory.dreamProposeSkills` is on, `/skills accept <name> [--replace]` makes
 one a live skill in `~/.candy-code/skills/`, `/skills reject <name>` deletes
-it. Accept is the only way a draft becomes live — see
+it. `/skills disable <name>` and `/skills enable <name>` flip a skill's
+`disabledSkills` entry in your user settings and the live registry in the same
+step, so the next bare listing and the next launch both tell the truth; an
+unknown name is refused with nothing written. Accept is the only way a draft
+becomes live — see
 [SKILLS.md](SKILLS.md#proposed-skills).
 
 `/editor` composes the next prompt in your own editor: `$VISUAL`, else
