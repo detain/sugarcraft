@@ -647,4 +647,63 @@ final class ReviewCommandTest extends TestCase
 
         return $chat;
     }
+
+    public function testReviewPrFlagStartsATurnClosingOnThePrMention(): void
+    {
+        $next = $this->submit('/review --pr 12');
+
+        self::assertTrue($next->inFlight, '/review --pr starts a turn like /review');
+        $prompts = self::userPrompts($next);
+        self::assertSame([ReviewCommand::prompt('', false, 12)], $prompts);
+        self::assertStringEndsWith('@pr:12', $prompts[0]);
+        self::assertSame('', $next->inputBuf);
+        // C-AGT-2.b: the clamp contract is the same road — a gateless chat
+        // clamps nothing, with or without the host scope.
+        self::assertNull($next->currentPermissionMode(), 'a gateless chat clamps nothing');
+
+        // The equals form is the same door: one argument, one scope.
+        $equals = $this->submit('/review --pr=12');
+        self::assertSame($prompts, self::userPrompts($equals));
+    }
+
+    public function testSecurityReviewCarriesThePrScopeToo(): void
+    {
+        $next = $this->submit('/security-review --pr 12');
+
+        self::assertTrue($next->inFlight);
+        $prompts = self::userPrompts($next);
+        self::assertSame([ReviewCommand::prompt('', true, 12)], $prompts);
+        self::assertStringContainsString('security review', $prompts[0]);
+        self::assertStringEndsWith('@pr:12', $prompts[0]);
+    }
+
+    public function testANonsensePrRefIsRefusedAtTheCommandDoor(): void
+    {
+        // The numeric door runs before anything else: no repository, no git
+        // and no `gh` is needed to answer that 12x is not a pull-request
+        // number — or that the flag alone names nothing.
+        foreach (['--pr', '--pr abc', '--pr 0', '--pr -7', '--pr 12x', '--pr 99999999999', '--pr 12 extra', '--pr=abc'] as $draft) {
+            $next = $this->submit('/review ' . $draft);
+
+            self::assertFalse($next->inFlight, $draft . ' must not begin a turn');
+            $last = $next->history[count($next->history) - 1];
+            self::assertSame(Role::Assistant, $last->role);
+            self::assertStringContainsString('is not a pull-request number', $last->content);
+            self::assertNotContains(
+                ReviewCommand::prompt('', false, 12),
+                self::userPrompts($next),
+                $draft . ' submitted no review prompt',
+            );
+        }
+    }
+
+    public function testThePrScopeWinsTheMentionLineAndTheNumericDoorStandsAlone(): void
+    {
+        // The command's parse never hands prompt() both scopes, but the
+        // assembler keeps the host scope authoritative if it ever did.
+        self::assertStringEndsWith('@pr:7', ReviewCommand::prompt('HEAD', false, 7));
+        self::assertNotNull(ReviewCommand::prError(''), 'the bare flag names nothing');
+        self::assertNull(ReviewCommand::prError('42'));
+        self::assertNotNull(ReviewCommand::prError('999999999999'), 'ten digits is past the door');
+    }
 }

@@ -43,6 +43,7 @@ final class SlashDispatchTest extends TestCase
         'newrule' => 'a canned prompt drafting a project rule into .candy-code/rules/ (roadmap 5.14d)',
         'review' => 'a canned review prompt closing on @diff (roadmap GIT-1)',
         'security-review' => 'the threat-shaped sibling of that prompt (roadmap GIT-1)',
+        'pr' => 'a canned prompt pushing the branch and opening a pull request with gh (roadmap GAP-GIT-04, R13)',
     ];
 
     private string $sandbox = '';

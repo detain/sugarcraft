@@ -23,15 +23,22 @@ use SugarCraft\Code\Workspace\GitRunner;
 final class ContextMentionsTest extends TestCase
 {
     private string $root;
+    private string|false|null $savedPath = null;
 
     protected function setUp(): void
     {
         $this->root = (string) realpath(sys_get_temp_dir()) . '/sc_ctxmention_' . bin2hex(random_bytes(4));
         mkdir($this->root, 0o777, true);
+        $this->savedPath = getenv('PATH');
     }
 
     protected function tearDown(): void
     {
+        if ($this->savedPath === false) {
+            putenv('PATH');
+        } elseif ($this->savedPath !== null) {
+            putenv('PATH=' . $this->savedPath);
+        }
         $it = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($this->root, \FilesystemIterator::SKIP_DOTS),
             \RecursiveIteratorIterator::CHILD_FIRST,
@@ -386,7 +393,7 @@ final class ContextMentionsTest extends TestCase
 
         self::assertCount(ContextMentions::MAX_MENTIONS, $r['attachments']);
         self::assertCount(2, $r['notices']);
-        self::assertStringContainsString('at most 5 @diff/@session/@url/@mcp mentions', $r['notices'][0]);
+        self::assertStringContainsString('at most 5 @diff/@session/@url/@mcp/@pr mentions', $r['notices'][0]);
     }
 
     public function testTheContextBlockSurvivesAResume(): void
@@ -417,6 +424,113 @@ final class ContextMentionsTest extends TestCase
         self::assertCount(1, $history[0]->attachments);
         self::assertSame('@diff', $history[0]->attachments[0]->path);
         self::assertStringContainsString("+echo 'headless';", (string) $history[0]->attachments[0]->data);
+    }
+
+    public function testAtPullRequestAttachesTheHostDiff(): void
+    {
+        $args = $this->fakeGh(['diff --git a/app.php b/app.php', '+echo 1;', 'from the host']);
+
+        $r = ContextMentions::new($this->root)->resolve('look at @pr:12 before you read anything else');
+
+        self::assertSame([], $r['notices']);
+        self::assertCount(1, $r['attachments']);
+        self::assertSame('@pr:12', $r['attachments'][0]->path);
+        self::assertStringContainsString('gh pr diff 12', (string) $r['attachments'][0]->data);
+        self::assertStringContainsString('the pull request as filed on the host', (string) $r['attachments'][0]->data);
+        self::assertStringContainsString('+echo 1;', (string) $r['attachments'][0]->data);
+        self::assertStringContainsString('from the host', (string) $r['attachments'][0]->data);
+        self::assertSame(
+            "pr\ndiff\n12\n--color\nnever\n",
+            file_get_contents($args),
+            'the number reaches gh as its own argument, never as an option',
+        );
+    }
+
+    public function testAtPullRequestRefusesNonsenseNumbersBeforeAnySpawn(): void
+    {
+        // The numeric door is the whole validation: nothing is spawned to
+        // answer that `abc` is not a pull-request number, and a ten-digit
+        // reference is past the door the same way.
+        foreach (['abc', '0', '-3', '12x', '9999999999'] as $bad) {
+            $args = $this->fakeGh(['never runs']);
+
+            $r = ContextMentions::new($this->root)->resolve('@pr:' . $bad . ' maybe');
+
+            self::assertSame([], $r['attachments'], $bad . ' attaches nothing');
+            self::assertStringContainsString('is not a pull-request number', $r['notices'][0]);
+            self::assertFileDoesNotExist($args, 'the door ran before the spawn');
+        }
+    }
+
+    public function testAtPullRequestWithoutGhIsATypedNotice(): void
+    {
+        $empty = $this->root . '/nobin';
+        mkdir($empty);
+        putenv('PATH=' . $empty);
+
+        $r = ContextMentions::new($this->root)->resolve('@pr:12');
+
+        self::assertSame([], $r['attachments']);
+        self::assertStringContainsString('gh is not available here.', $r['notices'][0]);
+    }
+
+    public function testAnUnansweredPullRequestQuotesWhatTheHostSaid(): void
+    {
+        $this->fakeGh([], 1, 'gh: To use GitHub CLI you have to log in');
+
+        $r = ContextMentions::new($this->root)->resolve('@pr:12');
+
+        self::assertSame([], $r['attachments']);
+        self::assertStringContainsString('gh could not read pull request 12', $r['notices'][0]);
+        self::assertStringContainsString('log in', $r['notices'][0], 'the first line of gh stderr rides into the notice');
+    }
+
+    public function testAHugePullRequestDiffIsCutAtTheSameCapAsEveryOtherAttachment(): void
+    {
+        $this->fakeGh([\str_repeat('x', 300 * 1024)]);
+
+        $r = ContextMentions::new($this->root)->resolve('@pr:9');
+
+        self::assertCount(1, $r['attachments']);
+        self::assertStringContainsString('only its first 256 KiB were attached', $r['notices'][0] ?? '');
+        self::assertStringContainsString('the diff is 300 KiB', (string) $r['attachments'][0]->data);
+    }
+
+    public function testThePullRequestKeywordIsReservedLikeTheOthers(): void
+    {
+        $this->fakeGh(['diff --git a/app.php b/app.php']);
+        self::assertTrue(ContextMentions::isReserved('pr:12'));
+        self::assertFalse(ContextMentions::isReserved('pr'), 'a bare keyword is a file candidate, like session');
+        self::assertFalse(ContextMentions::isReserved('pretty.png'), 'the keyword never eats a path that merely starts with it');
+    }
+
+    /**
+     * A fake `gh` first on PATH: it records its own argv one word per line
+     * and answers with $body on stdout ($stderr, $exit otherwise).
+     *
+     * @param list<string> $body
+     * @return string the path of the argv recording file
+     */
+    private function fakeGh(array $body, int $exit = 0, string $stderr = ''): string
+    {
+        $bin = $this->root . '/bin';
+        if (!is_dir($bin)) {
+            mkdir($bin);
+        }
+        $args = $this->root . '/gh-args-' . bin2hex(random_bytes(4));
+        $script = "#!/bin/sh\nprintf '%s\\n' " . '"$@"' . ' > ' . escapeshellarg($args) . "\n";
+        foreach ($body as $line) {
+            $script .= 'printf ' . escapeshellarg($line . "\n") . "\n";
+        }
+        if ($stderr !== '') {
+            $script .= 'printf ' . escapeshellarg($stderr . "\n") . " >&2\n";
+        }
+        $script .= 'exit ' . $exit . "\n";
+        file_put_contents($bin . '/gh', $script);
+        chmod($bin . '/gh', 0o755);
+        putenv('PATH=' . $bin);
+
+        return $args;
     }
 
     private function repoWithOneCommit(): void

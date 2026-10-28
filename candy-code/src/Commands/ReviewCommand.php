@@ -44,6 +44,17 @@ use SugarCraft\Code\Workspace\GitRunner;
  * A command that STARTS A TURN — see Chat::handleReviewCommand(); it belongs
  * to no read-only roster. Both spellings are SugarCraft architecture types,
  * not ports: charmbracelet/crush has no `/review`; the idea is Claude Code's.
+ *
+ * `--pr <n>` (C-AGT-6.d, GIT-10 scope parity): the review closes on the
+ * `@pr:<n>` mention instead — the pull request AS FILED on the host, read
+ * through the user's own `gh` (plan §6.1 R13), which is the review a hosted
+ * contribution deserves and a local `@diff` cannot give it. The command door
+ * checks only that the argument IS a number ({@see self::prError()}, the
+ * scanner's own {@see ContextMentions::isPrNumber()} rule); unlike $ref it
+ * gets no pre-resolution probe, by design: a missing or unauthenticated `gh`
+ * answers the mention with a notice inside the turn, and the reviewing
+ * model reads that notice and says what it could not see — the host, not a
+ * local git object, is not ours to second-guess before billing.
  */
 final class ReviewCommand
 {
@@ -91,6 +102,9 @@ final class ReviewCommand
     /** The mention when the command names a revision; `%s` is the ref. */
     public const DIFF_MENTION_FORMAT = '@diff:%s';
 
+    /** The mention when the command names a pull request; `%s` is the number. */
+    public const PR_MENTION_FORMAT = '@pr:%s';
+
     private function __construct()
     {
     }
@@ -98,14 +112,20 @@ final class ReviewCommand
     /**
      * The prompt `/review [<tree-ish>]` or `/security-review [ref]` submits: the
      * canned body, closing on the `@diff` mention (optionally scoped to
-     * $ref) that makes the scanner attach the very change being reviewed.
+     * $ref) that makes the scanner attach the very change being reviewed —
+     * or, when $pr names a pull-request number, on its `@pr:<n>` mention
+     * instead, which scopes the same review to the PR as filed on the host
+     * (C-AGT-6.d). $pr wins when both are handed: the caller's parse already
+     * refuses to mix the two, and the PR form is what was asked for.
      */
-    public static function prompt(string $ref = '', bool $security = false): string
+    public static function prompt(string $ref = '', bool $security = false, ?int $pr = null): string
     {
         $ref = trim($ref);
-        $mention = $ref === ''
-            ? self::DIFF_MENTION
-            : sprintf(self::DIFF_MENTION_FORMAT, $ref);
+        $mention = $pr !== null
+            ? sprintf(self::PR_MENTION_FORMAT, $pr)
+            : ($ref === ''
+                ? self::DIFF_MENTION
+                : sprintf(self::DIFF_MENTION_FORMAT, $ref));
 
         return rtrim(sprintf($security ? self::SECURITY_PROMPT : self::REVIEW_PROMPT, $mention));
     }
@@ -165,6 +185,26 @@ final class ReviewCommand
             if ($resolved['timedOut'] || $resolved['exitCode'] !== 0) {
                 return Lang::t('cmd.review.bad-ref', ['ref' => $ref]);
             }
+        }
+
+        return null;
+    }
+
+    /**
+     * Why $number cannot carry a `--pr` review turn, as the row the transcript
+     * should answer with — or null when it may. One gate only, deliberately:
+     * the {@see ContextMentions::isPrNumber()} rule the mention scanner itself
+     * enforces, because a spelling the scanner would refuse can never attach
+     * and the review would run against nothing. There is no gh-side probe
+     * here the way {@see refError()} pre-resolves a git ref: the design makes
+     * an unreachable host a NOTICE inside the turn (the model reads it and
+     * says what it could not see), not a refused command — see the class
+     * docblock. An empty $number is the flag with no argument: refused.
+     */
+    public static function prError(string $number): ?string
+    {
+        if (!ContextMentions::isPrNumber($number)) {
+            return Lang::t('cmd.review.bad-pr', ['ref' => $number]);
         }
 
         return null;

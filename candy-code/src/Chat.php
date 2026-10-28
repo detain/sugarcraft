@@ -12124,6 +12124,23 @@ final class Chat implements Model
     }
 
     /**
+     * `/pr [focus]` (roadmap GAP-GIT-04, plan §6.1 R13) — a command that
+     * STARTS A TURN, the InitCommand technique: the canned ship-it prompt
+     * re-enters submit() as the draft, and the push-and-open step runs inside
+     * that turn through the Bash tool, where the session's permission mode
+     * gates it — the write is gated where it happens, so this command needs
+     * no clamp of its own and belongs to no read-only roster.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handlePrCommand(string $text): array
+    {
+        return $this->withInputBuf(
+            \SugarCraft\Code\Commands\PrCommand::prompt(self::commandArgument($text)),
+        )->submit();
+    }
+
+    /**
      * `/review [ref]` (roadmap GIT-1) — a command that STARTS A TURN, the
      * InitCommand technique: the canned review prompt re-enters submit() as
      * the draft, and it closes on the `@diff` mention so the scanner attaches
@@ -12155,6 +12172,15 @@ final class Chat implements Model
      * attaches; a valid (or absent) ref becomes the prompt's closing mention
      * and the turn begins.
      *
+     * THE `--pr <n>` FORM (C-AGT-6.d) takes the same road with the `@pr:<n>`
+     * close instead: the number is validated through
+     * {@see \SugarCraft\Code\Commands\ReviewCommand::prError()} — the
+     * scanner's own digit rule, refused before any turn — and there is no
+     * pre-resolution probe, on purpose: an unreachable host answers inside
+     * the turn as the mention's notice, not as a refused command. The
+     * `plan` clamp below applies identically: --pr reviews the host's copy,
+     * but the reviewing contract is still report-do-not-edit.
+     *
      * THE TURN IS READ-ONLY BY ACTION, not only by mandate (C-AGT-2.b): a
      * session whose gate is looser than `plan` is stepped down to `plan` for
      * exactly this one turn, so the reviewing model physically cannot Write,
@@ -12173,7 +12199,22 @@ final class Chat implements Model
     private function reviewTurn(string $inputText, bool $security): array
     {
         $ref = \trim(self::commandArgument($inputText));
-        if (($refusal = \SugarCraft\Code\Commands\ReviewCommand::refError($ref, $this->projectRoot())) !== null) {
+        $pr = null;
+        if (str_starts_with($ref, '--pr ') || $ref === '--pr' || str_starts_with($ref, '--pr=')) {
+            // The PR form is intercepted before the ref door: a `--`-leading
+            // spelling was never a valid revision anyway, and answering a
+            // mistyped number as "not a pull-request number" is the honest
+            // row. Bare `--pr` and `--pr=` carry no number and refuse alike.
+            $number = \trim(\substr($ref, 4), " \t=");
+            $refusal = \SugarCraft\Code\Commands\ReviewCommand::prError($number);
+            if ($refusal === null) {
+                $pr = (int) $number;
+                $ref = '';
+            }
+        } else {
+            $refusal = \SugarCraft\Code\Commands\ReviewCommand::refError($ref, $this->projectRoot());
+        }
+        if ($refusal !== null) {
             return [
                 $this->mutate([
                     'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant($refusal)->withUiOnly()],
@@ -12203,7 +12244,7 @@ final class Chat implements Model
         }
 
         return $chat->withInputBuf(
-            \SugarCraft\Code\Commands\ReviewCommand::prompt($ref, $security),
+            \SugarCraft\Code\Commands\ReviewCommand::prompt($ref, $security, $pr),
         )->submit();
     }
 

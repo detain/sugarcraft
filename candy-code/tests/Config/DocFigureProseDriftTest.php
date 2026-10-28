@@ -7119,9 +7119,9 @@ final class DocFigureProseDriftTest extends TestCase
         // (this family grows with the legs), and the page quotes the bound
         // in words matching the constant.
         self::assertStringContainsString(
-            '@diff/@session/@url/@mcp mentions',
+            '@diff/@session/@url/@mcp/@pr mentions',
             $mentions,
-            'the cap notice no longer names all four keyword legs — a fifth leg arrived without its roster',
+            'the cap notice no longer names all five keyword legs — a sixth leg arrived without its roster',
         );
         self::assertSame(5, \SugarCraft\Code\Attachments\ContextMentions::MAX_MENTIONS, 'the cap moved off five — the page sentence and this pin move with it');
         self::assertStringContainsString(

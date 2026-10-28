@@ -192,6 +192,6 @@ final class McpResourceMentionsTest extends TestCase
         $r = $mentions->resolve($six);
         self::assertCount(ContextMentions::MAX_MENTIONS, $r['attachments']);
         self::assertSame(5, $read);
-        self::assertStringContainsString('@diff/@session/@url/@mcp mentions', $r['notices'][0]);
+        self::assertStringContainsString('@diff/@session/@url/@mcp/@pr mentions', $r['notices'][0]);
     }
 }

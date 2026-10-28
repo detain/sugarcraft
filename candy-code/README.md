@@ -600,9 +600,9 @@ context: it is listed with the others but sends nothing on its own. `#`, `//`,
 `/compact` `/compress` `/context` (`/tokens`) `/decompress` `/diff` `/editor`
 `/effort` `/exit` (`/quit`) `/export` `/fork` `/generate` `/goal` `/grind`
 `/handoff` `/help` `/hooks` `/init` `/keys` `/layout` `/loop` `/mcp` `/memory`
-`/model` `/new` `/newrule` `/notices` `/pane` `/permissions` `/play` `/pruning`
-`/recompress` `/redo` `/rename` `/rendermode` `/review` `/rewind` `/rules`
-`/schedules` (`/schedule`) `/security-review` `/sendto` `/sessions`
+`/model` `/new` `/newrule` `/notices` `/pane` `/permissions` `/play` `/pr`
+`/pruning` `/recompress` `/redo` `/rename` `/rendermode` `/review` `/rewind`
+`/rules` `/schedules` (`/schedule`) `/security-review` `/sendto` `/sessions`
 `/settings` (`/config`) `/share` `/shells` `/skills` `/status` `/sweep` `/theme`
 `/undo` `/usage` `/websearch` `/workflow`.
 <!-- commands:roster:end -->

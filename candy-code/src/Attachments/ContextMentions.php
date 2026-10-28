@@ -14,6 +14,7 @@ use SugarCraft\Code\Session\SessionResolver;
 use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Tools\BuiltIn\WebFetch;
 use SugarCraft\Code\Tools\ToolResult;
+use SugarCraft\Code\Workspace\GhRunner;
 use SugarCraft\Code\Workspace\GitRunner;
 
 /**
@@ -25,6 +26,12 @@ use SugarCraft\Code\Workspace\GitRunner;
  *    branch or tag; and — since C-AGT-6.b — the two committed-range spellings
  *    `@diff:A..B` (A to B) and `@diff:A...B` (from their common ancestor to B).
  *    Untracked files are not in any of them, and the block says so.
+ *  - `@pr:<n>` — a pull request on the user's own GitHub host, read through
+ *    their authenticated `gh` (roadmap GAP-GIT-04, plan §6.1 R13): the bounded
+ *    `gh pr diff <n> --color never` as FILED, working tree and all. The
+ *    number is validated before any spawn; a missing or unauthenticated `gh`
+ *    lands as a notice naming what is absent, never a silent nothing — the
+ *    review that rides the mention still runs and says what it could not see.
  *  - `@session:<id>` — another session's conversation, by id, name or a
  *    unique id prefix (the `--resume` rule, {@see SessionResolver}).
  *  - `@https://…` / `@http://…` — a web page, fetched through
@@ -58,7 +65,8 @@ use SugarCraft\Code\Workspace\GitRunner;
  * Read ONCE, on the Enter that submits the prompt, and the snapshot rides on
  * the attachment (see {@see Attachment} for why) — bounded like a file:
  * {@see TEXT_MAX_BYTES} of text, at most {@see MAX_MENTIONS} per prompt, and a
- * time bound on the git read ({@see DIFF_TIMEOUT_SECONDS}).
+ * time bound on each read ({@see DIFF_TIMEOUT_SECONDS} on git,
+ * {@see PR_TIMEOUT_SECONDS} on the host).
  */
 final class ContextMentions
 {
@@ -71,11 +79,19 @@ final class ContextMentions
     /** Wall-clock bound on the `@diff` git read. */
     public const DIFF_TIMEOUT_SECONDS = 5.0;
 
+    /**
+     * Wall-clock bound on the `@pr` host read. Wider than the git leg: `gh`
+     * crosses a network, and E646's ban is on blanket request timeouts for
+     * the MODEL, not on a bounded per-call ceiling for a CLI — the sibling
+     * shape {@see GitRunner} documents.
+     */
+    public const PR_TIMEOUT_SECONDS = 10.0;
+
     /** A keyword mention, at the start of the prompt or after whitespace. */
-    private const MENTION_PATTERN = '/(?<![^\s])@((?:diff|session|https?|mcp)\b[^\s"]*)/u';
+    private const MENTION_PATTERN = '/(?<![^\s])@((?:diff|pr|session|https?|mcp)\b[^\s"]*)/u';
 
     /** What a whole (punctuation-trimmed) token must be to be a keyword. */
-    private const KEYWORD_PATTERN = '~\A(?:diff(?::[^\s"]+)?|session:[^\s"]+|https?://[^\s"]+|mcp:[^\s":]+:[^\s"]+)\z~';
+    private const KEYWORD_PATTERN = '~\A(?:diff(?::[^\s"]+)?|pr:[^\s"]+|session:[^\s"]+|https?://[^\s"]+|mcp:[^\s":]+:[^\s"]+)\z~';
 
     /** Trailing punctuation a sentence puts after a mention — FileMentions' set. */
     private const TRAILING_PUNCTUATION = '.,;:!?)]}\'';
@@ -85,6 +101,24 @@ final class ContextMentions
      * leading `-`, so the ref can never be read as an option.
      */
     private const REF_PATTERN = '#\A[A-Za-z0-9_./~^@{}+][A-Za-z0-9_./~^@{}+:-]*\z#';
+
+    /**
+     * A pull-request number `@pr:<n>` may carry: digits, no leading zero, at
+     * most nine of them — every host this reads has far fewer than a billion
+     * issues, and the bound keeps the number an int on any PHP build.
+     */
+    private const PR_NUMBER_PATTERN = '/\A[1-9][0-9]{0,8}\z/';
+
+    /**
+     * Whether $number is the whole pull-request number the `@pr` leg reads.
+     * `/review --pr <n>` validates through here before assembling its prompt,
+     * the same door-law {@see isDiffRef()} enforces for `@diff` (C-AGT-2): a
+     * command can never submit a mention the scanner would refuse to attach.
+     */
+    public static function isPrNumber(string $number): bool
+    {
+        return preg_match(self::PR_NUMBER_PATTERN, $number) === 1;
+    }
 
     /**
      * Whether $ref survives the scanner's own round trip (GIT-1, C-AGT-2:
@@ -294,7 +328,7 @@ final class ContextMentions
 
             if (\count($attachments) >= self::MAX_MENTIONS) {
                 $notices[] = sprintf(
-                    '@%s was not attached: one prompt attaches at most %d @diff/@session/@url/@mcp mentions.',
+                    '@%s was not attached: one prompt attaches at most %d @diff/@session/@url/@mcp/@pr mentions.',
                     self::shown($keyword),
                     self::MAX_MENTIONS,
                 );
@@ -304,6 +338,7 @@ final class ContextMentions
 
             [$attachment, $notice] = match (true) {
                 $keyword === 'diff' || str_starts_with($keyword, 'diff:') => $this->diff($keyword),
+                str_starts_with($keyword, 'pr:') => $this->pr($keyword),
                 str_starts_with($keyword, 'session:') => $this->session($keyword),
                 str_starts_with($keyword, 'mcp:') => $this->mcp($keyword),
                 default => $this->url($keyword),
@@ -377,6 +412,58 @@ final class ContextMentions
         $header = sprintf(
             'git diff %s — staged and unstaged changes to tracked files (untracked files are not included)',
             $ref,
+        );
+
+        return $this->attachDiff($keyword, $header, $captured);
+    }
+
+    /**
+     * `@pr:<n>`: the pull request as filed on the user's host, via the bounded
+     * read-only `gh pr diff <n> --color never` of {@see GhRunner} (roadmap
+     * GAP-GIT-04, plan §6.1 R13). Same bounds as the git leg: {@see
+     * TEXT_MAX_BYTES} on the text, {@see PR_TIMEOUT_SECONDS} on gh — and one
+     * door the git leg does not need: the number is refused, before any
+     * spawn, unless it is all digits, because a non-numeric argument is
+     * something the user mistyped and `gh` would answer with a usage dump.
+     *
+     * The PR's body is HOST OUTPUT — somebody else's prose about your code —
+     * and rides the same untrusted framing as the diff snapshot, whose
+     * defusal law {@see attachDiff()} states.
+     *
+     * @return array{0: ?Attachment, 1: ?string}
+     */
+    private function pr(string $keyword): array
+    {
+        $number = substr($keyword, 3);
+        if (!self::isPrNumber($number)) {
+            return [null, sprintf('@%s was not attached: "%s" is not a pull-request number.', self::shown($keyword), self::shown($number))];
+        }
+        if (!\function_exists('proc_open') || !GhRunner::available()) {
+            return [null, sprintf('@%s was not attached: gh is not available here.', self::shown($keyword))];
+        }
+
+        $gh = GhRunner::new($this->root)->withTimeout(self::PR_TIMEOUT_SECONDS);
+        $captured = $gh->capture(self::TEXT_MAX_BYTES, 'pr', 'diff', $number, '--color', 'never');
+
+        if ($captured['timedOut']) {
+            return [null, sprintf('@%s was not attached: gh did not answer within %gs.', self::shown($keyword), self::PR_TIMEOUT_SECONDS)];
+        }
+        if ($captured['exitCode'] !== 0) {
+            // Unauthenticated, wrong repo, no such PR — all arrive here as a
+            // nonzero exit, and gh's own first line is the honest word on it.
+            $why = trim(strtok(self::flat($captured['stderr']), "\n") ?: '');
+
+            return [null, sprintf(
+                '@%s was not attached: gh could not read pull request %s%s.',
+                self::shown($keyword),
+                self::shown($number),
+                $why === '' ? '' : ' (' . self::shown($why) . ')',
+            )];
+        }
+
+        $header = sprintf(
+            'gh pr diff %s — the pull request as filed on the host (the working tree and untracked files are not included)',
+            $number,
         );
 
         return $this->attachDiff($keyword, $header, $captured);
