@@ -363,6 +363,7 @@ candy-code/tests/Host/TurnRunnerTodoTest.php	0.601	8
 candy-code/tests/Providers/ClaudeCodeProviderStreamReapTest.php	0.600	6
 candy-code/tests/Backend/BackendContractWideningTest.php	0.595	9
 candy-code/tests/Session/DebouncedTranscriptPersistenceTest.php	0.592	8
+candy-code/tests/Tools/BuiltIn/SkillToolForkTest.php	0.589	9
 candy-code/tests/Context/InstructionDiffTurnContextTest.php	0.585	10
 candy-code/tests/Session/RedoStackTest.php	0.582	6
 candy-code/tests/Backend/ScaledClockHelperSeamTest.php	0.579	6
@@ -601,6 +602,7 @@ candy-code/tests/McpMessageWireShapeTest.php	0.126	1
 candy-code/tests/Server/InternalErrorLoggingTest.php	0.126	5
 candy-code/tests/Skills/SkillPathNudgeTest.php	0.126	21
 candy-code/tests/Workflows/WorkflowUserTierContainmentTest.php	0.125	9
+candy-code/tests/Skills/SkillForkTest.php	0.125	7
 candy-code/tests/Backend/OverflowPruneAndRetryTest.php	0.124	7
 candy-code/tests/Commands/KeyBindingRegistryTest.php	0.124	26
 candy-code/tests/Support/ToolIpcFilesTest.php	0.123	22
