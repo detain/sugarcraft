@@ -1665,7 +1665,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Ruling:** Ship anonymous LIVE read-only links, where anyone holding the token sees future messages until revoke or expiry? — see §6
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-3.d`
 
-#### C-TUI-6.k — Web dictation via the Web Speech API
+#### ✅ 7e97c9e4f C-TUI-6.k — Web dictation via the Web Speech API
 - **Item:** C-TUI-6 (sources: GAP-WEB-13, GAP-MOD-23) · gap · effort S
 - **What:** **Why normal, not LATE.** This is the cheap, independent sliver the brief allows. It is S effort, client-only, needs no ruling, touches no protocol or PHP, and has no dependency. `lib/dictation.ts`: `dictationSupported(win)` …
 - **Files — create:** `candy-code-web/src-web/lib/dictation.ts`
