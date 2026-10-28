@@ -924,6 +924,7 @@ candy-code/tests/Commands/SettingsCommandTest.php	0.023	9
 candy-code/tests/Permissions/PermissionGateAcceptEditsTest.php	0.023	27
 candy-code/tests/Server/TicketsTest.php	0.023	10
 candy-code/tests/Support/SystemClipboardTest.php	0.023	8
+candy-code/tests/Host/Commands/SkillsNewTest.php	0.023	6
 candy-code/tests/Chat/BackgroundResultAnnouncedTest.php	0.022	14
 candy-code/tests/Chat/CompressCommandsTest.php	0.022	6
 candy-code/tests/Chat/ParkedCompactionHookTest.php	0.022	7
