@@ -971,6 +971,15 @@
                         ]
                     }
                 },
+                "choices": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "maxLength": 200
+                    },
+                    "maxItems": 6,
+                    "description": "AskUser's own choices, in order, the first recommended; answer one with `permission.respond` reply `once` and the choice as the note. Absent for every other ask."
+                },
                 "alwaysScope": {
                     "type": "object",
                     "additionalProperties": {
@@ -5609,6 +5618,15 @@
                                         "reject"
                                     ]
                                 }
+                            },
+                            "choices": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "maxLength": 200
+                                },
+                                "maxItems": 6,
+                                "description": "AskUser's own choices, in order, the first recommended; answer one with `permission.respond` reply `once` and the choice as the note. Absent for every other ask."
                             },
                             "alwaysScope": {
                                 "type": "object",

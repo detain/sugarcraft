@@ -246,6 +246,8 @@ export interface PendingAsk {
   source?: string
   mode?: string
   options: ("once" | "always" | "reject")[]
+  /** AskUser's own choices, in order, the first recommended; answer one with `permission.respond` reply `once` and the choice as the note. Absent for every other ask. */
+  choices?: string[]
   alwaysScope?: Record<string, string>
   /** C-SEC-2.b: server-computed unified diff of the proposed call, confined to the session root and capped at 32 KiB (beyond it, an omitted note naming the change size, never silence); absent when the call has no previewable outcome. Has real file line numbers, unlike a client-minted snippet diff. */
   diff?: string
@@ -1651,6 +1653,8 @@ export interface Events {
     source?: string
     mode?: string
     options: ("once" | "always" | "reject")[]
+    /** AskUser's own choices, in order, the first recommended; answer one with `permission.respond` reply `once` and the choice as the note. Absent for every other ask. */
+    choices?: string[]
     alwaysScope?: Record<string, string>
     /** C-SEC-2.b: server-computed unified diff of the proposed call, confined to the session root and capped at 32 KiB (beyond it, an omitted note naming the change size, never silence); absent when the call has no previewable outcome. Has real file line numbers, unlike a client-minted snippet diff. */
     diff?: string
