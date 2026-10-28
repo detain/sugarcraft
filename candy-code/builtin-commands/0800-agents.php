@@ -15,5 +15,6 @@ return BuiltInCommand::new(CommandSpec::new(
     Lang::t('cmd.category.agents'),
     paletteAction: PaletteAction::SwitchAgent,
     paletteLabel: Lang::t('cmd.agents.label'),
+    argumentHint: Lang::t('cmd.agents.hint'),
 ))->withHandler('handleAgentsCommand')->withAliases('agent')
     ->withHostCommand(\SugarCraft\Code\Host\Commands\AgentsHostCommand::class);

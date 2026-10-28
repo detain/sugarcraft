@@ -384,6 +384,22 @@ final class ReadPathCensusTest extends TestCase
                 . 'server writes; lstat-checked as a regular file before it is opened',
             'SELF_LOCATED — follow(): the same log, re-opened at the offset already printed',
         ],
+        'Host/Commands/AgentsHostCommand.php|glob' => [
+            'NAMES_ONLY — proposedListing() lists the `*.md` names in the project\'s own '
+                . '`.candy-code/agents-proposed/` draft directory for the /agents proposed table',
+        ],
+        'Host/Commands/AgentsHostCommand.php|file_get_contents' => [
+            'CONTAINED — the draft\'s frontmatter, read only for a name that passed DRAFT_NAME and whose '
+                . 'real path ContainedPath::below holds under the project root, so a grafted directory '
+                . 'link reads nothing outside it',
+            'CONTAINED — the accept leg\'s draft body, behind the same name/path doors, validated against '
+                . 'FrontmatterKeyAudit::KNOWN before the consent print and the rename into `.candy-code/agents/`',
+        ],
+        'Host/Commands/NewAgentPrompt.php|glob' => [
+            'NAMES_ONLY — existingPresets() lists the `*.md` names in the live and draft directories '
+                . 'so the draft prompt can name the taken ones without telling the agent to overwrite; '
+                . 'only the basename is kept, no bytes are read',
+        ],
         'Host/Commands/NewRulePrompt.php|glob' => [
             'NAMES_ONLY — existingRules() lists the `*.md` names in the project\'s own `.candy-code/rules/` '
                 . 'so the /newrule prompt can name the taken ones; nothing is read',

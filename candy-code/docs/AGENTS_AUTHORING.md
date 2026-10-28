@@ -121,6 +121,37 @@ established as the user's?*
 A refused directory is recorded and reported once at launch through
 `Bootstrap::reportProjectTierRefusals()`, not silently dropped.
 
+### Drafting a preset from a session: `/agents new` and `/agents accept`
+
+An agent **cannot write a live preset**. `ProtectFilesHook::WRITE_ONLY_PATTERNS`
+denies any write under `.candy-code/agents/` in every permission mode — a
+preset's `permissionMode:` is a self-grant, and a model that could write that
+directory could grant itself anything. What a session can do instead is write a
+**draft** under `<root>/.candy-code/agents-proposed/`, an ordinary gated
+directory no loader reads:
+
+- **`/agents new [focus]`** dispatches a canned prompt (the `/newrule` route):
+  the agent distils this conversation into one draft file, validated against
+  the key list the preset reader actually recognises (the same
+  `FrontmatterKeyAudit::KNOWN['agent preset']` the launch audit walks), and
+  the prompt names every preset and draft already in play so it never tries to
+  take a used name.
+- **`/agents proposed`** lists the drafts waiting under
+  `.candy-code/agents-proposed/`.
+- **`/agents accept <name>`** is the consent gate — host-side, human-typed,
+  never model-reachable. It re-reads the draft, refuses anything whose
+  frontmatter does not parse, carries a key no reader acts on, declares an
+  unknown `permissionMode`, or mistypes a policy shape; then it **prints
+  `permissionMode`, `tools` and `mcpServers` verbatim** before moving the file
+  into `.candy-code/agents/`. A self-granting mode (`accept-edits`, `auto`,
+  `dont-ask`, `bypass-permissions`) is still acceptable — the accept step *is*
+  the consent — but it is shown loudly on the line above the move. Promotion
+  never overwrites an existing preset, and a read-only window refuses it
+  outright.
+
+The tier between the two is deliberate: writing the draft changes no session;
+only the printed, reviewed, human-run move does.
+
 ---
 
 ## Frontmatter

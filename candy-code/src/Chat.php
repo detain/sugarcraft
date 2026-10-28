@@ -13448,12 +13448,24 @@ final class Chat implements Model
      */
     private function handleAgentsCommand(string $inputBuf): array
     {
-        $runId = $this->liveAgentRunFor(\SugarCraft\Code\Host\Commands\CommandText::words($inputBuf)[0] ?? '');
+        $words = \SugarCraft\Code\Host\Commands\CommandText::words($inputBuf);
+        $runId = $this->liveAgentRunFor($words[0] ?? '');
         if ($runId !== null) {
             // The echo row, as CommandResult's own echo builds it.
             [$chat] = $this->applyCommandResult(\SugarCraft\Code\Host\Commands\CommandResult::new(Message::user($inputBuf)->withUiOnly()));
 
             return [$chat, static fn (): OpenAgentViewMsg => new OpenAgentViewMsg($runId)];
+        }
+
+        // C-EXT-3.d: `new` is the canned draft prompt, dispatched as an
+        // ordinary turn — the same route `/newrule` takes through
+        // handleNewRuleCommand() above. The agent writes only the DRAFT tier;
+        // a human promotes it with `/agents accept`.
+        if (strtolower($words[0] ?? '') === 'new') {
+            return $this->withInputBuf(\SugarCraft\Code\Host\Commands\NewAgentPrompt::prompt(
+                implode(' ', \array_slice($words, 1)),
+                \SugarCraft\Code\Host\Commands\NewAgentPrompt::existingPresets($this->projectRoot()),
+            ))->submit();
         }
 
         return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\AgentsHostCommand(), $inputBuf);
