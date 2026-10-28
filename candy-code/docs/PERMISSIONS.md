@@ -1241,6 +1241,23 @@ for `mcp` and `mcp-pin` (which also re-records the refused fingerprints),
 through the settings writer for the other three — and because the four keys are
 frozen at launch, every grant takes effect at the next launch, not this one.
 
+### The same question at the terminal launch
+
+The interactive TUI asks the identical census. At an interactive launch,
+before the first frame, the shell consults the same `pendingProjectTrust()`
+entry point the web rows are minted from and, when rows stand pending, opens a
+full-band trust dialog: one row per target, answered `y` grant, `n` skip, `a`
+grant all, or dismissed with `Esc` — and a dismissal answers nothing. Grants
+ride the one door `Bootstrap::grantProjectTrust()` — the MCP door for `mcp`
+and `mcp-pin`, the settings writer's trust lists for the other three — and
+each lands in the operator's own user config, never the project's. Because the
+lists are frozen at launch, every grant takes effect at the next launch, not
+this one, and the dialog says so. The question is asked once per root per
+process, in process memory: skipping a row leaves that surface refused for the
+rest of the launch without repeating the ask. This dialog exists only on the
+interactive TUI surface; `-p` and serve never open it — they keep refusing the
+same rows through their existing paths.
+
 ## Sandbox
 
 The gate decides *whether* a `Bash` call runs; it cannot bound what the shell

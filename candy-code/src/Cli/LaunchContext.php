@@ -2360,6 +2360,13 @@ final class LaunchContext
                     ? $writer
                     : self::settingsWriter($root),
             )
+            // C-SEC-5.d: ask the trust question AT LAUNCH, once per root per
+            // process, when the census finds declared-but-untrusted rows.
+            // This is the dialog's only seed: `-p` and serve never build an
+            // App, so they never see one — they refuse the same rows they
+            // always have. The answer itself rides the shell's one grant door
+            // (Bootstrap::grantProjectTrust), never this class.
+            ->withTrustDialog(self::launchTrustDialog($root))
             // P-TABS.d: the tab strip's session factory (field only — the
             // routing lands in P-TABS.e). Each call hands Bootstrap::tabChat()
             // this launch's root, so every tab rides the workspace the launch
@@ -2383,6 +2390,82 @@ final class LaunchContext
             Bootstrap::userConfigPath(),
             static fn (array $set, array $unset) => Bootstrap::writeUserConfig($set, $unset),
         )->withProject($root, $root !== null && Bootstrap::projectSettingsTrusted($root));
+    }
+
+    /**
+     * Roots the launch dialog has already asked about — process memory only,
+     * the same once-per-process discipline the launch notices keep (C-SEC-5.d).
+     * A grant taken from the dialog lands in the FROZEN lists, so it cannot
+     * change this process's census; re-asking the identical question in the
+     * same launch could only annoy.
+     *
+     * @var array<string, true>
+     */
+    private static array $trustDialogAsked = [];
+
+    /**
+     * The launch dialog for an interactive TUI start (C-SEC-5.d): the
+     * {@see \SugarCraft\Code\Cli\Bootstrap::pendingProjectTrust()} census of
+     * `$root` wrapped in a dialog, or null when the root declares nothing
+     * pending or has already been asked this process. Only {@see app()}
+     * calls this — the interactive shell is the only surface that builds an
+     * App, which is what keeps `-p` and serve dialog-free by construction.
+     *
+     * @return \SugarCraft\Code\Tui\TrustDialog|null
+     */
+    public static function launchTrustDialog(?string $root): ?\SugarCraft\Code\Tui\TrustDialog
+    {
+        if ($root === null || $root === '' || isset(self::$trustDialogAsked[$root])) {
+            return null;
+        }
+
+        $targets = Bootstrap::pendingProjectTrust($root);
+        if ($targets === []) {
+            return null;
+        }
+
+        self::$trustDialogAsked[$root] = true;
+
+        return \SugarCraft\Code\Tui\TrustDialog::new($root, $targets, self::pendingTrustSettingsKeyCount($root, $targets));
+    }
+
+    /**
+     * The number the dialog's Settings row names — how many keys the
+     * project layer would change. Counted from the two project files'
+     * decoded key sets, the same stat-and-decode pre-read the census'
+     * declares probe performs; zero unless a Settings row stands pending.
+     *
+     * @param list<\SugarCraft\Code\Config\Trust\TrustTarget> $targets
+     */
+    private static function pendingTrustSettingsKeyCount(string $root, array $targets): int
+    {
+        if (!\in_array(\SugarCraft\Code\Config\Trust\TrustTarget::Settings, $targets, true)) {
+            return 0;
+        }
+
+        $configRoot = self::configRoot($root);
+        if ($configRoot === null) {
+            return 0;
+        }
+
+        $canonical = realpath($configRoot);
+        $base = rtrim($canonical !== false ? $canonical : $configRoot, '/');
+
+        $keys = array_merge(
+            array_keys(LayeredSettings::decodedFile($base . '/' . LayeredSettings::SHARED_PATH)),
+            array_keys(LayeredSettings::decodedFile($base . '/' . LayeredSettings::LOCAL_PATH)),
+        );
+
+        return \count(array_unique($keys));
+    }
+
+    /**
+     * Test seam for the once-per-process ask latch — production never resets
+     * it; the process exiting does.
+     */
+    public static function resetTrustDialogLatchForTesting(): void
+    {
+        self::$trustDialogAsked = [];
     }
 
     /**

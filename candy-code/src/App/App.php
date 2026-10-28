@@ -87,6 +87,7 @@ use SugarCraft\Video\Msg\TickMsg as VideoTickMsg;
 use SugarCraft\Video\Player as VideoPlayer;
 use SugarCraft\Video\Render\Mode as VideoMode;
 use SugarCraft\Video\Render\RendererFactory as VideoRendererFactory;
+use SugarCraft\Code\Config\Trust\TrustTarget;
 use SugarCraft\Code\Tui\Settings\OpenSettingsMsg;
 use SugarCraft\Code\Tui\Settings\SettingsEditor;
 use SugarCraft\Code\Tui\Settings\SettingsFileEditedMsg;
@@ -94,6 +95,7 @@ use SugarCraft\Code\Tui\Settings\SettingsFileEditor;
 use SugarCraft\Code\Tui\Settings\SettingsProfile;
 use SugarCraft\Code\Tui\Settings\SettingsProfileMsg;
 use SugarCraft\Code\Tui\Settings\SettingsSavedMsg;
+use SugarCraft\Code\Tui\TrustDialog;
 use SugarCraft\Code\Tui\Settings\SettingsSavePreview;
 use SugarCraft\Code\Config\Settings\SettingSource;
 use SugarCraft\Code\Config\Settings\SettingsTier;
@@ -407,6 +409,14 @@ final class App implements Model
          * (the global quit chord stops the loop without a model turn).
          */
         public readonly ?VideoPlayerScreen $videoPlayer = null,
+        /**
+         * The launch trust dialog while it is open (C-SEC-5.d), null
+         * otherwise. A full-band modal on the settings-view law: the census
+         * rows are answered row by row, and every grant leaves as a Cmd
+         * through the one door {@see \SugarCraft\Code\Cli\Bootstrap::grantProjectTrust()}. Only an
+         * interactive launch builds it — `-p` and serve never see a dialog.
+         */
+        public readonly ?TrustDialog $trustDialog = null,
         /**
          * The reasoning effort every request built off this App asks for
          * (roadmap 4.1-1) — a delegated sub-agent's preset `effort:`, carried
@@ -1372,6 +1382,12 @@ final class App implements Model
     public function withSettingsWriter(?SettingsWriter $v): self
     {
         return $this->mutate(settingsWriter: $v);
+    }
+
+    /** Replace the open launch trust dialog's state (null closes it). */
+    public function withTrustDialog(?TrustDialog $v): self
+    {
+        return $this->mutate(trustDialog: $v);
     }
 
     /**
@@ -3754,6 +3770,21 @@ final class App implements Model
             return [$origin === null ? $this : $this->mutate(dock: $origin), null];
         }
 
+        // The launch trust dialog (C-SEC-5.d) is MODAL on the same law, and
+        // FIRST among the full-band modals: it covers the frame at launch,
+        // so the user answers (or dismisses) it before reaching the settings
+        // view or typing into the chat it covers. The component carries every
+        // answer as a value; what it decides rides out as a Cmd through the
+        // one grant door, answered as a status notice like every other write.
+        if ($this->trustDialog !== null && !self::trustDialogYields($msg)) {
+            $next = $this->trustDialog->update($msg);
+            if (!$next->isResolved()) {
+                return [$this->mutate(trustDialog: $next), null];
+            }
+
+            return $this->resolveTrustDialog($next);
+        }
+
         // The settings view is MODAL while it is open: every key is its own,
         // so nothing types into a chat it covers. Three exceptions keep the
         // app drivable — Ctrl+C still quits (Chat's binding), and F10 and an
@@ -4093,6 +4124,84 @@ final class App implements Model
                 return SettingsSavedMsg::failed(SettingsTier::You, [$key], $e->getMessage());
             }
         }];
+    }
+
+    /**
+     * Carry the resolved launch dialog's answers through the ONE grant door
+     * ({@see \SugarCraft\Code\Cli\Bootstrap::grantProjectTrust()}) and close
+     * the dialog (C-SEC-5.d). The write is a Cmd answered with a
+     * {@see StatusMsg} notice — like a settings save — because the door
+     * never throws and the user must be able to read WHY an answer failed.
+     * A dismissal answers nothing, and a walk of rows the user all skipped
+     * writes nothing either: refusal is the default and needs no sentence
+     * repeating it. The lists are frozen at launch, so the notice says the
+     * grant stands from the NEXT launch, never this one.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function resolveTrustDialog(TrustDialog $resolved): array
+    {
+        $granted = [];
+        foreach ($resolved->choices() as $choice) {
+            if ($choice['granted']) {
+                $granted[] = $choice['target'];
+            }
+        }
+
+        $closed = $this->mutate(trustDialog: null);
+        if ($granted === []) {
+            return [$closed, null];
+        }
+
+        $writer = $this->settingsWriter;
+        $root = $resolved->root();
+
+        return [$closed, static function () use ($granted, $root, $writer): StatusMsg {
+            $labels = [];
+            $errors = [];
+            foreach ($granted as $target) {
+                $result = \SugarCraft\Code\Cli\Bootstrap::grantProjectTrust($target, $root, $writer);
+                if ($result['error'] !== null) {
+                    $errors[] = $result['error'];
+                } elseif ($result['granted']) {
+                    $labels[] = Lang::t(self::trustTargetKey($target));
+                }
+            }
+
+            if ($errors !== []) {
+                return new StatusMsg(Lang::t('tui.trust.failed', ['error' => implode('; ', $errors)]));
+            }
+
+            return new StatusMsg(Lang::t('tui.trust.granted', ['targets' => implode(' · ', $labels)]));
+        }];
+    }
+
+    /**
+     * The dialog's row vocabulary, spelled as literals rather than built
+     * from `$target->value`: the `tui.*` census in TuiLangTest walks quoted
+     * strings (the same law TrustDialog::rowText() records for its rows), and
+     * the exhaustive `match` is 5.a's own no-drift idiom.
+     */
+    private static function trustTargetKey(TrustTarget $target): string
+    {
+        return match ($target) {
+            TrustTarget::Mcp => 'tui.trust.target.mcp',
+            TrustTarget::McpPin => 'tui.trust.target.mcp_pin',
+            TrustTarget::Hooks => 'tui.trust.target.hooks',
+            TrustTarget::Commands => 'tui.trust.target.commands',
+            TrustTarget::Settings => 'tui.trust.target.settings',
+        };
+    }
+
+    /**
+     * Whether a key goes past the open launch trust dialog: the exact
+     * settings-view exception list (quit chord, menu key, live menu) —
+     * one law for every full-band modal, so no shell ever invents its own
+     * escape hatch.
+     */
+    private static function trustDialogYields(KeyMsg $msg): bool
+    {
+        return self::settingsEditorYields($msg);
     }
 
     /**
@@ -5192,6 +5301,7 @@ final class App implements Model
             settingsWriter: array_key_exists('settingsWriter', $changes) ? $changes['settingsWriter'] : $this->settingsWriter,
             mediaForm: array_key_exists('mediaForm', $changes) ? $changes['mediaForm'] : $this->mediaForm,
             videoPlayer: array_key_exists('videoPlayer', $changes) ? $changes['videoPlayer'] : $this->videoPlayer,
+            trustDialog: array_key_exists('trustDialog', $changes) ? $changes['trustDialog'] : $this->trustDialog,
             reasoningEffort: array_key_exists('reasoningEffort', $changes) ? $changes['reasoningEffort'] : $this->reasoningEffort,
             agentViewTarget: array_key_exists('agentViewTarget', $changes) ? $changes['agentViewTarget'] : $this->agentViewTarget,
             agentViewTail: array_key_exists('agentViewTail', $changes) ? $changes['agentViewTail'] : $this->agentViewTail,

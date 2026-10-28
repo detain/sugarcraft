@@ -2968,6 +2968,8 @@ TXT,
     'tui.trust.enable.settings' => 'settings may change {count} keys',
     'tui.trust.effect' => 'Takes effect next launch',
     'tui.trust.keys' => 'y grant · a grant all · n skip · Esc dismiss',
+    'tui.trust.granted' => 'Project trust granted: {targets} — takes effect next launch',
+    'tui.trust.failed' => 'Project trust not granted: {error}',
     // --- end tui/palette (W11-d) ---
 
     // --- serve remote (feature) ---

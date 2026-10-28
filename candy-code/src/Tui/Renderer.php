@@ -655,6 +655,14 @@ final class Renderer
         // Pane::Agents is painted through renderSide()/AgentsPane while some
         // other pane holds focus — the side-by-side seam the sidebar
         // docblocks named — and focusing Agents still takes the full band.)
+        // The launch trust dialog (C-SEC-5.d) takes the band ahead of every
+        // other full-band modal: it covers the frame AT launch, and the only
+        // way out is an answer or a dismissal — so the view it covers must
+        // never paint while it stands.
+        if ($a->trustDialog !== null) {
+            return self::renderTrustDialog($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
+        }
+
         // The settings view (N-P1) takes the band the same way, ahead of any
         // pane focus: it is modal while open, Agents included.
         if ($a->settingsEditor !== null) {
@@ -1118,6 +1126,68 @@ final class Renderer
         }
 
         self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), self::lineCount($menuBar), $zoneRows);
+
+        return new View($frame);
+    }
+
+    /**
+     * The launch trust dialog as a full-band modal (C-SEC-5.d): the same
+     * composite renderMediaForm() performs — veil-dimmed band, the box
+     * centred, menu bar and status notice kept, chat zone registry cleared
+     * so a click under the box reaches nothing — minus the box's own zones:
+     * the dialog is keyboard-only (`y`/`n`/`a`/`Esc`), so nothing inside it
+     * is a click target either. The height is the dialog's own layout maths
+     * — chrome plus one line per pending row — clamped into the band;
+     * TrustDialog::view() pads or squeezes to exactly that many lines.
+     */
+    private static function renderTrustDialog(
+        App $a,
+        int $cols,
+        int $rows,
+        string $menuBar,
+        string $notice,
+        string $bottom,
+        int $paneRows,
+    ): View {
+        $dialog = $a->trustDialog;
+        \assert($dialog !== null);
+        $theme = $a->theme();
+
+        $band = self::composeBand($a, $cols, $paneRows);
+        $backdrop = self::padBand($band['middle'], $cols, $paneRows);
+
+        // Mirrors view()'s own budget: seven chrome lines (six with no root
+        // line) plus one per target, the row the dialog always keeps at
+        // least. Over-tall bands only pad the box; view() never lets a line
+        // exceed $cols and keeps chrome before rows.
+        $boxRows = min($paneRows, 7 + count($dialog->targets()));
+
+        $middle = Veil::new()->withBackdrop(50)->composite(
+            $dialog->view($cols, $boxRows, $theme),
+            $backdrop,
+            OverlayPosition::CENTER,
+            OverlayPosition::CENTER,
+        );
+
+        $parts = [$menuBar];
+        if ($notice !== '') {
+            $parts[] = $notice;
+        }
+        $parts[] = $middle;
+        if ($bottom !== '') {
+            $parts[] = $bottom;
+        }
+
+        $joined = implode("\n", $parts);
+        $frame = self::clipWidth(self::clipTail($joined, $rows), $cols);
+        $frame = self::overlayMenu($a, $frame, $cols, self::lineCount($menuBar));
+        $dropped = self::lineCount($joined) - self::lineCount($frame);
+
+        LiveRenderer::clearZones();
+        self::$lastDockFrame = null;
+        self::$scrollRegions = [];
+
+        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), self::lineCount($menuBar), []);
 
         return new View($frame);
     }

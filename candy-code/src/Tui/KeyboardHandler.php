@@ -369,8 +369,9 @@ final class KeyboardHandler
      * the F10 menu, `Pane::Agents`' full-pane dashboard, an open skill
      * picker (letting its keys fall through would scroll the chat behind the
      * modal instead of moving the highlighted skill — which is exactly why the
-     * Skills pane could be OPENED but never selected from), and the full-band
-     * settings view (N-P1), which {@see \SugarCraft\Code\App\App::handleKey()}
+     * Skills pane could be OPENED but never selected from), the full-band
+     * settings view (N-P1), and the launch trust dialog (C-SEC-5.d) over it,
+     * each of which {@see \SugarCraft\Code\App\App::handleKey()}
      * hands every key to before this class is consulted at all.
      *
      * Read three times: once as claim rule 2, once by {@see chatOwns()} for
@@ -413,7 +414,8 @@ final class KeyboardHandler
             || $app->pane === Pane::Agents
             || ($app->pane === Pane::Skills && $app->skillPickerOptions !== [])
             || $app->settingsEditor !== null
-            || $app->mediaForm !== null;
+            || $app->mediaForm !== null
+            || $app->trustDialog !== null;
     }
 
     /**

@@ -9,6 +9,8 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Code\App\App;
+use SugarCraft\Code\Config\Trust\TrustTarget;
+use SugarCraft\Code\Tui\TrustDialog;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\KeyBindingRegistry;
@@ -995,6 +997,33 @@ final class KeyboardHandlerTest extends TestCase
         $this->assertNull($this->handler->handleKeyMsg(new KeyMsg(KeyType::Enter), $app));
         $this->assertNull($this->handler->handleKeyMsg(new KeyMsg(KeyType::Up), $app));
         $this->assertNull($this->handler->handleKeyMsg(new KeyMsg(KeyType::Backspace), $app));
+    }
+
+    /**
+     * C-SEC-5.d: with the launch trust dialog open the modal state swallows
+     * the keys the chat would otherwise own — the claim layer must agree with
+     * `App::handleKey()`, which already routes every non-yielding key to the
+     * dialog first, so a key `claims()` handed to Chat would deliver it twice.
+     * Run against the same runes the negative control above pins unclaimed.
+     */
+    public function testLaunchTrustDialogSwallowsKeysThatWouldReachChat(): void
+    {
+        $app = $this->createApp(Pane::Chat)
+            ->withTrustDialog(TrustDialog::new('/ld-claim-probe-root', [TrustTarget::Hooks]));
+
+        foreach (['c', 'r', 'y', 'z'] as $rune) {
+            $this->assertNotNull(
+                $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, $rune), $app),
+                "with the trust dialog open, '{$rune}' must not fall through to Chat",
+            );
+        }
+
+        // The negative leg of the same law: without the dialog, `z` is the
+        // chat's again (the exact shape testTypedTextIsNeverClaimed pins).
+        $this->assertNull(
+            $this->handler->handleKeyMsg(new KeyMsg(KeyType::Char, 'z'), $this->createApp(Pane::Chat)),
+            'the claim flip must be the dialog, not a widening for plain chat',
+        );
     }
 
     /**
