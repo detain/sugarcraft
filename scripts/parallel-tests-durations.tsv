@@ -472,6 +472,7 @@ candy-code/tests/Format/FormatRunnerTest.php	0.372	23
 candy-code/tests/Memory/DreamPassTest.php	0.370	11
 candy-code/tests/VhsTapeContractTest.php	0.370	125
 candy-code/tests/Chat/MutateCarryCensusTest.php	0.367	4
+candy-code/tests/App/AgentWindowViewportTest.php	0.366	5
 candy-code/tests/Host/SessionHostAheadOfNeedTest.php	0.364	3
 candy-code/tests/Commands/SlashDispatchTest.php	0.358	21
 candy-code/tests/Context/ContextCompactorTest.php	0.355	96
@@ -1019,6 +1020,7 @@ candy-code/tests/Renderer/UiOnlyNoticeStyleTest.php	0.016	7
 candy-code/tests/Skills/AgentsTreeAndLegacyOpencodeTest.php	0.016	7
 candy-code/tests/Support/ProjectDirMigrationTest.php	0.016	3
 candy-code/tests/Tools/BuiltIn/ReadPagingTest.php	0.016	13
+candy-code/tests/Agents/AgentInterruptSendTest.php	0.015	4
 candy-code/tests/Config/Settings/SettingsSchemaDocDriftTest.php	0.015	19
 candy-code/tests/Hooks/BashEscapeDenyHookTest.php	0.015	56
 candy-code/tests/Renderer/InputWrapTest.php	0.015	6
