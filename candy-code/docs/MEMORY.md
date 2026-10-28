@@ -927,6 +927,19 @@ the capture pays no re-expansion: a child costs one stat per turn, never a read.
 A child whose stat moved renders one `Read <path>` pointer line — its new bytes
 are never re-spliced mid-session; the next refresh point absorbs them.
 
+### Quick-add from the chat
+
+A draft that is a single line starting with `#` (but not `##`) is a quick-add
+offer rather than a turn: `# always run the tests first` raises a confirm row,
+Enter appends `- always run the tests first` to your personal file
+`~/.candy-code/AGENTS.md` — created 0600 when absent, held to the same
+owned-home containment as every read of it, an existing file appended under a
+lock — and the note reaches the model through the instruction diff described
+above, never as prompt text. Escape restores the draft exactly; any other
+keystroke cancels the offer and lands in the restored draft. A multi-line
+draft, a `##` markdown heading, a bare `#`, and anything typed while a turn
+runs are never captured: they behave exactly as they did before.
+
 ## On-disk layout summary
 
 ```

@@ -283,6 +283,16 @@ trait HandlesKeys
         if ($this->titleEditor !== null) {
             return $this->handleTitleEditorKey($msg);
         }
+        // C-CTX-3.b: a pending `#` quick-add owns the keyboard while its
+        // confirm row is up — Enter and Escape are its two answers, and any
+        // other key cancels the offer and lands in the restored draft.
+        // Ahead of the Escape arm below, so Escape answers the confirm
+        // instead of arming a turn cancel, and ahead of the mid-turn
+        // refusals for the same reason the title editor is: this keystroke
+        // starts no turn and rewrites no history.
+        if ($this->pendingQuickAdd !== null) {
+            return $this->handleQuickAddKey($msg);
+        }
         // Escape is checked before the inFlight blanket-swallow below (like
         // Ctrl+C above) because its whole point while a request is running
         // is to let the user cancel it. A single Escape never quits the app

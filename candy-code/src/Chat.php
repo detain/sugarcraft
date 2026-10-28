@@ -1678,6 +1678,18 @@ final class Chat implements Model
          */
         private readonly ?\SugarCraft\Forms\TextInput\TextInput $titleEditor = null,
     /**
+         * The pending `#` quick-add confirm (C-CTX-3.b): the offered note and
+         * the exact draft it was captured from, or null when nothing is
+         * pending. While set, the keyboard belongs to
+         * {@see handleQuickAddKey()} — Enter appends the note to the personal
+         * instruction file, Escape (or any other key) puts the draft back.
+         * Cleared by {@see mutate()} whenever the session changes, so a note
+         * offered in one tab can never be appended by a keystroke in another.
+         *
+         * @var array{note: string, draft: string}|null
+         */
+        private readonly ?array $pendingQuickAdd = null,
+    /**
          * Settings keys a save changed while a turn was running whose apply
          * rebuilds the engine (roadmap N-P3, Appendix N §4.8) — parked here
          * and applied by {@see update()} once no turn is in flight, so the
@@ -9069,6 +9081,7 @@ final class Chat implements Model
             'liveStepGeneration' => $this->liveStepGeneration,
             'currentSessionTitleSource' => $this->currentSessionTitleSource,
             'titleEditor' => $this->titleEditor,
+            'pendingQuickAdd' => $this->pendingQuickAdd,
             // ISS-102: the tab strip's model and the pending row minter ride
             // every clone by identity — a keystroke before the launch prompt
             // must not silently drop either (same rule as 'tokenTracker').
@@ -9101,6 +9114,7 @@ final class Chat implements Model
         if (array_key_exists('currentSessionId', $changes) && $changes['currentSessionId'] !== $this->currentSessionId) {
             $constructorProps['currentSessionTitleSource'] = $changes['currentSessionTitleSource'] ?? null;
             $constructorProps['titleEditor'] = null;
+            $constructorProps['pendingQuickAdd'] = null;
             // The "always" grants are the session's too: they were carried
             // into whatever session came next, so a grant given in one tab
             // answered questions in another, and a resumed session asked
@@ -9783,6 +9797,31 @@ final class Chat implements Model
         $readOnly = $this->readOnlyRefusal($text);
         if ($readOnly !== null) {
             return $readOnly;
+        }
+
+        // A `#`-prefixed SINGLE line is a QUICK-ADD (C-CTX-3.b), not a turn:
+        // it offers a note for the personal instruction file. Enter on the
+        // confirm row that follows appends `- <note>` to
+        // `~/.candy-code/AGENTS.md`; Escape puts the draft back untouched.
+        // Checked after the read-only refusal (a window that may not start a
+        // turn may not edit the instruction file either) and before the bang
+        // arm. A multi-line draft and a `##` markdown heading are never
+        // captured — pasted markdown reaches the model exactly as before —
+        // and mid-turn drafts were classified by the arm above, so a `#`
+        // typed while a turn runs still queues as a prompt. The note reaches
+        // the model only through the instruction-diff tracker (C-CTX-1.a):
+        // the file on disk is the source of truth, this writes no prompt.
+        $quickAdd = self::quickAddNote($text);
+        if ($quickAdd !== null) {
+            return [$this->mutate([
+                'history' => [
+                    ...$this->history,
+                    Message::user($text)->withUiOnly(),
+                    Message::assistant(Lang::t('chat.instructions.quick_add.confirm', ['note' => $quickAdd]))->withUiOnly(),
+                ],
+                'inputBuf' => '',
+                'pendingQuickAdd' => ['note' => $quickAdd, 'draft' => $text],
+            ]), null];
         }
 
         // `!<command>` RUNS A SHELL COMMAND FOR THE USER (roadmap 5.14g) and
@@ -16015,6 +16054,118 @@ final class Chat implements Model
             $next->mutate(['history' => [...$next->history, Message::assistant($response)->withUiOnly()]]),
             $cmd,
         ];
+    }
+
+    /**
+     * The note a draft carries for the `#` quick-add (C-CTX-3.b), or null
+     * when the draft is an ordinary prompt. Only a SINGLE line starting with
+     * `#` followed by something other than `#` qualifies: a multi-line draft
+     * is a pasted block, and `## heading` is markdown — both must reach the
+     * model untouched. A bare `#` offers nothing, so it prompts as before.
+     */
+    private static function quickAddNote(string $text): ?string
+    {
+        if (str_contains($text, "\n") || !str_starts_with($text, '#')) {
+            return null;
+        }
+
+        if (strlen($text) < 2 || $text[1] === '#') {
+            return null;
+        }
+
+        $note = ltrim(substr($text, 1));
+
+        return $note === '' ? null : $note;
+    }
+
+    /**
+     * A key while a `#` quick-add confirm is pending (C-CTX-3.b), reached
+     * from the owner arm in {@see \SugarCraft\Code\Chat\Handlers\HandlesKeys}.
+     * Enter appends the note; Escape cancels and puts the draft back
+     * exactly; any other key cancels first and is then delivered to the
+     * restored draft — the way the vim-owner arms re-route — so nothing the
+     * user meant to type is lost to the confirm.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleQuickAddKey(KeyMsg $msg): array
+    {
+        $pending = $this->pendingQuickAdd;
+        \assert($pending !== null);
+
+        if ($msg->type !== KeyType::Enter) {
+            $cancelled = $this->mutate(['pendingQuickAdd' => null, 'inputBuf' => $pending['draft']]);
+            if ($msg->type === KeyType::Escape) {
+                return [$cancelled, null];
+            }
+
+            return $cancelled->update($msg);
+        }
+
+        $refusal = $this->appendQuickAddNote($pending['note']);
+        $row = $refusal ?? Lang::t('chat.instructions.quick_add.appended', ['note' => $pending['note']]);
+
+        return [$this->mutate([
+            'history' => [...$this->history, Message::assistant($row)->withUiOnly()],
+            'pendingQuickAdd' => null,
+        ]), null];
+    }
+
+    /**
+     * Append one `- <note>` line to the personal instruction file
+     * `~/.candy-code/AGENTS.md` (C-CTX-3.b), creating it 0600 when absent,
+     * and return null — or the refusal sentence when the bytes could not be
+     * put there.
+     *
+     * The containment law is the loader's own ({@see \SugarCraft\Code\Context\InstructionFileLoader}):
+     * the file is read back only when it sits inside an owned home, so a
+     * write must reach the same bytes and no others. When the directory does
+     * not exist yet it is held to the owner-private rule
+     * ({@see \SugarCraft\Code\Support\PrivateDir::ensure}); its RESOLVED path is then
+     * compared against the owned home — the post-check is load-bearing, a
+     * `mkdir` through a planted symlink would otherwise write straight
+     * through it. A symlink wearing the file's name is refused, never
+     * followed. An existing regular file is APPENDED under a lock: a
+     * quick-add must never publish a truncated rewrite of a file the user
+     * wrote by hand, and its mode is theirs to keep.
+     */
+    private function appendQuickAddNote(string $note): ?string
+    {
+        $home = \SugarCraft\Code\Support\HomeDirectory::owned();
+        if ($home === null) {
+            return Lang::t('chat.instructions.quick_add.refused');
+        }
+
+        $dir = rtrim($home, '/') . '/.candy-code';
+        $path = $dir . '/' . \SugarCraft\Code\Context\InstructionFileLoader::PERSONAL_FILENAME;
+        $line = '- ' . $note . "\n";
+
+        try {
+            if (!is_dir($dir)) {
+                \SugarCraft\Code\Support\PrivateDir::ensure($dir, 'personal instruction directory');
+            }
+
+            $resolved = realpath($dir);
+            if ($resolved === false || !str_starts_with($resolved . '/', rtrim($home, '/') . '/')) {
+                return Lang::t('chat.instructions.quick_add.refused');
+            }
+
+            if (is_link($path)) {
+                return Lang::t('chat.instructions.quick_add.refused');
+            }
+
+            if (is_file($path)) {
+                if (@file_put_contents($path, $line, FILE_APPEND | LOCK_EX) === false) {
+                    return Lang::t('chat.instructions.quick_add.refused');
+                }
+            } else {
+                \SugarCraft\Code\Support\AtomicFileWriter::write($path, $line, 0600);
+            }
+        } catch (\Throwable) {
+            return Lang::t('chat.instructions.quick_add.refused');
+        }
+
+        return null;
     }
 
     /**

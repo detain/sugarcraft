@@ -472,7 +472,14 @@ final class ContainedPathInventoryTest extends TestCase
             [
                 'Agents/AgentPresetRegistry.php' => 1,
                 'Agents/WorktreeManager.php' => 2,
-                'Chat.php' => 1,
+                'Chat.php' => 2,
+                // C-CTX-3.b (# quick-add): appendQuickAddNote() compares the
+                // RESOLVED `.candy-code` directory against the owned home —
+                // the post-check that admits or refuses where bytes land
+                // (a mkdir through a planted symlink would write straight
+                // through it), the same shape as ExportCommand's shelf gate
+                // below. The mentionFor() compare stays in the exclusion
+                // paragraph above; this one is a boundary.
                 // plan_comparison W4-B (/export): the shelf gate in
                 // homeShelfTarget() admits only the subtree under
                 // `~/.candy-code` — a boundary that admits or refuses where a
