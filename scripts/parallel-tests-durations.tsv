@@ -751,6 +751,7 @@ candy-code/tests/Providers/SglangProviderServerLimitsTest.php	0.065	35
 candy-code/tests/Tools/BuiltIn/ApplyPatchTest.php	0.065	17
 candy-code/tests/Tui/Settings/SettingsFilesAndProfilesTest.php	0.065	16
 candy-code/tests/Integration/ArchitectureAssemblyOrderTest.php	0.064	2
+candy-code/tests/MCP/McpServerRequestsTest.php	0.064	13
 candy-code/tests/Providers/EffortBudgetTest.php	0.064	7
 candy-code/tests/Tui/Settings/SettingsEditorTest.php	0.063	11
 candy-code/tests/Support/MacAltNoticeStampTest.php	0.063	5
@@ -800,6 +801,7 @@ candy-code/tests/Host/Commands/SkillsEnableDisableTest.php	0.051	7
 candy-code/tests/Bundles/BundleRecommenderTest.php	0.051	10
 candy-code/tests/Skills/BuiltInSkillsTest.php	0.050	116
 candy-code/tests/Context/Compaction/SummarySafeguardTest.php	0.049	11
+candy-code/tests/MCP/McpElicitationTest.php	0.049	14
 candy-code/tests/Sessions/ScheduleTest.php	0.049	20
 candy-code/tests/Tools/BuiltIn/PlanExitToolTest.php	0.049	17
 candy-code/tests/App/VideoPlayerWiringTest.php	0.048	12
