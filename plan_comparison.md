@@ -1443,7 +1443,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tool.md` → `### C-TOOL-7.b`
 
-#### C-TOOL-7.d — JSON-output escaping of control/format chars
+#### ✅ 15ec4b791 C-TOOL-7.d — JSON-output escaping of control/format chars
 - **Item:** C-TOOL-7 (sources: CC-new#12 JSON-output escaping) · fix · NIT · effort S
 - **What:** `NonInteractive::encodeDocument()` (`candy-code/src/Cli/NonInteractive.php:1341-1354`) is the single encoder for `-p --output-format json`, `stream-json` (`StreamJsonEmitter.php:175`) and the subcommand JSON documents. It encodes …
 - **Files — create:** `candy-code/tests/Cli/EncodeDocumentEscapingTest.php`

@@ -103,7 +103,8 @@
   "P-TABS.c",
   "P-TABS.d",
   "P-TABS.h",
-  "C-TOOL-3.b"
+  "C-TOOL-3.b",
+  "C-TOOL-7.d"
  ],
  "inflight": {
   "C-EXT-2.c": {
@@ -130,12 +131,6 @@
    "worktree": "/home/sites/cc-cmp-C-SEC-5.b",
    "branch": "cc/C-SEC-5.b",
    "note": "builder derailed @attempt1 (injection-shaped return, zero commits, WIP on disk 5 protocol files); resumed same session with disk-grounding @attempt2"
-  },
-  "C-TOOL-7.d": {
-   "stage": "clean",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-TOOL-7.d",
-   "branch": "cc/C-TOOL-7.d"
   },
   "C-TOOL-7.e": {
    "stage": "clean",
