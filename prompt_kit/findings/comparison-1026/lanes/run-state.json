@@ -37,6 +37,7 @@
   "sweep_hazard_1034": "SWEEP HAZARD @10:34:02: a process ran a tests-dir git checkout/clean sweep INSIDE cc-cmp-C-AGT-5.b worktree mid-lane, deleting the builder's untracked new test file and reverting test edits (src survived; builder rebuilt). Wrong-worktree-targeting family. Standing order: cp-harness in /tmp ONLY, never git checkout/clean outside the owned worktree. Perpetrator unidentified; monitor."
  },
  "batch3_close_note": "batch-3 welder DONE 2026-10-29: welded 5 of 6 (P-AGENT.b f77460186, C-SES-8.c ebbb14984, C-TUI-3.f 7bcd40016 cure-at-weld, C-WEB-4.c 72c9aaa36 dist-swap, C-TOOL-5.a 7cae5cc33 gated on stage==clean unlock). C-WEB-4.d STOPPED-WITH-RECORD 81c47175f (NEW lane-attributable TS2554 statusBarTimer.spec.ts:191; r1 vue-tsc rc=0 claim vacuous; cure wording in STOP-1.md; branch+worktree HELD, now restacked 4935cce08). tsv 1550->1557. Close sanity battery 150T/25861A ALL GREEN at final tip. suite-figure carry +59T (14+15+4+0+20... web lanes 0) = P-AGENT.b +14, C-SES-8.c +15, C-TUI-3.f +4, C-TOOL-5.a +20 -> re-pin owed at closeout. Standing surface: vue-tsc 20-error base-residual (proven identical at e14c3cc7c, NOT lane). Vitest full re-run at 72c9aaa36 gate (76F/593T) stands; brief close-condition (web 4+5 both) unmet by lane-5 stop.",
+ "batch6": "COMPLETE e6188662a: TUI-5.d/WEB-4.e-src/CTX-4.a/EXT-3.b welded, W17 CLOSED, PathGlob cure 2ee1c62b4 (305,805=555x551), ARCHITECTURE 59→60 cure a2d5d0e3f, vitest full 618/618, durations 1568 asc-viol 4, suite-figure carry ~+56T",
  "blocked": [],
  "blocked_notes": {
   "C-AGT-5.b": "OWNER RULING NEEDED (gates W14 full closure + C-AGT-5.c cascade in W15): C-AGT-5.a r1 MINOR-2 — ScheduleFactory delete guard is createdBy-scoped, not root-scoped, so a model-created row in ANOTHER root can be deleted without include_operator_rows. Options (a) root-scope the guard (stricter; may break legit cross-root cleanup), (b) keep createdBy-scope + document. Per C-AGT-5.a r2 CLEAN the lane shipped as-designed; ruling owed before any rebuild of 5.b."
@@ -128,15 +129,15 @@
  ],
  "extra_agents": 1,
  "inflight": {
-  "C-CTX-2.f": {
-   "branch": "cc/C-CTX-2.f",
-   "note": "r3 FULL-RANGE CLEAN 0C/0M/0m/3-report-NITs @708. Fork leg live-by-construction (EngineBackend:5527 generic string-key union; only ReadLedger excluded). BATCH-7 weld: pick all three 4a36a153a+645e4ca2f+a853615d0, gates Visibility 11T/60A + family 322T/1652A EXACT, durations InstructionVisibilityNoticeTest (11T), §4 cites a853615d0, E199 budget note, ChatHostLangCatalogue 1F foreign",
-   "notes": "W19 loaded/updated instruction rows; base 9fc915cd9; disjoint-vs-3.b law given",
-   "round": 3,
+  "C-AGT-6.c": {
+   "base": "d3536ac91",
+   "branch": "cc/C-AGT-6.c",
+   "note": "r1 CLEAN 0C/0M/0m. BATCH-8 pool: pick f2534f502 rebase onto master, gates trio 260T/949A + battery 730T/6F-roster, DUR tests/Cli/MainWorktreeTest.php, +26T, §4 f2534f502; DocFigure red drops via master cure a2d5d0e3f",
+   "round": 1,
    "session": null,
    "stage": "clean",
-   "tip": "d844f938b",
-   "worktree": "/home/sites/cc-cmp-C-CTX-2.f"
+   "tip": "f2534f502",
+   "worktree": "/home/sites/cc-cmp-C-AGT-6.c"
   },
   "C-CTX-5.a": {
    "branch": "cc/C-CTX-5.a",
@@ -153,26 +154,62 @@
    "round": 1,
    "session": "ses_e7b5e3666ffe2HwskeA4N2ywdt",
    "stage": "review",
-   "worktree": "/home/sites/cc-cmp-C-EXT-3.d",
-   "tip": "b1c24fa69"
+   "tip": "b1c24fa69",
+   "worktree": "/home/sites/cc-cmp-C-EXT-3.d"
+  },
+  "C-EXT-3.e": {
+   "branch": "cc/C-EXT-3.e",
+   "note": "W21 self-learning SkillWorkshop tool; R-EXT-2 ANSWERED: go live immediately with announce-and-undo; base e6188662a refresh rc0",
+   "round": 0,
+   "session": "ses_e7b6585cdffe6h1AbeWlk2tm28",
+   "stage": "build",
+   "tip": null,
+   "worktree": "/home/sites/cc-cmp-C-EXT-3.e"
+  },
+  "C-EXT-4.c": {
+   "branch": "cc/C-EXT-4.c",
+   "note": "FRESH builder @cd87233d0 (prior LANDED narrative PHANTOM; honest stop-record real: NAME_PATTERN rejects colons -> lead-APPROVED widening ONE leading [A-Za-z0-9][A-Za-z0-9_-]*: segment, cite ruling in commit; NEW BundleCommandNamespaceTest two-bundle matrix)",
+   "round": 0,
+   "session": "ses_e7b7d49a9ffenAO2eTxu76O3jo",
+   "stage": "build",
+   "tip": null,
+   "worktree": "/home/sites/cc-cmp-C-EXT-4.c"
+  },
+  "C-EXT-4.d": {
+   "branch": "cc/C-EXT-4.d",
+   "note": "W21 bundle recommendations launch row; offline-only, once/project/pin stamp; cap-census+emitter+format flips in-step",
+   "round": 0,
+   "session": "ses_e7b63eb9affeRMVntMe2QZqfuc",
+   "stage": "build",
+   "tip": null,
+   "worktree": "/home/sites/cc-cmp-C-EXT-4.d"
+  },
+  "C-EXT-6.a": {
+   "branch": "cc/C-EXT-6.a",
+   "note": "4f +97/-17 REAL but UNCOMMITTED; prior return hash 325b2883b = FABRICATION (4th death-mode, builder-side). Finisher dispatched to verify gates+commit honestly",
+   "round": 1,
+   "session": "ses_e7b59d1b1ffesrH4U6O004PR1f",
+   "stage": "fix",
+   "tip": "DIRTY@e6188662a",
+   "worktree": "/home/sites/cc-cmp-C-EXT-6.a"
   },
   "C-PRV-3.a": {
    "branch": "cc/C-PRV-3.a",
-   "note": "r1 reviewer FINDINGS: MAJOR-1 LayeredSettingsTest:68 roster literal lacks serviceTier (tip RED 99T/1F — reviewer ran live); MAJOR-2 FallbackProvider lacks ShapesServiceTier ⇒ fallback-wrapped pair silently never sends tier (production ProviderFactory:244 fallbackModels) — fix: delegate interface or drop unwrap, pin both legs; MAJOR-3 report phantom figures (real 25T/77A ServiceTierTest, EnvRoster 37T). Azure-clause fixer RUNNING (ses_e7b6585ccffel); fixer-2 with MAJOR-1+2 AFTER it lands (twin-writer ban). Welder carries updated: durations ONE row ServiceTierTest 25T",
-   "round": 1,
-   "session": "PENDING-DISPATCH",
+   "note": "r1 azure MINOR-1 FIXED providerName-gate bff8226b8 (26T/83A file, gate 486T/42224A, mutation-exact). STILL OPEN M-1 LayeredSettingsTest userTierOnlyKeys missing serviceTier (TREE RED at tip — fixer-2) + M-2 FallbackProvider unwrap set-but-ignored money setting (real by fixer inspection — fixer-2) + M-3 report truth (draft figures). Weld range f59fff349+bff8226b8+fix2, DUR ONE row ServiceTierTest, §4 final tip",
+   "round": 2,
+   "session": "PENDING-FIXER2",
    "stage": "fix",
-   "worktree": "/home/sites/cc-cmp-C-PRV-3.a",
-   "tip": "f59fff349"
+   "tip": "bff8226b8",
+   "worktree": "/home/sites/cc-cmp-C-PRV-3.a"
   },
   "C-SES-7.e": {
-   "stage": "review",
-   "round": 1,
-   "tip": "37e76cec7",
-   "worktree": "/home/sites/cc-cmp-C-SES-7.e",
    "branch": "cc/C-SES-7.e",
+   "note": "REAL single tip 37e76cec7 @0cd7dc95b (earlier 4-commit range phantoms RETRACTED; 679f6b00f does not exist). r1 review dispatching next message. claims: inbound cap ServerConfig::MAX_CLIENT_FRAME_BYTES 16,777,216 at MessageBuffer reassembled-total via Upgrade.php:50; gates 196T/1418A+2, vitest 4f/34T, vue-tsc 20==20 line-shift; DUR x2 SessionImportMethodTest 8T + SessionArchiveMethodsTest 7T; trio+dist restored, 2 untracked dist-hash assets unstaged (welder re-derives); deviations disclosed incl Incognito-button shape + sidebar-archive half NOT included (matches brief 28L — verify)",
+   "round": 1,
    "session": "PENDING-r1",
-   "note": "REAL single tip 37e76cec7 @0cd7dc95b (earlier 4-commit range phantoms RETRACTED; 679f6b00f does not exist). r1 review dispatching next message. claims: inbound cap ServerConfig::MAX_CLIENT_FRAME_BYTES 16,777,216 at MessageBuffer reassembled-total via Upgrade.php:50; gates 196T/1418A+2, vitest 4f/34T, vue-tsc 20==20 line-shift; DUR x2 SessionImportMethodTest 8T + SessionArchiveMethodsTest 7T; trio+dist restored, 2 untracked dist-hash assets unstaged (welder re-derives); deviations disclosed incl Incognito-button shape + sidebar-archive half NOT included (matches brief 28L — verify)"
+   "stage": "review",
+   "tip": "37e76cec7",
+   "worktree": "/home/sites/cc-cmp-C-SES-7.e"
   },
   "C-TOOL-2.b": {
    "branch": "cc/C-TOOL-2.b",
@@ -180,8 +217,8 @@
    "round": 0,
    "session": "ses_e7b83baaeffeT3LzZPEC0kPMP1",
    "stage": "build",
-   "worktree": "/home/sites/cc-cmp-C-TOOL-2.b",
-   "tip": null
+   "tip": null,
+   "worktree": "/home/sites/cc-cmp-C-TOOL-2.b"
   },
   "C-WEB-4.b": {
    "branch": "cc/C-WEB-4.b",
@@ -193,60 +230,14 @@
    "tip": "2e32c90bf",
    "worktree": "/home/sites/cc-cmp-C-WEB-4.b"
   },
-  "C-AGT-6.c": {
-   "stage": "clean",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-AGT-6.c",
-   "branch": "cc/C-AGT-6.c",
-   "base": "d3536ac91",
-   "session": null,
-   "note": "r1 CLEAN 0C/0M/0m. BATCH-8 pool: pick f2534f502 rebase onto master, gates trio 260T/949A + battery 730T/6F-roster, DUR tests/Cli/MainWorktreeTest.php, +26T, §4 f2534f502; DocFigure red drops via master cure a2d5d0e3f",
-   "tip": "f2534f502"
-  },
-  "C-EXT-4.c": {
-   "stage": "build",
-   "round": 0,
-   "worktree": "/home/sites/cc-cmp-C-EXT-4.c",
-   "branch": "cc/C-EXT-4.c",
-   "session": "ses_e7b7d49a9ffenAO2eTxu76O3jo",
-   "note": "FRESH builder @cd87233d0 (prior LANDED narrative PHANTOM; honest stop-record real: NAME_PATTERN rejects colons -> lead-APPROVED widening ONE leading [A-Za-z0-9][A-Za-z0-9_-]*: segment, cite ruling in commit; NEW BundleCommandNamespaceTest two-bundle matrix)",
-   "tip": null
-  },
   "C-WEB-4.e": {
-   "stage": "clean",
-   "round": 4,
-   "tip": "7a9f8de48 (r4 docs-only on welded 5a89b0b20+47d19563f)",
-   "worktree": "/home/sites/cc-cmp-C-WEB-4.e",
    "branch": "cc/C-WEB-4.e",
+   "note": "src ALREADY welded in b6 (5a89b0b20+47d19563f); branch restacked with docs-only 7a9f8de48 — welder-b7 step-5 lands it + §4 restamp; trio/dist/16MiB all reviewed; closeout carry: 3-line session.spec documents leg (images same gap); b4e12c78a was MY phantom restamp — retracted, disk truth adopted",
+   "round": 4,
    "session": null,
-   "note": "r4 FULL-RANGE CLEAN @712 (13 files byte-faithful rebuild, security PASS maxItems=2/15,379,116 before decode, 16MiB frame, 11MiB budget named, refusal-vocab exact, vitest 64/64+full 618/618, vue-tsc EMPTY-delta). src 5a89b0b20+47d19563f ALREADY WELDED in b6; BATCH-7: ride docs-only 7a9f8de48 + §4 restamp cites new-chain hashes (welder restamp precedent e14c3cc74); closeout carry: 3-line session.spec request-key leg (images same gap since WEB-5b) + NIT c1 message wording. REVIEW-4 canonical copied"
-  },
-  "C-EXT-3.e": {
-   "stage": "build",
-   "round": 0,
-   "tip": null,
-   "worktree": "/home/sites/cc-cmp-C-EXT-3.e",
-   "branch": "cc/C-EXT-3.e",
-   "session": "ses_e7b6585cdffe6h1AbeWlk2tm28",
-   "note": "W21 self-learning SkillWorkshop tool; R-EXT-2 ANSWERED: go live immediately with announce-and-undo; base e6188662a refresh rc0"
-  },
-  "C-EXT-4.d": {
-   "stage": "build",
-   "round": 0,
-   "tip": null,
-   "worktree": "/home/sites/cc-cmp-C-EXT-4.d",
-   "branch": "cc/C-EXT-4.d",
-   "session": "ses_e7b63eb9affeRMVntMe2QZqfuc",
-   "note": "W21 bundle recommendations launch row; offline-only, once/project/pin stamp; cap-census+emitter+format flips in-step"
-  },
-  "C-EXT-6.a": {
-   "stage": "build",
-   "round": 0,
-   "tip": null,
-   "worktree": "/home/sites/cc-cmp-C-EXT-6.a",
-   "branch": "cc/C-EXT-6.a",
-   "session": "ses_e7b63eb99ffeG9lnc1G1Q0m3mH",
-   "note": "W22 hook systemMessage notice via C-EXT-1.a RuntimeNoticeSink; HOOKS.md :628 flip; suppressOutput-does-not-hide pin"
+   "stage": "welded-check",
+   "tip": "7a9f8de48 (r4 docs-only on welded 5a89b0b20+47d19563f)",
+   "worktree": "/home/sites/cc-cmp-C-WEB-4.e"
   }
  },
  "late_rulings": [
@@ -318,8 +309,8 @@
  },
  "note": "W15 FULLY WELDED — wave loop r1 next",
  "notes": {
-  "batch6_weld_1029": "batch-6 weld 2026-10-29: TUI-5.d aa0e46158+cure 54730fdcd; WEB-4.e 5a89b0b20+47d19563f (dist rider, trio rederive zero-diff); CTX-4.a 42939645a+603d2f167; EXT-3.b a42d85304+93e301ef2 cite f5b8a273b; CTX-3.b STOPPED-WITH-RECORD (branch moved to b4245ba44, unreviewed fixer delta; pick reverted, inflight kept); W17 wave closed (r2 CLEAN @d3536ac91); weld-cure a2d5d0e3f ARCHITECTURE slash counter 59->60 = batch-5 C-AGT-6.a carry red cured (base-proven zero-delta); tsv 1563->1568 asc-viol 4 held; phantom hashes confirmed non-existent: f14d0f983 (WEB-4.e STOP2 note), 87075738d (CTX-4.a note), c17a3fd24 (EXT-3.b brief) — canonical disk files governed",
-  "batch6_closeout_1029": "CLOSE battery at final master 041cf425a+2ee1c62b4: phpunit 6-family 187T/65303A OK after PathGlob corpus cure 2ee1c62b4 (304,700->305,805, batch-6 corpus growth, live-derivation law); durations full-tree file_exists sweep ZERO phantoms (1568 rows); vitest full serial 79 files/618 tests passed rc0; vue-tsc delta EMPTY. Pruned: cc/C-TUI-5.d (en.php-union content-equivalence proven), cc/C-CTX-4.a, cc/C-EXT-3.b (cherry -/-). HELD: cc/C-WEB-4.e (restacked, unreviewed r4 delta 7a9f8de48), cc/C-CTX-3.b (STOP, unreviewed b4245ba44). Batch-6 net: 4 lanes welded, W17 closed, welded_count 186, +2 master weld-cures (54730fdcd, a2d5d0e3f, 2ee1c62b4). suite-figure carry ~+56T (TUI-5d 28 + WEB-4e 8 + CTX-4a 7+5adj + EXT-3b 16) — re-pin OWED at program closeout per lead law."
+  "batch6_closeout_1029": "CLOSE battery at final master 041cf425a+2ee1c62b4: phpunit 6-family 187T/65303A OK after PathGlob corpus cure 2ee1c62b4 (304,700->305,805, batch-6 corpus growth, live-derivation law); durations full-tree file_exists sweep ZERO phantoms (1568 rows); vitest full serial 79 files/618 tests passed rc0; vue-tsc delta EMPTY. Pruned: cc/C-TUI-5.d (en.php-union content-equivalence proven), cc/C-CTX-4.a, cc/C-EXT-3.b (cherry -/-). HELD: cc/C-WEB-4.e (restacked, unreviewed r4 delta 7a9f8de48), cc/C-CTX-3.b (STOP, unreviewed b4245ba44). Batch-6 net: 4 lanes welded, W17 closed, welded_count 186, +2 master weld-cures (54730fdcd, a2d5d0e3f, 2ee1c62b4). suite-figure carry ~+56T (TUI-5d 28 + WEB-4e 8 + CTX-4a 7+5adj + EXT-3b 16) — re-pin OWED at program closeout per lead law.",
+  "batch6_weld_1029": "batch-6 weld 2026-10-29: TUI-5.d aa0e46158+cure 54730fdcd; WEB-4.e 5a89b0b20+47d19563f (dist rider, trio rederive zero-diff); CTX-4.a 42939645a+603d2f167; EXT-3.b a42d85304+93e301ef2 cite f5b8a273b; CTX-3.b STOPPED-WITH-RECORD (branch moved to b4245ba44, unreviewed fixer delta; pick reverted, inflight kept); W17 wave closed (r2 CLEAN @d3536ac91); weld-cure a2d5d0e3f ARCHITECTURE slash counter 59->60 = batch-5 C-AGT-6.a carry red cured (base-proven zero-delta); tsv 1563->1568 asc-viol 4 held; phantom hashes confirmed non-existent: f14d0f983 (WEB-4.e STOP2 note), 87075738d (CTX-4.a note), c17a3fd24 (EXT-3.b brief) — canonical disk files governed"
  },
  "notes_ruling_chain": "owner ruling 15 executed: AGT-5.b welded a812ea659; W14 loop r1 running; next: AGT-5.c build (W15) on 5.b-landed base, then W15 loop after its members complete",
  "owed": [
@@ -354,7 +345,7 @@
  ],
  "standing_reds_b985fbe51": "ADD: ChatHostLangCatalogueTest red on chat.effort.launch_unshaped (asker LaunchContext.php:2109 outside sources()) - byte-identical at base, C-PRV-1.b (a992413b0) seam -> closeout roster",
  "status": "RUNNING",
- "tick": "219-WEB4b-clean",
+ "tick": "224-PRV3a-fix2-needed-CTX2f-forklanded-clean",
  "tip": "0f58a906f",
  "updated": "2026-10-28 batch-5 weld step 6",
  "wave_loops": {
@@ -368,15 +359,15 @@
    "verdict": "CLEAN 0C/0M/0minor/3nit"
   },
   "17": {
-   "reviewed_at_master": "86f95e191",
-   "round": 2,
-   "session": null,
-   "stage": "clean",
    "fix_commits": [
     "d3536ac91",
     "cd87233d0"
    ],
    "note": "r2 CLEAN @cure d3536ac91; batch-6 step-6 commits WAVE-REVIEW-1+2.md + §3 close + waves_closed 17",
+   "reviewed_at_master": "86f95e191",
+   "round": 2,
+   "session": null,
+   "stage": "clean",
    "verdict": "CLEAN"
   },
   "2": "closed r1 CLEAN battery green",
@@ -612,6 +603,8 @@
    "regen": "none (no protocol/web files in pick)"
   },
   "C-CTX-2.d_weld": "WELD DUTIES (r1 FINDINGS 0C/0M/3min all evidence-level, ship-ready; NO code fixer): (1) BEFORE weld commit edit main-tree lanes/C-CTX-2.d/REPORT.md: replace \"PHP family 99T/679A\" with exact filter figure 187T/1083A (phantom token ServedContextSources + over-matching SessionHost* were the cause), and in dev-5 paragraph disclose typecheck 23 lines = 19 pre-existing EXACT + 4 new TS2344/TS18046 from Ev<prompt.suggested> vs restored generated.ts (self-heal at regen). (2) PROTOCOL trio regen rider OWED (pick touches src/Protocol/Methods/PromptMethods.php + Schema/Definitions.php): on merged tree run candy-code/tools/gen-protocol-schema.php --write + (cd candy-code-web && npm run gen:protocol && npm run build) -> separate \"weld: C-CTX-2.d regenerate\" commit; after regen CONFIRM vue-tsc back to exactly 19 and SERVER.md gains the two advertised rows; weld regen proves ProtocolSchemaDrift/ServerProtocolDocumentationDrift green. (3) merged gates: ServedPromptSuggestionTest 4T/48A; guards superset 158T/26137A EXACT; vitest --no-file-parallelism touched set (new 9/9, adjacent 116/116, protocol 31/31, panel/roster 22/22). (4) durations.tsv: exactly 1 new candy-code phpunit row (ServedPromptSuggestionTest 4T junit sum). (5) WELD.md notes: MINOR-2 accepted undeclared-touch disclosure (tests/Host/SessionHostTurnSettleWorkTest.php comment-only, env-guard pre-existed); NITs carried (settle double-refetch fold-later; /memory read-forms over-announce advisory; typing-clear wording unpinned). (6) staleness-pair gate re-pin is GATE duty not weld (welder never touches suite-figure.json).",
+  "C-CTX-2.f": "batch-7 weld: 4 picks c77030fa0+87f26fdf2+13de7554d+93bc8f028 (4a36a153a+645e4ca2f+a853615d0+96f4e4461 per tick-224 pool note); gates 12T/71A + 339T/1740A + guards 147T/21192A green; DUR 12T; §4 96f4e4461; ChatHostLangCatalogue 1F foreign-standing",
+  "C-CTX-3.b": "batch-7: aa8e4fdbf+b4245ba44 -> 5891bced5+74acd2472; gates 16T/77A+19T+188T family green; durations +1 row; +16T carry; §4 b4245ba44; r2 CLEAN-RANGE canonical REVIEW-2",
   "C-CTX-4.c_weld": "r1 FINDINGS 0C/0M/1min(out-of-scope FeatWiring docblock->closeout list)/3NIT: lane commit itself defect-free, weld WITHOUT fixer round. At weld: (a) append the undisclosed lang/en.php deviation line into lanes/C-CTX-4.c/REPORT.md before committing evidence (m2); (b) WELD.md figure corrections (m3/m4): red-before static 17T/11E (builder said 16T/10E); '93T guards' irreproducible as labeled — reviewer measured 206T/192T-green spellings; M1 static 3 reds not 4; gen-settings-doc --check sandbox-blocked, SettingsSchemaDocDrift green covers. 1 durations row InstructionWalkPastRootTest (17T junit sum); hub collision check README/DocFigure/LayeredSettingsTest/en.php vs concurrent lanes; no regen riders (zero Protocol/web files).",
   "C-CTX-6.a": {
    "durations_owed": "none - no new candy-code *Test.php (+3T rides closeout re-pin)",
@@ -1128,8 +1121,7 @@
    "pick": "2b250f827",
    "prune": "worktree cc-cmp-cure-swcap + branch cc/cure-swcap after git-cherry proof"
   },
-  "cure-w7": "MASTER REPAIR 2026-10-27 d3395595e (pick of 08862c003, lane base 8eab506d9; clean zero conflicts; 2 files: candy-code/src/Session/EnhancedSessionStore.php +31/-1, candy-code/tests/Session/UsageRecordsTest.php +54/0; %ae/%ce separate greps 1/1 detain@interserver.net, zero Co-Authored trailers). NOT a plan step: no §4 mark, welded count unchanged (90). Gates (plain pipe cwd candy-code env -u LINES -u COLUMNS): --filter 'UsageRecords|SessionStore|Tombstone' = Tests: 130, Assertions: 477 OK (2 pre-existing deprecations) EXACT; --filter 'SessionEventsTable|TranscriptResume|EventLog|DebouncedTranscript|ShareStore' = Tests: 61, Assertions: 306 OK EXACT; gen-command-docs/gen-tool-docs/gen-settings-doc --check all up-to-date rc0 (lane touched no docs); five-guard 133T/15816A F2 = staleness pair ONLY (25,537 pinned vs live - closeout re-pin). DUR: no new *Test.php (pins ride existing UsageRecordsTest). inflight entry removed at this weld.",
-  "C-CTX-3.b": "batch-7: aa8e4fdbf+b4245ba44 -> 5891bced5+74acd2472; gates 16T/77A+19T+188T family green; durations +1 row; +16T carry; §4 b4245ba44; r2 CLEAN-RANGE canonical REVIEW-2"
+  "cure-w7": "MASTER REPAIR 2026-10-27 d3395595e (pick of 08862c003, lane base 8eab506d9; clean zero conflicts; 2 files: candy-code/src/Session/EnhancedSessionStore.php +31/-1, candy-code/tests/Session/UsageRecordsTest.php +54/0; %ae/%ce separate greps 1/1 detain@interserver.net, zero Co-Authored trailers). NOT a plan step: no §4 mark, welded count unchanged (90). Gates (plain pipe cwd candy-code env -u LINES -u COLUMNS): --filter 'UsageRecords|SessionStore|Tombstone' = Tests: 130, Assertions: 477 OK (2 pre-existing deprecations) EXACT; --filter 'SessionEventsTable|TranscriptResume|EventLog|DebouncedTranscript|ShareStore' = Tests: 61, Assertions: 306 OK EXACT; gen-command-docs/gen-tool-docs/gen-settings-doc --check all up-to-date rc0 (lane touched no docs); five-guard 133T/15816A F2 = staleness pair ONLY (25,537 pinned vs live - closeout re-pin). DUR: no new *Test.php (pins ride existing UsageRecordsTest). inflight entry removed at this weld."
  },
  "weld_queue": {
   "_legacy_list": [
@@ -1327,9 +1319,10 @@
   "C-WEB-4.e",
   "C-CTX-4.a",
   "C-EXT-3.b",
-  "C-CTX-3.b"
+  "C-CTX-3.b",
+  "C-CTX-2.f"
  ],
- "welded_count": 187,
+ "welded_count": 188,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
  "welder_sessions": {
@@ -1347,6 +1340,5 @@
   },
   "scope": "owner directive @197@/@1108@: W10 loop + W11-W15 fully welded + wave loops closed; W16 band finished + welded under this lead per owner extension; W17+ builders NEVER started",
   "this_run": "welded 100 -> 161; waves closed W10,W11,W12,W13,W14,W15 (W14 96d36db45, W15 15046565a)"
- },
- "batch6": "COMPLETE e6188662a: TUI-5.d/WEB-4.e-src/CTX-4.a/EXT-3.b welded, W17 CLOSED, PathGlob cure 2ee1c62b4 (305,805=555x551), ARCHITECTURE 59→60 cure a2d5d0e3f, vitest full 618/618, durations 1568 asc-viol 4, suite-figure carry ~+56T"
+ }
 }

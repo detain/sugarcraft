@@ -2360,7 +2360,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-AGT-2.a (W1), C-AGT-2.c (W2), C-AGT-2.b (W7)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-6.a`
 
-#### C-CTX-2.f — "Loaded" and "updated" instruction rows
+#### ✅ 96f4e4461 C-CTX-2.f — "Loaded" and "updated" instruction rows
 - **Item:** C-CTX-2 (sources: GAP-INS-08w (notice half), INS-12 web) · gap · effort S
 - **What:** Neither surface tells the user when a nested instruction file is loaded on touch, or when a root file changes mid-session (OpenCode shows "↳ Loaded", OC2 "Instructions updated"). Both producers record one uiOnly row through …
 - **Files — create:** `candy-code/tests/Context/InstructionVisibilityNoticeTest.php`
