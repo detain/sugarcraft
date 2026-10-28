@@ -27,6 +27,10 @@ use SugarCraft\Code\MCP\McpClient;
  *                                      anything the session was built from;
  *                                      refuses outright while `.mcp.json`
  *                                      differs from the launch bytes
+ *   /mcp enable|disable <server>     — C-MCP-4.b: arm or lift a per-process
+ *                                      refusal on one exact declared server;
+ *                                      `--persist` mirrors the decision into
+ *                                      the user `disabledMcpServers` setting
  *
  * The command delegates token lifecycle (registration, fetch, refresh) to
  * {@see McpAuthStore} which wraps {@see \SugarCraft\Code\MCP\OAuthClientRegistration}.
@@ -170,6 +174,8 @@ final class McpAuthCommand
             'remove' => $this->removeServer($args),
             'login' => $this->printLoginGuidance(),
             'reconnect' => $this->reconnect($chat),
+            'enable' => $this->sessionToggle($chat, $args, enabling: true),
+            'disable' => $this->sessionToggle($chat, $args, enabling: false),
             default => $this->printError(Lang::t('cmd.mcp-auth.unknown', ['sub' => $subCommand])),
         };
     }
@@ -260,6 +266,126 @@ final class McpAuthCommand
         echo "\n" . TranscriptTable::indented(implode("\n", $lines)) . "\n";
 
         return 0;
+    }
+
+    /**
+     * C-MCP-4.b: the shared body of `/mcp enable` and `/mcp disable`.
+     *
+     * The toggle is EXACT by name and mutates only the memoised launch
+     * client — never a config re-read, never a router deny-pattern list. The
+     * model-facing tool roster deliberately keeps listing the server (the
+     * cache law every mid-session surface of {@see McpClient} obeys: calls
+     * are refused, listings are not re-derived), and because preset handles
+     * fork per dispatch, a turn already running keeps its pre-toggle copy —
+     * the change takes effect from the NEXT turn, the same stance the
+     * credential store documents, one level finer.
+     *
+     * `--persist` is the only disk write, via
+     * {@see \SugarCraft\Code\Cli\Bootstrap::writeUserConfig()}: the exact name
+     * joins or leaves the user `disabledMcpServers` list. That list is glob
+     * vocabulary, so a name carrying fnmatch metacharacters is REFUSED
+     * persistence rather than smuggled in as a wildcard that could cover
+     * servers this command never named.
+     *
+     * No sub-command here starts, stops, or re-admits anything; the servers
+     * keep running — refusal is routing, not teardown.
+     */
+    private function sessionToggle(Chat|CommandContext $chat, array $args, bool $enabling): int
+    {
+        $server = $args[1] ?? '';
+        $verb = $enabling ? 'enable' : 'disable';
+
+        if ($server === '' || str_starts_with($server, '--')) {
+            return $this->printError(Lang::t("cmd.mcp-auth.{$verb}.usage"));
+        }
+
+        $persist = in_array('--persist', array_slice($args, 2), true);
+
+        $client = ($this->clientResolver)($chat->projectRoot());
+        if ($client === null) {
+            echo "\n" . TranscriptTable::indented(Lang::t("cmd.mcp-auth.{$verb}.no-client")) . "\n";
+
+            return 0;
+        }
+
+        // Declared at launch, denied, disabled-by-config, refused — every one
+        // of those rows is still a NAME this session knows, and toggling a
+        // name nobody ever declared would report a refusal that no routing
+        // question could ever reproduce.
+        if (!isset($client->configEntries()[$server])) {
+            return $this->printError(Lang::t("cmd.mcp-auth.{$verb}.unknown", ['server' => $server]));
+        }
+
+        $wasArmed = in_array($server, $client->sessionDisabledServers(), true);
+        if ($enabling) {
+            $client->enableForSession($server);
+        } else {
+            $client->disableForSession($server);
+        }
+
+        $lines = [Lang::t($enabling
+            ? ($wasArmed ? 'cmd.mcp-auth.enable.done' : 'cmd.mcp-auth.enable.not-armed')
+            : 'cmd.mcp-auth.disable.done', ['server' => Chat::reportField($server)])];
+
+        if ($persist) {
+            $lines[] = '  ' . $this->persistSessionToggle($server, $enabling);
+        }
+
+        echo "\n" . TranscriptTable::indented(implode("\n", $lines)) . "\n";
+
+        return 0;
+    }
+
+    /**
+     * C-MCP-4.b: mirror the toggle into the user settings list, adding or
+     * removing EXACTLY this one name (the write replaces the list with the
+     * sanitized read plus/minus the entry; other settings keys ride
+     * {@see \SugarCraft\Code\Cli\Bootstrap::writeUserConfig()}'s merge, and an
+     * emptied list unsets the key rather than persisting a dead `[]`).
+     */
+    private function persistSessionToggle(string $server, bool $enabling): string
+    {
+        $key = McpClient::DENY_SETTINGS_KEY;
+        $raw = \SugarCraft\Code\Cli\Bootstrap::readUserConfig()[$key] ?? [];
+
+        $list = [];
+        if (is_array($raw)) {
+            foreach ($raw as $entry) {
+                if (is_string($entry) && $entry !== '') {
+                    $list[] = $entry;
+                }
+            }
+        }
+
+        if ($enabling) {
+            $kept = array_values(array_filter($list, static fn(string $e): bool => $e !== $server));
+            if (count($kept) === count($list)) {
+                return Lang::t('cmd.mcp-auth.enable.persist-none', ['server' => Chat::reportField($server)]);
+            }
+            if ($kept === []) {
+                \SugarCraft\Code\Cli\Bootstrap::writeUserConfig([], [$key]);
+            } else {
+                \SugarCraft\Code\Cli\Bootstrap::writeUserConfig([$key => $kept]);
+            }
+
+            return Lang::t('cmd.mcp-auth.enable.persist-removed', ['server' => Chat::reportField($server)]);
+        }
+
+        // fnmatch metacharacters, built at runtime: a typed glob-shaped
+        // string literal here would enter the PathGlob corpus (GlobDialect
+        // differential) and drift its documented census figure.
+        if (strpbrk($server, chr(42) . chr(63) . chr(91) . chr(92)) !== false) {
+            return Lang::t('cmd.mcp-auth.disable.persist-glob', ['server' => Chat::reportField($server)]);
+        }
+
+        if (in_array($server, $list, true)) {
+            return Lang::t('cmd.mcp-auth.disable.persist-kept', ['server' => Chat::reportField($server)]);
+        }
+
+        $list[] = $server;
+        \SugarCraft\Code\Cli\Bootstrap::writeUserConfig([$key => $list]);
+
+        return Lang::t('cmd.mcp-auth.disable.persist-added', ['server' => Chat::reportField($server)]);
     }
 
     /**

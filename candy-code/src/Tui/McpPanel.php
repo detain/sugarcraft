@@ -79,7 +79,7 @@ final class McpPanel
      * Render the inventory as transcript lines.
      *
      * @param array{status: string, path: string, servers: list<array{name: string, type: string, detail: string}>, error: string|null, userStatus?: string, userPath?: string, userServers?: list<array{name: string, type: string, detail: string}>, userError?: string|null} $inventory exactly what {@see Bootstrap::mcpServerInventory()} returned (the four MCP-3 `user*` keys are optional reads — an inventory from before MCP-3 renders exactly as it did)
-     * @param array<string, array{transport: string, up: bool|null, tools: int, resources?: int}> $liveness what {@see Bootstrap::mcpLivenessSnapshot()} returned for the same root (`?? []` when it answered null). EMPTY MAP ⇒ the render is BYTE-IDENTICAL to the pre-E698 panel — every existing pin in `tests/Tui/McpPanelTest` reads the cold process, and a cold process must say exactly what it said before this feature existed.
+     * @param array<string, array{transport: string, up: bool|null, tools: int, resources?: int, disabled?: bool}> $liveness what {@see Bootstrap::mcpLivenessSnapshot()} returned for the same root (`?? []` when it answered null). EMPTY MAP ⇒ the render is BYTE-IDENTICAL to the pre-E698 panel — every existing pin in `tests/Tui/McpPanelTest` reads the cold process, and a cold process must say exactly what it said before this feature existed.
      * @param bool|null $configChangedSinceLaunch {@see Bootstrap::mcpConfigChangedSinceLaunch()}; null suppresses the E703-α line (no digest to compare — silence, never a claim).
      */
     public static function render(
@@ -230,7 +230,8 @@ final class McpPanel
      * panel keeps its NoRawAnsi-in-transcript standing; the middle dot is
      * U+00B7, a character, not a colour.
      *
-     * The vocabulary is four states for servers plus one fallback:
+     * The vocabulary is four states for servers plus one fallback, and one
+     * C-MCP-4.b overlay:
      *  - ` · up N tools` — a stdio child still in `proc_get_status`'s running;
      *  - ` · exited N tools` — it was up at launch and the child is gone; the
      *    tools count shown is the cache it still advertises, which is exactly
@@ -242,6 +243,12 @@ final class McpPanel
      *    given a voice. No tool count: a server that never started has no
      *    cache, and inventing `0 tools` would read as "answered with an empty
      *    list".
+     *  - ` · disabled` — C-MCP-4.b: the process is alive and the cache stands,
+     *    but `/mcp disable` has the server under a session refusal — calls are
+     *    routed nowhere. It REPLACES the transport suffix (a live-but-refused
+     *    server is the whole useful fact; `up 3 tools` beside a refusal would
+     *    advertise reachability the routing denies), and it rides only rows of
+     *    started servers, the shape {@see McpClient::startedSnapshot()} flags.
      *  - ` · state unknown` — the `up: null` of a transport the snapshot
      *    could not classify; unknown stays unknown.
      *
@@ -264,6 +271,13 @@ final class McpPanel
         // credentials, a state with a command that fixes it.
         if (isset($row['auth-required'])) {
             return ' · ' . Lang::t('tui.mcp.liveness.auth_required', ['status' => (int) $row['auth-required']]);
+        }
+
+        // C-MCP-4.b: the session-refusal overlay, set only on rows of started
+        // servers. Checked before the transport match because it outranks it —
+        // routing, not process state, is what the operator asked about.
+        if (($row['disabled'] ?? false) === true) {
+            return ' · ' . Lang::t('tui.mcp.liveness.disabled');
         }
 
         $up = $row['up'];

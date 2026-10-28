@@ -4044,23 +4044,24 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/with five\s+sub-commands, backed by `McpAuthStore` and `OAuthClientRegistration`/', $mcp),
+            preg_match('/with seven\s+sub-commands, backed by `McpAuthStore` and `OAuthClientRegistration`/', $mcp),
             'the /mcp lead-in no longer states its count with both backing classes',
         );
         $authSource = self::sourceOf('Commands/McpAuthCommand.php');
         $execute = self::bodyExcerpt($authSource, 'execute', 1200);
-        preg_match_all("/'(list|add|remove|login|reconnect)' =>/", $execute, $subs);
-        self::assertSame(['list', 'add', 'remove', 'login', 'reconnect'], $subs[1], 'the /mcp match arms changed — the page fence and this order pin move together');
+        preg_match_all("/'(list|add|remove|login|reconnect|enable|disable)' =>/", $execute, $subs);
+        self::assertSame(['list', 'add', 'remove', 'login', 'reconnect', 'enable', 'disable'], $subs[1], 'the /mcp match arms changed — the page fence and this order pin move together');
         // VIS-3b grew the fifth arm (reconnect) and the page fence carries it
         // since the docs-fix-1023 wave — the lead-in's count, the fenced rows
-        // and the match arms are one roster pinned in both directions.
+        // and the match arms are one roster pinned in both directions. C-MCP-4.b
+        // grew the sixth and seventh (enable/disable session routing).
         self::assertStringContainsString("'reconnect' =>", $execute, 'the /mcp reconnect arm left the command — the page fence still advertises it');
-        preg_match_all('/^\/mcp (list|add|remove|login|reconnect)\b/m', $raw, $fence);
-        self::assertSame(['list', 'add', 'remove', 'login', 'reconnect'], $fence[1], 'the page fence no longer lists the five commands in code order');
+        preg_match_all('/^\/mcp (list|add|remove|login|reconnect|enable|disable)\b/m', $raw, $fence);
+        self::assertSame(['list', 'add', 'remove', 'login', 'reconnect', 'enable', 'disable'], $fence[1], 'the page fence no longer lists the seven commands in code order');
         // The message is catalogue text since audit 15b-14: the source routes the
         // key, and the English the key resolves to enumerates the roster.
         self::assertStringContainsString("Lang::t('cmd.mcp-auth.unknown'", $authSource, 'the unknown-sub-command arm stopped printing its message');
-        self::assertStringContainsString('Use: list, add, remove, login, reconnect', \SugarCraft\Code\Lang::inLocale('en', static fn (): string => \SugarCraft\Code\Lang::t('cmd.mcp-auth.unknown')), 'the unknown-sub-command message stopped enumerating the roster');
+        self::assertStringContainsString('Use: list, add, remove, login, reconnect, enable, disable', \SugarCraft\Code\Lang::inLocale('en', static fn (): string => \SugarCraft\Code\Lang::t('cmd.mcp-auth.unknown')), 'the unknown-sub-command message stopped enumerating the roster');
         self::assertTrue(class_exists('SugarCraft\Code\MCP\McpAuthStore'), 'McpAuthStore vanished — the page credits it as backing');
         self::assertTrue(class_exists('SugarCraft\Code\MCP\OAuthClientRegistration'), 'OAuthClientRegistration vanished — the page credits it as backing');
 
@@ -6005,7 +6006,7 @@ final class DocFigureProseDriftTest extends TestCase
         $labels[] = $en[$down[1]] ?? $down[1];
         $labels = array_values(array_unique($labels));
         self::assertSame(
-            ['up', 'ready', 'ready (in-process)', 'not up', 'state unknown', 'exited'],
+            ['up', 'ready', 'ready (in-process)', 'not up', 'disabled', 'state unknown', 'exited'],
             $labels,
             'the panel\'s liveness vocabulary changed shape — the page table and this pin move with it',
         );

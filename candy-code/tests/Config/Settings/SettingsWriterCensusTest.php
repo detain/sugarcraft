@@ -55,6 +55,14 @@ final class SettingsWriterCensusTest extends TestCase
         'Cli/LaunchContext.php::settingsWriter' => 1,
         'Cli/McpDecision.php::trustProjectMcp' => 1,
         'Cli/Subcommands.php::loginStoreKey' => 1,
+        // C-MCP-4.b (round-2 review): /mcp enable|disable --persist mirrors
+        // ONE exact name into the user disabledMcpServers list through this
+        // same door. Credited 3 because the method carries three write
+        // shapes, each its own call site: the enable arm's kept-list
+        // rewrite, the --persist clear/empty path that unsets the key
+        // instead of persisting a dead `[]`, and the disable arm's append.
+        // A glob-shaped name is refused before any of the three is reached.
+        'Commands/McpAuthCommand.php::persistSessionToggle' => 3,
     ];
 
     public function testConfigJsonIsWrittenOnlyThroughItsKnownDoors(): void

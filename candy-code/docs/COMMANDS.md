@@ -360,7 +360,7 @@ edit it by hand.
 | `/theme` | ✓ | | — | Switch the colour theme |
 | `/settings` | ✓ | ✓ | `[search]` | Show every setting, its value, where it came from and when it applies |
 | `/agents` | ✓ | | — | List the agent roster, inspect one by name, or open a running one's Agent View |
-| `/mcp` | ✓ | | `<list\|add\|remove\|login\|reconnect> [server]` | Manage MCP server auth (list/add/remove; login prints the CLI command) |
+| `/mcp` | ✓ | | `<list\|add\|remove\|login\|reconnect\|enable\|disable> [server]` | Manage MCP server auth (list/add/remove; login prints the CLI command) and session enable/disable |
 | `/keys` | ✓ | | `[reload]` | Show the keyboard shortcut reference (or press ?) |
 | `/help` | ✓ | ✓ | — | List every slash command |
 | `/permissions` | ✓ | ✓ | `[mode <name> \| revoke <n\|all> \| saved \| forget <n\|pattern>]` | Show this session's permission mode, its rules and its grants; switch the mode or revoke a grant |

@@ -497,6 +497,49 @@ final class McpPanelTest extends TestCase
     }
 
     /**
+     * C-MCP-4.b: the session-disable overlay REPLACES the transport suffix.
+     * The row carries `up: true` and its cached tool count — the process is
+     * alive and the roster stands — but the panel tells the story the human
+     * needs: this session is refusing its calls, by command.
+     */
+    public function testASessionDisabledServerRendersTheDisabledOverlay(): void
+    {
+        $name = 'rtdis-' . bin2hex(random_bytes(3));
+        $root = $this->makeRoot();
+        file_put_contents($root . '/' . Bootstrap::MCP_CONFIG_FILENAME, json_encode([
+            'mcpServers' => [$name => ['type' => 'stdio', 'command' => '/usr/bin/' . $name]],
+        ], JSON_THROW_ON_ERROR));
+        $this->trustRoot($root);
+
+        $inventory = Bootstrap::mcpServerInventory($root);
+        $out = McpPanel::render($inventory, 160, [
+            $name => ['transport' => 'stdio', 'up' => true, 'tools' => 3, 'disabled' => true],
+        ]);
+
+        self::assertStringContainsString($name . ' [stdio] /usr/bin/' . $name . ' · disabled', $out);
+        self::assertStringNotContainsString(' · up', $out, 'the overlay replaces the transport suffix, it does not stack behind it');
+    }
+
+    /** Absent or false `disabled` must render exactly as before the overlay existed. */
+    public function testTheDisabledFlagDoesNotDisturbRowsThatDoNotCarryIt(): void
+    {
+        $name = 'rtok-' . bin2hex(random_bytes(3));
+        $root = $this->makeRoot();
+        file_put_contents($root . '/' . Bootstrap::MCP_CONFIG_FILENAME, json_encode([
+            'mcpServers' => [$name => ['type' => 'stdio', 'command' => '/usr/bin/' . $name]],
+        ], JSON_THROW_ON_ERROR));
+        $this->trustRoot($root);
+
+        $inventory = Bootstrap::mcpServerInventory($root);
+        $out = McpPanel::render($inventory, 160, [
+            $name => ['transport' => 'stdio', 'up' => true, 'tools' => 3, 'disabled' => false],
+        ]);
+
+        self::assertStringContainsString($name . ' [stdio] /usr/bin/' . $name . ' · up', $out);
+        self::assertStringNotContainsString(' · disabled', $out);
+    }
+
+    /**
      * ISS-042: an http entry refused 401/403 keeps its declared row with an
      * `auth-required HTTP 401` marker — neither `not up` (a mystery) nor
      * `exited` (it never had a process). The row arrives from

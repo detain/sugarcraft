@@ -144,6 +144,30 @@ final class McpClient
      */
     private array $entriesByName = [];
 
+    /**
+     * C-MCP-4.b: server names disabled for the CURRENT process by
+     * `/mcp disable <server>` (name => true). Lives beside
+     * {@see $denyPatterns} but is NOT one of its entries: the settings map is
+     * operator-authored GLOBS frozen at launch, this set is exact names
+     * decided mid-session by a human in the loop — which is why consults go by
+     * key equality, never through fnmatch, and why the launch-frozen rosters
+     * (the cache law on {@see $surfaceRosters} and on the model-facing tool
+     * list) are left standing while CALLS are refused. Consulted by
+     * {@see isServerAllowed()} and {@see router()}; enforced at the call ladder
+     * of {@see callTool()}, {@see readResource()} and {@see prompt()}.
+     *
+     * Clone semantics are load-bearing: {@see forAgentPreset()} shallow-clones
+     * this map, so a preset handle forked BEFORE a `/mcp disable` keeps its
+     * pre-disable copy for its whole life — the toggle takes effect from the
+     * NEXT turn's fresh fork, the same next-launch stance the credential store
+     * documents, one level finer. The memoised launch client
+     * ({@see \SugarCraft\Code\Cli\Bootstrap::mcpClient()}) is the ONE object
+     * the command mutates, so later turns see the change through it.
+     *
+     * @var array<string, true>
+     */
+    private array $sessionDisabled = [];
+
     public function __construct(
         private string $configPath,
         ?Client $httpClient = null,
@@ -206,6 +230,11 @@ final class McpClient
      * paths stay bound to the original for exactly that reason. The preset
      * branch takes precedence over the launch client's `unrestricted` flag:
      * routing checks `agentPreset` first in listTools()/callTool().
+     *
+     * C-MCP-4.b spells out what that copying means for a mid-session
+     * `/mcp disable`: the clone inherits the refusals armed up to fork time,
+     * and later toggles on the launch client never reach a handle already
+     * forked — the toggle takes effect from the NEXT turn, not the running one.
      */
     public function forAgentPreset(AgentPreset $agentPreset): self
     {
@@ -239,6 +268,52 @@ final class McpClient
     public function setDenyPatterns(array $denyPatterns): void
     {
         $this->denyPatterns = $denyPatterns;
+    }
+
+    /**
+     * C-MCP-4.b: refuse CALLS to $server for the rest of this process unless
+     * $server was already refused by a launch deny pattern or the active
+     * preset — this adds a refusal, it never rescues one. The toggle is exact
+     * by name (never a glob), takes effect through
+     * {@see isServerAllowed()}/{@see router()} from the next check onward, and
+     * is inherited at clone time by preset handles forked after it
+     * ({@see forAgentPreset()}). Idempotent.
+     */
+    public function disableForSession(string $server): void
+    {
+        $this->sessionDisabled[$server] = true;
+    }
+
+    /**
+     * C-MCP-4.b: undo {@see disableForSession()} in this process. Only ever
+     * lifts a session refusal — a name still matched by a launch deny pattern
+     * stays denied, because the settings map is operator-authored and frozen
+     * at launch; telling `/mcp enable` it had rescued such a server would be
+     * the fabrication. Idempotent.
+     */
+    public function enableForSession(string $server): void
+    {
+        unset($this->sessionDisabled[$server]);
+    }
+
+    /**
+     * C-MCP-4.b: the session refusals currently armed, exact server names.
+     *
+     * @return list<string>
+     */
+    public function sessionDisabledServers(): array
+    {
+        return array_keys($this->sessionDisabled);
+    }
+
+    /**
+     * C-MCP-4.b: the ONE wording every session refusal carries — the fix is
+     * named inside the refusal, because a model told only "not allowed" will
+     * not know a human armed it mid-session and how to walk it back.
+     */
+    private static function sessionRefusalMessage(string $server): string
+    {
+        return "MCP server $server is disabled for this session (/mcp enable $server)";
     }
 
     /**
@@ -524,7 +599,14 @@ final class McpClient
      * {@see GitMcpServer::listTools()} all return arrays built during the
      * handshake or constructor), so enumerating it costs no traffic.
      *
-     * @return array<string, array{transport: string, up: bool|null, tools: int, resources?: int}>
+     * C-MCP-4.b: a row gains `disabled: true` when the server is under a
+     * session refusal. It rides beside the real `up`/`tools` counts rather
+     * than zeroing them — the refusal is a routing fact, the process is still
+     * alive, and the panel shows both truths. Like everything else here, the
+     * read is pure bookkeeping: the flag comes from the same map the call
+     * ladder consults, and no exchange is entered.
+     *
+     * @return array<string, array{transport: string, up: bool|null, tools: int, resources?: int, disabled?: bool}>
      */
     public function startedSnapshot(): array
     {
@@ -561,6 +643,10 @@ final class McpClient
             $resources = $this->surfaceRosters[$name]['resources'] ?? null;
             if ($resources !== null) {
                 $rows[$name]['resources'] = \count($resources);
+            }
+
+            if (isset($this->sessionDisabled[$name])) {
+                $rows[$name]['disabled'] = true;
             }
         }
 
@@ -1028,6 +1114,10 @@ final class McpClient
             throw new \RuntimeException("Unknown MCP server: $serverName");
         }
 
+        if (isset($this->sessionDisabled[$serverName])) {
+            throw new \RuntimeException(self::sessionRefusalMessage($serverName));
+        }
+
         if (!$this->isServerAllowed($serverName)) {
             throw new \RuntimeException("MCP server not allowed for this agent: $serverName");
         }
@@ -1058,9 +1148,17 @@ final class McpClient
      * Whether $serverName is reachable under the current routing mode: via
      * the active agent preset's allowlist (and any deny patterns), or via the
      * explicit $unrestricted escape hatch when no preset is attached.
+     *
+     * C-MCP-4.b: a session refusal ({@see disableForSession()}) answers false
+     * ahead of both arms — it is a refusal ADDED to whatever the launch
+     * routing decided, never a rescue from it.
      */
     private function isServerAllowed(string $serverName): bool
     {
+        if (isset($this->sessionDisabled[$serverName])) {
+            return false;
+        }
+
         if ($this->agentPreset !== null) {
             return in_array($serverName, $this->router()->resolveAllowedServers($this->agentPreset), true);
         }
@@ -1078,6 +1176,14 @@ final class McpClient
         foreach ($this->listTools() as $tool) {
             if ($tool->name !== $toolName) {
                 continue;
+            }
+
+            // C-MCP-4.b: the unrestricted arm's roster is NOT filtered by the
+            // session set (cache law — the roster stands, the CALL is refused),
+            // so this direct-to-transport route needs the same refusal the
+            // named ladder carries; without it the toggle would leak by name.
+            if (isset($this->sessionDisabled[$tool->serverName])) {
+                throw new \RuntimeException(self::sessionRefusalMessage($tool->serverName));
             }
 
             $server = $this->servers[$tool->serverName] ?? null;
@@ -1146,6 +1252,10 @@ final class McpClient
             throw new \RuntimeException("Unknown MCP server: $serverName");
         }
 
+        if (isset($this->sessionDisabled[$serverName])) {
+            throw new \RuntimeException(self::sessionRefusalMessage($serverName));
+        }
+
         if (!$this->isServerAllowed($serverName)) {
             throw new \RuntimeException("MCP server not allowed for this agent: $serverName");
         }
@@ -1207,6 +1317,10 @@ final class McpClient
 
         if ($server === null) {
             throw new \RuntimeException("Unknown MCP server: $serverName");
+        }
+
+        if (isset($this->sessionDisabled[$serverName])) {
+            throw new \RuntimeException(self::sessionRefusalMessage($serverName));
         }
 
         if (!$this->isServerAllowed($serverName)) {
@@ -1332,10 +1446,21 @@ final class McpClient
      * forwarding the configured global deny patterns alongside the servers
      * so both halves of McpRouter's enforcement (allowlist + deny patterns)
      * are actually wired through, not just the allowlist.
+     *
+     * C-MCP-4.b: session refusals ({@see disableForSession()}) are stripped
+     * from the server map BEFORE construction, never appended to $denyPatterns
+     * — the settings map is fnmatch glob vocabulary, and a session toggle is
+     * an exact name that must not gain wildcard reach by riding it. The
+     * unrestricted arm consults {@see isServerAllowed()} directly, which
+     * refuses the same set; both halves of the predicate see one truth.
      */
     private function router(): McpRouter
     {
-        return new McpRouter($this->servers, $this->denyPatterns);
+        $routable = $this->sessionDisabled === []
+            ? $this->servers
+            : array_filter($this->servers, fn(string $name): bool => !isset($this->sessionDisabled[$name]), ARRAY_FILTER_USE_KEY);
+
+        return new McpRouter($routable, $this->denyPatterns);
     }
 
     /**

@@ -544,6 +544,7 @@ and annotates each declared row:
 | ` · ready (in-process) N tools` | the in-process `git` transport, up |
 | ` · not up` | declared, but this process never started it — a failed `start()` is skipped silently at launch, and this is where that skip surfaces |
 | ` · state unknown` | a transport the snapshot could not classify — unknown stays unknown |
+| ` · disabled` | a started server this session refused mid-flight by `/mcp disable` — the process is alive and the tool cache stands, but calls are routed nowhere; `/mcp enable` lifts it |
 
 The block closes with `Live in this process: K of M declared (other sessions'
 servers are not visible here)`. The scope is honest: the readout is per
@@ -771,7 +772,7 @@ would be deferred, but its `eager: true` opts it back in.
 
 ## Server auth (`/mcp`)
 
-`src/Commands/McpAuthCommand.php` is a separate, in-chat surface with five
+`src/Commands/McpAuthCommand.php` is a separate, in-chat surface with seven
 sub-commands, backed by `McpAuthStore` and `OAuthClientRegistration`:
 
 ```
@@ -780,6 +781,8 @@ sub-commands, backed by `McpAuthStore` and `OAuthClientRegistration`:
 /mcp remove <server>                             drop stored credentials
 /mcp login <server>                              fork a real login into a background child
 /mcp reconnect                                   restart servers admitted this launch
+/mcp enable <server> [--persist]                 lift a session refusal, in this process
+/mcp disable <server> [--persist]                refuse a declared server for this session
 ```
 
 This store maps **server URLs to auth entries**. It is independent of
@@ -796,6 +799,23 @@ consulted for that server at all. The key match is exact-string: change the
 server URL in your config and you must re-run `mcp auth add` for the new URL.
 Credentials registered mid-session take effect at the next launch, the same
 stance under which the server list itself is frozen per launch.
+
+The last two verbs route rather than authenticate. `/mcp disable <server>`
+refuses further calls to one exact declared server for the rest of the
+session; `/mcp enable <server>` lifts that refusal again. The refusal lives
+beside the launch deny patterns, never inside them: the settings list
+`disabledMcpServers` is fnmatch glob vocabulary frozen at launch, while the
+session set is exact names decided by a human mid-session — and a name that
+carries metacharacters is refused `--persist` rather than smuggled into the
+settings as a wildcard that could cover servers the command never named.
+The model-facing tool roster is not re-derived (the same cache law governs
+`reconnect`): a disabled server's tools stay listed, calls answer with a
+refusal that names the fix, and because per-agent handles fork at dispatch,
+the toggle takes effect from the NEXT turn, never one already running.
+`--persist` mirrors the decision into the user settings list so the refusal
+also greets the next launch. The server process keeps running — refusal is
+routing, not teardown — and the panel shows it with the ` · disabled` suffix
+below.
 
 ### Authorization-code login (`candy-code mcp auth login`)
 
