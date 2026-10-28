@@ -175,6 +175,25 @@ final class McpPromptCommands
     }
 
     /**
+     * The one precedence decision of the command map, spelled the way
+     * {@see \SugarCraft\Code\Chat::mergeCustomCommandRows()} spells it: disk
+     * rows merge OVER launch-time MCP prompt rows, so a name a human typed
+     * into a command file always wins the map key against a server that
+     * sanitizes to the same spelling. Chat keeps its private copy; this is
+     * the shared home the served host (C-MCP-2.a) reads, so the two hosts
+     * cannot drift their precedence while claiming parity in the docs.
+     *
+     * @param array<string, CommandSpec> $mcpSpecs
+     * @param array<string, CommandSpec> $diskSpecs
+     *
+     * @return array<string, CommandSpec>
+     */
+    public static function mergeUnderDisk(array $mcpSpecs, array $diskSpecs): array
+    {
+        return array_merge($mcpSpecs, $diskSpecs);
+    }
+
+    /**
      * One roster row → one placeholder spec.
      *
      * @param array<mixed> $row the raw `prompts/list` entry

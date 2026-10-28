@@ -21,6 +21,8 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\CommandParser;
 use SugarCraft\Code\Commands\BangShell;
 use SugarCraft\Code\Commands\CommandSpec;
+use SugarCraft\Code\Commands\McpPromptCommands;
+use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Commands\Specs\BuiltInCommand;
 use SugarCraft\Code\Commands\Specs\BuiltInCommands;
 use SugarCraft\Code\Context\Compaction\HistoryFingerprint;
@@ -49,6 +51,7 @@ use SugarCraft\Code\Host\Commands\CommandResult;
 use SugarCraft\Code\Host\Commands\CommandText;
 use SugarCraft\Code\Host\ContextSources;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\MCP\McpClient;
 use SugarCraft\Code\Memory\AutoMemoryConsolidator;
 use SugarCraft\Code\Memory\DreamPass;
 use SugarCraft\Code\Message;
@@ -240,6 +243,17 @@ final class SessionHost
     /** @var array<string, CommandSpec> */
     private readonly array $customCommands;
 
+    /**
+     * This host's MCP client as a lazy provider (C-MCP-2.a), shaped exactly
+     * like Chat's — resolved when a mention or a prompt command actually
+     * needs it, never when this closure is merely built. A null answer is
+     * the honest state of a launch that trusted no MCP config; every
+     * consumer turns it into its own refusal.
+     *
+     * @var \Closure(): ?McpClient
+     */
+    private readonly \Closure $mcpProvider;
+
     /** @var array<string, PendingAsk> the turn's open questions, by askId */
     private array $pendingAsks = [];
 
@@ -288,6 +302,7 @@ final class SessionHost
         array $history,
         ?CompactorConfig $compactorConfig,
         ?array $customCommands,
+        ?\Closure $mcpProvider,
     ) {
         $this->history = array_values($history);
         $this->inbox = new \ArrayObject();
@@ -306,13 +321,28 @@ final class SessionHost
             : new TokenTracker();
         $this->compactor = new ContextCompactor($compactorConfig ?? CompactorConfig::new());
         $root = $this->root();
+        // C-MCP-2.a: the same lazy shape Chat's mcpClientProvider() carries —
+        // on serve, where the workspace's tool build has already memoised
+        // this process's client, this resolves to that memo; where nothing
+        // is trusted it answers null, and every consumer below (the merged
+        // rows, the forked fetch, the mention reader in dispatch()) turns a
+        // null into its own honest refusal. Injectable for the surface test.
+        $this->mcpProvider = $mcpProvider
+            ?? static fn (): ?McpClient => Bootstrap::mcpClient($root);
         // C-SEC-4.a: the launch's trust answer rides in here exactly as it
         // rides the TUI load (the `projectCommandsTrusted:` seam in Chat's
         // constructor), so a granted project's built-in override is a command
         // row over serve and the web too — and an ungranted one is refused.
-        $this->customCommands = $customCommands ?? array_filter(
-            $workspace->commandLoader?->loadAll($root, $workspace->projectCommandsTrusted) ?? [],
-            static fn (CommandSpec $spec): bool => $spec->isFileBased(),
+        // C-MCP-2.a: the served command table carries the MCP prompt rows
+        // UNDER those disk rows, merged by the one shared precedence helper
+        // Chat's own mergeCustomCommandRows() is spelled against — a disk
+        // file of the same name keeps its shadow here exactly as on the TUI.
+        $this->customCommands = McpPromptCommands::mergeUnderDisk(
+            McpPromptCommands::specs($this->mcpProvider),
+            $customCommands ?? array_filter(
+                $workspace->commandLoader?->loadAll($root, $workspace->projectCommandsTrusted) ?? [],
+                static fn (CommandSpec $spec): bool => $spec->isFileBased(),
+            ),
         );
         // C-CTX-2.a: adopt the launch's arm state, never invent one. The
         // process sink is armed by Bootstrap::workspace() on serve; a test
@@ -339,6 +369,10 @@ final class SessionHost
      *        released by {@see release()}
      * @param array<string, CommandSpec>|null $customCommands the session's
      *        command files; null loads them from the workspace's loader
+     * @param (\Closure(): ?McpClient)|null $mcpProvider this host's MCP client
+     *        as a lazy provider (C-MCP-2.a); null takes the workspace root's
+     *        launch-memoised client over {@see Bootstrap::mcpClient()}, the
+     *        same shape Chat's mcpClientProvider() carries
      */
     public static function new(
         string $sessionId,
@@ -348,6 +382,7 @@ final class SessionHost
         ?SessionLock $lease = null,
         ?CompactorConfig $compactorConfig = null,
         ?array $customCommands = null,
+        ?\Closure $mcpProvider = null,
     ): self {
         if (trim($sessionId) === '') {
             throw new \InvalidArgumentException('A session host needs a non-empty session id.');
@@ -361,6 +396,7 @@ final class SessionHost
             $history,
             $compactorConfig,
             $customCommands,
+            $mcpProvider,
         );
     }
 
@@ -1155,9 +1191,22 @@ final class SessionHost
                 return $this->parkExpansion($text, $command);
             }
 
+            // C-MCP-2.a: the fetched-body leg Chat's expandCustomCommand runs,
+            // for the no-fork shape of serve this branch takes. An MCP prompt
+            // whose fetch fails expands to nothing and rides the existing
+            // empty-expansion refusal below — it is never sent half-guessed.
+            [$spec, $arguments] = $command;
+            if (McpPromptCommands::isMcpPrompt($spec)) {
+                $materialized = McpPromptCommands::materialize($spec, $arguments, $this->mcpProvider);
+                if ($materialized === null) {
+                    return $this->admitExpanded($text, '');
+                }
+                $spec = $materialized;
+            }
+
             return $this->admitExpanded(
                 $text,
-                $turns->expandCustomCommand($command[0], $command[1], $this->directive($command[0])),
+                $turns->expandCustomCommand($spec, $arguments, $this->directive($spec)),
             );
         }
 
@@ -1206,8 +1255,24 @@ final class SessionHost
         $root = $this->root();
         $trusted = $this->workspace->projectCommandsTrusted;
         $gate = $this->workspace->permissionGate;
-        $run = static function () use ($turns, $spec, $arguments, $root, $trusted, $gate): array {
+        $provider = $this->mcpProvider;
+        $run = static function () use ($turns, $spec, $arguments, $root, $trusted, $gate, $provider): array {
             $gated = [];
+            // C-MCP-2.a: for an MCP prompt row the network fetch IS the
+            // reason this turn is parked (the posture always forks one), so
+            // it belongs in this child — the parent's keystroke and event
+            // threads never block on a server. A refused fetch reports the
+            // empty string, which rides the parent's existing empty-
+            // expansion refusal; a fetched body replaces the marker before
+            // the directive scan, so C-SEC-3 judges shell forms on what the
+            // model will actually see.
+            if (McpPromptCommands::isMcpPrompt($spec)) {
+                $materialized = McpPromptCommands::materialize($spec, $arguments, $provider);
+                if ($materialized === null) {
+                    return ['', $gated];
+                }
+                $spec = $materialized;
+            }
             $expanded = $turns->expandCustomCommand(
                 $spec,
                 $arguments,
@@ -1237,6 +1302,19 @@ final class SessionHost
                     $this->workspace->permissionGate?->evaluate(new ToolCall('Bash', ['command' => $command]));
                 }
                 if ($expanded === null) {
+                    return;
+                }
+                // C-MCP-2.a: a refused MCP fetch is the first expansion that
+                // can only ever arrive through the forking posture, so its
+                // refusal must land as the visible transcript notice Chat's
+                // refuseEmptyCustomCommand records — dropping the returned
+                // ticket silently would leave a web client watching a turn
+                // that vanished. A null expansion (the child's own judge
+                // refusal) keeps its existing silence; this leg is only the
+                // empty-string one admitExpanded refuses.
+                if (trim($expanded) === '') {
+                    $this->appendMessageRow(Message::notice($this->turns()->emptyCustomCommandNotice($text)));
+
                     return;
                 }
                 $this->admitExpanded($text, $expanded);
@@ -1994,6 +2072,7 @@ final class SessionHost
             $this->workspace->sessionStore,
             $this->workspace->permissionGate,
             $this->workspace->skills,
+            mcpProvider: $this->mcpProvider,
             extraAttachments: $attachments,
         );
         $newTurnMessages = [...$reports, ...$notes, ...$attachmentNotes, $userTurn];

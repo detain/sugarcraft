@@ -451,7 +451,19 @@ final class NonInteractive
                     new \SugarCraft\Code\ToolCall('WebFetch', ['url' => $url]),
                 ) === \SugarCraft\Code\Permissions\PermissionDecision::Deny
                     ? 'a permission rule denies WebFetch for it.'
-                    : null),
+                    : null)
+                // C-MCP-2.a: the `@mcp:` leg, worded as the controller arms it
+                // for the TUI and serve — the launch's memoised client or the
+                // same one-line refusal; a headless run never starts a server
+                // the trust decision refused.
+                ->withMcpReader(static function (string $server, string $uri) use ($mentionRoot): array {
+                    $client = Bootstrap::mcpClient($mentionRoot);
+                    if ($client === null) {
+                        throw new \RuntimeException('no MCP client is open for this project');
+                    }
+
+                    return $client->readResource($server, $uri);
+                }),
         );
         foreach ($mentionNotices as $notice) {
             self::noticeAttachment($notice);

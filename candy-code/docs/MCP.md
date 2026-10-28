@@ -858,11 +858,11 @@ mention at all — it reads as a file path. Resolution happens at submit
 time, bounded like every other keyword leg, and a resolved mention rides
 the resumed transcript as a saved attachment.
 
-TUI-only for now (dated 2026-10-26): a `serve` session and a headless `-p`
-run build their mention scanner without the MCP reader, so the same form
-there meets the one-line refusal even while servers are running. Parity
-wiring for those surfaces is an open product ruling; until it lands, every
-other sentence in this section describes the TUI turn path.
+Parity across all three surfaces (dated 2026-10-28): a `serve` session
+and a headless `-p` run arm their mention scanner with the same MCP
+reader the TUI uses, so the form resolves wherever a client is open for
+the project — and where none is, the scanner's one-line refusal names the
+mention instead of silently dropping it.
 
 The bytes are untrusted. A fetched resource is attached inside the same
 framed context block other fetched content uses, opening with a header
@@ -898,6 +898,13 @@ whose fetch fails, or whose messages carry anything but text, expands to
 nothing: the line returns to the input with a refusal notice instead of
 sending an empty turn. Positional arguments on the command line map onto
 the prompt's declared arguments in order, required first.
+
+A served session keeps the same rule for its own command table: the host
+merges the prompt roster under the file rows at construction, and
+materialises the fetched body at admission — on the forked route inside
+the child that parks the expansion, so the round trip is paid there. A
+failed fetch leaves a visible refusal in the transcript instead of
+admitting an empty expansion.
 
 A fetched prompt body is third-party text, not user intent: its inline
 shell forms are refused outright, whatever this project trusts — a

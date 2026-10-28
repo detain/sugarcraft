@@ -103,4 +103,28 @@ final class TurnControllerMcpSeamTest extends TestCase
 
         self::assertSame(0, $calls, 'the provider is lazy — building the reader must not resolve the client');
     }
+
+    /**
+     * C-MCP-2.a: both hosts feed the controller's one MCP reader-arming site.
+     *
+     * Chat hands `mcpClientProvider()` positionally and SessionHost hands its
+     * injected provider by name; if either call stops passing it, the served
+     * and interactive surfaces silently lose `@mcp:` parity again while the
+     * controller tests below stay green — which is exactly the drift this
+     * structural pin exists to catch.
+     */
+    public function testBothHostsFeedTheOneControllerArmingSite(): void
+    {
+        $chat = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Chat.php');
+        $host = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Host/SessionHost.php');
+
+        $chatCall = substr($chat, (int) strpos($chat, '$this->turnController()->userTurnMessage('), 400);
+        self::assertStringContainsString('$this->mcpClientProvider(),', $chatCall, 'Chat must keep feeding the controller provider');
+
+        $hostCall = substr($host, (int) strpos($host, '$turns->userTurnMessage('), 400);
+        self::assertStringContainsString('mcpProvider: $this->mcpProvider,', $hostCall, 'the served host must keep feeding its injected provider');
+
+        $controller = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Host/TurnController.php');
+        self::assertSame(1, substr_count($controller, '->withMcpReader('), 'the controller arms exactly one reader for every host');
+    }
 }

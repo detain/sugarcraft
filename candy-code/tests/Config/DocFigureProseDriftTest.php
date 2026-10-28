@@ -7124,36 +7124,34 @@ final class DocFigureProseDriftTest extends TestCase
         // One-line refusals are the only refusal shape the leg emits.
         self::assertGreaterThanOrEqual(4, substr_count($mcpBody, "'@%s was not attached: "), 'the leg gained a refusal that is not the one-line notice the page promises');
 
-        // Dated parity qualification (plan-reverify fx/misc, 2026-10-26): the
-        // page states that only the TUI arms the MCP reader, and the absence
-        // legs below keep that sentence honest — a parity ruling that wires
-        // the serve/headless scanners MUST re-word the page in the same
-        // commit, or this arm reddens on the stale qualification.
+        // C-MCP-2.a parity (dated 2026-10-28 in the page): all three surfaces
+        // arm the MCP reader. The headless scanner arms the arm-token
+        // directly on its ContextMentions chain; the served host flows the
+        // provider through TurnController's $mcpProvider parameter and never
+        // spells the arm-token inside SessionHost. Both tokens landing in
+        // both files was the stale-state shape this block used to pin by
+        // absence; it is now pinned by presence — a parity wiring that is
+        // unwired again, or re-worded in the page without the code (and the
+        // reverse), reddens here in the same commit that must move both.
         self::assertStringContainsString(
-            'TUI-only for now',
+            'arm their mention scanner with the same MCP',
             $page,
-            'MCP.md dropped the dated parity qualification — @mcp: mentions still refuse on the serve/headless scanners',
+            'MCP.md dropped the three-surface parity sentence — C-MCP-2.a wired the serve and headless readers',
         );
-        // rev-misc MINOR-1 cure: the absence legs pin BOTH wiring
-        // vocabularies. A headless parity change arms the reader directly on
-        // the ContextMentions chain ('withMcpReader'); a serve parity change
-        // flows the provider through TurnController's $mcpProvider parameter
-        // and never spells the arm-token inside SessionHost at all. Either
-        // token landing in either file without the page re-word reddens.
-        foreach (['Cli/NonInteractive.php', 'Host/SessionHost.php'] as $parityFile) {
-            $paritySource = self::sourceOf($parityFile);
-            foreach (['mcpProvider', 'withMcpReader'] as $wiringToken) {
-                self::assertStringNotContainsString(
-                    $wiringToken,
-                    $paritySource,
-                    $parityFile . ' gained MCP-mention wiring (' . $wiringToken . ') without re-wording the page\'s dated parity sentence',
-                );
-            }
-        }
+        self::assertStringContainsString(
+            'withMcpReader(',
+            self::sourceOf('Cli/NonInteractive.php'),
+            'the headless scanner no longer arms an MCP reader — the page promises the same leg in -p runs',
+        );
+        self::assertStringContainsString(
+            'mcpProvider',
+            self::sourceOf('Host/SessionHost.php'),
+            'the served host no longer feeds a provider — the page promises the same leg in serve sessions',
+        );
         self::assertStringContainsString(
             'withMcpReader(',
             self::sourceOf('Host/TurnController.php'),
-            'the ONE arming site moved out of TurnController — the page\'s TUI-only sentence must follow',
+            'the controller reader-arm moved — the TUI/serve surfaces reach the MCP leg through it',
         );
 
         // The resources tail: page backtick-shape ← lang English ← panel call.
@@ -7169,7 +7167,9 @@ final class DocFigureProseDriftTest extends TestCase
      * docs/MCP.md against the merge and the fetch — the command-name shape
      * re-derived from the ONE sanitizer the bridge exposes, the `mcp` tier
      * constant, the one precedence seam in Chat's constructor and its
-     * mergeCustomCommandRows body, the at-submission ordering inside
+     * mergeCustomCommandRows body, the served host's mirror of that seam
+     * through the shared mergeUnderDisk spelling (C-MCP-2.a), the
+     * at-submission ordering inside
      * expandCustomCommand, the always-fork tier arm, and the no-separate-
      * clock law by absence of any sleeping or timer in the shaping file.
      */
@@ -7210,6 +7210,37 @@ final class DocFigureProseDriftTest extends TestCase
         }
         self::assertIsString($merge, 'Chat::mergeCustomCommandRows() vanished — the one precedence seam the page states is gone');
         self::assertStringContainsString('array_merge($mcpSpecs, $diskSpecs)', $merge, 'the merge argument order flipped — the page precedence sentence inverted');
+
+        // C-MCP-2.a: the served host keeps the same precedence through the
+        // shared merger — mergeUnderDisk spells the identical argument order,
+        // the ctor feeds specs() into it, and both expansion routes run the
+        // fetch before the hand-off, expanding to nothing on a null body.
+        $shaper2 = self::sourceOf('Commands/McpPromptCommands.php');
+        $underDisk = null;
+        foreach (self::functionSpans($shaper2) as $span) {
+            if ('mergeUnderDisk' === $span['name']) {
+                $underDisk = (string) substr($shaper2, $span['begin'], $span['end'] - $span['begin']);
+            }
+        }
+        self::assertIsString($underDisk, 'McpPromptCommands::mergeUnderDisk() vanished — the served precedence lost its shared spelling');
+        self::assertStringContainsString('array_merge($mcpSpecs, $diskSpecs)', $underDisk, 'mergeUnderDisk drifted from the Chat merge spelling — one precedence law cannot have two orders');
+
+        $host = self::sourceOf('Host/SessionHost.php');
+        $hostSpecs = strpos($host, 'McpPromptCommands::mergeUnderDisk(');
+        self::assertNotFalse($hostSpecs, 'the served host no longer merges prompt rows — the page parity sentence lies');
+        self::assertSame(1, substr_count($host, 'McpPromptCommands::specs('), 'a second specs() site appeared in the host — the launch-frozen roster now has two merge sites there too');
+        self::assertStringContainsString('McpPromptCommands::materialize($spec, $arguments, $this->mcpProvider)', $host, 'the sync served route lost its at-submission fetch');
+        self::assertStringContainsString('McpPromptCommands::materialize($spec, $arguments, $provider)', $host, 'the forked served route lost its in-child fetch — the round trip must be paid there');
+        $hostSync = (string) substr($host, (int) strpos($host, 'McpPromptCommands::isMcpPrompt($spec)'), 600);
+        self::assertStringContainsString('admitExpanded($text, \'\')', str_replace("\n", ' ', $hostSync), 'a null materialisation on the sync route no longer expands to nothing — the empty-turn refusal path the page promises lost its served door');
+        $hostPark = (string) substr($host, (int) strrpos($host, 'McpPromptCommands::isMcpPrompt($spec)'), 600);
+        self::assertStringContainsString('return [\'\', $gated];', str_replace("\n", ' ', $hostPark), 'a null materialisation in the child no longer expands to nothing');
+        $hostGet = strpos($hostPark, 'materialize(');
+        $hostHand = strpos($hostPark, 'expandCustomCommand(');
+        self::assertNotFalse($hostGet, 'the forked served route lost its prompt intercept');
+        self::assertNotFalse($hostHand, 'the served child hand-off moved out of the window this pin orders');
+        self::assertLessThan((int) $hostHand, (int) $hostGet, 'the served child hands off before the fetch — the page says the body is fetched at submission');
+        self::assertStringContainsString('merges the prompt roster under the file rows at construction', $page, 'MCP.md dropped the served-merge parity sentence this block pins');
 
         // At-submission law: the intercept runs before the expansion hands
         // off, and a null materialization expands to nothing (empty string)
