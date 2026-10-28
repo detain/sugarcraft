@@ -14,6 +14,12 @@ import Transcript from '../Transcript.vue'
 
 const DIFF = '--- a/notes.txt\n+++ b/notes.txt\n@@ -1,2 +1,2 @@\n alpha\n-beta\n+gamma\n'
 
+// C-WEB-4: ToolCard, Transcript and their ReasoningFolds read the per-viewer
+// transcript store, so every mount in this file needs an active Pinia.
+beforeEach(() => {
+  setActivePinia(createPinia())
+})
+
 function tool(overrides: Partial<ToolItem> = {}): ToolItem {
   return { kind: 'tool', key: 'k', toolCallId: 'c1', name: 'Bash', arguments: { command: 'git status' }, status: 'done', content: 'clean', ...overrides }
 }

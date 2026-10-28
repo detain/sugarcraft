@@ -93,6 +93,9 @@ documents the protocol and the UI).
   are untrusted), fenced code coloured by a small highlighter loaded on first
   use; reasoning folds; a tool card per call with its arguments,
   output (the full text on request when the event was capped) and diff.
+  Two toolbar switches are remembered per browser: *Show thinking* opens
+  every settled fold, *Expand tool cards* opens every card until a card is
+  toggled by hand; a failure or refusal always opens.
 - **Permission cards**: once / always (this session) / reject / reject & stop,
   `y` `a` `n` on a focused card. The first answer from any client wins.
 - **Composer**: Enter sends; while a turn runs, steer, queue or interrupt —

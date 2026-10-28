@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { diffStats, parseUnifiedDiff } from '../lib/diff'
 import { duration, keyArgument } from '../lib/format'
 import { stripTerminalSequences } from '../lib/ansi'
 import type { SubAgent, ToolItem } from '../stores/reducer'
 import { usePanelsStore } from '../stores/agents/panels'
+import { useTranscriptViewStore } from '../stores/transcriptView'
 import { buildTree, foldRuns, startedBy } from '../stores/agents/tree'
 import SubAgentTree from './agents/SubAgentTree.vue'
 import DiffView from './DiffView.vue'
@@ -15,7 +16,22 @@ const props = defineProps<{ item: ToolItem; subagents?: SubAgent[]; sessionId?: 
 const emit = defineEmits<{ loadFull: [item: ToolItem] }>()
 
 // Collapsed when it succeeded, as the TUI shows it; a failure or a refusal opens.
-const open = ref(props.item.status === 'error' || props.item.status === 'denied')
+// C-WEB-4: otherwise the card follows the viewer's "expand tool cards" switch
+// until they toggle this card themselves — a manual click wins over the
+// toolbar, in both directions. Failures and denials still open regardless.
+const view = useTranscriptViewStore()
+const settledOpenByDefault = props.item.status === 'error' || props.item.status === 'denied'
+const toggledByViewer = ref(false)
+const open = ref(settledOpenByDefault || view.expandTools)
+watch(() => view.expandTools, (expand) => {
+  if (toggledByViewer.value) return
+  open.value = expand || settledOpenByDefault
+})
+
+function toggleCard(): void {
+  toggledByViewer.value = true
+  open.value = !open.value
+}
 
 const summary = computed(() => keyArgument(props.item.arguments) || props.item.description || '')
 const stats = computed(() => (props.item.diff ? diffStats(parseUnifiedDiff(props.item.diff)) : null))
@@ -58,7 +74,7 @@ function openAgent(id: string): void {
 
 <template>
   <article class="tool" :class="item.status" :data-status="item.status" data-testid="tool-card">
-    <button type="button" class="head" :aria-expanded="open" @click="open = !open">
+    <button type="button" class="head" :aria-expanded="open" @click="toggleCard">
       <span class="icon" aria-hidden="true">{{ icon }}</span>
       <span class="name">{{ item.name }}</span>
       <span class="arg">{{ summary }}</span>

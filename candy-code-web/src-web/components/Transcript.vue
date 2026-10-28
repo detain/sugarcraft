@@ -2,6 +2,7 @@
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { computed, nextTick, ref, watch, type ComponentPublicInstance } from 'vue'
 import type { SubAgent, ToolItem, TranscriptItem as Item } from '../stores/reducer'
+import { useTranscriptViewStore } from '../stores/transcriptView'
 import TranscriptItem from './TranscriptItem.vue'
 
 /**
@@ -17,6 +18,9 @@ const emit = defineEmits<{ loadFull: [item: ToolItem] }>()
 
 const scroller = ref<HTMLElement | null>(null)
 const following = ref(true)
+// The two reading switches (C-WEB-4) live in the per-viewer store, so rows
+// the virtualiser recycles and remounts pick the same settings up.
+const view = useTranscriptViewStore()
 
 const virtualizer = useVirtualizer(computed(() => ({
   count: props.items.length,
@@ -66,6 +70,10 @@ defineExpose({ jumpToEnd })
 
 <template>
   <div ref="scroller" class="scroller" data-testid="transcript" @scroll.passive="onScroll">
+    <div class="toolbar" data-testid="transcript-toggles">
+      <button type="button" :aria-pressed="view.showThinking" data-testid="toggle-thinking" @click="view.toggleThinking()">Show thinking</button>
+      <button type="button" :aria-pressed="view.expandTools" data-testid="toggle-tools" @click="view.toggleExpandTools()">Expand tool cards</button>
+    </div>
     <div class="inner">
       <div class="list" :style="{ height: `${total}px` }">
         <div
@@ -115,5 +123,15 @@ defineExpose({ jumpToEnd })
   left: 100%;
   margin-right: 1rem;
   float: right;
+}
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.35rem 1rem 0;
+  font-size: 0.8125rem;
 }
 </style>
