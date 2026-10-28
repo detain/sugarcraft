@@ -2315,7 +2315,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-TUI-2.a (W14), C-TUI-2.b (W15)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tui.md` → `### C-TUI-2.c`
 
-#### C-WEB-4.d — Elapsed turn timer in the status bar
+#### ✅ 074ffb281 C-WEB-4.d — Elapsed turn timer in the status bar
 - **Item:** C-WEB-4 (sources: GAP-UI-31) · gap · S
 - **What:** Client-only. **Reducer.** `stores/reducer.ts` records `turnStartedAt = envelope.ts` on `turn.started` (:416-425) and clears it on `turn.completed`. **Status bar.** `StatusBar.vue` shows `working · 0:42` (with `· step n/m` when …
 - **Files — create:** `candy-code-web/src-web/stores/__tests__/turnTimer.spec.ts`, `candy-code-web/src-web/components/__tests__/statusBarTimer.spec.ts`

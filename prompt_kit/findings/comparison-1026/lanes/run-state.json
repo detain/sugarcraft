@@ -219,16 +219,6 @@
    "stage": "build",
    "worktree": "/home/sites/cc-cmp-C-WEB-4.b"
   },
-  "C-WEB-4.d": {
-   "branch": "cc/C-WEB-4.d",
-   "note": "fix 4935cce08; STOP-1 reset => master has ZERO lane content; pick 416fee321+4935cce08 (skew-cure now IN lane), dist merged-tree rebuild, vue-tsc delta=base empty; batch-5",
-   "notes": "base 24d746501; npm ci in flight (bg shell). StatusBar.vue+reducer.ts hot; reducer edit = 2 arms + 1 field only (cross-area hot file). dist rides lane commit.",
-   "round": 2,
-   "session": "done",
-   "stage": "clean",
-   "weld_stop": "vue-tsc NEW TS2554 statusBarTimer.spec.ts:191 (r1 rc=0 gate vacuous); vitest green 78F/607T; pick+cure reset at 72c9aaa36; see STOP-1.md",
-   "worktree": "/home/sites/cc-cmp-C-WEB-4.d"
-  },
   "C-WEB-4.e": {
    "branch": "cc/C-WEB-4.e",
    "note": "r1 CLEAN 0C/0M/2nit-out; batch-4 pool; welder carries durations SessionSendDocumentsTest +8T, trio+dist re-derive once merged with C-WEB-4.d (dist collision certain, src disjoint), rebase post-b3 + sessionView+drift re-run",
@@ -339,7 +329,7 @@
  "status": "RUNNING",
  "tick": "154-CTX2f-review-live",
  "tip": "0f58a906f",
- "updated": "2026-10-29",
+ "updated": "2026-10-28 batch-5 weld step 4",
  "wave_loops": {
   "1": "closed r2 CLEAN",
   "16": {
@@ -938,6 +928,7 @@
    "regen": "649f76f69 dist rebuild (vite 8.3.4; no generated.ts drift, protocol trio not owed)"
   },
   "C-WEB-4.c": "batch-3 weld: pick 22ddc7c65->fc38985ab src-only (dist hunks dropped per WELDER FLAG, rebuilt on merged tree, swap rides weld commit); vitest serial 76F/593T rc0; vue-tsc 20 residual errors BASE-PROVEN at e14c3cc7c (closeout/owner surface, not lane); trio untouched; §4 cites fc38985ab; base master 7bcd40016",
+  "C-WEB-4.d": "batch-5 step4: picks bbf4a95b9+074ffb281 (src+spec, lane dist stripped; 416fee321 cherry + is by-design, content-proven identical); dist rebuilt on merged tree rides weld; vue-tsc delta vs base EMPTY (TS2554 cured by fix commit); vitest statusBarTimer+sessionView 9/9 serial",
   "C-WEB-7.a": {
    "cherry": "'-' clean single-commit pick, zero overlap vs master since base 581ac6ede",
    "durations": "no row (zero new test files); suite-figure.json untouched",
@@ -1287,9 +1278,10 @@
   "C-TOOL-5.a",
   "C-SES-4.d",
   "C-TUI-2.c",
-  "C-TUI-2.d"
+  "C-TUI-2.d",
+  "C-WEB-4.d"
  ],
- "welded_count": 178,
+ "welded_count": 179,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
  "welder_sessions": {
