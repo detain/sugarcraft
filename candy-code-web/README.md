@@ -63,7 +63,11 @@ documents the protocol and the UI).
   question a session is waiting on (also in the tab title, and as an opt-in
   desktop notification). Rows for another project root carry a "Close
   `<root>/` host" menu item: it asks first, retries with force when the
-  server refuses because a turn is running, and reloads the list after.
+  server refuses because a turn is running, and reloads the list after. On a
+  write-scoped connection each row also carries "Share page…" — it publishes a
+  share snapshot and shows the full link with its expiry and a copy button —
+  and a revoke item per live link the server lists, so any browser can revoke
+  a share it never made; the token is kept in memory only, never in storage.
 - **New session in any project** (servers started with `serve
   --allow-dir-browse`): New session opens a folder picker over the server's
   browse root — breadcrumb, Up, child directories with a project badge, show

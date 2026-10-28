@@ -8,7 +8,7 @@ import { useApprovalsStore } from '../stores/approvals'
 import { useConnectionStore } from '../stores/connection'
 import { useLayoutStore } from '../stores/layout'
 import { useNewSessionStore } from '../stores/newSession'
-import { useSessionsStore } from '../stores/sessions'
+import { useSessionsStore, type SessionShareRow } from '../stores/sessions'
 
 const props = defineProps<{ activeId: string | null }>()
 
@@ -23,6 +23,17 @@ const creating = ref(false)
 const error = ref<string | null>(null)
 /** WEB-1a: the session whose row action menu is open, at most one at a time. */
 const menuFor = ref<string | null>(null)
+
+/** C-WEB-3.e: `session.share` / `session.unshare` are write-scoped; a read-only connection sees neither item. */
+const canWrite = computed(() => connection.scopes.includes('write'))
+
+/**
+ * C-WEB-3.e: the just-published link, held in this dialog state only — the
+ * token is never written to localStorage or sessionStorage; the server's
+ * `session.shares` listing is the record.
+ */
+const shareDialog = ref<{ url: string; expiresAt: number } | null>(null)
+const shareCopied = ref(false)
 
 const EXPORT_EXTENSIONS: Record<'markdown' | 'json' | 'text', string> = { markdown: 'md', json: 'json', text: 'txt' }
 
@@ -133,6 +144,63 @@ async function exportRow(summary: SessionSummary, format: 'markdown' | 'json' | 
 }
 
 /**
+ * The live share pages of one row, straight from the store's server
+ * listing. Gated on the write scope like the menu item itself: revoking is
+ * a write call, so a read-only connection is not shown a door it cannot open.
+ */
+function shareRows(summary: SessionSummary): SessionShareRow[] {
+  return canWrite.value ? sessions.sharesBySession[summary.id] ?? [] : []
+}
+
+/**
+ * `expiresAt` is unix seconds; a UTC ISO render keeps the stamp identical
+ * wherever the page is opened (no locale- or timezone-dependent text).
+ */
+function expiryLabel(expiresAt: number): string {
+  return new Date(expiresAt * 1000).toISOString().slice(0, 16).replace('T', ' ')
+}
+
+/**
+ * C-WEB-3.e: publish a share page and show its URL. The full token arrives
+ * only in this response and renders as plain interpolation below — never
+ * v-html, never a stored value.
+ */
+async function shareRow(summary: SessionSummary): Promise<void> {
+  menuFor.value = null
+  shareCopied.value = false
+  await act(async () => {
+    const result = await sessions.share(summary.id)
+    shareDialog.value = { url: `${window.location.origin}${result.path}`, expiresAt: result.expiresAt }
+  })
+}
+
+/** C-WEB-3.e: revoke one listed share by its full token; the store re-reads the listing after. */
+async function unshareRow(row: SessionShareRow): Promise<void> {
+  menuFor.value = null
+  await act(() => sessions.unshare(row.token))
+}
+
+function closeShareDialog(): void {
+  shareDialog.value = null
+  shareCopied.value = false
+}
+
+/**
+ * Copy the link when the browser offers a clipboard; without one (or on a
+ * refusal) the URL stays on screen selectable — no claimed success.
+ */
+async function copyShareUrl(): Promise<void> {
+  const url = shareDialog.value?.url
+  if (!url || !navigator.clipboard) return
+  try {
+    await navigator.clipboard.writeText(url)
+    shareCopied.value = true
+  } catch {
+    // A clipboard refusal keeps the dialog's text, selectable by hand.
+  }
+}
+
+/**
  * Save exported text through a blob link: the browser downloads it, no
  * navigation. w2h M4: the URL is revoked when the next export replaces it
  * or the sidebar unmounts — revoking synchronously right after click() can
@@ -160,6 +228,10 @@ onBeforeUnmount(() => {
  * somebody else's shortcut. The same guard PermissionCard applies to y/a/n.
  */
 function onKey(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && shareDialog.value !== null) {
+    closeShareDialog()
+    return
+  }
   if (event.key === 'Escape' && menuFor.value !== null) {
     menuFor.value = null
     return
@@ -223,12 +295,25 @@ function onKey(event: KeyboardEvent): void {
           <li><button type="button" role="menuitem" :data-testid="`row-export-markdown-${summary.id}`" @click="exportRow(summary, 'markdown')">Export · Markdown</button></li>
           <li><button type="button" role="menuitem" :data-testid="`row-export-json-${summary.id}`" @click="exportRow(summary, 'json')">Export · JSON</button></li>
           <li><button type="button" role="menuitem" :data-testid="`row-export-text-${summary.id}`" @click="exportRow(summary, 'text')">Export · Text</button></li>
+          <li v-if="canWrite"><button type="button" role="menuitem" :data-testid="`row-share-${summary.id}`" @click="shareRow(summary)">Share page…</button></li>
+          <li v-for="row in shareRows(summary)" :key="row.token">
+            <button type="button" role="menuitem" :data-testid="`row-unshare-${summary.id}-${row.tokenPrefix}`" @click="unshareRow(row)">Revoke share {{ row.tokenPrefix }}… · {{ expiryLabel(row.expiresAt) }}</button>
+          </li>
           <li v-if="summary.status !== 'closed'"><button type="button" role="menuitem" :data-testid="`row-close-${summary.id}`" @click="closeRow(summary)">Close</button></li>
           <li><button type="button" role="menuitem" class="danger" :data-testid="`row-delete-${summary.id}`" @click="removeRow(summary)">Delete</button></li>
           <li v-if="elsewhere(summary)"><button type="button" role="menuitem" :data-testid="`row-close-host-${summary.id}`" @click="closeHost(summary)">Close {{ elsewhere(summary) }}/ host</button></li>
         </ul>
       </li>
     </ul>
+    <div v-if="shareDialog" class="share" role="dialog" aria-label="Share page" data-testid="share-dialog">
+      <p>Share page published. Anyone with the link can read this snapshot until it expires.</p>
+      <code class="share-url" data-testid="share-url">{{ shareDialog.url }}</code>
+      <p class="share-expiry" data-testid="share-expiry">Expires {{ expiryLabel(shareDialog.expiresAt) }} UTC</p>
+      <div class="share-actions">
+        <button type="button" class="primary" data-testid="share-copy" @click="copyShareUrl">{{ shareCopied ? 'Copied' : 'Copy link' }}</button>
+        <button type="button" data-testid="share-close" @click="closeShareDialog">Close</button>
+      </div>
+    </div>
   </nav>
 </template>
 
@@ -388,5 +473,35 @@ ul {
 }
 .error {
   color: var(--error);
+}
+.share {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 0.8125rem;
+}
+.share p {
+  margin: 0 0 0.4rem;
+}
+.share-url {
+  display: block;
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.3rem;
+  overflow-wrap: anywhere;
+}
+.share-expiry {
+  color: var(--muted);
+}
+.share-actions {
+  display: flex;
+  gap: 0.4rem;
 }
 </style>

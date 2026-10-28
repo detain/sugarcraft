@@ -1,12 +1,15 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import type { Events, PermissionMode, SessionSummary } from '../protocol/generated'
+import type { Events, MethodResult, PermissionMode, SessionSummary } from '../protocol/generated'
 import { useConnectionStore } from './connection'
 
 const PAGE = 200
 const MAX_PAGES = 10
 /** C-SES-2.c: keystrokes inside this window collapse into one server round trip. */
 const SEARCH_DEBOUNCE_MS = 250
+
+/** One live share page, as `session.shares` lists it (C-WEB-3.e). */
+export type SessionShareRow = MethodResult<'session.shares'>['items'][number]
 
 function stamp(summary: SessionSummary): string {
   return summary.updatedAt ?? summary.createdAt ?? ''
@@ -20,6 +23,12 @@ function stamp(summary: SessionSummary): string {
 export const useSessionsStore = defineStore('sessions', () => {
   const connection = useConnectionStore()
   const byId = ref<Record<string, SessionSummary>>({})
+  /**
+   * C-WEB-3.e: the cross-session live-share listing, in memory only. The
+   * server's `session.shares` is the record — the token is never written to
+   * any storage, so a revoke works even for a link this browser never made.
+   */
+  const sharesBySession = ref<Record<string, SessionShareRow[]>>({})
   const loading = ref(false)
   const error = ref<string | null>(null)
   const loaded = ref(false)
@@ -118,6 +127,45 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   /**
+   * C-WEB-3.e: re-read the server's live share pages. Best effort: a refused
+   * or unanswered listing keeps the previous map (a fresh connection has
+   * nothing to hide); the menu only ever offers revoke for rows the server
+   * listed, so it cannot get ahead of the truth on its own.
+   */
+  async function loadShares(): Promise<void> {
+    try {
+      const result = await connection.request('session.shares', {})
+      const next: Record<string, SessionShareRow[]> = {}
+      for (const row of result.items) {
+        const rows = next[row.sessionId]
+        if (rows) rows.push(row)
+        else next[row.sessionId] = [row]
+      }
+      sharesBySession.value = next
+    } catch {
+      // Listing is a read: a server that refuses it simply shows no items.
+    }
+  }
+
+  /**
+   * C-WEB-3.e: publish the share snapshot. The full token arrives
+   * only in this response and renders straight into the dialog — the listing
+   * re-read rides behind it and nothing here touches web storage.
+   */
+  async function share(sessionId: string, days?: number): Promise<MethodResult<'session.share'>> {
+    const result = await connection.request('session.share', days === undefined ? { sessionId } : { sessionId, days })
+    void loadShares()
+    return result
+  }
+
+  /** C-WEB-3.e: revoke one share page by its full token; false means it was already gone. */
+  async function unshare(token: string): Promise<boolean> {
+    const result = await connection.request('session.unshare', { token })
+    void loadShares()
+    return result.revoked
+  }
+
+  /**
    * C-WEB-3.d: stop a non-primary root's workspace host (`workspace.close`),
    * drop that root's rows from the index, and reload it. While one of the
    * host's turns runs the server refuses with `turn_running` — that throws
@@ -194,6 +242,7 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   connection.onHello(() => {
     void load()
+    void loadShares()
   })
 
   connection.onEvent((envelope) => {
@@ -204,6 +253,9 @@ export const useSessionsStore = defineStore('sessions', () => {
         break
       case 'session.deleted':
         drop((envelope.data as unknown as Events['session.deleted']).id)
+        // C-SES-3 voids a session's share pages when it is deleted; the
+        // listing follows the server rather than guessing locally.
+        void loadShares()
         break
       case 'session.status': {
         const current = envelope.sessionId === null ? undefined : byId.value[envelope.sessionId]
@@ -221,5 +273,26 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
   })
 
-  return { byId, items, loading, loaded, error, searchResults, searching, load, search, create, rename, remove, fork, close, exportTranscript, closeRoot }
+  return {
+    byId,
+    items,
+    loading,
+    loaded,
+    error,
+    searchResults,
+    searching,
+    sharesBySession,
+    load,
+    search,
+    create,
+    rename,
+    remove,
+    fork,
+    close,
+    exportTranscript,
+    loadShares,
+    share,
+    unshare,
+    closeRoot,
+  }
 })
