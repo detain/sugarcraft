@@ -376,6 +376,63 @@ final class Sanitize
     }
 
     /**
+     * Remove the invisible bidi and zero-width format characters that
+     * {@see markInvisibleFormatting()} marks — the strip twin of audit
+     * 15b-28, for text that must simply be free of them (a submitted
+     * prompt, a stored name) rather than shown with markers.
+     *
+     * The two policies agree character for character, and not by restating
+     * the rule: both tier sets come from {@see invisibleFormattingMaps()},
+     * and where the mark path deletes nothing the joiner decision is made
+     * against the raw bytes in one pass, so a joiner right after a removed
+     * U+200B is still "after the always tier" and goes too — exactly the
+     * joiner the marker path catches after the `>` of a `<U+200B>` marker.
+     * `SanitizeStripInvisibleFormattingTest` pins the agreement across a
+     * generated battery (stripped text == marked text with the markers
+     * deleted, removed count == marker count), so the two can drift no
+     * more than one edit to the maps allows.
+     *
+     * Byte-oriented and fail-closed like the rest of the class: the same
+     * "is the preceding byte ASCII" test as the mark path, and if the
+     * regex ever fails, every joiner is removed rather than none. The
+     * result of a prefix is the result of the prefix (the rule looks only
+     * backward), so a caller sanitising a draft and its caret prefix in
+     * two passes still agrees on the column.
+     *
+     * @param string $s     Input text.
+     * @param int    $removed Out: how many format characters were deleted.
+     * @return string `$s` with the neutralised format characters removed.
+     */
+    public static function stripInvisibleFormatting(string $s, ?int &$removed = null): string
+    {
+        $removed = 0;
+        if ($s === '') {
+            return '';
+        }
+
+        $stripped = preg_replace_callback(
+            self::invisibleFormattingStripPattern(),
+            static function (array $m) use (&$removed): string {
+                $removed++;
+
+                return '';
+            },
+            $s,
+        );
+
+        if ($stripped === null) {
+            // Fail closed: with no parse there is no conditional tier, so
+            // everything the class knows about goes, and the count restarts.
+            [$always, $joiners] = self::invisibleFormattingMaps();
+            $stripped = str_replace(array_keys($always), '', $s, $alwaysCount);
+            $stripped = str_replace(array_keys($joiners), '', $stripped, $joinerCount);
+            $removed = $alwaysCount + $joinerCount;
+        }
+
+        return $stripped;
+    }
+
+    /**
      * The 15b-28 codepoints, UTF-8 spelling => `<U+XXXX>` marker, split into
      * the always-marked tier and the conditional joiner tier. Built once.
      *
@@ -399,6 +456,36 @@ final class Sanitize
         }
 
         return $maps;
+    }
+
+    /**
+     * The {@see stripInvisibleFormatting()} matcher, built from the same
+     * maps as the marking path so the tiers can never disagree by editing
+     * one spelling: one alternative matches the always tier (removed
+     * unconditionally), the other a joiner in a spoofing position — at the
+     * start of the text, after an ASCII byte, after a removed always-tier
+     * character, or after another joiner (a run is never spelling). The
+     * lookbehind names the always-tier spellings because, unlike the mark
+     * path, the strip pass sees the raw bytes there rather than the `>` of
+     * a marker. Built once; byte-level, no `/u`, like its sibling.
+     */
+    private static function invisibleFormattingStripPattern(): string
+    {
+        static $pattern = null;
+        if ($pattern === null) {
+            [$always, $joiners] = self::invisibleFormattingMaps();
+            $bytes = static fn (array $map): string => implode(
+                '|',
+                array_map(static fn (string $k): string => preg_quote($k, '/'), array_keys($map)),
+            );
+            // The lookbehind must stay a FLAT alternation of fixed-length
+            // literals (PCRE2 rejects a grouped variable-length one); the
+            // mark path's lookbehind has the same shape for the same reason.
+            $pattern = '/(?:' . '(?:' . $bytes($always) . ')'
+                . '|(?:(?<![\x80-\xFF])|(?<=' . $bytes($always) . '|' . $bytes($joiners) . '))(?:' . $bytes($joiners) . '))/';
+        }
+
+        return $pattern;
     }
 
     /**
