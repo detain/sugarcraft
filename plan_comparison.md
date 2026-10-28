@@ -1653,7 +1653,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-AGT-1.a (W1), C-AGT-1.c (W1), C-AGT-1.b (W6), C-AGT-7.a (W7)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-5.a`
 
-#### C-SES-3.d — Live read-only share links
+#### ✅ a28124a7e C-SES-3.d — Live read-only share links
 - **Item:** C-SES-3 (sources: CLAW-new#8) · feature · effort M
 - **What:** **What it adds.** `/share serve --live [days]` publishes a link that re-renders the session's transcript at request time, so a reader sees existing and future messages. It keeps the same token, expiry and revoke semantics as …
 - **Files — create:** none

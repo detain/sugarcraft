@@ -1,0 +1,25 @@
+| `/rewind` | ✓ | | `[n] [--chat\|--files\|--both]` | Restore an earlier checkpoint: the conversation, the files, or both |\n
+| `/undo` | ✓ | | — | Take back the last turn, or revert the last auto-commit |\n
+| `/redo` | ✓ | | — | Step forward again over what /rewind or /undo took back |\n
+| `/diff` | ✓ | | `[n]` | Show what changed in the files since a checkpoint |\n
+| `/review` | ✓ | | `[<tree-ish>]` | Review the diff against a revision and report findings without editing |\n
+| `/security-review` | ✓ | | `[<ref>]` | Security-review the diff against a revision and report findings without editing |\n
+| `/bg` | ✓ | | `<task>` | Run a task in a background session |\n
+| `/schedules` | ✓ | | `[list\|enable\|disable\|delete <name>]` | List, enable, disable, and delete scheduled prompt rows |\n
+| `/loop` | ✓ | | `<interval> <prompt>` | Re-run a prompt in this session every interval (this process only) |\n
+| `/fork` | ✓ | | `<prompt>` | Clone this conversation into a background session |\n
+| `/websearch` | ✓ | | `<query> [--safesearch 0\|1\|2] [--time-range day\|month\|year]` | Search the web via SearXNG |\n
+| `/goal` | ✓ | | `[<condition>\|clear]` | Work until a condition is met, judged by the title model after every turn |\n
+| `/grind` | ✓ | | `[<condition>\|clear]` | Like /goal, with a much longer budget of follow-up rounds |\n
+| `/btw` | ✓ | | `<question>` | Ask the title model a side question about this conversation, kept out of it |\n
+| `/handoff` | ✓ | | `[focus]` | Continue in a new session that starts from a state summary of this one |\n
+| `/generate` | ✓ | | `<prompt> [--steps N] [--size WxH] [--seed N] [--save]` | Generate an image on the configured SD server |\n
+| `/generate-form` | | | — | Open the interactive generation form (image and video tabs) |\n
+| `/sendto` | ✓ | | `<file.png> [--to img2img\|inpaint] [--mask FILE]` | Import a saved PNG's parameters back into the generate form |\n
+| `/play` | ✓ | | `<file\|artifact-name>` | Play a video artifact by name or a local clip by path in the full-screen player |\n
+| `/rendermode` | ✓ | | `<mode>` | Show or switch the media render mode (images repaint from the new word, the player starts from it) |' [UTF-8](length: 6580) contains "`[md\|html\|json] [path] \| serve \[--live\] [days] \| list \| revoke [token]`" [ASCII](length: 78).
+
+/home/sites/cc-cmp-C-SES-3.d/candy-code/tests/Commands/CommandDocsDriftTest.php:60
+
+FAILURES!
+Tests: 126, Assertions: 8422, Failures: 2, PHPUnit Deprecations: 2.

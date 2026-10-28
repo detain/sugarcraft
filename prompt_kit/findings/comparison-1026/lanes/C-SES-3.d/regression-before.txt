@@ -1,0 +1,45 @@
+  Usage: /share [md|html|json|text] [path] | /share serve [days] | /share list | /share revoke [token]\n
+\n
+  Without a path the export goes to ~/.candy-code/exports/; a path must stay inside the project.\n
+\n
+' [UTF-8](length: 275) contains "Usage: /share [md|html|json|text] [path] | /share serve [--live] [days] | /share list | /share revoke [token]" [ASCII](length: 109).
+
+/home/sites/cc-cmp-C-SES-3.d/candy-code/tests/Commands/ShareCommandTest.php:42
+
+2) SugarCraft\Code\Tests\Commands\ShareCommandTest::testServePublishesASnapshotPageAndNamesItsPath
+without --live the page is a frozen snapshot
+Failed asserting that null is false.
+
+/home/sites/cc-cmp-C-SES-3.d/candy-code/tests/Commands/ShareCommandTest.php:212
+
+3) SugarCraft\Code\Tests\Commands\ShareCommandTest::testServeWithLiveFlagPublishesALiveRow
+Failed asserting that 1 is identical to 0.
+
+/home/sites/cc-cmp-C-SES-3.d/candy-code/tests/Commands/ShareCommandTest.php:227
+
+4) SugarCraft\Code\Tests\Commands\ShareCommandTest::testServeAcceptsTheLiveFlagOnEitherSideOfTheDayCount
+flag-first
+Failed asserting that 1 is identical to 0.
+
+/home/sites/cc-cmp-C-SES-3.d/candy-code/tests/Commands/ShareCommandTest.php:243
+
+5) SugarCraft\Code\Tests\Commands\ShareCommandTest::testServeRefusesASecondLiveFlagAndExtraArguments
+Failed asserting that '\n
+  ✗ Too many arguments.\n
+\n
+  Usage: /share [md|html|json|text] [path] | /share serve [days] | /share list | /share revoke [token]\n
+\n
+  Without a path the export goes to ~/.candy-code/exports/; a path must stay inside the project.\n
+\n
+' [UTF-8](length: 230) contains "Days must be a whole number from 1 to 365" [ASCII](length: 41).
+
+/home/sites/cc-cmp-C-SES-3.d/candy-code/tests/Commands/ShareCommandTest.php:264
+
+6) SugarCraft\Code\Tests\Share\ShareStoreTest::testTheLiveColumnMigratesOntoAnOldTable
+a row older than the flag is a snapshot
+Failed asserting that null is false.
+
+/home/sites/cc-cmp-C-SES-3.d/candy-code/tests/Share/ShareStoreTest.php:121
+
+ERRORS!
+Tests: 82, Assertions: 334, Errors: 6, Failures: 6, Warnings: 2, PHPUnit Deprecations: 2.
