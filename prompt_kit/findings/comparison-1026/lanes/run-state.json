@@ -93,7 +93,8 @@
   "C-PRV-5.b",
   "C-CTX-2.e",
   "C-MCP-4.c",
-  "C-CTX-2.c"
+  "C-CTX-2.c",
+  "P-MENU.e"
  ],
  "inflight": {
   "C-EXT-2.b": {
@@ -119,12 +120,6 @@
    "round": 2,
    "session": "ses_e809837ef7ffe2b2c9d4e7f1a3b6",
    "note": "tip 2119422aa; one-line InstructionDiffTracker.php:129 docblock cure (per-root shared budget) + REPORT; then r2"
-  },
-  "P-MENU.e": {
-   "stage": "clean",
-   "round": 2,
-   "session": "closed",
-   "note": "r1+r2 both CLEAN w/ gates run. WELD queued third (dist NOT required \u2014 pure TUI lane, no web files; welder verifies diff-tree has no candy-code-web). Chain: git log cc/P-MENU.e picks (60b8f997a..b077d7f8b + 2f58011e3 + 621536881 + fold cure commits \u2014 re-read list); DUR MenuHoverTest+PanesSubmenuToggleTest; \u00a74 marks unstaged; carry CLOSED: fold-budget handoff"
   },
   "C-TOOL-7.b": {
    "stage": "fix",
@@ -152,18 +147,6 @@
    "session": "closed",
    "note": "r1 CLEAN (gates 1677T/91485A + 532T/31594A + child-lifetimes rc0 + pair-only). WELD queued #1 (before C-MCP-6.b): DUR WorkflowRunInterpolationTest.php (3T) tools-guards NO DUR row actually \u2014 tools/tests files get no durations row (precedent); correct: NO DUR. \u00a74 unstaged.",
    "ts": "@1902"
-  },
-  "C-MCP-4.c": {
-   "stage": "clean",
-   "round": 2,
-   "session": "closed",
-   "note": "r2 CLEAN (142T/1965A + OAuth family 65T/346A + pair-only). WELD queued: picks 159024854+7a08304d3; no regen; DUR none; reviewer's unverified axes for welder: trio absent from commit list, \u00a71.8 roster flips real, pins non-vacuous"
-  },
-  "C-MCP-6.a": {
-   "stage": "clean",
-   "round": 1,
-   "session": "closed",
-   "note": "r1 CLEAN with gates run 309T/1749A + 311T/922A child-lifetimes rc0. WELD queued first: pick 872111a75; DUR SseMcpServerForkTlsTest+McpLoginForkTest; NIT McpLoginFork.php:152 truncated-URL boundary = report-only closeout carry"
   },
   "C-SEC-5.d": {
    "stage": "build",
@@ -532,6 +515,15 @@
    "gates": "SessionHostTurnSettleWork 3T/35A/0F (brief said 4T/29A - filter wobble, file green); SessionHost|TurnSettleWork|Idle|AutoCompact|Compaction 511T/22506A/0F (DreamPassTest:288 did NOT appear); five-guard 133T/15851A failures=2 = staleness pair ONLY, live enum 26,303 vs pinned 25,537",
    "durations_owed": "NEW candy-code/tests/Host/SessionHostTurnSettleWorkTest.php - LIST ONLY, closeout duty",
    "carries": "C-CTX-2.e release()-cancels-alarm carry CLOSED by this pick (per lane r1 note); DuplicatedTestHelperDriftTest.php:1534 self-unrostered pre-existing leg -> gate re-pin duty (from lane r1 note)"
+  },
+  "P-MENU.e": {
+   "master": "255c1599a",
+   "pick": "255c1599a (single squashed pick already on master from prior welder; ceremony completed at this weld)",
+   "weld_note": "single squashed pick 255c1599a; r1/r2 review verdicts never persisted to lanes/ \u2014 notification-era; DUR owed: tests/Tui/MenuHoverTest.php + tests/App/PanesSubmenuToggleTest.php (lead brief cited tests/Tui/Components/ \u2014 disk truth: file landed under tests/App/); fold-budget P-MENU.d HANDOFF CLOSED (monotone moreRows() budget, 4-boundary pins); tui.menu.empty orphan cured in preceding cure commit",
+   "regen": "no-op VERIFIED: gen-command-docs/gen-tool-docs/gen-settings-doc --check all up to date rc0; diff-tree has no src/Protocol or candy-code-web files -> schema/npm legs skipped by scope",
+   "gates": "TuiLang|LangParity 16T/4232A GREEN post-cure (orphan red reproduced pre-cure); --filter 'Menu|Pane|Window|SessionsPane|AgentColor|KeyBinding' 1589T/39173A OK EXACT; five-guard 133T/15851A F2 = staleness pair ONLY (pinned 25,537 vs live 26,303 - closeout re-pin)",
+   "evidence": "lanes/P-MENU.e/{BRIEF,REPORT}.md staged; inflight remnants C-MCP-4.c + C-MCP-6.a removed at this edit (both fully welded earlier; lead had not yet moved them)",
+   "prune": "cherry proof '-'; worktree cc-cmp-P-MENU.e + branch cc/P-MENU.e"
   }
  },
  "carries": [
@@ -603,5 +595,5 @@
   "docs/MCP.md \u00a7Deferred lines setAgentPreset now-false (C-AGT-3.a follow-up) - welder carry, C-CTX-2.c commit",
   "OAuthDynamicRegistrationTest.php DUR row (C-MCP-4.b landed 1442e77c4) - closeout gate duty, minted via C-CTX-2.c weld commit as first landing"
  ],
- "updated": "2026-10-28T01:54:13+00:00"
+ "updated": "2026-10-28T02:05:04+00:00"
 }

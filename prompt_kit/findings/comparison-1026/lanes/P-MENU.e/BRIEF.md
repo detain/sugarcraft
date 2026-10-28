@@ -1,0 +1,92 @@
+### P-MENU.e — Pane toggles leave the bar: View ▸ Panes owns `panetab:`, hover, indicator door
+- item: P-MENU-REDO (sources: owner pick)
+- kind: feature · effort M
+- approach:
+  - **The bar.**
+    - `compose()` drops the pane-tab strip and its three densities (`MenuBar.php:94-114`, :220-288).
+    - The right end keeps only the `Currently: <pane>` indicator (R-MENU-2). It goes terse (label only) below 61 cols and disappears below 50, so the five titles always come first.
+    - The indicator becomes a click door, zone `panesmenu`, that opens View ▸ Panes.
+  - **One list.** `PANE_TABS` (:94-102) is folded into `Pane::tabCycle()`, the list `PaneReverseCycleTest` already pins it equal to. Later panes (P-CTX.e's Context, P-TABS.g's Sessions) therefore appear in View ▸ Panes with no MenuBar edit. This is consolidation; no code is deleted.
+  - **The `panetab:<pane>` zone moves from the bar to the Panes rows.** `ShellMenu` sets each toggle node's `zone`. The existing click arm (`App.php:3468`) and the drag-to-dock arm (`dragTargetPane()`, :3071) stay wired unchanged:
+    - a click toggles docking;
+    - a press-drag on a docked pane's row carries the pane to a side, and `beginPaneDrag()` closes the menu once the drag arms;
+    - toggling keeps the submenu open and flips the check in place (R-MENU-3).
+
+    The rows keep the old tab's three states: focused is `shellPrimary` bold underlined, docked is ✓ in `shellForeground`, undocked is blank in `shellMuted`.
+  - **Hover.**
+    - **Mouse mode.** CellMotion reports no button-less motion (`Chat.php:6034`). So while any menu is open, the shell arms `Cmd::enableMouseAllMotion()`, and it restores `Cmd::enableMouseCellMotion()` when the menu closes. This is ONE transition check in `App::update()` (:2714), comparing `MenuBar::activeMenu() > 0` before and after every message, so every close path is covered. It is skipped when the mouse is Off.
+    - **Motion routing.** While a menu is open, `handleShellMouse()` (:2883) consumes motion. Over a `menuitem:` or `panetab:` row it calls `MenuBar::hover()` (highlight; a submenu row expands). Anywhere else the motion is swallowed, so the chat never receives hover.
+- files.create: none
+- files.modify:
+  - `candy-code/src/Tui/Components/MenuBar.php`: `compose()`, `density()`, `paneTabs()`→indicator, `PANE_TABS`, new `hover()`, `PANES_DOOR_ZONE`;
+  - `candy-code/src/Tui/Menu/ShellMenu.php`: the Panes rows' `zone`;
+  - `candy-code/src/App/App.php`: `update()` (mouse-mode transition), `handleShellMouse()` (motion arm), `beginPaneDrag()` (closes the menu), `dispatchChromeClick()` (`panesmenu` arm);
+  - `candy-code/README.md`: L353-357 (Mouse); L372-386 (Pane docking: the tabs become View ▸ Panes, the density sentence goes, dragging starts from the row);
+  - `candy-code/docs/ARCHITECTURE.md`: zone map L1176-1177; bullets L1200-1205 (also corrects their stale pane list).
+- tests:
+  - create `candy-code/tests/Tui/MenuHoverTest.php`:
+    - AllMotion is armed when a menu opens by F10 and by click;
+    - CellMotion is restored on Esc, after a row runs, and after a click-away;
+    - no mode Cmd is emitted when the mouse is Off;
+    - motion over a row highlights it and expands a submenu;
+    - motion with no menu open still reaches Chat.
+  - create `candy-code/tests/App/PanesSubmenuToggleTest.php`:
+    - Enter and click on each Panes row have `MenuBarPaneTabClickTest`'s semantics;
+    - the submenu stays open and the check flips;
+    - the indicator door opens View ▸ Panes.
+  - modify:
+    - `candy-code/tests/Tui/MenuBarCompactStripTest.php` (indicator densities; titles first);
+    - `candy-code/tests/App/MenuBarPaneTabClickTest.php` (the zones are now on the rows);
+    - `candy-code/tests/App/DockDragBytePathTest.php` (the drag starts from the Panes row);
+    - `candy-code/tests/MousePaneJumpDoesNotHandOverTest.php` (docblock);
+    - `candy-code/tests/Tui/ComponentTest.php` (the pane-tab assertions move to the Panes rows; the `Currently:` pins are unchanged);
+    - `candy-code/tests/Tui/TodoPaneTest.php` (`testTheMenuBarAdvertisesTheTodoTab`);
+    - `candy-code/tests/Tui/Components/SettingsPaneTest.php` (`testTheTabStripAdvertisesSettings`);
+    - `candy-code/tests/Tui/PaneReverseCycleTest.php` (its pin becomes: Panes rows == `tabCycle()`).
+- docs/guards: README.md and docs/ARCHITECTURE.md prose. No generated roster moves. The `mouse.*` key rows do not change, so `KeyBindingDriftTest` does not move.
+- serialized: [docs:README.md] [docs:ARCHITECTURE.md] [hot:candy-code/src/App/App.php] [hot:candy-code/src/Tui/Components/MenuBar.php]
+- deps: P-MENU.d
+- phase: normal
+- ruling: R-MENU-2 (keep the `Currently:` indicator as a door to View ▸ Panes; default yes) and R-MENU-3 (the submenu stays open after a toggle; default yes)
+- risks: AllMotion floods the read loop, but only while a menu is open. A missed close path would leave it on, so the single transition check and MenuHoverTest's close-path table are the guard.
+
+## Notes for the orchestrator
+
+- **Supersession of P-IMAGE-MENU.**
+  - **P-IMG.a is REPLACED by P-MENU.b + P-MENU.d. Drop it from the plan**, along with everything it carried:
+    - `CommandRegistry::MENU_ORDER`;
+    - the Media category;
+    - `CommandSpec::$menuVisible`;
+    - its edits to `builtin-commands/4000-4040`;
+    - `MenuOverflowTest`.
+
+    Its reachability test becomes `MenuReachabilityTest`, and its README L308 and `docs/MEDIA.md` edits move into P-MENU.d.
+  - **P-IMG.b stays** and is a dep of P-MENU.c (serial: layout).
+  - **P-IMG.c stays** and is independent.
+  - As a result, P-MENU touches **no [commands] file**, so P-IMG.a's [commands] collision with P-CTX.b is gone. Palette grouping is unchanged.
+- **Layout chain** (`src/Tui/Renderer.php`, at most one per wave): P-IMG.b → **P-MENU.c** → P-CTX.e → P-TABS.g. Insert P-MENU.c as link #2, and add it to P-CTX.e's deps.
+- **MenuBar.php / App.php chain:** P-MENU.c → P-MENU.d → P-MENU.e.
+  - **Preferred:** P-MENU.e lands before P-CTX.e and P-TABS.g. Those two then **drop their `MenuBar::PANE_TABS` edit and their `MenuBarCompactStripTest` edit**, because View ▸ Panes derives from `Pane::tabCycle()`.
+  - **If they land first:** P-MENU.e's consolidation absorbs their rows.
+  - Either way, never in the same wave: they share `App.php` and `MenuBar.php`.
+- **New frame paths must paint the menu.** C-TUI-2.e (`renderDiffReview`), C-TUI-3.d (`renderMessagePicker`), C-TUI-5.e (the wizard) and C-SEC-5.d (the trust dialog, if it composites in `Tui/Renderer.php`) add full-band paths. After P-MENU.c, each must call `overlayMenu()` and the `scanChrome()` panel pass, and add its state to `MenuOverlayFrameTest`'s table. Otherwise bug 1 comes back.
+- **Hot files.**
+  - `KeyBindingRegistry.php`: P-MENU.d edits `menu()` only. Also touched by C-TUI-2.e, 3.d, 3.e and 5.e, C-EXT-5.c, P-TABS.e, P-TABS.g, P-CTX.e and P-AGENT.b.
+  - `KeyboardHandler.php`: P-MENU.d edits the open-menu block only. Also touched by C-SEC-5.d, P-TABS.e, P-CTX.e and P-TABS.g.
+  - Lang prefixes: `tui.menu.` (b), `keys.menu.` + `tui.menu.more` (d).
+- **New test files for the weld** (durations TSV):
+  - `tests/Tui/Menu/MenuCursorTest.php`, `MenuCascadeTest.php`, `MenuTreeTest.php`, `ShellMenuTest.php`;
+  - `tests/Tui/MenuOverlayFrameTest.php`, `MenuReachabilityTest.php`, `MenuKeyboardOwnershipTest.php`, `MenuHoverTest.php`;
+  - `tests/App/MenuActionDispatchTest.php`, `PanesSubmenuToggleTest.php`.
+- **Web:** no menu bar exists in `candy-code-web/src-web`, so there is no parity step (see "Current state").
+- **Laws.**
+  - No fork sites, no E646 exposure, no LATE items, no protocol.
+  - No `Chat.php` touch. `Chat.php:7377`'s docblock names `MenuBar::paneTabs()`; fold the one-word fix into any later [chat] lane.
+  - Dormant code is kept and rewired:
+    - the `panetab:` zone, click arm and drag arm move to the rows;
+    - `PANE_TABS` is folded into `tabCycle()`;
+    - the `get*` and `renderDropdown*()` forwarders stay.
+- **Could not verify (read-only).**
+  - Bugs 1–4 were read from source, not run. Each step's regression test must go red first.
+  - Whether terminals, tmux included, honour the CellMotion↔AllMotion switch mid-session. `MenuHoverTest` pins only the Cmds; the live check is the tmux `send-keys -H` repro.
+  - The exact derived labels of rows with no `paletteLabel`. The table shows them by `/name`, and they do not change.
