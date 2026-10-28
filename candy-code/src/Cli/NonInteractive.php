@@ -604,15 +604,17 @@ final class NonInteractive
 
         // C-AGT-7.b: the schema rode only this turn's FIRST request — the
         // engine decides that boundary (Runtime::jsonSchemaFor), and this path
-        // only reports it. When the settled answer follows a tool result
-        // ($sawToolResult, read off the observer above), the shape the caller
-        // asked for was never in force on the answering step. Say so on stderr
-        // for all three formats, and let the JSON envelope carry
+        // only reports it. When the settled answer follows a tool result —
+        // either ONE RAN THIS RUN ($sawToolResult, read off the observer
+        // above) or the CARRIED history ends on one a resume has to answer
+        // (historyCarriesUnansweredToolResult, round-2 review) — the shape
+        // the caller asked for was never in force on the answering step. Say
+        // so on stderr for all three formats, and let the JSON envelope carry
         // `json_schema_applied: false`: the key reports what happened, and its
         // ABSENCE on a no-tool turn is the ordinary "the schema rode the
         // answer" case — never a hard `true` this renderer cannot itself
         // verify past the provider.
-        $schemaUnapplied = $jsonSchema !== null && $sawToolResult;
+        $schemaUnapplied = $jsonSchema !== null && ($sawToolResult || self::historyCarriesUnansweredToolResult($history));
         if ($schemaUnapplied) {
             \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.json_schema_unapplied') . "\n");
         }
@@ -1014,6 +1016,40 @@ final class NonInteractive
         return \str_starts_with($message, self::ERROR_LABEL)
             ? \substr($message, \strlen(self::ERROR_LABEL))
             : $message;
+    }
+
+    /**
+     * C-AGT-7.b round 2: did the CARRIED history (the rows a resume prepends
+     * to this run's $history) end on a tool result the next request has to
+     * answer? This is the resume-half of the same position rule the observer
+     * above covers live: {@see Runtime::jsonSchemaFor()} withholds the schema
+     * once a tool-result row is at or after the last tool-call row, so the
+     * FIRST request of a resumed run whose transcript ended after a tool
+     * result already goes out unconstrained — while this run itself fires no
+     * ToolFinished until the answer, so the observer alone would report the
+     * schema as silently applied. The rule is read off the engine's own
+     * Message DTO rows (toolCalls/toolResults), scanned for the LAST row
+     * carrying each; a toolResults row must exist, and the result sitting on
+     * the same row as its calls counts as carried (>=), mirroring that the
+     * answer to it is still owed. No tool rows at all keeps the answer false.
+     * The engine itself is untouched — this only reports its decision.
+     *
+     * @param list<Message> $history
+     */
+    private static function historyCarriesUnansweredToolResult(array $history): bool
+    {
+        $lastCall = -1;
+        $lastResult = -1;
+        foreach ($history as $index => $row) {
+            if ($row->toolCalls !== []) {
+                $lastCall = $index;
+            }
+            if ($row->toolResults !== []) {
+                $lastResult = $index;
+            }
+        }
+
+        return $lastResult >= 0 && $lastResult >= $lastCall;
     }
 
     /**

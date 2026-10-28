@@ -139,15 +139,11 @@ NEEDLE;
             512,
             JSON_THROW_ON_ERROR,
         );
-        $this->assertArrayNotHasKey('json_schema_applied', $default);
-
-        $explicitFalse = json_decode(
-            NonInteractive::format(Message::assistant('x'), NonInteractive::FORMAT_JSON, [], 's1', null, []),
-            true,
-            512,
-            JSON_THROW_ON_ERROR,
+        $this->assertArrayNotHasKey(
+            'json_schema_applied',
+            $default,
+            'a run without the flag must not answer for the schema — the key is absent, never a hard true',
         );
-        $this->assertArrayNotHasKey('json_schema_applied', $explicitFalse, 'a run without the flag must not answer for the schema');
 
         $withAll = json_decode(
             NonInteractive::format(
@@ -359,5 +355,266 @@ NEEDLE;
             @rmdir($dir . '/home');
             @rmdir($dir);
         }
+    }
+
+    /**
+     * C-AGT-7.b round 2 (rv-1 MAJOR): a resume whose CARRIED history ends on
+     * a tool result is refused the schema by the engine — on the FIRST
+     * request of the new run — exactly as mid-turn: Runtime::jsonSchemaFor
+     * scans the carried rows too, and a tool-result row at or after the last
+     * tool-call row means the answer being asked for is not schema-bound.
+     * But no ToolFinished event fires before that answer, so a report that
+     * read only this run's observer would hand the caller a keyless, silent,
+     * unconstrained envelope over a tool-ended transcript. run() now ORs the
+     * carried state in, and this pins both halves: resuming a tool-ended
+     * transcript carries `json_schema_applied:false` plus exactly one stderr
+     * notice (revert the carried leg of the OR and THIS leg reddens — with no
+     * tool events this run the key vanishes and stderr goes silent), while
+     * resuming an ordinary transcript stays keyless and silent (an
+     * over-eager carried leg reddens right here).
+     *
+     * The provider here is no double: a resume seeds $history only on a
+     * funnel-owned run ($opened is minted when no backend was injected), so
+     * the child selects the REAL sglang provider through the same two
+     * environment variables an operator uses and points it at a throwaway
+     * loopback endpoint. The endpoint routes the chat completion to an
+     * OpenAI-shaped SSE answer and everything else — sglang's server-info
+     * probes included, which fail safe by construction — to an empty JSON
+     * object, so the answer never depends on a discovery shape. Both
+     * channels are read TOGETHER from the child, per mode, exactly like the
+     * live-tools witness above: the stderr line is the half an in-process
+     * capture could not see.
+     */
+    public function testAResumedSchemaRunOverAToolEndedTranscriptSaysFalseOnBothChannels(): void
+    {
+        $root = \dirname(__DIR__, 2);
+        $dir = sys_get_temp_dir() . '/crush-agt7b-resume-' . bin2hex(random_bytes(6));
+        mkdir($dir . '/home/.candy-code', 0o700, true);
+        [$endpoint, $endpointPipes, $address] = $this->startCarriedEndpoint($dir);
+
+        $script = <<<'PHP'
+            <?php
+            require $argv[2] . '/vendor/autoload.php';
+
+            use SugarCraft\Code\Cli\ArgvParser;
+            use SugarCraft\Code\Cli\NonInteractive;
+            use SugarCraft\Code\Message;
+            use SugarCraft\Code\Session\EnhancedSessionStore;
+            use SugarCraft\Code\ToolCall;
+            use SugarCraft\Code\ToolResult;
+
+            $rows = [Message::user('earlier question')];
+            if ($argv[1] === 'carried') {
+                // A step whose RESULT row is last: the next request owes that
+                // result its answer — the position the engine withholds the
+                // schema at, reached through the transcript, not this run.
+                // These are the Chat-side DTO pair (the transcript stores
+                // THESE types), not the engine-side Tools\ pair.
+                $rows[] = Message::assistant('looking')
+                    ->withToolCalls([new ToolCall(name: 'Agt7bNoSuchTool', arguments: [], id: 'agt7b-c1')])
+                    ->withStepId('agt7b-s1');
+                $rows[] = Message::assistant('')
+                    ->withToolResults([new ToolResult(name: 'Agt7bNoSuchTool', result: 'done', id: 'agt7b-c1')])
+                    ->withStepId('agt7b-s1');
+            } else {
+                $rows[] = Message::assistant('an ordinary answer');
+            }
+
+            $store = new EnhancedSessionStore((string) getenv('HOME') . '/.candy-code/session.db');
+            // saveTranscript is the production save path AND auto-creates the
+            // session row; a transcript saved without one never resolves as a
+            // resume target and the launch would silently mint a fresh id.
+            $store->saveTranscript($argv[4], $rows);
+
+            $args = ArgvParser::parse([
+                'candy-code', '--root', $argv[2], '--resume', $argv[4], '-p', 'follow up',
+                '--json-schema', '{"type":"object"}', '--output-format', 'json',
+            ]);
+            if ($args->usageError !== null) {
+                fwrite(STDERR, 'USAGE-ERROR ' . $args->usageError . "\n");
+                exit(9);
+            }
+
+            exit(NonInteractive::run($args, null, NonInteractive::FORMAT_JSON));
+            PHP;
+
+        $file = $dir . '/agt7b-resume-child.php';
+        self::assertIsInt(file_put_contents($file, $script));
+
+        try {
+            foreach (['carried', 'clean'] as $mode) {
+                $process = proc_open([PHP_BINARY, $file, $mode, $root, $dir, 'agt7b-' . $mode . '-session'], [
+                    0 => ['pipe', 'r'],
+                    1 => ['pipe', 'w'],
+                    2 => ['pipe', 'w'],
+                ], $pipes, $root, [
+                    'HOME' => $dir . '/home',
+                    'PATH' => getenv('PATH') ?: '/usr/bin:/bin',
+                    'CANDY_CODE_PROVIDER' => 'sglang',
+                    'CANDY_CODE_MODEL' => 'agt7b-probe-model',
+                    'OPENAI_BASE_URL' => 'http://' . $address . '/v1',
+                ]);
+                self::assertIsResource($process, "the {$mode} resume child did not start");
+                fclose($pipes[0]);
+                stream_set_timeout($pipes[1], 90);
+                stream_set_timeout($pipes[2], 90);
+                $stdout = (string) stream_get_contents($pipes[1]);
+                $stderr = (string) stream_get_contents($pipes[2]);
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+                $status = proc_get_status($process);
+                if ($status['running']) {
+                    proc_terminate($process, \defined('SIGTERM') ? SIGTERM : 15);
+                }
+                self::assertSame(0, proc_close($process), "{$mode} resume child exited nonzero; stderr:\n{$stderr}");
+
+                $document = json_decode(trim($stdout), true, 512, JSON_THROW_ON_ERROR);
+                self::assertSame('carried answer', $document['result'], "{$mode}: the loopback's answer must survive the resume intact");
+
+                if ($mode === 'carried') {
+                    self::assertArrayHasKey(
+                        'json_schema_applied',
+                        $document,
+                        "a carried transcript ending on a tool result means the answering request never carried the schema; the key exists to say so; stderr was:\n{$stderr}",
+                    );
+                    self::assertFalse($document['json_schema_applied']);
+                    self::assertStringContainsString(
+                        'could not constrain the settled answer',
+                        $stderr,
+                        'the envelope says it, and stderr says it too — the same pairing the live-tools witness pins',
+                    );
+                    self::assertSame(
+                        1,
+                        substr_count($stderr, 'could not constrain the settled answer'),
+                        'ONE notice, not a notice per carried row',
+                    );
+                } else {
+                    self::assertArrayNotHasKey(
+                        'json_schema_applied',
+                        $document,
+                        "a tool-less resume leaves the schema riding the answering request; the key must not appear — that half would be the fabricated claim; stderr was:\n{$stderr}",
+                    );
+                    self::assertStringNotContainsString('could not constrain', $stderr);
+                }
+            }
+        } finally {
+            $this->removeCarriedTree($dir);
+            foreach ($endpointPipes as $pipe) {
+                @fclose($pipe);
+            }
+            $endpointStatus = proc_get_status($endpoint);
+            if ($endpointStatus['running']) {
+                proc_terminate($endpoint, \defined('SIGTERM') ? SIGTERM : 15);
+            }
+            proc_close($endpoint);
+        }
+    }
+
+    /**
+     * Throwaway loopback for the resume witness: answers the chat completion
+     * with an OpenAI-shaped SSE body and every other path (sglang's info
+     * probes ride those) with a bare JSON object. Announces its port-0
+     * address on a LISTEN line and self-expires after 40 accepts or 20 idle
+     * seconds, so a crashed parent leaves no listener behind.
+     *
+     * @return array{0: resource, 1: array<int, resource>, 2: string}
+     */
+    private function startCarriedEndpoint(string $dir): array
+    {
+        $script = <<<'PHP'
+            <?php
+            $server = @stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+            if ($server === false) {
+                fwrite(STDERR, "bind failed: {$errstr}\n");
+                exit(1);
+            }
+            fwrite(STDOUT, 'LISTEN ' . stream_socket_get_name($server, false) . "\n");
+            fflush(STDOUT);
+
+            $sse = 'data: ' . json_encode(['choices' => [[
+                'index' => 0,
+                'delta' => ['role' => 'assistant', 'content' => 'carried answer'],
+                'finish_reason' => 'stop',
+            ]]]) . "\n\n" . "data: [DONE]\n\n";
+
+            for ($seen = 0; $seen < 40; $seen++) {
+                $conn = @stream_socket_accept($server, 20);
+                if ($conn === false) {
+                    break;
+                }
+                stream_set_timeout($conn, 5);
+
+                $head = '';
+                while (!feof($conn)) {
+                    $line = fgets($conn, 8192);
+                    if (!is_string($line)) {
+                        break;
+                    }
+                    $head .= $line;
+                    if (str_ends_with($head, "\r\n\r\n")) {
+                        break;
+                    }
+                }
+                if (preg_match('/Content-Length:\s*(\d+)/i', $head, $match) === 1) {
+                    if (stripos($head, 'expect: 100-continue') !== false) {
+                        fwrite($conn, "HTTP/1.1 100 Continue\r\n\r\n");
+                    }
+                    $left = (int) $match[1];
+                    while ($left > 0 && !feof($conn)) {
+                        $chunk = fread($conn, min(8192, $left));
+                        if (!is_string($chunk) || $chunk === '') {
+                            break;
+                        }
+                        $left -= strlen($chunk);
+                    }
+                }
+                if (stripos($head, 'chat') !== false) {
+                    fwrite($conn, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\nContent-Length: " . strlen($sse) . "\r\n\r\n" . $sse);
+                } else {
+                    fwrite($conn, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: 2\r\n\r\n{}");
+                }
+                fclose($conn);
+            }
+            fclose($server);
+            PHP;
+
+        $file = $dir . '/agt7b-carried-endpoint.php';
+        self::assertIsInt(file_put_contents($file, $script));
+
+        $process = proc_open([PHP_BINARY, $file], [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes);
+        self::assertIsResource($process, 'the carried endpoint child did not start');
+        stream_set_timeout($pipes[1], 15);
+
+        $announced = fgets($pipes[1]);
+        self::assertIsString($announced, 'the carried endpoint never announced its address');
+        self::assertMatchesRegularExpression('/^LISTEN 127\.0\.0\.1:\d+\R$/', $announced);
+
+        return [$process, $pipes, substr(trim($announced), 7)];
+    }
+
+    /**
+     * Remove the whole scratch tree the resume witness leaves behind (db,
+     * WAL sidecars, child script, both homes) — unlink-first recursion, no
+     * rm -rf, so a surprise path can only fail loudly.
+     */
+    private function removeCarriedTree(string $path): void
+    {
+        foreach ((array) glob($path . '/{,.*}*', GLOB_BRACE) ?: [] as $entry) {
+            if (!is_string($entry) || basename($entry) === '.' || basename($entry) === '..') {
+                // '.' and '..' match the dot-glob but walk UPWARD — the
+                // recursion must never leave the scratch tree.
+                continue;
+            }
+            if (is_dir($entry) && !is_link($entry)) {
+                $this->removeCarriedTree($entry);
+            } else {
+                @unlink($entry);
+            }
+        }
+        @rmdir($path);
     }
 }
