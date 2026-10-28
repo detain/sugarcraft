@@ -635,6 +635,7 @@ candy-code/tests/Chat/AgentViewShowsChildAskTest.php	0.117	7
 candy-code/tests/Tui/Components/AgentDashboardPaneTest.php	0.117	38
 candy-code/tests/Cli/BootstrapShellOutTierTest.php	0.116	13
 candy-code/tests/Host/Commands/LoopSchedulesCommandTest.php	0.116	10
+candy-code/tests/Providers/OpenAiResponsesWireTest.php	0.116	21
 candy-code/tests/Tui/SessionPickerGoldenTest.php	0.115	14
 candy-code/tests/Tools/BuiltIn/ReadOutlineTest.php	0.114	5
 candy-code/tests/Tools/BuiltIn/GrepOptionInjectionTest.php	0.113	16
