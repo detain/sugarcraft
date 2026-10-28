@@ -25,7 +25,15 @@ use SugarCraft\Code\Tools\BuiltIn\Read;
  * records one `Instructions updated: <name>` row; re-rendering a change the
  * tracker already announced (the per-step replay leg) stays silent, and a
  * revert to the frozen bytes clears the file's row so a later edit is
- * announced again.
+ * announced again — including one back to the very bytes first said, which
+ * is the revert-clear's whole point, and two fresh detections of the SAME
+ * fingerprint (the unreadable leg twice), which is its guard's early return.
+ * (c) The said-state is the loader's, and the tracker registers with it at
+ * capture: the row crosses a forked turn child on the envelope's fifth key,
+ * {@see InstructionFileLoader::ANNOUNCED_UPDATES_KEY}, so the parent's
+ * un-advanced diff state (C-CTX-1's law) re-detects and re-renders the
+ * model's diff every turn WITHOUT re-spitting the human's row (round 1 of
+ * the step, the lead-accepted in-step carry).
  *
  * The rows ride {@see RuntimeNoticeSink} into the transcript through the same
  * pump the refusal rows already use; an unarmed sink (a bare `-p` run) drops
@@ -196,6 +204,176 @@ final class InstructionVisibilityNoticeTest extends TestCase
             RuntimeNoticeSink::drain(),
             'a later edit is a new change and is said again',
         );
+    }
+
+    /**
+     * The MAJOR carry (round 1): the said-state crosses the fork on the
+     * envelope's fifth key. The parent tracker models C-CTX-1's law — frozen
+     * before the edit, its $seen deliberately never advanced — so its next
+     * recheck is a FRESH detection whose section must still render for the
+     * model; what must NOT happen again is the human's row, because the
+     * turn child's merge-back left the fingerprint on the parent's loader.
+     * Without the fifth envelope key this reds: the carried wire has no
+     * update ledger, the parent's guard sees nothing, and the row repeats
+     * once per turn for the rest of the session.
+     */
+    public function testTheAnnouncedUpdateRowCrossesTheForkOnTheFifthEnvelopeKey(): void
+    {
+        $childLoader = $this->trackerFixture();
+        $parentLoader = new InstructionFileLoader($this->repo, [], null, $this->personal);
+        $child = InstructionDiffTracker::capture($childLoader);
+        $parent = InstructionDiffTracker::capture($parentLoader);
+
+        $edited = "Alpha rule\nBeta rule\nGamma rule\n";
+        file_put_contents($this->claude, $edited);
+        clearstatcache();
+
+        $childSection = $child->recheck();
+        self::assertNotSame('', $childSection, 'fixture: the change reached the model-facing section');
+        self::assertSame(
+            [Lang::t('chat.instructions.updated', ['file' => 'CLAUDE.md'])],
+            RuntimeNoticeSink::drain(),
+            'fixture: the first child said the row',
+        );
+
+        $childLedger = $childLoader->instructionUpdateLedger();
+        self::assertCount(1, $childLedger, 'fixture: the announce went through to the loader');
+        self::assertSame([sha1($edited)], array_values($childLedger), 'the fingerprint is the new content hash');
+
+        $wire = json_decode(json_encode((new Read(instructionLoader: $childLoader))->exportSessionState()), true);
+        self::assertArrayHasKey(InstructionFileLoader::ANNOUNCED_UPDATES_KEY, $wire, 'the ledger rides the envelope');
+        self::assertCount(1, $wire[InstructionFileLoader::ANNOUNCED_UPDATES_KEY]);
+        (new Read(instructionLoader: $parentLoader))->mergeSessionState($wire);
+        self::assertSame(
+            $childLoader->instructionUpdateLedger(),
+            $parentLoader->instructionUpdateLedger(),
+            'fixture: the merge landed the same path => fingerprint on the parent',
+        );
+
+        $parentSection = $parent->recheck();
+        self::assertSame($childSection, $parentSection, 'the model half still replays byte-identically');
+        self::assertSame(
+            [],
+            RuntimeNoticeSink::drain(),
+            'the carried ledger silences the human half: one row per path per session on the fork path too',
+        );
+    }
+
+    /**
+     * Round 1 MINOR pin (the revert-clear leg): a revert to the frozen bytes
+     * forgets the row, so an edit BACK to the very bytes first announced is
+     * said again. Deleting the revert leg's unset would leave the stale
+     * fingerprint and the guard would swallow this row — the existing
+     * different-bytes re-edit leg cannot tell the difference.
+     */
+    public function testARevertThenTheSameBytesAgainIsSaidAgain(): void
+    {
+        $tracker = InstructionDiffTracker::capture($this->trackerFixture());
+
+        $first = "Alpha rule\nBeta rule\nGamma rule\n";
+        file_put_contents($this->claude, $first);
+        clearstatcache();
+        self::assertNotSame('', $tracker->recheck());
+        self::assertSame(
+            [Lang::t('chat.instructions.updated', ['file' => 'CLAUDE.md'])],
+            RuntimeNoticeSink::drain(),
+            'fixture: the first edit was said',
+        );
+
+        file_put_contents($this->claude, "Alpha rule\nBeta rule\n");
+        clearstatcache();
+        self::assertSame('', $tracker->recheck(), 'fixture: reverting to the frozen bytes cancels the section');
+        self::assertSame([], RuntimeNoticeSink::drain());
+
+        file_put_contents($this->claude, $first);
+        clearstatcache();
+        self::assertNotSame('', $tracker->recheck());
+        self::assertSame(
+            [Lang::t('chat.instructions.updated', ['file' => 'CLAUDE.md'])],
+            RuntimeNoticeSink::drain(),
+            'the same bytes AGAIN after a revert are a new change and are said — the clear is load-bearing',
+        );
+    }
+
+    /**
+     * Round 1 MINOR pin (the guard's early return): two consecutive FRESH
+     * detections of one fingerprint say the row once. The unreadable leg is
+     * the deterministic driver — chmod 0 after a touch, twice, the size
+     * unchanged, so `unreadable:size` is byte-equal across the two — and the
+     * guard's line is what keeps the second silent. A different fingerprint
+     * afterwards must still be said, so the silence is the fingerprint, not
+     * a one-way latch. (The runner here is a plain user: chmod 0 makes the
+     * file genuinely unreadable, and the tracker only ever stats it.)
+     */
+    public function testTwoFreshDetectionsOfOneFingerprintSayTheRowOnce(): void
+    {
+        $tracker = InstructionDiffTracker::capture($this->trackerFixture());
+
+        chmod($this->claude, 0o644);
+        touch($this->claude, time() + 11);
+        chmod($this->claude, 0);
+        clearstatcache();
+        self::assertNotSame('', $tracker->recheck(), 'fixture: the unreadable change reached the section');
+        self::assertSame(
+            [Lang::t('chat.instructions.updated', ['file' => 'CLAUDE.md'])],
+            RuntimeNoticeSink::drain(),
+            'the first unreadable detection is said',
+        );
+
+        chmod($this->claude, 0o644);
+        touch($this->claude, time() + 22);
+        chmod($this->claude, 0);
+        clearstatcache();
+        self::assertNotSame('', $tracker->recheck(), 'the second detection re-renders the section for the model');
+        self::assertSame(
+            [],
+            RuntimeNoticeSink::drain(),
+            'but the same fingerprint is one row — the guard early-returns',
+        );
+
+        chmod($this->claude, 0o644);
+        file_put_contents($this->claude, "Alpha rule\nBeta rule\nZeta rule the third\n");
+        clearstatcache();
+        self::assertNotSame('', $tracker->recheck());
+        self::assertSame(
+            [Lang::t('chat.instructions.updated', ['file' => 'CLAUDE.md'])],
+            RuntimeNoticeSink::drain(),
+            'a different fingerprint is still said after the silence',
+        );
+    }
+
+    /**
+     * The ledger's loader half: union, last-wins per path, record/forget,
+     * and fail-soft per row — a hostile or stale-shaped entry costs the row,
+     * never the merge.
+     */
+    public function testTheUpdateLedgerMarksAreAUnionLastWinsAndFailSoft(): void
+    {
+        $this->trackerFixture();
+        $loader = new InstructionFileLoader($this->repo, [], null, $this->personal);
+        $path = '/fixture' . uniqid('-ctx2f-', true);
+
+        $loader->markInstructionUpdates([
+            json_encode([$path, 'first']),
+            'not-json',
+            12.5,
+            [],
+            json_encode([$path . '/truncated']),
+            json_encode(['', 'empty-path-is-skipped']),
+            json_encode([$path, 'second']),
+        ]);
+        self::assertSame(
+            [[$path, 'second']],
+            array_map(json_decode(...), $loader->announcedInstructionUpdates()),
+            'one entry for the path, last-wins; every malformed row skipped without throwing',
+        );
+        self::assertSame('second', $loader->instructionUpdateFingerprint($path));
+
+        $loader->recordInstructionUpdate($path, 'third');
+        self::assertSame('third', $loader->instructionUpdateFingerprint($path), 'record is the tracker write-through');
+        $loader->forgetInstructionUpdate($path);
+        self::assertSame([], $loader->announcedInstructionUpdates(), 'forget is the revert-clear write-through');
+        self::assertNull($loader->instructionUpdateFingerprint($path));
     }
 
     /**

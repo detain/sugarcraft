@@ -202,7 +202,7 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
     /**
      * @return array<string, mixed>
      *
-     * The four announce-once keys are kept byte-identical to
+     * The five announce-once keys are kept byte-identical to
      * {@see Glob::exportSessionState()}: both tools are wired to the SAME
      * collaborators (see {@see \SugarCraft\Code\Cli\Bootstrap::tools()}), so
      * a key one of them exported and the other did not would leave that half
@@ -216,6 +216,7 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             'announcedInstructionRefusals' => $this->instructionLoader?->announcedRefusals() ?? [],
             'announcedSkills' => $this->skillNudge?->announced() ?? [],
             'announcedRules' => $this->ruleNudge?->announcedPaths() ?? [],
+            InstructionFileLoader::ANNOUNCED_UPDATES_KEY => $this->instructionLoader?->announcedInstructionUpdates() ?? [],
             ReadLedger::SESSION_STATE_KEY => $this->readLedger?->toArray() ?? [],
         ];
     }
@@ -243,6 +244,13 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         $rules = $state['announcedRules'] ?? null;
         if (is_array($rules)) {
             $this->ruleNudge?->markAnnouncedPaths(array_values($rules));
+        }
+
+        // Last-recorded-wins per path, so the merge is order-independent —
+        // the same rule on the same class-owned key shape as the ledger.
+        $updates = $state[InstructionFileLoader::ANNOUNCED_UPDATES_KEY] ?? null;
+        if (is_array($updates)) {
+            $this->instructionLoader?->markInstructionUpdates(array_values($updates));
         }
 
         // Last-recorded-wins per path, so the merge is order-independent.

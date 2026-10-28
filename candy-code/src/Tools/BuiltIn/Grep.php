@@ -135,7 +135,7 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
     /**
      * @return array<string, mixed>
      *
-     * @see Read::exportSessionState() — deliberately the same two keys. All
+     * @see Read::exportSessionState() — deliberately the same keys. All
      *      loader-carrying tools share ONE loader and ONE nudge tracker (see
      *      {@see \SugarCraft\Code\Cli\Bootstrap::tools()}), so a key one of
      *      them exported and another did not would leave that half
@@ -148,6 +148,7 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             'announcedInstructionRefusals' => $this->instructionLoader?->announcedRefusals() ?? [],
             'announcedSkills' => $this->skillNudge?->announced() ?? [],
             'announcedRules' => $this->ruleNudge?->announcedPaths() ?? [],
+            InstructionFileLoader::ANNOUNCED_UPDATES_KEY => $this->instructionLoader?->announcedInstructionUpdates() ?? [],
         ];
     }
 
@@ -174,6 +175,11 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         $rules = $state['announcedRules'] ?? null;
         if (is_array($rules)) {
             $this->ruleNudge?->markAnnouncedPaths(array_values($rules));
+        }
+
+        $updates = $state[InstructionFileLoader::ANNOUNCED_UPDATES_KEY] ?? null;
+        if (is_array($updates)) {
+            $this->instructionLoader?->markInstructionUpdates(array_values($updates));
         }
     }
 

@@ -193,6 +193,25 @@ final class InstructionFileLoader
     public const PERSONAL_FILENAME = 'AGENTS.md';
 
     /**
+     * C-CTX-2.f round 1 (lead-accepted in-step carry): the fifth key of the
+     * Read/Grep/Glob session-state envelope — the tracker's
+     * already-announced "Instructions updated" ledger (path => fingerprint),
+     * exported as a list of JSON-encoded `[path, fingerprint]` pair strings.
+     *
+     * A list of self-decoding strings, not a raw map, because the turn-child
+     * union (EngineBackend's
+     * {@see \SugarCraft\Code\Backend\EngineBackend::sessionStateFromTools()})
+     * flattens each key's payload to a `list<string>` of its VALUES — a map
+     * would arrive as bare fingerprints with their paths stripped. Pair
+     * strings survive both carriers intact and dedup byte-identically in that
+     * union (all three tools share ONE loader, so their exports are equal).
+     *
+     * Mirrors {@see \SugarCraft\Code\Tools\ReadLedger::SESSION_STATE_KEY}:
+     * a class-owned ledger key merged by the tools that carry it.
+     */
+    public const ANNOUNCED_UPDATES_KEY = 'announcedInstructionUpdates';
+
+    /**
      * The instruction files this session deferred to a pointer instead of
      * inlining, real path => size in bytes. A subset of {@see $emittedPaths}
      * (the pointer IS what was put in front of the model), kept apart so a
@@ -257,6 +276,29 @@ final class InstructionFileLoader
      * @var array<string, true>
      */
     private array $announcedRefusals = [];
+
+    /**
+     * C-CTX-2.f round 1 (lead-accepted in-step carry): the "Instructions
+     * updated" transcript rows already spoken this session, path as the
+     * tracker spells it => fingerprint (a content sha1, or a
+     * `reason:size` pair for changes deliberately not read).
+     *
+     * This is the SESSION's copy of the {@see
+     * \SugarCraft\Code\Context\InstructionDiffTracker::$announcedUpdates}
+     * ledger: the tracker writes through it, {@see
+     * \SugarCraft\Code\Context\InstructionDiffTracker::capture()} seeds
+     * from it, and the tools export it under {@see
+     * self::ANNOUNCED_UPDATES_KEY} so a forked turn child that re-detects a
+     * change another child already announced stays silent — the block law
+     * "one row per path per session" holds on fork hosts, not only in-process
+     * ones. Union merge, last-wins per path; malformed rows are skipped.
+     * Like {@see $announcedRefusals}, a row the user was already told stays
+     * said across {@see refresh()} — clearing here would re-spit the ledger
+     * from every later capture.
+     *
+     * @var array<string, string>
+     */
+    private array $announcedInstructionUpdates = [];
 
     /**
      * The compiled form of each configured {@see $excludedGlobs} pattern,
@@ -1770,7 +1812,8 @@ final class InstructionFileLoader
      * carried those documents (the old system prompt, the on-touch notes in
      * tool results) have left the conversation, so "already in front of the
      * model" is no longer true of any of them. What the user was already
-     * told on screen ({@see announcedRefusals()}) stays said.
+     * told on screen ({@see announcedRefusals()} and the
+     * {@see announcedInstructionUpdates()} ledger) stays said.
      */
     public function refresh(): void
     {
@@ -1837,6 +1880,95 @@ final class InstructionFileLoader
                     $this->emittedPaths[$path] = true;
                 }
             }
+        }
+    }
+
+    /**
+     * The envelope export of {@see $announcedInstructionUpdates}: each entry
+     * is one JSON-encoded `[path, fingerprint]` pair.
+     *
+     * The pair shape is what makes the value survive
+     * {@see self::ANNOUNCED_UPDATES_KEY}'s flattening union (see the const
+     * docblock); encoding is {@see JSON_INVALID_UTF8_SUBSTITUTE} so an
+     * exotic file name can never make the whole export fail to encode.
+     *
+     * @return list<string>
+     */
+    public function announcedInstructionUpdates(): array
+    {
+        $entries = [];
+        foreach ($this->announcedInstructionUpdates as $path => $fingerprint) {
+            $entries[] = json_encode([(string) $path, $fingerprint], JSON_INVALID_UTF8_SUBSTITUTE);
+        }
+
+        return array_map(strval(...), $entries);
+    }
+
+    /**
+     * The raw ledger for {@see \SugarCraft\Code\Context\InstructionDiffTracker::capture()}
+     * seeding and the announce guard's live read — the same map the envelope
+     * exports, without the pair encoding.
+     *
+     * @return array<string, string>
+     */
+    public function instructionUpdateLedger(): array
+    {
+        return $this->announcedInstructionUpdates;
+    }
+
+    /**
+     * The fingerprint already announced for $path, or null when the row was
+     * never said. The guard reads this live (not a capture-time snapshot) so
+     * a merge that lands after the tracker was captured still silences it.
+     */
+    public function instructionUpdateFingerprint(string $path): ?string
+    {
+        return $this->announcedInstructionUpdates[$path] ?? null;
+    }
+
+    /**
+     * Write one announced row through into {@see $announcedInstructionUpdates}
+     * — called by the tracker beside its own ledger entry.
+     */
+    public function recordInstructionUpdate(string $path, string $fingerprint): void
+    {
+        if ($path !== '') {
+            $this->announcedInstructionUpdates[$path] = $fingerprint;
+        }
+    }
+
+    /**
+     * Forget $path's entry — the tracker's revert leg (a change cancelled
+     * back to the frozen bytes must let a later edit be said again).
+     */
+    public function forgetInstructionUpdate(string $path): void
+    {
+        unset($this->announcedInstructionUpdates[$path]);
+    }
+
+    /**
+     * Union encoded {@see announcedInstructionUpdates()} entries into the
+     * ledger — the merge half of {@see self::ANNOUNCED_UPDATES_KEY}, a union
+     * for the reason {@see markEmitted()} is one.
+     *
+     * Fail-soft by row, not by batch: a host fed a hostile or stale payload
+     * (a bare path string from a pre-round-1 child, a truncated pair) simply
+     * loses those rows — bookkeeping, never a thrown turn. Last entry wins
+     * per path, so the merge is order-independent across carriers.
+     *
+     * @param list<mixed> $entries
+     */
+    public function markInstructionUpdates(array $entries): void
+    {
+        foreach ($entries as $entry) {
+            if (!is_string($entry) || $entry === '') {
+                continue;
+            }
+            $pair = json_decode($entry, true);
+            if (!is_array($pair) || count($pair) !== 2 || !is_string($pair[0]) || !is_string($pair[1]) || $pair[0] === '') {
+                continue;
+            }
+            $this->announcedInstructionUpdates[$pair[0]] = $pair[1];
         }
     }
 

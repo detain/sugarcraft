@@ -934,10 +934,13 @@ are never re-spliced mid-session; the next refresh point absorbs them.
 A newly detected change also surfaces to the human: one
 `Instructions updated: <name>` transcript row per change — re-rendering a
 change the tracker already showed stays silent, and a revert back to the
-frozen bytes clears the file's row so a later edit is announced again. On the
-TUI's forked-turn path the parent deliberately never advances the tracker, so
-that row repeats once per turn while the change is still new to the model; a
-host that runs its turns in-process says each change once per session.
+frozen bytes clears the file's row so a later edit is announced again. The
+said-state lives on the loader and rides the session-state envelope as its
+fifth key (`announcedInstructionUpdates`), so even on the TUI's forked-turn
+path — where the parent deliberately never advances the tracker and every
+child re-detects the change — the row is said once per path per session,
+never once per turn; the model-facing diff still replays every turn as
+before.
 
 ### Quick-add from the chat
 

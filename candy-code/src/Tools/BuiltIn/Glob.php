@@ -151,6 +151,7 @@ final readonly class Glob implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             'announcedInstructionRefusals' => $this->instructionLoader?->announcedRefusals() ?? [],
             'announcedSkills' => $this->skillNudge?->announced() ?? [],
             'announcedRules' => $this->ruleNudge?->announcedPaths() ?? [],
+            InstructionFileLoader::ANNOUNCED_UPDATES_KEY => $this->instructionLoader?->announcedInstructionUpdates() ?? [],
         ];
     }
 
@@ -177,6 +178,11 @@ final readonly class Glob implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         $rules = $state['announcedRules'] ?? null;
         if (is_array($rules)) {
             $this->ruleNudge?->markAnnouncedPaths(array_values($rules));
+        }
+
+        $updates = $state[InstructionFileLoader::ANNOUNCED_UPDATES_KEY] ?? null;
+        if (is_array($updates)) {
+            $this->instructionLoader?->markInstructionUpdates(array_values($updates));
         }
     }
 

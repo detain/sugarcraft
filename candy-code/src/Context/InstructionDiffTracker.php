@@ -84,10 +84,13 @@ use SugarCraft\Diff\Diff;
  *   first turn-context build froze "frozen = current disk" once per child,
  *   the tracker died with each child, and a mid-session edit surfaced in no
  *   turn at all.
- * - The C-CTX-2.f transcript row rides that same fork topology: its ledger
- *   is per tracker object, and the session-state envelope that carries the
- *   loader's marks across a tool child does not (yet) carry it — see
- *   {@see self::$announcedUpdates} for exactly what repeats where.
+ * - The C-CTX-2.f transcript row rides that same fork topology, and its
+ *   said-state is session-scoped where the tracker object is not: the ledger
+ *   lives on the loader (registered at {@see capture()}, written through at
+ *   each announce, cleared on revert) and crosses a forked child's boundary
+ *   as the {@see InstructionFileLoader::ANNOUNCED_UPDATES_KEY} key of the
+ *   tool session-state envelope — {@see self::$announcedUpdates} for the
+ *   fingerprint semantics.
  *
  * Mutable by design — a snapshot that recorded no pending state could not
  * replay a delta without re-reading every step, defeating the stat gate. Its
@@ -164,11 +167,23 @@ final class InstructionDiffTracker
      *        Last measured disk state per path plus the recorded change (if
      *        any); advanced only when the stat moved. Seeded from $frozen, so
      *        the first recheck is pure stat.
+     * @param InstructionFileLoader $loader
+     *        The loader whose session-state envelope carries this tracker's
+     *        announce ledger (C-CTX-2.f round 1, the lead-accepted in-step
+     *        carry): {@see capture()} seeds {@see self::$announcedUpdates}
+     *        from it, every announce and every revert-clear writes back
+     *        through it, and the guard reads it live so a merge landing after
+     *        this capture still silences this tracker.
      */
     private function __construct(
         private readonly array $frozen,
         private array $seen,
+        private readonly InstructionFileLoader $loader,
     ) {
+        // C-CTX-2.f round 1: this capture starts where the SESSION's rows
+        // stand — the loader's ledger is the carry across a forked child's
+        // boundary, and every later write here goes through to it.
+        $this->announcedUpdates = $loader->instructionUpdateLedger();
     }
 
     /**
@@ -179,20 +194,24 @@ final class InstructionDiffTracker
      * the ledger so an edit away and back counts as the new change it is),
      * and the reason/size pair where the change was deliberately not read
      * (gone, moved, unreadable, over-cap, no-baseline) — a re-measured state
-     * announces once; a different one announces again. Same object lifetime
-     * as $seen, same caveat: the tool session-state envelope carries the
-     * LOADER's marks (emitted paths, announced refusals), and a fifth
-     * byte-identical key for this ledger belongs to a step owning Read.php,
-     * Grep.php and Glob.php. The parent by C-CTX-1's law never rechecks —
-     * the child that sends the row owns advancing $seen — so on the TUI's
-     * per-turn forks the row repeats once per child per turn while the
-     * change is still new to the model (the model's own diff row rides each
-     * of those turns anyway; {@see TurnContextBlock::changedSince()} collapses
-     * its wire repeat, nothing collapses a transcript row). On a host whose
-     * turns run in-process — SessionHost, any embedder that does not fork —
-     * the ledger lives on the memo slot's tracker and each change is said
-     * once per session. The per-turn E199 budget is what bounds a burst of
-     * changed files; it never hides a file's own row inside its turn.
+     * announces once; a different one announces again.
+     *
+     * This map is the capture-time view; the SESSION's view lives on the
+     * loader (C-CTX-2.f round 1, the lead-accepted in-step carry). Capture
+     * seeds from it, every write here goes through to it, and the guard
+     * consults it live — so on the TUI's per-turn forks the child that
+     * announces a change writes the row into its loader copy, the parent
+     * merges the {@see InstructionFileLoader::ANNOUNCED_UPDATES_KEY} key back
+     * from the turn child's envelope, and the next child that re-detects the
+     * same change (by C-CTX-1's law the parent never advances $seen, so
+     * every child re-detects) stays silent: one row per path per session,
+     * the block law, holds on fork hosts as it always held in-process. The
+     * model-facing half is untouched by the carry — the ledger rides, never
+     * $seen — so the diff section still replays byte-identically every turn
+     * ({@see TurnContextBlock::changedSince()} collapses its wire repeat;
+     * the envelope collapses the transcript row). The per-turn E199 budget
+     * bounds a burst of changed files; it never hides a file's own row
+     * inside its turn.
      *
      * @var array<string, string>
      */
@@ -220,7 +239,6 @@ final class InstructionDiffTracker
     public static function capture(InstructionFileLoader $loader): self
     {
         $frozen = [];
-        $seen = [];
         /** @var array<string, true> $byReal */
         $byReal = [];
         /** @var list<list<string>> $childLists */
@@ -316,7 +334,7 @@ final class InstructionDiffTracker
             }
         }
 
-        return new self($frozen, $seen);
+        return new self($frozen, $seen, $loader);
     }
 
     /**
@@ -421,6 +439,7 @@ final class InstructionDiffTracker
                 // the frozen bytes is a newly detected change and is said.
                 $this->seen[$path] = ['real' => $real, 'sha' => $sha, 'mtime' => $mtime, 'size' => $size, 'pending' => null];
                 unset($this->announcedUpdates[$path]);
+                $this->loader->forgetInstructionUpdate($path);
                 continue;
             }
 
@@ -557,17 +576,21 @@ final class InstructionDiffTracker
 
     /**
      * C-CTX-2.f: say a newly detected change to the human — one row per
-     * fingerprint (see {@see self::$announcedUpdates} for what a fingerprint
-     * is and for what the per-turn fork costs).
+     * fingerprint, checked against this capture's view AND the loader's
+     * session ledger (see {@see self::$announcedUpdates} for what a
+     * fingerprint is, and for how the said-state crosses a fork).
      */
     private function announceUpdate(string $path, ?string $sha, string $reason, int $size): void
     {
         $fingerprint = $sha ?? ($reason . ':' . $size);
-        if (($this->announcedUpdates[$path] ?? '') === $fingerprint) {
+        if (($this->announcedUpdates[$path] ?? '') === $fingerprint
+            || $this->loader->instructionUpdateFingerprint($path) === $fingerprint
+        ) {
             return;
         }
 
         $this->announcedUpdates[$path] = $fingerprint;
+        $this->loader->recordInstructionUpdate($path, $fingerprint);
         RuntimeNoticeSink::record(Lang::t('chat.instructions.updated', ['file' => self::rowLabel($path)]));
     }
 
