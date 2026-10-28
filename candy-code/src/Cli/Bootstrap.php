@@ -1333,13 +1333,12 @@ final class Bootstrap
         $sessionName = $opened['name'];
 
         // OBS-1: the OTLP event sink, dark unless the launch environment
-        // names an OTLP endpoint. This call site is the ONLY sink wiring
-        // in the program: `serve` does not build its sessions through it
-        // — they run on `Host\SessionHost`, which carries no sink at all
-        // — so a serve process exports NOTHING even with an endpoint set.
-        // The gap is recorded honestly as OBS-02 in COMPARISON.md; wiring
-        // serve telemetry is an owner-gated product decision, so nothing
-        // here may quietly grow toward it.
+        // names an OTLP endpoint. chat() and the headless `-p` path thread
+        // this sink into Chat directly; `serve` sessions run on
+        // Host\SessionHost instead and fold through a per-session sink
+        // handed out by the EventSinkFactory workspace service registered
+        // in self::workspace() (owner ruling §6.1, C-SES-4.d). Wiring the
+        // serve path closed the OBS-02 gap COMPARISON.md used to record.
         $eventSink = self::observabilitySink();
 
         $chat = new Chat(
@@ -2109,6 +2108,24 @@ final class Bootstrap
             // Shell tool spawns onto, so the command lists what this process
             // actually started — never a second table, never a second reaper.
             ->withService(\SugarCraft\Code\Background\BackgroundShellRegistry::class, self::backgroundShells($root));
+
+        // C-SES-4.d (owner ruling §6.1, decided 2026-10-26): serve exports
+        // OTel spans when OTEL_EXPORTER_OTLP_ENDPOINT is set. The export
+        // lands as a workspace SERVICE, not a threaded sink, because a
+        // serve process hosts many sessions and OtlpEncoder keys open turn
+        // spans by step number — one shared encoder would collide identical
+        // steps across sessions. Each SessionHost therefore builds its own
+        // sink with its own session.id-tagged encoder through this factory;
+        // the dark branch never registers the service at all.
+        $otelConfig = \SugarCraft\Code\Observability\OtelConfig::fromEnvironment();
+        if ($otelConfig->exportsEvents()) {
+            $workspace = $workspace->withService(
+                \SugarCraft\Code\Observability\EventSinkFactory::class,
+                $otelConfig->buildFactory(
+                    static fn (\SugarCraft\Code\Observability\OtelConfig $config): \SugarCraft\Code\Observability\EventSinkFactory => \SugarCraft\Code\Observability\EventSinkFactory::fromConfig($config, new \GuzzleHttp\Client()),
+                ),
+            );
+        }
 
         $events = $transcripts->events();
 

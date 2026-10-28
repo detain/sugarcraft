@@ -43,6 +43,9 @@ use SugarCraft\Code\App\MemoryConsolidatedMsg;
 use SugarCraft\Code\App\DreamPassCompletedMsg;
 use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Hooks\HookResult;
+use SugarCraft\Code\Observability\EventSink;
+use SugarCraft\Code\Observability\EventSinkFactory;
+use SugarCraft\Code\Observability\NullEventSink;
 use SugarCraft\Code\App\HistoryCompactedMsg;
 use SugarCraft\Code\App\PromptSuggestionMsg;
 use SugarCraft\Code\Host\Commands\CommandContext;
@@ -284,6 +287,19 @@ final class SessionHost
      * (E646). {@see release()} closes the pair of socket fds with the host.
      */
     private readonly NoticeSink $notices;
+
+    /**
+     * C-SES-4.d: this session's OTLP export sink — built lazily from the
+     * workspace's {@see EventSinkFactory} when serve has the endpoint lit,
+     * a {@see NullEventSink} otherwise. One per host, never shared: the
+     * encoder keys open turn spans by step number, and the sessions hosted
+     * in one process march over identical numbers. {@see fold()} is the
+     * single choke that feeds it; {@see release()} flushes it best-effort
+     * beside the transcript, and the factory's one PID-guarded shutdown
+     * hook covers whatever a crash skipped. The serve loop never blocks
+     * on a POST (C-SES-4.b law) — consume() only ever batches.
+     */
+    private ?EventSink $otelSink = null;
 
     /** The mode this session's turns run in; null is the workspace gate's. */
     private ?PermissionMode $permissionMode = null;
@@ -1172,6 +1188,11 @@ final class SessionHost
             $registry->removeEphemeralFor($this->sessionId);
         }
         $this->transcripts->flush();
+        // C-SES-4.d: flush the session's OTLP sink beside the transcript —
+        // the turn tail that never reached a batch boundary leaves here.
+        // Flush consults the property, never otelSink(): a session that
+        // folded nothing has no sink and must not mint one to flush it.
+        $this->otelSink?->flush();
         $this->lease?->release();
         $this->lease = null;
     }
@@ -2723,6 +2744,26 @@ final class SessionHost
     }
 
     /**
+     * This session's sink, built once per host. A dark serve process
+     * registers no factory on the workspace, so the answer is the null
+     * sink: one no-op call per folded event and nothing else. A host
+     * opened for an id a previous host closed gets a fresh live sink
+     * from the factory, never the predecessor's flushed-and-deaf one.
+     */
+    private function otelSink(): EventSink
+    {
+        if ($this->otelSink instanceof EventSink) {
+            return $this->otelSink;
+        }
+
+        $factory = $this->workspace->service(EventSinkFactory::class);
+
+        return $this->otelSink = $factory instanceof EventSinkFactory
+            ? $factory->forSession($this->sessionId)
+            : new NullEventSink();
+    }
+
+    /**
      * One reported event, folded as the TUI's live pump folds it: a tool's
      * start becomes its running placeholder and its finish replaces that row
      * (newest first, by call id); every event is reported to the runner, which
@@ -2730,6 +2771,13 @@ final class SessionHost
      */
     private function fold(?CancellationToken $turn, object $event): void
     {
+        // C-SES-4.d: the observation feed comes FIRST — every event this
+        // host folds reaches the sink, including the three shapes below
+        // that return early, and the sink's contract (never throws, never
+        // blocks) is why a fold site may hand over before it does any work
+        // of its own.
+        $this->otelSink()->consume($event);
+
         $runner = $this->runner();
         $projector = $runner->projector();
 

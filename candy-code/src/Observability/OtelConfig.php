@@ -124,6 +124,37 @@ final class OtelConfig
         return $exporterFactory($this) ?? new NullEventSink();
     }
 
+    /**
+     * THE gate for the serve path's per-session factory, mirroring
+     * {@see buildSink()} one-for-one: a dark config answers
+     * {@see EventSinkFactory::dark()} without the factory builder ever
+     * running (so no HTTP client is constructed and no shutdown hook is
+     * registered), and a builder that declines still lands on the dark
+     * factory. Callers ask this method, never a second endpoint read.
+     *
+     * @param callable(self): ?EventSinkFactory $factoryFactory
+     */
+    public function buildFactory(callable $factoryFactory): EventSinkFactory
+    {
+        if (!$this->exportsEvents()) {
+            return EventSinkFactory::dark();
+        }
+
+        return $factoryFactory($this) ?? EventSinkFactory::dark();
+    }
+
+    /**
+     * Environment-reading shim for {@see buildFactory()}: the one call
+     * shape Bootstrap's workspace arm uses, so the factory path shares
+     * the sink path's single copy of the dark branch.
+     */
+    public static function sinkFactoryFromEnvironment(): EventSinkFactory
+    {
+        return self::fromEnvironment()->buildFactory(
+            static fn (self $config): EventSinkFactory => EventSinkFactory::fromConfig($config, new \GuzzleHttp\Client()),
+        );
+    }
+
     private static function readNonEmpty(string $name): ?string
     {
         $value = getenv($name);

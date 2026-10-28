@@ -14,17 +14,16 @@ use PHPUnit\Framework\TestCase;
  * dark by default with a bounded shutdown flush, and the whole feature
  * still owes zero open-telemetry packages.
  *
- * The sink now has TWO wiring sites: `Bootstrap::chat()` threads the
+ * The sink now has THREE wiring paths. `Bootstrap::chat()` threads the
  * built sink into Chat (the TUI and every host that builds a Chat), and
  * `NonInteractive::run()` dials `Bootstrap::observabilitySink()`
  * statically and consumes every `$onEvent` event — pinned structurally
  * here and behaviourally by `tests/Cli/NonInteractiveOtelExportTest.php`.
- * `serve` is still the dark host: it runs no Chat (its sessions live on
- * `Host\SessionHost`, which carries no sink), so a serve process exports
- * nothing today — the remaining half of OBS-02 in COMPARISON.md, and an
- * owner-gated product decision until C-SES-4.d wires it. Nothing here
- * asserts serve coverage; when serve grows a sink, that wiring needs its
- * own pin, not a rewording of these.
+ * `serve` folds through `Host\SessionHost::fold()` into a per-session
+ * sink the workspace's `EventSinkFactory` hands out (owner ruling §6.1,
+ * C-SES-4.d) — pinned structurally here and behaviourally, including the
+ * cross-session step-collision trap, by
+ * `tests/Host/SessionHostOtelFoldTest.php`.
  */
 final class ObservabilityWiringTest extends TestCase
 {
@@ -53,7 +52,7 @@ final class ObservabilityWiringTest extends TestCase
         $this->assertStringContainsString('private readonly EventSink $eventSink = new NullEventSink(),', $chat, 'a Chat nobody configures is dark by the parameter default');
 
         $bootstrap = self::read(self::BOOTSTRAP_SOURCE);
-        $this->assertStringContainsString('eventSink: $eventSink,', $bootstrap, 'chat() threads the built sink — one of the two wiring sites; serve builds no Chat at all and is the remaining OBS-02 gap in COMPARISON.md');
+        $this->assertStringContainsString('eventSink: $eventSink,', $bootstrap, 'chat() threads the built sink — one of the three wiring paths (TUI chat, headless -p, serve host); serve coverage is pinned by tests/Host/SessionHostOtelFoldTest.php');
         $seam = self::methodBody($bootstrap, 'public static function observabilitySink');
         $this->assertStringContainsString('OtelConfig::sinkFromEnvironment(', $seam, 'the production seam runs through the single OtelConfig gate');
         $this->assertSame(0, substr_count($seam, 'exportsEvents'), 'the seam holds no second copy of the dark decision — F2 unification');
@@ -119,6 +118,36 @@ final class ObservabilityWiringTest extends TestCase
 
         $this->assertStringNotContainsString('Observability', $eventLog);
         $this->assertStringNotContainsString('eventSink', $eventLog);
+    }
+
+    public function testTheServePathFoldsThroughAPerSessionSink(): void
+    {
+        // C-SES-4.d (owner ruling §6.1): serve sessions live on
+        // Host\SessionHost, which now feeds a per-session sink handed out
+        // by the workspace's EventSinkFactory. Structural half; the
+        // behavioural half — two sessions, identical step numbers, two
+        // distinct session.id spans — is tests/Host/SessionHostOtelFoldTest.php.
+        $host = self::read(__DIR__ . '/../../src/Host/SessionHost.php');
+
+        $fold = self::methodBody($host, 'private function fold(?CancellationToken $turn, object $event): void');
+        $this->assertStringContainsString('$this->otelSink()->consume($event);', $fold, 'fold() is the single serve choke and it feeds the sink FIRST, before any early-return arm');
+
+        $release = self::methodBody($host, 'public function release(): void');
+        $this->assertStringContainsString('$this->otelSink?->flush();', $release, 'the host flushes its sink beside the transcript — but consults the property, so a host that folded nothing never mints a sink to flush');
+
+        $bootstrap = self::read(self::BOOTSTRAP_SOURCE);
+        $workspace = self::methodBody($bootstrap, 'public static function workspace(');
+        $this->assertStringContainsString('withService(', $workspace);
+        $this->assertStringContainsString('$otelConfig->buildFactory(', $workspace, 'the registration walks the single OtelConfig gate, never a second endpoint read');
+        $guard = \strpos($workspace, 'if ($otelConfig->exportsEvents())');
+        $this->assertIsInt($guard, 'the lit-only guard around the registration is present — without it a dark workspace would register the factory service anyway');
+        $serviceAt = \strpos($workspace, '\\SugarCraft\\Code\\Observability\\EventSinkFactory::class');
+        $this->assertIsInt($serviceAt, 'the workspace names the EventSinkFactory service');
+        $this->assertGreaterThan(
+            $guard,
+            $serviceAt,
+            'the service registration sits INSIDE the lit branch — a dark workspace carries no EventSinkFactory (behavioural twin: SessionHostOtelFoldTest::testADarkLaunchRegistersNoFactoryServiceOnTheRealWorkspace)',
+        );
     }
 
     private static function read(string $path): string
