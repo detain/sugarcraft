@@ -300,9 +300,92 @@ trait HandlesRunControl
             return $this->handleMcpLoginProgress($msg);
         }
         if ($msg instanceof IdleCompactTickMsg) {
+            // C-CTX-5.c: `cacheTtl` re-times the fold to the provider's
+            // prompt-cache expiry; the hour mode's path below is byte-unchanged.
+            if ($this->compactor->config()->idleAutoMode === CompactorConfig::IDLE_AUTO_CACHE_TTL) {
+                return $this->handleCacheTtlIdleCompactTick();
+            }
+
             return $this->handleIdleCompactTick();
         }
 
         return null;
+    }
+
+    /**
+     * The 60-second tick's verdict in `cacheTtl` mode (C-CTX-5.c) — the same
+     * watch gate, the same transient-silence list and the same tail as
+     * {@see handleIdleCompactTick()}, with the hour clock's over-tier AND-clock
+     * replaced by the cache fold's single call into
+     * {@see IdleCompactionPolicy::shouldAutoCompactAtCacheTtl()}: the floor
+     * BELOW the automatic tier is part of that predicate because this clock
+     * exists precisely for the middle band the tier never acts on.
+     *
+     * WHY THIS DUPLICATES THE SILENCE LIST INSTEAD OF CALLING THE HOUR TICK:
+     * the two verdicts differ mid-method (the predicate AND, in cacheTtl
+     * mode, the idle window itself — `cacheTtl` folds while
+     * `compaction.idleOfferSeconds` still only arms the watch, per the step's
+     * documented risk that a 5-minute cache folds at about 4 idle under the
+     * 60-second tick). Folding the branch into one method would re-measure
+     * the 85% tier on the cache path, where the tier's own fold would then
+     * race it. The duplication is pinned structurally —
+     * {@see \SugarCraft\Code\Tests\Context\CacheTtlIdleFoldTest}'s silence-list
+     * equality — so an edit to one copy cannot silently let the other answer
+     * "quiet" to a session with a dialog open.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleCacheTtlIdleCompactTick(): array
+    {
+        if (!$this->shouldWatchIdleCompaction()) {
+            return [$this, null];
+        }
+
+        if ($this->inFlight
+            || $this->inputBuf !== ''
+            || $this->queuedPrompts !== []
+            || $this->keyHelp !== null
+            || $this->flow->pendingPermission !== null
+            || $this->palette !== null
+            || $this->sessionPicker !== null
+            || $this->dirPicker !== null
+            || $this->historySearch !== null
+        ) {
+            return [$this, null];
+        }
+
+        $wireHistory = self::compactionWire($this->history);
+        $tokenLimit = $this->contextTokenLimit();
+        if (!IdleCompactionPolicy::shouldAutoCompactAtCacheTtl(
+            $this->backend,
+            \SugarCraft\Code\Host\CompactionService::tierTokenCount($this->estimateTokenCount($this->history), $this->history),
+            $tokenLimit,
+            $this->lastActivityAt,
+        )) {
+            return [$this, null];
+        }
+
+        if ($this->spendCapReached()) {
+            return $this->idleHeuristicFold($wireHistory, $tokenLimit);
+        }
+
+        $request = $this->buildSummarizationRequest(
+            $this->history,
+            null,
+            null,
+            '',
+            false,
+            null,
+            true, // unattended: the automatic backend and the `auto` PreCompact trigger
+        );
+        if ($request === null) {
+            return $this->idleHeuristicFold($wireHistory, $tokenLimit);
+        }
+
+        return [$this->mutate(['pendingIdleCompaction' => [
+            'id' => $request['id'],
+            'fingerprint' => $request['fingerprint'],
+            'sessionId' => $this->currentSessionId,
+        ]]), $request['cmd']];
     }
 }

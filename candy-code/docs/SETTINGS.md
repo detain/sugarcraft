@@ -213,7 +213,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `compaction.idleOfferSeconds` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `Chat::shouldPromptIdleCompaction()` → `IdleCompactionPolicy::shouldPrompt()` | yes |
 | `compaction.mode` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `autoCompacts()`, `summarisesWithModel()` | yes |
 | `compaction.refillLimit` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `IdleCompactionPolicy::thrashTripped()` | **no** |
-| `compaction.idleAuto` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `IdleCompactionPolicy::shouldAutoCompact()` | **no** |
+| `compaction.idleAuto` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `IdleCompactionPolicy::shouldAutoCompact()` / `shouldAutoCompactAtCacheTtl()` | **no** |
 | `contextPruning.minContextTokens` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `nudgePolicy()`, the engine's step loop | yes |
 | `contextPruning.maxContextTokens` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `nudgePolicy()`, the engine's step loop | yes |
 | `contextPruning.nudgeFrequency` | `Bootstrap::chat()`, `Chat::applySettings()`, `EngineBackend::compactorConfig()` → `CompactorConfig::fromSettings()` → `nudgePolicy()`, the engine's step loop | yes |
@@ -1158,7 +1158,7 @@ project-settable.
 | `compaction.idleOfferSeconds` | Context & Compaction | int | `3600` | P U C | — | live | tuning |
 | `compaction.mode` | Context & Compaction | enum | `llm` | P U C | — | live | tuning |
 | `compaction.refillLimit` | Context & Compaction | int | `3` | U C | — | live | spend |
-| `compaction.idleAuto` | Context & Compaction | bool | `false` | U C | — | live | tuning |
+| `compaction.idleAuto` | Context & Compaction | enum | `off` | U C | — | live | tuning |
 | `contextPruning.minContextTokens` | Context & Compaction | int | `60000` | P U C | — | next turn | tuning |
 | `contextPruning.maxContextTokens` | Context & Compaction | int | `120000` | P U C | — | next turn | tuning |
 | `contextPruning.nudgeFrequency` | Context & Compaction | int | `5` | P U C | — | next turn | tuning |

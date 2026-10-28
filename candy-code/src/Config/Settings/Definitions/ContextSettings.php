@@ -169,15 +169,18 @@ final class ContextSettings implements SettingDefinitionSet
             // existing spend cap, so the class stays Tuning with the offer — and
             // default-off because it bills a summarisation round-trip to a
             // session nobody is watching. Both hosts read it through the policy.
-            SettingDefinition::new(CompactorConfig::SETTING_IDLE_AUTO, SettingType::Bool, false)
+            // C-CTX-5.c: the value is a mode word, not a bool; a bool already
+            // on disk keeps reading (`true` = hour, `false` = off).
+            SettingDefinition::new(CompactorConfig::SETTING_IDLE_AUTO, SettingType::Enum, $defaults->idleAutoMode)
                 ->withCategory(SettingCategory::Context)
                 ->withRiskClass(RiskClass::Tuning)
                 ->withLayered()
                 ->withApplyMode(ApplyMode::Live)
+                ->withEnumValues(CompactorConfig::IDLE_AUTO_MODES)
                 ->withLabel(Lang::t('settings.compaction.idleAuto.label'))
                 ->withHelp(Lang::t('settings.compaction.idleAuto.help'))
                 ->withReaderSymbol(IdleCompactionPolicy::class . '::shouldAutoCompact')
-                ->withReadBy($readBy . ' → `IdleCompactionPolicy::shouldAutoCompact()`'),
+                ->withReadBy($readBy . ' → `IdleCompactionPolicy::shouldAutoCompact()` / `shouldAutoCompactAtCacheTtl()`'),
             // Roadmap 3.B-4 / N-P4b: the model's context reminders. Read with
             // the compaction keys and handed to the engine's step loop through
             // `CompactorConfig::nudgePolicy()`; a min above the max is ignored

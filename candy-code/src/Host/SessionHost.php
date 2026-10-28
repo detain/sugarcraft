@@ -812,9 +812,10 @@ final class SessionHost
      * keeps the offer clock's strict `>` semantics while an event-loop timer's
      * wall-clock elapsed at fire time can land a hair under its deadline —
      * and, unlike the TUI's tick, this watch gets no second chance. An
-     * unattended fold that waits two extra seconds of an hour-long idle is
-     * invisible; a fold whose one-shot alarm under-shot by a rounding and so
-     * silently never fired until the next prompt is the bug.
+     * unattended fold that waits two extra seconds — of an hour-long idle, or
+     * of the 240 seconds a 5-minute cache leaves after the margin
+     * (C-CTX-5.c) — is invisible; a fold whose one-shot alarm under-shot by a
+     * rounding and so silently never fired until the next prompt is the bug.
      */
     private function armIdleAutoCompaction(): void
     {
@@ -830,9 +831,24 @@ final class SessionHost
             return;
         }
 
+        // C-CTX-5.c: `cacheTtl` re-times the alarm to the provider's prompt-cache
+        // clock, margin included, instead of the offer window — the window still
+        // gates whether a watch exists at all (the documented shape of the
+        // step), and a provider that says it caches nothing for this model has
+        // no clock to arm to, so its sessions simply never carry an alarm.
+        $seconds = $config->idleOfferSeconds;
+        if ($config->idleAutoMode === CompactorConfig::IDLE_AUTO_CACHE_TTL) {
+            $ttl = IdleCompactionPolicy::cacheTtlSecondsOf($this->workspace->backend);
+            if ($ttl === null) {
+                return;
+            }
+
+            $seconds = max(1, $ttl - IdleCompactionPolicy::CACHE_TTL_MARGIN_SECONDS);
+        }
+
         $markedAt = $this->lastPromptAt;
         $this->idleAutoTimer = Loop::addTimer(
-            (float) ($config->idleOfferSeconds + 2),
+            (float) ($seconds + 2),
             function () use ($markedAt): void {
                 $this->idleAutoTimer = null;
                 $this->onIdleAutoCompaction($markedAt);
@@ -896,17 +912,31 @@ final class SessionHost
         }
 
         // The tier itself, measured exactly as submit() measures it, AND-ed
-        // with the shared idle clock so one policy answers both verdicts.
-        if (!IdleCompactionPolicy::shouldAutoCompact(
-            $this->compactor->shouldCompact(
-                CompactionService::compactionWire($this->history),
-                $this->meter()->limit($this->backend()),
-                CompactionService::tierTokenCount($this->estimate($this->history), $this->history),
-            ),
-            $idleAnchor,
-            $config->idleAuto,
-            idleSeconds: $config->idleOfferSeconds,
-        )) {
+        // with the shared idle clock so one policy answers both verdicts —
+        // except in `cacheTtl` mode (C-CTX-5.c), where the policy's cache
+        // predicate replaces the over-tier test with its below-the-tier floor
+        // and re-measures the provider's cache clock against the same anchor.
+        $windowLimit = $this->meter()->limit($this->backend());
+        $tierTokens = CompactionService::tierTokenCount($this->estimate($this->history), $this->history);
+        $foldDue = $config->idleAutoMode === CompactorConfig::IDLE_AUTO_CACHE_TTL
+            ? IdleCompactionPolicy::shouldAutoCompactAtCacheTtl(
+                $this->workspace->backend,
+                $tierTokens,
+                $windowLimit,
+                $idleAnchor,
+            )
+            : IdleCompactionPolicy::shouldAutoCompact(
+                $this->compactor->shouldCompact(
+                    CompactionService::compactionWire($this->history),
+                    $windowLimit,
+                    $tierTokens,
+                ),
+                $idleAnchor,
+                $config->idleAuto,
+                idleSeconds: $config->idleOfferSeconds,
+            );
+
+        if (!$foldDue) {
             return;
         }
 

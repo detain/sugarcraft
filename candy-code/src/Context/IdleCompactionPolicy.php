@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Context;
 
+use SugarCraft\Code\Backend;
+use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Providers\MarksPromptCache;
+
 /**
  * "This session has been sitting idle and is bigger than its window" — the
  * outermost context tier, and the one place its two numbers live.
@@ -31,6 +35,13 @@ namespace SugarCraft\Code\Context;
  * above about the idle tier is still exactly true: `IDLE_SECONDS` and
  * {@see shouldPrompt()} are unmoved, and this remains the one place the idle
  * tier's two numbers live.
+ *
+ * A THIRD CLOCK joins them (C-CTX-5.c): the `cacheTtl` idle fold's prompt
+ * cache lifetimes, margin and floor ({@see shouldAutoCompactAtCacheTtl()}).
+ * Same reason as the breaker above — a threshold and the predicate that
+ * reads it belong in one place, because the TUI's 60-second tick and the
+ * served host's single alarm must not disagree about when a cache goes
+ * cold. The file still only ever sees numbers, never transcripts.
  */
 final class IdleCompactionPolicy
 {
@@ -70,6 +81,40 @@ final class IdleCompactionPolicy
      * session's {@see CompactorConfig}.
      */
     public const REFILL_LIMIT = 3;
+
+    /**
+     * How long a MARKED prompt cache stays warm (C-CTX-5.c). The provider that
+     * places breakpoints says so through {@see MarksPromptCache}; the marked
+     * lifetime this app asks for on its breakpoints is one hour, and the value
+     * is that hour.
+     */
+    public const CACHE_TTL_MARKED_SECONDS = 3600;
+
+    /**
+     * How long the server-side prefix caches that need no marks stay warm —
+     * "5 min for most". Providers with those caches deliberately do NOT
+     * implement {@see MarksPromptCache} (see that interface's WHY), so an
+     * unanswered question is read as this clock rather than as "no cache".
+     */
+    public const CACHE_TTL_IMPLICIT_SECONDS = 300;
+
+    /**
+     * How far before the expiry the fold fires — "just short of" the cache
+     * going cold. It is also one tick: the TUI re-checks every 60 s
+     * (`App::IDLE_COMPACT_TICK_SECONDS`), so a 5-minute cache folds at about
+     * 4 minutes idle. That coarseness is accepted and documented, not hidden.
+     */
+    public const CACHE_TTL_MARGIN_SECONDS = 60;
+
+    /**
+     * The smallest history worth a cache-timed fold, as a percent of the
+     * window. It sits BELOW the automatic tier's 85% on purpose: a history at
+     * the tier already folds there on its own, so this clock exists for the
+     * middle band whose uncached re-prefill would still cost real money. The
+     * default of `compaction.idleAuto`'s cacheTtl mode, pinned both sides in
+     * {@see \SugarCraft\Code\Tests\Context\CacheTtlIdleFoldTest}.
+     */
+    public const CACHE_TTL_FLOOR_PERCENT = 60;
 
     /**
      * Whether to interrupt this turn and offer `/compact` instead of sending it.
@@ -172,6 +217,102 @@ final class IdleCompactionPolicy
         }
 
         return (($now ?? time()) - $lastActivityAt->getTimestamp()) > $idleSeconds;
+    }
+
+    /**
+     * The `cacheTtl` clock for a backend, or null when no idle fold should
+     * ever be timed to it (C-CTX-5.c).
+     *
+     * Three answers, one question — "how long would the next prompt's cached
+     * prefix have been warm?": a provider that MARKS breakpoints gets the
+     * marked hour; a provider the backend does not expose (or that caches
+     * server-side without marks — `openai`, `sglang`) gets the implicit
+     * 5-minutes-for-most; a provider that ANSWERS "nothing is cached for this
+     * model" gets null, because folding to protect a cache that does not
+     * exist spends a real call to save imaginary money.
+     */
+    public static function cacheTtlSeconds(?bool $marksPromptCache): ?int
+    {
+        if ($marksPromptCache === true) {
+            return self::CACHE_TTL_MARKED_SECONDS;
+        }
+
+        return $marksPromptCache === null ? self::CACHE_TTL_IMPLICIT_SECONDS : null;
+    }
+
+    /**
+     * {@see cacheTtlSeconds()} read from whatever a backend will show: the
+     * engine's provider, if there is one and it answers the marks question;
+     * the implicit clock for a backend that exposes no provider at all; null
+     * when the provider says it does not cache this model — and null for a
+     * null backend, because "no backend to ask" is not a cache to time a
+     * bill against.
+     */
+    public static function cacheTtlSecondsOf(?Backend $backend): ?int
+    {
+        if ($backend === null) {
+            return null;
+        }
+
+        if ($backend instanceof EngineBackend) {
+            $provider = $backend->provider();
+
+            return $provider instanceof MarksPromptCache
+                ? self::cacheTtlSeconds($provider->marksPromptCache($backend->model()))
+                : self::cacheTtlSeconds(null);
+        }
+
+        return self::cacheTtlSeconds(null);
+    }
+
+    /**
+     * Whether to fold an idle session just short of its provider's prompt-cache
+     * expiry (C-CTX-5.c) — the `cacheTtl` face of {@see CompactorConfig::$idleAutoMode}.
+     *
+     * WHY THE CLOCK IS THE CACHE AND NOT THE HOUR: a conversation sent within
+     * its cache lifetime rides the provider's cached prefix; send it after the
+     * expiry and the request prefills the WHOLE conversation uncached. The fold
+     * spends one summarisation call before that expiry to spare the far larger
+     * re-prefill bill the next prompt would otherwise carry. The margin is
+     * "just short of": {@see CACHE_TTL_MARGIN_SECONDS}, one tick of the TUI's
+     * 60 s watch — so against a 5-minute cache the fold lands at roughly 4
+     * minutes idle. That coarseness is the accepted shape, documented on the
+     * setting, not a race.
+     *
+     * The size floor is AND-ed in here rather than supplied by callers (unlike
+     * the hour fold's over-tier verdict) because the cache fold fires BELOW the
+     * automatic tier deliberately: at the tier the hour path already folds,
+     * and this clock exists precisely for the middle band the tier ignores.
+     * Callers pass the same estimated-token count and window limit the tier
+     * would use; the floor is {@see CACHE_TTL_FLOOR_PERCENT} of the limit,
+     * counting from the boundary itself.
+     *
+     * Same guards as the hour clock, same reasons: `tokenLimit <= 0` disables
+     * rather than fires, `null` idleness is unknown and never grounds, and the
+     * comparison is strict `>` so a fold never starts exactly ON the boundary.
+     */
+    public static function shouldAutoCompactAtCacheTtl(
+        ?Backend $backend,
+        int $tokenCount,
+        int $tokenLimit,
+        ?\DateTimeImmutable $lastActivityAt,
+        ?int $now = null,
+    ): bool {
+        $ttl = self::cacheTtlSecondsOf($backend);
+        if ($ttl === null) {
+            return false;
+        }
+
+        if ($tokenLimit <= 0 || $lastActivityAt === null) {
+            return false;
+        }
+
+        $floor = (int) ($tokenLimit * self::CACHE_TTL_FLOOR_PERCENT / 100);
+        if ($tokenCount < $floor) {
+            return false;
+        }
+
+        return (($now ?? time()) - $lastActivityAt->getTimestamp()) > $ttl - self::CACHE_TTL_MARGIN_SECONDS;
     }
 
     /**

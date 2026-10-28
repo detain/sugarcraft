@@ -286,6 +286,79 @@ final class IdleAutoCompactionTest extends TestCase
         $this->assertTrue($after->shouldWatchIdleCompaction(), 'transient silences never disarm');
     }
 
+    // ── the tick's verdict in cacheTtl mode (C-CTX-5.c) ───────────────
+
+    private function cacheTtlConfig(): CompactorConfig
+    {
+        return CompactorConfig::new()->withIdleAutoMode(CompactorConfig::IDLE_AUTO_CACHE_TTL);
+    }
+
+    public function testCacheTtlModeFoldsOnTheCacheClockNotTheHour(): void
+    {
+        // The IdleTurnSpy backend shows no provider, which is the server-side
+        // implicit cache: 300 s of warmth, a 60 s margin — five idle minutes
+        // is past 240 s, and the SAME five minutes on the hour config above
+        // (pinned there) stays silent. The pair of tests is the fold's point.
+        $chat = $this->chat(
+            self::bigIdlePairs(),
+            config: $this->cacheTtlConfig(),
+            idleSince: new \DateTimeImmutable('-5 minutes'),
+            summarizer: $summarizer,
+        );
+        $this->assertTrue($chat->shouldWatchIdleCompaction(), 'cacheTtl keeps the watch the bool arms');
+
+        [$next, $cmd] = $chat->update(new \SugarCraft\Code\App\IdleCompactTickMsg());
+
+        $this->assertNotNull($cmd, 'the cache fold rides the same unattended request machinery');
+        $this->assertSame(0, $summarizer->calls);
+        $latch = self::idleLatchOf($next);
+        $this->assertNotNull($latch, 'the fold parked a request, not just a promise');
+        $this->assertTrue($latch['fingerprint']->matches(self::idleFingerprint($chat->history)));
+    }
+
+    public function testCacheTtlModeHoldsInsideTheMarginAndUnderTheFloor(): void
+    {
+        $tick = new \SugarCraft\Code\App\IdleCompactTickMsg();
+
+        // One minute idle: inside the margin of the 300-second cache.
+        $justIdle = $this->chat(
+            self::bigIdlePairs(),
+            config: $this->cacheTtlConfig(),
+            idleSince: new \DateTimeImmutable('-1 minute'),
+            summarizer: $summarizer,
+        );
+        [$after, $cmd] = $justIdle->update($tick);
+        $this->assertNull($cmd, 'the fold waits for the cache, and never fires on a live-ish session');
+        $this->assertTrue($after->shouldWatchIdleCompaction(), 'a not-yet minute never disarms');
+
+        // Five idle minutes, but the history is under the 60% floor: nothing
+        // worth a re-prefill bill is there to protect.
+        $short = $this->chat(
+            [Message::user('hi'), Message::assistant('hello')],
+            config: $this->cacheTtlConfig(),
+            idleSince: new \DateTimeImmutable('-5 minutes'),
+            summarizer: $summarizer,
+        );
+        $this->assertTrue($short->shouldWatchIdleCompaction(), 'the watch is session-scoped; the floor is the tick\'s business');
+        [$after, $cmd] = $short->update($tick);
+        $this->assertNull($cmd);
+        $this->assertSame(0, $summarizer->calls);
+    }
+
+    public function testTheBoolAloneStillMeansHourAndStillWatches(): void
+    {
+        // A settings file saved before C-CTX-5.c had `true`, which is the hour
+        // mode now: the watch arms exactly as it did, and five minutes idle —
+        // ample for the cache fold — must still not fold on this config.
+        $config = CompactorConfig::fromSettings(['compaction.idleAuto' => true]);
+        $this->assertSame(CompactorConfig::IDLE_AUTO_HOUR, $config->idleAutoMode);
+
+        $chat = $this->chat(self::bigIdlePairs(), config: $config, idleSince: new \DateTimeImmutable('-5 minutes'));
+        $this->assertTrue($chat->shouldWatchIdleCompaction());
+        [$after, $cmd] = $chat->update(new \SugarCraft\Code\App\IdleCompactTickMsg());
+        $this->assertNull($cmd, 'hour mode is byte-unchanged behaviour');
+    }
+
     public function testTheHeuristicModeFoldsOnTheSpotWithoutAskingTheModel(): void
     {
         $chat = $this->chat(

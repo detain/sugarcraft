@@ -118,7 +118,16 @@ A block-tier refusal is not a dead end: each further attempt keeps one fewer
 recent exchange, and `/clear` frees the whole context at once. A session that
 has grown past the whole window and sat idle for an hour
 (`compaction.idleOfferSeconds`; `0` never offers) is offered `/compact` when
-you come back.
+you come back. The opt-in `compaction.idleAuto` (default `off`) can fold it
+instead of offering: `hour` folds after that full idle window, on the same
+over-tier test the next prompt would be judged by; `cacheTtl` re-times the
+fold to the provider's prompt-cache lifetime — a session idle just short of
+its cache going cold, with the history over a floor below the automatic tier,
+folds before the next prompt would prefill the whole conversation uncached (an
+hour when the provider marks cache breakpoints, about 5 minutes for the
+server-side kind, never where nothing is cached; the 60-second tick means a
+5-minute cache folds at roughly 4 minutes idle). Both hosts — the TUI's tick
+and a served session's single alarm — read the same policy table.
 
 ### How the summaries are written
 

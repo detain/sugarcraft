@@ -399,7 +399,10 @@ final class CompactionSettingsTest extends TestCase
 
         $this->assertSame(IdleCompactionPolicy::IDLE_SECONDS, SettingsSchema::byKey(CompactorConfig::SETTING_IDLE_OFFER_SECONDS)?->default);
         $this->assertSame(IdleCompactionPolicy::REFILL_LIMIT, SettingsSchema::byKey(CompactorConfig::SETTING_REFILL_LIMIT)?->default);
-        $this->assertSame(false, SettingsSchema::byKey(CompactorConfig::SETTING_IDLE_AUTO)?->default);
+        // C-CTX-5.c: the key's value became a mode word; `off` is the same
+        // behaviour the bool default meant, and the bool faces still read.
+        $this->assertSame(CompactorConfig::IDLE_AUTO_OFF, SettingsSchema::byKey(CompactorConfig::SETTING_IDLE_AUTO)?->default);
+        $this->assertSame(CompactorConfig::IDLE_AUTO_MODES, SettingsSchema::byKey(CompactorConfig::SETTING_IDLE_AUTO)?->enumValues);
         $this->assertSame(CompactorConfig::MODE_LLM, SettingsSchema::byKey(CompactorConfig::SETTING_MODE)?->default);
         $this->assertSame(CompactorConfig::MODES, SettingsSchema::byKey(CompactorConfig::SETTING_MODE)?->enumValues);
     }

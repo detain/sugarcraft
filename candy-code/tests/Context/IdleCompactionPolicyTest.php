@@ -19,6 +19,10 @@ use SugarCraft\Code\Context\IdleCompactionPolicy;
  * third predicate (CTX-5): {@see IdleCompactionPolicy::shouldAutoCompact()} is
  * the opt-in idle AUTO-fold's reuse of the idle clock, tested for the standing
  * reason — the two hosts that call it must not disagree about what "idle" means.
+ * A fourth clock joins the file with C-CTX-5.c — the `cacheTtl` fold's
+ * prompt-cache table ({@see IdleCompactionPolicy::shouldAutoCompactAtCacheTtl()});
+ * its boundaries are pinned in {@see \SugarCraft\Code\Tests\Context\CacheTtlIdleFoldTest},
+ * which keeps this file's band readable as the hour/offer story it tells.
  *
  * @see IdleCompactionPolicy
  */

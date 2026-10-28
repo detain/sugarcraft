@@ -131,6 +131,22 @@ final readonly class CompactorConfig
      */
     public const SETTING_IDLE_AUTO = 'compaction.idleAuto';
 
+    /** `compaction.idleAuto`: the idle window only ever offers; nothing folds unattended. */
+    public const IDLE_AUTO_OFF = 'off';
+
+    /** `compaction.idleAuto`: fold once the full {@see IdleCompactionPolicy::IDLE_SECONDS}-shaped offer window has passed. */
+    public const IDLE_AUTO_HOUR = 'hour';
+
+    /**
+     * `compaction.idleAuto` (C-CTX-5.c): fold a session idle just short of its
+     * provider's prompt-cache lifetime, so the next prompt does not prefill the
+     * whole conversation uncached — {@see IdleCompactionPolicy::shouldAutoCompactAtCacheTtl()}.
+     */
+    public const IDLE_AUTO_CACHE_TTL = 'cacheTtl';
+
+    /** Every `compaction.idleAuto` mode, the default first. */
+    public const IDLE_AUTO_MODES = [self::IDLE_AUTO_OFF, self::IDLE_AUTO_HOUR, self::IDLE_AUTO_CACHE_TTL];
+
     /** `compaction.mode`: the summary model writes the summaries (the heuristic is its fallback). */
     public const MODE_LLM = 'llm';
 
@@ -289,6 +305,10 @@ final readonly class CompactorConfig
      *                                      rather than only offering `/compact` to a
      *                                      human. Default false: the fold is a billed
      *                                      provider call on a session nobody is watching.
+     * @param string $idleAutoMode          which clock the idle fold reads — one of
+     *                                      {@see IDLE_AUTO_MODES}; the two faces of
+     *                                      `$idleAuto` are settled into a consistent
+     *                                      pair by the constructor body below.
      */
     public function __construct(
         public int $reminderThreshold = 70,
@@ -316,6 +336,7 @@ final readonly class CompactorConfig
         public string $mode = self::MODE_LLM,
         public int $refillLimit = IdleCompactionPolicy::REFILL_LIMIT,
         public bool $idleAuto = false,
+        public string $idleAutoMode = self::IDLE_AUTO_OFF,
     ) {
         foreach (self::ABSOLUTE_FIELDS as $field) {
             self::assertAbsolute($field, $this->{$field});
@@ -343,6 +364,29 @@ final readonly class CompactorConfig
         if ($refillLimit < 1) {
             throw new \InvalidArgumentException(sprintf('refillLimit must be at least 1; got %d.', $refillLimit));
         }
+        if (!\in_array($idleAutoMode, self::IDLE_AUTO_MODES, true)) {
+            throw new \InvalidArgumentException(sprintf(
+                'idleAutoMode must be one of %s; got "%s".',
+                implode(', ', self::IDLE_AUTO_MODES),
+                $idleAutoMode,
+            ));
+        }
+        // The bool and the mode are one setting seen from two sides, and the
+        // pair may never disagree: `$idleAuto` is what the watch gates already
+        // read (Chat's own `shouldWatchIdleCompaction()`, unchanged by
+        // C-CTX-5.c); the mode is what decides WHICH clock folds. Every
+        // writer sets both faces, so what this guard catches is a hand-built
+        // half-pair — and the readonly properties make the constructor the
+        // last place a rewrite could have happened, so a loud throw is the
+        // honest answer, mirroring how an invalid mode itself is met.
+        if ($this->idleAuto !== ($this->idleAutoMode !== self::IDLE_AUTO_OFF)) {
+            throw new \InvalidArgumentException(sprintf(
+                'idleAuto and idleAutoMode must agree: mode "%s" is %s; got idleAuto %s.',
+                $this->idleAutoMode,
+                $this->idleAutoMode === self::IDLE_AUTO_OFF ? 'off' : 'on',
+                $this->idleAuto ? 'true' : 'false',
+            ));
+        }
     }
 
     /**
@@ -360,10 +404,13 @@ final readonly class CompactorConfig
      * clears that cap for the model); a malformed entry is skipped.
      * `compaction.idleOfferSeconds` (`0` never offers), `compaction.mode` (one
      * of {@see MODES}, case-insensitive) and `compaction.refillLimit` (at
-     * least 1) follow the same rule. `compaction.idleAuto` (CTX-5) takes a
-     * real boolean only — `"true"` and `1` are ignored, leaving the off
-     * default, because this key buys a background provider call and an
-     * ambiguous edit must not buy it by accident.
+     * least 1) follow the same rule. `compaction.idleAuto` (CTX-5) takes a real
+     * boolean or one of {@see IDLE_AUTO_MODES}, case-insensitive: the bool keeps
+     * reading exactly as it did (C-CTX-5.c) — `true` means `hour`, `false`
+     * means `off` — while `"cacheTtl"` folds to the provider's prompt-cache
+     * lifetime instead. Anything else is ignored, leaving the off default,
+     * because this key buys a background provider call and an ambiguous edit
+     * must not buy it by accident.
      *
      * `fromSettings([])` equals {@see new()}.
      *
@@ -460,12 +507,17 @@ final readonly class CompactorConfig
             $changes['mode'] = strtolower(trim($mode));
         }
 
-        // `compaction.idleAuto` (CTX-5): a strict bool. `"true"`-strings are not
-        // coerced — the schema writes real booleans, and a hand edit that got it
-        // wrong keeps the safe default rather than guessing at the intent.
-        $idleAuto = self::boolSetting($config, self::SETTING_IDLE_AUTO);
-        if ($idleAuto !== null) {
-            $changes['idleAuto'] = $idleAuto;
+        // `compaction.idleAuto` (CTX-5, modes C-CTX-5.c): a mode word wins,
+        // case-insensitively like `compaction.mode`; a real bool keeps reading
+        // as it always did (`true` = hour, `false` = off) so settings saved
+        // before this step behave unchanged; anything else is ignored — this
+        // key buys a background provider call, and an ambiguous edit must not
+        // buy it by accident.
+        $idleAuto = $config[self::SETTING_IDLE_AUTO] ?? null;
+        $idleAutoMode = self::idleAutoModeSetting($idleAuto);
+        if ($idleAutoMode !== null) {
+            $changes['idleAutoMode'] = $idleAutoMode;
+            $changes['idleAuto'] = $idleAutoMode !== self::IDLE_AUTO_OFF;
         }
 
         $compress = $config[self::SETTING_COMPRESS] ?? null;
@@ -642,10 +694,32 @@ final readonly class CompactorConfig
         return $this->mutate(['refillLimit' => $limit]);
     }
 
-    /** Let the idle window fold the automatic tier on its own (CTX-5) rather than only offer. */
+    /**
+     * Let the idle window fold the automatic tier on its own (CTX-5) rather
+     * than only offer. The mode is the same setting seen from this side:
+     * `false` turns it fully off, and `true` keeps a mode already chosen (or
+     * means the hour one).
+     */
     public function withIdleAuto(bool $idleAuto = true): self
     {
-        return $this->mutate(['idleAuto' => $idleAuto]);
+        if (!$idleAuto) {
+            return $this->mutate(['idleAuto' => false, 'idleAutoMode' => self::IDLE_AUTO_OFF]);
+        }
+
+        return $this->mutate([
+            'idleAuto' => true,
+            'idleAutoMode' => $this->idleAutoMode === self::IDLE_AUTO_OFF ? self::IDLE_AUTO_HOUR : $this->idleAutoMode,
+        ]);
+    }
+
+    /**
+     * Choose which clock the idle fold reads — one of {@see IDLE_AUTO_MODES}.
+     *
+     * @throws \InvalidArgumentException on any other value
+     */
+    public function withIdleAutoMode(string $mode): self
+    {
+        return $this->mutate(['idleAutoMode' => $mode, 'idleAuto' => $mode !== self::IDLE_AUTO_OFF]);
     }
 
     /**
@@ -846,17 +920,31 @@ final readonly class CompactorConfig
     }
 
     /**
-     * $config[$key] as a bool, or null when absent or not one — strings and
-     * ints are not coerced (see {@see fromSettings()} on why this key in
-     * particular refuses to guess).
-     *
-     * @param array<string, mixed> $config
+     * A `compaction.idleAuto` value as one of {@see IDLE_AUTO_MODES}, or null
+     * to keep the default. Strings match the mode words case-insensitively and
+     * keep their canonical spelling (`cacheTtl` is what goes on the wire, and
+     * `'CacheTTL'` round-trips to it); the legacy real bool maps to hour/off
+     * exactly as it did before C-CTX-5.c. `"true"`-strings and ints are still
+     * not coerced — see {@see fromSettings()} for why this key in particular
+     * refuses to guess.
      */
-    private static function boolSetting(array $config, string $key): ?bool
+    private static function idleAutoModeSetting(mixed $value): ?string
     {
-        $value = $config[$key] ?? null;
+        if (\is_bool($value)) {
+            return $value ? self::IDLE_AUTO_HOUR : self::IDLE_AUTO_OFF;
+        }
 
-        return \is_bool($value) ? $value : null;
+        if (!\is_string($value)) {
+            return null;
+        }
+
+        $index = array_search(
+            strtolower(trim($value)),
+            array_map('strtolower', self::IDLE_AUTO_MODES),
+            true,
+        );
+
+        return $index === false ? null : self::IDLE_AUTO_MODES[$index];
     }
 
     /**

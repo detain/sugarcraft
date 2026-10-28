@@ -10,6 +10,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
+use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Backend\ReportsContextWindow;
 use SugarCraft\Code\Backend\SummarisesWithCache;
 use SugarCraft\Code\Context\CompactorConfig;
@@ -18,6 +19,8 @@ use SugarCraft\Code\Host\SessionHost;
 use SugarCraft\Code\Host\SubmitOptions;
 use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Providers\MarksPromptCache;
+use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Usage;
@@ -349,11 +352,197 @@ final class SessionHostIdleAutoTest extends TestCase
         self::assertSame(0, $backend->summaryCalls);
     }
 
+    // ── C-CTX-5.c: the cacheTtl mode ─────────────────────────────────────────
+
+    public function testTheCacheModeArmsOnTheProviderClockNotTheWindow(): void
+    {
+        // Implicit clock (the IdleAutoBackend double shows no provider):
+        // 300 s of warmth minus the 60 s margin, plus the alarm's own +2 s
+        // slack. The offer window must NOT leak into the delay — it gates
+        // whether a watch exists; the cache decides when it rings.
+        $host = $this->host(new IdleAutoBackend(88_000, 'ok', 'unused'), self::cacheTtlAuto());
+        $this->armedHosts[] = $host;
+        self::setIdleHistory($host);
+        self::stampIdlePromptAt($host, new \DateTimeImmutable('-2 hours'));
+
+        $host->submit('still here?', SubmitOptions::new()->withIdempotencyKey('k'));
+
+        $timer = self::timer($host);
+        self::assertNotNull($timer, 'cacheTtl arms its alarm on an accepted prompt like the hour mode');
+        self::assertSame(242.0, (float) $timer->getInterval());
+    }
+
+    public function testTheCacheAlarmFoldsInTheMiddleBandTheHourAlarmIgnores(): void
+    {
+        // Three exchanges ≈ 69,000 estimated tokens on this host's 88,000
+        // window: over the cacheTtl floor (60% = 52,800) and UNDER the 85%
+        // tier (74,800) — the band whose uncached re-prefill this fold pays
+        // to prevent, and the band the hour clock leaves standing.
+        $backend = new IdleAutoBackend(88_000, str_repeat('z', 60_000), self::idleSummaryReply());
+        $host = $this->host($backend, self::cacheTtlAuto());
+        self::setIdleHistory($host, self::midBandPairs());
+        self::stampIdlePromptAt($host, $stamp = new \DateTimeImmutable('-5 minutes'));
+
+        self::fire($host, $stamp);
+
+        self::assertSame(1, $backend->summaryCalls, 'five idle minutes is past the 240-second cache point');
+        self::assertNotNull(self::held($host), 'the fold rode requestAheadOfNeed, the hour mode\'s own block');
+
+        $hourBackend = new IdleAutoBackend(88_000, str_repeat('z', 60_000), self::idleSummaryReply());
+        $hourHost = $this->host($hourBackend, self::autoOn());
+        self::setIdleHistory($hourHost, self::midBandPairs());
+        self::stampIdlePromptAt($hourHost, $hourStamp = new \DateTimeImmutable('-2 hours'));
+
+        self::fire($hourHost, $hourStamp);
+
+        self::assertSame(0, $hourBackend->summaryCalls, 'under the tier the hour fold has nothing to say');
+    }
+
+    public function testTheCacheAlarmHoldsInsideTheMargin(): void
+    {
+        $backend = new IdleAutoBackend(88_000, str_repeat('z', 60_000), self::idleSummaryReply());
+        $host = $this->host($backend, self::cacheTtlAuto());
+        self::setIdleHistory($host);
+        self::stampIdlePromptAt($host, $stamp = new \DateTimeImmutable('-1 minute'));
+
+        self::fire($host, $stamp);
+
+        self::assertSame(0, $backend->summaryCalls, 'one minute of a 300-second cache is not the fold point');
+        self::assertNull(self::held($host));
+    }
+
+    public function testAProviderThatCachesNothingNeverArmsAndAProviderThatMarksGetsTheMarkedClock(): void
+    {
+        // Arming gate judged directly — the question is which clock the arm
+        // reads, and no turn needs to run to answer it.
+        $host = $this->host($this->engineWithCacheAnswer(false), self::cacheTtlAuto());
+        self::stampIdlePromptAt($host, new \DateTimeImmutable('-2 hours'));
+        self::arm($host);
+        self::assertNull(self::timer($host), 'no cache means no cache clock means no alarm');
+
+        $markedHost = $this->host($this->engineWithCacheAnswer(true), self::cacheTtlAuto());
+        $this->armedHosts[] = $markedHost;
+        self::arm($markedHost);
+        $timer = self::timer($markedHost);
+        self::assertNotNull($timer);
+        self::assertSame(3542.0, (float) $timer->getInterval(), 'the marked hour, minus the margin, plus the slack');
+
+        // The hour mode ignores the provider answer entirely — it is the
+        // offer window's clock, byte-unchanged by this step.
+        $hourHost = $this->host($this->engineWithCacheAnswer(true), self::autoOn());
+        $this->armedHosts[] = $hourHost;
+        self::arm($hourHost);
+        self::assertSame(3602.0, (float) self::timer($hourHost)->getInterval());
+    }
+
+    /** An EngineBackend whose provider answers the marks question $marks. */
+    private function engineWithCacheAnswer(bool $marks): EngineBackend
+    {
+        $provider = new class($marks) implements ProviderInterface, MarksPromptCache {
+            public function __construct(private readonly bool $marks)
+            {
+            }
+
+            public function name(): string
+            {
+                return 'stub';
+            }
+
+            public function supportsStreaming(): bool
+            {
+                return false;
+            }
+
+            public function supportsFunctionCalling(): bool
+            {
+                return false;
+            }
+
+            public function supportsVision(): bool
+            {
+                return false;
+            }
+
+            public function supportsDocuments(): bool
+            {
+                return false;
+            }
+
+            public function supportsJsonSchema(): bool
+            {
+                return false;
+            }
+
+            public function contextWindow(): int
+            {
+                return 88_000;
+            }
+
+            public function costPer1kTokens(string $model, string $direction): ?float
+            {
+                return 0.0;
+            }
+
+            public function complete(\SugarCraft\Code\Providers\CompleteRequest $request): \SugarCraft\Code\Providers\CompleteResponse
+            {
+                throw new \LogicException('arming never completes');
+            }
+
+            public function completeStream(\SugarCraft\Code\Providers\CompleteRequest $request): \Generator
+            {
+                throw new \LogicException('arming never completes');
+            }
+
+            public function embeddings(\SugarCraft\Code\Providers\EmbeddingsRequest $request): \SugarCraft\Code\Providers\EmbeddingsResponse
+            {
+                throw new \LogicException('arming never completes');
+            }
+
+            public function marksPromptCache(string $model): bool
+            {
+                return $this->marks;
+            }
+        };
+
+        return EngineBackend::new($provider, 'model');
+    }
+
     // ── fixtures ─────────────────────────────────────────────────────────────
 
     private static function autoOn(): CompactorConfig
     {
         return CompactorConfig::new()->withIdleAuto();
+    }
+
+    private static function cacheTtlAuto(): CompactorConfig
+    {
+        return CompactorConfig::new()->withIdleAutoMode(CompactorConfig::IDLE_AUTO_CACHE_TTL);
+    }
+
+    private static function arm(SessionHost $host): void
+    {
+        (new \ReflectionMethod(SessionHost::class, 'armIdleAutoCompaction'))->invoke($host);
+    }
+
+    /**
+     * The middle band: over the cacheTtl floor, under the 85% tier. Three
+     * heavy exchanges (~23,000 estimated tokens each) and a trivial tail.
+     *
+     * @return list<Message>
+     */
+    private static function midBandPairs(): array
+    {
+        $history = [];
+        for ($i = 0; $i < 3; $i++) {
+            $history[] = Message::user(str_repeat(chr(97 + $i), 46_000));
+            $history[] = Message::assistant(str_repeat(chr(110 + $i), 46_000));
+        }
+        for ($i = 0; $i < 10; $i++) {
+            $history[] = Message::user("q{$i}");
+            $history[] = Message::assistant("r{$i}");
+        }
+
+        return $history;
     }
 
     /**
@@ -411,9 +600,11 @@ final class SessionHostIdleAutoTest extends TestCase
         );
     }
 
-    private static function setIdleHistory(SessionHost $host): void
+    /** @param list<Message>|null $pairs the over-band history by default */
+    private static function setIdleHistory(SessionHost $host, ?array $pairs = null): void
     {
-        (new \ReflectionProperty(SessionHost::class, 'history'))->setValue($host, self::idleOverBandPairs());
+        (new \ReflectionProperty(SessionHost::class, 'history'))
+            ->setValue($host, $pairs ?? self::idleOverBandPairs());
     }
 
     private static function stampIdlePromptAt(SessionHost $host, \DateTimeImmutable $at): void
