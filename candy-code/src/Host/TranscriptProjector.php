@@ -577,6 +577,8 @@ final class TranscriptProjector
      */
     private static function askData(PendingAsk $ask): array
     {
+        $choices = $ask->choices();
+
         return [
             'askId' => $ask->askId,
             'toolCallId' => $ask->toolCallId,
@@ -591,7 +593,10 @@ final class TranscriptProjector
             // was relayed up; absent for the turn's own.
         ] + ($ask->origin === null ? [] : ['origin' => $ask->origin->toArray()])
             // C-SEC-2.b: the server-computed diff, absent when none.
-            + ($ask->diff === null ? [] : ['diff' => $ask->diff]);
+            + ($ask->diff === null ? [] : ['diff' => $ask->diff])
+            // C-WEB-7.d: AskUser's own choices (typed accessor), absent for
+            // every other ask — the same arm SessionFeed::askSummary() rides.
+            + ($choices === [] ? [] : ['choices' => $choices]);
     }
 
     /**

@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Protocol\Schema;
 use SugarCraft\Code\Media\MediaKind;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Background\BackgroundSessionStatus;
+use SugarCraft\Code\Tools\BuiltIn\AskUserTool;
 
 /**
  * The shapes several methods and events share, published once under the
@@ -75,6 +76,9 @@ final class Definitions
                 'source' => Schema::string()->describe('`gate`, `hook:<names>`, or `tool:<name>` for a question the call puts itself (`AskUser`, `PlanExit`)'),
                 'mode' => Schema::string(),
                 'options' => Schema::arrayOf(Schema::enum(['once', 'always', 'reject'])),
+            // C-WEB-7.d: the question's own answers, distinct from the verdict
+            // list above — one name each so a client never confuses them.
+            'choices' => Schema::arrayOf(Schema::string(AskUserTool::MAX_OPTION_CHARS), AskUserTool::MAX_OPTIONS)->describe('AskUser\'s own choices, in order, the first recommended; answer one with `permission.respond` reply `once` and the choice as the note. Absent for every other ask.'),
                 'alwaysScope' => Schema::map(Schema::string()),
                 'diff' => Schema::string()->describe('C-SEC-2.b: server-computed unified diff of the proposed call, confined to the session root and capped at 32 KiB (beyond it, an omitted note naming the change size, never silence); absent when the call has no previewable outcome. Has real file line numbers, unlike a client-minted snippet diff.'),
                 'origin' => Schema::object([

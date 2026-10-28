@@ -51,19 +51,20 @@ const preview = computed(() => {
 })
 
 /**
- * WEB-5a-iii: `AskUser` rides the permission channel, but its real choices live
- * in `arguments.options` (the `options` field carries only the once/always/reject
- * verdicts). Render a button per choice; answering is `once` with the exact
- * option string as the note — the server matches it verbatim. More than a handful
- * of choices (or none) keeps the free-text note field as the answer path.
+ * C-WEB-7.d: `AskUser` rides the permission channel, and its real choices now
+ * arrive typed on the ask itself — `choices`, produced server-side by
+ * `PendingAsk::choices()` (gated on source `tool:AskUser`, capped at
+ * `AskUserTool::MAX_OPTIONS`). The card renders a button per choice; answering
+ * is `once` with the exact option string as the note — the server matches it
+ * verbatim. Presence is the whole contract: no `choices` key means no buttons,
+ * and the free-text note stays the "something else" answer path. (The old
+ * client-side parse of `arguments.options` silently dropped to free text above
+ * eight choices; the typed field carries them all.)
  */
 const choices = computed<string[]>(() => {
-  const ask = props.ask
-  if (ask.tool !== 'AskUser' || (ask.source ?? '') !== 'tool:AskUser') return []
-  const raw = (ask.arguments as { options?: unknown }).options
+  const raw = (props.ask as { choices?: unknown }).choices
   if (!Array.isArray(raw)) return []
-  const list = raw.filter((option): option is string => typeof option === 'string' && option.trim() !== '')
-  return list.length === 0 || list.length > 8 ? [] : list
+  return raw.filter((option): option is string => typeof option === 'string' && option.trim() !== '')
 })
 
 /**

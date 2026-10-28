@@ -362,6 +362,8 @@ final class SessionFeed
      */
     public static function askSummary(PendingAsk $ask): array
     {
+        $choices = $ask->choices();
+
         return [
             'askId' => $ask->askId,
             'toolCallId' => $ask->toolCallId,
@@ -374,7 +376,11 @@ final class SessionFeed
             'alwaysScope' => $ask->alwaysScope === [] ? new \stdClass() : $ask->alwaysScope,
             // C-SEC-2.b: the server-computed diff (real line numbers), absent
             // when the call has no previewable outcome.
-        ] + ($ask->diff === null ? [] : ['diff' => $ask->diff]);
+        ] + ($ask->diff === null ? [] : ['diff' => $ask->diff])
+            // C-WEB-7.d: AskUser's own choices, read off the typed accessor so
+            // a hook's ask about an AskUser call carries none; absent for
+            // every other ask, which stays byte-identical.
+            + ($choices === [] ? [] : ['choices' => $choices]);
     }
 
     // ── hearing ────────────────────────────────────────────────────────

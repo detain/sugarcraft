@@ -57,13 +57,16 @@ describe('PermissionCard diff preview (WEB-5a-ii)', () => {
   })
 })
 
-describe('PermissionCard AskUser choice buttons (WEB-5a-iii)', () => {
+describe('PermissionCard AskUser choice buttons (WEB-5a-iii, typed by C-WEB-7.d)', () => {
   const askUser = ask({
     tool: 'AskUser',
     source: 'tool:AskUser',
-    arguments: { description: 'pick one', question: 'Favorite color?', options: ['Blue', 'Green'] },
+    arguments: { description: 'pick one', question: 'Favorite color?' },
     options: ['once', 'always', 'reject'],
-  })
+    // C-WEB-7.d: the choices ride the ask typed — `choices`, produced by the
+    // server's PendingAsk::choices() — no longer parsed from arguments.
+    choices: ['Blue', 'Green'],
+  } as Partial<PendingAsk>)
 
   it('offers one button per choice and answers with the exact option string', async () => {
     const wrapper = mount(PermissionCard, { props: { ask: askUser, canAnswer: true } })
@@ -75,18 +78,15 @@ describe('PermissionCard AskUser choice buttons (WEB-5a-iii)', () => {
     expect(call?.slice(0, 3)).toEqual(['once', false, 'Green'])
   })
 
-  it('falls back to the free-text note when there are too many choices', () => {
+  it('renders every typed choice — the old >8 free-text fallback is gone', () => {
     const many = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']
     const wrapper = mount(PermissionCard, {
-      props: {
-        ask: ask({ ...askUser, arguments: { question: '?', options: many } }),
-        canAnswer: true,
-      },
+      props: { ask: ask({ ...askUser, choices: many }), canAnswer: true },
     })
-    expect(wrapper.findAll('[data-testid="ask-choice"]')).toHaveLength(0)
+    expect(wrapper.findAll('[data-testid="ask-choice"]')).toHaveLength(many.length)
   })
 
-  it('ignores embedded option lists on tools that are not AskUser', () => {
+  it('an ask without `choices` shows no choice buttons, even with `arguments.options`', () => {
     const wrapper = mount(PermissionCard, {
       props: { ask: ask({ arguments: { command: 'ls', options: ['Blue'] } }), canAnswer: true },
     })
