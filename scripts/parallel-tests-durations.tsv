@@ -878,8 +878,10 @@ candy-code/tests/Commands/SlashMenuCommandTextSanitizationTest.php	0.033	3
 candy-code/tests/MCP/OAuthAuthorizationCodeExchangeTest.php	0.033	10
 candy-code/tests/Providers/BedrockProviderTest.php	0.033	62
 candy-code/tests/Tui/MediaForm/ImageSectionMaskTest.php	0.033	12
+candy-code/tests/Host/Commands/PermissionsSavedRulesCommandTest.php	0.033	10
 candy-code/tests/Config/Settings/SettingsSchemaTest.php	0.032	46
 candy-code/tests/Memory/MemoryWriterTest.php	0.032	10
+candy-code/tests/Permissions/SavedRulesTest.php	0.032	14
 candy-code/tests/Backend/ReasoningPaintTest.php	0.031	23
 candy-code/tests/Chat/ApplySettingsTest.php	0.031	10
 candy-code/tests/Tui/Settings/SettingsFieldFactoryTest.php	0.031	13
