@@ -1,0 +1,29 @@
+### C-CTX-2.c — Run auto-memory, dream pass and auto-commit on served settles
+- item: C-CTX-2 (sources: GAP-MEM-02w, k1-dorm#6)
+- kind: dormant-wire · MAJOR · effort M
+- approach:
+  - In `SessionHost::settleWith()`, after `releaseQueue()` and the goal decision, call `TurnSettleWork::plan()` with the host's state:
+    - `$this->turn !== null` means the turn carried on;
+    - `workspace->memoryStore`, `summaryBackend` and `titleBackend`;
+    - `$this->backend()`;
+    - `ledger()->capReached()`.
+  - Run the consolidation, dream and auto-commit closures under `RuntimeNoticeSink::using($this->notices, …)`.
+  - Each landing first bills through `ledger()->account()` with the model of the engine that ran it (the TUI's OBS-3 rule). It then appends the producer's existing `::notice()` row via `appendMessageRow()`, or appends nothing when the producer returns null.
+  - A landing after `release()` is billed and dropped.
+  - What the user sees: served sessions now get auto-memory notes, dream consolidation and `autoCommit: turn` commits, each with its transcript row.
+- files.create: `candy-code/tests/Host/SessionHostTurnSettleWorkTest.php`
+- files.modify: `candy-code/src/Host/SessionHost.php` (`settleWith()`, new private `runSettleWork()` plus its three landers)
+- tests: create SessionHostTurnSettleWorkTest. It pins:
+  - a settled turn with a memory store schedules consolidation and lands its notice, with spend accounted;
+  - a queued prompt suppresses all three jobs;
+  - `autoCommit: turn` commits through `AutoCommitter::turnCall()`.
+- docs/guards:
+  - `candy-code/docs/MEMORY.md`: Auto-memory and Dream pass now say they run on TUI and served sessions;
+  - `candy-code/docs/SERVER.md` (### Sub-agents, workflows, memory and todos);
+  - keep `candy-code/tests/Config/MemoryDocumentationDriftTest.php` green.
+- serialized: [docs:MEMORY.md] [docs:SERVER.md] [hot:candy-code/src/Host/SessionHost.php]
+- deps: C-CTX-2.a (the dream turn's fork notices need the host sink), C-CTX-2.b
+- phase: normal
+- ruling: none
+- risks: the on-disk throttles (auto-memory 5 min, dream 2 h, per project) now also see served traffic, so a TUI and a server on one project share the budget. This is intended and is stated in MEMORY.md.
+
