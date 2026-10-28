@@ -897,6 +897,7 @@ candy-code/tests/Tui/MediaForm/MediaFormFieldsTest.php	0.029	33
 candy-code/tests/Skills/ForeignSkillDiscoveryTest.php	0.028	24
 candy-code/tests/ToolCallClickTest.php	0.028	16
 candy-code/tests/Tui/MediaForm/MediaFormNarrowTest.php	0.028	4
+candy-code/tests/Palette/PaletteCatalogTest.php	0.028	8
 candy-code/tests/MCP/HttpMcpServerStreamableHttpTest.php	0.027	33
 candy-code/tests/RepoMap/RepoMapRendererBudgetTest.php	0.027	9
 candy-code/tests/Tools/BuiltIn/BashMissingRootTest.php	0.027	5
