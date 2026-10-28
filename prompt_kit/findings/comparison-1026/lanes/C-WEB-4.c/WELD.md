@@ -1,0 +1,9 @@
+# C-WEB-4.c weld (batch-3, 2026-10-29)
+
+- Base master: 7bcd40016 (after C-TUI-3.f). Lane tip 22ddc7c65 (parent eed6630d3), r1 CLEAN 0C/0M/0m/1nit.
+- Pick 22ddc7c65 -> fc38985ab, src-only per reviewer WELDER FLAG: ALL dist/** hunks conflicted (master carries da284586a dist+trio regen) -> lane dist hunks dropped entirely; dist REBUILT (npm run build, vite) on the merged tree in this weld. Dist swap rides the weld commit per batch-3 lead instruction (explicit deviation from same-commit dist law).
+- Absorption: cherry shows '+' BY DESIGN (dist excluded); content proof = patch bodies on the 7 lane files byte-identical (PATCH_BODY_IDENTICAL); trio (generated.ts/schema.json/SERVER.md) absent from pick diff AND from build output — verified untouched.
+- New dist hashes: css index-Bqln88tI.css (matches lane — css unchanged by master delta), js index-NcaNumyb.js (lane's nqKgVRMu superseded by merged-tree regen, expected).
+- Gates merged tree: full vitest serial (npx vitest run --no-file-parallelism) 76 files / 593 tests PASS rc0, zero FAIL — superset of targeted share-family 54/54 + components.spec + transcriptToggles. NO durations/suite-figure touch (web lane).
+- vue-tsc FLAG (disclosed, NOT lane, NOT new): rc=2 with 20 residual error lines (TS2532 x12 + TS2554 x6 spec-arity + TS2345 x2 contextSources.ts:176/:187). BASE-PROVEN identical at e14c3cc7c (batch start): temp-worktree run vs tip run, sorted 'error TS' sets byte-identical (IDENTICAL_SET; logs /tmp/opencode/vue-tsc-cweb4c-{base-e14,tip}.txt). Zero errors name a lane-touched file; runtime vitest fully green. This is the §7-step-3-owned protocol-chain residual + no-leg-owned spec-arity family (reviewer CLOSEOUT CARRY: surface to owner at closeout). Lead STOP-rule honored via base-proof: standing tree condition, not a re-appearing lane regression.
+- Prune: cc/C-WEB-4.c + /home/sites/cc-cmp-C-WEB-4.c after content proof.

@@ -2253,7 +2253,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web.md` → `### C-WEB-4.b`
 
-#### C-WEB-4.c — Transcript toggles: show thinking, expand all tool cards
+#### ✅ fc38985ab C-WEB-4.c — Transcript toggles: show thinking, expand all tool cards (pick of 22ddc7c65 tip, src-only: lane dist hunks dropped, dist rebuilt on merged tree in weld commit; welded 2026-10-29)
 - **Item:** C-WEB-4 (sources: GAP-UI-22, GAP-UI-32 (web half)) · gap · S
 - **What:** Client-only. **Store.** A per-viewer `stores/transcriptView.ts` (localStorage via `stores/storage.ts`) holds `showThinking` and `expandTools`. It is kept separate from `stores/settings.ts` so this step does not collide with …
 - **Files — create:** `candy-code-web/src-web/stores/transcriptView.ts`, `candy-code-web/src-web/components/__tests__/transcriptToggles.spec.ts`

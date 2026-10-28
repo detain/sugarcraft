@@ -1,0 +1,21 @@
+### C-WEB-4.c — Transcript toggles: show thinking, expand all tool cards
+- item: C-WEB-4 (sources: GAP-UI-22, GAP-UI-32 (web half))
+- kind: gap · S
+- approach: Client-only.
+  - **Store.** A per-viewer `stores/transcriptView.ts` (localStorage via `stores/storage.ts`) holds `showThinking` and `expandTools`. It is kept separate from `stores/settings.ts` so this step does not collide with C-WEB-4.b.
+  - **Toolbar.** `Transcript.vue` gets a two-button toolbar.
+  - **Thinking.** `ReasoningFold.vue` uses `:open="live || view.showThinking"`.
+  - **Tool cards.** `ToolCard.vue` follows `expandTools` until the user toggles that card; failures and denials still open.
+- files.create: `candy-code-web/src-web/stores/transcriptView.ts`, `candy-code-web/src-web/components/__tests__/transcriptToggles.spec.ts`
+- files.modify: `candy-code-web/src-web/components/Transcript.vue` (toolbar), `candy-code-web/src-web/components/ReasoningFold.vue`, `candy-code-web/src-web/components/ToolCard.vue` (`open` init/watch)
+- tests: create `candy-code-web/src-web/components/__tests__/transcriptToggles.spec.ts`. It pins three things:
+  - each toggle flips every fold or card;
+  - a manually toggled card keeps its state;
+  - the toggles persist across a remount.
+- docs/guards: `candy-code-web/README.md` Transcript bullet (soft); vitest; dist rebuild.
+- serialized: [hot:candy-code-web/src-web/components/ToolCard.vue]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: The transcript is virtualised (`@tanstack/vue-virtual`), so a remounted row must read the store, not local state alone.
+
