@@ -189,15 +189,6 @@
    "stage": "build",
    "worktree": "/home/sites/cc-cmp-C-EXT-3.b"
   },
-  "C-SEC-8.e": {
-   "base": "c8e8a1f42",
-   "branch": "cc/C-SEC-8.e",
-   "note": "r2 CLEAN @c44b27101; twin claims-MAJOR = my BRIEF ledger phantoms only (053d96d33 + interpolation-test); weld: durations ONLY KeychainTest 21T ~0.7s re-measure; +21T; NITs closeout",
-   "round": 2,
-   "session": "done",
-   "stage": "clean",
-   "worktree": "/home/sites/cc-cmp-C-SEC-8.e"
-  },
   "C-TUI-5.d": {
    "base": "878047472",
    "branch": "cc/C-TUI-5.d",
@@ -329,7 +320,7 @@
  "status": "RUNNING",
  "tick": "154-CTX2f-review-live",
  "tip": "0f58a906f",
- "updated": "2026-10-28 batch-5 weld step 5 STOP record",
+ "updated": "2026-10-28 batch-5 weld step 6",
  "wave_loops": {
   "1": "closed r2 CLEAN",
   "16": {
@@ -763,6 +754,7 @@
    "prune": "cherry proof pending -> '-' expected",
    "regen": "none (zero src/Protocol/** and zero candy-code-web paths in pick)"
   },
+  "C-SEC-8.e": "batch-5 step6: picks 6a1bbc540+cc3be741c clean; gates EXACT 21/74+114/304+battery 278T F1=standing CliLangCatalogue (proven identical at 49658ade4 pre-weld); KeychainTest durations row 0.43/21 (scripts 0cd7dc95b); phantom InterpolationTest row NOT minted; +21T carry",
   "C-SES-3.d": "clean r2 @7b47daa31 (single amended commit, 12 files, erratum-only; gates 114T/3468A + 'hare' 365T/4731A exact); weld roster: NO durations rows (no new phpunit files), NO regen (SERVER.md untouched, methods published only in existing schema region — verify gen-protocol-schema --check rc0 on merged), carry /tmp/opencode/cc-cmp-lanes/C-SES-3.d/REVIEW-2.md into lanes dir, §4 mark; NIT closeout: Serve.php liveRenderer source-scan pin candidate",
   "C-SES-4.b": {
    "durations_owed": "AsyncOtlpTransportTest.php + ChatTelemetryRetryTickTest.php rows owed at gate",
@@ -1280,9 +1272,10 @@
   "C-SES-4.d",
   "C-TUI-2.c",
   "C-TUI-2.d",
-  "C-WEB-4.d"
+  "C-WEB-4.d",
+  "C-SEC-8.e"
  ],
- "welded_count": 179,
+ "welded_count": 180,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
  "welder_sessions": {

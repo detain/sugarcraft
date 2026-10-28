@@ -2176,7 +2176,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-PRV-3.a`
 
-#### C-SEC-8.e — `${keychain:<name>}` provider keys
+#### ✅ cc3be741c C-SEC-8.e — `${keychain:<name>}` provider keys
 - **Item:** C-SEC-8 (sources: GAP-MOD-25) · gap · effort M
 - **What:** Provider keys sit in plaintext in a 0600 config, and `ProviderFactory::resolveEnv()` (`src/Providers/ProviderFactory.php:450`) resolves only `${VAR}`. Add `${keychain:<name>}`, resolved by a new `Keychain` that shells out to …
 - **Files — create:** `candy-code/src/Support/Keychain.php`, `candy-code/tests/Support/KeychainTest.php`

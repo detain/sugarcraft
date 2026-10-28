@@ -1,0 +1,37 @@
+# C-SEC-8.e — `${keychain:<name>}` provider keys — DONE
+
+- **Commit:** `851b6614a` on `cc/C-SEC-8.e` (base `c8e8a1f42`), worktree `/home/sites/cc-cmp-C-SEC-8.e`. 7 files, +744/−1. NOT pushed. Author/committer detain verified (%ae/%ce separate greps =1 each), zero Co-Authored trailers.
+
+## Shipped
+- **NEW `candy-code/src/Support/Keychain.php`** — `final class Keychain`, argv-array spawns through `ProcessContainment::spawnSpec`: Linux `secret-tool lookup service candy-code account <name>`, macOS `security find-generic-password -s candy-code -a <name> -w`. Per-process memoisation of hits AND misses (one spawn per entry per launch). 5.0 s wall bound (E646-clean: not an LLM call). Child reaped in-function via `ProcessReaper::terminateAndClose` with group id recorded alive; stdin pipe closed immediately; stdout capped at 64 KiB; exit-0-with-empty-stdout folds to a miss. Miss shapes (miss / missing binary / timeout / empty name / no backend incl. Windows) each record a `cli.keychain.*` launch notice naming the entry — never fatal, resolve to `''` like an unset `${VAR}`. Test seams: `armSpawnSeamForTesting` / `armOsForTesting` / `armTimeoutForTesting` / `resetForTesting`.
+- **`src/Providers/ProviderFactory.php`** — `resolveEnv()` gains a `${keychain:<name>}` pass BEFORE the existing `${VAR}` pass (lowercase+colon can never collide with `[A-Z_]`), docblock truth-updated.
+- **`lang/en.php`** — five `cli.keychain.*` keys inserted sorted inside the W11-a cli block (soft-append respected; no other lane's hunk touched).
+- **`docs/ENVIRONMENT.md`** — interpolation section extended with the keychain pattern (backends, service name, once-per-launch, name-in-argv/secret-on-stdout, empty-string miss + notice, Windows no-backend).
+- **NEW `candy-code/tests/Support/KeychainTest.php`** — 18 tests / 56 assertions: argv spellings per family, hit/miss/missing-binary/timeout/empty-name/Windows notices, **argv-never-contains-the-secret pin**, memoisation counters, and real-spawn pins through the private `spawn()` (hit via `sh -c printf`, nonzero-exit miss, absent-binary 127, wedge-timeout 124 with ladder+in-function reap bounded <4.5 s, partial stdout discarded on timeout).
+- **`tests/Providers/ProviderFactoryTest.php`** — +4 tests (keychain hit resolves, miss → `''`, VAR/keychain adjacency, no double env-resolve of the entry name).
+- **`tests/Support/DescriptorInheritanceGuardTest.php`** — +1 `SHORT_VIA_HELPER` receipt row `Support/Keychain.php::spawn` (the §1.8 in-step flip: handle closes via `terminateAndClose`, not a literal in-function `proc_close`, so the scanner needs the licence).
+
+## Gate actuals (cwd=candy-code, `env -u LINES -u COLUMNS vendor/bin/phpunit -c phpunit.xml`, plain pipe)
+- KeychainTest + ProviderFactoryTest: **OK 132 tests, 360 assertions**.
+- Core battery (KeychainTest, ProviderFactoryTest, DescriptorInheritanceGuard, CliLangCatalogue, LangParity, BootstrapLaunchNoticeCapCensus, StderrEmitterCensus, EnvRosterDrift, DocFigureProseDrift, GlobFigureDrift, DuplicatedTestHelperDrift, AccessorDeprecation): **556 tests / 77,252 assertions / Failures: 1** — the sole red is the standing `CliLangCatalogueTest::testTheCliBlockIsOneSortedRunBetweenItsMarkers` bundles-sort base red, byte-identical to the pre-edit base run (276T/69,591A/F:1); no `cli.keychain` lines in its diff = my keys correctly sorted.
+- Broad census battery (TreeWideGuardRoster, FixtureLifetimeCensus, ReadmeRosterDrift, ReadmeSuiteFigureDrift, DenialPrefixRoster, ReadPathCensus, StdinConstantReaderCensus, TtyStreamArgumentCensus, ReflectionLineSliceReaderCensus, ContainedPathInventory, SwallowingCatchCensus): **200 tests / 6,430 assertions / Failures: 4** = the expected staleness pair (my +18T; welder re-pin — `suite-figure.json` deliberately NOT committed) + `ContainedPathInventory` 2F standing-roster (file blob verified base-identical, untouched by this lane).
+- Mutation proofs (cp-backup + md5-verified restores): neuter empty-stdout fold → exactly the fold pin red; misroute timeout notice to miss → exactly `testAWedgedHelperTimesOutAnnouncedWithItsBound` red. File restored green 18T/56A after each.
+
+## Deviations / disclosures
+1. **Notice channel = `LaunchNotices::record(msg, Bootstrap::launchNoticeLimit())`** (public shelf) instead of a direct `fwrite(STDERR)`: visible in the TUI transcript and `/notices` because `chat()` drains the shelf AFTER providers are built. Headless `-p` never reaches the shelf by pre-existing E78c design (decision stamp at NonInteractive) — there, a missing keychain secret surfaces via the provider's own auth-failure loudness. Chosen to avoid flipping `StderrEmitterCensus` (out of declared scope).
+2. Keychain pass ordered before the env pass: a secret literally containing `${VAR}` text would still expand downstream — accepted (stored API keys never do; documented in code comment).
+3. Timeout 5 s generous per brief's E646 allowance.
+4. `plan_comparison §6` carries no ruling for this step — implemented per design block.
+
+## For the welder
+- **NEW test file needing a durations.tsv row: `candy-code/tests/Support/KeychainTest.php`** (18 tests, ~0.7 s wall incl. the real-spawn timeout ladder test).
+- Suite figure drift: **+18 tests / +296 assertions** expected vs base (KeychainTest 18/56 + ProviderFactoryTest 4/~8… the battery delta measured +279A on the combined run; re-pin from a green K-run, not from this arithmetic).
+- `docs/ENVIRONMENT.md` + `lang/en.php` edits are inside this lane's declared regions; no foreign hunks touched.
+
+## FIX ROUND 1 (c44b27101 on cc/C-SEC-8.e, parent 851b6614a; NOT pushed)
+- MINOR-1 SHIPPED: `Keychain::resolve()` now folds entry names matching `/^-|[\x00-\x1f\x7f]/` (leading dash, or any control/DEL byte anywhere) to the ordinary `cli.keychain.miss` launch notice BEFORE any spawn — no new lang key, no argv reach (closes the secret-tool GLib option-absorption and the JSON-`\u0000` → proc_open ValueError fatal). 3 new pins: `testALeadingDashEntryNameTakesTheMissNoticeWithoutSpawning`, `testAControlByteEntryNameTakesTheMissNoticeWithoutSpawning` (NUL mid-string, \x01, \x7f; seam counter 0, one notice per name), `testAWellFormedNameStillReachesTheSpawnSeam` (discriminator — ordinary and dash-containing names still spawn). lookup() @return enumeration truth-updated.
+- MINOR-2 SHIPPED: the one-sentence code comment at the keychain pass (ProviderFactory.php resolveEnv) now documents the accepted `${VAR}`-downstream-expansion tradeoff — REPORT deviation #2's "documented in code comment" claim is now true as written; no REPORT wording drift to fix.
+- NITs (ENVIRONMENT.md -p caveat, memo-staleness note for C-SEC-8.f): NOT taken here, carried to closeout per instruction.
+- Gates (cwd=candy-code in worktree, plain pipe): KeychainTest 21T/74A OK; --filter Keychain 26T/86A OK; ProviderFactoryTest 114T/304A OK; guard battery (DescriptorInheritanceGuard|StderrEmitterCensus|EnvRosterDrift|DocFigureProseDrift|GlobDialect|DenialPrefixRoster|CliLangCatalogue) 278T/70406A/F1 — sole red the standing foreign CliLangCatalogue sorted-run base-red, zero keychain lines in its diff.
+- Mutation proof MINOR-1: fold-neuter (`false &&`) → exactly the 2 new pins red (21T/F2), nothing else; cp+md5 restore from the post-edit fixed-tip copy (62cc8241…), green 21T/74A after. Author %ae/%ce separate greps =1 detain, zero trailers.
+- Welder note UNCHANGED: durations row + figure re-pin now +21T (was +18T) from the green K-run.
