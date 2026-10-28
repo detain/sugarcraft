@@ -40,7 +40,7 @@ final class PaletteSupersetDispatchTest extends TestCase
      * cannot carry them.
      */
     private const EXPLICIT_ARM_EXCEPTIONS = [
-        'new' => 'the palette row starts a new session in place (handlePaletteNewSession), not the typed /new folder flow',
+        'new' => 'the palette row starts a new session in place on a standalone chat (handlePaletteNewSession), not the typed /new folder flow; deck-hosted it hands off to OpenTabMsg instead (P-TABS.f)',
         'model' => 'second-level provider list, not a dispatch',
         'theme' => 'second-level theme list, not a dispatch',
         'mcp' => 'drives the panel with fully-formed "mcp auth list" text',

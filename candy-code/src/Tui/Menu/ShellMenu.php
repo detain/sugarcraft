@@ -117,7 +117,7 @@ final class ShellMenu
      */
     private const PLACEMENT = [
         'session' => [
-            'new', 'new-picker', 'sessions', 'rename', 'session-pin', 'session-delete',
+            'new', 'new-picker', 'close-tab', 'sessions', 'rename', 'session-pin', 'session-delete',
             self::SEP,
             ['branch' => ['branch', 'fork', 'handoff']],
             ['history' => ['compact', 'clear', 'rewind', 'undo', 'redo', 'diff']],

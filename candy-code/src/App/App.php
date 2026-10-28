@@ -1382,7 +1382,14 @@ final class App implements Model
      */
     public function withChat(?Chat $v): self
     {
-        return $this->mutate(chat: $v);
+        // P-TABS.f: every chat that enters a deck-armed App is deck-hosted —
+        // the appointment rides the swap itself, so the four session-open
+        // routes answer with OpenTabMsg/CloseTabMsg instead of swapping the
+        // session under the tab. tabFactory!==null is the deck's launch
+        // condition (armDeck arms on exactly it), and withTabHosted is
+        // identity-preserving, so a factory-less launch keeps its historic
+        // object flow byte-identically.
+        return $this->mutate(chat: $v === null ? null : $v->withTabHosted($this->tabFactory !== null));
     }
 
     /**
@@ -5429,11 +5436,19 @@ final class App implements Model
             return $this;
         }
 
-        return $this->mutate(deck: SessionDeck::forLaunch(
-            'tab-1',
-            $this->chat->currentSessionId() ?? '',
-            $this->chat->openTabs()->activeTab()?->name ?? Lang::t('tabs.name_new'),
-        ));
+        // P-TABS.f: the launch chat becomes the deck's FIRST foreground, and
+        // withChat only fires on swaps — so the appointment is seeded here too
+        // (withTabHosted is a no-op under a factory-less launch, which never
+        // reaches this line). Without it, a picker resume on tab-1 would keep
+        // switching in place under the deck key armDeck is about to write.
+        return $this->mutate(
+            chat: $this->chat->withTabHosted(true),
+            deck: SessionDeck::forLaunch(
+                'tab-1',
+                $this->chat->currentSessionId() ?? '',
+                $this->chat->openTabs()->activeTab()?->name ?? Lang::t('tabs.name_new'),
+            ),
+        );
     }
 
     /** The next minted deck key — deck keys are stable, never reused. */

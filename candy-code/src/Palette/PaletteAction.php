@@ -24,6 +24,10 @@ enum PaletteAction: string
     case NewSession = 'new_session';
     // `/new`'s folder picker: a new session in a directory chosen first.
     case NewSessionPicker = 'new_session_picker';
+    // P-TABS.f: the deck's Close tab palette row; the registry row is
+    // builtin-commands/0105-close-tab.php and the dispatch lives in the two
+    // Chat palette matchers (it never rides a slash command).
+    case CloseTab = 'close_tab';
     case SwitchSession = 'switch_session';
     case SwitchModel = 'switch_model';
     case ShareSession = 'share_session';

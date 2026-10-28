@@ -1776,6 +1776,18 @@ final class Chat implements Model
          * exporter's half-filled batch must survive a clone, not restart.
          */
         private readonly EventSink $eventSink = new NullEventSink(),
+    /**
+         * P-TABS.f: true when this Chat runs as the foreground of the App's
+         * tab deck (`App::withChat` / `App::armDeck` set it — a session deck
+         * is armed for the launch). Deck-hosted, the four session-open routes
+         * (picker resume, picker fork, Agent View "open as session", palette
+         * New session) go through {@see presentSession()} as an `OpenTabMsg`
+         * instead of swapping this Chat's session in place, so they are legal
+         * mid-turn: they never touch the running history. False (a standalone
+         * launch, embedders, tests that construct Chat directly) keeps every
+         * historic byte of the in-place switch and its mid-turn refusals.
+         */
+        private readonly bool $tabHosted = false,
     ) {
         $this->transcriptWriter = $transcriptWriter ?? new DebouncedTranscriptWriter();
         $this->inputHistory = $inputHistory ?? ($promptHistory?->entries() ?? []);
@@ -2418,6 +2430,84 @@ final class Chat implements Model
         $history = $transcripts->load($sessionId);
 
         return $this->mutate(SessionSwitch::resumed($history, $this->tabState, $this->sessionStore, $sessionId, $name));
+    }
+
+    /**
+     * P-TABS.f: the appointment this Chat runs under — true when the App's
+     * session deck hosts it as the foreground tab, false standalone. Read by
+     * the four session-open routes and their mid-turn refusal gates; set only
+     * by {@see withTabHosted()} at the App's two chat-swap points.
+     */
+    public function isTabHosted(): bool
+    {
+        return $this->tabHosted;
+    }
+
+    /**
+     * P-TABS.f: take the deck appointment from the host. Identity-preserving
+     * when the flag already matches, so a factory-less launch's chat-swap
+     * points keep their historic object flow byte-identically.
+     */
+    public function withTabHosted(bool $tabHosted): self
+    {
+        return $tabHosted === $this->tabHosted
+            ? $this
+            : $this->mutate(['tabHosted' => $tabHosted]);
+    }
+
+    /**
+     * P-TABS.f: the one door a session-open route takes once the session to
+     * show is settled (its id is already stored: a picked resume, a fork the
+     * store minted, an agent's transcript copied into a session).
+     *
+     * Deck-hosted, the route opens a tab: `OpenTabMsg` rides the Cmd channel
+     * to `App::handleOpenTab`, which mints the tab's Chat through the launch
+     * factory — THIS model is returned untouched, its history, drafts and
+     * turn state exactly as they were. That is why the gate at each route
+     * relaxes mid-turn: the route stops touching the running session, so
+     * there is nothing left to refuse. A null $sessionId asks the App to
+     * mint a fresh session (the palette's New session; the historic `''`
+     * not-yet-minted sentinel belongs to the deck's own keying).
+     *
+     * Standalone, the route is the historic in-place {@see switchToSession()}
+     * — every byte of the old switch — and a null id has no standalone
+     * meaning, so it fails closed to a no-op the palette New-session route
+     * never reaches (it branches on the flag before settling an id).
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function presentSession(?string $sessionId, ?string $name): array
+    {
+        if ($this->tabHosted) {
+            return [$this, Cmd::send(new App\Tabs\OpenTabMsg($sessionId, $name))];
+        }
+
+        if ($sessionId === null) {
+            return [$this, null];
+        }
+
+        return [$this->switchToSession($sessionId, $name), null];
+    }
+
+    /**
+     * P-TABS.f: the palette's Close tab row. Deck-hosted it is a plain
+     * `CloseTabMsg` for the App — the deck owns which tab is foreground, the
+     * last-tab floor, and the two-press guard on a busy tab. Standalone no
+     * deck exists, so the row answers with a transcript line instead of a
+     * silent drop (the same honest-feedback shape as
+     * {@see handlePaletteNewSession()}'s store-less branch).
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function closeDeckTab(): array
+    {
+        if (!$this->tabHosted) {
+            return [$this->mutate([
+                'history' => [...$this->history, Message::assistant(Lang::t('chat.tabs.close_no_deck'))->withUiOnly()],
+            ]), null];
+        }
+
+        return [$this, Cmd::send(new App\Tabs\CloseTabMsg())];
     }
 
     /**
@@ -8995,6 +9085,10 @@ final class Chat implements Model
             'dirPicker' => $this->dirPicker,
             'historySearch' => $this->historySearch,
             'relaunchDir' => $this->relaunchDir,
+            // P-TABS.f: the deck appointment is a launch/host fact, not
+            // per-keystroke state — dropped here, the second typed character
+            // would silently fall the open routes back to in-place switches.
+            'tabHosted' => $this->tabHosted,
         ];
 
         // P-A4: who named the session, and a half-typed title, both belong to
@@ -9462,12 +9556,18 @@ final class Chat implements Model
                 $child = $state->childSessionId;
                 if ($child === null || $child === '') {
                     $problems[] = Lang::t('chat.agents.problem.not_stored', ['agent' => $state->name]);
-                } elseif ($chat->inFlight) {
+                } elseif ($chat->inFlight && !$chat->tabHosted) {
+                    // P-TABS.f: deck-hosted, opening the agent's session
+                    // lands in a new tab, so a running turn no longer blocks
+                    // it; standalone keeps the historic refusal.
                     $problems[] = Lang::t('chat.agents.problem.turn_running', ['agent' => $state->name]);
                 } elseif ($chat->sessionStore === null) {
                     $problems[] = Lang::t('chat.agents.problem.no_sessions');
                 } else {
-                    $chat = $chat->switchToSession($child, Lang::t('chat.agents.session_name', ['agent' => $state->name]));
+                    [$chat, $tabCmd] = $chat->presentSession($child, Lang::t('chat.agents.session_name', ['agent' => $state->name]));
+                    if ($tabCmd !== null) {
+                        $cmds[] = $tabCmd;
+                    }
                 }
 
                 break;
@@ -10752,6 +10852,15 @@ final class Chat implements Model
                 PaletteAction::Exit => [$opened->mutate(['palette' => null]), Cmd::quit()],
                 PaletteAction::OpenSettings => $opened->mutate(['palette' => null])->openSettingsView(),
                 PaletteAction::OpenMediaForm => $opened->mutate(['palette' => null])->openMediaFormView(),
+                // P-TABS.f: the direct entry (palette row CLICK, menu row,
+                // CommandPalette surface) sees the same deck relaxation the
+                // interactive matcher does: deck-hosted these two open/close
+                // TABS, never the running session, so mid-turn they stand;
+                // standalone keeps the historic refusal word for word.
+                PaletteAction::NewSession => $this->tabHosted
+                    ? $opened->mutate(['palette' => null])->handlePaletteNewSession()
+                    : $opened->refuseInFlightAction($label),
+                PaletteAction::CloseTab => $opened->mutate(['palette' => null])->closeDeckTab(),
                 default => $opened->refuseInFlightAction($label),
             };
         }
@@ -15283,7 +15392,10 @@ final class Chat implements Model
             // running turn's transcript replaced under it — so mid-turn that one
             // action is refused with a notice naming it. Same rule as the
             // palette's; see {@see runSelectedPaletteActionWhileInFlight()}.
-            'resume' => $this->inFlight
+            // P-TABS.f: deck-hosted, resume opens a TAB instead (presentSession)
+            // and adopts nothing here, so mid-turn it stands — the running
+            // session is left exactly as it was.
+            'resume' => $this->inFlight && !$this->tabHosted
                 ? $this->refuseInFlightAction(Lang::t('chat.action.resume_session'))
                 : $this->resumeSelectedSession($next),
             'preview' => [$this->mutate(['sessionPicker' => $this->previewSessionInPicker($next)]), null],
@@ -15451,7 +15563,10 @@ final class Chat implements Model
                     if ($id === null) {
                         return $keep($picker);
                     }
-                    if ($this->inFlight) {
+                    // P-TABS.f: deck-hosted the fork lands in a NEW tab
+                    // (presentSession), so it never replaces the running
+                    // turn's session and mid-turn it stands.
+                    if ($this->inFlight && !$this->tabHosted) {
                         return $this->refuseInFlightAction(Lang::t('chat.action.fork_session'));
                     }
                     // forkSession() copies the STORED transcript: write any
@@ -15460,7 +15575,7 @@ final class Chat implements Model
                     $this->transcripts()->flush();
                     $forkId = $store->forkSession($id);
 
-                    return [$this->mutate(['sessionPicker' => null])->switchToSession($forkId, SessionSwitch::storedName($this->sessionStore, $forkId)), null];
+                    return $this->mutate(['sessionPicker' => null])->presentSession($forkId, SessionSwitch::storedName($this->sessionStore, $forkId));
             }
         } catch (\Throwable $e) {
             return $keep($picker->withNotice(Lang::t('chat.picker.error', ['error' => self::sanitizeSessionField($e->getMessage())])));
@@ -15546,7 +15661,10 @@ final class Chat implements Model
 
         $sessionId = $selected['sessionId'];
 
-        return [$this->mutate(['sessionPicker' => null])->switchToSession($sessionId, SessionSwitch::storedName($this->sessionStore, $sessionId)), null];
+        // P-TABS.f: deck-hosted this opens the picked session in a new tab
+        // and closes the picker over an untouched foreground; standalone the
+        // historic in-place switch, byte for byte.
+        return $this->mutate(['sessionPicker' => null])->presentSession($sessionId, SessionSwitch::storedName($this->sessionStore, $sessionId));
     }
 
     /**
@@ -17251,6 +17369,15 @@ final class Chat implements Model
             // this arm — PaletteAction::OpenMediaForm => mutate(…)->openMediaFormView().
             PaletteAction::OpenSettings => $this->mutate(['palette' => null])->openSettingsView(),
             PaletteAction::OpenMediaForm => $this->mutate(['palette' => null])->openMediaFormView(),
+            // P-TABS.f: deck-hosted, New session opens a tab (the App mints
+            // it) and Close tab is a plain deck message — neither touches the
+            // running session, so mid-turn they stand. Standalone keeps the
+            // historic refusal for New session, and Close tab answers with
+            // the honest "no deck" line from closeDeckTab().
+            PaletteAction::NewSession => $this->tabHosted
+                ? $this->mutate(['palette' => null])->handlePaletteNewSession()
+                : $this->refuseInFlightAction($label),
+            PaletteAction::CloseTab => $this->mutate(['palette' => null])->closeDeckTab(),
             default => $this->refuseInFlightAction($label),
         };
     }
@@ -17582,6 +17709,10 @@ final class Chat implements Model
             // {@see dispatchPaletteCommand()}.
             PaletteAction::ToggleMcp => $closed->handleMcpAuthCommand('mcp auth list'),
             PaletteAction::NewSession => $closed->handlePaletteNewSession(),
+            // P-TABS.f: palette-only row (slashVisible:false), so
+            // dispatchPaletteCommand never sees it — this arm IS its root
+            // dispatch.
+            PaletteAction::CloseTab => $closed->closeDeckTab(),
             PaletteAction::NewSessionPicker => $closed->handleNewCommand('/new'),
             PaletteAction::OpenDocs => $closed->handlePaletteOpenDocs(),
             // The gesture phase's palette twins: the same handlers the slash
@@ -18153,6 +18284,14 @@ final class Chat implements Model
             return [$this->mutate([
                 'history' => [...$this->history, Message::assistant(Lang::t('chat.sessions.no_store_new'))->withUiOnly()],
             ]), null];
+        }
+
+        if ($this->tabHosted) {
+            // P-TABS.f: deck-hosted, "new session" opens a tab and the App
+            // mints the session through its launch factory — the same route
+            // Ctrl+N takes when the deck is armed, so the two entry points
+            // cannot drift. This model is untouched; legal mid-turn.
+            return $this->presentSession(null, null);
         }
 
         // Chat's Backend interface exposes no provider/model name to record

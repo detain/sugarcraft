@@ -347,6 +347,7 @@ edit it by hand.
 |---|---|---|---|---|
 | `/new` | ✓ | | `[dir]` | Start a fresh session, here or in a directory you pick |
 | `/new-picker` | | | — | Start a fresh session in a directory picked from a folder browser |
+| `/close-tab` | | | — | Close the tab deck’s current tab |
 | `/sessions` | ✓ | | `[<query>]` | List, search and manage sessions |
 | `/session-pin` | | | — | Pin the current session to the front of the list, or unpin it |
 | `/session-delete` | | | — | Open the session list to delete a session |
@@ -412,10 +413,10 @@ edit it by hand.
 | `/rendermode` | ✓ | | `<mode>` | Show or switch the media render mode (images repaint from the new word, the player starts from it) |
 <!-- commands:table:end -->
 
-**S** is blank on `new-picker`, `session-pin`, `session-delete`, `docs`,
-`pane-dock-left`, `pane-dock-right` and `generate-form` alone: they are
+**S** is blank on `new-picker`, `close-tab`, `session-pin`, `session-delete`,
+`docs`, `pane-dock-left`, `pane-dock-right` and `generate-form` alone: they are
 palette-only (`slashVisible: false`), reachable from Ctrl+P and from no "/"
-popup. All seven
+popup. All eight
 share the typed-name asymmetry —
 their spec files name no handler, so `Chat::dispatchCommand()` dispatches
 nothing for the pseudo-names and a typed
