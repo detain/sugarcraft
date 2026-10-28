@@ -1460,7 +1460,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - Chat.php region claims: C-TUI-7.a (applyCommandResult (ClearTranscript/SwitchSession arms), init)
 - Bootstrap.php method claims: C-TUI-7.b (announceMacAltFallback, macAltNotice, terminalSpeaksKittyKeyboard); C-TOOL-5.b (hooks)
 
-#### C-MCP-2.b — `command.list`/`command.exec` carry MCP prompts; `mcp.resources` method
+#### ✅ fad3d931e #### C-MCP-2.b — `command.list`/`command.exec` carry MCP prompts; `mcp.resources` method
 - **Item:** C-MCP-2 (sources: GAP-MCP-07, GAP-CMD-09, CLAW-new#9) · dormant-wire · effort M
 - **What:** `CommandMethods::list/exec` read only `workspace->commandLoader->loadAll()` (`candy-code/src/Protocol/Methods/CommandMethods.php:49-62, 66-91, 127-138`), so served MCP prompts are neither listed nor executable via `command.exec` …
 - **Files — create:** `candy-code/src/Protocol/Methods/McpMethods.php`, `candy-code/tests/Protocol/CommandMethodsMcpPromptsTest.php`, `candy-code/tests/Protocol/McpMethodsTest.php`
