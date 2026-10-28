@@ -95,7 +95,8 @@
   "C-MCP-4.c",
   "C-CTX-2.c",
   "P-MENU.e",
-  "C-TOOL-7.b"
+  "C-TOOL-7.b",
+  "C-TOOL-3.a"
  ],
  "inflight": {
   "C-EXT-2.b": {
@@ -105,14 +106,6 @@
    "branch": "cc/C-EXT-2.b",
    "session": "none-fix-5",
    "note": "REAL fix needed: REVIEW-1.md step-local MINOR = ActiveSkillEffects.php:129 budget docblock names maxBytes while maxAllowed counts shared per-root readBudget entries incl dedup/missing children. Fixer: reword docblock + optional one-leg test (gate Skill 578T-class, commit C-EXT-2.b: review fixes (round 2)). DUR rows owed at weld: ActiveSkillEffectsTest + PermissionGateTurnGrantsTest + RuntimeSkillEffectsTest."
-  },
-  "C-TOOL-3.a": {
-   "stage": "clean",
-   "round": 2,
-   "worktree": "/home/sites/cc-cmp-C-TOOL-3.a",
-   "branch": "cc/C-TOOL-3.a",
-   "session": "none-inflight-3",
-   "note": "r2 CLEAN REVIEW-2.md ON DISK. Chain 3d7c1efe3+0758e111d. QUEUED WELD (welder unit2). DUR rows: tests/Tui/ToolTailSlotsTest.php + tests/Tools/PtyRunToolProgressTest.php."
   },
   "C-AGT-7.b": {
    "stage": "clean",
@@ -511,6 +504,15 @@
    "carry": "totalBytes helper now twins FileSearchWorker.php:335 - DuplicatedTestHelperDrift:1534 leg already red at base, gate re-pin duty (did NOT redden in the weld-tree five-guard run - DuplicatedTestHelperDrift green at 08e91c647)",
    "evidence": "lanes/C-TOOL-7.b/{BRIEF,REPORT,REVIEW-1}.md staged (r1 CLEAN; lead gate logs per inflight note)",
    "prune": "cherry proof '-'; worktree cc-cmp-C-TOOL-7.b + branch cc/C-TOOL-7.b"
+  },
+  "C-TOOL-3.a": {
+   "master": "634fb94f0 + a1760d1ec",
+   "picks": "3d7c1efe3->634fb94f0 (build), 0758e111d->a1760d1ec (r2 cure), onto d95f2486c-era, clean zero conflicts; %ae/%ce separate greps 1/1 detain, zero Co-Authored trailers",
+   "regen": "no-op VERIFIED (gen-command-docs/gen-tool-docs --write + gen-settings-doc --check all up to date rc0; no docs/Protocol/web files in chain -> schema/npm/dist legs skipped)",
+   "gates": "ToolTailSlots|PtyRunToolProgress 11T/48A 0F EXACT; PtyDriverRetain|PtyRunBashPermissionParity|ShellSubjectToolsCompleteness|ToolCatalog|ToolDocDrift 112T/339A 0F EXACT (PtyRunToolTest NOT matched, kept out per owner hazard carry); five-guard 133T/15866A F2 = staleness pair ONLY (25,537 pinned vs live 26,3xx - closeout re-pin); 2 pre-existing AccessorDeprecationTest deprecations throughout",
+   "review_evidence": "REVIEW-2.md: r2 reviewer's worktree copy never existed (lanes dir absent in /home/sites/cc-cmp-C-TOOL-3.a at prune time); main-tree copy authoritative and staged (VERDICT CLEAN 0C/0M)",
+   "carries": "DUR rows owed at gate: candy-code/tests/Tui/ToolTailSlotsTest.php + candy-code/tests/Tools/PtyRunToolProgressTest.php (files welded; durations.tsv untouched per §1.5)",
+   "prune": "cherry proof both '-'; worktree+branch pruned"
   }
  },
  "carries": [
@@ -586,5 +588,5 @@
   "WINDOWN: C-SES-9.e phantom step confirmed by fresh builder greps (no such step in plan; family ends .d); entry removed.",
   "WINDOWN-FINAL@1928@: C-SEC-5.d = 4th-phantom class, NOTHING LANDED (cat-file refuted 72f3d8f4e/b98b61b5b; no branch/worktree; design surface unwired; deps .a/.c real). Reset to not-started next session: fresh disk-only builder off master per plan:1474, lead cat-files returned SHA before any review. C-MCP-4.a = WELDED a6fa47900 (ghost reviewer resolved). C-MCP-4.b/C-MCP-6.b/C-TOOL-8.b/C-SEC-5.e/C-CTX-6.i keys: MCP-4.b/TOOL-8.b were phantom-era residues - MCP-4.b actual state: 1726fc330-era story unverifiable, branch gone, NOT in welded -> treat as not-started re-cut next session (same for C-MCP-6.b: verify via plan marks first). C-SEC-5.e: branch gone, not in welded, not-started. C-CTX-6.i: landed-445c8661e story phantom (branch gone, no mark) - not-started."
  ],
- "updated": "2026-10-28T02:35:00+00:00"
+ "updated": "2026-10-28T03:20:00+00:00"
 }
