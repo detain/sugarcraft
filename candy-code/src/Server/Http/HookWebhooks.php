@@ -27,7 +27,16 @@ use SugarCraft\Code\Server\ServerConfig;
  *   header {@see SECRET_HEADER}; there is no cookie, no ticket, no bearer.
  *   Wrong or missing secrets strike the shared {@see RateLimiter} keyed per
  *   hook AND address, so a guesser is locked out for the standard window
- *   without locking the operator out of `/api/login`.
+ *   without locking the operator out of `/api/login`. C-AGT-5.d opens a second
+ *   door for senders that cannot set custom headers: when the row names a
+ *   signature scheme, the credential is instead an HMAC-SHA256 of the RAW body
+ *   keyed by the same secret, `sha256=<hex>` in the scheme's signature header,
+ *   verified with the same `hash_equals` law IN PLACE OF the header compare;
+ *   failed signatures feed the same lockout. Such a row also dedupes by the
+ *   scheme's delivery id: a body already served answers `duplicate` without
+ *   starting a second session (ids live per hook in an LRU of the freshest
+ *   {@see INBOUND_DELIVERY_CAPACITY}; a delivery that failed with 503 keeps
+ *   its id unrecorded so the sender's retry still runs).
  * - **The body is untrusted model input.** It rides the same PromptFence
  *   escape every other externally-sourced text does, spliced into the
  *   operator's configured prompt at `{{payload}}` (or appended below a plain
@@ -66,12 +75,24 @@ final class HookWebhooks
     /** Distinct `hook|address` and `hook` (overall) keys tracked; the stalest are dropped beyond this. */
     private const CAPACITY = 4096;
 
+    /** C-AGT-5.d: the prefix a signature header value carries before the hex digest (GitHub's spelling). */
+    public const SIGNATURE_PREFIX = 'sha256=';
+
+    /** C-AGT-5.d: the HMAC algorithm the inbound signature schemes use. */
+    public const SIGNATURE_ALGORITHM = 'sha256';
+
+    /** C-AGT-5.d: per-hook LRU size for seen delivery ids; the freshest survive. */
+    public const INBOUND_DELIVERY_CAPACITY = 1024;
+
     /** @var array<string, list<float>> accepted-delivery times per window key */
     private array $accepted = [];
 
+    /** @var array<string, array<string,true>> seen delivery ids per hook, insertion-ordered (freshest last) */
+    private array $delivered = [];
+
     /**
-     * @param array<string,array{secret:string,prompt:string,permissionMode:PermissionMode|null,rate:int}> $hooks validated hook map ({@see \SugarCraft\Code\Server\ServerConfig::webhooksValue()})
-     * @param \Closure(string,array{secret:string,prompt:string,permissionMode:PermissionMode|null,rate:int},string):array<string,mixed> $run admits the turn through the server context's bg.spawn door; throws when it cannot
+     * @param array<string,array{secret:string,prompt:string,permissionMode:PermissionMode|null,rate:int,signature:null|array{scheme:string,header:string,deliveryHeader:string|null}}> $hooks validated hook map ({@see \SugarCraft\Code\Server\ServerConfig::webhooksValue()})
+     * @param \Closure(string,array{secret:string,prompt:string,permissionMode:PermissionMode|null,rate:int,signature:null|array{scheme:string,header:string,deliveryHeader:string|null}},string):array<string,mixed> $run admits the turn through the server context's bg.spawn door; throws when it cannot
      * @param \Closure(): float $clock
      */
     public function __construct(
@@ -116,10 +137,41 @@ final class HookWebhooks
             return Responses::error(429, 'rate_limited', 'too many failed deliveries for this hook from this address', ['Retry-After' => (string) $retry]);
         }
 
-        // Constant-time by law: this comparison's timing is the only signal a
-        // network attacker gets about the secret. hash_equals is the named
-        // primitive; HookWebhooksTest source-scans that it is USED here.
-        if (!\hash_equals($hook['secret'], $request->getHeaderLine(self::SECRET_HEADER))) {
+        $signature = $hook['signature'] ?? null;
+        $declared = (int) $request->getHeaderLine('content-length');
+        $body = (string) $request->getBody();
+        $deliveryId = '';
+        if ($signature !== null) {
+            // C-AGT-5.d: a signed row answers an over-cap body BEFORE the
+            // compare. RequestBodyBufferMiddleware swaps in an empty body for
+            // an over-limit one, and comparing an HMAC over '' would
+            // false-strike a legitimate large sender into the lockout — the
+            // 413 is the honest answer, and it charges no failure.
+            if (self::overCapBody($request, $declared, $body)) {
+                return Responses::error(413, 'payload_too_large', 'the webhook body is larger than the server accepts');
+            }
+            $expected = self::SIGNATURE_PREFIX . \hash_hmac(self::SIGNATURE_ALGORITHM, $body, $hook['secret']);
+            if (!\hash_equals($expected, $request->getHeaderLine($signature['header']))) {
+                $this->limiter->recordFailure($key);
+
+                return Responses::error(401, 'unauthorized', 'the webhook signature is not valid');
+            }
+            if ($signature['deliveryHeader'] !== null) {
+                $deliveryId = $request->getHeaderLine($signature['deliveryHeader']);
+                if ($deliveryId !== '' && isset($this->delivered[$name][$deliveryId])) {
+                    // A redelivered id: refresh its ring position, charge
+                    // nothing, and answer the duplicate WITHOUT spawning a
+                    // second session for the same event.
+                    unset($this->delivered[$name][$deliveryId]);
+                    $this->recordDelivery($name, $deliveryId);
+
+                    return Responses::json(200, ['ok' => true, 'duplicate' => true]);
+                }
+            }
+        } elseif (!\hash_equals($hook['secret'], $request->getHeaderLine(self::SECRET_HEADER))) {
+            // Constant-time by law: this comparison's timing is the only signal a
+            // network attacker gets about the secret. hash_equals is the named
+            // primitive; HookWebhooksTest source-scans that it is USED here.
             $this->limiter->recordFailure($key);
 
             return Responses::error(401, 'unauthorized', 'the webhook secret is not valid');
@@ -133,19 +185,11 @@ final class HookWebhooks
             return Responses::error(429, 'rate_limited', 'this hook is over its delivery rate, per address or per hook overall', ['Retry-After' => (string) self::WINDOW_SECONDS]);
         }
 
-        // The body arrives whole but NOT truthfully: RequestBodyBufferMiddleware
-        // (MAX_API_BODY_BYTES in front of the router) does not REFUSE an
-        // over-limit body — it swaps in an empty one and calls on, so a 70 KiB
-        // push would otherwise splice a fence-escaped nothing into the prompt
-        // and bill the turn anyway. An over-cap declaration, or a declared
-        // body that arrived as '' (dropped by that swap, or shorted by a lying
-        // Content-Length), is answered 413 here; $run never sees it. A body
-        // declared absent (Content-Length: 0, no chunked framing) may stay
-        // empty — that is an ordinary no-payload delivery, not a lost one.
-        $declared = (int) $request->getHeaderLine('content-length');
-        $body = (string) $request->getBody();
-        if ($declared > ServerConfig::MAX_API_BODY_BYTES
-            || ('' === $body && ($declared > 0 || 'chunked' === \strtolower($request->getHeaderLine('transfer-encoding'))))) {
+        // The body arrives whole but NOT truthfully — see overCapBody(). The
+        // signed row already answered it above, before the compare; the
+        // unsigned row answers it here, after the credential and the rate,
+        // exactly where it always did.
+        if (self::overCapBody($request, $declared, $body)) {
             return Responses::error(413, 'payload_too_large', 'the webhook body is larger than the server accepts');
         }
         try {
@@ -169,7 +213,49 @@ final class HookWebhooks
             return Responses::error(503, 'hook_unavailable', 'the webhook could not start a session');
         }
 
+        if ($deliveryId !== '') {
+            // Recorded only once the turn was admitted AND $run returned: a
+            // 503 delivery keeps its id unrecorded, so the sender's retry of
+            // the same event still runs instead of being answered duplicate.
+            $this->recordDelivery($name, $deliveryId);
+        }
+
         return Responses::json(200, ['ok' => true] + $summary);
+    }
+
+    /**
+     * The body arrives whole but NOT truthfully: RequestBodyBufferMiddleware
+     * (MAX_API_BODY_BYTES in front of the router) does not REFUSE an
+     * over-limit body — it swaps in an empty one and calls on, so a 70 KiB
+     * push would otherwise splice a fence-escaped nothing into the prompt and
+     * bill the turn anyway. An over-cap declaration, or a declared body that
+     * arrived as '' (dropped by that swap, or shorted by a lying
+     * Content-Length), is answered 413 by the caller; $run never sees it. A
+     * body declared absent (Content-Length: 0, no chunked framing) may stay
+     * empty — that is an ordinary no-payload delivery, not a lost one.
+     */
+    private static function overCapBody(ServerRequestInterface $request, int $declared, string $body): bool
+    {
+        return $declared > ServerConfig::MAX_API_BODY_BYTES
+            || ('' === $body && ($declared > 0 || 'chunked' === \strtolower($request->getHeaderLine('transfer-encoding'))));
+    }
+
+    /**
+     * C-AGT-5.d: keep one seen delivery id per hook, freshest last, dropping
+     * the stalest beyond {@see INBOUND_DELIVERY_CAPACITY}. The unset-first is
+     * load-bearing: re-setting an existing key would NOT move its position in
+     * the insertion order, so a replay would freeze an id at the head and the
+     * ring would evict the wrong entry.
+     */
+    private function recordDelivery(string $name, string $id): void
+    {
+        $ring = $this->delivered[$name] ?? [];
+        unset($ring[$id]);
+        $ring[$id] = true;
+        while (\count($ring) > self::INBOUND_DELIVERY_CAPACITY) {
+            unset($ring[\array_key_first($ring)]);
+        }
+        $this->delivered[$name] = $ring;
     }
 
     /**

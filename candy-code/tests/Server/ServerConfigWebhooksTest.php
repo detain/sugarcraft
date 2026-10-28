@@ -17,7 +17,9 @@ use SugarCraft\Code\Server\ServerConfigException;
  *
  * The floors pinned here: routeable names, a secret long enough to be a
  * credential, a prompt (the body is spliced INTO it; with no prompt the payload
- * would BE the instruction), the per-minute rate bounds, unknown fields, and —
+ * would BE the instruction), the per-minute rate bounds, unknown fields, the
+ * signature scheme's header pair (C-AGT-5.d: a named scheme, two optional
+ * single-token header names), and —
  * the restrictive permission floor — `bypass-permissions` refused even under
  * `--allow-bypass`, because a webhook is an unattended session and bypass
  * answers every permission ask YES with nobody asked (AUT-6-P2 narrowed the
@@ -43,8 +45,8 @@ final class ServerConfigWebhooksTest extends TestCase
         ]);
 
         self::assertSame([
-            'deploy' => ['secret' => \str_repeat(self::SECRET, 40), 'prompt' => 'Look at {{payload}}', 'permissionMode' => null, 'rate' => ServerConfig::DEFAULT_HOOK_RATE_PER_MINUTE],
-            'nightly' => ['secret' => \str_repeat('t', 32), 'prompt' => 'Run the nightly review', 'permissionMode' => PermissionMode::Plan, 'rate' => 2],
+            'deploy' => ['secret' => \str_repeat(self::SECRET, 40), 'prompt' => 'Look at {{payload}}', 'permissionMode' => null, 'rate' => ServerConfig::DEFAULT_HOOK_RATE_PER_MINUTE, 'signature' => null],
+            'nightly' => ['secret' => \str_repeat('t', 32), 'prompt' => 'Run the nightly review', 'permissionMode' => PermissionMode::Plan, 'rate' => 2, 'signature' => null],
         ], $config->webhooks);
     }
 
@@ -103,6 +105,55 @@ final class ServerConfigWebhooksTest extends TestCase
         $hooks = ServerConfig::webhooksValue(['h' => ['secret' => \str_repeat(self::SECRET, 32), 'prompt' => 'p', 'permissionMode' => 'dont-ask']]);
 
         self::assertSame(PermissionMode::DontAsk, $hooks['h']['permissionMode']);
+    }
+
+    /**
+     * C-AGT-5.d: a scheme resolves its header pair; an override replaces one
+     * member and is lower-cased (PSR-7 header lookup is case-insensitive, and
+     * the scheme defaults are spelled lower — one spelling avoids surprises in
+     * logs); `hmac-sha256` carries no default delivery header, so dedupe is
+     * opt-in for generic senders.
+     */
+    public function testTheSignatureSchemeResolvesItsHeaderPair(): void
+    {
+        $hooks = ServerConfig::webhooksValue([
+            'gh' => ['secret' => \str_repeat(self::SECRET, 32), 'prompt' => 'p', 'signature' => ['scheme' => 'github-sha256']],
+            'custom' => ['secret' => \str_repeat(self::SECRET, 32), 'prompt' => 'p', 'signature' => ['scheme' => 'github-sha256', 'header' => 'X-Hub-Signature-256', 'deliveryHeader' => 'X-Request-UUID']],
+            'hmac' => ['secret' => \str_repeat(self::SECRET, 32), 'prompt' => 'p', 'signature' => ['scheme' => 'hmac-sha256']],
+        ]);
+
+        self::assertSame(['scheme' => 'github-sha256', 'header' => 'x-hub-signature-256', 'deliveryHeader' => 'x-github-delivery'], $hooks['gh']['signature']);
+        self::assertSame(['scheme' => 'github-sha256', 'header' => 'x-hub-signature-256', 'deliveryHeader' => 'x-request-uuid'], $hooks['custom']['signature']);
+        self::assertSame(['scheme' => 'hmac-sha256', 'header' => 'x-signature', 'deliveryHeader' => null], $hooks['hmac']['signature']);
+    }
+
+    /** @return array<string, array{array<string, mixed>, string}> */
+    public static function signatureRefusals(): array
+    {
+        $good = ['secret' => \str_repeat(self::SECRET, 32), 'prompt' => 'p'];
+
+        return [
+            'signature not a map' => [['webhooks' => ['h' => $good + ['signature' => 'github-sha256']]], 'signature must be a map'],
+            'missing scheme' => [['webhooks' => ['h' => $good + ['signature' => ['header' => 'x-signature']]]], 'signature scheme "null" is not one of'],
+            'unknown scheme' => [['webhooks' => ['h' => $good + ['signature' => ['scheme' => 'yolo']]]], 'signature scheme "yolo" is not one of'],
+            'non-string scheme' => [['webhooks' => ['h' => $good + ['signature' => ['scheme' => 7]]]], 'signature scheme "7" is not one of'],
+            'header not a header name' => [['webhooks' => ['h' => $good + ['signature' => ['scheme' => 'hmac-sha256', 'header' => 'not a header']]]], 'signature header must be an HTTP header name'],
+            'deliveryHeader not a header name' => [['webhooks' => ['h' => $good + ['signature' => ['scheme' => 'hmac-sha256', 'deliveryHeader' => 42]]]], 'signature deliveryHeader must be an HTTP header name'],
+            'signature unknown setting' => [['webhooks' => ['h' => $good + ['signature' => ['scheme' => 'hmac-sha256', 'algo' => 'sha1']]]], 'signature unknown setting "algo"'],
+        ];
+    }
+
+    #[DataProvider('signatureRefusals')]
+    public function testAMalformedSignatureIsAStartupExceptionNamingItself(array $userConfig, string $needle): void
+    {
+        try {
+            ServerConfig::resolve([], [], $userConfig, '/state');
+        } catch (ServerConfigException $e) {
+            self::assertStringContainsString($needle, $e->getMessage());
+
+            return;
+        }
+        self::fail('expected a ServerConfigException mentioning: ' . $needle);
     }
 
     /** @return array<string, array{array<string, mixed>, string}> */

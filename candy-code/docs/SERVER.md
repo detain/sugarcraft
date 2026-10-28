@@ -296,7 +296,7 @@ single address may hold at most 16 simultaneous connections; more are refused
 | `POST /api/login` | none (rate limited) | `{"code"}` or `{"token"}` → `{"ok": true, "loginSecret": "<64-hex>"}` + the session cookie; wrong → `401` |
 | `POST /api/ticket` | session cookie + `X-Candy-Code-Auth` secret | `{"ticket", "expiresInSeconds": 30}`; a bearer client gets `400` (it needs no ticket) |
 | `POST /api/logout` | any | revokes the session, closes every WebSocket bound to it with close code `4001`, and clears the cookie |
-| `POST /api/hooks/{name}` | the `webhooks` user-config secret in the `x-candy-code-hook` header (constant-time; wrong ones lock out per hook and address) | the body (≤ 64 KiB) is fence-escaped as untrusted input and spliced into the hook's configured prompt at `{{payload}}` — or appended below a plain label — and admitted through the same background door `bg.spawn` uses; `{"ok": true, "bgId": …}` on admission, `413` when the body is declared past the 64 KiB cap or arrives as an empty buffer behind a non-empty declaration (an over-cap body is refused, never spliced as an empty run), `429` over the configured per-minute rate — counted per address, and per hook overall, `503` if the turn cannot start. Mounted only when `webhooks` names the hook: unconfigured, the path 404s like any unknown endpoint. `bypass-permissions` is refused for hooks at launch — a webhook has no one to answer an ask, and bypass answers every ask yes; `dont-ask` is accepted because it never asks — it refuses. A mode-less hook inherits the stricter of the server's mode and `default`, so an `accept-edits` or `auto` server hands mode-less hooks `default`. |
+| `POST /api/hooks/{name}` | the `webhooks` user-config secret in the `x-candy-code-hook` header (constant-time; wrong ones lock out per hook and address) — or, when the row names `signature`, an HMAC-SHA256 of the raw body, `sha256=<hex>` in `x-hub-signature-256` (GitHub) or `x-signature` (generic), or the configured `header`; a failed signature feeds the same lockout | the body (≤ 64 KiB) is fence-escaped as untrusted input and spliced into the hook's configured prompt at `{{payload}}` — or appended below a plain label — and admitted through the same background door `bg.spawn` uses; `{"ok": true, "bgId": …}` on admission, `413` when the body is declared past the 64 KiB cap or arrives as an empty buffer behind a non-empty declaration (an over-cap body is refused, never spliced as an empty run), `429` over the configured per-minute rate — counted per address, and per hook overall, `503` if the turn cannot start. A signed row dedupes redeliveries too: a `X-GitHub-Delivery` (or configured `deliveryHeader`) id already served answers `200 {"ok": true, "duplicate": true}` without starting a second session (a per-hook LRU of the freshest 1024 ids; a delivery that failed with `503` keeps its id unrecorded, so the sender retry still runs), and an over-cap signed body is refused `413` before the compare, never as a struck signature. Mounted only when `webhooks` names the hook: unconfigured, the path 404s like any unknown endpoint. `bypass-permissions` is refused for hooks at launch — a webhook has no one to answer an ask, and bypass answers every ask yes; `dont-ask` is accepted because it never asks — it refuses. A mode-less hook inherits the stricter of the server's mode and `default`, so an `accept-edits` or `auto` server hands mode-less hooks `default`. |
 | `GET /ws` | ticket, bearer or token subprotocol — never the cookie alone, which a browser attaches by itself | the WebSocket upgrade; `Origin` is checked, and a ticket only opens the socket for the login secret that minted it |
 | anything else | none | the web UI's files (`GET`/`HEAD` only) |
 
@@ -304,6 +304,40 @@ Refusals are JSON: `{"error": {"kind": "…", "message": "…"}}`. Clients branc
 `kind` (`unauthorized`, `rate_limited`, `host_refused`, `origin_refused`,
 `subprotocol_required`, `not_found`, `hook_unavailable`, …), never on the
 message.
+
+#### Signed inbound deliveries: the GitHub recipe
+
+GitHub's webhook settings cannot attach a custom header, so a hook fed by
+GitHub names a signature scheme instead of relying on the `x-candy-code-hook`
+compare:
+
+1. In the repository's **Settings → Webhooks**, add a webhook to
+   `https://<host>:<port>/api/hooks/<name>`, choose **application/json** as the
+   content type, and set the secret to the same value you will put in the row.
+2. In the server user config, name the scheme on the row:
+
+   ```json
+   {"webhooks": {"deploy": {"secret": "<32+ characters>", "prompt": "Review the push: {{payload}}", "signature": {"scheme": "github-sha256"}}}}
+   ```
+
+3. The scheme replaces the header-secret compare: the route recomputes
+   `hash_hmac('sha256', <raw body>, <row secret>)` and `hash_equals`-checks it
+   against the `sha256=<hex>` value in `x-hub-signature-256`. A wrong or
+   missing signature strikes the same per-hook-and-address lockout as a wrong
+   header secret.
+4. GitHub's `X-GitHub-Delivery` id dedupes redeliveries: a delivery already
+   served answers `200 {"ok": true, "duplicate": true}` without starting a
+   second session, while one that failed with `503` stays replayable so
+   GitHub's own retry still runs.
+5. For senders that are not GitHub, `scheme: "hmac-sha256"` defaults the
+   signature header to `x-signature` and carries no delivery header — dedupe
+   for such a row is opt-in by naming `deliveryHeader` explicitly. Any
+   `header`/`deliveryHeader` override must be a single HTTP header name.
+
+A push payload past the 64 KiB body cap arrives loud: the signed route answers
+`413` before the signature compare, so a middleware-swapped empty body can
+never false-strike a legitimate large sender into the lockout (raising the
+per-route cap is a separate change).
 
 Webhook delivery covers **inbound** only; there is no outbound webhook (the
 server posting events to external URLs) in this build — deferred by design, so

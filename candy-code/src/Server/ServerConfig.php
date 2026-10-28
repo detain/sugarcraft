@@ -87,6 +87,20 @@ final class ServerConfig
     public const HOOK_ROUTE_PREFIX = '/api/hooks/';
 
     /**
+     * C-AGT-5.d: the inbound signature schemes a `webhooks` row may name. The
+     * named header carries `sha256=` followed by the lowercase hex HMAC-SHA256
+     * of the RAW request body keyed by the row's secret — the scheme chooses
+     * ONLY the header pair; a `deliveryHeader` of null means delivery-id dedupe
+     * is opt-in (generic senders carry no standard id).
+     *
+     * @var array<string,array{header:string,deliveryHeader:string|null}>
+     */
+    public const INBOUND_SIGNATURE_SCHEMES = [
+        'github-sha256' => ['header' => 'x-hub-signature-256', 'deliveryHeader' => 'x-github-delivery'],
+        'hmac-sha256' => ['header' => 'x-signature', 'deliveryHeader' => null],
+    ];
+
+    /**
      * Appendix O §4.6: how long a stopping server waits for running turns
      * (`server.drainSeconds`). Kept well inside `serve stop`'s own wait, which
      * stretches to cover a longer configured drain.
@@ -101,7 +115,7 @@ final class ServerConfig
      * @param list<string> $allowedIps     client IPs/CIDRs admitted beside loopback; empty admits every address ({@see Http\ClientAddressGuard})
      * @param bool         $dirBrowse      whether `fs.listDirs` and the browse-rooted `workspace.open` answer
      * @param string|null  $browseRoot     the directory they are confined to (resolved by {@see \SugarCraft\Code\Cli\Serve::config()}; null = the user's home)
-     * @param array<string,array{secret:string,prompt:string,permissionMode:PermissionMode|null,rate:int}> $webhooks
+     * @param array<string,array{secret:string,prompt:string,permissionMode:PermissionMode|null,rate:int,signature:null|array{scheme:string,header:string,deliveryHeader:string|null}}> $webhooks
      *                                     AUT-6 inbound webhook hooks, validated at launch ({@see self::webhooksValue()}); empty = the route is not mounted at all
      */
     private function __construct(
@@ -414,7 +428,7 @@ final class ServerConfig
      * answers its 404 like any unknown path, so the feature is default-off by
      * construction rather than by a flag.
      *
-     * @param array<string,array{secret:string,prompt:string,permissionMode:PermissionMode|null,rate:int}> $webhooks
+     * @param array<string,array{secret:string,prompt:string,permissionMode:PermissionMode|null,rate:int,signature:null|array{scheme:string,header:string,deliveryHeader:string|null}}> $webhooks
      */
     public function withWebhooks(array $webhooks): self
     {
@@ -726,7 +740,9 @@ final class ServerConfig
      * - the name must be a URL segment we can route on (no traversal, no
      *   encoding games on `/api/hooks/`),
      * - the secret is the ONLY credential the route has; below
-     *   {@see MIN_HOOK_SECRET_BYTES} it is guessable entropy,
+     *   {@see MIN_HOOK_SECRET_BYTES} it is guessable entropy — and when a row
+     *   names a signature scheme ({@see self::INBOUND_SIGNATURE_SCHEMES}) the
+     *   same secret becomes the HMAC key instead of a compared header value,
      * - a `permissionMode` of `bypass-permissions` is refused
      *   unconditionally — even under `--allow-bypass`, whose promise
      *   is about a HUMAN's client sessions ({@see hookRefusesMode()} asks
@@ -737,7 +753,7 @@ final class ServerConfig
      * - the prompt is the injection surface; it must exist (a hook with no
      *   prompt would run the payload as the whole instruction).
      *
-     * @return array<string,array{secret:string,prompt:string,permissionMode:PermissionMode|null,rate:int}>
+     * @return array<string,array{secret:string,prompt:string,permissionMode:PermissionMode|null,rate:int,signature:null|array{scheme:string,header:string,deliveryHeader:string|null}}>
      *
      * @throws ServerConfigException
      */
@@ -799,15 +815,62 @@ final class ServerConfig
                     self::MAX_HOOK_RATE_PER_MINUTE,
                 ));
             }
-            $unknown = \array_values(\array_diff(\array_keys($hook), ['secret', 'prompt', 'permissionMode', 'rate']));
+            $signatureSettings = $hook['signature'] ?? null;
+            if ($signatureSettings === null) {
+                $signature = null;
+            } elseif (!\is_array($signatureSettings) || \array_is_list($signatureSettings)) {
+                throw new ServerConfigException(\sprintf('webhook "%s": signature must be a map of {scheme, header?, deliveryHeader?}', $name));
+            } else {
+                $scheme = $signatureSettings['scheme'] ?? null;
+                if (!\is_string($scheme) || !isset(self::INBOUND_SIGNATURE_SCHEMES[$scheme])) {
+                    throw new ServerConfigException(\sprintf(
+                        'webhook "%s": signature scheme "%s" is not one of: %s',
+                        $name,
+                        \is_scalar($scheme) ? (string) $scheme : \get_debug_type($scheme),
+                        \implode(', ', \array_keys(self::INBOUND_SIGNATURE_SCHEMES)),
+                    ));
+                }
+                $sigUnknown = \array_values(\array_diff(\array_keys($signatureSettings), ['scheme', 'header', 'deliveryHeader']));
+                if ($sigUnknown !== []) {
+                    throw new ServerConfigException(\sprintf('webhook "%s": signature unknown setting "%s"', $name, (string) $sigUnknown[0]));
+                }
+                $defaults = self::INBOUND_SIGNATURE_SCHEMES[$scheme];
+                $signature = [
+                    'scheme' => $scheme,
+                    'header' => self::hookSignatureHeader($name, 'header', $signatureSettings['header'] ?? null, $defaults['header']),
+                    'deliveryHeader' => self::hookSignatureHeader($name, 'deliveryHeader', $signatureSettings['deliveryHeader'] ?? null, $defaults['deliveryHeader']),
+                ];
+            }
+            $unknown = \array_values(\array_diff(\array_keys($hook), ['secret', 'prompt', 'permissionMode', 'rate', 'signature']));
             if ($unknown !== []) {
                 throw new ServerConfigException(\sprintf('webhook "%s": unknown setting "%s"', $name, (string) $unknown[0]));
             }
 
-            $hooks[$name] = ['secret' => $secret, 'prompt' => $prompt, 'permissionMode' => $mode, 'rate' => $rate];
+            $hooks[$name] = ['secret' => $secret, 'prompt' => $prompt, 'permissionMode' => $mode, 'rate' => $rate, 'signature' => $signature];
         }
 
         return $hooks;
+    }
+
+    /**
+     * C-AGT-5.d: one signature header name from the config — a lowercase
+     * RFC 7230 token, or the scheme's default when the row omits it. Header
+     * names are compared case-insensitively by the PSR-7 request itself; the
+     * lower-casing here keeps a hand-typed `X-Hub-Signature-256` and the
+     * scheme's own spelling behaving identically.
+     *
+     * @throws ServerConfigException
+     */
+    private static function hookSignatureHeader(string $hook, string $field, mixed $value, ?string $default): ?string
+    {
+        if ($value === null) {
+            return $default;
+        }
+        if (\is_string($value) && \preg_match('/^[!#$%&\'*+\-.^_`|~0-9A-Za-z]+$/', \trim($value)) === 1) {
+            return \strtolower(\trim($value));
+        }
+
+        throw new ServerConfigException(\sprintf('webhook "%s": signature %s must be an HTTP header name', $hook, $field));
     }
 
     /**
