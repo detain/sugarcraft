@@ -152,10 +152,13 @@
  ],
  "inflight": {
   "P-TABS.g": {
-   "stage": "build",
+   "stage": "review",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-P-TABS.g",
-   "branch": "cc/P-TABS.g"
+   "branch": "cc/P-TABS.g",
+   "tip": "a1504e05e1115a258e32c450a1850d4226607958",
+   "base": "6638d6415",
+   "reviewer": "ses_e7d3f7851ffeSNteDS6K4XvUBP"
   }
  },
  "blocked": [
@@ -750,7 +753,8 @@
    "riders": "none (no Protocol/web; gen-command-docs covered by green CommandDocsDrift)",
    "carries": "r1 CLEAN 0C/0M/1m/2n; no-home command-surface pin cured r2 (blob-verify test name in git show); en-only host.skills.new.* — 11-locale LAST; SkillRegistry eight->nine docblock guard-mandated (CompiledPatternCacheBoundTest:219 live-derives)"
   },
-  "C-AGT-6.d_weld": "r1 CLEAN 0C/0M/0 step-local minors (2 NITs recorded, take-or-leave); en-only cmd.pr.*/cmd.review.bad-pr -> 11-locale LAST per §6.3-h. Zero Protocol/web -> no trio/dist riders; gen-command-docs --check rc0. 3 durations rows (PrCommand 0.019/6, GhRunner 0.238/6, PrHostCommand 0.003/3 junit sums). Guards 275T/46483A, red-set = staleness pair only (foreign-era; +132A vs reviewer 46351 wobble from C-CTX-4.c era). DescriptorInheritanceGuard ::diffRange inherited-red cure (C-AGT-6.b) landed in-step. Zero new proc_open (CapturesProcessOutput choke, ChildLifetimesToolTest 9T/31A green)."
+  "C-AGT-6.d_weld": "r1 CLEAN 0C/0M/0 step-local minors (2 NITs recorded, take-or-leave); en-only cmd.pr.*/cmd.review.bad-pr -> 11-locale LAST per §6.3-h. Zero Protocol/web -> no trio/dist riders; gen-command-docs --check rc0. 3 durations rows (PrCommand 0.019/6, GhRunner 0.238/6, PrHostCommand 0.003/3 junit sums). Guards 275T/46483A, red-set = staleness pair only (foreign-era; +132A vs reviewer 46351 wobble from C-CTX-4.c era). DescriptorInheritanceGuard ::diffRange inherited-red cure (C-AGT-6.b) landed in-step. Zero new proc_open (CapturesProcessOutput choke, ChildLifetimesToolTest 9T/31A green).",
+  "P-TABS.g_weld": "3 durations rows owed: candy-code/tests/Tui/WindowStripShellTest.php 7T, candy-code/tests/App/TabAttentionTest.php 7T, tests/App/WindowTitleTest.php 3T (junit per-file sums; tsv 1523-era; desc-invariant set-equality live recount). No regen riders (no src/Protocol/** or web). §6.3-h en-only tui.pane.*+carry. WELD.md carries: Sessions auto-dock chat-readability-trial adjudication vs §6.1 P-CTX 120-col ruling (per r1), SessionTabs::tabs() list-vs-map bug fix note, AgentStrip::items() unscoped seam (P-AGENT.b chip no-ops reserved), staleness pair re-pin §7. W16-band step (owner-instructed exception) — weld bookkeeping: mark §4 but do NOT touch §3 W16 row (next lead closes W16)."
  },
  "carries": [
   "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest — closeout gate duty",
@@ -891,7 +895,7 @@
  "weld_queue": [
   "C-CTX-4.c"
  ],
- "tip": "8d7817be0",
+ "tip": "f27edbbff",
  "welded_count": 149,
  "tick": "87-disk-reconciled: W11 REALY closed@341f66404; trio MCP2b+TOOL5b+WEB3f real to 0b3c4ba21 (welded=122); W13/14 welds PENDING; phantom-atlas @b73@ correction: c3178096f/4d263705a/8d8c75678 GHOSTS, cure real 23fa8ab8e",
  "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
