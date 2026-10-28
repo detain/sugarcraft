@@ -741,6 +741,7 @@ candy-code/tests/Chat/InitialPromptTest.php	0.074	5
 candy-code/tests/Providers/BedrockSglangContextWindowTest.php	0.074	9
 candy-code/tests/SessionTest.php	0.074	18
 candy-code/tests/Support/ToolOutputSpillTest.php	0.074	16
+candy-code/tests/Tools/Edit/BomPreservationTest.php	0.074	10
 candy-code/tests/Bundles/BundleInstallTest.php	0.073	9
 candy-code/tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php	0.073	22
 candy-code/tests/Commands/McpPromptCommandsTest.php	0.072	8
@@ -816,6 +817,7 @@ candy-code/tests/Bundles/MarketplaceTest.php	0.054	9
 candy-code/tests/Events/ToolProgressFrameCodecTest.php	0.053	5
 candy-code/tests/Memory/MemorySearchIndexTest.php	0.053	15
 candy-code/tests/RuntimeToolResultUtf8Test.php	0.053	6
+candy-code/tests/Tools/BuiltIn/ReadBeforeWriteTest.php	0.053	10
 candy-code/tests/Tools/BuiltIn/WriteTest.php	0.053	24
 candy-code/tests/App/MenuBarPaneTabClickTest.php	0.052	7
 candy-code/tests/Chat/AbsoluteCapBreakerTest.php	0.052	3
