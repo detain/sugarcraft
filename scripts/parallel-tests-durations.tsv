@@ -159,6 +159,7 @@ candy-code/tests/Config/DocFigureProseDriftTest.php	2.018	89
 candy-code/tests/Cli/BootstrapTest.php	2.017	27
 candy-code/tests/Cli/NonInteractiveStdinGraceTest.php	2.015	4
 candy-code/tests/Agents/AgentWorkerPoolInlineBudgetTest.php	2.004	5
+candy-code/tests/Backend/DocumentAggregateBudgetTest.php	1.986	11
 candy-code/tests/Server/AgentsWorkflowMethodsTest.php	1.985	7
 candy-code/tests/MouseModalGuardTest.php	1.938	22
 candy-code/tests/Server/StateDirTest.php	1.921	11
