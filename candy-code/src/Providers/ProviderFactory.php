@@ -124,6 +124,14 @@ final readonly class ProviderFactory
             // the block to `custom` and re-declaring everything.
             'optional' => ['baseUrl', 'organization', 'model', 'modelPrices', 'contextWindow', 'supportsVision', 'fallbackModels', 'api'],
         ],
+        // C-PRV-2.c: Azure OpenAI speaks the OpenAI wire on a per-resource
+        // host. The schema cannot express "resource OR baseUrl" (one-of is
+        // enforced in createAzure with a message naming the template), so
+        // only the credential is required here.
+        'azure' => [
+            'required' => ['apiKey'],
+            'optional' => ['resource', 'baseUrl', 'api', 'model', 'modelPrices', 'contextWindow', 'supportsVision', 'fallbackModels'],
+        ],
         'anthropic' => [
             'required' => ['apiKey'],
             'optional' => ['baseUrl', 'model', 'modelPrices', 'contextWindow', 'fallbackModels', 'thinkingBudget'],
@@ -159,9 +167,17 @@ final readonly class ProviderFactory
             'required' => ['apiKey'],
             'optional' => ['baseUrl', 'model', 'modelPrices', 'thinkingBudget', 'fallbackModels', 'contextWindow'],
         ],
+        // C-PRV-2.c: an OpenRouter preset of the OpenAI-compatible shape —
+        // the same keys `custom` takes, with the base and the attribution
+        // headers defaulted (an explicit `baseUrl` still overrides, e.g.
+        // for a regional endpoint).
+        'openrouter' => [
+            'required' => ['apiKey'],
+            'optional' => ['baseUrl', 'model', 'headers', 'supportsStreaming', 'supportsFunctionCalling', 'extraBody', 'supportsVision', 'modelPrices', 'contextWindow', 'fallbackModels', 'mediaKinds', 'mediaBaseUrl', 'mediaApiKey'],
+        ],
         'custom' => [
             'required' => ['name', 'baseUrl', 'model'],
-            'optional' => ['apiKey', 'supportsStreaming', 'supportsFunctionCalling', 'extraBody', 'supportsVision', 'modelPrices', 'contextWindow', 'fallbackModels', 'mediaKinds', 'mediaBaseUrl', 'mediaApiKey'],
+            'optional' => ['apiKey', 'supportsStreaming', 'supportsFunctionCalling', 'extraBody', 'headers', 'supportsVision', 'modelPrices', 'contextWindow', 'fallbackModels', 'mediaKinds', 'mediaBaseUrl', 'mediaApiKey'],
         ],
     ];
 
@@ -475,13 +491,33 @@ final readonly class ProviderFactory
     }
 
     /**
+     * C-PRV-2.c: Azure OpenAI's OpenAI-compatible endpoint root template;
+     * `%s` is the resource name. The data-plane path `/openai/v1/` serves
+     * both chat/completions and responses for deployed models.
+     */
+    private const AZURE_BASE_TEMPLATE = 'https://%s.openai.azure.com/openai/v1/';
+
+    /**
+     * C-PRV-2.c: OpenRouter's documented API root (an OpenAI-compatible
+     * wire) and the attribution headers its rankings request — the
+     * homepage of this package and its name, matching the header guidance
+     * at https://openrouter.ai/docs. An operator `headers` block overrides
+     * the pair key for key.
+     */
+    private const OPENROUTER_DEFAULT_BASE = 'https://openrouter.ai/api/v1';
+    private const OPENROUTER_ATTRIBUTION_HEADERS = [
+        'HTTP-Referer' => 'https://github.com/sugarcraft/candy-code',
+        'X-Title' => 'candy-code',
+    ];
+
+    /**
      * Returns the list of available provider types.
      *
      * @return array<string>
      */
     public function availableTypes(): array
     {
-        return ['openai', 'anthropic', 'claude-code', 'codex', 'sglang', 'bedrock', 'vertex', 'gemini', 'custom'];
+        return ['openai', 'azure', 'anthropic', 'claude-code', 'codex', 'sglang', 'bedrock', 'vertex', 'gemini', 'openrouter', 'custom'];
     }
 
     /**
@@ -522,6 +558,19 @@ final readonly class ProviderFactory
                 // only calls withBaseUri() when it is set, so an unset env is
                 // byte-identical to before.
                 'baseUrl' => getenv('OPENAI_BASE_URL') ?: null,
+                'model' => 'gpt-4o',
+            ],
+            'azure' => [
+                'type' => 'azure',
+                'apiKey' => getenv('AZURE_OPENAI_API_KEY') ?: '',
+                // The resource name is the one piece with no sane global
+                // default — it is per-deployment infrastructure. A null
+                // here means createAzure must be given an explicit
+                // `resource` (or a full `baseUrl`) and the refusal says so.
+                'resource' => null,
+                // Azure chat deployments are named per resource (arbitrary
+                // deployment names), so no universal default model exists;
+                // the OpenAI spelling is a placeholder an operator replaces.
                 'model' => 'gpt-4o',
             ],
             'anthropic' => [
@@ -626,6 +675,14 @@ final readonly class ProviderFactory
                 // sglang/bedrock do: a default `gemini` launch must name a
                 // model that resolves in the shared Gemini price table.
                 'model' => GeminiProvider::DEFAULT_MODEL,
+            ],
+            'openrouter' => [
+                'type' => 'openrouter',
+                'apiKey' => getenv('OPENROUTER_API_KEY') ?: '',
+                // OpenRouter model ids are `vendor/model`; this one exists
+                // in their catalogue and matches the built-in price shape
+                // the OpenAI tables know.
+                'model' => 'openai/gpt-4o',
             ],
             'custom' => [
                 'type' => 'custom',
@@ -765,6 +822,11 @@ final readonly class ProviderFactory
         // one meaning, and this package names no env a config parser does
         // not also honour).
         'gemini' => ['apiKey' => 'GEMINI_API_KEY'],
+        // C-PRV-2.c: the two new front doors. Azure's variable name is
+        // Microsoft's own documented one; OPENROUTER_API_KEY follows the
+        // one-name-one-meaning rule the Gemini row states.
+        'azure' => ['apiKey' => 'AZURE_OPENAI_API_KEY'],
+        'openrouter' => ['apiKey' => 'OPENROUTER_API_KEY'],
     ];
 
     /**
@@ -797,7 +859,7 @@ final readonly class ProviderFactory
      * "Unknown provider type: opnenai" used to be the whole sentence, leaving
      * the typo to rediscover the valid set by reading source. The prefix stays
      * byte-identical — existing pins and the transcript's denial-shape scans
-     * key off it — and behind it now ride the eight valid types, the closest
+     * key off it — and behind it now ride the eleven valid types, the closest
      * spelling by {@see similar_text()} percentage (only when the candidate
      * shares at least half its length with the ask, so `cat` does not get
      * told it meant `custom`), and the one command that lists what this
@@ -835,6 +897,7 @@ final readonly class ProviderFactory
     {
         return match ($type) {
             'openai' => $this->createOpenAI($config),
+            'azure' => $this->createAzure($config),
             'anthropic' => $this->createAnthropic($config),
             'claude-code' => $this->createClaudeCode($config),
             'codex' => $this->createCodex($config),
@@ -842,6 +905,7 @@ final readonly class ProviderFactory
             'bedrock' => $this->createBedrock($config),
             'vertex' => $this->createVertex($config),
             'gemini' => $this->createGemini($config),
+            'openrouter' => $this->createOpenRouter($config),
             'custom' => $this->createCustom($config),
             default => throw new \RuntimeException("Unsupported provider type: {$type}"),
         };
@@ -938,6 +1002,131 @@ final readonly class ProviderFactory
                 && trim($config['organization']) !== ''
                 ? trim($config['organization'])
                 : null,
+        );
+    }
+
+    /**
+     * C-PRV-2.c: Azure OpenAI. The endpoint speaks the OpenAI wire, so the
+     * provider class is {@see OpenAIProvider} under the `azure` name; what
+     * differs is the credential shape (the `api-key` header, never
+     * `Authorization`) and the base (per-resource host, or an explicit
+     * `baseUrl` for a non-standard gateway).
+     *
+     * @param array<string, mixed> $config
+     *
+     * @throws \InvalidArgumentException when neither `resource` nor
+     *         `baseUrl` names a host — the schema's `required` list cannot
+     *         express a one-of, so the builder refuses here instead.
+     */
+    private function createAzure(array $config): OpenAIProvider
+    {
+        $resource = is_string($config['resource'] ?? null) ? trim($config['resource']) : '';
+        $baseUrl = is_string($config['baseUrl'] ?? null) ? trim($config['baseUrl']) : '';
+
+        if ($resource === '' && $baseUrl === '') {
+            throw new \InvalidArgumentException(sprintf(
+                'Provider type "azure" needs a "resource" (the Azure OpenAI resource name, for '
+                . rtrim(str_replace('%s', '{resource}', self::AZURE_BASE_TEMPLATE), '/') . ')'
+                . ' or an explicit "baseUrl" — set one under providers.<name> in ~/.candy-code/config.json.',
+            ));
+        }
+
+        // An explicit resource wins over a configured base only when no
+        // baseUrl is given; both present is not an error — the full URL is
+        // the more specific statement (a gateway in front of the resource).
+        $base = $baseUrl !== '' ? $baseUrl : sprintf(self::AZURE_BASE_TEMPLATE, $resource);
+
+        $apiKey = is_string($config['apiKey'] ?? null) && $config['apiKey'] !== '' ? $config['apiKey'] : null;
+
+        // Same expansion of \OpenAI::client() as createOpenAI (bounded
+        // transport), minus withApiKey: passing it makes the SDK send
+        // `Authorization`, which Azure's endpoint does not want once
+        // `api-key` is present. The beta header is kept for parity with
+        // the chat arm; Azure ignores unknown OpenAI-Beta values.
+        $factory = \OpenAI::factory()
+            ->withHttpHeader('api-key', (string) $apiKey)
+            ->withHttpHeader('OpenAI-Beta', 'assistants=v2')
+            ->withBaseUri($base)
+            ->withHttpClient(self::guzzleClient());
+        $client = $factory->make();
+
+        $model = $config['model'] ?? 'gpt-4o';
+
+        $api = $config['api'] ?? OpenAIProvider::API_CHAT;
+        if ($api === null) {
+            $api = OpenAIProvider::API_CHAT;
+        }
+        if (!is_string($api) || !in_array($api, OpenAIProvider::validApis(), true)) {
+            throw new \InvalidArgumentException(sprintf(
+                'api must be "chat" or "responses", got %s',
+                is_string($api) ? "'$api'" : get_debug_type($api),
+            ));
+        }
+
+        return new OpenAIProvider(
+            $client,
+            $model,
+            self::modelPricesFor($config),
+            self::configuredContextWindow(
+                $config['contextWindow'] ?? self::userTierSetting('contextWindow'),
+                $model,
+            ),
+            self::configuredSupportsVision($config['supportsVision'] ?? null),
+            $this->modelMetadata(),
+            // The Responses arm dials the same Azure base (modelsBaseUrl);
+            // modelsApiKey stays null because the credential rides the
+            // apiKeyHeader below, not a Bearer token.
+            modelsBaseUrl: $base,
+            modelsApiKey: null,
+            api: $api,
+            // Azure has no OpenAI-Organization header; the block's key is
+            // deliberately not threaded.
+            organization: null,
+            providerName: 'azure',
+            apiKeyHeader: $apiKey,
+        );
+    }
+
+    /**
+     * C-PRV-2.c: OpenRouter — an `openAiCompatible` preset of the `custom`
+     * shape: the documented base, the attribution headers OpenRouter uses
+     * for its rankings, and `openai/gpt-4o` as a model id that exists in
+     * their catalogue. Every other key is the `custom` block's own menu
+     * (`model`, `baseUrl` for a different endpoint, `headers` to replace
+     * or extend the attribution pair, vision/stream switches).
+     *
+     * @param array<string, mixed> $config
+     */
+    private function createOpenRouter(array $config): CustomProvider
+    {
+        $baseUrl = is_string($config['baseUrl'] ?? null) && trim($config['baseUrl']) !== ''
+            ? trim($config['baseUrl'])
+            : self::OPENROUTER_DEFAULT_BASE;
+
+        // An operator `headers` block wins key-for-key over the preset
+        // pair (array union keeps the LEFT side on collision, so config
+        // goes first); the preset fills in the attribution names absent.
+        $headers = self::configuredHeaders($config['headers'] ?? null, 'openrouter')
+            + self::OPENROUTER_ATTRIBUTION_HEADERS;
+
+        $model = $config['model'] ?? 'openai/gpt-4o';
+
+        return CustomProvider::openAiCompatible(
+            name: 'openrouter',
+            baseUrl: $baseUrl,
+            model: $model,
+            apiKey: $config['apiKey'] ?? null,
+            supportsStreaming: $config['supportsStreaming'] ?? true,
+            supportsFunctionCalling: $config['supportsFunctionCalling'] ?? true,
+            extraBody: self::configuredExtraBody($config['extraBody'] ?? self::userTierSetting('extraBody')),
+            supportsVision: self::configuredSupportsVision($config['supportsVision'] ?? null) ?? false,
+            modelMetadata: $this->modelMetadata(),
+            modelPrices: self::modelPricesFor($config),
+            contextWindowOverride: self::configuredContextWindow(
+                $config['contextWindow'] ?? self::userTierSetting('contextWindow'),
+                $model,
+            ),
+            headers: $headers,
         );
     }
 
@@ -1820,6 +2009,39 @@ final readonly class ProviderFactory
                 $config['contextWindow'] ?? self::userTierSetting('contextWindow'),
                 $config['model'],
             ),
+            // C-PRV-2.c: the block's own extra request headers; the
+            // provider validates the shape and refuses its owned names.
+            headers: self::configuredHeaders($config['headers'] ?? null, $config['name'] ?? 'custom'),
         );
+    }
+
+    /**
+     * C-PRV-2.c: the `headers` config key — an extra request-header map
+     * for OpenAI-compatible wires that need attribution or gateway fields
+     * (OpenRouter's HTTP-Referer/X-Title pair is the preset case). Absent
+     * or null is the empty map, byte-identical to before the key existed;
+     * anything that is not a map is refused loudly, and each name/value
+     * pair is validated (and the provider-owned names refused) by
+     * {@see CustomProvider}'s constructor.
+     *
+     * @param mixed $headers
+     *
+     * @return array<string, string>
+     */
+    private static function configuredHeaders(mixed $headers, string $providerName): array
+    {
+        if ($headers === null) {
+            return [];
+        }
+
+        if (!is_array($headers)) {
+            throw new \InvalidArgumentException(sprintf(
+                'Provider "%s" headers must be a map of header name to value, got %s.',
+                $providerName,
+                get_debug_type($headers),
+            ));
+        }
+
+        return $headers;
     }
 }

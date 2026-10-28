@@ -60,6 +60,14 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
     public const SDK_DEFAULT_BASE = 'https://api.openai.com/v1';
 
     /**
+     * C-PRV-2.c: the `type` key this class answers to by default. Azure
+     * OpenAI mints the same class under its own name via the constructor's
+     * `$providerName`; the default keeps every hand-built construction
+     * reporting `openai` exactly as before.
+     */
+    public const DEFAULT_NAME = 'openai';
+
+    /**
      * E707 (round 81): the chat-completions `finish_reason` values that mean
      * the reply hit the OUTPUT ceiling rather than ending on its own. OpenAI's
      * documented terminating set is `stop` / `length` / `tool_calls` /
@@ -221,6 +229,18 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
         // production passes nothing and guzzleClient() builds bounded
         // transports per call.
         private ?\GuzzleHttp\Client $responsesClient = null,
+        // C-PRV-2.c: the `type` key that minted this provider. Azure
+        // OpenAI reuses this whole class — its endpoint speaks the OpenAI
+        // wire — but reports its own name so transcripts, telemetry and
+        // price lookups attribute to `azure`. Default 'openai' keeps every
+        // existing construction byte-identical.
+        private string $providerName = self::DEFAULT_NAME,
+        // C-PRV-2.c: non-null switches this provider to Azure's
+        // credential shape — the key travels in an `api-key` header and
+        // the `Authorization` header is never sent. The chat arm gets
+        // this from the SDK client (built without withApiKey); the flag
+        // governs the raw Responses arm and the catalog door.
+        private ?string $apiKeyHeader = null,
     ) {
         if ($contextWindowOverride !== null && $contextWindowOverride < 1) {
             throw new \InvalidArgumentException(sprintf(
@@ -232,7 +252,7 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
 
     public function name(): string
     {
-        return 'openai';
+        return $this->providerName;
     }
 
     /** PRV-1: the version root the factory resolved, normalized for memo identity. */
@@ -275,9 +295,17 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
      * An explicit baseUrl still rides keyless: self-hosted
      * OpenAI-compatible servers commonly speak `/models` without a key,
      * and there the ask is not anonymous-by-guess but configured.
+     * C-PRV-2.c adds the Azure door: an `api-key` provider's deployments
+     * live on Azure's control-plane API, not on `{base}/models`, so the
+     * OpenAI-shaped ask can only fail there — the catalog reports closed
+     * rather than dialing a 404.
      */
     private function askableCatalogBase(): ?string
     {
+        if ($this->apiKeyHeader !== null) {
+            return null;
+        }
+
         $base = $this->modelsBaseUrl;
         if ($base === null || trim($base) === '') {
             return null;

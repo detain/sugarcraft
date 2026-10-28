@@ -81,6 +81,9 @@ final class ProviderErrorCopyTest extends TestCase
             'vertex' => ['projectId', 'GCP_PROJECT_ID'],
             'sglang' => ['baseUrl', 'OPENAI_BASE_URL'],
             'gemini' => ['apiKey', 'GEMINI_API_KEY'],
+            // C-PRV-2.c: the two new credential front doors.
+            'azure' => ['apiKey', 'AZURE_OPENAI_API_KEY'],
+            'openrouter' => ['apiKey', 'OPENROUTER_API_KEY'],
         ];
 
         foreach ($expectations as $type => [$key, $env]) {

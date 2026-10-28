@@ -907,7 +907,12 @@ trait OpenAiResponsesWire
      * self-hosted-proxy posture {@see
      * \SugarCraft\Code\Providers\OpenAIProvider}'s `askableCatalogBase()`
      * documents; against the public API root the factory always has a key
-     * (the `openai` schema row requires `apiKey`).
+     * (the `openai` and `azure` schema rows both require `apiKey`).
+     * C-PRV-2.c: an Azure provider (`apiKeyHeader` set) authenticates
+     * with the `api-key` header instead — Azure OpenAI accepts that
+     * scheme on its OpenAI-compatible endpoint and never sees an
+     * `Authorization` header from us, mirroring how the factory builds
+     * the chat arm without `withApiKey`.
      *
      * @return array<string, string>
      */
@@ -915,7 +920,9 @@ trait OpenAiResponsesWire
     {
         $headers = [];
 
-        if (is_string($this->modelsApiKey ?? null) && $this->modelsApiKey !== '') {
+        if ($this->apiKeyHeader !== null) {
+            $headers['api-key'] = $this->apiKeyHeader;
+        } elseif (is_string($this->modelsApiKey ?? null) && $this->modelsApiKey !== '') {
             $headers['Authorization'] = 'Bearer ' . $this->modelsApiKey;
         }
 

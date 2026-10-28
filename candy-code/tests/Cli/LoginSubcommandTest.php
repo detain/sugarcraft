@@ -221,6 +221,37 @@ final class LoginSubcommandTest extends TestCase
         $this->assertStringNotContainsString('sk-probe-key-9', $out, 'the key never echoes back');
     }
 
+    /**
+     * C-PRV-2.c: the two new store arms must reach loginStoreKey (not the
+     * ambient branch) and disclose the env name LOGIN_KEY_ENVS advertises.
+     *
+     * @return array<string, array{string, string}>
+     */
+    public static function newKeyStoreArms(): array
+    {
+        return [
+            'azure' => ['azure', 'AZURE_OPENAI_API_KEY'],
+            'openrouter' => ['openrouter', 'OPENROUTER_API_KEY'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('newKeyStoreArms')]
+    public function testTheAzureAndOpenRouterLoginsStoreTheirKeyArm(string $type, string $envName): void
+    {
+        $this->armKeyPaste('probe-key-1');
+
+        [$code, $out] = $this->capture(fn (): int => $this->dispatch(['login', $type]));
+
+        $this->assertSame(NonInteractive::EXIT_OK, $code);
+        $saved = json_decode((string) file_get_contents($this->dir . '/config.json'), true);
+        $this->assertSame(
+            ['type' => $type, 'apiKey' => 'probe-key-1'],
+            $saved['providers'][$type] ?? null,
+            "the {$type} entry carries its type and the trimmed key",
+        );
+        $this->assertStringContainsString($envName, $out, "the {$type} arm discloses the variable its defaultConfig reads");
+    }
+
     public function testStoringOneKeyKeepsEveryOtherProviderEntry(): void
     {
         file_put_contents($this->dir . '/config.json', json_encode([

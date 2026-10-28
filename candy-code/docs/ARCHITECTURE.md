@@ -944,13 +944,16 @@ its keys and its main argument, and its result is sent as it was.
 
 ## Providers
 
-`ProviderFactory::availableTypes()` returns **nine** selectable
-names, and each builds a different class. Measured by constructing every one of
+`ProviderFactory::availableTypes()` returns **eleven** selectable
+names; most build their own class, and since C-PRV-2.c two more reuse one —
+Azure speaks the OpenAI wire on its own host, and OpenRouter is a preset of
+the custom shape. Measured by constructing every one of
 them on this tree:
 
 | `type` | Class actually built |
 |---|---|
 | `openai` | `OpenAIProvider` |
+| `azure` | `OpenAIProvider`, Azure host and `api-key` header |
 | `anthropic` | **`AnthropicProvider`**, native Messages wire |
 | `claude-code` | `ClaudeCodeProvider` (over `ClaudeCodeInvocation`) |
 | `codex` | `CodexProvider` (over `CodexInvocation`) |
@@ -958,6 +961,7 @@ them on this tree:
 | `bedrock` | `BedrockProvider` |
 | `vertex` | `VertexProvider` |
 | `gemini` | `GeminiProvider`, native generativelanguage wire |
+| `openrouter` | `CustomProvider`, OpenRouter base and attribution headers |
 | `custom` | `CustomProvider` |
 
 Two rows are easy to get wrong, so they are worth stating flatly.
@@ -976,7 +980,7 @@ of `anthropic`: `createClaudeCode()` returns the real
 `ClaudeCodeProvider`, and `php bin/candy-code models` prints
 `claude-code claude-sonnet-4-6` as its own row.
 
-**`echo` is not one of the nine.** `$factory->create(['type' => 'echo'])`
+**`echo` is not one of the eleven.** `$factory->create(['type' => 'echo'])`
 raises `Unknown provider type: echo`. `EchoProvider` is nonetheless live, from a
 different direction: `Cli\Bootstrap::provider()` returns
 `new EchoProvider()` whenever the run selected no provider, or the selected one

@@ -5341,7 +5341,7 @@ final class DocFigureProseDriftTest extends TestCase
         $liveTypes = $live[1];
 
         self::assertSame(1, preg_match('/returns \*\*(\w+)\*\* selectable names/', $segment, $word), 'the paragraph no longer spells its count beside "selectable names"');
-        $wordNumbers = ['five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9];
+        $wordNumbers = ['five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'eleven' => 11];
         self::assertArrayHasKey($word[1], $wordNumbers, "the spelled count '{$word[1]}' is outside the pinned word map — extend it deliberately");
         self::assertCount($wordNumbers[$word[1]], $liveTypes, "the page still says the factory offers {$word[1]} selectable names — availableTypes() returns another count");
 
@@ -5376,7 +5376,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString('ClaudeCodeInvocation', $segment, 'the table no longer says the claude-code row rides over ClaudeCodeInvocation');
         self::assertTrue(class_exists('SugarCraft\Code\Providers\ClaudeCodeInvocation'), 'ClaudeCodeInvocation, cited as the claude-code row carrier, is gone');
 
-        self::assertStringContainsString('**`echo` is not one of the nine.**', $segment, 'the echo exclusion sentence moved — echo is a degradation path, never a selectable name');
+        self::assertStringContainsString('**`echo` is not one of the eleven.**', $segment, 'the echo exclusion sentence moved — echo is a degradation path, never a selectable name');
         self::assertNotContains('echo', $liveTypes, 'echo joined availableTypes() — the exclusion this paragraph stakes out is no longer true');
         self::assertStringContainsString('Unknown provider type:', $factory, 'the factory no longer throws the named rejection the echo paragraph quotes');
         // W7-E C3 (v4:S1b, 2026-10-21): provider()'s body moved to

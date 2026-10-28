@@ -61,13 +61,14 @@ final class ProviderFactoryTest extends TestCase
     // availableTypes()
     // -------------------------------------------------------------------------
 
-    public function testAvailableTypesReturnsAllNineTypes(): void
+    public function testAvailableTypesReturnsAllElevenTypes(): void
     {
         $types = $this->factory->availableTypes();
 
-        $this->assertCount(9, $types);
+        $this->assertCount(11, $types);
         $this->assertSame([
             'openai',
+            'azure',
             'anthropic',
             'claude-code',
             'codex',
@@ -75,6 +76,7 @@ final class ProviderFactoryTest extends TestCase
             'bedrock',
             'vertex',
             'gemini',
+            'openrouter',
             'custom',
         ], $types);
     }

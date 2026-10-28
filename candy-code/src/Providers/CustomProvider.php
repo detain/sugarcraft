@@ -86,6 +86,15 @@ final readonly class CustomProvider implements ProviderInterface, RebindsModel, 
         'tools',
     ];
 
+    /**
+     * C-PRV-2.c: header names the provider builds itself — from `apiKey`
+     * and the JSON wire format — so an extra-headers block naming one is
+     * a contradiction, refused instead of silently resolved.
+     *
+     * @var list<string>
+     */
+    private const OWNED_HEADER_NAMES = ['authorization', 'content-type'];
+
     public function __construct(
         private string $name,
         private string $baseUrl,
@@ -154,6 +163,19 @@ final readonly class CustomProvider implements ProviderInterface, RebindsModel, 
         private array $modelPrices = [],
         /** Roadmap 5.13a: the operator's `contextWindow` for this model; null for none. */
         private ?int $contextWindowOverride = null,
+        /**
+         * C-PRV-2.c: extra wire headers the factory merged for this
+         * endpoint (OpenRouter's `HTTP-Referer`/`X-Title` attribution pair,
+         * or an operator's `headers` block on a custom provider). The
+         * constructor validates them and the client is built from them;
+         * the property exists so the merged set is assertable at the
+         * provider boundary. `Authorization` and `Content-Type` are this
+         * class's own jurisdiction — naming one here is refused rather
+         * than silently won or lost.
+         *
+         * @var array<string, string>
+         */
+        private array $defaultHeaders = [],
     ) {
         foreach (array_keys($extraBody) as $key) {
             if (!is_string($key) || $key === '') {
@@ -177,6 +199,40 @@ final readonly class CustomProvider implements ProviderInterface, RebindsModel, 
                 ));
             }
         }
+
+        foreach ($defaultHeaders as $key => $value) {
+            if (!is_string($key) || $key === '' || $key !== trim($key)
+                || str_contains($key, ':') || preg_match('/[\x00-\x1F\x7F]/', $key) === 1) {
+                throw new \InvalidArgumentException(sprintf(
+                    'CustomProvider header names must be non-empty trimmed strings without a colon or control characters, got %s.',
+                    var_export($key, true),
+                ));
+            }
+            if (in_array(strtolower($key), self::OWNED_HEADER_NAMES, true)) {
+                throw new \InvalidArgumentException(sprintf(
+                    'CustomProvider headers must not set "%s": the provider builds that header itself.',
+                    $key,
+                ));
+            }
+            if (!is_string($value) || $value === '' || preg_match('/[\x00-\x1F\x7F]/', $value) === 1) {
+                throw new \InvalidArgumentException(sprintf(
+                    'CustomProvider header "%s" needs a non-empty string value without control characters.',
+                    $key,
+                ));
+            }
+        }
+    }
+
+    /**
+     * C-PRV-2.c: the extra headers this provider was built with (see the
+     * constructor's `$defaultHeaders`). Exposed for wiring assertions;
+     * the live client already carries them.
+     *
+     * @return array<string, string>
+     */
+    public function defaultHeaders(): array
+    {
+        return $this->defaultHeaders;
     }
 
     /**
@@ -198,13 +254,19 @@ final readonly class CustomProvider implements ProviderInterface, RebindsModel, 
         ?ModelMetadata $modelMetadata = null,
         array $modelPrices = [],
         ?int $contextWindowOverride = null,
+        // C-PRV-2.c: extra request headers (preset attribution pairs such
+        // as OpenRouter's HTTP-Referer/X-Title, or an operator `headers`
+        // block). Merged after Content-Type and before the Authorization
+        // this method builds from $apiKey, so a supplied set can carry
+        // neither name — the constructor refuses those as owned.
+        array $headers = [],
     ): self {
-        $headers = [
+        $wireHeaders = $headers + [
             'Content-Type' => 'application/json',
         ];
 
         if ($apiKey !== null) {
-            $headers['Authorization'] = 'Bearer ' . $apiKey;
+            $wireHeaders['Authorization'] = 'Bearer ' . $apiKey;
         }
 
         // guzzleClient() (not `new Client`) so this provider inherits the
@@ -215,7 +277,7 @@ final readonly class CustomProvider implements ProviderInterface, RebindsModel, 
             // when the request URI starts with '/'. Trailing-slash the base
             // and keep request paths below relative (no leading '/').
             'base_uri' => rtrim($baseUrl, '/') . '/',
-            'headers' => $headers,
+            'headers' => $wireHeaders,
         ]);
 
         return new self(
@@ -232,6 +294,7 @@ final readonly class CustomProvider implements ProviderInterface, RebindsModel, 
             modelMetadata: $modelMetadata,
             modelPrices: $modelPrices,
             contextWindowOverride: $contextWindowOverride,
+            defaultHeaders: $headers,
         );
     }
 

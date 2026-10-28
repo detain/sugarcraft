@@ -900,16 +900,21 @@ final class Subcommands
     // ---------------------------------------------------------------------
 
     /**
-     * The three built-in types whose credential IS an API key this command
+     * The five built-in types whose credential IS an API key this command
      * can store. The env names are the ones ProviderFactory's own defaults
      * read; naming one nothing consumes would be worse than naming none.
+     * (C-PRV-2.c added `azure`/AZURE_OPENAI_API_KEY and
+     * `openrouter`/OPENROUTER_API_KEY — azure still needs a `resource` or
+     * `baseUrl` in its block, which login deliberately does not invent.)
      *
      * @var array<string, string>
      */
     private const LOGIN_KEY_ENVS = [
         'openai' => 'OPENAI_API_KEY',
+        'azure' => 'AZURE_OPENAI_API_KEY',
         'anthropic' => 'ANTHROPIC_API_KEY',
         'gemini' => 'GEMINI_API_KEY',
+        'openrouter' => 'OPENROUTER_API_KEY',
     ];
 
     /**
@@ -1003,7 +1008,7 @@ final class Subcommands
         return match ($type) {
             'claude-code' => self::loginPassthrough(['claude', 'auth', 'login'], 'cli.sub.login.passthrough_claude'),
             'codex' => self::loginPassthrough(['codex', 'login'], 'cli.sub.login.passthrough_codex'),
-            'openai', 'anthropic', 'gemini' => self::loginStoreKey($type),
+            'openai', 'azure', 'anthropic', 'gemini', 'openrouter' => self::loginStoreKey($type),
             default => self::loginAmbient($type),
         };
     }

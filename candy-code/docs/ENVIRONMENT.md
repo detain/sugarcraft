@@ -227,6 +227,8 @@ the `claude` binary it spawns.
 | `GCP_PROJECT_ID` | `vertex` | Google Cloud project ID. Defaults to the empty string. |
 | `GEMINI_API_KEY` | `gemini` | API key for the native Gemini endpoint, sent as the `x-goog-api-key` header. Defaults to the empty string, which the provider will reject. |
 | `GEMINI_BASE_URL` | `gemini` | API base URL. Defaults to `https://generativelanguage.googleapis.com`; the requests go to `<base>/v1beta/models/<model>:generateContent` (and `:streamGenerateContent?alt=sse`), and a base that already ends in `/v1` or `/v1beta` is used as it is. |
+| `AZURE_OPENAI_API_KEY` | `azure` | API key for the Azure OpenAI resource, sent as the `api-key` header (never `Authorization`). Defaults to the empty string, which the provider will reject. The block still needs a `resource` or `baseUrl` to name the host. |
+| `OPENROUTER_API_KEY` | `openrouter` | API key for OpenRouter, sent as a bearer token on the OpenAI-compatible wire. Defaults to the empty string, which the provider will reject. |
 
 `bedrock` reads two variables of its own, both naming the region; credentials
 stay the AWS SDK's ambient chain (`AWS_*` variables, `~/.aws/credentials`,

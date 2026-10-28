@@ -91,6 +91,17 @@ arm builds a request. A split like that must stay binary — an unknown
 spelling throws by name when the provider is built, because a value that
 reached the live object would answer neither arm's endpoint.
 
+The converse precedent is a type that reuses an existing wire under its own
+name (C-PRV-2.c): `azure` registers `OpenAIProvider` against the per-resource
+Azure host with the key moved to the `api-key` header and the model catalog
+closed (the `/models` shape does not exist there), and `openrouter` registers
+a `CustomProvider` preset carrying the documented base plus the
+`HTTP-Referer`/`X-Title` attribution pair, overridable per block through the
+`headers` key a custom provider now also accepts. A reuse still needs its
+own schema row, `defaultConfig()` arm, `REQUIRED_KEY_ENVS` hint, README row,
+and — when it introduces a new environment name — the same-time
+`docs/ENVIRONMENT.md` table entry the guard enforces.
+
 The thinking-block carrier (`CompleteResponse::$thinkingBlocks`, replayed by
 `AssistantMessage::thinkingBlocks()`) is owned by the WIRE that produced the
 blocks, not by the store that persisted them: every parse seam collects only
