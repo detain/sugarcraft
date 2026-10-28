@@ -337,6 +337,18 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     public const MAX_FRAME_BYTES = 64 * 1024 * 1024;
 
     /**
+     * C-CTX-6.b: the base64 document payload one request may carry, in bytes.
+     * Every still-visible document re-encodes on every request, so it is the
+     * session's whole document set that must fit under Anthropic's 32 MiB
+     * per-request ceiling — a 15 MiB PDF paired with a 10 MiB one put every
+     * later turn over it (their blocks sum to 33.3 MiB encoded), a 400 on
+     * every send from then on. 30 MiB leaves one worst-case 20 MiB PDF
+     * (26.7 MiB encoded) plus headroom; documents older than where the budget
+     * runs out are withheld by toTypedMessages(), newest first.
+     */
+    public const DOCUMENT_BASE64_BUDGET = 30 * 1024 * 1024;
+
+    /**
      * B6: the rejection a turn settles with when the child's frame stream
      * stops being parseable - a header declaring an impossible length, a body
      * that does not decode, or a child gone with half a frame still on the
@@ -5935,12 +5947,53 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
 
         $vision = null;
         $documents = null;
+        // C-CTX-6.b: document bytes are a request-wide law, not a row-wide one.
+        // AttachmentEncoding re-encodes every still-visible document on every
+        // request, so two large PDFs attached on different turns push EVERY
+        // later request over the wire's per-request ceiling and lose the
+        // session to 400s from then on. The budget is counted newest-first:
+        // documents that no longer fit ride their row withheld (a one-line
+        // note for the model in place of the bytes, the row otherwise kept),
+        // and one notice naming them all lands on this turn - whichever row a
+        // withheld document came from, because the withholding is the current
+        // request's problem, not only the attaching turn's. The provider is
+        // asked about documents here, once, and the answer seeds the memo the
+        // row walk below shares, so the capability probe stays exactly one.
+        $overBudget = [];
+        $docBudget = self::DOCUMENT_BASE64_BUDGET;
+        foreach (array_reverse($visible, true) as $i => $msg) {
+            if ($msg->role->value !== 'user') {
+                continue;
+            }
+            foreach (array_reverse($msg->attachments, true) as $j => $attachment) {
+                if (!$attachment instanceof Attachment
+                    || $attachment->type !== AttachmentType::Document
+                    || $attachment->data === null
+                ) {
+                    continue;
+                }
+                $documents ??= $this->provider->supportsDocuments();
+                if (!$documents) {
+                    // The capability gate withholds it anyway; the budget
+                    // only speaks for documents that would otherwise ride.
+                    continue;
+                }
+                $cost = 4 * (int) ceil(strlen($attachment->data) / 3);
+                if ($cost > $docBudget) {
+                    $overBudget[$i][$j] = trim((string) preg_replace('/[\p{C}\s]+/u', ' ', $attachment->name())) ?: '(unnamed)';
+
+                    continue;
+                }
+                $docBudget -= $cost;
+            }
+        }
+        ksort($overBudget);
         $out = [];
         $replayed = [];
         foreach ($visible as $i => $msg) {
             if ($msg->role->value === 'user') {
                 $rowNotice = null;
-                $out[] = $this->typedUserMessage($msg, $vision, $documents, $rowNotice);
+                $out[] = $this->typedUserMessage($msg, $vision, $documents, $rowNotice, $overBudget[$i] ?? []);
                 if ($i === $lastUser) {
                     $attachmentNotice = $rowNotice;
                 }
@@ -6010,6 +6063,23 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             array_push($out, ...$answers);
         }
 
+        // C-CTX-6.b: the budget notice is composed once per turn from the
+        // whole-row view above (a row-scoped notice would only surface when
+        // the last user row itself lost a document, and the losing documents
+        // are precisely the older rows'). Joined after any capability notice
+        // so the two advices - switch model, re-attach document - stay two
+        // readable sentences.
+        if ($overBudget !== []) {
+            $withheldNames = [];
+            foreach ($overBudget as $perRow) {
+                foreach ($perRow as $name) {
+                    $withheldNames[] = $name;
+                }
+            }
+            $budgetNotice = Lang::t('chat.attach.document_withheld', ['names' => implode(', ', $withheldNames)]);
+            $attachmentNotice = $attachmentNotice === null ? $budgetNotice : $attachmentNotice . ' ' . $budgetNotice;
+        }
+
         return $out;
     }
 
@@ -6042,15 +6112,18 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
 
     /**
      * One user row as a {@see UserMessage}, its attachments carried - see
-     * {@see toTypedMessages()}.
+     * {@see toTypedMessages()}. `$overBudget` names the offsets in this row's
+     * attachments that the request-wide document budget (C-CTX-6.b) could not
+     * fit; they ride withheld, and withheld for a different reason than the
+     * incapable-wire ones, so it says so differently.
      */
-    private function typedUserMessage(Message $msg, ?bool &$vision, ?bool &$documents, ?string &$notice): UserMessage
+    private function typedUserMessage(Message $msg, ?bool &$vision, ?bool &$documents, ?string &$notice, array $overBudget = []): UserMessage
     {
         $content = $msg->content;
         $kept = [];
         $withheld = [];
         $withheldDocs = [];
-        foreach ($msg->attachments as $attachment) {
+        foreach ($msg->attachments as $j => $attachment) {
             if (!$attachment instanceof Attachment) {
                 continue;
             }
@@ -6078,6 +6151,19 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                     $content .= ($content === '' ? '' : "\n\n") . '[Document attachment '
                         . str_replace(['"', "\r", "\n"], ["'", ' ', ' '], $attachment->path)
                         . ' was not sent: the active model does not accept documents.]';
+
+                    continue;
+                }
+                if (isset($overBudget[$j])) {
+                    // C-CTX-6.b: the wire can carry documents; this document
+                    // no longer fits the request beside the newer ones the
+                    // transcript still shows. The bytes are withheld and one
+                    // line names the difference - the model is told to ask
+                    // for a re-attach rather than hunt the transcript for
+                    // pages that are not coming.
+                    $content .= ($content === '' ? '' : "\n\n") . '[Document attachment '
+                        . str_replace(['"', "\r", "\n"], ["'", ' ', ' '], $attachment->path)
+                        . ' was withheld; re-attach it to resend it.]';
 
                     continue;
                 }

@@ -193,6 +193,26 @@ cannot load. `hello` advertises `features.media` (`image`, `video`, and a
 truncated SHA-256 of the configured origin's host, never the hostname)
 computed fail-open at boot.
 
+## Attachment limits
+
+The `@`-mention attachments the chat carries to the model have ceilings, and
+each breach says so rather than silently halving what you named:
+
+| Kind | Ceiling | On breach |
+|---|---|---|
+| Text file | 256 KiB | truncated at a line boundary, with a notice — a reader takes partial text |
+| Image | 5 MiB | refused — half a bitmap decodes to nothing |
+| PDF | 20 MiB | refused — half a PDF is unparseable |
+| PDF pages | 100, estimated | refused; the estimate counts `/Type /Page` objects visible in the file's plain bytes, so a PDF that hides them in compressed object streams passes as unknown — the cap refuses on a positive count, never on silence |
+| Documents per request | 30 MiB base64, summed across the session | the newest documents ride; older ones that no longer fit are withheld — their transcript row carries a one-line note for the model, and one notice per turn names them so you can re-attach what you need |
+
+The last row is a request law, not a file law: every still-visible document
+re-encodes on every later request, so a 15 MiB PDF paired with a 10 MiB one
+would push *every* subsequent turn over the wire's 32 MiB per-request ceiling —
+a refusal each send from then on. The budget converts that dead session into a
+named, re-attachable withholding; providers that take no documents at all are
+governed by the capability notice instead, and spend no budget.
+
 ## Security posture
 
 Media egress is pinned to the configured origin rather than run through the

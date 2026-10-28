@@ -140,6 +140,52 @@ final class FileMentionsTest extends TestCase
         $this->assertStringContainsString('the document is 20 MiB, over the 20 MiB limit', $r['notices'][0]);
     }
 
+    public function testAPdfWhoseEstimatedPagesPassTheCeilingIsRefused(): void
+    {
+        file_put_contents(
+            $this->root . '/manual.pdf',
+            '%PDF-1.7' . str_repeat("\n1 0 obj\n<< /Type /Page /Parent 2 0 R >>\nendobj", FileMentions::DOCUMENT_MAX_PAGES + 1),
+        );
+
+        $r = FileMentions::resolve('@manual.pdf', $this->root);
+
+        $this->assertSame([], $r['attachments']);
+        $this->assertSame(
+            '@manual.pdf was not attached: the document is estimated at 101 pages, over the 100 page limit.',
+            $r['notices'][0],
+        );
+    }
+
+    public function testAPdfAtThePageCeilingIsStillAttached(): void
+    {
+        file_put_contents(
+            $this->root . '/at-limit.pdf',
+            '%PDF-1.7' . str_repeat("\n1 0 obj\n<< /Type /Page /Parent 2 0 R >>\nendobj", FileMentions::DOCUMENT_MAX_PAGES),
+        );
+
+        $r = FileMentions::resolve('@at-limit.pdf', $this->root);
+
+        $this->assertSame([], $r['notices']);
+        $this->assertCount(1, $r['attachments'], 'the limit refuses over it, never at it');
+    }
+
+    public function testAPdfHidingItsPagesFromTheEstimatePasses(): void
+    {
+        // Object streams compressed: no countable /Type /Page in the plain
+        // bytes, and a /Pages tree node is not a page. The estimate is a
+        // positive-count law: it refuses what it can see being too long, and
+        // never refuses on silence it cannot check.
+        file_put_contents(
+            $this->root . '/packed.pdf',
+            '%PDF-1.7' . str_repeat("\n<< /Type /Pages /PageLabels 1 0 R /Kids [2 0 R] >>", 200) . "\nstream junk",
+        );
+
+        $r = FileMentions::resolve('@packed.pdf', $this->root);
+
+        $this->assertSame([], $r['notices']);
+        $this->assertCount(1, $r['attachments']);
+    }
+
     public function testAnOversizedImageIsRefusedNotHalved(): void
     {
         $fh = fopen($this->root . '/huge.png', 'wb');

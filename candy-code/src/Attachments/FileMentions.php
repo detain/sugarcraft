@@ -63,6 +63,18 @@ final class FileMentions
      */
     public const DOCUMENT_MAX_BYTES = 20 * 1024 * 1024;
 
+    /**
+     * Longest PDF attached, in estimated pages. The document wires this app
+     * speaks answer to roughly a hundred pages per file, so a longer PDF is
+     * refused with a notice even when it fits {@see DOCUMENT_MAX_BYTES} — the
+     * same never-half-a-document doctrine, asked of the page ceiling instead
+     * of the byte ceiling. The estimate counts `/Type /Page` objects in the
+     * file's plain bytes; a PDF that hides them in compressed object streams
+     * passes as unknown-page-count, because the heuristic refuses only on a
+     * positive count over the limit, never on silence.
+     */
+    public const DOCUMENT_MAX_PAGES = 100;
+
     /** Most directory entries one completion looks at. */
     private const COMPLETION_SCAN_LIMIT = 2000;
 
@@ -263,6 +275,19 @@ final class FileMentions
     }
 
     /**
+     * How many page objects a PDF's plain bytes name: `/Type /Page` in its
+     * spellings (the name-separator law lets the space vary; `/Type /Pages`
+     * tree nodes and other `/Page…` names do not count). A lower bound by
+     * construction — pages declared only inside compressed object streams are
+     * invisible here — so {@see DOCUMENT_MAX_PAGES} refuses only on what this
+     * positively sees.
+     */
+    private static function estimatePdfPages(string $bytes): int
+    {
+        return preg_match_all('/\/Type\s*\/Page(?![a-zA-Z0-9])/', $bytes) ?: 0;
+    }
+
+    /**
      * Read one resolved file into an attachment, or explain why not.
      *
      * @return array{0: ?Attachment, 1: ?string}
@@ -306,6 +331,15 @@ final class FileMentions
                     )];
                 }
                 $bytes = $head . (string) stream_get_contents($handle);
+                $pages = self::estimatePdfPages($bytes);
+                if ($pages > self::DOCUMENT_MAX_PAGES) {
+                    return [null, sprintf(
+                        '@%s was not attached: the document is estimated at %d pages, over the %d page limit.',
+                        self::shown($display),
+                        $pages,
+                        self::DOCUMENT_MAX_PAGES,
+                    )];
+                }
 
                 return [new Attachment($display, AttachmentType::Document, $bytes, $mime), null];
             }
