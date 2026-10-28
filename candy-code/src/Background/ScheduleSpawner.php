@@ -31,6 +31,13 @@ use SugarCraft\Code\Host\Commands\BackgroundCommand;
  * the run takes spawnSession's own 3600s session default; present, it raises
  * that ONE row's ceiling. Both are daemon-run bounds and mode grants — neither
  * puts a timeout on a model request (E646).
+ *
+ * A HEARTBEAT row (C-AGT-5.c) spawns with two additions, both visible here
+ * and nowhere else: {@see taskFor()} appends the reply-exactly-HEARTBEAT_OK
+ * instruction to the prompt, and {@see tagsFor()} marks the session with
+ * {@see Schedule::HEARTBEAT_TAG}. The stored row keeps the human's bare
+ * prompt; the pump applies the silence contract from the TAG, so what a
+ * running check's answer means cannot change under its feet.
  */
 final class ScheduleSpawner
 {
@@ -71,9 +78,9 @@ final class ScheduleSpawner
             $spawn = [
                 'name' => self::sessionName($row),
                 'agent' => $agent,
-                'task' => $row->prompt,
+                'task' => self::taskFor($row),
                 'workingDirectory' => $directory === null || $directory === '' ? '.' : $directory,
-                'tags' => ['schedule', 'schedule:' . $row->name],
+                'tags' => self::tagsFor($row),
                 'permissionMode' => $row->permissionMode,
             ];
             // C-AGT-7.a P4: null adds NO key, so the default keeps living
@@ -95,5 +102,46 @@ final class ScheduleSpawner
     public static function sessionName(Schedule $row): string
     {
         return 'schedule:' . $row->name;
+    }
+
+    /**
+     * The task the daemon runs: the row's prompt, plus — for a heartbeat row
+     * only (C-AGT-5.c) — the instruction that gives the run its silence
+     * contract. The suffix rides the SPAWN, never the stored row, so
+     * `/schedules list` shows the human's prompt, and a row flipped to task
+     * on disk mid-flight cannot de-instruct an already-spawned heartbeat
+     * (the tag, not the row, is what the pump consults).
+     */
+    public static function taskFor(Schedule $row): string
+    {
+        if ($row->kind !== Schedule::KIND_HEARTBEAT) {
+            return $row->prompt;
+        }
+
+        return $row->prompt . ' When nothing needs attention, reply exactly ' . Schedule::HEARTBEAT_OK . '.';
+    }
+
+    /**
+     * The session tags: the ordinary pair, plus {@see Schedule::HEARTBEAT_TAG}
+     * on a heartbeat fire — the mark Chat's pump reads to apply the silence
+     * contract, carried on the session so a mid-flight row edit cannot change
+     * what an already-running check's answer means.
+     *
+     * @return list<string>
+     */
+    public static function tagsFor(Schedule $row): array
+    {
+        $tags = ['schedule', 'schedule:' . $row->name];
+        if ($row->kind === Schedule::KIND_HEARTBEAT) {
+            $tags[] = Schedule::HEARTBEAT_TAG;
+        }
+
+        return $tags;
+    }
+
+    /** Whether a settled daemon is a heartbeat fire (the tag — see {@see tagsFor()}). */
+    public static function isHeartbeat(BackgroundSession $session): bool
+    {
+        return \in_array(Schedule::HEARTBEAT_TAG, $session->tags ?? [], true);
     }
 }

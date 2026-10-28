@@ -202,6 +202,18 @@ final class ScheduleFactory
         if ($timeout !== null && !\is_int($timeout) && !(\is_string($timeout) && ctype_digit($timeout))) {
             throw new \InvalidArgumentException("schedule \"{$name}\": \"timeout_seconds\" must be an integer or absent");
         }
+        // C-AGT-5.c: the kind door. A strict membership test — an unknown
+        // spelling is refused by name, never guessed. Silently defaulting a
+        // misspelled "hearbeat" to task would delete the alerts the caller
+        // asked for; defaulting it to heartbeat would ring on every unrelated
+        // answer. Only an ABSENT kind means task.
+        $kind = $args['kind'] ?? null;
+        if ($kind !== null && !\in_array($kind, Schedule::KINDS, true)) {
+            $spelled = implode(' or ', Schedule::KINDS);
+            throw new \InvalidArgumentException(
+                "schedule \"{$name}\": \"kind\" must be {$spelled} — or omit kind to create a plain task",
+            );
+        }
 
         $mode = self::settleMode($requestedMode, $sessionMode);
 
@@ -223,6 +235,7 @@ final class ScheduleFactory
             root: $hostRoot,
             timeoutSeconds: $timeout === null ? null : (int) $timeout,
             createdBy: Schedule::CREATED_BY_MODEL,
+            kind: $kind ?? Schedule::KIND_TASK,
         );
         $registry->add($row);
         try {

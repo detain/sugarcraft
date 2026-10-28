@@ -65,11 +65,43 @@ relaunch.
 | `enabled` | no | `false` parks the row without deleting it. Defaults to `true`. |
 | `timeoutSeconds` | no | Wall-clock ceiling on one fired run, 60 up to 31,622,400 seconds. Absent means the background session's default of 3600. This bounds the daemon's whole run; no timeout anywhere on the schedule path bounds a model request. |
 | `createdBy` | no | The creation tag (C-AGT-5.a). The only spelling a row may carry is `model`, written by the `Schedule` tool; absence means the row arrived by a human hand. The tool's delete guard reads the tag and the binding: it removes its own rows from this project freely, and refuses an untagged row — or its own row bound to another project root — unless the call opts in. A forged or misspelled tag is refused at load by name — the field exists precisely to police that forgery. |
+| `kind` | no | `task` or `heartbeat` (C-AGT-5.c). Absent means `task`: every settled result is announced, as always. A `heartbeat` row watches instead of answers — its fired prompt carries one appended instruction, and the single reply `HEARTBEAT_OK` means silence: no announcement turn, no ring. Anything else it settles with is announced AND rings the `notify` setting. Any other spelling is refused by name, at create and at load. See [The heartbeat kind](#the-heartbeat-kind). |
 
 An unknown key is tolerated; a malformed known key is not. A row that fails to
 parse is skipped **by name** while its siblings keep running, and the refusal is
 recorded as a note — one bad line in a hand-edited file never bricks the whole
 roster, and never crashes a launch.
+
+## The `heartbeat` kind
+
+A `task` row answers: every fired run settles into an announcement turn,
+whatever it produced. A `heartbeat` row watches: the fired prompt is the
+recorded one with one instruction appended — when nothing needs attention,
+reply exactly `HEARTBEAT_OK` — and the pump reads the answer back. A run that
+settles completed with exactly that word found nothing, and it adds nothing:
+no announcement turn is queued and nothing rings; the ordinary status
+transition still reads in the transcript like any other session's. Any other
+settled answer — text, or a run that failed, stopped, or timed out before it
+could answer — means the check wants a human: the result is announced like any
+other background answer, and the terminal rings through the `notify` setting
+(`off`, `bell`, `osc9` — `docs/SETTINGS.md`), the same end-of-turn channel the
+turn notification already uses, gated the same way: no ring while a turn is
+mid-flight, because that turn's own end-notify already speaks for it.
+
+The kind is only a row field; firing, locking, the permission floor, the mode
+ceiling, and the cap do not read it. And nothing here moves a timeout: a
+heartbeat run is bounded by the same `timeoutSeconds` wall-clock ceiling as a
+task run, and a run that times out answers nothing — that silence is a settled
+failure, which the pump announces and rings rather than misreading as "nothing
+to report". On a `serve` window the transcript pump does not run: the row
+fires into its host as always and its answer arrives as an ordinary
+`bg.completed` wire row (`docs/SERVER.md`) — the heartbeat is not a second
+protocol. The `Schedule` tool's `kind` parameter and
+`/schedules add … [--heartbeat]` both write it; the row carries it from there.
+
+This is unrelated to the liveness heartbeat inside a running background
+session (stall detection while output is silent). The words collide; the
+clocks do not.
 
 ## The project binding
 
@@ -196,6 +228,10 @@ may itself have been talked into something by a prompt it read:
   a human deliberately spelled something looser at the create approval.
 - **The row cap.** At most 8 model-created (`createdBy: "model"`) rows per
   project root. Operator rows never count against it.
+- **The kind.** `create` may spell `kind`: `task` (also the absent default) or
+  `heartbeat`, whose silence contract is spelled by
+  [The heartbeat kind](#the-heartbeat-kind). An unknown spelling is refused by
+  name.
 - **The delete guard.** The tool removes rows it created for *this project*; an
   operator-written row (untagged) — or a model row bound to another project root,
   `unbound` included — is refused unless the call spells `include_operator_rows:
@@ -214,7 +250,7 @@ changes the floor, the ceiling, or the lock discipline described above.
 ```
 /schedules            # same as list
 /schedules list
-/schedules add <name> <interval> <prompt> [--mode <mode>] [--provider <name>]
+/schedules add <name> <interval> <prompt> [--mode <mode>] [--provider <name>] [--heartbeat]
 /schedules enable <name>
 /schedules disable <name>
 /schedules delete <name>
@@ -224,8 +260,10 @@ changes the floor, the ceiling, or the lock discipline described above.
 bounds, ceiling, mode-settling, per-project model cap and creation tag — so the
 command and the tool cannot drift into two grammars. The interval reads like
 `/loop`'s (`60`, `90s`, `15m`, `2h`, `1d`), the prompt is everything that follows
-minus any `--mode`/`--provider` flag, and the row lands bound to this project's
-root with its first fire one interval out. Rows may of course still arrive by
+minus any `--mode`/`--provider`/`--heartbeat` flag, and the row lands bound to
+this project's root with its first fire one interval out. `--heartbeat` takes no
+value: it stamps the created row's kind, exactly as the tool's `kind` parameter
+does. Rows may of course still arrive by
 writing the file: the config-authority posture governs hand-written rows, the
 factory governs created ones. `list` reads this process's roster and the one
 `0600` file and changes nothing, so it works in a read-only window; adding,

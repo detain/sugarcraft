@@ -141,6 +141,11 @@ final readonly class ScheduleTool implements Tool, BuildsFromCatalog, DelegatesT
                     'type' => 'integer',
                     'description' => 'create: optional wall-clock ceiling on one fired run, 60 up to 31,622,400 seconds. Absent means the background session default of 3600.',
                 ],
+                'kind' => [
+                    'type' => 'string',
+                    'enum' => ['task', 'heartbeat'],
+                    'description' => 'create: what the run owes a human. "task" (also the absent default) announces every settled result as it always has. "heartbeat" appends the instruction that an answer of exactly HEARTBEAT_OK means nothing needs attention: a silent answer adds no follow-up turn and no notification, while any other answer is announced and rings the configured terminal notification. Unknown spellings are refused by name.',
+                ],
                 'include_operator_rows' => [
                     'type' => 'boolean',
                     'description' => 'delete only: also remove a row this tool did not create, or a model row bound to another project root. Without it, deleting either is refused; /schedules delete <name> is the human surface for those.',
@@ -204,8 +209,13 @@ final readonly class ScheduleTool implements Tool, BuildsFromCatalog, DelegatesT
         return new ToolResult(
             toolCallId: (string) ($args['id'] ?? ''),
             content: sprintf(
-                "schedule '%s' created in schedules.json: every %s, first fire at %s, bound to %s. It fires as a supervised background run under %s until deleted.",
+                "schedule '%s' created in schedules.json:%s every %s, first fire at %s, bound to %s. It fires as a supervised background run under %s until deleted.",
                 $row->name,
+                // C-AGT-5.c: heartbeat rows spell their silence contract into
+                // the receipt; task rows keep the line byte-for-byte.
+                $row->kind === Schedule::KIND_HEARTBEAT
+                    ? " as a HEARTBEAT (an answer of exactly " . Schedule::HEARTBEAT_OK . " stays silent; anything else announces and rings)"
+                    : '',
                 LoopCommand::everyLabel($row->everySeconds),
                 date('Y-m-d H:i:s', $row->nextDue),
                 $row->root ?? 'no root',

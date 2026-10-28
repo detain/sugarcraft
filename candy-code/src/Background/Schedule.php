@@ -68,6 +68,19 @@ use SugarCraft\Code\Server\ServerConfig;
  * permissive for the same reason the mode floor does — the wither
  * round-trips (`mutate()`) carry the settled value back in.
  *
+ * THE HEARTBEAT KIND (C-AGT-5.c). {@see self::$kind} says WHAT a row is:
+ * ordinary `task` rows announce every settled run, and `heartbeat` rows are
+ * the check-on-things kind — the spawner instructs the daemon to answer
+ * exactly {@see self::HEARTBEAT_OK} when nothing needs attention, and the
+ * pump treats that silence as its own answer: no announcement turn is queued
+ * and nothing rings. ANY other settled answer means the check found something,
+ * and it is announced AND rings the terminal notification. The kind is
+ * read strictly at the file boundary like the creation tag — it carries no
+ * privilege, but a row that quietly changed kind would either spam a human's
+ * terminal or swallow the alert they set the cron to get. Note the name
+ * belongs to THIS kind, not to {@see BackgroundSession}'s liveness heartbeat
+ * (recordHeartbeat/isStalled), which is a different clock on a different thing.
+ *
  * THE RUN BOUND. Every fire spawns an ordinary background session, so the
  * run is bounded by that contract's timeout — 3600 seconds by default,
  * per-row raisable via {@see self::$timeoutSeconds}. This is the daemon's
@@ -118,6 +131,37 @@ final class Schedule
      * writes. Absence means the operator; a row never claims any other author.
      */
     public const CREATED_BY_MODEL = 'model';
+
+    /**
+     * Row kinds (C-AGT-5.c). A `task` row announces every settled run. A
+     * `heartbeat` row is a check-on-things cron: the daemon is instructed to
+     * answer exactly {@see self::HEARTBEAT_OK} when nothing needs attention,
+     * and that answer is silenced — anything else it says is announced and
+     * rings the terminal notification.
+     */
+    public const KIND_TASK = 'task';
+
+    /** The check-on-things kind — see {@see self::KIND_TASK} for the pair's contract. */
+    public const KIND_HEARTBEAT = 'heartbeat';
+
+    /** @var list<string> every spelling a row's `kind` may carry. */
+    public const KINDS = [self::KIND_TASK, self::KIND_HEARTBEAT];
+
+    /**
+     * The token a heartbeat daemon replies with when it found nothing to
+     * report (C-AGT-5.c). A protocol word between {@see ScheduleSpawner}'s
+     * instruction and Chat's pump — never user-facing prose, never translated,
+     * and compared trimmed and exact: no other reply is silenced.
+     */
+    public const HEARTBEAT_OK = 'HEARTBEAT_OK';
+
+    /**
+     * The tag every heartbeat fire's session carries, beside the ordinary
+     * `schedule`/`schedule:<name>` pair. The pump reads the tag (not the file)
+     * to know a settled daemon is a heartbeat, so a row edited on disk
+     * mid-flight cannot change what its already-running daemon's answer means.
+     */
+    public const HEARTBEAT_TAG = 'schedule-heartbeat';
 
     public readonly string $name;
 
@@ -183,6 +227,17 @@ final class Schedule
      */
     public readonly ?string $createdBy;
 
+    /**
+     * What this row IS (C-AGT-5.c): {@see self::KIND_TASK} or
+     * {@see self::KIND_HEARTBEAT} — see the class doc-block's heartbeat note
+     * for the pair's announce/silence contract. Absence in a file row is the
+     * task kind, the shape every row written before this field existed has.
+     * {@see fromArray()} reads it strictly (only the two spellings); the
+     * constructor validates in-code spellings because the wither round-trips
+     * (`mutate()`) carry the settled value back in.
+     */
+    public readonly string $kind;
+
     public function __construct(
         string $name,
         int $everySeconds,
@@ -196,6 +251,7 @@ final class Schedule
         ?string $sessionId = null,
         ?int $timeoutSeconds = null,
         ?string $createdBy = null,
+        string $kind = self::KIND_TASK,
     ) {
         if (preg_match(self::NAME_PATTERN, $name) !== 1) {
             throw new \InvalidArgumentException(
@@ -235,6 +291,18 @@ final class Schedule
             ? self::DEFAULT_PERMISSION_MODE->value
             : (PermissionMode::tryFrom($permissionMode) !== null ? $permissionMode : self::DEFAULT_PERMISSION_MODE->value);
 
+        // The kind is a CLOSED set validated HERE, never normalised (C-AGT-5.c):
+        // silently turning an unknown spelling into `task` would delete a
+        // heartbeat's whole purpose — the alert — and into `heartbeat` would
+        // silence announcements a task row's human waits for. {@see fromArray()}
+        // refuses file spellings at the boundary, so reaching this throw means
+        // in-process code misspelled a constant: a bug, failed loudly.
+        if (!\in_array($kind, self::KINDS, true)) {
+            throw new \InvalidArgumentException(
+                "Schedule '{$name}' spells kind \"{$kind}\" — the kinds are \"" . implode('" and "', self::KINDS) . '"',
+            );
+        }
+
         // The binding is RESOLVED here, at the boundary, for the same reason
         // the mode is normalised here: two spellings of one directory (`repo/`
         // and `./repo`) must not become two different owners of one row, and a
@@ -269,6 +337,7 @@ final class Schedule
         // normalisation above — an in-process grant that spells nothing (the
         // `/loop` row, a legacy wither) reads null, not ''.
         $this->createdBy = $createdBy === null || trim($createdBy) === '' ? null : $createdBy;
+        $this->kind = $kind;
     }
 
     /**
@@ -291,6 +360,10 @@ final class Schedule
      * legacy shape — and the literal `model` is the only spelling a row may
      * carry (C-AGT-5.a); anything else is refused by name at this boundary,
      * because the tag gates the Schedule tool's delete privilege.
+     * `kind` may be ABSENT — that is an ordinary task row, the shape every
+     * file predates (C-AGT-5.c) — and only `task` and `heartbeat` may be
+     * spelled; the kind decides whether a settled run announces silently or
+     * loudly, so a misspelling is refused by name, never coerced.
      *
      * @param array<array-key, mixed> $row
      * @throws \InvalidArgumentException naming the offending field
@@ -370,6 +443,20 @@ final class Schedule
                 'schedule \'' . $name . '\' spells "createdBy" as "' . $creator . '"; only "' . self::CREATED_BY_MODEL . '" may be spelled — leave the key out for an operator row',
             );
         }
+        // C-AGT-5.c, the kind read STRICTLY at the boundary — same grammar as
+        // the tag above, same reason: the value decides whether a settled run
+        // speaks or stays silent, and a spelling that quietly became something
+        // else would either spam the terminal or swallow the alert. Absence is
+        // the legacy shape: every row written before this field is a task row.
+        $kind = $row['kind'] ?? null;
+        if ($kind !== null && !is_string($kind)) {
+            throw new \InvalidArgumentException("schedule '{$name}' carries a non-string \"kind\"");
+        }
+        if ($kind !== null && $kind !== '' && !\in_array($kind, self::KINDS, true)) {
+            throw new \InvalidArgumentException(
+                'schedule \'' . $name . '\' spells "kind" as "' . $kind . '"; the kinds are "' . implode('" and "', self::KINDS) . '" — leave the key out for an ordinary task row',
+            );
+        }
 
         return new self(
             name: $name,
@@ -382,12 +469,13 @@ final class Schedule
             root: $root,
             timeoutSeconds: $timeout === null ? null : (int) $timeout,
             createdBy: $creator === '' ? null : $creator,
+            kind: $kind === null || $kind === '' ? self::KIND_TASK : $kind,
         );
     }
 
     /**
      * The file-row form. `model`/`reuseSession`-style keys are NOT part of
-     * this format — the plan's row is these ten fields and nothing else.
+     * this format — the plan's row is these eleven fields and nothing else.
      *
      * `createdBy` serialises as the literal `model` only on rows the Schedule
      * tool created (C-AGT-5.a); every other origin writes a null, which the
@@ -400,6 +488,11 @@ final class Schedule
      * this build's own output unreadable by the next load — a file that
      * poisons itself. Null means exactly what absence means on the read side,
      * and a non-floor mode rides spelled, as recorded.
+     *
+     * `kind` serialises ALWAYS spelled (C-AGT-5.c) — `task` or `heartbeat`.
+     * Absence still READS as task, so a legacy file stays valid, but a row
+     * this build writes says what it is: a silence contract that only lives
+     * in an omitted key is a contract the next hand-edit cannot see.
      *
      * @return array<string, mixed>
      */
@@ -418,6 +511,7 @@ final class Schedule
             'root' => $this->root,
             'timeoutSeconds' => $this->timeoutSeconds,
             'createdBy' => $this->createdBy,
+            'kind' => $this->kind,
         ];
     }
 
@@ -455,6 +549,11 @@ final class Schedule
     public function withEnabled(bool $enabled): self
     {
         return $this->mutate(['enabled' => $enabled]);
+    }
+
+    public function withKind(string $kind): self
+    {
+        return $this->mutate(['kind' => $kind]);
     }
 
     /**

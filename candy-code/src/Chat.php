@@ -19079,6 +19079,18 @@ final class Chat implements Model
      * settled status first, so no transition reaches this loop, and the user
      * who stopped it gets no surprise turn.
      *
+     * THE HEARTBEAT EXCEPTION (C-AGT-5.c). A settled run tagged
+     * {@see \SugarCraft\Code\Background\Schedule::HEARTBEAT_TAG} whose answer
+     * is exactly {@see \SugarCraft\Code\Background\Schedule::HEARTBEAT_OK}
+     * found nothing — it keeps the status notice every transition gets, but
+     * queues no announcement turn and rings nothing. Any other settled answer
+     * from that tag means the check wants the human: it is announced like
+     * every other result AND rings {@see terminalNotification()} when no turn
+     * is running (mid-turn, the turn's own end-notify already speaks — one
+     * bell per settle, the house polarity). Task-kind runs are untouched by
+     * all of this. On `serve` this poll never runs; the run settles as an
+     * ordinary `bg.completed` row there.
+     *
      * @return array{0:Chat,1:?\Closure}
      */
     private function pumpBackgroundSessions(): array
@@ -19126,6 +19138,7 @@ final class Chat implements Model
 
         $notices = [];
         $announcements = [];
+        $heartbeatAlerts = [];
         foreach ($statuses as $id => $status) {
             $previous = $this->backgroundStatuses[$id] ?? null;
             if ($previous === $status) {
@@ -19142,7 +19155,19 @@ final class Chat implements Model
                 ['id' => $id, 'name' => $name, 'status' => $status],
             ));
             if ($session !== null && $session->isSettled()) {
-                $announcements[] = $session->announcement();
+                // C-AGT-5.c: the heartbeat's silence contract. An OK answer is
+                // the check SAYING nothing is wrong — no turn, no bell. Every
+                // other settled answer (text, or a failed/timeout run that
+                // could not answer at all) means the human should look.
+                if (\SugarCraft\Code\Background\ScheduleSpawner::isHeartbeat($session)) {
+                    if (!($session->status === \SugarCraft\Code\Background\BackgroundSessionStatus::Completed
+                        && trim((string) $session->output) === \SugarCraft\Code\Background\Schedule::HEARTBEAT_OK)) {
+                        $announcements[] = $session->announcement();
+                        $heartbeatAlerts[] = $name;
+                    }
+                } else {
+                    $announcements[] = $session->announcement();
+                }
             }
         }
 
@@ -19192,11 +19217,23 @@ final class Chat implements Model
                 : [...$this->queuedPrompts, ...$queuedEntries],
         ]);
 
+        // C-AGT-5.c: a heartbeat that found something rings when nothing else
+        // is about to. Mid-turn the turn's own end-notify covers the bell —
+        // one notification per settle, the HandlesTurnCompletion polarity
+        // (`inFlight ? null : terminalNotification(...)`), reused rather than
+        // second-guessed. The closure rides the same return channel every
+        // pump Cmd takes; releaseQueuedPrompts merges it beside the submit.
+        $ring = $heartbeatAlerts === [] || $polled->inFlight
+            ? null
+            : $polled->terminalNotification('candy-code: ' . Lang::t('chat.schedule.heartbeat.alert', [
+                'name' => implode(', ', $heartbeatAlerts),
+            ]));
+
         if ($queuedEntries === [] || $polled->inFlight) {
-            return [$polled, null];
+            return [$polled, $ring];
         }
 
-        return self::releaseQueuedPrompts([$polled, null]);
+        return self::releaseQueuedPrompts([$polled, $ring]);
     }
 
     /**

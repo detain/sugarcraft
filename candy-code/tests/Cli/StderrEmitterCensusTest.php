@@ -464,7 +464,11 @@ final class StderrEmitterCensusTest extends TestCase
         // W7-S4 moved one of the two remaining literals (the turn-finished
         // title) out of route() into the turn-completion family handler; the
         // roster follows the code, the decision above is unchanged.
-        'src/Chat.php' => 1,
+        // C-AGT-5.c took this back to two: the heartbeat-alert title added in
+        // pumpBackgroundSessions() rides the SAME terminalNotification()
+        // OSC 9 / bell seam as the goal-settled title above — a desktop
+        // notification, not a diagnostic, the same not-stderr decision.
+        'src/Chat.php' => 2,
         'src/Chat/Handlers/HandlesTurnCompletion.php' => 1,
         // +2 each for the session-launch flags: ArgvParser's two refusals
         // (--continue with --resume, either with -p) and Bootstrap's two

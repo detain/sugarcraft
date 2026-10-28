@@ -23,18 +23,18 @@ final class ScheduleTest extends TestCase
         $row = new Schedule(name: 'nightly', everySeconds: 86_400, prompt: 'run the tests', provider: 'sglang', nextDue: 1_000, root: $root);
         $back = Schedule::fromArray($row->toArray(), 500);
 
-        foreach (['name', 'everySeconds', 'prompt', 'provider', 'permissionMode', 'nextDue', 'enabled', 'root', 'timeoutSeconds'] as $field) {
+        foreach (['name', 'everySeconds', 'prompt', 'provider', 'permissionMode', 'nextDue', 'enabled', 'root', 'timeoutSeconds', 'kind'] as $field) {
             $this->assertSame($row->$field, $back->$field, "field {$field}");
         }
         $this->assertTrue($back->persisted, 'an on-disk row is persisted by definition');
         $this->assertNull($row->timeoutSeconds, 'a row that names no bound round-trips as absent');
     }
 
-    public function testTheFileRowCarriesExactlyThePlannedNineKeys(): void
+    public function testTheFileRowCarriesExactlyThePlannedElevenKeys(): void
     {
         $row = new Schedule(name: 'a', everySeconds: 60, prompt: 'p', nextDue: 0);
 
-        $this->assertSame(['name', 'every', 'prompt', 'provider', 'permissionMode', 'nextDue', 'enabled', 'root', 'timeoutSeconds', 'createdBy'], array_keys($row->toArray()));
+        $this->assertSame(['name', 'every', 'prompt', 'provider', 'permissionMode', 'nextDue', 'enabled', 'root', 'timeoutSeconds', 'createdBy', 'kind'], array_keys($row->toArray()));
     }
 
     /**
@@ -250,6 +250,8 @@ final class ScheduleTest extends TestCase
             [['name' => 'a', 'every' => 60, 'prompt' => 'p', 'nextDue' => 'soon'], 'nextDue'],
             [['name' => 'a', 'every' => 60, 'prompt' => 'p', 'root' => 3], '"root"'],
             [['name' => 'a', 'every' => 60, 'prompt' => 'p', 'timeoutSeconds' => 'fast'], 'timeoutSeconds'],
+            [['name' => 'a', 'every' => 60, 'prompt' => 'p', 'kind' => 3], '"kind"'],
+            [['name' => 'a', 'every' => 60, 'prompt' => 'p', 'kind' => 'hearthbeat'], '"kind"'],
         ];
         foreach ($cases as [$row, $needle]) {
             try {
@@ -306,10 +308,45 @@ final class ScheduleTest extends TestCase
         $row = new Schedule(name: 'a', everySeconds: 60, prompt: 'p', provider: 'v', permissionMode: PermissionMode::Auto->value, nextDue: 10, enabled: false, persisted: false, root: sys_get_temp_dir());
         $moved = $row->withNextDue(70)->withEnabled(true);
 
-        foreach (['name', 'everySeconds', 'prompt', 'provider', 'permissionMode', 'persisted', 'root'] as $field) {
+        foreach (['name', 'everySeconds', 'prompt', 'provider', 'permissionMode', 'persisted', 'root', 'kind'] as $field) {
             $this->assertSame($row->$field, $moved->$field, "field {$field}");
         }
         $this->assertSame(70, $moved->nextDue);
         $this->assertTrue($moved->enabled);
+    }
+
+    /**
+     * C-AGT-5.c, the kind at the file boundary: absence is the legacy shape
+     * (every pre-kind row is a task row), heartbeat round-trips spelled, and
+     * a misspelling is refused by NAME rather than coerced — a kind that
+     * quietly changed would either delete a heartbeat's alerts or ring on
+     * every unrelated task answer.
+     */
+    public function testTheKindIsTaskWhenAbsentAndRoundTripsWhenHeartbeat(): void
+    {
+        $legacy = Schedule::fromArray(['name' => 'a', 'every' => 60, 'prompt' => 'p'], 0);
+        $this->assertSame(Schedule::KIND_TASK, $legacy->kind);
+        $this->assertSame(Schedule::KIND_TASK, $legacy->toArray()['kind'], 'a row this build writes spells its kind');
+
+        $heart = (new Schedule(name: 'watch', everySeconds: 60, prompt: 'p'))->withKind(Schedule::KIND_HEARTBEAT);
+        $back = Schedule::fromArray($heart->toArray(), 0);
+        $this->assertSame(Schedule::KIND_HEARTBEAT, $back->kind);
+        $this->assertSame(Schedule::KIND_HEARTBEAT, $back->withEnabled(false)->kind, 'the kind survives every other mutate too');
+    }
+
+    public function testAMisspelledKindIsRefusedByNameAtTheConstructorAndTheFile(): void
+    {
+        try {
+            new Schedule(name: 'a', everySeconds: 60, prompt: 'p', kind: 'heart-brat');
+            $this->fail('the constructor accepted an off-roster kind');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('heart-brat', $e->getMessage());
+        }
+        try {
+            Schedule::fromArray(['name' => 'a', 'every' => 60, 'prompt' => 'p', 'kind' => 'HEARTBEAT'], 0);
+            $this->fail('fromArray normalised a misspelled kind');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('HEARTBEAT', $e->getMessage());
+        }
     }
 }

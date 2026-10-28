@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Host\Commands;
 
+use SugarCraft\Code\Background\Schedule;
 use SugarCraft\Code\Background\ScheduleFactory;
 use SugarCraft\Code\Background\ScheduleRegistry;
 use SugarCraft\Code\Lang;
@@ -12,8 +13,14 @@ use SugarCraft\Code\Permissions\PermissionMode;
 /**
  * `/schedules` (alias `/schedule`) — the read and control surface for
  * AUT-1 rows: `list` (also the bare form), `add <name> <interval> <prompt>
- * [--mode <mode>] [--provider <name>]`, `enable <name>`, `disable <name>`,
- * `delete <name>`.
+ * [--mode <mode>] [--provider <name>] [--heartbeat]`, `enable <name>`,
+ * `disable <name>`, `delete <name>`.
+ *
+ * C-AGT-5.c adds the `--heartbeat` switch: it stamps the created row's kind
+ * (see {@see Schedule}'s heartbeat paragraph for the contract — the spawned
+ * prompt gains the HEARTBEAT_OK instruction, and a run answering exactly that
+ * reports nothing into the transcript). Listing marks heartbeat rows with
+ * their own kind word; the switch never changes firing, mode, or cap maths.
  *
  * READ-ONLY JUDGEMENT (the plan asks for it explicitly): LISTING is admitted
  * in a read-only window — it reads this process's roster and one 0600 file,
@@ -111,6 +118,13 @@ final class SchedulesCommand implements HostCommand
         $mode = null;
         $provider = null;
         $rest = $m[3];
+        // C-AGT-5.c: `--heartbeat` carries NO value, so it is peeled before
+        // the mode/provider accounting below — that counter reads a flag as
+        // misspelled unless a real value follows it, and a valueless switch
+        // would trip its guard. Repeats are accepted and collapsed: the row is
+        // heartbeat either way.
+        $heartbeat = preg_match('/(?:^|\s)--heartbeat\b/', $rest) === 1;
+        $rest = preg_replace('/(?:^|\s)--heartbeat\b/', '', $rest) ?? $rest;
         // A flag token not followed by a real value (end of string, or glued
         // to another flag) is a refusal, not a prompt word. Values never
         // start with '-': a mode/provider spelling cannot, and the guard
@@ -148,6 +162,7 @@ final class SchedulesCommand implements HostCommand
                     'prompt' => $prompt,
                     'provider' => $provider,
                     'permission_mode' => $mode,
+                    'kind' => $heartbeat ? Schedule::KIND_HEARTBEAT : Schedule::KIND_TASK,
                 ],
                 $context->root,
                 $context->permissionGate?->mode() ?? PermissionMode::Default,
@@ -184,7 +199,11 @@ final class SchedulesCommand implements HostCommand
                 $line = Lang::t('host.schedules.row', [
                     'name' => $row->name,
                     'state' => $row->enabled ? Lang::t('host.schedules.on') : Lang::t('host.schedules.off'),
-                    'kind' => $row->persisted ? Lang::t('host.schedules.kind_file') : Lang::t('host.schedules.kind_loop'),
+                    // C-AGT-5.c: a heartbeat row keeps its (file) marker and
+                    // gains a second kind word — which line rings, at a glance.
+                    'kind' => $row->persisted
+                        ? Lang::t('host.schedules.kind_file') . ($row->kind === Schedule::KIND_HEARTBEAT ? Lang::t('host.schedules.kind_heartbeat') : '')
+                        : Lang::t('host.schedules.kind_loop'),
                     'every' => LoopCommand::everyLabel($row->everySeconds),
                     'next' => date('Y-m-d H:i:s', $row->nextDue),
                     // C-AGT-1: a file row's own binding, spelled, or the word
