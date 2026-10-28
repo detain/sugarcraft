@@ -449,6 +449,7 @@ candy-code/tests/Providers/RetrySettingsTest.php	0.426	22
 candy-code/tests/RuntimeInitialDispatchOrderTest.php	0.422	3
 candy-code/tests/Commands/StatusCommandTest.php	0.416	10
 candy-code/tests/Providers/ProviderRequestResponseTest.php	0.415	65
+candy-code/tests/Host/Commands/InsightsHostCommandTest.php	0.414	5
 candy-code/tests/Workflows/WorkflowRetriesTest.php	0.413	10
 candy-code/tests/Cli/BinSignalExitCodeTest.php	0.408	3
 candy-code/tests/Host/TurnRunnerEventLogTest.php	0.406	5
@@ -1138,6 +1139,7 @@ candy-code/tests/Tui/Components/PaneFrameTest.php	0.008	15
 candy-code/tests/Agents/AgentManagerDelegationAccessorsTest.php	0.007	5
 candy-code/tests/Agents/Live/AgentLiveRegistryTest.php	0.007	12
 candy-code/tests/App/ToolOutputWalkTest.php	0.007	6
+candy-code/tests/Commands/InsightsCommandTest.php	0.007	10
 candy-code/tests/Commands/ShareLocalExportTest.php	0.007	8
 candy-code/tests/Context/Compaction/ReinjectionPlanTest.php	0.007	12
 candy-code/tests/Context/InstructionAliasTest.php	0.007	9
