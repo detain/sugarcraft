@@ -8,6 +8,7 @@ use SugarCraft\Code\Agents\PathJail as AgentPathJail;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Tools\AcceptsHeartbeat;
+use SugarCraft\Code\Tools\AcceptsShellOwner;
 use SugarCraft\Code\Tools\AcceptsToolProgress;
 use SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
@@ -48,7 +49,7 @@ use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
  * PreToolUse hook that denies commands referencing paths outside `$root`.
  */
 #[BuiltInTool(name: 'Bash', permission: ToolPermissionClass::Write, position: 1)]
-final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, AcceptsHeartbeat, BuildsFromCatalog, TakesToolCallId, AcceptsToolProgress, CarriesSessionState
+final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, AcceptsHeartbeat, AcceptsShellOwner, BuildsFromCatalog, TakesToolCallId, AcceptsToolProgress, CarriesSessionState
 {
     use CapturesProcessOutput;
     use RebindsWorktreeJail;
@@ -90,6 +91,13 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
  * the table `run_in_background` spawns into and ShellOutput/ShellStop read.
  * Null — a standalone Bash, an embedder’s context built without one — makes
  * `run_in_background` an immediate refusal, never a silently-different spawn.
+ *
+ * $shellOwner (C-TOOL-3.c) is the session id the registry tags new rows
+ * with ({@see \SugarCraft\Code\Background\BackgroundShellRegistry::start()}),
+ * and the id its visibility law scopes later lookups by.
+ * The turn binds it through {@see withShellOwner()}; null — every
+ * launch-built and standalone caller — leaves rows visible to all, exactly
+ * the behavior before the tag existed.
      */
     public function __construct(
         private ?string $root = null,
@@ -103,7 +111,21 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         private int $maxTimeoutSeconds = self::MAX_TIMEOUT_SECONDS,
         private ?\Closure $toolProgressEmitter = null,
         private ?BackgroundShellRegistry $registry = null,
+        private ?string $shellOwner = null,
     ) {}
+
+    /**
+     * This tool claiming its background rows for session $owner and every
+     * other field kept — the {@see withToolProgressEmitter()} rebuild, for
+     * the same reason: every property is constructor-promoted, so the
+     * object's own vars are the constructor's argument list. The turn binds
+     * the session here (C-TOOL-3.c); {@see AcceptsShellOwner} is the seam
+     * that hands it over.
+     */
+    public function withShellOwner(?string $owner): self
+    {
+        return new self(...array_replace(get_object_vars($this), ['shellOwner' => $owner]));
+    }
 
     /**
      * This tool streaming its live tail through $emit and every other field
@@ -599,7 +621,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
                 );
             }
 
-            return $this->backgroundAnswer($args, $this->registry->start($cmd, (string) ($args['description'] ?? '')));
+            return $this->backgroundAnswer($args, $this->registry->start($cmd, (string) ($args['description'] ?? ''), [], $this->shellOwner));
         }
 
         $run = $interactive

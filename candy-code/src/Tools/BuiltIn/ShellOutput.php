@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tools\BuiltIn;
 
 use SugarCraft\Code\Background\BackgroundShellRegistry;
+use SugarCraft\Code\Tools\AcceptsShellOwner;
 use SugarCraft\Code\Tools\CarriesSessionState;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;
@@ -49,15 +50,32 @@ use SugarCraft\Code\Tools\ToolResult;
  * READ permission class: this tool writes nothing and kills nothing — it
  * tails a file this launch created. Its sibling {@see ShellStop} carries the
  * process-mutating half.
+ *
+ * SINCE C-TOOL-3.c the read answers only shells this session owns or that
+ * carry no owner at all: a foreign session's id gets the very same
+ * "not registered" answer an unknown id gets, so serving one launch's
+ * sessions never leaks another's shells.
  */
 #[BuiltInTool(name: 'ShellOutput', permission: ToolPermissionClass::Read, position: 37, gloss: 'read output from a background shell started with Bash run_in_background')]
-final readonly class ShellOutput implements Tool, BuildsFromCatalog, TakesToolCallId, CarriesSessionState
+final readonly class ShellOutput implements Tool, AcceptsShellOwner, BuildsFromCatalog, TakesToolCallId, CarriesSessionState
 {
     public const NAME = 'ShellOutput';
 
     private function __construct(
         private ?BackgroundShellRegistry $registry = null,
+        private ?string $shellOwner = null,
     ) {}
+
+    /**
+     * This tool scoping its reads to session $owner, registry kept — the
+     * rebuild is total because both properties are constructor-promoted
+     * (C-TOOL-3.c); {@see \SugarCraft\Code\Tools\AcceptsShellOwner} is the
+     * seam the turn hands the session id over.
+     */
+    public function withShellOwner(?string $owner): self
+    {
+        return new self($this->registry, $owner);
+    }
 
     public static function new(): self
     {
@@ -118,7 +136,7 @@ final readonly class ShellOutput implements Tool, BuildsFromCatalog, TakesToolCa
         $cursor = self::parseCursor($args['cursor'] ?? null);
         $maxBytes = isset($args['max_bytes']) && \is_int($args['max_bytes']) ? $args['max_bytes'] : null;
 
-        $answer = $this->registry->read($id, $cursor, $maxBytes);
+        $answer = $this->registry->read($id, $cursor, $maxBytes, $this->shellOwner);
         if ($answer['ok'] !== true) {
             return $this->refuse((string) $answer['error']);
         }

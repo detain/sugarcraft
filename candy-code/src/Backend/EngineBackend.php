@@ -3280,6 +3280,15 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         $tools = [];
         foreach ($this->tools as $tool) {
             $tool = $limits->applyTo($tool);
+            if ($tool instanceof \SugarCraft\Code\Tools\AcceptsShellOwner) {
+                // C-TOOL-3.c: a served launch shares this tool set across its
+                // sessions, so the registry needs this turn's session id to
+                // scope its answers. Bound BEFORE the AcceptsToolProgress arm
+                // below — that arm `continue`s, and Bash implements both;
+                // its rebuild carries every field, so the progress binding
+                // keeps this one.
+                $tool = $tool->withShellOwner($this->sessionId);
+            }
             if ($tool instanceof \SugarCraft\Code\Tools\MutatesContextLedger) {
                 if ($ledgerRead !== null && $ledgerApply !== null && ($modelPrunes || $tool instanceof \SugarCraft\Code\Tools\BuiltIn\Compress)) {
                     $tools[] = $tool->withLedger($ledgerRead, $ledgerApply);

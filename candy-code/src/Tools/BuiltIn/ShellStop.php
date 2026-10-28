@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tools\BuiltIn;
 
 use SugarCraft\Code\Background\BackgroundShellRegistry;
+use SugarCraft\Code\Tools\AcceptsShellOwner;
 use SugarCraft\Code\Tools\CarriesSessionState;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;
@@ -52,15 +53,32 @@ use SugarCraft\Code\Tools\ToolResult;
  * call — and ShellStop is gated as an ordinary Write tool. Restrictive
  * Bash rules cannot name a background shell they never saw; that is the
  * honest shape, and `disabledTools: ["Bash"]` remains the blunt instrument.
+ *
+ * SINCE C-TOOL-3.c a stop answers only shells this session owns or that
+ * carry no owner at all: a foreign session's id takes the SAME not-
+ * registered refusal an unknown id takes — the ladder never runs on a shell
+ * the caller may not see, and the answer cannot be probed for existence.
  */
 #[BuiltInTool(name: 'ShellStop', permission: ToolPermissionClass::Write, position: 38, gloss: 'stop a background shell started with Bash run_in_background')]
-final readonly class ShellStop implements Tool, BuildsFromCatalog, TakesToolCallId, CarriesSessionState
+final readonly class ShellStop implements Tool, AcceptsShellOwner, BuildsFromCatalog, TakesToolCallId, CarriesSessionState
 {
     public const NAME = 'ShellStop';
 
     private function __construct(
         private ?BackgroundShellRegistry $registry = null,
+        private ?string $shellOwner = null,
     ) {}
+
+    /**
+     * This tool scoping its stops to session $owner, registry kept — the
+     * rebuild is total because both properties are constructor-promoted
+     * (C-TOOL-3.c); {@see \SugarCraft\Code\Tools\AcceptsShellOwner} is the
+     * seam the turn hands the session id over.
+     */
+    public function withShellOwner(?string $owner): self
+    {
+        return new self($this->registry, $owner);
+    }
 
     public static function new(): self
     {
@@ -106,7 +124,7 @@ final readonly class ShellStop implements Tool, BuildsFromCatalog, TakesToolCall
             return $this->refuse('no background shell registry is attached to this launch');
         }
 
-        $answer = $this->registry->stop($id);
+        $answer = $this->registry->stop($id, $this->shellOwner);
         if ($answer['found'] !== true) {
             return $this->refuse('no background shell ' . $id . ' is registered by this launch');
         }

@@ -425,7 +425,7 @@ final class BackgroundShellRegistryTest extends TestCase
     public function testMergingIsIdempotentAndInformedRowsBeatUninformedOnes(): void
     {
         $registry = $this->registry();
-        $started = $registry->start('true', 'export');
+        $started = $registry->start('true', 'export', [], 'session-A');
         $id = (string) $started['shell']['id'];
         self::assertTrue($this->waitFor($registry, static fn (BackgroundShellRegistry $r): bool => ($r->status($id)['state'] ?? '') === 'finished'));
         $export = $registry->toArray();
@@ -435,6 +435,8 @@ final class BackgroundShellRegistryTest extends TestCase
         $fresh->merge($export);
         self::assertSame([$id], $fresh->ids(), 'the same export twice is a no-op');
         self::assertSame(0, $fresh->status($id)['exitCode']);
+        self::assertSame('session-A', $fresh->status($id)['owner'], 'the claim rides the export-merge channel');
+        self::assertNull($fresh->status($id, 'session-B'), 'and the merged row keeps scoping by it');
 
         // An uninformed (still-running) row must not clobber the informed one.
         $stale = $export;
@@ -442,6 +444,32 @@ final class BackgroundShellRegistryTest extends TestCase
         $stale[$id]['spawnedAt'] = $stale[$id]['spawnedAt'] + 100.0;
         $fresh->merge($stale);
         self::assertSame(0, $fresh->status($id)['exitCode'], 'informed beats uninformed regardless of order');
+    }
+
+    public function testStartRowsCarryTheOwnerTagAndRowsWithoutTheKeyStayVisible(): void
+    {
+        $registry = $this->registry();
+        $id = (string) $registry->start('true', 'untagged')['shell']['id'];
+        self::assertArrayHasKey('owner', $registry->toArray()[$id], 'C-TOOL-3.c: the row shape carries the claim');
+        self::assertNull($registry->toArray()[$id]['owner']);
+
+        // The literal pre-tag export shape: no key at all. It must merge to
+        // an untagged row — visible to everyone — never a poison pill.
+        $row = $registry->toArray()[$id];
+        unset($row['owner']);
+        $latecomer = $this->registry();
+        $latecomer->merge([$id => $row]);
+        self::assertNotNull($latecomer->status($id, 'whoever'), 'a row without the key is untagged, not unreadable');
+        self::assertSame([$id], $latecomer->ownedBy('session-A'));
+
+        $claimed = $this->registry();
+        $claimedId = (string) $claimed->start('true', 'claimed', [], 'session-A')['shell']['id'];
+        self::assertSame('session-A', $claimed->toArray()[$claimedId]['owner']);
+        self::assertSame([$claimedId], $claimed->ownedBy('session-A'));
+        self::assertSame([], $claimed->ownedBy('session-B'));
+
+        $registry->teardown();
+        $claimed->teardown();
     }
 
     public function testMergeRefusesForgedRowsAndForeignPaths(): void

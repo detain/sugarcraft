@@ -125,6 +125,22 @@ use SugarCraft\Code\Support\ProcessContainment;
  * there. {@see merge()} is order-independent: a row reporting an exit code
  * beats one that does not, and among equally informed rows the later record
  * wins, so applying the same export twice is a no-op.
+ *
+ * ROWS CARRY AN OWNER TAG (C-TOOL-3.c). A served launch shares one
+ * registry across every session it hosts, so a row records the session id
+ * that started it ({@see start()}'s `$owner`); {@see status()},
+ * {@see read()} and {@see stop()} accept an optional owner and answer a
+ * foreign row exactly as they answer a missing one — the refusal is the
+ * same "not registered" shape, so a foreign id leaks nothing about what
+ * the other session is running. The table itself stays whole: the design
+ * deliberately tags rows instead of splitting one map per session, so
+ * {@see teardown()} remains a single pass over a single map and the
+ * launch's kill-everything guarantee cannot be widened or narrowed by
+ * whoever supplied the owner. A null owner — a shell started before any
+ * session was bound, or a row that predates the tag — is visible to every
+ * caller: the ABSENCE of a tag is never treated as a claim, which is also
+ * what keeps a merged pre-tag export readable. {@see ownedBy()} answers
+ * the ids one caller may see.
  */
 final class BackgroundShellRegistry
 {
@@ -278,10 +294,11 @@ final class BackgroundShellRegistry
      * trailer, the file sinks, and the containment spawn.
      *
      * @param array<string, string> $envOverrides handed to {@see ProcessContainment::scrubbedEnv()} and applied after the scrub
+     * @param string|null $owner the session id that will claim this row; null keeps the row visible to every caller (a launch that binds no session, or the pre-tag world)
      *
      * @return array{ok: bool, error?: string, shell?: array<string, mixed>}
      */
-    public function start(string $command, string $label, array $envOverrides = []): array
+    public function start(string $command, string $label, array $envOverrides = [], ?string $owner = null): array
     {
         // The fork door, with adoption: a child that spawns through this
         // copy owns its own handles, and its parent's inherited duplicates
@@ -338,6 +355,9 @@ final class BackgroundShellRegistry
         $this->rows[$id] = [
             'id' => $id,
             'label' => $label,
+            // Session claim for the visibility law ({@see rowVisible()});
+            // null is "nobody's yet", not "everybody's enemy".
+            'owner' => $owner,
             'pid' => $pid,
             'pgid' => $pid,
             // Recorded AT SPAWN, not observed later: whether the containment
@@ -586,13 +606,19 @@ final class BackgroundShellRegistry
      * verdict, and the `exitNote` a cap death is narrated with. Enforces the
      * max-lifetime wall on a live shell before answering.
      *
-     * @return array<string, mixed>|null null when the id is not in the table
+     * @return array<string, mixed>|null null when the id is not in the table, or when it belongs to a different owner
      */
-    public function status(string $shellId): ?array
+    public function status(string $shellId, ?string $owner = null): ?array
     {
         $this->dropForkInheritedHandles();
         $row = $this->rows[$shellId] ?? null;
         if ($row === null) {
+            return null;
+        }
+        // Checked before anything else reads the row: a foreign caller gets
+        // the missing-id answer, and the id's real owner sees no side effect
+        // (no lifetime enforcement, no observation) from the stranger's call.
+        if (!self::rowVisible($row['owner'] ?? null, $owner)) {
             return null;
         }
         $row = $this->enforceLifetime($shellId, $row);
@@ -635,10 +661,10 @@ final class BackgroundShellRegistry
      *
      * @return array{ok: bool, error?: string, stdout?: string, stderr?: string, cursor?: string, skippedBytes?: int, bytesAvailable?: int, state?: string, exitCode?: ?int, exitNote?: ?string, expired?: bool}
      */
-    public function read(string $shellId, int|string $cursor = 0, ?int $maxBytes = null): array
+    public function read(string $shellId, int|string $cursor = 0, ?int $maxBytes = null, ?string $owner = null): array
     {
         $this->dropForkInheritedHandles();
-        $row = $this->status($shellId);
+        $row = $this->status($shellId, $owner);
         if ($row === null) {
             return ['ok' => false, 'error' => 'no background shell ' . $shellId . ' is registered by this launch'];
         }
@@ -710,11 +736,14 @@ final class BackgroundShellRegistry
      *
      * @return array{found: bool, wasRunning: bool, confirmed: bool, grouped: bool, exitCode: ?int, expired: bool}
      */
-    public function stop(string $shellId): array
+    public function stop(string $shellId, ?string $owner = null): array
     {
         $this->dropForkInheritedHandles();
         $row = $this->rows[$shellId] ?? null;
-        if ($row === null) {
+        // A foreign row is answered exactly like a missing one — the ladder
+        // never runs on a shell the caller may not see, and the answer
+        // carries no trace that the id exists at all.
+        if ($row === null || !self::rowVisible($row['owner'] ?? null, $owner)) {
             return ['found' => false, 'wasRunning' => false, 'confirmed' => false, 'grouped' => false, 'exitCode' => null, 'expired' => false];
         }
         $wasRunning = $this->observe($shellId, $row)['state'] === 'running';
@@ -777,6 +806,38 @@ final class BackgroundShellRegistry
     public function ids(): array
     {
         return array_map('strval', array_keys($this->rows));
+    }
+
+    /**
+     * The ids one caller may see — its own rows plus the untagged ones —
+     * in insertion order. This is the whole visibility law read as a list:
+     * a null `$owner` (a caller bound to no session) sees every row, which
+     * is what keeps the launch's own tools, panels, and teardown working
+     * for a row started before the first session existed.
+     *
+     * @return list<string>
+     */
+    public function ownedBy(?string $owner): array
+    {
+        $ids = [];
+        foreach ($this->rows as $id => $row) {
+            if (self::rowVisible($row['owner'] ?? null, $owner)) {
+                $ids[] = (string) $id;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * The visibility law in one place: a row is visible to a caller when
+     * the row carries no owner, the caller carries none, or the two are the
+     * same session. Ownership is a CLAIM, never a lock — it scopes answers,
+     * not teardown.
+     */
+    private static function rowVisible(?string $rowOwner, ?string $caller): bool
+    {
+        return $rowOwner === null || $caller === null || $rowOwner === $caller;
     }
 
     /**
@@ -1232,6 +1293,10 @@ final class BackgroundShellRegistry
 
         return [
             'label' => \is_string($row['label'] ?? null) ? $row['label'] : '',
+            // An export that predates the tag, or a forged one that omits
+            // it, arrives untagged — visible to all, the same conservative
+            // answer the `grouped` paragraph below makes for the group law.
+            'owner' => (isset($row['owner']) && \is_string($row['owner']) && $row['owner'] !== '') ? $row['owner'] : null,
             'pid' => (int) $row['pid'],
             'pgid' => (int) $row['pgid'],
             // A row that predates this field, or a forged one that omits it,

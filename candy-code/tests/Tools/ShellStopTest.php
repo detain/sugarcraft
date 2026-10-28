@@ -113,6 +113,25 @@ final class ShellStopTest extends TestCase
         self::assertStringContainsString('had already settled (exit 5); nothing was signalled.', $result->content());
     }
 
+    public function testAStopBoundToAnotherOwnerAnswersTheNotRegisteredRefusal(): void
+    {
+        // C-TOOL-3.c: a foreign session's shell is addressed through the
+        // SAME not-registered door an unknown id is — and the refusal
+        // touches nothing.
+        $registry = $this->registry();
+        $id = (string) $registry->start('sleep 120', 'owned elsewhere', [], 'other-session')['shell']['id'];
+
+        $result = $this->tool($registry)->withShellOwner('a-stranger-session')->execute(['shell_id' => $id]);
+        self::assertTrue($result->isError());
+        self::assertStringContainsString('is registered by this launch', $result->content());
+        self::assertSame('running', $registry->status($id)['state'], 'a refused stop signals nothing');
+
+        $mine = $this->tool($registry)->withShellOwner('other-session')->execute(['shell_id' => $id]);
+        self::assertFalse($mine->isError(), $mine->content());
+
+        $registry->teardown();
+    }
+
     public function testThePositionRosterKeepsThirtyNineAndFortyReserved(): void
     {
         // The wave ruling: ShellOutput=37, ShellStop=38, and NOTHING else
