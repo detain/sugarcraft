@@ -909,18 +909,21 @@ final class ArgvParser
             $usageHint = Lang::t('cli.argv.hint.json_schema_needs_prompt');
         }
 
-        // C-AGT-6.c: --worktree is a MAIN-session flag — it swaps the
-        // launch's root for a worktree before the TUI or a one-shot opens
-        // there. `serve` runs a host that opens one root per client session
-        // (and its --allow-dir-browse/--browse-root already own that
-        // decision), so a --worktree beside it could only be ignored —
-        // refused at the parser so both spellings of the clash fail
+        // C-AGT-6.c, broadened at weld: --worktree is a MAIN-session flag —
+        // it swaps the launch's root for a worktree before the TUI or a
+        // one-shot opens there. bin exits at a subcommand verb's OWN
+        // dispatch before that swap, so beside ANY verb (ParsedArgs::
+        // SUBCOMMANDS) the flag is carried and silently ignored — the lie
+        // the jsonSchema guard above was minted to forbid. `serve` has the
+        // deeper reason too: its host opens one root per client session
+        // (and --allow-dir-browse/--browse-root already own that decision).
+        // Refused at the parser so both spellings of the clash fail
         // identically on stdout and in the JSON error document. The verb-
         // first order (`serve --worktree`) is caught earlier by the
         // unknown-flag recorder: serve's own flag table does not list it.
-        if ($usageError === null && $worktreeRequested && $subcommand === 'serve') {
-            $usageError = 'candy-code: ' . Lang::t('cli.argv.worktree.with_serve');
-            $usageHint = Lang::t('cli.argv.hint.worktree_serve');
+        if ($usageError === null && $worktreeRequested && $subcommand !== null) {
+            $usageError = 'candy-code: ' . Lang::t('cli.argv.worktree.with_subcommand');
+            $usageHint = Lang::t('cli.argv.hint.worktree_subcommand');
         }
 
         // The FIRST positional, when it looks like a path, is the root (see

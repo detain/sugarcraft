@@ -1895,8 +1895,10 @@ included; one that holds work stays in place and announces its path on stderr,
 because silently deleting output would be the worse bug. Outside a git work
 tree the flag is a usage error (exit `2`) rather than a silent no-op, a name
 the path and ref rules refuse is one too, and so is `--worktree` beside
-`serve` — a host opens its own root per client session, so there is nothing
-there for this flag to name.
+ANY subcommand verb — bin exits at the verb's own dispatch before the
+worktree is entered, so the flag could only be silently ignored there;
+`serve` has the deeper reason that its host opens its own root per client
+session.
 
 `--config <file>` (also `--config=<file>`) replaces the per-user
 `~/.candy-code/config.json` for this run: the theme, the persisted provider,

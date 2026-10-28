@@ -383,22 +383,23 @@ final class LaunchFlagsTest extends TestCase
     }
 
     /**
-     * `--worktree` beside `serve` is refused at the parser (C-AGT-6.c): the
-     * host decides a root per client session (that is what its own
-     * --allow-dir-browse/--browse-root pair is FOR), so there is nothing for
-     * a launch-level worktree to name — and a carried-then-ignored flag is
-     * the lie the jsonSchema guard above was minted to forbid. Both orders
-     * refuse: `--worktree x serve` through this usage rule, `serve
-     * --worktree x` through serve's own flag table, which does not list it.
+     * `--worktree` beside ANY subcommand verb is refused at the parser
+     * (C-AGT-6.c, broadened at weld): `serve` was the lane's named case —
+     * the host decides a root per client session (that is what its own
+     * --allow-dir-browse/--browse-root pair is FOR) — but the surface law
+     * is general: bin exits at a verb's own dispatch BEFORE the worktree
+     * enter, so beside any verb the flag is carried and silently ignored,
+     * the lie the jsonSchema guard above was minted to forbid. Both
+     * `--worktree x <verb>` and the `=` spelling refuse through this
+     * usage rule; the verb-first order (`serve --worktree`) refuses
+     * through serve's own flag table, which does not list it.
      */
-    public function testTheWorktreeFlagBesideServeIsAUsageError(): void
+    public function testTheWorktreeFlagBesideAnySubcommandIsAUsageError(): void
     {
         $pre = ArgvParser::parse(['candy-code', '--worktree', 'fix-bug', 'serve']);
         $this->assertNotNull($pre->usageError);
         $this->assertStringContainsString('--worktree', (string) $pre->usageError, 'the refusal names the flag');
-        $this->assertStringContainsString('serve', (string) $pre->usageError, 'and what it collides with');
         $this->assertNotNull($pre->usageHint);
-        $this->assertStringContainsString('serve', (string) $pre->usageHint, 'the hint repeats the safe path');
 
         $attached = ArgvParser::parse(['candy-code', '--worktree=fix-bug', 'serve']);
         $this->assertNotNull($attached->usageError, 'the `=` spelling collides the same way');
@@ -406,7 +407,15 @@ final class LaunchFlagsTest extends TestCase
         $post = ArgvParser::parse(['candy-code', 'serve', '--worktree', 'fix-bug']);
         $this->assertNotNull($post->usageError, 'the verb-first order refuses too — through serve\'s flag table');
 
-        $this->assertNull(ArgvParser::parse(['candy-code', '--worktree', 'fix-bug', 'session', 'list'])->usageError, 'other verbs do not carry a per-client root law and stay clean');
+        foreach ([['session', 'list'], ['models'], ['doctor'], ['mcp', 'list'], ['completion', 'bash']] as $verb) {
+            $spaced = ArgvParser::parse(array_merge(['candy-code', '--worktree', 'fix-bug'], $verb));
+            $this->assertNotNull($spaced->usageError, implode(' ', $verb) . ' never reaches the worktree enter either');
+            $this->assertStringContainsString('--worktree', (string) $spaced->usageError);
+            $attachedVerb = ArgvParser::parse(array_merge(['candy-code', '--worktree=fix-bug'], $verb));
+            $this->assertNotNull($attachedVerb->usageError, 'and so the `=` spelling collides with every verb');
+        }
+
+        $this->assertNull(ArgvParser::parse(['candy-code', '--worktree', 'fix-bug'])->usageError, 'a main-session launch stays clean');
     }
 
     /**
