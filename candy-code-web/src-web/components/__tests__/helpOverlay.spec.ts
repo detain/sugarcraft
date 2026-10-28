@@ -121,6 +121,28 @@ describe('help overlay key (C-WEB-4.b)', () => {
     expect(event.defaultPrevented).toBe(false)
   })
 
+  it('hears the field rule through closest(): a select keeps its ?', async () => {
+    wrapper = await mountApp()
+    const field = document.createElement('select')
+    field.appendChild(document.createElement('option'))
+    document.body.appendChild(field)
+    const event = press(HELP_CHORD, field)
+    await nextTick()
+    expect(overlayOpen()).toBe(false) // `select` is its own closest() token — native drop-downs own the key
+    expect(event.defaultPrevented).toBe(false)
+  })
+
+  it('hears the field rule through closest(): a contenteditable keeps its ?', async () => {
+    wrapper = await mountApp()
+    const field = document.createElement('div')
+    field.setAttribute('contenteditable', 'true')
+    document.body.appendChild(field)
+    const event = press(HELP_CHORD, field)
+    await nextTick()
+    expect(overlayOpen()).toBe(false) // so is `[contenteditable="true"]` — rich-text fields own the key
+    expect(event.defaultPrevented).toBe(false)
+  })
+
   it('escapes and toggles back out', async () => {
     wrapper = await mountApp()
     press(HELP_CHORD, null)
