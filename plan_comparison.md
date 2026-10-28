@@ -1897,7 +1897,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Ruling:** R13 (remote security). May candy-code shell out to `gh` (the user's GitHub credentials) for `/review --pr` and drive `gh pr create` from `/pr`? — see §6
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-6.d`
 
-#### C-CTX-4.c — Walk past the git root; absolute and `~` user-tier sources
+#### ✅ d361720d90920f17c1d42ef19032cb5768b24c43 C-CTX-4.c — Walk past the git root; absolute and `~` user-tier sources
 - **Item:** C-CTX-4 (sources: GAP-INS-07, GAP-INS-11 (absolute half)) · gap · effort S
 - **What:** A new user-tier bool `instructions.walkToRoot` lets `ancestorRoot()` (`InstructionFileLoader.php:845-880`) continue above the nearest `.git` up to, but not including, `$HOME`, under the same containment and budget. `loadForced()` …
 - **Files — create:** `candy-code/tests/Context/InstructionWalkPastRootTest.php`
