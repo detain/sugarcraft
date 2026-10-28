@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Context;
 
 use DateTimeImmutable;
+use SugarCraft\Code\Providers\ModelMetadata;
 use SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Code\Workspace\GitRunner;
 use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
@@ -135,9 +136,11 @@ use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
  * write still re-prefilled the `<env>` tail of message 0, and on SGLang every
  * byte after the first differing one — the whole conversation — with it. The
  * block now splits along the line that matters for caching. The STATIC half
- * (the seven lines: cwd, git-repo flag, platform, OS, PHP, model, date) is
- * frozen at capture or constant, and stays in the system prompt through the
- * static-only copy {@see withVolatile()} derives. The VOLATILE half — the git
+ * (the seven orientation lines: cwd, git-repo flag, platform, OS, PHP, model,
+ * date — plus the knowledge-cutoff line whenever the table in
+ * {@see \SugarCraft\Code\Providers\ModelMetadata} knows the session model's
+ * family, C-CTX-4) is frozen at capture or constant, and stays in the system
+ * prompt through the static-only copy {@see withVolatile()} derives. The VOLATILE half — the git
  * section, {@see renderVolatile()} — travels as the appended user-role
  * `<turn-context>` row built by {@see TurnContextBlock}, so a write changes
  * bytes at the TAIL of the request instead of inside message 0. The full
@@ -741,6 +744,7 @@ final readonly class EnvironmentBlock implements PromptSection
         private bool $volatile = true,
         private bool $diffsAfterWrites = true,
         private int $diffMaxBytes = self::DIFF_MAX_BYTES,
+        private ?string $knowledgeCutoff = null,
     ) {}
 
     /**
@@ -824,7 +828,7 @@ final readonly class EnvironmentBlock implements PromptSection
      */
     public function withWriteSinceLastRender(bool $writeSinceLastRender): self
     {
-        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $writeSinceLastRender, $this->volatile, $this->diffsAfterWrites, $this->diffMaxBytes);
+        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $writeSinceLastRender, $this->volatile, $this->diffsAfterWrites, $this->diffMaxBytes, $this->knowledgeCutoff);
         if (isset($this->enclosingRepo)) {
             $copy->enclosingRepo = $this->enclosingRepo;
         }
@@ -844,14 +848,24 @@ final readonly class EnvironmentBlock implements PromptSection
      */
     public static function capture(string $cwd, string $modelName): self
     {
-        return new self($cwd, $modelName, new DateTimeImmutable());
+        // C-CTX-4: resolve the model family's knowledge cutoff once, at
+        // capture, so the line rides the static per-session prefix like every
+        // other line here. An unknown family resolves to null and renders
+        // NOTHING — a confidently wrong cutoff is worse than none, and the
+        // hand-kept table in {@see ModelMetadata::KNOWLEDGE_CUTOFFS} is
+        // deliberately sparse (see its staleness law).
+        return new self($cwd, $modelName, new DateTimeImmutable(), knowledgeCutoff: ModelMetadata::knowledgeCutoff($modelName));
     }
 
     /**
      * Renders the environment block as an XML-flavoured string for embedding in prompts.
      *
      * Seven lines, in this order: cwd, git-repository flag, platform, OS version,
-     * PHP version, model name, current date. When the cwd is inside a git work
+     * PHP version, model name, current date — with a knowledge-cutoff
+     * line after the model name when the session's model family is known to
+     * {@see \SugarCraft\Code\Providers\ModelMetadata::knowledgeCutoff()}
+     * (C-CTX-4; the line is absent, never guessed, for unknown families).
+     * When the cwd is inside a git work
      * tree (its root, or since audit 15d-13 any directory below it, where the
      * first line also names the repo root — see {@see enclosingRepo()}), a git
      * section is appended — polled here, on every call, not frozen at capture
@@ -931,7 +945,7 @@ final readonly class EnvironmentBlock implements PromptSection
      */
     public function withVolatile(bool $volatile): self
     {
-        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $this->writeSinceLastRender, $volatile, $this->diffsAfterWrites, $this->diffMaxBytes);
+        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $this->writeSinceLastRender, $volatile, $this->diffsAfterWrites, $this->diffMaxBytes, $this->knowledgeCutoff);
         if (isset($this->enclosingRepo)) {
             $copy->enclosingRepo = $this->enclosingRepo;
         }
@@ -973,7 +987,7 @@ final readonly class EnvironmentBlock implements PromptSection
             return $this;
         }
 
-        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $this->writeSinceLastRender, $this->volatile, $diffs, $max);
+        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $this->writeSinceLastRender, $this->volatile, $diffs, $max, $this->knowledgeCutoff);
         if (isset($this->enclosingRepo)) {
             $copy->enclosingRepo = $this->enclosingRepo;
         }
@@ -994,8 +1008,9 @@ final readonly class EnvironmentBlock implements PromptSection
     }
 
     /**
-     * The seven orientation lines every mode renders, and whether the cwd sits
-     * in a work tree (the gate on the git section).
+     * The orientation lines every mode renders — the seven fixed ones plus the
+     * knowledge-cutoff line when the family is known (C-CTX-4) — and whether
+     * the cwd sits in a work tree (the gate on the git section).
      *
      * @return array{0: list<string>, 1: bool}
      */
@@ -1056,8 +1071,17 @@ final readonly class EnvironmentBlock implements PromptSection
             'OS version: ' . php_uname('s') . ' ' . php_uname('r'),
             'PHP version: ' . PHP_VERSION,
             'Model: ' . $this->modelName,
-            'Current date: ' . ($this->now ?? new DateTimeImmutable())->format('Y-m-d'),
         ];
+
+        // C-CTX-4: the family's knowledge cutoff, resolved once at capture
+        // (or injected) and frozen with the rest of this half. Present only
+        // when the table knows the family; an unknown family renders nothing
+        // here rather than a stale guess.
+        if ($this->knowledgeCutoff !== null) {
+            $lines[] = 'Knowledge cutoff: ' . $this->knowledgeCutoff;
+        }
+
+        $lines[] = 'Current date: ' . ($this->now ?? new DateTimeImmutable())->format('Y-m-d');
 
         return [$lines, $inRepo];
     }

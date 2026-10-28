@@ -247,6 +247,69 @@ final class EnvironmentBlockTest extends TestCase
         $this->assertStringContainsString('Current date: ' . $now->format('Y-m-d'), $output);
     }
 
+    // ─── C-CTX-4: the knowledge-cutoff line ─────────────────────────
+
+    /**
+     * A family the table knows gets its published cutoff as a frozen line
+     * directly after `Model:` — part of the static per-session prefix, so
+     * like every line here it is resolved once at capture and never revised
+     * mid-session. The namespace spelling and dated variant prove the match
+     * is on the FAMILY, not on one exact id.
+     */
+    public function testCaptureAddsKnowledgeCutoffForAKnownFamily(): void
+    {
+        $output = EnvironmentBlock::capture($this->tempDir, 'openai/gpt-4o-2024-11-20')->render();
+
+        $lines = explode("\n", substr($output, strlen("<env>\n"), -strlen("\n</env>")));
+        $modelIndex = array_search('Model: openai/gpt-4o-2024-11-20', $lines, true);
+        $this->assertIsInt($modelIndex, 'the Model line itself vanished: ' . $output);
+        $this->assertSame('Knowledge cutoff: October 2023', $lines[$modelIndex + 1] ?? null);
+        $this->assertStringStartsWith('Current date: ', $lines[$modelIndex + 2] ?? '', 'the cutoff line must sit between Model and Current date');
+    }
+
+    /**
+     * An unknown family renders NOTHING — the risk law of the hand-kept
+     * table: a confidently wrong cutoff inside the trusted `<env>` block is
+     * worse than no cutoff, so absence is the designed answer (the golden
+     * fixture's claude model takes this branch).
+     */
+    public function testCaptureRendersNoCutoffLineForAnUnknownFamily(): void
+    {
+        foreach (['claude-sonnet-4-6', 'gpt-4', 'deepseek-v4', 'llama-3.1-70b', ''] as $model) {
+            $output = EnvironmentBlock::capture($this->tempDir, $model)->render();
+            $this->assertStringNotContainsString('Knowledge cutoff', $output, "model '{$model}' must not gain a cutoff line");
+        }
+    }
+
+    /**
+     * The cutoff is captured, not polled: it rides every derived copy
+     * (`withVolatile(false)`'s static half IS the prefix the line belongs
+     * to) and two renders of one block are byte-identical.
+     */
+    public function testTheCutoffLineIsFrozenIntoEveryDerivedCopy(): void
+    {
+        $block = EnvironmentBlock::capture($this->tempDir, 'Gemini-1.5-Pro');
+
+        $this->assertStringContainsString('Knowledge cutoff: October 2023', $block->withVolatile(false)->render());
+        $this->assertStringContainsString('Knowledge cutoff: October 2023', $block->withWriteSinceLastRender(false)->render());
+        $this->assertSame($block->render(), $block->render(), 'the static half must not move between renders');
+    }
+
+    /**
+     * A directly constructed block (the prompt-golden path, and every test
+     * that pins bytes with `new EnvironmentBlock(...)`) keeps its historical
+     * seven lines: the cutoff exists only when a caller resolves one, so the
+     * frozen golden prompt cannot gain a row from this feature.
+     */
+    public function testDirectConstructionCarriesNoCutoffUnlessInjected(): void
+    {
+        $plain = new EnvironmentBlock($this->tempDir, 'gpt-4o');
+        $this->assertStringNotContainsString('Knowledge cutoff', $plain->render());
+
+        $injected = new EnvironmentBlock($this->tempDir, 'gpt-4o', null, null, true, true, true, EnvironmentBlock::DIFF_MAX_BYTES, 'October 2023');
+        $this->assertStringContainsString('Knowledge cutoff: October 2023', $injected->render());
+    }
+
     // ─── render() non-git directory tests ───────────────────────────
 
     public function testRenderShowsNotGitRepoWhenNoGitDirectory(): void

@@ -321,6 +321,53 @@ final class PromptPrefixByteStabilityTest extends TestCase
     }
 
     /**
+     * C-CTX-4: a session that runs past midnight gets today's date on the
+     * `<turn-context>` tail row — and message 0 must not move A SINGLE BYTE
+     * because of it. The frozen `<env>` date is prefix; the live date is
+     * tail. This is the same property the whole class pins for git state and
+     * instruction edits, derived here from the date pair instead of a real
+     * turn: an EnvironmentBlock injected at a past date stands in for a
+     * session that started yesterday.
+     */
+    public function testARolledDateMovesTheTailRowAndNotTheFrozenPrefix(): void
+    {
+        $provider = $this->createMock(\SugarCraft\Code\Providers\ProviderInterface::class);
+        $provider->method('name')->willReturn('test-provider');
+
+        $root = $this->tempDir();
+        $runtime = new \SugarCraft\Code\Runtime(
+            $provider,
+            new \SugarCraft\Code\Hooks\HookManager(new \SugarCraft\Code\Hooks\HookRegistry()),
+            new \SugarCraft\Code\Context\EnvironmentBlock($root, 'test-model', new \DateTimeImmutable('2000-01-01 12:00:00')),
+        );
+        $app = \SugarCraft\Code\App\App::new($provider, 'test-model')->withRoot($root);
+
+        $before = (new \DateTimeImmutable())->format('Y-m-d');
+        $first = $this->systemPromptOf($runtime, $app);
+        $row = $runtime->turnContext($app)->render();
+        $second = $this->systemPromptOf($runtime, $app);
+        $after = (new \DateTimeImmutable())->format('Y-m-d');
+
+        $this->assertSame($first, $second, 'the date row exists to spare the prefix — message 0 moved between two builds');
+        $this->assertStringContainsString('Current date: 2000-01-01', $first);
+        $this->assertSame(1, preg_match('/Current date: (\d{4}-\d{2}-\d{2})/', $row, $at), 'the stale-env step must carry exactly one live-date row');
+        $this->assertContains($at[1], [$before, $after], 'the row must name the ambient date (bracketed around the call)');
+        $this->assertStringNotContainsString('Current date: ' . $at[1], $first, 'the ambient date reached message 0 — the row is supposed to carry it');
+    }
+
+    /**
+     * The private prompt builder, driven by reflection the same way the
+     * Context-suite twins drive theirs.
+     */
+    private function systemPromptOf(\SugarCraft\Code\Runtime $runtime, \SugarCraft\Code\App\App $app): string
+    {
+        $method = new \ReflectionMethod($runtime, 'buildSystemPrompt');
+        $method->setAccessible(true);
+
+        return (string) $method->invoke($runtime, $app);
+    }
+
+    /**
      * Run the loop until the forked completion settles (the house fork-test
      * idiom, sibling of EngineBackend's own reap discipline).
      */

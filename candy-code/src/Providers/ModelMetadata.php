@@ -71,6 +71,61 @@ use SugarCraft\Code\Tui\Components\PaneLabel;
  */
 final class ModelMetadata
 {
+    /**
+     * Knowledge cutoffs by model-family token, matched case-insensitively as
+     * a substring of the model id (C-CTX-4). {@see \SugarCraft\Code\Context\EnvironmentBlock::capture()}
+     * renders one frozen `Knowledge cutoff:` line from this table when — and
+     * only when — the session model hits a row; an unknown family renders
+     * NOTHING. That asymmetry is the whole design: a stale or guessed cutoff
+     * inside a trusted `<env>` block misleads the model far more than its
+     * absence, and a hand-kept table like this one goes stale by construction
+     * (the frontier moves every month and nothing here verifies itself).
+     *
+     * STALENESS LAW. Every row must be a cutoff the provider published and
+     * that time has since confirmed — i.e. a model generation whose successors
+     * are already public. Current-generation and fast-moving families
+     * (claude, gpt-5.x, deepseek, qwen, minimax, llama, gemini-2 and later)
+     * are DELIBERATELY absent, not awaiting a confident value; verify against
+     * the provider before adding one. Reviewed 2026-10-28 against the OpenAI
+     * and Google model documentation.
+     *
+     * MATCH ORDER. Rows are consulted in declaration order, so a token that
+     * contains another row's token (e.g. a future `llama-3.1` before
+     * `llama-3`) MUST be declared first. No current pair contains another.
+     *
+     * @var array<string,string> family token => published cutoff, as shown to the model
+     */
+    public const KNOWLEDGE_CUTOFFS = [
+        'gpt-4o' => 'October 2023',
+        'o1-preview' => 'October 2023',
+        'o1-mini' => 'October 2023',
+        'gemini-1.5' => 'October 2023',
+    ];
+
+    /**
+     * The published knowledge cutoff for a model id, or null when the family
+     * is not in {@see KNOWLEDGE_CUTOFFS} — the answer the model-facing line
+     * must never guess.
+     *
+     * Substring matching is namespace-tolerant on purpose: LiteLLM routing
+     * spellings (`openai/gpt-4o-2024-11-20`), dated variants and `-mini`
+     * siblings of a listed family all resolve to the family's cutoff.
+     */
+    public static function knowledgeCutoff(string $model): ?string
+    {
+        $needle = strtolower(trim($model));
+        if ($needle === '') {
+            return null;
+        }
+
+        foreach (self::KNOWLEDGE_CUTOFFS as $token => $cutoff) {
+            if (str_contains($needle, $token)) {
+                return $cutoff;
+            }
+        }
+
+        return null;
+    }
     use HttpClientDefaults;
 
     /** LiteLLM's model database, the file Aider downloads. */

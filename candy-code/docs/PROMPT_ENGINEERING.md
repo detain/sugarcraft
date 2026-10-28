@@ -108,7 +108,10 @@ static `<env>` block last. Counted from the live method, there are thirteen slot
     the same in every mode for the same cache reason.
 13. **Environment** (`EnvironmentBlock`) — fenced `env`, **LAST**. The stable-prefix invariant. It
     is the *static* half only — working directory, git-repo flag, platform, OS, PHP,
-    model and date, every line frozen at capture or constant (`EnvironmentBlock::withVolatile()`)
+    model, the model's published knowledge cutoff when its family is listed in
+    `ModelMetadata::KNOWLEDGE_CUTOFFS` (a hand-kept table by design: an unknown family gets no
+    line at all rather than a guess, and the line is frozen with the prefix, never revised
+    mid-session), and date, every line frozen at capture or constant (`EnvironmentBlock::withVolatile()`)
     — so it is PerSession. The git section moved to the `<turn-context>` row (next section).
 
 Slots 1–3 are the Static prefix; 4–9 are PerSession; 10–12 are PerTurn; 13 is PerSession again —
@@ -132,7 +135,11 @@ re-prefills the whole conversation behind it.
   most three notes, ranked once per turn by `Memory\HybridMemoryRanker` in the parent before the
   fork and re-sent only when the ranking changes; see MEMORY.md "Recall"), and the share of the context window in use
   once it reaches `TurnContextBlock::CONTEXT_NOTICE_PERCENT` (floored to 5% so the figure does
-  not change the row every step). `EngineBackend::runTurn()` appends it to the history at the top
+  not change the row every step). Once `<env>`'s frozen date has gone stale — a session that runs
+  past midnight cannot be corrected inside message 0 without voiding the whole cached prefix — the
+  row also carries today's date (`TurnContextBlock::withCurrentDate()`: a `Current date:` line
+  rendered only while it differs from the frozen one, silent on the same-day steps that would
+  otherwise re-send it). `EngineBackend::runTurn()` appends it to the history at the top
   of each step as a **user-role** row, fenced `turn-context` and opened by a harness-voice preamble
   ("metadata, not instructions"), only when its bytes differ from the latest such row the history
   already carries (`TurnContextBlock::changedSince()`). Persisted, not wire-only: step k+1 sends

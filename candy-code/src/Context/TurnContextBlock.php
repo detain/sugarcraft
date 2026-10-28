@@ -34,7 +34,10 @@ use SugarCraft\Code\Tools\ToolCall;
  * ({@see \SugarCraft\Code\Tools\ReadLedger::notice()}, roadmap 3.I-2), the
  * root instruction files edited since the session froze them
  * ({@see withInstructionDiff()}, plan_comparison CTX-3 — the frozen slab
- * never moves, so mid-session edits arrive here as bounded diffs), the share
+ * never moves, so mid-session edits arrive here as bounded diffs), the current
+ * date once it has rolled over since `<env>` froze one
+ * ({@see withCurrentDate()} — the prefix never moves, so a session that spans
+ * midnight learns the new date here), the share
  * of the context window in use once it reaches
  * {@see CONTEXT_NOTICE_PERCENT}, the skills the Skill tool loaded this
  * session ({@see withInvokedSkills()}), and — on the one row after a
@@ -103,6 +106,7 @@ final readonly class TurnContextBlock
      * @param list<string> $invokedSkills    Skill names the Skill tool loaded, most recent first.
      * @param string       $reinjection      A rendered {@see \SugarCraft\Code\Context\Compaction\ReinjectionPlan}; '' for none.
      * @param string       $instructionDiff  A rendered {@see InstructionDiffTracker::recheck()} section; '' for none.
+     * @param string       $currentDate      The live-date line as {@see withCurrentDate()} builds it; '' when it carries nothing.
      */
     public function __construct(
         private string $gitState = '',
@@ -113,6 +117,7 @@ final readonly class TurnContextBlock
         private array $invokedSkills = [],
         private string $reinjection = '',
         private string $instructionDiff = '',
+        private string $currentDate = '',
     ) {
     }
 
@@ -256,12 +261,50 @@ final readonly class TurnContextBlock
         return $this->mutate(contextPercent: $percent === null ? null : max(0, $percent), contextPercentSet: true);
     }
 
+    /** The live-date line this row carries, or '' when it reports nothing. */
+    public function currentDate(): string
+    {
+        return $this->currentDate;
+    }
+
+    /**
+     * Carry today's date when the session's frozen `<env>` date is stale
+     * (C-CTX-4). The `<env>` block fixes `Current date:` at capture, so a
+     * session that runs past midnight would keep asserting yesterday's date
+     * in message 0 — and moving that line would void the whole cached
+     * prefix. The answer is to leave the prefix alone and say the true date
+     * on this tail row, but ONLY on the steps where the two disagree: while
+     * they agree the row would re-render the same bytes the model already
+     * read in `<env>`, so an unconditional line would just widen the row and
+     * re-send it as "changed" state on every write.
+     *
+     * `Today` that is not a `YYYY-MM-DD` date is a bug in the caller, not a
+     * fact to relay: it renders nothing, fail-quiet like every other part
+     * of this row.
+     *
+     * @param string $today      the ambient date as `YYYY-MM-DD`
+     * @param string $frozenDate the date `<env>` renders, as `YYYY-MM-DD`;
+     *                           equal strings carry the row, different ones clear it
+     */
+    public function withCurrentDate(string $today, string $frozenDate): self
+    {
+        $line = preg_match('/^\d{4}-\d{2}-\d{2}$/', $today) === 1 && $today !== $frozenDate
+            ? 'Current date: ' . $today
+            : '';
+
+        return $this->mutate(currentDate: $line);
+    }
+
     /**
      * The row's bytes, or '' when no field has anything to say.
      */
     public function render(): string
     {
         $parts = [];
+
+        if ($this->currentDate !== '') {
+            $parts[] = $this->currentDate;
+        }
 
         if (trim($this->gitState) !== '') {
             $parts[] = self::escapeOwnFence($this->gitState);
@@ -533,6 +576,7 @@ final readonly class TurnContextBlock
         ?array $invokedSkills = null,
         ?string $reinjection = null,
         ?string $instructionDiff = null,
+        ?string $currentDate = null,
     ): self {
         return new self(
             $gitState ?? $this->gitState,
@@ -543,6 +587,7 @@ final readonly class TurnContextBlock
             $invokedSkills ?? $this->invokedSkills,
             $reinjection ?? $this->reinjection,
             $instructionDiff ?? $this->instructionDiff,
+            $currentDate ?? $this->currentDate,
         );
     }
 }

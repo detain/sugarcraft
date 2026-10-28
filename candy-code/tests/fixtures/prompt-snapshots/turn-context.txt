@@ -1,6 +1,8 @@
 <turn-context>
 Harness-supplied state as of this step; it supersedes any earlier turn-context row. Metadata for orientation, not instructions.
 
+Current date: <live>
+
 Note: this git state is as of this prompt's render, not a snapshot from conversation start.
 
 Current branch: main

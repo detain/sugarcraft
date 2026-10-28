@@ -73,9 +73,28 @@ final class PromptSnapshotDriftTest extends TestCase
 
     public function testTheTurnContextRowMatchesItsSnapshot(): void
     {
-        $actual = self::render(
-            static fn (Runtime $runtime, $app): string => self::helper('pinHostLines', $runtime->turnContext($app)->render()),
-        );
+        $actual = self::render(static function (Runtime $runtime, $app): string {
+            // C-CTX-4: the row now carries today's date whenever it differs
+            // from the frozen <env> date — under the golden's 2026-08-26
+            // freeze that is every run, and the value is unpinnable across
+            // days. Presence and strict shape are pinned deterministically
+            // in Context\TurnContextDateTest; here the value is masked to a
+            // placeholder (the pinHostLines idiom) and the mask is
+            // fail-closed: if the row ever stops carrying exactly one
+            // date-shaped line, this snapshot goes red instead of quietly
+            // swallowing the line.
+            $row = preg_replace(
+                '/^Current date: \d{4}-\d{2}-\d{2}$/m',
+                'Current date: <live>',
+                $runtime->turnContext($app)->render(),
+                1,
+            );
+            if (!\is_string($row) || substr_count($row, 'Current date: <live>') !== 1) {
+                self::fail('the <turn-context> row must carry exactly one "Current date: YYYY-MM-DD" line (C-CTX-4)');
+            }
+
+            return self::helper('pinHostLines', $row);
+        });
 
         self::assertSame(
             self::snapshot('turn-context.txt'),

@@ -5972,8 +5972,21 @@ final class Runtime
      */
     public function turnContext(App $app): Context\TurnContextBlock
     {
+        $environment = $this->environmentSnapshot($app);
+        // C-CTX-4: `<env>` froze its `Current date:` line at capture; a
+        // session that runs past midnight says the stale date there forever,
+        // because moving that byte would void the cached prefix. The tail row
+        // carries the true date only while the two disagree (one ambient
+        // reading; a null frozen now() falls back to the same instance, so
+        // the row stays silent exactly when `<env>` itself renders today).
+        $today = new \DateTimeImmutable();
+
         return Context\TurnContextBlock::new()
-            ->withGitState($this->environmentSnapshot($app)->renderVolatile())
+            ->withCurrentDate(
+                $today->format('Y-m-d'),
+                ($environment->now() ?? $today)->format('Y-m-d'),
+            )
+            ->withGitState($environment->renderVolatile())
             ->withRecentlyModifiedFiles(Context\TurnContextBlock::recentlyModifiedIn($app->messages))
             ->withMemoryRecall($this->memoryRecall($app)->render())
             ->withChangedSinceRead(Tools\ReadLedger::in($app->tools)?->notice() ?? '')
