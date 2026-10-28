@@ -61,7 +61,9 @@ final class HookWebhooksSignatureTest extends TestCase
     {
         $handler = $this->handler($this->hooks(['scheme' => 'github-sha256']));
         // A VALID header secret is deliberately absent: the signed door must
-        // not fall back to it, and a sender that sends neither is refused.
+        // not fall back to it. The fall-back refusal is pinned where it bites
+        // — the valid-header-secret-rides-a-missing-signature leg in
+        // testABadSignatureIsRefusedAndStrikesTheLockout().
         $answer = $handler->handle($this->request([
             'x-hub-signature-256' => $this->signature(self::BODY),
             'x-github-delivery' => 'uuid-one',
@@ -115,8 +117,15 @@ final class HookWebhooksSignatureTest extends TestCase
         self::assertStringContainsString('"message":"the webhook signature is not valid"', (string) $wrong->getBody());
         self::assertStringContainsString('"kind":"unauthorized"', (string) $wrong->getBody());
 
-        $missing = $handler->handle($this->request(['x-github-delivery' => 'uuid-bad'], self::BODY), 'deploy', '127.0.0.1');
-        self::assertSame(401, $missing->getStatusCode(), 'a missing signature is a refused signature');
+        // THE NO-FALLBACK LAW, discriminated: the header secret rides this
+        // request VALID — a permissive `HMAC || header-secret` refactor would
+        // admit this delivery and so reds the very next assertion; the signed
+        // door refuses it either way.
+        $missing = $handler->handle($this->request([
+            'x-candy-code-hook' => self::SECRET,
+            'x-github-delivery' => 'uuid-bad',
+        ], self::BODY), 'deploy', '127.0.0.1');
+        self::assertSame(401, $missing->getStatusCode(), 'a missing signature is a refused signature, header secret or not');
         self::assertCount(0, $this->deliveries);
 
         // Fill the failure window with bad signatures: the strike count that

@@ -328,7 +328,9 @@ compare:
 4. GitHub's `X-GitHub-Delivery` id dedupes redeliveries: a delivery already
    served answers `200 {"ok": true, "duplicate": true}` without starting a
    second session, while one that failed with `503` stays replayable so
-   GitHub's own retry still runs.
+   GitHub's own retry still runs. The dedupe lives in the server process
+   only; a restart re-admits an already-seen delivery (GitHub retries a
+   timed-out delivery past one, so the ring bounds duplicates, not events).
 5. For senders that are not GitHub, `scheme: "hmac-sha256"` defaults the
    signature header to `x-signature` and carries no delivery header — dedupe
    for such a row is opt-in by naming `deliveryHeader` explicitly. Any

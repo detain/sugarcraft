@@ -36,7 +36,9 @@ use SugarCraft\Code\Server\ServerConfig;
  *   scheme's delivery id: a body already served answers `duplicate` without
  *   starting a second session (ids live per hook in an LRU of the freshest
  *   {@see INBOUND_DELIVERY_CAPACITY}; a delivery that failed with 503 keeps
- *   its id unrecorded so the sender's retry still runs).
+ *   its id unrecorded so the sender's retry still runs; the ring is process
+ *   memory only, so a server restart re-admits an already-seen delivery —
+ *   GitHub retries a timed-out delivery past one).
  * - **The body is untrusted model input.** It rides the same PromptFence
  *   escape every other externally-sourced text does, spliced into the
  *   operator's configured prompt at `{{payload}}` (or appended below a plain
