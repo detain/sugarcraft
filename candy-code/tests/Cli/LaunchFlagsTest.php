@@ -193,11 +193,15 @@ final class LaunchFlagsTest extends TestCase
      */
     public static function jsonSchemaSpellings(): array
     {
+        // C-AGT-7.b: every row gained its `-p`. These rows exist to pin the
+        // RAW carry (spelling parsed verbatim, not an unknown flag); a
+        // promptless `--json-schema` is no longer a clean parse — it is the
+        // usage error the same step added, pinned in its own test below.
         return [
-            'schema spaced'   => [['candy-code', '--json-schema', 'answer.json'], 'answer.json'],
-            'schema attached' => [['candy-code', '--json-schema=answer.json'], 'answer.json'],
-            'schema inline'   => [['candy-code', '--json-schema', '{"type":"object"}'], '{"type":"object"}'],
-            'schema inline attached' => [['candy-code', '--json-schema={"type":"object"}'], '{"type":"object"}'],
+            'schema spaced'   => [['candy-code', '--json-schema', 'answer.json', '-p', 'x'], 'answer.json'],
+            'schema attached' => [['candy-code', '--json-schema=answer.json', '-p', 'x'], 'answer.json'],
+            'schema inline'   => [['candy-code', '--json-schema', '{"type":"object"}', '-p', 'x'], '{"type":"object"}'],
+            'schema inline attached' => [['candy-code', '--json-schema={"type":"object"}', '-p', 'x'], '{"type":"object"}'],
         ];
     }
 
@@ -212,6 +216,115 @@ final class LaunchFlagsTest extends TestCase
         $this->assertSame($schema, $args->jsonSchema);
         $this->assertSame([], $args->unknownFlags);
         $this->assertNull($args->usageError);
+    }
+
+    /**
+     * C-AGT-7.b: a schema with no prompt to constrain is refused at the
+     * parser, exit 2 — not carried to the TUI boundary and silently dropped
+     * there. The flag's only production reader is the one-shot path
+     * (`NonInteractive::run()` hands it to the engine), and bin reaches that
+     * method only on a prompt launch; before this step,
+     * `candy-code --json-schema answer.json` (a CI line that lost its `-p` to
+     * a refactor) parsed, accepted, and ignored the schema in full silence.
+     *
+     * The refusal is about the PROMPT, so both prompt spellings clear it, and
+     * the raw parse still stands underneath the guard.
+     */
+    public function testTheJsonSchemaFlagWithoutAPromptIsAUsageError(): void
+    {
+        foreach ([
+            ['candy-code', '--json-schema', 'answer.json'],
+            ['candy-code', '--json-schema={"type":"object"}'],
+            ['candy-code', '--json-schema', 'answer.json', 'doctor'],
+        ] as $argv) {
+            $args = ArgvParser::parse($argv);
+
+            $this->assertNotNull($args->usageError, implode(' ', $argv));
+            $this->assertStringContainsString(
+                '--json-schema constrains a one-shot answer',
+                $args->usageError,
+                implode(' ', $argv),
+            );
+            $this->assertNotNull($args->usageHint, implode(' ', $argv));
+            $this->assertStringContainsString('-p', $args->usageHint, implode(' ', $argv));
+            $this->assertStringContainsString(
+                'the interactive TUI takes no schema',
+                $args->usageHint,
+                'the hint names the OTHER reading of the launch, which is the one that should end in dropping the flag',
+            );
+            $this->assertSame(
+                in_array('--json-schema', $argv, true)
+                    ? (string) $argv[array_search('--json-schema', $argv, true) + 1]
+                    : (string) substr($argv[1], strlen('--json-schema=')),
+                $args->jsonSchema,
+                'the guard refuses the launch; it does not launder the value',
+            );
+        }
+    }
+
+    /**
+     * @return array<string, array{list<string>}>
+     */
+    public static function promptSpellingsThatHonourASchema(): array
+    {
+        return [
+            'short prompt'     => [['candy-code', '--json-schema', 'answer.json', '-p', 'extract']],
+            'long prompt'      => [['candy-code', '--json-schema=answer.json', '--prompt', 'extract']],
+            'run operand'      => [['candy-code', 'run', 'extract', '--json-schema', 'answer.json']],
+        ];
+    }
+
+    /**
+     * The same flag, the same guard, on each launch form that HAS something to
+     * constrain: none may refuse. `run` matters most — it reaches the one-shot
+     * path through a different code route than `-p`, so a guard written only
+     * against `-p` would refuse a working launch.
+     *
+     * @param list<string> $argv
+     *
+     * @dataProvider promptSpellingsThatHonourASchema
+     */
+    public function testASchemaBesideAnyPromptFormIsNotRefused(array $argv): void
+    {
+        $args = ArgvParser::parse($argv);
+
+        $this->assertTrue($args->promptRequested, implode(' ', $argv));
+        $this->assertNull($args->usageError, implode(' ', $argv));
+        $this->assertNotNull($args->jsonSchema, implode(' ', $argv));
+    }
+
+    /**
+     * THE SIBLING FLAG KEEPS ITS ASYMMETRY — and that is a decision, not an
+     * oversight. `--output-format` without a prompt is NOT inert: `serve`,
+     * `self-update` and bin's own usage-failure path all read it on launches
+     * that never take a prompt. Refusing those would break working commands to
+     * police a flag doing real work, so this pins the absence of a guard as
+     * deliberately as the test above pins its presence.
+     *
+     * @return array<string, array{list<string>}>
+     */
+    public static function promptlessLaunchesThatKeepOutputFormat(): array
+    {
+        return [
+            'serve'             => [['candy-code', 'serve', '--output-format', 'json']],
+            'self-update'       => [['candy-code', 'self-update', '--output-format', 'json']],
+            'session list'      => [['candy-code', 'session', 'list', '--output-format', 'json']],
+            'bare format only'  => [['candy-code', '--output-format', 'json']],
+        ];
+    }
+
+    /**
+     * @param list<string> $argv
+     *
+     * @dataProvider promptlessLaunchesThatKeepOutputFormat
+     */
+    public function testOutputFormatIsNotRefusedForWantOfAPrompt(array $argv): void
+    {
+        $args = ArgvParser::parse($argv);
+
+        $this->assertFalse($args->promptRequested, implode(' ', $argv));
+        $this->assertSame('json', $args->outputFormat, implode(' ', $argv));
+        $this->assertNull($args->usageError, implode(' ', $argv));
     }
 
     /**

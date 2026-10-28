@@ -122,4 +122,242 @@ NEEDLE;
 
         $this->assertSame($legacy, array_values(array_slice($withSchema, 1)));
     }
+
+    /**
+     * C-AGT-7.b, format layer: `json_schema_applied` joins the conditional
+     * set on the report-what-happened polarity the stop trio already uses —
+     * it EXISTS only when the renderer was told the schema demonstrably did
+     * not constrain the answering step, it carries the single value `false`,
+     * and it sits AFTER every legacy key so an older `array_keys` reader's
+     * prefix is untouched. A clean document never grows a `true`.
+     */
+    public function testTheSchemaAppliedKeyAppearsOnlyToSayFalseAndOnlyLast(): void
+    {
+        $default = json_decode(
+            NonInteractive::format(Message::assistant('x'), NonInteractive::FORMAT_JSON, [], 's1', null, []),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        $this->assertArrayNotHasKey('json_schema_applied', $default);
+
+        $explicitFalse = json_decode(
+            NonInteractive::format(Message::assistant('x'), NonInteractive::FORMAT_JSON, [], 's1', null, []),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        $this->assertArrayNotHasKey('json_schema_applied', $explicitFalse, 'a run without the flag must not answer for the schema');
+
+        $withAll = json_decode(
+            NonInteractive::format(
+                Message::assistant('x'),
+                NonInteractive::FORMAT_JSON,
+                [['tool' => 'Bash', 'reason' => 'hook']],
+                's1',
+                \SugarCraft\Code\Usage::new(totalTokens: 5)->toArray(),
+                ['steps_truncated' => true, 'length_stopped' => true, 'loop_guard_stopped_by' => 'Bash'],
+                true,
+            ),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        $keys = array_keys($withAll);
+        $this->assertSame('json_schema_applied', $keys[count($keys) - 1], 'the new key lands AFTER every legacy key');
+        $this->assertFalse($withAll['json_schema_applied']);
+        $this->assertSame(
+            ['schema', 'result', 'refusals', 'session_id', 'usage', 'steps_truncated', 'length_stopped', 'loop_guard_stopped_by', 'json_schema_applied'],
+            $keys,
+        );
+
+        $text = NonInteractive::format(Message::assistant('plain answer'), NonInteractive::FORMAT_TEXT, [], null, null, [], true);
+        $this->assertSame("plain answer", $text, 'the text arm ignores the flag — its stderr notice is run()\'s, and its stdout stays the answer alone');
+    }
+
+    /**
+     * C-AGT-7.b, end-to-end: a real `--json-schema` one-shot whose turn RAN A
+     * TOOL must not hand the caller an envelope that reads as though the
+     * schema governed the answer. The engine constrains only the turn's first
+     * request (Runtime::jsonSchemaFor — unchanged here by design); when a tool
+     * result lands before the settled answer, that answer was unconstrained.
+     *
+     * Both witnesses run in a child because the honest half of this claim is
+     * the STDERR line, and `fwrite(STDERR,...)` cannot be captured in-process:
+     * splitting the two channels across separate assertions is exactly how a
+     * key present-but-unannounced (or an announcement without a key) would
+     * pass. The child therefore pins stdout and stderr TOGETHER, per mode:
+     *
+     *   tools:  envelope carries json_schema_applied:false, one stderr notice;
+     *   clean:  no key, no notice — the schema rode the only request there was.
+     *
+     * The tool call names a tool the launch does not carry. That is
+     * deliberate: "the turn ran a tool" is the SIGNAL, and an unknown-name call
+     * still lands its result row in the history the next request is built
+     * from (ToolFinished's own contract covers every call end alike) — so the
+     * probe proves the rule without executing anything, and a mutation that
+     * read the signal off only SUCCESSFUL tool runs goes red right here.
+     */
+    public function testAToolUsingSchemaRunSaysFalseOnBothChannels(): void
+    {
+        $root = \dirname(__DIR__, 2);
+        $dir = sys_get_temp_dir() . '/crush-agt7b-envelope-' . bin2hex(random_bytes(6));
+        mkdir($dir . '/home', 0o700, true);
+
+        $script = <<<'PHP'
+            <?php
+            require $argv[2] . '/vendor/autoload.php';
+
+            use SugarCraft\Code\Backend\EngineBackend;
+            use SugarCraft\Code\Cli\ArgvParser;
+            use SugarCraft\Code\Cli\NonInteractive;
+            use SugarCraft\Code\Providers\CompleteRequest;
+            use SugarCraft\Code\Providers\CompleteResponse;
+            use SugarCraft\Code\Providers\EmbeddingsRequest;
+            use SugarCraft\Code\Providers\EmbeddingsResponse;
+            use SugarCraft\Code\Providers\ProviderInterface;
+            use SugarCraft\Code\Tools\ToolCall;
+
+            $provider = new class ($argv[1] === 'tools') implements ProviderInterface {
+                private int $calls = 0;
+
+                public function __construct(private readonly bool $useTool)
+                {
+                }
+
+                public function name(): string
+                {
+                    return 'agt7b-probe';
+                }
+
+                public function supportsStreaming(): bool
+                {
+                    return false;
+                }
+
+                public function supportsFunctionCalling(): bool
+                {
+                    return $this->useTool;
+                }
+
+                public function supportsVision(): bool
+                {
+                    return false;
+                }
+
+                public function supportsDocuments(): bool
+                {
+                    return false;
+                }
+
+                public function supportsJsonSchema(): bool
+                {
+                    return true;
+                }
+
+                public function contextWindow(): int
+                {
+                    return 1000;
+                }
+
+                public function costPer1kTokens(string $model, string $direction): float
+                {
+                    return 0.0;
+                }
+
+                public function complete(CompleteRequest $request): CompleteResponse
+                {
+                    $this->calls++;
+                    if ($this->useTool && $this->calls === 1) {
+                        return new CompleteResponse(
+                            content: 'let me look',
+                            toolCalls: [new ToolCall('agt7b-c1', 'Agt7bNoSuchTool', [])],
+                        );
+                    }
+
+                    return new CompleteResponse(content: 'settled answer');
+                }
+
+                public function completeStream(CompleteRequest $request): \Generator
+                {
+                    yield new CompleteResponse(content: 'settled answer');
+                }
+
+                public function embeddings(EmbeddingsRequest $request): EmbeddingsResponse
+                {
+                    return new EmbeddingsResponse(embeddings: []);
+                }
+            };
+
+            $args = ArgvParser::parse([
+                'candy-code', '--root', $argv[3], '-p', 'extract',
+                '--json-schema', '{"type":"object"}', '--output-format', 'json',
+            ]);
+            if ($args->usageError !== null) {
+                fwrite(STDERR, 'USAGE-ERROR ' . $args->usageError . "\n");
+                exit(9);
+            }
+
+            exit(NonInteractive::run($args, new EngineBackend($provider, 'agt7b-probe'), NonInteractive::FORMAT_JSON));
+            PHP;
+
+        $file = $dir . '/agt7b-envelope-child.php';
+        self::assertIsInt(file_put_contents($file, $script));
+
+        try {
+            foreach (['tools', 'clean'] as $mode) {
+                $process = proc_open([PHP_BINARY, $file, $mode, $root, $dir], [
+                    0 => ['pipe', 'r'],
+                    1 => ['pipe', 'w'],
+                    2 => ['pipe', 'w'],
+                ], $pipes, $root, ['HOME' => $dir . '/home', 'PATH' => getenv('PATH') ?: '/usr/bin:/bin']);
+                self::assertIsResource($process, "the {$mode} child did not start");
+                fclose($pipes[0]);
+                stream_set_timeout($pipes[1], 30);
+                stream_set_timeout($pipes[2], 30);
+                $stdout = (string) stream_get_contents($pipes[1]);
+                $stderr = (string) stream_get_contents($pipes[2]);
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+                $status = proc_get_status($process);
+                if ($status['running']) {
+                    proc_terminate($process, \defined('SIGTERM') ? SIGTERM : 15);
+                }
+                self::assertSame(0, proc_close($process), "{$mode} child exited nonzero; stderr: {$stderr}");
+
+                $document = json_decode(trim($stdout), true, 512, JSON_THROW_ON_ERROR);
+                self::assertSame('settled answer', $document['result'], "{$mode}: the answer is intact on both modes");
+
+                if ($mode === 'tools') {
+                    self::assertArrayHasKey(
+                        'json_schema_applied',
+                        $document,
+                        "a tool-using schema turn is exactly the case the key exists to name; stderr was:\n{$stderr}",
+                    );
+                    self::assertFalse($document['json_schema_applied']);
+                    self::assertStringContainsString(
+                        'could not constrain the settled answer',
+                        $stderr,
+                        'the envelope says it, and stderr says it too — a JSON-blind reader (the text format shares this computation) must learn it as well',
+                    );
+                    self::assertSame(
+                        1,
+                        substr_count($stderr, 'could not constrain the settled answer'),
+                        'ONE notice, not a notice per tool row',
+                    );
+                } else {
+                    self::assertArrayNotHasKey(
+                        'json_schema_applied',
+                        $document,
+                        "no tool ran, so the schema rode the answering request; a `true` here would be the fabricated half of the claim; stderr was:\n{$stderr}",
+                    );
+                    self::assertStringNotContainsString('could not constrain', $stderr);
+                }
+            }
+        } finally {
+            @unlink($file);
+            @rmdir($dir . '/home');
+            @rmdir($dir);
+        }
+    }
 }

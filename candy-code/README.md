@@ -1894,7 +1894,7 @@ The same three exit codes govern every subcommand below.
 | --- | --- |
 | `0` | the prompt ran and produced an answer, or the subcommand answered |
 | `1` | ran and failed: the backend threw (unreachable host, rejected key, model error), the answer could not be encoded in the requested format, a `doctor` check came back `FAIL`, `session delete` found no such session, a trusted `.mcp.json` could not be parsed, or a turn hook (`UserPromptSubmit`/`SessionStart`) blocked the prompt before the first billed call — retrying may help. `error.type`: `backend`, `encoding`, `mcp-config`, `not-found`, `hook` |
-| `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, a word left over after `-p`/`run`'s prompt or before a subcommand, a second project directory, an `--output-format` value that is none of `text`, `json` or `stream-json`, `--config` naming no readable file, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.candy-code/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$CANDY_CODE_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help — or `--json-schema` asked of a provider that cannot honour the schema (its own `error.type`, so a consumer knows the schema was never sent). `error.type`: `usage`, `provider_configuration`, `json_schema_unsupported`, `installation` — the last one is the missing `vendor/autoload.php`, and it is what tells a consumer which kind of `2` it got |
+| `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, a word left over after `-p`/`run`'s prompt or before a subcommand, a second project directory, an `--output-format` value that is none of `text`, `json` or `stream-json`, `--config` naming no readable file, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.candy-code/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$CANDY_CODE_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help — or `--json-schema` asked of a provider that cannot honour the schema (its own `error.type`, so a consumer knows the schema was never sent), or `--json-schema` with no `-p`/`run` prompt to constrain — nothing would have read it, so the launch is refused rather than silently un-schema'd. `error.type`: `usage`, `provider_configuration`, `json_schema_unsupported`, `installation` — the last one is the missing `vendor/autoload.php`, and it is what tells a consumer which kind of `2` it got |
 
 `2` covers "no prompt given" (`candy-code -p`, `candy-code run`) deliberately:
 the invocation is malformed, no backend is ever selected, and a CI gate that
@@ -1975,7 +1975,7 @@ exits `1`, so the failure is visible to a script that never reads the text. A
 second `-p`/`--prompt` is no longer taken silently either: the last value still
 wins, and one line arrives on stderr naming what happened.
 
-Six keys are **conditional**: `refusals`, `session_id` and `usage`, and the
+Seven keys are **conditional**: `refusals`, `session_id` and `usage`, and the
 stop trio `steps_truncated`, `length_stopped` and `loop_guard_stopped_by`
 named below.
 A turn that
@@ -2000,7 +2000,9 @@ quietly not run, and the model — which *did* see the refusal — had simply
 answered around it. `refusals` is **absent, not empty**, on a run that refused
 nothing, so the ordinary document is unchanged and `jq '.refusals // []'` is
 the way to read it unconditionally. `session_id` names the stored session row
-the run persisted its answer to (a run owns a session when it built its own
+whose save **succeeded** — under `json` and `stream-json` the save runs before
+the document is built, so an id in the envelope is one `--resume` can follow
+(a run owns a session when it built its own
 backend; an embedder that injects one owns its own lifecycle, and its envelope
 carries no `session_id`). `usage` carries the run's summed token/cost report as
 the `Usage::toArray()` camelCase buckets (`totalTokens`, `costUsd`,
@@ -2009,7 +2011,10 @@ the offline echo answer, for one — because `jq '.usage'` answering null should
 mean "nothing was measured", not "zero". Both are absent, never null, like
 `refusals`, and a run whose session store could not open downgrades to the
 document without those two keys: one stderr line, answer intact, exit code
-unchanged. It is not a list of tool calls that
+unchanged. A store that opened but then **refused the save** loses exactly
+`session_id` — the other keys stand, because the rest of the document is a
+fact about the run rather than a promise about the store; one stderr line,
+answer intact, exit code unchanged. It is not a list of tool calls that
 *failed*: a tool that ran and returned an error is a result the model acted
 on, whereas a refusal is a call that never happened. That distinction is carried on
 the result by whoever refused the call, never read off its text, so a tool
@@ -2050,6 +2055,18 @@ same presence discipline as the other optional keys. A clean turn still ends
 at the answer alone. The exit code never changes for a stopped-but-answered
 run: `0` still means an answer arrived, and these markers mean it is a
 partial one.
+
+**A `--json-schema` turn that ran tools says its answer was unconstrained.**
+The engine rides the schema on the turn's **first** request only, because a
+request held to a schema cannot carry tool calls — forcing one mid-loop would
+strand the loop (`Runtime::jsonSchemaFor`). So when a tool result lands before
+the settled answer, that answer arrived with no schema behind it. A `json` run
+(or a stream-json run's final line) then carries `json_schema_applied: false`
+as its seventh conditional key — absent, never `true`, on every other turn,
+including a no-tool turn where the schema did ride the answer. One stderr line
+announces the same fact for all three formats. The exit code does not move:
+the answer is what was asked for in shape, and what the schema would have
+forced had it reached the answering step.
 
 Three of the seven are **not** `NonInteractive::emitErrorDocument()`'s, and
 that is the thing to know if you are reading the source to find where a type

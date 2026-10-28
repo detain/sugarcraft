@@ -186,6 +186,96 @@ final class NonInteractiveSessionPersistenceTest extends TestCase
         self::assertArrayNotHasKey('usage', $document);
     }
 
+    /**
+     * C-AGT-7.b (AUT-2-P1): the id inside the json envelope is now the row
+     * whose SAVE SUCCEEDED. Before this step the document was built first and
+     * the save attempted after, so the ordering could not tell a caller the
+     * truth — a store that refused the write still named a session the answer
+     * was never written into, and `session_id` is exactly the key a CI consumer
+     * follows with `--resume`.
+     *
+     * The lever is a WAL-mode store whose file has gone read-only AFTER a
+     * first run minted a row: SQLite opens such a database happily and raises
+     * only at the first write (MEASURED here, not assumed — a plain file-mode
+     * refusal would have failed the funnel's open instead, which is the
+     * pre-existing downgrade case, a different branch with the same-looking
+     * document). So `openSession` succeeds, `$opened['id']` exists, and the
+     * save is what fails — the ONLY state that distinguishes the old ordering
+     * (id announced) from the new one (id withheld). Exit stays 0, the answer
+     * stays whole, and the row stays exactly as the first run left it: the
+     * failure is reported by the document's shape, not by a side effect.
+     *
+     * The post-failure read checks the row's own counter rather than loading
+     * the transcript: a fresh connection cannot replay this database's -wal
+     * sidecar while the file is read-only, so a load would report the
+     * pre-existing downgrade case's symptom too and prove nothing about the
+     * refused write. The exact shape of the failure is pinned structurally by
+     * {@see testTheSaveRunsBeforeRenderingOnlyOnTheFormatsWhoseDocumentCarriesTheId()}.
+     */
+    public function testTheSessionIdKeyIsWithheldWhenTheSaveItselfFails(): void
+    {
+        [$firstCode] = $this->oneShot(['-p', 'first question']);
+        self::assertSame(NonInteractive::EXIT_OK, $firstCode);
+        $id = (string) $this->store()->listSessions(10)[0]['id'];
+
+        $db = $this->tempDir . '/home/.candy-code/session.db';
+        self::assertTrue(chmod($db, 0o444), 'the read-only lever must land or this test proves nothing');
+
+        try {
+            [$code, $stdout] = $this->oneShot(['-c', '-p', 'second question', '--output-format', 'json']);
+
+            self::assertSame(NonInteractive::EXIT_OK, $code, 'a store that cannot write still does not cost the answer');
+            $document = json_decode(trim($stdout), true, 512, JSON_THROW_ON_ERROR);
+            self::assertStringContainsString('second question', (string) $document['result']);
+            self::assertArrayNotHasKey(
+                'session_id',
+                $document,
+                'the run cannot name a row it failed to write — announcing it is the lie this step closes',
+            );
+
+            $after = $this->store()->getSession($id);
+            self::assertSame(1, (int) ($after['turns'] ?? 0), 'the refused save left the first run exactly as it was');
+        } finally {
+            chmod($db, 0o600);
+        }
+    }
+
+    /**
+     * C-AGT-7.b, structural arm: WHEN each format persists is a contract the
+     * envelope cannot show from the happy path alone (a successful save looks
+     * identical in either order), so the source-slice owns it. Under the two
+     * JSON formats the save runs BEFORE the render; under `text` the answer
+     * stays first and the save follows the echo. The success idiom appears
+     * exactly once, so no ordering arm can grow a second, differently
+     * judged notion of "saved".
+     */
+    public function testTheSaveRunsBeforeRenderingOnlyOnTheFormatsWhoseDocumentCarriesTheId(): void
+    {
+        $run = self::sliceRunBody(
+            (string) file_get_contents(__DIR__ . '/../../src/Cli/NonInteractive.php')
+        );
+
+        $persist = strpos($run, '$persistedId = $persistsFirst ? $persistSession() : null;');
+        $format = strpos($run, '$rendered = self::format(');
+        $afterAnswer = strpos($run, 'if (!$persistsFirst) {');
+
+        self::assertNotFalse($persist, 'the json/stream-json save site must stay in run() — name it differently if the shape moves');
+        self::assertNotFalse($format);
+        self::assertNotFalse($afterAnswer, 'the text arm must stay after the answer');
+        self::assertLessThan($format, $persist, 'under json the save precedes the render, so the id it announces is the id it wrote');
+        self::assertLessThan($afterAnswer, $format, 'under text the answer is still out before the save runs');
+        self::assertSame(
+            1,
+            substr_count($run, 'return (string) $opened'),
+            'exactly one success path returns the id; an ordering fork that invents its own notion of "saved" is the drift this pins out',
+        );
+        self::assertSame(
+            1,
+            substr_count($run, "\$persistsFirst ? \$persistedId : (\$opened['id'] ?? null)"),
+            'the id handed to the renderer is chosen by ONE expression, the format test, never re-derived per arm',
+        );
+    }
+
     public function testContinueSeedsTheStoredTranscriptAndAppendsTheSecondExchange(): void
     {
         [$firstCode] = $this->oneShot(['-p', 'first question']);

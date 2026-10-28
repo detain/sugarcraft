@@ -573,7 +573,19 @@ final class NonInteractive
         $onReasoning = static function (string $text) use ($emitter): void {
             $emitter?->onReasoning($text);
         };
-        $onEvent = static function (object $event) use ($observeRefusals, $emitter): void {
+        $sawToolResult = false;
+        $onEvent = static function (object $event) use ($observeRefusals, $emitter, &$sawToolResult): void {
+            // C-AGT-7.b: "the turn ran a tool" is read off the SAME observer
+            // stream, not re-derived. ToolFinished is the terminating half of
+            // EVERY call — executed, unknown-name, or hook-denied all arrive
+            // here (its doc-block says so) — and every one of them lands a
+            // tool-result row in the history the next request is built from,
+            // which is exactly the condition that pushes the settled answer
+            // past the schema's reach (Runtime::jsonSchemaFor constrains the
+            // FIRST request of a turn only).
+            if ($event instanceof ToolFinished) {
+                $sawToolResult = true;
+            }
             $observeRefusals($event);
             $emitter?->onEvent($event);
         };
@@ -590,67 +602,45 @@ final class NonInteractive
             return self::EXIT_FAILURE;
         }
 
-        // The answer exists but may not be representable in the format the
-        // caller asked for. Emitting the typed document instead of an empty
-        // stdout keeps the JSON contract intact on this branch too, and 1
-        // rather than 2 because something really did run.
-        try {
-            $rendered = self::format(
-                $message,
-                // Under stream-json the terminal line IS the json success
-                // document (AUT-3): the same shape, the same keys, encoded
-                // by the same encoder — a stream-json reader's last line
-                // parses exactly like an `--output-format json` run's only
-                // line. The format constant stays distinguishable for the
-                // paths above; only this rendering maps to the document.
-                $emitter !== null ? self::FORMAT_JSON : $outputFormat,
-                $refusals,
-                $opened['id'] ?? null,
-                \SugarCraft\Code\Usage::sum($sessionUsages)?->toArray(),
-                // D1-fix (plan_comparison audit 2026-10-21): the stop-condition
-                // flags the engine folded onto this settled Message ride the
-                // render call too — the trailer (text) and the typed keys
-                // (json) are decided from the SAME read of the Message.
-                self::stopFlags($message),
-            );
-        } catch (\JsonException $e) {
-            \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.answer_not_json', ['error' => $e->getMessage()]) . "\n");
-            self::emitErrorDocument($outputFormat, 'encoding', $e->getMessage(), null, $refusals);
-
-            return self::EXIT_FAILURE;
+        // C-AGT-7.b: the schema rode only this turn's FIRST request — the
+        // engine decides that boundary (Runtime::jsonSchemaFor), and this path
+        // only reports it. When the settled answer follows a tool result
+        // ($sawToolResult, read off the observer above), the shape the caller
+        // asked for was never in force on the answering step. Say so on stderr
+        // for all three formats, and let the JSON envelope carry
+        // `json_schema_applied: false`: the key reports what happened, and its
+        // ABSENCE on a no-tool turn is the ordinary "the schema rode the
+        // answer" case — never a hard `true` this renderer cannot itself
+        // verify past the provider.
+        $schemaUnapplied = $jsonSchema !== null && $sawToolResult;
+        if ($schemaUnapplied) {
+            \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.json_schema_unapplied') . "\n");
         }
 
-        // The TUI shows this as a UI-only notice after the reply: an image the
-        // active model cannot see went out as a text placeholder.
-        if ($message->attachmentNotice !== null) {
-            self::noticeAttachment($message->attachmentNotice);
-        }
-
-        // D1-fix (plan_comparison audit 2026-10-21), the fifth settled-message
-        // announcement, in the TUI settle arm's order: an unpriced model must
-        // not bill a CI run as free without saying so. One stderr line, the
-        // same channels discipline as every notice on this path; the exit
-        // status is deliberately unchanged — the answer is complete, the
-        // BOOKKEEPING is what carries the caveat.
-        self::noticeUnpricedModel($message);
-
-        if ($emitter !== null) {
-            $emitter->emitLine($rendered);
-        } else {
-            echo $rendered . "\n";
-        }
-
-        // AUT-2: the answer is out - persist this run to its session row
-        // BEFORE SessionEnd fires, so the session the end-event names is the
-        // session that now holds the transcript. The lazy mint lands here:
-        // runs that died earlier leave no empty row. A failed save cannot
-        // retract an answer the caller already holds: one stderr line, exit
-        // status unchanged. DIVERGENCE from the TUI, deliberate: the TUI
-        // replays a resumed session's stored permission grants into the gate;
-        // a headless run asks nobody (HeadlessPermissionPrompt refuses every
-        // ASK unattended), so persisted grants have no live surface to be
-        // honoured by and nothing is replayed.
-        if ($ownsSession && $opened !== null && $sessionStore !== null) {
+        // AUT-2: persist this run to its session row so the session the
+        // end-event names is the session that now holds the transcript. The
+        // lazy mint lands inside: runs that died earlier leave no empty row.
+        // A failed save cannot retract an answer the caller already holds:
+        // one stderr line, exit status unchanged. DIVERGENCE from the TUI,
+        // deliberate: the TUI replays a resumed session's stored permission
+        // grants into the gate; a headless run asks nobody
+        // (HeadlessPermissionPrompt refuses every ASK unattended), so
+        // persisted grants have no live surface to be honoured by and nothing
+        // is replayed.
+        //
+        // C-AGT-7.b moved WHEN this runs, per format. Under `json` and
+        // `stream-json` the session id is INSIDE the document, so the save now
+        // happens BEFORE rendering and the id a caller reads is by construction
+        // the row whose save succeeded — the previous ordering announced a
+        // stored session the store had just refused to write. `text` keeps the
+        // answer-first order untouched: its stdout is the answer and nothing
+        // else, so a slower or failing save cannot withhold anything a `text`
+        // consumer reads. The closure returns the id iff the whole save —
+        // mint, turn, transcript, ledger — came through.
+        $persistSession = static function () use ($ownsSession, $opened, $sessionStore, $args, $history, $message, $sessionUsages, $backend): ?string {
+            if (!$ownsSession || $opened === null || $sessionStore === null) {
+                return null;
+            }
             try {
                 $mint = $opened['mint'] ?? null;
                 if ($mint !== null) {
@@ -682,9 +672,80 @@ final class NonInteractive
                         $backend instanceof \SugarCraft\Code\Backend\EngineBackend ? $backend->model() : null,
                     );
                 }
+
+                return (string) $opened['id'];
             } catch (\Throwable $e) {
                 \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.session_save_failed', ['error' => $e->getMessage()]) . "\n");
+
+                return null;
             }
+        };
+
+        $persistsFirst = $outputFormat === self::FORMAT_JSON || $outputFormat === self::FORMAT_STREAM_JSON;
+        $persistedId = $persistsFirst ? $persistSession() : null;
+
+        // The answer exists but may not be representable in the format the
+        // caller asked for. Emitting the typed document instead of an empty
+        // stdout keeps the JSON contract intact on this branch too, and 1
+        // rather than 2 because something really did run.
+        try {
+            $rendered = self::format(
+                $message,
+                // Under stream-json the terminal line IS the json success
+                // document (AUT-3): the same shape, the same keys, encoded
+                // by the same encoder — a stream-json reader's last line
+                // parses exactly like an `--output-format json` run's only
+                // line. The format constant stays distinguishable for the
+                // paths above; only this rendering maps to the document.
+                $emitter !== null ? self::FORMAT_JSON : $outputFormat,
+                $refusals,
+                // C-AGT-7.b: on the two formats whose document carries the
+                // id, the value is now the row whose SAVE SUCCEEDED (null
+                // when the store refused it — the key disappears with it).
+                // `text` never reads this argument, so its answer-first
+                // order stands exactly as AUT-2 shipped it.
+                $persistsFirst ? $persistedId : ($opened['id'] ?? null),
+                \SugarCraft\Code\Usage::sum($sessionUsages)?->toArray(),
+                // D1-fix (plan_comparison audit 2026-10-21): the stop-condition
+                // flags the engine folded onto this settled Message ride the
+                // render call too — the trailer (text) and the typed keys
+                // (json) are decided from the SAME read of the Message.
+                self::stopFlags($message),
+                $schemaUnapplied,
+            );
+        } catch (\JsonException $e) {
+            \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.answer_not_json', ['error' => $e->getMessage()]) . "\n");
+            self::emitErrorDocument($outputFormat, 'encoding', $e->getMessage(), null, $refusals);
+
+            return self::EXIT_FAILURE;
+        }
+
+        // The TUI shows this as a UI-only notice after the reply: an image the
+        // active model cannot see went out as a text placeholder.
+        if ($message->attachmentNotice !== null) {
+            self::noticeAttachment($message->attachmentNotice);
+        }
+
+        // D1-fix (plan_comparison audit 2026-10-21), the fifth settled-message
+        // announcement, in the TUI settle arm's order: an unpriced model must
+        // not bill a CI run as free without saying so. One stderr line, the
+        // same channels discipline as every notice on this path; the exit
+        // status is deliberately unchanged — the answer is complete, the
+        // BOOKKEEPING is what carries the caveat.
+        self::noticeUnpricedModel($message);
+
+        if ($emitter !== null) {
+            $emitter->emitLine($rendered);
+        } else {
+            echo $rendered . "\n";
+        }
+
+        // C-AGT-7.b: under `text` the save still runs AFTER the answer is out
+        // — the ordering AUT-2 shipped, byte-unchanged. Under the two JSON
+        // formats it already ran before rendering, so this arm is a no-op
+        // there (no second write, no double ledger row).
+        if (!$persistsFirst) {
+            $persistSession();
         }
 
         // Step 3.D-2: the run is over and its answer is out — the one point
@@ -1859,13 +1920,16 @@ final class NonInteractive
      *
      * `text` (default): the assistant's raw content, matching the plain
      * stdout contract of every tool surveyed in crush_feat.md section 2.
-     * `json`: `{"schema": 1, "result": "<content>"}`, plus SIX conditional
+     * `json`: `{"schema": 1, "result": "<content>"}`, plus SEVEN conditional
      * keys. `refusals` appears when the turn blocked at least one tool call
      * — see {@see self::emitErrorDocument()} for why refusals is
      * conditional, and {@see self::refusalFrom()} for what counts as one and
      * for the optional per-row `unattended` qualifier an auto-refusal carries
-     * (E375). `session_id` names the row this run persisted its answer to and
-     * `usage` carries the run's summed token/cost report (AUT-2); both are
+     * (E375). `session_id` names the row this run persisted its answer to —
+     * under `json` and `stream-json` the save runs BEFORE this document is
+     * built (C-AGT-7.b), so the id names a row whose save SUCCEEDED; a store
+     * that refuses the write costs the key, never the answer —
+     * and `usage` carries the run's summed token/cost report (AUT-2); both are
      * ABSENT - not null - when the run owns no session (an injected backend)
      * or the provider reported nothing billable. `jq '.usage'` answering null
      * then means "nothing was measured", which is the truth rather than a
@@ -1878,7 +1942,13 @@ final class NonInteractive
      * neither — the keys report what happened, not what did not), and
      * `loop_guard_stopped_by` names the repeated tool exactly when the
      * repeat-call guard ended the turn. They are the machine half of the same
-     * facts the `text` trailer spells for a human.
+     * facts the `text` trailer spells for a human. The seventh key,
+     * `json_schema_applied: false` (C-AGT-7.b), appears exactly when a
+     * `--json-schema` launch settled its answer AFTER a tool result: the
+     * engine constrains only the turn's FIRST request
+     * ({@see \SugarCraft\Code\Runtime::jsonSchemaFor()}), so on a tool-using
+     * turn the answering request rode no schema. Absent — never `true` — in
+     * every other case; one stderr line accompanies it on all three formats.
      *
      * `text` CARRIES NO REFUSALS ON STDOUT, AND THE REASON GIVEN FOR THAT HAS
      * BEEN WRONG TWICE.
@@ -1937,7 +2007,7 @@ final class NonInteractive
      *   {@see self::run()} turns this into an `encoding`-typed document at
      *   {@see self::EXIT_FAILURE}; never into an empty stdout.
      */
-    public static function format(Message $message, string $outputFormat, array $refusals = [], ?string $sessionId = null, ?array $usage = null, array $stopFlags = []): string
+    public static function format(Message $message, string $outputFormat, array $refusals = [], ?string $sessionId = null, ?array $usage = null, array $stopFlags = [], bool $schemaUnapplied = false): string
     {
         if ($outputFormat === self::FORMAT_JSON) {
             $document = ['schema' => self::SCHEMA, 'result' => $message->content];
@@ -1964,6 +2034,16 @@ final class NonInteractive
             }
             if (($stopFlags['loop_guard_stopped_by'] ?? '') !== '') {
                 $document['loop_guard_stopped_by'] = (string) $stopFlags['loop_guard_stopped_by'];
+            }
+            // C-AGT-7.b: same report-what-happened polarity as the stop trio —
+            // the key EXISTS only when the schema was asked for and the settled
+            // answer followed a tool result, i.e. when the schema demonstrably
+            // did not constrain the answering step (the engine rides only the
+            // turn's first request). It is never a hard `true`: on a no-tool
+            // turn the absence already says the ordinary case, and this
+            // renderer cannot see past the provider to certify the shape.
+            if ($schemaUnapplied) {
+                $document['json_schema_applied'] = false;
             }
 
             return self::encodeDocument($document);

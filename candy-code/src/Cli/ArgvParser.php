@@ -858,6 +858,26 @@ final class ArgvParser
             $usageHint = Lang::t('cli.argv.hint.resume_needs_target');
         }
 
+        // C-AGT-7.b: --json-schema with nothing to constrain is not a launch
+        // that forgot the flag, it is a launch that will ignore it. The schema
+        // is read in exactly ONE place in production — NonInteractive::run()
+        // hands it to the engine — and bin/candy-code reaches that method only
+        // when $promptRequested. Without -p (or `run "<prompt>"`) the value was
+        // parsed, carried, and silently dropped at the TUI boundary, so a CI
+        // line that lost its -p through a refactor kept "asking" for structured
+        // output forever while free-form prose came back.
+        //
+        // THE SIBLING FLAG KEEPS ITS ASYMMETRY, DELIBERATELY. --output-format
+        // is NOT prompt-only: `serve`, `self-update`, the ACP route and bin's
+        // own usage-failure path all read $args->outputFormat on launches with
+        // no prompt, so a guard there would break working commands to police a
+        // flag that is doing real work. Both branches of the sibling question
+        // were checked; only this one is inert without a prompt.
+        if ($usageError === null && $jsonSchema !== null && !$promptRequested) {
+            $usageError = 'candy-code: ' . Lang::t('cli.argv.json_schema.requires_prompt');
+            $usageHint = Lang::t('cli.argv.hint.json_schema_needs_prompt');
+        }
+
         // The FIRST positional, when it looks like a path, is the root (see
         // the doc-block for why only the first). It leaves the list; the rest
         // stay for resolveOperands().
