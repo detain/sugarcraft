@@ -24,3 +24,4 @@ Base at weld: master e5dec3b71 (weld: C-SES-6.b). Lane cc/C-CTX-5.c (base cf0cfd
 
 ## Carries to closeout (§7)
 - r1 MINOR (out-of-scope, report-only): REPORT Idle-filter sentence was BASE not tip — cured here by re-stamp (256T/20371A above).
+- MERGED-TREE RED (found at C-TOOL-2.d weld battery, NOT by this lane's review set): DuplicatedTestHelperDriftTest unrecorded [identical] const pair `NOW` — CacheTtlIdleFoldTest.php:41 × Providers/ModelMetadataTest.php:28 (`private const NOW = 1_800_000_000;` byte-identical; ModelMetadataTest pre-existing at base). Cure = ACCEPTED_CONST_DUPLICATION roster row w/ judgement or consolidation (fixer/wave-loop duty; welder does not edit lane test files). Routed to lead.

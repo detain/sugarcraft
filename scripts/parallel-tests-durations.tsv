@@ -574,6 +574,7 @@ candy-code/tests/Integration/ParallelExemptJobStatusLostTest.php	0.196	1
 candy-code/tests/Integration/PromptEndToEndTest.php	0.196	1
 candy-code/tests/Bundles/BundleDeclinedSurfacesTest.php	0.192	5
 candy-code/tests/Commands/McpReconnectTest.php	0.192	9
+candy-code/tests/Tools/BuiltIn/ReadPdfTextTest.php	0.190	10
 candy-code/tests/Host/TurnRunnerActiveSubagentsTest.php	0.189	4
 candy-code/tests/Tui/Settings/SettingsEditorNarrowTest.php	0.187	7
 candy-code/tests/Chat/AgentViewTest.php	0.186	18
@@ -683,6 +684,7 @@ candy-code/tests/MCP/McpAuthStoreTest.php	0.096	20
 candy-code/tests/Providers/GeminiProviderTest.php	0.095	23
 candy-code/tests/Chat/InFlightInputQueueTest.php	0.094	26
 candy-code/tests/TerminalSizeFallbackIsolationTest.php	0.093	2
+candy-code/tests/Providers/ToolResultDocumentBlocksTest.php	0.092	13
 candy-code/tests/Context/InstructionBudgetTest.php	0.091	14
 candy-code/tests/Providers/ClaudeCodeInvocationThrowTest.php	0.091	2
 candy-code/tests/Runtime/SpillToFileTest.php	0.091	4

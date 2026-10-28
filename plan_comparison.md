@@ -2127,7 +2127,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-8.f`
 
-#### C-TOOL-2.d — Read PDFs: tool_result `document` block + pdftotext text
+#### ✅ d284451fa963cca330542f013b1e9f3e01b433d6 C-TOOL-2.d — Read PDFs: tool_result `document` block + pdftotext text (welded 2026-10-29)
 - **Item:** C-TOOL-2 (sources: GAP-TL-20, SHL-3-P1, p2-miss: SHL-3 PDF as document, k2-sum TL-20 downgrade) · gap · effort M
 - **What:** Read returns only a notice for a PDF (`candy-code/src/Tools/BuiltIn/Read.php:750-763`). Its "mention the file (@path)" advice is a road the model cannot take, because @-mentions resolve only on user prompts. Mirror the image path …
 - **Files — create:** `candy-code/tests/Providers/ToolResultDocumentBlocksTest.php`, `candy-code/tests/Tools/BuiltIn/ReadPdfTextTest.php`
