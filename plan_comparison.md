@@ -1575,7 +1575,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - protocol lanes: C-WEB-7.c, C-WEB-7.d (weld regenerates schema → SERVER.md → generated.ts once)
 - Chat.php region claims: C-EXT-2.e (submit custom-command branch)
 
-#### C-EXT-2.e — Command frontmatter `model`/`agent`/`subtask`
+#### ✅ f63217396 C-EXT-2.e — Command frontmatter `model`/`agent`/`subtask`
 - **Item:** C-EXT-2 (sources: GAP-CMD-04, k2-dorm inert command keys) · dormant-wire · effort M
 - **What:** **What's inert.** `CommandSpec.php:205-210` parses `model` and `subtask`, both INERT (`FrontmatterKeyAudit.php:131-134`). `agent` is KNOWN but not parsed. `TurnController::expandCustomCommand()` (:448) expands into the current …
 - **Files — create:** none

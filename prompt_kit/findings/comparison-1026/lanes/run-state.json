@@ -128,17 +128,10 @@
   "C-AGT-5.a",
   "C-AGT-6.b",
   "C-WEB-3.e",
-  "C-EXT-4.a"
+  "C-EXT-4.a",
+  "C-EXT-2.e"
  ],
  "inflight": {
-  "C-EXT-2.e": {
-   "stage": "clean",
-   "round": 2,
-   "worktree": "/home/sites/cc-cmp-C-EXT-2.e",
-   "branch": "cc/C-EXT-2.e",
-   "tip": "e0fbbff81",
-   "note": "r2 CLEAN 0C/0M/1NIT(Chat.php:615 docblock cite 13->16, cure-at-weld); weld wave-first W13; durations x2 TurnControllerCommandRoutingTest 14T + CustomCommandModelOverrideTest recount ~5T; Chat.php:10049 blank-line cosmetic at weld"
-  },
   "C-TOOL-4.a": {
    "stage": "clean",
    "round": 1,
@@ -190,11 +183,7 @@
   }
  },
  "blocked": [
-  {
-   "id": "C-AGT-5.b",
-   "reason": "owner-gated HOLD: delete cross-root createdBy-scope ruling owed (carried from C-AGT-5.a r1 review, WELD.md note b59485333-era). Scheduler keeps suggesting it (W14, deps C-AGT-5.a welded); do NOT start until owner answers.",
-   "since": "tick 98b"
-  }
+  "C-AGT-5.b"
  ],
  "extra_agents": 1,
  "waves_closed": [
@@ -686,6 +675,14 @@
     "gates merged: 'DoctorSandboxProbe|Bubblewrap|Sandbox' expect 56T/297A; ReadPathCensus 3rd PROCESS_DERIVED green; guards staleness-pair standing only"
    ],
    "notes": "WELD.md: NITs non-blocking (Subcommands class-docblock honest prose; CONTRIBUTING.md:93 fifteen-checks illustrative example kept). suite-figure +10T closeout carry."
+  },
+  "C-EXT-2.e": {
+   "master": "a7c2a81a2 (durations)+weld commit follows",
+   "pick": "f63217396",
+   "regen": "no regen (protocol trio absent from lane diff)",
+   "gates": "CustomCommandModelOverride|TurnControllerCommandRouting 19T/51A EXACT; CommandLoader-quartet 99T/949A EXACT; TurnController|SessionHostCommands 60T/232A EXACT; CustomCommand-trio 103T/450A EXACT; SessionHostTest-quartet 77T/336A EXACT; broad Chat|SessionHost|TurnController 1973T/14216A 8F = all base-inherited (AutomaticCompaction/ChatHostLangCatalogue/5x ChatTest title/DreamPass)",
+   "durations": "LANDED a7c2a81a2: Host/TurnControllerCommandRoutingTest.php 0.002 29 + Chat/CustomCommandModelOverrideTest.php 0.021 22; tsv 1498->1500",
+   "note": "weld cures (Chat.php 615-era cite 13->16, :10049 blank-line) NOT applied — grep proof negative on merged tree, recorded in WELD.md"
   }
  },
  "carries": [
@@ -773,7 +770,7 @@
   "STOP STATE @2052@: master b4b4404c5 (wind-down commit; 9 files). welded=100/328 LIST. waves_closed [1..9] (W8/W9 rows + marks committed inside b4b4404c5; W9 per lead ruling r1-CLEAN-no-r2 — disclosed). Owed loops: W10 (blocked on unwelded members C-EXT-2.c + C-PRV-5.c), then W11+ per scheduler waves_fully_welded. Only live artifact: /home/sites/cc-cmp-P-TABS.g + branch cc/P-TABS.g @f25a697c1 (parked; re-dispatch plan:1549 after P-TABS.e+P-TABS.f weld). LATE W33+ gated on §6.3 owner rulings (C-TOOL-6 c/e/h + C-TUI-6: Windows shell, Windows self-update helper, web i18n scope, locale choice, parity strictness, voice endpoint, push-to-talk key). NEVER pushed; origin advanced owner-side only.",
   "C-EXT-2.c welded 4b771634d; closeout roster in its WELD.md (Bootstrap:5955 comment, ChatHostLangCatalogue standing red=C-PRV-1.b (a992413b0) seam, TROUBLESHOOTING allowed-tools/effort half=C-EXT-2.b)"
  ],
- "updated": "2026-10-28T07:20:00Z",
+ "updated": "2026-10-28T07:45:00Z",
  "wind_down": {
   "master_tip_at_close": "b4b4404c5",
   "welded_count": 101,
@@ -831,8 +828,15 @@
   "C-TOOL-4.a (W14, 1 row DoctorSandboxProbeTest 10T)",
   "C-AGT-4.a (W14, after r2, 1 row PrimaryAgentTest)"
  ],
- "tip": "see git log; C-EXT-4.a welded 129",
- "welded_count": 129,
+ "tip": "see git log; C-EXT-2.e welded 130",
+ "welded_count": 130,
  "tick": "87-disk-reconciled: W11 REALY closed@341f66404; trio MCP2b+TOOL5b+WEB3f real to 0b3c4ba21 (welded=122); W13/14 welds PENDING; phantom-atlas @b73@ correction: c3178096f/4d263705a/8d8c75678 GHOSTS, cure real 23fa8ab8e",
- "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files)."
+ "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
+ "blocked_notes": {
+  "C-AGT-5.b": {
+   "id": "C-AGT-5.b",
+   "reason": "owner-gated HOLD: delete cross-root createdBy-scope ruling owed (carried from C-AGT-5.a r1 review, WELD.md note b59485333-era). Scheduler keeps suggesting it (W14, deps C-AGT-5.a welded); do NOT start until owner answers.",
+   "since": "tick 98b"
+  }
+ }
 }
