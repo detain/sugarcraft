@@ -234,6 +234,123 @@ final class InstructionQuickAddTest extends TestCase
         $this->assertStringContainsString('Could not write', $this->lastRow($after)->content);
     }
 
+    /**
+     * The review's real repro shape: a FILE symlink whose target EXISTS.
+     * `is_file()` follows links, so without the `is_link` arm the note would
+     * take the APPEND leg straight through the planted link into the target.
+     * The dangling-target pin above cannot catch that neuter (the write there
+     * simply fails); this one can, on the target's bytes.
+     */
+    public function testAFileLinkToAnExistingTargetIsRefusedAndItsBytesStayUntouched(): void
+    {
+        mkdir($this->home . '/.candy-code', 0o700);
+        $victim = $this->project . '/victim.md';
+        $before = "somebody else's file\n";
+        file_put_contents($victim, $before);
+        symlink($victim, $this->personalPath);
+
+        [$pending] = $this->typeInto($this->quickAddChat(new QuickAddRecordingBackend()), '# sneaky note')
+            ->update(new KeyMsg(KeyType::Enter, ''));
+        [$after, $cmd] = $pending->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertNull($cmd);
+        $this->assertNull($this->pendingOf($after));
+        $this->assertSame($before, file_get_contents($victim), 'the link target was neither created into nor appended through');
+        $this->assertTrue(is_link($this->personalPath), 'the link itself is left as it was found');
+        $this->assertStringContainsString('Could not write', $this->lastRow($after)->content);
+    }
+
+    /**
+     * The CONTAINING directory worn as a symlink onto a real file: refused,
+     * and the file's bytes are not touched — the verdict is on the resolved
+     * parent, not an accident of the write failing.
+     */
+    public function testADirectoryLinkOntoAFileIsRefusedAndTheFileIsUntouched(): void
+    {
+        $afile = $this->project . '/afile.md';
+        $before = "not a directory\n";
+        file_put_contents($afile, $before);
+        symlink($afile, $this->home . '/.candy-code');
+
+        [$pending] = $this->typeInto($this->quickAddChat(new QuickAddRecordingBackend()), '# note through a file')
+            ->update(new KeyMsg(KeyType::Enter, ''));
+        [$after, $cmd] = $pending->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertNull($cmd);
+        $this->assertNull($this->pendingOf($after));
+        $this->assertSame($before, file_get_contents($afile));
+        $this->assertStringContainsString('Could not write', $this->lastRow($after)->content);
+    }
+
+    /**
+     * A dangling directory link: the name is taken, nothing resolves behind
+     * it, and the writer creates NOTHING — not the target, not a file
+     * through the void. Fail-closed on the absent-resolve arm.
+     */
+    public function testADanglingDirectoryLinkIsRefusedAndCreatesNothing(): void
+    {
+        $ghost = $this->project . '/no-such-dir';
+        symlink($ghost, $this->home . '/.candy-code');
+
+        [$pending] = $this->typeInto($this->quickAddChat(new QuickAddRecordingBackend()), '# note into the void')
+            ->update(new KeyMsg(KeyType::Enter, ''));
+        [$after, $cmd] = $pending->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertNull($cmd);
+        $this->assertNull($this->pendingOf($after));
+        $this->assertFalse(file_exists($ghost . '/AGENTS.md'), 'no bytes land behind the dangling link');
+        $this->assertDirectoryDoesNotExist($ghost, 'and the target is not conjured either');
+        $this->assertStringContainsString('Could not write', $this->lastRow($after)->content);
+    }
+
+    /**
+     * Structural pin for the three containing-directory arms the verdict is
+     * made of (review MAJOR cure: resolve the PARENT, require a directory,
+     * require it inside the allowed root). Behavior pins above catch the
+     * prefix and file-link neuters; this one catches the `is_dir` arm — the
+     * race defense — disappearing while every observable path stays green.
+     */
+    public function testTheContainingDirectoryVerdictCarriesAllThreeArms(): void
+    {
+        $src = (string) file_get_contents((string) (new \ReflectionClass(Chat::class))->getFileName());
+        $start = strpos($src, 'private function appendQuickAddNote');
+        $this->assertIsInt($start, 'the writer exists');
+        $body = substr($src, $start, (int) strpos(substr($src, $start), "\n    }"));
+
+        $this->assertSame(1, substr_count($body, 'realpath($dir)'), 'the containing directory is RESOLVED before it is judged');
+        $this->assertSame(1, substr_count($body, 'is_dir($resolved)'), 'and required to be a directory, not a link wearing the name');
+        $this->assertSame(1, substr_count($body, 'str_starts_with($resolved'), 'and required to sit inside the owned home');
+        $this->assertSame(1, substr_count($body, 'is_link($path)'), 'the file-name link arm still stands ahead of any write leg');
+    }
+
+    /**
+     * The MINOR's consume-drain guard: once Enter has consumed the confirm,
+     * the row is gone and a later Enter cannot re-add it. Neutering the
+     * consume (`'pendingQuickAdd' => null` in the Enter branch) re-arms the
+     * owner and appends a second line — red here on the file's bytes.
+     */
+    public function testAConsumedConfirmCannotReAddOnALaterEnter(): void
+    {
+        $backend = new QuickAddRecordingBackend();
+        [$pending] = $this->typeInto($this->quickAddChat($backend), '# once only')
+            ->update(new KeyMsg(KeyType::Enter, ''));
+        [$done] = $pending->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNull($this->pendingOf($done), 'the confirm was consumed');
+        clearstatcache();
+        $this->assertSame("- once only\n", file_get_contents($this->personalPath));
+
+        [$after] = $done->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertNull($this->pendingOf($after), 'nothing re-armed');
+        clearstatcache();
+        $this->assertSame(
+            "- once only\n",
+            file_get_contents($this->personalPath),
+            'the already-consumed row returns without re-adding',
+        );
+        $this->assertSame(0, $backend->calls, 'and the drained Enter starts no turn on its own');
+    }
+
     private function quickAddChat(Backend $backend): Chat
     {
         return new Chat(backend: $backend, projectRoot: $this->project);

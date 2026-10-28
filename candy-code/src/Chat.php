@@ -16124,8 +16124,15 @@ final class Chat implements Model
      * ({@see \SugarCraft\Code\Support\PrivateDir::ensure}); its RESOLVED path is then
      * compared against the owned home — the post-check is load-bearing, a
      * `mkdir` through a planted symlink would otherwise write straight
-     * through it. A symlink wearing the file's name is refused, never
-     * followed. An existing regular file is APPENDED under a lock: a
+     * through it. The resolved CONTAINING directory is held to the same
+     * two-part verdict as the write's own target: it must resolve, be a
+     * DIRECTORY (a link wearing the directory's name that resolves onto a
+     * file is refused on policy, not by the write failing), and sit inside
+     * the owned home — so EVERY planted directory-symlink shape (out of
+     * home, onto a file, dangling) answers with the refusal row and zero
+     * bytes anywhere. A symlink wearing the file's name is refused, never
+     * followed — whether or not its target exists, since an existing
+     * target would take the APPEND leg straight through the link. An existing regular file is APPENDED under a lock: a
      * quick-add must never publish a truncated rewrite of a file the user
      * wrote by hand, and its mode is theirs to keep.
      */
@@ -16146,7 +16153,7 @@ final class Chat implements Model
             }
 
             $resolved = realpath($dir);
-            if ($resolved === false || !str_starts_with($resolved . '/', rtrim($home, '/') . '/')) {
+            if ($resolved === false || !is_dir($resolved) || !str_starts_with($resolved . '/', rtrim($home, '/') . '/')) {
                 return Lang::t('chat.instructions.quick_add.refused');
             }
 
