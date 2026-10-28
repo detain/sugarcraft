@@ -1048,7 +1048,7 @@ final class KeyboardHandler
                 // the composer's, not the single run's.
                 'i' => self::composerSends($app)
                     ? [$app, new \SugarCraft\Code\App\AgentControlMsg(\SugarCraft\Code\App\AgentControlMsg::INTERRUPT, $app->agentComposerTargets())]
-                    : null,
+                    : [$app, null],
                 default => [$app, null],
             };
         }

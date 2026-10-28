@@ -2013,6 +2013,24 @@ final class KeyBindingDriftTest extends TestCase
                 );
                 $this->assertSame([], \SugarCraft\Code\Agents\Live\AgentInbox::forSession($session)?->drain('run-1') ?? [], 'only the run on screen');
                 $this->assertSame([], $this->controls($session, 'run-2'), 'a message, not a control');
+
+                // Refused leg: a draft the composer will not send. The chord
+                // still CONSUMES the leader — the `i` is swallowed, not typed,
+                // and the key after it is an ordinary letter rather than a
+                // stale-leader chord reaching for CANCEL. (Pre-fix the arm
+                // returned null, discarding the disarm: `i` landed in the
+                // draft and `c` then sent a cancel.)
+                $refusal = 'drift-ref-' . bin2hex(random_bytes(4));
+                [$refLeader] = $this->composing($this->stripApp()->openAgentView('run-2'), $refusal, '')->update($k[0]);
+                $this->assertTrue($refLeader->agentViewLeader, 'the first key arms the leader');
+                [$refused] = $refLeader->update($k[1]);
+                $this->assertFalse($refused->agentViewLeader, 'a refused interrupt still consumes the leader');
+                $this->assertSame('', $refused->chat?->inputBuf, 'the i was swallowed, not typed');
+                $this->assertSame([], $this->controls($refusal, 'run-2'), 'nothing was interrupted, sent or controlled');
+
+                [$letter] = $refused->update(new KeyMsg(KeyType::Char, 'c'));
+                $this->assertSame('c', $letter->chat?->inputBuf, 'the key after a refused chord is an ordinary letter');
+                $this->assertSame([], $this->controls($refusal, 'run-2'), 'and it does not reach for CANCEL');
             },
             // P-D2: the box is the open run's composer. Mid-turn on purpose:
             // the same Enter in the main view would steer the parent's turn.

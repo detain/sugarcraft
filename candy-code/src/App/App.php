@@ -874,9 +874,12 @@ final class App implements Model
     /**
      * P-AGENT.b: land on run $runId's view from either window-list surface —
      * the strip chip or a Sessions row — switching to the run's tab first
-     * when it is a background one. A run the projection does not carry opens
-     * nothing: the id may have settled between paint and click, and the same
-     * nothing a stale session row already answers is the honest reply.
+     * when it is a background one. An empty id opens nothing. A run the
+     * projection no longer carries (the id may have settled between paint
+     * and click) still opens, with a null name: the view's own read ladder
+     * in {@see openAgentView()} answers from the log, the child session or
+     * the live buffer, and a nameless view of a real run beats the silent
+     * nothing a stale session row would otherwise answer.
      *
      * @return array{0: self, 1: ?\Closure}
      */

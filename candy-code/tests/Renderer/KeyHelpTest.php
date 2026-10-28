@@ -3143,8 +3143,10 @@ final class KeyHelpTest extends TestCase
      * The table's first column is "the files that construct a
      * `PermissionRequestMsg` at all" — three when this test was written, FOUR since
      * W2 added `Chat/InFlightInputQueueTest.php`, which builds one to drive the
-     * permission-DENIAL drain point, and FIVE since `MouseModalGuardTest.php` began
-     * building one to put a modal up for the click path to be refused by. A further
+     * permission-DENIAL drain point, FIVE since `MouseModalGuardTest.php` began
+     * building one to put a modal up for the click path to be refused by, and SIX
+     * since `App/AgentWindowViewportTest.php` began building one to park a
+     * waiting ask on an agent run's row. A further
      * file building one puts a further file's tests inside the measured universe, so
      * every row of the table becomes a figure taken over the wrong domain. (The W2
      * addition changed no row: like `RendererTest` and `KeyBindingDriftTest` its ask
@@ -3219,6 +3221,7 @@ final class KeyHelpTest extends TestCase
 
         $this->assertSame(
             [
+                'App/AgentWindowViewportTest.php',
                 'Chat/InFlightInputQueueTest.php',
                 'Commands/KeyBindingDriftTest.php',
                 'MouseModalGuardTest.php',
@@ -3226,7 +3229,7 @@ final class KeyHelpTest extends TestCase
                 'RendererTest.php',
             ],
             $found,
-            "the set column in PermissionPrompt::armAsk()'s mutation table is exactly these files; a sixth "
+            "the set column in PermissionPrompt::armAsk()'s mutation table is exactly these files; a seventh "
             . 'one CONSTRUCTING a PermissionRequestMsg widens the universe every row of that table was '
             . 'measured over. Merely naming the class in a comment does not, which is the half the grep '
             . 'this replaces got wrong',
