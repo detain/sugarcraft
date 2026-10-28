@@ -10,6 +10,7 @@
   "C-AGT-3.b",
   "C-AGT-4.a",
   "C-AGT-5.a",
+  "C-AGT-5.b",
   "C-AGT-5.e",
   "C-AGT-5.g",
   "C-AGT-6.b",
@@ -152,24 +153,16 @@
   "P-TABS.f",
   "P-TABS.g",
   "P-TABS.h",
-  "C-AGT-5.b"
+  "C-CTX-2.d"
  ],
  "inflight": {
-  "C-CTX-2.d": {
-   "stage": "clean",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-CTX-2.d",
-   "branch": "cc/C-CTX-2.d",
-   "tip": "566456295",
-   "note": "weld-queued (bundle lane 2; REPORT evidence edits + PROTOCOL trio+dist regen rider + 1 tsv row ServedPromptSuggestionTest 4T/48A; roster weld_notes.C-CTX-2.d_weld)"
-  },
   "C-EXT-4.b": {
-   "stage": "review",
+   "stage": "clean",
    "round": 2,
    "worktree": "/home/sites/cc-cmp-C-EXT-4.b",
    "branch": "cc/C-EXT-4.b",
    "tip": "de5c16a5149dc814ac599891fa1fcc1540166328",
-   "note": "fixer landed de5c16a51 (2 scan polarities + REPORT 9/7 truth); r2 cure-reviewer LIVE ses_e7cdc4c5dffeYQgumqe2GGivej; tsv duty 2 rows (BundleMarketplaceCliTest, BundleUpdateTest)"
+   "note": "r2 CLEAN 0C/0M (ses_e7cdc4c5d): 2 scan-polarity tests blob-present, non-vacuity static-rederived, DenialPrefixRoster OK, 118T/499A + guards 131T/25587A + 136T/7613A; weld duty 2 tsv rows BundleMarketplaceCliTest+BundleUpdateTest"
   },
   "C-MCP-3.b": {
    "stage": "review",
@@ -180,21 +173,22 @@
    "note": "salvage landed+lead-verified (1 commit, porcelain 0, detain); 9 files +1252/-11; reviewer LIVE ses_e7cd956faffenR7jxqD2TO8sKS (salvage-coherence scrutiny); weld duty 2 tsv rows (McpToolProgressTest 15T + NonInteractiveMcpToolsHeadlessTest 4T recount)"
   },
   "C-MCP-4.b": {
-   "stage": "fix",
+   "stage": "review",
    "round": 3,
    "worktree": "/home/sites/cc-cmp-C-MCP-4.b",
    "branch": "cc/C-MCP-4.b",
-   "tip": "2cfb83e04",
-   "fixer": "ses_e7ce29789ffeGG39tvZsGfsbG8",
-   "note": "r2 (fresh vs salvage-adopted commit) FINDINGS 1MAJOR/3min: trust walk + 6.1 rulings ALL PASS; pair 12T/53A EXACT; 11 files==declared; phantom-first PASS. MAJOR: SettingsWriterCensusTest red at tip - 3 new writeUserConfig sites in persistSessionToggle unrostered (row =>3 + adjudication comment, same commit). MINOR lang wording (disable.done preset-arm, enable.done launch-denied qualifier). MINOR REPORT-truth: claimed C-CTX-4.c cure hunk does not exist (pre-existing trait exemption; 1F foreign InstructionWalkPastRootTest) - REPORT-only fix. After fixer lands -> fresh r3 cure-reviewer; then weld roster: 2 tsv rows McpRuntimeDisableTest+McpAuthCommandEnableDisableTest + staleness-pair gate duty note + NO trio rider (pick fileset: src/MCP+Commands+Host+docs+tests, no src/Protocol/** - verify at weld)."
+   "tip": "1fbbaddc0664acf6c98600f0c4ec2845fe63b6d0",
+   "reviewer": "ses_e7cd09aceffepx6g97dj8jPm6I",
+   "note": "fixer r3 landed: census roster row persistSessionToggle=>3 + adjudication (gate 5T/4746A now OK), lang disable/enable.done scoped truthfully, REPORT cured in main tree. fresh r3 reviewer live; weld duty 2 tsv rows"
   },
   "C-PRV-2.b": {
-   "stage": "clean",
-   "round": 2,
+   "stage": "fix",
+   "round": 3,
    "worktree": "/home/sites/cc-cmp-C-PRV-2.b",
    "branch": "cc/C-PRV-2.b",
    "tip": "be3d3af18",
-   "note": "r2 CLEAN 0C/0M/0MIN \u2014 M1 gate cure accepted (shapesEffortFor wrap, byte-stability pinned), M2 rejection SUSTAINED (direct Trait::CONST forbidden regardless of visibility; r1 premise phantom). WELD-QUEUE: 1 tsv row OpenAiResponsesReasoningTest (12 methods \u2014 junit sum), no riders, +12T closeout carry, 5 foreign Drift reds named (staleness x2, PermissionsIntro, JsonErrorContract x4), NIT-4 welder: copy /tmp gate/probe logs into lane dir before evidence commit"
+   "note": "r2 FINDINGS 0C/0M/1MINOR/2NIT (ses_e7ce1543b @ be3d3af18, REVIEW-2.md in tree): MINOR-1 replay must be gated on shapesEffortFor(model) else text-only-model session wedges w/ stored reasoning (fix gated, red-before gate-neuter 1F, o3-mini switch-back leg); MINOR-2 + Trait::CONST docblock: fixer REJECTED with PHP 8.3.6 microprobe evidence Cannot-access trait-const IS the rule \u2014 fixer stance: direct trait access forbidden; reviewer claim via-class legal; docblock currently says fatal-for-public-const too. r2 NIT kept open: fixer to re-run 26-file providers filter + report exact. Fresh r3 cure-reviewer after this fix lands.",
+   "fixer": "ses_e7cd00ec2ffeyeHxBnwpEsr5J7"
   },
   "C-SEC-6.a": {
    "stage": "clean",
@@ -202,19 +196,27 @@
    "worktree": "/home/sites/cc-cmp-C-SEC-6.a",
    "branch": "cc/C-SEC-6.a",
    "tip": "675241a04",
-   "note": "r2 CLEAN 0C/0M/0m fresh reviewer (ses_e7ce37aa2): MAJOR bare-forget shared-guarded savedBody+readFailed byte-identical refusal pin; MINOR single loadableRow predicate list+remove; NITs landed; gates EXACT 24T/100A pair, 352T/13727A sole-foreign PermissionsIntroDrift (roster byte-identical base<->tip), guards 447T/68244A; REVIEW-2.md in main tree | SECOND independent CLEAN (voided-provenance ses_e7cefc13e returned a real executed review: red-before executed via da90aceb0 src-swap pin-ERRORS, restored clean \u2014 corroborates fresh r2). Weld adds optional one-word fold: PERMISSIONS.md @@911 \"numbers every stored entry\" over-promises on junk-row configs (live (N) header self-corrects). MODIFIED SettingsWriterCensusTest rides commit (census flip done). 2 tsv rows as rostered."
+   "note": "CLEAN x2 (ses_e7ce37aa2 fresh r2 + corroborating executed review): bare-forget read_failed guard shared one helper (byte-identical pin, red-before ERROR), loadableRow predicate list/remove, census flip in-step; weld duty 2 tsv rows SavedRulesTest+PermissionsSavedRulesCommandTest; weld-NIT optional one-word PERMISSIONS.md numbers-fabricated fold"
   },
   "C-SEC-7.d": {
-   "stage": "review",
+   "stage": "clean",
    "round": 2,
    "worktree": "/home/sites/cc-cmp-C-SEC-7.d",
    "branch": "cc/C-SEC-7.d",
    "tip": "75beffe3ec81a1b3859e378a7915cda221885c58",
-   "note": "fixer landed (MINOR-1 doc qualifiers :561/:1559; MINOR-2 assertSame([],tools) pin AutoReviewScopeTest:172 mutation-proven); r2 LIVE ses_e7cdc4c5affeaMC8EoLUFiGcVO; tsv duty 1 row AutoReviewScopeTest; FIFTY-SEVEN numeral consistency being re-verified at new tip"
+   "note": "r2 CLEAN 0C/0M (ses_e7cdc4c5a, REVIEW-2.md): both cure tokens blob-verified in tip, trio 43T/136A OK, census 95T OK, doc-guards 237T OK; ProjectTier 2F + staleness + PermissionsIntro all foreign-named; weld duty 1 tsv row AutoReviewScopeTest"
+  },
+  "C-AGT-5.c": {
+   "stage": "build",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-C-AGT-5.c",
+   "branch": "cc/C-AGT-5.c",
+   "builder": "ses_e7cce61e6ffeJMF0CXdTJTW5Ca",
+   "note": "heartbeat schedule kind; base a812ea659; BRIEF minted; refresh+npm ci OK"
   }
  },
  "blocked": [],
- "extra_agents": 0,
+ "extra_agents": 1,
  "waves_closed": [
   1,
   2,
@@ -281,6 +283,9 @@
     "NEW standing red: ShellMenuTest x2 shells-row placement (fixer queued)",
     "\u00a74 C-EXT-2.e InertFrontmatter test-name erratum folded this commit"
    ]
+  },
+  "W14": {
+   "r1": "LIVE ses_e7ccdcfc3ffePP7ORhXloXOHoT (read-only, judging 10-member set @ a812ea659; ruling-keystone = root-scope guard code+test match)"
   }
  },
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
@@ -893,7 +898,7 @@
   "STOP STATE @2052@: master b4b4404c5 (wind-down commit; 9 files). welded=100/328 LIST. waves_closed [1..9] (W8/W9 rows + marks committed inside b4b4404c5; W9 per lead ruling r1-CLEAN-no-r2 \u2014 disclosed). Owed loops: W10 (blocked on unwelded members C-EXT-2.c + C-PRV-5.c), then W11+ per scheduler waves_fully_welded. Only live artifact: /home/sites/cc-cmp-P-TABS.g + branch cc/P-TABS.g @f25a697c1 (parked; re-dispatch plan:1549 after P-TABS.e+P-TABS.f weld). LATE W33+ gated on \u00a76.3 owner rulings (C-TOOL-6 c/e/h + C-TUI-6: Windows shell, Windows self-update helper, web i18n scope, locale choice, parity strictness, voice endpoint, push-to-talk key). NEVER pushed; origin advanced owner-side only.",
   "C-EXT-2.c welded 4b771634d; closeout roster in its WELD.md (Bootstrap:5955 comment, ChatHostLangCatalogue standing red=C-PRV-1.b (a992413b0) seam, TROUBLESHOOTING allowed-tools/effort half=C-EXT-2.b)"
  ],
- "updated": "tick 162",
+ "updated": "tick 168 (AGT-5.b weld verified; W14 fully welded -> loop r1 live; AGT-5.c builder live; PRV-2.b fixer + MCP-4.b r3 reviewer + MCP-3.b r1 reviewer live; welder mid CTX-2.d)",
  "wind_down": {
   "master_tip_at_close": "b4b4404c5",
   "welded_count": 101,
@@ -945,13 +950,13 @@
   }
  ],
  "weld_queue": [
-  "C-AGT-5.b",
-  "C-CTX-2.d",
-  "C-PRV-2.b",
-  "C-SEC-6.a"
+  "C-SEC-7.d",
+  "C-EXT-4.b",
+  "C-SEC-6.a",
+  "(CTX-2.d in welder hands)"
  ],
- "tip": "93448849594e9c779e12a6979f2d5ac7e721f05d",
- "welded_count": 153,
+ "tip": "15dc9c53e",
+ "welded_count": 154,
  "tick": "87-disk-reconciled: W11 REALY closed@341f66404; trio MCP2b+TOOL5b+WEB3f real to 0b3c4ba21 (welded=122); W13/14 welds PENDING; phantom-atlas @b73@ correction: c3178096f/4d263705a/8d8c75678 GHOSTS, cure real 23fa8ab8e",
  "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
  "blocked_notes": {
@@ -1023,5 +1028,62 @@
   "prv2b_r2": "ses_e7ce1543b",
   "mcp4b_fixer": "ses_e7ce29789",
   "mcp3b_salvage": "ses_e7cefc139"
- }
+ },
+ "waved_loops": {
+  "1": "closed r2 CLEAN",
+  "2": "closed r1 CLEAN battery green",
+  "3": "closed r3 (static proof + lead battery)",
+  "4": "closed r1 FINAL CLEAN battery green",
+  "5": "closed r2 CLEAN",
+  "6": "closed r1 CLEAN",
+  "7": "closed r2 CLEAN + cure",
+  "8": "closed r2 CLEAN @ 30b7d4f08 (10/10 marks ancestors; battery all-green incl WorkflowRunInterpolation; hygiene clean; carries: docs/MCP.md :629-634 C-AGT-3 closeout, TrustTarget wiring C-SEC-5.b) \u2014 \u00a73 flip committed in wind-down",
+  "W10": "closed r2 CLEAN @ 533ab1431 (r1 FINDINGS 3 MAJOR + 2 MINOR -> cures 743681f84 StderrEmitterCensus/TreeWideGuardRoster rosters, 8be7334f8 durations rows x5, 533ab1431 \u00a74 C-AGT-7.b \u2705 e359fc884 stamp; MINOR-5 attribution cure C-AGT-7.b -> C-PRV-1.b (a992413b0) folded into this close commit; verdicts lanes/W10/WAVE-REVIEW-1.md + WAVE-REVIEW-2.md; 10/10 \u00a74 marks cat-file + ancestor-verified; cross-wave sweep 175T/4702A OK; reviewer ses_e7eaf469cffeggs78fM6cLM1LJ; standing NOT-W10: ReadmeSuiteFigureDrift staleness pair + ProjectTierRefusal 2F = \u00a77 closeout)",
+  "W11": {
+   "rounds": 2,
+   "verdict": "CLEAN",
+   "cure": "23fa8ab8e chat.attach.pdf_pages Lang::t route + en key",
+   "carries": [
+    "d95f2486c WELD.md backfill -> closeout ledger",
+    "fa14b82c6 self-committed REPORT note",
+    "SkillsEnableDisableTest durations 0.051-vs-0.224 \u00a77 re-measure",
+    "root gen-docs/gen-ansi --check \u00a77 must-do (wave reviewer map-denied)",
+    "TOOL-5.b phantom-review-chain anomaly noted"
+   ]
+  },
+  "W12": {
+   "rounds": 1,
+   "verdict": "CLEAN 0C/0M",
+   "reviewed_at": "5ed26cf92-era (mega-welder mid C-EXT-4.a; W13/W14 arrivals excluded)",
+   "hashes": "10/10 commit+ancestor+detain+zero-trailers (9070bd57e 'claude' prose; bf42820d8 'cherry' = pick trailer)",
+   "coherence": "lang zero dup keys; Bootstrap TOOL-5.b/TUI-7.b union live; SessionHost MCP-2.b read-only; trio --check rc0; dist assets exist w/ WEB-7.b markers",
+   "battery": "drift pair 12T OK; doc-family 380T 1F=thirty-seven; census 131T 2F=walker; targeted W12 297+214+20T OK; 6 vitest specs 47/47; durations 13/13",
+   "carries": [
+    "gen-docs/gen-ansi/path-repos/child-lifetimes --check were map-denied at wave review - \u00a77 closeout MUST-RUN",
+    "5 ChatTest title-suggestion pins red-at-tip blamed <=W5/W10 CTX band (967479a37/020772dca/14118b17d) - standing-red list meanwhile",
+    "thirty-seven + walker reds = W13-band owners (C-TOOL-5.c LspInstallerTest glob drift; cure in W13 loop brief)",
+    "plan tag cli.notice.mac_alt vs landed cli.launch.mac_alt_notice - \u00a77 ledger fold",
+    "WEB-3.f/WEB-7.b deferred dist rebuilds healed at 63f2de5d9/5a45aa4c0"
+   ]
+  },
+  "W13": {
+   "rounds": 2,
+   "verdict": "CLEAN",
+   "r1": "FINDINGS 4 MAJOR (thirty-seven word-map arm, TreeWideGuardRoster LspInstallerTest+DoctorSandboxProbeTest rows, ContainedPathInventory 5 stale entries cross-wave)",
+   "cure": "9fbb73173 W13 wave-loop: guard roster cures (thirty-seven arm added, 2 walker rows added; prose 222->224 claim false-to-code - no prose arm counts roster)",
+   "r2": "CLEAN 0C/0M at 6638d6415-era (all 11 hashes commit/ancestor/detain; en.php 2885 zero-dupes; 4 generators --check rc0; durations 11/11)",
+   "carries": [
+    "ContainedPathInventory 5 stale entries (C-AGT-3.b/C-EXT-2.a/P-CTX.b/C-WEB-1.d/C-SEC-2.b) -> W14/W15 loop owners report-only",
+    "W14 loop must NOT re-add DoctorSandboxProbeTest TreeWideGuardRoster row (already present; silent PHP key clobber)",
+    "thirty-seven/forty-six coexistence benign (different arm-local maps)",
+    "S7 must-run: K=24 battery + suite-figure re-pin (staleness pair ~27k vs 25,537), gen-protocol.mjs --check, root child-lifetimes/path-repos --check, gen-docs/gen-ansi --check",
+    "NEW standing red: ShellMenuTest x2 shells-row placement (fixer queued)",
+    "\u00a74 C-EXT-2.e InertFrontmatter test-name erratum folded this commit"
+   ]
+  },
+  "W14": {
+   "r1": "LIVE ses_e7cd09ace... NO \u2014 dispatched this tick"
+  }
+ },
+ "notes_ruling_chain": "owner ruling 15 executed: AGT-5.b welded a812ea659; W14 loop r1 running; next: AGT-5.c build (W15) on 5.b-landed base, then W15 loop after its members complete"
 }

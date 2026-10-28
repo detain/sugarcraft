@@ -1935,7 +1935,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** P-TABS.a (W5), P-AGENT.a (W6), P-TABS.c (W6), P-CTX.e (W7), P-TABS.f (W15)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-TABS.g`
 
-#### C-CTX-2.d — Served prompt suggestions and a `context.changed` event (protocol lane)
+#### ✅ 15c1f71fcf1a6be500f58726424d1d097eddb020 C-CTX-2.d — Served prompt suggestions and a `context.changed` event (protocol lane)
 - **Item:** C-CTX-2 (sources: GAP-UI-34, GAP-INS-08w (event half), k1-dorm#6) · gap · effort M
 - **What:** `ContextMethods::instructionWrite` also announces `context.changed {reason: instructions}` (C-CTX-3.c relies on it). Two new ephemeral events. `prompt.suggested {text, generation}`: On settle, the suggestion closure from …
 - **Files — create:** `candy-code/tests/Host/ServedPromptSuggestionTest.php`, `candy-code-web/src-web/components/__tests__/composerSuggestion.spec.ts`, `candy-code-web/src-web/stores/__tests__/contextChanged.spec.ts`
