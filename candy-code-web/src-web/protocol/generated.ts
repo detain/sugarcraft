@@ -91,8 +91,8 @@ export interface ContextSources {
     path: string
     reason: string
   }[]
-  /** WEB-3b: this root's trust prompt — measured here is where it is DISCOVERED: an untrusted project `.mcp.json` verdict mints the prompt (once per root) and server-scopes it as `permission.asked`; null while the verdicts need no grant or one was already settled. */
-  trust?: TrustPrompt | null
+  /** C-SEC-5.b: this root's trust prompts — the 5.a launch census' pending targets, measured here is where they are DISCOVERED: each one mints a row (once per root and target) and server-scopes it as `permission.asked`; the list also re-states rows this process already settled (a session grant that expires at next launch, a rejection that must not nag), so an empty list means nothing of this project is pending a grant. */
+  trusts?: TrustPrompt[]
   /** The `/context` figures ({@see \SugarCraft\Code\Context\ContextBreakdown}) — same measurement, same single writer (WEB-3a). */
   breakdown: {
     window: number
@@ -327,13 +327,13 @@ export interface TrustPrompt {
   askId: string
   /** WEB-3b: the marker that makes a `permission.asked` payload a project-trust prompt — answered by `context.trust`; `permission.respond` never sees these (they are not in the turn's question registry). */
   kind: "trust"
-  /** What a grant would enable — today only the project `.mcp.json` census verdict, the one launch-time trust with a user-tier grant writer. */
-  target: "mcp"
-  /** The project root the prompt is about — the exact string a `trustedProjectMcp` entry becomes. */
+  /** C-SEC-5.b: which grant door this prompt is about — the project `.mcp.json` census verdict (`mcp`), a drifted MCP command needing re-approval (`mcp-pin`, which answers through the same list), lifecycle hooks, `` !`cmd` `` command shell forms, or the project settings layer. A grant lands the root in that door's `trustedProject*` list (see the census in `Bootstrap::pendingProjectTrust`). */
+  target: "mcp" | "mcp-pin" | "hooks" | "commands" | "settings"
+  /** The project root the prompt is about — the exact string the grant writes into that door's trusted list. */
   root: string
   /** Why the prompt was put, for the panel line. */
   reason?: string
-  /** `asked` while open; one answer settles it for the process (the once-per-untrusted-root law). */
+  /** `asked` while open; one answer settles it for the process (the once-per-(root, target) law — the other targets' prompts stay open beside it). */
   status: "asked" | "granted" | "rejected"
   /** True when the answer wrote the user-tier trust list; a session grant or a refusal leaves it false. */
   persisted?: boolean
@@ -561,21 +561,21 @@ export interface Methods {
       })[]
     }
   }
-  /** What the session's context is built from: instruction files, memory notes, skills, declared MCP servers, refused paths, and the token breakdown. */
+  /** What the session's context is built from: instruction files, memory notes, skills, declared MCP servers, refused paths, the token breakdown, and this root's pending project-trust prompts. */
   "context.sources": {
     params: {
       sessionId: SessionId
     }
     result: ContextSources
   }
-  /** Answer a project-trust prompt (permission.asked with kind "trust"): grant or reject; a user-tier remember writes your own trustedProjectMcp list, a project-tier one is refused. */
+  /** Answer one project-trust prompt (permission.asked with kind "trust") by its askId: grant or reject; a user-tier remember writes the answering prompt's target list (trustedProjectMcp for an mcp or mcp-pin row, the matching trustedProject* key for the others) in your own config, a project-tier one is refused. */
   "context.trust": {
     params: {
       sessionId: SessionId
-      /** The trust prompt's id, as permission.asked (kind "trust") carried it. */
+      /** The trust prompt's id, as permission.asked (kind "trust") carried it — one answer settles that prompt's target only; the root's other prompts stay open. */
       askId: string
       decision: "grant" | "reject"
-      /** `user` writes the root into your own trustedProjectMcp list (effective next launch, like the TUI grant) and refuses `trust_write_failed` — leaving the prompt open — when that write does not land; `session` — or omitted — settles for this server only; `project` is refused: a project cannot grant itself trust (the permission.respond posture). */
+      /** `user` writes the root into your own config under the answered prompt's target list — `trustedProjectMcp` for an `mcp` or `mcp-pin` row, the matching `trustedProject*` key for the others (effective next launch, like the TUI grant) — and refuses `trust_write_failed`, leaving the prompt open, when that write does not land; `session` — or omitted — settles for this server only; `project` is refused: a project cannot grant itself trust (the permission.respond posture). */
       remember?: "session" | "user" | "project"
     }
     result: {
@@ -1638,13 +1638,13 @@ export interface Events {
     askId: string
     /** WEB-3b: the marker that makes a `permission.asked` payload a project-trust prompt — answered by `context.trust`; `permission.respond` never sees these (they are not in the turn's question registry). */
     kind: "trust"
-    /** What a grant would enable — today only the project `.mcp.json` census verdict, the one launch-time trust with a user-tier grant writer. */
-    target: "mcp"
-    /** The project root the prompt is about — the exact string a `trustedProjectMcp` entry becomes. */
+    /** C-SEC-5.b: which grant door this prompt is about — the project `.mcp.json` census verdict (`mcp`), a drifted MCP command needing re-approval (`mcp-pin`, which answers through the same list), lifecycle hooks, `` !`cmd` `` command shell forms, or the project settings layer. A grant lands the root in that door's `trustedProject*` list (see the census in `Bootstrap::pendingProjectTrust`). */
+    target: "mcp" | "mcp-pin" | "hooks" | "commands" | "settings"
+    /** The project root the prompt is about — the exact string the grant writes into that door's trusted list. */
     root: string
     /** Why the prompt was put, for the panel line. */
     reason?: string
-    /** `asked` while open; one answer settles it for the process (the once-per-untrusted-root law). */
+    /** `asked` while open; one answer settles it for the process (the once-per-(root, target) law — the other targets' prompts stay open beside it). */
     status: "asked" | "granted" | "rejected"
     /** True when the answer wrote the user-tier trust list; a session grant or a refusal leaves it false. */
     persisted?: boolean
