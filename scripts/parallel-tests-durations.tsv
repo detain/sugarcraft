@@ -183,6 +183,7 @@ candy-code/tests/Backend/EngineBackendCacheHealthTest.php	1.746	7
 candy-code/tests/Backend/ForkChannelIdleTimerSuspendedTest.php	1.735	2
 candy-code/tests/Agents/Live/SoftCancelPauseTest.php	1.722	5
 candy-code/tests/Renderer/ImageRenderingTest.php	1.722	8
+candy-code/tests/Host/SessionHostOtelFoldTest.php	1.72	8
 candy-code/tests/Integration/WorkflowExecutionTest.php	1.698	6
 candy-code/tests/MCP/McpMessageResultTypeTest.php	1.694	5
 candy-code/tests/Permissions/TaskGrantMemoHookOriginTest.php	1.694	8
