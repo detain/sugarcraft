@@ -22,7 +22,8 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  * read ledger (so the formatter's change never reads as an external edit),
  * and NEVER refuses. Plus the wiring seams: the launch hands one ledger to the
  * tool build and to this hook, and `Bootstrap::hooks()` registers the hook only
- * when the map names a command.
+ * when the map names a command or `formatAuto` arms the built-in table for a
+ * trusted project.
  *
  * @see PostEditFormatHook
  * @see FormatRunner

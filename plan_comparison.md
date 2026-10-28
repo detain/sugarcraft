@@ -1559,7 +1559,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SEC-4.b (W3)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web7.md` → `### C-WEB-7.b`
 
-#### C-TOOL-5.b — Default formatter table (`formatAuto`)
+#### ✅ 3ecf83d95 C-TOOL-5.b — Default formatter table (`formatAuto`)
 - **Item:** C-TOOL-5 (sources: GAP-EDT-04) · gap · effort M
 - **What:** `FormatRunner` (`candy-code/src/Format/FormatRunner.php`) runs only the explicit `formatCommands` map, and `Bootstrap::hooks()` (:5826, :5843-5848) registers the hook only when a command exists. Add `FormatAutoTable`: extension → …
 - **Files — create:** `candy-code/src/Format/FormatAutoTable.php`, `candy-code/tests/Format/FormatAutoTableTest.php`
