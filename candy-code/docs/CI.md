@@ -175,6 +175,121 @@ Exit codes and error envelopes are documented in [TROUBLESHOOTING.md](TROUBLESHO
 provider selection and credential variables in [ENVIRONMENT.md](ENVIRONMENT.md); the permission
 modes themselves in [PERMISSIONS.md](PERMISSIONS.md).
 
+## GitLab CI
+
+The composite action is a GitHub Actions mechanism — `uses:` has no GitLab counterpart. The same
+shape travels to GitLab as a plain recipe: download the release phar, verify it before anything
+executes it, and run one headless turn over the merge request's diff TEXT. The trust anchor is the
+one `candy-code self-update` uses, and the asset list is the one the `README.md` install section
+describes: `.github/workflows/release-phar.yml` publishes `candy-code.phar` with its
+`candy-code.phar.sha256` sidecar, and releases from `candy-code/v0.1.1` onward carry an Ed25519
+signature verified against the pinned key before any swap. The preferred asset is
+`candy-code.phar.sha256.sig` — a detached signature over the `candy-code.phar.sha256` sidecar body,
+so verification stays on the stream and the phar never has to fit in memory — and it is what the
+recipe below fetches. That asset shape is young: the sidecar signature entered the pipelines on
+2026-10-27, so a release cut before it — `v0.1.1` among them — publishes its signature as the
+legacy whole-archive `candy-code.phar.minisig` and has no `candy-code.phar.sha256.sig` to download;
+`self-update` accepts that legacy leg for one further release cycle, but new automation should not
+be built on it.
+Despite the file names nothing here is minisign format: both are raw base64 sodium signatures, so
+the verify leg is a few lines of PHP (the official PHP CLI images ship the sodium extension
+enabled) against a public key you pin yourself — the same base64 value the binary carries as
+`SelfUpdate::PUBLIC_KEY_BASE64`. A key served by the channel it authenticates is not an anchor.
+Releases at or before `candy-code/v0.1.0` carry no signature asset at all — the verify leg fails
+closed there, which is the honest answer, not an obstacle to route around.
+
+WHAT THE ANCHOR ACTUALLY GUARANTEES is not an order between two hashes. The swap path fetches the
+sidecar, downloads the phar to a temp file, checks that digest, and runs the pinned-key leg LAST —
+after the hash, so the bytes under test are the real artifact, and before the copy, so a rejection
+leaves nothing to roll back. The publish pipeline computes the checksum before signing because its
+signature is over the sidecar body: the sidecar has to exist first. The invariant the two share,
+and the one this recipe keeps, is that nothing runs until the pinned key has vetted a signature
+over the digest gating the bytes. A hash alone is a word that the published bytes are what someone
+meant to publish; the signature is what makes that word someone whose key you chose. The recipe
+below therefore checks the signature before `sha256sum -c` — an order belonging to a download-then-
+run job, credited to this page, not a transcription of the swap path's.
+
+```yaml
+# Illustrative recipe; nothing here runs in this repo's CI.
+candy-code-diff:
+  stage: build
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  script:
+    - git diff "$CI_MERGE_REQUEST_DIFF_BASE_SHA" "$CI_COMMIT_SHA" > mr.diff
+  artifacts:
+    paths: [mr.diff]
+
+candy-code-review:
+  stage: test
+  needs: [candy-code-diff]
+  variables:
+    GIT_STRATEGY: none        # this job may hold secrets, so the merge source reaches it as
+                              # artifact TEXT only — no checkout, nothing head-supplied executes
+    PHAR_VERSION: v0.1.1      # pin an exact release; a floating "latest" is an update channel
+                              # you do not control — the same law as `candy-code-version` above.
+                              # With THIS pin the `.sha256.sig` curl below 404s: `v0.1.1` was cut
+                              # before the sidecar signature entered the pipelines (2026-10-27),
+                              # so its signature asset is the whole-archive legacy minisig — a
+                              # path for older clients, not one to build new automation on. Move
+                              # the pin to a release cut by a sidecar-signing pipeline; quietly
+                              # skipping the signature leg is not the alternative to take here
+    PHAR_BASE: https://github.com/detain/sugarcraft/releases/download/candy-code
+  environment:
+    name: candy-code-review   # bind a required-approval rule to this environment, and keep
+                              # ANTHROPIC_API_KEY and PINNED_PUBKEY_B64 masked and protected:
+                              # fork pipelines never read them, and their values never echo
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq jq  # php:8.3-cli ships curl and sha256sum
+  script:
+    - curl -fsSL -o candy-code.phar            "$PHAR_BASE/$PHAR_VERSION/candy-code.phar"
+    - curl -fsSL -o candy-code.phar.sha256     "$PHAR_BASE/$PHAR_VERSION/candy-code.phar.sha256"
+    - curl -fsSL -o candy-code.phar.sha256.sig "$PHAR_BASE/$PHAR_VERSION/candy-code.phar.sha256.sig"
+    - |
+      php -r '
+        $pub = base64_decode((string) getenv("PINNED_PUBKEY_B64"), true);
+        $sig = base64_decode(trim((string) file_get_contents("candy-code.phar.sha256.sig")), true);
+        if ($pub === false || strlen($pub) !== SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES
+            || $sig === false || strlen($sig) !== SODIUM_CRYPTO_SIGN_BYTES
+            || !sodium_crypto_sign_verify_detached($sig, file_get_contents("candy-code.phar.sha256"), $pub)) {
+          fwrite(STDERR, "the pinned-key check over the sha256 sidecar failed\n");
+          exit(1);
+        }
+      '
+    - sha256sum -c candy-code.phar.sha256
+    - php candy-code.phar -p "Review the diff in ./mr.diff, list problems by severity."
+        --output-format json --permission-mode plan --max-cost 1.00 --root "$PWD" > review.json
+    - jq -e '.schema == 1 and .error == null' review.json
+    - jq -r '.result' review.json > review.md
+    - jq '.refusals | length' review.json   # every tool call plan mode refused — read the number
+```
+
+The legs are the doctrine above in a different shell: the agent receives attacker-written TEXT and a
+verified binary it trusts, `plan` and `--max-cost` contain what a hijacked turn can do, and the
+exit codes and envelope shapes mean exactly what [the outputs table](#outputs) and
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md) say they mean — a non-zero run fails the job before any
+`jq` leg reads its document.
+
+Posting the review back is one more job, and it is the only one holding a write-scoped project
+token — the reviewer itself keeps none, so a prompt-injected answer cannot post, close, or merge
+anything:
+
+```yaml
+candy-code-post:
+  stage: deploy
+  needs: [candy-code-review]
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - 'curl -fsS --request POST --header "PRIVATE-TOKEN: $GITLAB_POST_TOKEN"
+       --data-urlencode body@review.md
+       "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID/notes"'
+```
+
+The note body is model output and GitLab renders it as Markdown — the same forged-appearance
+hazard named above for step summaries and PR comments. No auto-merge on a review verdict, either
+side of the bridge.
+
 ## Linting this action
 
 `.github/` workflows are guarded by the monorepo CI; `action.yml` itself is a plain composite and
