@@ -796,6 +796,7 @@ candy-code/tests/Backend/StepSummaryCompactHooksTest.php	0.055	3
 candy-code/tests/Cli/StreamJsonEmitterTest.php	0.055	7
 candy-code/tests/Commands/MacAltNoticeTest.php	0.055	4
 candy-code/tests/Tui/ComposerVimTextObjectTest.php	0.055	9
+candy-code/tests/Chat/HeartbeatScheduleTest.php	0.055	9
 candy-code/tests/App/AgentsPaneDockedFooterTest.php	0.054	3
 candy-code/tests/Backend/TurnStartPruneTest.php	0.054	3
 candy-code/tests/Bundles/BundleManifestTest.php	0.054	9
