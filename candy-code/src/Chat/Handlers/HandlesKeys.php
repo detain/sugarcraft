@@ -325,23 +325,25 @@ trait HandlesKeys
             ]), null];
         }
 
-        // (b) A pending operator (`d`/`y` waiting for its motion) resolves
-        // HERE, ahead of the double-Escape arm below, because its Escape
-        // means "cancel the operator" and must not arm the two-beat stop
-        // binding. Every keyboard owner above the composer gates it out the
-        // same way the Escape arm is gated: while a modal or the `@`/`$`
+        // (b) An armed vim grammar (a pending `d`/`y`/`c` operator, a
+        // text-object scope waiting for its target, or an in-progress count)
+        // resolves HERE, ahead of the double-Escape arm below, because its
+        // Escape means "cancel the operator" and must not arm the two-beat
+        // stop binding. Every keyboard owner above the composer gates it out
+        // the same way the Escape arm is gated: while a modal or the `@`/`$`
         // popup is open that surface keeps its keys and the pending simply
         // waits. Enter is the one overlap with an owner BELOW — the slash
         // menu and the mention accept bind it first, so under a popup the
         // operator dies and the menu gets its Enter, exactly as it would
         // with vim off. A key that is no operator material at all (Tab, an
-        // arrow, a chord) clears the pending and re-routes through
-        // update() — the recursion is one step deep, since the cleaned
-        // clone's pending is null. That is the queue-owns-Tab / palette-owns-
-        // arrows guarantee: a forgotten `d` can never hold the keyboard
-        // hostage for one extra keystroke.
+        // arrow, a chord) clears the whole armed grammar and re-routes
+        // through update() — the recursion is one step deep, since the
+        // cleaned clone is unarmed. That is the queue-owns-Tab /
+        // palette-owns-arrows guarantee: a forgotten `d` or a forgotten
+        // count can never hold the keyboard hostage for one extra
+        // keystroke.
         if (
-            $this->composerVim->pending !== null
+            $this->composerVim->isArmed()
             && $msg instanceof KeyMsg
             && $this->titleEditor === null
             && $this->palette === null
@@ -1033,10 +1035,12 @@ trait HandlesKeys
             // them with moveCursor($row, …), and this box can have rows) — and
             // deciding that is a keymap addition, not part of the ctrl filter.
             // TUI-3A: vim-mode composer, wiring half 2 of 2 — the letters
-            // the sugar-forms Vim layer does NOT bind and a host must: `d`/`y`
-            // arm an operator, `D Y o O e p P` act at once. NORMAL state
+            // the sugar-forms Vim layer does NOT bind and a host must: `d`/`y`/`c`
+            // arm an operator, `1`-`9` arm a count (C-TUI-1), `D Y C o O e p
+            // P` act at once. NORMAL state
             // only (Insert is the lib's verbatim passthrough — typing must
-            // reach the draft), no pending operator (that resolved above the
+            // reach the draft), nothing armed yet (that grammar resolved
+            // above the
             // modals), no visible `/` or `@`/`$` popup (a popup owns the
             // letters that filter it — claiming `d` mid-`/do` or mid-`@src/`
             // would eat the user's own typing), and it sits LAST among the claim arms on purpose: the
@@ -1046,12 +1050,12 @@ trait HandlesKeys
             // with vim off, `$this->input->vimMode` is false and the arm is
             // inert, byte-for-byte the delegation below.
             $msg->type === KeyType::Char && !$msg->ctrl && !$msg->alt
-                && $this->composerVim->pending === null
+                && !$this->composerVim->isArmed()
                 && $this->input->vimMode
                 && $this->input->vimState === VimState::Normal
                 && $this->slashMenuMatches() === []
                 && !$this->mentionPopupOpen()
-                && ComposerVim::claims($msg->rune)
+                && $this->composerVim->claimsKey($msg->rune)
                 => $this->applyComposerVim($msg),
             !$msg->ctrl && \in_array($msg->type, self::DRAFT_KEYS, true)
                 => $this->delegateToInput($msg),

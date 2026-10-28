@@ -389,4 +389,38 @@ final class ComposerVimModeTest extends TestCase
         self::assertStringStartsWith('/compa', $completed->input->value(), 'Enter still belongs to the menu (completing, never killing)');
         self::assertStringNotContainsString("\n", $completed->input->value(), 'never the d<CR> line-kill');
     }
+
+    public function testCountDigitsAreClaimedInNormalButTypedinInsertAndSidelinedBehindTheMenu(): void
+    {
+        $normal = $this->drive($this->armed(new Chat(inputBuf: 'x')), $this->k('3'));
+        self::assertSame('x', $normal->input->value(), 'a NORMAL digit arms a count instead of typing itself');
+        self::assertTrue($normal->composerVim->isArmed());
+
+        $insert = $this->drive($this->armed(new Chat(inputBuf: 'ab')), $this->k('i'), $this->k('3'));
+        self::assertSame('ab3', $insert->input->value(), 'INSERT owns every keystroke verbatim, digits included');
+        self::assertFalse($insert->composerVim->isArmed());
+
+        $menu = $this->drive($this->armed(new Chat(inputBuf: '/compa')), $this->k('3'));
+        self::assertNotSame([], $menu->slashMenuMatches(), 'sanity: the menu is up');
+        self::assertFalse($menu->composerVim->isArmed(), 'a visible menu claims the keys — digits included — first');
+        self::assertSame('/compa', $menu->input->value());
+    }
+
+    public function testTheChangeOperatorLandsInTheLibsInsertStateThroughChat(): void
+    {
+        $chat = $this->drive($this->armed(new Chat(inputBuf: 'alpha beta')), $this->k('0'), $this->k('c'), $this->k('w'));
+        self::assertSame(' beta', $chat->input->value(), 'cw kills the word body like ce');
+        self::assertSame(\SugarCraft\Forms\Vim\VimState::Insert, $chat->input->vimState, 'c = the d kill then Insert, fed through the lib');
+        self::assertFalse($chat->composerVim->isArmed());
+    }
+
+    public function testAForgottenCountDoesNotHoldTabHostage(): void
+    {
+        $chat = $this->drive($this->armed(new Chat(inputBuf: 'x')), $this->k('3'));
+        self::assertTrue($chat->composerVim->isArmed(), 'sanity: the count is armed');
+
+        $settled = $this->drive($chat, $this->km(KeyType::Tab));
+        self::assertFalse($settled->composerVim->isArmed(), 'a forgotten count is dropped for Tab exactly like a forgotten d');
+        self::assertSame('x', $settled->input->value());
+    }
 }

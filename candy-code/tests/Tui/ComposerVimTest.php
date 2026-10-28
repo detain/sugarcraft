@@ -53,15 +53,39 @@ final class ComposerVimTest extends TestCase
 
     public function testTheClaimSetIsExactlyTheOperatorGrammar(): void
     {
-        foreach (['d', 'y', 'D', 'Y', 'o', 'O', 'e', 'p', 'P'] as $claimed) {
-            self::assertTrue(ComposerVim::claims($claimed), $claimed);
+        $idle = ComposerVim::empty();
+
+        foreach (['d', 'y', 'c', 'D', 'Y', 'o', 'O', 'e', 'p', 'P', 'C'] as $claimed) {
+            self::assertTrue($idle->claimsKey($claimed), $claimed);
+        }
+        foreach (['1', '2', '3', '4', '5', '6', '7', '8', '9'] as $digit) {
+            self::assertTrue($idle->claimsKey($digit), $digit . ' starts a count');
         }
 
         // Every other plain Char belongs to the lib or is its beep: motions,
-        // insert entries, the visual family and unbound letters alike.
+        // insert entries, the visual family and unbound letters alike. The
+        // line-start `0` is the named risk — UNARMED it is the lib's motion,
+        // so `d0` survives the count grammar.
         foreach (['i', 'a', 'I', 'A', 'h', 'j', 'k', 'l', 'w', 'b', 'x', 'v', 'V', '0', '$', 'q', '!', ' '] as $unclaimed) {
-            self::assertFalse(ComposerVim::claims($unclaimed), $unclaimed);
+            self::assertFalse($idle->claimsKey($unclaimed), $unclaimed);
         }
+
+        // With a count armed, the zero joins the number and every motion
+        // acts THROUGH the multiplier; scope keys and the visual family
+        // still belong to the lib (a `3i` enters Insert, vim's own reading).
+        $counted = new ComposerVim(null, '', false, null, 3);
+        self::assertTrue($counted->isArmed());
+        foreach (['0', '$', 'w', 'b', 'h', 'l', 'j', 'k', 'x', 'd', 'y', 'c', 'D', 'e', 'p'] as $claimed) {
+            self::assertTrue($counted->claimsKey($claimed), $claimed);
+        }
+        foreach (['i', 'a', 'I', 'A', 'v', 'V', 'q', '!'] as $unclaimed) {
+            self::assertFalse($counted->claimsKey($unclaimed), $unclaimed);
+        }
+
+        self::assertFalse($idle->isArmed());
+        self::assertTrue((new ComposerVim(null, '', false, 'i'))->isArmed(), 'a text-object scope arms the grammar');
+        self::assertTrue((new ComposerVim('d'))->isArmed());
+        self::assertTrue((new ComposerVim(null, '', false, null, 2))->isArmed(), 'a bare count arms the grammar');
     }
 
     public function testWordEndWalksAtLeastOneCellThenStopsPastTheWord(): void
