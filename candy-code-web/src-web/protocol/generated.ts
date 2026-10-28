@@ -323,6 +323,8 @@ export interface SessionSummary {
   permissionMode?: PermissionMode | null
   spentUsd?: number | null
   spendUnpriced?: boolean
+  archived?: boolean
+  ephemeral?: boolean
   /** Set by the serve gateway on a session another project root's workspace host answered for (roadmap O-7). */
   root?: string
 }
@@ -1009,6 +1011,15 @@ export interface Methods {
       accepted: boolean
     }
   }
+  /** Move a session to the archive tray; it leaves the default listing. */
+  "session.archive": {
+    params: {
+      sessionId: SessionId
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: SessionSummary
+  }
   /** Cancel the running turn (hard, or soft at the next step boundary). */
   "session.cancel": {
     params: {
@@ -1042,6 +1053,8 @@ export interface Methods {
     params: {
       name?: string
       permissionMode?: PermissionMode
+      /** Incognito: a live session that persists nothing — no store row, no transcript saves, no usage records, no title or memory passes — and is dropped by the hub on close. */
+      ephemeral?: boolean
       /** Another project root: the serve gateway routes the call to that root's workspace host (roadmap O-7). */
       root?: string
       /** A retry with the same key gets the original answer (5 min). */
@@ -1118,12 +1131,29 @@ export interface Methods {
     }
     result: SessionSnapshot
   }
+  /** Import an external agent transcript carried in the request; byte-identical re-sends land in the same session. */
+  "session.import": {
+    params: {
+      /** The transcript body to import, up to the verified inbound WS frame ceiling (ServerConfig::MAX_CLIENT_FRAME_BYTES less envelope headroom); a longer body is refused as an invalid param before dispatch, a malformed one as import_refused. */
+      content: string
+      /** How to read the body; omitted, the importer detects it from the leading structure. */
+      format?: "candy-code" | "claude-code" | "codex" | "opencode"
+      name?: string
+      /** Another project root: the serve gateway routes the call to that root's workspace host (roadmap O-7). */
+      root?: string
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: SessionSummary
+  }
   /** The workspace's sessions, newest activity first, paged. */
   "session.list": {
     params: {
       limit?: number
       cursor?: SessionId
       query?: string
+      /** true lists ONLY archived sessions; omitted or false lists the unarchived ones (the historical law). */
+      archived?: boolean
       /** Another project root: the serve gateway routes the call to that root's workspace host (roadmap O-7). */
       root?: string
     }
@@ -1225,6 +1255,15 @@ export interface Methods {
       snapshotLimit?: number
     }
     result: Subscription
+  }
+  /** Restore an archived session to the live listing. */
+  "session.unarchive": {
+    params: {
+      sessionId: SessionId
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: SessionSummary
   }
   /** Revoke a share page by token; it 404s from its next request. */
   "session.unshare": {
@@ -1604,6 +1643,7 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "server.hello": "read",
   "server.info": "read",
   "server.shutdown": "admin",
+  "session.archive": "write",
   "session.cancel": "write",
   "session.close": "write",
   "session.create": "write",
@@ -1612,6 +1652,7 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "session.export": "read",
   "session.fork": "write",
   "session.get": "read",
+  "session.import": "write",
   "session.list": "read",
   "session.queue": "read",
   "session.rename": "write",
@@ -1620,6 +1661,7 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "session.share": "write",
   "session.shares": "read",
   "session.subscribe": "read",
+  "session.unarchive": "write",
   "session.unshare": "write",
   "session.unsubscribe": "read",
   "settings.get": "read",
@@ -1657,16 +1699,19 @@ export const IDEMPOTENT_METHODS: readonly MethodName[] = [
   "memory.undo",
   "permission.respond",
   "server.shutdown",
+  "session.archive",
   "session.cancel",
   "session.close",
   "session.create",
   "session.delete",
   "session.dequeue",
   "session.fork",
+  "session.import",
   "session.rename",
   "session.send",
   "session.setMode",
   "session.share",
+  "session.unarchive",
   "session.unshare",
   "settings.set",
   "shells.stop",

@@ -464,6 +464,7 @@ it and the two tables below are generated from the code
 | `server.hello` | read |  | — | The handshake: protocol version, features, limits; optionally resume subscriptions (snapshotLimit pages their reset snapshots). |
 | `server.info` | read |  | — | What this server offers: providers, agents, commands, tools, permission modes. |
 | `server.shutdown` | admin | yes | — | Stop the server, draining running turns first. |
+| `session.archive` | write | yes | `sessionId` | Move a session to the archive tray; it leaves the default listing. |
 | `session.cancel` | write | yes | `sessionId` | Cancel the running turn (hard, or soft at the next step boundary). |
 | `session.close` | write | yes | `sessionId` | Release a session (refused while a turn runs unless force). |
 | `session.create` | write | yes | — | Create a session and open it. |
@@ -472,6 +473,7 @@ it and the two tables below are generated from the code
 | `session.export` | read |  | `sessionId` | A session's transcript as markdown, json or text; limit/offset page it and revision guards the walk. |
 | `session.fork` | write | yes | `sessionId` | Branch a session into a new one carrying its transcript. |
 | `session.get` | read |  | `sessionId` | A session's snapshot: rows, status, queue, open questions, usage; limit/beforeIndex page the rows. |
+| `session.import` | write | yes | `content` | Import an external agent transcript carried in the request; byte-identical re-sends land in the same session. |
 | `session.list` | read |  | — | The workspace's sessions, newest activity first, paged. |
 | `session.queue` | read |  | `sessionId` | The prompts queued behind the running turn. |
 | `session.rename` | write | yes | `sessionId`, `name` | Rename a session. |
@@ -480,6 +482,7 @@ it and the two tables below are generated from the code
 | `session.share` | write | yes | `sessionId` | Publish an HTML snapshot of a session as a self-hosted share page at /s/{token}. |
 | `session.shares` | read |  | — | The live share pages of one session, or of every session when sessionId is absent. |
 | `session.subscribe` | read |  | `sessionId` | Follow a session's events from a cursor (replay) or from a snapshot; snapshotLimit pages the reset snapshot. |
+| `session.unarchive` | write | yes | `sessionId` | Restore an archived session to the live listing. |
 | `session.unshare` | write | yes | `token` | Revoke a share page by token; it 404s from its next request. |
 | `session.unsubscribe` | read |  | `sessionId` | Stop following a session. |
 | `settings.get` | read |  | — | Effective values and where each came from, or one tier's file; secrets masked. |

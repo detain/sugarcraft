@@ -1293,6 +1293,12 @@
                 "spendUnpriced": {
                     "type": "boolean"
                 },
+                "archived": {
+                    "type": "boolean"
+                },
+                "ephemeral": {
+                    "type": "boolean"
+                },
                 "root": {
                     "type": "string",
                     "description": "Set by the serve gateway on a session another project root's workspace host answered for (roadmap O-7)."
@@ -3747,6 +3753,30 @@
                 ]
             }
         },
+        "session.archive": {
+            "description": "Move a session to the archive tray; it leaves the default listing.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "sessionId"
+                ]
+            },
+            "result": {
+                "$ref": "#/$defs/SessionSummary"
+            }
+        },
         "session.cancel": {
             "description": "Cancel the running turn (hard, or soft at the next step boundary).",
             "scope": "write",
@@ -3852,6 +3882,10 @@
                     },
                     "permissionMode": {
                         "$ref": "#/$defs/PermissionMode"
+                    },
+                    "ephemeral": {
+                        "type": "boolean",
+                        "description": "Incognito: a live session that persists nothing — no store row, no transcript saves, no usage records, no title or memory passes — and is dropped by the hub on close."
                     },
                     "root": {
                         "type": "string",
@@ -4078,6 +4112,50 @@
                 "$ref": "#/$defs/SessionSnapshot"
             }
         },
+        "session.import": {
+            "description": "Import an external agent transcript carried in the request; byte-identical re-sends land in the same session.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "maxLength": 16711680,
+                        "description": "The transcript body to import, up to the verified inbound WS frame ceiling (ServerConfig::MAX_CLIENT_FRAME_BYTES less envelope headroom); a longer body is refused as an invalid param before dispatch, a malformed one as import_refused."
+                    },
+                    "format": {
+                        "enum": [
+                            "candy-code",
+                            "claude-code",
+                            "codex",
+                            "opencode"
+                        ],
+                        "description": "How to read the body; omitted, the importer detects it from the leading structure."
+                    },
+                    "name": {
+                        "type": "string",
+                        "maxLength": 256
+                    },
+                    "root": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "description": "Another project root: the serve gateway routes the call to that root's workspace host (roadmap O-7)."
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "content"
+                ]
+            },
+            "result": {
+                "$ref": "#/$defs/SessionSummary"
+            }
+        },
         "session.list": {
             "description": "The workspace's sessions, newest activity first, paged.",
             "scope": "read",
@@ -4096,6 +4174,10 @@
                     "query": {
                         "type": "string",
                         "maxLength": 256
+                    },
+                    "archived": {
+                        "type": "boolean",
+                        "description": "true lists ONLY archived sessions; omitted or false lists the unarchived ones (the historical law)."
                     },
                     "root": {
                         "type": "string",
@@ -4464,6 +4546,30 @@
             },
             "result": {
                 "$ref": "#/$defs/Subscription"
+            }
+        },
+        "session.unarchive": {
+            "description": "Restore an archived session to the live listing.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "sessionId"
+                ]
+            },
+            "result": {
+                "$ref": "#/$defs/SessionSummary"
             }
         },
         "session.unshare": {
