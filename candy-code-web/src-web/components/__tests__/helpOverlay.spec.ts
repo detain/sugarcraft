@@ -109,6 +109,18 @@ describe('help overlay key (C-WEB-4.b)', () => {
     expect(event.defaultPrevented).toBe(false)
   })
 
+  it('hears the field rule through closest(): a plain input keeps its ?', async () => {
+    wrapper = await mountApp()
+    const field = document.createElement('input')
+    field.type = 'search'
+    field.value = 'filter text'
+    document.body.appendChild(field)
+    const event = press(HELP_CHORD, field)
+    await nextTick()
+    expect(overlayOpen()).toBe(false) // the escape hatch covers inputs, not just the composer
+    expect(event.defaultPrevented).toBe(false)
+  })
+
   it('escapes and toggles back out', async () => {
     wrapper = await mountApp()
     press(HELP_CHORD, null)

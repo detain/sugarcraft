@@ -119,4 +119,41 @@ describe('web keymap (C-WEB-4.b)', () => {
     localStorage.setItem('candy-code-web:tab-chord', '"alt"') // stale mirror: the keymap stays the truth
     expect(loadKeymap().tabs).toEqual(chordBinding('alt+shift'))
   })
+
+  it('performs no storage write on a plain load', () => {
+    // Fresh: reading defaults must not materialize them.
+    loadKeymap()
+    expect(localStorage.getItem('candy-code-web:keymap')).toBeNull()
+    expect(localStorage.getItem('candy-code-web:tab-chord')).toBeNull()
+    // Sound keymap with a stale mirror: load must neither rewrite nor sweep.
+    setBinding('tabs', chordBinding('ctrl+alt'))
+    localStorage.setItem('candy-code-web:tab-chord', '"alt"')
+    const keymapBefore = localStorage.getItem('candy-code-web:keymap')
+    expect(loadKeymap().tabs).toEqual(chordBinding('ctrl+alt'))
+    expect(localStorage.getItem('candy-code-web:keymap')).toBe(keymapBefore)
+    expect(localStorage.getItem('candy-code-web:tab-chord')).toBe('"alt"')
+  })
+
+  it('rides the legacy mirror on tab saves only', () => {
+    setBinding('tabs', chordBinding('ctrl+alt'))
+    localStorage.setItem('candy-code-web:tab-chord', '"alt"') // sentinel: a non-tabs save must leave it be
+    const keymapBefore = localStorage.getItem('candy-code-web:keymap')
+    expect(setBinding('palette', { key: 'p', primary: 'ctrl-or-meta', alt: false, shift: false })).toBeNull()
+    expect(localStorage.getItem('candy-code-web:keymap')).not.toBe(keymapBefore) // the save itself landed…
+    expect(localStorage.getItem('candy-code-web:tab-chord')).toBe('"alt"') // …and touched nothing else
+    expect(setBinding('tabs', chordBinding('alt+shift'))).toBeNull()
+    expect(localStorage.getItem('candy-code-web:tab-chord')).toBe('"alt+shift"') // tab saves mirror the chord
+  })
+
+  it('refuses overlaps, not just exact duplicates', () => {
+    setBinding('tabs', chordBinding('ctrl+alt')) // the shape the review names: Ctrl+Alt+digit answers both
+    const keymapAtSeed = localStorage.getItem('candy-code-web:keymap')
+    expect(setBinding('help', { key: 'digit', primary: 'ctrl-or-meta', alt: true, shift: false })).toBe('tabs')
+    expect(setBinding('help', { key: 'k', primary: 'ctrl', alt: false, shift: false })).toBe('palette') // Ctrl ⊂ Ctrl/⌘
+    expect(loadKeymap().help).toEqual(DEFAULT_BINDINGS.help)
+    expect(localStorage.getItem('candy-code-web:keymap')).toBe(keymapAtSeed) // refusals write nothing
+    // A shift the other binding cannot carry makes no press answer both — bindable.
+    expect(setBinding('help', { key: 'k', primary: 'ctrl', alt: false, shift: true })).toBeNull()
+    expect(loadKeymap().help).toEqual({ key: 'k', primary: 'ctrl', alt: false, shift: true })
+  })
 })

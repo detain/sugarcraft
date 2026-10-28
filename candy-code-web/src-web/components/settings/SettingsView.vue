@@ -107,7 +107,10 @@ function onCaptureKey(event: KeyboardEvent): void {
   }
   const clash = setBinding(action, binding)
   if (clash !== null) reportClash(action, clash, binding)
-  else keymapNote.value = `${KEYMAP_LABELS[action]} → ${bindingLabel(binding)}.`
+  else {
+    keymapRows.value = loadKeymap()
+    keymapNote.value = `${KEYMAP_LABELS[action]} → ${bindingLabel(binding)}.`
+  }
   stopCapture()
 }
 

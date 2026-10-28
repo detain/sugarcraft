@@ -112,15 +112,31 @@ export function bindingFor(action: KeyAction): KeyBinding {
   return loadKeymap()[action]
 }
 
-function sameBinding(a: KeyBinding, b: KeyBinding): boolean {
-  return a.key === b.key && a.primary === b.primary && a.alt === b.alt && a.shift === b.shift
+/**
+ * Can one keydown satisfy both primaries? `ctrl` is a subset of
+ * `ctrl-or-meta` that still overlaps it — a Ctrl press answers both — while
+ * `none` is disjoint from every chord.
+ */
+function primariesOverlap(a: Primary, b: Primary): boolean {
+  return a === b || (a === 'ctrl' && b === 'ctrl-or-meta') || (a === 'ctrl-or-meta' && b === 'ctrl')
 }
 
-/** Another action this binding would already answer, if any. */
+/**
+ * Would some single keydown answer both bindings? Alt and shift are matched
+ * exactly by `matchesModifiers`, so they must agree for an overlap to exist;
+ * the ctrl/meta spelling only has to intersect. Comparing raw objects instead
+ * let a `ctrl-or-meta` rebind double-answer a `ctrl` chord (and the reverse),
+ * which is exactly the silent shadowing the refusal exists to prevent.
+ */
+function bindingsOverlap(a: KeyBinding, b: KeyBinding): boolean {
+  return a.key === b.key && a.alt === b.alt && a.shift === b.shift && primariesOverlap(a.primary, b.primary)
+}
+
+/** Another action that already answers some keypress this binding would answer, if any. */
 export function conflictingAction(binding: KeyBinding, except: KeyAction): KeyAction | null {
   const current = loadKeymap()
   for (const action of KEY_ACTIONS) {
-    if (action !== except && sameBinding(current[action], binding)) return action
+    if (action !== except && bindingsOverlap(current[action], binding)) return action
   }
   return null
 }
