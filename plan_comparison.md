@@ -1377,7 +1377,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ext.md` → `### C-EXT-2.d`
 
-#### C-PRV-5.d — Gemini schema, documented catalog order, codex login wording
+#### ✅ e07d05447 C-PRV-5.d — Gemini schema, documented catalog order, codex login wording
 - **Item:** C-PRV-5 (sources: PRV-3-P1, PRV-1-P2, PRV-4-P4) · fix · MINOR/NIT · effort S
 - **What:** **PRV-3-P1:** `GeminiGenerateContentWire.php:280-293` sends the operator's raw JSON Schema as `responseSchema` with `responseMimeType: application/json`, on a first step that also declares tools (`Runtime.php:845-872`). Fix: send …
 - **Files — create:** `candy-code/tests/Providers/GeminiResponseSchemaTest.php`
