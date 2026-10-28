@@ -1769,7 +1769,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-PRV-1.a (W2)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-PRV-2.a`
 
-#### C-SES-7.a — Session importer core (CC / Codex / OpenCode / candy-code)
+#### ✅ bc898875f15a828b0d7dba103cf5a6a0321a992c C-SES-7.a — Session importer core (CC / Codex / OpenCode / candy-code)
 - **Item:** C-SES-7 (sources: GAP-SES-10, CLAW-new#3, p2-miss: session import) · gap · effort M
 - **What:** **Formats.** `SessionImporter` auto-detects four formats: candy-code's own export JSON (`Exporter::toJson`, read back via `Message::fromArray`); Claude Code project JSONL; Codex rollout JSONL; the OpenCode `export` JSON. …
 - **Files — create:** `candy-code/src/Session/Import/SessionImporter.php`, `candy-code/src/Session/Import/ImportFormat.php`, `candy-code/src/Session/Import/ImportedTranscript.php`, `candy-code/src/Session/Import/CandyCodeExportReader.php`, `candy-code/src/Session/Import/ClaudeCodeTranscriptReader.php`, `candy-code/src/Session/Import/CodexTranscriptReader.php`, `candy-code/src/Session/Import/OpenCodeExportReader.php`, `candy-code/src/Session/Import/SessionImportLedger.php`, `candy-code/src/Session/Import/ImportRefusedException.php`, `candy-code/tests/Session/Import/SessionImporterTest.php`, `candy-code/tests/Session/Import/TranscriptReadersTest.php`
