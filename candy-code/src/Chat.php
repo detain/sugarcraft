@@ -10658,7 +10658,7 @@ final class Chat implements Model
         'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share', 'export',
         'agent', 'agents', 'memory', 'bg', 'background', 'fork', 'branch', 'sessions', 'theme',
         'mcp', 'websearch', 'pane', 'layout', 'model', 'editor', 'settings', 'config', 'diff',
-        'context', 'tokens', 'btw', 'play', 'hooks', 'effort', 'status', 'usage',
+        'context', 'instructions', 'tokens', 'btw', 'play', 'hooks', 'effort', 'status', 'usage',
     ];
 
     /**
@@ -16372,6 +16372,173 @@ final class Chat implements Model
 
     /** A `/memory` row this arm answers without the router: echo and reply, UI-only. */
     private function memoryRow(string $inputText, string $response): self
+    {
+        return $this->mutate([
+            'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant($response)->withUiOnly()],
+            'inputBuf' => '',
+            'inFlight' => false,
+        ]);
+    }
+
+    /**
+     * `/instructions` (C-CTX-3.a): the open arm rides the editor channel,
+     * everything else rides the host command — the same shape
+     * {@see handleMemoryCommand()} gives `/memory`.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleInstructionsCommand(string $inputText): array
+    {
+        $open = $this->instructionsOpenArm($inputText);
+        if ($open !== null) {
+            return $open;
+        }
+
+        return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\InstructionsHostCommand(), $inputText);
+    }
+
+    /**
+     * The `/instructions open <n|path>` answer as [Chat, Cmd] — null for every
+     * other /instructions form, so the router keeps them (bare lists, `open`
+     * without a pick answers the usage row, and any other verb reaches the
+     * host's usage row).
+     *
+     * The jail is STRUCTURAL, not a compare over user bytes: a pick resolves
+     * only onto a path the loader itself listed — already gated by
+     * {@see \SugarCraft\Code\Context\InstructionFileLoader} against the
+     * checkout and the personal anchors — or onto the personal instruction
+     * file, created empty first when it does not exist yet (the editor cannot
+     * open what no session will load; the created file is exactly the one
+     * `#` quick-add appends to and the prompt prices). A pick that names
+     * anything else is refused by name. An edit lands through
+     * {@see \SugarCraft\Code\Context\InstructionDiffTracker}'s next-turn
+     * recheck (C-CTX-1.a) — no hook is needed to carry it to the model, which
+     * is why this arm's openFile() carries none, unlike `/memory open`'s
+     * journaling hook.
+     *
+     * @return ?array{0:Chat,1:?\Closure}
+     */
+    private function instructionsOpenArm(string $inputText): ?array
+    {
+        $after = self::commandArgument($inputText);
+        if ($after === '') {
+            return null; // bare /instructions: the host command prints the list
+        }
+
+        $parts = \preg_split('/\s+/', $after, 2);
+        if (($parts[0] ?? '') !== 'open') {
+            return null;
+        }
+
+        $pick = \trim($parts[1] ?? '');
+        if ($pick === '') {
+            return [$this->instructionsRow($inputText, Lang::t('host.instructions.usage')), null];
+        }
+
+        $priced = ContextSources::priceInstructionFiles($this->projectRoot());
+        $rows = ContextSources::instructionRows($priced === null ? null : $priced['files']) ?? [];
+
+        if (\ctype_digit($pick)) {
+            $row = $rows[(int) $pick - 1] ?? null;
+            if ($row === null) {
+                return [$this->instructionsRow($inputText, Lang::t('host.instructions.open-unknown', ['pick' => $pick])), null];
+            }
+
+            return [$this->withInputBuf(''), \SugarCraft\Code\Commands\EditorCommand::new()->openFile($row['path'])];
+        }
+
+        $target = self::spellOrResolve($pick);
+        foreach ($rows as $row) {
+            if ($target === self::spellOrResolve($row['path'])) {
+                return [$this->withInputBuf(''), \SugarCraft\Code\Commands\EditorCommand::new()->openFile($row['path'])];
+            }
+        }
+
+        $personal = $this->personalInstructionPath();
+        if ($personal !== null && $target === self::spellOrResolve($personal)) {
+            $openable = $this->personalInstructionFileForOpen();
+            if ($openable !== null) {
+                return [$this->withInputBuf(''), \SugarCraft\Code\Commands\EditorCommand::new()->openFile($openable)];
+            }
+
+            return [$this->instructionsRow($inputText, Lang::t('host.instructions.open-refused', ['path' => $pick])), null];
+        }
+
+        return [$this->instructionsRow($inputText, Lang::t('host.instructions.open-refused', ['path' => $pick])), null];
+    }
+
+    /** The personal instruction file's derived path — null when no owned home can be named. */
+    private function personalInstructionPath(): ?string
+    {
+        $home = \SugarCraft\Code\Support\HomeDirectory::owned();
+
+        return $home === null ? null : \rtrim($home, '/') . '/.candy-code/' . \SugarCraft\Code\Context\InstructionFileLoader::PERSONAL_FILENAME;
+    }
+
+    /**
+     * The personal file as an openable path: an existing regular file as-is,
+     * an absent one created EMPTY at 0600, and null when either step cannot
+     * complete inside the owned home. Quick-add's write law, kept identical:
+     * the directory is created private, a link standing at the file's name is
+     * never followed, and the resolved directory must still answer contained
+     * after the (possibly just-made) mkdir — a pre-planted symlink out of the
+     * home would otherwise be written straight through. The routed
+     * {@see \SugarCraft\Code\Support\ContainedPath::within()} asks the
+     * boundary so this file holds no by-hand containment spelling.
+     */
+    private function personalInstructionFileForOpen(): ?string
+    {
+        $home = \SugarCraft\Code\Support\HomeDirectory::owned();
+        if ($home === null) {
+            return null;
+        }
+        $dir = \rtrim($home, '/') . '/.candy-code';
+        $path = $dir . '/' . \SugarCraft\Code\Context\InstructionFileLoader::PERSONAL_FILENAME;
+
+        if (\is_link($path)) {
+            return null;
+        }
+        if (\is_file($path)) {
+            return $path;
+        }
+
+        try {
+            if (!\is_dir($dir)) {
+                \SugarCraft\Code\Support\PrivateDir::ensure($dir, 'personal instruction directory');
+            }
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (!\is_dir($dir) || !\SugarCraft\Code\Support\ContainedPath::within($dir, $home)) {
+            return null;
+        }
+
+        if (\is_link($path)) {
+            return null;
+        }
+
+        try {
+            if (!\is_file($path)) {
+                \SugarCraft\Code\Support\AtomicFileWriter::write($path, '', 0600);
+            }
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return \is_file($path) && !\is_link($path) ? $path : null;
+    }
+
+    /** `realpath()` when it resolves, the spelled path when it does not. */
+    private static function spellOrResolve(string $path): string
+    {
+        $resolved = \realpath($path);
+
+        return $resolved === false ? $path : $resolved;
+    }
+
+    /** A `/instructions` row this arm answers without the router: echo and reply, UI-only. */
+    private function instructionsRow(string $inputText, string $response): self
     {
         return $this->mutate([
             'history' => [...$this->history, Message::user($inputText)->withUiOnly(), Message::assistant($response)->withUiOnly()],

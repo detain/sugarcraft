@@ -191,6 +191,14 @@ final class ContainedPathInventoryTest extends TestCase
         // the base the registry was built with, so a planted link out of it
         // answers null instead of a path.
         'Bundles/MarketplaceRegistry.php' => 1,
+        // C-CTX-3.a: `/instructions open` creates the personal instruction
+        // file empty when the editor is asked to open it before it exists.
+        // The routed within() asks the one boundary that makes that write safe
+        // — the freshly-ensured `.candy-code` directory must still resolve
+        // inside the owned home after the mkdir (the post-check quick-add
+        // spells by hand at Chat.php's count of two; this arm reaches the
+        // routed class instead, so no by-hand spelling grows here).
+        'Chat.php' => 1,
         'Cli/McpDecision.php' => 1,
         'Commands/CommandLoader.php' => 2,
         'Commands/CommandSpec.php' => 1,
@@ -384,7 +392,7 @@ final class ContainedPathInventoryTest extends TestCase
             'THIRTY-SIX' => 36, 'THIRTY-SEVEN' => 37, 'THIRTY-EIGHT' => 38, 'THIRTY-NINE' => 39,
             'FORTY' => 40, 'FORTY-ONE' => 41, 'FORTY-TWO' => 42, 'FORTY-THREE' => 43,
             'FORTY-FOUR' => 44, 'FORTY-FIVE' => 45, 'FORTY-SIX' => 46, 'FORTY-SEVEN' => 47, 'FORTY-EIGHT' => 48, 'FORTY-NINE' => 49, 'FIFTY' => 50, 'FIFTY-ONE' => 51, 'FIFTY-THREE' => 53, 'FIFTY-FOUR' => 54, 'FIFTY-FIVE' => 55, 'FIFTY-SIX' => 56,
-            'SIXTY' => 60, 'SIXTY-ONE' => 61, 'SIXTY-THREE' => 63,
+            'SIXTY' => 60, 'SIXTY-ONE' => 61, 'SIXTY-FOUR' => 64,
             'TWENTY-ONE' => 21, 'TWENTY-TWO' => 22, 'TWENTY-THREE' => 23, 'TWENTY-FOUR' => 24, 'TWENTY-FIVE' => 25,
         ];
 

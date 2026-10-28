@@ -124,6 +124,33 @@ final class ContextSources
     }
 
     /**
+     * C-CTX-3.a: the one row builder for priced instruction files.
+     *
+     * `context.sources` wire rows and the `/instructions` listing (and the
+     * editor arm its `open` answer resolves picks against) all read the SAME
+     * shape built here from the {@see self::priceInstructionFiles()} result,
+     * so the panel, the wire and the open-jailed path list cannot fork into
+     * saying different things about the files the loader actually read. The
+     * row keeps the loader's order — the listing's 1-based index IS this
+     * list's order, which is what makes `/instructions open <n>` mean what
+     * the screen shows.
+     *
+     * @param ?list<array{path: string, bytes: int, personal: bool}> $files
+     * @return ?list<array{path: string, bytes: int, tier: string}>
+     */
+    public static function instructionRows(?array $files): ?array
+    {
+        return $files === null ? null : array_map(
+            static fn (array $file): array => [
+                'path' => $file['path'],
+                'bytes' => $file['bytes'],
+                'tier' => $file['personal'] ? 'personal' : 'project',
+            ],
+            $files,
+        );
+    }
+
+    /**
      * The whole `context.sources` answer. The session half rides $breakdown
      * (null when no session is on screen — every session figure is then
      * honestly absent rather than zero); the workspace half is read from
@@ -155,14 +182,7 @@ final class ContextSources
         ?array $mcpInventory = null,
         ?array $mcpLiveness = null,
     ): array {
-        $files = $instructionFiles === null ? null : array_map(
-            static fn (array $file): array => [
-                'path' => $file['path'],
-                'bytes' => $file['bytes'],
-                'tier' => $file['personal'] ? 'personal' : 'project',
-            ],
-            $instructionFiles['files'],
-        );
+        $files = $instructionFiles === null ? null : self::instructionRows($instructionFiles['files']);
         $untrusted = $instructionFiles === null ? [] : $instructionFiles['refused'];
         $mcp = $mcpInventory ?? Bootstrap::mcpServerInventory($workspace?->root);
         $liveness = $mcpLiveness ?? Bootstrap::mcpLivenessSnapshot($workspace?->root);

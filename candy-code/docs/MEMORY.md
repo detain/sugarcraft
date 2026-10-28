@@ -955,6 +955,19 @@ keystroke cancels the offer and lands in the restored draft. A multi-line
 draft, a `##` markdown heading, a bare `#`, and anything typed while a turn
 runs are never captured: they behave exactly as they did before.
 
+### Opening files from the chat
+
+`/instructions` lists the instruction files this session reads — the same
+numbered rows, with bytes and the personal badge, that the `/context` panel
+shows and the wire reports — and `/instructions open <n|path>` hands the
+terminal to your editor on one of them. The jail is the listing itself: an
+index off the rows or a path no row spells is refused by name, and the one
+extra entry is your personal file, created empty 0600 when it does not exist
+yet — never through a link, under the same owned-home containment as every
+other write to it. A serve/headless launch has no terminal to hand over, so
+there `open` answers with that row instead. What you save travels to the
+model through the instruction diff above; the command adds no second channel.
+
 ## On-disk layout summary
 
 ```
