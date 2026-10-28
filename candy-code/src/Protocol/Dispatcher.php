@@ -19,6 +19,7 @@ use SugarCraft\Code\Protocol\Methods\PermissionMethods;
 use SugarCraft\Code\Protocol\Methods\ServerMethods;
 use SugarCraft\Code\Protocol\Methods\SessionMethods;
 use SugarCraft\Code\Protocol\Methods\SettingsMethods;
+use SugarCraft\Code\Protocol\Methods\ShellsMethods;
 use SugarCraft\Code\Protocol\Methods\TodoMethods;
 use SugarCraft\Code\Protocol\Methods\WorkflowMethods;
 use SugarCraft\Code\Protocol\Methods\WorkspaceMethods;
@@ -138,6 +139,7 @@ final class Dispatcher implements MessageHandler
         ContextMethods::register($registry);
         AgentsMethods::register($registry);
         BgMethods::register($registry);
+        ShellsMethods::register($registry);
         FilesMethods::register($registry);
         FsMethods::register($registry);
         ToolMethods::register($registry);

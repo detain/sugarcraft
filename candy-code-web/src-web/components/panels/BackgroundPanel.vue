@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ago, spendLabel, tokens } from '../../lib/format'
 import type { BackgroundSession, PermissionMode } from '../../protocol/generated'
 import { isSettled, useBackgroundStore } from '../../stores/agents/background'
+import ProcessesSection from './ProcessesSection.vue'
 import { useConnectionStore } from '../../stores/connection'
 import { describe } from '../../stores/session'
 
@@ -185,6 +186,7 @@ function toggle(session: BackgroundSession): void {
         </li>
       </ul>
     </section>
+    <ProcessesSection :session-id="sessionId" />
   </div>
 </template>
 

@@ -28,6 +28,7 @@ final class Definitions
     public const ERROR = 'Error';
     public const USAGE = 'Usage';
     public const BACKGROUND_SESSION = 'BackgroundSession';
+    public const BACKGROUND_SHELL = 'BackgroundShell';
     public const MEDIA_REF = 'MediaRef';
     public const CONTEXT_SOURCES = 'ContextSources';
     public const TRUST_PROMPT = 'TrustPrompt';
@@ -195,6 +196,15 @@ final class Definitions
                 'forkedSessionId' => Schema::string()->nullable()->describe('The stored session a /fork session continues; null for /bg.'),
                 'adopted' => Schema::boolean()->describe('Re-adopted at boot from an earlier server or TUI.'),
             ], ['bgId', 'name', 'task', 'status', 'createdAt', 'outputBytes', 'adopted'])->describe('A background (/bg) session; never its output.'),
+            self::BACKGROUND_SHELL => Schema::object([
+                'shellId' => Schema::string(),
+                'label' => Schema::string(),
+                'state' => Schema::enum(['running', 'finished', 'unknown']),
+                'exitCode' => Schema::integer()->nullable(),
+                'exitNote' => Schema::string()->nullable()->describe('Set when the shell settled without an ordinary exit code — its output sink hit the cap, the lifetime wall stopped it, or the exit record was unreadable.'),
+                'expired' => Schema::boolean()->describe('True when the lifetime wall stopped the shell.'),
+                'ageSeconds' => Schema::number(0),
+            ], ['shellId', 'label', 'state', 'expired', 'ageSeconds'])->describe('A background shell row from the launch\'s shell table, as the Shell tool started it; never its output — `shells.output` reads that.'),
             self::USAGE => Schema::object([
                 'totalTokens' => Schema::integer(0),
                 'inputTokens' => Schema::integer(0)->nullable(),

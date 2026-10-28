@@ -545,6 +545,39 @@ final class MethodSchemas
                 Schema::object(['bgId' => Schema::string(), 'outcome' => Schema::string()], ['bgId', 'outcome']),
             ],
 
+            'shells.list' => [$sessionOnly, $items(Schema::ref(D::BACKGROUND_SHELL))],
+            'shells.output' => [
+                Schema::object([
+                    ...$sid,
+                    'shellId' => Schema::string(128),
+                    'cursor' => Schema::oneOf(Schema::integer(0), Schema::string(64))->describe('The "out.err" token a previous read answered, or a byte count; omitted (or 0) reads fresh — a fresh window tail-wins, and skippedBytes says how much fell off the head.'),
+                ], ['sessionId', 'shellId']),
+                Schema::object([
+                    'shellId' => Schema::string(),
+                    'stdout' => Schema::string(),
+                    'stderr' => Schema::string(),
+                    'cursor' => Schema::string(),
+                    'skippedBytes' => Schema::integer(0),
+                    'bytesAvailable' => Schema::integer(0),
+                    'state' => Schema::enum(['running', 'finished', 'unknown']),
+                    'exitCode' => Schema::integer()->nullable(),
+                    'exitNote' => Schema::string()->nullable(),
+                    'expired' => Schema::boolean(),
+                ], ['shellId', 'stdout', 'stderr', 'cursor', 'skippedBytes', 'bytesAvailable', 'state', 'expired']),
+            ],
+            'shells.stop' => [
+                Schema::object([...$sid, 'shellId' => Schema::string(128)], ['sessionId', 'shellId']),
+                Schema::object([
+                    'shellId' => Schema::string(),
+                    'found' => Schema::boolean()->describe('False for an unknown id AND for another session\'s shell — the two answers are identical by design.'),
+                    'wasRunning' => Schema::boolean(),
+                    'confirmed' => Schema::boolean(),
+                    'grouped' => Schema::boolean(),
+                    'exitCode' => Schema::integer()->nullable(),
+                    'expired' => Schema::boolean(),
+                ], ['shellId', 'found', 'wasRunning', 'confirmed', 'grouped', 'expired']),
+            ],
+
             'workflow.list' => [$empty, Schema::object([
                 'available' => Schema::boolean(),
                 'items' => Schema::arrayOf(Schema::object(['name' => Schema::string()], ['name'])),
