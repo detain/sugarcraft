@@ -75,6 +75,7 @@ candy-code/tests/Agents/AgentTest.php	4.162	40
 candy-code/tests/Agents/SubAgentProviderErrorSurfacingTest.php	4.115	13
 candy-code/tests/Tools/BuiltIn/BashTimeoutTest.php	4.069	18
 candy-code/tests/Context/EnvironmentBlockGitTimeoutTest.php	4.040	3
+candy-code/tests/Chat/InstructionQuickAddTest.php	5.111	16
 candy-code/tests/Chat/ExecuteAgentsTimeoutTest.php	4.006	2
 candy-code/tests/Server/RequestIngressTest.php	3.979	4
 candy-code/tests/ClaudeCodeMcpClientShutdownTest.php	3.895	7

@@ -2371,7 +2371,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-CTX-1.a (W3), C-CTX-2.a (W8)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-2.f`
 
-#### C-CTX-3.b — `#` quick-add to personal instructions (TUI)
+#### ✅ b4245ba44 C-CTX-3.b — `#` quick-add to personal instructions (TUI)
 - **Item:** C-CTX-3 (sources: GAP-INS-16 (`#` quick-add)) · gap · effort S
 - **What:** A single-line submit starting with `#` followed by a non-`#` character becomes a quick-add, not a turn. A uiOnly confirm row asks: Enter appends `- <text>` to personal `~/.candy-code/AGENTS.md` (created 0600 if absent, …
 - **Files — create:** `candy-code/tests/Chat/InstructionQuickAddTest.php`
