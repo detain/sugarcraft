@@ -1442,8 +1442,11 @@ final class KeyboardHandlerTest extends TestCase
      * Domain, in three parts:
      *
      * 1. the 8 table rows below, one cold press each;
-     * 2. an exhaustive sweep of 2 menu states × 11 panes × 95 printable runes ×
-     *    Ctrl on/off = 3800 cold presses, with the panes at their DEFAULT
+     * 2. an exhaustive sweep of 2 menu states × 12 panes × 95 printable runes ×
+     *    Ctrl on/off = 4560 cold presses, with the panes at their DEFAULT
+     *    (P-TABS.g: 11 panes x 95 x 2 x 2 = the 4180 this file asserted, and
+     *    this line claimed 3800 before that — the product was stale against
+     *    its own panes figure; restated true for the twelfth case.)
      *    sub-state (no skill-picker options, no agent selection);
      * 3. the same rune × Ctrl sweep across the 8 keyboard-owning sub-states of
      *    {@see keyboardOwningSubStates()} = 1520 more cold presses.
@@ -1509,7 +1512,7 @@ final class KeyboardHandlerTest extends TestCase
             $printable[] = chr($c);
         }
         $this->assertCount(95, $printable, 'fixture: the sweep width the docblock states');
-        $this->assertCount(11, Pane::cases(), 'fixture: the pane count the docblock states');
+        $this->assertCount(12, Pane::cases(), 'fixture: the pane count the docblock states');
 
         $presses = 0;
         $histogram = [0 => 0, 1 => 0, 2 => 0];
@@ -1539,9 +1542,9 @@ final class KeyboardHandlerTest extends TestCase
         }
 
         $this->resetMenuBarState();
-        $this->assertSame(4180, $presses, '2 menu states x 11 panes x 95 runes x ctrl on/off');
+        $this->assertSame(4560, $presses, '2 menu states x 12 panes x 95 runes x ctrl on/off');
         $this->assertSame(
-            [0 => 2090, 1 => 1120, 2 => 970],
+            [0 => 2280, 1 => 1215, 2 => 1065],
             $histogram,
             'the distribution the memo docblock states, over the sweep it names',
         );

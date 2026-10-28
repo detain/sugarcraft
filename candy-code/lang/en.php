@@ -1686,6 +1686,7 @@ TXT,
     'keys.picker.rename' => 'Rename the session in place (or Ctrl+E)',
     'keys.picker.resume' => 'Resume the highlighted session',
     'keys.picker.unarchive' => 'Bring an archived session back',
+    'keys.sessions.toggle' => 'Show or hide the Sessions pane',
     'keys.settings.back' => 'Leave the preview unsaved (or Esc)',
     'keys.settings.cancel-edit' => 'Drop the value being edited',
     'keys.settings.category' => 'Switch category (or h / l)',
@@ -2664,6 +2665,7 @@ TXT,
     'tui.pane.label.help' => 'Help',
     'tui.pane.label.input' => 'Input',
     'tui.pane.label.menu' => 'Menu',
+    'tui.pane.label.sessions' => 'Sessions',
     'tui.pane.label.settings' => 'Settings',
     'tui.pane.label.skills' => 'Skills',
     'tui.pane.label.todo' => 'Todo',
@@ -3479,6 +3481,15 @@ TXT,
     'tui.window.summary' => '{sessions} windows · {attention} need attention',
     'tui.window.summary.none' => 'no windows open',
     // --- end tui.window (P-TABS.a) ---
+
+    // --- begin tui.window.title (P-TABS.g) ---
+    // OSC 2 window title and background-tab notices, named from
+    // src/App/App.php's deck choke (windowList/afterDeckChange).
+    'tui.window.title.plain' => 'candy-code',
+    'tui.window.title.attention' => 'candy-code — {waiting} waiting · {running} running',
+    'tui.window.attention.waiting' => '{name} is waiting for an answer',
+    'tui.window.attention.unseen' => '{name} finished while you were away',
+    // --- end tui.window.title (P-TABS.g) ---
 
     // --- begin tui.sessions (P-TABS.c) ---
     // Strings of the vertical sessions pane in

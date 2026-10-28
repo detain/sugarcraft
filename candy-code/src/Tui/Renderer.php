@@ -31,6 +31,9 @@ use SugarCraft\Code\Tui\Components\SettingsPane;
 use SugarCraft\Code\Tui\Components\TodoPane;
 use SugarCraft\Code\Tui\Components\ToolsPane;
 use SugarCraft\Code\Tui\Components\MenuBar;
+use SugarCraft\Code\Tui\Components\SessionsPane;
+use SugarCraft\Code\Tui\Window\WindowList;
+use SugarCraft\Code\Tui\Window\WindowStrip;
 use SugarCraft\Code\Chat;
 use SugarCraft\Constraints\Dock\DockLayout;
 use SugarCraft\Constraints\Dock\Side;
@@ -67,6 +70,15 @@ final class Renderer
      * column can be dragged wider or narrower like any side.
      */
     public const SPLIT_DIVIDER_ZONE_PREFIX = 'splitdiv:';
+
+    /**
+     * Shortest terminal that still gets the P-TABS.g window strip. The strip
+     * costs exactly one chrome row; below this many rows the deck stays fully
+     * driveable through Ctrl+Tab, the `+`/×/switch clicks and the Sessions
+     * pane, so the row is given back to content rather than to a second bar.
+     * (GAP-UI-N6 ruling: drop the strip below 12 rows.)
+     */
+    public const WINDOW_STRIP_MIN_ROWS = 12;
 
     /**
      * Narrowest terminal that gets a split content band at all.
@@ -686,6 +698,27 @@ final class Renderer
             return self::renderAgentDashboard($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
         }
 
+        // P-TABS.g: the shell window strip — one row directly under the menu
+        // bar listing the deck's tabs with the `+` opener, painted whenever a
+        // deck is armed and the Sessions pane is NOT docked (the pane is the
+        // vertical form of this same list; having both would spend the row
+        // twice). Even one tab paints the strip: the `+` must always be
+        // reachable by mouse. Below WINDOW_STRIP_MIN_ROWS the row goes back
+        // to content. The early-modal bands above never see it — a modal owns
+        // the frame outright, chrome included, exactly like the notice.
+        $windowStrip = '';
+        $windowStripMarked = '';
+        if ($a->deck !== null && !$a->isDocked(Pane::Sessions) && $rows >= self::WINDOW_STRIP_MIN_ROWS) {
+            $windowList = $a->windowList();
+            if ($windowList !== null) {
+                $windowStrip = WindowStrip::render($windowList, $a->theme(), $cols, false);
+                if ($windowStrip !== '') {
+                    $windowStripMarked = WindowStrip::render($windowList, $a->theme(), $cols, true);
+                    $paneRows = max(3, $paneRows - 1);
+                }
+            }
+        }
+
         // The band itself — sidebars, chat column, live-agent split — lays
         // out in {@see composeBand()}, the moved text of what this method
         // always did here; the publish below and every chrome step after it
@@ -709,7 +742,9 @@ final class Renderer
         // or not clicks are on — a read-only snapshot costs nothing and a
         // gesture that begins the frame after clicks flip on still measures
         // against what is painted.
-        $bandTop = self::lineCount($menuBar) + ($notice === '' ? 0 : self::lineCount($notice));
+        $bandTop = self::lineCount($menuBar)
+            + ($windowStrip === '' ? 0 : self::lineCount($windowStrip))
+            + ($notice === '' ? 0 : self::lineCount($notice));
         self::$lastDockFrame = [
             'cols' => $cols,
             'bandTop' => $bandTop,
@@ -723,6 +758,9 @@ final class Renderer
         ];
 
         $parts = [$menuBar];
+        if ($windowStrip !== '') {
+            $parts[] = $windowStrip;
+        }
         if ($notice !== '') {
             $parts[] = $notice;
         }
@@ -838,6 +876,15 @@ final class Renderer
             }
         }
 
+        // P-TABS.g: the strip's marked twin shares the chrome scan's row
+        // space — its one row sits at absolute index lineCount($menuBar),
+        // directly under the bar. A dropdown that reaches this row keeps its
+        // own marks (the merge below is first-wins and the float covers the
+        // strip on paint, too).
+        if ($windowStripMarked !== '' && Chat::mouseClicksEnabled()) {
+            $dockRows[self::lineCount($menuBar)] = $windowStripMarked;
+        }
+
         // The bar's own click zones, recorded against the frame that was just
         // composed — the menu bar is chrome, so this is the terminal's own
         // coordinate space and NOT the pane-local space declared below.
@@ -851,6 +898,7 @@ final class Renderer
         LiveRenderer::setZoneOrigin(
             self::blockWidth($leftPane) + ChatPane::BODY_COL_INSET,
             self::lineCount($menuBar)
+                + ($windowStrip === '' ? 0 : self::lineCount($windowStrip))
                 + ($notice === '' ? 0 : self::lineCount($notice))
                 + ChatPane::BODY_ROW_INSET
                 - $dropped,
@@ -2196,7 +2244,7 @@ final class Renderer
     }
 
     /**
-     * Paint one sidebar pane at the given box size. The seven component
+     * Paint one sidebar pane at the given box size. The eight component
      * renderers share this signature; anything else has no sidebar form and
      * paints nothing.
      */
@@ -2215,6 +2263,16 @@ final class Renderer
             // click key per body row (category / toggle / dump) and no scroll
             // slot, which keyed() already reads as a zero maximum.
             Pane::Context => self::keyed($pane, ContextPane::layout($a, $width, $rows)),
+            // P-TABS.g: keyed like Context — the deck projection becomes a
+            // WindowList row-for-row, one `siderow:sessions:` key per row
+            // (session tab, agent child, the `+` opener), dispatched by
+            // App::dispatchSessionsRow().
+            Pane::Sessions => self::keyed($pane, SessionsPane::layout(
+                $a->windowList() ?? WindowList::empty(),
+                $a->theme(),
+                $width,
+                $rows,
+            )),
             default => '',
         };
     }

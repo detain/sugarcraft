@@ -773,9 +773,12 @@ final class KeyBindingRegistry
      * {@see shellCtrlRunes()} is read only when `shellOwnsKeyboard()` is FALSE
      * (`claims()` returns before reaching that read otherwise), and
      * {@see chatCtrlRunesYieldedToShell()} only when it is TRUE. The two reads
-     * are mutually exclusive. Swept exhaustively over 2 menu states × 10 panes ×
-     * 95 printable runes × Ctrl on/off = 3800 keypresses: 1900 derive nothing,
-     * 1025 derive one set, 875 derive two, none derive three.
+     * are mutually exclusive. Swept exhaustively over 2 menu states × 12 panes ×
+     * 95 printable runes × Ctrl on/off = 4560 keypresses: 2280 derive nothing,
+     * 1215 derive one set, 1065 derive two, none derive three. (The prose read
+     * "10 panes … 3800" long after the eleventh case made the sweep 4180;
+     * P-TABS.g's Sessions pane moves it to 4560 and the figures are restated
+     * from the measured run.)
      *
      * That sweep visits the panes at their DEFAULT sub-state, and a sub-state is
      * not neutral here: opening the skill picker in `Pane::Skills` flips
@@ -808,7 +811,7 @@ final class KeyBindingRegistry
      *
      * `KeyboardHandlerTest::testTheHotPathNeverDerivesMoreThanTwoRuneSets()` is
      * what keeps this accounting from drifting back into prose: it re-measures
-     * the table rows and re-runs both sweeps, the 3800 and the 1520.
+     * the table rows and re-runs both sweeps, the 4560 and the 1520.
      *
      * @var array<string, list<string>>
      */
@@ -1037,6 +1040,10 @@ final class KeyBindingRegistry
             KeyBinding::new('shell.settings', 'Ctrl+,', Lang::t('keys.shell.settings'), $c),
             // P-D3: GroupInputCmd became the Agent View composer's broadcast.
             KeyBinding::new('shell.group-input', 'Ctrl+G', Lang::t('keys.shell.group-input'), $c),
+            // P-TABS.g: the vertical Sessions pane (the window list in docked
+            // form) toggles without reaching for the menu; the horizontal
+            // strip and the deck itself stay mouse- and Tab-driven.
+            KeyBinding::new('sessions.toggle', 'Alt+S', Lang::t('keys.sessions.toggle'), $c),
         ];
     }
 

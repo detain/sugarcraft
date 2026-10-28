@@ -377,11 +377,15 @@ final class KeyBindingRegistryTest extends TestCase
      * 151 -> 152 live (152 all), 15 groups, with P-MENU.d's submenu walk:
      * `menu.submenu` — the row that opens the highlighted `▸` row and, on the
      * other key of the same binding, closes it again.
+     *
+     * 152 -> 153 live (153 all), 15 groups, with P-TABS.g's window strip:
+     * `sessions.toggle` — the shell-group row behind `Alt+S`, which docks
+     * and undocks the Sessions pane without ever moving focus.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(152, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(152, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(153, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(153, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(0, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(15, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }

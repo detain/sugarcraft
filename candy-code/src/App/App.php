@@ -68,6 +68,7 @@ use SugarCraft\Code\Tui\Components\ContextPane;
 use SugarCraft\Code\Tui\Components\FilesPane;
 use SugarCraft\Code\Tui\Components\MenuBar;
 use SugarCraft\Code\Tui\Components\MenuSelectedMsg;
+use SugarCraft\Code\Tui\Components\SessionsPane;
 use SugarCraft\Code\Tui\Components\TodoPane;
 use SugarCraft\Code\Tui\Components\ToolsPane;
 use SugarCraft\Code\Renderer;
@@ -76,6 +77,12 @@ use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Tui\PaneDragController;
 use SugarCraft\Code\Tui\Renderer as TuiRenderer;
 use SugarCraft\Code\Tui\TerminalBackground;
+use SugarCraft\Code\Tui\TerminalNotifier;
+use SugarCraft\Code\Tui\Window\WindowAttention;
+use SugarCraft\Code\Tui\Window\WindowEntry;
+use SugarCraft\Code\Tui\Window\WindowList;
+use SugarCraft\Code\Tui\Window\WindowRef;
+use SugarCraft\Code\Tui\Window\WindowStrip;
 use SugarCraft\Code\Media\MediaRequest;
 use SugarCraft\Code\Tui\MediaForm\ChoiceFeed;
 use SugarCraft\Code\Tui\MediaForm\GenerateFromMediaFormMsg;
@@ -615,6 +622,23 @@ final class App implements Model
          * mutate; spent, never re-armed, by design.
          */
         public readonly bool $tabQuitWarned = false,
+        /**
+         * P-TABS.g: the last OSC 2 window title the deck choke emitted, or
+         * null when nothing has been sent yet. The strip's whole title law is
+         * "write only on change", and this prop is what makes "change"
+         * decidable across turns. Rides every mutate.
+         */
+        public readonly ?string $deckTitle = null,
+        /**
+         * P-TABS.g: which background tabs have already had their desktop
+         * notice fired, keyed by tab key with the attention value that was
+         * announced as the payload. A tab re-enters Waiting from Idle and the
+         * law is once per transition, so the map is overwritten per key and
+         * pruned to the deck's live keys at every pass — never unbounded.
+         *
+         * @var array<string, string>
+         */
+        public readonly array $tabNotified = [],
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -2258,7 +2282,7 @@ final class App implements Model
      * (CL-2 FIX 1). Attachments ride the Files pane; there is no dedicated
      * attachments surface to add here.
      */
-    private const AUTO_ENABLE_PANES = [Pane::Todo, Pane::Agents, Pane::Tools, Pane::Files, Pane::Context];
+    private const AUTO_ENABLE_PANES = [Pane::Todo, Pane::Agents, Pane::Tools, Pane::Files, Pane::Context, Pane::Sessions];
 
     /**
      * The frame width from which the Context pane may auto-dock (plan §6.1
@@ -2329,6 +2353,13 @@ final class App implements Model
             // "measuring…" in a column the user never asked for.
             Pane::Context => ($this->cols ?? 0) >= self::AUTO_DOCK_CONTEXT_MIN_COLS
                 && ContextPane::heldCategories($this) !== null,
+            // P-TABS.g: the Sessions pane earns its column the moment the
+            // deck genuinely has somewhere to go — one tab has nowhere to
+            // switch to, two is a window list worth showing. The design's
+            // "auto-docks once when the second tab opens"; chat readability
+            // stays gated by AUTO_DOCK_MIN_CHAT_COLS like every auto-dock,
+            // and unlike Context there is no wide-terminal law to borrow.
+            Pane::Sessions => ($this->deck?->count() ?? 0) >= 2,
             default => false,
         };
         if (!$hasActivity) {
@@ -3658,6 +3689,47 @@ final class App implements Model
             return [$this, null];
         }
 
+        // P-TABS.g: the shell window strip's own zones. `+` opens, a session
+        // row switches, its `×` closes — and closing is handleCloseTab's
+        // busy-two-step untouched, so a strip click and a keystroke cannot
+        // diverge. Order: the close prefixes are disjoint but checked first
+        // for the same reason a classifier sorts longest-prefix first. The
+        // agent chips answer nothing yet — the strip paints them for the
+        // focused tab, and clicking one opens P-AGENT.b's per-tab surface;
+        // until that exists the zone is a deliberate no-op, refused under a
+        // modal exactly as the dashboard rows beside it are.
+        foreach ([
+            WindowStrip::ZONE_SESSION_CLOSE_PREFIX,
+            WindowStrip::ZONE_SESSION_PREFIX,
+            WindowStrip::ZONE_NEW,
+            WindowStrip::ZONE_AGENT_PREFIX,
+            WindowStrip::ZONE_AGENT_CLOSE_PREFIX,
+        ] as $zone) {
+            if (!str_starts_with($zoneId, $zone)) {
+                continue;
+            }
+
+            $chat = $this->chat;
+            if ($chat !== null && ($chat->keyHelp() !== null || $chat->pendingPermission() !== null)) {
+                return [$this, null];
+            }
+
+            $rest = substr($zoneId, strlen($zone));
+            if ($zone === WindowStrip::ZONE_SESSION_CLOSE_PREFIX && $rest !== '') {
+                return $this->handleCloseTab(new CloseTabMsg($rest));
+            }
+
+            if ($zone === WindowStrip::ZONE_SESSION_PREFIX && $rest !== '' && ($this->deck?->has($rest) ?? false)) {
+                return $this->switchTab($rest);
+            }
+
+            if ($zone === WindowStrip::ZONE_NEW) {
+                return $this->handleOpenTab(new OpenTabMsg());
+            }
+
+            return [$this, null];
+        }
+
         // A click on a run's row in the full-pane agent dashboard
         // (`agent:<runId>`, AgentDashboardPane::zones()) opens that run's
         // Agent View — Enter on a selected row, by mouse. Refused under a
@@ -3698,6 +3770,7 @@ final class App implements Model
                 ],
                 Pane::Agents->value => [$this->toggleAgentExpanded($key), null],
                 Pane::Context->value => $this->dispatchContextRow($key),
+                Pane::Sessions->value => $this->dispatchSessionsRow($key),
                 default => [$this, null],
             };
         }
@@ -3802,6 +3875,41 @@ final class App implements Model
             return [$this->contextPaneDrill(
                 $this->contextDrill === $category ? null : $category,
             ), null];
+        }
+
+        return [$this, null];
+    }
+
+    /**
+     * A row click inside the docked Sessions pane (P-TABS.g). The pane's own
+     * key vocabulary (SessionsPane::KEY_*) maps onto the same three deck
+     * routes the strip and the keyboard use — open, switch, and open the
+     * focused tab's agent child — so mouse and keyboard are one code path.
+     * Agent rows answer through openAgentView, keyed by run id exactly as
+     * the dashboard rows above are; the pane only lists children of the
+     * FOREGROUND tab, so the run is always registered with the live Chat.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function dispatchSessionsRow(string $key): array
+    {
+        if ($key === SessionsPane::KEY_NEW) {
+            return $this->handleOpenTab(new OpenTabMsg());
+        }
+
+        if (str_starts_with($key, SessionsPane::KEY_SESSION_PREFIX)) {
+            $tabKey = substr($key, strlen(SessionsPane::KEY_SESSION_PREFIX));
+            if ($tabKey === '' || !($this->deck?->has($tabKey) ?? false)) {
+                return [$this, null];
+            }
+
+            return $this->switchTab($tabKey);
+        }
+
+        if (str_starts_with($key, SessionsPane::KEY_AGENT_PREFIX)) {
+            $runId = substr($key, strlen(SessionsPane::KEY_AGENT_PREFIX));
+
+            return $runId === '' ? [$this, null] : [$this->openAgentView($runId), null];
         }
 
         return [$this, null];
@@ -3956,6 +4064,14 @@ final class App implements Model
             if ($msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'n') {
                 return $this->handleOpenTab(new OpenTabMsg());
             }
+        }
+
+        // P-TABS.g: Alt+S toggles the vertical Sessions pane whether or not a
+        // deck is armed yet — the pane over an unarmed deck honestly shows
+        // just the `+` row, which is the promise the menu bar's View ▸ Panes
+        // tab already makes for every dockable pane.
+        if ($msg->type === KeyType::Char && $msg->alt && !$msg->ctrl && strtolower($msg->rune) === 's') {
+            return $this->togglePaneFromChrome(Pane::Sessions);
         }
 
         $handled = $this->dispatchKey($msg);
@@ -5497,6 +5613,162 @@ final class App implements Model
     }
 
     /**
+     * The deck projected as the shell's window list (P-TABS.g) — what the
+     * horizontal strip and the vertical Sessions pane both render, and what
+     * the OSC 2 title counts over. Null means no deck: every surface that
+     * consumes this treats null as "the strip is not armed" and paints
+     * nothing, the same shape the deck routing keeps for a single chat.
+     *
+     * Agent chips ride only the FOCUSED tab's own registry: each Chat owns
+     * its AgentLiveRegistry, the App holds only the foreground Chat, and a
+     * parked model's running children are not census-visible from here.
+     * Widening that to background tabs is P-AGENT.b's surface; until then
+     * background rows carry no chips and badge 0, and the strip's working-dot
+     * for them rides the tab's attention state instead.
+     */
+    public function windowList(): ?WindowList
+    {
+        $deck = $this->deck;
+        if ($deck === null) {
+            return null;
+        }
+
+        $tabRows = [];
+        foreach ($deck->tabs()->tabs() as $row) {
+            $tabRows[$row->id] = $row;
+        }
+
+        $active = $deck->activeKey();
+        $list = WindowList::empty();
+        foreach ($deck->keys() as $key) {
+            $tab = $tabRows[$key] ?? null;
+            $agents = [];
+            if ($key === $active && $this->chat !== null) {
+                $session = $deck->sessionOf($key);
+                foreach ($this->chat->agentLive()->forSession($session) as $state) {
+                    $agents[] = WindowEntry::agent(
+                        WindowRef::agent($state->id, $state->name, $key),
+                        $state->isRunning() ? WindowAttention::Working : WindowAttention::Idle,
+                    );
+                }
+            }
+
+            $list = $list->add(WindowEntry::session(
+                WindowRef::session($key, $tab?->sessionName ?? $key),
+                WindowAttention::tryFrom($tab?->attention ?? SessionDeck::ATTENTION_IDLE) ?? WindowAttention::Idle,
+                count($agents),
+                $agents,
+            ));
+        }
+
+        return $list->focus($active);
+    }
+
+    /**
+     * The OSC 2 title for a projected list: the plain name while nothing
+     * needs the user, `waiting · running` counts the moment something does.
+     * Waiting sums the three states that block a tab (WAITING, UNSEEN,
+     * FAILED); running counts WORKING. (P-TABS.g)
+     */
+    private function deckTitleFor(WindowList $list): string
+    {
+        $waiting = 0;
+        $running = 0;
+        foreach ($list->entries() as $entry) {
+            match ($entry->attention) {
+                WindowAttention::Waiting, WindowAttention::Unseen, WindowAttention::Failed => $waiting++,
+                WindowAttention::Working => $running++,
+                default => null,
+            };
+        }
+
+        if ($waiting === 0 && $running === 0) {
+            return Lang::t('tui.window.title.plain');
+        }
+
+        return Lang::t('tui.window.title.attention', ['waiting' => $waiting, 'running' => $running]);
+    }
+
+    /**
+     * The deck choke every tab-mutating route lands on (P-TABS.g): re-derive
+     * the window list from the NEW app, then two once-per-state effects —
+     *
+     *  - the OSC 2 title, emitted only when it actually changed, which is
+     *    what makes the batch free of per-frame chatter;
+     *  - the desktop notice for a BACKGROUND tab that reached Waiting or
+     *    Unseen, fired once per transition through {@see $tabNotified} (the
+     *    map is pruned to the deck's live keys every pass so it never grows).
+     *
+     * A null list (no deck) passes the command through untouched, and a
+     * disabled notifier answers a null Cmd — nothing is booked then, so a
+     * user who turns notifications on mid-session is told about the states
+     * that are pending right now, once, and never about expired ones.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function withDeckEffects(self $app, ?\Closure $cmd): array
+    {
+        $list = $app->windowList();
+        if ($list === null) {
+            return [$app, $cmd];
+        }
+
+        $title = $app->deckTitleFor($list);
+        if ($title !== $app->deckTitle) {
+            $app = $app->mutate(deckTitle: $title);
+            $cmd = CoreCmd::batch($cmd, CoreCmd::setWindowTitle($title));
+        }
+
+        $keys = [];
+        $announce = [];
+        foreach ($list->entries() as $entry) {
+            $key = $entry->ref->key;
+            $keys[] = $key;
+            if ($key === $list->focusedKey()) {
+                continue;
+            }
+
+            if (!$entry->attention->needsAttention()) {
+                continue;
+            }
+
+            $state = $entry->attention->value;
+            if (!in_array($state, [WindowAttention::Waiting->value, WindowAttention::Unseen->value], true)) {
+                continue;
+            }
+
+            if (($app->tabNotified[$key] ?? '') === $state) {
+                continue;
+            }
+
+            $notice = TerminalNotifier::fromConfig($app->chat?->workspace()?->userConfig ?? [])
+                ->cmd($state === WindowAttention::Unseen->value
+                    // Both spellings are whole literals: the TuiLang drift
+                    // census reads quoted keys from source, and a
+                    // concatenated one would count as a key nobody owns.
+                    ? Lang::t('tui.window.attention.unseen', ['name' => $entry->ref->label])
+                    : Lang::t('tui.window.attention.waiting', ['name' => $entry->ref->label]));
+            if ($notice === null) {
+                continue;
+            }
+
+            $announce[$key] = $state;
+            $cmd = CoreCmd::batch($cmd, $notice);
+        }
+
+        $notified = array_intersect_key($app->tabNotified, array_flip($keys));
+        if ($announce !== []) {
+            $notified = array_merge($notified, $announce);
+        }
+
+        if ($notified !== $app->tabNotified) {
+            $app = $app->mutate(tabNotified: $notified);
+        }
+
+        return [$app, $cmd];
+    }
+
+    /**
      * Move the foreground to $toKey: park the leaving Chat (its turn keeps
      * running — parking is a bookkeeping move, not a pause), unpark or
      * factory-build the target, hand it the notice-drain appointment and
@@ -5541,7 +5813,13 @@ final class App implements Model
                 : SessionDeck::ATTENTION_IDLE,
         );
 
-        return [$this->withChat($target)->autoEnablePanes()->mutate(deck: $deck, pendingTabClose: null), $sizeCmd];
+        // P-TABS.g: mutate the deck BEFORE autoEnablePanes so the Sessions
+        // auto-dock arm sees the count this very route produced, and hand the
+        // settled app through the deck choke for the title + notices.
+        return $this->withDeckEffects(
+            $this->withChat($target)->mutate(deck: $deck, pendingTabClose: null)->autoEnablePanes(),
+            $sizeCmd,
+        );
     }
 
     /**
@@ -5578,7 +5856,7 @@ final class App implements Model
         $inner = $msg->inner();
         if ($inner instanceof OpenMediaFormMsg || $inner instanceof OpenSettingsMsg
             || $inner instanceof \SugarCraft\Code\App\OpenAgentViewMsg) {
-            return [$this->mutate(deck: $deck->attention($msg->tabKey(), SessionDeck::ATTENTION_WAITING)), null];
+            return $this->withDeckEffects($this->mutate(deck: $deck->attention($msg->tabKey(), SessionDeck::ATTENTION_WAITING)), null);
         }
 
         if ($inner instanceof \SugarCraft\Code\App\AgentMessageSentMsg) {
@@ -5601,7 +5879,7 @@ final class App implements Model
             $deck = $deck->rekey($msg->tabKey(), $session);
         }
 
-        return [$this->mutate(deck: $deck), TabScope::cmd($msg->tabKey(), $cmd)];
+        return $this->withDeckEffects($this->mutate(deck: $deck), TabScope::cmd($msg->tabKey(), $cmd));
     }
 
     /** The attention state a parked tab deserves after one routed message. */
@@ -5660,7 +5938,7 @@ final class App implements Model
             $target = $sized;
         }
 
-        return [$this->withChat($target)->autoEnablePanes()->mutate(deck: $deck), $sizeCmd];
+        return $this->withDeckEffects($this->withChat($target)->mutate(deck: $deck)->autoEnablePanes(), $sizeCmd);
     }
 
     /**
@@ -5695,12 +5973,12 @@ final class App implements Model
         if ($busy) {
             $armed = $this->pendingTabClose;
             if (!is_array($armed) || $armed['key'] !== $key || (microtime(true) - $armed['at']) > self::TAB_CLOSE_ARM_SECONDS) {
-                return [
+                return $this->withDeckEffects(
                     $this
                         ->mutate(pendingTabClose: ['key' => $key, 'at' => microtime(true)])
                         ->withStatus(Lang::t('tabs.close_arm')),
                     null,
-                ];
+                );
             }
         }
 
@@ -5723,7 +6001,7 @@ final class App implements Model
 
             [$closed, $closeCmd] = $carried->handleCloseTab(new CloseTabMsg($key));
 
-            return [$closed, CoreCmd::batch($switchCmd, $closeCmd)];
+            return $this->withDeckEffects($closed, CoreCmd::batch($switchCmd, $closeCmd));
         }
 
         if ($model instanceof Chat) {
@@ -5749,7 +6027,7 @@ final class App implements Model
 
         [$closed] = $deck->close($key);
 
-        return [$this->mutate(deck: $closed, pendingTabClose: null), null];
+        return $this->withDeckEffects($this->mutate(deck: $closed, pendingTabClose: null), null);
     }
 
     /**
@@ -5880,6 +6158,8 @@ final class App implements Model
             deck: array_key_exists('deck', $changes) ? $changes['deck'] : $this->deck,
             pendingTabClose: array_key_exists('pendingTabClose', $changes) ? $changes['pendingTabClose'] : $this->pendingTabClose,
             tabQuitWarned: array_key_exists('tabQuitWarned', $changes) ? $changes['tabQuitWarned'] : $this->tabQuitWarned,
+            deckTitle: array_key_exists('deckTitle', $changes) ? $changes['deckTitle'] : $this->deckTitle,
+            tabNotified: array_key_exists('tabNotified', $changes) ? $changes['tabNotified'] : $this->tabNotified,
         );
     }
 }

@@ -26,13 +26,14 @@ enum Pane: string
     case Settings = 'settings';
     case Todo = 'todo';
     case Context = 'context';
+    case Sessions = 'sessions';
     case Help = 'help';
     case Menu = 'menu';
 
     /**
      * The panes Tab walks, in display order — the ring, and only the ring.
      *
-     * This is EIGHT of the eleven cases, and the three that are missing are
+     * This is NINE of the twelve cases, and the three that are missing are
      * missing for a reason the history below records. Kept public so the
      * traversal order can be asserted against the tab strip that advertises
      * it; the two lists are declared separately (this one, and
@@ -52,6 +53,7 @@ enum Pane: string
             self::Settings,
             self::Todo,
             self::Context,
+            self::Sessions,
         ];
     }
 
@@ -62,7 +64,7 @@ enum Pane: string
      * traversal — including the wrap at both ends, which is the part a
      * hand-rolled `match` chain gets subtly wrong — is the library's problem
      * rather than this enum's. Built per call because a PHP enum may not hold
-     * state of any kind, static properties included; eight ids is not worth a
+     * state of any kind, static properties included; nine ids is not worth a
      * cache.
      *
      * `ofStrict()` rather than `of()`: a duplicate id would silently shorten
@@ -79,7 +81,7 @@ enum Pane: string
     /**
      * Returns the next pane in the cycling order.
      *
-     * Cycle: Chat → Files → Tools → Skills → Agents → Settings → Todo → Context → Chat.
+     * Cycle: Chat → Files → Tools → Skills → Agents → Settings → Todo → Context → Sessions → Chat.
      *
      * @see step() for the fold-back rule and the history behind it.
      */
@@ -91,7 +93,7 @@ enum Pane: string
     /**
      * Returns the previous pane in the cycling order — Shift+Tab.
      *
-     * Cycle: Chat → Context → Todo → Settings → Agents → Skills → Tools → Files → Chat.
+     * Cycle: Chat → Sessions → Context → Todo → Settings → Agents → Skills → Tools → Files → Chat.
      *
      * Tab could only ever walk forward, so escaping a pane you overshot meant
      * five more presses. The reverse walk is {@see FocusRing::previous()}, so
@@ -126,7 +128,7 @@ enum Pane: string
      * the reason it was excluded no longer holds. Input, Help and Menu still
      * draw nothing, so they stay off the strip.
      *
-     * An eight-id ring on its own expresses only "Input is not a member". It says
+     * A nine-id ring on its own expresses only "Input is not a member". It says
      * nothing about what Tab does while the user is somehow ON Input, and the
      * ring cannot be asked — `focus('input')` is a documented no-op for an
      * unregistered id, so handing it through unguarded would leave the ring
@@ -140,7 +142,7 @@ enum Pane: string
      * before Chat — is defensible as "the exact inverse of next()", but the
      * inverse property is unavailable here whatever we choose: fold-back is not
      * injective (three panes map onto Chat), so `X->next()->previous() === X`
-     * cannot hold for them under any rule. It holds over the ring's eight
+     * cannot hold for them under any rule. It holds over the ring's nine
      * members and only there, which is the domain the tests state it over.
      * Given that, the tie is broken by what fold-back is FOR: the user is
      * stranded on a pane that renders nothing and is pressing Tab to get out.
@@ -175,7 +177,7 @@ enum Pane: string
     public function dockSide(): ?Side
     {
         return match ($this) {
-            self::Files, self::Tools => Side::Left,
+            self::Files, self::Tools, self::Sessions => Side::Left,
             self::Skills, self::Settings, self::Agents, self::Todo, self::Context => Side::Right,
             default => null,
         };
@@ -239,6 +241,11 @@ enum Pane: string
             // that carries East Asian Width N in UCD 16.0, adjudicated against
             // unicode.org/Public/16.0.0/ucd/EastAsianWidth.txt (2026-10-27).
             self::Context => "\u{25D4}",
+            // ⧉ two overlapping squares — the session-window list (P-TABS.g).
+            // U+29C9 is not listed in the UCD 16.0 East Asian Width file, and
+            // unlisted code points default to Neutral; verified width 1 against
+            // unicode.org/Public/16.0.0/ucd/EastAsianWidth.txt (2026-10-28).
+            self::Sessions => "\u{29C9}",
             self::Input, self::Help, self::Menu => '',
         };
     }
@@ -258,6 +265,7 @@ enum Pane: string
             self::Settings => Lang::t('tui.pane.label.settings'),
             self::Todo => Lang::t('tui.pane.label.todo'),
             self::Context => Lang::t('tui.pane.label.context'),
+            self::Sessions => Lang::t('tui.pane.label.sessions'),
             self::Help => Lang::t('tui.pane.label.help'),
             self::Menu => Lang::t('tui.pane.label.menu'),
         };

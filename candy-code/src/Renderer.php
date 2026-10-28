@@ -1831,7 +1831,11 @@ final class Renderer
         // block is drawn exactly as before.
         $live = $chat->agentLive();
         $agentStrip = \SugarCraft\Code\Tui\AgentStrip::render(
-            \SugarCraft\Code\Tui\AgentStrip::items($live, $agentStripDismissed),
+            // P-TABS.g: the strip speaks for THIS tab's session —
+            // itemsFor() filters by currentSessionId (a not-yet-persisted
+            // fresh chat has no id and forSession(null) is the whole
+            // registry, so the legacy shape is exactly its no-deck shape).
+            \SugarCraft\Code\Tui\AgentStrip::itemsFor($live, $agentStripDismissed, $chat->currentSessionId()),
             $chat->cols(),
             $theme,
             $live->spinnerFrame(),
@@ -3376,9 +3380,19 @@ final class Renderer
      *
      * Zones are marked per visible tab only, after layout, so no zone is
      * ever cut and a hidden tab registers nothing to click.
+     *
+     * P-TABS.g: while a shell deck hosts this chat (a tab of the WINDOW
+     * list), the strip stands down entirely — the shell's own window strip
+     * (or docked Sessions pane) is the one row that lists tabs then, and a
+     * parked tab's chat never paints at all, so the guard is about honesty
+     * of the surface, not about pixels.
      */
     private static function renderSessionTabStrip(Chat $chat): string
     {
+        if ($chat->isTabHosted()) {
+            return '';
+        }
+
         $store = $chat->sessionStore();
         if ($store === null) {
             return '';

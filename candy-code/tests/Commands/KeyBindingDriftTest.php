@@ -1183,6 +1183,24 @@ final class KeyBindingDriftTest extends TestCase
                 $this->assertSame('tab-2', $after->deck?->activeKey());
                 $this->assertInstanceOf(Chat::class, $after->deck?->model('tab-1'));
             },
+            // P-TABS.g: two seeded tabs auto-dock the Sessions pane, so the
+            // row's promise reads naturally on the second-tab state — one
+            // press takes the pane away (the window strip returns), a second
+            // brings it back. Asserted on the docked flag, not the focused
+            // pane: the chord toggles visibility, it never moves focus.
+            'sessions.toggle' => function (array $k): void {
+                // 120 columns: the auto-dock stand-down at AUTO_DOCK_MIN_CHAT_COLS
+                // width keeps a 100-col deck from ever docking Sessions, and the
+                // row's promise is about the docked state the second tab produces.
+                $docked = $this->deckSeededApp(2, 120);
+                $this->assertTrue($docked->isDocked(Pane::Sessions), 'fixture: the second tab auto-docks Sessions');
+
+                [$hidden] = $docked->update($k[0]);
+                $this->assertFalse($hidden->isDocked(Pane::Sessions), 'the first press undocks the pane');
+
+                [$shown] = $hidden->update($k[0]);
+                $this->assertTrue($shown->isDocked(Pane::Sessions), 'the second press docks it again');
+            },
             'shell.palette' => function (array $k): void {
                 [, $cmd] = $this->claim($k[0], $this->app());
                 $this->assertInstanceOf(CommandPaletteCmd::class, $cmd);
@@ -2791,12 +2809,12 @@ final class KeyBindingDriftTest extends TestCase
      * `chat.session-cycle` chords and `shell.new-session` answer against this
      * shape rather than the legacy single-chat one.
      */
-    private function deckSeededApp(int $tabs): App
+    private function deckSeededApp(int $tabs, int $cols = 100): App
     {
         $app = $this->app()
             ->withChat($this->chat())
             ->withTabFactory(fn (?string $sessionId): Chat => $this->chat());
-        [$app] = $app->update(new WindowSizeMsg(100, 30));
+        [$app] = $app->update(new WindowSizeMsg($cols, 30));
         for ($i = 2; $i <= $tabs; $i++) {
             [$app] = $app->update(new OpenTabMsg());
         }

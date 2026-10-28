@@ -294,6 +294,7 @@ all one component tree — not two parallel UIs.
 | `Shift+Tab` | Cycle pane focus backwards (same docked list) |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Cycle sessions — since the many-Chats deck a switch parks the streaming one and brings the other up, so a turn keeps running in the background |
 | `Ctrl+N` | Start a fresh session, keeping this one open (the deck gives it a new slot) |
+| `Alt+S` | Show or hide the **Sessions** pane — the deck's window list as a docked pane (registry row `sessions.toggle`) — see the fine print below. |
 | `Ctrl+L` | Repaint the whole frame - clears and redraws chat, transcript and every pane from current state (registry row `chat.repaint`) |
 | `F10` | Open the menu bar |
 | `y` / `n` / `a` / `p` / `e` / `r` / `x` | Answer a permission prompt: allow once, refuse, allow for the session, save a rule, edit the scope first, refuse with a note, refuse and stop — see the fine print below. |
@@ -1061,7 +1062,21 @@ whole-store catalog. Inside the deck each tab hosts its own `Chat`: switching
 parks the old one mid-turn (its stream, tool pump and transcript flush keep
 running; a parked permission prompt raises that tab's waiting attention state
 instead of stealing the screen), and `Ctrl+N` opens a fresh session without touching
-the current one. Closing a busy tab is a two-press act — the first press
+the current one. While the deck is up the shell also paints a one-row **window
+strip** under the menu bar: every tab as a cell carrying its attention glyph
+(`⠋` working, `⏳` waiting for an answer, `✱` finished while you were away,
+`✗` failed), a `[+]` cell that opens a tab, and a `×` on each cell that closes
+it — a busy tab still takes the two-press act below. The strip costs the
+transcript one row and stands down entirely below 12 rows. The docked
+**Sessions pane** is the same list with room to breathe — agent runs indent
+under their tab — and it replaces the strip while shown: opening a second tab
+auto-docks it on the left while the terminal is wide enough to keep the chat
+readable, and `Alt+S` (registry row `sessions.toggle`) shows
+or hides it either way. Background tabs also speak through the terminal: the
+window title (OSC 2) carries how many tabs are waiting and working, and a
+desktop notification names a background tab that starts waiting or finishes
+while you are elsewhere — each said once per change, and only once the
+`notify` setting arms it. Closing a busy tab is a two-press act — the first press
 announces it, the second within three seconds cancels the turn, flushes the
 transcript and releases the row; quitting with a busy background tab asks once
 the same way. A plain launch writes no session record: the row appears
