@@ -1,8 +1,21 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useConnectionStore } from '../../stores/connection'
 import { groupRows } from '../../stores/settings/fields'
 import { useServerSettingsStore } from '../../stores/settings/serverSettings'
+import {
+  beginKeyCapture,
+  bindingFromEvent,
+  bindingLabel,
+  DEFAULT_BINDINGS,
+  endKeyCapture,
+  KEY_ACTIONS,
+  loadKeymap,
+  resetKeymap,
+  setBinding,
+  type KeyAction,
+  type KeyBinding,
+} from '../../lib/keymap'
 import SettingsField from './SettingsField.vue'
 import SettingsPreview from './SettingsPreview.vue'
 
@@ -38,6 +51,82 @@ onMounted(load)
 watch(() => connection.connected, (connected) => {
   if (connected && !settings.loaded) load()
 })
+
+/**
+ * C-WEB-4.b: the three client-side shortcuts (`lib/keymap`), saved per
+ * viewer through `stores/storage` — deliberately apart from the server's
+ * schema above. Rebinding listens in the capture phase with the global
+ * handlers held off by `beginKeyCapture()`; a chord that two actions would
+ * answer is refused, never silently shadowed.
+ */
+const KEYMAP_LABELS: Record<KeyAction, string> = {
+  palette: 'Command palette',
+  help: 'Help overlay',
+  tabs: 'Pick the Nth open tab',
+}
+const keymapRows = ref(loadKeymap())
+const capturing = ref<KeyAction | null>(null)
+const keymapNote = ref('')
+
+function startCapture(action: KeyAction): void {
+  stopCapture()
+  capturing.value = action
+  keymapNote.value = `Press the new chord for ${KEYMAP_LABELS[action]}… (Esc keeps the current one)`
+  beginKeyCapture()
+  window.addEventListener('keydown', onCaptureKey, true)
+}
+
+function stopCapture(): void {
+  if (capturing.value === null) return
+  window.removeEventListener('keydown', onCaptureKey, true)
+  capturing.value = null
+  endKeyCapture()
+}
+
+function reportClash(action: KeyAction, clash: KeyAction, binding: KeyBinding): void {
+  keymapRows.value = loadKeymap()
+  keymapNote.value = `Not ${KEYMAP_LABELS[action]} — ${bindingLabel(binding)} is already the ${KEYMAP_LABELS[clash]} key.`
+}
+
+function onCaptureKey(event: KeyboardEvent): void {
+  const action = capturing.value
+  if (action === null) return
+  event.preventDefault()
+  event.stopPropagation()
+  if (event.key === 'Escape') {
+    stopCapture()
+    keymapNote.value = ''
+    return
+  }
+  const binding = bindingFromEvent(event, action === 'tabs' ? 'chord' : 'key')
+  if (binding === null) {
+    keymapNote.value = action === 'tabs'
+      ? 'The tab shortcut stays an Alt-family chord over a digit — press Alt, Alt+Shift or Ctrl+Alt with a number.'
+      : 'Not a bindable chord — press a letter, digit or F-key with its modifiers.'
+    return
+  }
+  const clash = setBinding(action, binding)
+  if (clash !== null) reportClash(action, clash, binding)
+  else keymapNote.value = `${KEYMAP_LABELS[action]} → ${bindingLabel(binding)}.`
+  stopCapture()
+}
+
+function resetOne(action: KeyAction): void {
+  const clash = setBinding(action, DEFAULT_BINDINGS[action])
+  if (clash !== null) reportClash(action, clash, DEFAULT_BINDINGS[action])
+  else {
+    keymapRows.value = loadKeymap()
+    keymapNote.value = `${KEYMAP_LABELS[action]} → ${bindingLabel(DEFAULT_BINDINGS[action])} (default).`
+  }
+}
+
+function resetAll(): void {
+  resetKeymap()
+  keymapRows.value = loadKeymap()
+  keymapNote.value = 'Shortcuts reset to their defaults.'
+}
+
+onBeforeUnmount(stopCapture)
 </script>
 
 <template>
@@ -111,6 +200,28 @@ watch(() => connection.connected, (connected) => {
         </li>
       </ul>
     </details>
+
+    <div class="group" data-testid="keymap-section">
+      <h2>Keyboard — this browser</h2>
+      <div class="keymap-body">
+        <p class="muted">
+          The web client's own shortcuts, saved per viewer on this device — nothing here touches the server.
+          `?` opens the help overlay when the composer is empty or focus is outside any field.
+        </p>
+        <div v-for="action in KEY_ACTIONS" :key="action" class="keymap-row" data-testid="keymap-row" :data-action="action">
+          <span class="what">{{ KEYMAP_LABELS[action] }}</span>
+          <code class="keys" data-testid="keymap-binding" :data-action="action">{{ bindingLabel(keymapRows[action]) }}</code>
+          <button type="button" :data-testid="`keymap-rebind-${action}`" @click="capturing === action ? stopCapture() : startCapture(action)">
+            {{ capturing === action ? 'Waiting… (Esc)' : 'Rebind' }}
+          </button>
+          <button type="button" :data-testid="`keymap-reset-${action}`" :disabled="bindingLabel(keymapRows[action]) === bindingLabel(DEFAULT_BINDINGS[action])" @click="resetOne(action)">
+            Default
+          </button>
+        </div>
+        <p v-if="keymapNote" class="ok" role="status" data-testid="keymap-note">{{ keymapNote }}</p>
+        <button type="button" data-testid="keymap-reset-all" @click="resetAll()">Reset all three to defaults</button>
+      </div>
+    </div>
 
     <footer v-if="settings.dirty" class="footer" data-testid="settings-footer">
       <span data-testid="settings-staged-count">{{ settings.stagedCount }} change{{ settings.stagedCount === 1 ? '' : 's' }} staged for {{ tierLabel }}</span>
@@ -233,5 +344,26 @@ h1 {
 }
 .spacer {
   flex: 1;
+}
+.keymap-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+.keymap-row {
+  display: grid;
+  grid-template-columns: 1fr 8rem auto auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+.keymap-row .keys {
+  font-family: var(--mono);
+  color: var(--accent);
+  white-space: nowrap;
+}
+.keymap-body .muted,
+.keymap-body .ok {
+  margin: 0;
 }
 </style>

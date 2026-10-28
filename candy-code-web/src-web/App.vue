@@ -7,6 +7,7 @@ import { useAttention } from './components/approvals/attention'
 import AboutModal from './components/AboutModal.vue'
 import ConnectionBanner from './components/ConnectionBanner.vue'
 import DirectoryPicker from './components/DirectoryPicker.vue'
+import HelpOverlay from './components/HelpOverlay.vue'
 import SessionTabs from './components/grid/SessionTabs.vue'
 import SessionSidebar from './components/SessionSidebar.vue'
 import { SIGN_IN_CODE } from './keys'
@@ -14,9 +15,11 @@ import { AuthError } from './protocol/auth'
 import { usePanelsStore } from './stores/agents/panels'
 import { useConnectionStore } from './stores/connection'
 import { useLayoutStore } from './stores/layout'
+import { useSessionStore } from './stores/session'
 import { useSessionsStore } from './stores/sessions'
 import { NOTIFICATION_PROBLEM_TEXT, useSettingsStore } from './stores/settings'
 import { useQuestionAnnouncements } from './lib/questions'
+import { bindingFor, captureActive, matchesBinding } from './lib/keymap'
 import { onPasteNotice } from './lib/paste'
 import SessionTools from './components/panels/SessionTools.vue'
 
@@ -34,6 +37,9 @@ const activeId = computed(() => (route.name === 'session' ? String(route.params.
 const onLogin = computed(() => route.name === 'login')
 /** WEB-1c: the About overlay (`server.info` + `server.health`). */
 const aboutOpen = ref(false)
+/** C-WEB-4.b: the help overlay — `?` on an empty composer, or outside any field. */
+const helpOpen = ref(false)
+const helpCommands = computed(() => (activeId.value === null ? [] : useSessionStore(activeId.value).commands))
 const rtt = computed(() => (connection.connected && connection.rttMs !== null ? `${connection.rttMs} ms` : ''))
 
 watch(() => connection.status, (status) => {
@@ -57,6 +63,34 @@ function onPageHide(): void {
   connection.stop()
 }
 
+/**
+ * C-WEB-4.b: the help chord, heard in the capture phase so it answers from
+ * anywhere. Inside a field it belongs to the typing — except the empty
+ * composer, which is exactly where a lone `?` reads as "show me the keys"
+ * (the TUI's rule). The rebind editor raises `captureActive()` while it
+ * waits for a chord, and then this is deaf on purpose.
+ */
+function onHelpKey(event: KeyboardEvent): void {
+  if (captureActive()) return
+  if (helpOpen.value) {
+    if (event.key === 'Escape' || matchesBinding(event, bindingFor('help'))) {
+      event.preventDefault()
+      helpOpen.value = false
+    }
+    return
+  }
+  if (!matchesBinding(event, bindingFor('help'))) return
+  const node = event.target
+  if (node instanceof HTMLElement) {
+    const field = node.closest('input, textarea, select, [contenteditable="true"]')
+    if (field !== null) {
+      if (!(field instanceof HTMLTextAreaElement) || field.dataset.testid !== 'composer-input' || field.value !== '') return
+    }
+  }
+  event.preventDefault()
+  helpOpen.value = true
+}
+
 function onPageShow(event: PageTransitionEvent): void {
   if (event.persisted) connection.start()
 }
@@ -64,6 +98,7 @@ function onPageShow(event: PageTransitionEvent): void {
 onMounted(async () => {
   window.addEventListener('pagehide', onPageHide)
   window.addEventListener('pageshow', onPageShow)
+  window.addEventListener('keydown', onHelpKey, true)
   if (code !== null) {
     try {
       await connection.signIn({ code })
@@ -79,6 +114,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener('pagehide', onPageHide)
   window.removeEventListener('pageshow', onPageShow)
+  window.removeEventListener('keydown', onHelpKey, true)
   stopAttention()
   stopPasteNotice()
 })
@@ -120,6 +156,7 @@ async function signOut(): Promise<void> {
     <ApprovalsDrawer v-if="!onLogin" />
     <DirectoryPicker v-if="!onLogin" />
     <AboutModal :open="aboutOpen" @close="aboutOpen = false" />
+    <HelpOverlay :open="helpOpen" :commands="helpCommands" @close="helpOpen = false" />
   </div>
 </template>
 

@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { oneLine } from '../../lib/format'
+import { bindingFor, captureActive, matchesBinding } from '../../lib/keymap'
 import { PANEL_LABELS, PANELS, usePanelsStore } from '../../stores/agents/panels'
 import { useLayoutStore } from '../../stores/layout'
 import { describe, useSessionStore } from '../../stores/session'
@@ -11,7 +12,8 @@ import { useSettingsStore } from '../../stores/settings'
 import { clearPromptHistory } from '../../stores/promptHistory'
 
 /**
- * The command palette (Ctrl+K / ⌘K; roadmap O-6c, Appendix O §7.4, the TUI's
+ * The command palette (rebindable, default Ctrl/⌘K — see `lib/keymap`;
+ * roadmap O-6c, Appendix O §7.4, the TUI's
  * `PaletteAction` categories): jump to a session, run a slash command in the
  * session on screen — one that takes no argument runs at once, one that does
  * is put in the composer — open a panel, start a session, change the theme.
@@ -152,7 +154,8 @@ function onInputKey(event: KeyboardEvent): void {
 }
 
 function onGlobalKey(event: KeyboardEvent): void {
-  if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k') {
+  if (captureActive()) return
+  if (matchesBinding(event, bindingFor('palette'))) {
     event.preventDefault()
     panels.togglePalette()
   }

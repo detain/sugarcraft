@@ -33,11 +33,16 @@ describe('tab chord (ISS-106)', () => {
     expect(TAB_CHORDS.every((chord) => tabChordLabel(chord).length > 0)).toBe(true)
   })
 
-  it('falls back to Alt when storage holds a stranger', () => {
+  it('folds the old stored chord into the keymap once, then the keymap is the truth', () => {
     expect(loadTabChord()).toBe('alt')
-    saveTabChord('ctrl+alt')
+    localStorage.setItem('candy-code-web:tab-chord', '"ctrl+alt"')
     expect(loadTabChord()).toBe('ctrl+alt')
-    localStorage.setItem('candy-code-web:tab-chord', '"hyper"')
-    expect(loadTabChord()).toBe('alt')
+    expect(localStorage.getItem('candy-code-web:keymap')).toContain('"primary":"ctrl"')
+    expect(localStorage.getItem('candy-code-web:tab-chord')).toBeNull()
+    localStorage.setItem('candy-code-web:tab-chord', '"hyper"') // a stranger now rides a dead key
+    expect(loadTabChord()).toBe('ctrl+alt')
+    saveTabChord('alt+shift')
+    expect(loadTabChord()).toBe('alt+shift')
+    expect(localStorage.getItem('candy-code-web:tab-chord')).toBe('"alt+shift"') // the pulse mirror, not the authority
   })
 })

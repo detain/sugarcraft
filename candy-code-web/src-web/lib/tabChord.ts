@@ -1,4 +1,4 @@
-import { readJson, writeJson } from '../stores/storage'
+import { bindingFor, bindingToChord, chordBinding, digitNumber, matchesModifiers, setBinding, type TabChord } from './keymap'
 
 /**
  * The chord that picks the Nth open tab (ISS-106).
@@ -9,49 +9,30 @@ import { readJson, writeJson } from '../stores/storage'
  * AZERTY's shifted glyphs included), and the chord itself is configurable so a
  * user whose browser eats Alt can move to one it does not. Ctrl+digit and
  * Super+digit are deliberately absent: browsers and the OS own those.
+ *
+ * C-WEB-4.b: the chord is one entry of `lib/keymap` now. This module keeps
+ * speaking chords for its callers — `SessionTabs.vue` unchanged — and the old
+ * `tab-chord` storage key migrates into the keymap on first read (a derived
+ * mirror of a *saved* chord rides the old key only so the cross-tab storage
+ * pulse keeps firing; the keymap is the truth).
  */
-export type TabChord = 'alt' | 'alt+shift' | 'ctrl+alt'
-
-export const TAB_CHORDS: readonly TabChord[] = ['alt', 'alt+shift', 'ctrl+alt']
-
-const STORAGE_KEY = 'tab-chord'
-
-function isTabChord(value: unknown): value is TabChord {
-  return typeof value === 'string' && (TAB_CHORDS as readonly string[]).includes(value)
-}
+export type { TabChord } from './keymap'
+export { TAB_CHORDS, nextTabChord, tabChordLabel } from './keymap'
 
 export function loadTabChord(): TabChord {
-  const stored = readJson<unknown>(STORAGE_KEY, 'alt')
-  return isTabChord(stored) ? stored : 'alt'
+  return bindingToChord(bindingFor('tabs')) ?? 'alt'
 }
 
 export function saveTabChord(chord: TabChord): void {
-  writeJson(STORAGE_KEY, chord)
-}
-
-export function nextTabChord(chord: TabChord): TabChord {
-  return TAB_CHORDS[(TAB_CHORDS.indexOf(chord) + 1) % TAB_CHORDS.length] ?? 'alt'
-}
-
-/** Human spelling for tooltips and the toggle button label. */
-export function tabChordLabel(chord: TabChord): string {
-  return chord === 'alt' ? 'Alt' : chord === 'alt+shift' ? 'Alt+Shift' : 'Ctrl+Alt'
+  setBinding('tabs', chordBinding(chord))
 }
 
 /** True when `event` carries exactly this chord's modifiers (ctrl/meta never over-match). */
 export function matchesTabChord(event: KeyboardEvent, chord: TabChord): boolean {
-  switch (chord) {
-    case 'alt':
-      return event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
-    case 'alt+shift':
-      return event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey
-    case 'ctrl+alt':
-      return event.altKey && event.ctrlKey && !event.metaKey && !event.shiftKey
-  }
+  return matchesModifiers(event, chordBinding(chord))
 }
 
 /** 1…9 from the physical digit, independent of the glyph `event.key` would carry. */
 export function tabDigit(event: KeyboardEvent): number | null {
-  const match = /^Digit([1-9])$/.exec(event.code)
-  return match === null ? null : Number.parseInt(match[1] as string, 10)
+  return digitNumber(event)
 }
