@@ -1537,7 +1537,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web.md` → `### C-WEB-3.f`
 
-#### C-WEB-7.a — Shell tail trailing-edge flush + `discard()` docblock truth
+#### ✅ 0e2a4e08e C-WEB-7.a — Shell tail trailing-edge flush + `discard()` docblock truth
 - **Item:** C-WEB-7 (sources: WEB-4-P1, WEB-6-P3) · fix · MINOR · effort S
 - **What:** **Root cause, the tail.** `ShellTailRing::onChunk()` (`candy-code/src/Tools/ShellTailRing.php:55-67`) only sets `dirty` for a chunk that arrives within `frameIntervalSeconds` (0.5 s, `Bash.php:708`) of the last frame. Only …
 - **Files — create:** none
