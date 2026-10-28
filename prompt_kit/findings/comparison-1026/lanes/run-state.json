@@ -153,7 +153,8 @@
   "P-TABS.f",
   "P-TABS.g",
   "P-TABS.h",
-  "C-CTX-2.d"
+  "C-CTX-2.d",
+  "C-SEC-7.d"
  ],
  "inflight": {
   "C-EXT-4.b": {
@@ -197,14 +198,6 @@
    "branch": "cc/C-SEC-6.a",
    "tip": "675241a04",
    "note": "CLEAN x2 (ses_e7ce37aa2 fresh r2 + corroborating executed review): bare-forget read_failed guard shared one helper (byte-identical pin, red-before ERROR), loadableRow predicate list/remove, census flip in-step; weld duty 2 tsv rows SavedRulesTest+PermissionsSavedRulesCommandTest; weld-NIT optional one-word PERMISSIONS.md numbers-fabricated fold"
-  },
-  "C-SEC-7.d": {
-   "stage": "clean",
-   "round": 2,
-   "worktree": "/home/sites/cc-cmp-C-SEC-7.d",
-   "branch": "cc/C-SEC-7.d",
-   "tip": "75beffe3ec81a1b3859e378a7915cda221885c58",
-   "note": "r2 CLEAN 0C/0M (ses_e7cdc4c5a, REVIEW-2.md): both cure tokens blob-verified in tip, trio 43T/136A OK, census 95T OK, doc-guards 237T OK; ProjectTier 2F + staleness + PermissionsIntro all foreign-named; weld duty 1 tsv row AutoReviewScopeTest"
   },
   "C-AGT-5.c": {
    "stage": "build",
@@ -811,7 +804,17 @@
   "C-AGT-6.d_weld": "r1 CLEAN 0C/0M/0 step-local minors (2 NITs recorded, take-or-leave); en-only cmd.pr.*/cmd.review.bad-pr -> 11-locale LAST per \u00a76.3-h. Zero Protocol/web -> no trio/dist riders; gen-command-docs --check rc0. 3 durations rows (PrCommand 0.019/6, GhRunner 0.238/6, PrHostCommand 0.003/3 junit sums). Guards 275T/46483A, red-set = staleness pair only (foreign-era; +132A vs reviewer 46351 wobble from C-CTX-4.c era). DescriptorInheritanceGuard ::diffRange inherited-red cure (C-AGT-6.b) landed in-step. Zero new proc_open (CapturesProcessOutput choke, ChildLifetimesToolTest 9T/31A green).",
   "P-TABS.g_weld": "3 durations rows owed: candy-code/tests/Tui/WindowStripShellTest.php 7T, candy-code/tests/App/TabAttentionTest.php 7T, tests/App/WindowTitleTest.php 3T (junit per-file sums; tsv 1523-era; desc-invariant set-equality live recount). No regen riders (no src/Protocol/** or web). \u00a76.3-h en-only tui.pane.*+carry. WELD.md carries: Sessions auto-dock chat-readability-trial adjudication vs \u00a76.1 P-CTX 120-col ruling (per r1), SessionTabs::tabs() list-vs-map bug fix note, AgentStrip::items() unscoped seam (P-AGENT.b chip no-ops reserved), staleness pair re-pin \u00a77. W16-band step (owner-instructed exception) \u2014 weld bookkeeping: mark \u00a74 but do NOT touch \u00a73 W16 row (next lead closes W16).",
   "C-AGT-5.b_note": "FINAL tip 5f551912e (11:18, third amend; verified 1 commit over base 8fd05587a, porcelain 0, detain greps). 15 files incl candy-code-web BackgroundPanel.vue +111 + backgroundSchedules.spec.ts +106 (lane OWNS the web schedules subsection; collision-check C-AGT-5.c fileset at its launch), root-scoped ScheduleFactory::deleteRefusal, fireDue last-outcome recording, /schedules add [--mode][--provider], MenuBarLabelDerivationTest +2/-1 (claims to flip 2 standing 'pr' reds; reviewer verifying). tsv duty: NEW phpunit candy-code files = tests/Background/ScheduleCrossRootDeleteTest.php (8T) + tests/Host/Commands/LoopSchedulesCommandTest.php -> 2 rows, per-file junit sums at weld. r1 reviewer dispatched vs superseded tip 6f4de4575: on return, if verdict names old tip, resume SAME session re-target 5f551912e (delta = docs+web+menubar-label only; core PHP unchanged).",
-  "C-CTX-2.d_weld": "WELD DUTIES (r1 FINDINGS 0C/0M/3min all evidence-level, ship-ready; NO code fixer): (1) BEFORE weld commit edit main-tree lanes/C-CTX-2.d/REPORT.md: replace \"PHP family 99T/679A\" with exact filter figure 187T/1083A (phantom token ServedContextSources + over-matching SessionHost* were the cause), and in dev-5 paragraph disclose typecheck 23 lines = 19 pre-existing EXACT + 4 new TS2344/TS18046 from Ev<prompt.suggested> vs restored generated.ts (self-heal at regen). (2) PROTOCOL trio regen rider OWED (pick touches src/Protocol/Methods/PromptMethods.php + Schema/Definitions.php): on merged tree run candy-code/tools/gen-protocol-schema.php --write + (cd candy-code-web && npm run gen:protocol && npm run build) -> separate \"weld: C-CTX-2.d regenerate\" commit; after regen CONFIRM vue-tsc back to exactly 19 and SERVER.md gains the two advertised rows; weld regen proves ProtocolSchemaDrift/ServerProtocolDocumentationDrift green. (3) merged gates: ServedPromptSuggestionTest 4T/48A; guards superset 158T/26137A EXACT; vitest --no-file-parallelism touched set (new 9/9, adjacent 116/116, protocol 31/31, panel/roster 22/22). (4) durations.tsv: exactly 1 new candy-code phpunit row (ServedPromptSuggestionTest 4T junit sum). (5) WELD.md notes: MINOR-2 accepted undeclared-touch disclosure (tests/Host/SessionHostTurnSettleWorkTest.php comment-only, env-guard pre-existed); NITs carried (settle double-refetch fold-later; /memory read-forms over-announce advisory; typing-clear wording unpinned). (6) staleness-pair gate re-pin is GATE duty not weld (welder never touches suite-figure.json)."
+  "C-CTX-2.d_weld": "WELD DUTIES (r1 FINDINGS 0C/0M/3min all evidence-level, ship-ready; NO code fixer): (1) BEFORE weld commit edit main-tree lanes/C-CTX-2.d/REPORT.md: replace \"PHP family 99T/679A\" with exact filter figure 187T/1083A (phantom token ServedContextSources + over-matching SessionHost* were the cause), and in dev-5 paragraph disclose typecheck 23 lines = 19 pre-existing EXACT + 4 new TS2344/TS18046 from Ev<prompt.suggested> vs restored generated.ts (self-heal at regen). (2) PROTOCOL trio regen rider OWED (pick touches src/Protocol/Methods/PromptMethods.php + Schema/Definitions.php): on merged tree run candy-code/tools/gen-protocol-schema.php --write + (cd candy-code-web && npm run gen:protocol && npm run build) -> separate \"weld: C-CTX-2.d regenerate\" commit; after regen CONFIRM vue-tsc back to exactly 19 and SERVER.md gains the two advertised rows; weld regen proves ProtocolSchemaDrift/ServerProtocolDocumentationDrift green. (3) merged gates: ServedPromptSuggestionTest 4T/48A; guards superset 158T/26137A EXACT; vitest --no-file-parallelism touched set (new 9/9, adjacent 116/116, protocol 31/31, panel/roster 22/22). (4) durations.tsv: exactly 1 new candy-code phpunit row (ServedPromptSuggestionTest 4T junit sum). (5) WELD.md notes: MINOR-2 accepted undeclared-touch disclosure (tests/Host/SessionHostTurnSettleWorkTest.php comment-only, env-guard pre-existed); NITs carried (settle double-refetch fold-later; /memory read-forms over-announce advisory; typing-clear wording unpinned). (6) staleness-pair gate re-pin is GATE duty not weld (welder never touches suite-figure.json).",
+  "C-SEC-7.d": {
+   "master": "fecec0d99",
+   "pick": "75beffe3e -> fecec0d99 (CLEAN onto a83077811, lang/en.php auto-merge soft-append, patch-id 0c8e38cf5 IDENTICAL; %ae/%ce separate greps 1/1 detain, zero trailers; 14 files +740/-104)",
+   "regen": "none (zero src/Protocol/** and zero candy-code-web paths in pick)",
+   "gates": "trio 'AutoReviewScopeTest|UnflaggedShellReviewTest|ExecReviewerTest' 43T/136A OK EXACT (loose brief form 44T/142A green = BinCandyCodeWiring dataset artifact); StderrEmitterCensus 95T/21466A OK (census flip Bootstrap 40->43 / once 8->11 / FORTY-THREE in-step in pick; +54A vs lane-era 21412 = a83077811 tree-scan drift, 95T exact); doc-guards 237T/49018A OK EXACT-count; PermissionsIntroDrift 1F = standing foreign Schedule-row (proven inherited r1+r2)",
+   "durations": "scripts commit 153939c15: AutoReviewScopeTest.php 0.050/12 (junit /tmp/opencode/cc-cmp-junit-sec7d.xml 12 testcases); tsv 1529->1530 verified, desc-invariant @815",
+   "nits": "r1 NIT-A (WebFetch no-diff doc overclaim) + NIT-B (toolless-backend unpinned) both cured in amend 75beffe3e; details WELD.md",
+   "carry": "suite-figure +12T staleness rides closeout re-pin (welder never touched)",
+   "prune": "cherry proof pending -> '-' expected"
+  }
  },
  "carries": [
   "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest \u2014 closeout gate duty",
@@ -898,7 +901,7 @@
   "STOP STATE @2052@: master b4b4404c5 (wind-down commit; 9 files). welded=100/328 LIST. waves_closed [1..9] (W8/W9 rows + marks committed inside b4b4404c5; W9 per lead ruling r1-CLEAN-no-r2 \u2014 disclosed). Owed loops: W10 (blocked on unwelded members C-EXT-2.c + C-PRV-5.c), then W11+ per scheduler waves_fully_welded. Only live artifact: /home/sites/cc-cmp-P-TABS.g + branch cc/P-TABS.g @f25a697c1 (parked; re-dispatch plan:1549 after P-TABS.e+P-TABS.f weld). LATE W33+ gated on \u00a76.3 owner rulings (C-TOOL-6 c/e/h + C-TUI-6: Windows shell, Windows self-update helper, web i18n scope, locale choice, parity strictness, voice endpoint, push-to-talk key). NEVER pushed; origin advanced owner-side only.",
   "C-EXT-2.c welded 4b771634d; closeout roster in its WELD.md (Bootstrap:5955 comment, ChatHostLangCatalogue standing red=C-PRV-1.b (a992413b0) seam, TROUBLESHOOTING allowed-tools/effort half=C-EXT-2.b)"
  ],
- "updated": "tick 168 (AGT-5.b weld verified; W14 fully welded -> loop r1 live; AGT-5.c builder live; PRV-2.b fixer + MCP-4.b r3 reviewer + MCP-3.b r1 reviewer live; welder mid CTX-2.d)",
+ "updated": "welder bundle W16: C-SEC-7.d welded (welded_count=155)",
  "wind_down": {
   "master_tip_at_close": "b4b4404c5",
   "welded_count": 101,
@@ -955,8 +958,8 @@
   "C-SEC-6.a",
   "(CTX-2.d in welder hands)"
  ],
- "tip": "15dc9c53e",
- "welded_count": 154,
+ "tip": "153939c15",
+ "welded_count": 155,
  "tick": "87-disk-reconciled: W11 REALY closed@341f66404; trio MCP2b+TOOL5b+WEB3f real to 0b3c4ba21 (welded=122); W13/14 welds PENDING; phantom-atlas @b73@ correction: c3178096f/4d263705a/8d8c75678 GHOSTS, cure real 23fa8ab8e",
  "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
  "blocked_notes": {

@@ -2012,7 +2012,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-6.a`
 
-#### C-SEC-7.d — Model-judged review for writes, with a chosen reviewer model
+#### ✅ fecec0d995ce520f8f131a2984d1f417b5051806 C-SEC-7.d — Model-judged review for writes, with a chosen reviewer model
 - **Item:** C-SEC-7 (sources: GAP-PER-07, CC-new#8) · gap · effort M
 - **What:** `PermissionGate::autoReviewsUnflaggedShell()` (:998-1003) sends only shell calls to `ExecReviewer`. The reviewer is always built on the title backend (`Bootstrap.php:6849-6862`). Generalise it to `autoReviewsUnflagged()`, driven …
 - **Files — create:** `candy-code/tests/Permissions/AutoReviewScopeTest.php`
