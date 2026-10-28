@@ -125,43 +125,54 @@
    "stage": "review",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-WEB-3.f",
-   "branch": "cc/C-WEB-3.f"
+   "branch": "cc/C-WEB-3.f",
+   "tip": "06463ea76"
   },
   "C-MCP-2.b": {
    "stage": "fix",
-   "round": 2,
+   "round": 3,
    "worktree": "/home/sites/cc-cmp-C-MCP-2.b",
-   "branch": "cc/C-MCP-2.b"
+   "branch": "cc/C-MCP-2.b",
+   "tip": "5b3c8cfe8"
   },
   "C-TOOL-5.b": {
-   "stage": "clean",
-   "round": 2,
+   "stage": "fix",
+   "round": 4,
    "worktree": "/home/sites/cc-cmp-C-TOOL-5.b",
-   "branch": "cc/C-TOOL-5.b"
+   "branch": "cc/C-TOOL-5.b",
+   "tip": "2fecd5f26"
   },
   "C-TOOL-5.c": {
-   "stage": "review",
+   "stage": "clean",
    "round": 2,
    "worktree": "/home/sites/cc-cmp-C-TOOL-5.c",
    "branch": "cc/C-TOOL-5.c",
    "tip": "abdc611d3"
   },
   "C-AGT-5.a": {
-   "stage": "review",
-   "round": 1,
+   "stage": "fix",
+   "round": 2,
    "worktree": "/home/sites/cc-cmp-C-AGT-5.a",
-   "branch": "cc/C-AGT-5.a"
+   "branch": "cc/C-AGT-5.a",
+   "tip": "d9784ce96"
   },
   "C-AGT-6.b": {
-   "stage": "review",
-   "round": 1,
+   "stage": "fix",
+   "round": 2,
    "worktree": "/home/sites/cc-cmp-C-AGT-6.b",
    "branch": "cc/C-AGT-6.b",
    "tip": "3abfb69ef"
+  },
+  "C-SEC-5.d": {
+   "stage": "build",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-C-SEC-5.d",
+   "branch": "cc/C-SEC-5.d",
+   "tip": null
   }
  },
  "blocked": [],
- "extra_agents": 2,
+ "extra_agents": 0,
  "waves_closed": [
   1,
   2,
@@ -172,7 +183,8 @@
   7,
   8,
   9,
-  10
+  10,
+  11
  ],
  "wave_loops": {
   "1": "closed r2 CLEAN",
@@ -183,7 +195,19 @@
   "6": "closed r1 CLEAN",
   "7": "closed r2 CLEAN + cure",
   "8": "closed r2 CLEAN @ 30b7d4f08 (10/10 marks ancestors; battery all-green incl WorkflowRunInterpolation; hygiene clean; carries: docs/MCP.md :629-634 C-AGT-3 closeout, TrustTarget wiring C-SEC-5.b) — §3 flip committed in wind-down",
-  "W10": "closed r2 CLEAN @ 533ab1431 (r1 FINDINGS 3 MAJOR + 2 MINOR -> cures 743681f84 StderrEmitterCensus/TreeWideGuardRoster rosters, 8be7334f8 durations rows x5, 533ab1431 §4 C-AGT-7.b ✅ e359fc884 stamp; MINOR-5 attribution cure C-AGT-7.b -> C-PRV-1.b (a992413b0) folded into this close commit; verdicts lanes/W10/WAVE-REVIEW-1.md + WAVE-REVIEW-2.md; 10/10 §4 marks cat-file + ancestor-verified; cross-wave sweep 175T/4702A OK; reviewer ses_e7eaf469cffeggs78fM6cLM1LJ; standing NOT-W10: ReadmeSuiteFigureDrift staleness pair + ProjectTierRefusal 2F = §7 closeout)"
+  "W10": "closed r2 CLEAN @ 533ab1431 (r1 FINDINGS 3 MAJOR + 2 MINOR -> cures 743681f84 StderrEmitterCensus/TreeWideGuardRoster rosters, 8be7334f8 durations rows x5, 533ab1431 §4 C-AGT-7.b ✅ e359fc884 stamp; MINOR-5 attribution cure C-AGT-7.b -> C-PRV-1.b (a992413b0) folded into this close commit; verdicts lanes/W10/WAVE-REVIEW-1.md + WAVE-REVIEW-2.md; 10/10 §4 marks cat-file + ancestor-verified; cross-wave sweep 175T/4702A OK; reviewer ses_e7eaf469cffeggs78fM6cLM1LJ; standing NOT-W10: ReadmeSuiteFigureDrift staleness pair + ProjectTierRefusal 2F = §7 closeout)",
+  "W11": {
+   "rounds": 2,
+   "verdict": "CLEAN",
+   "cure": "23fa8ab8e chat.attach.pdf_pages Lang::t route + en key",
+   "carries": [
+    "d95f2486c WELD.md backfill -> closeout ledger",
+    "fa14b82c6 self-committed REPORT note",
+    "SkillsEnableDisableTest durations 0.051-vs-0.224 §7 re-measure",
+    "root gen-docs/gen-ansi --check §7 must-do (wave reviewer map-denied)",
+    "TOOL-5.b phantom-review-chain anomaly noted"
+   ]
+  }
  },
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "weld_notes": {
@@ -601,12 +625,13 @@
   "C-TUI-7.a": "CLEAN r3 tip fa64a39b9 (deriveGatherKey session\\0root exact-boundary proven NUL-safe; pins non-vacuous). Weld owes: durations row StartupSummaryGatherTest; RouteTraitParity union vs master 27757dd94 (keep master ModelCatalogReadyMsg+TelemetryRetryTickMsg rows, add lane StartupSummaryGatheredMsg after StatusLineTickMsg); 2 foreign AccessorDeprecation deprecations = weld glance",
   "C-CTX-6.b": "r2 CLEAN @723418d56; weld owes durations row DocumentAggregateBudgetTest 11T; suite-figure re-pin is gate duty NOT weld; weld AFTER EXT-2.d welder lands (single writer)",
   "C-EXT-2.d": "welded fa14b82c6 + durations 850653720 (1484); gates reproduced (83T 0F, +10A census wobble adjudicated); cherry '-'; worktree+branch pruned; NIT + census-red carries in WELD.md",
-  "C-TOOL-5.b": "W12 weld-ready: durations row FormatAutoTableTest 6T ONLY; disclose in WELD.md: LayeredSettings 'formatAuto' design-forced hub row + DocFigure 9000→12000 window; 2 lang keys en-only (strict-parity §6.3 carry); e2e planted-prettier; no regen (no protocol/dist sources).",
+  "C-TOOL-5.b": "FRESH fixer (user ruling) applying REVIEW-2 5 cures to 2fecd5f26; prior fixer hallucinated refutations+fake collision — fresh r4 review required after land; weld owes durations FormatAutoTableTest 6T ONLY; en-only lang strict-parity carry; LayeredSettings formatAuto + DocFigure window 9000→12000 @:2290 disclosed in-step",
   "C-TUI-6.k": "clean r2 @2887468af; weld roster: dist rebuild rides weld, NO phpunit durations rows; merged-tree recheck vitest 25/25+44/44; vue-tsc 19 standing baseline",
-  "C-TOOL-5.c": "weld owes durations LspInstallerTest 19T + lsp-install doc rows; fix r2 = vacuity pin MINOR-1 + NIT-1 staged-unlink; reviewer-exact gates 210T/1515A + guard set 357T/20911A (2 foreign TreeWide rows)",
-  "C-MCP-2.b": "MAJOR-1 MethodSchemas.php:276 command.list $sessionOnly fix in flight (fixer ses_e7e9a879); NIT-1 McpMethodsTest trait arms -> closeout note; weld owes trio regen+dist? NO dist (server-only schema/SERVER.md/generated.ts)+durations x2+suite-figure +10T is gate duty; dormantRoster mcp.resources row when C-WEB-3.g exists",
+  "C-TOOL-5.c": "r2 CLEAN @ abdc611d3; durations LspInstallerTest 20T (not 19); lsp-install doc rows ride C-TOOL-5.d; no regen",
+  "C-MCP-2.b": "micro-fixer folding uncommitted McpLaunchEnabledTrait arm into amend of 5b3c8cfe8; on blob-proof lead may weld WITHOUT full r3 (cure-only finding); weld owes trio regen merged-tree + npm gen:protocol + dist-if-moved + vitest generated.spec + durations CommandMethodsMcpPromptsTest+McpMethodsTest",
   "C-SES-3.d": "clean r2 @7b47daa31 (single amended commit, 12 files, erratum-only; gates 114T/3468A + 'hare' 365T/4731A exact); weld roster: NO durations rows (no new phpunit files), NO regen (SERVER.md untouched, methods published only in existing schema region — verify gen-protocol-schema --check rc0 on merged), carry /tmp/opencode/cc-cmp-lanes/C-SES-3.d/REVIEW-2.md into lanes dir, §4 mark; NIT closeout: Serve.php liveRenderer source-scan pin candidate",
-  "C-AGT-5.a": "tip d9784ce96 (16 files, replaces 481f2891f); weld owes 2 durations rows ScheduleFactoryTest+ScheduleToolTest; disclosed 1F DreamPassTest name-match to re-prove foreign; lang tool.schedule.* unminted by design (English-in-code precedent under review); deviations ledger in REPORT.md"
+  "C-AGT-5.a": "MINOR-1 fixer in flight; MINOR-2 OWNER-RULING-CARRY: delete guard createdBy-scoped not root-scoped (cross-root model-row delete w/o flag) — spec-permitted, rule before C-AGT-5.b; weld owes 2 durations rows ScheduleFactoryTest+ScheduleToolTest; lang tool.schedule.* NOT minted (precedent holds); DreamPassTest 1F foreign re-proven",
+  "C-AGT-6.b": "'--' terminator fix in flight; NIT REPORT counts +5/26,518; no new test files → no durations"
  },
  "carries": [
   "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest — closeout gate duty",
@@ -693,7 +718,7 @@
   "STOP STATE @2052@: master b4b4404c5 (wind-down commit; 9 files). welded=100/328 LIST. waves_closed [1..9] (W8/W9 rows + marks committed inside b4b4404c5; W9 per lead ruling r1-CLEAN-no-r2 — disclosed). Owed loops: W10 (blocked on unwelded members C-EXT-2.c + C-PRV-5.c), then W11+ per scheduler waves_fully_welded. Only live artifact: /home/sites/cc-cmp-P-TABS.g + branch cc/P-TABS.g @f25a697c1 (parked; re-dispatch plan:1549 after P-TABS.e+P-TABS.f weld). LATE W33+ gated on §6.3 owner rulings (C-TOOL-6 c/e/h + C-TUI-6: Windows shell, Windows self-update helper, web i18n scope, locale choice, parity strictness, voice endpoint, push-to-talk key). NEVER pushed; origin advanced owner-side only.",
   "C-EXT-2.c welded 4b771634d; closeout roster in its WELD.md (Bootstrap:5955 comment, ChatHostLangCatalogue standing red=C-PRV-1.b (a992413b0) seam, TROUBLESHOOTING allowed-tools/effort half=C-EXT-2.b)"
  ],
- "updated": "tick45: C-SES-3.d welded a28124a7e",
+ "updated": "close-W11 weld 2026-10-28: waves_closed +11; W11 loop r2 CLEAN @ 23fa8ab8e; extra_agents 0 (close welder finishing)",
  "wind_down": {
   "master_tip_at_close": "b4b4404c5",
   "welded_count": 101,
@@ -745,9 +770,13 @@
   }
  ],
  "weld_queue": [
-  "C-CTX-6.b",
-  "C-TUI-6.k",
-  "C-SES-3.d"
+  "C-MCP-2.b(blob-proof then W12)",
+  "C-TOOL-5.b(after r4 CLEAN)",
+  "C-WEB-3.f(after CLEAN; dist+trio)",
+  "C-SEC-5.d(after review)",
+  "C-TOOL-5.c(W13, LspInstallerTest 20T)",
+  "C-AGT-5.a(after r2 review)",
+  "C-AGT-6.b(after r2 review)"
  ],
  "tip": "see git log; CTX-6.b welded 117"
 }
