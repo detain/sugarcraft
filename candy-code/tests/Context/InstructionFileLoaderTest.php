@@ -247,12 +247,14 @@ final class InstructionFileLoaderTest extends TestCase
 
     public function testAnAbsoluteForcedPatternIsRefusedLoudlyNotSilentlySkipped(): void
     {
-        // The wildcard is concatenated on purpose: a single glob-shaped
-        // string literal here would be harvested into the GlobDialect corpus
-        // and drift the census figure in src/Util/PathGlob.php.
+        // C-CTX-4.c tiering: an absolute pattern is honoured only from the
+        // USER tier; from the project tier the loud refusal below still
+        // stands. The wildcard is concatenated on purpose: a single
+        // glob-shaped string literal here would be harvested into the
+        // GlobDialect corpus and drift the census figure in src/Util/PathGlob.php.
         $star = chr(42);
         $absolute = '/etc/ssh/' . $star . '.md';
-        $loader = new InstructionFileLoader($this->repoRoot, [$absolute]);
+        $loader = new InstructionFileLoader($this->repoRoot, projectForcedInstructions: [$absolute]);
 
         $this->assertSame([], $loader->loadForced());
         $this->assertArrayHasKey($absolute, $loader->refusedPaths());
@@ -261,12 +263,14 @@ final class InstructionFileLoaderTest extends TestCase
 
     public function testAHomePrefixedForcedPatternIsRefusedLoudly(): void
     {
-        // The old code globs `<repoRoot>/~/notes/*.md`, matches nothing, and
-        // says nothing — the operator's home notes never load either way, but
-        // until now the pattern retired in silence. (As above, the wildcard is
-        // concatenated so the literal never joins the GlobDialect corpus.)
+        // C-CTX-4.c tiering: a `~` pattern is honoured only from the USER
+        // tier; from the project tier it still retires LOUDLY (previously it
+        // globbed `<repoRoot>/~/notes/*.md`, matched nothing, and said
+        // nothing — the operator's home notes never loaded either way, but the
+        // pattern retired in silence). (As above, the wildcard is concatenated
+        // so the literal never joins the GlobDialect corpus.)
         $tilde = '~/notes/' . chr(42) . '.md';
-        $loader = new InstructionFileLoader($this->repoRoot, [$tilde]);
+        $loader = new InstructionFileLoader($this->repoRoot, projectForcedInstructions: [$tilde]);
 
         $this->assertSame([], $loader->loadForced());
         $this->assertArrayHasKey($tilde, $loader->refusedPaths());

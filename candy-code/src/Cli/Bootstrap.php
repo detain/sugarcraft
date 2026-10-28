@@ -9347,6 +9347,15 @@ public static function useMaxCost(?string $maxCost): void
      * operator's silencing patterns come from {@see excludedInstructions()},
      * the sibling "instructionsExclude" key — USER-tier only, so a checked-out
      * repository can never mute the context its operator chose to keep.
+     *
+     * The forced patterns are handed over split by tier (C-CTX-4.c): {@see
+     * forcedInstructions()} is the operator's own list and {@see
+     * projectForcedInstructions()} whatever the merged config carries beyond
+     * it — the distinction is what lets the loader accept absolute and `~`
+     * spellings home-anchored from the user tier while a checked-out repository
+     * still cannot name `/etc/...` into the prompt. The ancestor walk widens
+     * under the user-tier bool read from
+     * {@see InstructionFileLoader::WALK_TO_ROOT_SETTINGS_KEY} below.
      */
     public static function instructionLoader(?string $root = null): InstructionFileLoader
     {
@@ -9354,6 +9363,8 @@ public static function useMaxCost(?string $maxCost): void
             self::requireRoot($root),
             self::forcedInstructions(),
             excludedGlobs: self::excludedInstructions(),
+            projectForcedInstructions: self::projectForcedInstructions(),
+            walkToRoot: (self::readUserConfig()[InstructionFileLoader::WALK_TO_ROOT_SETTINGS_KEY] ?? false) === true,
         );
     }
 
@@ -9407,11 +9418,51 @@ public static function useMaxCost(?string $maxCost): void
      * `..` traversal) stays {@see InstructionFileLoader::loadForced()}'s job —
      * it is the layer that resolves a pattern against the repo root.
      *
+     * This list is the USER tier: it reads the config WITHOUT the project
+     * layer, which is what gives `loadForced()` a provenance-tagged pair of
+     * lists (C-CTX-4.c). The `instructions` key is not project-settable today,
+     * so this and the merged read agree byte-for-byte; the split is wired NOW
+     * so the trust rule holds no matter which later step admits the key to the
+     * project tier.
+     *
      * @return list<string>
      */
     public static function forcedInstructions(): array
     {
-        $configured = self::readUserConfig()['instructions'] ?? null;
+        return self::instructionPatterns(self::readUserConfigWithoutProjectTier()['instructions'] ?? null);
+    }
+
+    /**
+     * Forced-instruction patterns that reached the merged config BEYOND the
+     * user-tier list {@see forcedInstructions()} reads — i.e. anything a
+     * PROJECT-tier settings file could contribute. User-tier-only today:
+     * `instructions` is not in PROJECT_TIER_KEYS, so this is empty on every
+     * real launch; it exists so the loader's refusal of absolute and `~`
+     * patterns FROM THE PROJECT TIER is a wired rule rather than dead code
+     * (C-CTX-4.c), and it is the seam {@see
+     * InstructionFileLoader::loadForced()} consumes.
+     *
+     * @return list<string>
+     */
+    public static function projectForcedInstructions(): array
+    {
+        $user = self::forcedInstructions();
+        $merged = self::instructionPatterns(self::readUserConfig()['instructions'] ?? null);
+
+        return array_values(array_filter(
+            $merged,
+            static fn (string $pattern): bool => !in_array($pattern, $user, true),
+        ));
+    }
+
+    /**
+     * Shared shape filter for both forced-pattern lists — malformed entries
+     * degrade to "that one pattern is ignored" rather than a type error.
+     *
+     * @return list<string>
+     */
+    private static function instructionPatterns(mixed $configured): array
+    {
         if (!is_array($configured)) {
             return [];
         }

@@ -14,6 +14,7 @@ use SugarCraft\Code\Config\Settings\SettingDefinition;
 use SugarCraft\Code\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Code\Config\Settings\SettingType;
 use SugarCraft\Code\Config\Settings\UiEditability;
+use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Context\MemoryBlock;
 use SugarCraft\Code\Context\ProjectMemoryWriter;
 use SugarCraft\Code\Lang;
@@ -129,6 +130,19 @@ final class MemoryRuleSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.instructions.label'))
                 ->withHelp(Lang::t('settings.instructions.help'))
                 ->withReaderSymbol(Bootstrap::class . '::forcedInstructions'),
+            // C-CTX-4.c: the flag widens ancestorRoot()'s climb past the
+            // nearest .git toward (never into) $HOME; the tier split in
+            // forcedInstructions()/projectForcedInstructions() is what makes
+            // loadForced() accept home-anchored absolute and `~` spellings from
+            // this operator's config alone. No withProjectSettable — a
+            // checked-out repo may not widen its own containment.
+            SettingDefinition::new(InstructionFileLoader::WALK_TO_ROOT_SETTINGS_KEY, SettingType::Bool, false)
+                ->withCategory(SettingCategory::MemoryRules)
+                ->withRiskClass(RiskClass::Prompt)
+                ->withLayered()
+                ->withLabel(Lang::t('settings.instructions.walkToRoot.label'))
+                ->withHelp(Lang::t('settings.instructions.walkToRoot.help'))
+                ->withReaderSymbol(Bootstrap::class . '::instructionLoader'),
             SettingDefinition::new('instructionsExclude', SettingType::StringList, [])
                 ->withCategory(SettingCategory::MemoryRules)
                 ->withRiskClass(RiskClass::Prompt)

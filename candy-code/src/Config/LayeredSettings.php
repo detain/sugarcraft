@@ -577,6 +577,7 @@ final class LayeredSettings
         'sd.savePattern',
         'skills.pathNudges',
         'instructions',
+        'instructions.walkToRoot',
         'instructionsExclude',
         'disabledRules',
         'embeddingModel',

@@ -4994,11 +4994,11 @@ final class DocFigureProseDriftTest extends TestCase
             preg_match('/through `ContainedPath` — (\w+) call sites, one per read decision: (.*?)\. The gate closure/u', $doc, $contain),
             'the containment count sentence left its pinned shape',
         );
-        $wordNumbers = ['seven' => 7, 'eight' => 8, 'six' => 6, 'five' => 5, 'four' => 4];
+        $wordNumbers = ['nine' => 9, 'seven' => 7, 'eight' => 8, 'six' => 6, 'five' => 5, 'four' => 4];
         self::assertArrayHasKey($contain[1], $wordNumbers, 'the spelled call-site count is now a word this arm cannot judge — re-read it deliberately');
         preg_match_all('/`(\w+)\(\)`\'\w+/u', $contain[2], $named);
         self::assertNotEmpty($named[1], 'the containment sentence stopped naming its read decisions');
-        self::assertSame(6, count($named[1]), 'the sentence names a different number of methods than the six decisions this arm walks — re-read the sentence, do not bend the walk');
+        self::assertSame(7, count($named[1]), 'the sentence names a different number of methods than the seven decisions this arm walks — re-read the sentence, do not bend the walk');
 
         $loaderText = self::sourceOf('Context/InstructionFileLoader.php');
         self::assertTrue(class_exists('SugarCraft\Code\Context\InstructionFileLoader'));

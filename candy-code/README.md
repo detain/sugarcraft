@@ -1211,7 +1211,7 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and thirty keys are layered — `provider`, `models`,
+Only these one hundred and thirty-one keys are layered — `provider`, `models`,
 `providers`, `titleModel`, `summaryModel`, `maxOutputTokens`, `modelPrices`,
 `extraBody`, `thinkingBudget`, `reasoningEffort`, `promptCache`,
 `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxToolSteps`,
@@ -1236,9 +1236,10 @@ Only these one hundred and thirty keys are layered — `provider`, `models`,
 `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `grepTimeoutSeconds`,
 `sd.baseUrl`, `sd.apiKey`, `sd.timeoutSeconds`, `sd.defaultModel`,
 `ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`,
-`sd.savePattern`, `skills.pathNudges`, `instructions`, `instructionsExclude`,
-`disabledRules`, `embeddingModel`, `disabledSkills`, `enabledSkills`,
-`pluginPaths`, `subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
+`sd.savePattern`, `skills.pathNudges`, `instructions`,
+`instructions.walkToRoot`, `instructionsExclude`, `disabledRules`,
+`embeddingModel`, `disabledSkills`, `enabledSkills`, `pluginPaths`,
+`subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
 `subagentMaxDepth`, `subagentMaxActive`, `includeGitInstructions`,
 `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `theme`, `statusLine`,
 `layout`, `notify`, `watchFiles`, `queueMode`, `terminalBackground`, `mouse`,
@@ -1292,7 +1293,7 @@ in precedence only.
 > user-tier only. Details per key in
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
-Even for a trusted project, seventy-four keys are **never** taken from a project file:
+Even for a trusted project, seventy-five keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -1318,7 +1319,7 @@ to;
 `providers`, for the same host-and-bill reason — each entry pins a provider's base URL
 and key material, so a checkout choosing them would route the operator's paid traffic
 through an endpoint it picked; `instructions`, because it decides which files become authoritative
-system-prompt text; `instructionsExclude`, because it names the instruction
+system-prompt text; `instructions.walkToRoot`, because it widens that same decision above the nearest `.git` marker — a checkout switching it on would push the operator's prompt text up the directory tree, so the flag is the operator's alone (the user home still caps every read it unlocks); `instructionsExclude`, because it names the instruction
 files whose absence is enforced — the mirror of `instructions`'s power, so a
 checkout choosing it could mute the operator's own context; `disabledRules`, because its value is a list of names
 pointing at the operator's own rule packs, so a project-tier one would let a

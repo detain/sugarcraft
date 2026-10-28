@@ -123,6 +123,15 @@ final class InstructionFileLoader
     public const MAX_ON_TOUCH_RESULT_BYTES = self::MAX_DOCUMENT_BYTES;
 
     /**
+     * Config key (USER tier only — see {@see \SugarCraft\Code\Config\LayeredSettings})
+     * that widens {@see ancestorRoot()}'s climb past the nearest `.git` marker
+     * up to — never including — the operator's home directory, and that has no
+     * effect on {@see loadForced()}'s home-anchored absolute/`~` acceptance
+     * (those are gated by the tier split, not by this flag).
+     */
+    public const WALK_TO_ROOT_SETTINGS_KEY = 'instructions.walkToRoot';
+
+    /**
      * The room {@see loadForPath()}'s budget pre-check charges a candidate
      * beyond its raw file size: the framing {@see frameOnTouch()} adds
      * (attribute line, preamble, fences) plus the headroom {@see
@@ -304,6 +313,14 @@ final class InstructionFileLoader
      * @param string|null $personalDir The operator's own config directory holding the personal
      *        {@see PERSONAL_FILENAME}; null resolves `~/.candy-code` under the OWNED home at first
      *        read ({@see personalDir()})
+     * @param string[] $projectForcedInstructions Forced-instruction patterns that reached config
+     *        from the PROJECT tier (a checked-out repository's settings file). They are refused
+     *        by name whenever they carry an absolute or `~` spelling — the spellings only the
+     *        operator's own user tier may use ({@see loadForced()}); relative patterns behave
+     *        exactly as the user list's do. Split by {@see \SugarCraft\Code\Cli\Bootstrap::projectForcedInstructions()}.
+     * @param bool $walkToRoot Value of {@see WALK_TO_ROOT_SETTINGS_KEY}: with it true,
+     *        {@see ancestorRoot()} keeps climbing ABOVE the nearest `.git` marker up to — but
+     *        never including — the user's home directory instead of stopping at the marker.
      */
     public function __construct(
         private readonly string $repoRoot,
@@ -311,6 +328,8 @@ final class InstructionFileLoader
         ?ImportResolver $importResolver = null,
         private readonly ?string $personalDir = null,
         private readonly array $excludedGlobs = [],
+        private readonly array $projectForcedInstructions = [],
+        private readonly bool $walkToRoot = false,
     ) {
         $this->importResolver = $importResolver ?? ImportResolver::new();
     }
@@ -833,6 +852,18 @@ final class InstructionFileLoader
      *    cannot tell whose home this is, because a guard that cannot identify
      *    its subject must not invent one.
      *
+     * WITH `instructions.walkToRoot` TRUE (C-CTX-4.c, user tier only) rule 2
+     * stops returning null at the checkout itself and rules 3–4 give way to a
+     * single widened floor: when `$repoRoot` resolves INSIDE the operator's
+     * home (and is not the home), the answer is the topmost directory still
+     * strictly below `$HOME`, `.git` markers above the checkout notwithstanding.
+     * That is the opt-in the flag is named for — a workspace spine under one's
+     * own home is the operator's own filesystem, so stray `CLAUDE.md` files
+     * between the checkout and `$HOME` are in scope. The floor itself is not
+     * negotiable: `$HOME` and everything above it stay excluded exactly as rule
+     * 4 has them, and {@see loadAncestorRoots()} keeps its containment and
+     * per-document budget against the returned boundary.
+     *
      * The answer is memoized, and the reason is the OBSERVABLE one rather than
      * a speed argument: {@see loadRoot()} memoizes too, but this is also the
      * pull-based seam a display would read, and the walk's inputs are files on
@@ -853,12 +884,45 @@ final class InstructionFileLoader
         $this->ancestorRootResolved = true;
 
         $root = realpath($this->repoRoot);
-        if ($root === false || file_exists($root . '/.git')) {
+        if ($root === false) {
             return $this->ancestorRoot = null;
         }
 
         $home = HomeDirectory::resolved();
         $realHome = \is_string($home) ? realpath($home) : false;
+
+        if ($this->walkToRoot && $realHome !== false
+            && $root !== $realHome && ContainedPath::within($root, $realHome)) {
+            // instructions.walkToRoot (C-CTX-4.c): keep climbing ABOVE the
+            // nearest `.git` instead of stopping at it, but only inside the
+            // user's own home subtree — $HOME itself and everything above it
+            // stay excluded, the same boundary rule 4 enforces on the default
+            // walk. The accept-candidate here is the topmost directory still
+            // strictly below $HOME; loadAncestorRoots() then reads from it
+            // down to the checkout's parent under that one containment
+            // boundary. The raw `$root !== $realHome` half is deliberate:
+            // within() admits the resolve-ONTO case, and a checkout AT home
+            // would otherwise start its climb from home's own parent — above
+            // the boundary. Rule-4's `$dir === $realHome` above is the same
+            // raw-equality posture on resolved realpaths.
+            $top = \dirname($root);
+            if ($top === $realHome) {
+                return $this->ancestorRoot = null; // root sits directly under home
+            }
+            while (true) {
+                $parent = \dirname($top);
+                if ($parent === $top || $parent === $realHome) {
+                    break;
+                }
+                $top = $parent;
+            }
+
+            return $this->ancestorRoot = $top;
+        }
+
+        if (file_exists($root . '/.git')) {
+            return $this->ancestorRoot = null;
+        }
 
         $dir = \dirname($root);
         while (true) {
@@ -1009,20 +1073,26 @@ final class InstructionFileLoader
      * this class that skipped the expansion the class docblock promises.
      *
      * A PATTERN THAT CANNOT MATCH IS SAID SO (ISS-067), through the same
-     * {@see refusedPaths()} record the launch drain prints: an absolute
-     * pattern, a `~/` pattern, and a wildcard-free pattern whose file is
-     * absent each get a refusal keyed by the pattern as spelled. All three
-     * used to `continue` in silence — a forced instruction the operator
-     * believes is loading, quietly never loading. A pattern that DOES carry a
-     * wildcard and matches nothing is still silent: it names a class of files
-     * that may legitimately be empty today.
+     * {@see refusedPaths()} record the launch drain prints: a wildcard-free
+     * pattern whose file is absent, an absolute or `~` pattern reaching this
+     * layer from the PROJECT tier, and a home-anchored pattern whose home does
+     * not resolve each get a refusal keyed by the pattern as spelled. The
+     * refusal spellings used to `continue` in silence — a forced instruction
+     * the operator believes is loading, quietly never loading. A pattern that
+     * DOES carry a wildcard and matches nothing is still silent: it names a
+     * class of files that may legitimately be empty today.
      *
      * Patterns are user config but their matches land verbatim in the model's
-     * system prompt, so containment is enforced twice: absolute patterns are
-     * rejected outright, and every glob match is realpath()-checked against
-     * repoRoot afterwards. The second check is what stops a relative pattern
-     * that traverses out (`../../../etc/ssh/*`) from exfiltrating files —
-     * mirroring the boundary closure expandImports() hands to ImportResolver.
+     * system prompt, so containment is enforced on every read: relative
+     * patterns are realpath()-checked against repoRoot, and the absolute and
+     * `~` spellings — accepted since C-CTX-4.c, and ONLY from the user tier —
+     * are realpath()-checked against the operator's home. A PROJECT-tier
+     * pattern of either spelling is refused by name (the split lives in
+     * {@see \SugarCraft\Code\Cli\Bootstrap::projectForcedInstructions()}, so
+     * a checked-out repository can never name `/etc/...` into the prompt. The
+     * per-match check is what stops a relative pattern that traverses out
+     * (`../../../etc/ssh/*`) from exfiltrating files — mirroring the boundary
+     * closure expandImports() hands to ImportResolver.
      *
      * Containment is judged on the realpath()-RESOLVED target, so a symlink
      * that lives inside the repo but points outside it (a common way to
@@ -1038,8 +1108,9 @@ final class InstructionFileLoader
      * line rather than its body — a glob such as `docs/*.md` reaches a generated
      * reference file as easily as a convention; see {@see loadDocuments()}.
      *
-     * @return string[] Contents of matching in-repo files (matches outside
-     *                  repoRoot, and matches already emitted elsewhere, are
+     * @return string[] Contents of matching contained files (relative matches
+     *                  outside repoRoot, home-anchored matches outside the
+     *                  user home, and matches already emitted elsewhere, are
      *                  skipped; patterns that cannot match are refused, not
      *                  skipped — see above)
      */
@@ -1049,107 +1120,142 @@ final class InstructionFileLoader
             return self::bodies($this->forcedCache);
         }
 
-        if ($this->forcedInstructions === []) {
+        if ($this->forcedInstructions === [] && $this->projectForcedInstructions === []) {
             $this->forcedCache = [];
 
             return [];
         }
 
         $contents = [];
-        foreach ($this->forcedInstructions as $pattern) {
-            // A pattern is resolved under the checkout; the two spellings that
-            // cannot be are refused LOUDLY, keyed as spelled (ISS-067 — they
-            // used to `continue` in silence). Absolute patterns stay rejected
-            // outright, not globbed: they bypass repoRoot and are a security
-            // risk, and a `~/` pattern's intended target is outside the
-            // checkout anyway, where the per-match containment below would
-            // only refuse the matches one by one after walking a tree the
-            // loader has no business enumerating.
-            if (str_starts_with($pattern, '/')) {
-                $this->refusedPaths[$pattern] = 'an absolute forced-instruction pattern; forced patterns '
-                    . 'resolve under the checkout (' . $this->repoRoot . ')';
+        // Two sources, one walk: the user list first (its order preserved),
+        // then the project list — so a launch's forced-document order never
+        // reshuffles when the tier split lands (C-CTX-4.c).
+        foreach ([[$this->forcedInstructions, true], [$this->projectForcedInstructions, false]] as [$patterns, $userTier]) {
+            foreach ($patterns as $pattern) {
+                // A pattern is resolved under the checkout; the two spellings
+                // that cannot be are refused LOUDLY, keyed as spelled (ISS-067 —
+                // they used to `continue` in silence). Absolute and `~` spellings
+                // are now honoured, but ONLY from the user tier (C-CTX-4.c):
+                // they glob against the operator's own home directory, and every
+                // match is contained against it below. A PROJECT-tier pattern of
+                // either spelling keeps the refusal unchanged — a checked-out
+                // repository must never name `/etc/...` (or the operator's home)
+                // into the prompt.
+                $absolute = str_starts_with($pattern, '/');
+                $tilde = $pattern === '~' || str_starts_with($pattern, '~/');
 
-                continue;
-            }
-
-            if ($pattern === '~' || str_starts_with($pattern, '~/')) {
-                $this->refusedPaths[$pattern] = 'a ~-prefixed forced-instruction pattern; home-directory '
-                    . 'instructions belong to the personal layer, and forced patterns resolve only under '
-                    . 'the checkout (' . $this->repoRoot . ')';
-
-                continue;
-            }
-
-            // Only the configured pattern is a pattern; the checkout path is
-            // literal. Unescaped, a root such as `~/work/[acme]/site` turns
-            // `[acme]` into a character class and every forced instruction
-            // silently matched nothing — or matched a sibling tree that
-            // containment then refused (audit 15d-22). glob() honours
-            // backslash escapes, so the four characters it treats as special
-            // without GLOB_BRACE are escaped (a `]` is only special after an
-            // unescaped `[`). Matches come back with the real, unescaped path.
-            $fullPattern = addcslashes($this->repoRoot, '\\*?[') . '/' . $pattern;
-            $matches = glob($fullPattern);
-
-            if ($matches === false || $matches === []) {
-                // A wildcard-free pattern that matched nothing is a typo or a
-                // deleted file — it can never match anything else either, so
-                // the operator is told (ISS-067). Wildcard patterns matching
-                // nothing legitimately describe an empty set and stay silent.
-                if (strpbrk($pattern, '*?[') === false) {
-                    $this->refusedPaths[$pattern] = 'matched no file, and carries no wildcard to match '
-                        . 'anything else with';
-                }
-
-                continue;
-            }
-
-            foreach ($matches as $path) {
-                if (!is_file($path)) {
-                    continue;
-                }
-
-                if ($this->excluded($path)) {
-                    $this->refusedPaths[$path] = 'excluded by instructionsExclude';
+                if (($absolute || $tilde) && !$userTier) {
+                    $this->refusedPaths[$pattern] = $absolute
+                        ? 'an absolute forced-instruction pattern; forced patterns '
+                            . 'resolve under the checkout (' . $this->repoRoot . ')'
+                        : 'a ~-prefixed forced-instruction pattern; home-directory '
+                            . 'instructions belong to the personal layer, and forced patterns resolve only '
+                            . 'under the checkout (' . $this->repoRoot . ')';
 
                     continue;
                 }
 
-                // A relative pattern can still traverse out via "..", so the
-                // resolved match — not the pattern — is what must be contained.
-                // Routed through {@see ContainedPath} rather than spelled here:
-                // this file's two hand-spelled compares are precisely why six
-                // rounds read it as audited while its other two read paths had
-                // NO compare to find. One extra `realpath()` per glob match (a
-                // cached stat) buys the file zero local containment idiom.
-                if (!ContainedPath::within($path, $this->repoRoot)) {
-                    $this->refusedPaths[$path] = 'a forced-instruction match resolving outside the checkout ('
-                        . $this->repoRoot . ')';
+                if ($absolute || $tilde) {
+                    // User tier: anchor at the operator's home. The anchor is
+                    // READ, never created — an unresolved home refuses the
+                    // pattern by name rather than letting the glob fall back
+                    // to some other base.
+                    $home = HomeDirectory::resolved();
+                    $anchor = \is_string($home) ? realpath($home) : false;
+                    if ($anchor === false) {
+                        $this->refusedPaths[$pattern] = 'a home-anchored forced-instruction pattern; the '
+                            . 'user home directory did not resolve, so its matches cannot be contained';
+
+                        continue;
+                    }
+
+                    $boundary = $anchor;
+                    $fullPattern = $absolute
+                        ? $pattern
+                        : ($pattern === '~' ? addcslashes($anchor, '\\*?[') : addcslashes($anchor, '\\*?[') . \substr($pattern, 1));
+                    $anchored = true;
+                } else {
+                    $boundary = $this->repoRoot;
+                    // Only the configured pattern is a pattern; the checkout
+                    // path is literal. Unescaped, a root such as
+                    // `~/work/[acme]/site` turns `[acme]` into a character class
+                    // and every forced instruction silently matched nothing — or
+                    // matched a sibling tree that containment then refused (audit
+                    // 15d-22). glob() honours backslash escapes, so the four
+                    // characters it treats as special without GLOB_BRACE are
+                    // escaped (a `]` is only special after an unescaped `[`).
+                    // Matches come back with the real, unescaped path.
+                    $fullPattern = addcslashes($this->repoRoot, '\\*?[') . '/' . $pattern;
+                    $anchored = false;
+                }
+
+                $matches = glob($fullPattern);
+
+                if ($matches === false || $matches === []) {
+                    // A wildcard-free pattern that matched nothing is a typo or a
+                    // deleted file — it can never match anything else either, so
+                    // the operator is told (ISS-067). Wildcard patterns matching
+                    // nothing legitimately describe an empty set and stay silent.
+                    if (strpbrk($pattern, '*?[') === false) {
+                        $this->refusedPaths[$pattern] = 'matched no file, and carries no wildcard to match '
+                            . 'anything else with';
+                    }
 
                     continue;
                 }
 
-                $realPath = realpath($path);
-                if ($realPath === false) {
-                    continue; // unreachable: within() just resolved it
-                }
+                foreach ($matches as $path) {
+                    if (!is_file($path)) {
+                        continue;
+                    }
 
-                if (isset($this->emittedPaths[$realPath])) {
-                    continue;
-                }
+                    if ($this->excluded($path)) {
+                        $this->refusedPaths[$path] = 'excluded by instructionsExclude';
 
-                $raw = $this->readBounded($realPath, $path, $bytes);
-                if ($raw === null) {
-                    $contents[] = ['path' => $path, 'body' => null, 'bytes' => (int) $bytes];
-                } elseif ($raw !== false) {
-                    $this->emittedPaths[$realPath] = true;
-                    // A glob can match a binary as easily as a document, and
-                    // one invalid byte here used to fail every request
-                    // (audit 15d-08) — see utf8Document().
-                    [$doc, $note] = $this->utf8Document($raw, $path);
-                    $children = [];
-                    $body = $this->expandImports($doc, \dirname($path), $this->repoRoot, $children) . $note;
-                    $contents[] = ['path' => $path, 'body' => $body, 'bytes' => strlen($body), 'imports' => $children];
+                        continue;
+                    }
+
+                    // A relative pattern can still traverse out via "..", so the
+                    // resolved match — not the pattern — is what must be contained,
+                    // against ITS OWN base: the checkout for relative patterns,
+                    // the user home for the accepted absolute/`~` spellings. Routed
+                    // through {@see ContainedPath} rather than spelled here: this
+                    // file's two hand-spelled compares are precisely why six rounds
+                    // read it as audited while its other two read paths had NO
+                    // compare to find. One extra `realpath()` per glob match (a
+                    // cached stat) buys the file zero local containment idiom.
+                    if (!ContainedPath::within($path, $boundary)) {
+                        $this->refusedPaths[$path] = $anchored
+                            ? 'a forced-instruction match resolving outside the user home directory ('
+                                . $boundary . ')'
+                            : 'a forced-instruction match resolving outside the checkout ('
+                                . $this->repoRoot . ')';
+
+                        continue;
+                    }
+
+                    $realPath = realpath($path);
+                    if ($realPath === false) {
+                        continue; // unreachable: within() just resolved it
+                    }
+
+                    if (isset($this->emittedPaths[$realPath])) {
+                        continue;
+                    }
+
+                    $raw = $this->readBounded($realPath, $path, $bytes);
+                    if ($raw === null) {
+                        $contents[] = ['path' => $path, 'body' => null, 'bytes' => (int) $bytes];
+                    } elseif ($raw !== false) {
+                        $this->emittedPaths[$realPath] = true;
+                        // A glob can match a binary as easily as a document, and
+                        // one invalid byte here used to fail every request
+                        // (audit 15d-08) — see utf8Document().
+                        [$doc, $note] = $this->utf8Document($raw, $path);
+                        $children = [];
+                        $body = $this->expandImports($doc, \dirname($path), $boundary, $children) . $note;
+                        $contents[] = ['path' => $path, 'body' => $body, 'bytes' => strlen($body), 'imports' => $children];
+                    }
                 }
             }
         }

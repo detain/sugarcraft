@@ -815,8 +815,18 @@ precedence order (`InstructionFileLoader::FILENAMES`):
   owned home is consulted (`HomeDirectory::owned()`); when you have not written
   that file, Claude Code's personal memory file `~/.claude/CLAUDE.md` stands in,
   gated by its own directory the same way — the two are never both read;
-- **root files** — always, at session start;
-- **forced patterns** from config — glob-resolved, loaded every session; the
+- **root files** — always, at session start, plus any files the walk above the
+  checkout reaches: by default that walk stops at the nearest enclosing `.git`,
+  and with the user-tier `instructions.walkToRoot` on it continues past that
+  marker to the topmost directory **below** your home — never home itself, and
+  every ancestor file keeps the same containment gate and size budget. A stray
+  `CLAUDE.md` in a parent workspace is exactly why the walk is opt-in;
+- **forced patterns** from config — glob-resolved, loaded every session; an
+  absolute or `~`-prefixed pattern is honoured **only** when it arrives from
+  the user tier, and each of its matches is then contained by your home the
+  same way a checkout pattern is contained by the checkout (a symlink out of
+  home is refused by path); a project tier can never name one — the loader
+  keeps the tiers apart precisely so it cannot; the
   sibling user-tier key `instructionsExclude` skips (and records as refusals)
   the repository-tier instruction files its globs match — a checkout can never
   silence context its operator chose, and the personal file is outside the
@@ -886,13 +896,14 @@ protection — a file that imports itself is marked before its own expansion run
 
 ### Containment
 
-Every read is bounded by its own root through `ContainedPath` — eight call
+Every read is bounded by its own root through `ContainedPath` — nine call
 sites, one per read decision: `loadPersonal()`'s personal entry and its
 `~/.claude` fallback (each bounded by its own directory),
 `loadRoot()`'s root entry,
 `loadAncestorRoots()`'s ancestor entry, `loadForced()`'s glob match,
-`loadForPath()`'s starting directory and its per-level candidate, and
-`expandImports()`'s gate closure. The gate closure is threaded through **every**
+`loadForPath()`'s starting directory and its per-level candidate,
+`ancestorRoot()`'s home floor, and `expandImports()`'s gate closure. The gate
+closure is threaded through **every**
 recursion level, so an allowed file that imports something that imports
 something disallowed is still refused.
 
