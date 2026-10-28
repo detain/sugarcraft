@@ -7396,5 +7396,5 @@ final class DocFigureProseDriftTest extends TestCase
         foreach (['addTimer', 'usleep', 'sleep(', 'stream_select'] as $clock) {
             self::assertFalse(strpos($shaper, $clock), "McpPromptCommands mentions {$clock} — the page promises the fetch rides the ordinary MCP deadline, not a new clock");
         }
-        }
+    }
 }

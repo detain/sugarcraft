@@ -158,24 +158,17 @@
   "C-SEC-6.a",
   "C-PRV-2.b",
   "C-EXT-4.b",
-  "C-MCP-4.b"
+  "C-MCP-4.b",
+  "C-MCP-3.b"
  ],
  "inflight": {
-  "C-MCP-3.b": {
-   "stage": "review",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-MCP-3.b",
-   "branch": "cc/C-MCP-3.b",
-   "tip": "828b709ea8586eae4bc9e1bea141b16cf01e1690",
-   "note": "salvage landed+lead-verified (1 commit, porcelain 0, detain); 9 files +1252/-11; reviewer LIVE ses_e7cd956faffenR7jxqD2TO8sKS (salvage-coherence scrutiny); weld duty 2 tsv rows (McpToolProgressTest 15T + NonInteractiveMcpToolsHeadlessTest 4T recount)"
-  },
   "C-AGT-5.c": {
-   "stage": "build",
+   "stage": "review",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-AGT-5.c",
    "branch": "cc/C-AGT-5.c",
-   "builder": "ses_e7cce61e6ffeJMF0CXdTJTW5Ca",
-   "note": "heartbeat schedule kind; base a812ea659; BRIEF minted; refresh+npm ci OK"
+   "tip": "1d8dad74e603147567027477d59cf31c87f26a78",
+   "note": "builder LANDED (11 files +672/-21, REPORT.md on disk, lead-verified single commit porcelain 0 detain); r1 reviewer ses_e7c9f72d4 RESUMED with continue after silence (attempt 1/10); duties: heartbeat kind semantics + 9F base-identity + StderrEmitterCensus 1->2 flip; weld duty 1 tsv row HeartbeatScheduleTest 9T"
   }
  },
  "blocked": [],
@@ -832,6 +825,16 @@
    "reviews": "r2 FINDINGS 1MAJOR+3MINOR cured; r3 duplicate: ses_e7cc52312 CLEAN vs ses_e7ccb9189 FINDINGS 1MINOR -- disk adjudication vindicated FINDINGS, cure = single en.php disable.done line (796756612, verified one-line diff from 1fbbaddc0)",
    "carry": "suite-figure +12T/+53A (tick total +14T/+70A w/ C-EXT-4.b); ~66-file pre-existing durations backlog = closeout duty",
    "absorption": "RECORD: see WELD.md; worktree+branch pruned same tick"
+  },
+  "C-MCP-3.b": {
+   "master": "5cac857fc pick + 37a4ef615 scripts + weld (plan mark, cure, lane files, run-state)",
+   "pick": "58966feb9 -> 5cac857fc (CLEAN onto fb907c832, docs/MCP.md+lang/en.php+DocFigure auto-merge; patch-id 49b5b1342 IDENTICAL; %ae/%ce separate greps 1/1 detain, zero trailers; 10 files +1340/-12)",
+   "regen": "none (zero src/Protocol/** + zero candy-code-web paths in pick; gen-docs --check rc=0 re-run by welder at merged tree)",
+   "gates": "pair files 4T/14A + 15T/67A OK (junit per-file sums 0.004/0.007); --filter 'MCP|Mcp' 1476T/8531A OK 0F (1 skip, 2 base-present deprecations); new DocFigure arm standalone 1T/16A OK; five-guard 134T/16465A red-set = staleness pair ONLY (25537 vs live 27209, foreign-era, report-only)",
+   "fold": "r2 MINOR-1 CURED in weld commit: DocFigureProseDriftTest.php:7399 stray 4->8-space method-close brace restored (whitespace-only 1/1, php -l clean, whole class 92T/4047A OK post-fold, no whitespace guard exists)",
+   "durations": "scripts commit 37a4ef615: 2 rows NonInteractiveMcpToolsHeadlessTest 0.004/4 + McpToolProgressTest 0.007/15 (col3=testcase COUNT, tie-band alphabetical insert); tsv 1537->1539, asc-violations 4==4, set-equality +2 exact",
+   "carry": "suite-figure +20T (19T new files + 1T DocFigure arm) rides closeout re-pin (welder never touched suite-figure.json)",
+   "absorption": "cherry '-' expected (patch-id identical); WELD.md records salvage twin history (d7d008566 phantom, 828b709ea->58966feb9, twin-fixer 28545a1a7 tree-absorbed)"
   }
  },
  "carries": [
@@ -976,8 +979,8 @@
   "C-SEC-6.a",
   "(CTX-2.d in welder hands)"
  ],
- "tip": "f024af640",
- "welded_count": 159,
+ "tip": "37a4ef615",
+ "welded_count": 160,
  "tick": "87-disk-reconciled: W11 REALY closed@341f66404; trio MCP2b+TOOL5b+WEB3f real to 0b3c4ba21 (welded=122); W13/14 welds PENDING; phantom-atlas @b73@ correction: c3178096f/4d263705a/8d8c75678 GHOSTS, cure real 23fa8ab8e; C-PRV-2.b welded cf36a8458 (welded_count=157, r3 CLEAN + phantom-r2-note recorded) | W17: C-EXT-4.b real to 3bc062fc4 (r2 CLEAN, phantom-inflight-note correction: de5c16a51->1e03fa00a byte-identical amend; all-4-generator --check zero-drift) | W17: C-MCP-4.b real to 6beef34f4 (pick, content-equiv; tsv f024af640, 1535->1537); duplicate-r3 disagreement disk-adjudicated to FINDINGS (cure 796756612); foreign 1F pr-MenuBar standing report-only; C-EXT-4.b same tick -> 3bc062fc4/c569b41e6/8f0001af1",
  "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
  "blocked_notes": {

@@ -1968,7 +1968,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ext.md` → `### C-EXT-5.a`
 
-#### C-MCP-3.b — Wire server requests into turns (ask channel, progress, headless)
+#### ✅ 5cac857fc31c7534b1da515a50dcd7683dce91b3 C-MCP-3.b — Wire server requests into turns (ask channel, progress, headless)
 - **Item:** C-MCP-3 (sources: GAP-MCP-08, OC-new#1, CC-new#2) · gap · effort M
 - **What:** MCP tools never see the turn's approver: `EngineBackend::turnTools()` binds `RelaysPermissionAsks` only inside the `DelegatesToEngine` arm (`candy-code/src/Backend/EngineBackend.php:3209-3283`), and `McpToolBridge` is `Tool, …
 - **Files — create:** `candy-code/tests/Tools/McpToolProgressTest.php`, `candy-code/tests/Cli/NonInteractiveMcpToolsHeadlessTest.php`
