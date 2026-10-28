@@ -9,6 +9,7 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
+use SugarCraft\Code\Host\SessionHost;
 use SugarCraft\Code\Host\SessionHub;
 use SugarCraft\Code\Host\TranscriptStore;
 use SugarCraft\Code\Host\WorkspaceContext;
@@ -67,6 +68,74 @@ final class SessionHubTest extends TestCase
         $retaken = $this->store->lockSession('a');
         self::assertNotNull($retaken, 'closing released the lock');
         $retaken->release();
+    }
+
+    /**
+     * C-SES-7.e: the incognito contract at the hub — an ephemeral create
+     * touches NOTHING that outlives the process: no `sessions` row, no
+     * flock, no transcript saves; close drops the host and there is left
+     * behind nothing to find.
+     */
+    public function testAnEphemeralSessionPersistsNothingAndDropsOnClose(): void
+    {
+        $hub = SessionHub::new(WorkspaceContext::new(sessionStore: $this->store));
+
+        $host = $hub->create(null, 'incognito', ephemeral: true);
+
+        self::assertTrue($host->isEphemeral());
+        self::assertSame('incognito', $host->ephemeralName());
+        self::assertTrue($hub->isOpen($host->sessionId()), 'it is a live session while open');
+        self::assertNull($this->store->session($host->sessionId()), 'no row was minted');
+
+        $lock = $this->store->lockSession($host->sessionId());
+        self::assertNotNull($lock, 'no lease was taken — another process could always claim the id');
+        $lock->release();
+
+        self::assertTrue($hub->close($host->sessionId()));
+        self::assertFalse($hub->isOpen($host->sessionId()));
+        self::assertNull($this->store->session($host->sessionId()), 'and close leaves nothing behind either');
+    }
+
+    /**
+     * C-SES-7.e: the drop-on-close behaviour above proves the HOST is gone;
+     * this proves the GATES — every persistence channel an ephemeral host
+     * owns is refused at the channel, not by luck of nobody having written.
+     * A pre-seeded store row under the host's own id is the discriminator:
+     * an ungated `save()` would overwrite it with the host's history.
+     */
+    public function testTheEphemeralGatesRefuseEveryPersistenceChannel(): void
+    {
+        $this->store->createSession('ghost', 'sugar-code', 'opus');
+        (TranscriptStore::new($this->store))->save('ghost', [Message::user('kept')]);
+
+        $ghost = SessionHost::new('ghost', WorkspaceContext::new(sessionStore: $this->store), [Message::user('discarded')], TranscriptStore::new($this->store), ephemeral: true);
+        $save = new \ReflectionMethod(SessionHost::class, 'save');
+        $save->invoke($ghost);
+        $ghost->release();
+
+        $kept = $this->store->loadTranscript('ghost');
+        self::assertIsArray($kept);
+        self::assertSame('kept', (string) ($kept[0]['content'] ?? ''), 'the ephemeral save() touched nothing — the row kept its own story');
+
+        $sink = new \ReflectionMethod(SessionHost::class, 'usageRecordSink');
+        self::assertNull($sink->invoke($ghost), 'the ephemeral usage sink is null: the settle path has no channel to the ledger');
+        $plain = SessionHost::new('visible', WorkspaceContext::new(sessionStore: $this->store), [], TranscriptStore::new($this->store));
+        self::assertIsCallable($sink->invoke($plain), 'positive control: the very same accessor on a NON-ephemeral host over the same store hands out the sink');
+        $plain->release();
+
+        /*
+         * The settle work (auto-memory consolidation, dream, prompt
+         * suggestion — the title and memory passes) refuses on the same
+         * word. Driving it end to end needs a full engine fixture beyond
+         * this lane, so the gate is pinned where it lives: the opening of
+         * the method body, mechanically sliced. Deleting the guard reddens
+         * this arm exactly as surely as an executed one would.
+         */
+        $source = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Host/SessionHost.php');
+        $from = strpos($source, 'function runSettleWork(');
+        self::assertIsInt($from, 'the settle chokepoint still exists under this name');
+        $body = substr($source, (int) $from, (int) (strpos(substr($source, (int) $from, 700), '$plan =') ?: 600));
+        self::assertStringContainsString('if ($this->ephemeral) {', $body, 'an ephemeral host never plans consolidation, dream, or suggestion passes');
     }
 
     public function testASessionAnotherProcessHoldsIsRefused(): void

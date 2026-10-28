@@ -118,16 +118,43 @@ final class SessionHub
      * opened.
      *
      * @param string|null $sessionId null mints one
+     * @param bool $ephemeral C-SES-7.e: an incognito session — no store row,
+     *        no lease, and a host that writes nothing back. It rides the
+     *        open-host registry until it is closed (or evicted), and then it
+     *        is gone: there is nothing durable left behind to re-open.
      */
-    public function create(?string $sessionId = null, ?string $name = null, string $provider = '', string $model = ''): SessionHost
+    public function create(?string $sessionId = null, ?string $name = null, string $provider = '', string $model = '', bool $ephemeral = false): SessionHost
     {
         $sessionId ??= bin2hex(random_bytes(8));
-        $store = $this->workspace->sessionStore;
-        if ($store !== null && $store->session($sessionId) === null) {
-            $store->createSession($sessionId, $provider, $model, name: $name, cwd: $this->workspace->root);
+        if (!$ephemeral) {
+            $store = $this->workspace->sessionStore;
+            if ($store !== null && $store->session($sessionId) === null) {
+                $store->createSession($sessionId, $provider, $model, name: $name, cwd: $this->workspace->root);
+            }
+
+            return $this->open($sessionId);
         }
 
-        return $this->open($sessionId);
+        // The lease guards the durable row; with no row there is nothing to
+        // lock — and open() would take one — so the host is built directly
+        // over an empty history with its name carried on the host itself.
+        if (isset($this->hosts[$sessionId])) {
+            return $this->touch($sessionId);
+        }
+
+        $host = SessionHost::new(
+            $sessionId,
+            $this->workspace,
+            [],
+            SessionHost::transcriptsFor($this->workspace),
+            compactorConfig: $this->compactorConfig,
+            ephemeral: true,
+            ephemeralName: $name,
+        );
+        $this->hosts[$sessionId] = $host;
+        $this->evictIdle($sessionId);
+
+        return $host;
     }
 
     /** The open host of $sessionId, or null. */
@@ -196,13 +223,20 @@ final class SessionHub
      *
      * @return array{sessions: list<array<string, mixed>>, nextCursor: ?string}
      */
-    public function list(int $limit = 20, ?string $cursor = null, ?string $query = null): array
+    public function list(int $limit = 20, ?string $cursor = null, ?string $query = null, ?bool $archived = null): array
     {
         $store = $this->workspace->sessionStore;
         if (!$store instanceof EnhancedSessionStore || $limit < 1) {
             return ['sessions' => [], 'nextCursor' => null];
         }
 
+        // C-SES-7.e: $archived selects which archive state to show. null
+        // (default) means the ordinary live listing (archived rows hidden);
+        // true means the archived tray; false is the same as null today but
+        // spelled. Both store paths honour it identically so the cursor law
+        // stays one law. (The meta path gained this filter here: it reads
+        // `SELECT s.*` and carried archived rows unfiltered before.)
+        //
         // One row beyond the page tells whether another page exists; a cursor
         // means reading past everything up to it. The filtered path returns
         // SessionRow OBJECTS (rank order, snippet attached); it is converted
@@ -211,9 +245,12 @@ final class SessionHub
         $rows = $query !== null
             ? array_map(
                 static fn (SessionRow $row): array => [...$row->toArray(), 'bodySnippet' => $row->bodySnippet],
-                $store->listSessionsFiltered(SessionQuery::new()->withBodySearch($query)->withLimit(PHP_INT_MAX)),
+                $store->listSessionsFiltered(self::archiveQuery($archived)->withBodySearch($query)->withLimit(PHP_INT_MAX)),
             )
-            : $store->listSessionsWithMeta(PHP_INT_MAX);
+            : \array_values(\array_filter(
+                $store->listSessionsWithMeta(PHP_INT_MAX),
+                static fn (array $row): bool => self::archivedMatches($row, $archived),
+            ));
         if ($cursor !== null) {
             $ids = array_map(static fn (array $row): string => (string) ($row['id'] ?? ''), $rows);
             $at = array_search($cursor, $ids, true);
@@ -231,6 +268,26 @@ final class SessionHub
             'sessions' => array_values($sessions),
             'nextCursor' => $more && $page !== [] ? (string) ($page[\count($page) - 1]['id'] ?? '') : null,
         ];
+    }
+
+    /**
+     * The FTS-shaped query for one archive view: null/false read the live
+     * listing (the SessionQuery default already excludes archived rows),
+     * true reads the archived tray.
+     */
+    private static function archiveQuery(?bool $archived): SessionQuery
+    {
+        return $archived === true
+            ? SessionQuery::new()->withArchivedOnly(true)
+            : SessionQuery::new();
+    }
+
+    /** The meta path's same law, applied to the storage-shaped row. */
+    private static function archivedMatches(array $row, ?bool $archived): bool
+    {
+        $isArchived = ($row['archived_at'] ?? null) !== null;
+
+        return $archived === true ? $isArchived : !$isArchived;
     }
 
     /** Move $sessionId to the most-recently-used end and return its host. */

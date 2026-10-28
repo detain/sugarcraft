@@ -11,6 +11,7 @@ use SugarCraft\Code\Protocol\Methods\SessionMethods;
 use SugarCraft\Code\Protocol\Methods\TurnMethods;
 use SugarCraft\Code\Protocol\Schema\Definitions as D;
 use SugarCraft\Code\Server\ServerConfig;
+use SugarCraft\Code\Session\Import\ImportFormat;
 use SugarCraft\Code\Share\ShareSession;
 use SugarCraft\Code\Share\ShareStore;
 
@@ -159,11 +160,22 @@ final class MethodSchemas
             ],
 
             'session.list' => [
-                Schema::object(['limit' => Schema::integer(1, 200), 'cursor' => Schema::ref(D::SESSION_ID), 'query' => Schema::string(256), 'root' => $root]),
+                Schema::object([
+                    'limit' => Schema::integer(1, 200),
+                    'cursor' => Schema::ref(D::SESSION_ID),
+                    'query' => Schema::string(256),
+                    'archived' => Schema::boolean()->describe('true lists ONLY archived sessions; omitted or false lists the unarchived ones (the historical law).'),
+                    'root' => $root,
+                ]),
                 $page($summary),
             ],
             'session.create' => [
-                Schema::object(['name' => Schema::string(256), 'permissionMode' => Schema::ref(D::PERMISSION_MODE), 'root' => $root]),
+                Schema::object([
+                    'name' => Schema::string(256),
+                    'permissionMode' => Schema::ref(D::PERMISSION_MODE),
+                    'ephemeral' => Schema::boolean()->describe('Incognito: a live session that persists nothing — no store row, no transcript saves, no usage records, no title or memory passes — and is dropped by the hub on close.'),
+                    'root' => $root,
+                ]),
                 $summary,
             ],
             'session.get' => [Schema::object([...$sid, 'limit' => Schema::integer(1, SessionSnapshot::MAX_PAGE_ROWS), 'beforeIndex' => Schema::integer(0)], ['sessionId']), Schema::ref(D::SNAPSHOT)],
@@ -200,6 +212,17 @@ final class MethodSchemas
                     'revision' => Schema::string(64)->describe('xxh128 of the whole rendered transcript; echo it on the next page.'),
                 ], ['format', 'content']),
             ],
+            'session.import' => [
+                Schema::object([
+                    'content' => Schema::string(SessionMethods::IMPORT_MAX_CONTENT_BYTES)->describe('The transcript body to import, up to the verified inbound WS frame ceiling (ServerConfig::MAX_CLIENT_FRAME_BYTES less envelope headroom); a longer body is refused as an invalid param before dispatch, a malformed one as import_refused.'),
+                    'format' => Schema::enum(\array_map(static fn (ImportFormat $case): string => $case->value, ImportFormat::cases()))->describe('How to read the body; omitted, the importer detects it from the leading structure.'),
+                    'name' => Schema::string(256),
+                    'root' => $root,
+                ], ['content']),
+                $summary,
+            ],
+            'session.archive' => [$sessionOnly, $summary],
+            'session.unarchive' => [$sessionOnly, $summary],
             'session.share' => [
                 Schema::object([...$sid, 'days' => Schema::integer(1, ShareStore::MAX_EXPIRY_DAYS)], ['sessionId']),
                 Schema::object([

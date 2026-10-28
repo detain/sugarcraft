@@ -24,6 +24,9 @@ const DORMANT_REASONS: Record<string, string> = {
   // Scope::Admin host verb: the browser may receive the event but must never
   // call the method; C-WEB-5.g wires the confirmed Admin caller later.
   'server.shutdown': 'admin-scope shutdown is a host operator verb; the client only receives the event (WEB-1)',
+  // C-SES-7.e shipped the session.import method; the browser's import dialog
+  // arrives with a later step — external clients ride the wire meanwhile.
+  'session.import': 'transcript import rides the protocol for external clients; the browser import dialog lands with a later step',
 }
 
 /** Every module that ships to the browser: src minus the generated schema, tests and fixtures. */

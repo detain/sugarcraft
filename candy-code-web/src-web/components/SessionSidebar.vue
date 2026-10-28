@@ -23,6 +23,14 @@ const creating = ref(false)
 const error = ref<string | null>(null)
 /** WEB-1a: the session whose row action menu is open, at most one at a time. */
 const menuFor = ref<string | null>(null)
+/**
+ * C-SES-7.e: the tray toggle drives the store (which re-reads the server);
+ * the v-model write is the async reload itself, never a local sweep.
+ */
+const trayShown = computed({
+  get: () => sessions.showArchived,
+  set: (on: boolean) => void sessions.setShowArchived(on),
+})
 
 /** C-WEB-3.e: `session.share` / `session.unshare` are write-scoped; a read-only connection sees neither item. */
 const canWrite = computed(() => connection.scopes.includes('write'))
@@ -69,11 +77,11 @@ function open(id: string): void {
   void router.push({ name: 'session', params: { id } })
 }
 
-async function create(): Promise<void> {
+async function create(incognito = false): Promise<void> {
   creating.value = true
   error.value = null
   try {
-    const summary = await newSession.start()
+    const summary = await newSession.start(incognito)
     if (summary) open(summary.id)
   } catch (failure) {
     error.value = failure instanceof Error ? failure.message : String(failure)
@@ -104,6 +112,22 @@ async function fork(summary: SessionSummary): Promise<void> {
 async function closeRow(summary: SessionSummary): Promise<void> {
   menuFor.value = null
   await act(() => sessions.close(summary.id))
+}
+
+/**
+ * C-SES-7.e: the archive tray's two row actions. `session.archive` /
+ * `session.unarchive` are write-scoped and idempotent, and the store applies
+ * the tray law to the answer — an archived row disappears while the tray is
+ * hidden, exactly as the server's default listing will hide it.
+ */
+async function archiveRow(summary: SessionSummary): Promise<void> {
+  menuFor.value = null
+  await act(() => sessions.archive(summary.id))
+}
+
+async function restoreRow(summary: SessionSummary): Promise<void> {
+  menuFor.value = null
+  await act(() => sessions.unarchive(summary.id))
 }
 
 /**
@@ -258,9 +282,13 @@ function onKey(event: KeyboardEvent): void {
   <nav class="sidebar" aria-label="Sessions" data-testid="sidebar" @keydown="onKey">
     <div class="top">
       <h2>Sessions</h2>
-      <button type="button" class="primary" :disabled="creating || !connection.connected" data-testid="new-session" @click="create">+ New</button>
+      <button type="button" class="primary" :disabled="creating || !connection.connected" data-testid="new-session" @click="create()">+ New</button>
+      <!-- C-SES-7.e: the incognito entry — the same start path, ephemeral. -->
+      <button type="button" :disabled="creating || !connection.connected" data-testid="new-incognito" title="Incognito: nothing is persisted once it closes" @click="create(true)">Incognito</button>
     </div>
     <input v-model="filter" type="search" placeholder="Filter…" aria-label="Filter sessions">
+    <!-- C-SES-7.e: the tray toggle drives the store's re-read of the server. -->
+    <label class="tray"><input v-model="trayShown" type="checkbox" data-testid="show-archived"> Show archived</label>
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="sessions.loaded && sessions.items.length === 0" class="empty">No sessions yet.</p>
     <p v-else-if="filter.trim() !== '' && !sessions.searching && shown.length === 0" class="empty" data-testid="search-empty">No sessions match “{{ filter.trim() }}”.</p>
@@ -279,7 +307,7 @@ function onKey(event: KeyboardEvent): void {
           <span class="name">{{ title(summary) }}</span>
           <span v-if="approvals.countFor(summary.id) > 0" class="badge" :title="`${approvals.countFor(summary.id)} waiting for an answer`" data-testid="ask-badge">{{ approvals.countFor(summary.id) }}</span>
           <span v-if="summary.snippet" class="snippet" data-testid="session-snippet">{{ oneLine(summary.snippet, 90) }}</span>
-          <span class="meta">{{ summary.status === 'closed' ? '' : summary.status.replace('_', ' ') }}<template v-if="summary.updatedAt"> · {{ ago(summary.updatedAt) }}</template><template v-if="spendFor(summary)"> · <span data-testid="session-spend">{{ spendFor(summary) }}</span></template><template v-if="elsewhere(summary)"> · <span :title="summary.root" data-testid="session-root">{{ elsewhere(summary) }}/</span></template></span>
+          <span class="meta">{{ summary.status === 'closed' ? '' : summary.status.replace('_', ' ') }}<template v-if="summary.updatedAt"> · {{ ago(summary.updatedAt) }}</template><template v-if="spendFor(summary)"> · <span data-testid="session-spend">{{ spendFor(summary) }}</span></template><template v-if="elsewhere(summary)"> · <span :title="summary.root" data-testid="session-root">{{ elsewhere(summary) }}/</span></template><template v-if="summary.ephemeral === true"> · <span data-testid="session-incognito">incognito</span></template><template v-if="summary.archived === true"> · <span data-testid="session-archived">archived</span></template></span>
         </a>
         <button
           type="button"
@@ -299,8 +327,10 @@ function onKey(event: KeyboardEvent): void {
           <li v-for="row in shareRows(summary)" :key="row.token">
             <button type="button" role="menuitem" :data-testid="`row-unshare-${summary.id}-${row.tokenPrefix}`" @click="unshareRow(row)">Revoke share {{ row.tokenPrefix }}… · {{ expiryLabel(row.expiresAt) }}</button>
           </li>
+          <li v-if="canWrite && summary.ephemeral !== true && summary.archived !== true"><button type="button" role="menuitem" :data-testid="`row-archive-${summary.id}`" @click="archiveRow(summary)">Archive</button></li>
+          <li v-if="canWrite && summary.archived === true"><button type="button" role="menuitem" :data-testid="`row-restore-${summary.id}`" @click="restoreRow(summary)">Restore</button></li>
           <li v-if="summary.status !== 'closed'"><button type="button" role="menuitem" :data-testid="`row-close-${summary.id}`" @click="closeRow(summary)">Close</button></li>
-          <li><button type="button" role="menuitem" class="danger" :data-testid="`row-delete-${summary.id}`" @click="removeRow(summary)">Delete</button></li>
+          <li v-if="summary.ephemeral !== true"><button type="button" role="menuitem" class="danger" :data-testid="`row-delete-${summary.id}`" @click="removeRow(summary)">Delete</button></li>
           <li v-if="elsewhere(summary)"><button type="button" role="menuitem" :data-testid="`row-close-host-${summary.id}`" @click="closeHost(summary)">Close {{ elsewhere(summary) }}/ host</button></li>
         </ul>
       </li>
@@ -330,6 +360,14 @@ function onKey(event: KeyboardEvent): void {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+.tray {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0.25rem 0 0;
+  color: var(--muted, #888);
+  font-size: 0.75rem;
 }
 h2 {
   margin: 0;

@@ -23,6 +23,12 @@ use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Protocol\Scope;
 use SugarCraft\Code\Protocol\SessionFeed;
 use SugarCraft\Code\Protocol\TrustAsks;
+use SugarCraft\Code\Server\ServerConfig;
+use SugarCraft\Code\Session\EnhancedSessionStore;
+use SugarCraft\Code\Session\Import\ImportFormat;
+use SugarCraft\Code\Session\Import\ImportRefusedException;
+use SugarCraft\Code\Session\Import\SessionImportLedger;
+use SugarCraft\Code\Session\Import\SessionImporter;
 use SugarCraft\Code\Util\Exporter;
 
 /**
@@ -60,6 +66,23 @@ final class SessionMethods
     /** A paging revision is one xxh128 hex string; nothing longer is read. */
     private const EXPORT_REVISION_MAX_CHARS = 64;
 
+    /**
+     * The byte ceiling for `session.import` content (C-SES-7.e).
+     *
+     * The server reads an inbound WS frame up to
+     * {@see ServerConfig::MAX_CLIENT_FRAME_BYTES} before dispatch (that is
+     * the frame cap the `Ws\MessageBuffer` enforces, verified in
+     * `src/Server/Ws/`, NOT the 16 MiB outbox watermark in `Outbox.php:40`).
+     * A JSON-RPC envelope rides inside that same frame, so the largest
+     * transcript body that can arrive is the frame cap less the envelope and
+     * one escaped control byte's headroom. The import bound mirrors it: a
+     * larger `content` never reaches a method body: the published schema
+     * guard (`maxLength`) refuses it with `invalid_params` naming the
+     * oversized param before dispatch, and {@see self::import()} re-checks
+     * the same ceiling in-body for callers off that path.
+     */
+    public const IMPORT_MAX_CONTENT_BYTES = ServerConfig::MAX_CLIENT_FRAME_BYTES - self::EXPORT_FRAME_HEADROOM_BYTES;
+
     private function __construct()
     {
     }
@@ -76,6 +99,9 @@ final class SessionMethods
         $registry->add(MethodSpec::new('session.close', Scope::Write, 'Release a session (refused while a turn runs unless force).', self::close(...), true));
         $registry->add(MethodSpec::new('session.delete', Scope::Write, 'Delete a session and its history.', self::delete(...), true));
         $registry->add(MethodSpec::new('session.export', Scope::Read, 'A session\'s transcript as markdown, json or text; limit/offset page it and revision guards the walk.', self::export(...)));
+        $registry->add(MethodSpec::new('session.import', Scope::Write, 'Import an external agent transcript carried in the request; byte-identical re-sends land in the same session.', self::import(...), true));
+        $registry->add(MethodSpec::new('session.archive', Scope::Write, 'Move a session to the archive tray; it leaves the default listing.', self::archive(...), true));
+        $registry->add(MethodSpec::new('session.unarchive', Scope::Write, 'Restore an archived session to the live listing.', self::unarchive(...), true));
         $registry->add(MethodSpec::new('session.setMode', Scope::Write, 'The permission mode the session\'s next turns run in.', self::setMode(...), true));
         $registry->add(MethodSpec::new('session.share', Scope::Write, 'Publish an HTML snapshot of a session as a self-hosted share page at /s/{token}.', self::share(...), true));
         $registry->add(MethodSpec::new('session.shares', Scope::Read, 'The live share pages of one session, or of every session when sessionId is absent.', self::shares(...)));
@@ -110,11 +136,16 @@ final class SessionMethods
         $cursor = $params->optionalString('cursor', self::SESSION_ID_MAX);
         $query = $params->optionalString('query', 256);
 
+        // C-SES-7.e: `archived` is a tri-state. Absent (null) and false both
+        // hide the archive (the historical law); true shows ONLY archived
+        // rows. The hub applies it on both the FTS and the meta path.
+        $archived = $params->has('archived') ? $params->bool('archived') : null;
+
         // C-SES-2.c: $query reaches FTS through the hub — bodies ranked,
         // snippets attached, LIKE as the degrade — instead of str_contains
         // over what the first 200-row chunk happened to hold. Both paths
         // page $limit MATCHES, so the cursor law is one law.
-        $page = $call->server->hub()->list($limit, $cursor, $query);
+        $page = $call->server->hub()->list($limit, $cursor, $query, $archived);
 
         return [
             'items' => \array_map(static fn (array $row): array => self::summary($call, $row), $page['sessions']),
@@ -130,8 +161,13 @@ final class SessionMethods
         }
         $name = $params->optionalString('name', 256);
         $mode = self::admittedMode($call, $params);
+        // C-SES-7.e: an ephemeral ("Incognito") session opens a live host
+        // with NO store row — TranscriptStore saves, the usage-record sink
+        // and the settle passes (memory/title) are gated off inside
+        // SessionHost, and the hub drops the host on close.
+        $ephemeral = $params->bool('ephemeral');
 
-        $host = $call->server->hub()->create(null, $name);
+        $host = $call->server->hub()->create(null, $name, ephemeral: $ephemeral);
         $call->server->feedFor($host);
         if ($mode !== null) {
             $host->setPermissionMode($mode);
@@ -411,6 +447,152 @@ final class SessionMethods
         $token = $params->string('token', ShareStore::TOKEN_BYTES * 2);
 
         return ['revoked' => self::shareStore($call)->revoke($token)];
+    }
+
+    /**
+     * `session.import` — run the C-SES-7.a importer in-process over a
+     * uploaded transcript body (C-SES-7.e).
+     *
+     * The idempotency law is the importer's own digest keying, not the
+     * dispatcher's `idempotencyKey`: the source key is `rpc:` plus the
+     * sha256 of the body's FIRST LINE, so a byte-identical resend of the
+     * same transcript lands on the same session with `appended` 0, a grown
+     * resend appends only its delta, and a reshaped head is honestly a
+     * different source. The event type follows the ledger:
+     * `session.created` when the source key was unknown before the call,
+     * `session.updated` when it already had a session. A `content` beyond {@see IMPORT_MAX_CONTENT_BYTES} never
+     * reaches this body over the wire — the published schema guard refuses
+     * it with `invalid_params` at the dispatcher (one ceiling, two
+     * chokepoints) — and an importer refusal, malformed shape, unknown
+     * format, a shrunken resend, is translated to the typed
+     * `import_refused` rather than leaking as an internal error.
+     *
+     * @return array<string, mixed>
+     */
+    private static function import(CallContext $call, Params $params): array
+    {
+        if ($call->server->isDraining()) {
+            throw RpcError::of(ErrorCode::Busy, 'the server is shutting down', 'draining');
+        }
+
+        $store = $call->server->hub()->workspace()->sessionStore;
+        if (!$store instanceof EnhancedSessionStore) {
+            throw RpcError::of(ErrorCode::Internal, 'the workspace has no session store', 'no_store');
+        }
+
+        try {
+            $content = $params->string('content', self::IMPORT_MAX_CONTENT_BYTES);
+        } catch (RpcError $tooLong) {
+            // Defense-in-depth off the wire: on the WS path the published
+            // schema guard (maxLength) refuses the same bound before the
+            // method is ever dispatched, so this throw answers the direct
+            // callers only — one ceiling, two chokepoints.
+            throw RpcError::invalidParams($tooLong->getMessage(), 'import_too_large');
+        }
+
+        $format = null;
+        if (($formatName = $params->optionalString('format', 32)) !== null) {
+            $format = ImportFormat::tryFrom($formatName);
+            if ($format === null) {
+                throw RpcError::invalidParams(\sprintf(
+                    'format must be one of: %s',
+                    \implode(', ', \array_map(static fn (ImportFormat $case): string => $case->value, ImportFormat::cases())),
+                ));
+            }
+        }
+
+        /*
+         * The sourceKey must be stable across RESENDS of a growing
+         * transcript — the ledger's own law turns a changed digest under a
+         * known key into a delta append, and a shrunken one into a typed
+         * refusal. Hashing the whole body instead (the naive key) would make
+         * every resend a new key, and an append indistinguishable from a
+         * brand-new import. So the identity is the digest of the FIRST LINE:
+         * a growing log preserves its head, a rewritten one does not. The
+         * `rpc:` prefix namespaces the key away from file imports.
+         */
+        $identity = \substr(\hash('sha256', \strtok($content, "\n") ?: $content), 0, 32);
+        $sourceKey = 'rpc:' . $identity;
+
+        // The ledger is read BEFORE the import: it answers which session (if
+        // any) this source already produced, which is what makes the created
+        // vs updated announcement the truth rather than a guess.
+        $ledger = SessionImportLedger::atPath($store->path());
+        $known = $ledger->lookup($sourceKey);
+
+        try {
+            $imported = SessionImporter::new()
+                ->withBounds(null, self::IMPORT_MAX_CONTENT_BYTES)
+                ->importString($store, $content, $format, $params->optionalString('name', 256), $sourceKey);
+        } catch (ImportRefusedException $refused) {
+            throw RpcError::invalidParams($refused->getMessage(), 'import_refused');
+        }
+
+        if ($known === null) {
+            // A fresh import is a session the live server has never hosted;
+            // open it through the hub exactly as `session.create` does, so
+            // the answered row is interactive and honestly `open`, and the
+            // per-session lock is taken through the hub's own lease path.
+            $host = $call->server->hub()->open($imported->sessionId);
+            $call->server->feedFor($host);
+        } elseif ($call->server->hub()->isOpen($imported->sessionId)) {
+            // The append rewrote the session's stored transcript underneath
+            // any live host. Close and re-open so the in-memory history
+            // matches the store — an open host left behind the ledger would
+            // clobber the appended rows at its next save.
+            $call->server->hub()->close($imported->sessionId);
+            $call->server->feedFor($call->server->hub()->open($imported->sessionId));
+        }
+
+        return self::announce(
+            $call,
+            $imported->sessionId,
+            $known !== null ? EventType::SESSION_UPDATED : EventType::SESSION_CREATED,
+        );
+    }
+
+    /** @return array<string, mixed> */
+    private static function archive(CallContext $call, Params $params): array
+    {
+        return self::setArchived($call, $params, true);
+    }
+
+    /** @return array<string, mixed> */
+    private static function unarchive(CallContext $call, Params $params): array
+    {
+        return self::setArchived($call, $params, false);
+    }
+
+    /**
+     * `session.archive` / `session.unarchive` — flag one stored session
+     * out of, or back into, the default listing (C-SES-7.e, wrapping the
+     * existing `EnhancedSessionStore::archive()`/`unarchive()`). Re-asking
+     * for the state a session already holds is a no-op answered with the
+     * fresh summary, never a refusal: the flag write is `WHERE`-guarded in
+     * the store, so the repeat costs nothing and the announce keeps every
+     * follower honest.
+     *
+     * @return array<string, mixed>
+     */
+    private static function setArchived(CallContext $call, Params $params, bool $archived): array
+    {
+        $sessionId = self::sessionId($params);
+        $store = $call->server->hub()->workspace()->sessionStore;
+        if (!$store instanceof EnhancedSessionStore) {
+            throw RpcError::of(ErrorCode::Internal, 'the workspace has no session store', 'no_store');
+        }
+
+        if ($store->session($sessionId) === null) {
+            throw RpcError::notFound(\sprintf('no session %s', $sessionId), 'session_not_found');
+        }
+
+        if ($archived) {
+            $store->archive($sessionId);
+        } else {
+            $store->unarchive($sessionId);
+        }
+
+        return self::announce($call, $sessionId, EventType::SESSION_UPDATED);
     }
 
     /**

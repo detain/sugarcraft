@@ -370,6 +370,11 @@ final class ServerContext
                 ? $host->spentUsd()
                 : (isset($row['cost_usd']) && \is_numeric($row['cost_usd']) ? (float) $row['cost_usd'] : null),
             'spendUnpriced' => (int) ($row['cost_unpriced'] ?? 0) !== 0,
+            // C-SES-7.e: the archive tray state lives on the row; the
+            // incognito state lives on the open host (a closed one left no
+            // trace — that is the point).
+            'archived' => ($row['archived_at'] ?? null) !== null,
+            'ephemeral' => $host?->isEphemeral() === true,
         ];
     }
 
@@ -381,6 +386,13 @@ final class ServerContext
     public function summaryOf(string $sessionId): array
     {
         $row = $this->hub->workspace()->sessionStore?->session($sessionId) ?? ['id' => $sessionId];
+        if (($row['name'] ?? null) === null) {
+            // C-SES-7.e: an incognito session has no store row at all, and a
+            // name given to `session.create {ephemeral:true}` rides the open
+            // host instead; for every other session this answers null and
+            // leaves the row as it was.
+            $row['name'] = $this->hub->get($sessionId)?->ephemeralName();
+        }
 
         return $this->summary($row);
     }

@@ -66,6 +66,12 @@ final class Definitions
                 // figure is a lower bound. Read off the row's sticky
                 // cost_unpriced cache, so it holds for closed sessions too.
                 'spendUnpriced' => Schema::boolean(),
+                // C-SES-7.e: the archive tray state and the incognito state.
+                // archived reads the row's archived_at; ephemeral is true
+                // only while an incognito host is open (it leaves no row to
+                // say so once closed — that is the point).
+                'archived' => Schema::boolean(),
+                'ephemeral' => Schema::boolean(),
                 'root' => Schema::string()->describe('Set by the serve gateway on a session another project root\'s workspace host answered for (roadmap O-7).'),
             ], ['id', 'open', 'status']),
             self::PENDING_ASK => Schema::object([

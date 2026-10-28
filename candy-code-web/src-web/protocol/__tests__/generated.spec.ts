@@ -38,6 +38,15 @@ describe('gen:protocol', () => {
     expect(METHOD_SCOPES['session.share']).toBe('write')
     expect(METHOD_SCOPES['session.shares']).toBe('read')
     expect(METHOD_SCOPES['session.unshare']).toBe('write')
+    // C-SES-7.e: import and the archive tray pair ride the same tables, and
+    // all three are side-effecting — replay-safe by the digest-keyed ledger
+    // (import) and the WHERE-clause idempotence (archive/unarchive).
+    expect(METHOD_SCOPES['session.import']).toBe('write')
+    expect(METHOD_SCOPES['session.archive']).toBe('write')
+    expect(METHOD_SCOPES['session.unarchive']).toBe('write')
+    expect(IDEMPOTENT_METHODS).toContain('session.import')
+    expect(IDEMPOTENT_METHODS).toContain('session.archive')
+    expect(IDEMPOTENT_METHODS).toContain('session.unarchive')
     expect(EVENT_KINDS['assistant.delta']).toEqual({ durable: false, scope: 'session' })
     expect(EVENT_KINDS['tool.finished']).toEqual({ durable: true, scope: 'session' })
   })

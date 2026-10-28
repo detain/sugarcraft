@@ -330,6 +330,8 @@ final class SessionHost
         ?CompactorConfig $compactorConfig,
         ?array $customCommands,
         ?\Closure $mcpProvider,
+        private readonly bool $ephemeral = false,
+        private readonly ?string $ephemeralName = null,
     ) {
         $this->history = array_values($history);
         $this->inbox = new \ArrayObject();
@@ -400,6 +402,12 @@ final class SessionHost
      *        as a lazy provider (C-MCP-2.a); null takes the workspace root's
      *        launch-memoised client over {@see Bootstrap::mcpClient()}, the
      *        same shape Chat's mcpClientProvider() carries
+     * @param bool $ephemeral C-SES-7.e: an incognito host — it reads the
+     *        store like any other but writes nothing: transcript saves, the
+     *        usage-record sink, permission-grant persistence and every
+     *        post-turn settle pass are skipped
+     * @param string|null $ephemeralName the name given at create, carried on
+     *        the host itself because an ephemeral session has no store row
      */
     public static function new(
         string $sessionId,
@@ -410,6 +418,8 @@ final class SessionHost
         ?CompactorConfig $compactorConfig = null,
         ?array $customCommands = null,
         ?\Closure $mcpProvider = null,
+        bool $ephemeral = false,
+        ?string $ephemeralName = null,
     ): self {
         if (trim($sessionId) === '') {
             throw new \InvalidArgumentException('A session host needs a non-empty session id.');
@@ -424,6 +434,8 @@ final class SessionHost
             $compactorConfig,
             $customCommands,
             $mcpProvider,
+            $ephemeral,
+            $ephemeralName,
         );
     }
 
@@ -441,6 +453,26 @@ final class SessionHost
     public function sessionId(): string
     {
         return $this->sessionId;
+    }
+
+    /**
+     * C-SES-7.e: true for an incognito host — created with
+     * `session.create {ephemeral:true}`, never written to the store.
+     */
+    public function isEphemeral(): bool
+    {
+        return $this->ephemeral;
+    }
+
+    /**
+     * C-SES-7.e: the name carried by an ephemeral host, which has no store
+     * row to read it from. Null for a persisted host (its name lives in the
+     * sessions table); for an ephemeral host it is the `name` given at
+     * create, and the summary falls back to it.
+     */
+    public function ephemeralName(): ?string
+    {
+        return $this->ephemeralName;
     }
 
     /**
@@ -652,7 +684,9 @@ final class SessionHost
         }
         if ($remember) {
             $this->grants = $this->grants->withGrant($ask->tool, $ask->arguments, $this->root());
-            $this->transcripts->savePermissionGrants($this->sessionId, $this->grants->grants());
+            if (!$this->ephemeral) {
+                $this->transcripts->savePermissionGrants($this->sessionId, $this->grants->grants());
+            }
         }
         $resolution = $ask->resolution();
         if ($resolution !== null) {
@@ -1796,7 +1830,9 @@ final class SessionHost
 
                 case CommandEffectKind::SetPermissionGrants:
                     $this->grants = $effect->grants() ?? SessionPermissionMemo::new();
-                    $this->transcripts->savePermissionGrants($this->sessionId, $this->grants->grants());
+                    if (!$this->ephemeral) {
+                        $this->transcripts->savePermissionGrants($this->sessionId, $this->grants->grants());
+                    }
                     break;
 
                 case CommandEffectKind::SetPermissionMode:
@@ -2429,6 +2465,14 @@ final class SessionHost
      */
     private function runSettleWork(bool $carriedOn, bool $goalActive): void
     {
+        // C-SES-7.e: an incognito session runs no post-turn passes at all —
+        // no memory consolidation, no auto-commit, no dream, no prompt
+        // suggestion. Each carries a durable side (memory files, git); the
+        // session's turns answer live and die with the process.
+        if ($this->ephemeral) {
+            return;
+        }
+
         $engine = $this->backend();
         $work = TurnSettleWork::plan(
             carriedOn: $carriedOn,
@@ -2901,6 +2945,13 @@ final class SessionHost
 
     private function save(): void
     {
+        // C-SES-7.e: an incognito host never touches the store. This is THE
+        // transcript persistence choke — every row the host takes on is
+        // saved through here — so skipping it leaves nothing on disk.
+        if ($this->ephemeral) {
+            return;
+        }
+
         try {
             $this->transcripts->save($this->sessionId, $this->history);
         } catch (\Throwable) {
@@ -3050,6 +3101,12 @@ final class SessionHost
      */
     private function usageRecordSink(): ?\Closure
     {
+        // C-SES-7.e: the usage sink is the only durable usage ledger an open
+        // host writes; an incognito session has no ledger to append to.
+        if ($this->ephemeral) {
+            return null;
+        }
+
         $store = $this->workspace->sessionStore;
         if (!$store instanceof EnhancedSessionStore) {
             return null;

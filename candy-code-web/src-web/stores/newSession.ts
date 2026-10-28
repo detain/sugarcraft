@@ -23,6 +23,8 @@ export const useNewSessionStore = defineStore('newSession', () => {
   const starting = ref(false)
   const error = ref<string | null>(null)
   let settle: ((summary: SessionSummary | null) => void) | null = null
+  /** C-SES-7.e: the incognito choice made at `start()`, kept until the picker resolves. */
+  let pendingIncognito = false
 
   /** Whether the server lets a client pick the directory a session starts in. */
   const canBrowse = computed(() => connection.hello?.features.dirBrowse?.enabled === true)
@@ -31,9 +33,15 @@ export const useNewSessionStore = defineStore('newSession', () => {
   /** The server's own project root, where the picker opens. */
   const serverRoot = computed(() => connection.hello?.server.root ?? null)
 
-  /** Start a session: through the picker when the server offers one. */
-  function start(): Promise<SessionSummary | null> {
-    if (!canBrowse.value) return sessions.create()
+  /**
+   * Start a session: through the picker when the server offers one.
+   * C-SES-7.e: `incognito` rides `session.create {ephemeral:true}` on
+   * whichever path resolves — picked directory or the server's own root.
+   * The picker resolves later than the call, so the choice waits here.
+   */
+  function start(incognito = false): Promise<SessionSummary | null> {
+    pendingIncognito = incognito
+    if (!canBrowse.value) return sessions.create(incognito ? { ephemeral: true } : {})
     settle?.(null)
     error.value = null
     pickerOpen.value = true
@@ -57,7 +65,10 @@ export const useNewSessionStore = defineStore('newSession', () => {
     error.value = null
     try {
       const opened = await connection.request('workspace.open', { root, browse: true })
-      const summary = await sessions.create(opened.primary ? {} : { root: opened.root })
+      const summary = await sessions.create({
+        ...(opened.primary ? {} : { root: opened.root }),
+        ...(pendingIncognito ? { ephemeral: true } : {}),
+      })
       finish(summary)
       return summary
     } catch (failure) {
@@ -74,6 +85,7 @@ export const useNewSessionStore = defineStore('newSession', () => {
 
   function finish(summary: SessionSummary | null): void {
     pickerOpen.value = false
+    pendingIncognito = false
     const resolve = settle
     settle = null
     resolve?.(summary)

@@ -145,3 +145,102 @@ describe('session-row menu (WEB-1a)', () => {
     expect(wrapper.find('[data-testid="row-actions"]').exists()).toBe(false)
   })
 })
+
+/**
+ * C-SES-7.e: the tray and incognito UI on the same menu seams — Archive and
+ * Restore rows, the Incognito create button, the Show-archived checkbox,
+ * and the row markers. The tray toggle never client-side-sweeps: it drives
+ * the store's re-read of the server (pinned in the store spec).
+ */
+describe('session tray + incognito (C-SES-7.e)', () => {
+  const summary = (id: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    name: `session ${id}`,
+    status: 'idle',
+    open: false,
+    updatedAt: '2026-10-17 02:00:00',
+    createdAt: '2026-10-17 00:00:00',
+    permissionMode: 'default',
+    root: '/repo',
+    ...extra,
+  })
+
+  it('archives from the row menu, and the hidden tray drops the row', async () => {
+    const { wire, wrapper } = await mountSidebar(['s1'])
+    await wrapper.find('[data-testid="row-menu-s1"]').trigger('click')
+    await wrapper.find('[data-testid="row-archive-s1"]').trigger('click')
+    expect(wire.sent('session.archive').at(-1)?.params).toMatchObject({ sessionId: 's1' })
+    wire.answer('session.archive', summary('s1', { archived: true }))
+    await settle()
+    expect(useSessionsStore().byId.s1).toBeUndefined()
+    expect(wire.sent('session.unarchive')).toHaveLength(0)
+  })
+
+  it('an archived row shows Restore instead, and it comes back', async () => {
+    const { wire, wrapper } = await mountSidebar(['s1'])
+    const seeded = useSessionsStore().byId.s1
+    if (seeded) useSessionsStore().byId = { s1: { ...seeded, archived: true } }
+    await settle()
+    expect(wrapper.find('[data-testid="session-archived"]').exists()).toBe(true)
+    await wrapper.find('[data-testid="row-menu-s1"]').trigger('click')
+    expect(wrapper.find('[data-testid="row-archive-s1"]').exists()).toBe(false)
+    await wrapper.find('[data-testid="row-restore-s1"]').trigger('click')
+    expect(wire.sent('session.unarchive').at(-1)?.params).toMatchObject({ sessionId: 's1' })
+    wire.answer('session.unarchive', summary('s1', { archived: false }))
+    await settle()
+    expect(useSessionsStore().byId.s1?.archived).toBe(false)
+    expect(wrapper.find('[data-testid="session-archived"]').exists()).toBe(false)
+  })
+
+  it('the tray checkbox walks the archived listing and keeps its rows', async () => {
+    const { wire, wrapper } = await mountSidebar(['s1'])
+    await wrapper.find('[data-testid="show-archived"]').setValue(true)
+    await settle()
+    // The live page first, then the tray page — the newest unanswered frame
+    // is the walk currently in flight at each answer.
+    wire.answer('session.list', { items: [], nextCursor: null })
+    await settle()
+    wire.answer('session.list', { items: [summary('s1', { archived: true })], nextCursor: null })
+    await settle()
+    expect(wire.sent('session.list').at(-1)?.params).toMatchObject({ archived: true })
+    expect(useSessionsStore().showArchived).toBe(true)
+    expect(useSessionsStore().byId.s1?.archived).toBe(true)
+  })
+
+  it('the Incognito button creates an ephemeral session and marks its row', async () => {
+    const { wire, wrapper } = await mountSidebar(['s1'])
+    await wrapper.find('[data-testid="new-incognito"]').trigger('click')
+    expect(wire.sent('session.create').at(-1)?.params).toMatchObject({ ephemeral: true })
+    wire.answer('session.create', summary('e1', { name: 'incognito', ephemeral: true, open: true }))
+    await settle()
+    expect(useSessionsStore().byId.e1?.ephemeral).toBe(true)
+    expect(wrapper.find('[data-testid="session-incognito"]').exists()).toBe(true)
+  })
+
+  it('the Incognito button creates ephemeral, marks the row, and gates the destructive menu items', async () => {
+    const { wire, wrapper } = await mountSidebar(['s1'])
+    await wrapper.find('[data-testid="new-incognito"]').trigger('click')
+    expect(wire.sent('session.create').at(-1)?.params).toMatchObject({ ephemeral: true })
+    wire.answer('session.create', {
+      id: 'g1', name: '', status: 'idle', open: true,
+      updatedAt: '2026-10-17 05:00:00', createdAt: '', permissionMode: 'default',
+      root: '/repo', contextTokens: 0, contextWindow: 0, ephemeral: true,
+    })
+    await settle()
+    expect(useSessionsStore().byId.g1?.ephemeral).toBe(true)
+    expect(wrapper.find('[data-testid="session-incognito"]').exists()).toBe(true)
+    await wrapper.find('[data-testid="row-menu-g1"]').trigger('click')
+    expect(wrapper.find('[data-testid="row-delete-g1"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="row-archive-g1"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="row-close-g1"]').exists()).toBe(true)
+  })
+
+  it('keeps the full menu on a live row: Archive present, Restore absent', async () => {
+    // Discriminating shape-check for the row-action v-if gates.
+    const { wrapper } = await mountSidebar(['s1'])
+    await wrapper.find('[data-testid="row-menu-s1"]').trigger('click')
+    expect(wrapper.find('[data-testid="row-archive-s1"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="row-restore-s1"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="row-delete-s1"]').exists()).toBe(true)
+  })
+})

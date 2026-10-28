@@ -44,6 +44,13 @@ export const useSessionsStore = defineStore('sessions', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
   const loaded = ref(false)
+  /**
+   * C-SES-7.e: the archived tray is OFF by default — the server's default
+   * `session.list` hides archived rows, and so does the sidebar until the
+   * toggle asks for them. Toggling re-loads; it never client-side-sweeps a
+   * cache the server already filtered.
+   */
+  const showArchived = ref(false)
 
   const items = computed(() =>
     Object.values(byId.value).sort((a, b) => stamp(b).localeCompare(stamp(a)) || a.id.localeCompare(b.id)),
@@ -58,16 +65,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     error.value = null
     try {
       const next: Record<string, SessionSummary> = {}
-      let cursor: string | null = null
-      for (let page = 0; page < MAX_PAGES; page++) {
-        const result: { items: SessionSummary[]; nextCursor: string | null } = await connection.request(
-          'session.list',
-          cursor === null ? { limit: PAGE } : { limit: PAGE, cursor },
-        )
-        for (const summary of result.items) next[summary.id] = summary
-        cursor = result.nextCursor
-        if (cursor === null) break
-      }
+      await loadPages(next, {})
+      if (showArchived.value) await loadPages(next, { archived: true })
       await loadOtherRoots(next)
       byId.value = next
       loaded.value = true
@@ -76,6 +75,33 @@ export const useSessionsStore = defineStore('sessions', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  /**
+   * One `session.list` paging walk (C-WEB-7.c's cursor law), merged into
+   * $into. $extra carries the tray request (`{ archived: true }`); the
+   * default walk is the live listing, exactly as it always was.
+   *
+   * @param extra additional params for every page of this walk
+   */
+  async function loadPages(into: Record<string, SessionSummary>, extra: Record<string, unknown>): Promise<void> {
+    let cursor: string | null = null
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const result: { items: SessionSummary[]; nextCursor: string | null } = await connection.request(
+        'session.list',
+        cursor === null ? { limit: PAGE, ...extra } : { limit: PAGE, cursor, ...extra },
+      )
+      for (const summary of result.items) into[summary.id] = summary
+      cursor = result.nextCursor
+      if (cursor === null) break
+    }
+  }
+
+  /** C-SES-7.e: show or hide the archived tray; the index follows the server on the reload. */
+  async function setShowArchived(on: boolean): Promise<void> {
+    if (showArchived.value === on) return
+    showArchived.value = on
+    await load()
   }
 
   /**
@@ -98,9 +124,39 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
   }
 
-  async function create(options: { name?: string; permissionMode?: PermissionMode; root?: string } = {}): Promise<SessionSummary> {
+  /**
+   * C-SES-7.e: `ephemeral: true` starts an incognito session — the server
+   * keeps no row for it, nothing it produces reaches the transcript store,
+   * the usage ledger, or the settle passes, and the hub drops it on close.
+   * The answering row rides the index for this client until then.
+   */
+  async function create(options: { name?: string; permissionMode?: PermissionMode; root?: string; ephemeral?: boolean } = {}): Promise<SessionSummary> {
     const summary = await connection.request('session.create', options)
     put(summary)
+    return summary
+  }
+
+  /**
+   * C-SES-7.e: apply an answered or announced summary with the tray law —
+   * an archived row while the tray is hidden leaves the index (the server
+   * would not list it on the next load either); everything else merges.
+   */
+  function applyArchived(summary: SessionSummary): void {
+    if (summary.archived === true && showArchived.value === false) drop(summary.id)
+    else put(summary)
+  }
+
+  /** C-SES-7.e: hide the session from the live listing (server-side; the row keeps its transcript). */
+  async function archive(sessionId: string): Promise<SessionSummary> {
+    const summary = await connection.request('session.archive', { sessionId })
+    applyArchived(summary)
+    return summary
+  }
+
+  /** C-SES-7.e: restore an archived session to the live listing. */
+  async function unarchive(sessionId: string): Promise<SessionSummary> {
+    const summary = await connection.request('session.unarchive', { sessionId })
+    applyArchived(summary)
     return summary
   }
 
@@ -309,9 +365,14 @@ export const useSessionsStore = defineStore('sessions', () => {
   connection.onEvent((envelope) => {
     switch (envelope.type) {
       case 'session.created':
-      case 'session.updated':
-        put(envelope.data as unknown as Events['session.created'])
+      case 'session.updated': {
+        const summary = envelope.data as unknown as Events['session.created']
+        // C-SES-7.e: another client's incognito session rides no server row,
+        // so this index must not grow one either — it would vanish on reload.
+        // An archived row follows the tray law (applied below).
+        if (summary.ephemeral !== true) applyArchived(summary)
         break
+      }
       case 'session.deleted':
         drop((envelope.data as unknown as Events['session.deleted']).id)
         // C-SES-3 voids a session's share pages when it is deleted; the
@@ -340,12 +401,16 @@ export const useSessionsStore = defineStore('sessions', () => {
     loading,
     loaded,
     error,
+    showArchived,
     searchResults,
     searching,
     sharesBySession,
     load,
+    setShowArchived,
     search,
     create,
+    archive,
+    unarchive,
     rename,
     remove,
     fork,
