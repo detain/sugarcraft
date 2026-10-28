@@ -5,10 +5,16 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Context;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\Loop;
+use React\Promise\PromiseInterface;
+use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Context\InstructionDiffTracker;
 use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Message;
+use SugarCraft\Code\Providers\CompleteResponse;
+use SugarCraft\Code\Tests\Support\ScriptedProvider;
 use SugarCraft\Code\Tools\BuiltIn\Read;
 
 /**
@@ -33,7 +39,10 @@ use SugarCraft\Code\Tools\BuiltIn\Read;
  * {@see InstructionFileLoader::ANNOUNCED_UPDATES_KEY}, so the parent's
  * un-advanced diff state (C-CTX-1's law) re-detects and re-renders the
  * model's diff every turn WITHOUT re-spitting the human's row (round 1 of
- * the step, the lead-accepted in-step carry).
+ * the step, the lead-accepted in-step carry). Round 2 carries the same law
+ * through a REAL turn fork — parent-side assertions only, because the turn
+ * child self-SIGKILLs at export and no child-side assertion can ever run —
+ * {@see self::testARealForkedTurnCarriesTheAnnouncedRowHomeForTheParentToEmitAndMerge()}.
  *
  * The rows ride {@see RuntimeNoticeSink} into the transcript through the same
  * pump the refusal rows already use; an unarmed sink (a bare `-p` run) drops
@@ -260,6 +269,108 @@ final class InstructionVisibilityNoticeTest extends TestCase
     }
 
     /**
+     * Round 2 MAJOR: the leg above SIMULATES the wire; this one FORKS.
+     * {@see \SugarCraft\Code\Backend\EngineBackend::completeAsync()} runs the
+     * whole engine loop in a pcntl child whose only channel home is the result
+     * frame, so the only way to pin that a child's announce really crosses is
+     * to drive real turns and assert ONLY on the parent side: turn 1 primes the
+     * frozen tracker pre-edit (the parent-side prime C-CTX-1 mandates, into the
+     * backend's session memo); the edit lands; turn 2's child rechecks,
+     * fresh-detects, and the row rides the cross-fork notice transport while
+     * the fingerprint rides the ledger into the child's copy — both die with
+     * the child unless the frame carries them. After turn 2 the PARENT loader
+     * genuinely holds the entry (merged by the real
+     * {@see Read::mergeSessionState()} leg settleFromResultFrame calls — delete
+     * the ANNOUNCED_UPDATES_KEY branch there and the ledger assert below reddens,
+     * because the parent never saw the announce) and the parent's drained sink
+     * genuinely shows the one row the child spoke. Turn 3 proves the payoff on
+     * the real fork path: the parent's slot tracker stays frozen (its $seen is
+     * advanced only in copies that died), so the next child fresh-detects, its
+     * guard consults the carried loader live, and the human's row is NOT said
+     * again — without the fifth key every forked turn would re-spit it.
+     */
+    public function testARealForkedTurnCarriesTheAnnouncedRowHomeForTheParentToEmitAndMerge(): void
+    {
+        if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
+            self::markTestSkipped('completeAsync() takes the blocking fallback without pcntl, so nothing crosses a turn fork');
+        }
+
+        $loader = $this->trackerFixture();
+        // The transport backend must be armed BEFORE any fork — the child
+        // inherits the write end; arm(false) would strand the row in a child
+        // that is about to exit (the exact defect the sink's doc-block names).
+        RuntimeNoticeSink::reset();
+        RuntimeNoticeSink::arm(true);
+        if (!RuntimeNoticeSink::hasTransport()) {
+            self::markTestSkipped('the row-home leg needs the cross-fork notice transport, which this host refused to make');
+        }
+
+        // One response per child: each forked child replays the script from
+        // its inherited copy, so the parent's pointer never advances.
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: 'ok'),
+        ], contextWindow: 1_000_000);
+        $backend = EngineBackend::new($provider, 'm')
+            ->withoutHooks()
+            ->withRoot($this->repo)
+            ->withTools([new Read($this->repo, instructionLoader: $loader)])
+            ->withInstructionLoader($loader);
+
+        $first = $this->drainUntilSettled($backend->completeAsync([Message::user('one')]));
+        self::assertInstanceOf(Message::class, $first);
+        self::assertSame([], $loader->announcedInstructionUpdates(), 'pre-merge the parent view is empty: the child that would have announced found nothing to say');
+        self::assertSame([], RuntimeNoticeSink::drain(), 'and nobody spoke a row into the parent');
+
+        $edited = "Alpha rule\nBeta rule\nGamma rule\n";
+        file_put_contents($this->claude, $edited);
+        clearstatcache();
+
+        $second = $this->drainUntilSettled($backend->completeAsync([
+            Message::user('one'),
+            Message::assistant('ok'),
+            Message::user('two'),
+        ]));
+        self::assertInstanceOf(Message::class, $second);
+        self::assertStringContainsString(
+            'Gamma rule',
+            $this->forkTurnText($second),
+            'the model half is real child-side work: the fresh detection reached the prompt the turn child sent',
+        );
+
+        self::assertSame(
+            [$this->claude => sha1($edited)],
+            $loader->instructionUpdateLedger(),
+            'the child announced; only the frame\'s fifth key and the parent-side mergeSessionState leg could have landed this entry',
+        );
+        self::assertSame(
+            [Lang::t('chat.instructions.updated', ['file' => 'CLAUDE.md'])],
+            RuntimeNoticeSink::drain(),
+            'the row itself came home on the notice transport — one row, spoken by the child, surfaced by the parent',
+        );
+
+        $third = $this->drainUntilSettled($backend->completeAsync([
+            Message::user('one'),
+            Message::assistant('ok'),
+            Message::user('two'),
+            Message::assistant('ok'),
+            Message::user('three'),
+        ]));
+        self::assertInstanceOf(Message::class, $third);
+        self::assertStringContainsString(
+            'Gamma rule',
+            $this->forkTurnText($third),
+            'C-CTX-1\'s law on the real fork: the frozen tracker re-renders the model half every turn — the section is not what the carried ledger gates',
+        );
+
+        self::assertSame([], RuntimeNoticeSink::drain(), 'the next child fresh-detects on the frozen tracker the parent never advanced, and the carried ledger silences its row — the once-per-session law on the real fork path');
+        self::assertSame(
+            [$this->claude => sha1($edited)],
+            $loader->instructionUpdateLedger(),
+            'and the merge stays one entry, not a re-append',
+        );
+    }
+
+    /**
      * Round 1 MINOR pin (the revert-clear leg): a revert to the frozen bytes
      * forgets the row, so an edit BACK to the very bytes first announced is
      * said again. Deleting the revert leg's unset would leave the stale
@@ -467,6 +578,54 @@ final class InstructionVisibilityNoticeTest extends TestCase
             $parentLoader->instructionUpdateLedger(),
             're-merging the same wire changes nothing — the union is not additive',
         );
+    }
+
+    /**
+     * Byte-copied from {@see \SugarCraft\Code\Tests\Backend\SessionStateForkCarryTest::drainUntilSettled()}
+     * for the same reason the house copy discipline exists: it is the working
+     * shape for driving one real {@see EngineBackend::completeAsync()} turn to
+     * settle under the loop, with a watchdog so a stuck child fails loud.
+     */
+    private function drainUntilSettled(PromiseInterface $promise): mixed
+    {
+        $loop = Loop::get();
+        $value = null;
+        $failure = null;
+
+        $promise->then(
+            static function ($v) use (&$value, &$failure, $loop): void {
+                $value = $v;
+                $loop->stop();
+            },
+            static function (\Throwable $e) use (&$failure, $loop): void {
+                $failure = $e;
+                $loop->stop();
+            },
+        );
+
+        $watchdog = $loop->addTimer(30.0, static function () use ($loop, &$failure): void {
+            $failure = new \RuntimeException('the forked completion never settled within the safety window');
+            $loop->stop();
+        });
+        $loop->run();
+        $loop->cancelTimer($watchdog);
+
+        if ($failure !== null) {
+            $this->fail('forked turn failed: ' . $failure->getMessage());
+        }
+
+        return $value;
+    }
+
+    /** The reply plus every row of the turn's transcript, as one haystack. */
+    private function forkTurnText(Message $reply): string
+    {
+        $text = $reply->content;
+        foreach ($reply->turnTranscript as $row) {
+            $text .= "\n" . $row->content;
+        }
+
+        return $text;
     }
 
     /**
