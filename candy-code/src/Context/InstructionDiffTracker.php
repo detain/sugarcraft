@@ -128,8 +128,11 @@ final class InstructionDiffTracker
      *
      * A document's import graph is repository-controlled and a deep one is
      * cheap to state but expensive to walk every step; the cap bounds the
-     * child half of the stat sweep at this many per document, in expansion
-     * order. Children past the cap keep the pre-C-CTX-1.c behaviour: an edit
+     * child half of the stat sweep at this many CONSIDERED per document, in
+     * expansion order — a child already tracked via another document
+     * (realpath dedup) or one whose stat failed consumes budget without
+     * freezing, so a later root may track fewer new children than this.
+     * Children past the cap keep the pre-C-CTX-1.c behaviour: an edit
      * surfaces only through the parent's own bytes at a refresh point.
      */
     public const MAX_TRACKED_CHILDREN = 32;
