@@ -1852,7 +1852,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web.md` → `### C-WEB-4.a`
 
-#### C-AGT-5.c — Heartbeat schedule kind
+#### ✅ ff23948e797c90df66a4fa423b6323414b3552d0 C-AGT-5.c — Heartbeat schedule kind
 - **Item:** C-AGT-5 (sources: GAP-PA-02) · gap · effort M
 - **What:** A row gains `kind: "task"|"heartbeat"`. For a heartbeat, `ScheduleSpawner` appends "reply exactly HEARTBEAT_OK when nothing needs attention". When the daemon settles, Chat's `pumpBackgroundSessions()` suppresses the queued …
 - **Files — create:** none

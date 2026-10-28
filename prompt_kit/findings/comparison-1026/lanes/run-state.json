@@ -159,18 +159,10 @@
   "C-PRV-2.b",
   "C-EXT-4.b",
   "C-MCP-4.b",
-  "C-MCP-3.b"
+  "C-MCP-3.b",
+  "C-AGT-5.c"
  ],
- "inflight": {
-  "C-AGT-5.c": {
-   "stage": "review",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-AGT-5.c",
-   "branch": "cc/C-AGT-5.c",
-   "tip": "1d8dad74e603147567027477d59cf31c87f26a78",
-   "note": "builder LANDED (11 files +672/-21, REPORT.md on disk, lead-verified single commit porcelain 0 detain); r1 reviewer ses_e7c9f72d4 RESUMED with continue after silence (attempt 1/10); duties: heartbeat kind semantics + 9F base-identity + StderrEmitterCensus 1->2 flip; weld duty 1 tsv row HeartbeatScheduleTest 9T"
-  }
- },
+ "inflight": {},
  "blocked": [],
  "extra_agents": 1,
  "waves_closed": [
@@ -979,8 +971,8 @@
   "C-SEC-6.a",
   "(CTX-2.d in welder hands)"
  ],
- "tip": "37a4ef615",
- "welded_count": 160,
+ "tip": "ea68b8eae",
+ "welded_count": 161,
  "tick": "87-disk-reconciled: W11 REALY closed@341f66404; trio MCP2b+TOOL5b+WEB3f real to 0b3c4ba21 (welded=122); W13/14 welds PENDING; phantom-atlas @b73@ correction: c3178096f/4d263705a/8d8c75678 GHOSTS, cure real 23fa8ab8e; C-PRV-2.b welded cf36a8458 (welded_count=157, r3 CLEAN + phantom-r2-note recorded) | W17: C-EXT-4.b real to 3bc062fc4 (r2 CLEAN, phantom-inflight-note correction: de5c16a51->1e03fa00a byte-identical amend; all-4-generator --check zero-drift) | W17: C-MCP-4.b real to 6beef34f4 (pick, content-equiv; tsv f024af640, 1535->1537); duplicate-r3 disagreement disk-adjudicated to FINDINGS (cure 796756612); foreign 1F pr-MenuBar standing report-only; C-EXT-4.b same tick -> 3bc062fc4/c569b41e6/8f0001af1",
  "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
  "blocked_notes": {
@@ -1109,5 +1101,7 @@
    "r1": "LIVE ses_e7cd09ace... NO — dispatched this tick"
   }
  },
- "notes_ruling_chain": "owner ruling 15 executed: AGT-5.b welded a812ea659; W14 loop r1 running; next: AGT-5.c build (W15) on 5.b-landed base, then W15 loop after its members complete"
+ "notes_ruling_chain": "owner ruling 15 executed: AGT-5.b welded a812ea659; W14 loop r1 running; next: AGT-5.c build (W15) on 5.b-landed base, then W15 loop after its members complete",
+ "notes": {},
+ "note": "W15 FULLY WELDED — wave loop r1 next"
 }
