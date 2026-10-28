@@ -2068,7 +2068,7 @@ announces the same fact for all three formats. The exit code does not move:
 the answer is what was asked for in shape, and what the schema would have
 forced had it reached the answering step.
 
-Three of those seven error types are **not** `NonInteractive::emitErrorDocument()`'s, and
+Three of those nine error types are **not** `NonInteractive::emitErrorDocument()`'s, and
 that is the thing to know if you are reading the source to find where a type
 comes from. `installation` is hand-rolled by `bin/candy-code`'s autoload guard
 — see the one exception below for why it has to be. `not-found` and
