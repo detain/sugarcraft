@@ -281,7 +281,8 @@ trait HandlesRunControl
         }
         if ($msg instanceof StartupSummaryGatheredMsg) {
             // VIS-1-P2 landing: the off-view gather's bag parks for the next
-            // paint (store() also drops this key's memoized frame). Returns
+            // paint (store() also drops the memoized frames of this
+            // session+root). Returns
             // $this unchanged — the facts live in the summary's own cache,
             // not on the model — and Program repaints after every Msg anyway,
             // the StatusLineResultMsg precedent one line above.

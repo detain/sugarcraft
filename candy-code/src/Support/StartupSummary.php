@@ -83,11 +83,14 @@ final class StartupSummary
     private static array $cache = [];
 
     /**
-     * Expensive fact bags gathered off the paint path, keyed exactly like
-     * {@see $cache} — the {@see gatherCmd()} producer fills it and
-     * {@see store()} invalidates the memoized frame for the same key, so the
-     * next paint composes cheap facts plus the fresh bag. A key with no bag
-     * yet is the "still gathering" state: {@see render()} paints cheap rows.
+     * Expensive fact bags gathered off the paint path, keyed by
+     * {@see deriveGatherKey()} — session+root only, because every gathered
+     * fact is mode/provider/model-independent. The {@see gatherCmd()}
+     * producer fills it and {@see store()} drops the memoized frames of the
+     * same session+root, so the next paint composes cheap facts plus the
+     * fresh bag under whatever full key that frame carries. A session+root
+     * with no bag yet is the "still gathering" state: {@see render()} paints
+     * cheap rows.
      *
      * @var array<string, array<string, mixed>>
      */
@@ -100,7 +103,8 @@ final class StartupSummary
      *
      * NEVER gathers here (VIS-1-P2): on a memo miss with no landed bag this
      * paints the cheap rows only; once {@see store()} has landed the
-     * expensive bag for this key, the full frame composes and memoizes.
+     * expensive bag for this session+root, the full frame composes and
+     * memoizes.
      */
     public static function render(Chat $chat): string
     {
@@ -109,7 +113,7 @@ final class StartupSummary
         $key = self::deriveKey($chat, $mode, $provider, $model);
         $cheap = self::cheapFacts($chat, $mode, $provider, $model);
 
-        $expensive = self::$gathered[$key] ?? null;
+        $expensive = self::$gathered[self::deriveGatherKey($chat)] ?? null;
         if ($expensive === null) {
             return self::faintRows(self::compose($cheap));
         }
@@ -138,17 +142,26 @@ final class StartupSummary
     }
 
     /**
-     * Park a gathered bag for the key this Chat paints under, and drop the
-     * memoized full frame so the next paint composes the fresh facts.
+     * Park a gathered bag under this Chat's session+root key, and drop every
+     * memoized frame of that session+root so the next paint composes the
+     * fresh facts under whatever full key that frame carries.
      *
      * @param array<string, mixed> $facts
      */
     public static function store(Chat $chat, array $facts): void
     {
-        [$provider, $model] = self::providerAndModel($chat);
-        $key = self::deriveKey($chat, $chat->currentPermissionMode()?->value, $provider, $model);
-        self::$gathered[$key] = $facts;
-        unset(self::$cache[$key]);
+        $bagKey = self::deriveGatherKey($chat);
+        self::$gathered[$bagKey] = $facts;
+
+        // Invalidate by the BAG's scope, not by one frame key: a re-gather
+        // (a branch moved under /clear) makes every memoized frame of this
+        // session+root stale, whatever mode/provider/model it was painted
+        // with — and the full frame key starts with exactly the bag key.
+        foreach (array_keys(self::$cache) as $frameKey) {
+            if (str_starts_with($frameKey, $bagKey . "\0")) {
+                unset(self::$cache[$frameKey]);
+            }
+        }
     }
 
     /** The memo key for the frame this Chat paints: every fact that moves it. */
@@ -156,6 +169,21 @@ final class StartupSummary
     {
         return ($chat->currentSessionId() ?? '') . "\0" . $chat->projectRoot()
             . "\0" . ($mode ?? '') . "\0" . ($provider ?? '') . "\0" . ($model ?? '');
+    }
+
+    /**
+     * The expensive bag's key: session id + project root — the only two
+     * things a gathered fact depends on (branch, instruction documents,
+     * skills and MCP all read at the root; memory is the Chat's own store at
+     * that root). Mode, provider and model move only the CHEAP header rows,
+     * never the bag, so keying the bag by the full frame key stranded a
+     * cheap-only paint after a Shift+Tab toggle or a /model switch: the frame
+     * key moved, the bag did not, and no re-gather fires before /clear or a
+     * session switch (round-1 review MAJOR).
+     */
+    private static function deriveGatherKey(Chat $chat): string
+    {
+        return ($chat->currentSessionId() ?? '') . "\0" . $chat->projectRoot();
     }
 
     /**

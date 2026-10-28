@@ -79,6 +79,7 @@ final class StartupSummaryGatherTest extends TestCase
         $paintSlices = [
             'public static function render',
             'private static function deriveKey',
+            'private static function deriveGatherKey',
             'private static function cheapFacts',
             'public static function compose',
             'public static function tipIndex',

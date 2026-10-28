@@ -5,9 +5,16 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Support;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\App\PermissionModeToggledMsg;
+use SugarCraft\Code\App\StartupSummaryGatheredMsg;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
+use SugarCraft\Code\Hooks\HookManager;
+use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Permissions\PermissionGate;
+use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Providers\ReportsServedModel;
 use SugarCraft\Code\Renderer;
@@ -482,6 +489,69 @@ final class StartupSummaryTest extends TestCase
 
         StartupSummary::clearCacheForTesting();
         $this->assertSame($first, StartupSummary::render($chat), 're-derivation is deterministic, facts included');
+    }
+
+    /**
+     * Round-1 review MAJOR: the expensive bag is keyed by session+root only.
+     * Every gathered fact is mode/provider/model-independent, so a Shift+Tab
+     * permission flip (the most common interaction on this surface) must not
+     * strand a cheap-only paint forever: the frame memo re-keys, the bag
+     * survives without any re-gather. Driven on the same gate/EngineBackend
+     * pair as PlanModeToggleTest. The tail is the invalidation half of the
+     * same law — store() drops EVERY memoized frame of the session+root, not
+     * just the one it happened to run under, so a frame memoized before the
+     * flip cannot serve a stale branch after it.
+     */
+    public function testTheGatheredBagSurvivesAPermissionModeFlipWithoutReGather(): void
+    {
+        $root = '/tmp/opencode/ctui7a-mode-' . \uniqid('', true);
+        mkdir($root, 0700, true);
+        $gate = new PermissionGate(PermissionMode::Default, [], null, 'the built-in default');
+        $hooks = new HookManager(new HookRegistry());
+        $hooks->register(new PermissionGateHook($gate));
+        try {
+            $chat = new Chat(
+                projectRoot: $root,
+                backend: EngineBackend::new(new ScriptedProvider([]), 'm')->withPermissionGate($gate),
+                hooks: $hooks,
+            );
+
+            [$stored] = $chat->update(new StartupSummaryGatheredMsg([
+                'branch' => 'delta',
+                'instructionFiles' => [],
+                'memories' => 0,
+                'skills' => 0,
+                'mcpServers' => 0,
+            ]));
+            $rows = explode("\n", (string) preg_replace('/\e\[[0-9;]*m/', '', StartupSummary::render($stored)));
+            $this->assertStringEndsWith(self::SEP . 'default', $rows[0]);
+            $this->assertStringContainsString(self::SEP . 'delta', $rows[1], 'the landed bag renders full rows');
+
+            [$plan] = $stored->update(new PermissionModeToggledMsg(PermissionMode::Plan));
+            $this->assertSame(PermissionMode::Plan, $plan->currentPermissionMode(), 'the flip moved the full frame key');
+
+            $rows = explode("\n", (string) preg_replace('/\e\[[0-9;]*m/', '', StartupSummary::render($plan)));
+            $this->assertStringEndsWith(self::SEP . 'plan', $rows[0], 'the header repaints with the toggled cheap mode fact');
+            $this->assertStringContainsString(
+                self::SEP . 'delta',
+                $rows[1],
+                'the gathered rows survived the mode flip with no re-gather — the bag must key on session+root, never the full frame key',
+            );
+
+            [$relanded] = $plan->update(new StartupSummaryGatheredMsg([
+                'branch' => 'epsilon',
+                'instructionFiles' => [],
+                'memories' => 0,
+                'skills' => 0,
+                'mcpServers' => 0,
+            ]));
+            [$back] = $relanded->update(new PermissionModeToggledMsg(PermissionMode::Default));
+            $rows = explode("\n", (string) preg_replace('/\e\[[0-9;]*m/', '', StartupSummary::render($back)));
+            $this->assertStringContainsString(self::SEP . 'epsilon', $rows[1], 'the re-landed bag replaced every frame of the session+root');
+            $this->assertStringNotContainsString(self::SEP . 'delta', $rows[1], 'the frame memoized under the pre-flip key did not survive store()');
+        } finally {
+            @rmdir($root);
+        }
     }
 
     /**
