@@ -90,7 +90,8 @@
   "C-EXT-7.a",
   "P-MENU.d",
   "C-MCP-4.a",
-  "C-PRV-5.b"
+  "C-PRV-5.b",
+  "C-CTX-2.e"
  ],
  "inflight": {
   "C-EXT-2.b": {
@@ -136,15 +137,6 @@
    "worktree": "/home/sites/cc-cmp-C-CTX-2.c",
    "branch": "cc/C-CTX-2.c",
    "note": "LANDED ec5d4c2a5; r1 dispatching fresh; SessionHost:1055 release-cancel closes carry; DuplicatedTestHelperDrift:1534 self-unrostered leg carry",
-   "ts": "2026-10-28T00:39:39.517261+00:00"
-  },
-  "C-CTX-2.e": {
-   "stage": "clean",
-   "round": 1,
-   "session": "IN-WELDER",
-   "worktree": "/home/sites/cc-cmp-C-CTX-2.e",
-   "branch": "cc/C-CTX-2.e",
-   "note": "IN-WELDER f03994e49 (r2 CLEAN; no regen; no DUR)",
    "ts": "2026-10-28T00:39:39.517261+00:00"
   },
   "P-MENU.e": {
@@ -559,7 +551,8 @@
   "DUR row owed at gate: candy-code/tests/Protocol/ContextSourcesMcpUserTierTest.php (4T)",
   "W7 r1 MINOR resurrect seam cured on master: saveTranscript/appendSessionEvent refuse tombstoned ids, red-first pins in UsageRecordsTest; EventLog refused-seq-0 broadcast seam noted report-only",
   "DUR row owed: candy-code/tests/Cli/ToollessBackendThinkingTest.php",
-  "C-PRV-5.b orphan bare-pick recovered (bare master pick e2e05598d, ceremony evidence commit now closed), 2nd instance of class"
+  "C-PRV-5.b orphan bare-pick recovered (bare master pick e2e05598d, ceremony evidence commit now closed), 2nd instance of class",
+  "EventLog broadcast-side seq-0 guard is an out-of-lane seam (report-only)"
  ],
- "updated": "2026-10-28T00:42:16.486770+00:00"
+ "updated": "2026-10-28T00:49:24Z"
 }
