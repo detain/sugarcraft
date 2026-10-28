@@ -5465,7 +5465,7 @@ final class DocFigureProseDriftTest extends TestCase
     {
         $root = \dirname(__DIR__, 2);
         $flat = self::markdownProse((string) file_get_contents($root . '/docs/AGENTS_AUTHORING.md'));
-        $words = ['six' => 6, 'seven' => 7, 'sixteen' => 16, 'seventeen' => 17];
+        $words = ['six' => 6, 'seven' => 7, 'sixteen' => 16, 'seventeen' => 17, 'eighteen' => 18];
 
         self::assertSame(1, preg_match('/carries (\w+) fields and the path/', $flat, $w1), 'the intro no longer spells what AgentPreset carries');
         self::assertArrayHasKey($w1[1], $words, "spelled count '{$w1[1]}' outside the pinned map — extend it deliberately");
@@ -5475,9 +5475,9 @@ final class DocFigureProseDriftTest extends TestCase
         $fields = array_values(array_unique($props[1]));
         self::assertCount($words[$w1[1]], $fields, "the intro still says AgentPreset carries {$w1[1]} fields — the promoted readonly census moved");
 
-        self::assertSame(1, preg_match('/carries \*\*all (\w+)\*\* `AgentPreset` fields onto the `Agent` row:(.*?)Native and imported presets/s', $flat, $list), 'the per-field enumeration moved — the roster this arm derives from it has no home');
+        self::assertSame(1, preg_match('/\*\*every one of the (\w+)\*\* `AgentPreset` fields is accounted for — (\w+) carried onto the `Agent` row.*?:(.*?)Native and imported presets/s', $flat, $list), 'the per-field enumeration moved — the roster this arm derives from it has no home');
         self::assertSame($w1[1], $list[1], 'the intro count and the per-field count stopped agreeing with each other');
-        preg_match_all('/`([a-z][a-zA-Z]+)`/', $list[2], $cited);
+        preg_match_all('/`([a-z][a-zA-Z]+)`/', $list[3], $cited);
         self::assertEqualsCanonicalizing(
             [...$fields, 'inherit'],
             array_values(array_unique($cited[1])),
@@ -5486,7 +5486,23 @@ final class DocFigureProseDriftTest extends TestCase
 
         $body = self::bodyExcerpt(self::sourceOf('Agents/Agent.php'), 'fromPreset', 2200);
         preg_match_all('/\$preset->([a-zA-Z]+)/', $body, $reads);
-        self::assertEqualsCanonicalizing($fields, array_values(array_unique($reads[1])), 'fromPreset() no longer reads exactly the fields the page enumerates — the per-field account drifted from the wiring');
+        // C-AGT-4.a: `mode` is the enumerated field the bridge deliberately
+        // does not read — the presenting filter stops at the preset, so the
+        // reads census divides the fields minus that one, and the page's own
+        // "inside the count but outside the crossing" sentence is the half
+        // this exception licenses. A second uncarried field would still have
+        // to be named here and on the page together.
+        $uncarried = ['mode'];
+        // Round-1 review MINOR-1 (in-step with the page rewrite): the page now
+        // spells the divide itself — seventeen cross, the named uncarried ones
+        // do not — so the word is derived, not just admired.
+        self::assertArrayHasKey($list[2], $words, "the onto-the-row count '{$list[2]}' is outside the pinned word map — extend it deliberately");
+        self::assertSame($words[$list[2]], count($fields) - count($uncarried), 'the page carries a different number of fields onto the row than the preset census minus the named uncarried ones — the divide moved without this arm');
+        self::assertEqualsCanonicalizing(
+            array_values(array_diff($fields, $uncarried)),
+            array_values(array_unique($reads[1])),
+            'fromPreset() no longer reads exactly the fields the page enumerates — the per-field account drifted from the wiring'
+        );
         self::assertMatchesRegularExpression('/source === SkillSource::Native\s*\?\s*\$preset->permissionMode\s*:\s*PermissionMode::Default/', $body, 'the provenance gate on permissionMode is no longer one Native-check beside a Default collapse — the section stakes its exception on this shape');
         self::assertStringContainsString('source: $preset->source', $body, 'the page says source rides along — fromPreset() stopped copying it');
         self::assertStringContainsString('collapses to `PermissionMode::Default`', $flat, 'the gate paragraph no longer names the collapse target in backticks — the byte the code cites');
@@ -5758,7 +5774,7 @@ final class DocFigureProseDriftTest extends TestCase
         $root = \dirname(__DIR__, 2);
         $raw = (string) file_get_contents($root . '/docs/PROMPT_ENGINEERING.md');
         $flat = self::markdownProse($raw);
-        $words = ['four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12];
+        $words = ['four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13];
 
         self::assertSame(1, preg_match('/The roster is the (\w+) tags `PromptFence::tags\(\)` returns/', $flat, $tagWord), 'the tags sentence no longer spells its count beside PromptFence::tags()');
         $tags = PromptFence::tags();

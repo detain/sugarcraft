@@ -50,10 +50,11 @@ use SugarCraft\Code\Skills\SkillSource;
  * WHAT REACHES THE ROSTER IS STILL NARROWER THAN WHAT THIS CLASS PARSES, but
  * for a different reason than it used to be — read this before relying on
  * either sentence it replaced. `Agent::fromPreset()` used to read six of the
- * preset's seventeen fields and drop ten, so the `permissionMode:` this class
- * maps could not travel that path at all. It reads all sixteen now, because a
- * bridge that silently keeps six makes the other ten look broken rather than
- * unwired.
+ * preset's fields and drop the rest, so the `permissionMode:` this class
+ * maps could not travel that path at all. It reads every field except one
+ * now — `mode`, the C-AGT-4.a presenting filter, stops at the preset because
+ * a running Agent has no use for the question it answers — and a bridge that
+ * silently keeps six makes the dropped ones look broken rather than unwired.
  *
  * FOR ONE ROUND THE REPLACEMENT BOUND WAS WEAKER, and it was not enough: the
  * value landed on the `Agent` and what made it "harmless" was only that
@@ -609,6 +610,9 @@ final class ForeignAgentPresetRegistry
             effort: $this->enum(Effort::class, $data['effort'] ?? null),
             isolation: $this->enum(Isolation::class, $data['isolation'] ?? null),
             color: isset($data['color']) ? (string) $data['color'] : null,
+            // Lenient like every other foreign field (C-AGT-4.a): an absent or
+            // unknown mode reads as All — present everywhere — never a refusal.
+            mode: $this->enum(AgentMode::class, $data['mode'] ?? null) ?? AgentMode::All,
             initialPrompt: self::resolveInitialPrompt($data['initialPrompt'] ?? null, $body),
             source: $source,
         );
@@ -616,8 +620,10 @@ final class ForeignAgentPresetRegistry
 
     /**
      * Map opencode agent frontmatter onto an AgentPreset. opencode's
-     * `mode`/`temperature`/`disable` keys have no AgentPreset counterpart and
-     * are left behind; its `prompt` is candy-code's `initialPrompt`, and its
+     * `mode` key lands on {@see AgentPreset::$mode} directly — it is the
+     * dialect this project's spelling was copied from (C-AGT-4.a) — while its
+     * `temperature`/`disable` keys have no AgentPreset counterpart and are
+     * left behind; its `prompt` is candy-code's `initialPrompt`, and its
      * `tools:`/`permission:` blocks collapse into `tools`/`disallowedTools`.
      *
      * opencode also accepts the prompt as the markdown BODY, so $body is used
@@ -636,6 +642,9 @@ final class ForeignAgentPresetRegistry
             disallowedTools: $denied,
             model: isset($data['model']) ? (string) $data['model'] : 'inherit',
             skills: $this->importNameList($data['skills'] ?? null, 'opencode', $fallbackName, 'skills'),
+            // The dialect's own `mode:` — primary | subagent | all — read
+            // leniently like every other foreign key (C-AGT-4.a).
+            mode: $this->enum(AgentMode::class, $data['mode'] ?? null) ?? AgentMode::All,
             initialPrompt: self::resolveInitialPrompt($data['prompt'] ?? null, $body),
             source: SkillSource::Opencode,
         );

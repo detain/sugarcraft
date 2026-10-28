@@ -370,10 +370,10 @@ other:
   bounds a reader model tracks) or to forge `system-reminder`, which is a trust channel rather
   than a section. In the assembled prompt every roster tag is a delimiter regardless of which
   body carries the bytes.
-- **The roster is the twelve tags `PromptFence::tags()` returns**, read at this base: `env`,
+- **The roster is the thirteen tags `PromptFence::tags()` returns**, read at this base: `env`,
   `project-memory`, `repo-map`, `project-instructions`, `system-reminder`, `user-rules`,
   `prior-summary`, `harness-injected`, `available-skills`, `turn-context`, `system-notice`,
-  `agent-memory`. Two entries are noteworthy in kind:
+  `agent-memory`, `agent-instructions`. Two entries are noteworthy in kind:
   `prior-summary` is the tag `Chat::renderPriorSummariesForSummary()` wraps in a *summariser
   request* outside the assembled system prompt — foreign by exactly the route a repo file is — and
   `harness-injected` is the roster's one pre-registered, defang-only tag: nothing emits it yet, and

@@ -1397,6 +1397,32 @@ final class AgentManager
     }
 
     /**
+     * The preset's tool bundle for the MAIN chat's backend (C-AGT-4.a): the
+     * same resolution {@see createSubAgent()} runs for a delegated child,
+     * including the C-AGT-3 MCP dispatcher scoping and the bridge filter —
+     * one answer, one code path, so a preset cannot mean two different tool
+     * sets depending on which side of the delegation boundary it lands on.
+     *
+     * NULL-LAW, identical to the sub-agent path: null means the agent said
+     * nothing about tools and nothing about `mcpServers`, and the session's
+     * own roster then stands UNTOUCHED. A non-null list is always an
+     * intersection — this can never re-add a tool the session's own
+     * `disabledTools` removed; widening is not on offer from either side
+     * (narrow-only doctrine, the same one
+     * {@see \SugarCraft\Code\Agents\PrimaryAgent::apply()} documents).
+     *
+     * @return ?list<Tool>
+     *
+     * @throws \RuntimeException the same unresolved-grant refusal the
+     *         delegated path raises — a typo'd `tools:` entry is refused
+     *         whether the preset aims at a child or at the main chat.
+     */
+    public function toolsForPrimary(Agent $agent): ?array
+    {
+        return $this->resolveGrantedTools($agent);
+    }
+
+    /**
      * The tool objects an agent's DECLARATION names, or null when this manager
      * has no registry to resolve them against.
      *

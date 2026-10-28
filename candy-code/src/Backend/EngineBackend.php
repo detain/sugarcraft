@@ -723,6 +723,22 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
          * Workflow builds never set it (the same E20-style seam).
          */
         private readonly ?array $jsonSchema = null,
+        /**
+         * C-AGT-4.a: the active primary agent's instruction body — the preset
+         * file's markdown (the Agent's `prompt`) — carried to every turn's
+         * system prompt as the fenced `<agent-instructions>` section
+         * ({@see \SugarCraft\Code\Runtime::$agentInstructions}). Set ONLY via
+         * {@see withAgentInstructions()}, which only
+         * {@see \SugarCraft\Code\Agents\PrimaryAgent::apply()} calls today;
+         * the launch path never sets it, so every prompt a session builds
+         * before a switch is byte-identical to the tree before this field
+         * existed. Null clears it — revert() restores the launch shape.
+         * A preset's body is repository content when the preset came from a
+         * foreign tier, and containment rides the assembler's fence plus
+         * PromptFence::escape(), never this field. Main-chat scope: TaskTool
+         * and Workflow builds never set it (the same E20-style seam).
+         */
+        private readonly ?string $agentInstructions = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -903,6 +919,24 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     public function jsonSchema(): ?array
     {
         return $this->jsonSchema;
+    }
+
+    /**
+     * @see $agentInstructions
+     */
+    public function withAgentInstructions(?string $instructions): self
+    {
+        return $this->mutate(['agentInstructions' => $instructions]);
+    }
+
+    /**
+     * The active primary agent's instruction body, if one is applied.
+     *
+     * @see $agentInstructions
+     */
+    public function agentInstructions(): ?string
+    {
+        return $this->agentInstructions;
     }
 
     /**
@@ -2791,6 +2825,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // parameter — every caller of newRuntime() keeps its shape and a
             // `-p` run's schema reaches all of its turns. Null everywhere else.
             jsonSchema: $this->jsonSchema,
+            // C-AGT-4.a: same one-site reading — the active primary agent's
+            // body reaches every turn of this backend and no other Runtime
+            // construction is touched. Null everywhere apply() never ran.
+            agentInstructions: $this->agentInstructions,
         ))->withSessionPromptMemo($this->sessionPromptMemo);
     }
 

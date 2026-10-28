@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Agents;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Agents\AgentMode;
 use SugarCraft\Code\Agents\AgentPresetRegistry;
 use SugarCraft\Code\Agents\Effort;
 use SugarCraft\Code\Agents\Isolation;
@@ -44,6 +45,7 @@ final class PresetUnsupportedFieldFailsLoudTest extends TestCase
         yield 'effort' => ['effort', 'maximum', 'low, medium, high, xhigh, max'];
         yield 'permissionMode' => ['permissionMode', 'plna', 'default, accept-edits, plan, auto, dont-ask, bypass-permissions'];
         yield 'isolation' => ['isolation', 'container', 'none, worktree'];
+        yield 'mode' => ['mode', 'primarry', 'primary, subagent, all'];
     }
 
     #[DataProvider('unspellable')]
@@ -66,7 +68,7 @@ final class PresetUnsupportedFieldFailsLoudTest extends TestCase
     {
         file_put_contents(
             $this->dir . '/ok.md',
-            "---\ndescription: O\neffort: XHigh\npermissionMode: acceptEdits\nisolation: worktree\n---\nbody\n",
+            "---\ndescription: O\neffort: XHigh\npermissionMode: acceptEdits\nisolation: worktree\nmode: SubAgent\n---\nbody\n",
         );
 
         $preset = (new AgentPresetRegistry([$this->dir]))->list()['ok'];
@@ -74,6 +76,7 @@ final class PresetUnsupportedFieldFailsLoudTest extends TestCase
         $this->assertSame(Effort::XHigh, $preset->effort);
         $this->assertSame(PermissionMode::AcceptEdits, $preset->permissionMode, 'Claude Code\'s camel spelling still resolves');
         $this->assertSame(Isolation::Worktree, $preset->isolation);
+        $this->assertSame(AgentMode::Subagent, $preset->mode, 'the C-AGT-4.a presenting filter resolves camel too');
     }
 
     public function testAbsentFieldsAreTheirNoOpDefaultsAndNoEffortIsNull(): void
@@ -86,5 +89,6 @@ final class PresetUnsupportedFieldFailsLoudTest extends TestCase
         $this->assertSame(PermissionMode::Default, $preset->permissionMode);
         $this->assertNull($preset->isolation);
         $this->assertSame('inherit', $preset->model);
+        $this->assertSame(AgentMode::All, $preset->mode, 'an absent mode presents everywhere');
     }
 }

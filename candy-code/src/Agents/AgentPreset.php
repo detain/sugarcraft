@@ -26,6 +26,12 @@ use SugarCraft\Code\Skills\SkillSource;
  * in the tree a private store, an index layer in its child prompts, and a
  * `Memory` grant none of them asked for. The tier a file does declare selects
  * where that agent's own notes live — see {@see \SugarCraft\Code\Memory\AgentMemory}.
+ *
+ * `$mode` (C-AGT-4.a) decides which ends of the agent surface PRESENT the
+ * preset — the main-chat cycle, the delegating picker, or both. It is the one
+ * field that describes selection rather than running, so it stops at the
+ * preset: by the time an {@see Agent} exists the presenting question is
+ * answered. Absence means {@see AgentMode::All}.
  */
 final class AgentPreset
 {
@@ -45,6 +51,14 @@ final class AgentPreset
         public readonly ?Isolation $isolation = null,
         public readonly ?string $color = null,
         public readonly ?string $initialPrompt = null,
+        /**
+         * Which ends of the agent surface present this preset (C-AGT-4.a).
+         * The default {@see AgentMode::All} keeps every pre-existing preset
+         * behaving exactly as it did; the key is read by the picker, never by
+         * a running agent, which is why it is the one preset field that does
+         * not travel into {@see Agent}.
+         */
+        public readonly AgentMode $mode = AgentMode::All,
         public readonly SkillSource $source = SkillSource::Native,
         /**
          * The file this preset was read from (ISS-031), so `/agent <name>` can

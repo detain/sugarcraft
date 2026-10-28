@@ -151,6 +151,19 @@ final class Runtime
     private const USER_RULES_AUTHORITY_PREAMBLE = 'Written by the operator of this machine in their own home directory and chosen by that operator rather than by the repository, included here as personal instruction with any block markers in the text neutralised so it cannot open or close a block; where it conflicts with a project-authored layer below it this carries the weight, while the identity and maxims layers above it keep precedence.';
 
     /**
+     * C-AGT-4.a: the `<agent-instructions>` provenance preamble. WORDING
+     * CONSTRAINTS mirror {@see self::USER_RULES_AUTHORITY_PREAMBLE} exactly —
+     * ASCII, no fence-tag spellings, no line-leading heading marker, none of
+     * the register needles the maxims scan polices, and the same three facts
+     * in the same order: who chose these bytes, that block markers were
+     * neutralised, and where precedence lands. Unlike the user tier this one
+     * cannot claim the operator WROTE the body — a preset file may arrive
+     * from a foreign tier — so the claim is about the CHOOSING, which is what
+     * makes running under it an operator act at all.
+     */
+    private const AGENT_INSTRUCTIONS_PREAMBLE = 'Chosen by the operator of this machine as the agent this session runs as, read from that agent\'s preset file, included here as the active agent\'s instruction with any block markers in the text neutralised so it cannot open or close a block; where it conflicts with the identity, maxims and operator-authored layers this carries the agent\'s colouring of the task only, never precedence over them.';
+
+    /**
      * The `<available-skills>` provenance preamble now lives in
      * {@see \SugarCraft\Code\Skills\SkillListingSection::PREAMBLE}, the class that
      * assembles the whole fenced layer. This alias is kept because the fence
@@ -861,6 +874,15 @@ final class Runtime
          * @var array<string, mixed>|null
          */
         private ?array $jsonSchema = null,
+        /**
+         * C-AGT-4.a: the active primary agent's instruction body, read off
+         * {@see \SugarCraft\Code\Backend\EngineBackend::$agentInstructions}
+         * at the one construction site (newRuntime). Null — every path that
+         * never applied a primary agent — assembles no `<agent-instructions>`
+         * section, so the golden corpus and every launch prompt are
+         * byte-identical to the tree before this slot existed.
+         */
+        private ?string $agentInstructions = null,
     ) {}
 
     /**
@@ -4707,6 +4729,27 @@ final class Runtime
 
         if ($toolGuidance !== '') {
             $sections[] = $this->section('', Stability::Static, $toolGuidance);
+        }
+
+        // C-AGT-4.a: the active primary agent's instruction body, directly
+        // behind the tool-guidance slot (the brief's "behind maxims/tool-
+        // guidance") and ahead of the repository-derived layers — an agent's
+        // own instruction is harness-side voice chosen by the operator, not a
+        // fact about this checkout, and the layers below it keep the
+        // precedence their own preambles claim. The slot joins the list ONLY
+        // when a PrimaryAgent::apply() put bytes here; every prompt a session
+        // builds without one — the whole golden corpus — assembles exactly as
+        // before this slot existed. The body is the preset file's markdown,
+        // which for a foreign-tier preset is repository content, so it routes
+        // through PromptFence::escape() like every other dynamic byte, under a
+        // fence the roster now carries (the thirteenth entry there).
+        if ($this->agentInstructions !== null && trim($this->agentInstructions) !== '') {
+            $sections[] = $this->section(
+                '<agent-instructions>',
+                Stability::PerSession,
+                "<agent-instructions>\n" . self::AGENT_INSTRUCTIONS_PREAMBLE . "\n\n"
+                    . PromptFence::escape(trim($this->agentInstructions)) . "\n</agent-instructions>",
+            );
         }
 
         // Behind the base heredoc and the maxims voice layer, and BEFORE the

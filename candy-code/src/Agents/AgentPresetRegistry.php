@@ -629,6 +629,7 @@ final class AgentPresetRegistry
             effort: self::parseEffort(self::stringField($data, 'effort', $filePath), $filePath),
             isolation: self::parseIsolation(self::stringField($data, 'isolation', $filePath), $filePath),
             color: self::stringField($data, 'color', $filePath),
+            mode: self::parseAgentMode(self::stringField($data, 'mode', $filePath), $filePath),
             initialPrompt: self::resolveInitialPrompt($data['initialPrompt'] ?? null, $body),
             sourcePath: $filePath,
         );
@@ -749,7 +750,7 @@ final class AgentPresetRegistry
     }
 
     /**
-     * Each of the four resolvers below used to be a hand-written
+     * Each of the resolvers below used to be a hand-written
      * `match (strtolower($value))` that restated its enum's own backed values
      * and swallowed everything else into a silent default. Two things were
      * wrong with that, and only the second one bit:
@@ -811,6 +812,25 @@ final class AgentPresetRegistry
     private static function parseIsolation(?string $value, string $filePath): ?Isolation
     {
         return $value === null ? null : self::declaredCase(Isolation::class, 'isolation', $value, $filePath);
+    }
+
+    /**
+     * Null (absence) means {@see AgentMode::All} — the preset presents
+     * everywhere, exactly as it did before the key existed (C-AGT-4.a). A
+     * DECLARED mode must spell a real case: it is the fifth field on the
+     * refuse-unknown footing, and it refuses for the same shape of reason as
+     * the four above, with one difference — what it changes is not what a run
+     * does but WHERE the preset is offered, and a silently-swallowed
+     * `mode: primarry` would hide an agent from the main cycle while still
+     * advertising it to delegation. Neither reading is the author's; both are
+     * invisible. The refusal costs one file in {@see list()}, which is the
+     * same price the other four already pay.
+     *
+     * @throws \InvalidArgumentException for a declared value no case spells
+     */
+    private static function parseAgentMode(?string $value, string $filePath): AgentMode
+    {
+        return $value === null ? AgentMode::All : self::declaredCase(AgentMode::class, 'mode', $value, $filePath);
     }
 
     /**

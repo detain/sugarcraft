@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Agents;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentManager;
+use SugarCraft\Code\Agents\AgentMode;
 use SugarCraft\Code\Agents\AgentPreset;
 use SugarCraft\Code\Agents\SubAgent;
 use SugarCraft\Code\Agents\Effort;
@@ -346,6 +347,33 @@ final class ForeignAgentPresetRegistryTest extends TestCase
         $this->assertSame(PermissionMode::DontAsk, $result['quiet']->permissionMode);
     }
 
+    /**
+     * C-AGT-4.a (round-1 review MAJOR-1): the claude dialect's lenient `mode:`
+     * parse. Without these rows the whole tolerant half of the mapping was
+     * unpinned — deleting the mode argument from claudePreset() (falling to
+     * the constructor default) or making its spelling check refuse-bearing
+     * both survived every test this file held. A declared spelling lands;
+     * absence and an unspellable value both read All — a foreign file is not
+     * this project's to reject.
+     */
+    public function testDiscoverClaudeCarriesDeclaredModeAndReadsForeignSpellingsLeniently(): void
+    {
+        $registry = new ForeignAgentPresetRegistry();
+        $projectRoot = $this->tempDir . '/claude-mode';
+        $dir = $projectRoot . '/.claude/agents';
+        $this->writeAgent($dir, 'lead', "description: Chat-side\nmode: primary");
+        $this->writeAgent($dir, 'worker', "description: Delegation-side\nmode: subagent");
+        $this->writeAgent($dir, 'odd', "description: Unspellable tier\nmode: sideways");
+        $this->writeAgent($dir, 'plain', 'description: No mode key at all');
+
+        $result = $registry->discoverClaude($projectRoot);
+
+        $this->assertSame(AgentMode::Primary, $result['lead']->mode);
+        $this->assertSame(AgentMode::Subagent, $result['worker']->mode);
+        $this->assertSame(AgentMode::All, $result['odd']->mode, 'an unspellable foreign mode is no refusal — the import falls to All');
+        $this->assertSame(AgentMode::All, $result['plain']->mode, 'absence says nothing, and nothing means offer-me-everywhere');
+    }
+
     public function testDiscoverClaudeSkipsMalformedFilesWithoutAbortingTheDirectory(): void
     {
         $registry = new ForeignAgentPresetRegistry();
@@ -626,6 +654,32 @@ final class ForeignAgentPresetRegistryTest extends TestCase
         $this->assertSame('Builds things', $preset->description);
         $this->assertSame('minimax/m2', $preset->model);
         $this->assertSame('You build things.', $preset->initialPrompt);
+    }
+
+    /**
+     * C-AGT-4.a (round-1 review MAJOR-1): the opencode dialect's `mode:` is
+     * the NATIVE spelling's source — it must land on AgentPreset::$mode, and
+     * its lenient half (absence/unknown → All) must be pinned as lenient, not
+     * inherited by accident from the constructor default. Deleting the mode
+     * argument here or making the spelling check refuse-bearing reddens these
+     * rows and nothing else in the file did before this pin existed.
+     */
+    public function testDiscoverOpencodeCarriesDeclaredModeAndReadsForeignSpellingsLeniently(): void
+    {
+        $registry = new ForeignAgentPresetRegistry();
+        $projectRoot = $this->tempDir . '/oc-mode';
+        $dir = $projectRoot . '/.opencode/agents';
+        $this->writeAgent($dir, 'lead', "description: Chat-side\nmode: primary");
+        $this->writeAgent($dir, 'worker', "description: Delegation-side\nmode: subagent");
+        $this->writeAgent($dir, 'odd', "description: Unspellable tier\nmode: sideways");
+        $this->writeAgent($dir, 'plain', 'description: No mode key at all');
+
+        $result = $registry->discoverOpencode($projectRoot);
+
+        $this->assertSame(AgentMode::Primary, $result['lead']->mode);
+        $this->assertSame(AgentMode::Subagent, $result['worker']->mode);
+        $this->assertSame(AgentMode::All, $result['odd']->mode, 'opencode reads its own dialect leniently like the other one — no refusal, falls to All');
+        $this->assertSame(AgentMode::All, $result['plain']->mode, 'absence says nothing, and nothing means offer-me-everywhere');
     }
 
     public function testDiscoverOpencodeFindsUserConfigAgents(): void

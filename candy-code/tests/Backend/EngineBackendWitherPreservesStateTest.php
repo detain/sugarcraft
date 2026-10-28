@@ -160,6 +160,11 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
                 static fn(EngineBackend $b): EngineBackend => $b->withReasoningEffort('low'),
                 ['reasoningEffort'],
             ],
+            // C-AGT-4.a: the applied primary agent's body section (null = slot shut).
+            'withAgentInstructions' => [
+                static fn(EngineBackend $b): EngineBackend => $b->withAgentInstructions('You review.'),
+                ['agentInstructions'],
+            ],
             // Audit R1: the per-turn App's compaction budgets.
             'withCompactorConfig' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withCompactorConfig(new CompactorConfig(skillBudgetPerSkill: 7)),

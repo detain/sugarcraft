@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Agents;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\Agent;
+use SugarCraft\Code\Agents\AgentMode;
 use SugarCraft\Code\Agents\AgentPreset;
 use SugarCraft\Code\Agents\Effort;
 use SugarCraft\Code\Agents\Isolation;
@@ -27,7 +28,7 @@ use SugarCraft\Code\Skills\SkillSource;
  * NINE OF THE TEN NOW CARRY UNCONDITIONALLY. The tenth, `permissionMode`, is
  * GATED ON PROVENANCE — carried for a `SkillSource::Native` preset, forced to
  * {@see PermissionMode::Default} for a foreign one — because it is the only
- * field of the seventeen that is a privilege decision rather than a description,
+ * field of the eighteen that is a privilege decision rather than a description,
  * and the foreign tiers are repository directories read with no
  * `trustedProject*` opt-in. Both sides are pinned by
  * {@see testPermissionModeIsTheOneFieldGatedOnProvenance()}, and the fixture
@@ -44,17 +45,21 @@ use SugarCraft\Code\Skills\SkillSource;
 final class AgentPresetFieldCarryTest extends TestCase
 {
     /**
-     * The count that made this a finding. If someone adds an eighteenth field
+     * The count that made this a finding. If someone adds a nineteenth field
      * to AgentPreset, this fails and points at the carry below. (ISS-031's
      * `sourcePath` is the seventeenth — the field this guard exists to catch
-     * being added without its carry, and the carry came in the same commit.)
+     * being added without its carry, and the carry came in the same commit.
+     * The eighteenth, `mode`, is the C-AGT-4.a presenting filter: it is the
+     * one field that deliberately stops at the preset, and
+     * {@see testEveryPresetFieldHasAnAgentCounterpart()} carries that excuse
+     * by name so the next field still fails.)
      */
-    public function testAgentPresetStillDeclaresSeventeenFields(): void
+    public function testAgentPresetStillDeclaresEighteenFields(): void
     {
         $constructor = (new \ReflectionClass(AgentPreset::class))->getConstructor();
         self::assertNotNull($constructor);
 
-        $this->assertCount(17, $constructor->getParameters());
+        $this->assertCount(18, $constructor->getParameters());
     }
 
     /**
@@ -64,10 +69,17 @@ final class AgentPresetFieldCarryTest extends TestCase
      *
      * Two names differ by design and are mapped rather than excused:
      * `skills` is Agent's `skillNames`, and `initialPrompt` is its `prompt`.
+     *
+     * Exactly one field is excused rather than mapped: `mode` (C-AGT-4.a).
+     * It says which presets the primary-agent cycle PRESENTS, not how a
+     * running agent behaves, so it stops at the preset row — the Agent it
+     * would otherwise land on is constructed after the filter has already
+     * chosen. The excuse is by name, so a nineteenth field still reddens.
      */
     public function testEveryPresetFieldHasAnAgentCounterpart(): void
     {
         $rename = ['skills' => 'skillNames', 'initialPrompt' => 'prompt'];
+        $notCarried = ['mode' => 'presents, does not run — see the AgentMode docblock (C-AGT-4.a)'];
 
         $constructor = (new \ReflectionClass(AgentPreset::class))->getConstructor();
         self::assertNotNull($constructor);
@@ -75,6 +87,9 @@ final class AgentPresetFieldCarryTest extends TestCase
         $agent = new \ReflectionClass(Agent::class);
         $missing = [];
         foreach ($constructor->getParameters() as $parameter) {
+            if (isset($notCarried[$parameter->getName()])) {
+                continue;
+            }
             $name = $rename[$parameter->getName()] ?? $parameter->getName();
             if (!$agent->hasProperty($name)) {
                 $missing[] = $parameter->getName();
@@ -87,8 +102,14 @@ final class AgentPresetFieldCarryTest extends TestCase
     /**
      * The carry itself, with every field set AWAY from its default so a
      * dropped one shows up as the default rather than as a coincidence.
+     * `mode` is the one field this list cannot assert: it stops at the
+     * preset (see the excuse in
+     * {@see testEveryPresetFieldHasAnAgentCounterpart()}), and it is pinned
+     * where it lands instead — by the registry parse tests and by
+     * {@see \SugarCraft\Code\Tests\Agents\PrimaryAgentTest} for the fields it
+     * gates presentation of.
      */
-    public function testFromPresetCarriesAllSeventeenFields(): void
+    public function testFromPresetCarriesEveryFieldButThePresentingOne(): void
     {
         $agent = Agent::fromPreset($this->fullPreset(), 'anthropic', 'session-model');
 
@@ -107,7 +128,7 @@ final class AgentPresetFieldCarryTest extends TestCase
         // i.e. repository content, so its `Plan` is deliberately NOT carried.
         // See testPermissionModeIsTheOneFieldGatedOnProvenance() for both sides
         // of that; asserted here too so a reader of this list is not left
-        // believing all seventeen travel identically.
+        // believing every carried field travels identically.
         $this->assertSame(PermissionMode::Default, $agent->permissionMode);
         $this->assertSame(7, $agent->maxTurns);
         $this->assertSame(['fs' => ['command' => 'mcp-fs']], $agent->mcpServers);
@@ -236,7 +257,7 @@ final class AgentPresetFieldCarryTest extends TestCase
     /**
      * THE ONE FIELD THAT DOES NOT CARRY UNCONDITIONALLY, both sides.
      *
-     * Sixteen of the preset's seventeen fields describe an agent. Only
+     * Seventeen of the preset's eighteen fields describe an agent. Only
      * `permissionMode` decides what it may do without asking, and
      * {@see \SugarCraft\Code\Agents\ForeignAgentPresetRegistry} reads
      * `{projectRoot}/.claude/agents` and `{projectRoot}/.opencode/agents` with
@@ -435,6 +456,7 @@ final class AgentPresetFieldCarryTest extends TestCase
             effort: Effort::High,
             isolation: Isolation::Worktree,
             color: '#ff00ff',
+            mode: AgentMode::Primary,
             initialPrompt: 'You review.',
             source: SkillSource::Claude,
             sourcePath: '/fixture/reviewer.md',

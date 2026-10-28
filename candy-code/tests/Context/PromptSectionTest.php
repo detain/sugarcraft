@@ -303,6 +303,7 @@ final class PromptSectionTest extends TestCase
         sort($tags);
 
         self::assertSame([
+            'agent-instructions',
             'agent-memory',
             'available-skills',
             'env',

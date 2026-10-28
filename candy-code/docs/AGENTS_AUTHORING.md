@@ -5,8 +5,9 @@ delegation target and tunes it. Presets are discovered at launch, merged into a
 roster, and shown by `/agents`.
 
 This page documents what the frontmatter *does* on this checkout, which is
-narrower than what it declares. `AgentPreset` carries seventeen fields and the path that puts a preset onto
-the roster now reads every one of them onto the `Agent` row. The per-field
+narrower than what it declares. `AgentPreset` carries eighteen fields and the path that puts a preset onto
+the roster reads every one of them onto the `Agent` row except the presenting
+filter `mode`, which stops at the preset itself (see the table below). The per-field
 account is below rather than implied, because a preset whose
 `permissionMode: bypass-permissions` is honoured by a cloned checkout and one
 where that mode collapses to the safe default are very different objects to
@@ -140,6 +141,7 @@ background: false
 effort: high                    # low | medium | high | xhigh | max (sglang only)
 isolation: worktree             # worktree | none
 color: "#ffb86c"
+mode: all                       # primary | subagent | all (which presets the primary-agent cycle presents; validated at read)
 initialPrompt: |                # optional; the body is used when absent
   You are a reviewer…
 ---
@@ -168,13 +170,18 @@ carrying both is asking for the declared one.
 
 ### Which fields reach the roster
 
-`Bootstrap::agentRoster()` maps each preset through `Agent::fromPreset()`, which
-now carries **all seventeen** `AgentPreset` fields onto the `Agent` row:
+`Bootstrap::agentRoster()` maps each preset through `Agent::fromPreset()`; across
+that path **every one of the eighteen** `AgentPreset` fields is accounted for —
+seventeen carried onto the `Agent` row, `mode` read and stopped at the preset
+(below):
 `name`, `description`, `initialPrompt`, `model` (`inherit`/empty → the
 launch's model), `tools`, `skills`, `disallowedTools`, `maxTurns`,
 `mcpServers`, `memory`, `background`, `effort`, `isolation`, `color`,
-`source`, `sourcePath`, and — gated on provenance, alone among them —
-`permissionMode`.
+`source`, `sourcePath`, `mode`, and — gated on provenance, alone among them —
+`permissionMode`. `mode` sits inside the count but outside the crossing: the
+C-AGT-4.a presenting filter is read and validated by the registry and travels
+on the preset, yet never lands on the row — the Agent is constructed only
+after that filter has already chosen which presets ride the bridge at all.
 
 Native and imported presets take the same path — the wiring neither widens
 nor narrows it — with that one deliberate exception, stated per value because
@@ -204,7 +211,7 @@ Reaching the roster is not the same as changing what a delegated run does.
 `Task` runs every sub-agent on the session's provider and under the session's
 permission gate (`TaskTool`); its model and reasoning effort are the agent's,
 its permission mode can only narrow the session's, and every field below
-reaches a live path:
+except `mode` reaches a live path:
 
 | Field | Effect today |
 |---|---|
@@ -218,9 +225,11 @@ reaches a live path:
 | `background` | Live: runs the delegation as a background session; the call's own `background` wins (see [What you can actually do with a preset today](#what-you-can-actually-do-with-a-preset-today)). |
 | `isolation` | Live: `worktree` runs the delegation (and a `/bg` session run as this agent) in a git worktree of its own; see [Teams and worktrees](#teams-and-worktrees). |
 | `color` | Live: the agents strip, the Agent View header and activity line, and the dashboard row paint a run whose preset declared a colour this theme renders legibly. |
+| `mode` | **Inert (C-AGT-4.a)**: which presets the primary-agent cycle offers — `primary`, `subagent`, or `all` (default when absent). Validated at read (`AgentPresetRegistry::parseAgentMode` refuses a value it cannot spell) and carried on the preset, but nothing presents on it yet; the cycle lands with C-AGT-4.b, and `FrontmatterKeyAudit::INERT` sheds the entry the step that wires it ships. |
 
-As of C-AGT-3.b this table has no **Inert** rows left:
-`FrontmatterKeyAudit::INERT` names no agent preset key, and
+As of C-AGT-4.a this table has exactly one **Inert** row:
+`mode`, whose audit entry `FrontmatterKeyAudit::INERT` carries as an empty
+notice — parsed and validated, not yet presented on.
 `InertFrontmatterDocumentationDriftTest` pins that equality against this table
 in both directions, so a step that let a preset field go silent again would add
 its entry there and mark this row together. A preset that declares a key

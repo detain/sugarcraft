@@ -83,6 +83,7 @@ final class FrontmatterKeyAudit
         self::AGENT => [
             'name', 'description', 'tools', 'disallowedTools', 'model', 'permissionMode', 'maxTurns',
             'skills', 'mcpServers', 'memory', 'background', 'effort', 'isolation', 'color', 'initialPrompt',
+            'mode',
         ],
         self::SKILL => [
             'name', 'description', 'license', 'compatibility', 'metadata', 'user-invocable',
@@ -100,7 +101,11 @@ final class FrontmatterKeyAudit
      * those seats until C-EXT-2.c wired the skill fork half and C-EXT-2.e
      * wired the command delegation half, and both rows left the map.)
      *
-     * - agent preset: no key is inert here any more. `Task` honours `model`,
+     * - agent preset: `mode` joined the inert map at C-AGT-4.a and leaves it
+     *   when C-AGT-4.b ships the cycle that acts on it — the parser carries
+     *   the case, the badge rides the preset, but nothing presents anything
+     *   differently yet, which is exactly what "declared but not acted on"
+     *   means. Every other key: no key is inert. `Task` honours `model`,
      *   `effort` and (narrow-only) `permissionMode` since roadmap 4.1,
      *   `background` since 4.3-2, and `isolation` since 4.9 (a worktree run,
      *   `/bg` too) ({@see \SugarCraft\Code\Tools\BuiltIn\TaskTool}); `color`
@@ -141,7 +146,9 @@ final class FrontmatterKeyAudit
      * @var array<string, array<string, list<string>>>
      */
     public const INERT = [
-        self::AGENT => [],
+        self::AGENT => [
+            'mode' => [],
+        ],
         self::SKILL => [],
         self::COMMAND => [],
         self::RULE => [

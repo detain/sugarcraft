@@ -475,6 +475,13 @@ final class ForeignAgentPresetWiringTest extends TestCase
                 // session's own mode through SessionHost::permissionMode().
                 'Acp/AcpServer.php',
                 'Agents/Agent.php',
+                // C-AGT-4.a: an Agent reader BY DESIGN — PrimaryAgent is the
+                // application side of the gate `fromPreset()` opens. It reads
+                // the row's (already gated) mode only to apply a STRICTER-OF
+                // narrowing to the main session's PermissionGate, and revert()
+                // hands back the launch gate by identity; a foreign preset's
+                // Default can therefore never raise anything.
+                'Agents/PrimaryAgent.php',
                 // ISS-004: NOT an Agent reader — the needle also matches the
                 // runner's OWN promoted `$permissionMode`, the spawn config's
                 // top-level session mode the server named (the delegation

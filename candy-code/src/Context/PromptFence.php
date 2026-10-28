@@ -124,7 +124,7 @@ final class PromptFence
      * line to the model outside the provenance preamble. It joins at zero golden
      * bytes: the golden fixture's one skill is enabled, so its listing is empty.
      *
-     * WHAT PINS THIS ROSTER — EIGHT SITES, counted from the tests that read it and not
+     * WHAT PINS THIS ROSTER — NINE SITES, counted from the tests that read it and not
      * from the note that used to name one. Two are whole-roster: the SORTED list in
      * {@see \SugarCraft\Code\Tests\Context\PromptSectionTest::testTheEscapeRosterIsExactlyTheDerivedFenceTagList()}
      * and the DECLARATION-order map in
@@ -157,7 +157,14 @@ final class PromptFence
      * is the assembler-level one — it reads the request the real `/compact` route
      * builds, so a `prior-summary` dropped from this array reappears undefanged
      * inside the carried block and reddens there. The earlier prose here credited
-     * only the user-tier guard and was understated by seven.
+     * only the user-tier guard and was understated by seven. The ninth is the
+     * guard for `agent-instructions` at the splice that emits it: the two
+     * whole-roster sites already forge the tag in both polarities, and
+     * {@see \SugarCraft\Code\Tests\Agents\PrimaryAgentTest::testAForgedCloserInsideAnAgentBodyCannotEscapeItsFence()}
+     * is the assembler-level one — it reads the section a real Runtime
+     * assembles with instructions applied whose body spells its own fence, so
+     * an `agent-instructions` dropped from this array reappears undefanged
+     * inside the rendered layer and reddens there.
      *
      * The last two fences open OUTSIDE the system prompt (step 1.A-1/1.A-2):
      * `turn-context` is the volatile per-step state row
@@ -177,6 +184,16 @@ final class PromptFence
      * given splice plants. It joins at zero golden bytes: the fence renders
      * only in delegated prompts, which the goldens do not hold.
      *
+     * `agent-instructions` is the thirteenth entry (C-AGT-4.a): the fence
+     * around the active primary agent's preset body in the MAIN chat's prompt
+     * ({@see \SugarCraft\Code\Runtime::$agentInstructions}, assembled by
+     * {@see \SugarCraft\Code\Agents\PrimaryAgent}). Its body is a file a
+     * human wrote — possibly one dropped into the repository by a clone,
+     * through the foreign tiers — so the closer must defang exactly as it
+     * does for the instruction documents it sits beside. It joins at zero
+     * golden bytes: the fence renders only while an agent is applied to the
+     * session, which no golden run does.
+     *
      * @var list<string>
      */
     private const TAGS = [
@@ -192,6 +209,7 @@ final class PromptFence
         'turn-context',
         'system-notice',
         'agent-memory',
+        'agent-instructions',
     ];
 
     /**
