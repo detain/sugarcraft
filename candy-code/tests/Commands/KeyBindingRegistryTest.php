@@ -381,11 +381,16 @@ final class KeyBindingRegistryTest extends TestCase
      * 152 -> 153 live (153 all), 15 groups, with P-TABS.g's window strip:
      * `sessions.toggle` — the shell-group row behind `Alt+S`, which docks
      * and undocks the Sessions pane without ever moving focus.
+     *
+     * 153 -> 154 live (154 all), 15 groups, with P-AGENT.b's interrupt send:
+     * `agentview.interrupt` — the `Ctrl+X i` chord of the Agent transcript,
+     * the same draft Enter carries but delivered as `MessageMode::Interrupt`,
+     * skipping the step's unstarted calls.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(153, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(153, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(154, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(154, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(0, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(15, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }

@@ -548,9 +548,9 @@ final class KeyBindingDriftTest extends TestCase
      * `chat.cancel` is that row: "Esc Esc … twice, quickly" is two presses one
      * after the other, and rewriting the label as `Esc / Esc` would read as two
      * ways to do it while its observation kept passing unchanged. The Agent
-     * View's five `Ctrl+X <letter>` chords (P-D3, P-E3) are the same shape: a
-     * leader, then the letter — and each observation presses the two keys
-     * in that order and asserts the leader went down first.
+     * View's six `Ctrl+X <letter>` chords (P-D3, P-E3, P-AGENT.b) are the same
+     * shape: a leader, then the letter — and each observation presses the two
+     * keys in that order and asserts the leader went down first.
      *
      * Asserted in both directions — a new sequence row shows up here as an
      * unexpected entry, which is the prompt to decide whether its observation
@@ -566,7 +566,7 @@ final class KeyBindingDriftTest extends TestCase
         }
 
         $this->assertSame(
-            ['chat.cancel', 'agentview.cancel', 'agentview.pause', 'agentview.stop-all', 'agentview.open-session', 'agentview.background'],
+            ['chat.cancel', 'agentview.cancel', 'agentview.pause', 'agentview.stop-all', 'agentview.open-session', 'agentview.background', 'agentview.interrupt'],
             $sequences,
             'chord() cannot tell a sequence from a choice, so the set of rows written as a sequence is '
             . 'held here explicitly',
@@ -1990,11 +1990,38 @@ final class KeyBindingDriftTest extends TestCase
                 $this->assertTrue($after->chat?->inFlight, 'the turn goes on');
                 $this->assertSame('', $after->chat?->inputBuf, 'no letter was typed');
             },
+            // P-AGENT.b: Ctrl+X i is the composer's interrupt sibling of Enter
+            // — same broadcast law (agentComposerTargets), the leader pressed
+            // as the sequence the label names, and the draft landing in the
+            // run's mailbox with the INTERRUPT mode instead of Steer.
+            'agentview.interrupt' => function (array $k): void {
+                $session = 'drift-int-' . bin2hex(random_bytes(4));
+                $app = $this->composing($this->stripApp()->openAgentView('run-2'), $session, 'stop that and summarise');
+                [$leader] = $app->update($k[0]);
+                $this->assertTrue($leader->agentViewLeader, 'the first key is the leader');
+                [$after] = $leader->update($k[1]);
+                $this->assertFalse($after->agentViewLeader);
+                $this->assertSame('', $after->chat?->inputBuf, 'the draft was sent, not typed');
+                $this->assertTrue($after->chat?->inFlight, 'and the main turn was neither steered nor touched');
+
+                $mail = \SugarCraft\Code\Agents\Live\AgentInbox::forSession($session)?->drain('run-2') ?? [];
+                $this->assertSame(['stop that and summarise'], array_map(static fn ($m): string => $m->text, $mail), 'into that run\'s mailbox');
+                $this->assertSame(
+                    [\SugarCraft\Code\Agents\Live\MessageMode::Interrupt],
+                    array_map(static fn ($m): \SugarCraft\Code\Agents\Live\MessageMode => $m->mode, $mail),
+                    'delivered as an interrupt, not a steer',
+                );
+                $this->assertSame([], \SugarCraft\Code\Agents\Live\AgentInbox::forSession($session)?->drain('run-1') ?? [], 'only the run on screen');
+                $this->assertSame([], $this->controls($session, 'run-2'), 'a message, not a control');
+            },
             // P-D2: the box is the open run's composer. Mid-turn on purpose:
             // the same Enter in the main view would steer the parent's turn.
+            // P-AGENT.b flipped the fixture's shape: the view owns its own
+            // viewport now, so the draft is typed INSIDE it, never before the
+            // open — a draft left in the main box is stashed, not sent.
             'agentview.send' => function (array $k): void {
                 $session = 'drift-send-' . bin2hex(random_bytes(4));
-                $open = $this->composing($this->stripApp(), $session, 'also check the cookie')->openAgentView('run-2');
+                $open = $this->composing($this->stripApp()->openAgentView('run-2'), $session, 'also check the cookie');
 
                 [$sent, $cmd] = $open->update($k[0]);
                 $this->assertSame('', $sent->chat?->inputBuf, 'the draft was sent');
@@ -2015,12 +2042,14 @@ final class KeyBindingDriftTest extends TestCase
             // the broadcast Enter flow below is the untouched original.
             'shell.group-input' => function (array $k): void {
                 $session = 'drift-group-' . bin2hex(random_bytes(4));
-                [$group] = $this->composing($this->stripApp(), $session, 'wrap up')
-                    ->withPane(Pane::Agents)
+                // P-AGENT.b: the toggle opens the view first, and the draft
+                // belongs to the view's own composer from then on.
+                [$group] = $this->stripApp()->withPane(Pane::Agents)
                     ->update($k[0]);
                 $this->assertTrue($group->agentBroadcast);
                 $this->assertSame('run-3', $group->agentViewTarget, 'the view opened on the newest running run');
                 $this->assertSame(['run-1', 'run-2', 'run-3'], $group->agentComposerTargets());
+                $group = $this->composing($group, $session, 'wrap up');
 
                 $group->update(new KeyMsg(KeyType::Enter));
                 foreach (['run-1', 'run-2', 'run-3'] as $run) {

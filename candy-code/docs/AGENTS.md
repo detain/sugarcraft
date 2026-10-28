@@ -231,12 +231,16 @@ above it: `main ▸ explore  ‹ 1 of 3 ›  ⠋ running · step 4/50 · 0:12 ·
 | `Ctrl+X` `s` | Cancel every running agent |
 | `Ctrl+X` `o` | Open the finished run as a normal session to type into (not while a turn runs) |
 | `Ctrl+X` `b` | Send the running agent to the background (see below) |
+| `Ctrl+X` `i` | Send the draft **now**, interrupting: it skips the step's calls that have not started yet (see below) |
 | `Ctrl+G` | Broadcast: the composer sends to every running agent of the batch at once; again to go back |
 
 **Messaging an agent.** While the view is open the input box is that agent's
 composer (`message explore…`). A running agent reads your message at its next
 step boundary, with your authority — "go ahead and edit X" means what it says
-— and the view shows `you → explore · … ⧗ queued` until it does. A finished
+— and the view shows `you → explore · … ⧗ queued` until it does. `Ctrl+X` `i`
+sends the same draft as an **interrupt** instead: the run takes it at the same
+step boundary, but the calls of the current step that have not started yet are
+skipped — the row reads `you → explore · … ⚡ interrupt`. A finished
 agent is **continued** instead: a follow-up run of the same conversation that
 streams into the view (`↻ follow-up running`, then `↩ replied`), with one
 `you → explore · … (follow-up)` row left in the main transcript for you; the
@@ -244,6 +248,16 @@ main model is not told. A `/command` or `!command` typed there still runs as a
 command. Messages are delivered through a per-run mailbox signed with a key
 only this launch holds, so nothing else on the machine can speak to an agent
 as you ([`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md#messages-to-a-running-delegation)).
+
+**Every window keeps its own view.** The main transcript, each agent view and
+each session tab remember their own draft, caret and scroll position: opening
+an agent (or `Alt+N` / `Alt+P` to its sibling) parks the draft you were typing
+where it came from and hands you that agent's own half-typed message, and
+`Esc` gives yours back untouched. The open view is remembered per tab, so
+switching tabs and back restores it with the same run on screen. The session
+side pane and the strip list the live runs of **every** tab — not just the
+one in front — as `└ ⠋ @explore` rows and chips, ⏳ when a run is waiting on
+you; a row or chip click switches to its tab first, then opens the view.
 
 **Stopping.** A cancel or pause reaches a run at its next tool or step, so a
 long `Bash` call finishes first. The second cancel within 3 s is a hard stop:

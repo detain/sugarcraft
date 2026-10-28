@@ -258,7 +258,7 @@ final class AgentShellCommandsTest extends TestCase
 
     public function testEveryControlVerbIsKnownAndOnlyThose(): void
     {
-        $this->assertSame(['message', 'cancel', 'stop', 'pause', 'resume', 'open-session', 'background'], AgentControlMsg::VERBS);
+        $this->assertSame(['message', 'interrupt', 'cancel', 'stop', 'pause', 'resume', 'open-session', 'background'], AgentControlMsg::VERBS);
         $this->expectException(\InvalidArgumentException::class);
         new AgentControlMsg('explode', ['run-1']);
     }

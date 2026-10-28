@@ -9443,6 +9443,11 @@ final class Chat implements Model
      */
     private function submitToAgents(AgentControlMsg $msg): array
     {
+        // P-AGENT.b: `Ctrl+X i` is the same delivery with the mailbox mode set
+        // to Interrupt — the run reads it at its next step AND the step's
+        // calls that have not started yet are skipped. A finished run takes
+        // the follow-up path unchanged either way.
+        $interrupt = $msg->verb === AgentControlMsg::INTERRUPT;
         // ISS-051 (review fix): the mailbox is an egress exactly like submit —
         // a run must read the paste, never the marker. The composer's text and
         // the draft box can BOTH carry chips, so the expansion sits ahead of
@@ -9486,8 +9491,18 @@ final class Chat implements Model
             }
 
             try {
-                $message = $inbox->send($id, \SugarCraft\Code\Agents\Live\AgentMessage::fromUser($text));
-                $cmds[] = $answer(AgentMessageSentMsg::QUEUED, $message->msgId);
+                $message = $inbox->send($id, \SugarCraft\Code\Agents\Live\AgentMessage::fromUser(
+                    $text,
+                    $interrupt ? \SugarCraft\Code\Agents\Live\MessageMode::Interrupt : \SugarCraft\Code\Agents\Live\MessageMode::Steer,
+                ));
+                $cmds[] = $answer(
+                    AgentMessageSentMsg::QUEUED,
+                    $message->msgId,
+                    // The sent row reads `⚡ interrupt` instead of the plain
+                    // `⧗ queued` badge, through the detail slot the row
+                    // already prefers for a failed send (App::agentViewSentRows).
+                    $interrupt ? Lang::t('tui.agent_view.sent.interrupt') : null,
+                );
                 $sent = true;
             } catch (\Throwable $e) {
                 $cmds[] = $answer(AgentMessageSentMsg::FAILED, null, $e->getMessage());
@@ -16542,6 +16557,31 @@ final class Chat implements Model
         }
 
         return $input->moveToEnd();
+    }
+
+    /**
+     * The composer's state as the shell's window stash saves it (P-AGENT.b):
+     * the draft text and the flat caret offset — the two halves
+     * {@see withDraft()} puts back. A snapshot of the same pair
+     * {@see Renderer::renderInput()} and the checkpoint capture see.
+     *
+     * @return array{0: string, 1: int} [draft text, caret offset]
+     */
+    public function draft(): array
+    {
+        return [$this->inputBuf, $this->inputCursorOffset()];
+    }
+
+    /**
+     * Replace the composer's whole state (P-AGENT.b): text first through
+     * {@see withInputBuf()} — which owns the slash/mention-menu re-highlight
+     * law and the widget reseed — then the caret through the same seek the
+     * alt-chords use, so a stale cursor from a stashed viewport clamps to
+     * the restored draft instead of pointing past its end.
+     */
+    public function withDraft(string $text, int $cursor): self
+    {
+        return $this->withInputBuf($text)->withInputCursor($cursor);
     }
 
     /**

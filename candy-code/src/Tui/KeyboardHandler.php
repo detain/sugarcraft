@@ -1041,6 +1041,14 @@ final class KeyboardHandler
                         : $app->withStatus(Lang::t('tui.agent.backgrounding', ['name' => $run->name])),
                     new \SugarCraft\Code\App\AgentControlMsg(\SugarCraft\Code\App\AgentControlMsg::BACKGROUND, [$target]),
                 ],
+                // P-AGENT.b: send the draft NOW — the same delivery Enter
+                // makes, with the mailbox mode set to skip the step's calls
+                // that have not started yet. The broadcast law of `Ctrl+G`
+                // applies exactly as it does to Enter, so the targets are
+                // the composer's, not the single run's.
+                'i' => self::composerSends($app)
+                    ? [$app, new \SugarCraft\Code\App\AgentControlMsg(\SugarCraft\Code\App\AgentControlMsg::INTERRUPT, $app->agentComposerTargets())]
+                    : null,
                 default => [$app, null],
             };
         }

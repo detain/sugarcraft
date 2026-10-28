@@ -201,9 +201,12 @@ trait HandlesRunControl
         // of one or more delegated runs — the Agent View composer's Enter,
         // its Ctrl+X chords, the dashboard's c/r/s, Ctrl+G's broadcast. The
         // runs' mailboxes and the live registry the ids name are this
-        // chat's, so the shell only translates and this arm acts.
+        // chat's, so the shell only translates and this arm acts. P-AGENT.b's
+        // INTERRUPT rides the same submit path: it is a delivery of the
+        // draft, only with the mailbox mode set to skip the step's unstarted
+        // calls — control verbs are the rest.
         if ($msg instanceof AgentControlMsg) {
-            return $msg->verb === AgentControlMsg::MESSAGE
+            return \in_array($msg->verb, [AgentControlMsg::MESSAGE, AgentControlMsg::INTERRUPT], true)
                 ? $this->submitToAgents($msg)
                 : $this->controlAgents($msg);
         }

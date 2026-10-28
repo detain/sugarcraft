@@ -1249,6 +1249,10 @@ final class KeyBindingRegistry
             // P-E3: the run stops at its next tool or step and a background
             // session continues it; its Task call returns at once.
             KeyBinding::new('agentview.background', 'Ctrl+X b', Lang::t('keys.agentview.background'), $c),
+            // P-AGENT.b: send the draft now — the mailbox line is delivered
+            // as an interrupt, so the step's calls that have not started
+            // yet are skipped instead of run ahead of it.
+            KeyBinding::new('agentview.interrupt', 'Ctrl+X i', Lang::t('keys.agent-transcript.interrupt'), $c),
             KeyBinding::new('agentview.next', 'Alt+N', Lang::t('keys.agentview.next'), $c),
             KeyBinding::new('agentview.prev', 'Alt+P', Lang::t('keys.agentview.prev'), $c),
         ];

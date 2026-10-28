@@ -23,6 +23,11 @@ use SugarCraft\Code\Chat;
  * - {@see MESSAGE}: the composer's draft, to each run — a mailbox line the
  *   run reads at its next step, or, for a run that has finished, a
  *   follow-up run that continues its conversation ({@see \SugarCraft\Code\Host\AgentResume}).
+ * - {@see INTERRUPT} (P-AGENT.b): the composer's draft again, but delivered as
+ *   a `MessageMode::Interrupt` mailbox line — the run reads it at its next
+ *   step AND the step's calls that have not started yet are skipped, so a
+ *   steer that must land NOW does not first spend the whole batch. A finished
+ *   run follows up exactly as a MESSAGE does.
  * - {@see CANCEL}: soft cancel — a `cancel` control the run reads at its next
  *   tool or step, so it stops resumable. {@see STOP} is the hard second
  *   press (roadmap P-E1): `agent_cancel{agentId, callId}` on the turn that
@@ -42,6 +47,7 @@ use SugarCraft\Code\Chat;
 final readonly class AgentControlMsg implements Msg
 {
     public const MESSAGE = 'message';
+    public const INTERRUPT = 'interrupt';
     public const CANCEL = 'cancel';
     public const STOP = 'stop';
     public const PAUSE = 'pause';
@@ -50,12 +56,13 @@ final readonly class AgentControlMsg implements Msg
     public const BACKGROUND = 'background';
 
     /** Every verb, in the order the class doc lists them. */
-    public const VERBS = [self::MESSAGE, self::CANCEL, self::STOP, self::PAUSE, self::RESUME, self::OPEN_SESSION, self::BACKGROUND];
+    public const VERBS = [self::MESSAGE, self::INTERRUPT, self::CANCEL, self::STOP, self::PAUSE, self::RESUME, self::OPEN_SESSION, self::BACKGROUND];
 
     /**
      * @param list<string> $agentIds the runs it is for
      * @param string       $text     what to say; empty means the composer's
-     *                               draft for {@see MESSAGE} and "Continue."
+     *                               draft for {@see MESSAGE} and
+     *                               {@see INTERRUPT}, and "Continue."
      *                               for a {@see RESUME} that continues a
      *                               finished run
      */

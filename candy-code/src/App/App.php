@@ -83,6 +83,8 @@ use SugarCraft\Code\Tui\Window\WindowEntry;
 use SugarCraft\Code\Tui\Window\WindowList;
 use SugarCraft\Code\Tui\Window\WindowRef;
 use SugarCraft\Code\Tui\Window\WindowStrip;
+use SugarCraft\Code\Tui\Window\WindowViewport;
+use SugarCraft\Code\Tui\Window\WindowViewports;
 use SugarCraft\Code\Media\MediaRequest;
 use SugarCraft\Code\Tui\MediaForm\ChoiceFeed;
 use SugarCraft\Code\Tui\MediaForm\GenerateFromMediaFormMsg;
@@ -639,6 +641,26 @@ final class App implements Model
          * @var array<string, string>
          */
         public readonly array $tabNotified = [],
+        /**
+         * P-AGENT.b: the per-window stash of {@see WindowViewport}s — what
+         * each window (a tab's main transcript, an open Agent View) held
+         * scrolled and drafted while the user was elsewhere. Keys are the
+         * zoneable vocabulary the window surfaces already speak: `s:<tabKey>`
+         * for a tab's main window, `a:<runId>` for a run's view. Null means
+         * nothing has ever been swapped away — the deck's own law, so a
+         * single-window launch never builds the map. Rides every mutate.
+         */
+        public readonly ?WindowViewports $windowViewports = null,
+        /**
+         * P-AGENT.b: the Agent View each tab left open, tab key => run id.
+         * {@see openAgentView()} records it, a user {@see closeAgentView()}
+         * forgets it, and {@see switchTab()} re-opens the remembered run on
+         * the way back — the view is per-tab now. Pruned to the deck's live
+         * keys at every switch, like {@see $tabNotified}.
+         *
+         * @var array<string, string>
+         */
+        public readonly array $agentViewByTab = [],
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -819,6 +841,72 @@ final class App implements Model
     }
 
     /**
+     * P-AGENT.b: the window stash, normalised — a shell that has never
+     * swapped windows holds no map, and "no map" is the empty one.
+     */
+    private function viewportStore(): WindowViewports
+    {
+        return $this->windowViewports ?? WindowViewports::empty();
+    }
+
+    /** The single-window stand-in for the main window's key when no deck exists. */
+    private function mainWindowKey(): string
+    {
+        return 's:' . ($this->deck?->activeKey() ?? 'main');
+    }
+
+    /**
+     * What the foreground {@see Chat} holds on screen right now — scroll and
+     * composer — as the value object the stash keeps. No chat, nothing held:
+     * the bottom viewport.
+     */
+    private function currentViewport(): WindowViewport
+    {
+        if ($this->chat === null) {
+            return WindowViewport::bottom();
+        }
+
+        [$draft, $cursor] = $this->chat->draft();
+
+        return new WindowViewport($this->chat->scrollOffset(), $draft, $cursor);
+    }
+
+    /**
+     * P-AGENT.b: land on run $runId's view from either window-list surface —
+     * the strip chip or a Sessions row — switching to the run's tab first
+     * when it is a background one. A run the projection does not carry opens
+     * nothing: the id may have settled between paint and click, and the same
+     * nothing a stale session row already answers is the honest reply.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function openRunFromWindow(string $runId): array
+    {
+        if ($runId === '') {
+            return [$this, null];
+        }
+
+        $tab = null;
+        $name = null;
+        foreach ($this->windowList()?->entries() ?? [] as $entry) {
+            $child = $entry->child($runId);
+            if ($child !== null) {
+                $tab = $child->ref->parentKey;
+                $name = $child->ref->label;
+                break;
+            }
+        }
+
+        if ($tab === null || $tab === ($this->deck?->activeKey() ?? '')) {
+            return [$this->openAgentView($runId, name: $name), null];
+        }
+
+        [$app, $cmd] = $this->switchTab($tab);
+
+        return [$app->openAgentView($runId, name: $name), $cmd];
+    }
+
+    /**
      * Open run $id (P-B3's strip `Enter`): the read-only Agent View (P-C2).
      *
      * @see openAgentView()
@@ -873,6 +961,22 @@ final class App implements Model
             return $this->refreshAgentView();
         }
 
+        // P-AGENT.b: the window swap. What sits in the composer and how far
+        // the transcript is scrolled belong to the WINDOW being left — the
+        // tab's main transcript when the view was closed, the previous run's
+        // view when this open is `Alt+N`/`Alt+P` navigation — and the
+        // incoming window's own saved state is restored in its place, or the
+        // bottom/empty one when it has never been opened. Without the stash
+        // the main draft read as the agent's composer and the agent view's
+        // scrolling leaked back into the transcript on close.
+        $store = $this->viewportStore()->stash(
+            $this->agentViewTarget === null ? $this->mainWindowKey() : 'a:' . $this->agentViewTarget,
+            $this->currentViewport(),
+        );
+        $incoming = $store->restore('a:' . $id);
+        $chat = $this->chat;
+        $activeTab = $this->deck?->activeKey();
+
         $next = $this->mutate(
             pane: Pane::Chat,
             agentViewMode: AgentViewMode::Attach,
@@ -882,6 +986,9 @@ final class App implements Model
             agentViewItems: [],
             agentViewRows: [],
             agentViewName: $name,
+            chat: $chat === null ? null : $chat->withDraft($incoming->draft, $incoming->cursor)->withScrollOffset($incoming->scrollOffset),
+            windowViewports: $store,
+            agentViewByTab: $activeTab === null ? $this->agentViewByTab : [...$this->agentViewByTab, $activeTab => $id],
         );
         foreach (\SugarCraft\Code\Tui\Components\AgentDashboardPane::entries($next) as $index => $entry) {
             if (($entry->key ?? $entry->name) === $id) {
@@ -952,13 +1059,37 @@ final class App implements Model
 
     /**
      * Leave the Agent View: the parent transcript is back, and the dashboard
-     * is no longer attached. Pane focus is left where it is.
+     * is no longer attached. Pane focus is left where it is. P-AGENT.b: the
+     * leaving is a window swap — the run's view keeps whatever draft and
+     * scroll it holds, and the tab's main window comes back exactly as it
+     * was before the view opened.
      */
     public function closeAgentView(): self
     {
         if ($this->agentViewTarget === null && $this->agentViewMode !== AgentViewMode::Attach) {
             return $this;
         }
+
+        $id = $this->agentViewTarget;
+        if ($id === null) {
+            // A dashboard worker attached without a run id has no window of
+            // its own to keep: nothing was ever swapped into the chat.
+            return $this->mutate(
+                agentViewMode: AgentViewMode::List,
+                agentViewTarget: null,
+                agentViewTail: null,
+                agentViewItems: [],
+                agentViewRows: [],
+                agentViewName: null,
+                agentBroadcast: false,
+                agentViewLeader: false,
+            );
+        }
+
+        $store = $this->viewportStore()->stash('a:' . $id, $this->currentViewport());
+        $main = $store->restore($this->mainWindowKey());
+        $chat = $this->chat;
+        $activeTab = $this->deck?->activeKey();
 
         return $this->mutate(
             agentViewMode: AgentViewMode::List,
@@ -969,6 +1100,9 @@ final class App implements Model
             agentViewName: null,
             agentBroadcast: false,
             agentViewLeader: false,
+            chat: $chat === null ? null : $chat->withDraft($main->draft, $main->cursor)->withScrollOffset($main->scrollOffset),
+            windowViewports: $store,
+            agentViewByTab: $activeTab === null ? $this->agentViewByTab : array_diff_key($this->agentViewByTab, [$activeTab => true]),
         );
     }
 
@@ -1120,6 +1254,7 @@ final class App implements Model
                 \SugarCraft\Code\App\AgentControlMsg::PAUSE => Lang::t('tui.app.no_agent.pause'),
                 \SugarCraft\Code\App\AgentControlMsg::OPEN_SESSION => Lang::t('tui.app.no_agent.open'),
                 \SugarCraft\Code\App\AgentControlMsg::MESSAGE => Lang::t('tui.app.no_agent.message'),
+                \SugarCraft\Code\App\AgentControlMsg::INTERRUPT => Lang::t('tui.app.no_agent.message'),
                 default => Lang::t('tui.app.no_agent.stop'),
             }), null];
         }
@@ -1234,7 +1369,15 @@ final class App implements Model
             if ($sent->agentId !== $id || ($sent->msgId !== null && isset($delivered[$sent->msgId]))) {
                 continue;
             }
-            $rows[] = \SugarCraft\Code\Message::toAgent(\SugarCraft\Core\Util\Sanitize::untrustedForMarkedFrames($sent->name), \SugarCraft\Core\Util\Sanitize::untrustedForMarkedFrames($sent->text), $sent->badge());
+            // P-AGENT.b: an interrupt send rides the QUEUED status with its
+            // detail set to `⚡ interrupt`, so the row tells the two
+            // deliveries apart while both await the log's own line; every
+            // other state keeps badge()'s read.
+            $badge = $sent->status === \SugarCraft\Code\App\AgentMessageSentMsg::QUEUED
+                && $sent->detail !== null && $sent->detail !== ''
+                ? $sent->detail
+                : $sent->badge();
+            $rows[] = \SugarCraft\Code\Message::toAgent(\SugarCraft\Core\Util\Sanitize::untrustedForMarkedFrames($sent->name), \SugarCraft\Core\Util\Sanitize::untrustedForMarkedFrames($sent->text), $badge);
         }
 
         return $rows;
@@ -3693,11 +3836,11 @@ final class App implements Model
         // row switches, its `×` closes — and closing is handleCloseTab's
         // busy-two-step untouched, so a strip click and a keystroke cannot
         // diverge. Order: the close prefixes are disjoint but checked first
-        // for the same reason a classifier sorts longest-prefix first. The
-        // agent chips answer nothing yet — the strip paints them for the
-        // focused tab, and clicking one opens P-AGENT.b's per-tab surface;
-        // until that exists the zone is a deliberate no-op, refused under a
-        // modal exactly as the dashboard rows beside it are.
+        // for the same reason a classifier sorts longest-prefix first. Since
+        // P-AGENT.b the agent chips answer: a click lands on that run's
+        // Agent View, switching to its tab first when it is a background
+        // one. The chip's `×` stays a deliberate no-op — closing a run is
+        // the view's own cancel chords, not the strip's.
         foreach ([
             WindowStrip::ZONE_SESSION_CLOSE_PREFIX,
             WindowStrip::ZONE_SESSION_PREFIX,
@@ -3725,6 +3868,10 @@ final class App implements Model
 
             if ($zone === WindowStrip::ZONE_NEW) {
                 return $this->handleOpenTab(new OpenTabMsg());
+            }
+
+            if ($zone === WindowStrip::ZONE_AGENT_PREFIX) {
+                return $this->openRunFromWindow($rest);
             }
 
             return [$this, null];
@@ -3883,11 +4030,12 @@ final class App implements Model
     /**
      * A row click inside the docked Sessions pane (P-TABS.g). The pane's own
      * key vocabulary (SessionsPane::KEY_*) maps onto the same three deck
-     * routes the strip and the keyboard use — open, switch, and open the
-     * focused tab's agent child — so mouse and keyboard are one code path.
-     * Agent rows answer through openAgentView, keyed by run id exactly as
-     * the dashboard rows above are; the pane only lists children of the
-     * FOREGROUND tab, so the run is always registered with the live Chat.
+     * routes the strip and the keyboard use — open, switch, and open an
+     * agent child — so mouse and keyboard are one code path. Agent rows
+     * answer through {@see openRunFromWindow()}, keyed by run id exactly as
+     * the strip chips and the dashboard rows above are; since P-AGENT.b the
+     * pane lists children of EVERY tab, so a background tab's row switches
+     * to its tab first and lands on the run's view.
      *
      * @return array{0: self, 1: ?\Closure}
      */
@@ -3907,9 +4055,7 @@ final class App implements Model
         }
 
         if (str_starts_with($key, SessionsPane::KEY_AGENT_PREFIX)) {
-            $runId = substr($key, strlen(SessionsPane::KEY_AGENT_PREFIX));
-
-            return $runId === '' ? [$this, null] : [$this->openAgentView($runId), null];
+            return $this->openRunFromWindow(substr($key, strlen(SessionsPane::KEY_AGENT_PREFIX)));
         }
 
         return [$this, null];
@@ -5619,12 +5765,13 @@ final class App implements Model
      * consumes this treats null as "the strip is not armed" and paints
      * nothing, the same shape the deck routing keeps for a single chat.
      *
-     * Agent chips ride only the FOCUSED tab's own registry: each Chat owns
-     * its AgentLiveRegistry, the App holds only the foreground Chat, and a
-     * parked model's running children are not census-visible from here.
-     * Widening that to background tabs is P-AGENT.b's surface; until then
-     * background rows carry no chips and badge 0, and the strip's working-dot
-     * for them rides the tab's attention state instead.
+     * Agent chips ride EVERY tab (P-AGENT.b): each parked model is its own
+     * Chat with its own AgentLiveRegistry and its own pending permission
+     * ask, so the census is readable straight off the deck. A run whose
+     * prompt is waiting on the user carries Waiting (⏳) through the ask's
+     * {@see \SugarCraft\Code\Permissions\AskOrigin}, which is the one state
+     * a chip must show even on a background tab; running carries Working,
+     * everything else Idle.
      */
     public function windowList(): ?WindowList
     {
@@ -5643,12 +5790,16 @@ final class App implements Model
         foreach ($deck->keys() as $key) {
             $tab = $tabRows[$key] ?? null;
             $agents = [];
-            if ($key === $active && $this->chat !== null) {
+            $model = $key === $active && $this->chat !== null ? $this->chat : $deck->model($key);
+            if ($model instanceof Chat) {
                 $session = $deck->sessionOf($key);
-                foreach ($this->chat->agentLive()->forSession($session) as $state) {
+                $waitingOn = $model->pendingPermission()?->pendingAsk?->origin?->agentId;
+                foreach ($model->agentLive()->forSession($session) as $state) {
                     $agents[] = WindowEntry::agent(
                         WindowRef::agent($state->id, $state->name, $key),
-                        $state->isRunning() ? WindowAttention::Working : WindowAttention::Idle,
+                        $state->id === $waitingOn
+                            ? WindowAttention::Waiting
+                            : ($state->isRunning() ? WindowAttention::Working : WindowAttention::Idle),
                     );
                 }
             }
@@ -5791,7 +5942,23 @@ final class App implements Model
             return [$this, null];
         }
 
-        $deck = $deck->park($from, $this->chat->withNoticeDrain(false));
+        // P-AGENT.b: the Agent View is per-tab now. Leaving with a view open
+        // closes it exactly the way the user's Esc does — the agent window
+        // keeps its scroll and draft in the stash, the tab's main window
+        // comes back — and the run is remembered for the way home.
+        $leaving = $this;
+        $outgoing = $this->chat;
+        $openRun = $this->agentViewTarget;
+        if ($openRun !== null) {
+            $leaving = $leaving->closeAgentView();
+            $leaving = $leaving->mutate(agentViewByTab: [...$leaving->agentViewByTab, (string) $from => $openRun]);
+            $restored = $leaving->chat;
+            if ($restored instanceof Chat) {
+                $outgoing = $restored;
+            }
+        }
+
+        $deck = $deck->park($from, $outgoing->withNoticeDrain(false));
         [$deck, $model] = $deck->unpark($toKey);
 
         $target = $model instanceof Chat
@@ -5816,10 +5983,20 @@ final class App implements Model
         // P-TABS.g: mutate the deck BEFORE autoEnablePanes so the Sessions
         // auto-dock arm sees the count this very route produced, and hand the
         // settled app through the deck choke for the title + notices.
-        return $this->withDeckEffects(
-            $this->withChat($target)->mutate(deck: $deck, pendingTabClose: null)->autoEnablePanes(),
-            $sizeCmd,
-        );
+        $app = $leaving->withChat($target)->mutate(deck: $deck, pendingTabClose: null)->autoEnablePanes();
+
+        // P-AGENT.b: prune the per-tab memory to the deck's live keys (a
+        // closed tab's remembered run must not outlive the tab, on the
+        // $tabNotified law) and re-open the view this tab left, when its run
+        // is still registered with the incoming chat.
+        $app = $app->mutate(agentViewByTab: array_intersect_key($app->agentViewByTab, array_fill_keys($deck->keys(), null)));
+        $remembered = $app->agentViewByTab[$toKey] ?? null;
+        $rememberedState = $remembered === null ? null : $target->agentLive()->get($remembered);
+        if ($remembered !== null && $rememberedState !== null) {
+            $app = $app->openAgentView($remembered, name: $rememberedState->name);
+        }
+
+        return $this->withDeckEffects($app, $sizeCmd);
     }
 
     /**
@@ -6160,6 +6337,8 @@ final class App implements Model
             tabQuitWarned: array_key_exists('tabQuitWarned', $changes) ? $changes['tabQuitWarned'] : $this->tabQuitWarned,
             deckTitle: array_key_exists('deckTitle', $changes) ? $changes['deckTitle'] : $this->deckTitle,
             tabNotified: array_key_exists('tabNotified', $changes) ? $changes['tabNotified'] : $this->tabNotified,
+            windowViewports: array_key_exists('windowViewports', $changes) ? $changes['windowViewports'] : $this->windowViewports,
+            agentViewByTab: array_key_exists('agentViewByTab', $changes) ? $changes['agentViewByTab'] : $this->agentViewByTab,
         );
     }
 }

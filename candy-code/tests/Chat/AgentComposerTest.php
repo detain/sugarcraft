@@ -57,7 +57,8 @@ final class AgentComposerTest extends TestCase
 
     public function testEnterSendsTheDraftToTheRunsMailboxNotTheMainModel(): void
     {
-        $app = $this->typed($this->app(), 'also check the remember-me cookie')->openAgentView('run-2');
+        // P-AGENT.b: the view owns its composer, so the draft is typed inside it.
+        $app = $this->typed($this->app()->openAgentView('run-2'), 'also check the remember-me cookie');
 
         [$sent, $cmd] = $app->update(new KeyMsg(KeyType::Enter));
 
@@ -107,7 +108,7 @@ final class AgentComposerTest extends TestCase
 
     public function testTheViewShowsTheMessageQueuedUntilTheRunLogsItDelivered(): void
     {
-        $app = $this->typed($this->app(), 'also check the cookie')->openAgentView('run-2');
+        $app = $this->typed($this->app()->openAgentView('run-2'), 'also check the cookie');
         [$sent, $cmd] = $app->update(new KeyMsg(KeyType::Enter));
         $answer = $cmd();
         $this->assertInstanceOf(AgentMessageSentMsg::class, $answer);
@@ -151,7 +152,7 @@ final class AgentComposerTest extends TestCase
 
     public function testACommandStillRunsAsACommand(): void
     {
-        $app = $this->typed($this->app(), '/keys')->openAgentView('run-2');
+        $app = $this->typed($this->app()->openAgentView('run-2'), '/keys');
 
         $this->assertNull($app->dispatchKey(new KeyMsg(KeyType::Enter)), 'the composer leaves a /command to the chat');
     }
@@ -165,7 +166,7 @@ final class AgentComposerTest extends TestCase
 
     public function testARunThisSessionDoesNotKnowKeepsTheDraft(): void
     {
-        $app = $this->typed($this->app(), 'hello?')->openAgentView('no-such-run');
+        $app = $this->typed($this->app()->openAgentView('no-such-run'), 'hello?');
 
         [$kept, $cmd] = $app->update(new KeyMsg(KeyType::Enter));
 
