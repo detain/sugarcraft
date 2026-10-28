@@ -2410,7 +2410,8 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-AGT-1.c (W1), C-AGT-7.c (W9)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-5.d`
 
-#### C-AGT-6.c — `--worktree [name]` main sessions
+#### ✅ f2534f502 C-AGT-6.c — `--worktree [name]` main sessions
+> Weld note (dated 2026-10-28): the shipped step refused `--worktree` only beside `serve`; weld-cure c36143800 broadened the parser refusal to ANY subcommand verb (bin exits at the verb's own dispatch before the worktree enter, so every verb carried-and-ignored the flag). Keys renamed to `cli.argv.worktree.with_subcommand` / `cli.argv.hint.worktree_subcommand`; the stream-json leg is unchanged in shape — the usageError+hint flow lands verbatim in the JSON error document.
 - **Item:** C-AGT-6 (sources: GAP-GIT-08) · gap · effort M
 - **What:** `--worktree [name]` (TUI and `-p`) parses in `ArgvParser` and `ParsedArgs`. Before `Bootstrap::app()`/`NonInteractive`, `bin/candy-code` calls a new `Cli\MainWorktree::enter($root, $name)`. It reuses …
 - **Files — create:** `candy-code/src/Cli/MainWorktree.php`

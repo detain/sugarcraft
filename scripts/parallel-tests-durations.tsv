@@ -46,6 +46,7 @@ candy-code/tests/Server/SessionArchiveMethodsTest.php	6.174	7
 candy-code/tests/Host/GoalHostLoopTest.php	6.134	8
 candy-code/tests/Sessions/BackgroundSessionRunnerTest.php	6.089	31
 candy-code/tests/RuntimeTest.php	6.087	153
+candy-code/tests/Cli/MainWorktreeTest.php	6.058	17
 candy-code/tests/Agents/EngineExecutorTest.php	6.046	17
 candy-code/tests/Workflows/WorkflowPauseResumeTest.php	6.023	13
 candy-code/tests/Session/SessionStoreTest.php	5.977	45
