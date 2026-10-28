@@ -13,6 +13,10 @@ import { FakeSocket, FakeTimers, helloResult } from '../../__tests__/fakes'
  * P-IMG.c: the Generate panel gets a top-bar entry beside settings/about,
  * shown only when the server's hello advertises image generation, and a
  * click routes through the panels store exactly like the palette row does.
+ *
+ * Round-2 cure: the entry gates on either generation kind — a video-only
+ * launch has a panel entry too, and the panel lands it on the video tab
+ * (the generatePanel spec pins that half).
  */
 
 function json(status: number, body: unknown): Response {
@@ -57,9 +61,9 @@ describe('top-bar generate entry (P-IMG.c)', { retry: 0 }, () => {
     expect(wrapper.find('[data-testid="generate-button"]').exists()).toBe(false)
   })
 
-  it('is hidden when the hello explicitly refuses image generation', async () => {
+  it('appears when the server refuses image generation but can generate video', async () => {
     const { wrapper } = await mountApp(helloResult({ features: { methods: [], events: [], media: { image: false, video: true } } }))
-    expect(wrapper.find('[data-testid="generate-button"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="generate-button"]').exists()).toBe(true)
   })
 
   it('appears beside settings/about when the server can generate images', async () => {
@@ -77,6 +81,16 @@ describe('top-bar generate entry (P-IMG.c)', { retry: 0 }, () => {
     const panels = usePanelsStore()
     expect(panels.open).toBe(false)
     await wrapper.find('[data-testid="generate-button"]').trigger('click')
+    expect(panels.active).toBe('generate')
+    expect(panels.open).toBe(true)
+  })
+
+  it('shows the video tab entry for video-only capabilities', async () => {
+    const { wrapper } = await mountApp(helloResult({ features: { methods: [], events: [], media: { image: false, video: true } } }))
+    const button = wrapper.find('[data-testid="generate-button"]')
+    expect(button.exists()).toBe(true)
+    const panels = usePanelsStore()
+    await button.trigger('click')
     expect(panels.active).toBe('generate')
     expect(panels.open).toBe(true)
   })

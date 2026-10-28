@@ -31,8 +31,10 @@ export interface WatchedJob {
  * job names its session, a session switch drops the watch (the server job
  * outlives the view — nothing here cancels it), and a refused poll lands an
  * error line rather than throwing at the drawer. The submit request itself
- * carries only the fields the server accepts — `generate.submit` is an image
- * method (`kind` is not a wire dial; it labels the returned MediaRef rows).
+ * carries only the fields the server accepts — `generate.submit` is a
+ * two-kind method since C-WEB-3.f (`kind: image|video`, default image, is a
+ * wire dial selecting the tool door; it also labels the returned MediaRef
+ * rows), and each kind's key set is forwarded whole by the server.
  *
  * The generation gate is the AboutModal/contextSources latch once more: a
  * settle (or failure) from a superseded submit, poll or follow belongs to a

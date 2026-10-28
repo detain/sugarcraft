@@ -25,6 +25,7 @@ use SugarCraft\Code\Support\MediaStore;
 use SugarCraft\Code\Support\PrivateDir;
 use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\Tools\BuiltIn\GenerateImage;
+use SugarCraft\Code\Tools\BuiltIn\GenerateVideo;
 use SugarCraft\Code\Tools\Tool;
 
 /**
@@ -43,12 +44,14 @@ use SugarCraft\Code\Tools\Tool;
  * `$inline` door already prescribes (mirroring the `command.exec` precedent
  * of `/generate`, where the render always blocked its own turn).
  *
- * Consent mirrors the tool's own door: `GenerateImage` is an Ask-class tool
- * and submit runs the SAME {@see PermissionGate} the in-turn tool path
- * consults. A Deny refuses; an unanswered Ask cannot be relayed out of turn
- * (the ask-relay surface was descoped in W6.6), so submit refuses loudly
- * with `permission_ask_unanswered` rather than bypass it — clients drive
- * generations under a mode or grant that answers Ask affirmatively.
+ * Consent mirrors the tool's own door: both `GenerateImage` and
+ * `GenerateVideo` are Ask-class tools, and submit runs the SAME
+ * {@see PermissionGate} the in-turn tool path consults, evaluated against
+ * the kind's own tool name. A Deny refuses; an unanswered Ask cannot be
+ * relayed out of turn (the ask-relay surface was descoped in W6.6), so
+ * submit refuses loudly with `permission_ask_unanswered` rather than bypass
+ * it — clients drive generations under a mode or grant that answers Ask
+ * affirmatively.
  *
  * The ledger is one JSON file per job at
  * `<session media folder>/jobs/<jobId>.json`, written 0600 with the store's
@@ -69,6 +72,31 @@ final class MediaMethods
 
     /** MediaJob mints 16 lowercase hex chars ({@see MediaJob::new()}). */
     public const JOB_ID_PATTERN = '/^[0-9a-f]{16}$/';
+
+    /**
+     * The `generate.submit` video door's key set (C-WEB-3.f), in
+     * GenerateVideo's own inputSchema order: the seven names only the video
+     * tool speaks plus the six shared with the image vocabulary. Used as an
+     * intersect map, so `kind` and the transport fields never reach the
+     * tool, exactly as the image path intersects paramSchema().
+     *
+     * @var array<string, true>
+     */
+    private const VIDEO_ARG_KEYS = [
+        'prompt' => true,
+        'negative_prompt' => true,
+        'num_frames' => true,
+        'duration_seconds' => true,
+        'fps' => true,
+        'width' => true,
+        'height' => true,
+        'steps' => true,
+        'cfg' => true,
+        'cfg2' => true,
+        'seed' => true,
+        'motion' => true,
+        'first_frame_image' => true,
+    ];
 
     /** Longest error text a ledger keeps from a failed render. */
     private const ERROR_CLIP_BYTES = 2048;
@@ -93,7 +121,7 @@ final class MediaMethods
         $registry->add(MethodSpec::new(
             'generate.submit',
             Scope::Write,
-            'Start an image generation; answers with its job id.',
+            'Start an image or video generation; answers with its job id.',
             self::submit(...),
             true,
         ));
@@ -115,8 +143,10 @@ final class MediaMethods
 
     /**
      * Swap the render tool builder. Production builds
-     * `GenerateImage::new()->withStoreSession($sessionId)`; a suite injects
-     * a stub that writes bytes through MediaStore without dialing a server.
+     * `GenerateImage::new()->withStoreSession($sessionId)` for kind
+     * `image` and `GenerateVideo::new()->withStoreSession($sessionId)` for
+     * kind `video` (C-WEB-3.f); a suite injects a stub that writes bytes
+     * through MediaStore without dialing a server.
      */
     public static function setToolFactoryForTesting(?\Closure $factory): void
     {
@@ -153,10 +183,12 @@ final class MediaMethods
     /**
      * `generate.submit`: consent, open the ledger, launch, answer `{jobId}`.
      *
-     * Params arrive as the MediaRequest v1 surface (plan W6.2); the handler
-     * forwards only keys {@see MediaRequest::paramSchema()} models, so the
-     * transport fields (`sessionId`, `idempotencyKey`) never reach the tool,
-     * and `idempotencyKey` replay never renders twice — the Dispatcher's
+     * Params arrive as the MediaRequest v1 surface (plan W6.2) extended by
+     * C-WEB-3.f's `kind` dial and the GenerateVideo door's key set; the
+     * handler forwards only keys the kind's own schema models, so the
+     * transport fields (`sessionId`, `idempotencyKey`) and `kind` itself
+     * never reach the tool, and `idempotencyKey` replay never renders twice
+     * — the Dispatcher's
      * idempotency cache (`sideEffects: true`) answers the replay from
      * memory with the same `{jobId}`.
      *
@@ -172,16 +204,29 @@ final class MediaMethods
 
         $sessionId = SessionMethods::sessionId($params);
         $host = $call->host($sessionId);
+        // C-WEB-3.f: `kind` selects which tool door this job rides. It is a
+        // wire dial, not a tool arg, so it is read from the raw params and
+        // never forwarded — the per-kind intersection below drops it.
+        $kindRaw = $call->request->params['kind'] ?? 'image';
+        $kind = \is_string($kindRaw) ? MediaKind::tryFrom($kindRaw) : null;
+        if ($kind === null) {
+            throw RpcError::invalidParams('invalid params: kind must be image or video');
+        }
         /** @var array<string, mixed> $args */
-        $args = \array_intersect_key($call->request->params, MediaRequest::paramSchema());
+        $args = $kind === MediaKind::Video
+            // Video forwards the GenerateVideo door's own key set: its
+            // seven exclusive names plus the shared six, each still only
+            // when the client named it.
+            ? \array_intersect_key($call->request->params, self::VIDEO_ARG_KEYS)
+            : \array_intersect_key($call->request->params, MediaRequest::paramSchema());
 
         if (\trim((string) ($args['prompt'] ?? '')) === '') {
             throw RpcError::invalidParams('invalid params: prompt is empty');
         }
 
-        self::consent($host, $sessionId, $args);
+        self::consent($host, $sessionId, $args, $kind);
 
-        $job = MediaJob::new(MediaKind::Image)->withStatus(MediaJobStatus::Running);
+        $job = MediaJob::new($kind)->withStatus(MediaJobStatus::Running);
         $store = MediaStore::forSession($sessionId);
         $ledgerPath = self::ledgerPath($store, $job->jobId());
         $startedAt = \time();
@@ -194,8 +239,13 @@ final class MediaMethods
         // records still name real, fetchable artifacts.
         $before = \array_column($store->list(), 'id');
 
-        $run = static function () use ($host, $sessionId, $args, $job, $store, $ledgerPath, $startedAt, $before): string {
-            $tool = (self::$toolFactory ?? static fn (): Tool => GenerateImage::new()->withStoreSession($sessionId))($sessionId, $host->workspace());
+        $run = static function () use ($host, $sessionId, $args, $job, $kind, $store, $ledgerPath, $startedAt, $before): string {
+            $tool = (self::$toolFactory ?? static function () use ($sessionId, $kind): Tool {
+                // C-WEB-3.f: each kind rides its own tool door, both bound
+                // to this session's media folder through their store seam.
+                return ($kind === MediaKind::Video ? GenerateVideo::new() : GenerateImage::new())
+                    ->withStoreSession($sessionId);
+            })($sessionId, $host->workspace());
             $result = $tool->execute($args);
 
             if ($result->isError()) {
@@ -358,19 +408,21 @@ final class MediaMethods
      * The same gate the in-turn tool path consults —
      * {@see SessionHost::permissionGate()}, whose session-mode clone
      * {@see backend()} forks onto the turn's EngineBackend — asked about the
-     * same `GenerateImage` call the tool would carry. Allow runs; Deny
-     * refuses; Ask is answered only by this session's memo of an earlier
-     * always-allow — the identical door {@see SessionHost} opens for a
-     * re-ask inside a turn — and otherwise refuses, because out-of-turn ask
-     * relay is descoped (W6.6) and silence is not consent.
+     * call the kind's own tool would carry (`GenerateImage` or, since
+     * C-WEB-3.f, `GenerateVideo`). Allow runs; Deny refuses; Ask is answered
+     * only by this session's memo of an earlier always-allow — the identical
+     * door {@see SessionHost} opens for a re-ask inside a turn — and
+     * otherwise refuses, because out-of-turn ask relay is descoped (W6.6)
+     * and silence is not consent.
      *
      * @param array<string, mixed> $args
      */
-    private static function consent(SessionHost $host, string $sessionId, array $args): void
+    private static function consent(SessionHost $host, string $sessionId, array $args, MediaKind $kind): void
     {
+        $toolName = $kind === MediaKind::Video ? GenerateVideo::NAME : GenerateImage::NAME;
         $gate = self::$gateOverride ?? $host->permissionGate();
         $root = $host->workspace()->root;
-        $decision = $gate?->evaluate(new ToolCall(GenerateImage::NAME, $args), $root, $sessionId)
+        $decision = $gate?->evaluate(new ToolCall($toolName, $args), $root, $sessionId)
             ?? PermissionDecision::Ask;
 
         if ($decision === PermissionDecision::Allow) {
@@ -381,7 +433,7 @@ final class MediaMethods
             throw RpcError::of(ErrorCode::Forbidden, 'generate.submit was denied by the permission policy', 'permission_denied');
         }
 
-        if ($gate !== null && $host->grants()->allows(GenerateImage::NAME, $args, $root)) {
+        if ($gate !== null && $host->grants()->allows($toolName, $args, $root)) {
             return;
         }
 

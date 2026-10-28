@@ -19,6 +19,7 @@ use SugarCraft\Code\Protocol\Schema\ProtocolSchema;
 use SugarCraft\Code\Support\MediaStore;
 use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\Tools\BuiltIn\GenerateImage;
+use SugarCraft\Code\Tools\BuiltIn\GenerateVideo;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolResult;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
@@ -426,16 +427,27 @@ final class MediaMethodsTest extends TestCase
         self::assertSame(base64_encode('bytes'), $defaulted['bytes'], 'the 512 KiB default answers a small artifact whole');
     }
 
-    // ── one vocabulary, two doors ──────────────────────────────────────
+    // ── one vocabulary, three doors ────────────────────────────────────
 
-    public function testTheToolSchemaAndTheRpcParamsShareOneParamSchemaMap(): void
+    public function testTheToolSchemasAndTheRpcParamsShareOneVocabulary(): void
     {
         $mapped = array_map(static fn ($schema): array => $schema->toArray(), MediaRequest::paramSchema());
-        self::assertSame($mapped, GenerateImage::new()->inputSchema()['properties'], 'the model door renders the very map the RPC door embeds');
+        self::assertSame($mapped, GenerateImage::new()->inputSchema()['properties'], 'the image model door renders the very map the RPC door embeds');
 
         $submitProps = MethodSchemas::params('generate.submit')->toArray()['properties'];
-        unset($submitProps['sessionId'], $submitProps['idempotencyKey']);
-        self::assertSame(array_keys($mapped), array_keys($submitProps));
+        unset($submitProps['sessionId'], $submitProps['idempotencyKey'], $submitProps['kind']);
+        self::assertSame(array_keys($mapped), array_keys(array_intersect_key($submitProps, $mapped)), 'the image leg of the RPC door keeps the shared order verbatim');
+
+        // C-WEB-3.f: the video leg. Every key the GenerateVideo model door
+        // names must exist on the RPC door, and the seven video-exclusive
+        // names are the whole delta over the shared image vocabulary.
+        $videoProps = GenerateVideo::new()->inputSchema()['properties'];
+        self::assertSame([], array_diff_key($videoProps, $submitProps), 'the video model door names nothing the RPC door lacks');
+        self::assertSame(
+            ['num_frames', 'duration_seconds', 'fps', 'cfg', 'cfg2', 'motion', 'first_frame_image'],
+            array_keys(array_diff_key($submitProps, $mapped)),
+            'exactly seven names ride the video door alone',
+        );
     }
 
     // ── leaving the loop thread ────────────────────────────────────────

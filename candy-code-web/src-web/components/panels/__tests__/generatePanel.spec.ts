@@ -225,11 +225,81 @@ describe('GeneratePanel capability gate (WEB-1d)', () => {
     expect(wrapper.find('[data-testid="generate-unoffered"]').text()).toContain('does not report media capability')
   })
 
-  it('media reported but image off — the honest refusal line', async () => {
-    await wire.connect(() => {}, { features: { methods: [], events: [], media: { image: false, video: true } } })
+  it('media reported but both kinds off — the honest refusal line', async () => {
+    await wire.connect(() => {}, { features: { methods: [], events: [], media: { image: false, video: false } } })
     const wrapper = mount(GeneratePanel, { props: { sessionId: 's1' } })
     await flushPromises()
     expect(wrapper.find('[data-testid="generate-form"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="generate-unoffered"]').text()).toContain('not enabled')
+  })
+})
+
+describe('GeneratePanel video tab (C-WEB-3.f)', () => {
+  const BOTH_HELLO = { features: { methods: [], events: [], media: { image: true, video: true } } }
+  const VIDEO_ARTIFACT = { artifactId: 'vid-1', kind: 'video', path: '/srv/media/s1/vid-1.mp4', bytes: 999_999, mime: 'video/mp4' }
+
+  it('the video tab appears only when canGenerateVideo', async () => {
+    const imageOnly = await open() // MEDIA_HELLO carries video:false
+    expect(imageOnly.find('[data-testid="generate-tab-image"]').exists()).toBe(true)
+    expect(imageOnly.find('[data-testid="generate-tab-video"]').exists()).toBe(false)
+
+    await wire.connect(() => {}, BOTH_HELLO)
+    const both = mount(GeneratePanel, { props: { sessionId: 's1' } })
+    await flushPromises()
+    expect(both.find('[data-testid="generate-tab-image"]').exists()).toBe(true)
+    expect(both.find('[data-testid="generate-tab-video"]').exists()).toBe(true)
+  })
+
+  it('the video tab submits kind: video with the video door\'s keys only', async () => {
+    await wire.connect(() => {}, BOTH_HELLO)
+    useGenerateStore().pollMs = 0
+    const wrapper = mount(GeneratePanel, { props: { sessionId: 's1' } })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="generate-tab-video"]').trigger('click')
+    expect(wrapper.find('[data-testid="generate-count"]').exists()).toBe(false)
+
+    await wrapper.find('[data-testid="generate-prompt"]').setValue('  a fox running  ')
+    await wrapper.find('[data-testid="generate-negative"]').setValue('blurry')
+    await wrapper.find('[data-testid="generate-form"]').trigger('submit')
+    await tick()
+    expect(submitParams(wrapper)).toEqual({ sessionId: 's1', kind: 'video', prompt: 'a fox running', negative_prompt: 'blurry' })
+
+    await wire.answer('generate.submit', { jobId: 'j1' })
+    await tick()
+    await wire.answer('generate.status', { state: 'done', progress01: 1, artifacts: [VIDEO_ARTIFACT] })
+    const artifacts = wrapper.findAll('[data-testid="generate-artifact"]')
+    expect(artifacts).toHaveLength(1)
+    expect(artifacts[0]?.text()).toContain('video') // MediaCard's lazy-video badge — never an auto-dial
+  })
+
+  it('an image submit stays kind-implicit: the pre-C-WEB-3.f wire shape is byte-untouched', async () => {
+    await wire.connect(() => {}, BOTH_HELLO)
+    useGenerateStore().pollMs = 0
+    const wrapper = mount(GeneratePanel, { props: { sessionId: 's1' } })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="generate-tab-image"]').attributes('aria-selected')).toBe('true')
+
+    await wrapper.find('[data-testid="generate-prompt"]').setValue('owl')
+    await wrapper.find('[data-testid="generate-count"]').setValue('3')
+    await wrapper.find('[data-testid="generate-form"]').trigger('submit')
+    await tick()
+    expect(submitParams(wrapper)).toEqual({ sessionId: 's1', prompt: 'owl', batch_size: 3 })
+  })
+
+  it('a video-only launch lands on the video tab with no dead image choice', async () => {
+    await wire.connect(() => {}, { features: { methods: [], events: [], media: { image: false, video: true } } })
+    useGenerateStore().pollMs = 0
+    const wrapper = mount(GeneratePanel, { props: { sessionId: 's1' } })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="generate-form"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="generate-tab-image"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="generate-tab-video"]').attributes('aria-selected')).toBe('true')
+
+    await wrapper.find('[data-testid="generate-prompt"]').setValue('fox')
+    await wrapper.find('[data-testid="generate-form"]').trigger('submit')
+    await tick()
+    expect(submitParams(wrapper)).toEqual({ sessionId: 's1', kind: 'video', prompt: 'fox' })
   })
 })

@@ -627,14 +627,24 @@ final class MethodSchemas
             ],
             'todo.get' => [$sessionOnly, Schema::object(['items' => Schema::arrayOf(Schema::object(['content' => Schema::string(), 'status' => Schema::enum(\SugarCraft\Code\Todo\TodoStatus::values())], ['content', 'status']))], ['items'])],
 
-            // Plan W6.2. The submit params embed MediaRequest's own v1
-            // vocabulary map — the same static the GenerateImage tool schema
-            // renders — so the model door and the RPC door cannot drift;
-            // MediaMethodsTest pins that equality.
+            // Plan W6.2, widened by C-WEB-3.f: the submit params embed
+            // MediaRequest's own v1 vocabulary map — the same static the
+            // GenerateImage tool schema renders — plus the seven keys only
+            // the GenerateVideo tool names, selected by `kind`. The model
+            // doors and the RPC door cannot drift; MediaMethodsTest pins
+            // both equalities.
             'generate.submit' => [
                 Schema::object([
                     ...$sid,
+                    'kind' => Schema::enum(['image', 'video']),
                     ...\SugarCraft\Code\Media\MediaRequest::paramSchema(),
+                    'num_frames' => Schema::integer(1),
+                    'duration_seconds' => Schema::number(0),
+                    'fps' => Schema::integer(1),
+                    'cfg' => Schema::number(0),
+                    'cfg2' => Schema::number(0),
+                    'motion' => Schema::number(0),
+                    'first_frame_image' => Schema::string(4096),
                     'idempotencyKey' => Schema::string(64),
                 ], ['sessionId', 'prompt']),
                 Schema::object(['jobId' => Schema::string(64)], ['jobId']),

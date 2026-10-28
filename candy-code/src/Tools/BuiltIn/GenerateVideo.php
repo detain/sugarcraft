@@ -115,6 +115,12 @@ final readonly class GenerateVideo implements Tool, BuildsFromCatalog, Delegates
         // Production wiring, not a test seam: the turn's tool-event channel
         // (withEngine's emitter), fed a previewless MediaProgress per poll.
         private ?\Closure $eventEmitter = null,
+        // Production wiring for callers without an engine to bind: the serve
+        // RPC's `generate.submit` runs this tool outside any turn (kind
+        // `video`), so the session whose media folder receives the artifact
+        // arrives here instead of through `withEngine` — the same seam
+        // GenerateImage carries for plan W6.2.
+        private ?string $storeSession = null,
     ) {
     }
 
@@ -139,6 +145,7 @@ final readonly class GenerateVideo implements Tool, BuildsFromCatalog, Delegates
             $this->pollIntervalSeconds,
             $this->pollSleeper,
             $subAgentEmitter,
+            $this->storeSession,
         );
     }
 
@@ -154,6 +161,7 @@ final readonly class GenerateVideo implements Tool, BuildsFromCatalog, Delegates
             $this->pollIntervalSeconds,
             $this->pollSleeper,
             $this->eventEmitter,
+            $this->storeSession,
         );
     }
 
@@ -169,6 +177,7 @@ final readonly class GenerateVideo implements Tool, BuildsFromCatalog, Delegates
             $this->pollIntervalSeconds,
             $this->pollSleeper,
             $this->eventEmitter,
+            $this->storeSession,
         );
     }
 
@@ -184,6 +193,27 @@ final readonly class GenerateVideo implements Tool, BuildsFromCatalog, Delegates
             $intervalSeconds,
             $sleeper,
             $this->eventEmitter,
+            $this->storeSession,
+        );
+    }
+
+    /**
+     * The same tool writing into session $sessionId's media folder when no
+     * engine is bound — the serve RPC's door (plan W6.2, kind `video`),
+     * mirroring {@see GenerateImage::withStoreSession()}.
+     */
+    public function withStoreSession(?string $sessionId): self
+    {
+        return new self(
+            $this->engine,
+            $this->transport,
+            $this->baseUrl,
+            $this->settings,
+            $this->mediaRoot,
+            $this->pollIntervalSeconds,
+            $this->pollSleeper,
+            $this->eventEmitter,
+            $sessionId,
         );
     }
 
@@ -432,7 +462,7 @@ final readonly class GenerateVideo implements Tool, BuildsFromCatalog, Delegates
      */
     private function collect(JobClient $client, string $taskId, JobSnapshot $snapshot, array $params, ?FrameLadder $ladder, MediaJob $job, string $callId): ToolResult
     {
-        $session = $this->engine?->sessionId() ?? self::FALLBACK_SESSION;
+        $session = $this->storeSession ?? $this->engine?->sessionId() ?? self::FALLBACK_SESSION;
         $store = MediaStore::forSession($session, $this->mediaRoot);
 
         $tokens = [];

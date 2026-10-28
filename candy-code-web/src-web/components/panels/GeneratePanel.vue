@@ -12,11 +12,18 @@ import MediaCard from '../MediaCard.vue'
  * ETA, the failure line, and finished artifacts rendered through MediaCard
  * (the one sanctioned `media.fetch` path).
  *
+ * C-WEB-3.f: `generate.submit` grew a `kind: image|video` wire dial, so the
+ * panel offers Image and Video tabs gated on the two hello-capability flags.
+ * An image submit keeps its exact pre-C-WEB-3.f shape (no `kind` key — the
+ * server defaults it); a video submit dials `kind: 'video'` and names only
+ * keys the video door takes. Video artifacts land through the same MediaCard
+ * loop (its video kind renders the mp4).
+ *
  * Gating follows the hello-capability law: no media feature, no affordance —
- * `canGenerateImage` is the server's own yes, and submit is an image method
- * (`kind` labels returned MediaRefs, it is not a dial to send). Server-side
- * consent, permissions and the ledger doors are MediaMethods' doing; this
- * panel never implies a render started that the server refused.
+ * the two flags are the server's own yeses, and each tab is rendered only
+ * for the kind it gates. Server-side consent, permissions and the ledger
+ * doors are MediaMethods' doing; this panel never implies a render started
+ * that the server refused.
  *
  * SECURITY POSTURE (the ChangesPanel rule): every server string — job error,
  * artifact labels — renders through plain `{{ }}` spans; bytes arrive only
@@ -30,12 +37,27 @@ const generate = useGenerateStore()
 const prompt = ref('')
 const negative = ref('')
 const count = ref(1)
+const kind = ref<'image' | 'video'>('image')
 
-const offered = computed(() => connection.capabilitiesMedia !== null && connection.canGenerateImage)
+const offered = computed(
+  () => connection.capabilitiesMedia !== null && (connection.canGenerateImage || connection.canGenerateVideo),
+)
 const reason = computed(() =>
   connection.capabilitiesMedia === null
     ? 'This server does not report media capability, so generation is not offered.'
-    : 'Image generation is not enabled on this server.',
+    : 'Image generation and video generation are not enabled on this server.',
+)
+
+// A video-only (or image-only) launch must not sit on a dead tab: when the
+// selected kind's flag goes off and the other's is on, land on the offered
+// kind. Both-off keeps the user's choice; both-off leaves the unoffered line.
+watch(
+  () => [connection.canGenerateImage, connection.canGenerateVideo] as const,
+  ([image, video]) => {
+    if (kind.value === 'image' && !image && video) kind.value = 'video'
+    else if (kind.value === 'video' && !video && image) kind.value = 'image'
+  },
+  { immediate: true },
 )
 
 const job = computed(() => (generate.job?.sessionId === props.sessionId ? generate.job : null))
@@ -46,10 +68,21 @@ const canSubmit = computed(() => offered.value && !generate.busy && prompt.value
 async function send(): Promise<void> {
   if (!canSubmit.value) return
   const trimmed = prompt.value.trim()
+  const negativeTrimmed = negative.value.trim()
+  if (kind.value === 'video') {
+    // The video door's own key set: no batch dial, and `kind` names the tool.
+    await generate.submit({
+      sessionId: props.sessionId,
+      kind: 'video',
+      prompt: trimmed,
+      ...(negativeTrimmed !== '' ? { negative_prompt: negativeTrimmed } : {}),
+    })
+    return
+  }
   await generate.submit({
     sessionId: props.sessionId,
     prompt: trimmed,
-    ...(negative.value.trim() !== '' ? { negative_prompt: negative.value.trim() } : {}),
+    ...(negativeTrimmed !== '' ? { negative_prompt: negativeTrimmed } : {}),
     ...(count.value > 1 ? { batch_size: count.value } : {}),
   })
 }
@@ -69,6 +102,29 @@ watch(() => props.sessionId, (id) => generate.follow(id), { immediate: true })
     <p v-if="!offered" class="empty" data-testid="generate-unoffered">{{ reason }}</p>
 
     <template v-else>
+      <div class="tabs" role="tablist" data-testid="generate-tabs">
+        <button
+          v-if="connection.canGenerateImage"
+          type="button"
+          role="tab"
+          class="tab"
+          :class="{ active: kind === 'image' }"
+          :aria-selected="kind === 'image'"
+          data-testid="generate-tab-image"
+          @click="kind = 'image'"
+        >Image</button>
+        <button
+          v-if="connection.canGenerateVideo"
+          type="button"
+          role="tab"
+          class="tab"
+          :class="{ active: kind === 'video' }"
+          :aria-selected="kind === 'video'"
+          data-testid="generate-tab-video"
+          @click="kind = 'video'"
+        >Video</button>
+      </div>
+
       <form class="form" data-testid="generate-form" @submit.prevent="send">
         <label>
           <span>Prompt</span>
@@ -78,7 +134,7 @@ watch(() => props.sessionId, (id) => generate.follow(id), { immediate: true })
           <span>Negative</span>
           <input v-model="negative" type="text" data-testid="generate-negative" placeholder="What to steer away from (optional)" />
         </label>
-        <label>
+        <label v-if="kind === 'image'">
           <span>Images</span>
           <input v-model.number="count" type="number" min="1" max="8" data-testid="generate-count" />
         </label>
@@ -114,6 +170,25 @@ watch(() => props.sessionId, (id) => generate.follow(id), { immediate: true })
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+.tabs {
+  display: flex;
+  gap: 0.4rem;
+}
+.tabs .tab {
+  font: inherit;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.tabs .tab.active {
+  color: var(--ink);
+  border-color: var(--accent);
+  font-weight: 600;
 }
 .form {
   display: grid;
