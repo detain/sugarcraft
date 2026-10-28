@@ -1676,7 +1676,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tui.md` → `### C-TUI-6.k`
 
-#### C-AGT-6.b — `/review` ranges (`A..B`, `A...B`, `@{u}`)
+#### ✅ bec7fc651 C-AGT-6.b — `/review` ranges (`A..B`, `A...B`, `@{u}`)
 - **Item:** C-AGT-6 (sources: p2-miss: GIT-10 review scope parity, GIT-1-P1 fix (b)) · gap · effort M
 - **What:** `ContextMentions::diff()` (:234) learns ranges, through the same bounded `GitRunner` and safety flags: `A..B` → `git diff --no-ext-diff --no-textconv --no-color -M --patch A B`; `A...B` → `git diff --merge-base A B`, falling back …
 - **Files — create:** none
