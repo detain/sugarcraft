@@ -23,6 +23,7 @@ use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Background\ScheduleRegistry;
 use SugarCraft\Code\Tools\BuiltIn\WebSearch;
+use SugarCraft\Code\Util\TokenTracker;
 use SugarCraft\Code\Workflows\WorkflowEngineInterface;
 
 /**
@@ -51,6 +52,8 @@ final class CommandContext
      * @param int|null $contextTokenLimit the window `/context` measures against, when known
      * @param int|null $contextTokens the history's token estimate, the status bar's own
      * @param SessionPermissionMemo $grants the session's "always" answers, which `/permissions` lists and revokes
+     * @param TokenTracker|null $spendTracker the session's live spend tracker, when the driver carries one (C-SES-9)
+     * @param float|null $spendCap the session's cost cap in USD, when configured (C-SES-9)
      */
     private function __construct(
         public readonly array $history,
@@ -75,6 +78,8 @@ final class CommandContext
         public readonly ?WorkspaceContext $workspace,
         public readonly SessionPermissionMemo $grants,
         public readonly ?ScheduleRegistry $scheduleRegistry,
+        public readonly ?TokenTracker $spendTracker,
+        public readonly ?float $spendCap,
     ) {
     }
 
@@ -104,6 +109,8 @@ final class CommandContext
         ?WorkspaceContext $workspace = null,
         ?SessionPermissionMemo $grants = null,
         ?ScheduleRegistry $scheduleRegistry = null,
+        ?TokenTracker $spendTracker = null,
+        ?float $spendCap = null,
     ): self {
         return new self(
             history: array_values($history),
@@ -128,6 +135,8 @@ final class CommandContext
             workspace: $workspace,
             grants: $grants ?? SessionPermissionMemo::new(),
             scheduleRegistry: $scheduleRegistry,
+            spendTracker: $spendTracker,
+            spendCap: $spendCap,
         );
     }
 

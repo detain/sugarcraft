@@ -24,11 +24,14 @@ use SugarCraft\Code\Util\TokenTracker;
  * hooks chain's own `inspect()`, the serve discovery file, the config stores),
  * so no row here can fork the surface that owns the number.
  *
- * The tracker and cap are handed in by the TUI's {@see \SugarCraft\Code\Chat}
- * handler (they are per-Chat state, not CommandContext state); a host without
- * them degrades only the live-spend row — the durable ledger (SES-1) still
- * answers from the store, which is the more honest figure across resumes
- * anyway.
+ * The tracker and cap answer from the constructor when the TUI's
+ * {@see \SugarCraft\Code\Chat} handler passes its per-Chat pair; a driver
+ * that builds the command with no arguments — serve's `/status`, which
+ * `new`s it through {@see CommandContext} — falls back to the context's
+ * spend pair, which `SessionHost::commandContext()` fills from its reseeded
+ * tracker and configured cap (C-SES-9). A host with neither degrades only
+ * the live-spend row — the durable ledger (SES-1) still answers from the
+ * store, which is the more honest figure across resumes anyway.
  */
 final class StatusHostCommand implements HostCommand
 {
@@ -57,6 +60,11 @@ final class StatusHostCommand implements HostCommand
             ? $store->usageTotals($context->sessionId)
             : null;
 
+        // C-SES-9: the TUI's constructor pair wins; the context pair is what
+        // a no-argument host build (serve) carries for the same session.
+        $tracker = $this->tracker ?? $context->spendTracker;
+        $cap = $this->cap ?? $context->spendCap;
+
         $facts = [
             'version' => \SugarCraft\Code\Cli\Help::version(),
             'configPath' => Bootstrap::userConfigPath(),
@@ -70,9 +78,9 @@ final class StatusHostCommand implements HostCommand
             'model' => $engine?->model(),
             'contextTokens' => $context->contextTokens,
             'contextTokenLimit' => $context->contextTokenLimit,
-            'spend' => $this->tracker === null
+            'spend' => $tracker === null
                 ? Lang::t('cmd.status.spend.untracked')
-                : SpendLedger::new()->statusLine($this->tracker, $this->cap),
+                : SpendLedger::new()->statusLine($tracker, $cap),
             'ledger' => $ledger,
             'mcpCount' => null,
             'mcpReason' => null,

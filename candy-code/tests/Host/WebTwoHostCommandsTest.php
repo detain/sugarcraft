@@ -408,6 +408,49 @@ final class WebTwoHostCommandsTest extends TestCase
         self::assertFalse($listing->isRefused(), 'a bare listing writes nothing and stays answerable');
     }
 
+    public function testServeStatusPrintsLiveSpendAndCap(): void
+    {
+        // C-SES-9.b: serve builds StatusHostCommand with `new $class()` (no
+        // arguments), so the live-spend row must ride the context's spend
+        // pair — the tracker reseeded from the durable ledger and the
+        // configured cap — instead of degrading to the untracked sentence.
+        self::assertTrue($this->store->appendUsageRecord('s', Usage::new(
+            totalTokens: 500,
+            costUsd: 0.02,
+            unpricedModel: 'mystery',
+        )));
+
+        $host = SessionHost::new(
+            's',
+            WorkspaceContext::new(
+                sessionStore: $this->store,
+                backend: new EchoBackend(),
+                maxCostUsd: 5.0,
+            ),
+            history: [],
+            customCommands: [],
+        );
+
+        $result = $host->runCommand('status');
+        self::assertFalse($result->isClientOnly(), '/status is admitted to the server');
+
+        $pages = array_values(array_filter(
+            $host->history(),
+            static fn (Message $m): bool => str_contains($m->content, 'Spend:'),
+        ));
+        self::assertNotEmpty($pages, 'the status page carries the Spend: section');
+
+        $lines = explode("\n", $pages[array_key_last($pages)]->content);
+        $shapes = array_map(static fn (string $l): string => trim($l), $lines);
+        $index = array_search('Spend:', $shapes, true);
+        self::assertIsInt($index, 'Spend: stands as its own section header');
+        $row = $lines[$index + 1] ?? '';
+
+        self::assertStringNotContainsString('not measured', $row, 'the serve path must print the live tracker, not the untracked row');
+        self::assertStringContainsString('≥$', $row, 'the unpriced model renders its lower bound on the spend row');
+        self::assertStringContainsString('cap $5.0000', $row, 'the configured cap rides the same row');
+    }
+
     // ------------------------------------------------------------------
 
     /** @param (\Closure(string): \SugarCraft\Code\Backend)|null $backendFactory */

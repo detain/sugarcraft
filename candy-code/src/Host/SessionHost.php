@@ -1928,6 +1928,8 @@ final class SessionHost
             workspace: $this->workspace,
             grants: $this->grants,
             scheduleRegistry: $this->workspace->service(\SugarCraft\Code\Background\ScheduleRegistry::class),
+            spendTracker: $this->spend,
+            spendCap: $this->workspace->maxCostUsd,
         );
     }
 
