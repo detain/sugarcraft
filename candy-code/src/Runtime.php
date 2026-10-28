@@ -262,6 +262,33 @@ final class Runtime
      */
     private const MAX_INSTRUCTION_POINTERS = 4;
 
+    /**
+     * C-TOOL-7.e (CC-new#12, mirroring Claude Code's unparseable tool-call
+     * retry): how many times a reply whose every tool call carries an
+     * undecodable argument blob ({@see ToolCall::argumentsError()}, audit A11)
+     * is discarded and the SAME request re-issued, on both the
+     * {@see runBatch()} and {@see runStreaming()} arms, before today's A11
+     * error-result path runs unchanged. Two, not one: a deterministic model
+     * at temperature 0 repeats the broken call, so the point is to cap the
+     * waste, and one free do-over still catches the single-token truncation
+     * that a resample most often heals.
+     *
+     * A COUNT bound, not a timeout — nothing in this machinery bounds how
+     * long a request may take, per the standing ban on blanket LLM-request
+     * deadlines (E646). The discarded replies' usage is still summed into
+     * the step: a discarded call is a billed one.
+     */
+    public const MAX_MALFORMED_RESAMPLES = 2;
+
+    /**
+     * The one-line resample notice, announced through the same channel
+     * {@see TransientFailure::announceRateLimit()} uses
+     * ({@see RuntimeNoticeSink::warn()}). Plain English on a public format
+     * const, exactly the precedent's shape: the pin asserts against the
+     * sentence the user reads.
+     */
+    public const MALFORMED_RESAMPLE_NOTICE_FORMAT = 'Provider replied only with undecodable tool calls, retrying the request (resample %d of %d).';
+
     /** The counted-not-dropped tail of the instruction deferral fence. */
     private const INSTRUCTION_DEFERRED_NOTE = '... [%d further instruction file(s) deferred: budget; not rendered in this prompt.]';
 
@@ -1617,6 +1644,15 @@ final class Runtime
      * The throw sits after the loop, not inside it, so the retry decision and
      * the `$emitted` latch above are untouched: an error chunk on an attempt
      * that IS retried never reaches it.
+     *
+     * C-TOOL-7.e (CC-new#12) wraps the whole retry ladder in an outer
+     * sequence loop: a sequence ending cleanly with NO streamed text and an
+     * argument error on EVERY tool call it carried is discarded and the same
+     * request re-issued, at most {@see self::MAX_MALFORMED_RESAMPLES} times,
+     * before the A11 error-result path runs unchanged. The error throw now
+     * runs per sequence (still after that sequence's ladder); the discarded
+     * replies' usage sums into the final message. The bound is a count, not
+     * a timeout (E646) - no timer is armed by this machinery.
      */
     private function runStreaming(CompleteRequest $request, App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null, ?callable $onToken = null, ?callable $onProgress = null): \Generator
     {
@@ -1689,168 +1725,203 @@ final class Runtime
             return true;
         };
 
-        // N-P4a: `providerRetryAttempts`, read once per sequence.
-        $maxAttempts = TransientFailure::maxAttempts();
-        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
-            $lastAttempt = $attempt === $maxAttempts;
+        // C-TOOL-7.e (CC-new#12): one iteration of this outer loop is one
+        // provider sequence. A sequence that completes cleanly holding NO
+        // user-visible text (nothing was streamed, nothing was carried from a
+        // dropped attempt) and an argument error on EVERY tool call it
+        // carried is discarded and the SAME request re-issued, at most
+        // {@see self::MAX_MALFORMED_RESAMPLES} times; after the bound the
+        // A11 error-result path runs unchanged. The throw above the gate
+        // below now runs per sequence, and it still propagates out of the
+        // method - a sequence ending in an error chunk never reaches the
+        // gate. The bound is a COUNT, not a timeout (E646).
+        $malformedResamples = 0;
+        /** @var list<?Usage> $discardedUsages */
+        $discardedUsages = [];
 
-            // Per-attempt, not per-call: a retry must start from an empty
-            // accumulator set or it concatenates the failed attempt's partial
-            // reply onto the new one. See the docblock on $usages in
-            // particular.
-            $buffer = '';
-            $toolCalls = [];
-            $reasoning = null;
-            $usages = [];
-            // CTX-1: same per-attempt discipline - blocks collected by a
-            // FAILED attempt belong to text the retry never says; carrying
-            // them over would replay thinking the final reply did not think.
-            $thinkingBlocks = [];
+        for (;;) {
+            // N-P4a: `providerRetryAttempts`, read once per sequence.
+            $maxAttempts = TransientFailure::maxAttempts();
+            for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+                $lastAttempt = $attempt === $maxAttempts;
 
-            // E707 (round 81): same per-attempt discipline as the five above -
-            // a length stop seen by a FAILED attempt must not stain the
-            // retried one that completed cleanly. ORed across the attempt's
-            // chunks because the stop arrives on one frame of many.
-            $lengthStopped = false;
+                // Per-attempt, not per-call: a retry must start from an empty
+                // accumulator set or it concatenates the failed attempt's partial
+                // reply onto the new one. See the docblock on $usages in
+                // particular.
+                $buffer = '';
+                $toolCalls = [];
+                $reasoning = null;
+                $usages = [];
+                // CTX-1: same per-attempt discipline - blocks collected by a
+                // FAILED attempt belong to text the retry never says; carrying
+                // them over would replay thinking the final reply did not think.
+                $thinkingBlocks = [];
 
-            // True once a byte has been handed to $onToken. NOT "the only
-            // channel out of this loop" - $onProgress is a second one since
-            // E456 - but the only one carrying output a retry cannot undo. The
-            // docblock above says why reasoning is deliberately exempt.
-            $emitted = false;
-            // The last error-bearing chunk, for providers that report failure
-            // as a response instead of by throwing (Vertex, Custom).
-            $errorChunk = null;
-            $thrown = null;
+                // E707 (round 81): same per-attempt discipline as the five above -
+                // a length stop seen by a FAILED attempt must not stain the
+                // retried one that completed cleanly. ORed across the attempt's
+                // chunks because the stop arrives on one frame of many.
+                $lengthStopped = false;
 
-            try {
-                // Accumulate the whole stream and emit one assistant message when the
-                // generator is exhausted. We deliberately do NOT use a tokensUsed>0
-                // sentinel to detect completion — real providers stream content with
-                // tokensUsed=0 and only report totals at the end (if at all), so a
-                // sentinel drops the entire message in production.
-                //
-                // The buffer stays even now that $onToken forwards each chunk live:
-                // the AssistantMessage below is what the agentic loop feeds back to
-                // the model on the next step and what lands in the transcript, and
-                // that has to be the WHOLE turn. $onToken is an additional live
-                // observer of the same bytes, not a replacement for assembling them.
-                foreach ($this->provider->completeStream($request) as $response) {
-                    $buffer .= $response->content;
-                    // Forwarded before the tool-call/reasoning bookkeeping below so a
-                    // chunk carrying both text and the start of a tool call still
-                    // reaches the screen as text first, in wire order.
-                    if ($onToken !== null && $response->content !== '') {
-                        $emitted = true;
-                        $onToken($response->content);
-                    }
-                    if ($response->toolCalls !== null) {
-                        $toolCalls = array_merge($toolCalls, $response->toolCalls);
-                    }
-                    if ($response->reasoning !== null && $response->reasoning !== '') {
-                        $reasoning = ($reasoning ?? '') . $response->reasoning;
-                    }
-                    // CTX-1: fold signed thinking blocks in wire order, exactly
-                    // like the reasoning fold above. Non-Anthropic providers
-                    // never set the carrier, so this merges an empty list and
-                    // stays inert.
-                    $thinkingBlocks = array_merge($thinkingBlocks, $response->thinkingBlocks);
-                    // E456. EVERY chunk that did not already reach $onToken is
-                    // announced here, and the condition is `content === ''`
-                    // rather than "has reasoning" on purpose: the defect is a
-                    // FAMILY, and a definition of progress that named only the
-                    // reasoning member would leave the other two alive. All
-                    // three are real chunk shapes off real providers -
+                // True once a byte has been handed to $onToken. NOT "the only
+                // channel out of this loop" - $onProgress is a second one since
+                // E456 - but the only one carrying output a retry cannot undo. The
+                // docblock above says why reasoning is deliberately exempt.
+                $emitted = false;
+                // The last error-bearing chunk, for providers that report failure
+                // as a response instead of by throwing (Vertex, Custom).
+                $errorChunk = null;
+                $thrown = null;
+
+                try {
+                    // Accumulate the whole stream and emit one assistant message when the
+                    // generator is exhausted. We deliberately do NOT use a tokensUsed>0
+                    // sentinel to detect completion — real providers stream content with
+                    // tokensUsed=0 and only report totals at the end (if at all), so a
+                    // sentinel drops the entire message in production.
                     //
-                    //   - reasoning-only: the reported case, a model thinking
-                    //     for minutes before its first content byte;
-                    //   - tool-call-only: a chunk carrying nothing but the
-                    //     structure of a call;
-                    //   - usage-only: VertexProvider's `message_start` reports
-                    //     input tokens with no content at all (the retry note
-                    //     on $usages above describes the same chunk).
-                    //
-                    // - and every one of them used to leave the parent's idle
-                    // timer un-reset, because $onToken is the only other thing
-                    // in this loop that writes a byte across the fork.
-                    //
-                    // The delta is the reasoning text when there is any and the
-                    // empty string otherwise, so one channel carries both "here
-                    // is thinking to paint" and "still alive, nothing to show".
-                    if ($onProgress !== null && $response->content === '') {
-                        $onProgress($response->reasoning ?? '');
-                    } elseif ($onProgress !== null && $response->reasoning !== null && $response->reasoning !== '') {
-                        // A chunk carrying BOTH content and reasoning already
-                        // reset the deadline through $onToken, but its thinking
-                        // still has to reach the screen.
-                        $onProgress($response->reasoning);
-                    }
-                    $usages[] = self::foldUsage($response);
+                    // The buffer stays even now that $onToken forwards each chunk live:
+                    // the AssistantMessage below is what the agentic loop feeds back to
+                    // the model on the next step and what lands in the transcript, and
+                    // that has to be the WHOLE turn. $onToken is an additional live
+                    // observer of the same bytes, not a replacement for assembling them.
+                    foreach ($this->provider->completeStream($request) as $response) {
+                        $buffer .= $response->content;
+                        // Forwarded before the tool-call/reasoning bookkeeping below so a
+                        // chunk carrying both text and the start of a tool call still
+                        // reaches the screen as text first, in wire order.
+                        if ($onToken !== null && $response->content !== '') {
+                            $emitted = true;
+                            $onToken($response->content);
+                        }
+                        if ($response->toolCalls !== null) {
+                            $toolCalls = array_merge($toolCalls, $response->toolCalls);
+                        }
+                        if ($response->reasoning !== null && $response->reasoning !== '') {
+                            $reasoning = ($reasoning ?? '') . $response->reasoning;
+                        }
+                        // CTX-1: fold signed thinking blocks in wire order, exactly
+                        // like the reasoning fold above. Non-Anthropic providers
+                        // never set the carrier, so this merges an empty list and
+                        // stays inert.
+                        $thinkingBlocks = array_merge($thinkingBlocks, $response->thinkingBlocks);
+                        // E456. EVERY chunk that did not already reach $onToken is
+                        // announced here, and the condition is `content === ''`
+                        // rather than "has reasoning" on purpose: the defect is a
+                        // FAMILY, and a definition of progress that named only the
+                        // reasoning member would leave the other two alive. All
+                        // three are real chunk shapes off real providers -
+                        //
+                        //   - reasoning-only: the reported case, a model thinking
+                        //     for minutes before its first content byte;
+                        //   - tool-call-only: a chunk carrying nothing but the
+                        //     structure of a call;
+                        //   - usage-only: VertexProvider's `message_start` reports
+                        //     input tokens with no content at all (the retry note
+                        //     on $usages above describes the same chunk).
+                        //
+                        // - and every one of them used to leave the parent's idle
+                        // timer un-reset, because $onToken is the only other thing
+                        // in this loop that writes a byte across the fork.
+                        //
+                        // The delta is the reasoning text when there is any and the
+                        // empty string otherwise, so one channel carries both "here
+                        // is thinking to paint" and "still alive, nothing to show".
+                        if ($onProgress !== null && $response->content === '') {
+                            $onProgress($response->reasoning ?? '');
+                        } elseif ($onProgress !== null && $response->reasoning !== null && $response->reasoning !== '') {
+                            // A chunk carrying BOTH content and reasoning already
+                            // reset the deadline through $onToken, but its thinking
+                            // still has to reach the screen.
+                            $onProgress($response->reasoning);
+                        }
+                        $usages[] = self::foldUsage($response);
 
-                    // Folded alongside the usage above: whatever frame carried
-                    // the ceiling verdict, the turn is marked (E707, round 81).
-                    $lengthStopped = $lengthStopped || $response->truncated;
+                        // Folded alongside the usage above: whatever frame carried
+                        // the ceiling verdict, the turn is marked (E707, round 81).
+                        $lengthStopped = $lengthStopped || $response->truncated;
 
-                    // Folded in above BEFORE being noted as a failure, so the
-                    // chunk's usage and length-stop are accounted exactly as
-                    // any other chunk's; what happens to the failure itself is
-                    // decided after the loop (audit 15a A1).
-                    if ($response->isError) {
-                        $errorChunk = $response;
+                        // Folded in above BEFORE being noted as a failure, so the
+                        // chunk's usage and length-stop are accounted exactly as
+                        // any other chunk's; what happens to the failure itself is
+                        // decided after the loop (audit 15a A1).
+                        if ($response->isError) {
+                            $errorChunk = $response;
+                        }
                     }
+                } catch (\Throwable $e) {
+                    $thrown = $e;
                 }
-            } catch (\Throwable $e) {
-                $thrown = $e;
-            }
 
-            if ($thrown !== null) {
-                if (!$lastAttempt && $refusedPrefill($thrown)) {
+                if ($thrown !== null) {
+                    if (!$lastAttempt && $refusedPrefill($thrown)) {
+                        continue;
+                    }
+                    if ($lastAttempt
+                        || !TransientFailure::isTransient($thrown)
+                        || ($emitted && !$resume($buffer, $toolCalls, $reasoning, $usages, $thinkingBlocks))
+                    ) {
+                        throw $thrown;
+                    }
+                    // ISS-074 review fix: the throwable is in hand, so the
+                    // server's Retry-After outranks the ladder, the wait is
+                    // announced to the notice sink, and it is sliced into
+                    // one-second beats down the turn's existing liveness channel
+                    // (toolWaitHeartbeat) instead of going dark for up to 25s.
+                    TransientFailure::announceRateLimit($thrown);
+                    TransientFailure::backoff($attempt, failure: $thrown, onBeat: self::toolWaitHeartbeat($request, $onProgress));
+
                     continue;
                 }
-                if ($lastAttempt
-                    || !TransientFailure::isTransient($thrown)
+
+                if ($errorChunk !== null && !$lastAttempt && $refusedPrefill($errorChunk)) {
+                    continue;
+                }
+
+                if ($errorChunk === null
+                    || $lastAttempt
+                    || !TransientFailure::responseIsTransient($errorChunk)
                     || ($emitted && !$resume($buffer, $toolCalls, $reasoning, $usages, $thinkingBlocks))
                 ) {
-                    throw $thrown;
+                    break;
                 }
-                // ISS-074 review fix: the throwable is in hand, so the
-                // server's Retry-After outranks the ladder, the wait is
-                // announced to the notice sink, and it is sliced into
-                // one-second beats down the turn's existing liveness channel
-                // (toolWaitHeartbeat) instead of going dark for up to 25s.
-                TransientFailure::announceRateLimit($thrown);
-                TransientFailure::backoff($attempt, failure: $thrown, onBeat: self::toolWaitHeartbeat($request, $onProgress));
 
-                continue;
+                // ISS-074: an error CHUNK carries no throwable - the provider
+                // flattened it into errorMessage text, so there is no response to
+                // read Retry-After from and nothing to announce. The wait still
+                // heartbeats: silence is what makes a bounded wait look hung.
+                TransientFailure::backoff($attempt, onBeat: self::toolWaitHeartbeat($request, $onProgress));
             }
 
-            if ($errorChunk !== null && !$lastAttempt && $refusedPrefill($errorChunk)) {
-                continue;
+            // Audit 15a A1: the loop above only breaks with an error chunk in hand
+            // when it will not (or may not) retry it, so this is the turn's final
+            // answer and it is a failure. Yielding it as an AssistantMessage made
+            // a 401 or a blocked prompt look like an empty reply; throwing lets
+            // EngineBackend surface the provider's own text. It never classifies
+            // transient, so an outer retry loop does not re-run it.
+            if ($errorChunk !== null) {
+                throw ProviderResponseException::fromResponse($errorChunk);
             }
 
-            if ($errorChunk === null
-                || $lastAttempt
-                || !TransientFailure::responseIsTransient($errorChunk)
-                || ($emitted && !$resume($buffer, $toolCalls, $reasoning, $usages, $thinkingBlocks))
+            // C-TOOL-7.e gate: mixed replies keep today's path (the
+            // runnable calls run, the malformed ones get their A11
+            // results); a reply that streamed text at all is NOT thrown
+            // away because what reached the screen cannot be un-emitted.
+            if ($malformedResamples >= self::MAX_MALFORMED_RESAMPLES
+                || $carried !== null
+                || $buffer !== ''
+                || !self::replyIsAllMalformed($toolCalls)
             ) {
                 break;
             }
 
-            // ISS-074: an error CHUNK carries no throwable - the provider
-            // flattened it into errorMessage text, so there is no response to
-            // read Retry-After from and nothing to announce. The wait still
-            // heartbeats: silence is what makes a bounded wait look hung.
-            TransientFailure::backoff($attempt, onBeat: self::toolWaitHeartbeat($request, $onProgress));
-        }
-
-        // Audit 15a A1: the loop above only breaks with an error chunk in hand
-        // when it will not (or may not) retry it, so this is the turn's final
-        // answer and it is a failure. Yielding it as an AssistantMessage made
-        // a 401 or a blocked prompt look like an empty reply; throwing lets
-        // EngineBackend surface the provider's own text. It never classifies
-        // transient, so an outer retry loop does not re-run it.
-        if ($errorChunk !== null) {
-            throw ProviderResponseException::fromResponse($errorChunk);
+            $malformedResamples++;
+            // Billing honest: every chunk the discarded reply carried is
+            // accounted like a continuation's dropped attempt - its usage
+            // rides the final message, see the sum below.
+            $discardedUsages = [...$discardedUsages, ...$usages];
+            RuntimeNoticeSink::warn(sprintf(self::MALFORMED_RESAMPLE_NOTICE_FORMAT, $malformedResamples, self::MAX_MALFORMED_RESAMPLES));
         }
 
         // Summed across chunks, not taken from the last one. Measured:
@@ -1870,7 +1941,11 @@ final class Runtime
         // and before a call runs, so the history, the ToolStarted/ToolFinished
         // events and every ToolResultMessage all carry the same id.
         $toolCalls = ($this->toolCallIds ??= \SugarCraft\Code\Support\ToolCallIdAllocator::new())->assign($toolCalls);
-        $assistant = new AssistantMessage($buffer, $toolCalls ?: null, $reasoning, Usage::sum($usages), $lengthStopped, $thinkingBlocks);
+        // C-TOOL-7.e: the discarded wholly-malformed replies' usage sums in
+        // alongside this sequence's - a discarded call is a billed one.
+        // With no discards the spread is $usages itself, byte-identical to
+        // the answer before this step.
+        $assistant = new AssistantMessage($buffer, $toolCalls ?: null, $reasoning, Usage::sum([...$discardedUsages, ...$usages]), $lengthStopped, $thinkingBlocks);
         // 2.7-3: what the dropped attempts already said, then the rest. The
         // dropped attempts' usage is kept, not reset like a restart's: their
         // text is part of the reply, so what they billed is part of its cost.
@@ -1908,46 +1983,86 @@ final class Runtime
      * (audit 15a A1); it used to be yielded onward as an assistant message
      * whose content was `''`, so the user saw a blank reply instead of, say,
      * "Incorrect API key".
+     *
+     * C-TOOL-7.e (CC-new#12): the ladder above runs inside an outer sequence
+     * loop. A sequence that completes cleanly holding no text and an
+     * argument error on EVERY tool call it carried is discarded and the same
+     * request re-issued, at most {@see self::MAX_MALFORMED_RESAMPLES} times,
+     * before the A11 error-result path runs unchanged; discarded replies
+     * keep their usage in the step's total. The bound is a count, not a
+     * timeout (E646) - and nothing has reached $onToken when the discard
+     * happens, because `complete()` returns the whole reply in one call.
      */
     private function runBatch(CompleteRequest $request, App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null, ?callable $onToken = null, ?callable $onProgress = null): \Generator
     {
-        $response = null;
+        // C-TOOL-7.e (CC-new#12): one iteration of this outer loop is one
+        // provider sequence. A sequence that completes cleanly holding NO
+        // text and an argument error on EVERY tool call it carried is
+        // discarded and the SAME request re-issued, at most
+        // {@see self::MAX_MALFORMED_RESAMPLES} times; after the bound the
+        // A11 error-result path below runs unchanged. Nothing has been
+        // emitted yet when the discard happens — `complete()` is one
+        // blocking call and its reply is dropped before $onToken sees it —
+        // so the re-issue is invisible except for the one-line notice. The
+        // bound is a COUNT, not a timeout (E646): no timer is armed here.
+        $malformedResamples = 0;
+        /** @var list<?Usage> $discardedUsages */
+        $discardedUsages = [];
 
-        // N-P4a: `providerRetryAttempts`, read once per sequence.
-        $maxAttempts = TransientFailure::maxAttempts();
-        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
-            $lastAttempt = $attempt === $maxAttempts;
+        for (;;) {
+            $response = null;
 
-            try {
-                $response = $this->provider->complete($request);
-            } catch (\Throwable $e) {
-                if ($lastAttempt || !TransientFailure::isTransient($e)) {
-                    throw $e;
+            // N-P4a: `providerRetryAttempts`, read once per sequence.
+            $maxAttempts = TransientFailure::maxAttempts();
+            for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+                $lastAttempt = $attempt === $maxAttempts;
+
+                try {
+                    $response = $this->provider->complete($request);
+                } catch (\Throwable $e) {
+                    if ($lastAttempt || !TransientFailure::isTransient($e)) {
+                        throw $e;
+                    }
+                    // ISS-074 review fix: see the matching thread in
+                    // runStreaming() - Retry-After outranks the ladder, the wait
+                    // is announced, and it beats down the turn's liveness
+                    // channel. Nothing has been emitted yet in runBatch(), so
+                    // toolWaitHeartbeat is safe to attach here too.
+                    TransientFailure::announceRateLimit($e);
+                    TransientFailure::backoff($attempt, failure: $e, onBeat: self::toolWaitHeartbeat($request, $onProgress));
+
+                    continue;
                 }
-                // ISS-074 review fix: see the matching thread in
-                // runStreaming() - Retry-After outranks the ladder, the wait
-                // is announced, and it beats down the turn's liveness
-                // channel. Nothing has been emitted yet in runBatch(), so
-                // toolWaitHeartbeat is safe to attach here too.
-                TransientFailure::announceRateLimit($e);
-                TransientFailure::backoff($attempt, failure: $e, onBeat: self::toolWaitHeartbeat($request, $onProgress));
 
-                continue;
+                if ($lastAttempt || !TransientFailure::responseIsTransient($response)) {
+                    break;
+                }
+
+                // ISS-074: the flattened error response has no throwable behind
+                // it to read Retry-After from; the beat keeps the wait legible.
+                TransientFailure::backoff($attempt, onBeat: self::toolWaitHeartbeat($request, $onProgress));
             }
 
-            if ($lastAttempt || !TransientFailure::responseIsTransient($response)) {
+            // Audit 15a A1: see the matching throw in runStreaming(). Checked
+            // before $onToken so a failed call paints nothing, and before the
+            // resample door below so an error reply is never thrown away.
+            if ($response->isError) {
+                throw ProviderResponseException::fromResponse($response);
+            }
+
+            if ($malformedResamples >= self::MAX_MALFORMED_RESAMPLES
+                || $response->content !== ''
+                || !self::replyIsAllMalformed($response->toolCalls)
+            ) {
                 break;
             }
 
-            // ISS-074: the flattened error response has no throwable behind
-            // it to read Retry-After from; the beat keeps the wait legible.
-            TransientFailure::backoff($attempt, onBeat: self::toolWaitHeartbeat($request, $onProgress));
-        }
-
-        // Audit 15a A1: see the matching throw in runStreaming(). Checked
-        // before $onToken so a failed call paints nothing.
-        if ($response->isError) {
-            throw ProviderResponseException::fromResponse($response);
+            $malformedResamples++;
+            // Billing honest: the discarded call was a real call. Its usage
+            // rides the final message (see the yield below) exactly as the
+            // dropped attempts' usage rides a continuation's.
+            $discardedUsages[] = self::foldUsage($response);
+            RuntimeNoticeSink::warn(sprintf(self::MALFORMED_RESAMPLE_NOTICE_FORMAT, $malformedResamples, self::MAX_MALFORMED_RESAMPLES));
         }
 
         // One delta carrying the whole reply. A non-streaming provider has no
@@ -2002,7 +2117,14 @@ final class Runtime
             // provider's parsed buckets ride along when the wire carried
             // them; {@see foldUsage()} keeps the projection shape for every
             // provider that still reports only totals.
-            self::foldUsage($response),
+            //
+            // C-TOOL-7.e: when the sequence discarded wholly-malformed
+            // replies, their usage is summed in too - a discarded call is a
+            // billed one. Empty discards keep this byte-identical to the
+            // single-call answer (Usage::sum of one is that one).
+            $discardedUsages === []
+                ? self::foldUsage($response)
+                : Usage::sum([...$discardedUsages, self::foldUsage($response)]),
             // E707 (round 81): the batch answer states its own ending on the
             // same carrier the content arrived on - forward it verbatim.
             $response->truncated,
@@ -4212,6 +4334,38 @@ final class Runtime
         // rendering) must not claim one did.
         return "The tool was not run because its {$error}. "
             . 'Send the call again with its arguments as one complete JSON object.';
+    }
+
+    /**
+     * C-TOOL-7.e: whether a reply is wholly unrunnable — it carries at least
+     * one tool call and EVERY one of them arrived with an undecodable
+     * argument blob ({@see ToolCall::argumentsError()}, the audit-A11
+     * carrier). Such a reply would cost the step one A11 error result per
+     * call and teach the model nothing it could not learn from a free
+     * re-issue of the same request, so {@see runBatch()} and
+     * {@see runStreaming()} discard it instead, bounded by
+     * {@see self::MAX_MALFORMED_RESAMPLES}.
+     *
+     * A mixed reply is NOT resampled: the runnable calls must run and the
+     * malformed ones must still answer with their A11 error, exactly as
+     * audit 15a A1 decided. Null/empty tool calls are not "all malformed"
+     * either — a text-only reply is a finished answer, not a broken call.
+     *
+     * @param ?list<ToolCall> $toolCalls
+     */
+    private static function replyIsAllMalformed(?array $toolCalls): bool
+    {
+        if ($toolCalls === null || $toolCalls === []) {
+            return false;
+        }
+
+        foreach ($toolCalls as $toolCall) {
+            if ($toolCall->argumentsError() === null) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

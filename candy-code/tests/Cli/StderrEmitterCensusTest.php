@@ -143,8 +143,8 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Code\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — FORTY-ONE
- *     of them, in SEVENTEEN files. THE SECOND EMITTER-SIDE FUNNEL, and the same
+ *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — FORTY-THREE
+ *     of them, in EIGHTEEN files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
  *     with the ONE site in `src/Diagnostics/RuntimeNoticeSink.php` and cannot
@@ -698,6 +698,17 @@ final class StderrEmitterCensusTest extends TestCase
         // which is exactly what the seam exists to record. One site; the
         // announcement is per breach, throttled by the retry loop itself.
         'src/Providers/TransientFailure.php' => 1,
+        // C-TOOL-7.e (CC-new#12): the one-line notice each wholly-malformed
+        // tool-call reply emits before the same request is re-issued, one
+        // site in each of Runtime::runBatch() and Runtime::runStreaming().
+        // The routing decision: the seam, exactly like the Retry-After
+        // announcement directly above — a reply the session threw away and
+        // re-asked for is the step doing something it did not announce,
+        // invisible anywhere else, and it is NOT the transcript arm (the
+        // step still completes; nothing was lost permanently). Per discard,
+        // bounded by MAX_MALFORMED_RESAMPLES, so a pathological provider
+        // costs at most two rows per step.
+        'src/Runtime.php' => 2,
         // Item 3.A-2 (the 3.A-1 hand-off): a turn whose file snapshot was
         // refused or failed. The routing decision: `/rewind --files` and
         // `/undo` will not be able to bring those files back, which the user
