@@ -1548,7 +1548,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web7.md` → `### C-WEB-7.a`
 
-#### C-WEB-7.b — Web client nits: `@` debounce, cross-tab history clear + palette action, re-announced questions
+#### ✅ c69f190b1 C-WEB-7.b — Web client nits: `@` debounce, cross-tab history clear + palette action, re-announced questions
 - **Item:** C-WEB-7 (sources: WEB-5-P3 (client half), WEB-6-P1, WEB-6-P2, WEB-7-P1) · fix · MINOR · effort M
 - **What:** Client-only, no protocol. **WEB-5-P3, debounce.** Root cause: `Composer.vue:86-101` watches `mentionPartial` with no debounce, so every keystroke after `@` is a synchronous `fs.search` on the shared serve loop. Fix: a leading + …
 - **Files — create:** `candy-code-web/src-web/components/panels/__tests__/paletteClearHistory.spec.ts`
