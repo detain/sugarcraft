@@ -96,12 +96,14 @@ final class LearnedSkillsTest extends TestCase
         $this->store->create(SkillProposal::new('dup-learned', 'First landing.', 'Original body.'));
         $liveBytes = (string) file_get_contents($this->root . '/dup-learned/SKILL.md');
 
+        $occupied = null;
         try {
             $this->store->create(SkillProposal::new('dup-learned', 'Second tries.', 'Replacement body.'));
-            self::fail('creating an occupied name must refuse');
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('patch it instead', $e->getMessage());
+            $occupied = $e;
         }
+        self::assertNotNull($occupied, 'creating an occupied name must refuse');
+        self::assertStringContainsString('patch it instead', $occupied->getMessage());
 
         self::assertSame($liveBytes, (string) file_get_contents($this->root . '/dup-learned/SKILL.md'), 'a refused create leaves the live bytes alone');
         self::assertSame(1, $this->store->revisionCount('dup-learned'));
@@ -124,20 +126,24 @@ final class LearnedSkillsTest extends TestCase
 
         // The refusal must be observable THROUGH the loader the store uses.
         $rows = null;
+        $shadowed = null;
         $previous = getcwd();
         chdir($project);
         try {
             self::assertArrayHasKey('proj-shadow', (new SkillLoader(false))->loadAllManifests('.'), 'the fixture project really carries the name');
-            $this->store->create(SkillProposal::new('proj-shadow', 'Would shadow it.', 'Body.'));
-            self::fail('creating a project-tier name in the user tier must refuse');
-        } catch (\RuntimeException $e) {
-            self::assertStringContainsString('must not shadow', $e->getMessage());
-            $rows = (string) $e->getMessage();
+            try {
+                $this->store->create(SkillProposal::new('proj-shadow', 'Would shadow it.', 'Body.'));
+            } catch (\RuntimeException $e) {
+                $shadowed = $e;
+            }
+            $rows = $shadowed?->getMessage();
         } finally {
             chdir((string) $previous);
         }
 
-        self::assertStringContainsString('project', $rows);
+        self::assertNotNull($shadowed, 'creating a project-tier name in the user tier must refuse');
+        self::assertStringContainsString('must not shadow', (string) $rows);
+        self::assertStringContainsString('project', (string) $rows);
         self::assertDirectoryDoesNotExist($this->root . '/proj-shadow');
     }
 
@@ -209,12 +215,14 @@ final class LearnedSkillsTest extends TestCase
         mkdir($dir, 0700, true);
         file_put_contents($dir . '/SKILL.md', "---\nname: handwritten\ndescription: \"Typed by hand.\"\n---\n\nBody.\n");
 
+        $nothingSaved = null;
         try {
             $this->store->undo('handwritten');
-            self::fail('undo without saved revisions must refuse');
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('no saved revision to undo', $e->getMessage());
+            $nothingSaved = $e;
         }
+        self::assertNotNull($nothingSaved, 'undo without saved revisions must refuse');
+        self::assertStringContainsString('no saved revision to undo', $nothingSaved->getMessage());
 
         self::assertFileExists($dir . '/SKILL.md');
     }
@@ -286,19 +294,23 @@ final class LearnedSkillsTest extends TestCase
         file_put_contents($target . '/SKILL.md', "---\nname: beta-linked\ndescription: \"Planted.\"\n---\n\nPlanted body.\n");
         symlink($target, $this->root . '/beta-linked');
 
+        $patchRefused = null;
         try {
             $this->store->patch('beta-linked', 'Over the link.', null);
-            self::fail('patching through a linked skill directory must refuse');
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('no learned skill named', $e->getMessage());
+            $patchRefused = $e;
         }
+        self::assertNotNull($patchRefused, 'patching through a linked skill directory must refuse');
+        self::assertStringContainsString('no learned skill named', $patchRefused->getMessage());
 
+        $undoRefused = null;
         try {
             $this->store->undo('beta-linked');
-            self::fail('undoing through a linked skill directory must refuse');
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('no saved revision to undo', $e->getMessage());
+            $undoRefused = $e;
         }
+        self::assertNotNull($undoRefused, 'undoing through a linked skill directory must refuse');
+        self::assertStringContainsString('no saved revision to undo', $undoRefused->getMessage());
 
         $listed = $this->store->history('beta-linked');
         self::assertSame([], $listed['revisions']);
@@ -312,12 +324,14 @@ final class LearnedSkillsTest extends TestCase
         $this->store->create(SkillProposal::new('witness-again', 'Root exists.', 'Body.'));
         symlink($this->sandbox . '/nowhere-at-all', $this->root . '/link-occupied');
 
+        $linkCreate = null;
         try {
             $this->store->create(SkillProposal::new('link-occupied', 'Through the link?', 'Body.'));
-            self::fail('creating through a planted link must refuse');
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('patch it instead', $e->getMessage(), 'the occupied arm fires for links too — nothing is written through them');
+            $linkCreate = $e;
         }
+        self::assertNotNull($linkCreate, 'creating through a planted link must refuse');
+        self::assertStringContainsString('patch it instead', $linkCreate->getMessage(), 'the occupied arm fires for links too — nothing is written through them');
 
         self::assertDirectoryDoesNotExist($this->sandbox . '/nowhere-at-all');
     }
@@ -332,12 +346,14 @@ final class LearnedSkillsTest extends TestCase
             str_repeat('x', LearnedSkills::MAX_REVISION_BYTES + 64),
         );
 
+        $fatHead = null;
         try {
             $this->store->patch('fat-head', 'Would overwrite unseen bytes.', null);
-            self::fail('patching over an unreadable head must refuse');
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('cannot be read', $e->getMessage());
+            $fatHead = $e;
         }
+        self::assertNotNull($fatHead, 'patching over an unreadable head must refuse');
+        self::assertStringContainsString('cannot be read', $fatHead->getMessage());
 
         self::assertSame(2, $this->store->revisionCount('fat-head'), 'the refusal writes nothing and drops nothing');
         self::assertFileExists($this->root . '/fat-head/history/2.md');
@@ -393,23 +409,28 @@ final class LearnedSkillsTest extends TestCase
         // construction, so a store built while the home was owned would keep
         // answering through its cached root.
         $stranded = LearnedSkills::new();
+        $createRefused = null;
+        $undoRefused = null;
         try {
             try {
                 $stranded->create(SkillProposal::new('stranded-learned', 'Cannot land.', 'Body.'));
-                self::fail('the store must refuse without an owned home');
             } catch (\RuntimeException $e) {
-                self::assertStringContainsString('no home directory', $e->getMessage());
+                $createRefused = $e;
             }
 
             try {
                 $stranded->undo('stranded-learned');
-                self::fail('undo must refuse without an owned home too');
             } catch (\RuntimeException $e) {
-                self::assertStringContainsString('no home directory', $e->getMessage());
+                $undoRefused = $e;
             }
         } finally {
             chmod($this->home, 0700);
         }
+
+        self::assertNotNull($createRefused, 'the store must refuse without an owned home');
+        self::assertStringContainsString('no home directory', $createRefused->getMessage());
+        self::assertNotNull($undoRefused, 'undo must refuse without an owned home too');
+        self::assertStringContainsString('no home directory', $undoRefused->getMessage());
 
         self::assertDirectoryDoesNotExist($this->root);
     }

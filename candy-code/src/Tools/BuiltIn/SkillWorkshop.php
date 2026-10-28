@@ -38,7 +38,7 @@ use SugarCraft\Code\Tools\ToolResult;
  * human before a byte moves, and plan and dont-ask modes refuse the tool
  * outright ({@see ToolPermissionClass}). That gate plus the announcement
  * together are the "user sees each change" half of the ruling — the dream
- * pass keeps the unattended review leg ({@see ProposedSkills} drafts behind
+ * pass keeps the unattended review leg (drafts written to their own tree and
  * `/skills accept`) precisely because it sees no one at write time.
  *
  * WHAT MAY BE LEARNED. The doctrine lives in {@see self::description()} so it
