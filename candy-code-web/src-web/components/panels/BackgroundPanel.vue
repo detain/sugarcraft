@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ago, spendLabel, tokens } from '../../lib/format'
 import type { BackgroundSession, PermissionMode } from '../../protocol/generated'
 import { isSettled, useBackgroundStore } from '../../stores/agents/background'
@@ -18,8 +18,15 @@ import { describe } from '../../stores/session'
  * every daemon inherits is the hello default `bg.spawn` threads through as
  * the spawn-config key (ISS-004, bg01 6bad89ebe) — so the chip reads that
  * server-level mode, matching the mode-note the spawn form prints.
+ *
+ * The Schedules section (C-AGT-5.b) is a thin client of the host's own
+ * `/schedules` command: the roster renders as the command's listing text —
+ * rows, kinds, next-due stamps, load notes, and the last fire outcome once
+ * this host's pump has spoken for a row — and its buttons send the same
+ * command's mutating verbs. No web-only schedule grammar exists on purpose:
+ * the transcript and the panel can never drift into two vocabularies.
  */
-defineProps<{ sessionId: string | null }>()
+const props = defineProps<{ sessionId: string | null }>()
 
 /** Modes that never put a question in front of a human. */
 const BYPASS_CLASS: PermissionMode[] = ['bypass-permissions', 'auto', 'dont-ask']
@@ -62,6 +69,54 @@ async function act(action: () => Promise<unknown>): Promise<void> {
     error.value = describe(failure)
   }
 }
+
+/** One listed roster line: its raw text, and the verb target when it is a row. */
+interface ScheduleLine {
+  text: string
+  name: string | null
+  enabled: boolean
+}
+
+/**
+ * The listing's row shape is the host's: `[on] (file) name — every …`. Only
+ * lines that match carry buttons; usage and load-note lines render verbatim,
+ * so the panel never re-derives meaning the command did not print.
+ */
+function parseScheduleLine(line: string): ScheduleLine {
+  const match = /^\[(on|off)\]\s+\((?:file|loop)\)\s+(\S+)\s+\u2014/u.exec(line)
+  return { text: line, name: match?.[2] ?? null, enabled: (match?.[1] ?? 'on') === 'on' }
+}
+
+const scheduleLines = ref<ScheduleLine[]>([])
+const schedulesBusy = ref(false)
+
+async function loadSchedules(): Promise<void> {
+  const id = props.sessionId
+  if (id === null) {
+    scheduleLines.value = []
+    return
+  }
+  schedulesBusy.value = true
+  await act(async () => {
+    const result = await connection.request('command.exec', { sessionId: id, name: 'schedules' })
+    const listing = 'rows' in result ? result.rows.map((row) => row.content).join('\n') : ''
+    scheduleLines.value = listing.split('\n').filter((line) => line.trim() !== '').map(parseScheduleLine)
+  })
+  schedulesBusy.value = false
+}
+
+/** A mutating verb, then the fresh listing — the command is the only writer. */
+async function editSchedule(args: string): Promise<void> {
+  const id = props.sessionId
+  if (id === null) return
+  await act(async () => {
+    await connection.request('command.exec', { sessionId: id, name: 'schedules', args })
+  })
+  await loadSchedules()
+}
+
+onMounted(() => void loadSchedules())
+watch(() => props.sessionId, () => void loadSchedules())
 
 async function start(): Promise<void> {
   const text = task.value.trim()
@@ -113,6 +168,23 @@ function toggle(session: BackgroundSession): void {
         </div>
       </li>
     </ul>
+    <section class="schedules" data-testid="bg-schedules">
+      <div class="sched-head">
+        <h3>Schedules</h3>
+        <button v-if="sessionId" type="button" data-testid="bg-schedules-refresh" :disabled="schedulesBusy" @click="act(loadSchedules)">Refresh</button>
+      </div>
+      <p v-if="!sessionId" class="empty">Open a session to read its schedule roster.</p>
+      <p v-else-if="scheduleLines.length === 0" class="empty" data-testid="bg-schedules-empty">{{ schedulesBusy ? 'Loading…' : 'No schedules listed.' }}</p>
+      <ul v-else>
+        <li v-for="(line, index) in scheduleLines" :key="index" data-testid="bg-schedule-line">
+          <span class="sched-text">{{ line.text }}</span>
+          <span v-if="line.name !== null && canWrite" class="actions">
+            <button type="button" :data-testid="`bg-schedule-toggle-${line.name}`" @click="editSchedule(`${line.enabled ? 'disable' : 'enable'} ${line.name}`)">{{ line.enabled ? 'Disable' : 'Enable' }}</button>
+            <button type="button" class="danger" :data-testid="`bg-schedule-delete-${line.name}`" @click="editSchedule(`delete ${line.name}`)">Delete</button>
+          </span>
+        </li>
+      </ul>
+    </section>
   </div>
 </template>
 
@@ -240,5 +312,40 @@ pre {
   display: flex;
   gap: 0.4rem;
   flex-wrap: wrap;
+}
+.schedules {
+  display: grid;
+  gap: 0.4rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.5rem;
+}
+.sched-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.sched-head h3 {
+  margin: 0;
+}
+.schedules ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.35rem;
+}
+.schedules li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.sched-text {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 0.8125rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 </style>

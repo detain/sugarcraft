@@ -64,7 +64,7 @@ relaunch.
 | `nextDue` | no | Unix seconds at which the row next becomes due. A row without it is armed one interval out, so a file you write at midnight does not fire immediately at midnight. |
 | `enabled` | no | `false` parks the row without deleting it. Defaults to `true`. |
 | `timeoutSeconds` | no | Wall-clock ceiling on one fired run, 60 up to 31,622,400 seconds. Absent means the background session's default of 3600. This bounds the daemon's whole run; no timeout anywhere on the schedule path bounds a model request. |
-| `createdBy` | no | The creation tag (C-AGT-5.a). The only spelling a row may carry is `model`, written by the `Schedule` tool; absence means the row arrived by a human hand. The tool's delete guard reads the tag: it removes its own rows freely, and refuses untagged ones unless the human opts in. A forged or misspelled tag is refused at load by name — the field exists precisely to police that forgery. |
+| `createdBy` | no | The creation tag (C-AGT-5.a). The only spelling a row may carry is `model`, written by the `Schedule` tool; absence means the row arrived by a human hand. The tool's delete guard reads the tag and the binding: it removes its own rows from this project freely, and refuses an untagged row — or its own row bound to another project root — unless the call opts in. A forged or misspelled tag is refused at load by name — the field exists precisely to police that forgery. |
 
 An unknown key is tolerated; a malformed known key is not. A row that fails to
 parse is skipped **by name** while its siblings keep running, and the refusal is
@@ -102,6 +102,7 @@ never guesswork:
 ```
 [on] (file) nightly-tests — every 1d, next 2026-10-28 03:00:00 @ /home/me/projects/sugarcraft: Run the full test suite…
 [on] (file) old-clean — every 6h, next 2026-10-27 18:40:00 @ unbound: Tidy the artifacts directory…
+[on] (file) weekly-audit — every 1w, next 2026-11-01 09:00:00 @ /home/me/projects/sugarcraft: Audit the dependency tree… — last: skipped: another host holds the lock
 ```
 
 ### If a row stopped firing
@@ -110,9 +111,11 @@ never guesswork:
 2. `unbound` or a load note? Add (or correct) `root` on that row.
 3. Bound to the right directory but you never see it in *this* window? Then it is
    the other window's row: open the project it names, or re-point `root`.
-4. Bound and due but skipped silently every tick? Another host holds its run:
-   `/bg list` shows the `schedule:<name>` daemon that is still up, and the row
-   resumes once it settles.
+4. Bound and due but the `last:` suffix keeps saying `skipped`? Another host
+   holds its run: `/bg list` shows the `schedule:<name>` daemon that is still
+   up, and the row resumes once it settles. The suffix records what this
+   process's pump actually decided — fired, an error, or which refusal — so
+   the answer is on the line, not in the log.
 
 ## The permission floor
 
@@ -193,10 +196,12 @@ may itself have been talked into something by a prompt it read:
   a human deliberately spelled something looser at the create approval.
 - **The row cap.** At most 8 model-created (`createdBy: "model"`) rows per
   project root. Operator rows never count against it.
-- **The delete guard.** The tool removes rows it created; an operator-written
-  row (untagged) is refused unless the call spells `include_operator_rows:
+- **The delete guard.** The tool removes rows it created for *this project*; an
+  operator-written row (untagged) — or a model row bound to another project root,
+  `unbound` included — is refused unless the call spells `include_operator_rows:
   true` — a sentence the Ask approval shows verbatim, so forcing it is the
-  asking, not a bypass. `/schedules delete <name>` remains the human surface.
+  asking, not a bypass. `/schedules delete <name>` remains the human surface,
+  root-scoping free for a human who names the row.
 - **No self-widening.** A fired run executes under its recorded floor, where
   anything requiring a human answer is refused — so the clock cannot mint
   another clock or escalate its own mode.
@@ -209,20 +214,32 @@ changes the floor, the ceiling, or the lock discipline described above.
 ```
 /schedules            # same as list
 /schedules list
+/schedules add <name> <interval> <prompt> [--mode <mode>] [--provider <name>]
 /schedules enable <name>
 /schedules disable <name>
 /schedules delete <name>
 ```
 
-There is deliberately no `add` verb yet: rows arrive by writing the file, or
-through the `Schedule` tool above — the same config-authority posture the
-user-scope `mcp.json` takes, rather than a command parser re-inventing JSON
-grammar from scratch (a thin `add` over the tool's own factory is the planned
-follow-up). `list` reads this process's roster and the one
-`0600` file and changes nothing, so it works in a read-only window; the mutating
-verbs do not, because they persist consent-bearing rows that later turns will act
-on. Enable, disable and delete write the file back before answering, so the change
-survives the session; on a `/loop` row they touch only memory and say so.
+`add` (C-AGT-5.b) goes through the `Schedule` tool's own factory — the same
+bounds, ceiling, mode-settling, per-project model cap and creation tag — so the
+command and the tool cannot drift into two grammars. The interval reads like
+`/loop`'s (`60`, `90s`, `15m`, `2h`, `1d`), the prompt is everything that follows
+minus any `--mode`/`--provider` flag, and the row lands bound to this project's
+root with its first fire one interval out. Rows may of course still arrive by
+writing the file: the config-authority posture governs hand-written rows, the
+factory governs created ones. `list` reads this process's roster and the one
+`0600` file and changes nothing, so it works in a read-only window; adding,
+enabling, disabling and deleting persist consent-bearing rows that later turns
+will act on, so they do not. Enable, disable and delete write the file back
+before answering, so the change survives the session; on a `/loop` row they
+touch only memory and say so.
+
+Once a row has been evaluated by this process's pump, `list` also appends its
+last fire outcome — `fired`, an error, or which refusal stopped it (`skipped:
+bound to another host`, `skipped: the previous run is still going`, and the
+like). The outcome lives in memory only: it is this host's answer to "why isn't
+it firing here?", and a fresh process lists the row bare again until its own
+pump speaks for it.
 
 ## `/loop` on a served session
 

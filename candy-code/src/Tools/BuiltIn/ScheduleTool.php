@@ -51,11 +51,14 @@ use SugarCraft\Code\Tools\ToolResult;
  * roster. The cadence floor ({@see Schedule::MIN_EVERY_SECONDS}) is the row
  * class's own.
  *
- * THE DELETE GUARD. `delete` removes a model-tagged row on its own; a row the
- * operator wrote (or hand-edited into the file) is refused UNLESS the call
- * spells `include_operator_rows: true` — and because the tool is Ask-class,
- * spelling it means the human sees exactly that argument before it runs. The
- * flag is not a bypass, it is the asking, made visible in the transcript.
+ * THE DELETE GUARD (root-scoped as of C-AGT-5.b). `delete` removes a
+ * model-tagged row bound to THIS project on its own; a row the operator wrote
+ * (or hand-edited into the file) — and, since the guard learned to read the
+ * root binding, a model row bound to ANOTHER project — is refused UNLESS the
+ * call spells `include_operator_rows: true`, and because the tool is
+ * Ask-class, spelling it means the human sees exactly that argument before it
+ * runs. The flag is not a bypass, it is the asking, made visible in the
+ * transcript. `/schedules delete` stays the unrestricted human surface.
  *
  * NO LOOPS FROM SCHEDULES. A fired run executes under its recorded mode (the
  * dont-ask floor unless the human spelled otherwise), where any tool call that
@@ -101,7 +104,7 @@ final readonly class ScheduleTool implements Tool, BuildsFromCatalog, DelegatesT
 
     public function description(): string
     {
-        return 'Create, list, or delete schedules: recurring prompts that fire as supervised background runs in this project, stored in ~/.candy-code/schedules.json and kept by every candy-code host on this machine. A row created here repeats every N seconds (first fire one interval out), runs unattended on the permission mode settled at creation — never looser than this session\'s, never bypass-class, by default the read-only floor that refuses anything that would need asking — and carries this project as its root, so only a host in that directory ever fires it. This project holds at most 8 model-created rows; delete frees a slot. A delete removes a row this tool created; deleting an operator-written row requires include_operator_rows: true, which the approval shows verbatim. Every call here asks a human first: a schedule outlives the turn that made it.';
+        return 'Create, list, or delete schedules: recurring prompts that fire as supervised background runs in this project, stored in ~/.candy-code/schedules.json and kept by every candy-code host on this machine. A row created here repeats every N seconds (first fire one interval out), runs unattended on the permission mode settled at creation — never looser than this session\'s, never bypass-class, by default the read-only floor that refuses anything that would need asking — and carries this project as its root, so only a host in that directory ever fires it. This project holds at most 8 model-created rows; delete frees a slot. A delete removes a row this tool created for this project; deleting an operator-written row — or a model row bound to another project root — requires include_operator_rows: true, which the approval shows verbatim. Every call here asks a human first: a schedule outlives the turn that made it.';
     }
 
     public function inputSchema(): array
@@ -140,7 +143,7 @@ final readonly class ScheduleTool implements Tool, BuildsFromCatalog, DelegatesT
                 ],
                 'include_operator_rows' => [
                     'type' => 'boolean',
-                    'description' => 'delete only: also remove a row this tool did not create. Without it, deleting an operator-written row is refused; /schedules delete <name> is the human surface for those.',
+                    'description' => 'delete only: also remove a row this tool did not create, or a model row bound to another project root. Without it, deleting either is refused; /schedules delete <name> is the human surface for those.',
                 ],
             ],
             'required' => ['action'],
@@ -226,12 +229,12 @@ final readonly class ScheduleTool implements Tool, BuildsFromCatalog, DelegatesT
             return $this->refusal($args, "no schedule named '{$name}'; the list action shows what exists");
         }
 
-        // The creation tag is the whole boundary: untagged rows arrived by a
-        // human hand (or before the field existed) and are not the model's to
-        // tidy. Spelling the opt-in puts exactly that sentence in front of the
-        // human at the Ask approval — visible force, not silent privilege.
-        if ($row->createdBy !== Schedule::CREATED_BY_MODEL && ($args['include_operator_rows'] ?? null) !== true) {
-            return $this->refusal($args, "schedule '{$name}' was not created by this tool — deleting an operator-written row needs include_operator_rows: true (the approval will show it), or /schedules delete {$name} from a human prompt");
+        // The shared guard (root-scoped since C-AGT-5.b): model row of THIS
+        // root goes free; operator rows and foreign-root model rows need the
+        // human-spelled door, which the Ask approval shows verbatim.
+        $refusal = ScheduleFactory::deleteRefusal($row, $this->root, ($args['include_operator_rows'] ?? null) === true);
+        if ($refusal !== null) {
+            return $this->refusal($args, $refusal);
         }
 
         $this->registry->remove($name);

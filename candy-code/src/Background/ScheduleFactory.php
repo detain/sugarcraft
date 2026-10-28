@@ -10,9 +10,10 @@ use SugarCraft\Code\Server\ServerConfig;
 /**
  * The single creation path for persisted schedule rows (C-AGT-5.a).
  *
- * WHY A FACTORY AT ALL. Two surfaces will create rows: the Schedule tool (this
- * step) and the `/schedules add` verb (C-AGT-5.b). The bounds that matter —
- * the permission-mode ceiling, the model-row cap, the root binding, the
+ * WHY A FACTORY AT ALL. Two surfaces create rows: the Schedule tool
+ * (C-AGT-5.a) and the `/schedules add` verb (C-AGT-5.b). The bounds that
+ * matter — the permission-mode ceiling, the model-row cap, the root binding,
+ * the
  * one-interval arming — are exactly the things two hand-rolled callers would
  * drift apart on, so they live HERE, once, and both surfaces will call through.
  * {@see Schedule}'s constructor still owns the value-level validation (name
@@ -58,6 +59,20 @@ use SugarCraft\Code\Server\ServerConfig;
  * than persist a lie. (A plain launch always has one — the tool is built from
  * {@see \SugarCraft\Code\Tools\Catalog\ToolBuildContext::$root} — so this arm
  * exists for embedded and future hosts that cannot say where they live.)
+ *
+ * THE DELETE POLICY (C-AGT-5.b, root-scoped per the owner ruling closing
+ * C-AGT-5.a r1 MINOR-2). {@see deleteRefusal()} is the guard the Schedule
+ * tool's `delete` consults, and it scopes the tag: a model-tagged row bound
+ * to THIS project root goes freely, because the human approved its creation
+ * and the same approval sees its removal; a model-tagged row bound to
+ * ANOTHER root does not — the file is shared machine-wide (C-AGT-1), and a
+ * session in one project tidying another project's automation is exactly the
+ * cross-project reach a cap without a fence would have granted. Operator rows
+ * keep the rule they always had. `include_operator_rows: true` opens all of
+ * it at once — and because the tool is Ask-class, spelling it puts the intent
+ * in front of the human verbatim. The human surface (`/schedules delete`) is
+ * deliberately NOT behind this guard: a person typing a name owns every row in
+ * their own home file, which is why the refusal sentences point there.
  */
 final class ScheduleFactory
 {
@@ -82,6 +97,31 @@ final class ScheduleFactory
         }
 
         return $count;
+    }
+
+    /**
+     * The guard on a tool-side delete: the refusal sentence, or null when this
+     * row may go. Arms in order of breadth — the human-spelled door opens
+     * everything, then the creation tag, then the root. The operator-row
+     * sentence is byte-frozen from C-AGT-5.a (it is pinned there); the
+     * cross-root sentence is new in C-AGT-5.b and names the fact it refuses on
+     * so the model can tell "wrong project" from "not mine to touch".
+     */
+    public static function deleteRefusal(Schedule $row, ?string $hostRoot, bool $includeOperatorRows): ?string
+    {
+        if ($includeOperatorRows) {
+            return null;
+        }
+        if ($row->createdBy !== Schedule::CREATED_BY_MODEL) {
+            return "schedule '{$row->name}' was not created by this tool — deleting an operator-written row needs include_operator_rows: true (the approval will show it), or /schedules delete {$row->name} from a human prompt";
+        }
+        if ($row->root !== $hostRoot) {
+            $bound = $row->root ?? 'unbound';
+
+            return "schedule '{$row->name}' was created by this tool but is bound to another project root ({$bound}); deleting a row outside this project needs include_operator_rows: true (the approval will show it), or /schedules delete {$row->name} from a human prompt";
+        }
+
+        return null;
     }
 
     /**

@@ -129,6 +129,17 @@ final class ScheduleRegistry
     private array $fired = [];
 
     /**
+     * schedule name => the outcome of the LAST fireDue decision that named it
+     * ({action, error?, at}). In-memory only, like the fired map: the point is
+     * that a refusal or an error stops being silent between pumps — C-AGT-5.b
+     * records it where it was already computed, so both the TUI pump and the
+     * serve pump feed the same view `/schedules list` renders.
+     *
+     * @var array<string, array{action: string, error?: string, at: int}>
+     */
+    private array $lastOutcome = [];
+
+    /**
      * Human-formatted load notes: refusals this registry acted on, plus rows
      * that LOADED yet carry something the operator must know — a permission
      * spelling the floor overrode, or no project binding to fire on.
@@ -582,6 +593,19 @@ final class ScheduleRegistry
             }
         }
 
+        // C-AGT-5.b: every decision this pump made becomes the row's recorded
+        // last outcome — including the refusals the serve side has no
+        // transcript to announce. A row skipped-foreign before its name was
+        // even claimed records too: "skipped: another host's row" is exactly
+        // the answer an operator wants beside a row that never fires.
+        foreach ($results as $result) {
+            $outcome = ['action' => $result['action'], 'at' => $now];
+            if (isset($result['error'])) {
+                $outcome['error'] = $result['error'];
+            }
+            $this->lastOutcome[$result['name']] = $outcome;
+        }
+
         return $results;
     }
 
@@ -653,6 +677,23 @@ final class ScheduleRegistry
     public function firedNames(): array
     {
         return array_keys($this->fired);
+    }
+
+    /**
+     * The last fireDue decision naming this row, or null when this process has
+     * never evaluated it (a legacy-era view: nothing recorded, nothing shown).
+     *
+     * @return ?array{action: string, error?: string, at: int}
+     */
+    public function lastOutcome(string $name): ?array
+    {
+        return $this->lastOutcome[$name] ?? null;
+    }
+
+    /** @return array<string, array{action: string, error?: string, at: int}> */
+    public function lastOutcomes(): array
+    {
+        return $this->lastOutcome;
     }
 
     /**

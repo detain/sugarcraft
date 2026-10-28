@@ -12,7 +12,11 @@ use SugarCraft\Code\Host\Commands\SchedulesCommand;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Background\Schedule;
+use SugarCraft\Code\Background\ScheduleFactory;
 use SugarCraft\Code\Background\ScheduleRegistry;
+use SugarCraft\Code\Permissions\PermissionGate;
+use SugarCraft\Code\Permissions\PermissionMode;
+use SugarCraft\Code\Permissions\PermissionPolicy;
 
 /**
  * AUT-1 command surface: `/loop` registers an in-process ephemeral row (never
@@ -197,6 +201,9 @@ final class LoopSchedulesCommandTest extends TestCase
         self::assertFalse(SchedulesCommand::isReadOnlyVerb('enable'));
         self::assertFalse(SchedulesCommand::isReadOnlyVerb('disable'));
         self::assertFalse(SchedulesCommand::isReadOnlyVerb('delete'));
+        // C-AGT-5.b: adding is MUTATING — the read-only door refuses it, and
+        // READ_VERBS deliberately stays ['list'] (the brief's law).
+        self::assertFalse(SchedulesCommand::isReadOnlyVerb('add'));
         // Bare `/schedules` IS the list verb, so the empty verb is safe.
         self::assertTrue(SchedulesCommand::isReadOnlyVerb('list'));
     }
@@ -226,6 +233,172 @@ final class LoopSchedulesCommandTest extends TestCase
         /** @var array{version:int,schedules:list<array<string,mixed>>} $decoded */
         return $decoded;
     }
+
+    // =====================================================================
+    // C-AGT-5.b — /schedules add, the factory's second mouth
+    // =====================================================================
+
+    public function testAddGoesThroughTheFactoryAndStampsTheHostRoot(): void
+    {
+        $path = $this->root . '/schedules.json';
+        $registry = ScheduleRegistry::atPath($path, $this->root);
+        $before = time();
+
+        $result = (new SchedulesCommand())->run($this->context($registry), '/schedules add nightly 15m Do the thing');
+
+        self::assertSame([], $result->effects, 'adding is a reply, not a client-side pump arm');
+        $reply = self::lastRow($result);
+        self::assertStringContainsString('Schedule nightly: every 15m', $reply);
+        self::assertStringContainsString('Do the thing', $reply);
+        self::assertStringContainsString('bound to this root', $reply);
+
+        $document = self::document($path);
+        self::assertCount(1, $document['schedules']);
+        $row = $document['schedules'][0];
+        self::assertSame('nightly', $row['name']);
+        self::assertSame(900, $row['every']);
+        self::assertSame($this->root, $row['root'], 'the add stamps the host root — the tool delete guard scopes on it');
+        self::assertSame(Schedule::CREATED_BY_MODEL, $row['createdBy'] ?? null, 'a command-created row carries the model tag');
+        self::assertGreaterThanOrEqual($before + 900, $row['nextDue']);
+
+        // The factory path is single: the row lists as a persisted file row.
+        $listing = SchedulesCommand::listing($registry);
+        self::assertStringContainsString('(file) nightly', $listing);
+        self::remove($this->root);
+    }
+
+    public function testAddRefusesAnUnparseableIntervalNamingTheUnits(): void
+    {
+        $path = $this->root . '/schedules.json';
+        $registry = ScheduleRegistry::atPath($path, $this->root);
+
+        $result = (new SchedulesCommand())->run($this->context($registry), '/schedules add nightly banana Do the thing');
+
+        self::assertStringContainsString('Not an interval: banana', self::lastRow($result));
+        self::assertStringContainsString('90s, 15m, 2h, 1d', self::lastRow($result));
+        self::assertFileDoesNotExist($path, 'a refused add never lands the roster file');
+        self::remove($this->root);
+    }
+
+    public function testAddRefusesAnIntervalBelowTheScheduleFloor(): void
+    {
+        $path = $this->root . '/schedules.json';
+        $registry = ScheduleRegistry::atPath($path, $this->root);
+
+        $result = (new SchedulesCommand())->run($this->context($registry), '/schedules add nightly 5s Do the thing');
+
+        self::assertStringContainsString('must repeat every', self::lastRow($result));
+        self::assertFileDoesNotExist($path);
+        self::remove($this->root);
+    }
+
+    public function testAddRefusesABypassClassModeSpelledByName(): void
+    {
+        $path = $this->root . '/schedules.json';
+        $registry = ScheduleRegistry::atPath($path, $this->root);
+
+        $result = (new SchedulesCommand())->run(
+                $this->context($registry),
+                '/schedules add nightly 15m Do the thing --mode bypass-permissions',
+            );
+
+        self::assertStringContainsString('bypass-permissions', self::lastRow($result));
+        self::assertStringContainsString('refused', self::lastRow($result));
+        self::assertFileDoesNotExist($path);
+        self::remove($this->root);
+    }
+
+    public function testAddCarriesTheProviderFlagAndKeepsThePromptVerbatim(): void
+    {
+        $path = $this->root . '/schedules.json';
+        $registry = ScheduleRegistry::atPath($path, $this->root);
+
+        (new SchedulesCommand())->run(
+                $this->context($registry),
+                '/schedules add nightly 15m Do the thing --provider myprov',
+            );
+
+        $row = self::document($path)['schedules'][0];
+        self::assertSame('Do the thing', $row['prompt'], 'the flags are carried out of the prompt tail');
+        self::assertSame('myprov', $row['provider'] ?? null);
+        self::remove($this->root);
+    }
+
+    public function testAddHonoursTheInlineFlagForm(): void
+    {
+        $path = $this->root . '/schedules.json';
+        $registry = ScheduleRegistry::atPath($path, $this->root);
+        $context = CommandContext::new(
+            root: $this->root,
+            permissionGate: new PermissionGate(PermissionMode::Plan),
+            scheduleRegistry: $registry,
+        );
+
+        // Session runs `plan` (rank 4); `accept-edits` (2) is offered, and
+        // the settlement keeps the stricter — the same arithmetic
+        // ScheduleFactoryTest pins for the tool face. The inline `=` form
+        // must parse identically to the space form.
+        $result = (new SchedulesCommand())->run(
+                $context,
+                '/schedules add nightly 15m Do the thing --mode=accept-edits',
+            );
+
+        self::assertStringContainsString('Schedule nightly', self::lastRow($result));
+        self::assertSame('plan', self::document($path)['schedules'][0]['permissionMode'] ?? null);
+        self::remove($this->root);
+    }
+
+    public function testAddRefusesAFlagSpelledWithoutAValue(): void
+    {
+        $path = $this->root . '/schedules.json';
+        $registry = ScheduleRegistry::atPath($path, $this->root);
+
+        $result = (new SchedulesCommand())->run($this->context($registry), '/schedules add nightly 15m Do the thing --mode');
+
+        self::assertStringContainsString('--mode', self::lastRow($result));
+        self::assertFileDoesNotExist($path, 'a valueless flag is refused, never swallowed into the prompt');
+        self::remove($this->root);
+    }
+
+    public function testAddRefusesWhenThePromptPartIsMissing(): void
+    {
+        $registry = ScheduleRegistry::atPath($this->root . '/schedules.json', $this->root);
+
+        $result = (new SchedulesCommand())->run($this->context($registry), '/schedules add nightly 15m');
+
+        self::assertStringContainsString('Usage: /schedules', self::lastRow($result));
+        self::remove($this->root);
+    }
+
+    public function testAddSettlesAgainstTheSessionModeTheSameWayTheToolDoes(): void
+    {
+        $path = $this->root . '/schedules.json';
+        $registry = ScheduleRegistry::atPath($path, $this->root);
+        $context = CommandContext::new(
+            root: $this->root,
+            permissionGate: new PermissionGate(PermissionMode::Plan),
+            scheduleRegistry: $registry,
+        );
+
+        $spelled = (new SchedulesCommand())->run(
+                $context,
+                '/schedules add nightly 15m Do the thing --mode auto',
+            );
+        self::assertStringContainsString('Schedule nightly', self::lastRow($spelled));
+        self::assertSame('plan', self::document($path)['schedules'][0]['permissionMode'] ?? null,
+            'a looser spelled mode never lands looser than the session runs');
+
+        $omitted = (new SchedulesCommand())->run($context, '/schedules add later 30m Do the other thing');
+        self::assertStringContainsString('Schedule later', self::lastRow($omitted));
+        $rows = self::document($path)['schedules'];
+        self::assertNull($rows[1]['permissionMode'] ?? null,
+            'an omitted mode serialises as the floor null, never a frozen session mode');
+        self::remove($this->root);
+    }
+
+    // =====================================================================
+    // fixtures
+    // =====================================================================
 
     private static function remove(string $path): void
     {

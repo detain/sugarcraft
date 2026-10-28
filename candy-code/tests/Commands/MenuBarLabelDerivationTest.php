@@ -64,7 +64,7 @@ final class MenuBarLabelDerivationTest extends TestCase
         'security-review' => 'Security-review',
         'bg' => 'Run a task',
         'shells' => 'List, read output',
-        'schedules' => 'List, enable, disable',
+        'schedules' => 'List, add, enable',
         'loop' => 'Re-run a prompt',
         'fork' => 'Clone',
         'websearch' => 'Search the web',

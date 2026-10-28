@@ -15780,8 +15780,9 @@ final class Chat implements Model
 
     /**
      * Handle /schedules — {@see \SugarCraft\Code\Host\Commands\SchedulesCommand}: list
-     * the roster (rows, kinds, next-due stamps, load refusals) or enable,
-     * disable, and delete one.
+     * the roster (rows, kinds, next-due stamps, last fire outcomes, load
+     * refusals), add a row through the shared factory, or enable, disable,
+     * and delete one.
      *
      * @return array{0:Chat,1:?\Closure}
      */

@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Host;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Host\BackgroundEvents;
+use SugarCraft\Code\Host\Commands\SchedulesCommand;
 use SugarCraft\Code\Background\BackgroundSession;
 use SugarCraft\Code\Background\BackgroundSessionStatus;
 use SugarCraft\Code\Background\BackgroundSupervisor;
@@ -65,6 +66,18 @@ final class BackgroundEventsSchedulesTest extends TestCase
         self::assertGreaterThan(time(), (int) $onDisk['schedules'][0]['nextDue'], 'the idle pump still runs the clock');
         self::assertNull($registry->busySession('nightly'), 'a marker whose daemon vanished retires');
         self::assertSame([], $this->scheduleEvents(), 'no schedule-specific event was minted');
+
+        // C-AGT-5.b: the pump's decision survives it. fireDue RECORDS the
+        // skip, and the listing surfaces it — a serve user asking "why did
+        // nothing happen" finally gets an answer on the same roster read.
+        $outcome = $registry->lastOutcome('nightly');
+        self::assertIsArray($outcome, 'the idle pump recorded the decision it made');
+        self::assertSame('skipped-busy', $outcome['action']);
+        self::assertGreaterThanOrEqual(time() - 5, $outcome['at']);
+        self::assertStringContainsString(
+            ' — last: skipped: the previous run is still going',
+            SchedulesCommand::listing($registry)
+        );
     }
 
     public function testABusyPersistedRowSkipsAndNeverForks(): void

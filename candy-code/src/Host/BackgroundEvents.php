@@ -213,10 +213,14 @@ final class BackgroundEvents
      * an ordinary `bg.started` — no schedule-specific event type exists, and
      * none is minted here (the Protocol/ fence stays whole).
      *
-     * Spawn REFUSALS are quiet on this side by necessity: there is no
-     * transcript to announce to. `/schedules list` on the serve host reads
-     * the same roster, and the row keeps its un-advanced state only across a
-     * locked skip — an error'd row advances and will retry next period.
+     * Spawn REFUSALS no longer die with the pump. This side has no transcript
+     * to announce into, and none is faked: but since C-AGT-5.b {@see
+     * ScheduleRegistry::fireDue()} RECORDS every decision it makes (fired,
+     * error, or the shape of each skip) on the row's name, so `/schedules
+     * list` on the serve host shows the last outcome beside each row — the
+     * quiet path became a legible one without an event being minted. An
+     * error'd row still advances and will retry next period; the recorded
+     * error says why the last attempt did not land.
      */
     private function pumpSchedules(): void
     {
