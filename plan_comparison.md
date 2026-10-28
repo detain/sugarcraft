@@ -2187,7 +2187,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-8.e`
 
-#### C-TOOL-5.a — Opt-in read-before-write + UTF-8 BOM preservation
+#### ✅ ca69cb333 C-TOOL-5.a — Opt-in read-before-write + UTF-8 BOM preservation (pick of bdf851899 tip; welded 2026-10-29)
 - **Item:** C-TOOL-5 (sources: GAP-EDT-02, GAP-EDT-10) · gap · effort M
 - **What:** (1) New user-tier bool `requireReadBeforeWrite` (default false), read through `ToolLimits` like the other tool bounds. When it is on, these refuse an EXISTING file that has no `ReadLedger::has()` entry …
 - **Files — create:** `candy-code/tests/Tools/BuiltIn/ReadBeforeWriteTest.php`, `candy-code/tests/Tools/Edit/BomPreservationTest.php`
