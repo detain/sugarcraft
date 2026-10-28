@@ -438,7 +438,7 @@ it and the two tables below are generated from the code
 | `bg.stop` | write | yes | `bgId` | Stop a background session. |
 | `client.viewing` | read |  | — | Say which sessions this client shows, and which is in front. |
 | `command.exec` | write | yes | `sessionId`, `name` | Run a slash command in a session (command files, and the built-ins that run headless). |
-| `command.list` | read |  | — | The slash commands a session knows, and where each runs. |
+| `command.list` | read |  | `sessionId` | The slash commands a session knows, and where each runs. |
 | `context.sources` | read |  | `sessionId` | What the session's context is built from: instruction files, memory notes, skills, declared MCP servers, refused paths, the token breakdown, and this root's pending project-trust prompts. |
 | `context.trust` | approve |  | `sessionId`, `askId`, `decision` | Answer one project-trust prompt (permission.asked with kind "trust") by its askId: grant or reject; a user-tier remember writes the answering prompt's target list (trustedProjectMcp for an mcp or mcp-pin row, the matching trustedProject* key for the others) in your own config, a project-tier one is refused. |
 | `files.changed` | read |  | — | The workspace's changed and untracked files. |
@@ -448,6 +448,7 @@ it and the two tables below are generated from the code
 | `fs.search` | read |  | — | Workspace file names ranked against a partial (the web composer @-mention popup); jailed to the project root. |
 | `generate.status` | read |  | `sessionId`, `jobId` | A generation job's state, progress and artifact refs, from its ledger. |
 | `generate.submit` | write | yes | `sessionId`, `prompt` | Start an image generation; answers with its job id. |
+| `mcp.resources` | read |  | `sessionId` | The launch-frozen MCP resource rows of the session root, without starting any server. |
 | `media.fetch` | read |  | `sessionId` | A stored media artifact's bytes, in base64 slices. |
 | `memory.add` | write | yes | `content` | Add a note, routed like `/memory add`: a project note goes to the repository store when the tree can host one. |
 | `memory.delete` | write | yes | `id` | Delete a note from the store that owns the id. |

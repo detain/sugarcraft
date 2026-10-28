@@ -2103,7 +2103,10 @@
                     "sessionId": {
                         "$ref": "#/$defs/SessionId"
                     }
-                }
+                },
+                "required": [
+                    "sessionId"
+                ]
             },
             "result": {
                 "type": "object",
@@ -2128,7 +2131,8 @@
                                 "source": {
                                     "enum": [
                                         "builtin",
-                                        "file"
+                                        "file",
+                                        "mcp"
                                     ]
                                 },
                                 "runsIn": {
@@ -2653,6 +2657,87 @@
                 },
                 "required": [
                     "jobId"
+                ]
+            }
+        },
+        "mcp.resources": {
+            "description": "The launch-frozen MCP resource rows of the session root, without starting any server.",
+            "scope": "read",
+            "idempotent": false,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    }
+                },
+                "required": [
+                    "sessionId"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "enum": [
+                            "started",
+                            "not-started"
+                        ]
+                    },
+                    "servers": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "server": {
+                                    "type": "string",
+                                    "maxLength": 200
+                                },
+                                "resources": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "uri": {
+                                                "type": "string",
+                                                "maxLength": 512
+                                            },
+                                            "name": {
+                                                "type": "string",
+                                                "maxLength": 200
+                                            },
+                                            "mimeType": {
+                                                "type": [
+                                                    "string",
+                                                    "null"
+                                                ],
+                                                "maxLength": 128
+                                            },
+                                            "description": {
+                                                "type": [
+                                                    "string",
+                                                    "null"
+                                                ],
+                                                "maxLength": 400
+                                            }
+                                        },
+                                        "required": [
+                                            "uri",
+                                            "name"
+                                        ]
+                                    }
+                                }
+                            },
+                            "required": [
+                                "server",
+                                "resources"
+                            ]
+                        }
+                    }
+                },
+                "required": [
+                    "status",
+                    "servers"
                 ]
             }
         },

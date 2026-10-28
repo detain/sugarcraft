@@ -549,14 +549,14 @@ export interface Methods {
   /** The slash commands a session knows, and where each runs. */
   "command.list": {
     params: {
-      sessionId?: SessionId
+      sessionId: SessionId
     }
     result: {
       items: ({
         name: string
         description?: string
         argumentHint?: string | null
-        source: "builtin" | "file"
+        source: "builtin" | "file" | "mcp"
         runsIn: "server" | "client"
       })[]
     }
@@ -718,6 +718,24 @@ export interface Methods {
     }
     result: {
       jobId: string
+    }
+  }
+  /** The launch-frozen MCP resource rows of the session root, without starting any server. */
+  "mcp.resources": {
+    params: {
+      sessionId: SessionId
+    }
+    result: {
+      status: "started" | "not-started"
+      servers: ({
+        server: string
+        resources: ({
+          uri: string
+          name: string
+          mimeType?: string | null
+          description?: string | null
+        })[]
+      })[]
     }
   }
   /** A stored media artifact's bytes, in base64 slices. */
@@ -1477,6 +1495,7 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "fs.search": "read",
   "generate.status": "read",
   "generate.submit": "write",
+  "mcp.resources": "read",
   "media.fetch": "read",
   "memory.add": "write",
   "memory.delete": "write",
