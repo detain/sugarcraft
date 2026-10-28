@@ -1737,7 +1737,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-AGT-3.a (W6), C-AGT-3.b (W7)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-4.a`
 
-#### C-AGT-5.b — `/schedules add`, fire outcomes, web schedules table
+#### ✅ 93448849594e9c779e12a6979f2d5ac7e721f05d C-AGT-5.b — `/schedules add`, fire outcomes, web schedules table
 - **Item:** C-AGT-5 (sources: GAP-AUT-07, p1-miss: schedules UX) · gap · effort M
 - **What:** `/schedules add <name> <interval> <prompt> [--mode m] [--provider p]` goes through `ScheduleFactory`, stamped with the host root. It is mutating, so it is refused in read-only windows; `READ_VERBS` is unchanged. The registry …
 - **Files — create:** none
