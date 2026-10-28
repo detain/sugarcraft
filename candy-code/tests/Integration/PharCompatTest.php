@@ -734,6 +734,10 @@ final class PharCompatTest extends TestCase
         $buildWall = self::launch(
             [\PHP_BINARY, '-d', 'phar.readonly=0', $root . '/tools/build-phar.php', '--out=' . $wall, '--version=candy-code/v9.9.9'],
             $this->freshPharHome(),
+            // The unset polarity must be UNSET, not inherited: a release
+            // workflow (or developer shell) exporting SOURCE_DATE_EPOCH would
+            // otherwise stamp this very build and false-redden the pin below.
+            ['SOURCE_DATE_EPOCH' => ''],
         );
         self::assertSame(0, $buildWall['rc'], 'unstamped build rc/err: ' . $buildWall['err']);
         // Measured pitfall (first draft of this pin): PHP's touch() does NOT
