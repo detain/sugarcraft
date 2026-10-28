@@ -332,6 +332,13 @@ final class ReadPathCensusTest extends TestCase
                 . 'config, created by this process under umask 077 and opened `c` only for the '
                 . 'timed LOCK_EX; no byte of it is read',
         ],
+        'Cli/Bootstrap.php|scandir' => [
+            'NAMES_ONLY — installedBundleNames() (C-EXT-4.d) lists the names under the home '
+                . 'install root `~/.candy-code/bundles` to exclude already-installed entries from '
+                . 'the launch recommendation row; only directory names survive the filter, no '
+                . 'content is read here, and the root itself is the same owned-home location '
+                . 'the `bundles` verb reads for its own listings',
+        ],
         'Cli/LegacyMigration.php|fopen' => [
             'OWNED_HOME — serverRunning(): the pre-rename `server.lock` under a home '
                 . 'HomeDirectory::owned() established as this user\'s, opened `c` only to attempt '

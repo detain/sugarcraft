@@ -19,6 +19,8 @@ use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Backend\StreamingCommandBackend;
 use SugarCraft\Code\Bundles\Bundle;
 use SugarCraft\Code\Bundles\BundleDiscovery;
+use SugarCraft\Code\Bundles\BundleRecommender;
+use SugarCraft\Code\Bundles\MarketplaceRegistry;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\CommandLoader;
 use SugarCraft\Code\Commands\KeyBindingRegistry;
@@ -94,6 +96,7 @@ use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Workflows\WorkflowEngine;
 use SugarCraft\Code\Workflows\WorkflowRegistry;
 use SugarCraft\Constraints\Dock\DockLayout;
+use SugarCraft\Core\Util\AtomicJsonFile;
 
 /**
  * Wires up the CLI's shared, side-effecting collaborators: backend
@@ -226,10 +229,11 @@ final class Bootstrap
      * sum stops fitting under this cap — so the next source cannot spend the
      * headroom silently.
      *
-     * 48 is that sum — 47 after the C-PRV-1.b unshaped-launch-tier row
-     * joined the roster on top of the v1:F-1 Claude-settings skip drain,
-     * the v1:m-1 home stand-in row and the v2:a11y-F3 terminal-guidance row,
-     * which joined the roster on top of the PLG-1
+     * 49 is that sum — 48 after the C-EXT-4.d launch-recommendation
+     * aggregate row joined the roster on top of the C-PRV-1.b
+     * unshaped-launch-tier row, which joined on top of the v1:F-1
+     * Claude-settings skip drain, the v1:m-1 home stand-in row and the
+     * v2:a11y-F3 terminal-guidance row, which joined the roster on top of the PLG-1
      * bundles discovery seam and the ISS-047
      * keybinding-collision drain — plus one row
      * of headroom. A launch that does hit
@@ -238,7 +242,7 @@ final class Bootstrap
      * row, because a silently truncated warning list is the defect this seam
      * exists to end.
      */
-    public const LAUNCH_NOTICE_LIMIT = 48;
+    public const LAUNCH_NOTICE_LIMIT = 49;
 
     /**
      * Roadmap N-P4d: the setting that replaces {@see LAUNCH_NOTICE_LIMIT} (its
@@ -336,6 +340,10 @@ final class Bootstrap
         // reason is a single sentence whatever the tier, so one row is the
         // bounded worst case, not a per-entry fan-out.
         'withResolvedReasoningEffort' => 1,
+        // C-EXT-4.d: ONE aggregate row whatever the recommendation count —
+        // every matching `name@marketplace` is named inside the single
+        // sentence, so the bounded worst case is 1, not MAX_RECOMMENDATIONS.
+        'reportBundleRecommendations' => 1,
     ];
 
     /**
@@ -1631,6 +1639,10 @@ final class Bootstrap
         // v2:a11y-F3: a TTY whose terminal advertises no capabilities is
         // pointed at the paths that work there, once, before the frame.
         self::reportTerminalGuidance();
+
+        // C-EXT-4.d: the marketplace bundles that fit this project, named
+        // once per project per marketplace pin, from local bytes only.
+        self::reportBundleRecommendations($root);
 
         // LAST, so every warning the build raised is in hand — including
         // reportProjectTierRefusals() immediately above, which is one of the
@@ -10438,6 +10450,231 @@ public static function useMaxCost(?string $maxCost): void
         }
 
         self::warnLaunchRows([$notice]);
+    }
+
+    /**
+     * C-EXT-4.d: the marketplace bundles that fit the project being opened,
+     * named at launch, once per project per marketplace pin, from local bytes
+     * only.
+     *
+     * The matching itself is {@see BundleRecommender}'s (C-EXT-4.b); this is
+     * its launch drain. It joins the catalog of every ADDED marketplace into
+     * the recommender's shape — first offering wins, registration order, the
+     * same join the `bundles recommend` verb performs — drops the names
+     * already installed under the home bundle root, and raises AT MOST ONE
+     * aggregate row naming the survivors as `name@marketplace`. Nothing is
+     * installed or updated by the notice, and the wording says so; adopting
+     * one stays a deliberate `candy-code bundles install`.
+     *
+     * Three silences, in order: no marketplace has been added (the pinned
+     * empty catalog answers with nothing to walk); the project carries no
+     * signal the catalog answers; or every marketplace that contributed to
+     * the recommendation has ALREADY been shown for this project at its
+     * current pin. That last gate is a stamp written into the registry's own
+     * `marketplaces.json` under a top-level `launchRecommendations` key —
+     * `{projectRoot: {marketplace: sha shown}}`. The registry's loader
+     * ignores foreign top-level keys, and its writer drops the stamp on the
+     * next registry mutation — exactly when a re-show is owed, because an
+     * add, remove or repin changed what the last shown row promised.
+     *
+     * NEVER network at launch: the walk is one `scandir` of the project root
+     * against the recommender's FIXED signal list, one local read per added
+     * marketplace's catalog, and one `scandir` of the install root. A stamp
+     * read or write that fails skips the stamp, never the row — launch
+     * notices are the fail-open family, and a re-shown row is bounded at one
+     * line either way.
+     *
+     * @param string|null $root workspace root; null falls back to the process cwd
+     * @param MarketplaceRegistry|null $registry added-marketplace view; null for the home-backed default
+     * @param string|null $stampFile record file carrying the stamp; null for the home-backed default — a registry read from other paths passes ITS own path here
+     * @param string|null $installedRoot installed-bundle directory; null for the home-backed default, '' for none
+     */
+    public static function reportBundleRecommendations(
+        ?string $root = null,
+        ?MarketplaceRegistry $registry = null,
+        ?string $stampFile = null,
+        ?string $installedRoot = null,
+    ): void {
+        if ($root === null) {
+            $cwd = \getcwd();
+            $root = $cwd === false ? null : $cwd;
+        }
+
+        if ($root === null || $root === '') {
+            return;
+        }
+
+        $registry ??= MarketplaceRegistry::loadDefault();
+
+        if ($registry->names() === []) {
+            return; // no marketplace added: fully silent, nothing is walked
+        }
+
+        $home = HomeDirectory::owned();
+        $stampFile ??= $home === null ? '' : rtrim($home, '/') . '/' . MarketplaceRegistry::RECORD_RELATIVE_PATH;
+        $installedRoot ??= $home === null ? '' : $home . '/.candy-code/bundles';
+
+        $catalog = [];
+        $offeredBy = [];
+
+        foreach ($registry->names() as $marketplaceName) {
+            $marketplace = $registry->marketplace($marketplaceName);
+
+            if ($marketplace === null) {
+                continue;
+            }
+
+            foreach ($marketplace->entries as $entry) {
+                if (isset($offeredBy[$entry->name])) {
+                    continue; // first offering wins, registration order
+                }
+
+                $offeredBy[$entry->name] = $marketplaceName;
+                $catalog[] = $entry;
+            }
+        }
+
+        if ($catalog === []) {
+            return;
+        }
+
+        $recommended = (new BundleRecommender(
+            $root,
+            $catalog,
+            $installedRoot === '' ? [] : self::installedBundleNames($installedRoot),
+        ))->recommend();
+
+        if ($recommended === []) {
+            return;
+        }
+
+        $envelope = self::readMarketplaceEnvelope($stampFile);
+        $shown = is_array($envelope['launchRecommendations'] ?? null) ? $envelope['launchRecommendations'] : [];
+        $stamped = is_array($shown[$root] ?? null) ? $shown[$root] : [];
+
+        // The pin gate: a contributing marketplace already shown for this
+        // project AT THIS SHA owes no repeat; one un-shown pin opens the row.
+        $involved = [];
+        $fresh = false;
+
+        foreach ($recommended as $entry) {
+            $marketplaceName = $offeredBy[$entry->name];
+            $record = $registry->record($marketplaceName);
+            $sha = is_array($record) && is_string($record['sha'] ?? null) ? $record['sha'] : '';
+            $involved[$marketplaceName] = $sha;
+
+            if ((string) ($stamped[$marketplaceName] ?? '') !== $sha) {
+                $fresh = true;
+            }
+        }
+
+        if (!$fresh) {
+            return;
+        }
+
+        $labelled = [];
+
+        foreach ($recommended as $entry) {
+            $labelled[] = $entry->name . '@' . $offeredBy[$entry->name];
+        }
+
+        // Lang::t(), not sprintf(): this file's launch-format census counts
+        // sprintf call sites, and this notice must not move it.
+        self::warnLaunchRows([Lang::t('bundles.recommend.launch', [
+            'names' => implode(', ', $labelled),
+        ])]);
+
+        self::stampBundleRecommendations($stampFile, $envelope, $root, $involved);
+    }
+
+    /**
+     * The registry file's raw envelope, or `[]` when there is nothing to
+     * carry a stamp: absent, unreadable, or not the object shape. This reads
+     * the bytes without re-deriving rows — the drain is a pure passenger of
+     * `marketplaces.json`, and the registry's own loader stays the only
+     * interpreter of its `marketplaces` array.
+     *
+     * @return array<string, mixed>
+     */
+    private static function readMarketplaceEnvelope(string $stampFile): array
+    {
+        if ($stampFile === '' || !is_file($stampFile)) {
+            return [];
+        }
+
+        try {
+            $document = AtomicJsonFile::new($stampFile)->read();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return is_array($document) ? $document : [];
+    }
+
+    /**
+     * Merge the pins shown this launch into the envelope read moments before
+     * and rewrite the file through the SAME 0600 atomic writer the registry
+     * itself uses — only ever over a file that already exists, so this never
+     * mints a registry file the registry did not write. Every failure skips
+     * the stamp and says nothing: the row has already ridden, and a lost
+     * stamp costs one re-shown line at the next launch, not a silent one.
+     *
+     * @param array<string, mixed> $envelope
+     * @param array<string, string> $involved marketplace name => pin shown
+     */
+    private static function stampBundleRecommendations(string $stampFile, array $envelope, string $root, array $involved): void
+    {
+        if ($envelope === [] || !is_array($envelope['marketplaces'] ?? null) || !is_file($stampFile)) {
+            return;
+        }
+
+        $shown = is_array($envelope['launchRecommendations'] ?? null) ? $envelope['launchRecommendations'] : [];
+        $stamped = is_array($shown[$root] ?? null) ? $shown[$root] : [];
+
+        foreach ($involved as $marketplaceName => $sha) {
+            $stamped[$marketplaceName] = $sha;
+        }
+
+        $shown[$root] = $stamped;
+        $envelope['launchRecommendations'] = $shown;
+
+        try {
+            AtomicJsonFile::new($stampFile)->withPermissions(0o600)->write($envelope);
+        } catch (\Throwable) {
+            // Fail-open per the doc-block: no stamp, not no notice.
+        }
+    }
+
+    /**
+     * The installed-bundle names under an install root — directories only,
+     * dot entries skipped; the same list the `bundles` verb reads for its own
+     * exclusions, copied rather than reached into because that walk is the
+     * verb's private helper and this drain must not grow a dependency on an
+     * argument parser to name one row.
+     *
+     * @return list<string>
+     */
+    private static function installedBundleNames(string $installedRoot): array
+    {
+        $entries = @\scandir($installedRoot);
+
+        if ($entries === false) {
+            return [];
+        }
+
+        $names = [];
+
+        foreach ($entries as $entry) {
+            if ($entry === '.' || $entry === '..' || \str_starts_with($entry, '.')) {
+                continue;
+            }
+
+            if (is_dir($installedRoot . '/' . $entry)) {
+                $names[] = $entry;
+            }
+        }
+
+        return $names;
     }
 
     /**
