@@ -176,6 +176,7 @@ candy-code/tests/Integration/WorkflowResumptionTest.php	1.836	9
 candy-code/tests/Host/WebTwoHostCommandsTest.php	1.776	16
 candy-code/tests/Chat/UndoRefusalsTest.php	1.773	8
 candy-code/tests/Context/GlobDialectDifferentialTest.php	1.771	13
+candy-code/tests/Host/Commands/CommitHostCommandTest.php	1.770	7
 candy-code/tests/Agents/AgentWorkerPoolCancelTreeTest.php	1.766	3
 candy-code/tests/Host/SessionHostCommandsTest.php	1.765	17
 candy-code/tests/Integration/SystemPromptWiringTest.php	1.763	14

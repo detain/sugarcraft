@@ -1244,7 +1244,7 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and thirty-four keys are layered — `provider`,
+Only these one hundred and thirty-five keys are layered — `provider`,
 `models`, `providers`, `titleModel`, `summaryModel`, `maxOutputTokens`,
 `modelPrices`, `extraBody`, `thinkingBudget`, `reasoningEffort`, `promptCache`,
 `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxToolSteps`,
