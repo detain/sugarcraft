@@ -761,7 +761,11 @@ final class Runtime
     // into schedules.json — shared state every host reloads by digest — so a
     // batch that created or deleted one changed something the NEXT turn (and
     // another window's pump) depends on, on the same judgement Task rides.
-    public const WRITE_CAPABLE_TOOL_NAMES = [...ShellSubjectTools::NAMES, 'Edit', 'Write', 'ApplyPatch', 'Task', 'Workflow', 'ShellStop', 'Schedule', 'mcp_call'];
+    // 'SkillWorkshop' joined at C-EXT-3.e: it lands a learned skill straight
+    // into the live user tier (owner ruling R-EXT-2 — live-in-stant behind the
+    // Write-class ask-gate), the same shared-state judgement Schedule rides:
+    // a skill the workshop wrote changes the roster every later launch loads.
+    public const WRITE_CAPABLE_TOOL_NAMES = [...ShellSubjectTools::NAMES, 'Edit', 'Write', 'ApplyPatch', 'Task', 'Workflow', 'ShellStop', 'Schedule', 'SkillWorkshop', 'mcp_call'];
 
     /**
      * MCP tool-name prefix — an `mcp__<server>__<tool>` call's capability is

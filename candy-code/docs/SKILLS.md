@@ -762,6 +762,41 @@ is asked about in every permission mode, the same as one touching
 `.candy-code/skills` ([PERMISSIONS.md](PERMISSIONS.md)), so a draft the agent
 planted cannot pass for one the dream proposed.
 
+## Learned skills
+
+The drafts above are the *unattended* write path, and they wait. The
+`SkillWorkshop` tool is the *attended* one: under the comparison campaign's
+owner ruling R-EXT-2, a skill the model writes during a live turn goes **live
+immediately, with an announce-and-undo notice** — because the turn itself is
+the review. Three doors make that safe rather than merely fast:
+
+- **The gate.** `SkillWorkshop` is a Write-class tool
+  ([PERMISSIONS.md](PERMISSIONS.md)): in default permission mode every call
+  prompts you before a byte moves, and plan and dont-ask modes refuse it
+  outright. The dream pass keeps its review queue precisely because it sees
+  no one at write time.
+- **The announcement.** The tool's result — which you read in the transcript
+  the same second — names the live path, the revision number, and the undo
+  door: `/skills undo <name>`.
+- **The history.** Every landing saves its exact bytes as
+  `~/.candy-code/skills/<name>/history/<n>.md` *before* writing the live
+  file, so no live state exists that the history does not already hold.
+  `undo` restores the previous revision (or, for revision 1, removes the
+  skill whole); `history` prints the window. The newest
+  `LearnedSkills::MAX_REVISIONS` revisions stay active and older ones move
+  whole to `history/archive/` — the undo door is bounded, the record is not.
+
+| Command | What it does |
+|---|---|
+| `/skills history <name>` | Lists a learned skill's saved revisions (number, size, time) and counts the archived ones. Skills that arrived by `accept` or by hand have no revisions and the reply says so. |
+| `/skills undo <name>` | Steps a learned skill back one revision, restoring its saved bytes; undoing revision 1 removes the learned skill. Only what the workshop wrote is ever removed, and an empty skill directory is pruned — files you added beside it stay. |
+
+A create that would **shadow** a built-in, project or bundle skill of the
+same name is refused — the same floor `accept` keeps. A patch answers only
+for names the workshop itself wrote. The store reuses the draft store's name
+sanitiser and size caps, redacts secrets out of every field, reads nothing
+through symlinks, and writes `0700` directories and `0600` files.
+
 ## See also
 
 - [`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md) — the sibling format, and the

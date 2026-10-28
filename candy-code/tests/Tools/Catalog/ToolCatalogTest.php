@@ -18,6 +18,7 @@ use SugarCraft\Code\Tools\BuiltIn\McpCallTool;
 use SugarCraft\Code\Tools\BuiltIn\McpListTool;
 use SugarCraft\Code\Tools\BuiltIn\ScheduleTool;
 use SugarCraft\Code\Tools\BuiltIn\SkillsSearch;
+use SugarCraft\Code\Tools\BuiltIn\SkillWorkshop;
 use SugarCraft\Code\Tools\BuiltIn\TaskTool;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;
@@ -124,12 +125,12 @@ final class ToolCatalogTest extends TestCase
         self::assertContains(McpListTool::NAME, $names);
         self::assertContains(McpCallTool::NAME, $names);
         self::assertSame(
-            // C-EXT-3.b truth-flip: skills_search (position 42) landed
-            // unconditionally after Schedule, so the pair now rides ahead of
-            // only the two newest unconditional tools. The pin keeps its
+            // C-EXT-3.e truth-flip: SkillWorkshop (position 43) landed
+            // unconditionally after skills_search, so the pair now rides ahead
+            // of only the three newest unconditional tools. The pin keeps its
             // meaning (the pair never sneaks in before its trigger) by naming
             // the unconditional tools that land after it.
-            [McpCallTool::NAME, ScheduleTool::NAME, SkillsSearch::NAME],
+            [ScheduleTool::NAME, SkillsSearch::NAME, SkillWorkshop::NAME],
             \array_slice($names, -3),
             'the dispatcher pair lands in roster order 39 then 40, ahead only of the newest unconditional tools',
         );

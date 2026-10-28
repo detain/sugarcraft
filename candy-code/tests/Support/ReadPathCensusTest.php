@@ -1017,6 +1017,20 @@ final class ReadPathCensusTest extends TestCase
                 . 'SessionLock idiom); the only payload written is this process\'s pid, and the '
                 . 'name in the path is regex-vetted by Schedule::NAME_PATTERN before the open',
         ],
+        // C-EXT-3.e (R-EXT-2): the learned-skill store beside the drafts it
+        // versions — one window listing and one size-capped revision read.
+        'Skills/LearnedSkills.php|scandir' => [
+            'NAMES_ONLY — /skills history lists one learned skill\'s revision window and counts '
+                . 'its archive: the prefix is the owned skills tree and a name the draft store\'s '
+                . 'sanitiser accepted, entries that are not real NON-LINK `<n>.md` files are never '
+                . 'read on, and a linked directory anywhere in the tree lists nothing at all',
+        ],
+        'Skills/LearnedSkills.php|file_get_contents' => [
+            'OWNED_HOME — one saved revision of the user tier, by a path this store built from a '
+                . 'sanitised name (a slash, dot or NUL cannot survive the sanitiser), behind a '
+                . 'link check on the file and a filesize gate, read no longer than '
+                . 'LearnedSkills::MAX_REVISION_BYTES',
+        ],
         // Roadmap 5.4-3's propose mode: the dream pass's skill drafts.
         'Skills/ProposedSkills.php|scandir' => [
             'NAMES_ONLY — `/skills proposed` lists the owned home\'s drafts tree; only names that '

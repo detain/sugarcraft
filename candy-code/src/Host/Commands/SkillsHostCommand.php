@@ -8,6 +8,7 @@ use SugarCraft\Code\Config\Settings\SettingsTier;
 use SugarCraft\Code\Config\Settings\SettingsWriter;
 use SugarCraft\Code\Commands\TranscriptTable;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Skills\LearnedSkills;
 use SugarCraft\Code\Skills\ProposedSkills;
 use SugarCraft\Code\Skills\SkillLoader;
 use SugarCraft\Code\Skills\SkillManager;
@@ -46,6 +47,16 @@ use SugarCraft\Code\Skills\SkillRegistry;
  * through, with the bundled `skill-creator` skill teaching the format — so
  * the draft lands in the queue awaiting review and `/skills accept` stays
  * the only promotion path. The reply prints the draft path.
+ *
+ * `/skills history <name>` and `/skills undo <name>` (C-EXT-3.e) are the
+ * two doors the SkillWorkshop tool's announcement names, under owner ruling
+ * R-EXT-2: a model-written learned skill goes LIVE immediately (through the
+ * Write-class ask-gate, never through accept()), and every landing saves a
+ * revision in the learned store, so `history` shows the window and `undo`
+ * steps one revision back — restoring the previous bytes, or, for the sole
+ * first revision, removing the skill whole. These verbs answer only for
+ * skills the workshop wrote; an accepted draft or a hand-written skill has
+ * no saved revisions and says so rather than pretending a history.
  *
  * THE ONLY PROMOTION PATH. A draft is model output written by an unattended
  * turn; making it a skill turns it into prompt text every later session reads
@@ -118,6 +129,17 @@ final class SkillsHostCommand implements HostCommand
                 // installed table's On column answers under.
                 'enable', 'disable' => \count($words) === 2
                     ? $this->toggleSkill($context, $text, $sub, $words[1])
+                    : CommandResult::failure($text, self::usage(), 2),
+                // C-EXT-3.e: the two doors R-EXT-2's announcement names, each
+                // taking exactly one name — and both answer only for skills
+                // the workshop wrote, because only its revisions make an
+                // undo real. The store resolves its own owned home; a session
+                // without one gets the store's refusal through the catch.
+                'history' => \count($words) === 2
+                    ? $this->history($text, $words[1])
+                    : CommandResult::failure($text, self::usage(), 2),
+                'undo' => \count($words) === 2
+                    ? $this->undo($text, $words[1])
                     : CommandResult::failure($text, self::usage(), 2),
                 default => CommandResult::failure($text, self::usage(), 2),
             };
@@ -348,6 +370,73 @@ MARKDOWN;
             'name' => $name,
             // propose() returning means the root exists; the ?? keeps types honest.
             'path' => PermissionsCommand::reportField(($drafts->root() ?? '') . '/' . $name . '/SKILL.md'),
+        ]));
+    }
+
+    /**
+     * `/skills history <name>` (C-EXT-3.e) — the active revision window of a
+     * learned skill, oldest first so the head that `/skills undo` steps back
+     * from reads last. Names, sizes and mtimes only: a listing that slurped
+     * every body would be the walk this store refuses. The archived count
+     * closes the window's other edge — R-EXT-2 bounds undo, not the record.
+     * The store's own refusal (no owned home, a name that sanitises to
+     * nothing) rides the catch in {@see self::run()} as a notice.
+     */
+    private function history(string $text, string $name): CommandResult
+    {
+        $record = LearnedSkills::new()->history($name);
+        $shown = PermissionsCommand::reportField($record['name']);
+
+        if ($record['revisions'] === []) {
+            return CommandResult::reply($text, Lang::t('host.skills.history.no_revisions', ['name' => $shown]));
+        }
+
+        $lines = [Lang::t('host.skills.history.header', ['name' => $shown])];
+        foreach ($record['revisions'] as $row) {
+            $lines[] = Lang::t('host.skills.history.row', [
+                'number' => $row['number'],
+                'bytes' => number_format($row['bytes']),
+                'modified' => date('Y-m-d H:i', $row['modified']),
+            ]);
+        }
+        if (!$record['live']) {
+            $lines[] = Lang::t('host.skills.history.not_live');
+        }
+        if ($record['archived'] > 0) {
+            $lines[] = Lang::t('host.skills.history.archived', ['count' => $record['archived']]);
+        }
+
+        return CommandResult::reply($text, implode("\n", $lines));
+    }
+
+    /**
+     * `/skills undo <name>` (C-EXT-3.e) — the door every SkillWorkshop
+     * announcement names. It restores the previous saved revision, or removes
+     * the skill whole when revision 1 was its first landing; nothing an undo
+     * removes is unrecorded, because the step-back reads only what the store
+     * itself wrote. A skill with no saved revisions refuses through the
+     * store, not a guess here.
+     */
+    private function undo(string $text, string $name): CommandResult
+    {
+        $result = LearnedSkills::new()->undo($name);
+        $shown = PermissionsCommand::reportField($result['name']);
+
+        if ($result['action'] === 'removed') {
+            $message = Lang::t('host.skills.undo.removed', ['name' => $shown]);
+            if ($result['residue'] !== null) {
+                $message .= Lang::t('host.skills.undo.removed_residue', [
+                    'dir' => PermissionsCommand::reportField($result['residue']),
+                ]);
+            }
+
+            return CommandResult::reply($text, $message);
+        }
+
+        return CommandResult::reply($text, Lang::t('host.skills.undo.restored', [
+            'name' => $shown,
+            'revision' => $result['revision'],
+            'path' => PermissionsCommand::reportField($result['path']),
         ]));
     }
 

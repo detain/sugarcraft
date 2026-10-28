@@ -5432,6 +5432,10 @@ final class DocFigureProseDriftTest extends TestCase
         // directory (38) and the generator re-spelled both pages again; the
         // map rides the same commit, per the rule the lag comment above names.
         $wordNumbers['thirty-eight'] = 38;
+        // C-EXT-3.e era, in-step census flip: SkillWorkshop.php joined the
+        // directory (39) and the generator re-spelled both pages again; the
+        // map rides the same commit, per the rule the lag comment above names.
+        $wordNumbers['thirty-nine'] = 39;
         self::assertArrayHasKey($word[1], $wordNumbers, "the spelled count '{$word[1]}' is outside the pinned word map — extend it deliberately");
 
         $files = array_values(array_filter(scandir($root . '/src/Tools/BuiltIn') ?: [], static fn(string $f): bool => str_ends_with($f, '.php')));

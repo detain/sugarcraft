@@ -397,7 +397,7 @@ edit it by hand.
 | `/workflow` | ✓ | | — | Run, pause, resume, or inspect a workflow |
 | `/memory` | ✓ | | — | Add, list, search, edit, import, clear, or restore memory entries, and show their history |
 | `/instructions` | ✓ | | `[open <n\|path>]` | List the instruction files this session reads, and open one in the editor |
-| `/skills` | ✓ | | `[installed\|new <name> [description]\|proposed\|accept <name> [--replace]\|reject <name>\|enable <name>\|disable <name>]` | List the invocable skills, switch them on or off, or review the dream pass drafts: accept or reject one |
+| `/skills` | ✓ | | `[installed\|new <name> [description]\|proposed\|accept <name> [--replace]\|reject <name>\|enable <name>\|disable <name>\|history <name>\|undo <name>]` | List the invocable skills, switch them on or off, review the dream pass drafts: accept or reject one, or step a learned skill back through its history |
 | `/init` | ✓ | | `[focus]` | Study this project and write or improve its AGENTS.md |
 | `/branch` | ✓ | | — | Fork the current session into a new branch |
 | `/rename` | ✓ | | `[<name>\|--auto]` | Rename the current session |

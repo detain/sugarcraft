@@ -10,11 +10,13 @@ use SugarCraft\Code\MCP\McpToolShape;
 use SugarCraft\Code\Memory\DreamMemoryView;
 use SugarCraft\Code\Memory\MemoryStore;
 use SugarCraft\Code\Memory\MemoryWriter;
+use SugarCraft\Code\Skills\LearnedSkills;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tools\BuiltIn\McpCallTool;
 use SugarCraft\Code\Tools\BuiltIn\McpListTool;
 use SugarCraft\Code\Tools\BuiltIn\SkillTool;
 use SugarCraft\Code\Tools\BuiltIn\SkillsSearch;
+use SugarCraft\Code\Tools\BuiltIn\SkillWorkshop;
 use SugarCraft\Code\Tools\McpToolBridge;
 use SugarCraft\Code\Tools\Tool;
 
@@ -975,6 +977,12 @@ final class BuiltInToolCorpus
                     $built = match ($class) {
                         SkillTool::class => new SkillTool(new SkillRegistry()),
                         SkillsSearch::class => new SkillsSearch(new SkillRegistry()),
+                        // A writer whose learned store cannot be opened: every
+                        // corpus consumer asks name/description/schema only,
+                        // and a home path that is no real directory keeps the
+                        // ctor pure — LearnedSkills::new() touches no disk, and
+                        // the store refuses to write there if anyone tries.
+                        SkillWorkshop::class => new SkillWorkshop(LearnedSkills::new('/candy-code-builtin-corpus-no-such-home')),
                         // A writer whose home store cannot be opened: the
                         // view's reads answer the error an unopenable store
                         // must, and nothing touches a real memory directory.
