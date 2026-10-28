@@ -691,6 +691,7 @@ candy-code/tests/Context/SessionPromptMemoTest.php	0.080	10
 candy-code/tests/Host/TurnControllerTest.php	0.080	16
 candy-code/tests/MCP/McpDispatcherToolsTest.php	0.080	7
 candy-code/tests/Permissions/PerPartGrantTest.php	0.080	33
+candy-code/tests/LSP/LspInstallerTest.php	0.080	20
 candy-code/tests/Cli/PolicyFreshnessQuarantineTest.php	0.079	5
 candy-code/tests/Cli/SubcommandsModelsCatalogTest.php	0.079	6
 candy-code/tests/Context/CompactionSettingsTest.php	0.079	41
