@@ -1780,7 +1780,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SES-2.a (W2)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-7.a`
 
-#### C-TOOL-3.d — `/shells` list/output/stop
+#### ✅ 734f97dda76b02e912933a996f62368877349cdc C-TOOL-3.d — `/shells` list/output/stop
 - **Item:** C-TOOL-3 (sources: GAP-SH-04, CLAW-new#6 (TUI half)) · gap · effort M
 - **What:** The human has no view of background shells; ShellOutput and ShellStop are model-only. Add a `/shells` built-in with a host command, so served and web sessions get it free through `command.exec`, with verbs: `list` (bare form): …
 - **Files — create:** `candy-code/builtin-commands/2905-shells.php`, `candy-code/src/Host/Commands/ShellsCommand.php`, `candy-code/tests/Host/Commands/ShellsCommandTest.php`
