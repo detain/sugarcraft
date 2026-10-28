@@ -591,6 +591,7 @@ candy-code/tests/Config/Settings/SessionOverlayForkTest.php	0.162	4
 candy-code/tests/Cli/NonInteractiveProviderFailureTest.php	0.161	21
 candy-code/tests/Tools/BuiltIn/TeamToolHooksTest.php	0.158	6
 candy-code/tests/Support/SecretEnvScrubTest.php	0.155	29
+candy-code/tests/Agents/PrimaryAgentTest.php	0.152	10
 candy-code/tests/Support/ManifestDependencyReachTest.php	0.152	3
 candy-code/tests/Bundles/MarketplaceRegistryTest.php	0.152	16
 candy-code/tests/Integration/ParallelSubAgentActivityRelayTest.php	0.149	1
@@ -776,7 +777,6 @@ candy-code/tests/Chat/AgentComposerTest.php	0.056	9
 candy-code/tests/Context/AbsoluteThresholdTest.php	0.056	23
 candy-code/tests/Tui/ComposerVimCountTest.php	0.056	18
 candy-code/tests/Tui/ComposerVimTest.php	0.056	27
-candy-code/tests/Agents/PrimaryAgentTest.php	0.056	45
 candy-code/tests/Backend/StepSummaryCompactHooksTest.php	0.055	3
 candy-code/tests/Cli/StreamJsonEmitterTest.php	0.055	7
 candy-code/tests/Commands/MacAltNoticeTest.php	0.055	4
