@@ -17,9 +17,10 @@ use SugarCraft\Style\Style;
  * {@see TrustTarget} of a project root, answered `y`/`n` row by row, `a` for
  * all of them, or dismissed with `Esc`.
  *
- * DORMANT BY DESIGN. Nothing constructs this dialog yet — step C-SEC-5.d
- * opens it from the launch path once the census hands it its output. The
- * component is deliberately inert until then, exactly as the {@see
+ * WIRED SINCE C-SEC-5.d. {@see \SugarCraft\Code\Cli\LaunchContext} seeds
+ * this dialog into the TUI app at launch for every project with pending
+ * census rows, answered before the first turn. The component stays
+ * deliberately inert, exactly as the {@see
  * \SugarCraft\Code\Config\Trust\ProjectTrustCensus} it consumes was.
  *
  * IT ONLY COMPUTES. Every answer is carried out as a value: the dialog never

@@ -1471,7 +1471,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-MCP-2.a (W11)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-mcp.md` → `### C-MCP-2.b`
 
-#### C-SEC-5.d — TUI launch trust dialog wiring
+#### ✅ a93d124b6 C-SEC-5.d — TUI launch trust dialog wiring
 - **Item:** C-SEC-5 (sources: GAP-PER-11) · dormant-wire · effort M
 - **What:** At an interactive launch only, never `-p` or serve, `LaunchContext` seeds the App with `TrustDialog::for(Bootstrap::pendingProjectTrust($root))` when the list is non-empty. The App is built at :2274. `App` holds the dialog as an …
 - **Files — create:** `candy-code/tests/App/LaunchTrustDialogTest.php`
