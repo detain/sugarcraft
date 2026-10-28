@@ -1,6 +1,7 @@
-import { onScopeDispose, ref, type Ref } from 'vue'
+import { nextTick, onScopeDispose, ref, watch, type Ref } from 'vue'
 import { sessionLabel } from '../components/approvals/attention'
 import { useApprovalsStore, type SessionAsk } from '../stores/approvals'
+import { useContextSourcesStore } from '../stores/contextSources'
 import { useSessionsStore } from '../stores/sessions'
 import { oneLine } from './format'
 
@@ -41,10 +42,46 @@ export function questionAnnouncement(ask: SessionAsk, where: string): string {
 export function useQuestionAnnouncements(): Readonly<Ref<string>> {
   const approvals = useApprovalsStore()
   const sessions = useSessionsStore()
+  const context = useContextSourcesStore()
   const announcement = ref('')
+  /**
+   * WEB-7-P1: a live region only speaks when its text CHANGES. Writing the
+   * composed sentence straight onto the ref means two identical asks (the same
+   * session, tool and reason — common for a re-asked permission) leave the
+   * region's text untouched and the screen reader silent. Clearing then
+   * re-filling on the next tick forces a mutation every time, so each arrival
+   * — even a byte-identical repeat — is announced.
+   */
+  function speak(sentence: string): void {
+    announcement.value = ''
+    void nextTick(() => {
+      announcement.value = sentence
+    })
+  }
   const stop = approvals.onNew((ask: SessionAsk) => {
-    announcement.value = questionAnnouncement(ask, sessionLabel(sessions.byId[ask.sessionId], ask.sessionId))
+    speak(questionAnnouncement(ask, sessionLabel(sessions.byId[ask.sessionId], ask.sessionId)))
   })
-  onScopeDispose(stop)
+  // WEB-7-P1 (trust prompts): a `kind:"trust"` ask is filtered out before
+  // `approvals.onNew` (stores/approvals.ts), so it never announces there. The
+  // Context panel's store shelves them in `pendingTrusts` (C-SEC-4.b, listed
+  // per door by C-SEC-5.b); watch that shelf and announce each open row once,
+  // keyed by askId — a re-delivery of a row already spoken, or a second door
+  // opening beside it, never re-announces the first. This is read-only on the store.
+  const announcedTrustAskIds = new Set<string>()
+  const stopTrust = watch(
+    () => context.pendingTrusts,
+    (rows) => {
+      for (const trust of rows) {
+        if (trust.status !== 'asked') continue
+        if (announcedTrustAskIds.has(trust.askId)) continue
+        announcedTrustAskIds.add(trust.askId)
+        speak(`${sessionLabel(sessions.byId[trust.sessionId], trust.sessionId)} — project trust prompt for ${trust.root} is waiting in the Context panel`)
+      }
+    },
+  )
+  onScopeDispose(() => {
+    stop()
+    stopTrust()
+  })
   return announcement
 }

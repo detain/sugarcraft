@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CommandInfo } from '../../stores/session'
 import Composer from '../Composer.vue'
 
@@ -116,5 +116,84 @@ describe('Composer image paste (WEB-5b)', () => {
     await command.find('[data-testid="composer-input"]').trigger('paste', { clipboardData: { items: [clipboardItem(pngFile())] } })
     await flushPromises()
     expect(command.find('[data-testid="composer-send"]').attributes('disabled')).toBeDefined()
+  })
+})
+
+describe('Composer @search debounce (WEB-5-P3 client half)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  async function typePartial(wrapper: ReturnType<typeof mountComposer>, value: string, gapMs: number) {
+    if (gapMs > 0) await vi.advanceTimersByTimeAsync(gapMs)
+    await wrapper.setProps({ modelValue: value })
+    await flushPromises()
+  }
+
+  it('five partials inside 120 ms send exactly the first and the last searches, and the popup shows the last answer', async () => {
+    const searchFiles = vi.fn(async (query: string) => [query])
+    const wrapper = mountComposer({ searchFiles })
+    await typePartial(wrapper, '@a', 0) // leading edge: the first `@` opens at once
+    await typePartial(wrapper, '@ab', 20)
+    await typePartial(wrapper, '@abc', 20)
+    await typePartial(wrapper, '@abcd', 20)
+    await typePartial(wrapper, '@abcde', 20)
+    expect(searchFiles).toHaveBeenCalledTimes(1) // every follow-up partial is still windowed
+    await vi.advanceTimersByTimeAsync(120) // the window closes: one trailing search, newest partial
+    await flushPromises()
+    expect(searchFiles).toHaveBeenCalledTimes(2)
+    expect(searchFiles.mock.calls.map((call) => call[0])).toEqual(['a', 'abcde'])
+    const items = wrapper.findAll('[data-testid="file-suggestions"] li')
+    expect(items.map((item) => item.text())).toEqual(['abcde'])
+    wrapper.unmount()
+  })
+
+  it('a stale answer that arrives after a newer search was dispatched is dropped (the fileSeq latch)', async () => {
+    let releaseStale: (found: string[]) => void = () => {}
+    const searchFiles = vi.fn((query: string) => {
+      if (query === 'a') return new Promise<string[]>((resolve) => { releaseStale = resolve })
+      return Promise.resolve([query])
+    })
+    const wrapper = mountComposer({ searchFiles })
+    await typePartial(wrapper, '@a', 0) // leading search, left unresolved
+    await typePartial(wrapper, '@ab', 20)
+    await vi.advanceTimersByTimeAsync(120)
+    await flushPromises()
+    expect(searchFiles).toHaveBeenCalledTimes(2)
+    expect(wrapper.findAll('[data-testid="file-suggestions"] li').map((item) => item.text())).toEqual(['ab'])
+    releaseStale(['stale answer']) // the superseded search lands late
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="file-suggestions"] li').map((item) => item.text())).toEqual(['ab'])
+    wrapper.unmount()
+  })
+
+  it('a null partial cancels the pending trailing search and resets the window', async () => {
+    const searchFiles = vi.fn(async (query: string) => [query])
+    const wrapper = mountComposer({ searchFiles })
+    await typePartial(wrapper, '@a', 0) // leading search
+    await typePartial(wrapper, '@ab', 20) // trailing search now pending
+    await typePartial(wrapper, '@ab ', 20) // the closing edge: partial goes null
+    expect(wrapper.find('[data-testid="file-suggestions"]').exists()).toBe(false)
+    await vi.advanceTimersByTimeAsync(240)
+    await flushPromises()
+    expect(searchFiles).toHaveBeenCalledTimes(1) // the pending trailing search never ran
+    await typePartial(wrapper, '@ac', 20) // window reset: the next partial leads at once
+    expect(searchFiles).toHaveBeenCalledTimes(2)
+    expect(searchFiles.mock.calls[1]?.[0]).toBe('ac')
+    wrapper.unmount()
+  })
+
+  it('unmount clears the pending timer — no search runs from a dead composer', async () => {
+    const searchFiles = vi.fn(async (query: string) => [query])
+    const wrapper = mountComposer({ searchFiles })
+    await typePartial(wrapper, '@a', 0)
+    await typePartial(wrapper, '@ab', 20)
+    wrapper.unmount()
+    await vi.advanceTimersByTimeAsync(240)
+    await flushPromises()
+    expect(searchFiles).toHaveBeenCalledTimes(1)
   })
 })

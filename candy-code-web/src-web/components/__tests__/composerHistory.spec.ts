@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { loadPromptHistory } from '../../stores/promptHistory'
+import { clearPromptHistory, loadPromptHistory } from '../../stores/promptHistory'
 import { writeJson } from '../../stores/storage'
 import Composer from '../Composer.vue'
 
@@ -69,5 +69,62 @@ describe('Composer prompt history (WEB-5a-i)', () => {
     const wrapper = mountComposer({ modelValue: 'anything' })
     await press(wrapper, 'ArrowUp', true)
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
+})
+
+/**
+ * WEB-6-P1: a clear made in another tab — sign-out there, DevTools, a
+ * whole-storage wipe — must drop this tab's in-memory ring too. Holding it
+ * was the resurrection bug: the next send re-persisted the whole pre-clear
+ * history from memory.
+ */
+describe('Composer prompt-history clear propagation (WEB-6-P1)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('a cross-tab storage event empties the mounted ring: the next send persists only the new prompt', async () => {
+    writeJson('promptHistory', ['one', 'two'])
+    const wrapper = mountComposer({ modelValue: 'draft' })
+    window.dispatchEvent(new StorageEvent('storage', { key: 'candy-code-web:promptHistory', newValue: null }))
+    await wrapper.setProps({ modelValue: 'ship it' })
+    await press(wrapper, 'Enter')
+    expect(loadPromptHistory()).toEqual(['ship it'])
+    // Recall sees only the post-clear prompt; the resurrected entries are gone.
+    await press(wrapper, 'ArrowUp', true)
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['ship it'])
+    await press(wrapper, 'ArrowUp', true)
+    expect(wrapper.emitted('update:modelValue')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('a same-tab clearPromptHistory() does the same (the storage event never fires here)', async () => {
+    writeJson('promptHistory', ['one', 'two'])
+    const wrapper = mountComposer({ modelValue: 'draft' })
+    clearPromptHistory()
+    await wrapper.setProps({ modelValue: 'send now' })
+    await press(wrapper, 'Enter')
+    expect(loadPromptHistory()).toEqual(['send now'])
+    wrapper.unmount()
+  })
+
+  it('a whole-storage clear event (key null) empties the mounted ring', async () => {
+    writeJson('promptHistory', ['one', 'two'])
+    const wrapper = mountComposer({ modelValue: 'draft' })
+    window.dispatchEvent(new StorageEvent('storage', { key: null, newValue: null }))
+    await wrapper.setProps({ modelValue: 'only me' })
+    await press(wrapper, 'Enter')
+    expect(loadPromptHistory()).toEqual(['only me'])
+    wrapper.unmount()
+  })
+
+  it('an unrelated key removal leaves the ring untouched', async () => {
+    writeJson('promptHistory', ['keep me'])
+    const wrapper = mountComposer({ modelValue: 'x' })
+    window.dispatchEvent(new StorageEvent('storage', { key: 'candy-code-web:draft', newValue: null }))
+    await wrapper.setProps({ modelValue: 'again' })
+    await press(wrapper, 'Enter')
+    expect(loadPromptHistory()).toEqual(['again', 'keep me'])
+    wrapper.unmount()
   })
 })

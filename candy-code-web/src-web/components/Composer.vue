@@ -1,7 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import type { CommandInfo, Delivery } from "../stores/session";
-import { loadPromptHistory, pushPromptHistory } from "../stores/promptHistory";
+import {
+    loadPromptHistory,
+    onPromptHistoryCleared,
+    pushPromptHistory,
+} from "../stores/promptHistory";
 import {
     MAX_PASTED_IMAGES,
     readPastedImages,
@@ -83,23 +87,59 @@ const mentionPartial = computed(() => {
     return match ? (match[1] ?? "") : null;
 });
 
+/**
+ * WEB-5-P3 (client half): the `@` popup used to fire a synchronous `fs.search`
+ * on the shared serve loop for every keystroke after `@`. This is a leading +
+ * trailing debounce: a partial arriving more than MENTION_SEARCH_DEBOUNCE_MS
+ * after the last search runs at once — the first `@` still opens instantly —
+ * while partials inside the window collapse to one trailing search carrying
+ * the newest partial. A null partial cancels the pending timer and resets the
+ * window. The `fileSeq` latch (a late answer never overwrites a newer one)
+ * stays; the timer is cleared on unmount.
+ */
+const MENTION_SEARCH_DEBOUNCE_MS = 120;
+let mentionTimer: ReturnType<typeof setTimeout> | undefined;
+let lastSearchAt = Number.NEGATIVE_INFINITY;
+
+function searchMentionedFiles(partial: string): void {
+    const seq = ++fileSeq;
+    lastSearchAt = Date.now();
+    void props
+        .searchFiles!(partial)
+        .then((found) => {
+            if (seq === fileSeq) files.value = found.slice(0, 8);
+        })
+        .catch(() => {
+            if (seq === fileSeq) files.value = [];
+        });
+}
+
 watch(
     mentionPartial,
-    async (partial) => {
-        const seq = ++fileSeq;
+    (partial) => {
+        if (mentionTimer !== undefined) {
+            clearTimeout(mentionTimer);
+            mentionTimer = undefined;
+        }
         if (partial === null || !props.searchFiles) {
             files.value = [];
+            lastSearchAt = Number.NEGATIVE_INFINITY; // the next `@` opens at once
             return;
         }
-        try {
-            const found = await props.searchFiles(partial);
-            if (seq === fileSeq) files.value = found.slice(0, 8);
-        } catch {
-            if (seq === fileSeq) files.value = [];
+        if (Date.now() - lastSearchAt >= MENTION_SEARCH_DEBOUNCE_MS) {
+            searchMentionedFiles(partial);
+            return;
         }
+        mentionTimer = setTimeout(() => {
+            mentionTimer = undefined;
+            if (props.searchFiles) searchMentionedFiles(partial);
+        }, MENTION_SEARCH_DEBOUNCE_MS);
     },
     { immediate: true },
 );
+onBeforeUnmount(() => {
+    if (mentionTimer !== undefined) clearTimeout(mentionTimer);
+});
 watch(files, () => {
     selected.value = 0;
 });
@@ -149,6 +189,20 @@ const history = ref<string[]>(loadPromptHistory());
 let historyIndex = -1;
 /** The draft recall interrupted, restored when recall walks back to the head. */
 let draftBackup = "";
+
+/**
+ * WEB-6-P1: the ring was loaded once and lived only here, so a clear made in
+ * another tab (sign-out, DevTools, the palette) left this copy standing — and
+ * the next send re-persisted the whole pre-clear history from memory. The
+ * subscription drops the local copy the moment the stored ring is erased,
+ * here or anywhere; unsubscribed on unmount.
+ */
+const stopHistoryCleared = onPromptHistoryCleared(() => {
+    history.value = [];
+    historyIndex = -1;
+    draftBackup = "";
+});
+onBeforeUnmount(stopHistoryCleared);
 
 function submit(): void {
     const text = props.modelValue.trim();

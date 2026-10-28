@@ -150,8 +150,11 @@ documents the protocol and the UI).
   your typed prompts in a local ring (`localStorage` key
   `candy-code-web:promptHistory`, capped at 50, this origin only, never
   sent anywhere beyond the server that answered those very prompts) —
-  sign-out clears that key, and `clearPromptHistory()` in
-  `src-web/stores/promptHistory.ts` clears it any time without signing out.
+  sign-out clears that key in every open tab of this browser (each tab's
+  in-memory copy drops with it, so nothing resurrects on the next send),
+  and the command palette's “Clear prompt history” action (the `Actions`
+  group, after a confirm) clears it any time without signing out —
+  `clearPromptHistory()` in `src-web/stores/promptHistory.ts`.
 
 ### Deployment hardening
 

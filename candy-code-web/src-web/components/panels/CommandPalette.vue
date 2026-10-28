@@ -8,6 +8,7 @@ import { describe, useSessionStore } from '../../stores/session'
 import { useNewSessionStore } from '../../stores/newSession'
 import { useSessionsStore } from '../../stores/sessions'
 import { useSettingsStore } from '../../stores/settings'
+import { clearPromptHistory } from '../../stores/promptHistory'
 
 /**
  * The command palette (Ctrl+K / ⌘K; roadmap O-6c, Appendix O §7.4, the TUI's
@@ -42,6 +43,7 @@ const entries = computed<Entry[]>(() => {
   const list: Entry[] = []
   list.push({ id: 'new-session', group: 'Actions', label: newSessionFlow.canBrowse ? 'New session…' : 'New session', hint: newSessionFlow.canBrowse ? 'choose its directory' : undefined, run: newSession })
   list.push({ id: 'theme', group: 'Actions', label: `Theme: ${settings.theme} → next`, run: () => settings.cycleTheme() })
+  list.push({ id: 'clear-history', group: 'Actions', label: 'Clear prompt history', hint: 'this browser', run: clearHistory })
   list.push({ id: 'panels', group: 'Actions', label: panels.open ? 'Close the panels' : 'Open the panels', run: () => panels.toggle() })
   for (const panel of PANELS) {
     list.push({ id: `panel-${panel}`, group: 'Panels', label: `${PANEL_LABELS[panel]} panel`, run: () => panels.show(panel) })
@@ -102,6 +104,16 @@ async function newSession(): Promise<void> {
   panels.togglePalette(false)
   const summary = await newSessionFlow.start()
   if (summary) await router.push({ name: 'session', params: { id: summary.id } })
+}
+
+/**
+ * WEB-6-P2: the README advertised a prompt-history clear "any time without
+ * signing out" while the only caller was `logout()`. This is the UI: the
+ * confirm is deliberate — the ring is the only local record of what was typed
+ * in this browser, and the clear reaches every open tab.
+ */
+function clearHistory(): void {
+  if (window.confirm('Clear this browser’s saved prompt history? Every open tab of this origin loses it too.')) clearPromptHistory()
 }
 
 async function runCommand(name: string, argumentHint: string | null): Promise<void> {
