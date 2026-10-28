@@ -74,4 +74,68 @@ final class BashToolProgressTest extends TestCase
         $this->assertSame([], $frames, 'without a call id a tail belongs to no card');
         $this->assertStringContainsString('still runs', $result->content());
     }
+
+    /**
+     * C-WEB-7 (WEB-4-P1): the trailing-edge flush. A build that prints its
+     * last lines just after a frame and then goes quiet must show them
+     * DURING the silence, not at exit — the capture's wait beat calls
+     * tick() through the same argument the liveness heartbeat rides. The
+     * margins are wide by design (a 1.2 s sleep against a flush at about
+     * 0.5-0.7 s); the discriminator against the pre-fix shape is the
+     * timing leg: there, the 'ab' frame is the finish() at exit.
+     */
+    public function testAHeldTailLandsOnTheWaitBeatBeforeTheExitFlush(): void
+    {
+        /** @var list<array{float, ToolProgress}> $frames */
+        $frames = [];
+        $bash = (new Bash())->withToolProgressEmitter(static function (ToolProgress $frame) use (&$frames): void {
+            $frames[] = [microtime(true), $frame];
+        });
+
+        $bash->execute(['command' => 'printf a; sleep 0.05; printf b; sleep 1.2', 'id' => 'c7']);
+        $returnedAt = microtime(true);
+
+        $this->assertCount(2, $frames, 'the opening frame and one trailing-edge flush');
+        $this->assertSame('a', $frames[0][1]->tail);
+        $this->assertSame('ab', $frames[1][1]->tail, 'the flush carries the held chunk');
+        $this->assertGreaterThanOrEqual(0.4, $returnedAt - $frames[1][0],
+            'the last lines surfaced during the silence, not at exit');
+    }
+
+    public function testARunWithoutAnEmitterStillBeatsASuppliedHeartbeat(): void
+    {
+        // The other half of the composition: with no ring the wait argument
+        // is the plain heartbeat, byte-identical to what this call passed
+        // before C-WEB-7 (item 0.4-b's idle-watchdog liveness contract).
+        $beats = 0;
+        $result = (new Bash())->executeWithHeartbeat(
+            ['command' => 'printf x; sleep 0.5', 'id' => 'c8'],
+            static function () use (&$beats): void {
+                $beats++;
+            },
+        );
+
+        $this->assertStringContainsString('x', $result->content());
+        $this->assertGreaterThan(0, $beats, 'a silent slice still beats');
+    }
+
+    public function testARingRunKeepsBeatingTheHeartbeatAlongsideTheFlush(): void
+    {
+        $frames = 0;
+        $beats = 0;
+        $bash = (new Bash())->withToolProgressEmitter(static function (ToolProgress $frame) use (&$frames): void {
+            $frames++;
+        });
+
+        $result = $bash->executeWithHeartbeat(
+            ['command' => 'printf a; sleep 0.05; printf b; sleep 0.6', 'id' => 'c9'],
+            static function () use (&$beats): void {
+                $beats++;
+            },
+        );
+
+        $this->assertGreaterThan(0, $frames, 'the ring still frames');
+        $this->assertGreaterThan(0, $beats, 'and the composition still beats the heartbeat beside tick()');
+        $this->assertStringContainsString('ab', $result->content());
+    }
 }

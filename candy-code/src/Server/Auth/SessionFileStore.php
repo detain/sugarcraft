@@ -191,8 +191,8 @@ final class SessionFileStore
     /**
      * Make the durable copy UNIMPORTABLE: delete it. A revocation that could
      * not be written must still stand after a restart, and with no readable
-     * file {@see load()} imports nothing — every live session then rides over
-     * the restart unsigned-out, which is the conservative direction (an
+     * file {@see load()} imports nothing — every live session is signed out
+     * at the restart, which is the conservative direction (an
      * availability cost, never a revoked row resurrected). True when nothing
      * the loader could import remains: unlinked now, never there, or behind a
      * directory the reader could not even resolve a path inside.

@@ -21,7 +21,10 @@ use SugarCraft\Code\Events\ToolProgress;
  * one frame per 8 KiB chunk. The first frame goes out as soon as there is
  * anything to show — the whole point of the event is the early silence-breaker
  * — and later ones no more than once per `$frameIntervalSeconds`. Bytes that
- * arrive between frames are not lost: the next frame's tail carries them.
+ * arrive between frames are not lost: {@see tick()} flushes a held tail at
+ * the trailing edge of the interval — fired from the capture's wait beat, so
+ * the quiet end of a run lands its last lines without a further chunk — and
+ * {@see finish()} still carries whatever is pending at exit.
  *
  * `$clock` is the test seam (the production default is the wall clock), so the
  * cadence pins never sleep.
@@ -76,6 +79,25 @@ final class ShellTailRing
             return;
         }
         $this->push($this->now());
+    }
+
+    /**
+     * The capture's wait beat (C-WEB-7): land a held tail once the interval
+     * since the last frame has elapsed, so the last lines before a long
+     * silence reach the client at the trailing edge instead of at exit.
+     * Waits on the same cadence as a chunk would — an early beat is silent —
+     * and does nothing at all while nothing is pending.
+     */
+    public function tick(): void
+    {
+        if (!$this->dirty) {
+            return;
+        }
+        $now = $this->now();
+        if ($now - $this->lastEmittedAt < $this->frameIntervalSeconds) {
+            return;
+        }
+        $this->push($now);
     }
 
     private function push(float $now): void

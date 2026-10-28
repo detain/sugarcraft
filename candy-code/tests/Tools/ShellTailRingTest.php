@@ -107,6 +107,35 @@ final class ShellTailRingTest extends TestCase
         $this->assertCount(2, $this->frames, 'a clean ring has nothing left to say');
     }
 
+    public function testTickFlushesAHeldTailAtTheTrailingEdgeWithoutANewChunk(): void
+    {
+        // C-WEB-7: the scenario the docblock once over-promised — a chunk
+        // lands just after a frame and then the run goes quiet. tick() is
+        // the wait beat's flush: same interval, no chunk required.
+        $ring = $this->ring();
+        $ring->onChunk('a');            // t = 0: the opening frame is immediate
+        $this->now += 0.1;
+        $ring->onChunk('b');            // t = 0.1: inside the interval, held
+        $this->assertCount(1, $this->frames);
+
+        $this->now += 0.2;
+        $ring->tick();                  // t = 0.3
+        $this->assertCount(1, $this->frames, 'tick waits for the interval too');
+
+        $this->now += 0.3;
+        $ring->tick();                  // t = 0.6
+        $this->assertCount(2, $this->frames, 'the trailing edge lands with no further chunk');
+        $this->assertSame('ab', $this->frames[1]->tail, 'the flush carries every held byte');
+        $this->assertSame(2, $this->frames[1]->seq);
+
+        $this->now += 0.3;
+        $ring->tick();                  // t = 0.9
+        $this->assertCount(2, $this->frames, 'a clean ring has nothing for tick to say');
+
+        $ring->finish();
+        $this->assertCount(2, $this->frames, 'tick already landed it; finish stays the exit flush');
+    }
+
     public function testQuietChunksCostNoFrames(): void
     {
         $ring = $this->ring();

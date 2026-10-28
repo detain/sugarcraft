@@ -541,6 +541,21 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
             : static function (string $chunk) use ($progress): void {
                 $progress->onChunk($chunk);
             };
+        // C-WEB-7: no new timer and no new loop seam — the capture loops
+        // already beat their wait argument on every slice (runCaptured one
+        // per ≤200 ms select slice, runCapturedInteractive one per 50 ms
+        // read pass), so the ring's trailing-edge flush rides that SAME
+        // beat: tick() first, then the caller's heartbeat when there is
+        // one. With no ring the beat is the plain heartbeat, exactly what
+        // this call passed before.
+        $onWait = $progress === null
+            ? $heartbeat
+            : static function () use ($progress, $heartbeat): void {
+                $progress->tick();
+                if ($heartbeat !== null) {
+                    $heartbeat();
+                }
+            };
 
         // The sandbox (roadmap 5.12) is a PREFIX on the same shell string, so
         // both capture mechanisms — and the setsid group kill the timeout
@@ -588,8 +603,8 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         }
 
         $run = $interactive
-            ? $this->runCapturedInteractive($cmd, null, $maxBytes, null, (float) $timeout, $heartbeat, $onChunk)
-            : $this->runCaptured($cmd, null, $maxBytes, (float) $timeout, [], $heartbeat, $onChunk);
+            ? $this->runCapturedInteractive($cmd, null, $maxBytes, null, (float) $timeout, $onWait, $onChunk)
+            : $this->runCaptured($cmd, null, $maxBytes, (float) $timeout, [], $onWait, $onChunk);
         // The last frame: bytes that arrived between the final cadence slice
         // and EOF would otherwise never have been shown. tool.finished lands
         // the full contract right after, so a client that missed this frame
