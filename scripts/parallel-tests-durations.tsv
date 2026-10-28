@@ -640,6 +640,7 @@ candy-code/tests/Host/Commands/SkillsHostCommandTest.php	0.099	8
 candy-code/tests/Integration/RulePathScopingWiringTest.php	0.099	16
 candy-code/tests/Support/MediaStoreTest.php	0.099	26
 candy-code/tests/Tools/WorktreeJailRoutingTest.php	0.098	40
+candy-code/tests/Providers/GeminiResponseSchemaTest.php	0.097	6
 candy-code/tests/Renderer/CarriageReturnFrameTest.php	0.097	82
 candy-code/tests/MCP/McpAuthStoreTest.php	0.096	20
 candy-code/tests/Providers/GeminiProviderTest.php	0.095	23
