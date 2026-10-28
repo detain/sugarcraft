@@ -2023,7 +2023,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-7.d`
 
-#### C-SEC-8.c — `Sanitize::stripInvisibleFormatting()` in sugar-core
+#### ✅ bd539b638fdd31398a002f50185153d198e7abd6 C-SEC-8.c — `Sanitize::stripInvisibleFormatting()` in sugar-core
 - **Item:** C-SEC-8 (sources: GAP-UI-N5) · gap · effort S
 - **What:** `Sanitize::markInvisibleFormatting()` (`sugar-core/src/Util/Sanitize.php:359`) only marks. It has a two-tier rule: bidi, ZWSP, WJ and BOM are always marked, while ZWJ/ZWNJ/LRM/RLM/ALM are kept after a non-ASCII byte. Add a …
 - **Files — create:** `sugar-core/tests/Util/SanitizeStripInvisibleFormattingTest.php`
