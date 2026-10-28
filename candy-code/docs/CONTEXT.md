@@ -176,10 +176,16 @@ says the model now reads a summary.
 call the session makes, so it can overflow the window it is measuring, and a
 configured `summaryModel` can name a model the provider no longer serves.
 Neither answer is final the way it used to be: the cache-reusing summary
-backend retries each once. An overflow is retried against the same model with
-the *older* tool outputs clipped to their first and last stretch — the newest
-exchanges stay verbatim, because they are what the summary is being asked to
-carry forward. A non-transient refusal from an overridden `summaryModel` (an
+backend retries each once. The retries live in that pair: today the paired TUI
+route dispatches its summary through it, while a host that hands the
+conversation engine to the summariser directly — the served route — still
+folds heuristically on the first refusal. An overflow is retried against the
+same model with the *older* tool outputs clipped to their first and last
+stretch — the newest exchanges stay verbatim, because they are what the summary
+is being asked to carry forward — and an overflow the clip cannot relieve
+(nothing old and heavy to cut) is not retried at all, since the second request
+would be the refused bytes again. A non-transient refusal from an overridden
+`summaryModel` (an
 unknown model, a client error) is retried once on the conversation's own
 model, which is the one the session's cache is warm for. Every other failure —
 a transient refusal, a cancellation, a second failure after one of these

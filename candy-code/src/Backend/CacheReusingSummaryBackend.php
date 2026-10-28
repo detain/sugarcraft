@@ -90,7 +90,10 @@ final class CacheReusingSummaryBackend implements Backend, SummarisesWithCache
      *    bytes is pointless, but {@see CompactionService::clipOlderToolOutputs()}
      *    cuts the session's fattest, least load-bearing rows (old tool outputs)
      *    to head and tail and keeps the newest exchanges whole, which is the
-     *    same rescue the manual overflow notice recommends, automated.
+     *    same rescue the manual overflow notice recommends, automated. The leg
+     *    fires only when that clip changes the bytes: an overflow the clip
+     *    cannot relieve would otherwise be re-sent verbatim, and the retry
+     *    would spend its one billed call on a guaranteed second refusal.
      *  - A configured `summaryModel` that is simply UNAVAILABLE (unknown model,
      *    a 4xx refusal) should not fold the session when the session's own
      *    model demonstrably answers — the conversation rode it moments ago. One
@@ -135,11 +138,15 @@ final class CacheReusingSummaryBackend implements Backend, SummarisesWithCache
         }
 
         if (ContextOverflow::matches($error)) {
-            return $this->engine->summariseAsync(
-                CompactionService::clipOlderToolOutputs($history),
-                $instruction,
-                $cancellation,
-            );
+            $clipped = CompactionService::clipOlderToolOutputs($history);
+            if ($clipped === $history) {
+                // The clip found nothing to cut: the retry would re-send the
+                // refused bytes. Fold on the first answer instead of paying
+                // twice for the same overflow.
+                throw $error;
+            }
+
+            return $this->engine->summariseAsync($clipped, $instruction, $cancellation);
         }
 
         if ($this->engine instanceof EngineBackend

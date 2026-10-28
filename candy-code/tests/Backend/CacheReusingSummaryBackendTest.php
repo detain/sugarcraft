@@ -12,6 +12,7 @@ use SugarCraft\Code\Backend\CacheReusingSummaryBackend;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Backend\SummarisesWithCache;
+use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Host\CompactionService;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Providers\CompleteRequest;
@@ -36,6 +37,10 @@ final class CacheReusingSummaryBackendTest extends TestCase
 
     protected function setUp(): void
     {
+        // The notice-cap pin arms the process-global sink; both ends reset so
+        // this file can never leak it armed (the idiom of the Diagnostics
+        // suite's own setUp/tearDown pair).
+        RuntimeNoticeSink::reset();
         $this->sandbox = sys_get_temp_dir() . '/crush-summretry-' . bin2hex(random_bytes(6));
         @mkdir($this->sandbox . '/repo', 0700, true);
         $this->originalHome = getenv('HOME');
@@ -44,6 +49,7 @@ final class CacheReusingSummaryBackendTest extends TestCase
 
     protected function tearDown(): void
     {
+        RuntimeNoticeSink::reset();
         if ($this->originalHome !== false) {
             putenv('HOME=' . $this->originalHome);
         }
@@ -92,6 +98,85 @@ final class CacheReusingSummaryBackendTest extends TestCase
         self::assertSame($error, $failure, 'the retry failure reaches the fold unchanged');
     }
 
+    /**
+     * C-CTX-5.a notice-cap leg (r1 MINOR, VERIFIED BY PIN). The ask was that
+     * a folded summary failure must not push a turn past
+     * {@see RuntimeNoticeSink::TURN_NOTICE_LIMIT}. Reading the fold path, it
+     * CANNOT over-emit, and both halves of that claim are pinned here.
+     * STRUCTURALLY: no code from the pair's `summariseAsync` entry downward
+     * names the notice sink at all — a failed summary leaves the backend as
+     * exactly ONE Throwable (identity pinned by the cap test above) that the
+     * caller turns into one HistoryCompactedMsg; it is never a batch of
+     * notice rows. BEHAVIOURALLY: with TURN_NOTICE_LIMIT + 5 refusals pending
+     * in a budgeted turn, a fold that fails mid-turn changes nothing the
+     * drain sees — the kept refusals plus exactly one capped aggregate row.
+     * Any future wiring of the fold through the sink breaks the structure
+     * census, the row shape, or both.
+     */
+    public function testTheFoldCannotOverrunTheTurnNoticeCap(): void
+    {
+        // Comments stripped from the entry point down: the prose legitimately
+        // NAMES the failure path; the code must not CALL a sink.
+        $source = (string) file_get_contents(
+            (new \ReflectionClass(CacheReusingSummaryBackend::class))->getFileName(),
+        );
+        $entry = strpos($source, 'public function summariseAsync');
+        self::assertIsInt($entry, 'the summariseAsync entry point moved or renamed; re-derive this pin');
+        $body = (string) preg_replace(
+            ['~/\\*.*?\\*/~s', '~[ \\t]//.*~'],
+            '',
+            substr($source, $entry),
+        );
+        foreach (['Sink', 'record(', 'warn('] as $forbidden) {
+            self::assertSame(
+                0,
+                substr_count($body, $forbidden),
+                'the fold path grew a notice-emission call (' . $forbidden . '); '
+                    . 'over-emission is no longer structurally impossible — re-derive this pin',
+            );
+        }
+
+        RuntimeNoticeSink::arm(false);
+        RuntimeNoticeSink::beginTurn();
+        $pending = RuntimeNoticeSink::TURN_NOTICE_LIMIT + 5;
+        for ($i = 0; $i < $pending; $i++) {
+            $accepted = RuntimeNoticeSink::record('overflow refusal ' . $i);
+            self::assertSame(
+                $i < RuntimeNoticeSink::NOTICE_LIMIT,
+                $accepted,
+                'refusal ' . $i . ' took the queue by the wrong end of the cap',
+            );
+        }
+
+        $seen = new \ArrayObject();
+        $error = self::overflowError();
+        $engine = new RejectingEngine($seen, $error, thenResolve: null);
+        $pair = CacheReusingSummaryBackend::new(new ToollessStub(), $engine);
+
+        $failure = $this->settleFailure($pair->summariseAsync(self::fatToolHistory(rows: 12), 'summarise'));
+
+        self::assertSame($error, $failure, 'the fold is ONE rejection, not a row per refusal');
+        self::assertSame(2, $seen['calls'], 'the two billed calls still entered nothing into the sink');
+
+        $rows = RuntimeNoticeSink::drain();
+        $kept = RuntimeNoticeSink::NOTICE_LIMIT;
+        self::assertLessThanOrEqual(
+            RuntimeNoticeSink::TURN_NOTICE_LIMIT + 1,
+            count($rows),
+            'the turn surfaced more than its budget plus the single aggregate row',
+        );
+        self::assertCount($kept + 1, $rows, 'the fold added a row the refusals alone do not account for');
+        for ($i = 0; $i < $kept; $i++) {
+            self::assertSame('overflow refusal ' . $i, $rows[$i], 'row ' . $i . ' shifted; the fold inserted something');
+        }
+        self::assertSame(
+            RuntimeNoticeSink::overflowNotice($pending - $kept),
+            $rows[$kept],
+            'the over-cap refusals did not collapse into exactly one capped aggregate row',
+        );
+        self::assertFalse(RuntimeNoticeSink::hasPending(), 'the capped drain deferred rows instead of discarding them');
+    }
+
     public function testNothingIsRetriedOnceTheTurnIsCancelled(): void
     {
         $seen = new \ArrayObject();
@@ -109,6 +194,11 @@ final class CacheReusingSummaryBackendTest extends TestCase
 
     public function testATransientFailureIsNotRetriedByEitherLeg(): void
     {
+        // Scope: the double is not an EngineBackend, so the instanceof leg
+        // blocks the retry here whatever the transient clause does — this pins
+        // the fold contract for non-engine hosts only. The transient clause
+        // against a real engine is pinned in
+        // testATransientFailureOnAnOverriddenSummaryModelDoesNotFallBack.
         $seen = new \ArrayObject();
         $error = self::transientError();
         $engine = new RejectingEngine($seen, $error, thenResolve: 'should never run');
@@ -125,6 +215,9 @@ final class CacheReusingSummaryBackendTest extends TestCase
         $seen = new \ArrayObject();
         // A plain failure against an engine that is NOT an EngineBackend: no
         // override to drop, so the fold path is the answer, not a retry.
+        // Where instanceof passes and only the missing override can stop the
+        // retry, the real-engine twin is
+        // testAFailureWithoutAnOverriddenSummaryModelCostsExactlyOneProviderCall.
         $error = new \RuntimeException('a plain summary refusal');
         $engine = new RejectingEngine($seen, $error, thenResolve: 'x');
         $pair = CacheReusingSummaryBackend::new(new ToollessStub(), $engine);
@@ -157,6 +250,90 @@ final class CacheReusingSummaryBackendTest extends TestCase
         $message = $this->settle($pair->summariseAsync([Message::user('q')], 'summarise'));
 
         self::assertSame('answered on m', $message->content, 'the retry drops the override and asks the session model');
+    }
+
+    public function testATransientFailureOnAnOverriddenSummaryModelDoesNotFallBack(): void
+    {
+        // The transient clause, pinned against a REAL EngineBackend carrying
+        // an override so the instanceof leg cannot stand in for it. The typed
+        // 429 is fed to the retry decision directly: through summariseAsync()
+        // a forked host flattens it to plain text (the class docblock's honest
+        // scope note documents that accepted trade), and only the decision
+        // itself is shape-independent. Unmutated the guard rethrows the
+        // original error before dispatching anything; neuter
+        // `!TransientFailure::isTransient($error)` and it returns the fallback
+        // promise instead of throwing, reddening the assertNull below.
+        $provider = new ScriptedProvider([
+            static fn (CompleteRequest $request): CompleteResponse => new CompleteResponse('answered on ' . $request->model),
+        ]);
+        $engine = EngineBackend::new($provider, 'm')->withoutHooks()->withRoot($this->sandbox . '/repo');
+        $pair = CacheReusingSummaryBackend::new(new ToollessStub(), $engine->withSummaryModel('small'));
+        $error = self::transientError();
+        $retry = new \ReflectionMethod(CacheReusingSummaryBackend::class, 'retrySummaryOnce');
+
+        $dispatched = null;
+        $thrown = null;
+        try {
+            $dispatched = $retry->invoke($pair, $error, [Message::user('q')], 'summarise', null);
+        } catch (\RuntimeException $caught) {
+            // Capture only: an assertion inside this catch could be swallowed.
+            $thrown = $caught;
+        }
+
+        self::assertNull($dispatched, 'a transient failure never reaches the fallback dispatch');
+        self::assertSame($error, $thrown, 'the original rejection rides on to the heuristic fold');
+        self::assertSame([], $provider->requests, 'no provider call was spent on a transient failure');
+    }
+
+    public function testAFailureWithoutAnOverriddenSummaryModelCostsExactlyOneProviderCall(): void
+    {
+        // The summaryModel clause, pinned against a REAL EngineBackend with no
+        // override so the instanceof leg cannot stand in for it. The marker
+        // file is the provider-call ground truth across BOTH engine shapes:
+        // a fork child's in-memory ScriptedProvider is invisible to the
+        // parent, only writes to disk survive. Deleting
+        // `$this->engine->summaryModel() !== null` from the guard sends a
+        // second dispatch to the session model that was never overridden, and
+        // the marker gains a line in either shape.
+        $marker = $this->sandbox . '/summary-calls.log';
+        $provider = new ScriptedProvider([
+            static function (CompleteRequest $request) use ($marker): CompleteResponse {
+                file_put_contents($marker, $request->model . "\n", FILE_APPEND | LOCK_EX);
+
+                throw new \RuntimeException('a plain summary refusal without an override');
+            },
+        ]);
+        $engine = EngineBackend::new($provider, 'm')->withoutHooks()->withRoot($this->sandbox . '/repo');
+        $pair = CacheReusingSummaryBackend::new(new ToollessStub(), $engine);
+
+        $failure = $this->settleFailure($pair->summariseAsync([Message::user('q')], 'summarise'));
+
+        self::assertStringContainsString('plain summary refusal', $failure->getMessage());
+        self::assertSame(
+            ['m'],
+            array_map('trim', (array) \file($marker, FILE_IGNORE_NEW_LINES)),
+            'without an override to drop, the fold path costs exactly one provider call',
+        );
+    }
+
+    public function testAnOverflowTheClipCannotRelieveIsNotRetried(): void
+    {
+        // A history inside the clip's keep window comes back byte-identical
+        // (pinned in testClippingKeepsTheNewestRowsAndOnlyCutsOldToolOutputs),
+        // so the overflow leg would re-send the refused request verbatim. The
+        // guard folds on the first answer instead of spending the one billed
+        // retry on a guaranteed second refusal; drop the
+        // `$clipped === $history` check and the pair dispatches a second,
+        // identical call.
+        $seen = new \ArrayObject();
+        $error = self::overflowError();
+        $engine = new RejectingEngine($seen, $error, thenResolve: 'should never run');
+        $pair = CacheReusingSummaryBackend::new(new ToollessStub(), $engine);
+
+        $failure = $this->settleFailure($pair->summariseAsync(self::fatToolHistory(rows: 4), 'summarise'));
+
+        self::assertSame(1, $seen['calls'], 'an overflow the clip cannot relieve is not re-sent');
+        self::assertSame($error, $failure);
     }
 
     public function testClippingKeepsTheNewestRowsAndOnlyCutsOldToolOutputs(): void
