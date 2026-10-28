@@ -963,6 +963,7 @@ candy-code/tests/SessionSaveLockTest.php	0.020	2
 candy-code/tests/Skills/SkillDiscoveryTest.php	0.020	21
 candy-code/tests/Tools/ProcessOutputCaptureTest.php	0.020	4
 candy-code/tests/Tui/MediaForm/ImageSectionIngressTest.php	0.020	5
+candy-code/tests/Providers/OpenAiResponsesReasoningTest.php	0.020	12
 candy-code/tests/Chat/PrCommandTest.php	0.019	6
 candy-code/tests/ChatInputCursorTest.php	0.019	31
 candy-code/tests/Cli/ArgvParserTest.php	0.019	134
