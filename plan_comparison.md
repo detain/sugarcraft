@@ -1515,7 +1515,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tui.md` → `### C-TUI-7.a`
 
-#### C-TUI-7.b — Mac Option-as-Meta notice: once per version, tmux-aware
+#### ✅ ea1f22bf7 C-TUI-7.b — Mac Option-as-Meta notice: once per version, tmux-aware
 - **Item:** C-TUI-7 (sources: TUI-5-P1) · fix · NIT · effort S
 - **What:** `Bootstrap::terminalSpeaksKittyKeyboard()` (`Bootstrap.php:10001-10015`) checks only `TERM`/`TERM_PROGRAM`. So tmux-on-kitty (`TERM_PROGRAM=tmux`), and a Terminal.app user who already set Option-as-Meta, see the row on **every** …
 - **Files — create:** `candy-code/src/Support/MacAltNotice.php`
