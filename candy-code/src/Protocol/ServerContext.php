@@ -363,6 +363,9 @@ final class ServerContext
             'turns' => isset($row['turns']) ? (int) $row['turns'] : null,
             'preview' => $row['last_preview'] ?? null,
             'snippet' => $row['bodySnippet'] ?? null,
+            // C-WEB-4.f: the branch-at-session-start from the row; the row is
+            // the whole truth here — nothing on this path calls git.
+            'branch' => $row['git_branch'] ?? null,
             'open' => $host !== null,
             'status' => $host === null ? 'closed' : $this->feedFor($host)->status(),
             'permissionMode' => $host?->permissionMode()?->value,

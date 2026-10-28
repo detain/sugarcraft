@@ -58,6 +58,11 @@ final class Definitions
                 // row read through `session.list {query}` with the full-text
                 // path answering; null everywhere else.
                 'snippet' => Schema::string()->nullable(),
+                // C-WEB-4.f: the git branch the session was OPENED on, read
+                // off the row's git_branch. Session-start state, never live —
+                // no serve loop runs git, and an agent `git checkout` after
+                // the launch does not move it.
+                'branch' => Schema::string()->nullable(),
                 'open' => Schema::boolean(),
                 'status' => Schema::enum(['closed', 'idle', 'busy', 'waiting_permission']),
                 'permissionMode' => Schema::ref(self::PERMISSION_MODE)->nullable(),

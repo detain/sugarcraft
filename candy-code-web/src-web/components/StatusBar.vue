@@ -168,6 +168,11 @@ const cachePct = computed<number | null>(() => {
       </select>
     </label>
     <span v-else class="item model" :title="model">{{ model }}</span>
+    <!-- C-WEB-4.f (GAP-GIT-01): the branch the session was OPENED on — the
+         summary field is read off the row, never off a live `git`, so the
+         tooltip says what it is: a start-state fact an agent's `git checkout`
+         cannot silently outdate. Chip only when the server named one. -->
+    <span v-if="summary?.branch" class="item branch" data-testid="branch-chip" :title="`Branch at session start: ${summary.branch}`">⎇ {{ summary.branch }}</span>
     <button
       type="button"
       class="item action"
