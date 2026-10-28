@@ -76,6 +76,10 @@ final class PaletteSupersetDispatchTest extends TestCase
         'review' => 'needs a diff range; the bare form only answers with usage',
         'security-review' => 'needs a diff range; the bare form only answers with usage',
         'bg' => 'bare /bg answers usage rather than backgrounding something unintended',
+        // C-TOOL-3.d: bare /shells IS the read-only list (registry order puts
+        // its 2905 spec ahead of schedules' 2910); the output/stop verbs need
+        // a shell id, and the palette has no shell pane to pre-open.
+        'shells' => 'bare /shells is the whole list surface; the argument verbs need a shell id',
         // AUT-1 (w5c), welded judgement: /schedules' bare form IS the
         // read-only list — a palette row that only prints a table has nothing
         // to pick; /loop needs its interval and prompt, the bare form answers

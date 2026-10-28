@@ -10576,6 +10576,15 @@ final class Chat implements Model
             return \SugarCraft\Code\Host\Commands\SchedulesCommand::isReadOnlyVerb($tokens[1] ?? 'list');
         }
 
+        if ($name === 'shells') {
+            // C-TOOL-3.d judgement: `list` and `output` read the launch's
+            // shell table and the log files a shell writes, changing nothing,
+            // so a read-only window may look; `stop` runs the kill ladder on
+            // a live child, which is a write. Spawning is not this command's
+            // to do at all — the Shell tool is the single spawn door.
+            return \SugarCraft\Code\Host\Commands\ShellsCommand::isReadOnlyVerb($tokens[1] ?? 'list');
+        }
+
         return \in_array($name, self::READ_ONLY_COMMANDS, true);
     }
 
@@ -15620,6 +15629,18 @@ final class Chat implements Model
     private function handleSchedulesCommand(string $inputText): array
     {
         return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\SchedulesCommand(), $inputText);
+    }
+
+    /**
+     * Handle /shells — {@see \SugarCraft\Code\Host\Commands\ShellsCommand}: list
+     * this session's background shells, read one shell's output window, or
+     * stop one through the registry's kill ladder.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleShellsCommand(string $inputText): array
+    {
+        return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\ShellsCommand(), $inputText);
     }
 
     /** The transcript line for a settled `/bg stop` — {@see \SugarCraft\Code\Host\Commands\BackgroundCommand::stopNotice()}. */

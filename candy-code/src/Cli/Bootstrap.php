@@ -2103,7 +2103,12 @@ final class Bootstrap
             // the single place a registry learns which project it speaks for,
             // so a row fires only where its own `root` says it belongs and not
             // in whichever host happened to claim the shared file first.
-            ->withService(\SugarCraft\Code\Background\ScheduleRegistry::class, \SugarCraft\Code\Background\ScheduleRegistry::loadDefault($root));
+            ->withService(\SugarCraft\Code\Background\ScheduleRegistry::class, \SugarCraft\Code\Background\ScheduleRegistry::loadDefault($root))
+            // C-TOOL-3.d: `/shells` reads the launch's shell table through
+            // the SAME memoized registry `self::backgroundShells()` hands the
+            // Shell tool spawns onto, so the command lists what this process
+            // actually started — never a second table, never a second reaper.
+            ->withService(\SugarCraft\Code\Background\BackgroundShellRegistry::class, self::backgroundShells($root));
 
         $events = $transcripts->events();
 
