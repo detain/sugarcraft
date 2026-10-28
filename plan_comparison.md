@@ -150,7 +150,7 @@ So while 2 lanes are in review, the other 8 slots build steps from the next wave
 | ✅ W14 (closed 2026-10-28) | 10 | P-TABS.e · C-WEB-3.e · C-TOOL-4.a · C-AGT-4.a · C-AGT-5.b · C-EXT-4.a · C-PRV-2.a · C-SES-7.a · C-TOOL-3.d · C-TUI-2.a |
 | ✅ W15 (closed 2026-10-28) | 10 | P-TABS.f · C-WEB-3.g · C-TUI-2.b · C-WEB-4.a · C-AGT-5.c · C-AGT-5.e · C-AGT-5.g · C-AGT-6.d · C-CTX-4.c · C-EXT-3.c |
 | ✅ W16 (closed 2026-10-29, wave loop r1 CLEAN (0C/0M/3nits)) | 10 | P-TABS.g · C-CTX-2.d · C-EXT-4.b · C-EXT-5.a · C-MCP-3.b · C-MCP-4.b · C-PRV-2.b · C-SEC-6.a · C-SEC-7.d · C-SEC-8.c |
-| W17 | 10 | P-AGENT.b · C-CTX-5.c · C-PRV-2.c · C-SES-4.c · C-SES-6.b · C-SES-6.c · C-SES-8.c · C-SES-8.f · C-TOOL-2.d · C-TOOL-3.e |
+| ✅ W17 (closed 2026-10-29, wave loop r2 CLEAN 0C/0M; r1 MAJOR cured d3536ac91) | 10 | P-AGENT.b · C-CTX-5.c · C-PRV-2.c · C-SES-4.c · C-SES-6.b · C-SES-6.c · C-SES-8.c · C-SES-8.f · C-TOOL-2.d · C-TOOL-3.e |
 | W18 | 10 | C-AGT-4.b · C-PRV-3.a · C-SEC-8.e · C-TOOL-5.a · C-TUI-2.d · C-TUI-3.c · C-TUI-3.f · C-TUI-5.d · C-WEB-4.b · C-WEB-4.c |
 | W19 | 10 | C-PRV-4.a · C-SES-4.d · C-TOOL-2.b · C-TUI-2.c · C-WEB-4.d · C-WEB-4.e · C-AGT-5.h · C-AGT-6.a · C-CTX-2.f · C-CTX-3.b |
 | W20 | 10 | C-SES-7.e · C-AGT-5.d · C-AGT-6.c · C-CTX-3.a · C-CTX-3.d · C-CTX-4.a · C-CTX-5.a · C-EXT-3.b · C-EXT-3.d · C-EXT-4.c |
@@ -2231,7 +2231,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tui.md` → `### C-TUI-3.f`
 
-#### C-TUI-5.d — First-run wizard core + `ProviderKeyStore`
+#### ✅ 963ddd0f6 C-TUI-5.d — First-run wizard core + `ProviderKeyStore`
 - **Item:** C-TUI-5 (sources: GAP-UI-29) · gap · effort M
 - **What:** A first launch with no provider runs the echo backend behind a notice (`Bootstrap.php` ~L3339, L3473). `ProviderKeyStore` extracts the persist half of `Subcommands::loginStoreKey()` (L936-986): merge into the `providers` map, …
 - **Files — create:** `candy-code/src/Tui/FirstRunWizard/FirstRunWizard.php`, `candy-code/src/Tui/FirstRunWizard/FirstRunWizardAction.php`, `candy-code/src/Tui/FirstRunWizard/FirstRunWizardActionKind.php`, `candy-code/src/Tui/FirstRunWizard/OpenFirstRunWizardMsg.php`, `candy-code/src/Config/ProviderKeyStore.php`
@@ -2326,7 +2326,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web.md` → `### C-WEB-4.d`
 
-#### C-WEB-4.e — PDF upload from the browser (`session.send` `documents[]`)
+#### ✅ 76527aec1 C-WEB-4.e — PDF upload from the browser (`session.send` `documents[]`)
 - **Item:** C-WEB-4 (sources: GAP-MOD-22w) · gap · M
 - **What:** **Gap.** PDFs reach the model only by `@path` of a server file. `session.send` carries `images[]` only (`candy-code/src/Protocol/Schema/MethodSchemas.php:206-222`, `TurnMethods.php:90-173`). **Wire.** Add `documents[]` with …
 - **Files — create:** `candy-code/tests/Protocol/SessionSendDocumentsTest.php`, `candy-code-web/src-web/components/__tests__/composerDocuments.spec.ts`
@@ -2442,7 +2442,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SES-2.a (W2), C-SES-2.b (W3), C-SES-2.c (W4)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-3.d`
 
-#### C-CTX-4.a — Live date and knowledge-cutoff note
+#### ✅ ce48359fe C-CTX-4.a — Live date and knowledge-cutoff note
 - **Item:** C-CTX-4 (sources: GAP-PRM-14) · gap · effort S
 - **What:** The `<env>` date is frozen at session start, and there is no cutoff note. `TurnContextBlock` gains `withCurrentDate()`. It renders "Current date: YYYY-MM-DD" only when the date differs from the `<env>` date, so the prefix never …
 - **Files — create:** `candy-code/tests/Context/TurnContextDateTest.php`
@@ -2464,7 +2464,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-5.a`
 
-#### C-EXT-3.b — `skills_search` tool + an honest listing-overflow line
+#### ✅ f5b8a273b C-EXT-3.b — `skills_search` tool + an honest listing-overflow line
 - **Item:** C-EXT-3 (sources: GAP-SKL-14 context, CLAW-new#2) · gap · effort M
 - **What:** **Root cause.** `SkillMatcher.php:58` writes the overflow line `"- %d more skills; call Skill to list them"`. The Skill tool's own description (`SkillTool.php:84-99`) says it "does not itself list, search, or run skills". A …
 - **Files — create:** `candy-code/src/Tools/BuiltIn/SkillsSearch.php`

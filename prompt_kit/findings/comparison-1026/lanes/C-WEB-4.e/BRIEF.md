@@ -1,0 +1,25 @@
+### C-WEB-4.e — PDF upload from the browser (`session.send` `documents[]`)
+- item: C-WEB-4 (sources: GAP-MOD-22w)
+- kind: gap · M
+- approach:
+  - **Gap.** PDFs reach the model only by `@path` of a server file. `session.send` carries `images[]` only (`candy-code/src/Protocol/Schema/MethodSchemas.php:206-222`, `TurnMethods.php:90-173`).
+  - **Wire.** Add `documents[]` with `{name?, mime: application/pdf, data}`. The server decodes and sniffs `%PDF-` with `FileMentions::sniffDocument()` (refusing a mismatch) and attaches `AttachmentType::Document` through the existing `SubmitOptions::withAttachments()`.
+  - **Caps.** The new caps keep the base64 frame under `ServerConfig::MAX_CLIENT_FRAME_BYTES` (16 MiB): at most 2 documents, and one decoded budget shared with images (≈11 MiB), each document also ≤ `FileMentions::DOCUMENT_MAX_BYTES`. A larger PDF keeps the `@path` route.
+  - **Refusals.** As for images: `documents_while_busy` and `documents_with_command`.
+  - **Client.** A file picker (`accept=application/pdf,image/*`) and the 4.a drop target route PDFs into a documents chip strip.
+  - **Wire support.** Only the Anthropic and Vertex-Claude wires carry documents. Others get the existing decline notice; C-TOOL-2 widens that.
+- files.create: `candy-code/tests/Protocol/SessionSendDocumentsTest.php`, `candy-code-web/src-web/components/__tests__/composerDocuments.spec.ts`
+- files.modify: `candy-code/src/Protocol/Methods/TurnMethods.php` (`decodeDocuments`, caps, refusals), `candy-code/src/Protocol/Schema/MethodSchemas.php` (`session.send`), `candy-code/docs/protocol/candy-code.v1.schema.json` (regen), `candy-code/docs/SERVER.md` (regen + the `session.send` attachments paragraph), `candy-code-web/src-web/protocol/generated.ts` (regen), `candy-code-web/src-web/lib/paste.ts` (`readDroppedDocuments`), `candy-code-web/src-web/components/Composer.vue` (picker, document strip), `candy-code-web/src-web/stores/session.ts` (`send` signature)
+- tests:
+  - Create `candy-code/tests/Protocol/SessionSendDocumentsTest.php`. It pins:
+    - a PDF attaches as a Document;
+    - a mime mismatch, over-budget, busy and `/command` cases refuse with named kinds;
+    - images plus documents share the budget.
+  - Create `candy-code-web/src-web/components/__tests__/composerDocuments.spec.ts`: picker and drop add PDF chips and send `documents[]`.
+- docs/guards: the protocol gates; `tests/Config/ServerProtocolDocumentationDriftTest.php`; `docs/SERVER.md`; `candy-code-web/README.md` (soft).
+- serialized: [protocol] [hot:candy-code-web/src-web/components/Composer.vue]
+- deps: C-WEB-4.a
+- phase: normal
+- ruling: none
+- risks: CTX-2-P1 (PDFs re-sent every later turn, no page check) is another lane's fix. Uploads widen its blast radius, so say so in SERVER.md.
+

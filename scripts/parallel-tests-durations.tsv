@@ -180,6 +180,7 @@ candy-code/tests/Host/Commands/CommitHostCommandTest.php	1.770	7
 candy-code/tests/Agents/AgentWorkerPoolCancelTreeTest.php	1.766	3
 candy-code/tests/Host/SessionHostCommandsTest.php	1.765	17
 candy-code/tests/Integration/SystemPromptWiringTest.php	1.763	14
+candy-code/tests/Protocol/SessionSendDocumentsTest.php	1.751	7
 candy-code/tests/Session/CheckpointRefLifecycleTest.php	1.750	9
 candy-code/tests/Backend/EngineBackendCacheHealthTest.php	1.746	7
 candy-code/tests/Backend/ForkChannelIdleTimerSuspendedTest.php	1.735	2
@@ -629,6 +630,7 @@ candy-code/tests/Tui/SessionPickerActionsTest.php	0.143	25
 candy-code/tests/Bundles/BundleMarketplaceCliTest.php	0.142	15
 candy-code/tests/Commands/CommandDocsDriftTest.php	0.141	6
 candy-code/tests/Tui/PaneDragIntegrationTest.php	0.141	21
+candy-code/tests/Tui/FirstRunWizard/FirstRunWizardTest.php	0.14	21
 candy-code/tests/MCP/SseTransportWiringTest.php	0.139	6
 candy-code/tests/Hooks/HookEnvironmentDocumentationDriftTest.php	0.136	1
 candy-code/tests/Agents/SuspendedDelegationsTest.php	0.134	9
@@ -927,6 +929,7 @@ candy-code/tests/Skills/ForeignSkillDiscoveryTest.php	0.028	24
 candy-code/tests/ToolCallClickTest.php	0.028	16
 candy-code/tests/Tui/MediaForm/MediaFormNarrowTest.php	0.028	4
 candy-code/tests/Palette/PaletteCatalogTest.php	0.028	8
+candy-code/tests/Context/TurnContextDateTest.php	0.028	7
 candy-code/tests/MCP/HttpMcpServerStreamableHttpTest.php	0.027	33
 candy-code/tests/RepoMap/RepoMapRendererBudgetTest.php	0.027	9
 candy-code/tests/Tools/BuiltIn/BashMissingRootTest.php	0.027	5
@@ -1029,6 +1032,7 @@ candy-code/tests/Renderer/UiOnlyNoticeStyleTest.php	0.016	7
 candy-code/tests/Skills/AgentsTreeAndLegacyOpencodeTest.php	0.016	7
 candy-code/tests/Support/ProjectDirMigrationTest.php	0.016	3
 candy-code/tests/Tools/BuiltIn/ReadPagingTest.php	0.016	13
+candy-code/tests/Config/ProviderKeyStoreTest.php	0.016	7
 candy-code/tests/Chat/AgentInterruptSendTest.php	0.015	4
 candy-code/tests/Config/Settings/SettingsSchemaDocDriftTest.php	0.015	19
 candy-code/tests/Hooks/BashEscapeDenyHookTest.php	0.015	56
@@ -1193,6 +1197,7 @@ candy-code/tests/Session/TitleRaceTest.php	0.006	8
 candy-code/tests/Tools/BuiltIn/EditMaxBytesTest.php	0.006	3
 candy-code/tests/Tools/TaskToolTest.php	0.006	18
 candy-code/tests/UsageTest.php	0.006	38
+candy-code/tests/Tools/BuiltIn/SkillsSearchTest.php	0.006	16
 candy-code/tests/Agents/AgentPresetShadowNoticeTest.php	0.005	5
 candy-code/tests/Agents/WorktreeConfigTest.php	0.005	31
 candy-code/tests/App/AppTest.php	0.005	37
