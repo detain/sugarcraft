@@ -221,7 +221,7 @@
   },
   "C-WEB-4.e": {
    "branch": "cc/C-WEB-4.e",
-   "note": "r1 CLEAN 0C/0M/2nit-out; batch-4 pool; welder carries durations SessionSendDocumentsTest +8T, trio+dist re-derive once merged with C-WEB-4.d (dist collision certain, src disjoint), rebase post-b3 + sessionView+drift re-run",
+   "note": "r1 CLEAN 0C/0M/2nit-out; batch-4 pool; welder carries durations SessionSendDocumentsTest +8T, trio+dist re-derive once merged with C-WEB-4.d (dist collision certain, src disjoint), rebase post-b3 + sessionView+drift re-run | BATCH-5 STOP-1 @ f2ecbff7c: vue-tsc --build delta not EMPTY — TS7053 composerDocuments.spec.ts:146 (r1 gate was vacuous --noEmit); zero lane content on master; see lanes/C-WEB-4.e/STOP-1.md for cure+re-weld recipe",
    "notes": "base 24d746501; npm ci in flight (bg shell). [protocol] serialized: TurnMethods+MethodSchemas+trio regen (schema/SERVER.md/generated.ts)+Composer.vue+paste.ts+session.ts; NEW SessionSendDocumentsTest.php -> durations row at weld; welder re-derives trio once on merged tree (C-TOOL-3.e precedent).",
    "round": 1,
    "session": null,
@@ -329,7 +329,7 @@
  "status": "RUNNING",
  "tick": "154-CTX2f-review-live",
  "tip": "0f58a906f",
- "updated": "2026-10-28 batch-5 weld step 4",
+ "updated": "2026-10-28 batch-5 weld step 5 STOP record",
  "wave_loops": {
   "1": "closed r2 CLEAN",
   "16": {
@@ -929,6 +929,7 @@
   },
   "C-WEB-4.c": "batch-3 weld: pick 22ddc7c65->fc38985ab src-only (dist hunks dropped per WELDER FLAG, rebuilt on merged tree, swap rides weld commit); vitest serial 76F/593T rc0; vue-tsc 20 residual errors BASE-PROVEN at e14c3cc7c (closeout/owner surface, not lane); trio untouched; §4 cites fc38985ab; base master 7bcd40016",
   "C-WEB-4.d": "batch-5 step4: picks bbf4a95b9+074ffb281 (src+spec, lane dist stripped; 416fee321 cherry + is by-design, content-proven identical); dist rebuilt on merged tree rides weld; vue-tsc delta vs base EMPTY (TS2554 cured by fix commit); vitest statusBarTimer+sessionView 9/9 serial",
+  "C-WEB-4.e": "NOT welded batch-5 step5: STOP-with-record (lane-attributable TS7053); kept inflight",
   "C-WEB-7.a": {
    "cherry": "'-' clean single-commit pick, zero overlap vs master since base 581ac6ede",
    "durations": "no row (zero new test files); suite-figure.json untouched",
