@@ -193,7 +193,7 @@ final class ReadmeRosterDriftTest extends TestCase
             16 => 'Sixteen', 17 => 'Seventeen', 18 => 'Eighteen', 19 => 'Nineteen', 20 => 'Twenty',
             21 => 'Twenty-one', 22 => 'Twenty-two', 23 => 'Twenty-three', 24 => 'Twenty-four', 25 => 'Twenty-five',
             26 => 'Twenty-six', 27 => 'Twenty-seven', 28 => 'Twenty-eight', 29 => 'Twenty-nine', 30 => 'Thirty',
-            31 => 'Thirty-one', 32 => 'Thirty-two',
+            31 => 'Thirty-one', 32 => 'Thirty-two', 33 => 'Thirty-three',
         ];
         $this->assertArrayHasKey(
             \count($shipped),

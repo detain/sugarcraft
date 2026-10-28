@@ -4184,7 +4184,13 @@ DOC;
         // nothing: no file, no socket, no process. `mcp_call` deliberately
         // does NOT join: it dispatches whatever the named tool does, and the
         // write roster carries it for exactly that reason.
-        return ['mcp_list', 'Read', 'Grep', 'Glob', 'Ls', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune', 'Todo', 'Compress', 'Recall', 'Team', 'AskUser', 'PlanExit', 'SendMessage', 'Subagents', 'InterruptAgent', 'BoardRead', 'BoardPost', 'GenerateImage', 'GenerateVideo', 'ShellOutput'];
+        // `skills_search` (comparison plan C-EXT-3.b) joins on that same
+        // `mcp_list` doctrine: it ranks and formats the skill rows the
+        // registry already holds — names, descriptions, path lists and a
+        // bounded head of an already-loaded body — and opens nothing itself:
+        // no file, no socket, no process. The truth test below sees no write
+        // primitive in its source, exactly the shape its doc-block demands.
+        return ['mcp_list', 'Read', 'Grep', 'Glob', 'Ls', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune', 'Todo', 'Compress', 'Recall', 'Team', 'AskUser', 'PlanExit', 'SendMessage', 'Subagents', 'InterruptAgent', 'BoardRead', 'BoardPost', 'GenerateImage', 'GenerateVideo', 'ShellOutput', 'skills_search'];
     }
 
     /**

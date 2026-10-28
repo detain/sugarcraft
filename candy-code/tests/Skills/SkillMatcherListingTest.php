@@ -173,16 +173,16 @@ final class SkillMatcherListingTest extends TestCase
         // line, so exactly one skill and the count survive.
         $this->assertSame([
             '- [project] a: Alpha line body.',
-            '- 3 more skills; call Skill to list them',
+            '- 3 more skills; call skills_search to find them',
         ], $this->lines($lines));
 
         $firstTwo = strlen('- [project] a: Alpha line body.') + 1 + strlen('- [project] b: Bravo line body.');
-        $reserve = strlen('- 999999999 more skills; call Skill to list them');
+        $reserve = strlen('- 999999999 more skills; call skills_search to find them');
         $roomy = $firstTwo + 1 + $reserve + strlen('- [project] c: Charlie line body.') - 1;
         $this->assertSame([
             '- [project] a: Alpha line body.',
             '- [project] b: Bravo line body.',
-            '- 2 more skills; call Skill to list them',
+            '- 2 more skills; call skills_search to find them',
         ], $this->lines((new SkillMatcher())->listForPrompt($registry, excludeNames: [], maxTotalBytes: $roomy)));
     }
 

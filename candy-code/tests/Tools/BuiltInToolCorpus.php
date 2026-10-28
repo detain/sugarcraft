@@ -14,6 +14,7 @@ use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tools\BuiltIn\McpCallTool;
 use SugarCraft\Code\Tools\BuiltIn\McpListTool;
 use SugarCraft\Code\Tools\BuiltIn\SkillTool;
+use SugarCraft\Code\Tools\BuiltIn\SkillsSearch;
 use SugarCraft\Code\Tools\McpToolBridge;
 use SugarCraft\Code\Tools\Tool;
 
@@ -973,6 +974,7 @@ final class BuiltInToolCorpus
                 } else {
                     $built = match ($class) {
                         SkillTool::class => new SkillTool(new SkillRegistry()),
+                        SkillsSearch::class => new SkillsSearch(new SkillRegistry()),
                         // A writer whose home store cannot be opened: the
                         // view's reads answer the error an unopenable store
                         // must, and nothing touches a real memory directory.

@@ -138,9 +138,12 @@ Beyond the per-line clip, the whole listing carries an **aggregate** byte
 budget: lines are kept from the top while `skills.listingMaxBytes`
 (default 8192, `SkillMatcher::DEFAULT_LISTING_MAX_BYTES`) can still seat the
 next line *and* the collapse line; everything past it is replaced by one
-`- N more skills; call Skill to list them` line, and the drop is announced
-once per process through `RuntimeNoticeSink` — the same channel that carries
-every other "this session got smaller" warning — never silently. The first
+`- N more skills; call skills_search to find them` line, and the drop is
+announced once per process through `RuntimeNoticeSink` — the same channel
+that carries every other "this session got smaller" warning — never silently.
+The collapse line names a real door: `skills_search` ranks the same roster by
+keyword, so a skill the budget could not name is one query away, and the
+`Skill` tool still loads any of them by name. The first
 line is kept unconditionally: a roster of one is still a roster, and the
 collapse line names what the budget could not. Before this the per-line clip
 bounded a line and nothing bounded the SUM: a skill-heavy checkout paid

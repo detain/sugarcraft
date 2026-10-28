@@ -55,7 +55,7 @@ final readonly class SkillMatcher
     public const DEFAULT_LISTING_MAX_BYTES = 8192;
 
     /** The tail line naming what the budget dropped. */
-    private const MORE_LINE_FORMAT = '- %d more skills; call Skill to list them';
+    private const MORE_LINE_FORMAT = '- %d more skills; call skills_search to find them';
 
     /**
      * The listing's aggregate byte budget: `skills.listingMaxBytes`, else
@@ -183,7 +183,7 @@ final readonly class SkillMatcher
             if (!$announced) {
                 $announced = true;
                 \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn(sprintf(
-                    'The system-prompt skill listing hit its %d-byte budget (`%s`); %d skill(s) are not named in it — the Skill tool still lists and loads them, and the setting raises the cap.',
+                    'The system-prompt skill listing hit its %d-byte budget (`%s`); %d skill(s) are not named in it — skills_search finds them by keyword, the Skill tool still loads them by name, and the setting raises the cap.',
                     $maxTotalBytes,
                     self::SETTING_LISTING_MAX_BYTES,
                     $omitted,

@@ -5428,6 +5428,10 @@ final class DocFigureProseDriftTest extends TestCase
         // thirty-seven, but left this word map at thirty-six — the in-step
         // rule. Cured here; the (page + scandir) pair already agreed.
         $wordNumbers['thirty-seven'] = 37;
+        // C-EXT-3.b era, in-step census flip: skills_search.php joined the
+        // directory (38) and the generator re-spelled both pages again; the
+        // map rides the same commit, per the rule the lag comment above names.
+        $wordNumbers['thirty-eight'] = 38;
         self::assertArrayHasKey($word[1], $wordNumbers, "the spelled count '{$word[1]}' is outside the pinned word map — extend it deliberately");
 
         $files = array_values(array_filter(scandir($root . '/src/Tools/BuiltIn') ?: [], static fn(string $f): bool => str_ends_with($f, '.php')));
