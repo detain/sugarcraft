@@ -14,6 +14,14 @@ namespace SugarCraft\Code\MCP;
  * `registrationClientUri` is the RFC 7592 per-client management URL. It came
  * after the first nine keys, so a row written before it existed loads with
  * `''` (no update possible) and nothing else changes.
+ *
+ * `redirectUri` is C-MCP-4.c: the EXACT loopback callback binding the grant
+ * was registered and exchanged under (RFC 7591 asks the server to remember it
+ * verbatim, so the client keeps a byte-for-byte copy of what it declared).
+ * It came after the first ten keys: a row written before it existed — and
+ * every `mcp auth add` row, which never had a callback to declare — loads
+ * with `''`, meaning "no binding constrained this grant", not "the binding
+ * is the empty string".
  */
 final readonly class AuthEntry
 {
@@ -28,6 +36,7 @@ final readonly class AuthEntry
         public string $tokenUrl = '',
         public string $registrationUrl = '',
         public string $registrationClientUri = '',
+        public string $redirectUri = '',
     ) {}
 
     /**
@@ -46,6 +55,7 @@ final readonly class AuthEntry
             tokenUrl: $data['tokenUrl'] ?? '',
             registrationUrl: $data['registrationUrl'] ?? '',
             registrationClientUri: $data['registrationClientUri'] ?? '',
+            redirectUri: $data['redirectUri'] ?? '',
         );
     }
 
@@ -65,6 +75,7 @@ final readonly class AuthEntry
             'tokenUrl' => $this->tokenUrl,
             'registrationUrl' => $this->registrationUrl,
             'registrationClientUri' => $this->registrationClientUri,
+            'redirectUri' => $this->redirectUri,
         ];
     }
 

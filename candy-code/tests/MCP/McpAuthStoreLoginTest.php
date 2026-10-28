@@ -62,7 +62,7 @@ final class McpAuthStoreLoginTest extends TestCase
         self::removeTempDirEvenWithLockSidecars($this->tempDir);
     }
 
-    public function testLoginRunsTheWholeFlowAndPersistsTheTenKeyEntry(): void
+    public function testLoginRunsTheWholeFlowAndPersistsTheElevenKeyEntry(): void
     {
         $history = [];
         $flow = $this->flow([$this->registrationResponse(), $this->exchangeResponse()], $history, $discovered);
@@ -111,7 +111,7 @@ final class McpAuthStoreLoginTest extends TestCase
         self::assertSame('code', $params['response_type']);
         self::assertSame(OAuthPkce::METHOD, $params['code_challenge_method']);
 
-        // On-disk entry — same ten-key shape `add` writes, response scopes, endpoint carries.
+        // On-disk entry — same eleven-key shape `add` writes, response scopes, endpoint carries.
         $persisted = (new OAuthClientRegistration(new Client(), $this->authFilePath))->loadAuth();
         self::assertArrayHasKey(self::SERVER, $persisted);
         $entry = $persisted[self::SERVER];
@@ -126,6 +126,7 @@ final class McpAuthStoreLoginTest extends TestCase
         self::assertSame(self::TOKEN_URL, $entry->tokenUrl);
         self::assertSame(self::REGISTRATION_URL, $entry->registrationUrl);
         self::assertSame(self::REGISTRATION_URL . '/cid-login', $entry->registrationClientUri, 'the RFC 7592 management URI rides onto the row');
+        self::assertSame($redirectUri, $entry->redirectUri, 'C-MCP-4.c: the grant persists the EXACT loopback binding it registered and exchanged under — byte-identical to the authorize URL value, not a port re-derivation');
 
         $this->closeAll($requests);
     }

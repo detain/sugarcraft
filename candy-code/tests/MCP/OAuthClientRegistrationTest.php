@@ -865,6 +865,154 @@ final class OAuthClientRegistrationTest extends TestCase
         $this->assertSame('https://roundtrip.example.com/reg', $reloaded['https://roundtrip.example.com/mcp']->registrationUrl);
     }
 
+    // =========================================================================
+    // C-MCP-4.c: validAuthFor callback-binding verdict
+    // =========================================================================
+
+    /**
+     * The stored binding is the authority: a live token earned under one
+     * loopback callback must not answer a flow that declared another —
+     * the authorization server still remembers the registered binding, and
+     * handing the grant to a flow whose completion would land on a
+     * un-listened port strands it. The mock queue is empty, so the refusal
+     * is also proven network-free.
+     */
+    public function testValidAuthForRefusesALiveEntryBoundToADifferentCallback(): void
+    {
+        $ocr = new OAuthClientRegistration(
+            new Client(['handler' => HandlerStack::create(new MockHandler([]))]),
+            $this->authFilePath,
+        );
+        $ocr->saveAuth('https://bound.example.com/mcp', new AuthEntry(
+            clientId: 'c5',
+            clientSecret: 's5',
+            registrationAccessToken: 'r5',
+            accessToken: 'bound-access',
+            refreshToken: 'rt5',
+            expiresAt: time() + 3600,
+            tokenUrl: 'https://bound.example.com/token',
+            registrationUrl: 'https://bound.example.com/register',
+            redirectUri: 'http://127.0.0.1:41239/callback',
+        ));
+        $ocr->clearCache();
+
+        self::assertNull(
+            $ocr->validAuthFor('https://bound.example.com/mcp', 'http://127.0.0.1:52000/callback'),
+            'a flow presenting a different binding than the stored grant is answered with nothing (stored value is authority)',
+        );
+        self::assertSame(
+            'bound-access',
+            $ocr->validAuthFor('https://bound.example.com/mcp', 'http://127.0.0.1:41239/callback')?->accessToken,
+            'the byte-identical binding passes; this is the same exact-string comparison the exchange already applies',
+        );
+        self::assertSame(
+            'bound-access',
+            $ocr->validAuthFor('https://bound.example.com/mcp')?->accessToken,
+            'a caller with no flow (the per-request attach path) sees the entry exactly as it did before C-MCP-4.c',
+        );
+    }
+
+    /**
+     * The chosen migration for rows that persisted no binding: an undeclared
+     * binding constrains nothing. This covers both shapes that exist on real
+     * disks — every `mcp auth add` row (client_credentials never had a
+     * callback to declare), and — via the next test — login rows written
+     * before this field existed.
+     */
+    public function testValidAuthForServesAnUnboundRowToAnyFlowBinding(): void
+    {
+        $ocr = new OAuthClientRegistration(
+            new Client(['handler' => HandlerStack::create(new MockHandler([]))]),
+            $this->authFilePath,
+        );
+        $ocr->saveAuth('https://addrow.example.com/mcp', new AuthEntry(
+            clientId: 'c6',
+            clientSecret: 's6',
+            registrationAccessToken: 'r6',
+            accessToken: 'add-access',
+            refreshToken: 'rt6',
+            expiresAt: time() + 3600,
+            tokenUrl: 'https://addrow.example.com/token',
+            registrationUrl: 'https://addrow.example.com/register',
+        ));
+        $ocr->clearCache();
+
+        $entry = $ocr->validAuthFor('https://addrow.example.com/mcp', 'http://127.0.0.1:41239/callback');
+
+        self::assertNotNull($entry, 'a row that declared no binding constrains no flow; re-login is what declares one');
+        self::assertSame('add-access', $entry->accessToken);
+        self::assertSame('', $entry->redirectUri, 'serving does not invent a binding onto the row');
+    }
+
+    /**
+     * Graceful migration pinned ON DISK: the 10-key row a pre-C-MCP-4.c
+     * build wrote lacks the key entirely — fromArray must load '' and the
+     * entry must keep working exactly as it did (the same contract
+     * registrationClientUri shipped with).
+     */
+    public function testALegacyOnDiskRowWithoutTheBindingKeyStillLoadsAndPassesAnyFlow(): void
+    {
+        file_put_contents($this->authFilePath, (string) json_encode(['https://pre-binding.example.com/mcp' => [
+            'clientId' => 'c7', 'clientSecret' => '', 'registrationAccessToken' => 'r7', 'accessToken' => 'pre-binding-access',
+            'refreshToken' => '', 'expiresAt' => null, 'scopes' => [], 'tokenUrl' => '', 'registrationUrl' => '',
+            'registrationClientUri' => '',
+        ]]));
+
+        $ocr = new OAuthClientRegistration(
+            new Client(['handler' => HandlerStack::create(new MockHandler([]))]),
+            $this->authFilePath,
+        );
+
+        $loaded = $ocr->loadAuth()['https://pre-binding.example.com/mcp'];
+        self::assertSame('', $loaded->redirectUri, 'the absent key loads as unbound, never as a notice-worthy gap');
+
+        $served = $ocr->validAuthFor('https://pre-binding.example.com/mcp', 'http://127.0.0.1:4711/callback');
+        self::assertNotNull($served, 'an entry persisted before this change must still work for a live flow');
+        self::assertSame('pre-binding-access', $served->accessToken);
+    }
+
+    /**
+     * A rotated token rides a NEW AuthEntry built by entryFromRefresh — the
+     * binding must carry through the refresh and its locked save, or the
+     * grant would silently unbind itself exactly when it is being kept alive.
+     */
+    public function testTheCallbackBindingSurvivesARefresh(): void
+    {
+        $mock = new MockHandler([new Response(200, ['Content-Type' => 'application/json'], json_encode([
+            'access_token' => 'rotated-bound-access',
+            'refresh_token' => 'rotated-rt',
+            'expires_in' => 3600,
+        ]))]);
+        $ocr = new OAuthClientRegistration(
+            new Client(['handler' => HandlerStack::create($mock)]),
+            $this->authFilePath,
+        );
+        $ocr->saveAuth('https://rot-bind.example.com/mcp', new AuthEntry(
+            clientId: 'c8',
+            clientSecret: 's8',
+            registrationAccessToken: 'r8',
+            accessToken: 'stale-bound-access',
+            refreshToken: 'rt8',
+            expiresAt: time() - 10,
+            tokenUrl: 'https://rot-bind.example.com/token',
+            registrationUrl: 'https://rot-bind.example.com/register',
+            redirectUri: 'http://127.0.0.1:40400/callback',
+        ));
+        $ocr->clearCache();
+
+        $served = $ocr->validAuthFor('https://rot-bind.example.com/mcp', 'http://127.0.0.1:40400/callback');
+
+        self::assertSame('rotated-bound-access', $served?->accessToken);
+        self::assertSame('http://127.0.0.1:40400/callback', $served?->redirectUri, 'the refresh reconstructs the entry; the binding is identity, not a token field');
+
+        $reloaded = (new OAuthClientRegistration(new Client(), $this->authFilePath))->loadAuth();
+        self::assertSame(
+            'http://127.0.0.1:40400/callback',
+            $reloaded['https://rot-bind.example.com/mcp']->redirectUri,
+            'and the rotated row still carries it on disk',
+        );
+    }
+
     /**
      * r77-rv-la MINOR-1: `mcp auth add` must persist the endpoint URLs on the
      * stored entry. Before this pin the add-arm's `tokenUrl:`/`registrationUrl:`

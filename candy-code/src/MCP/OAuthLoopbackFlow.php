@@ -187,6 +187,7 @@ final class OAuthLoopbackFlow
                 tokenUrl: $tokenUrl,
                 registrationUrl: $registrationUrl,
                 registrationClientUri: $registered['registrationClientUri'],
+                redirectUri: $redirectUri,
             );
             $this->oauth->saveAuth($serverUrl, $entry);
 

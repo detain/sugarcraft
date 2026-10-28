@@ -491,12 +491,38 @@ final class OAuthClientRegistration
      * 401 is the honest outcome, and re-running `mcp auth add` records the
      * endpoints. This asymmetry is deliberate: inventing an endpoint is worse
      * than a visible rejection.
+     *
+     * C-MCP-4.c adds the callback-binding verdict. `login` persists the exact
+     * loopback `redirect_uri` its grant was registered and exchanged under;
+     * a caller that is itself inside a live flow passes that flow's binding as
+     * `$currentFlowRedirectUri`, and a stored binding that differs from it
+     * answers `null` — the STORED value is the authority, because it is the
+     * one the authorization server still remembers for this client. Serving
+     * a token earned under a different callback to a flow that cannot receive
+     * its completion would strand the grant on a port nobody listens on. Two
+     * shapes pass unconstrained: a flow that presents no binding (the
+     * request-attach callers hold only the server URL) is today's byte-exact
+     * behavior, and a row that persisted no binding — every `add` row, and
+     * every `login` row written before this field existed — declared nothing,
+     * so it constrains nothing until a re-login declares one.
+     *
+     * @param string|null $currentFlowRedirectUri The EXACT redirect_uri the
+     *     calling flow registered with, or null when the caller is not a
+     *     flow and has no binding to check.
      */
-    public function validAuthFor(string $serverUrl): ?AuthEntry
+    public function validAuthFor(string $serverUrl, ?string $currentFlowRedirectUri = null): ?AuthEntry
     {
         $entry = $this->loadAuth()[$serverUrl] ?? null;
 
         if ($entry === null) {
+            return null;
+        }
+
+        if (
+            $currentFlowRedirectUri !== null
+            && $entry->redirectUri !== ''
+            && $entry->redirectUri !== $currentFlowRedirectUri
+        ) {
             return null;
         }
 
@@ -610,6 +636,7 @@ final class OAuthClientRegistration
             tokenUrl: $entry->tokenUrl,
             registrationUrl: $entry->registrationUrl,
             registrationClientUri: $entry->registrationClientUri,
+            redirectUri: $entry->redirectUri,
         );
     }
 

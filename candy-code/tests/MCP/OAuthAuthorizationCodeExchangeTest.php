@@ -174,7 +174,7 @@ final class OAuthAuthorizationCodeExchangeTest extends TestCase
         self::assertNull($token['expiresIn']);
     }
 
-    public function testTheAuthCodeEntryShapeIsTheTenKeyRoster(): void
+    public function testTheAuthCodeEntryShapeIsTheElevenKeyRoster(): void
     {
         $entry = new AuthEntry(
             clientId: 'cid',
@@ -189,11 +189,18 @@ final class OAuthAuthorizationCodeExchangeTest extends TestCase
         );
 
         self::assertSame(
-            ['clientId', 'clientSecret', 'registrationAccessToken', 'accessToken', 'refreshToken', 'expiresAt', 'scopes', 'tokenUrl', 'registrationUrl', 'registrationClientUri'],
+            ['clientId', 'clientSecret', 'registrationAccessToken', 'accessToken', 'refreshToken', 'expiresAt', 'scopes', 'tokenUrl', 'registrationUrl', 'registrationClientUri', 'redirectUri'],
             array_keys($entry->toArray()),
-            'the on-disk shape is shared by `add` and `login`; an eleventh key here means AuthEntry grew a field the legacy readers never saw '
-            . '(the tenth, registrationClientUri for RFC 7592 updates, loads as \'\' from a row written before it existed)',
+            'the on-disk shape is shared by `add` and `login`; an unexpected key here means AuthEntry grew a field the legacy readers never saw '
+            . '(the tenth, registrationClientUri for RFC 7592 updates, and the eleventh, redirectUri for the C-MCP-4.c callback binding, '
+            . 'each load as \'\' from a row written before they existed)',
         );
+        // C-MCP-4.c: the roster grew to eleven keys on purpose. The newest,
+        // redirectUri, is the loopback callback binding a login declares;
+        // a row written before it existed — and every `add` row — loads it
+        // as '' ("unbound"), which is the graceful migration the roster
+        // message above promises for exactly this situation.
+        self::assertSame('', $entry->redirectUri, 'an entry built without a binding carries the empty string, not an absent key');
     }
 
     // =========================================================================

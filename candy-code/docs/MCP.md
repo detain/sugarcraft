@@ -829,6 +829,14 @@ The callback is judged on GET method, exact `/callback` path, and a
 page that echoes nothing of the request. The code is then exchanged with the
 verifier, and the entry is stored in exactly the shape `mcp auth add` writes
 — including the endpoint carries, so refresh works from the next launch.
+The entry also records the exact callback binding it was registered under.
+The request-attachment path never consults that record (it holds only the
+server URL, no binding to declare); a flow that presents a different loopback
+binding than the stored one is answered with no credentials — the stored
+value is the authority, because it is the one the authorization server still
+remembers, and only a re-login changes it. A row that recorded no binding —
+every `mcp auth add` row, and every login stored before this field existed —
+constrains no flow at all.
 The wait is bounded by 300 s; `--timeout` (as a verb operand after the `--`
 separator) changes the budget. It bounds a human leg, not a provider request,
 which is why it is a plain socket deadline. An entry that arrives without a
