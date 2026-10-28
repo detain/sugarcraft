@@ -189,6 +189,7 @@ candy-code/tests/Session/Import/SessionImporterTest.php	1.673	11
 candy-code/tests/Protocol/MemoryMethodsTest.php	1.666	12
 candy-code/tests/SuiteChildStdinPrependResidualTest.php	1.654	1
 candy-code/tests/Tools/SendMessageToolTest.php	1.632	9
+candy-code/tests/Commands/McpAuthCommandEnableDisableTest.php	1.614	7
 candy-code/tests/Cli/RefusalStderrSurfaceTest.php	1.597	4
 candy-code/tests/Workflows/StageArgumentScopedGrantTest.php	1.597	6
 candy-code/tests/Workflows/WorkflowProviderHandoffTest.php	1.593	6
@@ -248,6 +249,7 @@ candy-code/tests/Acp/AcpPromptStreamTest.php	1.192	9
 candy-code/tests/Chat/ColdResumeFinishedAgentTest.php	1.180	5
 candy-code/tests/Workflows/MultiTaskStageTest.php	1.179	14
 candy-code/tests/Backend/TurnIdleTimeoutSettingTest.php	1.178	23
+candy-code/tests/MCP/McpRuntimeDisableTest.php	1.176	5
 candy-code/tests/Support/ProcessReaperEscalationOrderTest.php	1.170	5
 candy-code/tests/Acp/AcpPermissionBridgeTest.php	1.157	6
 candy-code/tests/Backend/EngineBackendStepBudgetTest.php	1.157	8
