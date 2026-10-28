@@ -1167,6 +1167,7 @@ candy-code/tests/Commands/MenuBarLabelDerivationTest.php	0.006	11
 candy-code/tests/Commands/NewRuleCommandTest.php	0.006	9
 candy-code/tests/Config/MemoryDocumentationDriftTest.php	0.006	8
 candy-code/tests/Context/ExchangeSummaryTest.php	0.006	23
+candy-code/tests/Host/Commands/RecapHostCommandTest.php	0.006	4
 candy-code/tests/Integration/BinCandyCodeTuiErrorLogTest.php	0.006	6
 candy-code/tests/MCP/McpConfigToleranceTest.php	0.006	16
 candy-code/tests/Media/MaskIngestTest.php	0.006	25
