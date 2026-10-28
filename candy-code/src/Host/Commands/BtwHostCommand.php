@@ -66,15 +66,19 @@ final class BtwHostCommand implements HostCommand
      * The side question's request: the framing, then the transcript and the
      * question in one user turn.
      *
+     * The framing is a parameter because the same transcript envelope serves
+     * every tool-less side call on the title backend — {@see RecapHostCommand}
+     * passes its own voice through it. The default keeps `/btw` byte-identical.
+     *
      * @param array<int, Message> $history
      * @return list<Message>
      */
-    public static function request(string $question, array $history): array
+    public static function request(string $question, array $history, string $framing = self::PROMPT): array
     {
         $transcript = TranscriptDigest::of($history);
 
         return [
-            Message::system(self::PROMPT),
+            Message::system($framing),
             Message::user(
                 "The conversation so far, oldest first:\n<transcript>\n"
                 . ($transcript === '' ? '(empty)' : $transcript) . "\n</transcript>\n\n"
@@ -87,19 +91,28 @@ final class BtwHostCommand implements HostCommand
 
     /**
      * The call as a thunk resolving to a {@see SideQuestionAnsweredMsg} —
-     * never rejecting: a failed call answers with what went wrong.
+     * never rejecting: a failed call answers with what went wrong. A caller
+     * varies only the voice (`$framing`) and the key the failure is woven
+     * from (`$failureKey`); the DTO carries no verdict field, so the failure
+     * text is the whole failure signal either way.
      *
      * @param array<int, Message> $history
      * @return \Closure(): PromiseInterface<Msg>
      */
-    public static function call(Backend $titleBackend, string $question, array $history, ?string $sessionId): \Closure
-    {
-        $request = self::request($question, $history);
+    public static function call(
+        Backend $titleBackend,
+        string $question,
+        array $history,
+        ?string $sessionId,
+        string $framing = self::PROMPT,
+        string $failureKey = 'host.btw.failed',
+    ): \Closure {
+        $request = self::request($question, $history, $framing);
 
-        return static function () use ($titleBackend, $request, $sessionId): PromiseInterface {
+        return static function () use ($titleBackend, $request, $sessionId, $failureKey): PromiseInterface {
             $failed = static fn (\Throwable $e): Msg => new SideQuestionAnsweredMsg(
                 $sessionId,
-                Lang::t('host.btw.failed', ['reason' => self::oneLine($e->getMessage())]),
+                Lang::t($failureKey, ['reason' => self::oneLine($e->getMessage())]),
             );
             try {
                 $promise = $titleBackend->completeAsync($request);
@@ -119,32 +132,40 @@ final class BtwHostCommand implements HostCommand
      * channel widening: describe returns the row, not the text). An answer is
      * never an error row: `host.btw.failed` text is woven into the answer
      * itself, so no verdict field distinguishes it — flagging would need the
-     * DTO widened, a separate ruling.
+     * DTO widened, a separate ruling. The heading and empty-answer keys are
+     * parameters so the same seam renders {@see RecapHostCommand}'s voice.
      */
-    public static function answerRowMessage(mixed $msg): ?Message
-    {
+    public static function answerRowMessage(
+        mixed $msg,
+        string $headingKey = 'host.btw.answer_heading',
+        string $noAnswerKey = 'host.btw.no_answer',
+    ): ?Message {
         if (!$msg instanceof SideQuestionAnsweredMsg) {
             return null;
         }
 
-        return Message::assistant(self::answerRow($msg))->withUiOnly();
+        return Message::assistant(self::answerRow($msg, $headingKey, $noAnswerKey))->withUiOnly();
     }
 
     /**
      * The row text an answer lands as: the model's text without a reasoning
-     * preamble or terminal control bytes, bounded, and marked as a side answer.
+     * preamble or terminal control bytes, bounded, and marked under the
+     * voice's own heading.
      */
-    public static function answerRow(SideQuestionAnsweredMsg $msg): string
-    {
+    public static function answerRow(
+        SideQuestionAnsweredMsg $msg,
+        string $headingKey = 'host.btw.answer_heading',
+        string $noAnswerKey = 'host.btw.no_answer',
+    ): string {
         $answer = trim((string) preg_replace('/<think>.*?<\/think>/is', '', $msg->answer));
         $answer = trim(Sanitize::untrusted($answer));
         if ($answer === '') {
-            $answer = Lang::t('host.btw.no_answer');
+            $answer = Lang::t($noAnswerKey);
         } elseif (mb_strlen($answer) > self::ANSWER_MAX_CHARS) {
             $answer = mb_substr($answer, 0, self::ANSWER_MAX_CHARS - 1) . '…';
         }
 
-        return Lang::t('host.btw.answer_heading') . "\n\n" . $answer;
+        return Lang::t($headingKey) . "\n\n" . $answer;
     }
 
     private static function oneLine(string $text): string
