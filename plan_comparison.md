@@ -141,8 +141,8 @@ So while 2 lanes are in review, the other 8 slots build steps from the next wave
 | ✅ W5 (closed 2026-10-27) | 10 | C-WEB-1.a · C-WEB-1.b · P-CTX.c · P-CTX.d · P-TABS.a · P-MENU.a · P-CTX.b · P-IMG.c · P-TABS.h · C-TOOL-7.a |
 | ✅ W6 (closed 2026-10-27) | 10 | P-MENU.c · P-AGENT.a · P-TABS.c · P-MENU.b · P-CTX.f · C-TOOL-7.c · C-AGT-1.b · C-AGT-3.a · C-CTX-2.b · C-EXT-2.a |
 | ✅ W7 (closed 2026-10-27) | 10 | P-CTX.e · P-AGENT.c · P-CTX.g · C-AGT-7.a · C-AGT-2.b · C-AGT-3.b · C-EXT-7.b · C-SEC-5.a · C-SES-6.a · C-SES-9.a |
-| W8 | 10 | P-MENU.d · P-AGENT.d · C-CTX-2.a · C-EXT-2.b · C-SES-4.b · C-SES-9.c · C-SES-9.d · C-WEB-3.a · C-WEB-3.b · C-WEB-3.c |
-| W9 | 10 | C-SES-5.c · P-MENU.e · C-CTX-2.c · C-WEB-3.d · C-AGT-7.c · C-CTX-6.c · C-CTX-6.d · C-EXT-7.a · C-MCP-6.a · C-PRV-5.a |
+| ✅ W8 (closed 2026-10-28) | 10 | P-MENU.d · P-AGENT.d · C-CTX-2.a · C-EXT-2.b · C-SES-4.b · C-SES-9.c · C-SES-9.d · C-WEB-3.a · C-WEB-3.b · C-WEB-3.c |
+| ✅ W9 (closed 2026-10-28) | 10 | C-SES-5.c · P-MENU.e · C-CTX-2.c · C-WEB-3.d · C-AGT-7.c · C-CTX-6.c · C-CTX-6.d · C-EXT-7.a · C-MCP-6.a · C-PRV-5.a |
 | W10 | 10 | C-CTX-6.a · C-EXT-2.c · C-SEC-5.c · C-TOOL-3.a · C-AGT-7.b · C-CTX-1.c · C-CTX-2.e · C-MCP-4.a · C-PRV-5.b · C-PRV-5.c |
 | W11 | 10 | C-MCP-2.a · C-CTX-6.b · C-EXT-2.d · C-PRV-5.d · C-SEC-5.b · C-SES-1.b · C-SES-9.b · C-TOOL-3.b · C-TOOL-7.b · C-TOOL-7.d |
 | W12 | 10 | C-MCP-2.b · C-SEC-5.d · C-TOOL-7.e · C-TUI-1.a · C-TUI-7.a · C-TUI-7.b · C-WEB-3.f · C-WEB-7.a · C-WEB-7.b · C-TOOL-5.b |
@@ -1030,7 +1030,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-2.a`
 
-#### C-EXT-2.b — Honour skill `allowed-tools`/`disallowed-tools`/`model`/`effort` for the active turn
+#### ✅ 4c1e8bb82 C-EXT-2.b — Honour skill `allowed-tools`/`disallowed-tools`/`model`/`effort` for the active turn
 - **Item:** C-EXT-2 (sources: GAP-SKL-11, k2-dorm inert frontmatter, k1-dorm#8) · dormant-wire · effort M (upper)
 - **What:** **What's inert.** `FrontmatterKeyAudit.php:120-135` lists four skill keys as INERT; nothing on a live path reads them. Two traps: `Skill::$effort` defaults to `'medium'` when absent (`Skill.php:24`), so "declared" cannot be told …
 - **Files — create:** `candy-code/src/Skills/ActiveSkillEffects.php`
@@ -1123,7 +1123,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SES-9.d (W8)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-5.c`
 
-#### P-MENU.e — Pane toggles leave the bar: View ▸ Panes owns `panetab:`, hover, indicator door
+#### ✅ 255c1599a P-MENU.e — Pane toggles leave the bar: View ▸ Panes owns `panetab:`, hover, indicator door
 - **Item:** P-MENU-REDO (sources: owner pick) · feature · effort M
 - **What:** **The bar.** `compose()` drops the pane-tab strip and its three densities (`MenuBar.php:94-114`, :220-288). The right end keeps only the `Currently: <pane>` indicator (R-MENU-2). It goes terse (label only) below 61 cols and …
 - **Files — create:** none
@@ -1135,7 +1135,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Ruling:** R-MENU-2 (keep the `Currently:` indicator as a door to View ▸ Panes; default yes) and R-MENU-3 (the submenu stays open after a toggle; default yes) — see §6
 - **Brief:** `prompt_kit/findings/comparison-1026/design-menu.md` → `### P-MENU.e`
 
-#### C-CTX-2.c — Run auto-memory, dream pass and auto-commit on served settles
+#### ✅ b4d34cecd C-CTX-2.c — Run auto-memory, dream pass and auto-commit on served settles
 - **Item:** C-CTX-2 (sources: GAP-MEM-02w, k1-dorm#6) · dormant-wire · MAJOR · effort M
 - **What:** In `SessionHost::settleWith()`, after `releaseQueue()` and the goal decision, call `TurnSettleWork::plan()` with the host's state: `$this->turn !== null` means the turn carried on; `workspace->memoryStore`, `summaryBackend` and …
 - **Files — create:** `candy-code/tests/Host/SessionHostTurnSettleWorkTest.php`
@@ -1262,7 +1262,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SEC-5.a (W7)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-5.c`
 
-#### C-TOOL-3.a — Tool-tail slot store + PtyRun live progress
+#### ✅ 634fb94f0 C-TOOL-3.a — Tool-tail slot store + PtyRun live progress
 - **Item:** C-TOOL-3 (sources: GAP-SH-08, k2-dorm `ToolProgress` unpainted) · dormant-wire · effort S
 - **What:** Core half of the live tail. (1) `ToolTailSlots`: a process-global store shaped like `candy-code/src/Media/PreviewSlots.php` (MAX_SLOTS backstop). It holds the newest tail text, `truncated` and `seq` per toolCallId, and drops …
 - **Files — create:** `candy-code/src/Tui/ToolTailSlots.php`, `candy-code/tests/Tui/ToolTailSlotsTest.php`, `candy-code/tests/Tools/PtyRunToolProgressTest.php`
@@ -1284,7 +1284,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-7.b`
 
-#### C-CTX-1.c — Track `@import` children in the instruction diff
+#### ✅ 7f6968f9f C-CTX-1.c — Track `@import` children in the instruction diff
 - **Item:** C-CTX-1 (sources: p1-miss: CTX-3 `@import` children untracked) · fix · MINOR · effort S
 - **What:** The tracker's declared limit (`InstructionDiffTracker.php:59-63`) leaves a child-only edit to an `@import`ed file invisible until the next refresh point. Capture records each root document's resolved import children as stat-only …
 - **Files — create:** none
@@ -1432,7 +1432,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-TOOL-3.a (W10)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tool.md` → `### C-TOOL-3.b`
 
-#### C-TOOL-7.b — Ls bounded heap
+#### ✅ 08e91c647 C-TOOL-7.b — Ls bounded heap
 - **Item:** C-TOOL-7 (sources: SHL-2-P1) · fix · MINOR · effort S
 - **What:** Root cause `candy-code/src/Tools/BuiltIn/Ls.php:313-347` (`collect()`): every entry is `is_dir`'d, ignore-checked and `realpath`'d into `$entries`, then `usort`ed, and the cap applies after. The comment "the walk IS the cost …
 - **Files — create:** none
@@ -3204,7 +3204,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - Chat.php region claims: C-SES-7.c (ctor, persistence/memory guards); C-WEB-2.f (handleEffortCommand)
 - Bootstrap.php method claims: C-SES-7.c (chat, openSession); C-SES-8.g (sessionStore)
 
-#### C-MCP-4.c — Served `/mcp login` + paste-back finish from a remote browser
+#### ✅ 2ad862baf C-MCP-4.c — Served `/mcp login` + paste-back finish from a remote browser
 - **Item:** C-MCP-4 (sources: GAP-MCP-04) · gap · effort M
 - **What:** In the TUI, `Chat::handleMcpAuthCommand` intercepts `login <server>` into `McpLoginFork` (`candy-code/src/Chat.php:19810-19843`). Served `/mcp login` reaches `McpAuthHostCommand` → `printLoginGuidance()`, which only prints shell …
 - **Files — create:** `candy-code/src/Host/ServedMcpLogins.php`, `candy-code/tests/Host/McpLoginServedTest.php`
