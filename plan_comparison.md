@@ -149,7 +149,7 @@ So while 2 lanes are in review, the other 8 slots build steps from the next wave
 | ✅ W13 (closed 2026-10-28) | 10 | C-EXT-2.e · C-WEB-7.c · C-WEB-7.d · C-TOOL-3.c · C-MCP-3.a · C-TOOL-5.c · C-AGT-5.a · C-SES-3.d · C-TUI-6.k · C-AGT-6.b |
 | ✅ W14 (closed 2026-10-28) | 10 | P-TABS.e · C-WEB-3.e · C-TOOL-4.a · C-AGT-4.a · C-AGT-5.b · C-EXT-4.a · C-PRV-2.a · C-SES-7.a · C-TOOL-3.d · C-TUI-2.a |
 | ✅ W15 (closed 2026-10-28) | 10 | P-TABS.f · C-WEB-3.g · C-TUI-2.b · C-WEB-4.a · C-AGT-5.c · C-AGT-5.e · C-AGT-5.g · C-AGT-6.d · C-CTX-4.c · C-EXT-3.c |
-| W16 | 10 | P-TABS.g · C-CTX-2.d · C-EXT-4.b · C-EXT-5.a · C-MCP-3.b · C-MCP-4.b · C-PRV-2.b · C-SEC-6.a · C-SEC-7.d · C-SEC-8.c |
+| ✅ W16 (closed 2026-10-29, wave loop r1 CLEAN (0C/0M/3nits)) | 10 | P-TABS.g · C-CTX-2.d · C-EXT-4.b · C-EXT-5.a · C-MCP-3.b · C-MCP-4.b · C-PRV-2.b · C-SEC-6.a · C-SEC-7.d · C-SEC-8.c |
 | W17 | 10 | P-AGENT.b · C-CTX-5.c · C-PRV-2.c · C-SES-4.c · C-SES-6.b · C-SES-6.c · C-SES-8.c · C-SES-8.f · C-TOOL-2.d · C-TOOL-3.e |
 | W18 | 10 | C-AGT-4.b · C-PRV-3.a · C-SEC-8.e · C-TOOL-5.a · C-TUI-2.d · C-TUI-3.c · C-TUI-3.f · C-TUI-5.d · C-WEB-4.b · C-WEB-4.c |
 | W19 | 10 | C-PRV-4.a · C-SES-4.d · C-TOOL-2.b · C-TUI-2.c · C-WEB-4.d · C-WEB-4.e · C-AGT-5.h · C-AGT-6.a · C-CTX-2.f · C-CTX-3.b |
