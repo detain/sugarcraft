@@ -139,6 +139,7 @@ candy-code/tests/Agents/AgentWorkerPoolCancelKeepsLoopLiveTest.php	2.296	5
 candy-code/tests/Server/ReplayResyncTest.php	2.267	7
 candy-code/tests/Tools/TaskToolEngineTest.php	2.259	15
 candy-code/tests/MCP/StdioMcpServerToolTimeoutTest.php	2.254	13
+candy-code/tests/Tools/BuiltIn/ScheduleToolTest.php	2.229	13
 candy-code/tests/Session/CheckpointIntegrityTest.php	2.220	9
 candy-code/tests/Support/ForkedChildReaperAdoptionTest.php	2.220	6
 candy-code/tests/LSP/LspCacheTest.php	2.203	18
@@ -565,6 +566,7 @@ candy-code/tests/Chat/AgentViewTest.php	0.186	18
 candy-code/tests/App/SidePaneRowClickTest.php	0.185	8
 candy-code/tests/Chat/CompactModelSummaryTest.php	0.184	38
 candy-code/tests/Tui/MenuBarCompactStripTest.php	0.184	6
+candy-code/tests/Background/ScheduleFactoryTest.php	0.184	14
 candy-code/tests/Hooks/ClaudeSettingsHooksTest.php	0.183	28
 candy-code/tests/Host/SessionTabsExtractionParityTest.php	0.182	22
 candy-code/tests/Chat/PermissionRejectNoteAndStopTest.php	0.180	7
