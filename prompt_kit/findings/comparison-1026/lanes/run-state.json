@@ -242,7 +242,8 @@
    "notes": "base 24d746501; npm ci in flight (bg shell). StatusBar.vue+reducer.ts hot; reducer edit = 2 arms + 1 field only (cross-area hot file). dist rides lane commit.",
    "round": 1,
    "session": null,
-   "stage": "clean",
+   "stage": "weld-stopped",
+   "weld_stop": "vue-tsc NEW TS2554 statusBarTimer.spec.ts:191 (r1 rc=0 gate vacuous); vitest green 78F/607T; pick+cure reset at 72c9aaa36; see STOP-1.md",
    "worktree": "/home/sites/cc-cmp-C-WEB-4.d"
   },
   "C-WEB-4.e": {
@@ -353,7 +354,7 @@
  ],
  "standing_reds_b985fbe51": "ADD: ChatHostLangCatalogueTest red on chat.effort.launch_unshaped (asker LaunchContext.php:2109 outside sources()) - byte-identical at base, C-PRV-1.b (a992413b0) seam -> closeout roster",
  "status": "RUNNING",
- "tick": "128-batch3-weld-C-WEB-4.c",
+ "tick": "128-batch3-stop-C-WEB-4.d",
  "tip": "0f58a906f",
  "updated": "2026-10-29",
  "wave_loops": {
