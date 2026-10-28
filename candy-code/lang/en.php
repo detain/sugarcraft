@@ -3477,4 +3477,14 @@ TXT,
     'tui.sessions.unnamed' => 'session',
     'tui.sessions.agents' => '{count} agents',
     // --- end tui.sessions (P-TABS.c) ---
+
+    // --- session.import (C-SES-7.a: the importer core) ---
+    'session.import.notice' => 'Imported {format} transcript — untrusted reference material: its tool activity is recorded as text, never replayed.',
+    'session.import.refusal.not_readable' => 'import: {path} is not a readable file, so nothing was imported',
+    'session.import.refusal.source_shrank' => 'import: the source now holds fewer transcript rows than the last import stored, and a shrunken transcript is refused instead of rewritten',
+    'session.import.refusal.too_large' => 'import: the transcript is {bytes} bytes, past the {max} byte bound',
+    'session.import.refusal.too_many_items' => 'import: the transcript carries more rows than the {max} row bound',
+    'session.import.refusal.unknown_format' => 'import: the file does not match a CandyCode, Claude Code, Codex or OpenCode transcript, so nothing was guessed',
+    'session.import.refusal.unsupported_shape' => 'import: the transcript shape is not recognised ({detail}); unknown formats are refused, never guessed',
+    // --- end session.import ---
 ];

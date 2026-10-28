@@ -822,6 +822,11 @@ final class ReadPathCensusTest extends TestCase
                 . 'only to hold flock(); lstat refuses anything but a regular file and no byte '
                 . 'of it is read',
         ],
+        'Session/Import/SessionImporter.php|file_get_contents' => [
+            'USER_TYPED — importFile() reads the transcript file the person at the terminal named for '
+                . 'import (C-SES-7.a); is_file() gates it, the byte bound is checked before the read, and '
+                . 'the content only ever becomes session transcript rows after redaction',
+        ],
         'Session/PromptHistory.php|file' => [
             'SELF_LOCATED — ~/.candy-code/prompt_history.jsonl, the path Bootstrap::promptHistory() names',
         ],
