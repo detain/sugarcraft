@@ -447,6 +447,7 @@ candy-code/tests/Chat/ChatCancelKeepsLoopLiveTest.php	0.439	2
 candy-code/tests/Config/TrustKeyDocumentationDriftTest.php	0.439	12
 candy-code/tests/Backend/EngineBackendTranscriptTest.php	0.435	3
 candy-code/tests/Renderer/EllipsisPolicyTest.php	0.433	6
+candy-code/tests/Support/KeychainTest.php	0.43	21
 candy-code/tests/Backend/EngineBackendWithModelTest.php	0.429	7
 candy-code/tests/Providers/RetrySettingsTest.php	0.426	22
 candy-code/tests/RuntimeInitialDispatchOrderTest.php	0.422	3
