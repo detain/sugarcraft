@@ -12,6 +12,7 @@ composer require sugarcraft/sugar-diff
 
 - **`Diff::compute()`** — prefix/suffix-trimmed LCS over lines (same algorithmic guarantees as the candy-code trait: `>=` tie-break deletes first, `maxLcsCells` budget falls back to a whole-middle replace block), producing numbered `Line` rows grouped into `Hunk`s.
 - **`Writer\UnifiedFormat`** — renders `diff -u` shaped text: `--- / +++` headers, `@@ -a,b +c,d @@` hunk headers, optional `\ No newline at end of file` markers and `/dev/null` empty-side labels.
+- **`Writer\SideBySideFormat`** — pairs one diff into side-by-side `[left?, right?]` rows, line by line, for split viewers: `rows(Diff)` from the hunk model, `fromUnified(string)` from already-rendered patch text via `Reader\UnifiedScan` (both return the same rows for the same change). Leftover removals/additions stand alone; width and colour stay with the caller.
 - **`Reader\UnifiedScan`** — walks any rendered unified diff and tells a viewer which old/new line each row points at (the gutter model the candy-code TUI consumes), without owning any view code.
 
 ## Quickstart
@@ -61,6 +62,7 @@ foreach (UnifiedScan::lines($patchText) as $row) {
 | `DiffOptions` | `withContextLines()` (default 3), `withMaxLcsCells()` (default 250 000), `withIgnoreWhitespace()`, `withIgnoreCase()`, `withNoNewlineMarker()`, `withDevNullOnEmptySide()` |
 | `Hunk` / `Line` / `LineKind` | The immutable region model — one `@@` block, one numbered row, `eq`/`del`/`ins` |
 | `Writer\UnifiedFormat` | `write()` / `hunksOnly()` statics behind `Diff::unified()` / `Diff::hunkText()` |
+| `Writer\SideBySideFormat` / `Writer\SideBySideRow` | `rows()` / `fromUnified()` pairing into `[left?, right?]` value rows for split layouts |
 | `Reader\UnifiedScan` | `lines()` / `fileHeaders()` row-number walk of any unified diff |
 
 Non-visual engine: no ANSI, no rendering, no demos — view layers (gutters, coloring) consume the model and stay downstream.
