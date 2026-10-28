@@ -1504,7 +1504,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tui.md` → `### C-TUI-1.a`
 
-#### C-TUI-7.a — Startup summary: personal files + gather off `view()`
+#### ✅ 03280fdea C-TUI-7.a — Startup summary: personal files + gather off `view()`
 - **Item:** C-TUI-7 (sources: VIS-1-P1, VIS-1-P2) · fix · MINOR/NIT · effort M
 - **What:** VIS-1-P1: `StartupSummary::instructionFiles()` (`src/Support/StartupSummary.php:282-290`) lists `loadDocuments()` only, while `/context` also lists `loadPersonal()`. Fix: append the personal documents with a personal marker, …
 - **Files — create:** `candy-code/src/App/StartupSummaryGatheredMsg.php`
