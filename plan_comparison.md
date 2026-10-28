@@ -146,7 +146,7 @@ So while 2 lanes are in review, the other 8 slots build steps from the next wave
 | ✅ W10 (closed 2026-10-28) | 10 | C-CTX-6.a · C-EXT-2.c · C-SEC-5.c · C-TOOL-3.a · C-AGT-7.b · C-CTX-1.c · C-CTX-2.e · C-MCP-4.a · C-PRV-5.b · C-PRV-5.c |
 | ✅ W11 (closed 2026-10-28) | 10 | C-MCP-2.a · C-CTX-6.b · C-EXT-2.d · C-PRV-5.d · C-SEC-5.b · C-SES-1.b · C-SES-9.b · C-TOOL-3.b · C-TOOL-7.b · C-TOOL-7.d |
 | ✅ W12 (closed 2026-10-28) | 10 | C-MCP-2.b · C-SEC-5.d · C-TOOL-7.e · C-TUI-1.a · C-TUI-7.a · C-TUI-7.b · C-WEB-3.f · C-WEB-7.a · C-WEB-7.b · C-TOOL-5.b |
-| W13 | 10 | C-EXT-2.e · C-WEB-7.c · C-WEB-7.d · C-TOOL-3.c · C-MCP-3.a · C-TOOL-5.c · C-AGT-5.a · C-SES-3.d · C-TUI-6.k · C-AGT-6.b |
+| ✅ W13 (closed 2026-10-28) | 10 | C-EXT-2.e · C-WEB-7.c · C-WEB-7.d · C-TOOL-3.c · C-MCP-3.a · C-TOOL-5.c · C-AGT-5.a · C-SES-3.d · C-TUI-6.k · C-AGT-6.b |
 | W14 | 10 | P-TABS.e · C-WEB-3.e · C-TOOL-4.a · C-AGT-4.a · C-AGT-5.b · C-EXT-4.a · C-PRV-2.a · C-SES-7.a · C-TOOL-3.d · C-TUI-2.a |
 | W15 | 10 | P-TABS.f · C-WEB-3.g · C-TUI-2.b · C-WEB-4.a · C-AGT-5.c · C-AGT-5.e · C-AGT-5.g · C-AGT-6.d · C-CTX-4.c · C-EXT-3.c |
 | W16 | 10 | P-TABS.g · C-CTX-2.d · C-EXT-4.b · C-EXT-5.a · C-MCP-3.b · C-MCP-4.b · C-PRV-2.b · C-SEC-6.a · C-SEC-7.d · C-SEC-8.c |
@@ -1585,6 +1585,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Serialized:** [chat:submit custom-command branch] [docs:COMMANDS.md] [lang:host.turn.] [hot:candy-code/src/Host/SessionHost.php] [hot:candy-code/src/Host/TurnController.php] …
 - **Deps:** C-EXT-2.b (W8)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ext.md` → `### C-EXT-2.e`
+- **Erratum (2026-10-29, W13 loop r2):** the modify-test name `InertFrontmatterDocumentationDriftTest` above is stale for this step — what moved in-commit was `tests/Config/BootstrapLaunchNoticeRoutingTest.php` (fixture flip subtask→subtaskx); no InertFrontmatter arm changed here.
 
 #### ✅ 1aab5f2f9 C-WEB-7.c — Paged `session.export` + memoized non-git `fs.search` walk
 - **Item:** C-WEB-7 (sources: WEB-1-P2, WEB-5-P3 (server half), p2-miss: web session export over 4 MiB) · fix · MINOR · effort M

@@ -1,0 +1,3 @@
+
+## Fixer final land (this tick, lead-verified on disk)
+Commit e6d830327 'W13 wave-loop: guard roster cures' (parent 6875a1d90): DocFigure thirty-seven word-map arm added (byte-identical to C-TOOL-3.d's own dated hunk — weld keep-either when that lane lands), TreeWideGuardRoster +2 walker rows (LSP/LspInstallerTest scandir; Cli/DoctorSandboxProbeTest RecursiveDirectoryIterator). Gates: DocFigure OK 91T/3999A; TreeWide OK 17T/3495A; five-guard 43T/12240A; census 114T unchanged. Live corpus figure 304,700=554×550 (PathGlob.php:51) unchanged. WAVE-REVIEW-2.md owed by r2 wave reviewer before §3 close.
