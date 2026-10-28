@@ -814,6 +814,7 @@ candy-code/tests/Tui/ThinkingFrameBorderAlignmentTest.php	0.039	3
 candy-code/tests/ChatScrollTest.php	0.038	18
 candy-code/tests/Cli/BootstrapSubdirectoryLaunchTest.php	0.038	3
 candy-code/tests/Hooks/AuditHookDenialAndEscapingTest.php	0.038	10
+candy-code/tests/Renderer/RunningToolTailTest.php	0.038	10
 candy-code/tests/Agents/AgentPresetHomeRootTest.php	0.037	16
 candy-code/tests/StreamingDirectoryListerTest.php	0.037	12
 candy-code/tests/Providers/ProviderFactoryTest.php	0.036	108
@@ -957,6 +958,7 @@ candy-code/tests/Backend/EngineBackendWitherPreservesStateTest.php	0.014	31
 candy-code/tests/Backend/EngineBackendWorktreeJailTest.php	0.014	6
 candy-code/tests/Chat/CompactionHidesNotDeletesTest.php	0.014	10
 candy-code/tests/Chat/GoalCommandTest.php	0.014	16
+candy-code/tests/Chat/ToolTailFoldTest.php	0.014	7
 candy-code/tests/Context/RuleLoaderContainmentTest.php	0.014	13
 candy-code/tests/Host/CompactionServiceParityTest.php	0.014	8
 candy-code/tests/Memory/ForeignMemoryImporterContainmentTest.php	0.014	10
