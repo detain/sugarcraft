@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Protocol\Methods;
 use SugarCraft\Code\Backend\QueueMode;
 use SugarCraft\Code\Commands\CommandRegistry;
 use SugarCraft\Code\Commands\CommandSpec;
+use SugarCraft\Code\Commands\McpPromptCommands;
 use SugarCraft\Code\Commands\Specs\BuiltInCommands;
 use SugarCraft\Code\Protocol\CallContext;
 use SugarCraft\Code\Protocol\ErrorCode;
@@ -20,10 +21,12 @@ use SugarCraft\Code\Protocol\Scope;
  * Slash commands over the wire (Appendix O §6.3 "command").
  *
  * `command.list` names every command a session knows — the built-ins and the
- * workspace's command FILES — and says where each runs. A command file is a
- * prompt template, so `command.exec` runs it exactly as typing `/name args`
- * would: expanded by the session's host, then admitted like `session.send`.
- * A built-in with a host body (roadmap O-2h, `Host\Commands`) runs on the
+ * session's command ROWS: the workspace's command FILES plus the launch-frozen
+ * MCP prompt rows (C-MCP-2.b), each listed under its own `source` — and says
+ * where each runs. A command file or prompt row is a prompt template, so
+ * `command.exec` runs it exactly as typing `/name args` would: expanded by the
+ * session's host (whose map is the one listing answer), then admitted like
+ * `session.send`. A built-in with a host body (roadmap O-2h, `Host\Commands`) runs on the
  * server through {@see \SugarCraft\Code\Host\SessionHost::runCommand()}
  * and answers its `CommandResult` rows and effects; it is listed
  * `runsIn: "server"`. The rest are screen-only (`/theme`, the pickers) or
@@ -48,14 +51,19 @@ final class CommandMethods
     /** @return array<string, mixed> */
     private static function list(CallContext $call, Params $params): array
     {
+        // C-MCP-2.b: the listing reads the session host's command map — the
+        // very table submit() resolves — so served MCP prompt rows appear
+        // (source `mcp`) and a row can never be listed that exec would refuse.
+        $host = $call->host(SessionMethods::sessionId($params));
         $items = [];
         foreach (CommandRegistry::all() as $spec) {
             if ($spec->slashVisible) {
                 $items[$spec->name] = self::describe($spec, 'builtin', self::runsIn($spec->name));
             }
         }
-        foreach (self::files($call) as $name => $spec) {
-            $items[$name] = self::describe($spec, 'file', self::RUNS_IN_SERVER);
+        foreach ($host->customCommands() as $name => $spec) {
+            $source = McpPromptCommands::isMcpPrompt($spec) ? 'mcp' : 'file';
+            $items[(string) $name] = self::describe($spec, $source, self::RUNS_IN_SERVER);
         }
         \ksort($items);
 
@@ -72,8 +80,8 @@ final class CommandMethods
         $name = \ltrim($params->string('name', 128), '/');
         $args = \trim((string) ($params->optionalString('args', 65_536) ?? ''));
 
-        $file = self::files($call)[$name] ?? null;
-        if ($file === null) {
+        $row = $host->customCommands()[$name] ?? null;
+        if ($row === null) {
             foreach (CommandRegistry::all() as $spec) {
                 if ($spec->name === $name) {
                     return self::runBuiltIn($host, $name, $args);
@@ -120,27 +128,12 @@ final class CommandMethods
     }
 
     /**
-     * The workspace's command files, by name.
+     * One `command.list` row. C-MCP-2.b retired the loader-side listing seam
+     * (`files()`) that lived above this: both list and exec answer through the
+     * session host's merged command map now, so rows and admission agree.
      *
-     * @return array<string, CommandSpec>
+     * @return array<string, mixed>
      */
-    private static function files(CallContext $call): array
-    {
-        $workspace = $call->server->hub()->workspace();
-        $files = [];
-        // C-SEC-4.a: the listing must name the rows the grant actually admits —
-        // the same answer SessionHost's constructor and Chat both pass, so
-        // `command.list` and what `command.exec` runs cannot disagree.
-        foreach ($workspace->commandLoader?->loadAll($workspace->root ?? (\getcwd() ?: '.'), $workspace->projectCommandsTrusted) ?? [] as $name => $spec) {
-            if ($spec instanceof CommandSpec && $spec->isFileBased()) {
-                $files[(string) $name] = $spec;
-            }
-        }
-
-        return $files;
-    }
-
-    /** @return array<string, mixed> */
     private static function describe(CommandSpec $spec, string $source, string $runsIn): array
     {
         return [

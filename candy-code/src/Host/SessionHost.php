@@ -416,6 +416,19 @@ final class SessionHost
         return $this->sessionId;
     }
 
+    /**
+     * The session's command map — the workspace's file rows merged under the
+     * launch-frozen MCP prompt rows (C-MCP-2.b: `command.list` and
+     * `command.exec` answer from exactly this map, the same table submit()
+     * resolves, so a listing can never promise a row exec will refuse).
+     *
+     * @return array<string, CommandSpec>
+     */
+    public function customCommands(): array
+    {
+        return $this->customCommands;
+    }
+
     /** The session's todo list (roadmap 3.C), as its `Todo` tool last wrote it. */
     public function todos(): \SugarCraft\Code\Todo\TodoList
     {

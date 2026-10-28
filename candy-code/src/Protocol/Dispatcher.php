@@ -13,6 +13,7 @@ use SugarCraft\Code\Protocol\Methods\CommandMethods;
 use SugarCraft\Code\Protocol\Methods\ContextMethods;
 use SugarCraft\Code\Protocol\Methods\FilesMethods;
 use SugarCraft\Code\Protocol\Methods\FsMethods;
+use SugarCraft\Code\Protocol\Methods\McpMethods;
 use SugarCraft\Code\Protocol\Methods\MemoryMethods;
 use SugarCraft\Code\Protocol\Methods\PermissionMethods;
 use SugarCraft\Code\Protocol\Methods\ServerMethods;
@@ -131,6 +132,7 @@ final class Dispatcher implements MessageHandler
         TurnMethods::register($registry);
         PermissionMethods::register($registry);
         CommandMethods::register($registry);
+        McpMethods::register($registry);
         SettingsMethods::register($registry);
         MemoryMethods::register($registry);
         ContextMethods::register($registry);

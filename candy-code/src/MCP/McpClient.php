@@ -112,13 +112,24 @@ final class McpClient
      * This is NOT the roster's source of truth — that stays the live, per-call
      * {@see listResources()}/{@see listPrompts()} round trips, per the
      * READ ON DEMAND law on the capability interfaces. It is a snapshot of
-     * sizes and prompt rows as of the moment the surface first asked, and
+     * bounded resource and prompt rows as of the moment the surface first asked, and
      * nothing that ENFORCES reads it.
      *
-     * @var array<string, array{resources: int|null, prompts: list<array<mixed>>|null}>|null
+     * C-MCP-2.b: the resources leg keeps the bounded ROWS, not a size —
+     * `mcp.resources` answers them on the wire while the panel's count rides
+     * derived through {@see startedSnapshot()}.
+     *
+     * @var array<string, array{resources: list<array<mixed>>|null, prompts: list<array<mixed>>|null}>|null
      *      null = never primed; keyed by server name once it has been
      */
     private ?array $surfaceRosters = null;
+
+    /**
+     * C-MCP-2.b: rows the surface pass keeps per resource provider. The live
+     * {@see listResources()} round trip stays unbounded-by-us (page caps ride
+     * the transport); this is only the display snapshot's memory bound.
+     */
+    private const SURFACE_RESOURCE_ROWS_KEPT = 200;
 
     /**
      * MCP-7: the raw config entry seen for each server name at `startServers()`
@@ -540,14 +551,16 @@ final class McpClient
                 'tools' => count($server->listTools()),
             ];
 
-            // MCP-1 panel count: a size remembered by the surface pass
-            // ({@see primeSurfaceRosters()}), never a fresh exchange — the
-            // zero-traffic property of this readout is unchanged. An absent
-            // key means never asked or refused, which is the truth the panel
-            // must not paper over by inventing `0`.
+            // MCP-1 panel count: derived from the rows remembered by the
+            // surface pass ({@see primeSurfaceRosters()}), never a fresh
+            // exchange — the zero-traffic property of this readout is
+            // unchanged, and C-MCP-2.b's row storage keeps the panel's key an
+            // int exactly as before. An absent key means never asked or
+            // refused, which is the truth the panel must not paper over by
+            // inventing `0`.
             $resources = $this->surfaceRosters[$name]['resources'] ?? null;
             if ($resources !== null) {
-                $rows[$name]['resources'] = $resources;
+                $rows[$name]['resources'] = \count($resources);
             }
         }
 
@@ -1170,8 +1183,8 @@ final class McpClient
     public function getPrompt(string $serverName, string $name, array $arguments = []): array { return $this->prompt($serverName, $name, $arguments); }
 
     /**
-     * The launch-time surface pass: resource SIZES and prompt ROWS for every
-     * allowed provider server, gathered once and remembered (the
+     * The launch-time surface pass: bounded resource ROWS and prompt ROWS for
+     * every allowed provider server, gathered once and remembered (the
      * {@see $surfaceRosters} contract — display and materialization only,
      * never enforcement). Each server is asked under the same
      * {@see isServerAllowed()} predicate the strict {@see listResources()} and
@@ -1200,9 +1213,12 @@ final class McpClient
             $entry = ['resources' => null, 'prompts' => null];
             if ($server instanceof McpResourceProvider) {
                 try {
-                    $entry['resources'] = \count($server->listResources());
+                    // C-MCP-2.b: the bounded ROWS, not a size — the panel's
+                    // count and the `mcp.resources` wire rows both derive from
+                    // this one snapshot; neither pays a second exchange.
+                    $entry['resources'] = \array_slice($server->listResources(), 0, self::SURFACE_RESOURCE_ROWS_KEPT);
                 } catch (\Throwable) {
-                    // Refused or unreachable: the entry stays a null size.
+                    // Refused or unreachable: the entry keeps no rows at all.
                 }
             }
             if ($server instanceof McpPromptProvider) {
@@ -1233,6 +1249,29 @@ final class McpClient
         foreach ($this->surfaceRosters ?? [] as $name => $entry) {
             if ($entry['prompts'] !== null) {
                 $rows[$name] = $entry['prompts'];
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * The launch-frozen resource rows the `mcp.resources` wire method answers
+     * ({@see \SugarCraft\Code\Protocol\Methods\McpMethods}) — the same one
+     * bounded snapshot the panel counts, per allowed provider server that
+     * answered. Data, not enforcement, exactly as {@see promptsRoster()}:
+     * the strict per-call {@see listResources()} remains the live gate.
+     *
+     * @return array<string, list<array<mixed>>> per server that answered
+     */
+    public function resourcesRoster(): array
+    {
+        $this->primeSurfaceRosters();
+
+        $rows = [];
+        foreach ($this->surfaceRosters ?? [] as $name => $entry) {
+            if ($entry['resources'] !== null) {
+                $rows[$name] = $entry['resources'];
             }
         }
 

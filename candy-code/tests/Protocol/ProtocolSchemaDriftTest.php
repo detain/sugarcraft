@@ -156,7 +156,7 @@ final class ProtocolSchemaDriftTest extends TestCase
             $this->checked($client, 'session.setMode', ['sessionId' => $sessionId, 'permissionMode' => 'plan']);
             $this->checked($client, 'server.health');
             $this->checked($client, 'server.info');
-            $this->checked($client, 'command.list');
+            $this->checked($client, 'command.list', ['sessionId' => $sessionId]);
             $this->checked($client, 'settings.schema');
             $this->checked($client, 'settings.get', ['scope' => 'effective']);
             $this->checked($client, 'agents.list');

@@ -8,10 +8,10 @@
  * `projectCommandsTrusted:` seam in Chat's constructor), so a trusted
  * project's built-in override wins there. The two served callers of the same
  * method — the {@see SessionHost} constructor's customCommands load and
- * `command.list` through CommandMethods::files() — must give the SAME
- * answer, or a clone the operator granted runs its override in the terminal
- * but not over serve or the web, and a `command.list` row disagrees with
- * what `command.exec` would admit.
+ * `command.list` through CommandMethods (C-MCP-2.b: the host's command map
+ * itself) — must give the SAME answer, or a clone the operator granted runs
+ * its override in the terminal but not over serve or the web, and a
+ * `command.list` row disagrees with what `command.exec` would admit.
  *
  * Mirrors the TUI precedence pins (testAProjectFileOverridesTheBuiltInOfTheSameName
  * / testAProjectFileCannotShadowABuiltInOnAnUntrustedRoot in
@@ -128,13 +128,13 @@ final class ServedProjectCommandTrustTest extends TestCase
         $host->release();
     }
 
-    // ── command.list (CommandMethods::files seam) ──────────────────────
+    // ── command.list (the host command-map seam) ───────────────────────
 
     /**
      * On a trusted root the wire listing says FILE for the overridden name —
-     * the same row `command.exec` will admit. Fails before the fix: files()
-     * called loadAll() without the grant, so the listing kept saying BUILTIN
-     * for a command the server actually ran from the file.
+     * the same row `command.exec` will admit. Fails before the C-SEC-4.a
+     * fix: the listing called loadAll() without the grant, so it kept saying
+     * BUILTIN for a command the server actually ran from the file.
      */
     public function testCommandListShowsTheTrustedProjectOverride(): void
     {
@@ -196,7 +196,7 @@ final class ServedProjectCommandTrustTest extends TestCase
         $client = WireClient::open($dispatcher, 'trust-client');
         $client->hello();
 
-        $items = (array) $client->call('command.list')['items'];
+        $items = (array) $client->call('command.list', ['sessionId' => 's'])['items'];
 
         $dispatcher->stop('test over');
         $hub->closeAll();

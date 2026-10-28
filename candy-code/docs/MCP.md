@@ -877,6 +877,15 @@ naming the mention and the reason, and the rest of the turn is sent. The
 keyword legs share one per-prompt cap: at most five of them attach to a
 single prompt.
 
+A client of the `serve` protocol can see which resources a running
+session's servers offer without touching them: `mcp.resources` answers
+the launch-frozen roster — per allowed server, each resource's uri, name,
+optional mime type and a bounded description — in one read that starts no
+server and asks none a second question. Without a memoised client for the
+session's root it answers `not-started` with an empty list, so a popup can
+ask speculatively. These rows are display data, never enforcement: the
+strict per-call read above remains the live gate.
+
 ## Prompts as slash commands
 
 A server that exposes prompts contributes slash commands. At construction —
@@ -904,7 +913,11 @@ merges the prompt roster under the file rows at construction, and
 materialises the fetched body at admission — on the forked route inside
 the child that parks the expansion, so the round trip is paid there. A
 failed fetch leaves a visible refusal in the transcript instead of
-admitting an empty expansion.
+admitting an empty expansion. The `serve` protocol answers from that same
+table: `command.list` lists prompt rows beside file rows and marks them
+`source: "mcp"`, and `command.exec` admits them, so the web popup's `/`
+menu can show the session's MCP prompts with no browser-side MCP
+knowledge at all.
 
 A fetched prompt body is third-party text, not user intent: its inline
 shell forms are refused outright, whatever this project trusts — a

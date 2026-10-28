@@ -345,7 +345,7 @@ final class ConformanceTest extends TestCase
         $client = $this->fixture->client();
         $sessionId = $this->fixture->session($client);
 
-        $commands = \array_column($client->call('command.list')['items'], null, 'name');
+        $commands = \array_column($client->call('command.list', ['sessionId' => $sessionId])['items'], null, 'name');
         self::assertSame('server', $commands['clear']['runsIn'] ?? null, 'Host\\Commands\\ClearCommand runs headless');
         self::assertSame('client', $commands['theme']['runsIn'] ?? null, 'a screen-only command');
 

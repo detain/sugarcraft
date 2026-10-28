@@ -273,11 +273,11 @@ final class MethodSchemas
                 ], ['mode', 'rules', 'sessionGrants']),
             ],
 
-            'command.list' => [Schema::object($sid), $items(Schema::object([
+            'command.list' => [$sessionOnly, $items(Schema::object([
                 'name' => Schema::string(),
                 'description' => Schema::string(),
                 'argumentHint' => Schema::string()->nullable(),
-                'source' => Schema::enum(['builtin', 'file']),
+                'source' => Schema::enum(['builtin', 'file', 'mcp']),
                 'runsIn' => Schema::enum(['server', 'client']),
             ], ['name', 'source', 'runsIn']))],
             'command.exec' => [
@@ -293,6 +293,22 @@ final class MethodSchemas
                         'effects' => Schema::arrayOf(Schema::string()),
                     ], ['rows', 'effects'], open: false)->describe('A built-in run on the server: the rows it appended and the kinds of the effects it applied.'),
                 ),
+            ],
+
+            'mcp.resources' => [
+                $sessionOnly,
+                Schema::object([
+                    'status' => Schema::enum(['started', 'not-started']),
+                    'servers' => Schema::arrayOf(Schema::object([
+                        'server' => Schema::string(200),
+                        'resources' => Schema::arrayOf(Schema::object([
+                            'uri' => Schema::string(512),
+                            'name' => Schema::string(200),
+                            'mimeType' => Schema::string(128)->nullable(),
+                            'description' => Schema::string(400)->nullable(),
+                        ], ['uri', 'name'])),
+                    ], ['server', 'resources'])),
+                ], ['status', 'servers']),
             ],
 
             'settings.schema' => [$empty, Schema::object([
