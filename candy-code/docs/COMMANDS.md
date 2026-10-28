@@ -363,7 +363,7 @@ edit it by hand.
 | `/mcp` | ✓ | | `<list\|add\|remove\|login\|reconnect> [server]` | Manage MCP server auth (list/add/remove; login prints the CLI command) |
 | `/keys` | ✓ | | `[reload]` | Show the keyboard shortcut reference (or press ?) |
 | `/help` | ✓ | ✓ | — | List every slash command |
-| `/permissions` | ✓ | ✓ | `[mode <name> \| revoke <n\|all>]` | Show this session's permission mode, its rules and its grants; switch the mode or revoke a grant |
+| `/permissions` | ✓ | ✓ | `[mode <name> \| revoke <n\|all> \| saved \| forget <n\|pattern>]` | Show this session's permission mode, its rules and its grants; switch the mode or revoke a grant |
 | `/notices` | ✓ | | — | Show every warning this launch raised, un-capped and un-aggregated |
 | `/status` | ✓ | | — | Show where this session stands: version, model, context, spend, config, MCP, hooks, serve |
 | `/context` | ✓ | | `--raw [path]` | Show what fills the context window: prompt layers, tools, history, cache |

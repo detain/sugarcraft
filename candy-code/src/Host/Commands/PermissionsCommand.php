@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Host\Commands;
 
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Code\Config\Settings\SettingsWriter;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
+use SugarCraft\Code\Permissions\SavedRules;
 
 /**
  * `/permissions` — what this session is actually gated by (roadmap O-2h moved
@@ -27,23 +29,41 @@ use SugarCraft\Code\Permissions\PermissionMode;
  * The report is READ-ONLY, in the strong sense: see {@see report()} for the
  * accessors it is built on and why reaching for {@see PermissionGate::evaluate()}
  * here would have been a bug rather than a shortcut. It also lists the
- * session's "always" grants, numbered, and how to change things. Two
+ * session's "always" grants, numbered, and how to change things. Four
  * subcommands do: `/permissions revoke <n>|all` takes grants back (the
- * transcript row `a` leaves points here) and `/permissions mode <name>`
+ * transcript row `a` leaves points here), `/permissions mode <name>`
  * switches the mode for the session's next turns — any mode except
  * `dont-ask`, which stays launch-only (see {@see switchableModes()} for the
- * ruling on both). Any other argument is ignored: the report is total.
+ * ruling on both), `/permissions saved` lists the SAVED rules `p` writes to
+ * the user config (numbered as {@see forgetRule()} takes them; C-SEC-6.a
+ * moved that list into {@see SavedRules} and gave it a reader and a remover),
+ * and `/permissions forget <n>|<pattern>` takes saved rules out — which
+ * lands on the NEXT launch, because the live gate reads its rules once at
+ * start, so the answer says so and points at `mode` for what is deciding
+ * right now. Any other argument is ignored: the report is total.
  */
 final class PermissionsCommand implements HostCommand
 {
     public function run(CommandContext $context, string $text): CommandResult
     {
-        $words = preg_split('/\s+/', trim(CommandText::argument($text))) ?: [];
+        $arg = trim(CommandText::argument($text));
+        $words = preg_split('/\s+/', $arg) ?: [];
         if (strtolower($words[0] ?? '') === 'revoke') {
             return self::revoke($context, $text, $words[1] ?? '');
         }
         if (strtolower($words[0] ?? '') === 'mode') {
             return self::switchMode($context, $text, strtolower($words[1] ?? ''));
+        }
+        if (strtolower($words[0] ?? '') === 'saved') {
+            return self::savedRules($context, $text);
+        }
+        if (strtolower($words[0] ?? '') === 'forget') {
+            // Rest-of-argument, not words[1]: a rule pattern carries spaces
+            // (`Bash(git status *)` is the house shape), and split-and-rejoin
+            // would silently collapse any run of them inside a pattern. The
+            // verb arm already proved $arg opens with the six bytes "forget",
+            // so cutting past them is exact — no pattern-math to drift.
+            return self::forgetRule($context, $text, trim(substr($arg, 6)));
         }
 
         return CommandResult::reply(
@@ -168,6 +188,139 @@ final class PermissionsCommand implements HostCommand
         return CommandResult::reply($text, Lang::t('host.permissions.revoked', [
             'grant' => self::reportField($grants->entries()[$index - 1]),
         ]))->withEffect(CommandEffect::setPermissionGrants($kept));
+    }
+
+    /**
+     * `/permissions saved`: the user's saved rules — what `p` appends to
+     * `permissionRules` — in stored order, numbered as `forget` below takes
+     * them. Read through {@see SavedRules}; the door is the same
+     * {@see SettingsWriter} the settings editor writes with, so this never
+     * reads a file the launch would not have read.
+     */
+    private static function savedRules(CommandContext $context, string $text): CommandResult
+    {
+        $writer = $context->workspace?->service(SettingsWriter::class);
+        if (!$writer instanceof SettingsWriter) {
+            return CommandResult::errorReply($text, Lang::t('host.permissions.no_writer'));
+        }
+
+        try {
+            $body = self::savedBody(new SavedRules($writer));
+        } catch (\Throwable $e) {
+            // Refuse loudly: an empty list shown here would claim the user
+            // saved nothing when in truth the file could not be read.
+            return self::readFailed($text, $e);
+        }
+
+        return CommandResult::reply($text, $body);
+    }
+
+    /**
+     * The one read-failure refusal this command answers with — shaped by
+     * {@see SavedRules::list()} throwing where the file cannot be read at
+     * all (a corrupt top-level, say). Every surface that WOULD show the
+     * list answers through here, so a crash can never ride out of a typed
+     * slash command and `saved` and `forget` refuse identically on the
+     * same unreadable file (C-SEC-6.a review r1, MAJOR).
+     */
+    private static function readFailed(string $text, \Throwable $e): CommandResult
+    {
+        return CommandResult::errorReply($text, Lang::t('host.permissions.read_failed', [
+            'error' => self::reportField($e->getMessage()),
+        ]));
+    }
+
+    /**
+     * `/permissions forget <n>|<pattern>`: take saved rules out — the entry
+     * the `saved` list numbered <n>, or every entry whose pattern matches
+     * exactly. A failed write REFUSES visibly (the opposite of the save
+     * notice's kinder half: silence here would forge a removal that did not
+     * land). The reply carries the next-launch truth: {@see PermissionGate}
+     * loads `permissionRules` once at start, so forgetting changes the NEXT
+     * session's decisions, and the live one is tightened with `mode`.
+     */
+    private static function forgetRule(CommandContext $context, string $text, string $target): CommandResult
+    {
+        $writer = $context->workspace?->service(SettingsWriter::class);
+        if (!$writer instanceof SettingsWriter) {
+            return CommandResult::errorReply($text, Lang::t('host.permissions.no_writer'));
+        }
+        $rules = new SavedRules($writer);
+        if ($target !== '') {
+            try {
+                $removed = $rules->remove(ctype_digit($target) ? (int) $target : $target);
+            } catch (\Throwable $e) {
+                return CommandResult::errorReply($text, Lang::t('host.permissions.write_failed', [
+                    'error' => self::reportField($e->getMessage()),
+                ]));
+            }
+
+            if ($removed !== []) {
+                $what = [];
+                foreach ($removed as $entry) {
+                    $action = \is_string($entry['action'] ?? null) ? $entry['action'] : 'allow';
+                    $pattern = \is_string($entry['pattern'] ?? null) ? $entry['pattern'] : '';
+                    $what[] = $action . ' ' . self::reportField($pattern);
+                }
+
+                return CommandResult::reply($text, Lang::t('host.permissions.forgot', [
+                    'count' => \count($removed),
+                    'rules' => implode(', ', $what),
+                    'path' => self::reportField($rules->path()),
+                ]));
+            }
+        }
+
+        // Both remaining answers — the bare-verb teaching reply and the
+        // no-match reply — re-show the list, and that read can fail on the
+        // very file whose existence prompted them: the corrupt config that
+        // makes `saved` refuse must make THIS refuse the same way, never
+        // throw out of run() into the program loop (C-SEC-6.a review r1,
+        // MAJOR). One guarded read serves both branches.
+        try {
+            $body = self::savedBody($rules);
+        } catch (\Throwable $e) {
+            return self::readFailed($text, $e);
+        }
+
+        if ($target === '') {
+            return CommandResult::reply($text, Lang::t('host.permissions.forget_usage') . "\n\n" . $body);
+        }
+
+        return CommandResult::reply($text, Lang::t('host.permissions.forget_none', [
+            'target' => self::reportField($target),
+        ]) . "\n\n" . $body);
+    }
+
+    /**
+     * The saved list as one report block: header naming the file, one line
+     * per rule in the `report()` rule shape (number, action column, escaped
+     * pattern), and the hint that says plainly how removal lands. Every
+     * field is run through {@see reportField()} — the pattern is config text
+     * on its way into a line-per-fact surface, exactly the case that promoted
+     * this method's own honesty rule.
+     */
+    private static function savedBody(SavedRules $rules): string
+    {
+        $entries = $rules->list();
+        $path = self::reportField($rules->path());
+        if ($entries === []) {
+            $lines = [Lang::t('host.permissions.no_saved', ['path' => $path])];
+        } else {
+            $lines = [Lang::t('host.permissions.saved', ['count' => \count($entries), 'path' => $path])];
+            foreach ($entries as $index => $entry) {
+                $lines[] = sprintf(
+                    '  %d. %-5s %s',
+                    $index + 1,
+                    self::reportField($entry['action']),
+                    self::reportField($entry['pattern']),
+                );
+            }
+        }
+        $lines[] = '';
+        $lines[] = Lang::t('host.permissions.saved_hint');
+
+        return implode("\n", $lines);
     }
 
     /**

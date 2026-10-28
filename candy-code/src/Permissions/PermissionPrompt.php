@@ -6,9 +6,7 @@ namespace SugarCraft\Code\Permissions;
 
 use React\Promise\Deferred;
 use SugarCraft\Code\Backend\PendingAsk;
-use SugarCraft\Code\Chat;
 use SugarCraft\Code\App\PermissionRequestMsg;
-use SugarCraft\Code\Config\Settings\SettingsTier;
 use SugarCraft\Code\Config\Settings\SettingsWriter;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Host\WorkspaceContext;
@@ -244,65 +242,20 @@ final class PermissionPrompt
 
     /**
      * Append $patterns to the user's `permissionRules` in `config.json`,
-     * through the workspace's {@see SettingsWriter}
-     * — the settings editor's own write door, so the schema's validation of
-     * the key (refusing a value the launch would not load whole) is this
-     * write's validation too. Existing entries ride in front of the new ones:
-     * rules are first-match-wins, so a `deny` the user wrote keeps refusing
-     * what `p` saves, and the grant only answers questions the mode would
-     * have asked anyway. An entry already there is not written twice.
-     *
-     * Returns the notice the transcript shows — where it landed, or why it
-     * did not. A failed save is REPORTED, never fatal, exactly as a model
-     * choice that cannot be persisted still switches for the session: the
-     * session grant `p` rides on has already been recorded.
+     * through the workspace's {@see SettingsWriter} — the write itself lives
+     * in {@see SavedRules} since C-SEC-6.a gave the same list its reader and
+     * its remover; this method only opens the door the prompt has and hands
+     * the patterns through. The notices (where it landed, or why it did not
+     * — a failed save is REPORTED, never fatal, because the session grant
+     * `p` rides on has already been recorded) are unchanged.
      *
      * @param list<string> $patterns
      */
     public function persistRules(array $patterns): string
     {
-        $scope = implode(', ', $patterns);
         $writer = $this->workspace?->service(SettingsWriter::class);
-        if (!$writer instanceof SettingsWriter) {
-            return Lang::t('chat.permission.not_persisted', [
-                'scope' => $scope,
-                'error' => Chat::reportField('this session has no settings write door'),
-            ]);
-        }
 
-        try {
-            $config = $writer->current(SettingsTier::You);
-            $existing = $config['permissionRules'] ?? [];
-            $existing = \is_array($existing)
-                ? array_values(array_filter($existing, static fn (mixed $rule): bool => \is_array($rule)))
-                : [];
-            $have = [];
-            foreach ($existing as $rule) {
-                if (($rule['action'] ?? null) === 'allow' && \is_string($rule['pattern'] ?? null)) {
-                    $have[$rule['pattern']] = true;
-                }
-            }
-
-            $next = $existing;
-            foreach ($patterns as $pattern) {
-                if (!isset($have[$pattern])) {
-                    $next[] = ['pattern' => $pattern, 'action' => 'allow'];
-                }
-            }
-            $path = $next === $existing
-                ? (string) $writer->targetPath(SettingsTier::You)
-                : $writer->write(SettingsTier::You, ['permissionRules' => $next]);
-
-            return Lang::t('chat.permission.persisted', [
-                'scope' => $scope,
-                'path' => Chat::reportField($path),
-            ]);
-        } catch (\Throwable $e) {
-            return Lang::t('chat.permission.not_persisted', [
-                'scope' => $scope,
-                'error' => Chat::reportField($e->getMessage()),
-            ]);
-        }
+        return (new SavedRules($writer instanceof SettingsWriter ? $writer : null))->append($patterns);
     }
 
     /**

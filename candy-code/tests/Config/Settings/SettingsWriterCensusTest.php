@@ -162,7 +162,15 @@ final class SettingsWriterCensusTest extends TestCase
             // command's writer rather than touching the file itself for the
             // same reason /rendermode's row does.
             'Host/Commands/SkillsHostCommand.php::toggleSkill->write' => 1,
-            'Permissions/PermissionPrompt.php::persistRules->write' => 1,
+            // C-SEC-6.a: the `p` save moved from PermissionPrompt into the
+            // SavedRules service that also lists and forgets the key — one
+            // write of `permissionRules` in append() (the modal's save, same
+            // notice and door as before the move) and one in remove() (the
+            // `/permissions forget` write-back, which refuses loudly rather
+            // than report a half-landed removal). PermissionPrompt now only
+            // opens the door and delegates, so it holds no write site.
+            'Permissions/SavedRules.php::append->write' => 1,
+            'Permissions/SavedRules.php::remove->write' => 1,
             'Protocol/Methods/SettingsMethods.php::set->write' => 1,
             // N-P5: a settings PROFILE, not a settings file — its write is
             // AtomicJsonFile's, it names SettingsWriter only to ask which keys
