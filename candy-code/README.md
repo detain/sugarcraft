@@ -94,7 +94,7 @@ Claude Code, OpenCode and OpenClaw.
 | [`docs/HOOKS.md`](docs/HOOKS.md) | `hooks.yaml`, every hook event, the exit-code and JSON stdout contract, post-edit lint, diagnostics, auto-commit and auto-test |
 | [`docs/MEMORY.md`](docs/MEMORY.md) | Memory notes, the `Memory` tool, recall, auto-consolidation, the dream pass, instruction files |
 | [`docs/SKILLS.md`](docs/SKILLS.md) | Writing a skill, where skills load from, how they reach the model, `$name` mentions |
-| [`docs/PLUGINS.md`](docs/PLUGINS.md) | Claude-format plugin bundles: what a bundle may ship, which surfaces it feeds, why its hooks and `.mcp.json` are declined, `candy-code bundles list|install` |
+| [`docs/PLUGINS.md`](docs/PLUGINS.md) | Claude-format plugin bundles: what a bundle may ship, which surfaces it feeds, why its hooks and `.mcp.json` are declined, `candy-code bundles list|install|marketplace|update|search|recommend` |
 | [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) | Multi-stage workflows in YAML or PHP, `/workflow`, and the model-authored `Workflow` tool |
 | [`docs/MEDIA.md`](docs/MEDIA.md) | Image and video generation: endpoint dialects, the capability probe, the `Ctrl+D` form and `/play`, presets, the PNG infotext round-trip, the RPC surface |
 | [`docs/CI.md`](docs/CI.md) | The GitHub Action around `-p`, the JSON envelope, and the fork-PR/prompt-injection doctrine — for when you run the agent in CI |
@@ -2219,6 +2219,12 @@ candy-code attach [<session>]        # the TUI on a session of the running serve
                                      #   [--url URL]
 candy-code acp                       # an Agent Client Protocol agent on stdio, for an editor to start
 candy-code bundles list              # plugin bundles this directory sees, with the declined surfaces named
+candy-code bundles install <path|git-url|plugin@marketplace>
+                                     # a bundle copied, cloned, or gated in from an added marketplace
+candy-code bundles marketplace add|list|remove|update
+                                     # pinned plugin catalogs under ~/.candy-code/
+candy-code bundles update [bundle]   # re-install recorded bundles from their marketplace pins
+candy-code bundles search|recommend  # read-only catalog queries, never a write
 candy-code completion bash|zsh|fish  # a shell completion script on stdout
 ```
 

@@ -220,6 +220,13 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // arriving in a SECOND file, which the derivation flags by name. It
         // writes nobody's project tier: USER, like the serve state directory.
         'Cli/Subcommands.php|.candy-code/bundles' => self::USER,
+        // C-EXT-4.b 2026-10-28: the two git-metadata reads bundlesGitSha()
+        // performs on a checkout — the scratch this verb minted inside the
+        // user root, or the source directory the operator named at
+        // `bundles marketplace add`. Never a project-chosen path: no
+        // repository file decides which .git is opened.
+        'Cli/Subcommands.php|.git/HEAD' => self::USER,
+        'Cli/Subcommands.php|.git/packed-refs' => self::USER,
         'Bundles/Bundle.php|.claude-plugin/plugin.json' => self::BOTH,
         'Cli/Bootstrap.php|.candy-code/agents' => self::REPOSITORY,
         'Cli/Bootstrap.php|.candy-code/hooks.yaml' => self::REPOSITORY,
@@ -491,8 +498,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is SEVENTY-ONE occurrences — one per entry
-     * in {@see DOT_PATHS} — of FORTY-EIGHT distinct paths. TWENTY-NINE of those
+     * APPEARS IN. On this tree that is SEVENTY-THREE occurrences — one per entry
+     * in {@see DOT_PATHS} — of FIFTY-SEVEN distinct paths. TWENTY-NINE of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
      * they are TWENTY-FOUR distinct paths — which is the figure
@@ -664,7 +671,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             $distinct[$path] = true;
         }
 
-        self::assertCount(48, $distinct, 'distinct dot-DIRECTORY paths in src/');
+        self::assertCount(57, $distinct, 'distinct dot-DIRECTORY paths in src/');
         self::assertCount(24, $this->repositoryChosenPaths(), 'of which repository-chosen');
 
         $enumeration = $this->docBlockAbove(
@@ -673,7 +680,16 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         );
 
         self::assertStringContainsString('TWENTY-FOUR repository-chosen', $enumeration);
-        self::assertStringContainsString('FORTY-EIGHT distinct', $enumeration);
+        // C-EXT-4.b (wave 16): the derived truth above is FIFTY-SEVEN (55 at
+        // this file's last re-derivation, plus the marketplace pin reads). The
+        // collector's doc-block still says FORTY-EIGHT; this arm reds NAMING it
+        // on purpose — the guard's design is that the doc-block is what needs
+        // editing, and laundering the literal down to the stale figure would
+        // recreate the exact defect this test exists to catch. The prose fix
+        // rides the wave that classifies the eight foreign occurrences the
+        // enumeration arm still refuses (C-EXT-4.a, C-TOOL-7.c, lsp/memory/
+        // schedule/mac reads) — Bootstrap.php is not this lane's file.
+        self::assertStringContainsString('FIFTY-SEVEN distinct', $enumeration);
 
         // AND THIS FILE'S OWN DOC-BLOCK, which is where all four figures went
         // stale unnoticed — the assertions above only ever read `Bootstrap`'s.
@@ -691,7 +707,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             59 => 'FIFTY-NINE', 60 => 'SIXTY', 61 => 'SIXTY-ONE',
             62 => 'SIXTY-TWO', 63 => 'SIXTY-THREE', 64 => 'SIXTY-FOUR', 65 => 'SIXTY-FIVE',
             66 => 'SIXTY-SIX', 67 => 'SIXTY-SEVEN', 68 => 'SIXTY-EIGHT',
-            69 => 'SIXTY-NINE', 70 => 'SEVENTY', 71 => 'SEVENTY-ONE', 72 => 'SEVENTY-TWO'];
+            69 => 'SIXTY-NINE', 70 => 'SEVENTY', 71 => 'SEVENTY-ONE', 72 => 'SEVENTY-TWO',
+            73 => 'SEVENTY-THREE'];
         $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE',
             24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE', 26 => 'TWENTY-SIX', 27 => 'TWENTY-SEVEN',
             28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE', 30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO',
@@ -699,7 +716,9 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             38 => 'THIRTY-EIGHT', 39 => 'THIRTY-NINE', 40 => 'FORTY',
             41 => 'FORTY-ONE', 42 => 'FORTY-TWO', 43 => 'FORTY-THREE',
             44 => 'FORTY-FOUR', 45 => 'FORTY-FIVE', 46 => 'FORTY-SIX',
-            47 => 'FORTY-SEVEN', 48 => 'FORTY-EIGHT'];
+            47 => 'FORTY-SEVEN', 48 => 'FORTY-EIGHT', 49 => 'FORTY-NINE',
+            50 => 'FIFTY', 51 => 'FIFTY-ONE', 52 => 'FIFTY-TWO', 53 => 'FIFTY-THREE',
+            54 => 'FIFTY-FOUR', 55 => 'FIFTY-FIVE', 56 => 'FIFTY-SIX', 57 => 'FIFTY-SEVEN'];
         $repoWords = [13 => 'THIRTEEN', 14 => 'FOURTEEN', 15 => 'FIFTEEN',
             16 => 'SIXTEEN', 17 => 'SEVENTEEN', 18 => 'EIGHTEEN', 19 => 'NINETEEN', 20 => 'TWENTY',
             21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO',

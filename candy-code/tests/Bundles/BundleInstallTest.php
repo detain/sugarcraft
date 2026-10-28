@@ -148,6 +148,35 @@ final class BundleInstallTest extends TestCase
         self::assertSame([], $this->entriesUnderRoot());
     }
 
+    /**
+     * C-EXT-4.b: the plugin@marketplace grammar must not steal the scp-style
+     * git shape. A `user@host:path` URL carries a colon and a slash after the
+     * '@', so the segment-only regex admits none of it — the source still
+     * reaches the clone arm verbatim. The other leg pins the boundary from
+     * the marketplace side: a bare two-segment name@name form is parsed as a
+     * marketplace reference and never spawns.
+     */
+    public function testTheMarketplaceGrammarLeavesScpStyleGitUrlsToTheCloneArm(): void
+    {
+        $recorded = [];
+        $this->armFakeClone(static function (string $url, string $scratch) use (&$recorded): array {
+            $recorded[] = $url;
+            mkdir($scratch . '/.claude-plugin', 0777, true);
+            file_put_contents($scratch . '/.claude-plugin/plugin.json', json_encode(['name' => 'scpd']));
+
+            return ['ok' => true, 'detail' => ''];
+        });
+
+        self::assertSame(NonInteractive::EXIT_OK, $this->verb('install', 'git@github.com:owner/repo.git'));
+        self::assertSame(['git@github.com:owner/repo.git'], $recorded, 'the marketplace parser intercepted an scp-style git URL');
+        self::assertFileExists($this->root . '/scpd/.claude-plugin/plugin.json');
+
+        $recorded = [];
+        self::assertSame(NonInteractive::EXIT_FAILURE, $this->verb('install', 'alpha@nope'));
+        self::assertSame([], $recorded, 'a plugin@marketplace source reached the clone arm instead of the registry');
+        self::assertSame(['scpd'], $this->entriesUnderRoot());
+    }
+
     public function testAManifestNamingSomethingOtherThanOneSafeSegmentRefusesTheWrite(): void
     {
         $source = $this->tempDir . '/evil';

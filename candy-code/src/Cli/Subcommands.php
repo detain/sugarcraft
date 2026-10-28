@@ -12,6 +12,11 @@ use SugarCraft\Code\Host\SpendLedger;
 use SugarCraft\Code\Providers\ProviderFactory;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Bundles\Bundle;
+use SugarCraft\Code\Bundles\BundleRecommender;
+use SugarCraft\Code\Bundles\BundleSource;
+use SugarCraft\Code\Bundles\Marketplace;
+use SugarCraft\Code\Bundles\MarketplaceEntry;
+use SugarCraft\Code\Bundles\MarketplaceRegistry;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Tools\BuiltIn\Bash;
@@ -1800,7 +1805,10 @@ final class Subcommands
 
     /**
      * The `bundles` verb: `list` reads the tree, `install` stages a bundle
-     * into the user root. Both answer without a provider, an API key or a
+     * into the user root — from a path, a git URL, or (since C-EXT-4) one
+     * catalog entry `plugin@marketplace` — and the C-EXT-4 family adds
+     * `marketplace add|list|remove|update`, `update [bundle]`, `search <q>`
+     * and `recommend`. All answer without a provider, an API key or a
      * terminal, like every sibling in this class.
      */
     private static function bundles(ParsedArgs $args): int
@@ -1811,6 +1819,18 @@ final class Subcommands
         }
         if ($verb === 'install') {
             return self::bundlesInstall($args);
+        }
+        if ($verb === 'marketplace') {
+            return self::bundlesMarketplace($args);
+        }
+        if ($verb === 'update') {
+            return self::bundlesUpdate($args);
+        }
+        if ($verb === 'search') {
+            return self::bundlesSearch($args);
+        }
+        if ($verb === 'recommend') {
+            return self::bundlesRecommend($args);
         }
 
         return NonInteractive::failUsage(
@@ -1943,8 +1963,8 @@ final class Subcommands
     private static ?\Closure $bundlesInstallSpawn = null;
 
     /**
-     * `bundles install <path|git-url>` — stage a bundle into
-     * `~/.candy-code/bundles/`, the ONE directory this verb writes to
+     * `bundles install <path|git-url|plugin@marketplace>` — stage a bundle
+     * into `~/.candy-code/bundles/`, the ONE directory this verb writes to
      * (owned-dest law: {@see HomeDirectory::owned()} or refusal).
      *
      * A directory source must carry a manifest and is copied minus every
@@ -1992,6 +2012,15 @@ final class Subcommands
             self::bundlesLine(Lang::t('cli.bundles.install.not_a_source', ['source' => $source]));
 
             return NonInteractive::EXIT_FAILURE;
+        }
+
+        if (\preg_match('/^([A-Za-z0-9._-]+)@([A-Za-z0-9._-]+)$/', $source, $at) === 1) {
+            // C-EXT-4: one safe segment, an at-sign, one more — that is the
+            // whole `plugin@marketplace` shape. A scp-style git URL (the
+            // only other string carrying an at-sign that `install` ever
+            // sees) has a colon and a slash in its tail, so it cannot
+            // collide with this grammar and still falls to the clone arm.
+            return self::bundlesInstallFromMarketplace($args, $at[1], $at[2], $root);
         }
 
         $scratch = null;
@@ -2090,6 +2119,1036 @@ final class Subcommands
         }
 
         echo Lang::t('cli.bundles.installed', ['name' => $name, 'dest' => $dest]) . "\n";
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * The shared usage door for the C-EXT-4 verb family: the prefixed
+     * refusal, the format-aware exit, and the current usage line — one
+     * envelope literal so the stderr census counts ONE new emitter shape
+     * for the whole family.
+     */
+    private static function bundlesUsage(ParsedArgs $args, string $key, array $params = []): int
+    {
+        return NonInteractive::failUsage(
+            'candy-code: ' . Lang::t($key, $params),
+            $args->outputFormat,
+            Lang::t('cli.bundles.usage'),
+        );
+    }
+
+    /**
+     * `bundles marketplace <verb>` dispatcher.
+     */
+    private static function bundlesMarketplace(ParsedArgs $args): int
+    {
+        $verb = $args->subcommandArgs[1] ?? null;
+
+        return match ($verb) {
+            'add' => self::bundlesMarketplaceAdd($args),
+            'list' => self::bundlesMarketplaceList($args),
+            'remove' => self::bundlesMarketplaceRemove($args),
+            'update' => self::bundlesMarketplaceUpdate($args),
+            default => self::bundlesUsage($args, $verb === null
+                ? 'cli.bundles.marketplace.needs_action'
+                : 'cli.bundles.marketplace.unknown_action', $verb === null ? [] : ['action' => $verb]),
+        };
+    }
+
+    /**
+     * `bundles marketplace add <git-url|path>` — take a marketplace
+     * checkout (clone a repo into a scratch under the bundle root, or use
+     * the operator's directory as given), require it to READ as a
+     * marketplace (C-EXT-4.a's parser is the validator — a catalog that
+     * does not parse was never offered), pin the 40-hex commit it stands at
+     * (no pin, no add: the install gate refuses an unpinned row anyway, so
+     * accepting one here would only be slower lying), register the row, and
+     * for a remote arm shed its `.git` and land the content in the private
+     * checkout directory the registry made at add time. A path row is the
+     * operator's explicit word — the checkout IS the directory, copied
+     * nowhere and deleted never.
+     */
+    private static function bundlesMarketplaceAdd(ParsedArgs $args): int
+    {
+        $source = $args->subcommandArgs[2] ?? null;
+        if ($source === null || $source === '') {
+            return self::bundlesUsage($args, 'cli.bundles.marketplace.needs_source');
+        }
+
+        $home = HomeDirectory::owned();
+        if ($home === null) {
+            self::bundlesLine(Lang::t('cli.bundles.install.no_home'));
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        $root = $home . '/.candy-code/bundles';
+        if (!is_dir($root) && !@\mkdir($root, 0700, true) && !is_dir($root)) {
+            self::bundlesLine(Lang::t('cli.bundles.install.no_home'));
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        $scratch = null;
+
+        if (is_dir($source)) {
+            $sha = self::bundlesGitSha($source);
+            $marketplace = $sha === '' ? null : Marketplace::read($source);
+
+            if ($marketplace === null) {
+                self::bundlesLine($sha === ''
+                    ? Lang::t('cli.bundles.marketplace.no_pin', ['source' => $source])
+                    : Lang::t('cli.bundles.marketplace.not_marketplace', ['source' => $source]));
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+
+            $sourceType = MarketplaceEntry::SOURCE_PATH;
+            $name = $marketplace->name;
+        } elseif (self::looksLikeGitUrl($source)) {
+            if (ProcessContainment::locateOnPath('git') === '') {
+                self::bundlesLine(Lang::t('cli.bundles.install.missing_git', ['source' => $source]));
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+
+            $scratch = $root . '/.mkt-' . \uniqid('', true);
+            $spawn = self::$bundlesInstallSpawn ?? self::bundlesCloneDefault();
+            $run = $spawn($source, $scratch);
+
+            if ($run['ok'] !== true || !is_dir($scratch)) {
+                self::bundlesLine(Lang::t('cli.bundles.install.clone_failed', ['source' => $source, 'detail' => $run['detail']]));
+                self::removeTree($scratch);
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+
+            $sha = self::bundlesGitSha($scratch);
+            $marketplace = $sha === '' ? null : Marketplace::read($scratch);
+
+            if ($marketplace === null) {
+                self::bundlesLine($sha === ''
+                    ? Lang::t('cli.bundles.marketplace.no_pin', ['source' => $source])
+                    : Lang::t('cli.bundles.marketplace.not_marketplace', ['source' => $source]));
+                self::removeTree($scratch);
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+
+            $sourceType = \str_starts_with($source, 'https://')
+                ? MarketplaceEntry::SOURCE_URL
+                : MarketplaceEntry::SOURCE_GIT;
+            $name = $marketplace->name;
+        } else {
+            self::bundlesLine(Lang::t('cli.bundles.install.not_a_source', ['source' => $source]));
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        $registry = MarketplaceRegistry::loadDefault();
+
+        if ($registry->has($name)) {
+            self::bundlesLine(Lang::t('cli.bundles.marketplace.exists', ['name' => $name]));
+
+            if ($scratch !== null) {
+                self::removeTree($scratch);
+            }
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        $refusal = $registry->add($name, $sourceType, $source, $sha);
+
+        if ($refusal !== null) {
+            self::bundlesLine($refusal);
+
+            if ($scratch !== null) {
+                self::removeTree($scratch);
+            }
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        if ($sourceType !== MarketplaceEntry::SOURCE_PATH) {
+            self::removeTree($scratch . '/.git');
+            $dest = $registry->checkoutDir($name);
+
+            if ($dest === null) {
+                // add() vouched the checkout directory and it is gone: the
+                // row cannot serve installs from a path this process will
+                // not name. Roll the registration back rather than leave a
+                // marketplace that reads as added but never opens.
+                self::bundlesLine(Lang::t('cli.bundles.marketplace.checkout_lost', ['name' => $name]));
+                $registry->remove($name);
+                self::removeTree($scratch);
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+
+            if (!@\rename($scratch, $dest)) {
+                $fallback = self::copyBundleTree($scratch, $dest);
+
+                if ($fallback['ok'] !== true) {
+                    self::bundlesLine($fallback['link'] === ''
+                        ? Lang::t('cli.bundles.install.read_failed', ['source' => $source])
+                        : Lang::t('cli.bundles.install.link_refused', ['source' => $source, 'link' => $fallback['link']]));
+                    $registry->remove($name);
+                    self::removeTree($dest);
+                    self::removeTree($scratch);
+
+                    return NonInteractive::EXIT_FAILURE;
+                }
+
+                self::removeTree($scratch);
+            }
+        }
+
+        echo Lang::t('cli.bundles.marketplace.added', [
+            'name' => $name,
+            'sha' => $sha,
+            'plugins' => (string) \count($marketplace->entries),
+        ]) . "\n";
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * `bundles marketplace list` — the registration file, one row per
+     * marketplace, in registration order. Reads what the registry holds;
+     * catalogs are NOT opened here, so the listing answers even when one
+     * checkout went unreadable (a `marketplace update` or re-add is the
+     * repair, and `install` is the surface that refuses per entry).
+     */
+    private static function bundlesMarketplaceList(ParsedArgs $args): int
+    {
+        $registry = MarketplaceRegistry::loadDefault();
+
+        foreach ($registry->loadErrors() as $error) {
+            self::bundlesLine($error);
+        }
+
+        $names = $registry->names();
+
+        if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
+            $rows = [];
+
+            foreach ($names as $name) {
+                $row = $registry->record($name);
+
+                if ($row !== null) {
+                    $rows[] = $row;
+                }
+            }
+
+            echo \json_encode(
+                ['marketplaces' => $rows],
+                \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE,
+            ) . "\n";
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        if ($names === []) {
+            echo Lang::t('cli.bundles.marketplace.none') . "\n";
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        echo Lang::t('cli.bundles.marketplace.list_header') . "\n";
+
+        foreach ($names as $name) {
+            $row = $registry->record($name) ?? [];
+            \printf(
+                "%-18s %-8s %-12s %s\n",
+                $name,
+                (string) ($row['sourceType'] ?? '-'),
+                \substr((string) ($row['sha'] ?? '-'), 0, 12),
+                (string) ($row['source'] ?? '-'),
+            );
+        }
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * `bundles marketplace remove <name>` — retire the registration. The
+     * checkout directory stays (deleting is not this verb's job, and an
+     * installed bundle's recorded source still names it); what leaves is
+     * the registry row, so the refuse-by-default gate starts answering for
+     * every entry that marketplace offered.
+     */
+    private static function bundlesMarketplaceRemove(ParsedArgs $args): int
+    {
+        $name = $args->subcommandArgs[2] ?? null;
+        if ($name === null || $name === '') {
+            return self::bundlesUsage($args, 'cli.bundles.marketplace.needs_name');
+        }
+
+        $refusal = MarketplaceRegistry::loadDefault()->remove($name);
+
+        if ($refusal !== null) {
+            self::bundlesLine($refusal);
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        echo Lang::t('cli.bundles.marketplace.removed', ['name' => $name]) . "\n";
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * `bundles marketplace update [<name>]` — re-clone each remote row's
+     * source, diff the catalog against what the old checkout offered, swap
+     * the checkout (aside-first, same-directory renames only, the old tree
+     * removed by the no-follow walk only after the new one landed), and
+     * move the pin to the new commit. A path row is skipped loudly: its
+     * "update" is whatever the operator's directory already is. The pin
+     * never moves to a commit whose catalog fails to parse, and a catalog
+     * that renamed itself is refused — the row's name is the identity every
+     * `BundleSource` record keys on.
+     */
+    private static function bundlesMarketplaceUpdate(ParsedArgs $args): int
+    {
+        $wanted = $args->subcommandArgs[2] ?? null;
+        $registry = MarketplaceRegistry::loadDefault();
+
+        foreach ($registry->loadErrors() as $error) {
+            self::bundlesLine($error);
+        }
+
+        if ($wanted !== null && $wanted !== '') {
+            if (!$registry->has($wanted)) {
+                self::bundlesLine(Lang::t('cli.bundles.marketplace.not_added', ['name' => $wanted]));
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+
+            $names = [$wanted];
+        } else {
+            $names = $registry->names();
+        }
+
+        $status = NonInteractive::EXIT_OK;
+
+        foreach ($names as $name) {
+            $row = $registry->record($name);
+
+            if ($row === null) {
+                continue;
+            }
+
+            if ($row['sourceType'] === MarketplaceEntry::SOURCE_PATH) {
+                self::bundlesLine(Lang::t('cli.bundles.marketplace.update_path_skipped', ['name' => $name]));
+
+                continue;
+            }
+
+            $checkout = $registry->checkoutDir($name);
+
+            if ($checkout === null) {
+                self::bundlesLine(Lang::t('cli.bundles.marketplace.checkout_lost', ['name' => $name]));
+                $status = NonInteractive::EXIT_FAILURE;
+
+                continue;
+            }
+
+            if (ProcessContainment::locateOnPath('git') === '') {
+                self::bundlesLine(Lang::t('cli.bundles.install.missing_git', ['source' => (string) $row['source']]));
+                $status = NonInteractive::EXIT_FAILURE;
+
+                continue;
+            }
+
+            // Scratch beside the checkout it will replace: the swap is then
+            // two same-directory renames, the atomic shape the risk line in
+            // this step's design demanded (never a cross-device copy of a
+            // half-live tree).
+            $scratch = \dirname($checkout) . '/.mkt-' . \uniqid('', true);
+            $spawn = self::$bundlesInstallSpawn ?? self::bundlesCloneDefault();
+            $run = $spawn((string) $row['source'], $scratch);
+
+            if ($run['ok'] !== true || !is_dir($scratch)) {
+                self::bundlesLine(Lang::t('cli.bundles.install.clone_failed', ['source' => (string) $row['source'], 'detail' => $run['detail']]));
+                self::removeTree($scratch);
+                $status = NonInteractive::EXIT_FAILURE;
+
+                continue;
+            }
+
+            $sha = self::bundlesGitSha($scratch);
+            $marketplace = $sha === '' ? null : Marketplace::read($scratch);
+
+            if ($marketplace === null) {
+                self::bundlesLine($sha === ''
+                    ? Lang::t('cli.bundles.marketplace.no_pin', ['source' => (string) $row['source']])
+                    : Lang::t('cli.bundles.marketplace.not_marketplace', ['source' => (string) $row['source']]));
+                self::removeTree($scratch);
+                $status = NonInteractive::EXIT_FAILURE;
+
+                continue;
+            }
+
+            if ($marketplace->name !== $name) {
+                self::bundlesLine(Lang::t('cli.bundles.marketplace.renamed', ['from' => $name, 'to' => $marketplace->name]));
+                self::removeTree($scratch);
+                $status = NonInteractive::EXIT_FAILURE;
+
+                continue;
+            }
+
+            $old = $registry->marketplace($name);
+            $oldNames = [];
+
+            foreach ($old === null ? [] : $old->entries as $entry) {
+                $oldNames[$entry->name] = true;
+            }
+
+            $newNames = [];
+
+            foreach ($marketplace->entries as $entry) {
+                $newNames[$entry->name] = true;
+            }
+
+            foreach (\array_keys(\array_diff_key($newNames, $oldNames)) as $arrived) {
+                echo Lang::t('cli.bundles.marketplace.entry_added', ['plugin' => (string) $arrived]) . "\n";
+            }
+
+            foreach (\array_keys(\array_diff_key($oldNames, $newNames)) as $gone) {
+                echo Lang::t('cli.bundles.marketplace.entry_removed', ['plugin' => (string) $gone]) . "\n";
+            }
+
+            self::removeTree($scratch . '/.git');
+
+            $aside = \dirname($checkout) . '/.swap-' . \uniqid('', true);
+
+            if (is_dir($checkout) && !@\rename($checkout, $aside)) {
+                self::bundlesLine(Lang::t('cli.bundles.update.swap_failed', ['name' => $name]));
+                self::removeTree($scratch);
+                $status = NonInteractive::EXIT_FAILURE;
+
+                continue;
+            }
+
+            if (!@\rename($scratch, $checkout)) {
+                if (is_dir($aside)) {
+                    @\rename($aside, $checkout); // the old checkout comes back; a marketplace is never left absent
+                }
+
+                self::bundlesLine(Lang::t('cli.bundles.update.swap_failed', ['name' => $name]));
+                self::removeTree($scratch);
+                $status = NonInteractive::EXIT_FAILURE;
+
+                continue;
+            }
+
+            if (is_dir($aside)) {
+                self::removeTree($aside);
+            }
+
+            $refusal = $registry->repin($name, $sha);
+
+            if ($refusal !== null) {
+                // Loud by shape: the tree moved and the pin did not, so the
+                // operator's registry file still names the old commit.
+                self::bundlesLine($refusal);
+                $status = NonInteractive::EXIT_FAILURE;
+
+                continue;
+            }
+
+            echo Lang::t('cli.bundles.marketplace.updated', ['name' => $name, 'sha' => $sha]) . "\n";
+        }
+
+        return $status;
+    }
+
+    /**
+     * The full commit sha a checkout points at, read from git's own
+     * reference files — no child process, no PATH dependence. `.git/HEAD`
+     * either IS the sha (detached checkout), names a `refs/...` legible in
+     * the loose ref file, or falls to a packed-refs line. The ref name is
+     * regex-bound to `refs/` before it is ever concatenated into a path, so
+     * a crafted HEAD cannot aim this read outside `.git/refs`. Anything
+     * other than one full 40-hex sha answers '' — the marketplace pin floor
+     * has no partial shape.
+     */
+    private static function bundlesGitSha(string $dir): string
+    {
+        $head = @\file_get_contents($dir . '/.git/HEAD');
+
+        if (!\is_string($head)) {
+            return '';
+        }
+
+        $head = \trim($head);
+
+        if (\preg_match('/^[0-9a-f]{40}$/', $head) === 1) {
+            return $head;
+        }
+
+        if (\preg_match('#^ref: (refs/[A-Za-z0-9._/-]+)$#', $head, $ref) !== 1 || \str_contains($ref[1], '..')) {
+            return '';
+        }
+
+        $loose = @\file_get_contents($dir . '/.git/' . $ref[1]);
+
+        if (\is_string($loose) && \preg_match('/^[0-9a-f]{40}$/', \trim($loose)) === 1) {
+            return \trim($loose);
+        }
+
+        $packed = @\file_get_contents($dir . '/.git/packed-refs');
+
+        if (!\is_string($packed)) {
+            return '';
+        }
+
+        $needle = ' ' . $ref[1];
+
+        foreach (\explode("\n", $packed) as $line) {
+            $line = \trim($line);
+
+            if (\str_ends_with($line, $needle)) {
+                $sha = \substr($line, 0, -\strlen($needle));
+
+                if (\preg_match('/^[0-9a-f]{40}$/', $sha) === 1) {
+                    return $sha;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * The installed bundle names in the user bundle root: one scandir of
+     * NAMES only (no read of any bundle's content), dot entries excluded —
+     * a leading dot is exactly what `BundleDiscovery`'s glob never matches,
+     * and it is what the scratch and swap directories this verb family
+     * parks in the root are made of, so neither update nor recommend can
+     * ever see one as a bundle.
+     *
+     * @return list<string>
+     */
+    private static function bundlesBundleRootNames(string $root): array
+    {
+        $entries = @\scandir($root);
+
+        if ($entries === false) {
+            return [];
+        }
+
+        $names = [];
+
+        foreach ($entries as $entry) {
+            if ($entry === '.' || $entry === '..' || \str_starts_with($entry, '.')) {
+                continue;
+            }
+
+            if (is_dir($root . '/' . $entry)) {
+                $names[] = $entry;
+            }
+        }
+
+        return $names;
+    }
+
+    /**
+     * `bundles install <plugin>@<marketplace>` — the gated path from the
+     * C-EXT-4.a contract: the marketplace must be ADDED, its row must carry
+     * the pin, and the entry must be IN the catalog (the gate is
+     * {@see MarketplaceRegistry::installGate()}, refused-by-default, and
+     * this arm prints its sentence rather than inventing a softer one).
+     * The materialized tree goes through the same manifest/name/exists
+     * doors as every other install; on landing, a {@see BundleSource}
+     * record is written INTO the bundle so `bundles update` can find its
+     * provenance later. A record that cannot be written rolls the install
+     * back — an unrecorded bundle is a bundle update will never reach.
+     */
+    private static function bundlesInstallFromMarketplace(ParsedArgs $args, string $entryName, string $marketplaceName, string $root): int
+    {
+        $registry = MarketplaceRegistry::loadDefault();
+        $marketplace = $registry->marketplace($marketplaceName);
+
+        if ($marketplace === null) {
+            self::bundlesLine(Lang::t('cli.bundles.marketplace.not_added', ['name' => $marketplaceName]));
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        $gate = $registry->installGate($marketplace, $entryName);
+
+        if ($gate !== null) {
+            self::bundlesLine($gate);
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        $entry = $registry->installEntry($marketplace, $entryName);
+
+        if ($entry === null) {
+            // Gate passed and the entry still is not there: the catalog
+            // moved between the two reads. Refuse; do not chase.
+            self::bundlesLine(Lang::t('cli.bundles.install.not_a_source', ['source' => $entryName . '@' . $marketplaceName]));
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        $staged = self::bundlesStageEntry($entry, $root, $marketplaceName);
+
+        if ($staged === null) {
+            return NonInteractive::EXIT_FAILURE; // bundlesStageEntry printed its line
+        }
+
+        if (!Bundle::hasManifest($staged)) {
+            self::bundlesLine(Lang::t('cli.bundles.install.not_bundle', ['source' => $entryName . '@' . $marketplaceName]));
+            self::removeTree($staged);
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        $manifest = Bundle::readManifest($staged);
+        $name = (string) ($manifest['name'] ?? '') !== '' ? (string) $manifest['name'] : $entry->name;
+
+        if (\preg_match('/^[A-Za-z0-9._-]+$/', $name) !== 1 || $name === '.' || $name === '..') {
+            self::bundlesLine(Lang::t('cli.bundles.install.invalid_name', ['name' => $name]));
+            self::removeTree($staged);
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        if (\str_starts_with($name, '.')) {
+            self::bundlesLine(Lang::t('cli.bundles.install.dot_name', ['name' => $name]));
+            self::removeTree($staged);
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        $dest = $root . '/' . $name;
+
+        if (\file_exists($dest)) {
+            self::bundlesLine(Lang::t('cli.bundles.install.exists', ['name' => $name, 'dest' => $dest]));
+            self::removeTree($staged);
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        if (!@\rename($staged, $dest)) {
+            $fallback = self::copyBundleTree($staged, $dest);
+
+            if ($fallback['ok'] !== true) {
+                self::bundlesLine($fallback['link'] === ''
+                    ? Lang::t('cli.bundles.install.read_failed', ['source' => $entryName . '@' . $marketplaceName])
+                    : Lang::t('cli.bundles.install.link_refused', ['source' => $entryName . '@' . $marketplaceName, 'link' => $fallback['link']]));
+                self::removeTree($dest);
+                self::removeTree($staged);
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+
+            self::removeTree($staged);
+        }
+
+        $recordRefusal = BundleSource::fromEntry($entry, $marketplaceName)->write($dest);
+
+        if ($recordRefusal !== null) {
+            self::bundlesLine($recordRefusal);
+            self::removeTree($dest);
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        echo Lang::t('cli.bundles.installed', ['name' => $name, 'dest' => $dest]) . "\n";
+        echo Lang::t('cli.bundles.install.via_marketplace', [
+            'name' => $name,
+            'marketplace' => $marketplaceName,
+            'sha' => $entry->sha,
+        ]) . "\n";
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * Materialize one catalog entry into a fresh scratch under the bundle
+     * root. A path row copies through C-SEC-1's hardened walker (the link
+     * refusal rides with it; the source itself was already containment-
+     * resolved inside the checkout by C-EXT-4.a's parser); a remote row
+     * clones through the SAME spawn seam `install` uses — there is no
+     * second clone site and no new child. The clone sheds its `.git`
+     * before landing. Returns the staged directory, which the CALLER owns
+     * (rename into place or remove), or null after printing the refusal.
+     */
+    private static function bundlesStageEntry(MarketplaceEntry $entry, string $root, string $marketplaceName): ?string
+    {
+        $label = $entry->name . '@' . $marketplaceName;
+
+        if ($entry->sourceType === MarketplaceEntry::SOURCE_PATH) {
+            $scratch = $root . '/.install-' . \uniqid('', true);
+            $stage = self::copyBundleTree($entry->path, $scratch);
+
+            if ($stage['ok'] !== true) {
+                self::bundlesLine($stage['link'] === ''
+                    ? Lang::t('cli.bundles.install.read_failed', ['source' => $label])
+                    : Lang::t('cli.bundles.install.link_refused', ['source' => $label, 'link' => $stage['link']]));
+                self::removeTree($scratch);
+
+                return null;
+            }
+
+            return $scratch;
+        }
+
+        if (ProcessContainment::locateOnPath('git') === '') {
+            self::bundlesLine(Lang::t('cli.bundles.install.missing_git', ['source' => $label]));
+
+            return null;
+        }
+
+        $url = $entry->sourceType === MarketplaceEntry::SOURCE_GITHUB
+            ? 'https://github.com/' . $entry->repo . '.git'
+            : $entry->url;
+
+        $scratch = $root . '/.install-' . \uniqid('', true);
+        $spawn = self::$bundlesInstallSpawn ?? self::bundlesCloneDefault();
+        $run = $spawn($url, $scratch);
+
+        if ($run['ok'] !== true || !is_dir($scratch)) {
+            self::bundlesLine(Lang::t('cli.bundles.install.clone_failed', ['source' => $label, 'detail' => $run['detail']]));
+            self::removeTree($scratch);
+
+            return null;
+        }
+
+        self::removeTree($scratch . '/.git');
+
+        return $scratch;
+    }
+
+    /**
+     * `bundles update [<bundle>]` — re-materialize every installed bundle
+     * that carries a {@see BundleSource} record from its recorded
+     * marketplace's CURRENT pinned entry, and swap the new tree in:
+     * old directory aside first (same-directory rename), staged directory
+     * landed, provenance record re-written, only THEN the aside removed by
+     * the no-follow walk. A landing that fails mid-way restores the aside:
+     * an update never leaves a bundle absent. A bundle with no record, or
+     * one whose marketplace is gone, is refused per name when named and
+     * skipped with a line when the root is scanned — update never invents
+     * a source for what install did not record.
+     */
+    private static function bundlesUpdate(ParsedArgs $args): int
+    {
+        $home = HomeDirectory::owned();
+        if ($home === null) {
+            self::bundlesLine(Lang::t('cli.bundles.install.no_home'));
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        $root = $home . '/.candy-code/bundles';
+
+        if (!is_dir($root)) {
+            echo Lang::t('cli.bundles.update.nothing') . "\n";
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        $wanted = $args->subcommandArgs[1] ?? null;
+        $named = $wanted !== null && $wanted !== '';
+
+        if ($named) {
+            if (!is_dir($root . '/' . $wanted)) {
+                self::bundlesLine(Lang::t('cli.bundles.update.unknown', ['name' => (string) $wanted]));
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+
+            $names = [(string) $wanted];
+        } else {
+            $names = self::bundlesBundleRootNames($root);
+        }
+
+        $registry = MarketplaceRegistry::loadDefault();
+        $status = NonInteractive::EXIT_OK;
+
+        foreach ($names as $name) {
+            $dir = $root . '/' . $name;
+            $record = BundleSource::read($dir, $root);
+
+            if ($record === null) {
+                self::bundlesLine(Lang::t('cli.bundles.update.no_record', ['name' => $name]));
+
+                if ($named) {
+                    $status = NonInteractive::EXIT_FAILURE;
+                }
+
+                continue;
+            }
+
+            $marketplace = $registry->marketplace($record->marketplace);
+
+            if ($marketplace === null) {
+                self::bundlesLine(Lang::t('cli.bundles.update.marketplace_gone', [
+                    'name' => $name,
+                    'marketplace' => $record->marketplace,
+                ]));
+
+                if ($named) {
+                    $status = NonInteractive::EXIT_FAILURE;
+                }
+
+                continue;
+            }
+
+            $gate = $registry->installGate($marketplace, $record->name);
+
+            if ($gate !== null) {
+                self::bundlesLine($gate);
+                $status = NonInteractive::EXIT_FAILURE;
+
+                continue;
+            }
+
+            $fresh = $registry->installEntry($marketplace, $record->name);
+
+            if ($fresh === null) {
+                self::bundlesLine(Lang::t('cli.bundles.install.not_a_source', ['source' => $record->name . '@' . $record->marketplace]));
+                $status = NonInteractive::EXIT_FAILURE;
+
+                continue;
+            }
+
+            $staged = self::bundlesStageEntry($fresh, $root, $record->marketplace);
+
+            if ($staged === null) {
+                $status = NonInteractive::EXIT_FAILURE; // bundlesStageEntry printed its line
+
+                continue;
+            }
+
+            if (!Bundle::hasManifest($staged)) {
+                self::bundlesLine(Lang::t('cli.bundles.install.not_bundle', ['source' => $name]));
+                self::removeTree($staged);
+                $status = NonInteractive::EXIT_FAILURE;
+
+                continue;
+            }
+
+            $manifest = Bundle::readManifest($staged);
+            $newName = (string) ($manifest['name'] ?? '');
+
+            if ($newName !== '' && $newName !== $name) {
+                // The upstream renamed itself. Re-keying the install would
+                // strand every setting that names the old bundle, so the
+                // update stops at the door, staged tree discarded.
+                self::bundlesLine(Lang::t('cli.bundles.update.renamed', ['from' => $name, 'to' => $newName]));
+                self::removeTree($staged);
+                $status = NonInteractive::EXIT_FAILURE;
+
+                continue;
+            }
+
+            $aside = $root . '/.swap-' . \uniqid('', true);
+
+            if (!@\rename($dir, $aside)) {
+                self::bundlesLine(Lang::t('cli.bundles.update.swap_failed', ['name' => $name]));
+                self::removeTree($staged);
+                $status = NonInteractive::EXIT_FAILURE;
+
+                continue;
+            }
+
+            if (!@\rename($staged, $dir)) {
+                @\rename($aside, $dir); // the old tree comes back; a bundle is never left absent
+
+                self::bundlesLine(Lang::t('cli.bundles.update.swap_failed', ['name' => $name]));
+                self::removeTree($staged);
+                $status = NonInteractive::EXIT_FAILURE;
+
+                continue;
+            }
+
+            $write = BundleSource::fromEntry($fresh, $record->marketplace)->write($dir);
+
+            if ($write !== null) {
+                self::bundlesLine($write);
+                self::removeTree($dir);
+
+                if (!@\rename($aside, $dir)) {
+                    // The only exit that can say less than it means: the
+                    // fresh tree is gone and the old one did not return.
+                    self::bundlesLine(Lang::t('cli.bundles.update.swap_failed', ['name' => $name]));
+                }
+
+                $status = NonInteractive::EXIT_FAILURE;
+
+                continue;
+            }
+
+            self::removeTree($aside); // the old copy leaves LAST, no-follow walk
+
+            echo Lang::t('cli.bundles.update.done', ['name' => $name, 'sha' => $fresh->sha]) . "\n";
+        }
+
+        return $status;
+    }
+
+    /**
+     * `bundles search <q>` — one case-insensitive substring over name,
+     * source key, description, category and keywords of every entry of
+     * every ADDED marketplace. An empty catalog answers nothing, which is
+     * the same law as everywhere else in this family: search never dials a
+     * remote, so what you cannot have added you cannot find here.
+     */
+    private static function bundlesSearch(ParsedArgs $args): int
+    {
+        $query = $args->subcommandArgs[1] ?? null;
+
+        if ($query === null || $query === '') {
+            return self::bundlesUsage($args, 'cli.bundles.search.needs_query');
+        }
+
+        $needle = \strtolower($query);
+        $registry = MarketplaceRegistry::loadDefault();
+
+        foreach ($registry->loadErrors() as $error) {
+            self::bundlesLine($error);
+        }
+
+        $results = [];
+
+        foreach ($registry->names() as $marketplaceName) {
+            $marketplace = $registry->marketplace($marketplaceName);
+
+            if ($marketplace === null) {
+                continue;
+            }
+
+            foreach ($marketplace->entries as $entry) {
+                $haystack = \strtolower(\implode(' ', [
+                    $entry->name,
+                    $entry->sourceKey(),
+                    $entry->description,
+                    $entry->category,
+                    \implode(' ', $entry->keywords),
+                ]));
+
+                if (\str_contains($haystack, $needle)) {
+                    $results[] = [
+                        'marketplace' => $marketplaceName,
+                        'name' => $entry->name,
+                        'source' => $entry->sourceKey(),
+                        'version' => $entry->version,
+                        'description' => $entry->description,
+                    ];
+                }
+            }
+        }
+
+        if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
+            echo \json_encode(
+                ['query' => $query, 'results' => $results],
+                \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE,
+            ) . "\n";
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        if ($results === []) {
+            echo Lang::t('cli.bundles.search.none', ['query' => $query]) . "\n";
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        foreach ($results as $row) {
+            \printf(
+                "%-18s %-18s %-9s %s\n",
+                $row['name'],
+                $row['marketplace'],
+                $row['version'] === '' ? '-' : $row['version'],
+                $row['description'] === '' ? '-' : $row['description'],
+            );
+        }
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * `bundles recommend` — C-EXT-4.a's scorer over the joined catalog of
+     * every ADDED marketplace, minus what the user already has installed,
+     * for the project root this process was pointed at. Reads only: the
+     * answer is a suggestion line, and the install is the verb that writes.
+     */
+    private static function bundlesRecommend(ParsedArgs $args): int
+    {
+        $root = (string) ($args->root ?? '') !== '' ? (string) $args->root : (string) \getcwd();
+        $registry = MarketplaceRegistry::loadDefault();
+
+        foreach ($registry->loadErrors() as $error) {
+            self::bundlesLine($error);
+        }
+
+        $catalog = [];
+        $offeredBy = [];
+
+        foreach ($registry->names() as $marketplaceName) {
+            $marketplace = $registry->marketplace($marketplaceName);
+
+            if ($marketplace === null) {
+                continue;
+            }
+
+            foreach ($marketplace->entries as $entry) {
+                if (isset($offeredBy[$entry->name])) {
+                    continue; // first offering wins, registration order
+                }
+
+                $offeredBy[$entry->name] = $marketplaceName;
+                $catalog[] = $entry;
+            }
+        }
+
+        $home = HomeDirectory::owned();
+        $installed = $home === null ? [] : self::bundlesBundleRootNames($home . '/.candy-code/bundles');
+
+        $recommended = (new BundleRecommender($root, $catalog, $installed))->recommend();
+
+        if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
+            $rows = [];
+
+            foreach ($recommended as $entry) {
+                $rows[] = [
+                    'name' => $entry->name,
+                    'marketplace' => $offeredBy[$entry->name] ?? '',
+                    'category' => $entry->category,
+                    'keywords' => $entry->keywords,
+                ];
+            }
+
+            echo \json_encode(
+                ['project_root' => $root, 'recommendations' => $rows],
+                \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE,
+            ) . "\n";
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        if ($recommended === []) {
+            echo Lang::t('cli.bundles.recommend.none') . "\n";
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        foreach ($recommended as $entry) {
+            \printf(
+                "%-18s %-18s %-9s %s\n",
+                $entry->name,
+                $offeredBy[$entry->name] ?? '-',
+                $entry->category === '' ? '-' : $entry->category,
+                $entry->description === '' ? '-' : $entry->description,
+            );
+        }
 
         return NonInteractive::EXIT_OK;
     }
@@ -3002,7 +4061,7 @@ final class Subcommands
      */
     private const SUBCOMMAND_ACTIONS = [
         'session' => ['list', 'show', 'rename', 'delete', 'pin', 'unpin', 'archive', 'unarchive'],
-        'bundles' => ['list', 'install'],
+        'bundles' => ['list', 'install', 'marketplace', 'update', 'search', 'recommend'],
         'mcp' => ['list', 'auth', 'import', 'trust'],
         'serve' => Serve::ACTIONS,
         'completion' => self::SHELLS,

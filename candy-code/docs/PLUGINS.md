@@ -117,6 +117,17 @@ candy-code bundles list                   # every bundle this directory sees,
 candy-code bundles install <path>         # copy a bundle directory into
                                           # ~/.candy-code/bundles/
 candy-code bundles install <git-url>      # depth-one clone into the same place
+candy-code bundles install <plugin>@<marketplace>
+                                          # gated install from an added marketplace
+candy-code bundles marketplace add <path|git-url>
+                                          # pin a marketplace catalog under ~/.candy-code/
+candy-code bundles marketplace list       # the added rows and their pins
+candy-code bundles marketplace remove <name>
+candy-code bundles marketplace update [name]
+                                          # re-clone, diff, move the pin
+candy-code bundles update [bundle]        # re-install recorded bundles from their rows
+candy-code bundles search <query>         # every catalog entry matching a needle
+candy-code bundles recommend              # entries the project's own files point at
 ```
 
 `list` answers without a provider, an API key or a terminal, and
@@ -132,6 +143,50 @@ no tags, terminal prompts and askpass disabled, killed with its process group
 if it overstays. Its only destination is the user bundle root — a clone can
 land in `~/.candy-code/bundles/<name>` and nowhere else, under a name that can
 not traverse out of it.
+
+## Marketplaces
+
+A marketplace is a directory whose `.claude-plugin/marketplace.json` names
+itself and lists plugins, each with a source: a path strictly inside the
+checkout, a `github` `owner/repo`, or a plain `https` git URL.
+`bundles marketplace add` clones or opens such a source, reads the catalog,
+resolves a full 40-hex commit for it, and writes one registry row under
+`~/.candy-code/marketplaces.json`; remote checkouts land beside it under
+`~/.candy-code/marketplaces/<name>/` with the `.git` stripped. A source with
+no resolvable commit is refused outright — a marketplace nobody can pin is a
+catalog every install from it would silently drift on.
+
+That pin is the install gate. `bundles install demo@marketplace` only runs if
+`marketplace` is a registered row with a pinned commit and an entry named
+`demo`; otherwise it refuses with the sentence naming why. A gated install
+stages exactly like a direct one (path copy or depth-one clone, both
+content-only), then writes a provenance record
+(`<bundle>/.candy-code-source.json`) naming the marketplace, the entry and
+the commit — the row `bundles update` later refreshes against.
+
+`bundles marketplace update` re-clones the row's source into a scratch beside
+the old checkout, prints which plugins arrived and left the catalog, swaps
+the checkout by rename, and only then moves the pin. If the catalog renamed
+itself the update refuses — the registry name is the identity every install
+record keys on. Local-path rows answer "update it in place" and do nothing
+else. `bundles update` (with or without a bundle name) re-installs each
+recorded bundle from its row: the old tree moves aside, the fresh tree lands
+under the name, and the aside copy is removed last and without ever following
+a link, so no upstream tree can aim a removal at your home directory. A
+bundle whose upstream renamed itself is refused rather than re-keyed, and
+bundles installed from a bare path or URL simply carry no record — the scan
+answers that they were left alone.
+
+`bundles search <query>` and `bundles recommend` read the same catalogs and
+write nothing: the first matches name, source, description, category and
+keywords; the second scores catalog keywords against the signal words of the
+project files sitting in the working directory (a `package.json` points at
+the JavaScript-family keywords, a `Dockerfile` at the container family), and
+never names an entry whose bundle is already installed. Both answer to
+`--output-format json`.
+
+`marketplace remove` retires the row; its checkout directory stays on disk,
+because deleting trees is not what a remove verb is for.
 
 ## See also
 

@@ -400,6 +400,11 @@ final class ReadPathCensusTest extends TestCase
                 . 'named on `bundles install`; the destination is this command\'s own container',
             'SELF_LOCATED — removeTree() sweeps only the scratch paths this verb minted inside '
                 . 'its own root',
+            // C-EXT-4.b: bundlesBundleRootNames() lists the command's OWN bundle
+            // root (under HomeDirectory::owned()) names-only, to pick which
+            // installed bundles `bundles update` walks and `recommend` excludes.
+            'SELF_LOCATED — bundlesBundleRootNames() reads only the names directly under '
+                . 'the operator-owned `~/.candy-code/bundles` root this command minted',
         ],
         'Commands/BangShell.php|file_get_contents' => [
             'SELF_LOCATED — the `!cmd` result payload (roadmap 5.14g): the name ToolIpcFiles::reserve() '
@@ -672,6 +677,18 @@ final class ReadPathCensusTest extends TestCase
                 . 'Bootstrap::writeUserConfig(); the corrupt-config branch refuses, never repairs',
             'CALLER_SUPPLIED — `login`\'s write-back re-read: the SAME path, re-read only to confirm the '
                 . 'slot settled before promising it on stdout (writeUserConfig() can bail unwritten)',
+            // C-EXT-4.b: the three bundlesGitSha() reads of a checkout's OWN git
+            // metadata — HEAD, the loose ref HEAD names, and packed-refs as the
+            // fallback. The directory is either a scratch the clone seam just
+            // minted inside the command's own root or the operator-named source
+            // directory; only a 40-hex line ever leaves the function.
+            'SELF_LOCATED — `bundlesGitSha()`\'s read of `<dir>/.git/HEAD` in a checkout this '
+                . 'verb minted (or the operator-named marketplace source dir); only a ref name '
+                . 'or a bare 40-hex commit is ever parsed out',
+            'SELF_LOCATED — `bundlesGitSha()`\'s follow-on read of the loose ref file HEAD '
+                . 'names, inside the same checkout; a `..` traversal in the ref line is refused first',
+            'SELF_LOCATED — `bundlesGitSha()`\'s packed-refs scan when the loose ref file is '
+                . 'unreadable, the same checkout\'s own `.git/packed-refs` index',
         ],
         'Lint/LintRunner.php|file_get_contents' => [
             'PATH_JAIL — the file a Write/Edit call named, resolved through PathJail against the hook\'s '

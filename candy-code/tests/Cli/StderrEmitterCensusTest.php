@@ -547,8 +547,11 @@ final class StderrEmitterCensusTest extends TestCase
         // before any session exists, so there is no transcript to name.
         // +1 in PHA (self-update channels): the `--channel` value door rides
         // the same failUsage envelope, same stderr-only decision.
+        // C-EXT-4.b 2026-10-28: +1 — bundlesUsage()'s shared usage-door
+        // envelope for the marketplace/search verbs (unknown action, missing
+        // operand). Same stderr-only decision as every sibling here.
         'src/Cli/SelfUpdate.php' => 3,
-        'src/Cli/Subcommands.php' => 37,
+        'src/Cli/Subcommands.php' => 38,
         'src/Permissions/PermissionPrompt.php' => 1,
         // Not a message: the protocol schema's `$id` URN
         // (`urn:sugarcraft:candy-code:protocol:v1`, roadmap O-3c) spells the
