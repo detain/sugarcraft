@@ -621,6 +621,17 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'CLOSING_HELPERS row; if it is ever wrong this site is a long-lived exposed '
                 . 'spawn and nothing else in this file would say so.',
         ],
+        'Support/Keychain.php::spawn' => [
+            'count' => 1,
+            'reason' => 'C-SEC-8.e: the keychain backend handle never leaves the method — '
+                . 'every path out of it after the successful proc_open() (hit, miss, timeout) '
+                . 'closes the two read pipes and runs '
+                . 'ProcessReaper::terminateAndClose() (with the group id recorded while the '
+                . 'handle is alive on the timeout path); the pre-spawn missing-binary return '
+                . 'holds no handle at all. The short verdict rests on the CLOSING_HELPERS row '
+                . 'for that helper; if it is ever wrong this site is a long-lived exposed '
+                . 'spawn and nothing else in this file would say so.',
+        ],
     ];
 
     /**

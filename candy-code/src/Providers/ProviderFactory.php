@@ -11,6 +11,7 @@ use SugarCraft\Code\Providers\ToolCallParser\OpenAiArrayToolCallParser;
 use SugarCraft\Code\Providers\ToolCallParser\ToolCallParserInterface;
 use SugarCraft\Code\Providers\ThinkingCapability;
 use SugarCraft\Code\Support\ContainedPath;
+use SugarCraft\Code\Support\Keychain;
 
 /**
  * Factory for creating provider instances from configuration arrays.
@@ -459,7 +460,8 @@ final readonly class ProviderFactory
     }
 
     /**
-     * Resolves ${VAR} and ${VAR:-default} patterns from environment.
+     * Resolves ${VAR}, ${VAR:-default} and ${keychain:<name>} patterns from
+     * the environment and the OS keychain.
      *
      * @param string|null $value The value to resolve
      * @return string|null Resolved value or null if not set and no default
@@ -470,6 +472,18 @@ final readonly class ProviderFactory
         if ($value === null) {
             return null;
         }
+
+        // C-SEC-8.e: ${keychain:<name>} reads one entry from the OS secret
+        // store. The pass runs first and misses to '' — the same degradation
+        // an unset ${VAR} takes below — so a bad entry costs a launch notice
+        // naming it, never the launch. The ${VAR} pattern below cannot lexically
+        // collide: `keychain:` is lowercase with a colon, which its [A-Z_]
+        // head never matches, so no env-var name is shadowed by this form.
+        $value = preg_replace_callback(
+            '/\$\{keychain:([^}]*)\}/',
+            static fn (array $matches): string => Keychain::lookup($matches[1]) ?? '',
+            $value
+        );
 
         // Pattern: ${VAR} or ${VAR:-default}
         return preg_replace_callback(

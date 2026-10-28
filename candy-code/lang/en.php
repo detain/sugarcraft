@@ -742,6 +742,11 @@ For more information, see the README:
   https://github.com/detain/sugarcraft/tree/master/candy-code
 
 TXT,
+    'cli.keychain.empty_name' => 'a ${keychain:} reference names no entry — it resolves to the empty string.',
+    'cli.keychain.miss' => 'keychain entry {entry} not found in the {os} keychain — the provider receives an empty value.',
+    'cli.keychain.missing_binary' => '{backend} is not installed, so keychain entry {entry} could not be read — the provider receives an empty value.',
+    'cli.keychain.no_backend' => 'no keychain backend exists on {os}, so entry {entry} could not be read — keep the value in the environment or the user config instead.',
+    'cli.keychain.timeout' => 'the {backend} keychain lookup of {entry} did not answer within {seconds} seconds — the provider receives an empty value.',
     'cli.keys.reload_refused' => 'keybindings reload refused: {reason} — the live keymap is kept',
     'cli.keys.reload_unchanged' => 'keybindings unchanged — the live keymap already matches the setting',
     'cli.keys.reloaded' => 'keybindings reloaded — {count} override(s) live from the next press',

@@ -21,6 +21,7 @@ use SugarCraft\Code\Providers\ToolCallParser\MinimaxXmlFallbackToolCallParser;
 use SugarCraft\Code\Providers\ToolCallParser\OpenAiArrayToolCallParser;
 use SugarCraft\Code\Providers\ToolCallParser\ToolCallParserInterface;
 use SugarCraft\Code\Providers\VertexProvider;
+use SugarCraft\Code\Support\Keychain;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
 
@@ -316,6 +317,97 @@ final class ProviderFactoryTest extends TestCase
             putenv('VAR1');
             putenv('VAR2');
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // resolveEnv() - ${keychain:<name>} (C-SEC-8.e)
+    // -------------------------------------------------------------------------
+
+    public function testAKeychainPlaceholderResolvesThroughTheKeychain(): void
+    {
+        $captured = [];
+        Keychain::resetForTesting();
+        Keychain::armOsForTesting('Linux');
+        Keychain::armSpawnSeamForTesting(
+            static function (array $argv) use (&$captured): array {
+                $captured = $argv;
+
+                return ['status' => 'hit', 'stdout' => 'key-from-the-store', 'exitCode' => 0];
+            },
+        );
+
+        try {
+            $this->assertSame('key-from-the-store', $this->factory->resolveEnv('${keychain:candy-openai}'));
+        } finally {
+            Keychain::resetForTesting();
+        }
+
+        // The name reached the backend intact — `${keychain:...}` is a lookup,
+        // never an env-var read wearing that spelling.
+        $this->assertSame('candy-openai', $captured[5]);
+    }
+
+    public function testAKeychainMissResolvesToTheEmptyStringLikeAnUnsetVar(): void
+    {
+        Keychain::resetForTesting();
+        Keychain::armOsForTesting('Linux');
+        Keychain::armSpawnSeamForTesting(
+            static fn (array $argv): array => ['status' => 'miss', 'stdout' => '', 'exitCode' => 1],
+        );
+
+        try {
+            $this->assertSame('', $this->factory->resolveEnv('${keychain:gone-key}'));
+        } finally {
+            Keychain::resetForTesting();
+        }
+    }
+
+    public function testTheVariablePatternCannotSeeTheKeychainForm(): void
+    {
+        // With the keychain pass removed the order would still hold, so pin
+        // the two shapes side by side: each form resolves only in its own.
+        putenv('CSEC8E_ADJACENT=env-answer');
+        Keychain::resetForTesting();
+        Keychain::armOsForTesting('Linux');
+        Keychain::armSpawnSeamForTesting(
+            static fn (array $argv): array => ['status' => 'hit', 'stdout' => 'store-answer', 'exitCode' => 0],
+        );
+
+        try {
+            $this->assertSame(
+                'store-answer and env-answer',
+                $this->factory->resolveEnv('${keychain:two-forms} and ${CSEC8E_ADJACENT}'),
+            );
+        } finally {
+            Keychain::resetForTesting();
+            putenv('CSEC8E_ADJACENT');
+        }
+    }
+
+    public function testAKeychainNameSurvivesThePlaceholderThatLooksLikeAVar(): void
+    {
+        // `${keychain:OPENAI_KEY}` must not double-resolve: the keychain gets
+        // the raw name, and the env pass never sees a leftover placeholder.
+        $captured = [];
+        putenv('OPENAI_KEY=sentinel-value');
+        Keychain::resetForTesting();
+        Keychain::armOsForTesting('Linux');
+        Keychain::armSpawnSeamForTesting(
+            static function (array $argv) use (&$captured): array {
+                $captured = $argv;
+
+                return ['status' => 'miss', 'stdout' => '', 'exitCode' => 1];
+            },
+        );
+
+        try {
+            $this->assertSame('', $this->factory->resolveEnv('${keychain:OPENAI_KEY}'));
+        } finally {
+            Keychain::resetForTesting();
+            putenv('OPENAI_KEY');
+        }
+
+        $this->assertSame('OPENAI_KEY', $captured[5]);
     }
 
     // -------------------------------------------------------------------------

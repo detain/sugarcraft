@@ -292,6 +292,18 @@ like this:
 
 An unset variable with no `:-default` resolves to the empty string.
 
+A value can also spell `${keychain:<name>}`: CandyCode then reads that entry
+from the operating system's own secret store — `secret-tool lookup` on
+freedesktop Linux, `security find-generic-password` on macOS — under the
+service name `candy-code`, once per launch per name. Only the entry name
+crosses to the helper in its argv; the secret rides the helper's stdout and
+so stays out of the process listing the name is visible in. Any miss — the
+entry does not exist, the helper is not installed, it does not answer within
+five seconds, or the platform has no backend here at all (Windows among them)
+— resolves to the empty string, the same shape an unset `${VAR}` takes, and
+the reason is raised as a launch notice naming the entry rather than as a
+startup failure.
+
 Beyond the map, `OPENAI_BASE_URL` redirects the endpoint for the OpenAI-shaped
 built-in types (`openai`, `sglang`, `custom`) without declaring a block at all —
 the counterpart of `ANTHROPIC_BASE_URL` for that family, aimed at gateways like
