@@ -122,6 +122,37 @@ describe('ProcessesSection', () => {
     expect(wire.sent('shells.list')).toHaveLength(2)
   })
 
+  it('a REJECTING shells.stop surfaces as the error line, never an uncaught rejection', async () => {
+    // Sibling of BackgroundPanel's act(): the Stop click must not float a
+    // rejected promise. The collector is the non-vacuity pin — reverting the
+    // act() wrap lands the rejection on 'unhandledRejection' and reddens here.
+    const rejections: unknown[] = []
+    const onRejection = (reason: unknown): void => void rejections.push(reason)
+    process.on('unhandledRejection', onRejection)
+    try {
+      const wrapper = await openSection()
+      await wire.answer('shells.list', SHELL_ROWS)
+      await flushPromises()
+      await wrapper.find('[data-testid="proc-head-sh-aaaa1111"]').trigger('click')
+      await wire.answer('shells.output', OUTPUT)
+      await flushPromises()
+
+      await wrapper.find('[data-testid="proc-stop-sh-aaaa1111"]').trigger('click')
+      await flushPromises()
+      expect(wire.sent('shells.stop')).toHaveLength(1)
+      await wire.fail('shells.stop', -32003, 'permission_denied', 'stop refused here')
+      await flushPromises()
+      await flushPromises()
+
+      expect(wrapper.find('[data-testid="proc-error"]').text()).toContain('stop refused here')
+      expect(rejections).toEqual([])
+      // The failed stop does not fake a reload: still the single on-mount read.
+      expect(wire.sent('shells.list')).toHaveLength(1)
+    } finally {
+      process.off('unhandledRejection', onRejection)
+    }
+  })
+
   it('a read-only caller sees no Stop button', async () => {
     const wrapper = await openSection(['read'])
     await wire.answer('shells.list', SHELL_ROWS)

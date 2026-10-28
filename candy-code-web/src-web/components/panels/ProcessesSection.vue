@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { BackgroundShell } from '../../protocol/generated'
 import { useShellsStore } from '../../stores/agents/shells'
 import { useConnectionStore } from '../../stores/connection'
+import { describe } from '../../stores/session'
 
 /**
  * The launch's background shells (C-TOOL-3.e), mounted inside the Background
@@ -29,6 +30,17 @@ const shells = useShellsStore()
 const connection = useConnectionStore()
 const canWrite = computed(() => connection.scopes.includes('write'))
 const expanded = ref<string | null>(null)
+const error = ref<string | null>(null)
+
+/** Sibling idiom (BackgroundPanel): a rejecting store call lands as an error line, never an uncaught rejection. */
+async function act(action: () => Promise<unknown>): Promise<void> {
+  error.value = null
+  try {
+    await action()
+  } catch (failure) {
+    error.value = describe(failure)
+  }
+}
 
 /** How often an OPEN panel re-reads the table. A closed one never polls. */
 const POLL_MS = 3000
@@ -62,7 +74,9 @@ function toggle(shell: BackgroundShell): void {
 }
 
 async function stop(shellId: string): Promise<void> {
-  if (props.sessionId !== null) await shells.stop(shellId, props.sessionId)
+  const id = props.sessionId
+  if (id === null) return
+  await act(() => shells.stop(shellId, id))
 }
 
 function outputText(shellId: string): string {
@@ -93,7 +107,7 @@ function ageText(seconds: number): string {
 <template>
   <section class="processes" data-testid="processes-section">
     <h3>Processes</h3>
-    <p v-if="shells.error" class="error" role="alert" data-testid="proc-error">{{ shells.error }}</p>
+    <p v-if="error || shells.error" class="error" role="alert" data-testid="proc-error">{{ error || shells.error }}</p>
     <p v-if="sessionId === null" class="empty">Open a session to see its background shells.</p>
     <template v-else>
       <p v-if="shells.items.length === 0" class="empty" data-testid="proc-empty">No background shells.</p>
