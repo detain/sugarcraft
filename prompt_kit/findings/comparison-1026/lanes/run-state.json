@@ -126,17 +126,8 @@
   "STOP STATE @2052@: master b4b4404c5 (wind-down commit; 9 files). welded=100/328 LIST. waves_closed [1..9] (W8/W9 rows + marks committed inside b4b4404c5; W9 per lead ruling r1-CLEAN-no-r2 — disclosed). Owed loops: W10 (blocked on unwelded members C-EXT-2.c + C-PRV-5.c), then W11+ per scheduler waves_fully_welded. Only live artifact: /home/sites/cc-cmp-P-TABS.g + branch cc/P-TABS.g @f25a697c1 (parked; re-dispatch plan:1549 after P-TABS.e+P-TABS.f weld). LATE W33+ gated on §6.3 owner rulings (C-TOOL-6 c/e/h + C-TUI-6: Windows shell, Windows self-update helper, web i18n scope, locale choice, parity strictness, voice endpoint, push-to-talk key). NEVER pushed; origin advanced owner-side only.",
   "C-EXT-2.c welded 4b771634d; closeout roster in its WELD.md (Bootstrap:5955 comment, ChatHostLangCatalogue standing red=C-PRV-1.b (a992413b0) seam, TROUBLESHOOTING allowed-tools/effort half=C-EXT-2.b)"
  ],
- "extra_agents": 2,
+ "extra_agents": 1,
  "inflight": {
-  "C-AGT-6.a": {
-   "base": "c4c13f101",
-   "branch": "cc/C-AGT-6.a",
-   "note": "r1 CLEAN 0C/0M/0m @96f14da66; weld: durations CommitHostCommandTest 7T, +10 methods, notice()-over-promise closeout carry; ChatHostLangCatalogue base-red glance owed",
-   "round": 1,
-   "session": "done",
-   "stage": "clean",
-   "worktree": "/home/sites/cc-cmp-C-AGT-6.a"
-  },
   "C-CTX-2.f": {
    "branch": "cc/C-CTX-2.f",
    "note": "build 4a36a153a@9fc915cd9 7f; r1 live w/ envelope-ruling task (updated-half per-tracker dedup vs one-row-per-session law); durations InstructionVisibilityNoticeTest +5T",
@@ -166,10 +157,11 @@
   },
   "C-CTX-5.a": {
    "branch": "cc/C-CTX-5.a",
-   "note": "builder live @ca69cb333; twin stood down; W20 summary resilience",
-   "round": 0,
-   "session": "ses_e7bcdaa69ffdZXQr0ItaM5Z365",
-   "stage": "build",
+   "note": "build 2f867a969@ca69cb333 5f; r1 LIVE; deviations to judge: served-route raw-engine seam, wording-match overflow, clip cache-identity",
+   "round": 1,
+   "session": "ses_e7ba8ea75ffewif0fEz8XwJ8h3",
+   "stage": "review",
+   "tip": "2f867a969",
    "worktree": "/home/sites/cc-cmp-C-CTX-5.a"
   },
   "C-EXT-3.b": {
@@ -179,6 +171,14 @@
    "session": "ses_e7bcc770cffeuVqnOPzaRMMhoF",
    "stage": "build",
    "worktree": "/home/sites/cc-cmp-C-EXT-3.b"
+  },
+  "C-EXT-3.d": {
+   "branch": "cc/C-EXT-3.d",
+   "note": "/agents new+accept; base 7e322e44d",
+   "round": 0,
+   "session": "ses_e7ba99eb2ffeWL1KB8aAV2iZ0T",
+   "stage": "build",
+   "worktree": "/home/sites/cc-cmp-C-EXT-3.d"
   },
   "C-PRV-3.a": {
    "branch": "cc/C-PRV-3.a",
@@ -219,19 +219,22 @@
   },
   "C-WEB-4.b": {
    "branch": "cc/C-WEB-4.b",
+   "note": "recut builder live @7d78cf8d3",
    "notes": "(key was clobbered by welder run-state write; builder live)",
    "round": 0,
-   "session": "ses_e7c27b501ffeBETBU1SfvxNwBy",
+   "session": "ses_e7bab1165ffewVe2x743Ld6xoo",
    "stage": "build",
+   "tip": null,
    "worktree": "/home/sites/cc-cmp-C-WEB-4.b"
   },
   "C-WEB-4.e": {
    "branch": "cc/C-WEB-4.e",
-   "note": "STOP-1 TS7053 fixer live; r2+re-weld after",
+   "note": "r2 CLEAN @76527aec1; parked batch-6: pick b0ea554b4+76527aec1, trio re-derive+dist rider merged, durations SessionSendDocumentsTest +8T",
    "notes": "base 24d746501; npm ci in flight (bg shell). [protocol] serialized: TurnMethods+MethodSchemas+trio regen (schema/SERVER.md/generated.ts)+Composer.vue+paste.ts+session.ts; NEW SessionSendDocumentsTest.php -> durations row at weld; welder re-derives trio once on merged tree (C-TOOL-3.e precedent).",
-   "round": 1,
-   "session": "ses_e7bb1103effe",
-   "stage": "fix",
+   "round": 2,
+   "session": null,
+   "stage": "clean",
+   "tip": "76527aec1",
    "worktree": "/home/sites/cc-cmp-C-WEB-4.e"
   }
  },
@@ -333,7 +336,7 @@
  ],
  "standing_reds_b985fbe51": "ADD: ChatHostLangCatalogueTest red on chat.effort.launch_unshaped (asker LaunchContext.php:2109 outside sources()) - byte-identical at base, C-PRV-1.b (a992413b0) seam -> closeout roster",
  "status": "RUNNING",
- "tick": "157-TOOL2b-cut;10-live;push-law-active",
+ "tick": "165-WEB4e-clean-held",
  "tip": "0f58a906f",
  "updated": "2026-10-28 batch-5 weld step 6",
  "wave_loops": {
@@ -542,6 +545,7 @@
    "regen": "none (docs-only)"
   },
   "C-AGT-5.h": "welded batch-5: ecda4ca36->676ab6c0f + 5ea83ca14->0ebfdf9fe zero conflicts; gates 10/56 + 499/2636 + 110T exact (4337A wobble); no durations; §4 marks 0ebfdf9fe",
+  "C-AGT-6.a": "batch-5 weld: pick 7e322e44d (96f14da66, en.php both-sides conflict cured); gates 73T/1541A combo (+2 derived-row wobble), Commands 140+AutoCommit 15 OK, 22/313 EXACT; gen trio rc0; durations row + README 135-numeral rider landed 9b1853cc1 (step-2 regen residue cured); closeout carry: AutoCommittedMsg::notice() over-promise (review iii)",
   "C-AGT-6.b": "'--' terminator fix in flight; NIT REPORT counts +5/26,518; no new test files → no durations",
   "C-AGT-6.d_weld": "r1 CLEAN 0C/0M/0 step-local minors (2 NITs recorded, take-or-leave); en-only cmd.pr.*/cmd.review.bad-pr -> 11-locale LAST per §6.3-h. Zero Protocol/web -> no trio/dist riders; gen-command-docs --check rc0. 3 durations rows (PrCommand 0.019/6, GhRunner 0.238/6, PrHostCommand 0.003/3 junit sums). Guards 275T/46483A, red-set = staleness pair only (foreign-era; +132A vs reviewer 46351 wobble from C-CTX-4.c era). DescriptorInheritanceGuard ::diffRange inherited-red cure (C-AGT-6.b) landed in-step. Zero new proc_open (CapturesProcessOutput choke, ChildLifetimesToolTest 9T/31A green).",
   "C-AGT-7.a": {
@@ -1290,9 +1294,10 @@
   "C-TUI-2.d",
   "C-WEB-4.d",
   "C-SEC-8.e",
-  "C-AGT-5.h"
+  "C-AGT-5.h",
+  "C-AGT-6.a"
  ],
- "welded_count": 181,
+ "welded_count": 182,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
  "welder_sessions": {

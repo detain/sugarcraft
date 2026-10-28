@@ -2349,7 +2349,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Ruling:** R13 (remote security). Is an issue-comment-triggered bot that posts with a write token acceptable, and under which association gate? — see §6
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-5.h`
 
-#### C-AGT-6.a — `/commit` with a drafted message
+#### ✅ 7e322e44d C-AGT-6.a — `/commit` with a drafted message
 - **Item:** C-AGT-6 (sources: GAP-GIT-03, p2-miss: built-in `/commit` (×2)) · gap · effort M
 - **What:** `/commit [message]` is a builtin with a host body, so serve and web get it as `runsIn: server`. `CommitHostCommand` returns `CommandEffect::async`, which collects every changed path (`git status --porcelain -z`). With no message, …
 - **Files — create:** `candy-code/builtin-commands/2850-commit.php`, `candy-code/src/Host/Commands/CommitHostCommand.php`
