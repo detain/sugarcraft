@@ -1840,7 +1840,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tui.md` → `### C-TUI-2.b`
 
-#### C-WEB-4.a — Composer: drag-drop images, Ctrl+G history search, paste chips
+#### ✅ 9e22d932fab8c5c4942defd5aa6e84b67e57a158 C-WEB-4.a — Composer: drag-drop images, Ctrl+G history search, paste chips
 - **Item:** C-WEB-4 (sources: GAP-UI-12, GAP-UI-09, GAP-UI-11) · gap · M
 - **What:** Client-only, three features: **Drag-drop.** `@dragover.prevent`/`@drop` on the composer feeds `readPastedImages(event.dataTransfer)`. A DataTransfer already satisfies `ClipboardFiles` (`lib/paste.ts`). Drops use the same …
 - **Files — create:** `candy-code-web/src-web/components/HistorySearch.vue`, `candy-code-web/src-web/components/__tests__/composerDropAndChips.spec.ts`
@@ -1862,7 +1862,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-AGT-5.b (W14)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-5.c`
 
-#### C-AGT-5.e — Outbound webhooks core (sign, async send, retry)
+#### ✅ 23e4dae805c2996d1df1921fe9a2d12ddae9b261 C-AGT-5.e — Outbound webhooks core (sign, async send, retry)
 - **Item:** C-AGT-5 (sources: p1-miss: outbound webhooks, p2-miss: outbound webhooks) · gap · effort M
 - **What:** Add a self-contained `Automation` namespace, with no serialized files: `OutboundWebhookConfig` parses a user-tier map `{name: {url, secret, events[]}}`. It requires https, or http only to loopback, and refuses redirects; …
 - **Files — create:** `candy-code/src/Automation/OutboundWebhookConfig.php`, `candy-code/src/Automation/WebhookSigner.php`, `candy-code/src/Automation/WebhookEvent.php`, `candy-code/src/Automation/WebhookDispatcher.php`
@@ -1873,7 +1873,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-AGT-1.a (W1), C-AGT-1.c (W1), C-AGT-1.b (W6)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-5.e`
 
-#### C-AGT-5.g — GitLab CI recipe around the signed phar
+#### ✅ 0cbd4e7c787bb41c66b7f49b6c1d25926c7b6619 C-AGT-5.g — GitLab CI recipe around the signed phar
 - **Item:** C-AGT-5 (sources: p2-miss: GitLab CI component) · gap · effort S
 - **What:** Add a `docs/CI.md` "GitLab CI" section: a `.gitlab-ci.yml` job that downloads the `candy-code/v*` release phar, verifies sha256 and the pinned-key minisig (the `release-phar.yml` assets), and runs `-p --output-format json …
 - **Files — create:** none
