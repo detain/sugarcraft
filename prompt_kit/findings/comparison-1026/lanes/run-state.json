@@ -139,14 +139,13 @@
    "tip": "f2534f502",
    "worktree": "/home/sites/cc-cmp-C-AGT-6.c"
   },
-  "C-CTX-5.a": {
-   "branch": "cc/C-CTX-5.a",
-   "note": "r4 FULL-RANGE CLEAN 0C/0M/0m @671 (chain 2f867a969+fe47a3921+b3f5cea29). BATCH-7 weld: pick all three, gates 19T/174A fold-family + 201T/1099A Runtime + guards 159T; durations x2 CacheReusingSummaryBackendTest+CompactionFallbackParityTest; +14T; §4 cites b3f5cea29",
-   "round": 4,
-   "session": null,
-   "stage": "clean",
-   "tip": "2f867a969",
-   "worktree": "/home/sites/cc-cmp-C-CTX-5.a"
+  "C-CTX-3.a": {
+   "base": "972e0960b",
+   "branch": "cc/C-CTX-3.a",
+   "round": 0,
+   "session": "ses_e7b4a416dffe5d1Ck637bE7iRL",
+   "stage": "build",
+   "worktree": "/home/sites/cc-cmp-C-CTX-3.a"
   },
   "C-EXT-3.d": {
    "branch": "cc/C-EXT-3.d",
@@ -186,7 +185,7 @@
   },
   "C-EXT-6.a": {
    "branch": "cc/C-EXT-6.a",
-   "note": "4f +97/-17 REAL but UNCOMMITTED; prior return hash 325b2883b = FABRICATION (4th death-mode, builder-side). Finisher dispatched to verify gates+commit honestly",
+   "note": "5f35a8957 re-verified by late finisher twin (no new commits, tree clean, detain 1/1, gates re-derived honest: 1276T/10520A + 367T/44351A + gens rc0). r1 reviewer live on same tip. Carries: DUR ScriptHookSystemMessageNoticeTest +12T, ChatHostLangCatalogue foreign.",
    "round": 1,
    "session": "ses_e7b59d1b1ffesrH4U6O004PR1f",
    "stage": "fix",
@@ -326,6 +325,7 @@
    "C-WEB-4.b/C-WEB-4.c": "npm ci web lanes"
   }
  },
+ "push_law": "W18+ EVERY wave close on time: fetch/ls-remote, pull --ff-only, push origin master, verify ls-remote==local; NON-FF -> STOP+report. W17 backlog pushed at tick-235: e85b8464c..972e0960b (32 commits). origin/master==972e0960b.",
  "rulings": {
   "C-AGT-5.b": "(a) ROOT-SCOPE the delete guard (owner 2026-10-29, blocker 15). Chain: build 5.b -> loop clean -> weld -> W14 wave loop -> close W14 in §3; then 5.c -> weld -> W15 loop -> close W15. Then wind down: run-state STOPPED-at-scope-end + scope report; do NOT start W17+; live W16 lanes finish + weld under this lead, hand documented to next lead. Keep 10 busy (no-reservation law)."
  },
@@ -345,7 +345,7 @@
  ],
  "standing_reds_b985fbe51": "ADD: ChatHostLangCatalogueTest red on chat.effort.launch_unshaped (asker LaunchContext.php:2109 outside sources()) - byte-identical at base, C-PRV-1.b (a992413b0) seam -> closeout roster",
  "status": "RUNNING",
- "tick": "224-PRV3a-fix2-needed-CTX2f-forklanded-clean",
+ "tick": "235-PUSHED-972e0960b; CTX-3.a blank-resume#1",
  "tip": "0f58a906f",
  "updated": "2026-10-28 batch-5 weld step 6",
  "wave_loops": {
@@ -606,6 +606,7 @@
   "C-CTX-2.f": "batch-7 weld: 4 picks c77030fa0+87f26fdf2+13de7554d+93bc8f028 (4a36a153a+645e4ca2f+a853615d0+96f4e4461 per tick-224 pool note); gates 12T/71A + 339T/1740A + guards 147T/21192A green; DUR 12T; §4 96f4e4461; ChatHostLangCatalogue 1F foreign-standing",
   "C-CTX-3.b": "batch-7: aa8e4fdbf+b4245ba44 -> 5891bced5+74acd2472; gates 16T/77A+19T+188T family green; durations +1 row; +16T carry; §4 b4245ba44; r2 CLEAN-RANGE canonical REVIEW-2",
   "C-CTX-4.c_weld": "r1 FINDINGS 0C/0M/1min(out-of-scope FeatWiring docblock->closeout list)/3NIT: lane commit itself defect-free, weld WITHOUT fixer round. At weld: (a) append the undisclosed lang/en.php deviation line into lanes/C-CTX-4.c/REPORT.md before committing evidence (m2); (b) WELD.md figure corrections (m3/m4): red-before static 17T/11E (builder said 16T/10E); '93T guards' irreproducible as labeled — reviewer measured 206T/192T-green spellings; M1 static 3 reds not 4; gen-settings-doc --check sandbox-blocked, SettingsSchemaDocDrift green covers. 1 durations row InstructionWalkPastRootTest (17T junit sum); hub collision check README/DocFigure/LayeredSettingsTest/en.php vs concurrent lanes; no regen riders (zero Protocol/web files).",
+  "C-CTX-5.a": "WELDED batch-7 2026-10-28 (picks 2f867a969->aa8bdbeea, fe47a3921->53b8e0fbc, b3f5cea29->972e0960b, zero conflicts; r4 FULL-RANGE CLEAN per lead ledger @671, no REVIEW-3/4 files persisted; gates 19T/174A fold-band EXACT + Runtime 414T/10033A OK + doc-guard band 547T/47974A OK; standing AutomaticCompaction 1F re-proven base-inherited, not attributed; DUR x2 5.562/7 + 5.148/11; +18T carry; §4 cites b3f5cea29; untracked REPORT.md prefix handled before pick; worktree+branch pruned)",
   "C-CTX-6.a": {
    "durations_owed": "none - no new candy-code *Test.php (+3T rides closeout re-pin)",
    "gates": "SessionHost 57T/283A EXACT; Idle|AutoCompact|Compaction 461T/22159A EXACT; five-guard 133T/15781A failures=2 = staleness pair ONLY",
@@ -1320,9 +1321,10 @@
   "C-CTX-4.a",
   "C-EXT-3.b",
   "C-CTX-3.b",
-  "C-CTX-2.f"
+  "C-CTX-2.f",
+  "C-CTX-5.a"
  ],
- "welded_count": 188,
+ "welded_count": 189,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
  "welder_sessions": {

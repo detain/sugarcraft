@@ -1,0 +1,24 @@
+### C-CTX-5.a — Summary resilience: overflow retry, summary-model fallback, failure-path pins
+- item: C-CTX-5 (sources: OC-new#9, OC-new#4 (fallback half), CLAW-new#5)
+- kind: competitor-feature · effort M
+- approach:
+  - Already shipped: `summaryModel`, cache-reusing summaries, a heuristic fold on any summary error, and a stall ceiling.
+  - Missing 1: a compaction request that itself overflows the window has no second try.
+  - Missing 2: a configured `summaryModel` that fails non-transiently (unknown model, 4xx) is never retried on the session's model.
+  - Fix, inside `CacheReusingSummaryBackend::summariseAsync()`, which serves both hosts with no Chat or SessionHost edit:
+    - on `ContextOverflow::matches()`, retry once with `CompactionService::clipOlderToolOutputs()` (older tool results cut to head and tail, the newest exchanges kept);
+    - on a non-transient failure of an overridden summary model, retry once on `engine->withSummaryModel(null)`;
+    - otherwise reject as today, which folds heuristically.
+  - Pin CLAW-new#5 parity: a 408, a 504 or an idle-stall rejection lands a heuristic fold, and the parked turn proceeds on both hosts.
+- files.create: `candy-code/tests/Backend/CacheReusingSummaryBackendTest.php`, `candy-code/tests/Host/CompactionFallbackParityTest.php`
+- files.modify: `candy-code/src/Backend/CacheReusingSummaryBackend.php` (`summariseAsync()`), `candy-code/src/Host/CompactionService.php` (new `clipOlderToolOutputs()`)
+- tests: CacheReusingSummaryBackendTest (overflow → one clipped retry; model failure → one session-model retry; transient errors not retried); CompactionFallbackParityTest (TUI and served parked turn both proceed on a heuristic fold after 408/504/stall)
+- docs/guards: `candy-code/docs/CONTEXT.md` (compaction failure modes)
+- serialized: [docs:CONTEXT.md] [hot:candy-code/src/Host/CompactionService.php] [hot:candy-code/src/Backend/CacheReusingSummaryBackend.php]
+- deps: none
+- phase: normal
+- ruling: none
+- risks:
+  - Each retry is a second billed call. It is capped at one, and the ledger already bills summary calls.
+  - E646: no total timeout is added.
+

@@ -2453,7 +2453,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-4.a`
 
-#### C-CTX-5.a — Summary resilience: overflow retry, summary-model fallback, failure-path pins
+#### ✅ b3f5cea29 C-CTX-5.a — Summary resilience: overflow retry, summary-model fallback, failure-path pins
 - **Item:** C-CTX-5 (sources: OC-new#9, OC-new#4 (fallback half), CLAW-new#5) · competitor-feature · effort M
 - **What:** Already shipped: `summaryModel`, cache-reusing summaries, a heuristic fold on any summary error, and a stall ceiling. Missing 1: a compaction request that itself overflows the window has no second try. Missing 2: a configured …
 - **Files — create:** `candy-code/tests/Backend/CacheReusingSummaryBackendTest.php`, `candy-code/tests/Host/CompactionFallbackParityTest.php`
