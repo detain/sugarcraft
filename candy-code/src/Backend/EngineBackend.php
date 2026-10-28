@@ -48,6 +48,7 @@ use SugarCraft\Code\Providers\MarksPromptCache;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Providers\RebindsModel;
 use SugarCraft\Code\Providers\ReportsServedModel;
+use SugarCraft\Code\Providers\ShapesServiceTier;
 use SugarCraft\Code\Runtime;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Support\EnvBool;
@@ -739,6 +740,21 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
          * and Workflow builds never set it (the same E20-style seam).
          */
         private readonly ?string $agentInstructions = null,
+        /**
+         * C-PRV-3.a: the configured fast-service-tier WORD — 'fast',
+         * 'default' or null (setting unset). This is what the user asked;
+         * the WIRE value ('priority' on the OpenAI arms, 'fast' on the
+         * Anthropic Messages body) is the provider's business, resolved at
+         * {@see withServiceTier()} by overlaying the provider through
+         * {@see \SugarCraft\Code\Providers\ShapesServiceTier::withServiceTier()}.
+         * A provider that does not shape the tier stores the word without a
+         * provider leg — the launch gate never arms such a pair, and the
+         * accessor lets C-PRV-3.b's status surface tell the truth. Null is
+         * the historical shape: every wire byte and every price answer is
+         * exactly what the tree before this field produced.
+         * @see withServiceTier()
+         */
+        private readonly ?string $serviceTier = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -878,10 +894,55 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             return $this;
         }
 
+        $provider = $this->provider instanceof RebindsModel ? $this->provider->withModel($model) : $this->provider;
+
+        // C-PRV-3.a: a model move re-resolves the fast-tier wire leg,
+        // because tier eligibility is a property of the model family
+        // (Anthropic's fast-mode list gates `speed`; OpenAI answers for
+        // every model). The engine keeps the configured WORD; the provider
+        // clone carries only what THIS model's pair can honestly put on
+        // the wire — so a `/model` jump from sonnet to an opus fast-mode
+        // family lands on the lane the user asked for, and the jump back
+        // off it clears, without a relaunch. When no tier word is armed
+        // this leg is dead code by construction: the bytes are exactly
+        // what the tree before this field produced.
+        if ($this->serviceTier !== null && $provider instanceof ShapesServiceTier) {
+            $provider = $provider->withServiceTier(
+                $this->serviceTier === ShapesServiceTier::WORD_FAST ? $provider->serviceTierFor($model) : null
+            );
+        }
+
         return $this->mutate([
             'model' => $model,
-            'provider' => $this->provider instanceof RebindsModel ? $this->provider->withModel($model) : $this->provider,
+            'provider' => $provider,
         ]);
+    }
+
+    /**
+     * The same engine on the service tier named by `$word` — the
+     * configuration word ('default', 'fast') or null for unset; see
+     * {@see $serviceTier}. The provider leg is overlaid only when the
+     * pair shapes the tier: a shaper gets its own wire value resolved
+     * against the CURRENT model (or null cleared for the default word),
+     * and a non-shaper is left untouched so its wire bytes never change.
+     */
+    public function withServiceTier(?string $word): self
+    {
+        $changes = ['serviceTier' => $word];
+
+        if ($this->provider instanceof ShapesServiceTier) {
+            $changes['provider'] = $this->provider->withServiceTier(
+                $word === ShapesServiceTier::WORD_FAST ? $this->provider->serviceTierFor($this->model) : null
+            );
+        }
+
+        return $this->mutate($changes);
+    }
+
+    /** @see $serviceTier */
+    public function serviceTier(): ?string
+    {
+        return $this->serviceTier;
     }
 
     /**

@@ -22,7 +22,7 @@ use SugarCraft\Code\Usage;
 
 use function React\Promise\resolve;
 
-final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, HasModelCatalog, ShapesReasoningEffort
+final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, HasModelCatalog, ShapesReasoningEffort, ShapesServiceTier
 {
     use ToolSchema;
 
@@ -30,7 +30,13 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
 
     use ReassemblesStreamedToolCalls;
 
-    use OpenAiResponsesWire;
+    // C-PRV-3.a: the Responses body is aliased rather than edited in place —
+    // the trait is its own file and both Responses arms (batch and stream)
+    // assemble through `responsesBody()`, so one class-side override puts the
+    // service tier on that arm without touching a byte of the shared trait.
+    use OpenAiResponsesWire {
+        responsesBody as private responsesBodyWire;
+    }
 
     /**
      * C-PRV-2.a: the two wire arms the config block's `api` key picks.
@@ -66,6 +72,15 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
      * reporting `openai` exactly as before.
      */
     public const DEFAULT_NAME = 'openai';
+
+    /**
+     * C-PRV-3.a: the wire value for the fast lane. OpenAI renamed Priority
+     * processing to Fast mode mid-2026; both `fast` and `priority` request
+     * the same lane and every response reports `service_tier=priority`, so
+     * `priority` is the spelling that works on the pre-rename and post-
+     * rename API alike and stays visible verbatim in the response.
+     */
+    public const SERVICE_TIER_PRIORITY = 'priority';
 
     /**
      * E707 (round 81): the chat-completions `finish_reason` values that mean
@@ -241,6 +256,15 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
         // this from the SDK client (built without withApiKey); the flag
         // governs the raw Responses arm and the catalog door.
         private ?string $apiKeyHeader = null,
+        // C-PRV-3.a: the resolved service-tier wire value this provider sends
+        // as `service_tier` — 'priority' (Fast mode; `fast` is the newer
+        // spelling, the API bills and reports both as priority). Null, the
+        // default, sends no field at all and every body stays byte-identical
+        // to the pre-tier wire. Provider state, not a CompleteRequest field:
+        // the tier belongs to the session's launch configuration the way
+        // `promptCache` does, so a model rebind through withModel() carries
+        // it and per-turn history never sees it.
+        private ?string $serviceTier = null,
     ) {
         if ($contextWindowOverride !== null && $contextWindowOverride < 1) {
             throw new \InvalidArgumentException(sprintf(
@@ -441,6 +465,21 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
      */
     public function costPer1kTokens(string $model, string $direction): ?float
     {
+        // C-PRV-3.a: while this provider rides the fast lane, nothing here
+        // can price the turn honestly. Fast mode bills "at a premium relative
+        // to Standard" — a per-model multiplier the published table does not
+        // carry and no local arithmetic can derive — and every rate consulted
+        // below is model-keyed. Returning the standard rate under a premium
+        // lane would understate the spend the cap exists to police, so the
+        // answer is the loud-unknown one: null rides the existing
+        // `unpricedModel` notice and the turn bills 0.0 visibly, never
+        // silently. Tier-keyed price tables (operator `modelPrices` gaining a
+        // tier leg, or the model database carrying fast-lane rates) are the
+        // C-PRV-3.b seam; until then every wire leg above stays true.
+        if ($this->serviceTier !== null) {
+            return null;
+        }
+
         // Operator declaration wins over the built-in row: the point of the
         // config seam is repricing what this file gets wrong or does not know,
         // including a stale shipped row. And once the operator NAMES a model
@@ -570,6 +609,47 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
     }
 
     /**
+     * C-PRV-3.a: the OpenAI surface answers `service_tier` for every model
+     * it speaks for. The field is documented on BOTH arms this class drives
+     * (Chat Completions and Responses) with the same value vocabulary, and
+     * Fast-mode eligibility is a property of the PROJECT and the model line,
+     * not of this file's tables — which ids accept `priority` changes with
+     * every release. An unsupported pair answers with the API's own 400
+     * prose, the same "the API's rejection is better guidance than a local
+     * guess" doctrine {@see openAiReasoningEffort()} records for effort
+     * spellings, so the pair never needs a stale local allowlist here.
+     */
+    public function serviceTierFor(string $model): ?string
+    {
+        return self::SERVICE_TIER_PRIORITY;
+    }
+
+    /** @see ShapesServiceTier::withServiceTier() — the clone carries the wire value. */
+    public function withServiceTier(?string $tier): static
+    {
+        return new self(...array_merge(get_object_vars($this), ['serviceTier' => $tier]));
+    }
+
+    /**
+     * C-PRV-3.a: the Responses arm's tier leg. Both Responses routes build
+     * their document here (via the aliased trait original), so this single
+     * override lands `service_tier` on batch and stream alike. Unset tier =
+     * the trait body byte-for-byte.
+     *
+     * @return array<string, mixed>
+     */
+    private function responsesBody(CompleteRequest $request): array
+    {
+        $body = $this->responsesBodyWire($request);
+
+        if ($this->serviceTier !== null) {
+            $body['service_tier'] = $this->serviceTier;
+        }
+
+        return $body;
+    }
+
+    /**
      * ISS-005: the sampling knobs for one request, spelled the way the
      * target family reads them. Legacy models keep the historical pair
      * byte-for-byte; reasoning families get `max_completion_tokens` always,
@@ -615,6 +695,12 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
             'model' => $request->model,
             'messages' => $this->formatMessages($request->messages),
         ], $this->samplingParams($request));
+
+        // C-PRV-3.a: unset tier = no key = the historical body bytes. The
+        // Responses arm gets the same leg from the responsesBody() override.
+        if ($this->serviceTier !== null) {
+            $params['service_tier'] = $this->serviceTier;
+        }
 
         if ($request->tools !== null) {
             $params['tools'] = $this->formatTools($request->tools);
@@ -690,6 +776,12 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
             'stream' => true,
             'stream_options' => ['include_usage' => true],
         ]);
+
+        // C-PRV-3.a: same leg as the batch arm, below the historical keys so
+        // an unset tier leaves the streamed body byte-identical.
+        if ($this->serviceTier !== null) {
+            $params['service_tier'] = $this->serviceTier;
+        }
 
         if ($request->tools !== null) {
             $params['tools'] = $this->formatTools($request->tools);

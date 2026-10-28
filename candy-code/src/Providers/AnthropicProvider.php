@@ -36,14 +36,43 @@ use SugarCraft\Code\Providers\Concerns\ToolSchema;
  * an unknown model is priced `null` (loud) rather than guessed from the
  * model database. That is a deliberate change from the old compat arm.
  */
-final readonly class AnthropicProvider implements ProviderInterface, MarksPromptCache, AcceptsAssistantPrefill, RebindsModel, ShapesReasoningEffort
+final readonly class AnthropicProvider implements ProviderInterface, MarksPromptCache, AcceptsAssistantPrefill, RebindsModel, ShapesReasoningEffort, ShapesServiceTier
 {
     use ToolSchema;
     use HttpClientDefaults;
-    use AnthropicMessagesWire;
+    // C-PRV-3.a: the Messages wire is shared verbatim by Gemini and Vertex,
+    // so nothing tier-related is edited INTO the trait. The two price doors
+    // are overridden class-side below (fast-lane turns answer unpriced) and
+    // reach their originals through these aliases; everything else rides
+    // wrappers inside this class only.
+    use AnthropicMessagesWire {
+        costPer1kTokens as traitCostPer1kTokens;
+        cacheCostPer1kTokens as traitCacheCostPer1kTokens;
+    }
 
     /** The protocol date Anthropic's Messages API expects in the `anthropic-version` header. */
     public const HEADER_ANTHROPIC_VERSION = '2023-06-01';
+
+    /**
+     * C-PRV-3.a: the wire value for the fast lane — the Messages `speed`
+     * field spelling `fast` (verified against the current Messages API
+     * request reference: `speed` accepts `standard`|`fast`).
+     */
+    public const SERVICE_TIER_FAST = 'fast';
+
+    /**
+     * C-PRV-3.a: the research-preview beta that gates fast mode on the
+     * families where it is not yet generally available, and the two family
+     * lists the API documents today: every fast-capable family, and the
+     * subset that STILL requires the header (a GA family sends `speed`
+     * without it). An id outside the first list never sees `speed` at all;
+     * sending it would be the 400 the gate exists to avoid.
+     */
+    public const HEADER_FAST_MODE_BETA = 'fast-mode-2026-02-01';
+
+    private const FAST_MODE_FAMILIES = ['claude-opus-5-5', 'claude-opus-5', 'claude-opus-4-8'];
+
+    private const FAST_MODE_BETA_FAMILIES = ['claude-opus-5', 'claude-opus-4-8'];
 
     /**
      * Context windows by pricing family (ISS-073's table, claude rows only -
@@ -83,6 +112,19 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
     private Client $httpClient;
 
     /**
+     * C-PRV-3.a: whether each transport seam was injected. The default
+     * closures are bound to THIS instance, so a rebinder that forwards a
+     * default closure to its clone would freeze the clone's wire bytes to
+     * the original's state (a stale `$this` read). Recording the origin
+     * lets {@see self::withModel()} and {@see self::withServiceTier()}
+     * rebuild the default transport per clone — the fast-mode legs then
+     * re-gate against the clone's own tier and model — while an injected
+     * seam (a test double, no `$this` state) stays forwarded untouched.
+     */
+    private bool $httpSeamInjected;
+    private bool $httpStreamSeamInjected;
+
+    /**
      * @param (callable(string, array<string, mixed>): array<string, mixed>)|null $http
      *        Unary seam: receives the absolute endpoint URL and the request
      *        document, returns the decoded response document. Injected by
@@ -112,6 +154,13 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
         private bool $promptCache = true,
         private ?int $contextWindowOverride = null,
         private ?int $thinkingBudget = null,
+        // C-PRV-3.a: the wire value for the fast service tier ('fast'), or
+        // null for the untouched default lane. Provider state, not a
+        // CompleteRequest field — it rides every request the pair shapes,
+        // and {@see self::serviceTierFor()} gates it per model family
+        // because the Messages API accepts `speed` only on the fast-mode
+        // family list; anything else is a server 400.
+        private ?string $serviceTier = null,
     ) {
         if ($thinkingBudget !== null && $thinkingBudget < self::MIN_THINKING_BUDGET) {
             throw new \InvalidArgumentException(sprintf(
@@ -131,6 +180,9 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
             ],
         ]);
 
+        $this->httpSeamInjected = $http !== null;
+        $this->httpStreamSeamInjected = $httpStream !== null;
+
         // The seams are stored as Closures over $this->httpClient so the
         // client's shared connect-timeout policy (HttpClientDefaults) is the
         // single transport configuration; a call site that injects a seam
@@ -139,7 +191,10 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
             ? \Closure::fromCallable($http)
             /** @param array<string, mixed> $body */
             : function (string $endpoint, array $body): array {
-                $response = $this->httpClient->post($this->messagesEndpoint(), ['json' => $body]);
+                // C-PRV-3.a: the fast-mode beta header rides the per-request
+                // options (see fastModeRequestOptions) because its need is a
+                // property of the MODEL in the body, not of this client.
+                $response = $this->httpClient->post($this->messagesEndpoint(), ['json' => $body] + $this->fastModeRequestOptions($body));
 
                 return json_decode((string) $response->getBody(), true) ?? [];
             };
@@ -158,7 +213,7 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
                     // so a prefill that thinks for minutes before its first
                     // frame stays alive on the wire instead of tripping the
                     // EngineBackend idle ceiling.
-                ] + self::heartbeatOptions($onHeartbeat));
+                ] + self::heartbeatOptions($onHeartbeat) + $this->fastModeRequestOptions($body));
 
                 if ($onHeartbeat !== null) {
                     // Headers landed: deliver one fail-soft beat, so the wait
@@ -260,6 +315,9 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
             // input (an empty transcript), and a caller expects that the same
             // way it expects a transport failure - as an error response.
             $body = $this->anthropicBody($request, stream: false);
+            // C-PRV-3.a: the `speed` leg is applied HERE (not inside the
+            // transport) so every seam sees the same bytes the API sees.
+            $body = $this->withFastMode($body, $model);
             $data = ($this->http)($this->messagesEndpoint(), $body);
 
             return $this->parseAnthropicResponse($data, $model);
@@ -309,6 +367,8 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
             // reject locally-detectable bad input; a generator's caller must
             // see that as an error CHUNK, not an exception on first iteration.
             $body = $this->anthropicBody($request, stream: true);
+            // C-PRV-3.a: same `speed` leg as the non-streaming arm.
+            $body = $this->withFastMode($body, $model);
 
             // Whether the stream reached its terminal event. A transport cut
             // ends the read quietly, so falling out of the loop proves
@@ -412,11 +472,124 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
     }
 
     /**
+     * C-PRV-3.a: the Messages API's `speed` field is a documented family
+     * property, not a global one. Per the current Messages API reference,
+     * fast mode (higher output tokens per second, premium pricing) is live
+     * on `claude-opus-5-5` and in research preview on `claude-opus-5` and
+     * `claude-opus-4-8`; every other model is a server 400. The answer is
+     * family-gated through the same {@see pricingFamily()} normalisation
+     * the price tables use, so a dated id like `claude-opus-4-8-20260115`
+     * reads its family row.
+     */
+    public function serviceTierFor(string $model): ?string
+    {
+        return in_array(self::pricingFamily($model), self::FAST_MODE_FAMILIES, true)
+            ? self::SERVICE_TIER_FAST
+            : null;
+    }
+
+    /**
+     * C-PRV-3.a: positional clone mirroring {@see self::withModel()} — the
+     * same stale-`$this` discipline applies, so a rebuilt default transport
+     * re-gates the fast-mode legs against THIS object's tier and model.
+     */
+    public function withServiceTier(?string $tier): static
+    {
+        return new self(
+            $this->apiKey,
+            $this->baseUrl,
+            $this->defaultModel,
+            $this->httpSeamInjected ? $this->http : null,
+            $this->httpStreamSeamInjected ? $this->httpStream : null,
+            $this->modelPrices,
+            $this->promptCache,
+            $this->contextWindowOverride,
+            $this->thinkingBudget,
+            $tier,
+        );
+    }
+
+    /**
+     * C-PRV-3.a: stamp the request-level `speed` leg when (and only when)
+     * this pair shapes the model — the tier is armed AND the model's family
+     * is on the fast-mode list. Applied at the call site rather than inside
+     * the transport so an injected seam observes exactly what the API gets.
+     *
+     * @param array<string, mixed> $body
+     */
+    private function withFastMode(array $body, string $model): array
+    {
+        if ($this->serviceTier !== null && $this->serviceTierFor($model) === $this->serviceTier) {
+            $body['speed'] = $this->serviceTier;
+        }
+
+        return $body;
+    }
+
+    /**
+     * C-PRV-3.a: per-request transport options for the fast lane. The two
+     * research-preview families (`claude-opus-5`, `claude-opus-4-8`) are
+     * documented to reject `speed: "fast"` without the `fast-mode-2026-02-01`
+     * beta header — a hard 400 — while the GA family (`claude-opus-5-5`)
+     * must NOT carry it. Deciding from the body's model, per request, keeps
+     * the verdict honest for hand-built instances whose defaultModel and
+     * request model disagree; the production flow rebases via withModel,
+     * which rebuilds these closures for the new model.
+     *
+     * @param array<string, mixed> $body
+     *
+     * @return array<string, mixed>
+     */
+    private function fastModeRequestOptions(array $body): array
+    {
+        if ($this->serviceTier === null) {
+            return [];
+        }
+
+        $model = isset($body['model']) ? (string) $body['model'] : '';
+        if ($this->serviceTierFor($model) !== $this->serviceTier) {
+            return [];
+        }
+
+        if (in_array(self::pricingFamily($model), self::FAST_MODE_BETA_FAMILIES, true)) {
+            return ['headers' => ['anthropic-beta' => self::HEADER_FAST_MODE_BETA]];
+        }
+
+        return [];
+    }
+
+    /**
+     * C-PRV-3.a: fast mode bills a premium the model-keyed table cannot
+     * derive, so while this pair shapes the model the answer is null — the
+     * existing unpricedModel notice, never a guessed rate. A non-shaper
+     * model under an armed tier keeps its standard rate: the wire sends it
+     * no `speed` field, so the standard price is the true price.
+     */
+    public function costPer1kTokens(string $model, string $direction): ?float
+    {
+        return ($this->serviceTier !== null && $this->serviceTierFor($model) !== null)
+            ? null
+            : $this->traitCostPer1kTokens($model, $direction);
+    }
+
+    /** C-PRV-3.a: the cache-rate door, same pair-precise premium gate. */
+    public function cacheCostPer1kTokens(string $model, string $kind): ?float
+    {
+        return ($this->serviceTier !== null && $this->serviceTierFor($model) !== null)
+            ? null
+            : $this->traitCacheCostPer1kTokens($model, $kind);
+    }
+
+    /**
      * The trait's spread-based rebinder cannot be used here: this class holds
      * a `httpClient` property that is not a constructor parameter, so the
      * named spread would reject it. Rebuilding positionally keeps every
-     * transport seam, price override, cache flag, sizing override and the
-     * CTX-1 thinking budget intact across a model switch.
+     * transport seam, price override, cache flag, sizing override, the CTX-1
+     * thinking budget and the C-PRV-3.a service tier intact across a model
+     * switch. An injected seam is forwarded as-is; the DEFAULT transport is
+     * rebuilt so the clone's closures bind to the clone — a forwarded
+     * default closure would keep reading the original's `$this` and freeze
+     * the old tier gating onto the new model's wire bytes.
      */
     public function withModel(string $model): static
     {
@@ -424,12 +597,13 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
             $this->apiKey,
             $this->baseUrl,
             $model,
-            $this->http,
-            $this->httpStream,
+            $this->httpSeamInjected ? $this->http : null,
+            $this->httpStreamSeamInjected ? $this->httpStream : null,
             $this->modelPrices,
             $this->promptCache,
             $this->contextWindowOverride,
             $this->thinkingBudget,
+            $this->serviceTier,
         );
     }
 }

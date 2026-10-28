@@ -2060,6 +2060,15 @@ final class LaunchContext
         // unread. The Chat that installs this engine states the same fact on
         // the transcript through `Chat::withEngineSettings()`.
         [$engine] = self::withResolvedReasoningEffort($engine);
+        // C-PRV-3.a: the service tier rides the same tail, for the same
+        // reason, and the reason half is unsaid HERE for the same documented
+        // reason — the notice shelf is read once at launch. What differs is
+        // the reach: every real-provider launch AND every mid-session
+        // provider switch walks this one door (Bootstrap::backend()'s own
+        // tail ends on EchoProvider, which shapes no tier), so the setting
+        // is live from launch, never a dormant knob. A launch notice naming
+        // the refusal case is the C-PRV-3.b seam.
+        [$engine] = self::withResolvedServiceTier($engine);
 
         return self::withConsolePermissionPrompt($engine, $gate, $consolePermissionPrompt);
     }
@@ -2114,6 +2123,94 @@ final class LaunchContext
         }
 
         return [$engine->withReasoningEffort($effort), null];
+    }
+    /**
+     * C-PRV-3.a: the configured service-tier WORD — 'fast', 'default', or
+     * null when nothing valid is set. Environment first (a human who
+     * exports `CANDY_CODE_SERVICE_TIER` means it for this process), then the
+     * layered user config read the same way `selectedModelName()` reads its
+     * key. An unrecognized value is not a tier: like the model env's junk it
+     * asks nothing rather than guessing, and the settings schema's enum
+     * already refuses such a value on the write side.
+     */
+    public static function resolvedServiceTier(): ?string
+    {
+        foreach ([
+            getenv('CANDY_CODE_SERVICE_TIER'),
+            Bootstrap::readUserConfig()['serviceTier'] ?? null,
+        ] as $raw) {
+            $word = self::serviceTierWord($raw);
+            if ($word !== null) {
+                return $word;
+            }
+        }
+
+        return null;
+    }
+    /**
+     * The one vocabulary check: a value is a tier word only when it is the
+     * string 'default' or 'fast' up to case and surrounding space.
+     */
+    private static function serviceTierWord(mixed $raw): ?string
+    {
+        if (!is_string($raw)) {
+            return null;
+        }
+
+        $word = strtolower(trim($raw));
+
+        return in_array($word, [
+            \SugarCraft\Code\Providers\ShapesServiceTier::WORD_DEFAULT,
+            \SugarCraft\Code\Providers\ShapesServiceTier::WORD_FAST,
+        ], true) ? $word : null;
+    }
+    /**
+     * C-PRV-3.a: lower the configured tier onto a freshly built engine only
+     * where the pair SHAPES it — the door
+     * {@see withResolvedReasoningEffort()} opened for effort, relocated in
+     * intent for money. `default` never refuses: it is the standard lane,
+     * which every pair is on whether or not it can leave it, so applying it
+     * just clears any armed fast leg. `fast` consults
+     * {@see \SugarCraft\Code\Providers\ShapesServiceTier::serviceTierFor()}
+     * through the same unwrapped-primary shape the effort door uses, and on
+     * a no-the-engine comes back UNTOUCHED with a reason beside it: the word
+     * is deliberately not stored either, so a status surface reads the
+     * truth (no tier armed) instead of a promise this wire will not keep.
+     * The reason half is unsaid by this caller for the documented shelf
+     * reason above; saying it is the C-PRV-3.b seam.
+     *
+     * @return array{0: EngineBackend, 1: ?string} the engine to carry, and
+     *         the reason to say when the pair shapes no fast lane
+     */
+    public static function withResolvedServiceTier(EngineBackend $engine): array
+    {
+        $tier = self::resolvedServiceTier();
+
+        if ($tier === null) {
+            return [$engine, null];
+        }
+
+        if ($tier === \SugarCraft\Code\Providers\ShapesServiceTier::WORD_DEFAULT) {
+            return [$engine->withServiceTier($tier), null];
+        }
+
+        $provider = $engine->provider();
+        if ($provider instanceof \SugarCraft\Code\Providers\FallbackProvider) {
+            $provider = $provider->primary();
+        }
+
+        $shapes = $provider instanceof \SugarCraft\Code\Providers\ShapesServiceTier
+            && $provider->serviceTierFor($engine->model()) !== null;
+
+        if (!$shapes) {
+            return [$engine, Lang::t('chat.serviceTier.launch_unshaped', [
+                'tier' => $tier,
+                'provider' => $provider->name(),
+                'model' => $engine->model(),
+            ])];
+        }
+
+        return [$engine->withServiceTier($tier), null];
     }
     /**
      * Attach the console approver, or hand the engine back untouched.

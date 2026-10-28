@@ -160,6 +160,13 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
                 static fn(EngineBackend $b): EngineBackend => $b->withReasoningEffort('low'),
                 ['reasoningEffort'],
             ],
+            // C-PRV-3.a: the service tier word. The sweep's provider is a plain
+            // ProviderInterface, so no ShapesServiceTier leg fires and the
+            // provider field is preserved, not owned.
+            'withServiceTier' => [
+                static fn(EngineBackend $b): EngineBackend => $b->withServiceTier('fast'),
+                ['serviceTier'],
+            ],
             // C-AGT-4.a: the applied primary agent's body section (null = slot shut).
             'withAgentInstructions' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withAgentInstructions('You review.'),

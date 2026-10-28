@@ -1244,9 +1244,9 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and thirty-five keys are layered — `provider`,
-`models`, `providers`, `titleModel`, `summaryModel`, `maxOutputTokens`,
-`modelPrices`, `extraBody`, `thinkingBudget`, `reasoningEffort`, `promptCache`,
+Only these one hundred and thirty-six keys are layered — `provider`, `models`,
+`providers`, `titleModel`, `summaryModel`, `maxOutputTokens`, `modelPrices`,
+`extraBody`, `thinkingBudget`, `reasoningEffort`, `serviceTier`, `promptCache`,
 `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxToolSteps`,
 `maxCostUsd`, `compaction.reminderPercent`, `compaction.autoPercent`,
 `compaction.blockPercent`, `compaction.keepRecent`,
@@ -1327,7 +1327,7 @@ in precedence only.
 > user-tier only. Details per key in
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
-Even for a trusted project, seventy-eight keys are **never** taken from a project file:
+Even for a trusted project, seventy-nine keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -1432,12 +1432,13 @@ chooses which paid endpoint answers; `permissions.autoStrikeLimit` and `permissi
 because they decide how many blocked calls `auto` lets the model make before a
 person is asked, and a checkout raising them would buy its own commands more
 attempts at the gate; `contextWindow`,
-`extraBody`, `thinkingBudget`, `reasoningEffort` and `promptCache`, the five
-provider-shaping keys, because each moves the bill — an inflated window switches
-auto-compaction off so requests grow until the server refuses them, an extra
-body field such as `n` multiplies every request, a thinking budget is billed as
-output, the effort tier spends that same budget by name, and switching prompt
-caching off bills every prompt in full;
+`extraBody`, `thinkingBudget`, `reasoningEffort`, `serviceTier` and `promptCache`,
+the six provider-shaping keys, because each moves the bill — an inflated window
+switches auto-compaction off so requests grow until the server refuses them, an
+extra body field such as `n` multiplies every request, a thinking budget is
+billed as output, the effort tier spends that same budget by name, the service
+tier buys a priority lane billed at a premium, and switching prompt caching off
+bills every prompt in full;
 `bashSandbox`, because its meaningful direction is `off` — a checkout able to
 set it could lift the write jail the operator put around every command `Bash`
 runs, from inside the very repository that jail confines;

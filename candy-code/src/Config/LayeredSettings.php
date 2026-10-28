@@ -508,6 +508,7 @@ final class LayeredSettings
         'extraBody',
         'thinkingBudget',
         'reasoningEffort',
+        'serviceTier',
         'promptCache',
         'parallelToolCalls',
         'parallelToolDeadlineSeconds',

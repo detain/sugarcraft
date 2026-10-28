@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Config\Settings\Definitions;
 
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Config\Settings\ApplyMode;
 use SugarCraft\Code\Config\Settings\OptionsSource;
 use SugarCraft\Code\Config\Settings\RiskClass;
@@ -16,6 +17,7 @@ use SugarCraft\Code\Config\Settings\SettingType;
 use SugarCraft\Code\Config\Settings\UiEditability;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Providers\ProviderFactory;
+use SugarCraft\Code\Providers\ShapesServiceTier;
 
 /**
  * The "Model & Provider" category's keys. One file per category so a step adding a
@@ -152,6 +154,27 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withHelp(Lang::t('settings.reasoningEffort.help'))
                 ->withReaderSymbol(Bootstrap::class . '::resolvedReasoningEffort')
                 ->withReadBy('`Bootstrap::backend()`, `backendFor()`, `Chat::applySettings()` → `resolvedReasoningEffort()`'),
+            // C-PRV-3.a: the service tier, named in words the user can say;
+            // each shaped provider spells its own wire value (OpenAI's
+            // `service_tier: "priority"` on both arms, Anthropic's
+            // `speed: "fast"` on the fast-mode families only). Applied at
+            // the launch door (`LaunchContext::backendFor()`'s tail) and by
+            // every later engine rebuild — deliberately NOT Live: the live
+            // re-apply needs a `Chat::applySettings()` sink, which is the
+            // C-PRV-3.b seam. RiskClass::Spend because the fast lane bills
+            // a premium no model-keyed price table can derive: while a
+            // tiered pair is live the ledger answers unpriced, loudly,
+            // never a guessed rate.
+            SettingDefinition::new('serviceTier', SettingType::String)
+                ->withCategory(SettingCategory::ModelProvider)
+                ->withRiskClass(RiskClass::Spend)
+                ->withLayered()
+                ->withEnvVar('CANDY_CODE_SERVICE_TIER')
+                ->withEnumValues([ShapesServiceTier::WORD_DEFAULT, ShapesServiceTier::WORD_FAST])
+                ->withLabel(Lang::t('settings.serviceTier.label'))
+                ->withHelp(Lang::t('settings.serviceTier.help'))
+                ->withReaderSymbol(LaunchContext::class . '::resolvedServiceTier')
+                ->withReadBy('`LaunchContext::backendFor()` launch tail → `withResolvedServiceTier()`'),
             SettingDefinition::new('promptCache', SettingType::Bool, true)
                 ->withCategory(SettingCategory::ModelProvider)
                 ->withRiskClass(RiskClass::Spend)
