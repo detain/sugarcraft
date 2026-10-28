@@ -15,8 +15,11 @@ use SugarCraft\Code\App\SideQuestionAnsweredMsg;
  * question slot, the recap's own voice rides its framing parameter. No new
  * message type and no Chat arm — the call resolves to a
  * {@see SideQuestionAnsweredMsg} the existing fold already lands
- * ({@see \SugarCraft\Code\Chat\Handlers\HandlesTurnCompletion}); this class
- * only fixes the prompt and gives the row the recap's heading.
+ * ({@see \SugarCraft\Code\Chat\Handlers\HandlesTurnCompletion}) — on the
+ * headless host the row rides this class' mapper; the Chat fold lands it
+ * in the seam's default btw voice (it applies Async effects without the
+ * describe), so a recap-voiced TUI row is a C-TUI-3.g seam. This class
+ * fixes the prompt and gives the host row the recap's heading.
  *
  * Both the echo and the answer are UI-only rows like `/btw`'s: the recap is
  * for the human stepping away and back, not material the agent reads into
