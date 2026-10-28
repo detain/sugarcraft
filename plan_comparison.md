@@ -1747,7 +1747,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-AGT-5.a (W13)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-5.b`
 
-#### C-EXT-4.a — Marketplace core: manifest reader, registry, provenance, search, recommender
+#### ✅ 533a881ca C-EXT-4.a — Marketplace core: manifest reader, registry, provenance, search, recommender
 - **Item:** C-EXT-4 (sources: GAP-PLG-02, GAP-SKL-09, p1-miss plugin registry tier, CC-new#12 recommendations) · gap · effort M
 - **What:** **`Marketplace`.** Parses Claude's `.claude-plugin/marketplace.json`: name, owner, `plugins[]` with a source (relative path, `{source:github,repo}` or `{source:url|git,url}`), description, version, keywords/tags/category. It …
 - **Files — create:** `candy-code/src/Bundles/Marketplace.php`, `candy-code/src/Bundles/MarketplaceEntry.php`, `candy-code/src/Bundles/MarketplaceRegistry.php`, `candy-code/src/Bundles/BundleSource.php`, `candy-code/src/Bundles/BundleRecommender.php`

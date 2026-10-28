@@ -1,0 +1,18 @@
+# C-EXT-4.a — Marketplace core: manifest reader, registry, provenance, search, recommender
+- item: C-EXT-4 (sources: GAP-PLG-02, GAP-SKL-09, p1-miss plugin registry tier, CC-new#12 recommendations)
+- kind: gap · effort M · phase: normal
+- area: ext
+- deps: none (core only; nothing installs)
+- serialized: none
+- ruling: none (default: no marketplace pre-added)
+- files.create: `candy-code/src/Bundles/Marketplace.php`, `candy-code/src/Bundles/MarketplaceEntry.php`, `candy-code/src/Bundles/MarketplaceRegistry.php`, `candy-code/src/Bundles/BundleSource.php`, `candy-code/src/Bundles/BundleRecommender.php`
+- files.modify: none
+- tests: create `candy-code/tests/Bundles/MarketplaceTest.php`, `candy-code/tests/Bundles/MarketplaceRegistryTest.php`, `candy-code/tests/Bundles/BundleSourceTest.php`, `candy-code/tests/Bundles/BundleRecommenderTest.php`
+- docs/guards: ReadPathCensusTest and ContainedPathInventoryTest rows for the new user-tier reads; one type per file.
+- approach: 
+- **`Marketplace`.** Parses Claude's `.claude-plugin/marketplace.json`: name, owner, `plugins[]` with a source (relative path, `{source:github,repo}` or `{source:url|git,url}`), description, version, keywords/tags/category. It validates names with the bundle-name rule and resolves relative sources inside the checkout through `ContainedPath` (absolute or escaping sources are refused).
+- **`MarketplaceRegistry`.** A user-tier record, `~/.candy-code/marketplaces.json` (name → source, pinned sha, addedAt), with checkouts under `~/.candy-code/marketplaces/<name>/`. It follows the `HomeDirectory::owned()` law and writes atomically.
+- **`BundleSource`.** The install provenance record, `<bundle>/.candy-code-source.json`.
+- **`BundleRecommender`.** Offline: it matches root manifest signals (composer.json, package.json, Dockerfile, `*.tf`, go.mod) against entry keywords and reports at most 3 bundles that are not installed.
+- **Search and pin.** Search is lexical. The SHA pin is read from `.git/HEAD`/packed-refs before `.git` is stripped, so no new spawn site is needed.
+- risks: Claude's manifest format drifts upstream, so tolerate unknown keys.
