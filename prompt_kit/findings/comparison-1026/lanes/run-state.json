@@ -97,7 +97,8 @@
     "P-MENU.e",
     "C-TOOL-7.b",
     "C-TOOL-3.a",
-    "C-EXT-2.b"
+    "C-EXT-2.b",
+    "C-CTX-1.c"
   ],
   "inflight": {
     "C-AGT-7.b": {
@@ -107,14 +108,6 @@
       "branch": "cc/C-AGT-7.b",
       "session": "ses_e7f696160ffe4ojTlkJdCTt8q3",
       "note": "welder resumed with disk truth: re-picks were already absorbed (cherry -), weld ceremony owed. r2 REVIEW-2.md on disk: lone MINOR README seven->nine cure folded by welder. Gate note: NonInteractive family 159T/722A."
-    },
-    "C-CTX-1.c": {
-      "stage": "welding",
-      "round": 2,
-      "worktree": "/home/sites/cc-cmp-C-CTX-1.c",
-      "branch": "cc/C-CTX-1.c",
-      "session": "ses_e7f696160ffe4ojTlkJdCTt8q3",
-      "note": "chain 2119422aa+ffe7515da (REAL round-2 cure) unit2 of welder. r2-equivalent = fix-scope check by welder + r1 axes. No DUR."
     },
     "P-TABS.g": {
       "stage": "parked",
@@ -581,7 +574,9 @@
     "WINDOWN: C-SES-9.e phantom step confirmed by fresh builder greps (no such step in plan; family ends .d); entry removed.",
     "WINDOWN-FINAL@1928@: C-SEC-5.d = 4th-phantom class, NOTHING LANDED (cat-file refuted 72f3d8f4e/b98b61b5b; no branch/worktree; design surface unwired; deps .a/.c real). Reset to not-started next session: fresh disk-only builder off master per plan:1474, lead cat-files returned SHA before any review. C-MCP-4.a = WELDED a6fa47900 (ghost reviewer resolved). C-MCP-4.b/C-MCP-6.b/C-TOOL-8.b/C-SEC-5.e/C-CTX-6.i keys: MCP-4.b/TOOL-8.b were phantom-era residues - MCP-4.b actual state: 1726fc330-era story unverifiable, branch gone, NOT in welded -> treat as not-started re-cut next session (same for C-MCP-6.b: verify via plan marks first). C-SEC-5.e: branch gone, not in welded, not-started. C-CTX-6.i: landed-445c8661e story phantom (branch gone, no mark) - not-started.",
     "DISPATCH-AUDIT@1990@: several orchestrator-side SHA citations (72f3d8f4e/b98b61b5b CTX-1.c tips c52a57e04/80d442f5d, C-SEC-5.d 72f3d8f4e, C-SES-9.e story) failed cat-file at probe time. Standing correction: every SHA goes through git cat-file -e AT BRIEF COMPOSITION TIME; reviewer/welder briefs carry the printout, not memory.",
-    "C-EXT-2.b r1 :129 MINOR voided by fixer+reviewer (cross-label class); DUR rows owed at gate: ActiveSkillEffectsTest, PermissionGateTurnGrantsTest, RuntimeSkillEffectsTest"
+    "C-EXT-2.b r1 :129 MINOR voided by fixer+reviewer (cross-label class); DUR rows owed at gate: ActiveSkillEffectsTest, PermissionGateTurnGrantsTest, RuntimeSkillEffectsTest",
+    "C-CTX-1.c welded; lead-gated r2 (cure ffe7515da git-show-verified; stale reviewer replay overridden by disk)",
+    "TreeWideGuardRoster MemoryRecallBlockTest 2F base-file duty + ContainedPathInventory foreign-names carry"
   ],
-  "updated": "2026-10-28T03:40:00+00:00"
+  "updated": "2026-10-28T03:48:16+00:00"
 }
