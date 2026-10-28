@@ -29,7 +29,7 @@ is reported — see below):
 
 | Tier | Directory | Notes |
 |---|---|---|
-| built-in | `src/Skills/BuiltIn/` | Ships with the package — eight directories in this checkout (`api-design`, `composer-wizard`, `laravel-best-practices`, `php-best-practices`, `phpunit-master`, `security-audit`, `symfony-best-practices`, `testing-strategies`). Lowest precedence. |
+| built-in | `src/Skills/BuiltIn/` | Ships with the package — nine directories in this checkout (`api-design`, `composer-wizard`, `laravel-best-practices`, `php-best-practices`, `phpunit-master`, `security-audit`, `skill-creator`, `symfony-best-practices`, `testing-strategies`). Lowest precedence. |
 | project | `<root>/.candy-code/skills/` | Confined to the checkout; see [Containment](#containment). Beats a built-in. |
 | user | `~/.candy-code/skills/` | Yours. Symlinks inside it may resolve anywhere under `$HOME`. Highest precedence. |
 
@@ -735,11 +735,14 @@ secrets, size caps, owner-only modes) is in
 [MEMORY.md](MEMORY.md#dream-pass).
 
 A draft becomes a skill only when you say so, with `/skills`
-(`Host\Commands\SkillsHostCommand`):
+(`Host\Commands\SkillsHostCommand`); `/skills new <name> [description]` starts
+one by hand, scaffolding a draft through the same store — the bundled
+`skill-creator` skill teaches the format the draft should grow into:
 
 | Command | What it does |
 |---|---|
 | `/skills` or `/skills proposed` | Lists the waiting drafts: name, size, date and description (or why it does not load). |
+| `/skills new <name> [description]` | Writes a scaffold draft into the same queue: the name is sanitised to a slug, the description is the rest of the line (a placeholder sentence when absent), and the body is a skeleton to edit. The draft waits like any other — this verb lives nothing. |
 | `/skills accept <name>` | Validates the draft with the skill loader — frontmatter through `SkillLoader::loadSkillManifest()`, the whole file through `Skill::fromFile()` — then writes it to `~/.candy-code/skills/<name>/SKILL.md` and deletes the draft. Refused when a live skill of that name exists in any native tier (`SkillLoader::loadAllManifests()`) or its user-tier directory exists, unless you add `--replace`, which rewrites only that directory's `SKILL.md` (a built-in or project skill of the name is then shadowed by yours, the usual user-beats-project order). |
 | `/skills reject <name>` | Deletes the draft. |
 

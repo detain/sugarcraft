@@ -25,7 +25,7 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  * built-ins they were listed in every project's system prompt — one told the
  * model to `git checkout -- . && git clean -fd` a dirty tree. They now live in
  * the monorepo's own project tier, `<repo root>/.candy-code/skills/`, and the
- * eight generic skills stay built in. The four keep their metadata pins here,
+ * nine generic skills stay built in. The four keep their metadata pins here,
  * retargeted at the new location, so moving them did not also unpin them.
  */
 final class BuiltInSkillsTest extends TestCase
@@ -46,7 +46,7 @@ final class BuiltInSkillsTest extends TestCase
     }
 
     /**
-     * Expected definitions for the eight built-in skills.
+     * Expected definitions for the nine built-in skills.
      *
      * `effort` is null on every entry: C-EXT-2.b (R-EXT-1) trimmed the
      * built-ins to what each truly needs — no built-in forces a thinking
@@ -120,6 +120,14 @@ final class BuiltInSkillsTest extends TestCase
                 'userInvocable' => true,
                 'effort' => null,
                 'allowedTools' => null,
+                'paths' => [],
+            ],
+            'skill-creator' => [
+                'name' => 'skill-creator',
+                'description' => 'Author a SKILL.md skill file. Every frontmatter key with its honored meaning, the tier and gating rules, and the draft path to accept. Use when creating, narrowing, or reviewing a skill.',
+                'userInvocable' => true,
+                'effort' => null,
+                'allowedTools' => 'Read, Grep',
                 'paths' => [],
             ],
         ];
@@ -207,7 +215,7 @@ final class BuiltInSkillsTest extends TestCase
     }
 
     /**
-     * The eight built-in skill files.
+     * The nine built-in skill files.
      *
      * @return array<string, array{string, string}>
      */
@@ -223,6 +231,7 @@ final class BuiltInSkillsTest extends TestCase
             'laravel-best-practices' => ["$basePath/laravel-best-practices/SKILL.md", 'laravel-best-practices'],
             'symfony-best-practices' => ["$basePath/symfony-best-practices/SKILL.md", 'symfony-best-practices'],
             'testing-strategies' => ["$basePath/testing-strategies/SKILL.md", 'testing-strategies'],
+            'skill-creator' => ["$basePath/skill-creator/SKILL.md", 'skill-creator'],
         ];
     }
 
@@ -470,7 +479,7 @@ final class BuiltInSkillsTest extends TestCase
     // SkillLoader::loadBuiltInSkills() integration
     // -------------------------------------------------------------------------
 
-    public function testLoadBuiltInSkillsReturnsAllEightSkills(): void
+    public function testLoadBuiltInSkillsReturnsAllNineSkills(): void
     {
         // Arrange
         $loader = new SkillLoader();
@@ -479,7 +488,7 @@ final class BuiltInSkillsTest extends TestCase
         $skills = $loader->loadBuiltInSkills();
 
         // Assert
-        $this->assertCount(8, $skills, 'Should load exactly 8 built-in skills');
+        $this->assertCount(9, $skills, 'Should load exactly 9 built-in skills');
         $this->assertSame([], array_values(array_intersect(self::MONOREPO_SKILLS, array_keys($skills))));
     }
 
@@ -523,9 +532,9 @@ final class BuiltInSkillsTest extends TestCase
      * symfony-best-practices, testing-strategies, api-design) must be
      * discoverable through SkillLoader's existing BuiltIn scan path with NO
      * loader code changes -- i.e. loadAll() from the candy-code project root
-     * surfaces all eight built-ins.
+     * surfaces all nine built-ins.
      */
-    public function testLoadAllFromSugarCrushRootReturnsAllEightBuiltIns(): void
+    public function testLoadAllFromSugarCrushRootReturnsAllNineBuiltIns(): void
     {
         // Arrange
         $loader = new SkillLoader();
@@ -610,7 +619,7 @@ final class BuiltInSkillsTest extends TestCase
     public function testNoBuiltInSkillNamesASugarCraftPathOrRunsADestructiveGitCommand(): void
     {
         $files = self::skillFilesUnder($this->builtInSkillsPath);
-        $this->assertCount(8, $files, 'the scan must read every built-in, or it proves nothing');
+        $this->assertCount(9, $files, 'the scan must read every built-in, or it proves nothing');
 
         $forbidden = [
             'the monorepo port map' => '/MATCHUPS/i',

@@ -11,6 +11,7 @@ use SugarCraft\Code\Lang;
 use SugarCraft\Code\Skills\ProposedSkills;
 use SugarCraft\Code\Skills\SkillLoader;
 use SugarCraft\Code\Skills\SkillManager;
+use SugarCraft\Code\Skills\SkillProposal;
 use SugarCraft\Code\Skills\SkillRegistry;
 
 /**
@@ -38,6 +39,13 @@ use SugarCraft\Code\Skills\SkillRegistry;
  * file nor registry moves. One launch's registry is shared with its forked
  * children, so a disable mid-turn is read by those children as still-on; the
  * next launch's boot discovery carries the truth.
+ *
+ * `/skills new <name> [description]` (C-EXT-3.c) is the write side of the
+ * review queue: it scaffolds a draft `SKILL.md` through
+ * {@see ProposedSkills::propose()} — the same door the dream pass writes
+ * through, with the bundled `skill-creator` skill teaching the format — so
+ * the draft lands in the queue awaiting review and `/skills accept` stays
+ * the only promotion path. The reply prints the draft path.
  *
  * THE ONLY PROMOTION PATH. A draft is model output written by an unattended
  * turn; making it a skill turns it into prompt text every later session reads
@@ -92,6 +100,11 @@ final class SkillsHostCommand implements HostCommand
                 // the drafts are the rarer question with an explicit word.
                 'installed', 'list' => \count($words) <= 1
                     ? CommandResult::reply($text, self::installedListing($context))
+                    : CommandResult::failure($text, self::usage(), 2),
+                // C-EXT-3.c: the scaffold needs a name; the words after it
+                // are the one-line description, defaulted when absent.
+                'new' => \count($words) >= 2
+                    ? $this->newDraft($drafts, $text, \array_slice($words, 1))
                     : CommandResult::failure($text, self::usage(), 2),
                 'proposed' => \count($words) <= 1
                     ? CommandResult::reply($text, self::listing($drafts))
@@ -287,6 +300,55 @@ final class SkillsHostCommand implements HostCommand
         $drafts->reject($name);
 
         return CommandResult::reply($text, Lang::t('host.skills.rejected', ['name' => $name]));
+    }
+
+    /** The body every `/skills new` scaffold starts from — frontmatter arrives from the proposal. */
+    private const SCAFFOLD_BODY = <<<'MARKDOWN'
+## When to use this skill
+
+(Replace this line: the request shape or files that should load it.)
+
+## Procedure
+
+1. State the concrete steps, in order.
+2. Keep every instruction general — a skill is prompt text in every
+   session of whatever project installs it, so it must not name one
+   project's private paths or endpoints.
+3. Say what counts as done.
+
+Edit this file, then `/skills accept <name>` makes it live; that typed
+command is the only promotion path. The `skill-creator` skill explains
+the keys the host honours: `allowed-tools`, `disallowed-tools`, `model`,
+`effort`, `requires` gating, `paths` nudges, and `context: fork`, and
+`${CLAUDE_SKILL_DIR}` substitutes with this skill's own directory at
+load time. Full format: the host's shipped `docs/SKILLS.md`.
+MARKDOWN;
+
+    /**
+     * C-EXT-3.c: the scaffold half of the review queue. The name arrives raw
+     * and {@see ProposedSkills::propose()} sanitises it — a name that
+     * sanitises to nothing, an over-cap description, a draft already waiting
+     * under the sanitised name, or a missing owned home all throw, and the
+     * run() catch turns any of them into a failure notice, so nothing here
+     * duplicates those refusals. The write is the dream pass's own door: the
+     * draft waits for review, and only `/skills accept` moves it live.
+     *
+     * @param list<string> $args the name and any following description words
+     */
+    private function newDraft(ProposedSkills $drafts, string $text, array $args): CommandResult
+    {
+        $description = \trim(\implode(' ', \array_slice($args, 1)));
+        if ($description === '') {
+            $description = Lang::t('host.skills.new.default_description');
+        }
+
+        $name = $drafts->propose(SkillProposal::new($args[0], $description, self::SCAFFOLD_BODY));
+
+        return CommandResult::reply($text, Lang::t('host.skills.new.drafted', [
+            'name' => $name,
+            // propose() returning means the root exists; the ?? keeps types honest.
+            'path' => PermissionsCommand::reportField(($drafts->root() ?? '') . '/' . $name . '/SKILL.md'),
+        ]));
     }
 
     /**
