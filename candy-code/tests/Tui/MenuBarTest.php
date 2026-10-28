@@ -109,11 +109,13 @@ final class MenuBarTest extends TestCase
     }
 
     /**
-     * The Session dropdown: the six session commands first (ISS-104: rows the
-     * palette never lists derive their label from the short description), the
-     * separator as its own row, then the three submenu titles — a submenu row
-     * is a row the bar PAINTS, and itemsOf is what the drift observations
-     * count rows through.
+     * The Session dropdown: the seven session commands first (ISS-104: rows
+     * the palette never lists derive their label from the short description),
+     * the separator as its own row, then the three submenu titles — a submenu
+     * row is a row the bar PAINTS, and itemsOf is what the drift observations
+     * count rows through. P-TABS.f placed `close-tab` third (after the two
+     * new-session rows), and this roster is the one hand copy in the tree —
+     * the row's own placement is proven by ShellMenuTest.
      */
     public function testGetMenuItemsReturnsThePlacementRowsForAValidMenu(): void
     {
@@ -121,7 +123,7 @@ final class MenuBarTest extends TestCase
 
         $this->assertIsArray($items);
         $this->assertSame(
-            ['New session', 'New session…', 'Switch session', 'Rename session…', 'Pin or unpin session', 'Delete session…', '', 'Branch & fork', 'History', 'Share & export'],
+            ['New session', 'New session…', 'Close tab', 'Switch session', 'Rename session…', 'Pin or unpin session', 'Delete session…', '', 'Branch & fork', 'History', 'Share & export'],
             $items,
         );
     }

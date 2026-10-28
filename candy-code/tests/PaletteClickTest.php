@@ -482,10 +482,33 @@ final class PaletteClickTest extends TestCase
                 $written = $clicked->history[count($clicked->history) - 1]->content;
                 if (str_contains($written, 'in flight')) {
                     $refusals++;
-                } else {
-                    self::assertFalse(
-                        $inFlight,
-                        "'{$label}' wrote a line mid-turn that does not say why it was refused: {$written}",
+                } elseif ($inFlight) {
+                    // P-TABS.f widened the mid-turn arm: a row that stands
+                    // because it touches no turn state may also write an
+                    // honest answer instead of a refusal — Close tab on a
+                    // deck-less Chat writes its "no tab deck" line, in both
+                    // states (pinned in DeckHostedSessionRoutesTest). That is
+                    // only legitimate when the answer does not depend on the
+                    // turn state at all: drive the keyboard path on the idle
+                    // twin and demand the byte-identical row back. A row that
+                    // writes words only mid-turn, or a different line per
+                    // state, still reddens here — the defect this leg was
+                    // written against (an unexplained mid-turn write) is
+                    // unexplained whether it arrives in one state or both.
+                    $idle = (new Chat(palette: PaletteState::root(), inFlight: false))->withSize(100, 80);
+                    for ($step = 0; $step < $index; $step++) {
+                        [$idle] = $idle->update(new KeyMsg(KeyType::Down));
+                    }
+                    [$idleAnswered] = $idle->update(new KeyMsg(KeyType::Enter));
+                    self::assertGreaterThan(
+                        count($idle->history),
+                        count($idleAnswered->history),
+                        "'{$label}' wrote nothing at idle but '{$written}' mid-turn — a mid-turn write must be the row's state-independent answer, not a surprise",
+                    );
+                    self::assertSame(
+                        $idleAnswered->history[count($idleAnswered->history) - 1]->content,
+                        $written,
+                        "'{$label}' wrote a different line mid-turn than it writes idle: {$written}",
                     );
                 }
             }
