@@ -1399,7 +1399,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SEC-4.b (W3), C-SEC-5.a (W7)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-5.b`
 
-#### C-SES-1.b — Background announcement obeys the `≥` law
+#### ✅ 46d64b18a C-SES-1.b — Background announcement obeys the `≥` law
 - **Item:** C-SES-1 (sources: SES-1-P3) · fix · MINOR · effort S
 - **What:** **Root cause.** `BackgroundSession::announcement()` prints `sprintf('$%.4f', $this->costUsd)` only when the cost is above zero (`src/Background/BackgroundSession.php:327-329`). It ignores `spendUnpriced` (`:77`, `:118-123`): an …
 - **Files — create:** none
