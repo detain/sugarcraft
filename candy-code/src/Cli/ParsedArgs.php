@@ -226,6 +226,17 @@ final readonly class ParsedArgs
          *  the parser performs no filesystem read (same shape as
          *  {@see $maxCost}'s raw-store-and-later-judge law). */
         public ?string $jsonSchema = null,
+        /** Whether `--worktree` appeared at all, with or without a name
+         *  (C-AGT-6.c). The tree itself is entered by
+         *  {@see MainWorktree::enter()} in `bin/candy-code` — the parser
+         *  performs no git access, the same no-filesystem law that keeps
+         *  {@see $root} unresolved here. */
+        public bool $worktreeRequested = false,
+        /** The name `--worktree` carried, or null for a bare one — which
+         *  auto-names. Not validated here; {@see MainWorktree::enter()}
+         *  judges the charset because it is the code that turns the name
+         *  into a path component and a branch name. */
+        public ?string $worktreeName = null,
     ) {
     }
 
@@ -311,7 +322,9 @@ final readonly class ParsedArgs
         ?string $maxCost = null,
         ?string $maxTurns = null,
         ?string $jsonSchema = null,
+        bool $worktreeRequested = false,
+        ?string $worktreeName = null,
     ): self {
-        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags, $maxCost, $maxTurns, $jsonSchema);
+        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName);
     }
 }

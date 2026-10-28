@@ -84,7 +84,11 @@ use SugarCraft\Code\Workspace\GitRunner;
  * builds one for a `/bg` session run as such an agent, and
  * {@see \SugarCraft\Code\Background\BackgroundSessionRunner} builds one for
  * a background `Task` (the daemon's own process, off any turn of the
- * session that started it).
+ * session that started it), and
+ * {@see \SugarCraft\Code\Cli\MainWorktree::enter()} builds one to seat a
+ * `--worktree` MAIN session in its own tree (C-AGT-6.c) — the one builder
+ * that RELEASES through the same instance it created, under the exit law its
+ * class doc-block states.
  *
  * WHAT THIS PARAGRAPH ONCE SAID: "These fire while the alternate screen is up,
  * so today they land as unprefixed lines on a frame the renderer believes it
@@ -103,7 +107,7 @@ use SugarCraft\Code\Workspace\GitRunner;
  *
  * THE REACHABILITY IS PINNED, as the dormancy was —
  * {@see \SugarCraft\Code\Tests\Cli\StderrEmitterCensusTest}'s
- * construction-site guard names the two files that build one, so a third
+ * construction-site guard names the files that build one, so a new one
  * (or a lost one) is a red that sends the reader back to this paragraph.
  *
  * GIT RUNS THROUGH {@see GitRunner} (roadmap 4.9), the package's bounded and
@@ -223,6 +227,28 @@ final class WorktreeManager
     // -------------------------------------------------------------------------
     // Core operations
     // -------------------------------------------------------------------------
+
+    /**
+     * The registry key a `--worktree <name>` MAIN session holds its tree
+     * under (C-AGT-6.c). Kept here rather than spelled at the call site so
+     * the `main-` namespace prefix cannot drift away from whatever else
+     * learns to name these ids; Task's agent ids never carry it, so the two
+     * families cannot collide in the registry.
+     */
+    public static function mainAgentId(string $name): string
+    {
+        return 'main-' . $name;
+    }
+
+    /**
+     * The branch a `--worktree <name>` MAIN session starts on (C-AGT-6.c) —
+     * the same namespace logic as {@see self::mainAgentId()}, on the branch
+     * side: `candy-code/` groups every such branch under one ref namespace.
+     */
+    public static function mainBranchName(string $name): string
+    {
+        return 'candy-code/' . $name;
+    }
 
     /**
      * Create a new git worktree for the given agent.

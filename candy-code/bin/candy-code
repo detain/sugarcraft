@@ -217,7 +217,7 @@ ini_set('display_errors', 'stderr');
     // `--root` joined it in audit CLI-2; `--output-format` joined it in
     // ISS-084, which is why it is handled by its own branch below rather than
     // listed here — its consumed value is the one thing this scan reads.
-    $strictValueFlags = ['-p', '--prompt', '--root', '--config', '--model', '--permission-mode', '--max-cost', '--max-turns', '--resume'];
+    $strictValueFlags = ['-p', '--prompt', '--root', '--config', '--model', '--permission-mode', '--max-cost', '--max-turns', '--resume', '--worktree'];
     for ($i = 1, $n = count($rawArgv); $i < $n; $i++) {
         $arg = $rawArgv[$i];
         if (!is_string($arg)) {
@@ -278,6 +278,7 @@ use SugarCraft\Code\Cli\ArgvParser;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\Help;
 use SugarCraft\Code\Cli\LegacyMigration;
+use SugarCraft\Code\Cli\MainWorktree;
 use SugarCraft\Code\Cli\NonInteractive;
 use SugarCraft\Code\Cli\PermissionConfigException;
 use SugarCraft\Code\Cli\Subcommands;
@@ -519,6 +520,23 @@ try {
 // Tests\Integration\BinCandyCodeDispatchTest.
 if ($args->subcommand !== null) {
     exit(Subcommands::dispatch($args));
+}
+
+// C-AGT-6.c: `--worktree [name]` swaps the launch's ROOT before any door
+// opens — the TUI's Bootstrap::app() and the one-shot's NonInteractive both
+// read trust files, MCP config and the instruction tree off $args->root, so
+// the decision must precede both. MainWorktree::enter() reuses the sub-agent
+// WorktreeManager machinery (`main-<name>` on `candy-code/<name>`) and arms
+// the release law there: an unused tree is gone at exit, one with work stays
+// and announces itself. A refusal (outside a git work tree, a name the path
+// and ref rules refuse) is a usage error on every shape of --output-format,
+// exactly like the parser's own refusals two blocks above.
+if ($args->worktreeRequested) {
+    try {
+        $args = $args->withRoot(MainWorktree::enter($args->root, $args->worktreeName), $args->positionals);
+    } catch (\RuntimeException $e) {
+        exit(NonInteractive::failUsage('candy-code: ' . $e->getMessage(), $args->outputFormat));
+    }
 }
 
 // Dispatch on "the user asked for one-shot mode", NOT on "a prompt value was

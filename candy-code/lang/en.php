@@ -87,6 +87,7 @@ return [
     'cli.argv.hint.root_value' => 'Write it as --root=<dir> if the directory begins with "-"; it may not be omitted.',
     'cli.argv.hint.valid_modes' => 'Valid modes are: {modes}.',
     'cli.argv.hint.words_open_tui' => 'Words after the options open the TUI with them as the first prompt; to run a one-shot prompt, use -p "<prompt>". A subcommand takes no prompt, and an empty argument is not one.',
+    'cli.argv.hint.worktree_serve' => 'Run `candy-code serve` without --worktree, or start `candy-code --worktree <name>` in another terminal.',
     'cli.argv.json_schema.empty' => '--json-schema expects a schema, but the value is empty',
     'cli.argv.json_schema.flag' => '--json-schema expects a schema, but the next argument is the option {option}',
     'cli.argv.json_schema.missing' => '--json-schema expects a schema, but the argument list ended',
@@ -123,6 +124,7 @@ return [
     'cli.argv.verb_flag.flag' => '{verb} {flag} expects a value, but the next argument is the option {option}',
     'cli.argv.verb_flag.missing' => '{verb} {flag} expects a value, but the argument list ended',
     'cli.argv.verb_flag.no_value' => '{verb} {flag} takes no value',
+    'cli.argv.worktree.with_serve' => '--worktree names a worktree for one session; `serve` runs a host that opens its own root per client session',
     'cli.attach.bad_url' => 'candy-code attach: --url {url} is not an http(s):// or ws(s):// address',
     'cli.attach.closed_during_handshake' => 'the server closed the connection during the handshake',
     'cli.attach.flag_does_not_apply' => 'candy-code attach: {flag} does not apply to attach',
@@ -275,6 +277,8 @@ Usage:
   candy-code -p <prompt>           Run a single prompt and exit (one-shot)
   candy-code run "<prompt>"        Alias for -p "<prompt>" (one-shot mode)
   candy-code --output-format json  Output machine-readable JSON (one-shot)
+  candy-code --worktree [<name>]   Run this session in a git worktree of
+                                   its own (created if it does not exist)
 
 Subcommands (none of them opens the TUI or needs a provider, an API key or a
 terminal; each answers and exits except serve, which runs until stopped — and
@@ -517,6 +521,14 @@ Options:
                          required (the transcript seeds the one-shot and the
                          answer is saved back to the row). Also accepts
                          --resume=<id>. Not combinable with --continue.
+      --worktree [<name>]
+                         Run the whole session inside git worktree
+                         main-<name> on branch candy-code/<name>, created
+                         on first use; with no name, the worktree gets an
+                         auto-chosen one. At exit a worktree holding no
+                         commits and no edits is removed again; one with
+                         work stays and announces its path. Refused
+                         outside a git work tree and beside `serve`.
   -h, --help             Show this help message
   -v, --version          Show the installed version and exit
       --                 End of options: every later argument is positional,
@@ -1101,6 +1113,9 @@ TXT,
     'cli.warn.untrusted_hooks' => 'no project hook file was trusted',
     'cli.warn.untrusted_mcp' => 'no project MCP config was trusted',
     'cli.warn.untrusted_settings' => 'no project settings file may contribute a setting',
+    'cli.worktree.bad_name' => '--worktree {name}: a worktree name must begin with a letter or digit and contain only letters, digits, ".", "-" and "_"',
+    'cli.worktree.kept_announce' => 'candy-code: worktree {path} left in place — its branch {branch} holds work of its own or was named; reopen it with `candy-code --worktree {name}`',
+    'cli.worktree.not_git' => '--worktree needs a git work tree; {path} is not inside one',
     // --- end cli (W11-a) ---
     // --- registries (W11-b) ---
     'cmd.agents.cell.active' => '● active',

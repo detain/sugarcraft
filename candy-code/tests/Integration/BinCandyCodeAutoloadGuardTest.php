@@ -32,7 +32,7 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  * was re-examined against `Bootstrap::warnPermissionConfigInTranscript()`".
  * WHAT IS TRUE NOW, and what round 42's review measured: that was false. Only
  * `Bootstrap`'s writes and this one had been looked at. The real census of raw
- * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is THIRTY-FOUR:
+ * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is THIRTY-FIVE:
  *
  *  - {@see \SugarCraft\Code\Cli\NonInteractive}, fifteen —
  *    `run()` four times (a thrown backend error, an answer that would not encode
@@ -83,6 +83,11 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  *    succeeded, and the transcript seam's call-site census lives in docs,
  *    and — added by ISS-026's rv6 residual — its `--resume` pick twin, raw
  *    by the identical decision.
+ *  - {@see \SugarCraft\Code\Cli\MainWorktree}, one — added by C-AGT-6.c — the
+ *    kept-tree announce the `--worktree` shutdown hook writes when the session
+ *    left work behind. Stderr alone: the session is already over, so no
+ *    transcript is left to carry it, and a raw-mode exit needs the `\r\n`
+ *    padding bin's own shutdown lines carry.
  *  - {@see \SugarCraft\Code\Support\SessionRelaunch}, one — `tell()`, the
  *    line saying why `/new` could not restart candy-code in another
  *    directory, and the command to run instead.

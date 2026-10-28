@@ -477,6 +477,8 @@ final class ArgvParserTest extends TestCase
             '--prompt=x'      => ['--prompt=x'],
             '--root=/tmp/x'   => ['--root=/tmp/x'],
             '--output-format' => ['--output-format'],
+            '--worktree'      => ['--worktree'],
+            '--worktree=x'    => ['--worktree=x'],
         ];
     }
 

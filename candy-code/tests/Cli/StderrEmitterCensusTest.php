@@ -57,7 +57,9 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — thirty-four sites (C-AGT-7.b 2026-10-28: +1 in
+ *  1. `fwrite(STDERR, …)` — thirty-five sites (C-AGT-6.c 2026-10-28: +1 in
+ *     `MainWorktree` for the kept-tree announce, stderr-alone like every other
+ *     end-of-process line; C-AGT-7.b 2026-10-28: +1 in
  *     `NonInteractive` for the `json_schema_unapplied` report line, stderr-alone
  *     like every other answer-shaping note: stdout carries the answer (or the
  *     document) on all three formats and the fact the line reports rides the
@@ -333,6 +335,11 @@ final class StderrEmitterCensusTest extends TestCase
         // +1 in ISS-026 residual (rv6): the --resume pick's crossed-project
         // twin, stderr-alone by the identical decision.
         'src/Cli/Bootstrap.php' => 4,
+        // C-AGT-6.c: MainWorktree's kept-tree announce, written by the parent's
+        // shutdown hook. Stderr alone: the session has already ended, so no
+        // transcript is left to carry it — the fireSessionEnd() decision below,
+        // applied to the process's own last line.
+        'src/Cli/MainWorktree.php' => 1,
         // +1 in wave 11 (audit 15b-15 residual): noticeAttachment(), the
         // headless twin of the TUI's UI-only attachment notices - a `-p`
         // mention that matched nothing, a refused file, an image the model
@@ -438,7 +445,9 @@ final class StderrEmitterCensusTest extends TestCase
      * @var array<string, int>
      */
     private const MESSAGE_SHAPES = [
-        'bin/candy-code' => 7,
+        // +1 in C-AGT-6.c: the `--worktree` refusal hand-off passes the
+        // prefixed message through failUsage like every other exit-2 door here.
+        'bin/candy-code' => 8,
         // W7-C NOTE, reads forward: the nine E154 files whose in-code
         // `candy-code: ` literals sat only on error_log lines (AgentWorkerPool,
         // ForeignAgentPresetRegistry, CommandLoader, RuleLoader,
@@ -490,7 +499,7 @@ final class StderrEmitterCensusTest extends TestCase
         // C-AGT-7.b took it to thirty-six: the --json-schema-without-a-prompt
         // hint carries its own `candy-code: ` envelope, the same pre-launch
         // exit-2 usage decision as the family above it.
-        'src/Cli/ArgvParser.php' => 36, // +3 AUT-4 --json-schema refusal family; +1 INFO-4 duplicate-prompt notice (1021); +1 C-AGT-7.b requires_prompt hint
+        'src/Cli/ArgvParser.php' => 37, // +3 AUT-4 --json-schema refusal family; +1 INFO-4 duplicate-prompt notice (1021); +1 C-AGT-7.b requires_prompt hint; +1 C-AGT-6.c serve-refusal message
         // +1 in ISS-026: SESSION_RESUME_CROSS_PROJECT_FORMAT carries its own
         // `candy-code: ` envelope, like the retention detail line.
         // +1 in ISS-026 residual (rv6): the --resume pick twin carries its own
@@ -1528,6 +1537,10 @@ final class StderrEmitterCensusTest extends TestCase
         // WorktreeConfig's, Chat::subscriptions()'s) were rewritten with it.
         // Roadmap 4.9's background-Task fix added a third builder, the
         // background daemon's BackgroundSessionRunner.
+        // C-AGT-6.c added a fourth, the main-session `--worktree` door: its
+        // count is 4 because this scanner reports the file's WorktreeManager
+        // calls one by one — mainAgentId, ::new, and mainBranchName twice —
+        // not one per construction.
         self::assertSame(
             // W5-C (v4:F5): the runner's path changed, so ksort() lands it first.
             // W7-E (2026-10-21, S1b composition split): tools()'s body — the
@@ -1535,7 +1548,7 @@ final class StderrEmitterCensusTest extends TestCase
             // LaunchContext, so the construction site lands there now; the
             // Bootstrap::tools() public delegate keeps the doc-blocks' claim
             // about which door builds it true.
-            ['src/Background/BackgroundSessionRunner.php' => 1, 'src/Cli/LaunchContext.php' => 1, 'src/Host/Commands/BackgroundCommand.php' => 1],
+            ['src/Background/BackgroundSessionRunner.php' => 1, 'src/Cli/LaunchContext.php' => 1, 'src/Cli/MainWorktree.php' => 4, 'src/Host/Commands/BackgroundCommand.php' => 1],
             $built,
             'the set of files that construct — or statically call — a WorktreeManager moved. Its five '
                 . 'seam sites fire wherever it is built: re-read WorktreeManager\'s class doc-block (which '

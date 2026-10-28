@@ -328,6 +328,104 @@ final class LaunchFlagsTest extends TestCase
     }
 
     /**
+     * C-AGT-6.c: `--worktree` carries an OPTIONAL value in `--resume`'s
+     * shape — a bare one is a legal launch (the tree gets an auto-chosen
+     * name), only its ABSENCE is absence. What counts as a legal NAME is
+     * judged by MainWorktree::enter(), the code that turns the string into a
+     * directory and a ref; the parser just carries it raw.
+     *
+     * @return array<string, array{list<string>, bool, ?string}>
+     */
+    public static function worktreeSpellings(): array
+    {
+        return [
+            'named spaced'          => [['candy-code', '--worktree', 'fix-bug'], true, 'fix-bug'],
+            'named attached'        => [['candy-code', '--worktree=fix-bug'], true, 'fix-bug'],
+            'named beside prompt'   => [['candy-code', '--worktree', 'fix-bug', '-p', 'x'], true, 'fix-bug'],
+            'bare before option'    => [['candy-code', '--worktree', '-p', 'x'], true, null],
+            'bare at end'           => [['candy-code', '--worktree'], true, null],
+            'bare with empty arg'   => [['candy-code', '--worktree', '', '-p', 'x'], true, null],
+            'attached empty is bare'=> [['candy-code', '--worktree='], true, null],
+            'absent'                => [['candy-code', '-p', 'x'], false, null],
+        ];
+    }
+
+    /**
+     * @param list<string> $argv
+     *
+     * @dataProvider worktreeSpellings
+     */
+    public function testTheWorktreeFlagParsesItsOptionalValueAndIsNotAnUnknownFlag(array $argv, bool $requested, ?string $name): void
+    {
+        $args = ArgvParser::parse($argv);
+
+        $this->assertSame($requested, $args->worktreeRequested, implode(' ', $argv));
+        $this->assertSame($name, $args->worktreeName, implode(' ', $argv));
+        $this->assertSame([], $args->unknownFlags, implode(' ', $argv));
+        $this->assertNull($args->usageError, implode(' ', $argv));
+    }
+
+    /**
+     * The flag eats its value, not the next option: `--worktree -p "x"` must
+     * still be a one-shot run. A leading `-`-shaped token is never the name —
+     * the same rule as `--root`, which refuses an option-eaten value outright
+     * rather than this flag's softer "then it is bare" because --root has no
+     * legal bare shape.
+     */
+    public function testTheWorktreeFlagLeavesAFollowingPromptFlagAlone(): void
+    {
+        $args = ArgvParser::parse(['candy-code', '--worktree', '-p', 'hello']);
+
+        $this->assertTrue($args->worktreeRequested);
+        $this->assertNull($args->worktreeName, 'a flag-shaped token is the NEXT option, not the worktree name');
+        $this->assertTrue($args->promptRequested, 'the -p survives the optional-value probe');
+        $this->assertSame('hello', $args->prompt);
+    }
+
+    /**
+     * `--worktree` beside `serve` is refused at the parser (C-AGT-6.c): the
+     * host decides a root per client session (that is what its own
+     * --allow-dir-browse/--browse-root pair is FOR), so there is nothing for
+     * a launch-level worktree to name — and a carried-then-ignored flag is
+     * the lie the jsonSchema guard above was minted to forbid. Both orders
+     * refuse: `--worktree x serve` through this usage rule, `serve
+     * --worktree x` through serve's own flag table, which does not list it.
+     */
+    public function testTheWorktreeFlagBesideServeIsAUsageError(): void
+    {
+        $pre = ArgvParser::parse(['candy-code', '--worktree', 'fix-bug', 'serve']);
+        $this->assertNotNull($pre->usageError);
+        $this->assertStringContainsString('--worktree', (string) $pre->usageError, 'the refusal names the flag');
+        $this->assertStringContainsString('serve', (string) $pre->usageError, 'and what it collides with');
+        $this->assertNotNull($pre->usageHint);
+        $this->assertStringContainsString('serve', (string) $pre->usageHint, 'the hint repeats the safe path');
+
+        $attached = ArgvParser::parse(['candy-code', '--worktree=fix-bug', 'serve']);
+        $this->assertNotNull($attached->usageError, 'the `=` spelling collides the same way');
+
+        $post = ArgvParser::parse(['candy-code', 'serve', '--worktree', 'fix-bug']);
+        $this->assertNotNull($post->usageError, 'the verb-first order refuses too — through serve\'s flag table');
+
+        $this->assertNull(ArgvParser::parse(['candy-code', '--worktree', 'fix-bug', 'session', 'list'])->usageError, 'other verbs do not carry a per-client root law and stay clean');
+    }
+
+    /**
+     * `--worktree` is a value flag: a line that splits argv must consume the
+     * name before testing for a following prompt — bin's JSON-format
+     * pre-scan and the parser now agree (same roster law as --resume).
+     */
+    public function testBinsPreScanCarriesWorktreeAmongTheValueFlags(): void
+    {
+        $bin = (string) file_get_contents(__DIR__ . '/../../bin/candy-code');
+
+        $this->assertMatchesRegularExpression(
+            '/\$strictValueFlags = \[[^\]]*\'--worktree\'[^\]]*\]/',
+            $bin,
+            'the autoload-guard value-flag roster must list --worktree or the pre-scan reads its name as the next flag',
+        );
+    }
+
+    /**
      * `--max-turns` carries its value RAW too (AUT-5): the parser judges only
      * the SHAPE failures that make "which value was asked for" unanswerable
      * (missing, flag-eaten, empty). Whether `five` or `0` or an

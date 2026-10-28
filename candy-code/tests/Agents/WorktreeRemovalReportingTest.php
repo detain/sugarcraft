@@ -416,23 +416,25 @@ final class WorktreeRemovalReportingTest extends TestCase
     }
 
     /**
-     * EXACTLY THREE PLACES IN `src/` OR `bin/` BUILD A `WorktreeManager`, BY
+     * EXACTLY FOUR PLACES IN `src/` OR `bin/` BUILD A `WorktreeManager`, BY
      * ANY SHAPE (roadmap 4.9): `LaunchContext::tools()` (the body moved out of
      * `Bootstrap::tools()` at v4:S1b W7-E C1, 2026-10-21; the door delegates),
      * for `Task`'s isolated
      * runs, `BackgroundCommand::spawnThunk()`, for a `/bg` session run as an
-     * `isolation: worktree` agent, and `BackgroundSessionRunner`'s delegation
+     * `isolation: worktree` agent, `BackgroundSessionRunner`'s delegation
      * arm, for a background `Task` of such a preset (over the same root the
-     * launch's manager uses, so both share one registry and sweep).
+     * launch's manager uses, so both share one registry and sweep), and
+     * `MainWorktree::enter()`, the C-AGT-6.c `--worktree` door that seats the
+     * MAIN session itself in one.
      *
      * This test pinned ZERO while the class was dormant, and said that the day
      * it redded would be good news — someone wired the class. Roadmap 4.9 did;
      * the pin now names the reachability instead. The walk reports static
      * calls of ANY name (not only `new`-shaped sites: `SglangProvider` once
-     * scored a false zero that way), so a third builder — or a lost one — is a
-     * red that sends the reader to the doc-blocks describing who builds it.
+     * scored a false zero that way), so a further builder — or a lost one — is
+     * a red that sends the reader to the doc-blocks describing who builds it.
      */
-    public function testExactlyTheThreeWiredBuildersConstructAWorktreeManager(): void
+    public function testExactlyTheFourWiredBuildersConstructAWorktreeManager(): void
     {
         $root = \dirname(__DIR__, 2);
         $files = self::phpSources($root);
@@ -454,6 +456,13 @@ final class WorktreeRemovalReportingTest extends TestCase
                 // W7-E C1 (v4:S1b, 2026-10-21): tools() construction moved with
                 // the body onto Cli/LaunchContext.php — same builder, new file.
                 'src/Cli/LaunchContext.php: new',
+                // C-AGT-6.c: the walk reports this builder's FOUR WorktreeManager
+                // calls, not one: ::mainAgentId, ::new, and ::mainBranchName twice
+                // (the createWorktree argument and the branchOf ?? fallback).
+                'src/Cli/MainWorktree.php: mainAgentId',
+                'src/Cli/MainWorktree.php: new',
+                'src/Cli/MainWorktree.php: mainBranchName',
+                'src/Cli/MainWorktree.php: mainBranchName',
                 'src/Host/Commands/BackgroundCommand.php: new',
             ],
             self::sitesIn($files, $root),

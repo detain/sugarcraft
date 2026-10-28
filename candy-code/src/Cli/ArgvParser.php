@@ -150,6 +150,8 @@ final class ArgvParser
         $continueSession = false;
         $resumeSession = null;
         $resumeRequested = false;
+        $worktreeRequested = false;
+        $worktreeName = null;
 
         $i = 1; // skip $argv[0] (script name)
         while ($i < \count($argv)) {
@@ -726,6 +728,35 @@ final class ArgvParser
                 continue;
             }
 
+            // --worktree=<name> (C-AGT-6.c): a main session run in its own
+            // git worktree. Empty after `=` means bare, as --resume's does.
+            if (\str_starts_with($arg, '--worktree=')) {
+                $value = \substr($arg, 11); // length of "--worktree="
+                $worktreeRequested = true;
+                $worktreeName = $value === '' ? null : $value;
+                ++$i;
+                continue;
+            }
+
+            // --worktree [<name>]: the value is OPTIONAL, in --resume's
+            // shape — bare or before another option, the launch auto-names
+            // the worktree rather than erroring; a following non-flag token
+            // is always the name. Which name is LEGAL (a path-safe word, no
+            // traversal) is judged by {@see MainWorktree::enter()}, the code
+            // that turns it into a directory and a branch — parse() keeps
+            // its no-filesystem law and carries the raw string.
+            if ($arg === '--worktree') {
+                $worktreeRequested = true;
+                $next = $argv[$i + 1] ?? null;
+                if ($next === null || self::looksLikeFlag($next) || $next === '') {
+                    $i += $next === '' ? 2 : 1;
+                    continue;
+                }
+                $worktreeName = $next;
+                $i += 2;
+                continue;
+            }
+
             // A flag the OPEN verb owns (ParsedArgs::SUBCOMMAND_FLAGS):
             // `session list --archived`. Checked only once a verb is open and
             // only against that verb's own table, so the same word before the
@@ -878,6 +909,20 @@ final class ArgvParser
             $usageHint = Lang::t('cli.argv.hint.json_schema_needs_prompt');
         }
 
+        // C-AGT-6.c: --worktree is a MAIN-session flag — it swaps the
+        // launch's root for a worktree before the TUI or a one-shot opens
+        // there. `serve` runs a host that opens one root per client session
+        // (and its --allow-dir-browse/--browse-root already own that
+        // decision), so a --worktree beside it could only be ignored —
+        // refused at the parser so both spellings of the clash fail
+        // identically on stdout and in the JSON error document. The verb-
+        // first order (`serve --worktree`) is caught earlier by the
+        // unknown-flag recorder: serve's own flag table does not list it.
+        if ($usageError === null && $worktreeRequested && $subcommand === 'serve') {
+            $usageError = 'candy-code: ' . Lang::t('cli.argv.worktree.with_serve');
+            $usageHint = Lang::t('cli.argv.hint.worktree_serve');
+        }
+
         // The FIRST positional, when it looks like a path, is the root (see
         // the doc-block for why only the first). It leaves the list; the rest
         // stay for resolveOperands().
@@ -885,7 +930,7 @@ final class ArgvParser
             $root = \array_shift($positional);
         }
 
-        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost, $maxTurns, $jsonSchema);
+        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName);
     }
 
     /**

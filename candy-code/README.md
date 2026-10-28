@@ -1819,6 +1819,7 @@ candy-code --permission-mode plan -p "audit this" # pick the permission mode for
 candy-code --max-cost 2.50 -p "audit this"        # cap this launch's spend (USD)
 candy-code --max-turns 8 -p "audit this"          # cap this launch's tool-loop steps
 candy-code --json-schema answer.json -p "extract fields" # constrain the answer to a JSON Schema
+candy-code --worktree fix-bug        # run this session in its own git worktree
 candy-code --help                               # prints and exits (never opens the TUI)
 candy-code --version                            # prints the installed version and exits
 candy-code -- --not-a-flag                      # `--` ends options; everything after is positional
@@ -1881,6 +1882,21 @@ typo only costs that knob and is reported at launch, but a typed flag is an
 explicit act and is honored or the run does not start. The flag applies to
 the TUI and to `-p`/`run` alike; a sub-agent run whose ceiling TaskTool
 raises for its own turn keeps that raise.
+
+`--worktree [<name>]` (also `--worktree=<name>`) runs the whole session —
+TUI or one-shot — inside the git worktree `main-<name>` on branch
+`candy-code/<name>`, created from the repository's current HEAD on first use
+and reused by name afterwards; with no name the worktree gets an auto-chosen
+one. The worktree lives under the same base `Task`'s `isolation: worktree`
+runs and `/bg` sessions use (`.candy-code/worktrees/`, or whatever
+`$CANDY_CODE_WORKTREES_DIR` names). When the session exits, a worktree that
+holds NOTHING — no commit and no uncommitted change — is removed again, branch
+included; one that holds work stays in place and announces its path on stderr,
+because silently deleting output would be the worse bug. Outside a git work
+tree the flag is a usage error (exit `2`) rather than a silent no-op, a name
+the path and ref rules refuse is one too, and so is `--worktree` beside
+`serve` — a host opens its own root per client session, so there is nothing
+there for this flag to name.
 
 `--config <file>` (also `--config=<file>`) replaces the per-user
 `~/.candy-code/config.json` for this run: the theme, the persisted provider,
@@ -1953,7 +1969,7 @@ The same three exit codes govern every subcommand below.
 | --- | --- |
 | `0` | the prompt ran and produced an answer, or the subcommand answered |
 | `1` | ran and failed: the backend threw (unreachable host, rejected key, model error), the answer could not be encoded in the requested format, a `doctor` check came back `FAIL`, `session delete` found no such session, a trusted `.mcp.json` could not be parsed, or a turn hook (`UserPromptSubmit`/`SessionStart`) blocked the prompt before the first billed call — retrying may help. `error.type`: `backend`, `encoding`, `mcp-config`, `not-found`, `hook` |
-| `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, a word left over after `-p`/`run`'s prompt or before a subcommand, a second project directory, an `--output-format` value that is none of `text`, `json` or `stream-json`, `--config` naming no readable file, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.candy-code/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$CANDY_CODE_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help — or `--json-schema` asked of a provider that cannot honour the schema (its own `error.type`, so a consumer knows the schema was never sent), or `--json-schema` with no `-p`/`run` prompt to constrain — nothing would have read it, so the launch is refused rather than silently un-schema'd. `error.type`: `usage`, `provider_configuration`, `json_schema_unsupported`, `installation` — the last one is the missing `vendor/autoload.php`, and it is what tells a consumer which kind of `2` it got |
+| `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, a word left over after `-p`/`run`'s prompt or before a subcommand, a second project directory, an `--output-format` value that is none of `text`, `json` or `stream-json`, `--config` naming no readable file, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.candy-code/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$CANDY_CODE_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help — or `--json-schema` asked of a provider that cannot honour the schema (its own `error.type`, so a consumer knows the schema was never sent), or `--json-schema` with no `-p`/`run` prompt to constrain — nothing would have read it, so the launch is refused rather than silently un-schema'd — or `--worktree` beside `serve`, outside a git work tree, or with a name its path and ref rules refuse. `error.type`: `usage`, `provider_configuration`, `json_schema_unsupported`, `installation` — the last one is the missing `vendor/autoload.php`, and it is what tells a consumer which kind of `2` it got |
 
 `2` covers "no prompt given" (`candy-code -p`, `candy-code run`) deliberately:
 the invocation is malformed, no backend is ever selected, and a CI gate that
