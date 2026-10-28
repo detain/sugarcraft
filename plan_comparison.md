@@ -1597,7 +1597,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web7.md` → `### C-WEB-7.c`
 
-#### C-WEB-7.d — Typed AskUser `choices` on the ask payload
+#### ✅ 7b730e485 C-WEB-7.d — Typed AskUser `choices` on the ask payload
 - **Item:** C-WEB-7 (sources: p2-miss: WEB-5 structured AskUser `options[]`) · fix · MINOR · effort S
 - **What:** **Root cause.** The web reads AskUser's choices by parsing the untyped `arguments.options` (`PermissionCard.vue:39-53`). It silently drops to free text above 8 choices. Nothing in the protocol schema states the contract. **The …
 - **Files — create:** `candy-code/tests/Protocol/AskUserChoicesWireTest.php`
