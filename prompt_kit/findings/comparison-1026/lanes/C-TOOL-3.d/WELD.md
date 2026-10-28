@@ -14,3 +14,10 @@
 - suite-figure.json: untouched (standing ReadmeSuiteFigureDrift staleness pair carries; +10T-era ride is closeout re-pin duty).
 - Absorption proof: `git cherry master cc/C-TOOL-3.d` after weld commit (see orchestrator report); worktree /home/sites/cc-cmp-C-TOOL-3.d removed, branch cc/C-TOOL-3.d deleted.
 - run-state: inflight minus C-TOOL-3.d; welded_count 139 -> 140.
+
+## cure note: ShellMenuTest x2 standing red (2026-10-28, W14 follow-up)
+
+- The P-TABS.f weld 6638d6415 recorded this gate owed to C-TOOL-3.d: the `shells` row (pick 734f97dda) joined the registry but `ShellMenu::PLACEMENT` never named it, reddening `ShellMenuTest::testEveryRegistryRowIsPlacedExactlyOnceAndNoPlacementIsABluff` and `testTheShippedTreeHasNoMoreSubmenuBecauseNothingIsUnplaced` (deterministic, reproduced at base cbe74fb5a and at tip cc341ce87).
+- Cured: `'shells'` placed in Agent ▸ Automate ▸ between `bg` and `schedules` — mirrors the registry file numbering (2900-bg / 2905-shells / 2910-schedules) and the `/schedules`-sibling note in design-tool.md §C-TOOL-3.d; no new submenu invented (design-menu.md never names `shells`; R-MENU-1 Automate is the bg/schedules/workflow home).
+- Gates after fix (plain pipe, cwd candy-code, env -u LINES -u COLUMNS): ShellMenuTest 11T/374A 0F; ShellMenu|ShellsCommand|MenuBar|MenuReachability|PanesSubmenu|MenuOverlayFrame 122T/12565A 1F — the one red is `MenuBarTest::testGetMenuItemsReturnsThePlacementRowsForAValidMenu`, a SEPARATE foreign standing red (its hand-copied Session-menu expected list lacks the P-TABS.f 'Close tab' row; proven identical at cc341ce87 with ShellMenu.php reverted, and unrelated to the shells row — Gate miss recorded for P-TABS.f, palette 'Close tab' mid-turn refusal `PaletteClickTest` dataset "mid-turn" likewise red at base).
+- No docs touched; ReadmeRosterDrift/DocFigureProseDrift not re-armed (src-only hunk). suite-figure/durations untouched (no new test file, no test count change).
