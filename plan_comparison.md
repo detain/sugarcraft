@@ -2105,7 +2105,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SES-5.b (W3), C-SES-6.a (W7)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-6.c`
 
-#### C-SES-8.c — Insights report core
+#### ✅ ccf94cd63 C-SES-8.c — Insights report core (pick of cc8ea765f tip; welded 2026-10-29)
 - **Item:** C-SES-8 (sources: GAP-OBS-06, p2-miss: OBS-06 insights) · gap · effort M
 - **What:** **Report contents.** `InsightsCommand::compose(facts)` builds a text summary plus a self-contained HTML report over a window (default 30 days): spend by model and by day (`≥` law); sessions and turns per day; busiest projects …
 - **Files — create:** `candy-code/src/Commands/InsightsCommand.php`, `candy-code/src/Host/Commands/InsightsHostCommand.php`, `candy-code/tests/Commands/InsightsCommandTest.php`, `candy-code/tests/Host/Commands/InsightsHostCommandTest.php`

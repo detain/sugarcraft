@@ -130,10 +130,10 @@
   "C-AGT-5.h": {
    "base": "c8e8a1f42",
    "branch": "cc/C-AGT-5.h",
-   "note": "build ecda4ca36@c8e8a1f42 4f +489/-1; r1 review live R13-doctrine+vacuity tasks; no durations/figure carry",
+   "note": "r1 FINDINGS 5 step-local MINORs (guard hardening: M1 verbatim-gate pin, M2 write-all/blindness legs, M3 GH_TOKEN anti-recursion pin, M4 multi-line quoted run scalar parser, M5 needs.success&& coercion); doctrine PASS; fixer next",
    "round": 1,
-   "session": "ses_e7beec15affe9KXl3wtieeeeIm",
-   "stage": "review",
+   "session": "ses_e7be8a5bfffezWLNzA2iigW2VJ",
+   "stage": "fix",
    "worktree": "/home/sites/cc-cmp-C-AGT-5.h"
   },
   "C-AGT-6.a": {
@@ -161,6 +161,14 @@
    "stage": "build",
    "worktree": "/home/sites/cc-cmp-C-CTX-3.b"
   },
+  "C-CTX-4.a": {
+   "branch": "cc/C-CTX-4.a",
+   "note": "W20 date/cutoff note; base ccf94cd63; brief 17L",
+   "round": 0,
+   "session": "ses_e7be78e4cffeKWE8rn7cYRgY2j",
+   "stage": "build",
+   "worktree": "/home/sites/cc-cmp-C-CTX-4.a"
+  },
   "C-SEC-8.e": {
    "base": "c8e8a1f42",
    "branch": "cc/C-SEC-8.e",
@@ -178,13 +186,6 @@
    "session": "ses_e7bfb0701ffeh4sd2yPhRAZg1t",
    "stage": "clean",
    "worktree": "/home/sites/cc-cmp-C-SES-4.d"
-  },
-  "C-SES-8.c": {
-   "branch": "cc/C-SES-8.c",
-   "notes": "r2 CLEAN 0C/0M/0m/0n @cc8ea765f (old base cf0cfd0be; pick range e2759d081..cc8ea765f, 2 commits). Welder carries: durations rows InsightsCommandTest+InsightsHostCommandTest, +15T carry, §4 cites cc8ea765f, OneSided roster accusation routes to C-CTX-4.c owner (closeout).",
-   "round": 2,
-   "stage": "clean",
-   "worktree": "/home/sites/cc-cmp-C-SES-8.c"
   },
   "C-TOOL-5.a": {
    "base": "878047472",
@@ -259,11 +260,11 @@
   },
   "C-WEB-4.e": {
    "branch": "cc/C-WEB-4.e",
-   "note": "build b0ea554b4@24d746501 18f +859/-69; r1 review live; welder carries durations SessionSendDocumentsTest +8T trio/dist rederive rebase-onto-late-master collision-check WEB-4.d files",
+   "note": "r1 CLEAN 0C/0M/2nit-out; batch-4 pool; welder carries durations SessionSendDocumentsTest +8T, trio+dist re-derive once merged with C-WEB-4.d (dist collision certain, src disjoint), rebase post-b3 + sessionView+drift re-run",
    "notes": "base 24d746501; npm ci in flight (bg shell). [protocol] serialized: TurnMethods+MethodSchemas+trio regen (schema/SERVER.md/generated.ts)+Composer.vue+paste.ts+session.ts; NEW SessionSendDocumentsTest.php -> durations row at weld; welder re-derives trio once on merged tree (C-TOOL-3.e precedent).",
    "round": 1,
-   "session": "ses_e7bf3b276ffeTr89G0mzypNNZY",
-   "stage": "review",
+   "session": null,
+   "stage": "clean",
    "worktree": "/home/sites/cc-cmp-C-WEB-4.e"
   }
  },
@@ -365,7 +366,7 @@
  ],
  "standing_reds_b985fbe51": "ADD: ChatHostLangCatalogueTest red on chat.effort.launch_unshaped (asker LaunchContext.php:2109 outside sources()) - byte-identical at base, C-PRV-1.b (a992413b0) seam -> closeout roster",
  "status": "RUNNING",
- "tick": "128-batch3-weld-P-AGENT.b",
+ "tick": "128-batch3-weld-C-SES-8.c",
  "tip": "0f58a906f",
  "updated": "2026-10-29",
  "wave_loops": {
@@ -830,6 +831,7 @@
   },
   "C-SES-7.a_pick": "pick 78f34d0f0?? NO — welder MUST use branch tip 16057843d (fixer round-2 unknown-kind fail-loud + backtick legs; r1 reviewer CLEAN @ 16057843d); 2 durations rows SessionImporterTest+TranscriptReadersTest junit sums; +25T-era closeout carry; NIT-3 ImporterRegistry.php:19 'eight' stale carried.",
   "C-SES-7.a_status": "builder blank-returned; resumed same-session attempt-1; 3-file+ WIP state unprobed; on land: r1 reviewer duties incl census guards + SecretRedactor + typed refusals + 2 new tests -> durations rows",
+  "C-SES-8.c": "weld batch-3: picks d59c71edc+ccf94cd63 (cherry -/-, patch-ids SAME, zero conflicts); gates EXACT pair 15T/84A, Insights|Usage 405T/2047A, guards 204T (A-wobble disclosed); durations 1552->1554 violations 4==4; §4 cites ccf94cd63; OneSided InstructionWalkPastRoot -> C-CTX-4.c owner carry; +15T closeout carry",
   "C-SES-9.a": {
    "durations_owed": "none (no new test files)",
    "gates": "UsageRecords 21T/102A OK exact; builder wide filter on merged tree 491T/2275A OK (= builder lane-tree 490/2267 + r2 test, lead-cut 'SessionStore|Tombstone|Usage' 484/2253 OK); five-guard 133T/15654A pair-only (pinned 25,537 vs live 26,051 - closeout re-pin; +23 over builder's 26,028 = other master welds)",
@@ -1295,9 +1297,10 @@
   "C-PRV-2.c",
   "C-SES-8.f",
   "C-TUI-3.c",
-  "P-AGENT.b"
+  "P-AGENT.b",
+  "C-SES-8.c"
  ],
- "welded_count": 170,
+ "welded_count": 172,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
  "welder_sessions": {
