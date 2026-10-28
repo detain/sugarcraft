@@ -598,6 +598,7 @@ candy-code/tests/Config/Settings/OperatorSettingsTest.php	0.163	16
 candy-code/tests/Backend/UiOnlyWireFilterTest.php	0.162	5
 candy-code/tests/Config/Settings/SessionOverlayForkTest.php	0.162	4
 candy-code/tests/Cli/NonInteractiveProviderFailureTest.php	0.161	21
+candy-code/tests/Bundles/BundleUpdateTest.php	0.161	10
 candy-code/tests/Tools/BuiltIn/TeamToolHooksTest.php	0.158	6
 candy-code/tests/Support/SecretEnvScrubTest.php	0.155	29
 candy-code/tests/Agents/PrimaryAgentTest.php	0.152	10
@@ -609,6 +610,7 @@ candy-code/tests/Agents/SessionArtifactRetentionTest.php	0.143	5
 candy-code/tests/Cli/NonInteractiveAskUserTest.php	0.143	2
 candy-code/tests/Providers/SseDecodeFrameBoundTest.php	0.143	4
 candy-code/tests/Tui/SessionPickerActionsTest.php	0.143	25
+candy-code/tests/Bundles/BundleMarketplaceCliTest.php	0.142	15
 candy-code/tests/Commands/CommandDocsDriftTest.php	0.141	6
 candy-code/tests/Tui/PaneDragIntegrationTest.php	0.141	21
 candy-code/tests/MCP/SseTransportWiringTest.php	0.139	6
@@ -825,7 +827,7 @@ candy-code/tests/MCP/SseLineParserTest.php	0.048	14
 candy-code/tests/Server/ServerConfigWebhooksTest.php	0.048	23
 candy-code/tests/Skills/CompiledPatternCacheBoundTest.php	0.048	6
 candy-code/tests/Tools/BuiltIn/SkillPathScopingTest.php	0.048	12
-candy-code/tests/Cli/DoctorSandboxProbeTest.php	0.048	51
+candy-code/tests/Cli/DoctorSandboxProbeTest.php	0.048	10
 candy-code/tests/Agents/Live/TranscriptLogTailTest.php	0.047	11
 candy-code/tests/Tui/ToolTailSlotsTest.php	0.047	5
 candy-code/tests/Observability/BatchEventSinkTest.php	0.047	7
