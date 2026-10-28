@@ -57,7 +57,13 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — thirty-three sites (D1-fix 2026-10-21: +1 in
+ *  1. `fwrite(STDERR, …)` — thirty-four sites (C-AGT-7.b 2026-10-28: +1 in
+ *     `NonInteractive` for the `json_schema_unapplied` report line, stderr-alone
+ *     like every other answer-shaping note: stdout carries the answer (or the
+ *     document) on all three formats and the fact the line reports rides the
+ *     document itself as `json_schema_applied: false`; the `session_save_failed`
+ *     line MOVED inside the same file in the same step and costs nothing;
+ *     D1-fix 2026-10-21: +1 in
  *     `NonInteractive::noticeUnpricedModel()`, the `-p` unpriced-model line
  *     beside the attachment notice, stderr-only because stdout carries the
  *     answer and its stop trailer; 1021 INFO-4 2026-10-21: +1 in
@@ -339,7 +345,11 @@ final class StderrEmitterCensusTest extends TestCase
         // the answer proceeds without history) and the save-degrade line
         // (answer already echoed; a failed persist cannot retract it). Both
         // stderr alone by design: stdout is the answer and nothing else.
-        'src/Cli/NonInteractive.php' => 14, // +1 D1-fix 2026-10-21 noticeUnpricedModel (was +1 AUT-4 failJsonSchemaUnsupported at 13)
+        // +1 in C-AGT-7.b: the json_schema_unapplied report line. Stderr alone
+        // like every other answer-shaping note: stdout carries the answer (or
+        // the document) on all three formats, and the fact this reports rides
+        // the document itself as json_schema_applied: false.
+        'src/Cli/NonInteractive.php' => 15, // +1 C-AGT-7.b 2026-10-28 json_schema_unapplied (was +1 D1-fix 2026-10-21 noticeUnpricedModel, +1 AUT-4 failJsonSchemaUnsupported at 13)
         // O-3a: `serve`'s one funnel (Serve::stderr()) for its startup lines,
         // request log and stop notice. Stderr alone: no session exists to
         // carry a transcript notice, and the terminal running the server is
@@ -471,7 +481,10 @@ final class StderrEmitterCensusTest extends TestCase
         // pre-launch exit-2 usage decision.
         // AUT-5 took it to thirty-one: --max-turns' same three refusal shapes,
         // the same pre-launch exit-2 usage decision.
-        'src/Cli/ArgvParser.php' => 35, // +3 AUT-4 --json-schema refusal family; +1 INFO-4 duplicate-prompt notice (1021)
+        // C-AGT-7.b took it to thirty-six: the --json-schema-without-a-prompt
+        // hint carries its own `candy-code: ` envelope, the same pre-launch
+        // exit-2 usage decision as the family above it.
+        'src/Cli/ArgvParser.php' => 36, // +3 AUT-4 --json-schema refusal family; +1 INFO-4 duplicate-prompt notice (1021); +1 C-AGT-7.b requires_prompt hint
         // +1 in ISS-026: SESSION_RESUME_CROSS_PROJECT_FORMAT carries its own
         // `candy-code: ` envelope, like the retention detail line.
         // +1 in ISS-026 residual (rv6): the --resume pick twin carries its own
@@ -499,7 +512,11 @@ final class StderrEmitterCensusTest extends TestCase
         // ship raw `error.message`, and the eight literals this file baked into
         // caller arguments and document arguments are gone. The ten that
         // remain are stderr-alone notices that never reach a document.
-        'src/Cli/NonInteractive.php' => 10, // +2 AUT-4 refusal prefixes (gate line + decode failUsage)
+        // +1 in C-AGT-7.b: the json_schema_unapplied literal carries its own
+        // envelope — a stderr-alone notice that never reaches a document
+        // (channel 1's note; the document reports the same fact through the
+        // json_schema_applied key).
+        'src/Cli/NonInteractive.php' => 11, // +2 AUT-4 refusal prefixes (gate line + decode failUsage); +1 C-AGT-7.b json_schema_unapplied
         // E701: mcpAuth's five failUsage shapes (no action, unknown action,
         // JSON refusal, bad --timeout, missing server) took eleven to sixteen.
         // E710: mcpImport adds the funnel prefix literal plus its five door

@@ -32,9 +32,9 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  * was re-examined against `Bootstrap::warnPermissionConfigInTranscript()`".
  * WHAT IS TRUE NOW, and what round 42's review measured: that was false. Only
  * `Bootstrap`'s writes and this one had been looked at. The real census of raw
- * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is THIRTY-THREE:
+ * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is THIRTY-FOUR:
  *
- *  - {@see \SugarCraft\Code\Cli\NonInteractive}, fourteen —
+ *  - {@see \SugarCraft\Code\Cli\NonInteractive}, fifteen —
  *    `run()` four times (a thrown backend error, an answer that would not encode
  *    as JSON, and the two AUT-2 session-degrade lines), `failUsage()`, `failUnusableProvider()`,
  *    and — added by AUT-4 — `failJsonSchemaUnsupported()`, the refusal line for a
@@ -50,7 +50,11 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  *    — added by ISS-080 — the second line inside `readStdinIfPiped()`: the
  *    stdin-silent grace notice, stdout staying the answer alone. And — added
  *    by the D1-fix of plan_comparison audit 2026-10-21 — `noticeUnpricedModel()`,
- *    one line per `-p` run that billed an unpriced model.
+ *    one line per `-p` run that billed an unpriced model. And — added by
+ *    C-AGT-7.b — the `json_schema_unapplied` report line, stderr-alone like
+ *    every other answer-shaping note beside it: stdout carries the answer (or
+ *    the document) on all three formats, and the document itself reports the
+ *    fact through `json_schema_applied: false`.
  *  - {@see \SugarCraft\Code\Cli\ArgvParser}, one — added by 1021 INFO-4 —
  *    `noticePromptOverride()`, the once-per-parse line saying a second
  *    `-p`/`--prompt` value replaced the first. The parser's only write, and

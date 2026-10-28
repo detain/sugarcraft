@@ -585,6 +585,9 @@ final class TreeWideGuardRosterTest extends TestCase
         // INT-M1: entriesUnderRoot() lists the sandbox bundle dir under the
         // test's fake HOME; every install lands inside it.
         'Bundles/BundleInstallTest.php' => ['scandir($this->root)'],
+        // C-TUI-7.a (weld c3dfec2a0): tearDown() empties the sys_get_temp_dir()
+        // scratch dirs the test tracked in $scratchDirs before its own rmdir.
+        'Chat/StartupSummaryGatherTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         'ClaudeCodeMcpClientStdinWedgeTest.php' => ['glob($this->tempDir.\'/*\')'],
         'Cli/AgentManagerWiringTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         // tearDown() removes the sys_get_temp_dir() tree setUp() made;
@@ -599,6 +602,10 @@ final class TreeWideGuardRosterTest extends TestCase
         'Cli/BootstrapTrustGateSelfGrantTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)', 'scandir($probe)'],
         // tearDown() unlinks and rmdir's the sys_get_temp_dir() poison catalogue setUp() made (E453 pin).
         'Cli/HelpTest.php' => ['glob($this->poisonDir.\'/*.php\')'],
+        // C-AGT-7.b (449b0f248): removeCarriedTree() empties the scratch tree the
+        // resume witness leaves behind (db, WAL sidecars, child script, both
+        // homes) — unlink-first recursion, the dot-glob being its listing walk.
+        'Cli/JsonSchemaEnvelopeTest.php' => ['glob($path.\'/{,.*}*\',GLOB_BRACE)'],
         // w1e: tearDown() empties the sys_get_temp_dir() fake HOME the test mkdir'd
         // (0700, nih_be_exit_* prefix) before its own rmdir.
         'Cli/NonInteractiveBackendErrorExitTest.php' => ['RecursiveDirectoryIterator($this->tempHome,\FilesystemIterator::SKIP_DOTS)'],
@@ -625,6 +632,10 @@ final class TreeWideGuardRosterTest extends TestCase
         'Context/EnvironmentBlockTest.php' => ['scandir($dir)'],
         // removeDir() tears down the sys_get_temp_dir() tree setUp() made.
         'Context/ImportResolverTest.php' => ['scandir($dir)'],
+        // C-CTX-6.c (16266186d, W9-era walker — its licence row lands with the
+        // W10 wave-fix that surfaced it): tearDown() empties the scratch
+        // home/repo tree setUp() made under $this->dir before the rmdir.
+        'Context/MemoryRecallBlockTest.php' => ['RecursiveDirectoryIterator($this->dir,\FilesystemIterator::SKIP_DOTS)'],
         // tearDown() empties the sys_get_temp_dir() scratch dir setUp() made.
         'Diagnostics/RuntimeNoticeSinkStderrTest.php' => ['glob($this->scratch.\'/*\')'],
         // tearDown() removes the sys_get_temp_dir() home setUp() made.
@@ -707,6 +718,9 @@ final class TreeWideGuardRosterTest extends TestCase
         // ROOTFIX: purgeOwnFixtureTree() empties the throwaway sweep bases
         // setUp() made; `scandir($dir)` is that walk.
         'Support/SafeDeleteSweepHardeningTest.php' => ['scandir($dir)'],
+        // C-TUI-7.a (weld c3dfec2a0): the finally block empties the
+        // sys_get_temp_dir() scratch tree the test made before restoring HOME.
+        'Support/StartupSummaryTest.php' => ['RecursiveDirectoryIterator($scratch,\FilesystemIterator::SKIP_DOTS)'],
         // Names the package root only to hand its driver script the vendor
         // autoloader; tearDown() empties the sys_get_temp_dir() fixture dir
         // setUp() made (audit R3).
