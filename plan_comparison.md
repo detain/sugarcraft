@@ -2242,7 +2242,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tui.md` → `### C-TUI-5.d`
 
-#### C-WEB-4.b — `?` help overlay + web keymap
+#### ✅ 2e32c90bf C-WEB-4.b — `?` help overlay + web keymap
 - **Item:** C-WEB-4 (sources: GAP-UI-28, GAP-UI-25) · gap · M
 - **What:** Client-only. **Help overlay.** `?` on an empty composer, or outside any input, opens `HelpOverlay`. It lists the web shortcuts plus `command.list` rows with `runsIn` markers. The global capture-phase handler lives in `App.vue`, …
 - **Files — create:** `candy-code-web/src-web/components/HelpOverlay.vue`, `candy-code-web/src-web/lib/keymap.ts`, `candy-code-web/src-web/components/__tests__/helpOverlay.spec.ts`, `candy-code-web/src-web/lib/__tests__/keymap.spec.ts`
