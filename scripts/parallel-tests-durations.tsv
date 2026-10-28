@@ -126,6 +126,7 @@ candy-code/tests/FrameCapFamilyTest.php	2.598	8
 candy-code/tests/Context/EnvironmentBlockTest.php	2.571	49
 candy-code/tests/Tools/BuiltIn/AtomicEditWriteTest.php	2.571	21
 candy-code/tests/Integration/ParallelDeadlineExemptionTest.php	2.533	1
+candy-code/tests/Tui/DiffReview/DiffReviewTest.php	2.51	14
 candy-code/tests/Config/Settings/SettingsWriterCensusTest.php	2.506	5
 candy-code/tests/App/UntouchedDockWidthSweepTest.php	2.493	16
 candy-code/tests/Renderer/FrameWidthClipTest.php	2.406	328
@@ -262,6 +263,7 @@ candy-code/tests/Tools/BuiltIn/GrepInstructionWiringTest.php	1.155	19
 candy-code/tests/Chat/RewindCommandTest.php	1.142	15
 candy-code/tests/Host/SessionHostIdleAutoTest.php	1.139	10
 candy-code/tests/Sessions/ScheduleRegistryTest.php	1.131	14
+candy-code/tests/Workspace/CheckpointDiffFilesTest.php	1.13	7
 candy-code/tests/Chat/SessionStartHookWireTest.php	1.129	14
 candy-code/tests/Integration/ForeignAgentPresetWiringTest.php	1.126	17
 candy-code/tests/Chat/ToolChildReapTest.php	1.113	5
