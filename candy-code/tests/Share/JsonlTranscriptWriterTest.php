@@ -105,6 +105,13 @@ final class JsonlTranscriptWriterTest extends TestCase
         $lines = explode("\n", rtrim($grown, "\n"));
         self::assertSame('{"type":"rewind","to":1}', $lines[3]);
         self::assertSame('{"role":"user","content":"msg-2"}', $lines[4]);
+
+        // Docblock truth (review-1): the prose must not claim the journal
+        // replays as the export — after this rewind the file holds m1,m2,m3
+        // plus the marker, while the live session is a shorter branch.
+        $doc = (string) (new \ReflectionClass(JsonlTranscriptWriter::class))->getDocComment();
+        self::assertStringNotContainsString('replays as the export', $doc);
+        self::assertStringContainsString('including rewound branches', $doc);
     }
 
     public function testMessageLinesCarryRoleAndNeverTheMarkerFrame(): void

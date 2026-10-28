@@ -15,9 +15,9 @@ use SugarCraft\Code\Util\Exporter;
  * 0600). Each {@see save()} appends ONLY the rows past a high-water mark read
  * back from the file itself: every message line counts the mark up, and a
  * rewound session (fewer messages than the mark) appends a
- * `{"type":"rewind","to":N}` marker line that re-sets the mark instead of
- * rewriting the journal. Skipping marker lines, the remaining lines ARE
- * {@see Exporter::toJsonl()} output — the file replays as the export.
+ * `{"type":"rewind","to":N}` marker line instead of rewriting the journal.
+ * Markers re-set the mark exactly as {@see self::scanHighWater()} does; the
+ * journal keeps every row ever appended, including rewound branches.
  *
  * A marker can never be confused with a message row: every message row —
  * concrete or interface, see `Message::toWire()` and the
