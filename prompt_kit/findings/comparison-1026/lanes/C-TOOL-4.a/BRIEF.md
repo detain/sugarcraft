@@ -1,0 +1,33 @@
+# C-TOOL-4.a — `sandbox` row in `candy-code doctor`
+- item: C-TOOL-4 (sources: CC-new#11 (AppArmor userns diagnostic in `doctor`), GAP-SH-06) · kind: gap · effort S · phase: normal
+- approach: 
+- `Subcommands::doctorProbes()` (`candy-code/src/Cli/Subcommands.php:381`) gains a `sandbox` row, backed by a private `sandboxProbe(?string $sysctlPath = null)` seam. The row goes after `permission policy` and is spelled `'sandbox' => static function` so the drift guard's label scrape counts it.
+- The row reports three things:
+- the configured `bashSandbox` mode;
+- where `bwrap` resolves (`Bubblewrap::resolvedBinary()`);
+- whether the jail actually starts. Presence is not capability (the ISS-083 doctrine), so the row EXERCISES the jail through a new public `Bash::sandboxRefusal(): ?string`. That method is the probe closure extracted from `Bash::execute()` (`Bash.php:545-570`), so doctor asks Bash's exact question through Bash's own `runCaptured`. No new proc_open token.
+- New `Bubblewrap::appArmorRestrictsUserns(string $path = <the /proc/sys/kernel/apparmor_restrict_unprivileged_userns const>): ?bool` (null when the file is absent) adds the AppArmor diagnostic. The path is the test seam.
+- Verdicts:
+- `off`: OK. The detail still says whether the jail would start here, and why not.
+- Configured and starts: OK.
+- Configured and refused: WARN with the remedy. The remedy is to install bubblewrap or, on an AppArmor host, add an `/etc/apparmor.d` profile granting bwrap `userns` (the sysctl is the blunt fallback).
+- Non-Linux: the Linux-only line.
+- The row never FAILs, per `doctor()`'s WARN doctrine (:186-190).
+- **Why `phase: normal` inside a LATE item:**
+- It is S effort and needs no ruling.
+- It uses nothing from the 4.b seam, and adds no spawn site and no setting.
+- It pays off today: on Ubuntu 24.04 a configured `bashSandbox` refuses every Bash call, and nothing explains why before the first refusal.
+- files.create: `candy-code/tests/Cli/DoctorSandboxProbeTest.php`
+- files.modify: `candy-code/src/Cli/Subcommands.php` (`doctorProbes()`, new `sandboxProbe()`), `candy-code/src/Tools/BuiltIn/Bash.php` (extract `sandboxRefusal()` from the `execute()` probe block; `execute()` calls it), `candy-code/src/Tools/Sandbox/Bubblewrap.php` (`appArmorRestrictsUserns()` + the sysctl path const), `candy-code/lang/en.php` (`cli.doctor.sandbox_*`), `candy-code/docs/TROUBLESHOOTING.md` (:10 headline "fifteen checks" → "sixteen checks"; a bwrap/AppArmor row), `candy-code/tests/Support/ReadPathCensusTest.php` (the `Tools/Sandbox/Bubblewrap.php|file_get_contents` row gains a PROCESS_DERIVED sysctl verdict)
+- tests: 
+- create the file above. It pins:
+- the row is present and in place;
+- the off / starts / refused verdicts, through an injected sysctl path and an injected refusal;
+- a sysctl file reading `1` names the AppArmor remedy, and an absent file names none;
+- the Lang keys resolve (a typo'd key would surface raw).
+- modify `candy-code/tests/Tools/BashSandboxTest.php`: `sandboxRefusal()` returns exactly the reason `execute()` refuses with.
+- docs/guards: `DocFigureProseDriftTest` doctor-count pin (the `doctorProbes()` label scrape ↔ TROUBLESHOOTING.md "sixteen checks; exits 1 if any FAILs"); `ReadPathCensusTest`. Keep green: `DoctorFts5ProbeTest` (row order), `DoctorExtensionProbesTest`, `DoctorBypassNoticeProbeTest`.
+- serialized: [headless] [lang:cli.doctor.sandbox_] [docs:TROUBLESHOOTING.md] [hot:candy-code/src/Tools/BuiltIn/Bash.php] [hot:candy-code/tests/Support/ReadPathCensusTest.php]
+- deps: none
+- ruling: none
+- risks: C-TUI-5.a (design-tui.md) also plans a `sandbox` doctor probe, and it moves `doctorProbes()` into a new `DoctorChecks.php`. There should be one row with one owner: this step owns it. C-TUI-5.a drops its sandbox bullet and carries this row along in the extraction. The two steps serialize on [headless] and TROUBLESHOOTING.md in either order.

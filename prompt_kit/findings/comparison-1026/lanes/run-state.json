@@ -131,17 +131,10 @@
     "C-EXT-4.a",
     "C-EXT-2.e",
     "C-WEB-7.d",
-    "C-WEB-7.c"
+    "C-WEB-7.c",
+    "C-TOOL-4.a"
   ],
   "inflight": {
-    "C-TOOL-4.a": {
-      "stage": "clean",
-      "round": 1,
-      "tip": "c28d0a473",
-      "worktree": "/home/sites/cc-cmp-C-TOOL-4.a",
-      "branch": "cc/C-TOOL-4.a",
-      "note": "r1 CLEAN 0C/0M/2NIT (@629@). weld roster: 1 durations row tests/Cli/DoctorSandboxProbeTest.php (10T); no regen."
-    },
     "C-AGT-4.a": {
       "stage": "clean",
       "round": 2,
@@ -151,7 +144,7 @@
       "note": "r2 CLEAN 0C/0M (REVIEW-2.md on disk in lane dir; all 5 REVIEW-1 cures blob-verified at 1cee96571; phantom b83a58d4d discarded). WELD ROSTER: 1 durations row tests/Agents/PrimaryAgentTest.php (10T junit recount), no regen, WELD carries 6.1 C-AGT-4.b inert-subtask deferral note + suite-figure +10T closeout; wave W14 \u2014 weld AFTER W13 cleans (EXT-2.e first, then WEB-7.d/MCP-3.a reviews)"
     },
     "C-MCP-3.a": {
-      "stage": "review",
+      "stage": "clean",
       "round": 1,
       "worktree": "/home/sites/cc-cmp-C-MCP-3.a",
       "branch": "cc/C-MCP-3.a"
@@ -164,10 +157,28 @@
       "note": "resume attempt 1 live (agent-key gotcha fixed); prior EMPTY return"
     },
     "C-PRV-2.a": {
-      "stage": "fix",
+      "stage": "clean",
       "round": 2,
       "worktree": "/home/sites/cc-cmp-C-PRV-2.a",
       "branch": "cc/C-PRV-2.a"
+    },
+    "C-SES-7.a": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-SES-7.a",
+      "branch": "cc/C-SES-7.a"
+    },
+    "C-TOOL-3.d": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-TOOL-3.d",
+      "branch": "cc/C-TOOL-3.d"
+    },
+    "C-TUI-2.a": {
+      "stage": "build",
+      "round": 1,
+      "worktree": "/home/sites/cc-cmp-C-TUI-2.a",
+      "branch": "cc/C-TUI-2.a"
     }
   },
   "blocked": [
@@ -652,7 +663,14 @@
     "C-WEB-3.e": "sidebarShare.spec.ts NEW \u2014 vitest spec: NO phpunit durations row; dist rebuild rides weld; base 23fa8ab8e; foreign typecheck 2x contextSources.ts errors at base (f90523394 era); r1 CLEAN (RPC surface match, token hygiene, non-vacuous 4F-at-base, neighbor 101/101, vue-tsc exit0 at tip AND master \u2014 the 2 contextSources errors did not reproduce); weld: dist rebuild ride + eslint 3-path leg + NIT spec URL-shadow cosmetic",
     "TRIO_WELDER": "LIVE original welder owns master: landed pick fad3d931e (MCP-2.b patch-id c0cd02a2==lane, blob-proof trait=3) + regen 8856da5e9 (schema+89/SERVER/generated.ts, dist unchanged disclosed); its duties remain: gates/durations x2/weld: C-MCP-2.b commit (run-state ->120) then TOOL-5.b 2fecd5f26 + WEB-3.f 6174f871f. My respawn ses_e7e6fb47d correctly STOOD DOWN zero writes. DO NOT spawn any welder until twin returns.",
     "C-SEC-5.d": "LANDED b64922b50 base e7e22823a (salvage commit of r1-PASSed content). r1 reviewer content-CLEAN (only CRITICAL was the then-missing commit; semantics/scope/gates PASS: 93T/12754A, 41T/3638A, 160T/21752A, App|LaunchContext 1319T; KeyHelpTest 1F pre-existing). Lead precedent EXT-2.d/W11-cure: MAY WELD on blob-match without full r2. WELD ROSTER: 1 durations row LaunchTrustDialogTest (6T junit recount); no regen; en-only tui.trust.* \u00a76.3-h carry; weld one-liner candidate: src/Tui/TrustDialog.php docblock 'DORMANT/no Renderer edit' truth-flip (grep-verified unpinned); REPORT already carries Renderer-conditional + +7T note? builder says 6 tests (+7T vs brief +6T deviation disclosed).",
-    "C-TOOL-4.a": "weld roster: 1 durations row tests/Cli/DoctorSandboxProbeTest.php (10T junit recount); base-red carry KeyHelpTest /skills family re-proved; suite-figure +10T closeout note; no regen",
+    "C-TOOL-4.a": {
+      "master": "<to-be-stamped>",
+      "pick": "c28d0a473 -> 1945e347f (CLEAN; 8 files +477/-10; doctor sandbox row; ReadPathCensus auto-merge)",
+      "regen": "none (no protocol/schema/SERVER/generated/web surface in pick)",
+      "durations": "66c0cb2b6 +1 row Cli/DoctorSandboxProbeTest.php 0.048/51 (junit 10T/51A); tsv 1503->1504",
+      "gates": "56T/297A EXACT; 205T exact 1F=standing thirty-seven; 71T exact; 144T exact; five-guard re-derivation 137T/16168A 3F=thirty-seven+staleness-pair standing only",
+      "notes": "en-only cli.doctor.sandbox_* x10 = 6.3-h strict-parity LAST carry (future locales must translate). REVIEW-1 2 NITs carried in WELD.md unchanged. C-TUI-5.a owns row location later."
+    },
     "C-AGT-4.a": "weld roster: 1 durations row tests/Agents/PrimaryAgentTest.php (9T junit recount); no regen; seams Agent.php/WiringTest seventeen prose carry; suite-figure +9T closeout",
     "C-EXT-4.a_weld": "clean r1 @ 8dd4df6ef base 341f66404 12 files; welder owes: 4 durations rows tests/Bundles/{MarketplaceTest,MarketplaceRegistryTest,BundleSourceTest,BundleRecommenderTest} junit per-testcase sums set-eq from live tsv (1492-era); NO regen; section-4 check + WELD.md record phantom-6d1c5435b tip-note + 2F guards foreign-at-base; run-state bump; cherry proof + cleanup; wave W14.",
     "EXT-2.e_r1_review": "r1 reviewer PENDING LAUNCH on b5806091d (base 63f2de5d9, 10 files, 2 NEW test files CommandPipelineFrontmatterModelTest 4T + CommandFrontmatterWiringTest 6T -> weld owes 2 durations rows). Focus: chat:submit custom-command branch / docs:COMMANDS.md / lang:host.turn. / hot SessionHost,TurnController discipline; INERT->KNOWN roster honesty for model/agent/subtask (keys ENFORCED where claimed; unknown-model fail-closed; frontmatter-vs-CLAUDE.md precedence per 6.1); FrontmatterKeyAuditTest +3 rows + INERT count 4->1 comment truth-flip in-step; reproduce gates; ChatHostLangCatalogue 1F exclusion (C-PRV-1.b seam); DuplicatedTestHelperDrift.",
@@ -681,7 +699,7 @@
       "note": "web dist law honored; no dormantRoster action (C-WEB-3.g unwelded); cherry '-' PROOF (04c99e248); branch+worktree pruned"
     },
     "C-WEB-7.c": {
-      "master": "<to-be-stamped>",
+      "master": "f1a6623bb",
       "pick": "82ad9c081 -> 1aab5f2f9 (CLEAN; 13 files +951/-79; export paging + WorkspaceWalk)",
       "regen": "rider 62b58abd9 (schema --write incl SERVER.md generated session.export row; sanctioned :378 hand hunk untouched; web gen:protocol + build; dist via rider ONLY; builder gate 1F pre-rider -> 63T/1099A green post)",
       "gates": "builder 63T/1098A 1F(schema by-design) -> post-rider 63T/1099A OK; new files 17T/79A OK; guards 130T/16115A 1F = thirty-seven standing ONLY; vitest 19/19 serial (16 lane + generated.spec 3)",
@@ -774,7 +792,7 @@
     "STOP STATE @2052@: master b4b4404c5 (wind-down commit; 9 files). welded=100/328 LIST. waves_closed [1..9] (W8/W9 rows + marks committed inside b4b4404c5; W9 per lead ruling r1-CLEAN-no-r2 \u2014 disclosed). Owed loops: W10 (blocked on unwelded members C-EXT-2.c + C-PRV-5.c), then W11+ per scheduler waves_fully_welded. Only live artifact: /home/sites/cc-cmp-P-TABS.g + branch cc/P-TABS.g @f25a697c1 (parked; re-dispatch plan:1549 after P-TABS.e+P-TABS.f weld). LATE W33+ gated on \u00a76.3 owner rulings (C-TOOL-6 c/e/h + C-TUI-6: Windows shell, Windows self-update helper, web i18n scope, locale choice, parity strictness, voice endpoint, push-to-talk key). NEVER pushed; origin advanced owner-side only.",
     "C-EXT-2.c welded 4b771634d; closeout roster in its WELD.md (Bootstrap:5955 comment, ChatHostLangCatalogue standing red=C-PRV-1.b (a992413b0) seam, TROUBLESHOOTING allowed-tools/effort half=C-EXT-2.b)"
   ],
-  "updated": "2026-10-28T07:45:00Z",
+  "updated": "2026-10-28T07:09:30-04:00",
   "wind_down": {
     "master_tip_at_close": "b4b4404c5",
     "welded_count": 101,
@@ -833,7 +851,7 @@
     "C-AGT-4.a (W14, after r2, 1 row PrimaryAgentTest)"
   ],
   "tip": "004bc7240",
-  "welded_count": 132,
+  "welded_count": 133,
   "tick": "87-disk-reconciled: W11 REALY closed@341f66404; trio MCP2b+TOOL5b+WEB3f real to 0b3c4ba21 (welded=122); W13/14 welds PENDING; phantom-atlas @b73@ correction: c3178096f/4d263705a/8d8c75678 GHOSTS, cure real 23fa8ab8e",
   "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
   "blocked_notes": {

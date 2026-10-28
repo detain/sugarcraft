@@ -1714,7 +1714,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SES-3.a (W1), C-SES-3.b (W2), C-SES-3.c (W2), C-SES-3.d (W13)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web.md` → `### C-WEB-3.e`
 
-#### C-TOOL-4.a — `sandbox` row in `candy-code doctor`
+#### ✅ 1945e347f C-TOOL-4.a — `sandbox` row in `candy-code doctor`
 - **Item:** C-TOOL-4 (sources: CC-new#11 (AppArmor userns diagnostic in `doctor`), GAP-SH-06) · gap · effort S
 - **What:** `Subcommands::doctorProbes()` (`candy-code/src/Cli/Subcommands.php:381`) gains a `sandbox` row, backed by a private `sandboxProbe(?string $sysctlPath = null)` seam. The row goes after `permission policy` and is spelled `'sandbox' …
 - **Files — create:** `candy-code/tests/Cli/DoctorSandboxProbeTest.php`
