@@ -376,6 +376,7 @@ candy-code/tests/Media/PngTest.php	0.556	28
 candy-code/tests/Tools/BuiltIn/RepoMapToolTest.php	0.556	11
 candy-code/tests/Acp/AcpHandshakeTest.php	0.555	9
 candy-code/tests/Tools/PtyShimAutoloadResolutionTest.php	0.550	8
+candy-code/tests/Tui/TrustDialogTest.php	0.550	12
 candy-code/tests/Cli/BootstrapPermissionGateTest.php	0.547	65
 candy-code/tests/Host/ModelHostPersistenceTest.php	0.546	6
 candy-code/tests/Tools/BuiltIn/GrepEngineDifferentialTest.php	0.537	25
@@ -384,6 +385,7 @@ candy-code/tests/Runtime/ParallelGrandchildAskRelayTest.php	0.531	10
 candy-code/tests/Tools/TaskToolPromoteToBackgroundTest.php	0.529	3
 candy-code/tests/Agents/TeamTest.php	0.528	28
 candy-code/tests/Backend/PerStepUsageFrameTest.php	0.527	4
+candy-code/tests/Tools/PtyRunToolProgressTest.php	0.523	5
 candy-code/tests/Backend/EngineBackendFrameSocketInheritanceTest.php	0.522	2
 candy-code/tests/ClaudeCodeMcpClientTest.php	0.521	21
 candy-code/tests/Session/SessionEventsTableTest.php	0.520	7
@@ -571,6 +573,7 @@ candy-code/tests/Backend/EngineBackendServedModelTest.php	0.168	5
 candy-code/tests/Tui/McpPanelUserScopeTest.php	0.167	6
 candy-code/tests/Tools/GenerateVideoTest.php	0.166	19
 candy-code/tests/Diagnostics/TuiErrorLogTest.php	0.165	40
+candy-code/tests/Protocol/ContextSourcesMcpUserTierTest.php	0.165	4
 candy-code/tests/Tui/Settings/SettingsEditorPolishTest.php	0.164	11
 candy-code/tests/Config/Settings/OperatorSettingsTest.php	0.163	16
 candy-code/tests/Backend/UiOnlyWireFilterTest.php	0.162	5
@@ -647,6 +650,7 @@ candy-code/tests/Integration/RulePathScopingWiringTest.php	0.099	16
 candy-code/tests/Support/MediaStoreTest.php	0.099	26
 candy-code/tests/Tools/WorktreeJailRoutingTest.php	0.098	40
 candy-code/tests/Providers/GeminiResponseSchemaTest.php	0.097	6
+candy-code/tests/Cli/ToollessBackendThinkingTest.php	0.097	5
 candy-code/tests/Renderer/CarriageReturnFrameTest.php	0.097	82
 candy-code/tests/MCP/McpAuthStoreTest.php	0.096	20
 candy-code/tests/Providers/GeminiProviderTest.php	0.095	23
@@ -790,6 +794,7 @@ candy-code/tests/Server/ServerConfigWebhooksTest.php	0.048	23
 candy-code/tests/Skills/CompiledPatternCacheBoundTest.php	0.048	6
 candy-code/tests/Tools/BuiltIn/SkillPathScopingTest.php	0.048	12
 candy-code/tests/Agents/Live/TranscriptLogTailTest.php	0.047	11
+candy-code/tests/Tui/ToolTailSlotsTest.php	0.047	5
 candy-code/tests/Observability/BatchEventSinkTest.php	0.047	7
 candy-code/tests/Observability/OtelConfigTest.php	0.047	10
 candy-code/tests/Observability/OtelSinkTest.php	0.047	4
