@@ -1,0 +1,9 @@
+# FIX-1 — lane C-TOOL-5.c (review round 1) @ abdc611d3 (amended, base 4b771634d, single commit, never pushed)
+
+MINOR-1 CURED (structural option, the :305 genre): tests/LSP/LspLauncherAutoDetectTest.php new testTheChosenExpressionResolvesTheInstallTreeAheadOfThePathProbe — slices the install arm of src/LSP/LspLauncher.php from the installedBinaryPath binding and asserts `$installed ??` binds BEFORE `self::capabilityPresent` is consulted, fail-closed on either anchor moving (assertIsInt legs). Mutation proof: /tmp-cp reorder to `$chosen = self::capabilityPresent($command) ? $command : ($installed ?? '');` → EXACTLY 1F (the new pin, naming PATH-first) while the behavioral trio stayed green — the pin is the discriminator the vacuous tests could not be; restore cmp-identical.
+
+NIT-1 TAKEN: src/LSP/LspInstaller.php chmod-failure branch now `@unlink($staged);` before the return (symmetric with the rename branch; leak of .dl-*.out closed). Pinned by tests/LSP/LspInstallerTest.php new testTheChmodFailureBranchDiscardsTheStagedFileLikeItsRenameSibling (source-slice: unlink before return in BOTH arms — chmod branch not behaviorally reachable hermetically, disclosed in test comment). Mutation proof: re-introduce the leak → EXACTLY 1F; restore cmp-identical.
+
+NIT-2: no action (bookkeeping note; REPORT figures now state reviewer window 210/1515 = builder 197/1437 + 13 foreign BinCandyCodeWiring rows, and 212/1527 at FIX-1).
+
+Gates (cwd=candy-code, plain pipe, -u LINES -u COLUMNS, PtyRunToolTest never run): --filter '(LSP|ReadPathCensus)' → OK 212T/1527A (+2T/+12A vs tip pre-fix), 2 PHPUnit deprecations = the foreign AccessorDeprecationTest pair REVIEW-1 traced. php -l clean ×3. Author law on amend verified: %ae and %ce separately = detain@interserver.net, empty body, zero trailers; porcelain clean; single-commit invariant held.

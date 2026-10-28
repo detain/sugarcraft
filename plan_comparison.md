@@ -1630,7 +1630,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-MCP-1.a (W1)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-mcp.md` → `### C-MCP-3.a`
 
-#### C-TOOL-5.c — LSP installer core
+#### ✅ 14d37bbf5 C-TOOL-5.c — LSP installer core
 - **Item:** C-TOOL-5 (sources: GAP-EDT-07) · gap · effort M
 - **What:** `LspInstaller`: explicit, never automatic, installs into `~/.candy-code/lsp/` (0700). Single-binary servers (rust-analyzer, and others the ruling admits) come from a pinned manifest `LspReleases` (language → version, per-OS/arch …
 - **Files — create:** `candy-code/src/LSP/LspInstaller.php`, `candy-code/src/LSP/LspReleases.php`, `candy-code/tests/LSP/LspInstallerTest.php`
