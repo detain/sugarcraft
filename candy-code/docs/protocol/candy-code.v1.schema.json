@@ -5581,6 +5581,23 @@
                 ]
             }
         },
+        "context.changed": {
+            "description": "What this session's context is built from has moved (a settle, a compaction, a rules/memory/init command); live-only, and the client re-reads context.sources.",
+            "durable": false,
+            "scope": "session",
+            "data": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "description": "What moved it: settle, compaction, or the name of the context-changing command (rules, memory, init)."
+                    }
+                },
+                "required": [
+                    "reason"
+                ]
+            }
+        },
         "message.created": {
             "description": "A transcript row was added: the prompt, a notice, a summary.",
             "durable": true,
@@ -5833,6 +5850,27 @@
                 "required": [
                     "sessionId",
                     "askId"
+                ]
+            }
+        },
+        "prompt.suggested": {
+            "description": "A one-line follow-up suggestion for the turn that just settled, proposed by the title model and billed on it; live-only, never a transcript row, and the next settle replaces it.",
+            "durable": false,
+            "scope": "session",
+            "data": {
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string"
+                    },
+                    "generation": {
+                        "type": "integer",
+                        "minimum": 0
+                    }
+                },
+                "required": [
+                    "text",
+                    "generation"
                 ]
             }
         },

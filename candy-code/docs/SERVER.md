@@ -537,11 +537,13 @@ TUI alone drains.
 | `bg.started` | server | live | A background session started, or one an earlier server or TUI left running was re-adopted. |
 | `bg.status` | server | live | A background session's status changed (running, stalled, …). |
 | `compaction.completed` | session | durable | The history was compacted before a turn. |
+| `context.changed` | session | live | What this session's context is built from has moved (a settle, a compaction, a rules/memory/init command); live-only, and the client re-reads context.sources. |
 | `message.created` | session | durable | A transcript row was added: the prompt, a notice, a summary. |
 | `permission.asked` | server | live | A question was put for a client to answer: permission.requested with its sessionId, for every client, following the session or not — and a background session's relayed question, named by its background id and answered the same way. A third shape joins the arm: a project-trust prompt (kind "trust") discovered by a context.sources measurement, answered by `context.trust` and not by `permission.respond`. |
 | `permission.requested` | session | durable | A tool call is waiting for an answer (permission.respond). |
 | `permission.resolved` | session | durable | A question was answered or cancelled. |
 | `permission.settled` | server | live | A question was answered or cancelled (permission.resolved for every client) — a background session's relayed question included, cancelled when its session settled unanswered. |
+| `prompt.suggested` | session | live | A one-line follow-up suggestion for the turn that just settled, proposed by the title model and billed on it; live-only, never a transcript row, and the next settle replaces it. |
 | `reasoning.delta` | session | live | Streamed reasoning text. |
 | `server.overflow` | server | live | This client fell behind; ephemeral events were dropped — resubscribe. |
 | `server.shutdown` | server | live | The server is stopping. |

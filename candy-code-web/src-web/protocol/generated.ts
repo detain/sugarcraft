@@ -1649,6 +1649,11 @@ export interface Events {
     after: number
     savedPct?: number
   }
+  /** What this session's context is built from has moved (a settle, a compaction, a rules/memory/init command); live-only, and the client re-reads context.sources. */
+  "context.changed": {
+    /** What moved it: settle, compaction, or the name of the context-changing command (rules, memory, init). */
+    reason: string
+  }
   /** A transcript row was added: the prompt, a notice, a summary. */
   "message.created": {
     messageId: string
@@ -1712,6 +1717,11 @@ export interface Events {
     askId: string
     reply?: "once" | "always" | "reject"
     cancelled?: boolean
+  }
+  /** A one-line follow-up suggestion for the turn that just settled, proposed by the title model and billed on it; live-only, never a transcript row, and the next settle replaces it. */
+  "prompt.suggested": {
+    text: string
+    generation: number
   }
   /** Streamed reasoning text. */
   "reasoning.delta": {
@@ -1955,11 +1965,13 @@ export const EVENT_KINDS: { readonly [E in EventName]: { readonly durable: boole
   "bg.started": { durable: false, scope: "server" },
   "bg.status": { durable: false, scope: "server" },
   "compaction.completed": { durable: true, scope: "session" },
+  "context.changed": { durable: false, scope: "session" },
   "message.created": { durable: true, scope: "session" },
   "permission.asked": { durable: false, scope: "server" },
   "permission.requested": { durable: true, scope: "session" },
   "permission.resolved": { durable: true, scope: "session" },
   "permission.settled": { durable: false, scope: "server" },
+  "prompt.suggested": { durable: false, scope: "session" },
   "reasoning.delta": { durable: false, scope: "session" },
   "server.overflow": { durable: false, scope: "server" },
   "server.shutdown": { durable: false, scope: "server" },
