@@ -515,6 +515,7 @@ candy-code/tests/Backend/SessionAffinityWiringTest.php	0.279	6
 candy-code/tests/Backend/EngineBackendCompactorConfigTest.php	0.276	4
 candy-code/tests/Providers/SglangProviderEnvelopeHoldBackTest.php	0.276	11
 candy-code/tests/Runtime/ToolCallIdUniquenessTest.php	0.270	2
+candy-code/tests/App/BackgroundTabStreamingTest.php	0.270	4
 candy-code/tests/Chat/ReviewCommandTest.php	0.264	6
 candy-code/tests/Skills/SlashSkillInvocationTest.php	0.262	14
 candy-code/tests/Session/SessionLiveLockHolderTest.php	0.259	5
@@ -536,7 +537,9 @@ candy-code/tests/Backend/TurnContextPersistedTest.php	0.238	3
 candy-code/tests/Permissions/AlwaysAllowReliabilityTest.php	0.238	5
 candy-code/tests/SuiteRootRunRefusalTest.php	0.237	4
 candy-code/tests/Context/RepoMapBlockTest.php	0.236	68
+candy-code/tests/App/TabScopedRoutingTest.php	0.236	8
 candy-code/tests/Workflows/WorkflowFailureReportingTest.php	0.230	2
+candy-code/tests/App/TabCloseAndQuitTest.php	0.228	7
 candy-code/tests/Context/MemoryBlockUserScopeTest.php	0.223	8
 candy-code/tests/MCP/McpClientStartedSnapshotTest.php	0.222	6
 candy-code/tests/Chat/SummarySafeguardLandingTest.php	0.221	4
