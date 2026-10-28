@@ -140,6 +140,24 @@ from then on; a CI dev build stamped `dev-<shortsha>` rides the rolling
 `candy-code/dev` release instead (current iff that release's target commit
 matches the stamp — `--channel=stable|dev` overrides the default).
 
+Or let the bundled `tools/install.sh` run those legs in one command: it
+resolves the newest `candy-code/v*` release (or `candy-code/dev` with
+`--channel=dev`), downloads the phar with its sidecar and signature, checks
+the signature against the same pinned key `self-update` uses and the digest
+against the sidecar, then installs `candy-code` (mode 0755) into
+`--dir` (default `$HOME/.local/bin`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/detain/sugarcraft/master/candy-code/tools/install.sh | sh -s --
+```
+
+The script takes flags only — no environment variables — plus
+`--base-url URL` to read `releases.json` from a mirror of the release list
+instead of the GitHub API. Homebrew: a formula is rendered per release by
+`candy-code/tools/gen-homebrew-formula.php` and ships as that release's
+`candy-code.rb` asset — there is no tap, so install it as a formula file:
+`brew install --formula ./candy-code.rb`.
+
 Requirements: PHP 8.3+, `ext-sqlite3` (it backs the Team task list) and
 `pdo_sqlite` (the session store),
 `ext-curl` for the HTTP providers, and `ext-mbstring` with `ext-intl` (text
