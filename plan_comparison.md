@@ -2039,7 +2039,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - protocol lanes: C-TOOL-3.e (weld regenerates schema → SERVER.md → generated.ts once)
 - Chat.php region claims: P-AGENT.b (submitToAgents + new draft()/withDraft())
 
-#### P-AGENT.b — Agent windows: own viewport, rows/chips in the window list, `Ctrl+X i` interrupt-send
+#### ✅ 9fc915cd9 P-AGENT.b — Agent windows: own viewport, rows/chips in the window list, `Ctrl+X i` interrupt-send (pick of 552cc4e71 tip; welded 2026-10-29)
 - **Item:** P-AGENT-ATTACH (sources: owner pick; CLAW-new#7 note; CC-new#9 parity note only) · feature · effort M
 - **What:** **Gap 1: shared viewport.** The Agent View shares the main chat's scroll and draft. `App::openAgentView`/`closeAgentView` (`src/App/App.php:710,810`) never save `Chat::scrollOffset()` or the input, so the main draft becomes the …
 - **Files — create:** none
