@@ -1908,7 +1908,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-4.c`
 
-#### C-EXT-3.c — Bundled `skill-creator` + `/skills new <name>` scaffold
+#### ✅ a1adc4f35bf1efc8d96f161ddf84b690cc3b3c74 C-EXT-3.c — Bundled `skill-creator` + `/skills new <name>` scaffold
 - **Item:** C-EXT-3 (sources: GAP-SKL-14) · gap · effort S
 - **What:** Ship a ninth built-in skill, `skill-creator`. It teaches the `SKILL.md` format and the KNOWN keys from `FrontmatterKeyAudit` with their now-honoured meaning (fork, `allowed-tools`, `${CLAUDE_SKILL_DIR}`). It also covers gating …
 - **Files — create:** `candy-code/src/Skills/BuiltIn/skill-creator/SKILL.md`
