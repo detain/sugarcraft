@@ -920,6 +920,7 @@ candy-code/tests/Skills/SkillFileReaderTest.php	0.022	14
 candy-code/tests/Support/Directories/DirectoryBrowserTest.php	0.022	11
 candy-code/tests/Tui/SessionPickerTest.php	0.022	42
 candy-code/tests/App/DockPersistenceRoundTripTest.php	0.021	7
+candy-code/tests/Chat/CustomCommandModelOverrideTest.php	0.021	22
 candy-code/tests/Chat/MainMailboxWakeTest.php	0.021	4
 candy-code/tests/Hooks/AuditHookProductionPathIsolationTest.php	0.021	2
 candy-code/tests/Tui/ComponentTest.php	0.021	22
@@ -1302,6 +1303,7 @@ candy-code/tests/Context/CompactorToolRowKeyingTest.php	0.002	13
 candy-code/tests/Context/Pruning/NudgePolicyTest.php	0.002	9
 candy-code/tests/Context/Utf8ScrubTest.php	0.002	11
 candy-code/tests/Events/SubAgentActivityV2CodecTest.php	0.002	7
+candy-code/tests/Host/TurnControllerCommandRoutingTest.php	0.002	29
 candy-code/tests/Hooks/HookDispatchResultTest.php	0.002	23
 candy-code/tests/MCP/McpForeignTranslateTest.php	0.002	14
 candy-code/tests/MCP/OAuthDiscoveryTest.php	0.002	15
