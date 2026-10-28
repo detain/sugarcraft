@@ -925,37 +925,19 @@
  ],
  "updated": "2026-10-28",
  "wind_down": {
-  "master_tip_at_close": "b4b4404c5",
-  "welded_count": 101,
-  "waves_closed": [
-   1,
-   2,
-   3,
-   4,
-   5,
-   6,
-   7,
-   8,
-   9
-  ],
-  "waves_fully_welded_no_close": [
-   "W10 (missing C-EXT-2.c, C-PRV-5.c)"
-  ],
-  "parked_lanes": {
-   "P-TABS.g": {
-    "worktree": "/home/sites/cc-cmp-P-TABS.g",
-    "branch": "cc/P-TABS.g",
-    "diff": "prompt_kit/findings/comparison-1026/lanes/P-TABS.g/PARKED-DIFF.patch (zero-length — builder died with no disk)",
-    "unblocks": "after P-TABS.e (W14) + P-TABS.f (W15) weld"
-   }
-  },
-  "owed_wave_loops": [
-   "W10 reviewer when C-EXT-2.c + C-PRV-5.c weld"
-  ],
-  "next_session_resume_recipe": "fresh lead: read this run-state.json + git log --oneline -30; reconcile inflight vs `git worktree list`/`git branch --list cc/*` (phantom law: cat-file every SHA at brief time); scheduler: python3 -I prompt_kit/findings/comparison-1026/schedule_plan.py prompt_kit/findings/comparison-1026 --next --state prompt_kit/findings/comparison-1026/lanes/run-state.json --slots 10 — welded is a LIST; keep ~10 busy; ONE welder at a time (pre-dispatch: zero live welder + git log head-20 + git cherry proof); §4 marks stay UNSTAGED except wave-closes/closing commits; lanes never touch suite-figure.json/durations.tsv/dist; gates plain-pipe cwd <wt>/candy-code env -u LINES -u COLUMNS targeted-only, PtyRunToolTest NEVER in filters; vitest --no-file-parallelism; protocol trio regen-verify-RESTORE in-lane, welder regenerates+commits (+dist commit-if-changed); P-TABS.g: re-dispatch per plan:1549 AFTER P-TABS.e+P-TABS.f weld (parked worktree kept); C-SEC-5.d: NOT STARTED — branch/worktree/claimed SHAs (72f3d8f4e,b98b61b5c) all absent (4 phantom rounds; lanes/C-SEC-5.d/REVIEW-1..3.md record it); fresh build per plan:1474 after the drain. C-SES-1.b: EMPTY CUT (branch was creation-only bd6b14128, zero commits — pruned @2029@; earlier f3132e45e claims phantom); step is welded only in the OLD-era record if at all — next lead cat-file the §4 mark before trusting, else fresh build. C-SES-9.e = NOT-A-STEP (phantom id; design-ses family ends at .d); §6.3 LATE gating: W33+ steps NEVER startable until owner answers LATE rulings C-TOOL-6 c/e/h (Script tool language/sandbox floor; user-tier script tools; client-hosted tools) + C-TUI-6 six calls (Windows shell; Windows self-update helper; web i18n scope; locale choice + translation-parity strictness; voice endpoint; push-to-talk key) — on first startable LATE step return LATE-RULINGS-NEEDED. NEVER push.",
-  "residual_unstaged": "see carries WIND-DOWN RESIDUALS"
+  "completed_at": "2026-10-28",
+  "scope": "owner directive @197@/@1108@: W10 loop + W11-W15 fully welded + wave loops closed; W16 band finished + welded under this lead per owner extension; W17+ builders NEVER started",
+  "this_run": "welded 100 -> 161; waves closed W10,W11,W12,W13,W14,W15 (W14 96d36db45, W15 15046565a)",
+  "resume_for_next_lead": {
+   "w16": "ALL 10 W16 steps welded (pick marks in plan $4 sections: P-TABS.g, C-CTX-2.d, C-EXT-4.b, C-EXT-5.a, C-MCP-3.b, C-MCP-4.b, C-PRV-2.b, C-SEC-6.a, C-SEC-7.d, C-SEC-8.c); W16 §3 line 152 close + wave-loop r1 OWED to next lead (fresh cc-cmp-wave-reviewer at master tip)",
+   "w17_w20": "scheduler --next --slots 10 is sole pick authority; W17 members listed plan §3 line 153; nothing blocked (blocked=[]; C-AGT-5.b/5.c chain resolved via §6.3 (a) ROOT-SCOPE ruling stamped 8fd05587a, welded 934488495 + ff23948e7)",
+   "hygiene": "git worktree list == main only; zero cc/* branches; stray root ./run-state.json + 0-byte escalated NEVER stage",
+   "closeout_must_run": "§7 gate battery: scripts/parallel-tests.sh K=24 --against-json suite-figure + refresh-suite-figure re-pin (staleness pair pinned 25,537 vs live ~27.2k; accumulated per-lane +T carries in every lanes/*/WELD.md), gen-docs/gen-ansi/gen-protocol.mjs --check, path-repos + child-lifetimes rc0, vitest serial full, COMPARISON.md refresh, durations col3 spot-recounts (EXT-2.d 0.051-vs-0.224 re-measure carry)",
+   "standing_reds_roster": "lanes/W14/WELD.md + lanes/W15/WELD.md carry lists (AsyncCmd x5, ChatHostLangCatalogue seam, ProjectTierRefusal, SwallowingCatch SkillTool, PermissionsIntro, KeyHelpTest, DreamPass, MouseWiringTest, AutomaticCompaction, ReadmeJsonErrorContract x4, OneSidedHomeSandbox, ContainedPathInventory stale rows, ImporterRegistry eight)",
+   "phantom_law": "every hash claim from any agent report (incl this files own summaries) re-verified via git cat-file + merge-base --is-ancestor + grep before use; welder/fixer/reviewer fabrication families all occurred this run; last raw shell wins on contradiction"
+  }
  },
- "status": "RUNNING",
+ "status": "STOPPED-at-scope-end",
  "standing_reds_b985fbe51": "ADD: ChatHostLangCatalogueTest red on chat.effort.launch_unshaped (asker LaunchContext.php:2109 outside sources()) - byte-identical at base, C-PRV-1.b (a992413b0) seam -> closeout roster",
  "late_rulings": [
   {
@@ -980,7 +962,7 @@
   "C-SEC-6.a",
   "(CTX-2.d in welder hands)"
  ],
- "tip": "045751c4483fa37bb287d98fc8b6cfef0e646a6f",
+ "tip": "15046565a",
  "welded_count": 161,
  "tick": "87-disk-reconciled: W11 REALY closed@341f66404; trio MCP2b+TOOL5b+WEB3f real to 0b3c4ba21 (welded=122); W13/14 welds PENDING; phantom-atlas @b73@ correction: c3178096f/4d263705a/8d8c75678 GHOSTS, cure real 23fa8ab8e; C-PRV-2.b welded cf36a8458 (welded_count=157, r3 CLEAN + phantom-r2-note recorded) | W17: C-EXT-4.b real to 3bc062fc4 (r2 CLEAN, phantom-inflight-note correction: de5c16a51->1e03fa00a byte-identical amend; all-4-generator --check zero-drift) | W17: C-MCP-4.b real to 6beef34f4 (pick, content-equiv; tsv f024af640, 1535->1537); duplicate-r3 disagreement disk-adjudicated to FINDINGS (cure 796756612); foreign 1F pr-MenuBar standing report-only; C-EXT-4.b same tick -> 3bc062fc4/c569b41e6/8f0001af1",
  "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
