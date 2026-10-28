@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Commands;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Support\MacAltNotice;
 
 /**
  * TUI-5 stage 1 (plan_comparison 6.15): the macOS Option-as-Meta launch hint.
@@ -15,9 +16,14 @@ use SugarCraft\Code\Cli\Bootstrap;
  * ever see the row. The `kittyCapable` half stands in for real negotiation
  * state honestly: `App::init()` PUSHES `pushKittyKeyboard()` fire-and-forget
  * and the reply family has no consumer, so the app cannot know whether the
- * terminal understood. The probe is therefore env-shaped (TERM/TERM_PROGRAM
- * naming a kitty-speaking terminal), and the notice wording says "may be"
- * for exactly that reason — see the method's doc-block.
+ * terminal understood. The probe is therefore env-shaped, and the notice
+ * wording says "may be" for exactly that reason — see the method's doc-block.
+ *
+ * C-TUI-7.b moved the probe and added the tmux-transparent carriers
+ * (`KITTY_WINDOW_ID`/`GHOSTTY_RESOURCES_DIR`/`WEZTERM_PANE` survive the mux
+ * while `TERM` is rewritten to `screen`) plus the once-per-version stamp —
+ * the shape pins below follow the code into {@see MacAltNotice}; the stamp
+ * behaviour has its own file (MacAltNoticeStampTest).
  */
 final class MacAltNoticeTest extends TestCase
 {
@@ -43,13 +49,15 @@ final class MacAltNoticeTest extends TestCase
         self::assertNull(Bootstrap::macAltNotice('BSD', false));
     }
 
-    public function testTheProbeConsultsBothTerminalEnvironmentSpellings(): void
+    public function testTheProbeConsultsTerminalSpellingsAndTheirTmuxCarriers(): void
     {
         // TERM and TERM_PROGRAM are set by different emulators for different
-        // reasons; the probe consults both. The body is pinned by source shape
+        // reasons; since C-TUI-7.b the probe ALSO consults the carriers the
+        // three emulators export through a multiplexer. The body is pinned by
+        // source shape (the probe moved into MacAltNotice with the stamp)
         // because the ambient env of the runner is not ours to rewrite here —
-        // the quadrant table above owns the behaviour.
-        $source = (string) file_get_contents((new \ReflectionClass(Bootstrap::class))->getFileName());
+        // the seam table below owns the behaviour.
+        $source = (string) file_get_contents((new \ReflectionClass(MacAltNotice::class))->getFileName());
 
         self::assertSame(
             1,
@@ -59,6 +67,26 @@ final class MacAltNoticeTest extends TestCase
         foreach (['kitty', 'ghostty', 'wezterm'] as $terminal) {
             self::assertStringContainsString($terminal, $source, $terminal . ' names a keyboard-negotiating terminal and belongs in the probe');
         }
+        foreach (MacAltNotice::TMUX_TRANSPARENT_ENV as $carrier) {
+            self::assertStringContainsString($carrier, $source, $carrier . ' is the terminal identity that survives tmux and belongs in the probe');
+        }
+    }
+
+    public function testTheProbeSeamAnswersForEveryTerminalSpellingShape(): void
+    {
+        // Behaviour over the injected env: direct spellings, each tmux
+        // carrier, and the plain-in-tmux negative (the old false "not
+        // capable" that made Macs inside tmux-on-kitty hear the lecture).
+        self::assertTrue(MacAltNotice::terminalSpeaksKittyKeyboard(['TERM_PROGRAM' => 'kitty']));
+        self::assertTrue(MacAltNotice::terminalSpeaksKittyKeyboard(['TERM' => 'xterm-ghostty']));
+        self::assertTrue(MacAltNotice::terminalSpeaksKittyKeyboard(['TERM' => 'screen-256color', 'KITTY_WINDOW_ID' => '7']));
+        self::assertTrue(MacAltNotice::terminalSpeaksKittyKeyboard(['TERM' => 'screen', 'GHOSTTY_RESOURCES_DIR' => '/Applications/Ghostty.app/Contents/Resources/ghostty']));
+        self::assertTrue(MacAltNotice::terminalSpeaksKittyKeyboard(['TERM' => 'tmux-256color', 'WEZTERM_PANE' => '2']));
+        self::assertFalse(
+            MacAltNotice::terminalSpeaksKittyKeyboard(['TERM' => 'screen-256color', 'TERM_PROGRAM' => 'tmux']),
+            'a plain terminal inside tmux must NOT read as kitty-capable — the row belongs there',
+        );
+        self::assertFalse(MacAltNotice::terminalSpeaksKittyKeyboard([]));
     }
 
     public function testTheRowIsRecordedNotWarned(): void
@@ -73,6 +101,26 @@ final class MacAltNoticeTest extends TestCase
         self::assertStringContainsString('RuntimeNoticeSink::record(', $body);
         self::assertStringNotContainsString('warn(', $body, 'record() is the chosen channel — warn() would smear the row onto stderr for every embedder');
         self::assertStringNotContainsString('warnLaunchRows', $body, 'a new launch-buffer caller would drift the cap census behind its roster');
+    }
+
+    public function testTheStampIsConsumedOnlyAfterEligibility(): void
+    {
+        // C-TUI-7.b once-per-version law, pinned at the call site's shape:
+        // the eligibility guard returns before showsOnThisLaunch() is ever
+        // consulted (a Linux launch must not touch the stamp file), and the
+        // stamp check sits between eligibility and record() (an unarmed
+        // sink's launch records nothing — this method's own caller runs after
+        // arming, so the version burns exactly when the row can land).
+        $body = self::bootstrapBodyOf('announceMacAltFallback');
+
+        self::assertStringContainsString('MacAltNotice::showsOnThisLaunch(', $body);
+
+        $ineligible = \strpos($body, 'if ($row === null)');
+        $stamp = \strpos($body, 'MacAltNotice::showsOnThisLaunch(');
+        $record = \strpos($body, 'RuntimeNoticeSink::record(');
+        self::assertNotFalse($ineligible);
+        self::assertGreaterThan($ineligible, (int) $stamp, 'the stamp must not be consulted before the eligibility guard returns');
+        self::assertGreaterThan($stamp, (int) $record, 'the record must sit after the stamp check');
     }
 
     /** @return string the trimmed body of the named Bootstrap method */

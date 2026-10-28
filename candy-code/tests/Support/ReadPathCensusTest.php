@@ -999,6 +999,13 @@ final class ReadPathCensusTest extends TestCase
                 . '~/.candy-code/media root HomeDirectory::owned() establishes (tests hand a '
                 . 'temp root to the forSession() seam)',
         ],
+        'Support/MacAltNotice.php|file_get_contents' => [
+            'OWNED_HOME — readStamp(): the one-line mac-alt-notice version stamp this class '
+                . 'itself wrote under the ~/.candy-code/cache root HomeDirectory::owned() '
+                . 'establishes (tests hand a temp path to the showsOnThisLaunch() seam); an '
+                . 'unread or malformed body reads as "no stamp" and fails soft toward showing '
+                . 'the notice again, never as data consumed',
+        ],
         'Support/MediaStore.php|scandir' => [
             'NAMES_ONLY — list() enumerates this store\'s own session directory; no content is '
                 . 'read, `.partial` residue and non-regular entries are skipped, and the gate is '

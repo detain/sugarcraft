@@ -70,6 +70,7 @@ use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\EnvBool;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\Log;
+use SugarCraft\Code\Support\MacAltNotice;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProjectRoot;
 use SugarCraft\Code\Support\TimedFileLock;
@@ -10489,31 +10490,31 @@ public static function useMaxCost(?string $maxCost): void
      * "may be" because on a Mac that asked the question badly, nobody knows
      * more than that.
      *
+     * C-TUI-7.b: eligibility itself moved to {@see MacAltNotice::belongs()}
+     * (the tmux-aware probe lives with the stamp it shares a subject with);
+     * this method keeps the public shape and the translation step.
+     *
      * @param string $osFamily the {@see PHP_OS_FAMILY} value
      */
     public static function macAltNotice(string $osFamily, bool $kittyCapable): ?string
     {
-        if ($osFamily !== 'Darwin' || $kittyCapable) {
+        if (!MacAltNotice::belongs($osFamily, $kittyCapable)) {
             return null;
         }
 
         return self::translated(self::MAC_ALT_NOTICE_TEXT);
     }
 
-    /** Whether the ambient terminal environment names a kitty-speaking emulator. */
+    /**
+     * Whether the ambient terminal environment names a kitty-speaking
+     * emulator — delegated to {@see MacAltNotice::terminalSpeaksKittyKeyboard()},
+     * which since C-TUI-7.b also reads the emulator identity variables that
+     * survive tmux, so a Mac inside tmux-on-kitty is no longer misread as
+     * needing the Option-as-Meta lecture.
+     */
     public static function terminalSpeaksKittyKeyboard(): bool
     {
-        $env = \strtolower(
-            (string) (\getenv('TERM') ?: '') . ' ' . (string) (\getenv('TERM_PROGRAM') ?: ''),
-        );
-
-        foreach (['kitty', 'ghostty', 'wezterm'] as $terminal) {
-            if (\str_contains($env, $terminal)) {
-                return true;
-            }
-        }
-
-        return false;
+        return MacAltNotice::terminalSpeaksKittyKeyboard();
     }
 
     /**
@@ -10521,11 +10522,22 @@ public static function useMaxCost(?string $maxCost): void
      * belongs to. `record()` — not `warn()`: a headless run must not grow an
      * unsolicited stderr row, and an unarmed sink drops the row anyway
      * (which is the correct answer for a surface with no one to read it).
+     *
+     * C-TUI-7.b adds the once-per-version law: eligibility is judged FIRST
+     * (a non-Mac launch never touches the stamp file), and the stamp is
+     * consumed only when the row actually records — this method is called
+     * after the sink is armed, so a headless launch whose sink is unarmed
+     * shows nothing AND burns nothing. {@see MacAltNotice::showsOnThisLaunch()}
+     * re-arms on every version change.
      */
     private static function announceMacAltFallback(): void
     {
         $row = self::macAltNotice(PHP_OS_FAMILY, self::terminalSpeaksKittyKeyboard());
         if ($row === null) {
+            return;
+        }
+
+        if (!MacAltNotice::showsOnThisLaunch()) {
             return;
         }
 
