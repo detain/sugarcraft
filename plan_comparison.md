@@ -1979,7 +1979,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-MCP-2.a (W11), C-MCP-3.a (W13)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-mcp.md` → `### C-MCP-3.b`
 
-#### C-MCP-4.b — Runtime `/mcp enable|disable <server> [--persist]`
+#### ✅ 6beef34f4c8e11b67c1253dd6b99f67d13855230 C-MCP-4.b — Runtime `/mcp enable|disable <server> [--persist]`
 - **Item:** C-MCP-4 (sources: GAP-MCP-10) · gap · effort M
 - **What:** Today a server can be disabled only through `disabledMcpServers` plus a relaunch (E696 deny map, applied at start and in `isServerAllowed()`, `candy-code/src/MCP/McpClient.php:204-207, 893-901`). `McpClient` gains …
 - **Files — create:** `candy-code/tests/Commands/McpAuthCommandEnableDisableTest.php`, `candy-code/tests/MCP/McpRuntimeDisableTest.php`

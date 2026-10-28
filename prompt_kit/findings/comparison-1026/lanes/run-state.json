@@ -157,7 +157,8 @@
   "C-SEC-7.d",
   "C-SEC-6.a",
   "C-PRV-2.b",
-  "C-EXT-4.b"
+  "C-EXT-4.b",
+  "C-MCP-4.b"
  ],
  "inflight": {
   "C-MCP-3.b": {
@@ -167,15 +168,6 @@
    "branch": "cc/C-MCP-3.b",
    "tip": "828b709ea8586eae4bc9e1bea141b16cf01e1690",
    "note": "salvage landed+lead-verified (1 commit, porcelain 0, detain); 9 files +1252/-11; reviewer LIVE ses_e7cd956faffenR7jxqD2TO8sKS (salvage-coherence scrutiny); weld duty 2 tsv rows (McpToolProgressTest 15T + NonInteractiveMcpToolsHeadlessTest 4T recount)"
-  },
-  "C-MCP-4.b": {
-   "stage": "review",
-   "round": 3,
-   "worktree": "/home/sites/cc-cmp-C-MCP-4.b",
-   "branch": "cc/C-MCP-4.b",
-   "tip": "1fbbaddc0664acf6c98600f0c4ec2845fe63b6d0",
-   "reviewer": "ses_e7cd09aceffepx6g97dj8jPm6I",
-   "note": "fixer r3 landed: census roster row persistSessionToggle=>3 + adjudication (gate 5T/4746A now OK), lang disable/enable.done scoped truthfully, REPORT cured in main tree. fresh r3 reviewer live; weld duty 2 tsv rows"
   },
   "C-AGT-5.c": {
    "stage": "build",
@@ -830,6 +822,16 @@
    "anomaly": "PHANTOM-INFLIGHT + reviewer/fixer double-pass: fixer found cure content ALREADY landed at dispatch (sibling/prior fixer pass), verified live + 2 mutation proofs; r2 reviewer cp-harness refused by permission map, non-vacuity via static re-derivation PASS; tip 1e03fa00a = byte-identical amend of the de5c16a51 recorded in my inflight note; no weld consequence: reviewed tip == picked tip",
    "carry": "closeout re-pin: brief carry +2T/+17A recorded; measured NEW-file sums +25T/+169A (15+10T, 106+63A) — K=24 battery staleness pair is authoritative; +68-row durations backlog (above); vitest N/A",
    "absorption": "cherry - (patch-id identical), worktree+branch pruned post-weld"
+  },
+  "C-MCP-4.b": {
+   "master": "6beef34f4 pick + f024af640 scripts + <weld> (plan mark, lane files, run-state)",
+   "pick": "6beef34f4c8e11b67c1253dd6b99f67d13855230 from lane tip 796756612; 12 files +892/-21; patch-id differs (context drift 26 welds above base) content-equivalence proven per WELD.md",
+   "regen": "none -- all four --check arms rc=0 up to date; zero src/Protocol, zero web",
+   "gates": "pair 12T/53A EXACT; SettingsWriterCensus OK 5T/4762A (+16A wobble vs 4746A era); DocFigure OK 91T/4031A; MCP|Commands 2783T/20310A 1F=foreign pr MenuBarLabelDerivation standing (C-AGT-6.d era, report-only)",
+   "durations": "tsv 1535->1537: McpAuthCommandEnableDisableTest 1.614/7, McpRuntimeDisable 1.176/5; asc-violations 4==4",
+   "reviews": "r2 FINDINGS 1MAJOR+3MINOR cured; r3 duplicate: ses_e7cc52312 CLEAN vs ses_e7ccb9189 FINDINGS 1MINOR -- disk adjudication vindicated FINDINGS, cure = single en.php disable.done line (796756612, verified one-line diff from 1fbbaddc0)",
+   "carry": "suite-figure +12T/+53A (tick total +14T/+70A w/ C-EXT-4.b); ~66-file pre-existing durations backlog = closeout duty",
+   "absorption": "RECORD: see WELD.md; worktree+branch pruned same tick"
   }
  },
  "carries": [
@@ -917,7 +919,7 @@
   "STOP STATE @2052@: master b4b4404c5 (wind-down commit; 9 files). welded=100/328 LIST. waves_closed [1..9] (W8/W9 rows + marks committed inside b4b4404c5; W9 per lead ruling r1-CLEAN-no-r2 — disclosed). Owed loops: W10 (blocked on unwelded members C-EXT-2.c + C-PRV-5.c), then W11+ per scheduler waves_fully_welded. Only live artifact: /home/sites/cc-cmp-P-TABS.g + branch cc/P-TABS.g @f25a697c1 (parked; re-dispatch plan:1549 after P-TABS.e+P-TABS.f weld). LATE W33+ gated on §6.3 owner rulings (C-TOOL-6 c/e/h + C-TUI-6: Windows shell, Windows self-update helper, web i18n scope, locale choice, parity strictness, voice endpoint, push-to-talk key). NEVER pushed; origin advanced owner-side only.",
   "C-EXT-2.c welded 4b771634d; closeout roster in its WELD.md (Bootstrap:5955 comment, ChatHostLangCatalogue standing red=C-PRV-1.b (a992413b0) seam, TROUBLESHOOTING allowed-tools/effort half=C-EXT-2.b)"
  ],
- "updated": "welder W17 tick: C-EXT-4.b welded (pick 3bc062fc4, scripts 8f0001af1, welded_count=158); C-MCP-4.b weld follows in same tick",
+ "updated": "2026-10-28",
  "wind_down": {
   "master_tip_at_close": "b4b4404c5",
   "welded_count": 101,
@@ -974,9 +976,9 @@
   "C-SEC-6.a",
   "(CTX-2.d in welder hands)"
  ],
- "tip": "8f0001af1",
- "welded_count": 158,
- "tick": "87-disk-reconciled: W11 REALY closed@341f66404; trio MCP2b+TOOL5b+WEB3f real to 0b3c4ba21 (welded=122); W13/14 welds PENDING; phantom-atlas @b73@ correction: c3178096f/4d263705a/8d8c75678 GHOSTS, cure real 23fa8ab8e; C-PRV-2.b welded cf36a8458 (welded_count=157, r3 CLEAN + phantom-r2-note recorded) | W17: C-EXT-4.b real to 3bc062fc4 (r2 CLEAN, phantom-inflight-note correction: de5c16a51->1e03fa00a byte-identical amend; all-4-generator --check zero-drift)",
+ "tip": "f024af640",
+ "welded_count": 159,
+ "tick": "87-disk-reconciled: W11 REALY closed@341f66404; trio MCP2b+TOOL5b+WEB3f real to 0b3c4ba21 (welded=122); W13/14 welds PENDING; phantom-atlas @b73@ correction: c3178096f/4d263705a/8d8c75678 GHOSTS, cure real 23fa8ab8e; C-PRV-2.b welded cf36a8458 (welded_count=157, r3 CLEAN + phantom-r2-note recorded) | W17: C-EXT-4.b real to 3bc062fc4 (r2 CLEAN, phantom-inflight-note correction: de5c16a51->1e03fa00a byte-identical amend; all-4-generator --check zero-drift) | W17: C-MCP-4.b real to 6beef34f4 (pick, content-equiv; tsv f024af640, 1535->1537); duplicate-r3 disagreement disk-adjudicated to FINDINGS (cure 796756612); foreign 1F pr-MenuBar standing report-only; C-EXT-4.b same tick -> 3bc062fc4/c569b41e6/8f0001af1",
  "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
  "blocked_notes": {
   "C-AGT-5.b": "OWNER RULING NEEDED (gates W14 full closure + C-AGT-5.c cascade in W15): C-AGT-5.a r1 MINOR-2 — ScheduleFactory delete guard is createdBy-scoped, not root-scoped, so a model-created row in ANOTHER root can be deleted without include_operator_rows. Options (a) root-scope the guard (stricter; may break legit cross-root cleanup), (b) keep createdBy-scope + document. Per C-AGT-5.a r2 CLEAN the lane shipped as-designed; ruling owed before any rebuild of 5.b."
