@@ -199,6 +199,24 @@ final class SkillsSearchTest extends TestCase
         );
         // The coverage line counts MATCHES, not the shown page.
         self::assertStringContainsString('searched 8 of 8 skills; 8 matched.', $this->search($registry, ['query' => 'hit'])->content());
+
+        // The cap itself, pinned behaviorally (round-1 review fix): the 8-hit
+        // leg above cannot see a min(30, ...) clamp mutation because no limit
+        // there needs capping. With a crowd LARGER than MAX_LIMIT, an
+        // out-of-range limit must page exactly 20 — the literal, not the
+        // constant, so widening the cap itself reddens this pin too.
+        $crowd = [];
+        for ($i = 1; $i <= 21; ++$i) {
+            $crowd[] = $this->skill('many-' . $i, 'hit');
+        }
+        $capped = $this->search($this->registryWith(...$crowd), ['query' => 'hit', 'limit' => 999]);
+        self::assertCount(
+            20,
+            $this->rowsOf($capped->content()),
+            'an out-of-range limit pages the cap exactly, never more, never padded',
+        );
+        // The coverage line still tells the truth about the whole match set.
+        self::assertStringContainsString('searched 21 of 21 skills; 21 matched.', $capped->content());
     }
 
     public function testTheBodyHeadIsSearchedButOnlyItsFirstBytes(): void
