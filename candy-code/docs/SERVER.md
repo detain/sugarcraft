@@ -598,6 +598,23 @@ session refuses — the spend cap, an empty command expansion — is `-32009`
 once across sessions: one more is refused `busy` (`too_many_turns`), which is
 retryable.
 
+A send may additionally carry up to four pasted images (`images`) or two
+base64 PDFs (`documents`), each `{name?, mime, data}`. The declared mime is
+a claim — the handler re-sniffs the bytes and refuses a lie (`image_mime_mismatch`,
+`document_mime_mismatch`) rather than hand a provider a false media_type. An
+image is at most 5 MiB and the images together at most 10 MiB
+(`image_budget_exceeded` beyond that); images and documents then share one
+decoded budget of 11 MiB, and a larger sum is refused
+`attachment_budget_exceeded`. Attachments ride only a prompt that STARTS a
+turn: while one runs, the `queue` and `steer` lanes carry text, so attachments
+are refused by name (`images_while_busy`, `documents_while_busy`) — `interrupt`
+admits them into the turn it replaces — and a `/command` or `!bang` route,
+which would silently drop them, refuses instead (`images_with_command`,
+`documents_with_command`). Blast radius to know: an uploaded document re-enters
+the model context on EVERY later turn until the planned CTX-2-P1 resend fix,
+so it stays billable for the session; a repository file is better mentioned as
+`@path` (page-capped), and documents larger than the wire budget keep that route.
+
 `session.cancel` stops the running turn: `mode: "hard"` (the default) at once,
 the way Esc Esc does; `mode: "soft"` at the next step boundary, letting the
 tool in flight finish. `clearQueue: true` also drops the queue.

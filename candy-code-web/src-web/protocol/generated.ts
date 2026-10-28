@@ -1162,6 +1162,11 @@ export interface Methods {
         mime: "image/png" | "image/jpeg" | "image/gif" | "image/webp"
         data: string
       })[]
+      documents?: {
+        name?: string
+        mime: "application/pdf"
+        data: string
+      }[]
       /** A retry with the same key gets the original answer (5 min). */
       idempotencyKey?: string
     }

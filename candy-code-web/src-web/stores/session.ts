@@ -3,7 +3,7 @@ import { computed, reactive, ref } from 'vue'
 import { SeqCursor } from '../protocol/cursor'
 import type { EventEnvelope, MethodResult, PermissionMode, SessionSnapshot, Subscription } from '../protocol/generated'
 import { ProtocolError } from '../protocol/jsonrpc'
-import type { PastedImage } from '../lib/paste'
+import type { PastedDocument, PastedImage } from '../lib/paste'
 import { useConnectionStore } from './connection'
 import { useLayoutStore } from './layout'
 import { applyEvent, applyOlderPage, applyPendingAsks, applySnapshot, createState, type ToolItem } from './reducer'
@@ -161,7 +161,7 @@ function setup(sessionId: string) {
    * runs is refused here with the reason; a command file and plain prose
    * are a prompt (`session.send`), exactly as typing them in the TUI.
    */
-  async function send(text: string, delivery: Delivery = 'queue', images: PastedImage[] = []): Promise<MethodResult<'session.send'> | MethodResult<'command.exec'>> {
+  async function send(text: string, delivery: Delivery = 'queue', images: PastedImage[] = [], documents: PastedDocument[] = []): Promise<MethodResult<'session.send'> | MethodResult<'command.exec'>> {
     const slash = /^\/([A-Za-z0-9_:.-]+)(?:\s+([\s\S]*))?$/.exec(text.trim())
     if (slash) {
       const name = slash[1] ?? ''
@@ -175,6 +175,11 @@ function setup(sessionId: string) {
           // attachments, so pastes ride prose only.
           throw new ProtocolError(-32602, 'images ride a prose prompt; a /command or !bang takes none', 'images_with_command')
         }
+        if (documents.length > 0) {
+          // C-WEB-4.e, same law one kind over: the refusal mirrors the
+          // server's `documents_with_command`, checked after the image leg.
+          throw new ProtocolError(-32602, 'documents ride a prose prompt; a /command or !bang takes none', 'documents_with_command')
+        }
         const args = (slash[2] ?? '').trim()
         const result = await connection.request('command.exec', args === '' ? { sessionId, name } : { sessionId, name, args })
         // A command rewrites the transcript in place (`/clear`, `/rewind`, …)
@@ -186,6 +191,7 @@ function setup(sessionId: string) {
     return connection.request('session.send', {
       ...(busy.value ? { sessionId, text, delivery } : { sessionId, text }),
       ...(images.length > 0 ? { images } : {}),
+      ...(documents.length > 0 ? { documents } : {}),
     })
   }
 

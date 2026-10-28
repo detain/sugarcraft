@@ -4235,6 +4235,32 @@
                         },
                         "maxItems": 4
                     },
+                    "documents": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string",
+                                    "maxLength": 256
+                                },
+                                "mime": {
+                                    "enum": [
+                                        "application/pdf"
+                                    ]
+                                },
+                                "data": {
+                                    "type": "string",
+                                    "maxLength": 15379116
+                                }
+                            },
+                            "required": [
+                                "mime",
+                                "data"
+                            ]
+                        },
+                        "maxItems": 2
+                    },
                     "idempotencyKey": {
                         "type": "string",
                         "maxLength": 64,

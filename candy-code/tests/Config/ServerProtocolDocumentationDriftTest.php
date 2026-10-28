@@ -11,10 +11,12 @@ use SugarCraft\Code\Protocol\Client;
 use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\IdempotencyCache;
+use SugarCraft\Code\Protocol\Methods\TurnMethods;
 use SugarCraft\Code\Protocol\SessionFeed;
 use SugarCraft\Code\Server\Server;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\Ws\Outbox;
+use SugarCraft\Code\Attachments\FileMentions;
 
 /**
  * The figures `docs/SERVER.md` states about the `candy-code.v1` protocol are
@@ -90,6 +92,37 @@ final class ServerProtocolDocumentationDriftTest extends TestCase
             $flat,
         );
         self::assertStringContainsString('closed with `' . Server::CLOSE_CREDENTIALS_ROTATED . '`', $flat);
+    }
+
+    /**
+     * C-WEB-4.e: the attachments paragraph in the "Sending, queueing,
+     * steering, cancelling" section restates figures the code owns. The
+     * counts and byte budgets come from the constants that enforce them, and
+     * the named refusal kinds are scanned against the handler that throws
+     * them, in both directions — a kind renamed in code reddens the page, a
+     * kind invented only in prose reddens here.
+     */
+    public function testTheAttachmentFiguresAreTheCode(): void
+    {
+        $flat = self::flat();
+        $words = [4 => 'four', 2 => 'two'];
+        self::assertStringContainsString('up to ' . $words[TurnMethods::MAX_IMAGES] . ' pasted images', $flat);
+        self::assertStringContainsString('or ' . $words[TurnMethods::MAX_DOCUMENTS] . ' base64 PDFs', $flat);
+        self::assertStringContainsString('the images together at most ' . self::mib(TurnMethods::MAX_IMAGE_TOTAL_BYTES), $flat);
+        self::assertStringContainsString('share one decoded budget of ' . self::mib(TurnMethods::MAX_ATTACHMENT_TOTAL_BYTES), $flat);
+        self::assertStringContainsString('An image is at most ' . self::mib(FileMentions::IMAGE_MAX_BYTES), $flat);
+
+        $attachmentKinds = [
+            'image_mime_mismatch', 'document_mime_mismatch',
+            'image_budget_exceeded', 'attachment_budget_exceeded',
+            'images_while_busy', 'documents_while_busy',
+            'images_with_command', 'documents_with_command',
+        ];
+        $handler = (string) \file_get_contents(__DIR__ . '/../../src/Protocol/Methods/TurnMethods.php');
+        foreach ($attachmentKinds as $kind) {
+            self::assertStringContainsString('`' . $kind . '`', $flat, $kind . ' is named in the docs and thrown by the code');
+            self::assertStringContainsString("'" . $kind . "'", $handler, $kind . ' is thrown by TurnMethods');
+        }
     }
 
     /** The page with every line break folded to a space, so a figure may wrap. */

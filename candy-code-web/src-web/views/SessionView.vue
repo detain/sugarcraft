@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import Composer from '../components/Composer.vue'
 import RunningAgentsLine from '../components/agents/RunningAgentsLine.vue'
-import type { PastedImage } from '../lib/paste'
+import type { PastedDocument, PastedImage } from '../lib/paste'
 import PermissionCard, { type Reply } from '../components/PermissionCard.vue'
 import QueueStrip from '../components/QueueStrip.vue'
 import ReasoningFold from '../components/ReasoningFold.vue'
@@ -63,11 +63,11 @@ watch(() => connection.connected, (connected) => {
   if (connected && session.value.phase === 'idle') void session.value.subscribe()
 })
 
-async function send(text: string, delivery: Delivery, images: PastedImage[] = []): Promise<void> {
+async function send(text: string, delivery: Delivery, images: PastedImage[] = [], documents: PastedDocument[] = []): Promise<void> {
   sending.value = true
   error.value = null
   try {
-    await session.value.send(text, delivery, images)
+    await session.value.send(text, delivery, images, documents)
     draft.value = ''
   } catch (failure) {
     error.value = describe(failure)

@@ -1,9 +1,11 @@
 /**
- * Pasted images for the composer (WEB-5b). The browser hands clipboard files
- * as Blobs; `session.send`'s `images` wants strict-base64 payloads with the
- * sniffed raster type declared. This module is the whole conversion — kept a
- * plain function over a ClipboardData-shaped input so a test can feed it a
- * fake without a real clipboard, and the component stays presentation.
+ * Pasted images for the composer (WEB-5b) and attached documents (C-WEB-4.e).
+ * The browser hands clipboard files as Blobs; `session.send`'s `images` wants
+ * strict-base64 payloads with the sniffed raster type declared, and its
+ * `documents` the same shape over the document kinds the server admits. This
+ * module is the whole conversion — kept a plain function over a
+ * ClipboardData-shaped input so a test can feed it a fake without a real
+ * clipboard, and the component stays presentation.
  */
 
 /** The rasters the server sniffs and admits; mirrors TurnMethods::PASTED_IMAGE_MIMES. */
@@ -136,4 +138,77 @@ export async function readPastedImages(clipboard: ClipboardFiles | null | undefi
     .filter((file): file is File => file !== null)
     .slice(0, cap)
   return Promise.all(files.map(readImage))
+}
+
+// ── attached documents (C-WEB-4.e) ─────────────────────────────────────
+// A PDF rides `session.send`'s `documents`: the same {name?, mime, data}
+// envelope as an image. The server sniffs the bytes and the sniff is the
+// authority — this reader only ever offers files the browser reports as one
+// of the admitted kinds, so the popup never carries a refusal it could have
+// avoided. Counts and shapes mirror TurnMethods::MAX_DOCUMENTS and
+// TurnMethods::PASTED_DOCUMENT_MIMES.
+
+/** The document kinds the server admits; mirrors TurnMethods::PASTED_DOCUMENT_MIMES. */
+export const PASTED_DOCUMENT_MIMES = ['application/pdf'] as const
+
+export type PastedDocumentMime = (typeof PASTED_DOCUMENT_MIMES)[number]
+
+/** One entry of `session.send`'s `documents` array. */
+export interface PastedDocument {
+  name: string
+  mime: PastedDocumentMime
+  /** Strict base64 of the file's bytes, no data-URL prefix. */
+  data: string
+}
+
+/** Two documents max, exactly the server's `MAX_DOCUMENTS`. */
+export const MAX_PASTED_DOCUMENTS = 2
+
+function isPastedDocumentMime(type: string): type is PastedDocumentMime {
+  return (PASTED_DOCUMENT_MIMES as readonly string[]).includes(type)
+}
+
+async function readDocument(file: File): Promise<PastedDocument> {
+  const mime = file.type as PastedDocumentMime
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  return {
+    name: file.name !== '' ? file.name : `pasted-document.${mime.slice('application/'.length)}`,
+    mime,
+    data: bytesToBase64(bytes),
+  }
+}
+
+/**
+ * The document files of a paste or drop, in clipboard order, capped at
+ * MAX_PASTED_DOCUMENTS. Typeless entries are the image reader's notice to
+ * make (readPastedImages runs over the same clipboard); this reader picks up
+ * only what it recognises and announces nothing of its own.
+ */
+export async function readDroppedDocuments(clipboard: ClipboardFiles | null | undefined, cap = MAX_PASTED_DOCUMENTS): Promise<PastedDocument[]> {
+  const files = Array.from(clipboard?.items ?? [])
+    .filter((item) => item.kind === 'file' && isPastedDocumentMime(item.type))
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file !== null)
+    .slice(0, cap)
+  return Promise.all(files.map(readDocument))
+}
+
+/**
+ * The file-picker halves: a `<input type=file>` hands plain Files, not
+ * clipboard items, so these convert the admitted ones in list order under the
+ * same per-kind cap. The composer adds them to the standing strip, which owns
+ * the merge-time budget.
+ */
+export async function imagesFromFiles(files: Iterable<File>, cap = MAX_PASTED_IMAGES): Promise<PastedImage[]> {
+  const picked = Array.from(files)
+    .filter((file) => isPastedImageMime(file.type))
+    .slice(0, cap)
+  return Promise.all(picked.map(readImage))
+}
+
+export async function documentsFromFiles(files: Iterable<File>, cap = MAX_PASTED_DOCUMENTS): Promise<PastedDocument[]> {
+  const picked = Array.from(files)
+    .filter((file) => isPastedDocumentMime(file.type))
+    .slice(0, cap)
+  return Promise.all(picked.map(readDocument))
 }

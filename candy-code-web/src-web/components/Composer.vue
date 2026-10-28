@@ -10,11 +10,16 @@ import {
     pushPromptHistory,
 } from "../stores/promptHistory";
 import {
+    documentsFromFiles,
     expandPasteChips,
+    imagesFromFiles,
+    MAX_PASTED_DOCUMENTS,
     MAX_PASTED_IMAGES,
     pasteChip,
     pasteNeedsCollapse,
+    readDroppedDocuments,
     readPastedImages,
+    type PastedDocument,
     type PastedImage,
 } from "../lib/paste";
 import {
@@ -36,7 +41,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
     "update:modelValue": [value: string];
-    send: [text: string, delivery: Delivery, images: PastedImage[]];
+    send: [text: string, delivery: Delivery, images: PastedImage[], documents: PastedDocument[]];
     stop: [];
 }>();
 
@@ -98,6 +103,14 @@ function complete(command: CommandInfo): void {
 
 /** The images pasted since the last accepted send, as `session.send` wants them. */
 const images = ref<PastedImage[]>([]);
+/**
+ * C-WEB-4.e: the documents (PDFs) dropped or picked since the last accepted
+ * send, as `session.send`'s `documents` wants them. The same strip law as
+ * images: capped at the server's count, cleared only on an accepted send.
+ */
+const documents = ref<PastedDocument[]>([]);
+/** The hidden `<input type=file>` behind the Attach button (C-WEB-4.e). */
+const fileInput = ref<HTMLInputElement | null>(null);
 /** Ranked `fs.search` matches for the trailing `@partial`, capped to one popup. */
 const files = ref<string[]>([]);
 let fileSeq = 0;
@@ -192,6 +205,32 @@ function addImages(pasted: PastedImage[]): void {
     }
 }
 
+function addDocuments(dropped: PastedDocument[]): void {
+    for (const doc of dropped) {
+        if (documents.value.length < MAX_PASTED_DOCUMENTS)
+            documents.value.push(doc);
+    }
+}
+
+/**
+ * C-WEB-4.e: the Attach button opens a plain file picker; its answer is a
+ * `FileList`, not clipboard items, so the kind filters convert through the
+ * paste module's picker halves. Resetting `value` lets the very same file be
+ * picked again after the user removes its chip.
+ */
+function pickFiles(): void {
+    fileInput.value?.click();
+}
+
+async function onFilesPicked(event: Event): Promise<void> {
+    const el = event.target as HTMLInputElement;
+    const picked = el.files ? Array.from(el.files) : [];
+    el.value = "";
+    if (picked.length === 0) return;
+    addImages(await imagesFromFiles(picked));
+    addDocuments(await documentsFromFiles(picked));
+}
+
 /**
  * Insert at the caret, like the dictation insert: the parent owns the draft,
  * so the chip text leaves as an `update:modelValue` the way any keystroke does.
@@ -211,9 +250,12 @@ function insertAtCaret(text: string): void {
 
 async function onPaste(event: ClipboardEvent): Promise<void> {
     const pasted = await readPastedImages(event.clipboardData);
-    if (pasted.length > 0) {
+    // C-WEB-4.e: a PDF on the clipboard is a document, not a skipped image.
+    const dropped = await readDroppedDocuments(event.clipboardData);
+    if (pasted.length > 0 || dropped.length > 0) {
         event.preventDefault();
         addImages(pasted);
+        addDocuments(dropped);
         return;
     }
     // C-WEB-4.a: the TUI's collapse, client-side. A paste over the chip
@@ -235,7 +277,8 @@ async function onPaste(event: ClipboardEvent): Promise<void> {
  * C-WEB-4.a: dropping files over the composer is a paste that arrived by
  * mouse — a DataTransfer satisfies `ClipboardFiles` structurally, so the
  * drop shares the paste's reader, the MAX_PASTED_IMAGES strip, and (through
- * the image chips) the same busy/command refusals on send.
+ * the image chips) the same busy/command refusals on send. C-WEB-4.e adds
+ * the document twin: the same drop fills the PDF strip under its own cap.
  *
  * Only a Files drag is ours to claim. Cancelling every drop would silently
  * break the browser's native text-drag into the textarea, so the types
@@ -245,20 +288,31 @@ async function onPaste(event: ClipboardEvent): Promise<void> {
 async function onDrop(event: DragEvent): Promise<void> {
     if (!event.dataTransfer?.types?.includes("Files")) return;
     event.preventDefault();
-    const pasted = await readPastedImages(event.dataTransfer);
-    if (pasted.length === 0) return;
+    // C-WEB-4.e: the same drop feeds both strips — images through the paste
+    // reader, PDFs through the document reader, each capped independently,
+    // exactly how the server counts the two arrays.
+    const [pasted, dropped] = await Promise.all([
+        readPastedImages(event.dataTransfer),
+        readDroppedDocuments(event.dataTransfer),
+    ]);
+    if (pasted.length === 0 && dropped.length === 0) return;
     addImages(pasted);
+    addDocuments(dropped);
 }
 
 /**
  * Server laws mirrored as a disabled button, so a refusal never appears as a
- * mystery: images never ride a `/command` or `!bang`, and never a delivery
- * that does not start a turn.
+ * mystery: attachments never ride a `/command` or `!bang` (the images leg
+ * answers first, as the server checks it first), and never a delivery that
+ * does not start a turn.
  */
 const blockedReason = computed(() => {
-    if (images.value.length === 0) return "";
-    if (/^[!/]/.test(props.modelValue.trim()))
+    if (images.value.length === 0 && documents.value.length === 0) return "";
+    if (/^[!/]/.test(props.modelValue.trim())) {
+        if (images.value.length === 0)
+            return "Documents ride a prose prompt; a /command or !bang takes none.";
         return "Images ride a prose prompt; a /command or !bang takes none.";
+    }
     if (props.busy && delivery.value !== "interrupt")
         return "A turn is running — switch delivery to interrupt, or wait for it to end.";
     return "";
@@ -269,7 +323,10 @@ const blockedReason = computed(() => {
 watch(
     () => props.modelValue,
     (value, previous) => {
-        if (value === "" && previous !== "") images.value = [];
+        if (value === "" && previous !== "") {
+            images.value = [];
+            documents.value = [];
+        }
         // C-WEB-4.a: a placeholder the user deleted is no longer a chip —
         // its payload is dropped with it, so re-typing the same text later
         // is just typing, never a resurrection of the filed paste.
@@ -315,6 +372,7 @@ function submit(): void {
         sent,
         props.busy ? delivery.value : initialDelivery(),
         images.value,
+        documents.value,
     );
 }
 
@@ -625,6 +683,28 @@ defineExpose({ focus: () => input.value?.focus() });
                     </button>
                 </figure>
             </div>
+            <div
+                v-if="documents.length > 0"
+                class="chips"
+                data-testid="document-chips"
+            >
+                <span
+                    v-for="(doc, i) in documents"
+                    :key="`${doc.name}-${i}`"
+                    class="chip doc-chip"
+                >
+                    <span class="doc-name" :title="doc.name">{{ doc.name }}</span>
+                    <button
+                        type="button"
+                        class="remove"
+                        :aria-label="`Remove ${doc.name}`"
+                        data-testid="document-chip-remove"
+                        @click="documents.splice(i, 1)"
+                    >
+                        ×
+                    </button>
+                </span>
+            </div>
             <textarea
                 ref="input"
                 :value="modelValue"
@@ -634,7 +714,7 @@ defineExpose({ focus: () => input.value?.focus() });
                     busy
                         ? 'Type to queue, steer or interrupt…'
                         : (suggestion ??
-                            'Message CandyCode… (Enter sends, Shift+Enter for a new line, / for commands, @ for files, paste or drop images, Ctrl+↑ history, Ctrl+G search)')
+                            'Message CandyCode… (Enter sends, Shift+Enter for a new line, / for commands, @ for files, paste or drop images and PDFs, Ctrl+↑ history, Ctrl+G search)')
                 "
                 aria-label="Message"
                 data-testid="composer-input"
@@ -660,6 +740,26 @@ defineExpose({ focus: () => input.value?.focus() });
             </div>
         </div>
         <div class="controls">
+            <button
+                type="button"
+                class="attach"
+                aria-label="Attach files"
+                title="Attach images or PDFs to this prompt"
+                data-testid="composer-attach"
+                @click="pickFiles"
+            >
+                Attach
+            </button>
+            <input
+                ref="fileInput"
+                type="file"
+                multiple
+                accept="application/pdf,image/*"
+                tabindex="-1"
+                data-testid="composer-file-input"
+                class="file-input"
+                @change="onFilesPicked"
+            />
             <button
                 v-if="canDictate"
                 type="button"
@@ -789,6 +889,25 @@ textarea:focus {
     background: var(--panel);
     color: var(--text);
     cursor: pointer;
+}
+/* C-WEB-4.e: the document chip is the same corner-close machine, a name
+   instead of a thumbnail. */
+.doc-chip {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    max-width: 100%;
+    padding: 0.25rem 0.6rem;
+}
+.doc-name {
+    max-width: 14rem;
+    overflow: hidden;
+    font-family: var(--mono);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+.file-input {
+    display: none;
 }
 .suggest {
     position: absolute;

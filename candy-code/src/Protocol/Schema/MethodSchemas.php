@@ -244,6 +244,16 @@ final class MethodSchemas
                         'mime' => Schema::enum(TurnMethods::PASTED_IMAGE_MIMES),
                         'data' => Schema::string(TurnMethods::MAX_IMAGE_B64_CHARS),
                     ], ['mime', 'data']), TurnMethods::MAX_IMAGES),
+                    // C-WEB-4.e: uploaded documents, base64 — same law, PDF
+                    // bytes only, and the `data` cap is the exact base64
+                    // length of the images' and documents' SHARED decoded
+                    // budget, the largest lone upload that still rides a
+                    // frame. The handler sums both legs into it.
+                    'documents' => Schema::arrayOf(Schema::object([
+                        'name' => Schema::string(256),
+                        'mime' => Schema::enum(TurnMethods::PASTED_DOCUMENT_MIMES),
+                        'data' => Schema::string(TurnMethods::MAX_DOCUMENT_B64_CHARS),
+                    ], ['mime', 'data']), TurnMethods::MAX_DOCUMENTS),
                 ], ['sessionId', 'text']),
                 Schema::ref(D::ADMISSION),
             ],
