@@ -1526,7 +1526,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tui.md` → `### C-TUI-7.b`
 
-#### C-WEB-3.f — Video tab in the Generate panel (`generate.submit` kind)
+#### ✅ bf42820d8 C-WEB-3.f — Video tab in the Generate panel (`generate.submit` kind)
 - **Item:** C-WEB-3 (sources: k3-dorm#4, k3-sum (Generate form image-only)) · dormant-wire · M
 - **What:** **Gap.** `canGenerateVideo` (`candy-code-web/src-web/stores/connection.ts:91`) is read by nothing. `GeneratePanel.vue:34` gates on image only. `generate.submit` (`candy-code/src/Protocol/Methods/MediaMethods.php:166-232`) always …
 - **Files — create:** `candy-code/tests/Protocol/GenerateVideoSubmitTest.php`

@@ -171,7 +171,7 @@ Over `candy-code serve` (see [`SERVER.md`](SERVER.md)):
 
 | Method | Shape |
 |---|---|
-| `generate.submit` | Starts an **image** or **video** generation — `kind` selects the tool door (default `image`; the video half was the TUI-only side until C-WEB-3.f wired it here). Each kind forwards only its own tool's key set, the image door still naming the twelve shared-request fields; the answer is `{jobId}`. Replays are idempotent: a repeated submission returns the same job. |
+| `generate.submit` | Starts an **image** or **video** generation — `kind` selects the tool door (default `image`; the video half was the TUI-only side until the web Generate panel wired it here). Each kind forwards only its own tool's key set, the image door still naming the twelve shared-request fields; the answer is `{jobId}`. Replays are idempotent: a repeated submission returns the same job. |
 | `generate.status` | A job's `{state, progress01}`, plus artifact refs when done and an error when failed. The schema declares an ETA field that v1 never sends. |
 | `media.fetch` | A stored artifact's bytes as base64 slices — by artifact id or by path, never both, default slice with a hard ceiling, and an `eof` flag. |
 
