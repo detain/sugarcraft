@@ -2337,7 +2337,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-WEB-4.a (W15)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web.md` → `### C-WEB-4.e`
 
-#### C-AGT-5.h — PR-comment bot example workflow
+#### ✅ 0ebfdf9fe C-AGT-5.h — PR-comment bot example workflow
 - **Item:** C-AGT-5 (sources: GAP-GIT-12, GAP-AUT-05, p2-miss: GIT-12 bot) · gap · effort S
 - **What:** Ship `candy-code/docs/examples/pr-comment-bot.yml`, an `issue_comment` workflow: it is gated on an `@candy-code` mention AND `author_association` ∈ OWNER/MEMBER/COLLABORATOR; job 1 runs the existing action in `plan` mode on the …
 - **Files — create:** `candy-code/docs/examples/pr-comment-bot.yml`, `tools/tests/PrCommentBotExampleTest.php`

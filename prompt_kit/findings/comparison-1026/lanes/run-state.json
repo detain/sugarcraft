@@ -128,15 +128,6 @@
  ],
  "extra_agents": 2,
  "inflight": {
-  "C-AGT-5.h": {
-   "base": "c8e8a1f42",
-   "branch": "cc/C-AGT-5.h",
-   "note": "r2 CLEAN 0C/0M @5ea83ca14+ecda4ca36; no carries; batch-5",
-   "round": 2,
-   "session": "done",
-   "stage": "clean",
-   "worktree": "/home/sites/cc-cmp-C-AGT-5.h"
-  },
   "C-AGT-6.a": {
    "base": "c4c13f101",
    "branch": "cc/C-AGT-6.a",
@@ -167,10 +158,10 @@
   },
   "C-CTX-4.a": {
    "branch": "cc/C-CTX-4.a",
-   "note": "build c91e3f185@c4c13f101 10f; r1 review live: withCurrentDate row-only-when-differs byte-freeze proof, cutoff table conservative-only, PromptSnapshot mask fail-closed judgment, goldens untouched claim",
-   "round": 1,
-   "session": "ses_e7bd2f5b5ffeC3Z4YQD9U6P2Wm",
-   "stage": "review",
+   "note": "r2 CLEAN ce48359fe; carries: durations TurnContextDateTest +12T; batch-6 pool",
+   "round": 2,
+   "session": "done",
+   "stage": "clean",
    "worktree": "/home/sites/cc-cmp-C-CTX-4.a"
   },
   "C-CTX-5.a": {
@@ -189,16 +180,40 @@
    "stage": "build",
    "worktree": "/home/sites/cc-cmp-C-EXT-3.b"
   },
+  "C-PRV-3.a": {
+   "branch": "cc/C-PRV-3.a",
+   "note": "serviceTier core; base e68270a09",
+   "round": 0,
+   "session": "ses_e7bb0aa00ffeybpTrYo7FxLI8C",
+   "stage": "build",
+   "worktree": "/home/sites/cc-cmp-C-PRV-3.a"
+  },
+  "C-SES-7.e": {
+   "branch": "cc/C-SES-7.e",
+   "note": "import+ephemeral+archive; base 0cd7dc95b; inbound-cap probe-first risk row",
+   "round": 0,
+   "session": "ses_e7bae5797ffeLKK4ZtcrUnpbPT",
+   "stage": "build",
+   "worktree": "/home/sites/cc-cmp-C-SES-7.e"
+  },
+  "C-TOOL-2.b": {
+   "branch": "cc/C-TOOL-2.b",
+   "note": "search backends; base 0ebfdf9fe",
+   "round": 0,
+   "session": "ses_e7bacec98ffeUv6AFVjJRWAYpV",
+   "stage": "build",
+   "worktree": "/home/sites/cc-cmp-C-TOOL-2.b"
+  },
   "C-TUI-5.d": {
    "base": "878047472",
    "branch": "cc/C-TUI-5.d",
    "libs": "candy-code,sugar-forms",
-   "note": "build 963ddd0f6@878047472 10f salvage-landed; r1 live (shouldOffer doors vacuity, masked step2 purity, P-AGENT.b contamination walk); durations x2 +28T weld-carry",
+   "note": "r1 CLEAN 963ddd0f6; WELD-CURE fold-in FirstRunWizardTest:291 assertTrue(shouldOffer(false,false,true)); durations x2; +28T; batch-6 pool",
    "notes": "live builder = RE-CUT ses_e7c27b478ffe (worktree progress verified @222: ProviderKeyStore.php + FirstRunWizard/ untracked, en.php+census tests dirty). Old original ses_e7c2a7e8fffe blank-returned post-recut: RETIRED, do NOT resume (double-writer hazard).",
    "resumes": 1,
    "round": 1,
-   "session": "ses_e7bc8b2a0ffeg74wJKddnaVTRU",
-   "stage": "review",
+   "session": "done",
+   "stage": "clean",
    "tip": "963ddd0f6",
    "worktree": "/home/sites/cc-cmp-C-TUI-5.d"
   },
@@ -212,11 +227,11 @@
   },
   "C-WEB-4.e": {
    "branch": "cc/C-WEB-4.e",
-   "note": "r1 CLEAN 0C/0M/2nit-out; batch-4 pool; welder carries durations SessionSendDocumentsTest +8T, trio+dist re-derive once merged with C-WEB-4.d (dist collision certain, src disjoint), rebase post-b3 + sessionView+drift re-run | BATCH-5 STOP-1 @ f2ecbff7c: vue-tsc --build delta not EMPTY — TS7053 composerDocuments.spec.ts:146 (r1 gate was vacuous --noEmit); zero lane content on master; see lanes/C-WEB-4.e/STOP-1.md for cure+re-weld recipe",
+   "note": "STOP-1 TS7053 fixer live; r2+re-weld after",
    "notes": "base 24d746501; npm ci in flight (bg shell). [protocol] serialized: TurnMethods+MethodSchemas+trio regen (schema/SERVER.md/generated.ts)+Composer.vue+paste.ts+session.ts; NEW SessionSendDocumentsTest.php -> durations row at weld; welder re-derives trio once on merged tree (C-TOOL-3.e precedent).",
    "round": 1,
-   "session": null,
-   "stage": "clean",
+   "session": "ses_e7bb1103effe",
+   "stage": "fix",
    "worktree": "/home/sites/cc-cmp-C-WEB-4.e"
   }
  },
@@ -237,7 +252,7 @@
    "flip": "§6.3 ANSWERED - LATE unlocked but still scheduler-gated (normal steps first)"
   }
  ],
- "laws_owner_2026_10_29": "Standing law (owner 2026-10-29): fill ALL 10 slots EVERY tick with safe work available RIGHT NOW (builders within scope cap, due reviewers, due fixers, welder while welds due) - NEVER reserve a spot for a 'future reviewer/welder'; between welds the welder slot builds. Refill same-tick on notifications. Scheduler free_slots=0 means the cap is honored, not an idle reservation. | OWNER 2026-10-29 tick88+: spawn EVERY agent background=true (state it in each brief), never block on foreground children; ONE welder at a time; keep driving weld->wave-loop->fill on notifications; phantom law always; NEVER push. | OWNER 2026-10-29b: ALWAYS keep 10 agents busy — every tick fills all free slots (later-wave eligible steps via schedule_plan.py --next, sole pick authority: deps welded, no collision, LATE gating unchanged); every spawn background=true AND stated in the child brief. | OWNER 2026-10-29c (apply to self + EVERY child brief): (1) BLANK-RETURN: on any blank/empty agent response, resume THAT session with message 'continue', up to 10x before fresh spawn/prompt change. (2) COMPRESSION TIMING: compress only content already USED (e.g. after writing the report file), never material about to be acted on. (3) NEAR-END SKIP: agents near task end must skip context compression entirely — finish and respond. | 2026-10-29d: RESUMES also background=true. STASH BAN for all lanes: repo-global stash list is SHARED across worktrees (P-AGENT.b consumed C-CTX-5.c's WIP twice; recovered, evidence /tmp/opencode/cc-cmp-lanes/C-CTX-5.c/foreign-dirt-P-AGENT.b/) — lanes use cp backups under /tmp/opencode/ ONLY. stash@{0} in cc/P-AGENT.b worktree = verified dup, welder may drop. | OWNER 2026-10-29e SLOT LAW: ONLY live agents hold slots. Clean-held-awaiting-weld / no-agent lanes live in weld_queue (dict), occupy ZERO slots. Fill to 10 live agents every tick; never reserve for pending welds.",
+ "laws_owner_2026_10_29": "Standing law (owner 2026-10-29): fill ALL 10 slots EVERY tick with safe work available RIGHT NOW (builders within scope cap, due reviewers, due fixers, welder while welds due) - NEVER reserve a spot for a 'future reviewer/welder'; between welds the welder slot builds. Refill same-tick on notifications. Scheduler free_slots=0 means the cap is honored, not an idle reservation. | OWNER 2026-10-29 tick88+: spawn EVERY agent background=true (state it in each brief), never block on foreground children; ONE welder at a time; keep driving weld->wave-loop->fill on notifications; phantom law always; NEVER push. | OWNER 2026-10-29b: ALWAYS keep 10 agents busy — every tick fills all free slots (later-wave eligible steps via schedule_plan.py --next, sole pick authority: deps welded, no collision, LATE gating unchanged); every spawn background=true AND stated in the child brief. | OWNER 2026-10-29c (apply to self + EVERY child brief): (1) BLANK-RETURN: on any blank/empty agent response, resume THAT session with message 'continue', up to 10x before fresh spawn/prompt change. (2) COMPRESSION TIMING: compress only content already USED (e.g. after writing the report file), never material about to be acted on. (3) NEAR-END SKIP: agents near task end must skip context compression entirely — finish and respond. | 2026-10-29d: RESUMES also background=true. STASH BAN for all lanes: repo-global stash list is SHARED across worktrees (P-AGENT.b consumed C-CTX-5.c's WIP twice; recovered, evidence /tmp/opencode/cc-cmp-lanes/C-CTX-5.c/foreign-dirt-P-AGENT.b/) — lanes use cp backups under /tmp/opencode/ ONLY. stash@{0} in cc/P-AGENT.b worktree = verified dup, welder may drop. | OWNER 2026-10-29e SLOT LAW: ONLY live agents hold slots. Clean-held-awaiting-weld / no-agent lanes live in weld_queue (dict), occupy ZERO slots. Fill to 10 live agents every tick; never reserve for pending welds. | PUSH LAW @505@ 2026-10-29 SUPERSEDES never-push FOR WAVE CLOSES ONLY: after each wave loop CLEAN + §3 flip lands, whoever landed the flip runs git pull --ff-only then git push (ls-remote/fetch first). NOT clean FF or needs merge/force => DO NOT force/merge/rewrite; STOP+report in digest. No other pushes.",
  "laws_premise_correction": "2026-10-29: plan_comparison.md is TRACKED (ls-files + full weld history commit its marks). §3/§4 progress marks MUST be committed with the weld. The never-stage rule applies ONLY to root ./run-state.json stray, ./escalated, and foreign dirt.",
  "live_registry": {
   "C-SES-8.c": "fixer ses_e7c245d4dffeNG8CLQnaWRuPrH",
@@ -318,7 +333,7 @@
  ],
  "standing_reds_b985fbe51": "ADD: ChatHostLangCatalogueTest red on chat.effort.launch_unshaped (asker LaunchContext.php:2109 outside sources()) - byte-identical at base, C-PRV-1.b (a992413b0) seam -> closeout roster",
  "status": "RUNNING",
- "tick": "154-CTX2f-review-live",
+ "tick": "157-TOOL2b-cut;10-live;push-law-active",
  "tip": "0f58a906f",
  "updated": "2026-10-28 batch-5 weld step 6",
  "wave_loops": {
@@ -526,6 +541,7 @@
    "pick": "b5f0033e9",
    "regen": "none (docs-only)"
   },
+  "C-AGT-5.h": "welded batch-5: ecda4ca36->676ab6c0f + 5ea83ca14->0ebfdf9fe zero conflicts; gates 10/56 + 499/2636 + 110T exact (4337A wobble); no durations; §4 marks 0ebfdf9fe",
   "C-AGT-6.b": "'--' terminator fix in flight; NIT REPORT counts +5/26,518; no new test files → no durations",
   "C-AGT-6.d_weld": "r1 CLEAN 0C/0M/0 step-local minors (2 NITs recorded, take-or-leave); en-only cmd.pr.*/cmd.review.bad-pr -> 11-locale LAST per §6.3-h. Zero Protocol/web -> no trio/dist riders; gen-command-docs --check rc0. 3 durations rows (PrCommand 0.019/6, GhRunner 0.238/6, PrHostCommand 0.003/3 junit sums). Guards 275T/46483A, red-set = staleness pair only (foreign-era; +132A vs reviewer 46351 wobble from C-CTX-4.c era). DescriptorInheritanceGuard ::diffRange inherited-red cure (C-AGT-6.b) landed in-step. Zero new proc_open (CapturesProcessOutput choke, ChildLifetimesToolTest 9T/31A green).",
   "C-AGT-7.a": {
@@ -1273,9 +1289,10 @@
   "C-TUI-2.c",
   "C-TUI-2.d",
   "C-WEB-4.d",
-  "C-SEC-8.e"
+  "C-SEC-8.e",
+  "C-AGT-5.h"
  ],
- "welded_count": 180,
+ "welded_count": 181,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
  "welder_sessions": {
