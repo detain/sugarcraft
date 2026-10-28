@@ -103,6 +103,37 @@ final class StdioMcpServerSdkWireShapeTest extends TestCase
         self::assertStringContainsString('"params":{}', McpMessage::notification('x', [])->toJson());
     }
 
+    public function testInitializeCapabilitiesGoOnTheWireAsAnObject(): void
+    {
+        // The MCP-1 law restated for the field the handshake leads with,
+        // and C-MCP-3 extends it: whatever the client configures, the map
+        // rides the (object) cast, never an array.
+        $json = McpMessage::request('1', 'initialize', ['capabilities' => new \stdClass()])->toJson();
+
+        self::assertStringContainsString('"capabilities":{}', $json);
+        self::assertStringNotContainsString('"capabilities":[]', $json);
+    }
+
+    public function testConfiguredClientCapabilitiesStillSatisfyTheStrictServer(): void
+    {
+        // C-MCP-3 round-trip form: strict_sdk_server refuses an array-shaped
+        // `capabilities` exactly like the official SDKs were measured to, so
+        // a clean handshake with a CONFIGURED map proves the object cast
+        // survives configuration — not just the empty default this file's
+        // other tests already pin.
+        $server = new StdioMcpServer(
+            'strict',
+            PHP_BINARY,
+            [__DIR__ . '/Fixtures/strict_sdk_server.php', $this->notificationLog],
+            startTimeoutSeconds: self::BUDGET_SECONDS,
+            capabilities: ['roots' => ['listChanged' => false]],
+        );
+        $this->live[] = $server;
+        $server->start();
+
+        self::assertTrue($server->isUp());
+    }
+
     public function testNonEmptyAndNestedObjectParamsKeepTheirShape(): void
     {
         $json = McpMessage::request('2', 'call', ['name' => 't', 'arguments' => new \stdClass()])->toJson();
@@ -177,5 +208,33 @@ final class StdioMcpServerSdkWireShapeTest extends TestCase
         self::assertFalse($server->isUp(), 'a refused start must leave no child behind');
         self::assertSame([], self::liveChildrenRunning('strict_sdk_server.php'));
         self::assertSame([], file($this->notificationLog, FILE_SKIP_EMPTY_LINES), 'a refused session must not be told it was initialized');
+    }
+
+    /**
+     * C-MCP-3: the `capabilities:` constructor argument made the handshake
+     * object configurable, but the shape law survives. An unconfigured
+     * client still sends the empty OBJECT (this fixture refuses array-shaped
+     * capabilities, so a successful start is the witness for the default),
+     * and a configured map rides through as a JSON object too — the plain
+     * PHP cast of `['roots' => ...]` would encode an ARRAY and die at the
+     * same gate MCP-1 audited.
+     */
+    public function testConfiguredCapabilitiesArriveAsAnObjectAndTheDefaultStaysTheEmptyOne(): void
+    {
+        $plain = $this->spawn();
+        $plain->start();
+        self::assertTrue($plain->isUp(), 'the default {} capabilities must still pass the strict-SDK gate');
+        $plain->stop();
+
+        $configured = new StdioMcpServer(
+            'configured',
+            PHP_BINARY,
+            [__DIR__ . '/Fixtures/strict_sdk_server.php', $this->notificationLog],
+            startTimeoutSeconds: self::BUDGET_SECONDS,
+            capabilities: ['roots' => ['listChanged' => false]],
+        );
+        $this->live[] = $configured;
+        $configured->start();
+        self::assertTrue($configured->isUp(), 'a configured capabilities map must travel as a JSON object, never an array');
     }
 }

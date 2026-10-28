@@ -49,7 +49,7 @@ use SugarCraft\Code\Support\ProcessContainment;
  * mid-exchange, and teardown reserved to the process that started it. See
  * the library class's FORK SAFETY note.
  */
-final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptProvider
+final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptProvider, AnswersServerRequests
 {
     use WalksProviderPages;
     /**
@@ -106,6 +106,12 @@ final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptP
      *        that spells its own absolute `cwd` wins either way). Null means
      *        the historic inherit-the-launch-cwd spawn, which stays exactly
      *        what a single-file launch with no tier provenance gets
+     * @param array<string,mixed> $serverCapabilities C-MCP-3: client
+     *        capabilities advertised in the initialize handshake (the
+     *        library sends them as a JSON object; [] keeps the historic {})
+     * @param \Closure|null $onServerMessage C-MCP-3: connection-wide
+     *        answerer for the server's own requests and notifications;
+     *        null lets the library default answer ping and refuse the rest
      */
     public function __construct(
         public readonly string $name,
@@ -115,6 +121,8 @@ final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptP
         ?float $startTimeoutSeconds = null,
         ?float $toolTimeoutSeconds = null,
         ?string $cwd = null,
+        array $serverCapabilities = [],
+        ?\Closure $onServerMessage = null,
     ) {
         $this->toolTimeoutSeconds = $toolTimeoutSeconds !== null && $toolTimeoutSeconds > 0.0
             ? $toolTimeoutSeconds
@@ -129,6 +137,8 @@ final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptP
             spawnPlanner: fn (string $name, array $argv, array $env): array => $this->spawnPlan($name, $argv, $env),
             clientInfo: ['name' => 'candy-code', 'version' => '1.0.0'],
             cwd: $cwd,
+            capabilities: $serverCapabilities,
+            onServerMessage: $onServerMessage,
         );
     }
 
@@ -251,6 +261,30 @@ final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptP
     public function callTool(string $toolName, array $args, ?\Closure $onWait = null): array
     {
         return $this->transport->callTool($toolName, $args, $onWait, $this->toolTimeoutSeconds);
+    }
+
+    /**
+     * C-MCP-3 ({@see AnswersServerRequests}): the same bounded call, with an
+     * exchange-scoped answerer for whatever the server asks mid-call. The
+     * library pauses this call's deadline while the answerer runs, so an
+     * elicitation held open for a human does not eat the toolTimeout budget
+     * — but it holds the connection's exchange lock meanwhile, and further
+     * calls to THIS server queue behind the answer (one pipe, one
+     * conversation; the queue is bounded per waiter by its own timeout).
+     *
+     * @param array<string,mixed> $args
+     * @param (\Closure(): void)|null $onWait
+     * @return array<mixed>
+     */
+    public function callToolAnsweringRequests(string $toolName, array $args, ?\Closure $onWait = null, ?McpServerRequests $serverRequests = null): array
+    {
+        return $this->transport->callTool(
+            $toolName,
+            $args,
+            $onWait,
+            $this->toolTimeoutSeconds,
+            $serverRequests?->handler(),
+        );
     }
 
     /** The resolved per-call bound in seconds — never null since cl-4 FIX-C. */

@@ -784,7 +784,13 @@ final class McpClient
                     ? (float) $config['startTimeout']
                     : null,
                 toolTimeoutSeconds: self::toolTimeout($config['toolTimeout'] ?? null),
+                // C-MCP-3: declared capabilities + a default answer desk
+                // over the spawn root itself; see the two helpers below.
                 cwd: $this->stdioSpawnCwd($config['cwd'] ?? null, $tierPath),
+                serverCapabilities: self::stdioClientCapabilities(),
+                onServerMessage: (new McpServerRequests(
+                    $this->stdioSpawnCwd($config['cwd'] ?? null, $tierPath) ?? '',
+                ))->handler(),
             ),
             'http' => new HttpMcpServer(
                 name: $name,
@@ -885,6 +891,14 @@ final class McpClient
      * The trust record fingerprints `cwd` like any other key — adding it to
      * McpTrustPins::UNPINNED_KEYS would be wrong on purpose: moving where a
      * server runs moves what it loads.
+     *
+     * C-MCP-3 gives the same answer a second consumer: the default
+     * {@see McpServerRequests} built next to this resolution answers
+     * `roots/list` with exactly this directory, so a server asking "where
+     * is the workspace?" hears the root its entry was approved for, never
+     * wherever the parent happened to stand. No tier provenance (null)
+     * falls back to the process cwd — the pre-roots meaning, kept honest
+     * rather than invented.
      */
     private function stdioSpawnCwd(mixed $explicit, string $tierPath): ?string
     {
@@ -906,6 +920,23 @@ final class McpClient
         return $tierPath === $this->userConfigPath
             ? dirname(dirname($tierPath))
             : dirname($tierPath);
+    }
+
+    /**
+     * The client capabilities a stdio server may ask against (C-MCP-3):
+     * `roots` with a fixed list (listChanged false — we never push a
+     * `notifications/roots/list_changed`), and `elicitation` as the empty
+     * object the spec's shape requires (the flag is the capability; the
+     * answer arrives over the request seam, not the declaration).
+     *
+     * @return array<string, mixed>
+     */
+    private static function stdioClientCapabilities(): array
+    {
+        return [
+            'roots' => ['listChanged' => false],
+            'elicitation' => new \stdClass(),
+        ];
     }
 
     /**
@@ -977,8 +1008,19 @@ final class McpClient
      * was explicitly set at construction time.
      *
      * @param (\Closure(): void)|null $onWait the caller's wait beat (item 0.4-b)
+     * @param McpServerRequests|null $serverRequests per-call server-request
+     *        answers (C-MCP-3): pass a set to answer this call's
+     *        `elicitation/create` with a real approver (or route its
+     *        `notifications/progress` to a live sink) instead of the
+     *        build-time defaults. Only transports implementing
+     *        {@see AnswersServerRequests} can interleave answers with a
+     *        call's reply — on any other transport the parameter is inert
+     *        and the plain call proceeds. Hold-discipline (plan §6): while
+     *        an answer handler runs, the exchange lock is held, so later
+     *        calls to THAT server queue behind it — an elicitation waiting
+     *        on a human parks that server's queue, not the session.
      */
-    public function callTool(string $serverName, string $toolName, array $args, ?\Closure $onWait = null): array
+    public function callTool(string $serverName, string $toolName, array $args, ?\Closure $onWait = null, ?McpServerRequests $serverRequests = null): array
     {
         $server = $this->servers[$serverName] ?? null;
 
@@ -1000,6 +1042,13 @@ final class McpClient
         // `http` carries its own per-call ceiling (ISS-042: the entry's
         // `toolTimeout`, default 120 s like stdio — no longer the shared
         // client's fixed 30 s), and `claude-mcp` speaks through its own client.
+        // C-MCP-3: with a per-call answer set attached, the call rides the
+        // interleaving seam so an `elicitation/create` mid-call can reach the
+        // caller's approver instead of the build-time cancel default.
+        if ($serverRequests !== null && $server instanceof AnswersServerRequests) {
+            return $server->callToolAnsweringRequests($toolName, $args, $onWait, $serverRequests);
+        }
+
         return $server instanceof StdioMcpServer && $onWait !== null
             ? $server->callTool($toolName, $args, $onWait)
             : $server->callTool($toolName, $args);

@@ -126,7 +126,10 @@ official TypeScript and Python SDK servers reject a JSON array in their place.
 PHP's `[]` encodes as an array, so `McpMessage::toJson()` emits empty `params`
 as `{}`, `initialize` sends `"capabilities":{}`, an argument-less `callTool()`
 sends `"arguments":{}`, and `tools/list` omits `params` entirely (as the
-reference TS client does).
+reference TS client does). The `capabilities:` constructor argument configures
+what that object HOLDS (C-MCP-3) — a configured map rides through the same
+object cast, so `['roots' => ['listChanged' => false]]` arrives as a populated
+JSON object and the default still lands as `{}` byte-for-byte.
 
 Tool arguments are shaped one level further: a model's `{"filter":{}}`
 decodes (assoc) to `['filter' => []]`, so `callTool()` walks the arguments
@@ -138,6 +141,31 @@ sends every empty array the schema types as an object — through nested
 schema does not type, stays `[]`; a `\stdClass` you pass is kept as-is. A
 nested empty map inside your own `request()` params still has to be spelled
 `new \stdClass()`.
+
+## Server requests
+
+MCP is bidirectional: a server may send requests of its own (`ping`,
+`roots/list`, `elicitation/create`, `sampling/createMessage`) and
+notifications (`notifications/progress`) while a call is in flight.
+`readResponse()` answers them inline instead of skipping them: pass
+`onServerMessage:` to the constructor for a connection-wide answerer, or to
+`callTool()`/`request()` for one exchange. The handler is called as
+`($method, $params, $isNotification)`; for a request it returns
+`['result' => ...]`, `['error' => ['code' => int, 'message' => string]]`,
+or `null` for the built-in default — `ping` is acknowledged with `{}`,
+anything else is refused "Method not found" (-32601). Replies preserve the
+request id's wire TYPE (an int id comes back an int, never a string);
+notifications write nothing back. Two consequences worth knowing:
+
+- answers are written **under the exchange lock**, so a handler that waits
+  (an elicitation held open for a human) holds the lock — every other call
+  to that server queues behind it. One pipe, one conversation; an answerer
+  must never call back into the same server instance.
+- the wall clock a request handler spends is **paused out** of a bounded
+  call's `timeoutSeconds` budget — waiting on an answer this client owes is
+  not the server being slow (E646). `sampling/createMessage` ships no
+  answer beyond the default refusal: running a model in the client's name
+  is product policy, downstream.
 
 ## Fork safety
 
@@ -192,9 +220,13 @@ stderr is not locked — it is diagnostics only.
 - **Downstream (product policy, not protocol):** contained/detached spawning
   (setsid wrapping, PATH pre-checks, curated environments) — wrap `proc_open`
   policy at the embedder.
-- **Phase 2:** HTTP transport, server-side implementation, OAuth (PKCE,
-  loopback, dynamic client registration), and `resources/*` / `prompts/*`
-  conveniences — `StdioMcpServer::request()` already reaches them.
+- **Phase 2:** HTTP/SSE transport, server-side implementation, and OAuth
+  (PKCE, loopback, dynamic client registration). `resources/*` and
+  `prompts/*` traffic is already one `StdioMcpServer::request()` away (the
+  product's provider pages ride exactly that), and the server's own
+  request/notification traffic is answered inline — see *Server requests*
+  above. What is deliberately NOT answered for you is `sampling/createMessage`:
+  model policy stays downstream.
 
 ## Tests
 

@@ -93,6 +93,25 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * stderr is NOT locked: it is diagnostics only, and the owner's pumpStderr()
  * may drain it while a child is mid-exchange — the tail may then be split
  * between processes, which loses nothing a protocol exchange depends on.
+ *
+ * SERVER REQUESTS (C-MCP-3). The protocol is bidirectional: a server may
+ * send requests of its own (ping, roots/list, elicitation/create) and
+ * notifications (notifications/progress) mid-call, on this same pipe.
+ * readResponse() answers them inline instead of skipping them: a handler
+ * (connection-wide, or per-call through callTool()/request()) sees every
+ * method-bearing frame as ($method, $params, $isNotification); request
+ * handlers return `['result' => ...]` or `['error' => ['code' => int,
+ * 'message' => string, 'data' => mixed]]`, or null to fall back to the
+ * default answer (ping is acknowledged, anything else refused "Method not
+ * found"); a notification handler's return is ignored. Answers are written
+ * under the SAME exchange lock that already serialises every exchange on
+ * this connection — so an answerer that WAITS (an elicitation held open for
+ * a human) holds that lock, and every other call to this server queues
+ * behind it. That is the deliberate shape: one pipe, one conversation. An
+ * answerer must therefore never call back into this server instance; it
+ * answers from state it already holds. The wall clock a request handler
+ * spends is PAUSED out of any bounded call's deadline — waiting for an
+ * answer this client owes is not the server being slow (E646 spirit).
  */
 final class StdioMcpServer implements McpServer
 {
@@ -203,6 +222,16 @@ final class StdioMcpServer implements McpServer
     /** @var array<string,mixed> parsed in the constructor, trusted afterwards */
     private readonly array $clientInfo;
 
+    /**
+     * Client capabilities advertised in the initialize handshake
+     * (C-MCP-3). A configured map; sent as a JSON OBJECT whatever it
+     * holds — the MCP-1 shape law survives configuration. [] means
+     * "none" and still encodes as {}.
+     *
+     * @var array<string,mixed>
+     */
+    private readonly array $capabilities;
+
     private float $startTimeoutSeconds;
 
     /**
@@ -212,6 +241,23 @@ final class StdioMcpServer implements McpServer
      * fork as live state — each process sets its own).
      */
     private ?\Closure $onWait = null;
+
+    /**
+     * Connection-wide answerer for the server's own requests and
+     * notifications (C-MCP-3), or null to fall back to the built-in
+     * defaults (answer ping, refuse the rest). Overridden per call by
+     * {@see $callServerMessage}; see the class docblock for the contract
+     * and the lock-hold discipline.
+     */
+    private readonly ?\Closure $onServerMessage;
+
+    /**
+     * The server-request handler for the exchange in flight, or null.
+     * Set by callTool()/request() for the length of one exchange and
+     * cleared after it — the same one-call lifetime law as {@see $onWait},
+     * so it never crosses a fork as live state.
+     */
+    private ?\Closure $callServerMessage = null;
 
     /**
      * @param string $name    server identity, tagged onto every McpTool
@@ -245,6 +291,19 @@ final class StdioMcpServer implements McpServer
      *        the planner returns [command, env], and this is why the seam's
      *        shape stayed two-tuple — the directory is a spawn fact the
      *        embedder decides up front, not one the wrapper negotiates.
+     * @param array<string,mixed> $capabilities client capabilities for the
+     *        initialize handshake (C-MCP-3); the default [] encodes as the
+     *        empty JSON OBJECT it always has — a configured map rides
+     *        through as an object too, never an array.
+     * @param \Closure|null $onServerMessage connection-wide answerer for
+     *        the server's own requests and notifications; called as
+     *        ($method, $params, $isNotification). Request handlers return
+     *        `['result' => ...]`, `['error' => ['code' => int, 'message'
+     *        => string]]`, or null for the default answer; notification
+     *        handlers return is ignored. A handler that throws aborts the
+     *        exchange in flight (callTool converts it to an error payload);
+     *        it must never call back into this server — the answer travels
+     *        under the exchange lock the caller already holds.
      */
     public function __construct(
         public readonly string $name,
@@ -255,6 +314,8 @@ final class StdioMcpServer implements McpServer
         private readonly ?\Closure $spawnPlanner = null,
         array $clientInfo = self::DEFAULT_CLIENT_INFO,
         private readonly ?string $cwd = null,
+        array $capabilities = [],
+        ?\Closure $onServerMessage = null,
     ) {
         $this->startTimeoutSeconds = $startTimeoutSeconds !== null && $startTimeoutSeconds > 0
             ? $startTimeoutSeconds
@@ -262,6 +323,8 @@ final class StdioMcpServer implements McpServer
 
         $this->assertClientInfoShaped($clientInfo);
         $this->clientInfo = $clientInfo;
+        $this->capabilities = $capabilities;
+        $this->onServerMessage = $onServerMessage;
         $this->ids = new RequestIdSequence();
     }
 
@@ -418,10 +481,12 @@ final class StdioMcpServer implements McpServer
         try {
             // capabilities is a JSON object in the schema; PHP's `[]` encodes as
             // a JSON array, which the official SDK servers answer with an
-            // "expected object, received array" error (audit MCP-1).
+            // "expected object, received array" error (audit MCP-1). The
+            // configured map (C-MCP-3) rides through the same (object) cast,
+            // so the default [] still lands as {} byte-for-byte.
             $response = $this->request('initialize', [
                 'protocolVersion' => self::PROTOCOL_VERSION,
-                'capabilities' => new \stdClass(),
+                'capabilities' => (object) $this->capabilities,
                 'clientInfo' => $this->clientInfo,
             ], $deadline);
 
@@ -677,17 +742,23 @@ final class StdioMcpServer implements McpServer
      *
      * @param array<string,mixed> $args
      * @param (\Closure(): void)|null $onWait
+     * @param (\Closure(string, ?array<string,mixed>, bool): ?array)|null $onServerMessage
+     *        per-call override of the connection's server-request handler
+     *        (C-MCP-3); null keeps the configured one in force.
      * @return array<string,mixed>
      */
-    public function callTool(string $toolName, array $args, ?\Closure $onWait = null, ?float $timeoutSeconds = null): array
+    public function callTool(string $toolName, array $args, ?\Closure $onWait = null, ?float $timeoutSeconds = null, ?\Closure $onServerMessage = null): array
     {
         $previous = $this->onWait;
         $this->onWait = $onWait;
+        $previousHandler = $this->callServerMessage;
+        $this->callServerMessage = $onServerMessage;
 
         try {
             return $this->callToolWaiting($toolName, $args, $timeoutSeconds);
         } finally {
             $this->onWait = $previous;
+            $this->callServerMessage = $previousHandler;
         }
     }
 
@@ -817,12 +888,22 @@ final class StdioMcpServer implements McpServer
      * implements none of it either.
      *
      * @param array<string,mixed>|null $params
+     * @param (\Closure(string, ?array<string,mixed>, bool): ?array)|null $onServerMessage
+     *        per-call override of the connection's server-request handler
+     *        (C-MCP-3), live for this round trip only.
      * @throws \InvalidArgumentException when $params cannot be encoded as JSON
      *         (see McpMessage::toJson()); nothing is written in that case
      */
-    public function request(string $method, ?array $params = null, ?float $deadline = null): ?McpMessage
+    public function request(string $method, ?array $params = null, ?float $deadline = null, ?\Closure $onServerMessage = null): ?McpMessage
     {
-        return $this->requestAs((string) $this->ids->next(), $method, $params, $deadline);
+        $previousHandler = $this->callServerMessage;
+        $this->callServerMessage = $onServerMessage;
+
+        try {
+            return $this->requestAs((string) $this->ids->next(), $method, $params, $deadline);
+        } finally {
+            $this->callServerMessage = $previousHandler;
+        }
     }
 
     /**
@@ -1113,8 +1194,14 @@ final class StdioMcpServer implements McpServer
      * {@see UNATTRIBUTABLE_FRAMES_BEFORE_REFUSAL}; the refusal throws and
      * callTool() reports it as an error payload (FIX #4 rail), while the
      * handshake legs fail the start loudly.
+     *
+     * $deadline is taken by reference because C-MCP-3 pauses it: the wall
+     * clock a server-request handler spends is added back, so an answerer
+     * that waits (an elicitation held for a human) does not consume the
+     * bounded call's budget — the wait this client owes is not the server
+     * being slow.
      */
-    private function readResponse(string $id, ?float $deadline = null): ?McpMessage
+    private function readResponse(string $id, ?float &$deadline = null): ?McpMessage
     {
         $unattributable = 0;
 
@@ -1144,6 +1231,18 @@ final class StdioMcpServer implements McpServer
                 continue;
             }
 
+            // C-MCP-3: a frame carrying a METHOD is the server speaking —
+            // its own request (ping, roots/list, elicitation/create) or a
+            // notification (progress). Answer it inline, under the exchange
+            // lock this read already holds, then keep waiting for the
+            // response we came for. Skipping these unanswered (the historic
+            // shape) is what left ping/roots/elicitation dead traffic.
+            if ($message->method !== null) {
+                $this->answerServerMessage($message, $line, $this->callServerMessage ?? $this->onServerMessage, $deadline);
+
+                continue;
+            }
+
             // Strict match: only a genuine response (no method) whose id is
             // byte-equal to ours answers the request. An id-less broadcast —
             // a server spontaneously pushing `result`/`error` with no id, or
@@ -1158,8 +1257,8 @@ final class StdioMcpServer implements McpServer
                 // id stays exempt: it is a late answer to somebody else's
                 // (often this client's own abandoned) call, and skipping it
                 // without blame is the whole point of strict id matching.
-                // Method-bearing frames (notifications, server requests) are
-                // protocol traffic and exempt, however chatty.
+                // Method-bearing frames no longer reach this strike check:
+                // the C-MCP-3 interception above answers them first.
                 if ($message->id === null && $message->method === null && ($message->resultSet || $message->error !== null)) {
                     $this->refuseAfterUnattributableFrames($id, ++$unattributable);
                 }
@@ -1169,6 +1268,105 @@ final class StdioMcpServer implements McpServer
 
             return $message;
         }
+    }
+
+    /**
+     * C-MCP-3: answer one method-bearing frame while an exchange awaits its
+     * response. Notifications fire the handler (return ignored, nothing is
+     * written back); requests consult the handler and fall back to the
+     * built-in default — acknowledge `ping` with the empty-object result the
+     * schema wants, refuse everything else with JSON-RPC's "Method not
+     * found". The reply echoes the request's id with its wire TYPE intact
+     * (an int id must not come back as a string), and the wall clock the
+     * handler spent is added back to $deadline so a waiting answerer never
+     * eats the bounded call's budget.
+     *
+     * A handler exception propagates: a broken answerer should surface as
+     * this client's loud refusal (callToolWaiting's FIX #4 rails convert it
+     * to an error payload) rather than a silently wrong reply.
+     *
+     * @param (\Closure(string, ?array<string,mixed>, bool): ?array)|null $handler
+     */
+    private function answerServerMessage(McpMessage $message, string $line, ?\Closure $handler, ?float &$deadline): void
+    {
+        $startedAt = self::nowSeconds();
+        $paused = false;
+
+        try {
+            if ($message->isNotification) {
+                if ($handler !== null) {
+                    $handler($message->method, $message->params, true);
+                }
+
+                return;
+            }
+
+            $answer = $handler !== null ? $handler($message->method, $message->params, false) : null;
+
+            if ($answer === null) {
+                $answer = $message->method === 'ping'
+                    ? ['result' => new \stdClass()]
+                    : ['error' => ['code' => -32601, 'message' => 'Method not found']];
+            }
+
+            if (!is_array($answer)) {
+                throw new \InvalidArgumentException('MCP server-request handler must return an array or null, ' . get_debug_type($answer) . ' given');
+            }
+
+            $raw = McpMessage::parsePreservingId($line);
+            $wireId = $raw !== null && $raw->wireIdSet ? $raw->wireId : $message->id;
+
+            if (array_key_exists('error', $answer)) {
+                $error = $answer['error'];
+                if (!is_array($error) || !isset($error['code'], $error['message'])
+                    || !is_int($error['code']) || !is_string($error['message'])) {
+                    throw new \InvalidArgumentException('MCP server-request handler returned a malformed error answer');
+                }
+
+                $response = self::requesterReply($wireId, static fn (string $id): McpMessage => McpMessage::error($id, $error['code'], $error['message'], $error['data'] ?? null));
+            } elseif (array_key_exists('result', $answer)) {
+                $response = self::requesterReply($wireId, static fn (string $id): McpMessage => McpMessage::success($id, $answer['result']));
+            } else {
+                throw new \InvalidArgumentException('MCP server-request handler must return ["result" => ...] or ["error" => ...], got keys ' . implode(',', array_keys($answer)));
+            }
+
+            // Bill the handler's thinking back to the call BEFORE the answer
+            // is written — the pause is worth nothing if the write itself is
+            // refused against the un-extended deadline.
+            if ($deadline !== null) {
+                $deadline += self::nowSeconds() - $startedAt;
+            }
+
+            $paused = true;
+
+            $this->writeLine($response->toJson(), $deadline);
+        } finally {
+            if (!$paused && $deadline !== null) {
+                $deadline += self::nowSeconds() - $startedAt;
+            }
+        }
+    }
+
+    /**
+     * Build the reply a server REQUEST deserves, carrying the id exactly as
+     * it arrived. A request whose id this client cannot address (absent,
+     * explicit null, float, nested) gets JSON-RPC's "Invalid Request" with
+     * a null id — inventing an id for a reply to an unreadable request is
+     * how streams become undiagnosable.
+     *
+     * @param \Closure(string): McpMessage $build
+     */
+    private static function requesterReply(string|int|null $wireId, \Closure $build): McpMessage
+    {
+        if (is_int($wireId)) {
+            return $build((string) $wireId)->withWireId($wireId);
+        }
+
+        if (is_string($wireId)) {
+            return $build($wireId);
+        }
+
+        return McpMessage::error('', -32600, 'Invalid Request')->withWireId(null);
     }
 
     /**

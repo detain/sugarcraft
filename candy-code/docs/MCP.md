@@ -606,6 +606,14 @@ Sharing is made safe in the transport:
   lock rather than in one process' memory, and a call that dies mid-exchange
   leaves a marker: the next call terminates any half-written request line and
   skips the fragment of a half-read reply.
+- **Server-initiated traffic on a stdio stream is answered in place (C-MCP-3).**
+  A `ping` is answered, `roots/list` names the spawn directory the entry was
+  approved for, `elicitation/create` is declined-with-cancel unless the caller
+  passed per-call answers, `notifications/progress` is absorbed, and any other
+  request gets an honest `Method not found` — never silence. Answers are
+  written while the exchange lock is held, so a server that waits mid-call for
+  one holds only its own server's queue, and the call's timeout clock pauses
+  while the answer handler runs.
 - **Only the starting process stops a server.** A forked process exiting —
   normally or not — never signals the shared server or ends the shared HTTP
   session.
