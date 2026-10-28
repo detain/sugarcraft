@@ -9,7 +9,9 @@ use React\EventLoop\Loop;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\Backend\EchoBackend;
+use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
@@ -24,6 +26,9 @@ use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Memory\MemoryStore;
 use SugarCraft\Code\Session\EnhancedSessionStore;
+use SugarCraft\Code\Providers\CompleteRequest;
+use SugarCraft\Code\Providers\CompleteResponse;
+use SugarCraft\Code\Tests\Support\ScriptedProvider;
 use SugarCraft\Code\Workflows\WorkflowEngineInterface;
 use SugarCraft\Code\Workflows\WorkflowResult;
 use SugarCraft\Code\Workflows\WorkflowStatus;
@@ -223,6 +228,79 @@ final class SessionHostCommandsTest extends TestCase
         self::assertStringContainsString('manual', $rows[\count($rows) - 1]->content);
     }
 
+    /**
+     * C-EXT-2.e on serve: the SAME {@see \SugarCraft\Code\Host\TurnController::wrapCommandDelegation()}
+     * decision TUI and -p make — admitExpanded hands the non-empty expansion to
+     * it — so the delegated prompt row IS the fenced directive, identical in
+     * shape to Chat's, one prose for all three surfaces.
+     */
+    public function testADelegatingCommandRidesTheDirectiveThroughTheHost(): void
+    {
+        $host = $this->host(commands: [
+            'audit' => CommandSpec::new(
+                name: 'audit',
+                description: 'x',
+                category: 'project',
+                template: 'Review src for bugs.',
+                subtask: true,
+            ),
+        ]);
+
+        $ticket = $host->submit('/audit');
+        self::assertSame(TurnTicket::STARTED, $ticket->admitted);
+
+        $rows = $host->history();
+        self::assertStringStartsWith(
+            'The command `/audit` declares `subtask: true`: this prompt is a task to delegate',
+            $rows[0]->content,
+        );
+        self::assertStringContainsString('agent "coder"', $rows[0]->content, 'the default agent rides the directive');
+    }
+
+    /**
+     * C-EXT-2.e on serve: a `model:` command pins only the turn its expansion
+     * is sent as. ScriptedProvider records every wire request, so the pin and
+     * its structural restoration are both read from what the server was asked
+     * for, not from internal state.
+     */
+    public function testAHostInlineModelPinsItsTurnAndTheNextTurnRestores(): void
+    {
+        // EngineBackend::completeAsync() forks, so the wire request is read
+        // from a file the answering closure writes IN THE CHILD — the same
+        // idiom ScriptedProvider documents for reporting which process ran.
+        $log = $this->dir . '/turn-models.log';
+        $record = static fn (string $answer): \Closure => static function (CompleteRequest $request) use ($log, $answer): CompleteResponse {
+            file_put_contents($log, $request->model . "\n", \FILE_APPEND | \LOCK_EX);
+
+            return new CompleteResponse(content: $answer);
+        };
+        $provider = new ScriptedProvider([$record('reviewed'), $record('welcome')]);
+        $host = $this->host(
+            backend: EngineBackend::new($provider, 'session-model'),
+            commands: [
+                'audit' => CommandSpec::new(
+                    name: 'audit',
+                    description: 'x',
+                    category: 'project',
+                    template: 'Review src for bugs.',
+                    model: 'other/one',
+                ),
+            ],
+        );
+
+        $host->submit('/audit');
+        $this->drain($host);
+        $host->submit('thanks');
+        $this->drain($host);
+
+        $models = array_values(array_filter(explode("\n", (string) file_get_contents($log))));
+        self::assertSame(
+            ['other/one', 'session-model'],
+            $models,
+            'the command turn went out on the pinned model and the next turn answered on the session model — nothing was ever restored because nothing was stored',
+        );
+    }
+
     public function testABangCommandRunsHoldsTheSessionAndLandsItsRow(): void
     {
         $host = $this->host(root: $this->project());
@@ -418,6 +496,7 @@ final class SessionHostCommandsTest extends TestCase
         array $history = [],
         ?string $root = null,
         ?\SugarCraft\Code\Backend $backend = null,
+        array $commands = [],
     ): SessionHost {
         return SessionHost::new(
             's',
@@ -428,7 +507,7 @@ final class SessionHostCommandsTest extends TestCase
                 backend: $backend ?? new EchoBackend(),
             ),
             history: $history,
-            customCommands: [],
+            customCommands: $commands,
         );
     }
 

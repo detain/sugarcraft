@@ -9719,6 +9719,8 @@ final class Chat implements Model
         }
 
         $expanded = $this->expandCustomCommand($text);
+        $commandTurnPin = null;
+        $commandModelNotice = null;
         // Audit 15b-15: `@file` mentions are resolved in what the USER typed,
         // never in a file-based command's expansion. A command body is
         // repository-authored text with its own `@` include form, which
@@ -9746,6 +9748,27 @@ final class Chat implements Model
             $expanded = trim($expanded);
             if ($expanded === '') {
                 return $this->refuseEmptyCustomCommand($text);
+            }
+
+            // C-EXT-2.e: the row's frontmatter is ACTED ON here — a
+            // `subtask: true` or `agent:` wraps the (already non-empty)
+            // expansion in the one fenced delegation directive, and a bare
+            // `model:` pins exactly THIS turn's request to it through the
+            // Task rule; the session's model is never touched, so the next
+            // turn answers on it with nothing to restore. The wrap runs
+            // after the refusal above on purpose: a directive around an
+            // empty body would resurrect the prompt this refusal exists
+            // to stop.
+            $command = $this->resolveCustomCommand($text);
+            if ($command !== null) {
+                $expanded = $this->turnController()->wrapCommandDelegation($expanded, $command[0]);
+                $decided = $this->turnController()->commandTurnModel(
+                    $command[0],
+                    $this->backend instanceof Backend\EngineBackend ? $this->backend : null,
+                );
+                if ($decided !== null) {
+                    [$commandTurnPin, $commandModelNotice] = $decided;
+                }
             }
             $text = $expanded;
         } else {
@@ -9922,7 +9945,7 @@ final class Chat implements Model
             }
 
             $parked = $spliced === null
-                ? $this->scheduleParkedCompaction($text, $tokenCount, $tokenLimit, $capNotice, $mentionsAreTheUsers)
+                ? $this->scheduleParkedCompaction($text, $tokenCount, $tokenLimit, $capNotice, $mentionsAreTheUsers, $commandTurnPin, $commandModelNotice)
                 : null;
             if ($parked !== null) {
                 return $parked;
@@ -10021,6 +10044,12 @@ final class Chat implements Model
         if ($truncationNotice !== null) {
             $newTurnMessages[] = $truncationNotice;
         }
+        if ($commandModelNotice !== null) {
+            // C-EXT-2.e: the command asked for a model this provider cannot
+            // serve; said BEFORE the user's line like every other rewrite
+            // report, because it describes how THIS prompt will be sent.
+            $newTurnMessages[] = Message::notice($commandModelNotice);
+        }
 
         // TURN-LIFECYCLE HOOKS (P7.S2) fire here and nowhere earlier. Every arm
         // above returns BEFORE a draft has become a submitted prompt — queued
@@ -10069,6 +10098,7 @@ final class Chat implements Model
             $preTurnHistory,
             $this->inputBuf,
             $this->inputCursorOffset(),
+            $commandTurnPin,
         );
 
         return [$sent, $postCompact === null ? $turnCmd : ($turnCmd === null ? $postCompact : Cmd::batch($turnCmd, $postCompact))];
@@ -10990,6 +11020,10 @@ final class Chat implements Model
      *                                  submission, for the checkpoint only.
      * @param string $preTurnDraft The draft `/rewind` re-seeds the box with.
      * @param ?int $preTurnCursor The caret within it, or null for end-of-text.
+     * @param ?string $oneTurnModel C-EXT-2.e: a file command's inline `model:`
+     *                              pin for THIS turn only
+     *                              ({@see scheduleBackendCompletion()}); null
+     *                              runs the session's model as always.
      * @return array{0:Chat,1:?\Closure}
      */
     private function dispatchTurn(
@@ -10999,6 +11033,7 @@ final class Chat implements Model
         array $preTurnHistory,
         string $preTurnDraft,
         ?int $preTurnCursor,
+        ?string $oneTurnModel = null,
     ): array {
         // Defence in depth for audit SES-3(b): submit() already refused, but a
         // turn reached by another route (a parked compaction resuming) must
@@ -11200,7 +11235,7 @@ final class Chat implements Model
         // `turn.started`, whose `messageId` names this same row.
         $turns->recordMessagesCreated($next->transcripts(), $this->currentSessionId, $newTurnMessages, $next->turnRunner());
 
-        $completion = $this->scheduleBackendCompletion($next, $cancellation, $generation);
+        $completion = $this->scheduleBackendCompletion($next, $cancellation, $generation, $oneTurnModel);
         if ($workspaceCapture !== null) {
             // Same Cmd, capture first: the snapshot is complete before the
             // completion forks the turn that may edit the files.
@@ -12931,11 +12966,23 @@ final class Chat implements Model
      * a time. A turn that called no tools resolves to a plain
      * {@see AssistantMsg} exactly as before.
      */
-    private function scheduleBackendCompletion(self $next, CancellationToken $cancellation, int $generation): \Closure
+    private function scheduleBackendCompletion(self $next, CancellationToken $cancellation, int $generation, ?string $oneTurnModel = null): \Closure
     {
+        // C-EXT-2.e: a command's inline `model:` pins the "one turn" literally
+        // — the clone this closure hands the runner, never `$next->backend`,
+        // so the Chat that resumes, parks, or dispatches the next prompt
+        // still carries the session's own model with nothing to restore.
+        // A non-engine backend cannot answer `withModel()`; the decision
+        // method already returned null for it, so this guard is structure,
+        // not policy.
+        $turnBackend = $next->backend;
+        if ($oneTurnModel !== null && $turnBackend instanceof Backend\EngineBackend) {
+            $turnBackend = $turnBackend->withModel($oneTurnModel);
+        }
+
         $run = $this->turnRunner()->start(
             backend: \SugarCraft\Code\Host\TurnRunner::backendForTurn(
-                $next->backend,
+                $turnBackend,
                 $this->maxCostUsd,
                 $this->spentUsd(),
                 $this->compactorConfig,
@@ -14039,9 +14086,27 @@ final class Chat implements Model
      *                          keep meaning "no model route, take the heuristic",
      *                          which is exactly what the capped caller must still
      *                          do — now with something to say about it.
+     * @param ?string $oneTurnModel The model a `model:` command pinned for this
+     *                          prompt, when one did. The parked route's landing
+     *                          rebuilds its dispatch from the {@see HistoryCompactedMsg}
+     *                          and no field of that message carries a model, so
+     *                          the pin CANNOT ride the park — the prompt goes out
+     *                          on the session's model. `$oneTurnModel` therefore
+     *                          buys no override here; it buys the truth row the
+     *                          park writes beside the prompt, which is what keeps
+     *                          the command's `model:` from silently evaporating.
+     * @param ?string $commandModelNotice C-EXT-2.e: the fall-back sentence when
+     *                          the pinned model is unservable and the turn runs
+     *                          on the session's model. The pin and the notice are
+     *                          exclusive by construction ({@see TurnController::commandTurnModel()}
+     *                          answers one or the other), and on the serve route
+     *                          the sentence rides submit()'s notice tail — which
+     *                          the park's early return never reaches. Threading it
+     *                          here is what stops the parked prompt from running
+     *                          the swap in silence.
      * @return array{0:Chat,1:?\Closure}|null
      */
-    private function scheduleParkedCompaction(string $inputText, int $tokenCount, int $tokenLimit, ?string &$capNotice = null, bool $resolveMentions = true): ?array
+    private function scheduleParkedCompaction(string $inputText, int $tokenCount, int $tokenLimit, ?string &$capNotice = null, bool $resolveMentions = true, ?string $oneTurnModel = null, ?string $commandModelNotice = null): ?array
     {
         // OFFLINE BEATS CAPPED, in that order and for the reason
         // {@see scheduleModelCompaction()} states: with no provider at all there
@@ -14185,12 +14250,29 @@ final class Chat implements Model
         // here exactly as on the unparked route (see userTurnMessage()).
         [$parkedUserTurn, $parkedAttachmentNotes] = $this->userTurnMessage($inputText, $resolveMentions);
 
+        // C-EXT-2.e: see the `$oneTurnModel` @param above. The pin drops at the
+        // park and the landing dispatches on the session's model, so the park
+        // says so — a notice row like the attachment notes beside it, written
+        // before the prompt it speaks for. The fall-back sentence (round-1
+        // MINOR-1) rides the same slot: on the serve route submit()'s notice
+        // tail carries it, and this route returns before that tail exists, so
+        // without it the parked prompt would swap models in silence. The two
+        // rows are exclusive by construction — commandTurnModel() answers with
+        // a pin or a notice, never both.
+        $commandNotes = $oneTurnModel === null ? [] : [Message::notice(Lang::t('host.turn.command_model_parked', [
+            'model' => $oneTurnModel,
+        ]))];
+        if ($commandModelNotice !== null) {
+            $commandNotes[] = Message::notice($commandModelNotice);
+        }
+
         $next = $this->mutate([
             // Kept short on purpose — see CompactionService::parkNotice().
             'history' => [
                 ...$this->history,
                 Message::notice($this->compactionService()->parkNotice($tokenCount, $tokenLimit, $request['count'])),
                 ...$hookNotes,
+                ...$commandNotes,
                 ...$parkedAttachmentNotes,
                 $parkedUserTurn,
             ],

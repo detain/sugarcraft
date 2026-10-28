@@ -932,8 +932,9 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
      * a misspelt key (C-AGT-3.b retired its inert `memory:` half), a skill
      * whose `allowed-tools` and `model` now pass without a row (C-EXT-2.b made
      * them live) and whose `context: fork` passes as well (C-EXT-2.c made it
-     * live), while a misspelt `user_invocable` is named, a command with
-     * `subtask: true`,
+     * live), while a misspelt `user_invocable` is named, a command with a
+     * misspelt `subtaskx` (C-EXT-2.e retired the command format's inert pair,
+     * so only an unknown key earns its row),
      * and a rule whose `enable: false` silently leaves it enabled.
      */
     public function testIgnoredFrontmatterReachesBothChannelsAsOneRowPerFormat(): void
@@ -944,7 +945,7 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
         mkdir($sc . '/skills/fork-me', 0o700, true);
         file_put_contents($sc . '/skills/fork-me/SKILL.md', "---\ndescription: Forks.\nallowed-tools: Read\nmodel: big\ncontext: fork\nuser_invocable: true\n---\nbody\n");
         mkdir($sc . '/commands', 0o700, true);
-        file_put_contents($sc . '/commands/iso.md', "---\ndescription: Isolated.\nsubtask: true\n---\nDo it.\n");
+        file_put_contents($sc . '/commands/iso.md', "---\ndescription: Isolated.\nsubtaskx: true\n---\nDo it.\n");
         mkdir($sc . '/rules', 0o700, true);
         file_put_contents($sc . '/rules/style.md', "---\nenable: false\n---\nUse tabs.\n");
 
@@ -968,7 +969,8 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
             $rows,
         );
         self::assertContains(
-            '1 command declares frontmatter candy-code ignores: `subtask: true` is not acted on (/iso)',
+            '1 command declares frontmatter candy-code ignores: '
+            . '`subtaskx` is not a command field (did you mean `subtask`?) (/iso)',
             $rows,
         );
         self::assertContains(

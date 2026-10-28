@@ -1220,6 +1220,7 @@ final class SessionHost
             return $this->admitExpanded(
                 $text,
                 $turns->expandCustomCommand($spec, $arguments, $this->directive($spec)),
+                $spec,
             );
         }
 
@@ -1243,15 +1244,42 @@ final class SessionHost
      * read (audit 15b-15) — the body is repository-authored, with its own `@`
      * form a trust tier may just have refused. The `/rewind` draft is the line
      * as typed.
+     *
+     * C-EXT-2.e: $spec is the command file's own spec (null for an expansion
+     * no spec stands behind, like the MCP fetch-refusal leg). Beside it this
+     * route applies the same two judgements Chat::submit() applies to a
+     * command it expands: a `subtask:`/`agent:` command rides out wrapped in
+     * {@see TurnController::wrapCommandDelegation()}'s delegation directive,
+     * and a `model:` command pins exactly this one turn through
+     * {@see TurnController::commandTurnModel()} — the pin is threaded to
+     * {@see dispatch()}'s backend, never stored on the session, so the next
+     * turn answers on the session's model by construction.
      */
-    private function admitExpanded(string $typed, ?string $expanded): TurnTicket
+    private function admitExpanded(string $typed, ?string $expanded, ?CommandSpec $spec = null): TurnTicket
     {
         $expanded = trim((string) $expanded);
         if ($expanded === '') {
             return TurnTicket::refused($this->turns()->emptyCustomCommandNotice($typed));
         }
 
-        return $this->admitPrompt($expanded, false, $typed);
+        $oneTurnModel = null;
+        $commandModelNotice = null;
+        if ($spec !== null) {
+            $expanded = $this->turns()->wrapCommandDelegation($expanded, $spec);
+            $engine = $this->backend();
+            $decided = $this->turns()->commandTurnModel($spec, $engine instanceof EngineBackend ? $engine : null);
+            if ($decided !== null) {
+                [$oneTurnModel, $commandModelNotice] = $decided;
+            }
+        }
+
+        return $this->admitPrompt(
+            $expanded,
+            false,
+            $typed,
+            oneTurnModel: $oneTurnModel,
+            commandModelNotice: $commandModelNotice,
+        );
     }
 
     /**
@@ -1305,7 +1333,7 @@ final class SessionHost
             },
             static fn (string $file): array => TurnController::customCommandExpansionFromPayload(TurnController::takePayload($file)),
             $run,
-            function (array $result) use ($text): void {
+            function (array $result) use ($text, $command): void {
                 [$expanded, $gated] = $result;
                 // The child's gate evaluations, replayed against this session's
                 // own gate, so Auto mode's circuit breaker counts what a
@@ -1330,7 +1358,7 @@ final class SessionHost
 
                     return;
                 }
-                $this->admitExpanded($text, $expanded);
+                $this->admitExpanded($text, $expanded, $command[0]);
             },
         );
 
@@ -1348,6 +1376,13 @@ final class SessionHost
      * @param ?PermissionMode $modeCeiling the C-AGT-2.b gate ceiling of the
      *     submission that starts this turn; threaded unchanged through a
      *     forked hook's resume, null for an expansion that names none
+     * @param ?string $oneTurnModel C-EXT-2.e: the model a command file's
+     *     `model:` pinned for exactly this turn (see
+     *     {@see TurnController::commandTurnModel()}); threaded unchanged
+     *     through a forked hook's resume so the pin cannot be forked away
+     * @param ?string $commandModelNotice C-EXT-2.e: the fall-back sentence when
+     *     the requested model could not be served and the turn rides the
+     *     session's model instead; a notice row, never an override
      */
     private function admitPrompt(
         string $text,
@@ -1356,6 +1391,8 @@ final class SessionHost
         ?array $verdicts = null,
         array $attachments = [],
         ?PermissionMode $modeCeiling = null,
+        ?string $oneTurnModel = null,
+        ?string $commandModelNotice = null,
     ): TurnTicket {
         $turns = $this->turns();
         $ledger = $this->ledger();
@@ -1467,7 +1504,7 @@ final class SessionHost
         $notes = [];
         if ($hooks !== null) {
             if ($verdicts === null) {
-                $verdicts = $this->fireTurnHooks($text, $resolveMentions, $draft, $attachments, $modeCeiling);
+                $verdicts = $this->fireTurnHooks($text, $resolveMentions, $draft, $attachments, $modeCeiling, $oneTurnModel, $commandModelNotice);
                 if ($verdicts === null) {
                     return TurnTicket::pending();
                 }
@@ -1481,7 +1518,7 @@ final class SessionHost
             $notes = $turns->turnHookNotes($prompt, $session);
         }
 
-        return $this->dispatch($text, $resolveMentions, $draft, $baseHistory, $reports, $notes, $refilled, $attachments, $modeCeiling);
+        return $this->dispatch($text, $resolveMentions, $draft, $baseHistory, $reports, $notes, $refilled, $attachments, $modeCeiling, $oneTurnModel, $commandModelNotice);
     }
 
     /**
@@ -1491,10 +1528,12 @@ final class SessionHost
      * back now; when a hook leaves the process the chain is forked
      * (audit 15b-04), the session is held, null is returned, and
      * {@see admitPrompt()} is re-entered with the verdicts when they land.
+     * The two C-EXT-2.e tail parameters ride the fork so a command's one-turn
+     * model pin and its fall-back notice survive the chain.
      *
      * @return array{0: HookResult, 1: ?HookResult}|null
      */
-    private function fireTurnHooks(string $text, bool $resolveMentions, string $draft, array $attachments = [], ?PermissionMode $modeCeiling = null): ?array
+    private function fireTurnHooks(string $text, bool $resolveMentions, string $draft, array $attachments = [], ?PermissionMode $modeCeiling = null, ?string $oneTurnModel = null, ?string $commandModelNotice = null): ?array
     {
         $hooks = $this->workspace->hooks ?? throw new \LogicException('fireTurnHooks() needs a hook manager');
         $turns = $this->turns();
@@ -1519,8 +1558,8 @@ final class SessionHost
             },
             static fn (string $file): array => TurnController::turnHookResultsFromPayload(TurnController::takePayload($file)),
             $run,
-            function (array $verdicts) use ($text, $resolveMentions, $draft, $attachments, $modeCeiling): void {
-                $this->admitPrompt($text, $resolveMentions, $draft, $verdicts, $attachments, $modeCeiling);
+            function (array $verdicts) use ($text, $resolveMentions, $draft, $attachments, $modeCeiling, $oneTurnModel, $commandModelNotice): void {
+                $this->admitPrompt($text, $resolveMentions, $draft, $verdicts, $attachments, $modeCeiling, $oneTurnModel, $commandModelNotice);
             },
         );
 
@@ -2074,6 +2113,8 @@ final class SessionHost
         ?bool $refilled,
         array $attachments = [],
         ?PermissionMode $modeCeiling = null,
+        ?string $oneTurnModel = null,
+        ?string $commandModelNotice = null,
     ): TurnTicket {
         $turns = $this->turns();
         $preTurnHistory = [...$baseHistory, ...$reports];
@@ -2089,6 +2130,12 @@ final class SessionHost
             extraAttachments: $attachments,
         );
         $newTurnMessages = [...$reports, ...$notes, ...$attachmentNotes, $userTurn];
+        if ($commandModelNotice !== null) {
+            // C-EXT-2.e: the model fall-back sentence, reported immediately
+            // ahead of the prompt it speaks for — the same slot Chat::submit()
+            // gives the identical notice on the TUI route.
+            array_splice($newTurnMessages, count($newTurnMessages) - 1, 0, [Message::notice($commandModelNotice)]);
+        }
 
         // The 70% reminder: dropped from the base unconditionally, appended
         // only when due, so the history holds at most one, current, copy.
@@ -2156,9 +2203,18 @@ final class SessionHost
         // in the parent before pcntl_fork, so $run() must be called inside
         // the window for the child's records to land here and not in the
         // process sink nobody drains on serve.
+        // C-EXT-2.e: the one-turn pin is applied HERE and nowhere else — a
+        // withModel() clone handed to the runner, never stored on the session,
+        // so the next dispatch reads $this->backend() at the session's model
+        // by construction. Same rule as Chat::scheduleBackendCompletion().
+        $turnBackend = $this->backend($modeCeiling);
+        if ($oneTurnModel !== null && $turnBackend instanceof EngineBackend) {
+            $turnBackend = $turnBackend->withModel($oneTurnModel);
+        }
+
         $run = RuntimeNoticeSink::using($this->notices, fn (): \Closure => $this->runner()->start(
             backend: TurnRunner::backendForTurn(
-                $this->backend($modeCeiling),
+                $turnBackend,
                 $this->workspace->maxCostUsd,
                 $this->spentUsd(),
                 $this->compactor->config(),

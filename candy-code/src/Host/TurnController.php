@@ -11,6 +11,7 @@ use SugarCraft\Code\Attachments\ContextMentions;
 use SugarCraft\Code\Attachments\FileMentions;
 use SugarCraft\Code\AttachmentType;
 use SugarCraft\Code\Backend\CancellationToken;
+use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Backend\QueueMode;
 use SugarCraft\Code\Backend\SocketSteerInbox;
 use SugarCraft\Code\CommandParser;
@@ -35,6 +36,7 @@ use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ToolIpcFiles;
+use SugarCraft\Code\Tools\BuiltIn\TaskTool;
 use SugarCraft\Code\ToolCall;
 
 /**
@@ -454,6 +456,131 @@ final class TurnController
             (new CommandParser())->parse('/c ' . $arguments)?->args ?? [],
             $directive,
         );
+    }
+
+    /**
+     * The agent a delegating command falls back to when its frontmatter names
+     * none — the same default {@see \SugarCraft\Code\Skills\SkillMentions}
+     * gives a fork skill with no `agent:`, so one roster word answers both.
+     */
+    public const DEFAULT_DELEGATION_AGENT = 'coder';
+
+    /**
+     * C-EXT-2.e: the fenced delegation directive a `subtask: true` or
+     * `agent:`-declaring command's expansion rides.
+     *
+     * THE ONE IMPLEMENTATION FOR ALL THREE SURFACES: TUI and -p enter through
+     * `Chat::submit()`'s custom-command branch and serve through
+     * {@see \SugarCraft\Code\Host\SessionHost::admitExpanded()}, and both call
+     * THIS method on the already-non-empty expansion — one prose, one fence,
+     * one pinned shape ({@see \SugarCraft\Code\Tests\Host\TurnControllerCommandRoutingTest}).
+     * Wrapping AFTER the empty-expansion refusal is deliberate: a directive
+     * glued around an empty body would resurrect exactly the prompt
+     * {@see emptyCustomCommandNotice()} exists to refuse.
+     *
+     * The directive ASKS; the model holds the Task tool and may decline.
+     * Compliance is not enforced (plan §6 R-EXT-2's accepted risk), which is
+     * why the shape is pinned rather than paraphrased: a drift here changes
+     * what the model is told to do. A `model:` beside a delegation key rides
+     * the directive as the asked-for model — it is NOT also pinned inline, so
+     * the delegation's own {@see TaskTool::runOnEngine()} rule stays the only
+     * model decision inside the run.
+     */
+    public function wrapCommandDelegation(string $expanded, CommandSpec $spec): string
+    {
+        if (!$spec->subtask && $spec->agent === null) {
+            return $expanded;
+        }
+
+        $decl = match (true) {
+            $spec->subtask && $spec->agent !== null => '`subtask: true` and `agent: ' . $spec->agent . '`',
+            $spec->subtask => '`subtask: true`',
+            default => '`agent: ' . $spec->agent . '`',
+        };
+
+        return Lang::t('host.turn.command_delegation', [
+            'name' => $spec->name,
+            'decl' => $decl,
+            'agent' => $spec->agent ?? self::DEFAULT_DELEGATION_AGENT,
+            'model' => $spec->model === null
+                ? ''
+                : Lang::t('host.turn.command_delegation.model', ['model' => $spec->model]),
+            'prompt' => $expanded,
+        ]);
+    }
+
+    /**
+     * C-EXT-2.e: the inline `model:` of a command with NO delegation key pins
+     * exactly the ONE turn its expansion is sent as — never the session, so
+     * the next turn runs on the session's model without any restore step.
+     *
+     * THE TASK RULE, RE-DERIVED (plan §6 R13: one rule, one spelling):
+     * {@see TaskTool}'s `chooseModel()` honours the asked-for model unless it
+     * plainly cannot be — an id with whitespace or control bytes, a Claude
+     * Code tier name no model of this session's tier answers to, a server
+     * reporting it serves another model, or a single-model server — and each
+     * "cannot" falls back to the session's model WITH a notice instead of
+     * refusing. Decided from what the provider already knows; never a probe
+     * request (E646's neighbour: no network per keystroke).
+     *
+     * Returns null when nothing applies: no `model:`, or a delegation key set
+     * (then the model rides {@see wrapCommandDelegation()} and Task decides it),
+     * or an engine that already runs that model. A non-{@see EngineBackend}
+     * session answers null by the same route: the engine is the only backend
+     * with a `withModel()`, so an inert pin there is the truth, not a loss —
+     * the caller passes null and the row goes unsaid.
+     *
+     * @return ?array{0: ?string, 1: ?string} [model to pin for one turn, the
+     *         fallback notice (null when the pin holds)]
+     */
+    public function commandTurnModel(CommandSpec $spec, ?EngineBackend $engine): ?array
+    {
+        if ($spec->model === null || $spec->subtask || $spec->agent !== null || $engine === null) {
+            return null;
+        }
+
+        $model = trim($spec->model);
+        if ($model === '') {
+            return null;
+        }
+
+        $session = $engine->model();
+        if ($model === $session) {
+            return null;
+        }
+
+        $provider = $engine->provider()->name();
+        $fallback = function (string $reasonKey) use ($spec, $model, $provider): array {
+            return [null, Lang::t('host.turn.command_model_fallback', [
+                'name' => $spec->name,
+                'model' => $model,
+                'reason' => Lang::t($reasonKey, ['provider' => $provider]),
+            ])];
+        };
+
+        if (preg_match('/[\s[:cntrl:]]/', $model) === 1) {
+            return $fallback('host.turn.command_model_fallback.not_an_id');
+        }
+
+        if (\in_array(strtolower($model), TaskTool::CLAUDE_MODEL_ALIASES, true)) {
+            if (str_contains(strtolower($session), strtolower($model))) {
+                return null;
+            }
+
+            return $fallback('host.turn.command_model_fallback.alias_unanswered');
+        }
+
+        $served = $engine->servedModel();
+        if ($served !== null) {
+            return $served === $model
+                ? [$model, null]
+                : $fallback('host.turn.command_model_fallback.not_served');
+        }
+        if ($engine->servesOneModel()) {
+            return $fallback('host.turn.command_model_fallback.single_model');
+        }
+
+        return [$model, null];
     }
 
     /**

@@ -99,12 +99,16 @@ final class FrontmatterKeyAuditTest extends TestCase
         self::assertSame([], FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::SKILL, ['agent' => 'sage']));
     }
 
-    public function testAValueSensitiveInertKeyShowsTheValue(): void
+    public function testCommandModelSubtaskAndAgentAreLiveSoNoCommandKeyIsInert(): void
     {
-        self::assertSame(
-            ['`subtask: true` is not acted on'],
-            FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::COMMAND, ['subtask' => true]),
-        );
+        // C-EXT-2.e: TurnController reads all three — `subtask: true` and
+        // `agent: X` route the expansion through the delegation directive and
+        // `model: X` pins that one turn — so the command format's inert pair
+        // left the map and no value of any command key is "ignored" any more.
+        self::assertSame([], FrontmatterKeyAudit::INERT[FrontmatterKeyAudit::COMMAND]);
+        self::assertSame([], FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::COMMAND, ['subtask' => true]));
+        self::assertSame([], FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::COMMAND, ['model' => 'big']));
+        self::assertSame([], FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::COMMAND, ['agent' => 'sage']));
     }
 
     public function testAnUnknownKeyIsNamedWithADidYouMean(): void
@@ -236,12 +240,12 @@ final class FrontmatterKeyAuditTest extends TestCase
         $path = $this->dir . '/c.md';
         file_put_contents($path, "---\ndescription: D\nmodel: big\nagent: build\ncolour: red\n---\nDo it.\n");
 
-        // INT-3 flipped `agent` from unrecognised to KNOWN: it is Claude
-        // Code's own command syntax and the imported trees are read now, so
-        // did-you-mean on it would nag every file the import exists to
-        // support. `colour` keeps the unknown-key row the seam is for.
+        // INT-3 flipped `agent` from unrecognised to KNOWN; C-EXT-2.e made it
+        // and `model` ACTED ON (delegation directive, one-turn model pin), so
+        // neither earns a row any more. `colour` keeps the unknown-key row the
+        // seam is for — and no did-you-mean: no command key folds near it.
         self::assertSame(
-            ['`model` is not acted on', '`colour` is not a command field'],
+            ['`colour` is not a command field'],
             CommandSpec::fromFile($path, 'c')->ignoredFrontmatter,
         );
         self::assertSame(
@@ -250,6 +254,8 @@ final class FrontmatterKeyAuditTest extends TestCase
             'the imported vocabulary earns no notice of either kind (KNOWN, not INERT — see the KNOWN doc-block)'
         );
         self::assertSame([], CommandSpec::new('help', 'Help', 'Session')->ignoredFrontmatter);
+        // C-EXT-2.e: the agent name is carried off the row, not just tolerated.
+        self::assertSame('build', CommandSpec::fromFile($path, 'c')->agent);
     }
 
     public function testRuleLoaderRecordsWhatALoadedRuleIgnores(): void

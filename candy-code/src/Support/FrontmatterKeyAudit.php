@@ -64,20 +64,20 @@ final class FrontmatterKeyAudit
      * KNOWN precisely so an imported rule using them earns no did-you-mean -
      * and in no INERT row, because both keys decide something.
      *
-     * COMMAND keys `allowed-tools`, `disallowed-tools` and `agent` are Claude
-     * Code's command frontmatter and `template` is opencode's prompt body; all
-     * four joined the list when INT-3 started READING those trees, under the
-     * same argument as the rule pair above: a file written for the convention
-     * we chose to import must not pay a did-you-mean for its own syntax.
-     * `template` is consumed — it substitutes for an empty body, see
-     * {@see \SugarCraft\Code\Commands\CommandSpec::fromFile()}. The three
-     * Claude keys are deliberately KNOWN-but-not-INERT: the docs pin INERT to
-     * COMMANDS.md's Inert rows, and the import floor (ruling R7) makes their
-     * no-op a property of THIS port rather than of the file — the syntax is
-     * correct and the reader's silence is ours, which is the skill side's
-     * descriptive-fields category, not the "looks active but does nothing"
-     * one. Widening INERT (and the matching doc rows) is an owner-side step
-     * if the imported trio ever lands on the acted-on-later ledger.
+     * COMMAND keys `allowed-tools` and `disallowed-tools` are Claude Code's
+     * command frontmatter and `template` is opencode's prompt body; all four
+     * (with `agent`) joined the list when INT-3 started READING those trees,
+     * under the same argument as the rule pair above: a file written for the
+     * convention we chose to import must not pay a did-you-mean for its own
+     * syntax. `template` is consumed — it substitutes for an empty body, see
+     * {@see \SugarCraft\Code\Commands\CommandSpec::fromFile()}. Since
+     * C-EXT-2.e `agent` is consumed too — it routes the expansion through the
+     * delegation directive beside `subtask`, so it stands in KNOWN as an
+     * ACTED-ON key, no longer part of the silent trio; that trio shrank to the
+     * two tool-list keys plus `template`, whose no-op stays a property of THIS
+     * port rather than of the file — the syntax is correct and the reader's
+     * silence is ours, which is the skill side's descriptive-fields category,
+     * not the "looks active but does nothing" one.
      */
     public const KNOWN = [
         self::AGENT => [
@@ -96,9 +96,9 @@ final class FrontmatterKeyAudit
     /**
      * Keys each format parses and no live path acts on, mapped to the values
      * that are no-ops anyway (lower-cased). A declared key whose value is one
-     * of those is not reported: `subtask: false` asks for exactly what
-     * happens. (`context: thread` held that seat until C-EXT-2.c wired the
-     * fork half and the row left the map.)
+     * of those is not reported. (`subtask: false` and `context: thread` held
+     * those seats until C-EXT-2.c wired the skill fork half and C-EXT-2.e
+     * wired the command delegation half, and both rows left the map.)
      *
      * - agent preset: no key is inert here any more. `Task` honours `model`,
      *   `effort` and (narrow-only) `permissionMode` since roadmap 4.1,
@@ -122,8 +122,13 @@ final class FrontmatterKeyAudit
      *   {@see \SugarCraft\Code\Skills\ActiveSkillEffects} reads them off the
      *   skills invoked in the turn, feeds the tool grants to the gate and the
      *   model and thinking effort to the step loop's next request.
-     * - command: `Chat` expands a file command's template into the current
-     *   conversation on the current model; nothing reads `model` or `subtask`.
+     * - command: no key is inert here any more. `subtask` and `agent` went
+     *   LIVE with C-EXT-2.e: {@see \SugarCraft\Code\Host\TurnController::wrapCommandDelegation()}
+     *   wraps the expansion in the fenced delegation directive naming the
+     *   `Task` agent, and `model` went LIVE beside them:
+     *   {@see \SugarCraft\Code\Host\TurnController::commandTurnModel()} pins
+     *   that one turn to the declared model under the same fall-back rule
+     *   `Task` applies to a requested model.
      * - rule: `keywords` reaches {@see \SugarCraft\Code\Context\Rule::$models}'s
      *   sibling {@see \SugarCraft\Code\Context\Rule::$keywords} and no matcher
      *   consults it. `models` is LIVE (ISS-068, seam closed): the prompt
@@ -138,10 +143,7 @@ final class FrontmatterKeyAudit
     public const INERT = [
         self::AGENT => [],
         self::SKILL => [],
-        self::COMMAND => [
-            'model' => [],
-            'subtask' => ['false'],
-        ],
+        self::COMMAND => [],
         self::RULE => [
             'keywords' => [],
         ],

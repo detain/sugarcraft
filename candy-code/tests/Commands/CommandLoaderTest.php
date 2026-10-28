@@ -86,6 +86,7 @@ final class CommandLoaderTest extends TestCase
             argument-hint: <suite>
             model: anthropic/claude-3-5-sonnet-20241022
             subtask: true
+            agent: reviewer
             ---
             Review @src/Foo.php then run the tests for $1.
             MD);
@@ -99,6 +100,8 @@ final class CommandLoaderTest extends TestCase
         $this->assertSame('<suite>', $spec->argumentHint);
         $this->assertSame('anthropic/claude-3-5-sonnet-20241022', $spec->model);
         $this->assertTrue($spec->subtask);
+        // C-EXT-2.e: `agent` is read off the row beside them, not carried silent.
+        $this->assertSame('reviewer', $spec->agent);
         $this->assertSame('Review @src/Foo.php then run the tests for $1.', $spec->template);
         $this->assertTrue($spec->isFileBased());
         // File-based commands are typed after "/" and carry no palette action.
@@ -117,6 +120,7 @@ final class CommandLoaderTest extends TestCase
         $this->assertSame('Summarize the diff.', $commands['summarize']->template);
         $this->assertFalse($commands['summarize']->subtask);
         $this->assertNull($commands['summarize']->model);
+        $this->assertNull($commands['summarize']->agent);
     }
 
     public function testSubdirectoriesNamespaceTheCommandName(): void

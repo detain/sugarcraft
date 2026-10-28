@@ -110,8 +110,8 @@ subtask: true
 Review the change at $1 for correctness issues.
 ```
 
-Four keys, all optional, plus four import-floor keys the audit recognises
-silently (`template`, `allowed-tools`, `disallowed-tools`, `agent`).
+Five keys, all optional, plus three import-floor keys the audit recognises
+silently (`template`, `allowed-tools`, `disallowed-tools`).
 Frontmatter itself is optional — a bare markdown file
 is a valid command whose body is the whole prompt.
 
@@ -119,19 +119,25 @@ is a valid command whose body is the whole prompt.
 |---|---|
 | `description` | shown in the "/" popup and `/help`; defaults to `Custom command: <name>` |
 | `argument-hint` | placeholder shown after the name in the popup |
-| `model` | **Inert.** Parsed and carried on the row; the expanded prompt still goes to the session's current model |
-| `subtask` | **Inert.** Parsed and carried on the row; `true` does not isolate anything — the prompt still expands into the current conversation |
+| `model` | Live since C-EXT-2.e: the expanded prompt goes out on this model for exactly the one turn the command submits, through `TurnController::commandTurnModel()`; a model this server cannot serve falls back to the session's with a notice — the same rule `Task` applies to a requested model |
+| `subtask` | Live since C-EXT-2.e: `true` wraps the expansion in `TurnController::wrapCommandDelegation()`'s fenced delegation directive, so the prompt goes to the `Task` tool naming `agent` (default `coder`) instead of being answered in the conversation |
+| `agent` | Claude Code's command frontmatter, live since C-EXT-2.e: routes the expansion through that same directive and names the agent it delegates to; without `subtask`, `agent` alone still delegates |
 | `template` | opencode's prompt body. Consumed only as a substitute for an empty file body; a body wins when both exist |
-| `allowed-tools` / `disallowed-tools` / `agent` | Claude Code's command frontmatter. Recognised-silent: a file in the imported convention earns no did-you-mean for its own syntax, and this port carries and acts on none of the three (the silence is ours, not the file's) |
+| `allowed-tools` / `disallowed-tools` | Claude Code's command frontmatter. Recognised-silent: a file in the imported convention earns no did-you-mean for its own syntax, and this port carries and acts on neither (the silence is ours, not the file's) |
 
-`model` and `subtask` are written the way opencode and Claude Code write them,
-so a command copied from either tool loads unchanged, but nothing in
-`Chat` reads them yet. The launch says so instead of leaving it to be
-discovered: one aggregated row (stderr and transcript) names every command
-that sets an inert key or a key the audit does not know, with a did-you-mean for a
-near miss (`argument_hint` → `argument-hint`). The file still loads. The inert
-pair is `FrontmatterKeyAudit::INERT`, which `InertFrontmatterDocumentationDriftTest`
-holds this table to.
+`model`, `subtask` and `agent` are written the way opencode and Claude Code
+write them, so a command copied from either tool loads unchanged and does what
+it says. One implementation serves every surface: `Chat::submit()` applies the
+directive and the one-turn pin, `SessionHost::admitExpanded()` applies the same
+two judgements on the served route, and the `-p` one-shot goes through the same
+`Chat` branch. A `model:` pin cannot ride a parked compaction — that route
+lands its dispatch from a history event that carries no model — so the park
+says so and the prompt goes out on the session's model. The launch still
+aggregates what it cannot honour: one row (stderr and transcript) names every
+command that sets a key the audit does not know, with a did-you-mean for a
+near miss (`argument_hint` → `argument-hint`). The file still loads. No
+command key is inert today; `FrontmatterKeyAudit::INERT` keeps the set, and
+`InertFrontmatterDocumentationDriftTest` holds this table to it.
 
 `CommandSpec::fromFile()` **fails closed**: an unreadable file, unparseable
 YAML, a wrongly typed frontmatter value, a frontmatter block that is not a

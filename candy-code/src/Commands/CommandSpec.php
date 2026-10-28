@@ -199,15 +199,30 @@ final class CommandSpec
          */
         public readonly ?string $template = null,
         /**
-         * Frontmatter `model:`. INERT: parsed and carried, and nothing pins the
-         * expanded prompt to it — see {@see FrontmatterKeyAudit::INERT}.
+         * Frontmatter `model:` — ACTED ON since C-EXT-2.e. With no delegation
+         * key set it pins exactly the one turn this expansion is sent as
+         * ({@see \SugarCraft\Code\Host\TurnController::commandTurnModel()});
+         * with `subtask` or `agent` set it names the model the delegation
+         * directive asks {@see \SugarCraft\Code\Tools\BuiltIn\TaskTool} to run.
+         * Either way the session's own model is never changed.
          */
         public readonly ?string $model = null,
         /**
-         * Frontmatter `subtask: true`. INERT: the template still expands into
-         * the current conversation — see {@see FrontmatterKeyAudit::INERT}.
+         * Frontmatter `subtask: true` — ACTED ON since C-EXT-2.e: the expansion
+         * rides a fenced delegation directive asking for a Task run
+         * ({@see \SugarCraft\Code\Host\TurnController::wrapCommandDelegation()})
+         * instead of answering in this conversation. `false` is the default
+         * value, never reported inert, and expands inline as before.
          */
         public readonly bool $subtask = false,
+        /**
+         * Frontmatter `agent:` — Claude Code's command delegation key, parsed
+         * since C-EXT-2.e. Set (like `subtask: true`) routes the expansion
+         * through the delegation directive naming this agent; null delegates to
+         * the default worker. It never renames a session agent — commands are
+         * prompts, and the roster is {@see \SugarCraft\Code\Agents\AgentManager}'s.
+         */
+        public readonly ?string $agent = null,
         /**
          * WHICH DISK TIER this row was read from: `'user'` for
          * `~/.candy-code/commands`, `'project'` for
@@ -224,11 +239,10 @@ final class CommandSpec
          */
         public readonly ?string $tier = null,
         /**
-         * The file's frontmatter keys nothing acts on — the inert `model` /
-         * `subtask` and any unknown key — as
-         * {@see FrontmatterKeyAudit::inspect()} labels. Empty for a built-in
-         * row. Carried on the row because the loader that reads the file
-         * hands back only rows, and the launch reports these as one
+         * The file's frontmatter keys nothing acts on — any key the audit does
+         * not know — as {@see FrontmatterKeyAudit::inspect()} labels. Empty for
+         * a built-in row. Carried on the row because the loader that reads the
+         * file hands back only rows, and the launch reports these as one
          * aggregated notice rather than letting the keys vanish.
          *
          * @var list<string>
@@ -260,6 +274,7 @@ final class CommandSpec
         ?string $template = null,
         ?string $model = null,
         bool $subtask = false,
+        ?string $agent = null,
         ?string $tier = null,
         array $ignoredFrontmatter = [],
         ?SkillSource $source = null,
@@ -276,6 +291,7 @@ final class CommandSpec
             $template,
             $model,
             $subtask,
+            $agent,
             $tier,
             $ignoredFrontmatter,
             $source,
@@ -284,8 +300,9 @@ final class CommandSpec
 
     /**
      * Build a row from a user-authored command file: YAML frontmatter
-     * (`description`, `argument-hint`, `model`, `subtask` — the last two
-     * inert — plus opencode's `template`, read only as an empty body's
+     * (`description`, `argument-hint`, `model`, `subtask`, `agent` — the last
+     * three acted on by {@see \SugarCraft\Code\Host\TurnController} since
+     * C-EXT-2.e — plus opencode's `template`, read only as an empty body's
      * substitute, see {@see $source}) plus a template body. Frontmatter is
      * optional - a bare markdown file is a valid command
      * whose body is the whole prompt.
@@ -374,6 +391,7 @@ final class CommandSpec
             template: $template,
             model: self::stringField($meta, 'model', $path),
             subtask: self::boolField($meta, 'subtask', $path),
+            agent: self::stringField($meta, 'agent', $path),
             // NOT read from the frontmatter, and that is the whole point: the
             // tier is what decides whether this file's `` !`…` `` forms may run
             // a shell, so it is supplied by the loader that knows WHICH
