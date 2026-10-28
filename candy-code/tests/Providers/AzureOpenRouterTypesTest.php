@@ -316,8 +316,15 @@ final class AzureOpenRouterTypesTest extends TestCase
         return [
             'owned authorization' => [['Authorization' => 'x'], 'builds that header itself'],
             'owned content-type' => [['Content-Type' => 'x'], 'builds that header itself'],
+            // HTTP header names are case-insensitive, so the owned-name
+            // refusal goes through strtolower — an uppercase spelling must
+            // not smuggle the auth header past the floor.
+            'case-variant owned name' => [['AUTHORIZATION' => 'Bearer smuggled'], 'builds that header itself'],
             'empty name' => [['' => 'x'], 'header names must be'],
+            'untrimmed name' => [['X-Probe ' => 'x'], 'header names must be'],
             'colon in name' => [['X-Bad: Host' => 'x'], 'header names must be'],
+            'empty value' => [['X-Probe' => ''], 'needs a non-empty string value'],
+            'non-string value' => [['X-Probe' => 42], 'needs a non-empty string value'],
             'control char in value' => [["X-Probe" => "bad\rvalue"], 'control characters'],
         ];
     }
