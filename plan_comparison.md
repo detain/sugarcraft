@@ -1818,7 +1818,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** P-TABS.e (W14)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-TABS.f`
 
-#### C-WEB-3.g — Dormant-method roster spec (fail-loud on new uncalled RPCs)
+#### ✅ 770f8ee9bc75726c86f323a751d1233145130eda C-WEB-3.g — Dormant-method roster spec (fail-loud on new uncalled RPCs)
 - **Item:** C-WEB-3 (sources: WEB-1-P1 (fix: dormancy roster spec)) · dormant-wire · S
 - **What:** **What the spec derives.** One spec: the `METHOD_SCOPES` keys (`protocol/generated.ts`) minus every method a shipped module calls. It reuses the `shutdownDormant.spec.ts` source-scan regex (`request('M'` / `method: 'M'`). **What …
 - **Files — create:** `candy-code-web/src-web/__tests__/dormantRoster.spec.ts`
