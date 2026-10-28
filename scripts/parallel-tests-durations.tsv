@@ -590,6 +590,7 @@ candy-code/tests/Cli/NonInteractiveProviderFailureTest.php	0.161	21
 candy-code/tests/Tools/BuiltIn/TeamToolHooksTest.php	0.158	6
 candy-code/tests/Support/SecretEnvScrubTest.php	0.155	29
 candy-code/tests/Support/ManifestDependencyReachTest.php	0.152	3
+candy-code/tests/Bundles/MarketplaceRegistryTest.php	0.152	16
 candy-code/tests/Integration/ParallelSubAgentActivityRelayTest.php	0.149	1
 candy-code/tests/Tools/ToolDescriptionGuidanceTest.php	0.144	23
 candy-code/tests/Agents/SessionArtifactRetentionTest.php	0.143	5
@@ -726,6 +727,7 @@ candy-code/tests/Config/Settings/SettingsWriterTest.php	0.070	53
 candy-code/tests/Hooks/RuntimePostToolUseBlockTest.php	0.070	7
 candy-code/tests/Memory/ForeignMemoryImporterTest.php	0.070	40
 candy-code/tests/Support/ProjectRootTest.php	0.070	6
+candy-code/tests/Bundles/BundleSourceTest.php	0.070	7
 candy-code/tests/Backend/EngineBackendPromptSectionsTest.php	0.069	4
 candy-code/tests/MCP/McpToolShapeTest.php	0.069	17
 candy-code/tests/Media/ImportPngTest.php	0.069	16
@@ -779,6 +781,7 @@ candy-code/tests/App/AgentsPaneDockedFooterTest.php	0.054	3
 candy-code/tests/Backend/TurnStartPruneTest.php	0.054	3
 candy-code/tests/Bundles/BundleManifestTest.php	0.054	9
 candy-code/tests/Cli/NonInteractiveTest.php	0.054	25
+candy-code/tests/Bundles/MarketplaceTest.php	0.054	9
 candy-code/tests/Events/ToolProgressFrameCodecTest.php	0.053	5
 candy-code/tests/Memory/MemorySearchIndexTest.php	0.053	15
 candy-code/tests/RuntimeToolResultUtf8Test.php	0.053	6
@@ -791,6 +794,7 @@ candy-code/tests/Tui/StallDetectorTest.php	0.052	21
 candy-code/tests/Context/ProjectMemoryWriterTest.php	0.051	10
 candy-code/tests/Permissions/ReadOnlySedAndLoopsTest.php	0.051	75
 candy-code/tests/Host/Commands/SkillsEnableDisableTest.php	0.051	7
+candy-code/tests/Bundles/BundleRecommenderTest.php	0.051	10
 candy-code/tests/Skills/BuiltInSkillsTest.php	0.050	116
 candy-code/tests/Context/Compaction/SummarySafeguardTest.php	0.049	11
 candy-code/tests/Sessions/ScheduleTest.php	0.049	20
