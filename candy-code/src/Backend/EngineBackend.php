@@ -3337,6 +3337,18 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             if ($tool instanceof \SugarCraft\Code\Tools\AcceptsToolProgress) {
                 // WEB-4: the shell tail needs no engine — only the turn's
                 // event channel, and only when the turn has one.
+                // C-MCP-3.b: an MCP bridge/dispatcher also answers the turn's
+                // ask channel through this arm — its elicitation is put in the
+                // AskUser shape, so the SAME approver the delegation arm below
+                // relays lands here too (Bash and PtyRun implement the progress
+                // leg but not RelaysPermissionAsks, so they pass through this
+                // gate untouched; TaskTool delegates and never reaches it).
+                if ($tool instanceof \SugarCraft\Code\Tools\RelaysPermissionAsks
+                    && !$tool instanceof \SugarCraft\Code\Tools\BuiltIn\TaskTool
+                    && $this->permissionApprover !== null
+                ) {
+                    $tool = $tool->withPermissionApprover($this->permissionApprover);
+                }
                 $tools[] = $toolProgressEmitter === null
                     ? $tool
                     : $tool->withToolProgressEmitter($toolProgressEmitter);
@@ -3344,6 +3356,15 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 continue;
             }
             if (!$tool instanceof DelegatesToEngine) {
+                // C-MCP-3.b: the plain arm relays the approver too — any
+                // future non-delegating relay tool asks through the turn's
+                // channel rather than silently answering nobody.
+                if ($tool instanceof \SugarCraft\Code\Tools\RelaysPermissionAsks
+                    && !$tool instanceof \SugarCraft\Code\Tools\BuiltIn\TaskTool
+                    && $this->permissionApprover !== null
+                ) {
+                    $tool = $tool->withPermissionApprover($this->permissionApprover);
+                }
                 $tools[] = $tool;
 
                 continue;

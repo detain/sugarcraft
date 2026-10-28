@@ -18,6 +18,7 @@ use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\DenialKind;
 use SugarCraft\Code\Permissions\ToolRefusal;
 use SugarCraft\Code\Tools\BuiltIn\AskUserTool;
+use SugarCraft\Code\Tools\BuiltIn\McpCallTool;
 use SugarCraft\Code\Tools\BuiltIn\PlanExitTool;
 use SugarCraft\Core\Util\Ansi;
 
@@ -794,8 +795,12 @@ final class NonInteractive
 
     /**
      * $backend with the model's own questions closed (roadmap 5.7-2): every
-     * `AskUser` fails closed with a "no interactive user" result and every
-     * `PlanExit` is refused, so plan mode is never left in a `-p` run.
+     * `AskUser` fails closed with a "no interactive user" result, every
+     * `PlanExit` is refused, so plan mode is never left in a `-p` run, and —
+     * since C-MCP-3.b — every MCP `elicitation/create` a stdio server puts
+     * mid-call answers `cancel`: an {@see \SugarCraft\Code\Tools\McpToolBridge}
+     * or {@see \SugarCraft\Code\Tools\BuiltIn\McpCallTool} copy installed here
+     * ignores any approver bound later, the same sticky law `AskUser` obeys.
      *
      * Applied whatever approver the run carries. At a terminal
      * {@see HeadlessPermissionPrompt} can take a `y`/`n` for a permission
@@ -814,6 +819,11 @@ final class NonInteractive
         $tools = [];
         foreach ($backend->tools() as $key => $tool) {
             if ($tool instanceof AskUserTool || $tool instanceof PlanExitTool) {
+                $tool = $tool->withoutInteractiveUser(self::NO_INTERACTIVE_USER);
+                $closed = true;
+            } elseif ($tool instanceof \SugarCraft\Code\Tools\McpToolBridge || $tool instanceof McpCallTool) {
+                // C-MCP-3.b: the MCP spellings cancel their elicitations —
+                // the closure, not a refusal row, is what a `-p` server gets.
                 $tool = $tool->withoutInteractiveUser(self::NO_INTERACTIVE_USER);
                 $closed = true;
             }

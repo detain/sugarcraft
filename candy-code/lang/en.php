@@ -2499,6 +2499,8 @@ TXT,
     'host.workflow.usage.resume' => 'Usage: /workflow resume <workflowId>',
     'host.workflow.usage.run' => 'Usage: /workflow run <name> [key=val ...]',
     'host.workflow.usage.status' => 'Usage: /workflow status <workflowId>',
+    // --- mcp: elicitation questions put to the human mid-call (C-MCP-3.b) ---
+    'mcp.elicitation.ask' => 'MCP server `{server}` asks: {question}',
     // --- end chat + host (W11-c) ---
     // --- agents: lines on a delegated run's live trail (TaskTool) ---
     'agents.trail.effort_ignored' => 'effort: {effort} ignored ({provider} sends no reasoning effort)',

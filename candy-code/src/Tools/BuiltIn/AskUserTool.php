@@ -255,9 +255,13 @@ final readonly class AskUserTool implements Tool, BuildsFromCatalog, DelegatesTo
      * the first rows of a long prompt, and a question whose keys were cut off
      * could not be answered on purpose.
      *
+     * PUBLIC since C-MCP-3.b: an MCP elicitation is put to the same modal,
+     * and reusing this shape (not imitating it) is what keeps the TUI modal
+     * and the web permission card rendering server questions with no new UI.
+     *
      * @param list<string> $options
      */
-    private static function prompt(string $question, array $options): string
+    public static function prompt(string $question, array $options): string
     {
         $keys = $options === []
             ? 'y = yes · n = no / decline · r = type an answer'
@@ -277,8 +281,12 @@ final readonly class AskUserTool implements Tool, BuildsFromCatalog, DelegatesTo
     /**
      * The user's own words in a refusal's feedback: '' for none, null when
      * the feedback is a reason the harness wrote rather than the user.
+     *
+     * PUBLIC since C-MCP-3.b: the MCP elicitation adapter reads answers
+     * through the same funnel `answer()` does, so one verdict dialect cannot
+     * drift into two "what did the user type" interpretations.
      */
-    private static function typedAnswer(string $feedback): ?string
+    public static function typedAnswer(string $feedback): ?string
     {
         if ($feedback === '') {
             return '';
@@ -294,7 +302,7 @@ final readonly class AskUserTool implements Tool, BuildsFromCatalog, DelegatesTo
     /**
      * @param list<string> $options
      */
-    private static function pickedOption(string $typed, array $options): ?int
+    public static function pickedOption(string $typed, array $options): ?int
     {
         if (preg_match('/\A\s*(\d+)\s*[.)]?\s*\z/', $typed, $m) === 1) {
             $index = (int) $m[1] - 1;
@@ -368,7 +376,12 @@ final readonly class AskUserTool implements Tool, BuildsFromCatalog, DelegatesTo
         return trim((string) preg_replace('/[\x00-\x09\x0B-\x1F\x7F]/u', '', $text));
     }
 
-    private static function label(string $text): string
+    /**
+     * One display line for a card title, clipped to {@see LABEL_CHARS}.
+     * PUBLIC since C-MCP-3.b so an MCP elicitation labels itself with the
+     * same funnel `AskUser` uses — the card rows must not diverge in shape.
+     */
+    public static function label(string $text): string
     {
         $line = trim((string) preg_replace('/\s+/u', ' ', $text));
 

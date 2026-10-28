@@ -4,8 +4,15 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tools;
 
+use SugarCraft\Code\Events\ToolProgress;
+use SugarCraft\Code\Hooks\HookResult;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\MCP\McpClient;
+use SugarCraft\Code\MCP\McpElicitation;
+use SugarCraft\Code\MCP\McpServerRequests;
 use SugarCraft\Code\MCP\McpTool;
+use SugarCraft\Code\Permissions\ApprovalVerdict;
+use SugarCraft\Code\Tools\BuiltIn\AskUserTool;
 use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
 
 /**
@@ -85,7 +92,7 @@ use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
  * {@see \SugarCraft\Code\Permissions\PermissionGate::isWriteTool()} applies to
  * the `mcp__*` name.
  */
-final class McpToolBridge implements Tool, AcceptsHeartbeat
+final class McpToolBridge implements Tool, AcceptsHeartbeat, RelaysPermissionAsks, AcceptsToolProgress
 {
     use TruncatesOutput;
 
@@ -111,6 +118,25 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat
     public const MAX_RESOURCE_TEXT_BYTES = 8192;
 
     /**
+     * Byte budget for one live progress tail (C-MCP-3.b). The server's own
+     * `message` is untrusted text squeezed into a single TUI row / web card
+     * line; the frame announces truncation rather than silently cutting.
+     */
+    public const PROGRESS_TAIL_BUDGET = 4096;
+
+    /**
+     * $permissionApprover and $toolProgressEmitter are the TURN's ask channel
+     * and live-tail channel, handed in by
+     * {@see \SugarCraft\Code\Backend\EngineBackend::turnTools()} (C-MCP-3.b)
+     * exactly as they arrive for `Bash`. With neither bound the call rides
+     * the spawn-time default desk byte-identically to the pre-C-MCP-3.b wire;
+     * with the approver bound a `elicitation/create` is put to the human in
+     * the AskUser modal shape, and with the emitter bound each
+     * `notifications/progress` becomes a {@see ToolProgress} frame.
+     * $elicitationsClosed is the `-p` latch: once
+     * {@see \SugarCraft\Code\Cli\NonInteractive::withoutInteractiveUser()}
+     * has closed the run, no later binding may re-open the ask channel.
+     *
      * $maxOutputBytes bounds what one server answer can push into the context
      * window (item 0.5): the same 64 KiB default the built-in open-ended
      * tools take, clipped with the trait's announced marker. Before it, an
@@ -122,6 +148,9 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat
         private McpClient $client,
         private McpTool $descriptor,
         private int $maxOutputBytes = self::DEFAULT_MAX_OUTPUT_BYTES,
+        private ?\Closure $permissionApprover = null,
+        private ?\Closure $toolProgressEmitter = null,
+        private bool $elicitationsClosed = false,
     ) {
         self::recordReadOnlyHint($this->name(), $this->readOnly());
     }
@@ -565,6 +594,7 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat
                 $this->descriptor->name,
                 $args,
                 $heartbeat,
+                $this->perCallDesk($id),
             );
         } catch (\Throwable $e) {
             return new ToolResult(
@@ -581,6 +611,301 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat
             $start,
             fn (string $text): string => $this->truncateOutput($text, $this->maxOutputBytes),
         );
+    }
+
+    /**
+     * {@see RelaysPermissionAsks}: the turn's ask channel, relayed into the
+     * per-call answer desk so `elicitation/create` reaches the human (the
+     * modal shows the AskUser shape, C-MCP-3.b). Once
+     * {@see withoutInteractiveUser()} has closed the run, a later binding is
+     * IGNORED — the `-p` decision is made once at launch, the same sticky law
+     * {@see \SugarCraft\Code\Cli\NonInteractive::withoutInteractiveUser()}
+     * enforces for `AskUserTool`.
+     */
+    public function withPermissionApprover(\Closure $approver): Tool
+    {
+        if ($this->elicitationsClosed) {
+            return $this;
+        }
+
+        return new self(...array_replace(get_object_vars($this), ['permissionApprover' => $approver]));
+    }
+
+    /**
+     * {@see AcceptsToolProgress}: the turn's live-tail channel, fed by
+     * `notifications/progress` frames the server pushes mid-call. Progress
+     * is NOT an ask — it survives even a closed `-p` run, where nobody is
+     * queried and the frames only ever stream into the running row.
+     */
+    public function withToolProgressEmitter(\Closure $emit): self
+    {
+        return new self(...array_replace(get_object_vars($this), ['toolProgressEmitter' => $emit]));
+    }
+
+    /**
+     * The `-p` closure: elicitations cancel and no later approver re-opens
+     * the channel. $why rides the same funnel argument the `AskUser`/
+     * `PlanExit` closures pass; the bridge stores no copy because a canceled
+     * elicitation is announced to the server by its ACTION, and the model
+     * learns the silence from the server's own follow-up, not from prose we
+     * would invent here.
+     */
+    public function withoutInteractiveUser(string $why): self
+    {
+        return new self(...array_replace(get_object_vars($this), [
+            'permissionApprover' => null,
+            'elicitationsClosed' => true,
+        ]));
+    }
+
+    /**
+     * The per-call answer desk, or null to leave the call on the spawn-time
+     * default desk (byte-identical to the pre-C-MCP-3.b wire).
+     *
+     * ROOT NOTE (disclosed deviation): the desk is built with an empty root,
+     * so a mid-call `roots/list` answers the PROCESS working directory —
+     * {@see McpClient::stdioSpawnCwd()} is private and the client file is
+     * owned by a concurrent lane (C-MCP-4.b), so the bridge cannot see the
+     * tier's spawn root. The install-time desk (C-MCP-3.a) still answers
+     * `roots/list` with the tier directory whenever no per-call desk is
+     * installed; docs/MCP.md §Server requests states both readings.
+     */
+    private function perCallDesk(string $callId): ?McpServerRequests
+    {
+        $ask = $this->elicitationsClosed ? null : $this->permissionApprover;
+        $emit = $this->toolProgressEmitter;
+        if ($ask === null && ($emit === null || $callId === '')) {
+            return null;
+        }
+
+        return new McpServerRequests(
+            '',
+            $ask === null ? null : function (array $questions) use ($ask, $callId): mixed {
+                return self::askElicitation($ask, $this->descriptor->serverName, $callId, $questions);
+            },
+            $emit === null || $callId === '' ? null : self::progressSink($emit, $callId, $this->name()),
+        );
+    }
+
+    /**
+     * Answer one server elicitation through the turn's ask channel: each
+     * schema field becomes a short question in the AskUser modal shape, in
+     * declaration order, and the person's words are coerced to the field's
+     * declared type. A multi-field form is therefore a SHORT SERIES of
+     * modals — the risk the plan disclosed — not a new form UI.
+     *
+     * Return contract is {@see McpElicitation}'s approver dialect: a field
+     * map, or the CANCEL/DECLINE sentinel. Anything that could not be put
+     * (no channel, thrown channel, an answer that matches no offered option)
+     * cancels rather than inventing: an MCP server must never receive an
+     * answer nobody gave.
+     *
+     * PUBLIC/STATIC because both MCP spellings (this bridge and the MCP-7
+     * dispatcher) must put ONE dialect, the same reason
+     * {@see replyResult()} exists.
+     *
+     * @param \Closure(ToolCall, HookResult): ApprovalVerdict $approver
+     * @param list<array<string,mixed>> $questions
+     *
+     * @return array<string,mixed>|string the field map, or a McpElicitation sentinel
+     */
+    public static function askElicitation(?\Closure $approver, string $server, string $callId, array $questions): mixed
+    {
+        if ($approver === null) {
+            return McpElicitation::CANCEL;
+        }
+
+        $answers = [];
+        foreach ($questions as $question) {
+            $text = Lang::t('mcp.elicitation.ask', [
+                'server' => $server,
+                'question' => self::scrubServerText((string) ($question['message'] ?? '')),
+            ]);
+            $enum = $question['enum'] ?? null;
+            $options = is_array($enum)
+                ? array_values(array_map(static fn (mixed $o): string => self::scrubServerText((string) $o), $enum))
+                : [];
+
+            try {
+                $verdict = ApprovalVerdict::of($approver(
+                    new ToolCall($callId, AskUserTool::NAME, [
+                        'description' => AskUserTool::label($text),
+                        'question' => $text,
+                        'options' => $options,
+                    ]),
+                    HookResult::ask(AskUserTool::prompt($text, $options)),
+                ));
+            } catch (\Throwable) {
+                return McpElicitation::CANCEL;
+            }
+
+            if ($verdict->isUnanswered()) {
+                return McpElicitation::CANCEL;
+            }
+
+            $typed = AskUserTool::typedAnswer($verdict->feedback);
+            if ($typed === null) {
+                // A reason the harness wrote, not the person's words — the
+                // question was never actually put; the server learns cancel.
+                return McpElicitation::CANCEL;
+            }
+
+            if ($typed === '') {
+                if (!$verdict->permits()) {
+                    return McpElicitation::DECLINE;
+                }
+                if ($options !== []) {
+                    $answers[(string) $question['key']] = $options[0];
+                    continue;
+                }
+                if ((string) ($question['type'] ?? 'string') === 'boolean') {
+                    $answers[(string) $question['key']] = true;
+                    continue;
+                }
+                if (($question['required'] ?? false) === true) {
+                    // "y" on a free-input question is not an answer to it.
+                    return McpElicitation::CANCEL;
+                }
+                continue;
+            }
+
+            try {
+                $answers[(string) $question['key']] = self::coerceElicitationAnswer($typed, $question, $options);
+            } catch (\InvalidArgumentException) {
+                return McpElicitation::CANCEL;
+            }
+        }
+
+        return $answers;
+    }
+
+    /**
+     * The sink that turns each `notifications/progress` parameter map into a
+     * {@see ToolProgress} frame on the turn's channel, seq counting from 1.
+     *
+     * PUBLIC/STATIC for the dispatcher spelling's parity, like
+     * {@see askElicitation()}.
+     */
+    public static function progressSink(\Closure $emit, string $callId, string $toolName): \Closure
+    {
+        $seq = 0;
+
+        return static function (array $params) use ($emit, $callId, $toolName, &$seq): void {
+            $seq++;
+            [$tail, $truncated] = self::progressTail($params);
+            $emit(new ToolProgress(
+                toolCallId: $callId,
+                toolName: $toolName,
+                tail: $tail,
+                seq: $seq,
+                truncated: $truncated,
+                tailBudget: self::PROGRESS_TAIL_BUDGET,
+            ));
+        };
+    }
+
+    /**
+     * One line of untrusted server copy, safe for a single TUI row / web
+     * card line: control bytes collapse to spaces and the two mouse-zone
+     * sentinel codepoints are swept, because a progress tail rides marked
+     * frames downstream (the fleet's untrusted-content law).
+     */
+    public static function scrubServerText(string $text): string
+    {
+        return trim((string) preg_replace('/[\x00-\x1F\x7F\x{e000}\x{e001}]+/u', ' ', $text));
+    }
+
+    /**
+     * @param array<string,mixed> $question one entry from {@see McpElicitation::questions()}
+     * @param list<string> $options the scrubbed enum list, [] without one
+     *
+     * @throws \InvalidArgumentException when the words answer nothing of the field's type
+     */
+    private static function coerceElicitationAnswer(string $typed, array $question, array $options): mixed
+    {
+        $typed = trim($typed);
+        $type = (string) ($question['type'] ?? 'string');
+
+        if ($options !== []) {
+            $index = AskUserTool::pickedOption($typed, $options);
+            if ($index === null) {
+                throw new \InvalidArgumentException('the answer is none of the offered options');
+            }
+
+            return $options[$index];
+        }
+
+        switch ($type) {
+            case 'integer':
+                if (preg_match('/\A[+-]{0,1}\d+\z/', $typed) !== 1) {
+                    throw new \InvalidArgumentException('the field wants a whole number');
+                }
+
+                return (int) $typed;
+
+            case 'number':
+                if (preg_match('/\A[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\z/', $typed) !== 1) {
+                    throw new \InvalidArgumentException('the field wants a number');
+                }
+
+                return preg_match('/\A[+-]{0,1}\d+\z/', $typed) === 1 ? (int) $typed : (float) $typed;
+
+            case 'boolean':
+                return match (strtolower($typed)) {
+                    'y', 'yes', 'true', '1', 'on' => true,
+                    'n', 'no', 'false', '0', 'off' => false,
+                    default => throw new \InvalidArgumentException('the field wants yes or no'),
+                };
+
+            default:
+                return $typed;
+        }
+    }
+
+    /**
+     * The tail text and truncation flag for one progress notification: the
+     * server's own `message` when it carried one, else its bare pacing
+     * (percent when the server named a total, the raw figure otherwise) —
+     * numbers the server itself wrote, so no English is minted here and no
+     * lang key is earned.
+     *
+     * @param array<string,mixed> $params
+     *
+     * @return array{0: string, 1: bool}
+     */
+    private static function progressTail(array $params): array
+    {
+        $message = $params['message'] ?? null;
+        $text = is_string($message) && trim($message) !== ''
+            ? self::scrubServerText($message)
+            : self::progressPacing($params);
+
+        $truncated = strlen($text) > self::PROGRESS_TAIL_BUDGET;
+        if ($truncated) {
+            $text = substr($text, -self::PROGRESS_TAIL_BUDGET);
+        }
+
+        return [$text, $truncated];
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     */
+    private static function progressPacing(array $params): string
+    {
+        $progress = $params['progress'] ?? null;
+        if (!is_numeric($progress)) {
+            return '';
+        }
+
+        $total = $params['total'] ?? null;
+        if (is_numeric($total) && (float) $total > 0.0) {
+            $pct = ((float) $progress / (float) $total) * 100.0;
+
+            return rtrim(rtrim(number_format($pct, 1, '.', ''), '0'), '.') . '%';
+        }
+
+        return is_float($progress) ? rtrim(rtrim(number_format($progress, 1, '.', ''), '0'), '.') : (string) $progress;
     }
 
     /**

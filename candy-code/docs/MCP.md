@@ -625,6 +625,73 @@ Sharing is made safe in the transport:
 
 ---
 
+## Server requests
+
+A server you approved can ask *you* things in the middle of a call: probe
+liveness with a `ping`, list the workspace roots it may touch, ask the human
+for a value with `elicitation/create`, or report how far along a long call is
+with `notifications/progress`. Only the `stdio` transport interleaves this
+traffic today: it is the one server class that carries an answer desk, so
+its requests are answered in place while the exchange lock is held. The
+other transports — `http`, `git`, `sse` and `claude-mcp` — surface no
+server-initiated requests, and their calls simply proceed.
+
+Answers arrive through an *answer desk* (`McpServerRequests`). There are two,
+and which one answers changes the reply:
+
+- **The spawn-time desk** is built when the server starts and knows no human.
+  It answers `ping` with an empty result, absorbs bare notifications, and
+  answers an elicitation with `cancel`.
+- **The per-call desk** is installed by a running MCP tool call for the
+  duration of that one exchange. The TUI binds it when the turn has a
+  permission approver to consult; with no approver bound (a headless run, or
+  a tool copy nobody armed) no desk is installed at all and the call falls
+  back to the spawn-time one.
+
+What each request becomes:
+
+- **`ping`** — an empty result. A server that pings is answered, not ignored.
+- **`roots/list`** — one result, two readings, disclosed: the spawn-time desk
+  names the directory the entry was approved for (its `cwd` override, or the
+  config file's tier), while the per-call desk names the *process* working
+  directory — the desk is built by the tool call, which does not re-read the
+  config tier the entry came from. A server that treats root names as a
+  sandbox boundary should not; trust-gating lives in the transport, not here.
+- **`elicitation/create`** — in an interactive session, a question. Each
+  requested schema field becomes an `AskUser`-shaped prompt headed
+  `MCP server <name> asks: <message>`; a string answers with free text, an
+  integer or number answers with a validated number, a boolean with yes/no,
+  and a string carrying `enum` with a pick from those options. Several
+  fields in one request are asked in sequence and answered together.
+  Answering `decline` sends `{action: "decline"}`; Esc, a timed-out prompt,
+  an unanswered required field, or an approver that throws all send
+  `{action: "cancel"}` — the fail-closed direction, because a cancel is what
+  a server that asked into silence should assume. A long wait does not eat
+  the call's timeout budget: the clock pauses while a human is being asked.
+- **`notifications/progress`** — with a per-call desk, a live tail on the
+  running tool row: each notification updates the row's status line with the
+  server's own message when it sent one (control bytes and marking sentinels
+  swept from it), otherwise with a percent pacing computed from the reported
+  progress and total. Without a desk the notification is absorbed and the
+  row keeps its ordinary heartbeat.
+- **Anything else** — an honest `Method not found`, never silence.
+  `sampling/createMessage` in particular is refused: the client advertises
+  `roots` and `elicitation` capabilities only, and a server-initiated model
+  completion has no bridge into the session.
+
+Headless (`-p`) runs ask nobody anything, and that includes MCP servers: the
+launch funnel closes every MCP call tool beside `AskUser` and `PlanExit`, so
+a `stdio` server's elicitations land on the spawn-time desk and answer
+`cancel` by construction (on a desk-less transport the question never
+arrives). The closure is sticky — a later attempt to bind an approver
+does not reopen a closed tool, mirroring the `-p` rule the `AskUser` tool
+already follows. While an elicitation waits for a human it holds only its
+own server's exchange lock: parallel calls to *other* servers keep running,
+and later calls to the asking server queue behind it, which is the whole
+point of the serialised exchange.
+
+---
+
 ## What the model sees
 
 `Bootstrap::mcpTools()` wraps each advertised tool in an `McpToolBridge`

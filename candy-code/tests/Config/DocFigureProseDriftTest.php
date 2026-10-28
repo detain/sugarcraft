@@ -6176,6 +6176,91 @@ final class DocFigureProseDriftTest extends TestCase
     }
 
     /**
+     * C-MCP-3.b (r1 MAJOR-1 cure): the Server-requests section's transport split
+     * is DERIVED, not narrated. The answer desk is gated on {@see AnswersServerRequests}
+     * at both install points (the factory's spawn-time arm and the per-call desk
+     * in McpClient::callTool), so the transport that interleaves is exactly the
+     * constructed class implementing that interface — today only one. If a second
+     * transport grows a desk, the derivation reddens and the section must be
+     * re-worded in the same step; if the section re-claims the retracted overclaim
+     * (that `claude-mcp` answers in place), the sentence pins below redden first.
+     */
+    public function testTheServerRequestsSectionNamesExactlyTheDeskCapableTransports(): void
+    {
+        $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
+        $start = \strpos($raw, "\n## Server requests\n");
+        self::assertIsInt($start, 'the Server requests section moved or vanished — re-anchor the guard');
+        $end = \strpos($raw, "\n## ", $start + 1);
+        self::assertIsInt($end, 'the Server requests section has no following heading to bound it');
+        $section = self::markdownProse(\substr($raw, $start, $end - $start));
+
+        $clientSource = self::sourceOf('MCP/McpClient.php');
+        $build = null;
+        foreach (self::functionSpans($clientSource) as $span) {
+            $build ??= 'buildServer' === $span['name'] ? $span : null;
+        }
+        self::assertIsArray($build, 'buildServer() vanished — the transport split lost its ground');
+        $buildText = (string) \substr($clientSource, $build['begin'], $build['end'] - $build['begin']);
+        \preg_match_all("/'([a-z-]+)' => new (\w+)/", $buildText, $arms, \PREG_SET_ORDER);
+        $pairs = [];
+        foreach ($arms as $arm) {
+            $pairs[] = [$arm[1], $arm[2]];
+        }
+        if (\preg_match("/'claude-mcp' => ClaudeCodeMcpServer::fromGrant/", $buildText) === 1) {
+            $pairs[] = ['claude-mcp', 'ClaudeCodeMcpServer'];
+        }
+        $constructed = [];
+        $desking = [];
+        foreach ($pairs as [$transport, $className]) {
+            $constructed[] = $transport;
+            $class = 'SugarCraft\Code\MCP\\' . $className;
+            self::assertTrue(\class_exists($class), 'the factory constructs a missing transport class: ' . $class);
+            if (\in_array('SugarCraft\Code\MCP\AnswersServerRequests', \class_implements($class), true)) {
+                $desking[] = $transport;
+            }
+        }
+        \sort($constructed);
+        \sort($desking);
+        self::assertSame(
+            ['claude-mcp', 'git', 'http', 'sse', 'stdio'],
+            $constructed,
+            'the factory gained or lost a constructed transport — this arm and the section move together',
+        );
+        self::assertSame(
+            ['stdio'],
+            $desking,
+            'a transport gained or lost the answer-desk interface — the Server-requests sentences and this derivation re-pin together',
+        );
+
+        self::assertSame(
+            1,
+            \preg_match('/Only the ((?:`[a-z-]+`)+) transport interleaves this traffic today/', $section, $m),
+            'the section no longer states the interleaving transport in its pinned shape — re-derive from the desk gate',
+        );
+        \preg_match_all('/`([a-z-]+)`/', $m[1], $nm);
+        self::assertSame($desking, $nm[1], 'the positive claim stopped naming exactly the desk-carrying transports');
+
+        self::assertSame(
+            1,
+            \preg_match('/The other transports — ((?:`[a-z-]+`(, | and )?)+) — surface no/', $section, $m),
+            'the non-interleaving roster lost its pinned shape',
+        );
+        \preg_match_all('/`([a-z-]+)`/', $m[1], $nm);
+        $others = $nm[1];
+        \sort($others);
+        self::assertSame(
+            \array_values(\array_diff($constructed, $desking)),
+            $others,
+            'the negative roster stopped naming exactly the desk-less transports',
+        );
+        self::assertStringContainsString(
+            "a `stdio` server's elicitations land on the spawn-time desk",
+            $section,
+            'the -p paragraph lost its stdio scoping — on a desk-less transport the question never arrives',
+        );
+    }
+
+    /**
      * E699 — the `claude-mcp` operator-tier paragraph in docs/MCP.md and the
      * gate in `src/` are one claim told twice. Every figure the paragraph
      * states derives live: the entry-refusal trio from the adapter's
@@ -7311,5 +7396,5 @@ final class DocFigureProseDriftTest extends TestCase
         foreach (['addTimer', 'usleep', 'sleep(', 'stream_select'] as $clock) {
             self::assertFalse(strpos($shaper, $clock), "McpPromptCommands mentions {$clock} — the page promises the fetch rides the ordinary MCP deadline, not a new clock");
         }
-    }
+        }
 }
