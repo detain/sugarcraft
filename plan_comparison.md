@@ -1608,7 +1608,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web7.md` → `### C-WEB-7.d`
 
-#### C-TOOL-3.c — Session-owned background shells
+#### ✅ 1f1db4f97 C-TOOL-3.c — Session-owned background shells
 - **Item:** C-TOOL-3 (sources: GAP-SH-04 serve half, p2-miss: SHL no web/serve shell list) · gap · effort M
 - **What:** One `BackgroundShellRegistry` per pid+root (`LaunchContext::backgroundShellRegistryFor()` :690). Served sessions share `workspace->backend` and its tool instances (`SessionHost.php:1626`, `TurnRunner::backendForTurn()` :276 only …
 - **Files — create:** `candy-code/src/Tools/AcceptsShellOwner.php`, `candy-code/tests/Tools/ShellOwnershipTest.php`
