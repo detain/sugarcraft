@@ -39,7 +39,7 @@ final class ShareCommandTest extends TestCase
 
         $this->assertSame(1, $exitCode);
         $this->assertStringContainsString("Invalid format 'invalid_format'", $output);
-        $this->assertStringContainsString('Usage: /share [md|html|json|text] [path] | /share serve [days] | /share list | /share revoke [token]', $output);
+        $this->assertStringContainsString('Usage: /share [md|html|json|text] [path] | /share serve [--live] [days] | /share list | /share revoke [token]', $output);
         $this->assertFalse(is_dir($this->exportsDir), 'a refused command writes nothing');
     }
 
@@ -209,6 +209,72 @@ final class ShareCommandTest extends TestCase
         $this->assertSame(32, strlen($match[1]), 'a 128-bit token, hex');
         $this->assertStringContainsString('live for 7 day(s)', $output);
         $this->assertNotNull($store->lookup($match[1]), 'the row is readable straight away');
+        $this->assertFalse($store->lookup($match[1])->live, 'without --live the page is a frozen snapshot');
+    }
+
+    /**
+     * C-SES-3.d: `--live` publishes a row the controller RE-RENDERS from the
+     * session on every request. The command half is the flag parsing and the
+     * stored flag; the rendering itself is pinned in SharePageTest.
+     */
+    public function testServeWithLiveFlagPublishesALiveRow(): void
+    {
+        $this->clearUploadKeys();
+        $store = ShareStore::atPath($this->scratch . '/session.db');
+
+        [$exitCode, $output] = $this->share(['serve', '--live'], store: $store);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertSame(1, preg_match('#/s/([0-9a-f]{32})#', $output, $match), 'the reply names the /s/{token} path: ' . $output);
+        $record = $store->lookup($match[1]);
+        $this->assertNotNull($record);
+        $this->assertTrue($record->live, '--live lands in the row');
+        $this->assertStringContainsString('re-rendered from the session on every request', $output);
+        $this->assertStringContainsString('7 day(s)', $output, 'the default expiry still rides a live link');
+    }
+
+    public function testServeAcceptsTheLiveFlagOnEitherSideOfTheDayCount(): void
+    {
+        $store = ShareStore::atPath($this->scratch . '/session.db');
+
+        foreach (['flag-first' => ['serve', '--live', '30'], 'days-first' => ['serve', '30', '--live']] as $label => $args) {
+            [$exitCode, $output] = $this->share($args, store: $store);
+
+            $this->assertSame(0, $exitCode, $label);
+            $this->assertSame(1, preg_match('#/s/([0-9a-f]{32})#', $output, $match), $label . ': ' . $output);
+            $record = $store->lookup($match[1]);
+            $this->assertNotNull($record, $label);
+            $this->assertTrue($record->live, $label);
+            $this->assertGreaterThanOrEqual(time() + 29 * 86400, $record->expiresAt, $label);
+            $this->assertLessThanOrEqual(time() + 30 * 86400 + 1, $record->expiresAt, $label);
+        }
+    }
+
+    /**
+     * The flag is a flag, not an argument slot: a second one has no meaning
+     * (it parses as a day count and is refused), and a real extra argument
+     * still trips the too-many door.
+     */
+    public function testServeRefusesASecondLiveFlagAndExtraArguments(): void
+    {
+        $store = ShareStore::atPath($this->scratch . '/session.db');
+
+        [$exitCode, $output] = $this->share(['serve', '--live', '--live'], store: $store);
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('Days must be a whole number from 1 to 365', $output);
+
+        [$exitCode, $output] = $this->share(['serve', '--live', '7', 'extra'], store: $store);
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('Too many arguments', $output);
+    }
+
+    /** Exact match only — an unknown near-flag is refused, never half-honored. */
+    public function testServeRefusesAnUnknownFlagLikeAnyBadDayCount(): void
+    {
+        [$exitCode, $output] = $this->share(['serve', '--lively'], store: ShareStore::atPath($this->scratch . '/session.db'));
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('Days must be a whole number from 1 to 365', $output);
     }
 
     public function testServeHonoursAnExplicitDayCount(): void
@@ -315,6 +381,32 @@ final class ShareCommandTest extends TestCase
         $this->assertStringContainsString(gmdate('Y-m-d', $mine->expiresAt), $output);
         $this->assertStringNotContainsString(substr($mine->token, 12), $output, 'the full token never reaches the transcript');
         $this->assertStringNotContainsString(substr($ghost->token, 12), $output, 'the full token never reaches the transcript');
+    }
+
+    /**
+     * C-SES-3.d: the audit view badges the live pages so an operator can see
+     * WHICH pages track the session and which are frozen. Snapshot rows stay
+     * byte-identical to the pre-live listing — only live rows gain the tag.
+     */
+    public function testListBadgesLiveRowsAndLeavesSnapshotRowsAlone(): void
+    {
+        $store = ShareStore::atPath($this->scratch . '/badge.db');
+        $snapshot = $store->publish('', 'html', '<p>s</p>', 7);
+        $live = $store->publish('', 'html', '<p>l</p>', 7, live: true);
+
+        [$exitCode, $output] = $this->share(['list'], store: $store);
+
+        $this->assertSame(0, $exitCode);
+        $rowFor = static function (string $token) use ($output): string {
+            foreach (explode("\n", $output) as $line) {
+                if (str_contains($line, substr($token, 0, 12))) {
+                    return $line;
+                }
+            }
+            throw new \RuntimeException('no row for token');
+        };
+        $this->assertStringContainsString(' live', $rowFor($live->token), 'a live page is tagged as one');
+        $this->assertStringNotContainsString(' live', $rowFor($snapshot->token), 'a snapshot row reads exactly as it did before --live existed');
     }
 
     public function testListWithNothingPublishedSaysSoAndSucceeds(): void

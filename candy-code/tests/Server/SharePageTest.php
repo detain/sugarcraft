@@ -72,6 +72,112 @@ final class SharePageTest extends TestCase
     }
 
     /**
+     * C-SES-3.d: a LIVE row is not a frozen page — the controller asks its
+     * renderer for the session's current transcript on EVERY request, and
+     * the stored publish-time HTML is only the fallback for a serve built
+     * without a renderer. The same public surface, the same headers: the
+     * live page answers with no-store for the strongest of reasons (it must
+     * never cache what the next edit will change).
+     */
+    public function testALiveLinkReRendersTheSessionOnEveryRequest(): void
+    {
+        $store = ShareStore::atPath($this->dbPath);
+        $page = '<p>EARLY</p>';
+        $renders = 0;
+        $renderer = function (string $sessionId) use (&$page, &$renders): ?string {
+            $renders++;
+            self::assertSame('sess-live', $sessionId, 'the renderer is asked for the record\'s own session');
+
+            return $page;
+        };
+        $record = $store->publish('sess-live', 'html', '<p>SNAPSHOT-FALLBACK</p>', 7, live: true);
+
+        $first = $this->route($store, $record->path(), liveRenderer: $renderer);
+        self::assertSame(200, $first->getStatusCode());
+        self::assertStringContainsString('<p>EARLY</p>', (string) $first->getBody());
+        self::assertStringNotContainsString('SNAPSHOT-FALLBACK', (string) $first->getBody(), 'a live row serves the render, not the stored fallback');
+        self::assertSame('no-store', $first->getHeaderLine('Cache-Control'));
+        self::assertSame('text/html; charset=utf-8', $first->getHeaderLine('Content-Type'));
+        self::assertSame('DENY', $first->getHeaderLine('X-Frame-Options'));
+
+        $page = '<p>LATE</p>';
+        $second = $this->route($store, $record->path(), liveRenderer: $renderer);
+        self::assertStringContainsString('<p>LATE</p>', (string) $second->getBody());
+        self::assertStringNotContainsString('<p>EARLY</p>', (string) $second->getBody());
+        self::assertSame(2, $renders, 'the renderer runs per request, nothing about the page is cached');
+    }
+
+    public function testALiveRowWithoutAWiredRendererFallsBackToItsStoredSnapshot(): void
+    {
+        $store = ShareStore::atPath($this->dbPath);
+        $record = $store->publish('sess-1', 'html', '<p>frozen-fallback</p>', 7, live: true);
+
+        $response = $this->route($store, $record->path());
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertStringContainsString('<p>frozen-fallback</p>', (string) $response->getBody());
+    }
+
+    public function testSnapshotRowsNeverConsultTheLiveRenderer(): void
+    {
+        $store = ShareStore::atPath($this->dbPath);
+        $renders = 0;
+        $renderer = function () use (&$renders): ?string {
+            $renders++;
+
+            return '<p>live-render</p>';
+        };
+        $snapshot = $store->publish('sess-1', 'html', '<p>stored</p>', 7);
+
+        $response = $this->route($store, $snapshot->path(), liveRenderer: $renderer);
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertStringContainsString('<p>stored</p>', (string) $response->getBody());
+        self::assertStringNotContainsString('live-render', (string) $response->getBody());
+        self::assertSame(0, $renders, 'the frozen-snapshot promise holds for rows published without --live');
+    }
+
+    public function testALiveLinkWhoseSessionIsGoneAnswersTheSharedDeath(): void
+    {
+        $store = ShareStore::atPath($this->dbPath);
+        $record = $store->publish('sess-gone', 'html', '<p>old</p>', 7, live: true);
+        $renderer = static fn(string $sessionId): ?string => null;
+
+        $dead = $this->route($store, $record->path(), liveRenderer: $renderer);
+        $unknown = $this->route($store, '/s/' . str_repeat('0f', 16));
+
+        self::assertSame(404, $dead->getStatusCode());
+        self::assertSame((string) $unknown->getBody(), (string) $dead->getBody(), 'a deleted session is indistinguishable from a token that never existed');
+    }
+
+    public function testRevokedAndExpiredLiveRowsNeverReachTheRenderer(): void
+    {
+        $store = ShareStore::atPath($this->dbPath);
+        $renders = 0;
+        $renderer = function () use (&$renders): ?string {
+            $renders++;
+
+            return '<p>x</p>';
+        };
+        $revoked = $store->publish('sess-1', 'html', '<p>x</p>', 7, live: true);
+        $expired = $store->publish('sess-1', 'html', '<p>x</p>', 7, live: true);
+
+        self::assertSame(200, $this->route($store, $revoked->path(), liveRenderer: $renderer)->getStatusCode());
+        self::assertSame(1, $renders);
+
+        $store->revoke($revoked->token);
+        self::assertSame(404, $this->route($store, $revoked->path(), liveRenderer: $renderer)->getStatusCode());
+        self::assertSame(1, $renders, 'revocation is enforced before the session is read');
+
+        $pdo = new \PDO('sqlite:' . $this->dbPath);
+        $pdo->prepare('UPDATE shares SET expires_at = :past WHERE token = :token')
+            ->execute([':token' => $expired->token, ':past' => \time() - 1]);
+        $pdo = null;
+        self::assertSame(404, $this->route($store, $expired->path(), liveRenderer: $renderer)->getStatusCode());
+        self::assertSame(1, $renders, 'expiry is enforced before the session is read');
+    }
+
+    /**
      * The no-oracle law, byte-exact: a token that never existed, one past
      * expiry and one just revoked answer the SAME status, body and type.
      */
@@ -266,9 +372,9 @@ final class SharePageTest extends TestCase
         return $bytes;
     }
 
-    private function route(ShareStore $store, string $path, string $method = 'GET'): ResponseInterface
+    private function route(ShareStore $store, string $path, string $method = 'GET', ?\Closure $liveRenderer = null): ResponseInterface
     {
-        $share = new SharePageController($store);
+        $share = new SharePageController($store, $liveRenderer);
         $router = new Router(
             static fn(): ResponseInterface => Responses::error(500, 'no', 'upgrade must not run'),
             static fn(): ResponseInterface => Responses::error(500, 'no', 'api must not run'),

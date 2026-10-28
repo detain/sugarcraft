@@ -29,6 +29,7 @@ use SugarCraft\Code\Server\Server;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\ServerConfigException;
 use SugarCraft\Code\Server\StateDir;
+use SugarCraft\Code\Share\ShareSession;
 use SugarCraft\Code\Share\ShareStore;
 use SugarCraft\Code\Server\Workspace\Gateway;
 use SugarCraft\Code\Support\Daemonize;
@@ -403,7 +404,38 @@ final class Serve
         // (after any detach fork — a connection may not ride into the child
         // that returns to the shell). The lookup is fail-safe: a database
         // without the shares table answers 404, never an error page.
-        $share = new SharePageController(ShareStore::atPath(Bootstrap::sessionStore(prune: false)->path()));
+        // C-SES-3.d: the renderer carries LIVE pages (`/share serve --live`).
+        // It re-reads the CURRENT transcript through the exact serializer a
+        // snapshot went through — ShareSession's row filter and SecretRedactor
+        // included. The filter is not a size bound and no row cap exists, so
+        // every request re-renders the full filtered transcript — the cost
+        // the design's risk-line priced against a cap that never existed.
+        // Every failure
+        // (session deleted, store unreadable, a row nothing can revive)
+        // answers null, which the controller returns as the shared 404; the
+        // page can never outlive its session nor leak more than a snapshot
+        // could, and `Cache-Control: no-store` (the controller's own law)
+        // keeps proxies from freezing what promises to track.
+        $sessionStore = Bootstrap::sessionStore(prune: false);
+        $share = new SharePageController(
+            ShareStore::atPath($sessionStore->path()),
+            static function (string $sessionId) use ($sessionStore): ?string {
+                try {
+                    $rows = $sessionStore->loadTranscript($sessionId);
+                    if ($rows === null) {
+                        return null;
+                    }
+                    $messages = array_map(
+                        static fn(array $row): \SugarCraft\Code\Message => \SugarCraft\Code\Host\TranscriptStore::reviveRow($row),
+                        $rows,
+                    );
+
+                    return (new ShareSession($messages, ShareSession::FORMAT_HTML))->serialize();
+                } catch (\Throwable) {
+                    return null;
+                }
+            },
+        );
         // AUT-6: inbound webhook delivery, mounted ONLY when the operator's
         // user config names hooks (they were validated at launch inside
         // ServerConfig::resolve — one bad hook refused the boot, never a

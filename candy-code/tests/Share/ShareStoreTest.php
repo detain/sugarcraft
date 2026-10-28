@@ -51,6 +51,82 @@ final class ShareStoreTest extends TestCase
     }
 
     /**
+     * C-SES-3.d: the `live` column round-trips through every reader. A live
+     * row is the SAME row-shape as a snapshot — same token law, same expiry
+     * and revocation data — and the flag is only what the controller does
+     * with it at request time.
+     */
+    public function testTheLiveFlagRoundTripsThroughEveryReader(): void
+    {
+        $store = ShareStore::atPath($this->dbPath);
+        $snapshot = $store->publish('sess-1', 'html', '<p>stored</p>', 7);
+        $live = $store->publish('sess-1', 'html', '<p>early</p>', 7, live: true);
+
+        self::assertFalse($snapshot->live);
+        self::assertTrue($live->live);
+
+        self::assertTrue($store->lookup($live->token)->live, 'lookup carries the flag');
+        self::assertFalse($store->lookup($snapshot->token)->live, 'a publish without the flag stays a snapshot');
+
+        $byToken = [];
+        foreach ($store->liveForSession('sess-1') as $record) {
+            $byToken[$record->token] = $record->live;
+        }
+        self::assertSame([$live->token => true, $snapshot->token => false], $byToken, 'newest first, same as the table order');
+
+        $all = [];
+        foreach ($store->liveAll() as $entry) {
+            $all[$entry['record']->token] = $entry['record']->live;
+        }
+        self::assertSame([$live->token => true, $snapshot->token => false], $all, 'liveAll is newest-first, like the table');
+    }
+
+    /**
+     * THE migration law (C-SES-3.d): a session database shared by an older
+     * build carries the PRE-LIVE six-column schema and rows that predate the
+     * flag. Opening the store adds the column idempotently, old rows read as
+     * snapshots, and fresh publishes record the flag — the same file, no
+     * re-publish required for the old pages to keep answering.
+     */
+    public function testTheLiveColumnMigratesOntoAnOldTable(): void
+    {
+        $pdo = new \PDO('sqlite:' . $this->dbPath);
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $pdo->exec('CREATE TABLE shares ('
+            . 'token TEXT PRIMARY KEY,'
+            . 'session_id TEXT NOT NULL,'
+            . 'format TEXT NOT NULL,'
+            . 'html TEXT NOT NULL,'
+            . 'created_at INTEGER NOT NULL,'
+            . 'expires_at INTEGER NOT NULL,'
+            . 'revoked_at INTEGER NULL'
+            . ')');
+        $old = str_repeat('cd', 16);
+        $pdo->prepare('INSERT INTO shares (token, session_id, format, html, created_at, expires_at, revoked_at)'
+            . ' VALUES (:token, :session_id, :format, :html, :created_at, :expires_at, NULL)')
+            ->execute([
+                ':token' => $old,
+                ':session_id' => 'sess-old',
+                ':format' => 'html',
+                ':html' => '<p>pre-live</p>',
+                ':created_at' => time(),
+                ':expires_at' => time() + 7 * 86400,
+            ]);
+        $pdo = null;
+
+        $store = ShareStore::atPath($this->dbPath);
+
+        $found = $store->lookup($old);
+        self::assertNotNull($found, 'the migration keeps a pre-live page answering');
+        self::assertFalse($found->live, 'a row older than the flag is a snapshot');
+        self::assertSame('<p>pre-live</p>', $found->html);
+
+        $fresh = $store->publish('sess-new', 'html', '<p>live</p>', 7, live: true);
+        self::assertTrue($store->lookup($fresh->token)->live, 'publishing after the migration records the flag');
+        self::assertCount(2, $store->liveAll(), 'the operator view reads the migrated table');
+    }
+
+    /**
      * 128 bits from the CSPRNG, and nothing derived from the session: a
      * token that leaked an id, a timestamp or a counter is the whole
      * capability, so the shape IS the security.

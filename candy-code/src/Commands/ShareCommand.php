@@ -35,13 +35,19 @@ use SugarCraft\Code\Tools\PathJail;
  *     cannot drop a transcript somewhere unexpected. An existing directory
  *     receives the default file name.
  *
- * `/share serve [days]` is the explicit user act that PUBLISHES: an HTML
- * snapshot of the transcript AS IT STANDS NOW is rendered and written to the
- * `shares` table ({@see ShareStore}), and the reply names the `/s/{token}`
- * path on the user's own `candy-code serve`. Nothing leaves the machine —
- * the WHY-LOCAL stance is preserved; only serving stays opt-in. Editing the
- * transcript afterwards changes nothing a reader sees; publishing the new
- * state is a second user act. `/share revoke [token]` kills a page on its
+ * `/share serve [--live] [days]` is the explicit user act that PUBLISHES: an
+ * HTML snapshot of the transcript AS IT STANDS NOW is rendered and written to
+ * the `shares` table ({@see ShareStore}), and the reply names the
+ * `/s/{token}` path on the user's own `candy-code serve`. Nothing leaves the
+ * machine — the WHY-LOCAL stance is preserved; only serving stays opt-in.
+ * For a snapshot, editing the transcript afterwards changes nothing a reader
+ * sees; publishing the new state is a second user act. `--live` (C-SES-3.d)
+ * publishes a page that instead RE-RENDERS the session's current transcript
+ * on every request — same token, same expiry, same revocation — so later
+ * edits do reach readers, through the identical serializer and redaction the
+ * snapshot ran through, and a deleted session answers the same 404 as an
+ * expired page. `/share list` badges those rows `live`.
+ * `/share revoke [token]` kills a page on its
  * next request — by whole token or by the prefix `/share list` shows — and
  * `/share list` prints EVERY live page in the database, across all sessions,
  * so what a machine is currently publishing is auditable from anywhere.
@@ -94,7 +100,7 @@ final class ShareCommand
 
     /**
      * @param list<string> $args Command arguments: [format] [path],
-     *        `serve [days]`, `list`, or `revoke [token]`
+     *        `serve [--live] [days]`, `list`, or `revoke [token]`
      */
     public function execute(Chat|CommandContext $chat, array $args = []): int
     {
@@ -160,16 +166,36 @@ final class ShareCommand
     }
 
     /**
-     * `/share serve [days]` — render the HTML snapshot NOW and publish it.
+     * `/share serve [--live] [days]` — render the HTML snapshot NOW and
+     * publish it.
      *
      * The snapshot is rendered from `$chat->history` at this exact call:
      * the row stores rendered HTML, never a session reference to be
-     * re-rendered later, which is the whole security model of §6.5.
+     * re-rendered later, which is the whole security model of §6.5. Under
+     * `--live` that snapshot stays as the row's stored fallback, but the
+     * serve process re-renders the session's CURRENT transcript through the
+     * same ShareSession serializer on every request (C-SES-3.d) — the row
+     * filter and the secret redaction are identical, only WHEN they run
+     * differs. The filter decides which rows share; it is not a count cap,
+     * and no cap exists: the full filtered transcript is re-serialized on
+     * every request.
      *
      * @param list<string> $args
      */
     private function serve(Chat|CommandContext $chat, array $args): int
     {
+        // `--live` is a flag, never a day count: it is stripped (wherever it
+        // sits) before the "at most one word left" shape check, so a second
+        // --live or any extra word falls into the existing refusals.
+        $live = false;
+        foreach ($args as $index => $arg) {
+            if (strtolower($arg) === '--live') {
+                $live = true;
+                unset($args[$index]);
+                break;
+            }
+        }
+        $args = array_values($args);
         if (count($args) > 1) {
             $this->printError(Lang::t('cmd.share.too-many'));
 
@@ -199,6 +225,7 @@ final class ShareCommand
                 ShareSession::FORMAT_HTML,
                 $session->serialize(),
                 $days,
+                live: $live,
             );
         } catch (RuntimeException $e) {
             $this->printError($e->getMessage());
@@ -206,7 +233,7 @@ final class ShareCommand
             return 1;
         }
 
-        echo Lang::t('cmd.share.served', [
+        echo Lang::t($live ? 'cmd.share.live-served' : 'cmd.share.served', [
             'count' => $session->messageCount(),
             'url' => $this->serveUrl($record->path()),
             'days' => $days,
@@ -403,7 +430,7 @@ final class ShareCommand
             'session' => $this->printableLabel($session),
             'expires' => gmdate('Y-m-d', $record->expiresAt),
             'format' => $record->format,
-        ]);
+        ]) . ($record->live ? ' ' . Lang::t('cmd.share.live-badge') : '');
     }
 
     /**

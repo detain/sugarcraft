@@ -60,8 +60,19 @@ final class ShareStore
         . 'html TEXT NOT NULL,'
         . 'created_at INTEGER NOT NULL,'
         . 'expires_at INTEGER NOT NULL,'
-        . 'revoked_at INTEGER NULL'
+        . 'revoked_at INTEGER NULL,'
+        . 'live INTEGER NOT NULL DEFAULT 0'
         . ')';
+
+    /**
+     * C-SES-3.d: the one migration the table needs. Databases created before
+     * live links existed carry six columns; ADD COLUMN with a DEFAULT lands
+     * every existing row as `0` — a snapshot, which is exactly what every
+     * page published before `--live` existed is. Applied idempotently beside
+     * {@see CREATE_TABLE} by {@see ensureSchema()}, never behind a flag: the
+     * column has no behavior of its own until a reader asks for it.
+     */
+    private const ALTER_LIVE = 'ALTER TABLE shares ADD COLUMN live INTEGER NOT NULL DEFAULT 0';
 
     /**
      * The statement that revokes every LIVE share published from a chunk of
@@ -110,7 +121,17 @@ final class ShareStore
             @chmod($dbPath, 0600);
         }
 
-        return new self($dbPath, $pdo);
+        $store = new self($dbPath, $pdo);
+        try {
+            $store->ensureSchema();
+        } catch (\PDOException) {
+            // A store opened read-only (or a migration losing an impossible
+            // race twice) keeps the shape it has: every reader below fails
+            // safe to null/the empty list exactly as a missing table does,
+            // and the next publish retries the migration.
+        }
+
+        return $store;
     }
 
     public function path(): string
@@ -126,13 +147,17 @@ final class ShareStore
      * name what they are showing. A PRIMARY KEY collision on a 128-bit token
      * cannot happen without a broken CSPRNG; if the insert nonetheless
      * repeats, publish retries with a fresh token rather than failing.
+     *
+     * $live (C-SES-3.d) records the page as one the controller RE-RENDERS
+     * from the session on every request; the stored $html is the snapshot as
+     * it was published, kept as the row's fallback and its audit trail.
      */
-    public function publish(string $sessionId, string $format, string $html, int $expiryDays): ShareRecord
+    public function publish(string $sessionId, string $format, string $html, int $expiryDays, bool $live = false): ShareRecord
     {
         if ($expiryDays < 1 || $expiryDays > self::MAX_EXPIRY_DAYS) {
             throw new RuntimeException(Lang::t('cmd.share.bad-days', ['max' => self::MAX_EXPIRY_DAYS]));
         }
-        $this->pdo->exec(self::CREATE_TABLE);
+        $this->ensureSchema();
         $this->sweepInertRows();
 
         $now = time();
@@ -144,10 +169,11 @@ final class ShareStore
                 html: $html,
                 createdAt: $now,
                 expiresAt: $now + $expiryDays * 86400,
+                live: $live,
             );
             $statement = $this->pdo->prepare(
-                'INSERT INTO shares (token, session_id, format, html, created_at, expires_at, revoked_at)'
-                . ' VALUES (:token, :session_id, :format, :html, :created_at, :expires_at, NULL)'
+                'INSERT INTO shares (token, session_id, format, html, created_at, expires_at, revoked_at, live)'
+                . ' VALUES (:token, :session_id, :format, :html, :created_at, :expires_at, NULL, :live)'
             );
             try {
                 $statement->execute([
@@ -157,6 +183,7 @@ final class ShareStore
                     ':html' => $record->html,
                     ':created_at' => $record->createdAt,
                     ':expires_at' => $record->expiresAt,
+                    ':live' => $live ? 1 : 0,
                 ]);
             } catch (\PDOException) {
                 // Duplicate token (attempt < 5) or an unusable table racing a
@@ -186,7 +213,7 @@ final class ShareStore
         }
         try {
             $statement = $this->pdo->prepare(
-                'SELECT token, session_id, format, html, created_at, expires_at FROM shares'
+                'SELECT token, session_id, format, html, created_at, expires_at, live FROM shares'
                 . ' WHERE token = :token AND revoked_at IS NULL AND expires_at > :now'
             );
             $statement->execute([':token' => $token, ':now' => time()]);
@@ -205,6 +232,7 @@ final class ShareStore
             html: (string) $row['html'],
             createdAt: (int) $row['created_at'],
             expiresAt: (int) $row['expires_at'],
+            live: (int) $row['live'] !== 0,
         );
     }
 
@@ -218,7 +246,7 @@ final class ShareStore
         if (preg_match('/^[0-9a-f]{' . (self::TOKEN_BYTES * 2) . '}$/', $token) !== 1) {
             return false;
         }
-        $this->pdo->exec(self::CREATE_TABLE);
+        $this->ensureSchema();
         $statement = $this->pdo->prepare('UPDATE shares SET revoked_at = :now WHERE token = :token AND revoked_at IS NULL');
         $statement->execute([':token' => $token, ':now' => time()]);
 
@@ -236,7 +264,7 @@ final class ShareStore
     {
         try {
             $statement = $this->pdo->prepare(
-                'SELECT token, session_id, format, html, created_at, expires_at FROM shares'
+                'SELECT token, session_id, format, html, created_at, expires_at, live FROM shares'
                 . ' WHERE session_id = :session_id AND revoked_at IS NULL AND expires_at > :now'
                 . ' ORDER BY created_at DESC, rowid DESC'
             );
@@ -254,6 +282,7 @@ final class ShareStore
                 html: (string) $row['html'],
                 createdAt: (int) $row['created_at'],
                 expiresAt: (int) $row['expires_at'],
+                live: (int) $row['live'] !== 0,
             ),
             $rows,
         );
@@ -283,7 +312,7 @@ final class ShareStore
         try {
             $statement = $this->pdo->prepare(
                 'SELECT shares.token, shares.session_id, shares.format, shares.html,'
-                . ' shares.created_at, shares.expires_at,'
+                . ' shares.created_at, shares.expires_at, shares.live,'
                 . ($joined ? 'sessions.id AS session_row, sessions.name AS session_name FROM shares'
                     : 'NULL AS session_row, NULL AS session_name FROM shares')
                 . ($joined ? ' LEFT JOIN sessions ON sessions.id = shares.session_id' : '')
@@ -305,12 +334,32 @@ final class ShareStore
                     html: (string) $row['html'],
                     createdAt: (int) $row['created_at'],
                     expiresAt: (int) $row['expires_at'],
+                    live: (int) $row['live'] !== 0,
                 ),
                 'sessionName' => $row['session_name'] === null ? null : (string) $row['session_name'],
                 'orphan' => $row['session_row'] === null,
             ],
             $rows,
         );
+    }
+
+    /**
+     * Bring `shares` to the current shape: create when absent, then carry a
+     * pre-live database forward with {@see ALTER_LIVE}. Runs wherever the old
+     * code ran the bare CREATE (atPath, publish, revoke); the PRAGMA probe
+     * makes the ALTER idempotent, so a fresh database never sees it and an
+     * already-migrated one is untouched.
+     */
+    private function ensureSchema(): void
+    {
+        $this->pdo->exec(self::CREATE_TABLE);
+        $columns = $this->pdo->query('PRAGMA table_info(shares)')->fetchAll(\PDO::FETCH_ASSOC);
+        foreach ($columns as $column) {
+            if (($column['name'] ?? '') === 'live') {
+                return;
+            }
+        }
+        $this->pdo->exec(self::ALTER_LIVE);
     }
 
     /**

@@ -346,7 +346,7 @@ edit it by hand.
 | `/session-delete` | | | — | Open the session list to delete a session |
 | `/model` | ✓ | ✓ | `[provider [model]]` | Switch the active provider, or a provider and its model |
 | `/effort` | ✓ | | `[low\|medium\|high\|xhigh\|max\|auto]` | Read or set the reasoning effort tier |
-| `/share` | ✓ | | `[md\|html\|json] [path] \| serve [days] \| list \| revoke [token]` | Export the session to a file, or serve and revoke share pages |
+| `/share` | ✓ | | `[md\|html\|json] [path] \| serve [--live] [days] \| list \| revoke [token]` | Export the session to a file, or serve and revoke share pages |
 | `/export` | ✓ | | `[md\|html\|json\|text] [file\|--path <file>]` | Export the transcript to a local file, raw bytes unredacted |
 | `/docs` | | | — | Open the documentation |
 | `/exit` | ✓ | ✓ | — | Quit the app |
@@ -659,14 +659,21 @@ ever uploaded: `CANDY_CODE_SHARE_UPLOAD_URL` is retired, and if it is still
 set the reply refuses it loudly
 ([`ENVIRONMENT.md`](ENVIRONMENT.md)).
 
-`/share serve [days]` publishes instead of uploading: the transcript is
+`/share serve [--live] [days]` publishes instead of uploading: the transcript is
 rendered to HTML AT THAT MOMENT and the snapshot is written to the `shares`
 table of the session database, with a 128-bit random token, an expiry
 (default 7 days) and revocation as data. `candy-code serve` then answers
 `GET /s/<token>` publicly — no login cookie — enforcing expiry and
-revocation on every request. Because the row holds rendered HTML, later
+revocation on every request. Because a snapshot row holds rendered HTML, later
 edits to the transcript never appear on a page already shared; publishing
-the new state is a second user act. `/share revoke [token]` takes a page
+the new state is a second user act. With `--live` the page instead TRACKS its
+session: every request re-renders the session's current transcript through the
+same serializer and secret redaction the snapshot passed through — the same
+visible-row rules bound each render — and the response's
+`Cache-Control: no-store`, already law for every share page, becomes
+load-bearing. A live page of a deleted session answers the same 404 as an
+expired one, and `/share list` badges such rows `live`.
+`/share revoke [token]` takes a page
 down (unknown, expired and revoked tokens all answer the same 404, so the
 page cannot be probed); the token may be given whole or as the 12-character
 prefix the listings show. `/share list` prints EVERY live page in the

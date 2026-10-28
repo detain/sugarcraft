@@ -57,7 +57,7 @@ final class CommandDocsDriftTest extends TestCase
 
     public function testAnEscapedPipeStaysInsideItsCell(): void
     {
-        self::assertStringContainsString('`[md\|html\|json] [path] \| serve [days] \| list \| revoke [token]`', CommandDocGenerator::new()->commandsTable());
+        self::assertStringContainsString('`[md\|html\|json] [path] \| serve [--live] [days] \| list \| revoke [token]`', CommandDocGenerator::new()->commandsTable());
     }
 
     public function testAMissingMarkerIsRefusedRatherThanAppended(): void
