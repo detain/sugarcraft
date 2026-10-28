@@ -11,3 +11,13 @@ GATES at merged tip: SessionSendDocumentsTest 7T/29A OK (junit 1.751/7); TurnMet
 DUR row: Protocol/SessionSendDocumentsTest 1.751/7. §4 cites 76527aec1. Absorption: git cherry '+' expected on b0ea554b4 (dist resolved-away); patch-id of src/test/doc payload verified identical.
 
 POST-WELD: branch restacked — cc/C-WEB-4.e tip now 7a9f8de48 ('review fixes (round 4)') stacked ON my master picks (5a89b0b20/47d19563f are its ancestors). r4 delta UNREVIEWED → branch+worktree HELD for r3/r4 review disposition; NOT pruned. Welded scope = exactly the r1/r2-reviewed pair per canonical REVIEW-2.md; absorption = identity (picks are the branch's own ancestors).
+
+# C-WEB-4.e WELD — batch-7 step 4
+
+PICK 7a9f8de48 -> 6c42f30ca (master), docs-only (FIX-ROUND-4.md, 93 lines; git show --stat verified pre-pick — zero candy-code/candy-code-web paths ⇒ NO node/dist/vitest/generator work per weld brief). Zero conflicts; branch was restacked so src half (5a89b0b20+47d19563f, batch-6) are ancestors.
+
+r4 REVIEW-4.md (canonical, VERDICT CLEAN over the new chain) collected; its welder-carries (src picks, DUR row, +8T re-pin, trio+dist re-derive) were ALL discharged at the batch-6 weld — nothing further owed; zero-T lane, no durations.tsv row, no suite-figure movement.
+
+§4 RESTAMPED: heading cite 76527aec1 -> 5a89b0b20+47d19563f+7a9f8de48 with dated note (e14c3cc74 precedent), per batch-7 brief.
+
+Absorption: git cherry '-' (sole listed commit); patch-id 9911fd4df identical both sides. Worktree /home/sites/cc-cmp-C-WEB-4.e + branch cc/C-WEB-4.e PRUNED after proof.

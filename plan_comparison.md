@@ -2326,7 +2326,8 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web.md` → `### C-WEB-4.d`
 
-#### ✅ 76527aec1 C-WEB-4.e — PDF upload from the browser (`session.send` `documents[]`)
+#### ✅ 5a89b0b20+47d19563f+7a9f8de48 C-WEB-4.e — PDF upload from the browser (`session.send` `documents[]`)
+> 2026-10-28 batch-7 restamp (precedent e14c3cc74): earlier cite 76527aec1 was the pre-rebuild lane hash; the reviewed src half welded in batch-6 as master picks 5a89b0b20+47d19563f (dist re-derived at that weld), and the docs-only r4 delta 7a9f8de48 lands in batch-7.
 - **Item:** C-WEB-4 (sources: GAP-MOD-22w) · gap · M
 - **What:** **Gap.** PDFs reach the model only by `@path` of a server file. `session.send` carries `images[]` only (`candy-code/src/Protocol/Schema/MethodSchemas.php:206-222`, `TurnMethods.php:90-173`). **Wire.** Add `documents[]` with …
 - **Files — create:** `candy-code/tests/Protocol/SessionSendDocumentsTest.php`, `candy-code-web/src-web/components/__tests__/composerDocuments.spec.ts`

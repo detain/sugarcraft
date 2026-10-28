@@ -211,13 +211,11 @@
    "worktree": "/home/sites/cc-cmp-C-SES-7.e"
   },
   "C-TOOL-2.b": {
+   "stage": "clean",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-C-TOOL-2.b",
    "branch": "cc/C-TOOL-2.b",
-   "note": "FRESH builder salvage-forward (prior DONE narrative PHANTOM, zero commits, en.php apostrophe parse-break in dirty). Must WRITE 2 test files that never existed + finish backends/factory; r1 reviewer ses_e7b877ffcffe result pending-junk — re-review after land",
-   "round": 0,
-   "session": "ses_e7b83baaeffeT3LzZPEC0kPMP1",
-   "stage": "build",
-   "tip": null,
-   "worktree": "/home/sites/cc-cmp-C-TOOL-2.b"
+   "note": "r1 CLEAN 0C/0M/3MINOR (2 narrative-truth step-local + 1 accepted scope) -> FIXER r1: REPORT narrative fixes (resolve-timing claim, 323T figure) cheap; then batch-8. Welder carries DUR x2 WebSearchBackendTest+WebSearchFactoryTest, +28T, §4 eaae19bdc, COLLISION flag vs EXT-4.c (README/LAYERED/ENVIRONMENT numerals), gen-settings-doc --check post-pick, re-run 9 guard reds at master."
   },
   "C-WEB-4.b": {
    "branch": "cc/C-WEB-4.b",
@@ -228,15 +226,6 @@
    "stage": "clean",
    "tip": "2e32c90bf",
    "worktree": "/home/sites/cc-cmp-C-WEB-4.b"
-  },
-  "C-WEB-4.e": {
-   "branch": "cc/C-WEB-4.e",
-   "note": "src ALREADY welded in b6 (5a89b0b20+47d19563f); branch restacked with docs-only 7a9f8de48 — welder-b7 step-5 lands it + §4 restamp; trio/dist/16MiB all reviewed; closeout carry: 3-line session.spec documents leg (images same gap); b4e12c78a was MY phantom restamp — retracted, disk truth adopted",
-   "round": 4,
-   "session": null,
-   "stage": "welded-check",
-   "tip": "7a9f8de48 (r4 docs-only on welded 5a89b0b20+47d19563f)",
-   "worktree": "/home/sites/cc-cmp-C-WEB-4.e"
   }
  },
  "late_rulings": [
@@ -345,7 +334,7 @@
  ],
  "standing_reds_b985fbe51": "ADD: ChatHostLangCatalogueTest red on chat.effort.launch_unshaped (asker LaunchContext.php:2109 outside sources()) - byte-identical at base, C-PRV-1.b (a992413b0) seam -> closeout roster",
  "status": "RUNNING",
- "tick": "235-PUSHED-972e0960b; CTX-3.a blank-resume#1",
+ "tick": "236-TOOL-2b-clean-r1",
  "tip": "0f58a906f",
  "updated": "2026-10-28 batch-5 weld step 6",
  "wave_loops": {
@@ -960,7 +949,7 @@
   },
   "C-WEB-4.c": "batch-3 weld: pick 22ddc7c65->fc38985ab src-only (dist hunks dropped per WELDER FLAG, rebuilt on merged tree, swap rides weld commit); vitest serial 76F/593T rc0; vue-tsc 20 residual errors BASE-PROVEN at e14c3cc7c (closeout/owner surface, not lane); trio untouched; §4 cites fc38985ab; base master 7bcd40016",
   "C-WEB-4.d": "batch-5 step4: picks bbf4a95b9+074ffb281 (src+spec, lane dist stripped; 416fee321 cherry + is by-design, content-proven identical); dist rebuilt on merged tree rides weld; vue-tsc delta vs base EMPTY (TS2554 cured by fix commit); vitest statusBarTimer+sessionView 9/9 serial",
-  "C-WEB-4.e": "NOT welded batch-5 step5: STOP-with-record (lane-attributable TS7053); kept inflight",
+  "C-WEB-4.e": "BATCH-7 weld: docs-only r4 delta 7a9f8de48->6c42f30ca (src half 5a89b0b20+47d19563f landed batch-6); REVIEW-4 CLEAN; section-4 restamp 2026-10-28; pruned. Lead note: {\"branch\": \"cc/C-WEB-4.e\", \"note\": \"src ALREADY welded in b6 (5a89b0b20+47d19563f); branch restacked with docs-only 7a9f8de48 \\u2014 welder-b7 step-5 lands it + \\u00a74 restamp; trio/dist/16MiB all reviewed; closeout carry: 3-line session.spec documents leg (images same gap); b4e12c78a was MY phantom restamp \\u2014 retracted, disk truth adopted\", \"round\": 4, \"session\": null, \"stage\": \"welded-check\", \"tip\": \"7a9f8de48 (r4 docs-only on welded 5a89b0b20+47d19563f)\", \"worktree\": \"/home/sites/cc-cmp-C-WEB-4.e\"}",
   "C-WEB-7.a": {
    "cherry": "'-' clean single-commit pick, zero overlap vs master since base 581ac6ede",
    "durations": "no row (zero new test files); suite-figure.json untouched",
@@ -1322,9 +1311,10 @@
   "C-EXT-3.b",
   "C-CTX-3.b",
   "C-CTX-2.f",
-  "C-CTX-5.a"
+  "C-CTX-5.a",
+  "C-WEB-4.e"
  ],
- "welded_count": 189,
+ "welded_count": 190,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
  "welder_sessions": {
