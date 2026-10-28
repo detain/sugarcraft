@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Context;
 
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Util\PathGlob;
@@ -1518,6 +1519,17 @@ final class InstructionFileLoader
                         $spelled,
                         $this->expandImports($doc, dirname($spelled), $repoRoot),
                     ) . $note;
+                    // C-CTX-2.f: the nested load was invisible to the human —
+                    // the file rode into the tool result and the model followed
+                    // a rule nobody was told is now in force. One row per
+                    // ACTUAL load: the emitted-path gate above makes a second
+                    // touch of the same path silent, and the mark crosses a
+                    // forked turn child with the tool's session-state envelope,
+                    // so "once per session" holds across the TUI's per-turn
+                    // forks exactly as the load itself does. A deferred or
+                    // unreadable candidate gets no row here — the refusal seam
+                    // below already speaks for those.
+                    RuntimeNoticeSink::record(Lang::t('chat.instructions.loaded', ['file' => $this->underRoot($spelled)]));
                 }
 
                 $blocks[] = $block;

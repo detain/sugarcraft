@@ -833,6 +833,10 @@ precedence order (`InstructionFileLoader::FILENAMES`):
   filter by construction;
 - **nested files** — a `CLAUDE.md`/`AGENTS.md` (or alias) in a subdirectory is
   injected when a tool touches a path under it, at most once per session.
+  When one is actually injected the human sees that too: one
+  `Instruction file loaded: <path>` transcript row (checkout-relative), on the
+  same once-per-session gate as the load itself — a refused or deferred
+  candidate gets the refusal notice instead, never both.
 
 The two import trees bring their own frontmatter vocabulary; each foreign key
 maps ONTO the fields above rather than adding a kind of its own:
@@ -926,6 +930,14 @@ in expansion order. The child list rides the loader's already-expanded rows, so
 the capture pays no re-expansion: a child costs one stat per turn, never a read.
 A child whose stat moved renders one `Read <path>` pointer line — its new bytes
 are never re-spliced mid-session; the next refresh point absorbs them.
+
+A newly detected change also surfaces to the human: one
+`Instructions updated: <name>` transcript row per change — re-rendering a
+change the tracker already showed stays silent, and a revert back to the
+frozen bytes clears the file's row so a later edit is announced again. On the
+TUI's forked-turn path the parent deliberately never advances the tracker, so
+that row repeats once per turn while the change is still new to the model; a
+host that runs its turns in-process says each change once per session.
 
 ### Quick-add from the chat
 

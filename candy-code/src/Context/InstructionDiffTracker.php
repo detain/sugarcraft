@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Context;
 
+use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Code\Lang;
 use SugarCraft\Diff\Diff;
 
 /**
@@ -82,6 +84,10 @@ use SugarCraft\Diff\Diff;
  *   first turn-context build froze "frozen = current disk" once per child,
  *   the tracker died with each child, and a mid-session edit surfaced in no
  *   turn at all.
+ * - The C-CTX-2.f transcript row rides that same fork topology: its ledger
+ *   is per tracker object, and the session-state envelope that carries the
+ *   loader's marks across a tool child does not (yet) carry it — see
+ *   {@see self::$announcedUpdates} for exactly what repeats where.
  *
  * Mutable by design — a snapshot that recorded no pending state could not
  * replay a delta without re-reading every step, defeating the stat gate. Its
@@ -164,6 +170,33 @@ final class InstructionDiffTracker
         private array $seen,
     ) {
     }
+
+    /**
+     * C-CTX-2.f: the transcript rows already spoken, path => fingerprint.
+     *
+     * The fingerprint is the new content's sha1 where this method knows it
+     * (the real-change leg, and a revert to the frozen bytes, which clears
+     * the ledger so an edit away and back counts as the new change it is),
+     * and the reason/size pair where the change was deliberately not read
+     * (gone, moved, unreadable, over-cap, no-baseline) — a re-measured state
+     * announces once; a different one announces again. Same object lifetime
+     * as $seen, same caveat: the tool session-state envelope carries the
+     * LOADER's marks (emitted paths, announced refusals), and a fifth
+     * byte-identical key for this ledger belongs to a step owning Read.php,
+     * Grep.php and Glob.php. The parent by C-CTX-1's law never rechecks —
+     * the child that sends the row owns advancing $seen — so on the TUI's
+     * per-turn forks the row repeats once per child per turn while the
+     * change is still new to the model (the model's own diff row rides each
+     * of those turns anyway; {@see TurnContextBlock::changedSince()} collapses
+     * its wire repeat, nothing collapses a transcript row). On a host whose
+     * turns run in-process — SessionHost, any embedder that does not fork —
+     * the ledger lives on the memo slot's tracker and each change is said
+     * once per session. The per-turn E199 budget is what bounds a burst of
+     * changed files; it never hides a file's own row inside its turn.
+     *
+     * @var array<string, string>
+     */
+    private array $announcedUpdates = [];
 
     /**
      * Freeze the fingerprints of every tracked instruction path.
@@ -313,6 +346,7 @@ final class InstructionDiffTracker
                         'pending' => ['reason' => 'gone', 'body' => null, 'size' => self::GONE],
                     ];
                     $this->seen[$path] = $current;
+                    $this->announceUpdate($path, null, 'gone', self::GONE);
                 }
                 if ($current['pending'] !== null) {
                     $changed[] = self::carried($entry, $current['pending']);
@@ -343,6 +377,7 @@ final class InstructionDiffTracker
                     'pending' => ['reason' => 'moved', 'body' => null, 'size' => $size],
                 ];
                 $this->seen[$path] = $current;
+                $this->announceUpdate($path, null, 'moved', $size);
                 $changed[] = self::carried($entry, $current['pending']);
                 continue;
             }
@@ -358,6 +393,7 @@ final class InstructionDiffTracker
                     'pending' => ['reason' => 'no-baseline', 'body' => null, 'size' => $size],
                 ];
                 $this->seen[$path] = $current;
+                $this->announceUpdate($path, null, 'no-baseline', $size);
                 $changed[] = self::carried($entry, $current['pending']);
                 continue;
             }
@@ -370,6 +406,7 @@ final class InstructionDiffTracker
                     'pending' => ['reason' => 'no-baseline', 'body' => null, 'size' => $size],
                 ];
                 $this->seen[$path] = $current;
+                $this->announceUpdate($path, null, 'no-baseline', $size);
                 $changed[] = self::carried($entry, $current['pending']);
                 continue;
             }
@@ -379,8 +416,11 @@ final class InstructionDiffTracker
 
             if ($sha !== null && $sha === $entry['sha']) {
                 // Back to the frozen content: the pending notice is cancelled
-                // and cleared, matching the slab the model still holds.
+                // and cleared, matching the slab the model still holds. The
+                // C-CTX-2.f ledger clears with it — the next edit away from
+                // the frozen bytes is a newly detected change and is said.
                 $this->seen[$path] = ['real' => $real, 'sha' => $sha, 'mtime' => $mtime, 'size' => $size, 'pending' => null];
+                unset($this->announcedUpdates[$path]);
                 continue;
             }
 
@@ -403,6 +443,7 @@ final class InstructionDiffTracker
                     'pending' => ['reason' => 'unreadable', 'body' => null, 'size' => $size],
                 ];
                 $this->seen[$path] = $current;
+                $this->announceUpdate($path, null, 'unreadable', $size);
                 $changed[] = self::carried($entry, $current['pending']);
                 continue;
             }
@@ -417,6 +458,7 @@ final class InstructionDiffTracker
                 'size' => $size,
             ];
             $this->seen[$path] = ['real' => $real, 'sha' => $sha, 'mtime' => $mtime, 'size' => $size, 'pending' => $pending];
+            $this->announceUpdate($path, $sha, $pending['reason'], $size);
             $changed[] = self::carried($entry, $pending);
         }
 
@@ -511,6 +553,32 @@ final class InstructionDiffTracker
         };
 
         return PromptFence::escape('now ' . number_format($size) . ' bytes' . $tail);
+    }
+
+    /**
+     * C-CTX-2.f: say a newly detected change to the human — one row per
+     * fingerprint (see {@see self::$announcedUpdates} for what a fingerprint
+     * is and for what the per-turn fork costs).
+     */
+    private function announceUpdate(string $path, ?string $sha, string $reason, int $size): void
+    {
+        $fingerprint = $sha ?? ($reason . ':' . $size);
+        if (($this->announcedUpdates[$path] ?? '') === $fingerprint) {
+            return;
+        }
+
+        $this->announcedUpdates[$path] = $fingerprint;
+        RuntimeNoticeSink::record(Lang::t('chat.instructions.updated', ['file' => self::rowLabel($path)]));
+    }
+
+    /**
+     * The row's name for the file: the bare name. {@see label()} is the
+     * model-facing form — clipped-path tail, fence-escaped — for a row the
+     * transcript clips again at MAX_CHARS and the user reads at a glance.
+     */
+    private static function rowLabel(string $path): string
+    {
+        return basename($path);
     }
 
     /**

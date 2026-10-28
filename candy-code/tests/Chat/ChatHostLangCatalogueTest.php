@@ -87,7 +87,7 @@ final class ChatHostLangCatalogueTest extends TestCase
         }
 
         $unused = array_values(array_diff(array_keys($this->catalogue()), array_keys($asked)));
-        self::assertSame([], $unused, 'chat./host. entries nothing in src/Chat.php, src/Host, SessionPermissionMemo, PermissionPrompt, PendingAsk, EngineBackend, GoalLoop or EffortGate asks for');
+        self::assertSame([], $unused, 'chat./host. entries nothing in src/Chat.php, src/Host, SessionPermissionMemo, PermissionPrompt, PendingAsk, EngineBackend, GoalLoop, EffortGate or the two src/Context instruction files asks for');
     }
 
     public function testTheEnglishRenderingIsTheTextTheLiteralsUsedToSpell(): void
@@ -138,7 +138,11 @@ final class ChatHostLangCatalogueTest extends TestCase
         // (unlisted files strand their keys as unused here).
         // C-PRV-1.a: EffortGate.php joins — the /effort verdict emits its own
         // chat.effort.shape.* rows from the src/Providers/ directory.
-        $files = [self::SRC . '/Chat.php', self::SRC . '/Permissions/SessionPermissionMemo.php', self::SRC . '/Permissions/PermissionPrompt.php', self::SRC . '/Backend/PendingAsk.php', self::SRC . '/Backend/EngineBackend.php', self::SRC . '/Runtime.php', self::SRC . '/Goal/GoalLoop.php', self::SRC . '/Providers/EffortGate.php'];
+        // C-CTX-2.f: the two src/Context instruction files join — the nested
+        // load and the mid-session change each emit their own visibility row
+        // (chat.instructions.loaded / chat.instructions.updated) through the
+        // same RuntimeNoticeSink the refusal rows already ride from there.
+        $files = [self::SRC . '/Chat.php', self::SRC . '/Permissions/SessionPermissionMemo.php', self::SRC . '/Permissions/PermissionPrompt.php', self::SRC . '/Backend/PendingAsk.php', self::SRC . '/Backend/EngineBackend.php', self::SRC . '/Runtime.php', self::SRC . '/Goal/GoalLoop.php', self::SRC . '/Providers/EffortGate.php', self::SRC . '/Context/InstructionFileLoader.php', self::SRC . '/Context/InstructionDiffTracker.php'];
         foreach (new \RecursiveDirectoryIterator(self::SRC . '/Chat/Handlers', \FilesystemIterator::SKIP_DOTS) as $handlerFile) {
             if ($handlerFile->isFile() && $handlerFile->getExtension() === 'php') {
                 $files[] = $handlerFile->getPathname();

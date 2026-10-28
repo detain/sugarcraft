@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Context;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Tools\BuiltIn\Read;
 
 /**
@@ -122,13 +123,20 @@ final class InstructionFileLoaderMidSessionNoticeTest extends TestCase
         self::assertSame([], RuntimeNoticeSink::drain());
     }
 
-    /** A nested file that loads is not a refusal and raises nothing. */
-    public function testALoadedNestedFileSaysNothing(): void
+    /**
+     * A nested file that loads is not a refusal — but since C-CTX-2.f it is
+     * not silent either: the one row it raises is the loaded row, never a
+     * refusal row.
+     */
+    public function testALoadedNestedFileSaysOnlyItsLoadedRow(): void
     {
         file_put_contents($this->repo . '/src/CLAUDE.md', "# src rules\n");
 
         self::assertStringContainsString('# src rules', (string) (new InstructionFileLoader($this->repo))->loadForPath($this->repo . '/src/x.php'));
-        self::assertSame([], RuntimeNoticeSink::drain());
+        self::assertSame(
+            [Lang::t('chat.instructions.loaded', ['file' => 'src/CLAUDE.md'])],
+            RuntimeNoticeSink::drain(),
+        );
     }
 
     /**
