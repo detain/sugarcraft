@@ -83,6 +83,44 @@ async function readImage(file: File): Promise<PastedImage> {
   }
 }
 
+// ── paste chips (C-WEB-4.a) ────────────────────────────────────────────
+// A long text paste used to flood the textarea, exactly the frame problem
+// ISS-051 solved on the TUI: the draft there collapses such a paste to a
+// one-line chip and `Chat::expandPasteChips()` puts the payload back at every
+// reader that treats the draft as sent text. The composer lands the same
+// machine client-side: the thresholds mirror `Chat::PASTE_COLLAPSE_LINES` /
+// `Chat::PASTE_COLLAPSE_BYTES`, and the chip shape is this surface's own —
+// `[Pasted #n +X lines]`.
+
+/** Collapse a paste taller than this many lines (mirrors `Chat::PASTE_COLLAPSE_LINES`). */
+export const PASTE_CHIP_LINES = 10
+
+/** ...or heavier than this many bytes (mirrors `Chat::PASTE_COLLAPSE_BYTES`). */
+export const PASTE_CHIP_BYTES = 2048
+
+/** Would the TUI collapse this text on paste? (Either bound alone; both exclusive.) */
+export function pasteNeedsCollapse(text: string): boolean {
+  return text.split('\n').length > PASTE_CHIP_LINES || new TextEncoder().encode(text).length > PASTE_CHIP_BYTES
+}
+
+/** The one-line placeholder filing away a paste of $lines lines, numbered $n. */
+export function pasteChip(n: number, lines: number): string {
+  return `[Pasted #${n} +${lines} lines]`
+}
+
+/**
+ * Replace every chip in $text with the payload it filed, in chip order.
+ * Unknown or hand-re-typed chip text does not match the map and survives
+ * literally — the same law as `Chat::expandPasteChips()`.
+ */
+export function expandPasteChips(text: string, chips: ReadonlyMap<string, string>): string {
+  let expanded = text
+  for (const [chip, payload] of chips) {
+    expanded = expanded.split(chip).join(payload)
+  }
+  return expanded
+}
+
 /**
  * The image files of a paste, in clipboard order, capped at MAX_PASTED_IMAGES.
  * Anything that is not one of the sniffed rasters — text, files, an svg — is

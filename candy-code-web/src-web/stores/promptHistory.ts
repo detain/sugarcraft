@@ -42,6 +42,19 @@ export function pushPromptHistory(history: string[], prompt: string): string[] {
   return next
 }
 
+/**
+ * The ring filtered the way the TUI's Ctrl+G search filters it
+ * ({@see \SugarCraft\Code\Tui\HistorySearch::computeMatches()}): case-
+ * insensitive containment, recency IS the rank — the ring is stored
+ * newest-first and the filter preserves that order, so the freshest match is
+ * always the first row. An empty query returns the whole ring.
+ */
+export function searchPromptHistory(history: string[], query: string): string[] {
+  if (query === '') return history
+  const needle = query.toLowerCase()
+  return history.filter((entry) => entry.toLowerCase().includes(needle))
+}
+
 /** Listeners told when the stored ring is erased — here or in another tab. */
 type ClearedListener = () => void
 const clearedListeners = new Set<ClearedListener>()

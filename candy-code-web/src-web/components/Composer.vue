@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import HistorySearch from "./HistorySearch.vue";
 import type { CommandInfo, Delivery } from "../stores/session";
 import {
     loadPromptHistory,
@@ -7,7 +8,10 @@ import {
     pushPromptHistory,
 } from "../stores/promptHistory";
 import {
+    expandPasteChips,
     MAX_PASTED_IMAGES,
+    pasteChip,
+    pasteNeedsCollapse,
     readPastedImages,
     type PastedImage,
 } from "../lib/paste";
@@ -157,13 +161,78 @@ function completeFile(path: string): void {
     input.value?.focus();
 }
 
-async function onPaste(event: ClipboardEvent): Promise<void> {
-    const pasted = await readPastedImages(event.clipboardData);
-    if (pasted.length === 0) return;
-    event.preventDefault();
+/**
+ * File of the long text pastes this draft has collapsed to chips
+ * (C-WEB-4.a), chip text → payload, in paste order. The same machine the
+ * TUI runs for ISS-051: the placeholder rides the draft, the payload waits
+ * here, and `expandPasteChips()` puts it back at submit — the only reader
+ * that treats the draft as sent text.
+ */
+const textChips = new Map<string, string>();
+let pasteCount = 0;
+
+function addImages(pasted: PastedImage[]): void {
     for (const image of pasted) {
         if (images.value.length < MAX_PASTED_IMAGES) images.value.push(image);
     }
+}
+
+/**
+ * Insert at the caret, like the dictation insert: the parent owns the draft,
+ * so the chip text leaves as an `update:modelValue` the way any keystroke does.
+ */
+function insertAtCaret(text: string): void {
+    const value = props.modelValue;
+    const el = input.value;
+    if (el === null) {
+        emit("update:modelValue", value + text);
+        return;
+    }
+    const start = el.selectionStart ?? value.length;
+    const end = el.selectionEnd ?? value.length;
+    emit("update:modelValue", value.slice(0, start) + text + value.slice(end));
+    input.value?.focus();
+}
+
+async function onPaste(event: ClipboardEvent): Promise<void> {
+    const pasted = await readPastedImages(event.clipboardData);
+    if (pasted.length > 0) {
+        event.preventDefault();
+        addImages(pasted);
+        return;
+    }
+    // C-WEB-4.a: the TUI's collapse, client-side. A paste over the chip
+    // thresholds is filed under a one-line placeholder instead of flooding
+    // the textarea; short text still falls through to the browser's insert.
+    // The `getData` duck-check keeps fixtures that only model image items
+    // (the older paste tests) falling through untouched.
+    const data = event.clipboardData as DataTransfer | null | undefined
+    if (typeof data?.getData !== "function") return;
+    const text = data.getData("text/plain");
+    if (text === "" || !pasteNeedsCollapse(text)) return;
+    event.preventDefault();
+    const chip = pasteChip(++pasteCount, text.split("\n").length);
+    textChips.set(chip, text);
+    insertAtCaret(chip);
+}
+
+/**
+ * C-WEB-4.a: dropping files over the composer is a paste that arrived by
+ * mouse — a DataTransfer satisfies `ClipboardFiles` structurally, so the
+ * drop shares the paste's reader, the MAX_PASTED_IMAGES strip, and (through
+ * the image chips) the same busy/command refusals on send.
+ *
+ * Only a Files drag is ours to claim. Cancelling every drop would silently
+ * break the browser's native text-drag into the textarea, so the types
+ * guard answers synchronously, before any await, and a text/plain drag
+ * falls through unpreventended for the browser to insert.
+ */
+async function onDrop(event: DragEvent): Promise<void> {
+    if (!event.dataTransfer?.types?.includes("Files")) return;
+    event.preventDefault();
+    const pasted = await readPastedImages(event.dataTransfer);
+    if (pasted.length === 0) return;
+    addImages(pasted);
 }
 
 /**
@@ -186,6 +255,12 @@ watch(
     () => props.modelValue,
     (value, previous) => {
         if (value === "" && previous !== "") images.value = [];
+        // C-WEB-4.a: a placeholder the user deleted is no longer a chip —
+        // its payload is dropped with it, so re-typing the same text later
+        // is just typing, never a resurrection of the filed paste.
+        for (const chip of [...textChips.keys()]) {
+            if (!value.includes(chip)) textChips.delete(chip);
+        }
     },
 );
 
@@ -213,16 +288,50 @@ onBeforeUnmount(stopHistoryCleared);
 function submit(): void {
     const text = props.modelValue.trim();
     if (text === "" || props.disabled || blockedReason.value !== "") return;
+    // C-WEB-4.a: the wire and the ring carry the expanded text — the model
+    // never sees a placeholder, same reader law as the TUI's submit arm.
+    const sent = expandPasteChips(text, textChips);
     // WEB-5a-i: the ring records what was sent, newest first (a failed
     // delivery keeps its prompt too, as in a shell — the prompt happened).
-    history.value = pushPromptHistory(history.value, text);
+    history.value = pushPromptHistory(history.value, sent);
     historyIndex = -1;
     emit(
         "send",
-        text,
+        sent,
         props.busy ? delivery.value : initialDelivery(),
         images.value,
     );
+}
+
+/**
+ * C-WEB-4.a: Ctrl+G opens the history search over the same ring Ctrl+↑/↓
+ * walks, seeded with the draft so Escape can put it back — the TUI rule that
+ * the draft the user is typing is not fuel for the search and never moves
+ * while it is up. With nothing to search the chord is not consumed, exactly
+ * as `Chat::buildHistorySearch()` answers null.
+ */
+const searchOpen = ref(false);
+let searchSeed = "";
+
+function openHistorySearch(): void {
+    if (history.value.length === 0) return;
+    searchSeed = props.modelValue;
+    searchOpen.value = true;
+}
+
+function onHistoryAccept(entry: string): void {
+    searchOpen.value = false;
+    historyIndex = -1;
+    emit("update:modelValue", entry);
+    input.value?.focus();
+}
+
+function onHistoryClose(): void {
+    searchOpen.value = false;
+    // Restore the seed verbatim (the overlay never wrote the draft, so this
+    // is the TUI's Escape arm applied — the draft is the user's again).
+    emit("update:modelValue", searchSeed);
+    input.value?.focus();
 }
 
 /** Ctrl+Up walks older, Ctrl+Down walks newer and lands back on the draft. */
@@ -337,6 +446,20 @@ function onKeydown(event: KeyboardEvent): void {
     if (
         event.ctrlKey &&
         !event.metaKey &&
+        !searchOpen.value &&
+        history.value.length > 0 &&
+        event.key.toLowerCase() === "g"
+    ) {
+        // C-WEB-4.a: the Ctrl+G search chord (browsers reserve Ctrl+R, so
+        // this surface lands on the TUI's Ctrl+G); while the overlay is up
+        // it owns the keyboard itself.
+        event.preventDefault();
+        openHistorySearch();
+        return;
+    }
+    if (
+        event.ctrlKey &&
+        !event.metaKey &&
         suggestions.value.length === 0 &&
         (event.key === "ArrowUp" || event.key === "ArrowDown") &&
         recallHistory(event.key === "ArrowUp")
@@ -397,7 +520,12 @@ defineExpose({ focus: () => input.value?.focus() });
 </script>
 
 <template>
-    <div class="composer">
+    <div
+        class="composer"
+        data-testid="composer-root"
+        @dragover.prevent
+        @drop="onDrop"
+    >
         <ul
             v-if="suggestions.length > 0"
             class="suggest"
@@ -470,7 +598,7 @@ defineExpose({ focus: () => input.value?.focus() });
                 :placeholder="
                     busy
                         ? 'Type to queue, steer or interrupt…'
-                        : 'Message CandyCode… (Enter sends, Shift+Enter for a new line, / for commands, @ for files, paste images, Ctrl+↑ history)'
+                        : 'Message CandyCode… (Enter sends, Shift+Enter for a new line, / for commands, @ for files, paste or drop images, Ctrl+↑ history, Ctrl+G search)'
                 "
                 aria-label="Message"
                 data-testid="composer-input"
@@ -550,6 +678,12 @@ defineExpose({ focus: () => input.value?.focus() });
                 Stop
             </button>
         </div>
+        <HistorySearch
+            v-if="searchOpen"
+            :entries="history"
+            @accept="onHistoryAccept"
+            @close="onHistoryClose"
+        />
     </div>
 </template>
 

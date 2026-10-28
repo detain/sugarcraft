@@ -98,7 +98,12 @@ documents the protocol and the UI).
 - **Composer**: Enter sends; while a turn runs, steer, queue or interrupt —
   offered first is the server's `queueMode` (`server.hello`'s
   `defaults.delivery`; `steer` unless set, as the TUI's Enter does mid-turn);
-  Stop or Esc Esc cancels; `/` completes server-runnable commands.
+  Stop or Esc Esc cancels; `/` completes server-runnable commands. Pasting or
+  dragging images files them as chips that ride the send; Ctrl+↑ walks the
+  prompt history and Ctrl+G searches it (TUI semantics: Enter fills the
+  draft, Esc restores yours); a paste over the TUI's collapse thresholds
+  lands as a `[Pasted #n +X lines]` chip that expands at submit, so the wire
+  carries the whole text while the draft stays short (C-WEB-4.a).
 - **Status bar**: activity and step, context used, spend, model, and the
   permission mode (changeable).
 - **Reconnects** after 0.5 s doubling to 15 s (±30 % jitter) with a fresh

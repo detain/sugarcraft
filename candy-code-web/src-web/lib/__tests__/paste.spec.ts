@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bytesToBase64, MAX_PASTED_IMAGES, onPasteNotice, readPastedImages, typelessPasteNotice, type ClipboardItem } from '../paste'
+import { bytesToBase64, expandPasteChips, MAX_PASTED_IMAGES, onPasteNotice, pasteChip, pasteNeedsCollapse, readPastedImages, typelessPasteNotice, type ClipboardItem } from '../paste'
 
 function item(type: string, bytes: number[], name = ''): ClipboardItem {
   return {
@@ -87,5 +87,29 @@ describe('paste rejection notices (NIT web58-1)', () => {
     onPasteNotice((notice) => notices.push(notice))()
     await readPastedImages({ items: [{ kind: 'file', type: '', getAsFile: () => null }] })
     expect(notices).toEqual([])
+  })
+})
+
+describe('paste chips (C-WEB-4.a)', () => {
+  it('collapses past the TUI thresholds and only past them (both exclusive)', () => {
+    expect(pasteNeedsCollapse(Array.from({ length: 10 }, (_, i) => `l${i}`).join('\n'))).toBe(false)
+    expect(pasteNeedsCollapse(Array.from({ length: 11 }, (_, i) => `l${i}`).join('\n'))).toBe(true)
+    expect(pasteNeedsCollapse('x'.repeat(2048))).toBe(false)
+    expect(pasteNeedsCollapse('x'.repeat(2049))).toBe(true)
+    expect(pasteNeedsCollapse('short')).toBe(false)
+  })
+
+  it('the chip is the one-line placeholder the composer files the paste under', () => {
+    expect(pasteChip(1, 12)).toBe('[Pasted #1 +12 lines]')
+  })
+
+  it('expansion replaces every known chip, in map order, and leaves unknown text literal', () => {
+    const chips = new Map([
+      ['[Pasted #1 +2 lines]', 'a\nb'],
+      ['[Pasted #2 +3 lines]', 'c\nd\ne'],
+    ])
+    expect(expandPasteChips('[Pasted #1 +2 lines] then [Pasted #2 +3 lines]', chips)).toBe('a\nb then c\nd\ne')
+    expect(expandPasteChips('[Pasted #9 +1 lines] untouched', chips)).toBe('[Pasted #9 +1 lines] untouched')
+    expect(expandPasteChips('plain', new Map())).toBe('plain')
   })
 })

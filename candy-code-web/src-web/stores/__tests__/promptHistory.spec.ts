@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { PROMPT_HISTORY_CAP, clearPromptHistory, loadPromptHistory, pushPromptHistory } from '../promptHistory'
+import { PROMPT_HISTORY_CAP, clearPromptHistory, loadPromptHistory, pushPromptHistory, searchPromptHistory } from '../promptHistory'
 import { readJson, writeJson } from '../storage'
 
 describe('prompt history ring (WEB-5a-i)', () => {
@@ -73,5 +73,36 @@ describe('prompt history ring (WEB-5a-i)', () => {
     // And the ring still works afterwards: clearing is not disabling.
     expect(pushPromptHistory(loadPromptHistory(), 'after clear')).toEqual(['after clear'])
     expect(loadPromptHistory()).toEqual(['after clear'])
+  })
+})
+
+/**
+ * C-WEB-4.a: the Ctrl+G search filter over the persisted ring — TUI
+ * semantics: case-insensitive containment, newest-first preserved.
+ */
+describe('searchPromptHistory (C-WEB-4.a)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('filters by case-insensitive containment keeping the ring order (newest first)', () => {
+    let ring = loadPromptHistory()
+    for (const prompt of ['deploy docs', 'ship it', 'DEPLOY the fix']) ring = pushPromptHistory(ring, prompt)
+    expect(ring).toEqual(['DEPLOY the fix', 'ship it', 'deploy docs'])
+    expect(searchPromptHistory(ring, 'deploy')).toEqual(['DEPLOY the fix', 'deploy docs'])
+    expect(searchPromptHistory(ring, 'the')).toEqual(['DEPLOY the fix'])
+    expect(searchPromptHistory(ring, 'nothing matches')).toEqual([])
+  })
+
+  it('an empty query returns the whole ring; the search never rewrites storage', () => {
+    const ring = pushPromptHistory([], 'only me')
+    expect(searchPromptHistory(ring, '')).toEqual(ring)
+    searchPromptHistory(ring, 'only')
+    expect(loadPromptHistory()).toEqual(ring)
+  })
+
+  it('searches the loaded ring from storage exactly as recall walks it', () => {
+    writeJson('promptHistory', ['newest', 'older'])
+    expect(searchPromptHistory(loadPromptHistory(), 'older')).toEqual(['older'])
   })
 })
