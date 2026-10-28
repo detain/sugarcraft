@@ -166,7 +166,8 @@
   3,
   4,
   5,
-  6
+  6,
+  7
  ],
  "wave_loops": {
   "1": "closed r2 CLEAN",
@@ -175,7 +176,7 @@
   "3": "closed r3 (static proof + lead battery 94T/103T, pair-only, gens rc0)",
   "5": "closed r2 CLEAN (EnvRoster cure 86eab474c; battery pre-pass)",
   "6": "closed r1 CLEAN (fresh reviewer; gates run at tip 6ab223f36, gens rc0)",
-  "7": "r2 CLEAN \u2014 CLOSE dispatching as unit 3 of orphan batch welder (post PRV-5.b ceremony + CTX-2.e weld)"
+  "7": "closed r2 CLEAN (battery green both tips, cure verified, gens rc0, hygiene clean)"
  },
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "weld_notes": {
@@ -554,5 +555,5 @@
   "C-PRV-5.b orphan bare-pick recovered (bare master pick e2e05598d, ceremony evidence commit now closed), 2nd instance of class",
   "EventLog broadcast-side seq-0 guard is an out-of-lane seam (report-only)"
  ],
- "updated": "2026-10-28T00:49:24Z"
+ "updated": "2026-10-28T00:50:32Z"
 }

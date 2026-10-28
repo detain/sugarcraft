@@ -140,7 +140,7 @@ So while 2 lanes are in review, the other 8 slots build steps from the next wave
 | ✅ W4 (closed 2026-10-27) | 10 | C-SES-2.c · C-SEC-4.a · C-SES-1.a · C-SES-5.d · C-TOOL-1.b · C-WEB-1.c · P-CTX.a · P-TABS.b · P-TABS.d · P-IMG.b |
 | ✅ W5 (closed 2026-10-27) | 10 | C-WEB-1.a · C-WEB-1.b · P-CTX.c · P-CTX.d · P-TABS.a · P-MENU.a · P-CTX.b · P-IMG.c · P-TABS.h · C-TOOL-7.a |
 | ✅ W6 (closed 2026-10-27) | 10 | P-MENU.c · P-AGENT.a · P-TABS.c · P-MENU.b · P-CTX.f · C-TOOL-7.c · C-AGT-1.b · C-AGT-3.a · C-CTX-2.b · C-EXT-2.a |
-| W7 | 10 | P-CTX.e · P-AGENT.c · P-CTX.g · C-AGT-7.a · C-AGT-2.b · C-AGT-3.b · C-EXT-7.b · C-SEC-5.a · C-SES-6.a · C-SES-9.a |
+| ✅ W7 (closed 2026-10-27) | 10 | P-CTX.e · P-AGENT.c · P-CTX.g · C-AGT-7.a · C-AGT-2.b · C-AGT-3.b · C-EXT-7.b · C-SEC-5.a · C-SES-6.a · C-SES-9.a |
 | W8 | 10 | P-MENU.d · P-AGENT.d · C-CTX-2.a · C-EXT-2.b · C-SES-4.b · C-SES-9.c · C-SES-9.d · C-WEB-3.a · C-WEB-3.b · C-WEB-3.c |
 | W9 | 10 | C-SES-5.c · P-MENU.e · C-CTX-2.c · C-WEB-3.d · C-AGT-7.c · C-CTX-6.c · C-CTX-6.d · C-EXT-7.a · C-MCP-6.a · C-PRV-5.a |
 | W10 | 10 | C-CTX-6.a · C-EXT-2.c · C-SEC-5.c · C-TOOL-3.a · C-AGT-7.b · C-CTX-1.c · C-CTX-2.e · C-MCP-4.a · C-PRV-5.b · C-PRV-5.c |
@@ -938,7 +938,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-AGT-2.a (W1)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-2.b`
 
-#### C-AGT-3.b — Per-agent memory from the preset `memory:` key
+#### ✅ 09da7d3e9 C-AGT-3.b — Per-agent memory from the preset `memory:` key
 - **Item:** C-AGT-3 (sources: GAP-MEM-13, k1-dorm#2) · dormant-wire · effort M
 - **What:** Today `memory:` is parsed onto `AgentPreset`/`Agent` and read by nothing (`src/Support/FrontmatterKeyAudit.php:122`, `INERT[AGENT]`). It also defaults to `User` when absent (`AgentPresetRegistry.php:608`, `Agent.php:104,176`), so …
 - **Files — create:** `candy-code/src/Memory/AgentMemory.php`
@@ -997,7 +997,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 
 - Chat.php region claims: C-EXT-2.b (gateToolCall); C-SES-4.b (subscriptions)
 
-#### P-MENU.d — Swap the bar to the five-menu tree: keyboard, click, dispatch, `»` overflow
+#### ✅ 65335c6c4 P-MENU.d — Swap the bar to the five-menu tree: keyboard, click, dispatch, `»` overflow
 - **Item:** P-MENU-REDO (sources: owner pick; supersedes P-IMG.a; latent bug 4) · feature · effort M
 - **What:** **MenuBar.** `menus()` reads the `ShellMenu::tree()` titles. The static `$activeMenu`/`$activeItem` pair becomes one static `MenuCursor`. `handleKey()` is `MenuCursor::key()`, and `selectItem()` takes a path (an int still means a …
 - **Files — create:** none
@@ -1157,7 +1157,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web.md` → `### C-WEB-3.d`
 
-#### C-AGT-7.c — Webhook mode clamp + hygiene
+#### ✅ 75853c72e C-AGT-7.c — Webhook mode clamp + hygiene
 - **Item:** C-AGT-7 (sources: AUT-6-P2, AUT-6-P3) · fix · MINOR/NIT · effort S
 - **What:** AUT-6-P2: `answersAsksWithoutAHuman()` (`src/Server/ServerConfig.php:574`) classes the strictest mode, `dont-ask`, with bypass. Hooks refuse it (:753), and `hookPermissionModeFallback()` (:592) widens a dont-ask server's hooks to …
 - **Files — create:** none
@@ -1168,7 +1168,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-AGT-1.c (W1)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-7.c`
 
-#### C-CTX-6.c — Context nit bundle
+#### ✅ 16266186d C-CTX-6.c — Context nit bundle
 - **Item:** C-CTX-6 (sources: VIS-6-P1, k1-dorm#7, INT-1-P1, CTX-5-P2, p2-miss: TUI-6 English plural) · fix · MINOR/NIT · effort S
 - **What:** **VIS-6-P1:** `Runtime::announceMemoryRecall()` (`Runtime.php:5991-5994`) injects the English plural as a parameter. Split `chat.memory.recalled_notice` (`lang/en.php:1898`) into `.one`/`.many` keys. **k1-dorm#7:** truth-flip the …
 - **Files — create:** none
@@ -1179,7 +1179,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-6.c`
 
-#### C-CTX-6.d — `/memory open` edits enter the memory journal
+#### ✅ dd6fd4069 C-CTX-6.d — `/memory open` edits enter the memory journal
 - **Item:** C-CTX-6 (sources: VIS-2-P1) · fix · NIT · effort S
 - **What:** Root cause: `Chat::memoryOpenArm()` (`Chat.php:15628-15660`) answers before `MemoryCommand`'s `MemoryHistoryCommand::record` (`MemoryCommand.php:60-62, 82-84`), so `/memory open` edits never reach `/memory log`/`undo`. Fix: …
 - **Files — create:** `candy-code/tests/Chat/MemoryOpenJournalTest.php`
@@ -1190,7 +1190,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-6.d`
 
-#### C-EXT-7.a — `/hooks` reads the live chain; bundle decline notices see Claude manifest keys
+#### ✅ be4c24ae5 C-EXT-7.a — `/hooks` reads the live chain; bundle decline notices see Claude manifest keys
 - **Item:** C-EXT-7 (sources: VIS-3-P2, PLG-1-P4; VIS-4-P1 is closed in C-EXT-5.b) · fix · MINOR/NIT · effort S
 - **What:** **VIS-3-P2.** `HooksHostCommand.php:30` calls `Bootstrap::hooks()`, which re-runs `installSecretEnvAllowlist` (:5830), `lspClient` (:5869) and `TeamManager::useLaunchHooks` (:5983). That makes the "read-only" `/hooks` command a …
 - **Files — create:** none
@@ -1201,7 +1201,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ext.md` → `### C-EXT-7.a`
 
-#### C-MCP-6.a — MCP hygiene: `mcp_list` lookup, login-URL scan, SSE fork TLS
+#### ✅ 6ae2c9e36 C-MCP-6.a — MCP hygiene: `mcp_list` lookup, login-URL scan, SSE fork TLS
 - **Item:** C-MCP-6 (sources: MCP-7-P3, MCP-5-P1, MCP-4-P1, VIS-3-P1) · fix · MINOR (the login-URL leg is upgraded, see the first bullet) · effort S
 - **What:** Three legs, one lane, disjoint files. **Login URL (upgrade).** `McpLoginFork::poll()` keeps a 1500-byte tail (`candy-code/src/Support/McpLoginFork.php:35,116`) and takes the FIRST `https?://\S+` (`:120`). The real child prints …
 - **Files — create:** `candy-code/tests/MCP/SseMcpServerForkTlsTest.php`
@@ -1212,7 +1212,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-MCP-1.b (W3)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-mcp.md` → `### C-MCP-6.a`
 
-#### C-PRV-5.a — Per-family thinking ceilings and omission
+#### ✅ aa0d35002 C-PRV-5.a — Per-family thinking ceilings and omission
 - **Item:** C-PRV-5 (sources: CTX-1-P2, PRV-2-P2) · fix · MINOR · effort M
 - **What:** Root cause: the only bound is a floor (`ProviderFactory.php:999-1006`), while the wire sets `max_tokens = max(…, 1.5×budget)` (`AnthropicMessagesWire.php:509-515`). These therefore 400 on every turn: `thinkingBudget: 50000` …
 - **Files — create:** `candy-code/tests/Providers/ThinkingCeilingTest.php`
@@ -1229,7 +1229,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - Chat.php region claims: C-CTX-2.e (scheduleAutoCommit, schedulePromptSuggestion); C-PRV-5.c (pickPaletteProvider, update dispatch arm (ModelCatalogReadyMsg))
 - Bootstrap.php method claims: C-PRV-5.b (summaryBackend, titleBackend, toollessBackend)
 
-#### C-CTX-6.a — Served idle alarm survives a running turn
+#### ✅ 4219a10c4 C-CTX-6.a — Served idle alarm survives a running turn
 - **Item:** C-CTX-6 (sources: CTX-5-P1) · fix · MINOR · effort S
 - **What:** Root cause: the served alarm is armed only on submit (`SessionHost.php:562`) as a one-shot `addTimer` (:656-661), and it returns on `isBusy()` (:678) with the timer already nulled and never re-armed. Idleness is measured from …
 - **Files — create:** none
@@ -1251,7 +1251,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-EXT-2.a (W6), C-EXT-2.b (W8)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ext.md` → `### C-EXT-2.c`
 
-#### C-SEC-5.c — TUI trust dialog component
+#### ✅ 2a24daeba C-SEC-5.c — TUI trust dialog component
 - **Item:** C-SEC-5 (sources: GAP-PER-11 TUI half) · dormant-wire · effort S
 - **What:** A self-contained immutable `TrustDialog` model. It takes the `TrustTarget` list from 5.a and the root. It shows one row per target, with what granting enables (hooks run programs, MCP starts servers, commands may run `!` forms, …
 - **Files — create:** `candy-code/src/Tui/TrustDialog.php`, `candy-code/tests/Tui/TrustDialogTest.php`
@@ -1295,7 +1295,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-CTX-1.a (W3)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-1.c`
 
-#### C-CTX-2.e — The TUI settle consumes the same gate
+#### ✅ 14118b17d C-CTX-2.e — The TUI settle consumes the same gate
 - **Item:** C-CTX-2 (sources: GAP-MEM-02w ("one decision table, two hosts")) · dormant-wire (consolidation) · effort S
 - **What:** Replace the inline gating at `HandlesTurnCompletion.php:304-336` with `TurnSettleWork::plan()`. Chat wraps each closure in `Cmd::promise`, and the landers stay unchanged. `Chat::scheduleAutoCommit()` and …
 - **Files — create:** none
@@ -1306,7 +1306,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-CTX-2.b (W6)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-2.e`
 
-#### C-MCP-4.a — User-tier rows + liveness in `context.sources` (data step)
+#### ✅ a6fa47900 C-MCP-4.a — User-tier rows + liveness in `context.sources` (data step)
 - **Item:** C-MCP-4 (sources: k2-dorm `McpDecision` user servers, GAP-MCP-10 web-liveness half); feeds P-CTX-BREAKDOWN · dormant-wire · effort M
 - **What:** Dormant data: `McpDecision::mcpServerInventory()` already computes `userStatus/userPath/userServers/userSkipped/userError` (`candy-code/src/Cli/McpDecision.php:294-340, 648-680`). `ContextSources::answer()` maps only the project …
 - **Files — create:** `candy-code/tests/Protocol/ContextSourcesMcpUserTierTest.php`
@@ -1317,7 +1317,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-mcp.md` → `### C-MCP-4.a`
 
-#### C-PRV-5.b — No thinking budget on the title and auxiliary backends
+#### ✅ e2e05598d C-PRV-5.b — No thinking budget on the title and auxiliary backends
 - **Item:** C-PRV-5 (sources: CTX-1-P1) · fix · MINOR · effort S
 - **What:** Root cause: `Bootstrap::toollessBackend()` (`Bootstrap.php:9484-9516`) builds from the selected provider's block, `thinkingBudget` included, and the Anthropic budget survives `withModel()` (`AnthropicProvider.php:395-409`). So …
 - **Files — create:** `candy-code/tests/Cli/ToollessBackendThinkingTest.php`
