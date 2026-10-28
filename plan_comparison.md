@@ -1482,7 +1482,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SEC-5.a (W7), C-SEC-5.c (W10)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-5.d`
 
-#### C-TOOL-7.e — Bounded resample of all-malformed tool-call replies
+#### ✅ 9070bd57e C-TOOL-7.e — Bounded resample of all-malformed tool-call replies
 - **Item:** C-TOOL-7 (sources: CC-new#12 unparseable tool-call retry) · fix · NIT · effort S
 - **What:** Today a call whose arguments did not decode becomes an A11 error result (`Runtime::malformedArguments()` :4183, `failure()`), costing a whole step. Mirror Claude Code: in `Runtime::runBatch()` (:1899) and `runStreaming()`, when a …
 - **Files — create:** none
