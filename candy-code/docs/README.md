@@ -31,7 +31,7 @@ asking.
 | [PROMPT_ENGINEERING.md](PROMPT_ENGINEERING.md) | How the system prompt is assembled | You tune agent behaviour |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Symptom-first error recovery, incl. CI automation notes | Something is broken |
 | [protocol/](protocol/) | Generated JSON schema of the serve wire | You build a client |
-| [examples/](examples/) | systemd unit and other deployment samples | You install it as a service |
+| [examples/](examples/) | systemd unit, the PR-comment bot workflow, other deployment samples | You install it as a service or wire the bot into CI |
 
 ## The `AGENTS.md` name collision
 

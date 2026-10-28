@@ -112,6 +112,45 @@ steps:
 Note the shape: the model's output crosses into the shell through `REVIEW`, not through `${{ }}`
 inside the script line. Keep it that way.
 
+## The PR-comment bot — the association-gated example
+
+The full example lives at [examples/pr-comment-bot.yml](examples/pr-comment-bot.yml): someone
+comments `@candy-code review this` on a PR, the agent runs in `plan` mode over the PR's diff
+**text**, and the result is posted back as a reply. It is the one fork-PR review shape that
+never needs the artifact split below, and it earns that with three load-bearing choices:
+
+- **The event is `issue_comment`, and the gate is not decoration.** `issue_comment` runs in the
+  base context, so — unlike `pull_request` — it does receive secrets and a write-capable token.
+  That is precisely why the job runs only when the comment mentions the bot **and** the
+  commenter's `author_association` is `OWNER`, `MEMBER` or `COLLABORATOR`. Without the
+  association test, anyone who can type a comment can direct a token-bearing, paid agent run at
+  your repository. The gate, in full:
+
+  ```yaml
+  if: >-
+    github.event.issue.pull_request
+    && contains(github.event.comment.body, '@candy-code')
+    && (github.event.comment.author_association == 'OWNER'
+    || github.event.comment.author_association == 'MEMBER'
+    || github.event.comment.author_association == 'COLLABORATOR')
+  ```
+
+- **Nothing is checked out or executed.** The diff arrives as text via `gh pr diff` into an
+  empty workspace and that file is the model's whole world — attacker-authored *code* never
+  lands where the secrets are, which is the separation the doctrine below spends two jobs
+  enforcing elsewhere. There is no `actions/checkout` step in the file at all.
+- **The write scope is solitary.** The run job holds `contents: read` and `pull-requests: read`;
+  only the second job holds `pull-requests: write`, and the only thing it does is paste the
+  review into a comment — with a `> [!WARNING]` banner, because GitHub renders comment bodies
+  as Markdown and the review text is untrusted content wearing your bot's avatar. The review
+  crosses into that job as a job output bound through `env:`, exactly the shape above.
+
+Comments created with `GITHUB_TOKEN` do not trigger workflow runs, so the bot cannot loop on its
+own replies. Pin the action ref to a full commit SHA as everywhere else on this page, and note
+that the example is guarded in the build by `tools/tests/PrCommentBotExampleTest.php` — the
+association gate, the absence of any checkout, the solitary write scope and the env-only
+crossings are pins, not suggestions.
+
 ## The doctrine — read this before automating anything untrusted
 
 ### Forked pull requests get no secrets — and that is the load-bearing fact

@@ -1,0 +1,95 @@
+# Documentation example — nothing in this repository's CI executes this file.
+#
+# The association-gated issue-comment bot that docs/CI.md rules on: someone
+# with write standing comments "@candy-code review this" on a PR, the agent
+# runs in plan mode over the PR's diff TEXT, and the result is posted back as
+# a reply.
+#
+# WHY THIS TRUST MODEL HOLDS. `issue_comment` runs in the base context, so —
+# unlike `pull_request` — it DOES receive secrets and a token that can write.
+# That is exactly what makes the author gate below load-bearing rather than
+# tidy: without it, any passerby who can type a comment directs a
+# token-bearing, paid agent run at your repository.
+#
+# THE OTHER TWO LOAD-BEARING CHOICES:
+#   * Nothing is checked out or executed. The diff arrives as text through
+#     the API into an empty workspace; attacker-authored CODE never lands
+#     where the secrets are. (tools/tests/PrCommentBotExampleTest.php fails
+#     the build if this file ever grows a checkout or the target event.)
+#   * The write scope is solitary. The run job holds only read scopes; the
+#     second job is the only step in the file that can write, and the only
+#     thing it does with model output is paste it into a comment. Every
+#     value crosses into a script through an `env:` binding — never as a
+#     `${{ }}` pasted into a `run:` line (script-injection doctrine, same
+#     guard).
+#
+# Comments created with GITHUB_TOKEN do not trigger workflow runs, so the
+# bot cannot loop on its own replies. Pin the action ref to a full commit
+# SHA, as everywhere else in these docs.
+name: pr-comment-bot
+
+on:
+  issue_comment:
+    types: [created]
+
+# No default scope anywhere; each job below opts in to exactly what it needs.
+permissions: {}
+
+jobs:
+  # The paid run. Read scopes only. The model's whole world is the pr.diff
+  # text file dropped into the empty workspace — no PR code executes here.
+  review:
+    if: >-
+      github.event.issue.pull_request
+      && contains(github.event.comment.body, '@candy-code')
+      && (github.event.comment.author_association == 'OWNER'
+      || github.event.comment.author_association == 'MEMBER'
+      || github.event.comment.author_association == 'COLLABORATOR')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      result: ${{ steps.bot.outputs.result }}
+    steps:
+      - name: Fetch the PR diff as text
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.issue.html_url }}
+        run: gh pr diff "$PR_URL" > pr.diff
+
+      - name: Plan-mode review with a cost ceiling
+        id: bot
+        uses: sugarcraft/candy-code@<full-commit-sha>
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        with:
+          prompt: "Review the diff in ./pr.diff at the working root. List problems by severity; cite file and line. Recommend only — change nothing."
+          permission-mode: plan
+          max-cost: "1.00"
+
+  # The only job in the file that can write, and the only thing it writes is
+  # a comment. The review text arrives via a job output bound into `env:`,
+  # and it carries a warning banner because GitHub renders comment bodies
+  # as Markdown: this text may be shaped by whatever the PR author wrote.
+  post:
+    needs: review
+    if: needs.review.outputs.result != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Post the review as a PR comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.issue.html_url }}
+          REVIEW: ${{ needs.review.outputs.result }}
+        run: |-
+          {
+            printf '> [!WARNING]\n'
+            printf '> Model-generated review of untrusted input. Verify before acting on it.\n\n'
+            printf '%s\n' "$REVIEW"
+          } > "$RUNNER_TEMP/comment.md"
+          gh pr comment "$PR_URL" --body-file "$RUNNER_TEMP/comment.md"
