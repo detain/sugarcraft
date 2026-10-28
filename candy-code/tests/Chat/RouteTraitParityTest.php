@@ -67,6 +67,7 @@ final class RouteTraitParityTest extends TestCase
         'LoadMoreMsg',
         'McpLoginProgressMsg',
         'MemoryConsolidatedMsg',
+        'ModelCatalogReadyMsg', // C-PRV-5.c palette wake arm (HandlesSessionSurface) — row landed in-step
         'MouseMsg',
         'PasteMsg',
         'PermissionModeToggledMsg',
@@ -80,6 +81,7 @@ final class RouteTraitParityTest extends TestCase
         'SideQuestionAnsweredMsg',
         'StatusLineResultMsg',
         'StatusLineTickMsg',
+        'TelemetryRetryTickMsg', // C-SES-4.b arm landed without its roster row — base red cured in-step (C-PRV-5.c)
         'TickRequest',
         'ToolEventPumpMsg',
         'ToolResultsMsg',

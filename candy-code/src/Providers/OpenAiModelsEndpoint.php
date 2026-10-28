@@ -5,8 +5,14 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Providers;
 
 use GuzzleHttp\HandlerStack;
+use React\EventLoop\Loop;
+use React\Http\Browser;
+use React\Promise\PromiseInterface;
+use React\Socket\Connector;
 use SugarCraft\Code\Providers\Concerns\HttpClientDefaults;
 use SugarCraft\Code\Tui\Components\PaneLabel;
+
+use function React\Promise\resolve;
 
 /**
  * PRV-1 (§6.5): one bounded `GET {root}/v1/models` against an
@@ -87,6 +93,74 @@ final class OpenAiModelsEndpoint
             return self::decode((string) $client->get(self::MODELS_PATH)->getBody());
         } catch (\Throwable) {
             return null;
+        }
+    }
+
+    /**
+     * The async sibling of {@see fetch()} (C-PRV-5.c): the same single
+     * bounded `GET {base}/models`, dispatched on the event loop instead of
+     * the calling thread, so a palette open starts the read and answers at
+     * once on the tiers already in the memo. The E646 rule is about LLM
+     * calls and holds unchanged — this is still a one-request metadata
+     * read, and it still carries the same total discovery budget: the
+     * bound that made the sync prime merely annoying on a keystroke is
+     * exactly what makes this one safe to leave outstanding. Both bounds
+     * name {@see self::DISCOVERY_TIMEOUT_SECONDS} — the connector's
+     * connect budget and `Browser::withTimeout()`'s total — so this file
+     * keeps naming its one budget (the exemption
+     * `ProviderConnectTimeoutTest` reads), and Browser's default status
+     * refusal is re-applied in the callback so the seam below cannot
+     * smuggle a 4xx/5xx body past the contract.
+     *
+     * SAME NEVER-THROWS CONTRACT as {@see fetch()}: a transport error, a
+     * refused status or a junk body all resolve null — the promise never
+     * rejects, so no caller can surface an unhandled rejection the way a
+     * sync throw would reach the prime. `$sender` is the seam `$handler`
+     * is for the Guzzle side: a test transport replacing the browser
+     * itself, handed the composed URL and headers and answering with a
+     * PSR-7 response promise (synchronously, so pins need no loop).
+     *
+     * @param (callable(string, array<string, string>): \React\Promise\PromiseInterface)|null $sender
+     *
+     * @return PromiseInterface<list<string>|null>
+     */
+    public static function fetchAsync(string $baseUrl, ?string $apiKey = null, ?callable $sender = null): PromiseInterface
+    {
+        try {
+            $headers = ['Accept' => 'application/json'];
+            if ($apiKey !== null && $apiKey !== '') {
+                $headers['Authorization'] = 'Bearer ' . $apiKey;
+            }
+
+            // Same route resolution as the sync read: the base IS the
+            // version root, so `models` lands beside its own
+            // `chat/completions` — and the same header set rides either
+            // transport, composed here once rather than per-browser so
+            // the seam sees exactly what the real Browser would send.
+            $url = rtrim($baseUrl, '/') . '/' . self::MODELS_PATH;
+
+            $promise = $sender === null
+                ? (new Browser(new Connector(['timeout' => self::DISCOVERY_TIMEOUT_SECONDS], Loop::get())))
+                    ->withTimeout(self::DISCOVERY_TIMEOUT_SECONDS)
+                    ->get($url, $headers)
+                : $sender($url, $headers);
+
+            return $promise->then(
+                static function (mixed $response): ?array {
+                    try {
+                        return $response instanceof \Psr\Http\Message\ResponseInterface
+                            && $response->getStatusCode() >= 200
+                            && $response->getStatusCode() < 300
+                            ? self::decode((string) $response->getBody())
+                            : null;
+                    } catch (\Throwable) {
+                        return null;
+                    }
+                },
+                static fn (\Throwable $reason): ?array => null,
+            );
+        } catch (\Throwable) {
+            return resolve(null);
         }
     }
 

@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Providers;
 
 use OpenAI\Contracts\ClientContract;
 use OpenAI\Exceptions\TransporterException;
+use React\Promise\PromiseInterface;
 use SugarCraft\Code\Messages\Message;
 use SugarCraft\Code\Messages\AssistantMessage;
 use SugarCraft\Code\Messages\UserMessage;
@@ -17,6 +18,8 @@ use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Providers\Concerns\ToolSchema;
 use SugarCraft\Code\Usage;
+
+use function React\Promise\resolve;
 
 final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, HasModelCatalog, ShapesReasoningEffort
 {
@@ -207,6 +210,23 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
         $base = $this->askableCatalogBase();
 
         return $base === null ? null : OpenAiModelsEndpoint::fetch($base, $this->modelsApiKey);
+    }
+
+    /**
+     * C-PRV-5.c: the async sibling of {@see listModels()} — the same askable
+     * door, the same bounded read, answered on the event loop so a palette
+     * open never pays for it on the keystroke path. The promise resolves to
+     * exactly what {@see listModels()} returns (ids or null) and never
+     * rejects. `$sender` is the endpoint's test seam; production callers
+     * pass nothing.
+     *
+     * @return PromiseInterface<list<string>|null>
+     */
+    public function listModelsAsync(?callable $sender = null): PromiseInterface
+    {
+        $base = $this->askableCatalogBase();
+
+        return $base === null ? resolve(null) : OpenAiModelsEndpoint::fetchAsync($base, $this->modelsApiKey, $sender);
     }
 
     /**

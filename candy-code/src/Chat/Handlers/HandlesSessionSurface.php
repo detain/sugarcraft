@@ -108,6 +108,7 @@ use SugarCraft\Code\App\BackgroundSessionSpawnedMsg;
 use SugarCraft\Code\App\BackgroundSessionStoppedMsg;
 use SugarCraft\Code\App\CancelledWorkflowReportMsg;
 use SugarCraft\Code\App\ContextMeasuredMsg;
+use SugarCraft\Code\App\ModelCatalogReadyMsg;
 use SugarCraft\Code\App\CustomCommandExpandedMsg;
 use SugarCraft\Code\App\PermissionModeToggledMsg;
 use SugarCraft\Code\App\ClipboardImagePastedMsg;
@@ -185,6 +186,18 @@ trait HandlesSessionSurface
             // set, and the picker's clear paths read that stamp to know a
             // widened re-read is owed (C-SES-2 review round 1, MAJOR).
             return [$this->mutate(['sessionPicker' => $picker->withFetchedRows($rows, SessionPicker::SEARCH_LIMIT, $more, $msg->query)]), null];
+        }
+        if ($msg instanceof ModelCatalogReadyMsg) {
+            // C-PRV-5.c's palette wake: by the time this arrives the async
+            // answer is ALREADY in the ModelCatalog memo (the wake's own
+            // then performs that write before dispatching), and the picker's
+            // rows are re-derived from the memo on every paint — so the
+            // model does not move and this arms nothing. Returning $this IS
+            // the merge: the repaint comes from Program re-rendering after
+            // the update, and an open model list reads the widened tier on
+            // that pass. A failed answer (ids null) took the same inert
+            // path with nothing written, deriving the rows it always had.
+            return [$this, null];
         }
         if ($msg instanceof BackgroundSessionSpawnedMsg) {
             // Unlike the title call above this is NOT session-scoped: the

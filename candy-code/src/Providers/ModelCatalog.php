@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Providers;
 
+use React\Promise\PromiseInterface;
+
 /**
  * PRV-1 (§6.5): the once-per-process cache in front of the two model-catalog
  * sources, and the merge order the palette and `models all` render.
@@ -78,6 +80,62 @@ final class ModelCatalog
         }
 
         self::$live[$key] = $provider?->listModels();
+    }
+
+    /**
+     * The async sibling of {@see prefetch()} (C-PRV-5.c): starts the same
+     * once-per-process catalog read on the event loop and hands back the
+     * promise that will settle the memo, so a palette open answers at once
+     * on the tiers already in hand. Null means NOTHING WAS STARTED — every
+     * shape the sync guards refuse (no key, memo already settled or in
+     * flight, environment opt-out), plus the providers whose transport has
+     * no async path: the dispatch is typed to the two concrete endpoints
+     * that speak one, so the custom gateway and anonymous fakes answer null
+     * and their callers keep the sync prime byte-identical.
+     *
+     * The memo placeholder is written BEFORE the dial starts, deliberately:
+     * null is this file's existing stamp for "asked, answered nothing", and
+     * an in-flight entry under the same stamp is what makes the once-per-
+     * process rule hold across the async window — a second open, or the CLI
+     * `models all` reading the same base mid-flight, sees a settled key and
+     * skips, instead of starting a parallel second dial. The answer (ids or
+     * null) overwrites the placeholder when the fetch resolves, leaving the
+     * memo in the state the sync prime would have left it in.
+     *
+     * The returned promise never rejects — the endpoint's own async read
+     * resolves null on every failure — and its `then` performs the memo
+     * write BEFORE the value continues, so by the time any listener (the
+     * palette's ModelCatalogReadyMsg wake) sees the answer, the row
+     * derivation already reads it from the memo.
+     *
+     * @param (callable(string, array<string, string>): PromiseInterface)|null $sender the endpoint test seam, threaded to the transports that answer async; ignored by every caller that starts nothing
+     *
+     * @return PromiseInterface<list<string>|null>|null
+     */
+    public static function prefetchAsync(?HasModelCatalog $provider, ?callable $sender = null): ?PromiseInterface
+    {
+        $key = $provider?->catalogKey();
+        if ($key === null || \array_key_exists($key, self::$live) || ModelMetadata::disabledFromEnvironment()) {
+            return null;
+        }
+
+        // Typed dispatch, not method_exists: the async answer is a property
+        // of these two concrete transports (see the HasModelCatalog contract
+        // note), and a fake or the gateway staying on the sync path IS the
+        // documented null answer here.
+        if (!$provider instanceof OpenAIProvider && !$provider instanceof SglangProvider) {
+            return null;
+        }
+
+        self::$live[$key] = null;
+
+        return $provider->listModelsAsync($sender)->then(
+            static function (?array $ids) use ($key): ?array {
+                self::$live[$key] = $ids;
+
+                return $ids;
+            },
+        );
     }
 
     /**

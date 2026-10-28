@@ -11,12 +11,18 @@ use GuzzleHttp\Psr7\Response;
 use OpenAI\Contracts\ClientContract;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\RequestInterface;
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
 use SugarCraft\Code\Providers\CustomProvider;
 use SugarCraft\Code\Providers\HasModelCatalog;
 use SugarCraft\Code\Providers\ModelCatalog;
+use SugarCraft\Code\Providers\ModelMetadata;
 use SugarCraft\Code\Providers\OpenAIProvider;
 use SugarCraft\Code\Providers\OpenAiModelsEndpoint;
 use SugarCraft\Code\Providers\SglangProvider;
+
+use function React\Promise\reject;
+use function React\Promise\resolve;
 
 /**
  * PRV-1 (§6.5): the shared `GET {base}/models` metadata read behind every
@@ -266,6 +272,227 @@ final class OpenAiModelsEndpointTest extends TestCase
         self::assertSame(['configured-model', 'hostile-row', 'honest-row', 'litellm-model'], $merged);
         foreach ($merged as $label) {
             self::assertSame(0, preg_match('/[\x00-\x1b\x7f]/', $label), 'no row the palette or `models all` paints carries a control byte');
+        }
+    }
+
+    /**
+     * C-PRV-5.c: the async sibling. The transport seam receives the
+     * composed URL and the header set — the same contract the sync pins
+     * through Guzzle options — and the answer rides the shared decode
+     * containment. Every sender here settles synchronously: no test in
+     * this family ever runs the loop.
+     */
+    public function testFetchAsyncAsksTheModelsRouteBesideTheChatRouteAndCarriesTheCredential(): void
+    {
+        $seen = [];
+        $sender = static function (string $url, array $headers) use (&$seen): PromiseInterface {
+            $seen[] = [$url, $headers];
+
+            return resolve(new Response(200, [], '{"data":[{"id":"relay-a"},{"id":"relay-b"}]}'));
+        };
+
+        $captured = 'unsettled';
+        OpenAiModelsEndpoint::fetchAsync('https://relay.example/v1/', 'sk-relay', $sender)
+            ->then(static function (?array $ids) use (&$captured): void {
+                $captured = $ids;
+            });
+
+        self::assertCount(1, $seen, 'exactly one GET, answered synchronously through the seam');
+        self::assertSame('https://relay.example/v1/models', $seen[0][0], 'a trailing-slash base resolves the route beside its own chat/completions — the sync read\'s rule, byte-for-byte');
+        self::assertSame('application/json', $seen[0][1]['Accept']);
+        self::assertSame('Bearer sk-relay', $seen[0][1]['Authorization'], 'a key in hand rides the async Bearer contract exactly as the sync one');
+        self::assertSame(['relay-a', 'relay-b'], $captured, 'the promise carries the sync answer, in server order');
+
+        OpenAiModelsEndpoint::fetchAsync('https://gw.example/v1', null, $sender)
+            ->then(static fn (?array $ids): mixed => $ids);
+
+        self::assertArrayNotHasKey('Authorization', $seen[1][1], 'no key, no header — the self-hosted keyless ride is the same rule as the sync door');
+    }
+
+    /**
+     * The NEVER-REJECTS trio (plus two): every failure shape the sync read
+     * answers null for resolves null here — the seam bypasses Browser's own
+     * status refusal, so the callback re-applies it and a 500 body is
+     * "unknown" even when it would have decoded. A rejection that escaped
+     * would leave its case missing from the roster below, which fails the
+     * identity assert, not the suite.
+     */
+    public function testFetchAsyncNeverRejectsAnyFailureTheSyncReadAlsoRefuses(): void
+    {
+        $settles = [];
+        $record = static function (string $case) use (&$settles): \Closure {
+            return static function (mixed $value) use ($case, &$settles): void {
+                $settles[$case] = $value;
+            };
+        };
+
+        $senders = [
+            'http-500' => static fn (): PromiseInterface => resolve(new Response(500, [], '{"data":[{"id":"stolen-row"}]}')),
+            'transport-error' => static fn (): PromiseInterface => reject(new \RuntimeException('connection refused by the host')),
+            'junk-body' => static fn (): PromiseInterface => resolve(new Response(200, [], 'not-json-at-all')),
+            'no-usable-rows' => static fn (): PromiseInterface => resolve(new Response(200, [], '{"data":[]}')),
+        ];
+        foreach ($senders as $case => $sender) {
+            OpenAiModelsEndpoint::fetchAsync('https://evil.example/v1', null, $sender)->then($record($case));
+        }
+
+        $senders['sender-throws'] = static function (): PromiseInterface {
+            throw new \LogicException('the seam itself exploded');
+        };
+        OpenAiModelsEndpoint::fetchAsync('https://evil.example/v1', null, $senders['sender-throws'])->then($record('sender-throws'));
+
+        self::assertSame(['http-500', 'transport-error', 'junk-body', 'no-usable-rows', 'sender-throws'], array_keys($settles), 'every shape settles, none escapes a rejection');
+        self::assertSame(array_fill_keys(array_keys($settles), null), $settles, 'every failure answers the same null the sync fetch returns — never a partial or refused catalog');
+    }
+
+    /**
+     * THE POINT OF THE WHOLE STEP: the open does not wait. A pending
+     * transport leaves the listener untouched until the answer lands, and
+     * the answer landing is when the memo (and then the picker) moves —
+     * late, never blocking. A late failure is a late null, never a
+     * rejection.
+     */
+    public function testFetchAsyncAnswersOnSettleNotOnOpen(): void
+    {
+        $deferred = new Deferred();
+        $captured = 'unsettled';
+        OpenAiModelsEndpoint::fetchAsync('https://relay.example/v1', null, static fn (): PromiseInterface => $deferred->promise())
+            ->then(static function (?array $ids) use (&$captured): void {
+                $captured = $ids;
+            });
+
+        self::assertSame('unsettled', $captured, 'nothing has settled at open — the caller keeps moving');
+
+        $deferred->resolve(new Response(200, [], '{"data":[{"id":"late-model"}]}'));
+
+        self::assertSame(['late-model'], $captured, 'the answer rides the settle the moment it arrives');
+
+        $broken = new Deferred();
+        $failed = 'unsettled';
+        OpenAiModelsEndpoint::fetchAsync('https://relay.example/v1', null, static fn (): PromiseInterface => $broken->promise())
+            ->then(static function (?array $ids) use (&$failed): void {
+                $failed = $ids;
+            });
+        $broken->reject(new \RuntimeException('the bounded budget ran out'));
+
+        self::assertNull($failed, 'a late failure is the same "unknown" as the sync door, never a rejection');
+    }
+
+    /**
+     * The containment is shared, not duplicated: a hostile escape-swept id
+     * answers the async path through the SAME {@see OpenAiModelsEndpoint::decode()}
+     * choke the sync fetch pins above.
+     */
+    public function testFetchAsyncSharesTheDecodeContainmentOfTheSyncRead(): void
+    {
+        $captured = null;
+        OpenAiModelsEndpoint::fetchAsync('https://evil.example/v1', null, static fn (): PromiseInterface => resolve(
+            new Response(200, [], '{"data":[{"id":"\\u001b]8;;https://evil\\u0007hostile-row"},{"id":"honest-row"}]}'),
+        ))->then(static function (?array $ids) use (&$captured): void {
+            $captured = $ids;
+        });
+
+        self::assertSame(['hostile-row', 'honest-row'], $captured, 'the async answer lands control-swept exactly like the sync one');
+    }
+
+    /**
+     * The transports' async siblings keep the sync doors: the keyless
+     * public-root refusal answers null WITHOUT constructing a read at all
+     * (the seam is never reached), and the sglang ask threads URL and
+     * keylessness through unchanged.
+     */
+    public function testTheAsyncProviderSiblingsThreadTheSeamAndKeepTheDoor(): void
+    {
+        $doorReached = false;
+        $keyless = new OpenAIProvider(
+            $this->createMock(ClientContract::class),
+            'gpt-4o',
+            modelsBaseUrl: OpenAIProvider::SDK_DEFAULT_BASE,
+            modelsApiKey: null,
+        );
+        $answered = 'unsettled';
+        $keyless->listModelsAsync(static function () use (&$doorReached): PromiseInterface {
+            $doorReached = true;
+
+            return resolve(new Response(200, [], '{"data":[]}'));
+        })->then(static function (?array $ids) use (&$answered): void {
+            $answered = $ids;
+        });
+
+        self::assertFalse($doorReached, 'the guaranteed-401 door spends no bytes on the async path either');
+        self::assertNull($answered, 'the door answers null, settled immediately');
+
+        $bare = new OpenAIProvider($this->createMock(ClientContract::class), 'gpt-4o');
+        $bareAnswer = 'unsettled';
+        $bare->listModelsAsync()->then(static function (?array $ids) use (&$bareAnswer): void {
+            $bareAnswer = $ids;
+        });
+        self::assertNull($bareAnswer, 'no threaded base, no ask — the sync constructor contract holds async too');
+
+        $sglang = new SglangProvider('http://127.0.0.1:30000/v1', 'Qwen/Qwen3.8-Flash-Next-FP8', null, new \GuzzleHttp\Client());
+        $seen = [];
+        $captured = 'unsettled';
+        $sglang->listModelsAsync(static function (string $url, array $headers) use (&$seen): PromiseInterface {
+            $seen[] = [$url, $headers];
+
+            return resolve(new Response(200, [], '{"data":[{"id":"sg-a"}]}'));
+        })->then(static function (?array $ids) use (&$captured): void {
+            $captured = $ids;
+        });
+
+        self::assertSame('http://127.0.0.1:30000/v1/models', $seen[0][0]);
+        self::assertArrayNotHasKey('Authorization', $seen[0][1], 'a keyless self-host rides the async read credential-free, like the sync one');
+        self::assertSame(['sg-a'], $captured);
+    }
+
+    /**
+     * The catalog's async dispatcher: typed to the two transports that
+     * answer async, guarded by the same three refusals as the sync prime,
+     * and IN FLIGHT it pins the once-per-process rule across the async
+     * window — the placeholder memo stamp means a second open (or the CLI
+     * listing) never starts a parallel dial into the same base.
+     */
+    public function testPrefetchAsyncDispatchesForAsyncTransportsAndPinsTheInFlightMemo(): void
+    {
+        $original = getenv(ModelMetadata::OPT_OUT_ENV);
+        ModelCatalog::resetForTesting();
+        putenv(ModelMetadata::OPT_OUT_ENV . '=0');
+
+        try {
+            $syncOnly = new class implements HasModelCatalog {
+                public function catalogKey(): ?string
+                {
+                    return 'https://sync-only.example/v1';
+                }
+
+                public function listModels(): ?array
+                {
+                    return ['tier-of-a-sync-transport'];
+                }
+            };
+            self::assertNull(ModelCatalog::prefetchAsync($syncOnly), 'a transport without an async path answers "nothing started" — its caller stays on the sync prime, byte-identical');
+
+            $deferred = new Deferred();
+            $sglang = new SglangProvider('http://127.0.0.1:30001/v1', 'm', null, new \GuzzleHttp\Client());
+            $inflight = ModelCatalog::prefetchAsync($sglang, static fn (): PromiseInterface => $deferred->promise());
+            self::assertNotNull($inflight, 'the OpenAI-compatible transports do dispatch');
+            self::assertNull(ModelCatalog::live($sglang), 'while the read is in flight the memo carries the placeholder — the existing "answered nothing" stamp');
+            self::assertNull(ModelCatalog::prefetchAsync($sglang), 'in flight, the once-per-process rule holds: the placeholder IS a settled key, and a second open does not dial in parallel');
+
+            $deferred->resolve(new Response(200, [], '{"data":[{"id":"newly-live"}]}'));
+            self::assertSame(['newly-live'], ModelCatalog::live($sglang), 'the answer overwrites the placeholder in the memo before anything downstream can see it — the palette derives rows from the memo on the repaint');
+            self::assertNull(ModelCatalog::prefetchAsync($sglang), 'a settled answer is the same memo key the sync prime would have written');
+
+            putenv(ModelMetadata::OPT_OUT_ENV . '=1');
+            $gated = new SglangProvider('http://127.0.0.1:30002/v1', 'm', null, new \GuzzleHttp\Client());
+            self::assertNull(ModelCatalog::prefetchAsync($gated), 'the discovery opt-out stands down the async sibling too — air-gapped hosts stay silent on every path');
+        } finally {
+            ModelCatalog::resetForTesting();
+            if ($original === false) {
+                putenv(ModelMetadata::OPT_OUT_ENV);
+            } else {
+                putenv(ModelMetadata::OPT_OUT_ENV . '=' . $original);
+            }
         }
     }
 }

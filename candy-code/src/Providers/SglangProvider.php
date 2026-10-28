@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Providers;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Exception\RequestException;
+use React\Promise\PromiseInterface;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Messages\Message;
@@ -1007,6 +1008,19 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
     public function listModels(): ?array
     {
         return OpenAiModelsEndpoint::fetch($this->baseUrl, $this->apiKey);
+    }
+
+    /**
+     * C-PRV-5.c: the async sibling of {@see listModels()} — same bounded
+     * read on the event loop, resolves to exactly what the sync ask
+     * returns, never rejects. `$sender` is the endpoint's test seam;
+     * production callers pass nothing.
+     *
+     * @return PromiseInterface<list<string>|null>
+     */
+    public function listModelsAsync(?callable $sender = null): PromiseInterface
+    {
+        return OpenAiModelsEndpoint::fetchAsync($this->baseUrl, $this->apiKey, $sender);
     }
 
     public function supportsStreaming(): bool

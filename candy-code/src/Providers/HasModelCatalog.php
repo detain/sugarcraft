@@ -17,6 +17,17 @@ namespace SugarCraft\Code\Providers;
  * failure. {@see \SugarCraft\Code\Providers\ModelCatalog} holds the
  * once-per-process memo so repeated palette opens stay render-path safe.
  *
+ * The async sibling C-PRV-5.c added for the non-blocking palette prime is
+ * deliberately NOT on this contract: `listModelsAsync(?callable $sender)`
+ * lives on the two concrete OpenAI-compatible transports whose catalog
+ * reads run on the event loop (`OpenAIProvider`, `SglangProvider`), because
+ * widening the interface would break every other implementer — the custom
+ * gateway and the suite's anonymous test doubles answer the sync contract
+ * only. {@see \SugarCraft\Code\Providers\ModelCatalog::prefetchAsync()} is
+ * the sanctioned dispatcher over that pair and answers null — "nothing
+ * async started, stay on the sync prime" — for everything else, so callers
+ * never need to know which transports qualify.
+ *
  * This is a SugarCraft architecture interface, not a port: no
  * `Mirrors charmbracelet/...` citation attaches to it.
  */

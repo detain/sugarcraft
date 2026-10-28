@@ -116,6 +116,7 @@ use SugarCraft\Code\App\ContextMeasuredMsg;
 use SugarCraft\Code\App\SideQuestionAnsweredMsg;
 use SugarCraft\Code\App\DreamPassCompletedMsg;
 use SugarCraft\Code\App\MemoryConsolidatedMsg;
+use SugarCraft\Code\App\ModelCatalogReadyMsg;
 use SugarCraft\Code\App\BackendToolEventsMsg;
 use SugarCraft\Code\App\PermissionRequestMsg;
 use SugarCraft\Code\App\RuntimeNoticePumpMsg;
@@ -17246,6 +17247,41 @@ final class Chat implements Model
     }
 
     /**
+     * C-PRV-5.c: start this provider's catalog read on the event loop and
+     * return the wake that reports the answer back to {@see update()}, or
+     * null when nothing async started — every no-answer shape
+     * {@see \SugarCraft\Code\Providers\ModelCatalog::prefetchAsync()}
+     * documents (environment opt-out, settled or in-flight memo key, a
+     * provider that speaks only the sync contract, or an offline switch
+     * failure with no backend on it). The LiteLLM tier stays the sync memo
+     * read inside the prime it shares with the sync path: it is the cached
+     * community table, not the network.
+     *
+     * The wake rides {@see Cmd::promise()}: the Program dispatches the
+     * ModelCatalogReadyMsg when the promise settles, and a settle whose
+     * answer is null still dispatches — the arm treats it as the no-change
+     * it derives to, so a failed read costs the palette nothing but an
+     * inert repaint.
+     */
+    private function paletteCatalogWake(Chat $next, string $name): ?\Closure
+    {
+        $backend = $next->backend;
+        $provider = $backend instanceof \SugarCraft\Code\Backend\EngineBackend ? $backend->provider() : null;
+        if (!$provider instanceof \SugarCraft\Code\Providers\HasModelCatalog || $provider->name() !== $name) {
+            return null;
+        }
+
+        $promise = \SugarCraft\Code\Providers\ModelCatalog::prefetchAsync($provider);
+        if ($promise === null) {
+            return null;
+        }
+
+        return Cmd::promise(static fn (): PromiseInterface => $promise->then(
+            static fn (?array $ids): Msg => new ModelCatalogReadyMsg($name, $ids),
+        ));
+    }
+
+    /**
      * The provider list's Enter (N-P3b): switch to $name, then — when that
      * provider has more than one model worth offering — reopen the palette on
      * its model list, so Ctrl+P → Switch model reaches a model as `/model
@@ -17259,12 +17295,23 @@ final class Chat implements Model
         // PRV-1: warm the catalog tiers BEFORE the reopen decision, so the
         // row count that gates the second level counts the models the user
         // is about to be offered, not just the three install-known ids.
-        $next->primeModelCatalog($name);
+        // C-PRV-5.c: where the transport answers async the warm starts on
+        // the event loop and this open decides on the tiers already in the
+        // memo — the base rows the gate counts are exactly what a cold
+        // cache has always shown, and the ModelCatalogReadyMsg landing
+        // refills an open picker by derivation. When nothing async starts
+        // the sync prime runs byte-identical to before, and the wake rides
+        // the return even when no reopen happens: the memo serves every
+        // later open and the `/model` command path.
+        $warm = $this->paletteCatalogWake($next, $name);
+        if ($warm === null) {
+            $next->primeModelCatalog($name);
+        }
         if ($next->backend === $this->backend || \count($next->paletteModelLabels($name)) < 2) {
-            return [$next, $cmd];
+            return [$next, $warm === null ? $cmd : Cmd::batch($cmd, $warm)];
         }
 
-        return [$next->mutate(['palette' => PaletteState::root()->withModelsOf($name)]), $cmd];
+        return [$next->mutate(['palette' => PaletteState::root()->withModelsOf($name)]), $warm === null ? $cmd : Cmd::batch($cmd, $warm)];
     }
 
     /**
