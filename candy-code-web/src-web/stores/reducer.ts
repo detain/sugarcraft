@@ -136,6 +136,16 @@ export interface SessionState {
    *  offered as a ghost prompt until the next turn starts. Live-only: never an item,
    *  and every snapshot starts it back at null. */
   suggestedPrompt: string | null
+  /**
+   * C-WEB-4.d (GAP-UI-31): the `turn.started` envelope's `ts` (epoch ms) for
+   * the turn in flight, so the status bar can show elapsed time. ONLY the
+   * `turn.started`/`turn.completed` arms write it. A snapshot resume has no
+   * observed start — `applySnapshot` deliberately never sets this — so the
+   * timer stays hidden on a mid-turn reload instead of guessing. A server
+   * clock behind ours reads as 0:00 until real time catches up (the display
+   * clamps); nothing else follows from the skew.
+   */
+  turnStartedAt: number | null
 }
 
 export function createState(sessionId: string): SessionState {
@@ -161,6 +171,7 @@ export function createState(sessionId: string): SessionState {
     hasMoreOlder: false,
     olderCursor: null,
     suggestedPrompt: null,
+    turnStartedAt: null,
   }
 }
 
@@ -437,6 +448,8 @@ export function applyEvent(state: SessionState, envelope: EventEnvelope): void {
       state.turnId = data.turnId
       state.status = 'busy'
       state.step = 0
+      // C-WEB-4.d: the elapsed timer counts from this envelope's ts.
+      state.turnStartedAt = envelope.ts
       state.turnUsage = null
       state.live = null
       state.reasoning = null
@@ -644,6 +657,8 @@ export function applyEvent(state: SessionState, envelope: EventEnvelope): void {
       }
       if (state.turnUsage?.costUsd) state.spentUsd += state.turnUsage.costUsd
       state.turnId = null
+      // C-WEB-4.d: the turn is over; the timer hides with it.
+      state.turnStartedAt = null
       break
     }
 

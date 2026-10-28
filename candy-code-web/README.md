@@ -107,7 +107,9 @@ documents the protocol and the UI).
   draft, Esc restores yours); a paste over the TUI's collapse thresholds
   lands as a `[Pasted #n +X lines]` chip that expands at submit, so the wire
   carries the whole text while the draft stays short (C-WEB-4.a).
-- **Status bar**: activity and step, context used, spend, model, and the
+- **Status bar**: activity and step — with a live elapsed turn timer while a
+  turn runs (`working · 0:42 · step 3/20`; hidden on a mid-turn reload, where
+  no start was ever observed) — context used, spend, model, and the
   permission mode (changeable).
 - **Reconnects** after 0.5 s doubling to 15 s (±30 % jitter) with a fresh
   ticket, resuming every followed session from its gap-free `seq` cursor. Six

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onScopeDispose, ref, watch } from 'vue'
 import { spendLabel, tokens } from '../lib/format'
 import type { MethodResult, PermissionMode, SessionSummary } from '../protocol/generated'
 import { useConnectionStore } from '../stores/connection'
@@ -71,10 +71,52 @@ function pickModel(event: Event): void {
   select.value = modelOptionValue(currentProvider.value)
 }
 
+/**
+ * C-WEB-4.d (GAP-UI-31): the elapsed read-out for a running turn. The
+ * reducer stamps `turnStartedAt` from the `turn.started` envelope; this
+ * ref advances on a 1 s interval that exists ONLY while there is something
+ * to count — busy and a start observed. A snapshot-resumed mid-turn session
+ * has no start, so no interval ever arms and the read-out stays hidden
+ * rather than guessing. The interval is cleared on idle and on unmount.
+ */
+const tickNow = ref(0)
+let tickTimer: ReturnType<typeof setInterval> | null = null
+function stopTick(): void {
+  if (tickTimer === null) return
+  clearInterval(tickTimer)
+  tickTimer = null
+}
+watch(
+  () => props.state.status === 'busy' && props.state.turnStartedAt !== null,
+  (counting) => {
+    stopTick()
+    if (!counting) return
+    tickNow.value = Date.now()
+    tickTimer = setInterval(() => {
+      tickNow.value = Date.now()
+    }, 1000)
+  },
+  { immediate: true },
+)
+onScopeDispose(stopTick)
+
+const elapsedLabel = computed(() => {
+  const start = props.state.turnStartedAt
+  if (props.state.status !== 'busy' || start === null) return null
+  // Server clock behind ours (skew): clamp at 0:00 until real time catches up.
+  const seconds = Math.max(0, Math.floor((tickNow.value - start) / 1000))
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+})
+
 const statusText = computed(() => {
   switch (props.state.status) {
-    case 'busy':
-      return props.state.maxSteps > 0 ? `working · step ${props.state.step}/${props.state.maxSteps}` : 'working'
+    case 'busy': {
+      const bits = ['working']
+      const elapsed = elapsedLabel.value
+      if (elapsed !== null) bits.push(elapsed)
+      if (props.state.maxSteps > 0) bits.push(`step ${props.state.step}/${props.state.maxSteps}`)
+      return bits.join(' · ')
+    }
     case 'waiting_permission':
       return 'waiting for you'
     default:
