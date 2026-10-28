@@ -101,6 +101,7 @@ candy-code/tests/Cli/BootstrapHookFileTest.php	3.236	41
 candy-code/tests/Tools/TaskNestingDepthCapTest.php	3.148	6
 candy-code/tests/Hooks/HookRegistryTest.php	3.073	72
 candy-code/tests/Tools/CapturedProcessDeadlineTest.php	3.041	6
+candy-code/tests/Server/SessionExportPagingTest.php	3.030	61
 candy-code/tests/Backend/ProviderErrorSurfacingTest.php	2.983	10
 candy-code/tests/Chat/TurnHookAsyncTest.php	2.981	8
 candy-code/tests/Backend/RemoteBackendTest.php	2.979	13
@@ -829,6 +830,7 @@ candy-code/tests/Tui/McpPanelTest.php	0.044	18
 candy-code/tests/MCP/HttpMcpServerTest.php	0.043	28
 candy-code/tests/Permissions/LeadingCdGrantTest.php	0.043	52
 candy-code/tests/Tui/Settings/SettingsSaveFlowTest.php	0.043	10
+candy-code/tests/Attachments/WorkspaceWalkTest.php	0.043	18
 candy-code/tests/Cli/RulesStateWiringTest.php	0.042	5
 candy-code/tests/Tools/UndecidableIgnoreRuleNoteTest.php	0.042	6
 candy-code/tests/Context/Sections/MaximsSectionTest.php	0.041	9
