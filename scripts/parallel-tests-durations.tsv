@@ -220,6 +220,7 @@ candy-code/tests/Renderer/RenderMemoTest.php	1.298	30
 candy-code/tests/Sessions/BackgroundIpcCleanupTest.php	1.296	12
 candy-code/tests/Session/SessionQueryTest.php	1.292	15
 candy-code/tests/Providers/ClaudeCodeStreamJsonTest.php	1.289	15
+candy-code/tests/Host/SessionHostMcpSurfaceTest.php	1.287	5
 candy-code/tests/Integration/UsageWiringTest.php	1.286	43
 candy-code/tests/Tools/OutputTruncationTest.php	1.284	24
 candy-code/tests/Tools/WorkflowToolTest.php	1.283	14
