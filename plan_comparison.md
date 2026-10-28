@@ -2208,7 +2208,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tui.md` → `### C-TUI-2.d`
 
-#### C-TUI-3.c — Message-picker core
+#### ✅ c8e8a1f42 C-TUI-3.c — Message-picker core
 - **Item:** C-TUI-3 (sources: GAP-UI-15) · gap · effort S
 - **What:** A pure `MessagePicker` in the HistorySearch shape. Its rows are the session's conversation checkpoints, read from the store (the positions `/rewind n --chat` counts), each labelled with the prompt it restores. Newest first; …
 - **Files — create:** `candy-code/src/Tui/MessagePicker/MessagePicker.php`, `candy-code/src/Tui/MessagePicker/MessagePickerAction.php`, `candy-code/src/Tui/MessagePicker/OpenMessagePickerMsg.php`

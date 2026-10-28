@@ -168,7 +168,8 @@
   "C-TOOL-3.e",
   "C-SES-6.c",
   "C-PRV-2.c",
-  "C-SES-8.f"
+  "C-SES-8.f",
+  "C-TUI-3.c"
  ],
  "inflight": {
   "P-AGENT.b": {
@@ -193,23 +194,16 @@
    "session": "recut3 ses_e7c204c60ffe0gvIRUPQLp9ieN",
    "base": "878047472",
    "libs": "candy-code",
-   "note": "2 prior incarnations harness-dead zero writes; worktree clean at 878047472"
+   "note": "2 prior incarnations harness-dead zero writes; worktree clean at 878047472 | recut twin CONFIRMED same tip bdf851899 \u2014 reviewer ses_e7c09e6eaffen covers it; extra_agents back to 0"
   },
   "C-TUI-2.d": {
-   "stage": "review",
+   "stage": "fix",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-TUI-2.d",
    "branch": "cc/C-TUI-2.d",
    "session": "ses_e7c115d4cffeV4qnDudHWJP7C0",
-   "notes": "build c49418587 (parent 878047472, 9 files +1279/-4). r1 reviewer live."
-  },
-  "C-TUI-3.c": {
-   "stage": "clean",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-TUI-3.c",
-   "branch": "cc/C-TUI-3.c",
-   "session": "ses_e7c239aa3ffekIEhvYVm70DzdV",
-   "notes": "BOTH r1 reviewers CLEAN (0C/0M; twin verdicts agree). WELD-READY tip 4ccfb9ce4. Welder carries: durations MessagePickerTest row, +9T/+90A, KeyHelpTest base-reds standing."
+   "notes": "build c49418587 (parent 878047472, 9 files +1279/-4). r1 reviewer live.",
+   "note": "r1 FINDINGS 0C/0M/3 step-local MINORs @c49418587: M1 toggleTurn reset unpinned, M2 bases() mixed-hole unexercised, M3 REPORT arithmetic 21 not 19; fixer dispatched"
   },
   "C-TUI-3.f": {
    "stage": "clean",
@@ -238,12 +232,13 @@
    "notes": "(key was clobbered by welder run-state write; builder live)"
   },
   "C-WEB-4.c": {
-   "stage": "review",
+   "stage": "clean",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-WEB-4.c",
    "branch": "cc/C-WEB-4.c",
    "session": "ses_e7c0c27e7fferXV7mBKKnWo4jV",
-   "notes": "build 22ddc7c65 (parent eed6630d3, 12 files; vitest 54/54 targeted + 593/593 full-serial; vue-tsc 40 base-red PROVEN protocol-chain desync; dist committed but WELDER must REBUILD dist on merged tree per reviewer brief; \u00a71.8 setActivePinia flip in components.spec.ts)."
+   "notes": "build 22ddc7c65 (parent eed6630d3, 12 files; vitest 54/54 targeted + 593/593 full-serial; vue-tsc 40 base-red PROVEN protocol-chain desync; dist committed but WELDER must REBUILD dist on merged tree per reviewer brief; \u00a71.8 setActivePinia flip in components.spec.ts).",
+   "note": "r1 CLEAN 0C/0M/0m/1nit @22ddc7c65; WELD: cherry src only, rebuild dist on merged tree, trio untouched; CLOSEOUT: vue-tsc TS2532/2554 spec-arity residuals owner-surface"
   },
   "C-SES-4.d": {
    "stage": "build",
@@ -262,12 +257,13 @@
    "notes": "base da284586a. diffStyle setting multi-guard move; width-invariant pin load-bearing."
   },
   "C-WEB-4.d": {
-   "stage": "build",
-   "round": 0,
+   "stage": "review",
+   "round": 1,
    "worktree": "/home/sites/cc-cmp-C-WEB-4.d",
    "branch": "cc/C-WEB-4.d",
-   "session": "ses_e7c0c856dffesmMbqfKCU6wY3S",
-   "notes": "base 24d746501; npm ci in flight (bg shell). StatusBar.vue+reducer.ts hot; reducer edit = 2 arms + 1 field only (cross-area hot file). dist rides lane commit."
+   "session": "ses_e7c035d62ffexDdKMaQTrEMZOh",
+   "notes": "base 24d746501; npm ci in flight (bg shell). StatusBar.vue+reducer.ts hot; reducer edit = 2 arms + 1 field only (cross-area hot file). dist rides lane commit.",
+   "note": "build 416fee321@parent24d746501; r1 review live; dist in-commit flagged to reviewer"
   },
   "C-WEB-4.e": {
    "stage": "build",
@@ -276,6 +272,22 @@
    "branch": "cc/C-WEB-4.e",
    "session": "ses_e7c0c856bffeCRDrBEB3kQsFQm",
    "notes": "base 24d746501; npm ci in flight (bg shell). [protocol] serialized: TurnMethods+MethodSchemas+trio regen (schema/SERVER.md/generated.ts)+Composer.vue+paste.ts+session.ts; NEW SessionSendDocumentsTest.php -> durations row at weld; welder re-derives trio once on merged tree (C-TOOL-3.e precedent)."
+  },
+  "C-SEC-8.e": {
+   "stage": "build",
+   "round": 0,
+   "worktree": "/home/sites/cc-cmp-C-SEC-8.e",
+   "branch": "cc/C-SEC-8.e",
+   "session": "ses_e7c049b76ffeUcXJ5H9Fd0lbKe",
+   "base": "c8e8a1f42"
+  },
+  "C-AGT-5.h": {
+   "stage": "build",
+   "round": 0,
+   "worktree": "/home/sites/cc-cmp-C-AGT-5.h",
+   "branch": "cc/C-AGT-5.h",
+   "session": "ses_e7c010289ffekQh0MLmPJbNSqT",
+   "base": "c8e8a1f42"
   }
  },
  "blocked": [],
@@ -1098,8 +1110,8 @@
   ]
  },
  "tip": "0f58a906f",
- "welded_count": 169,
- "tick": "batch-2 weld: C-SES-8.f welded (welder subagent). queue: C-SES-6.c, C-PRV-2.c, C-SES-8.f, C-TUI-3.c (welding in order).",
+ "welded_count": 170,
+ "tick": "batch-2 weld: C-TUI-3.c welded (welder subagent). queue: C-SES-6.c, C-PRV-2.c, C-SES-8.f, C-TUI-3.c (welding in order).",
  "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
  "blocked_notes": {
   "C-AGT-5.b": "OWNER RULING NEEDED (gates W14 full closure + C-AGT-5.c cascade in W15): C-AGT-5.a r1 MINOR-2 \u2014 ScheduleFactory delete guard is createdBy-scoped, not root-scoped, so a model-created row in ANOTHER root can be deleted without include_operator_rows. Options (a) root-scope the guard (stricter; may break legit cross-root cleanup), (b) keep createdBy-scope + document. Per C-AGT-5.a r2 CLEAN the lane shipped as-designed; ruling owed before any rebuild of 5.b."
@@ -1254,7 +1266,7 @@
  "note": "W15 FULLY WELDED \u2014 wave loop r1 next",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
  "laws_premise_correction": "2026-10-29: plan_comparison.md is TRACKED (ls-files + full weld history commit its marks). \u00a73/\u00a74 progress marks MUST be committed with the weld. The never-stage rule applies ONLY to root ./run-state.json stray, ./escalated, and foreign dirt.",
- "master_tip": "9a8a96f23",
+ "master_tip": "c8e8a1f42",
  "prestage_w18": {
   "briefs": "all 10 extracted to lanes/<id>/BRIEF.md",
   "notes": {

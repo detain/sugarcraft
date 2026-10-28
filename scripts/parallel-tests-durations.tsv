@@ -580,6 +580,7 @@ candy-code/tests/Commands/McpReconnectTest.php	0.192	9
 candy-code/tests/Tools/BuiltIn/ReadPdfTextTest.php	0.190	10
 candy-code/tests/Host/TurnRunnerActiveSubagentsTest.php	0.189	4
 candy-code/tests/Tui/Settings/SettingsEditorNarrowTest.php	0.187	7
+candy-code/tests/Tui/MessagePicker/MessagePickerTest.php	0.187	9
 candy-code/tests/Chat/AgentViewTest.php	0.186	18
 candy-code/tests/App/SidePaneRowClickTest.php	0.185	8
 candy-code/tests/Chat/CompactModelSummaryTest.php	0.184	38
