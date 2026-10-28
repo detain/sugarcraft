@@ -6,7 +6,7 @@ declare(strict_types=1);
  * tools/build-phar.php — builds the single-file candy-code PHAR (DST-1).
  *
  * Run it as:
- *   php -d phar.readonly=0 tools/build-phar.php [--out dist/candy-code.phar] [--gz]
+ *   php -d phar.readonly=0 tools/build-phar.php [--out dist/candy-code.phar] [--gz] [--manifest-out PATH]
  *
  * `-d phar.readonly=0` is BUILD-ONLY, never a runtime requirement: the app
  * never mutates its own archive (a future `self-update` replaces the FILE,
@@ -20,6 +20,34 @@ declare(strict_types=1);
  * answers — the historical behavior. The version stamp itself is read back
  * at runtime by `Version::fromPharMetadata()` (DST-1/DST-3: nothing used to
  * consume it, so the shipped phar reported the frozen dev-master).
+ *
+ * REPRODUCIBILITY OF THE ENTRIES (C-SES-6.b): phar entries carry a
+ * modification time, so an epoch-pinned build first `touch()`es every
+ * packaged file to SOURCE_DATE_EPOCH; with the epoch unset the files are
+ * left exactly as found. The touch moves mtimes only, never content — and
+ * it runs AFTER the integrity preflight, whose `git status --porcelain`
+ * reads content, so a published-mode build cannot touch its way into a
+ * dirty tree. The honest consequence is for local runs: a build with the
+ * epoch exported invalidates git's stat cache across the checkout (the
+ * next `git status` re-hashes every packaged file, content-clean results
+ * unchanged). The release workflow checks out a throwaway clone, so it
+ * never pays that cost twice; developers who care build from a copy.
+ * Measured on PHP 8.3.6: `addFile`/`addFromString` seal entries with mtime
+ * 0 and the source mtime reaches neither the tar header nor the hash — so
+ * on that runtime the touch is belt-and-braces for the format, and what it
+ * provably decides is the packaged files' own mtimes (which PharCompatTest
+ * pins) plus the entry clock on any runtime that does seal it.
+ *
+ * THE PACKAGES MANIFEST (C-SES-6.b): the artifact states what it froze.
+ * `vendor/composer/installed.json` is folded into the metadata under
+ * `packages` as `name => reference` (source reference, else dist reference,
+ * else the recorded version — whatever composer itself attested). With the
+ * release workflow's lock-less `dev-master` resolution (disclosed in
+ * .github/workflows/release-phar.yml), this is the only per-build record of
+ * which sibling commit rode the archive. `--manifest-out=PATH` writes the
+ * same map as JSON next to the artifact for release notes; a missing or
+ * unparsable installed.json stores `packages: null` and warns on stderr —
+ * unknown is honest, an empty map would be a fabrication.
  *
  * WHY THE BUILD MUST RUN FROM A CLEAN PUBLISHED VENDOR
  * ====================================================
@@ -93,6 +121,7 @@ $outArg = $package . '/dist/candy-code.phar';
 $gz = false;
 $version = null;
 $vendorMode = 'published';
+$manifestOut = null;
 
 foreach (array_slice($argv, 1) as $arg) {
     if ($arg === '--gz') {
@@ -107,6 +136,10 @@ foreach (array_slice($argv, 1) as $arg) {
         $version = substr($arg, 10);
         continue;
     }
+    if (str_starts_with($arg, '--manifest-out=')) {
+        $manifestOut = substr($arg, 15);
+        continue;
+    }
     if (str_starts_with($arg, '--vendor=')) {
         $candidate = substr($arg, 9);
         if ($candidate !== 'published' && $candidate !== 'monorepo') {
@@ -116,7 +149,7 @@ foreach (array_slice($argv, 1) as $arg) {
         $vendorMode = $candidate;
         continue;
     }
-    fwrite(STDERR, "build-phar: unrecognized option {$arg} (usage: php -d phar.readonly=0 tools/build-phar.php [--out=PATH] [--gz] [--version=X] [--vendor=published|monorepo])\n");
+    fwrite(STDERR, "build-phar: unrecognized option {$arg} (usage: php -d phar.readonly=0 tools/build-phar.php [--out=PATH] [--gz] [--version=X] [--vendor=published|monorepo] [--manifest-out=PATH])\n");
     exit(2);
 }
 
@@ -246,12 +279,74 @@ $commit = trim((string) @shell_exec('git -C ' . escapeshellarg($package) . ' rev
 // workflow can export the tag's commit date and get a byte-stable
 // built_at; unset, the wall clock answers exactly as before.
 $sourceEpoch = getenv('SOURCE_DATE_EPOCH');
-$builtAt = preg_match('/^\d+$/', $sourceEpoch === false ? '' : $sourceEpoch) === 1
-    ? (new DateTimeImmutable('@' . (int) $sourceEpoch))->setTimezone(new DateTimeZone('UTC'))->format('c')
+$epochTs = preg_match('/^\d+$/', $sourceEpoch === false ? '' : $sourceEpoch) === 1
+    ? (int) $sourceEpoch
+    : null;
+$builtAt = $epochTs !== null
+    ? (new DateTimeImmutable('@' . $epochTs))->setTimezone(new DateTimeZone('UTC'))->format('c')
     : date('c');
+
+// C-SES-6.b — the packages manifest: name => reference for every package
+// composer attests it installed, sealed into the archive's metadata. With
+// the release workflow's lock-less dev-master resolution this is the only
+// per-build record of WHICH sibling code rode the artifact. Unknown reads
+// as null with a loud warning — an empty map would fabricate a success.
+$packages = null;
+$installedPath = $package . '/vendor/composer/installed.json';
+if (is_file($installedPath)) {
+    $installedRaw = file_get_contents($installedPath);
+    $installed = is_string($installedRaw) ? json_decode($installedRaw, true) : null;
+    if (is_array($installed)) {
+        // Composer 2 nests the list under "packages"; composer 1 ships it
+        // as the top-level array. Both shapes are attested in the wild.
+        $list = isset($installed['packages']) && is_array($installed['packages'])
+            ? $installed['packages']
+            : (array_is_list($installed) ? $installed : null);
+        if (is_array($list)) {
+            $packages = [];
+            foreach ($list as $entry) {
+                if (!is_array($entry) || !isset($entry['name']) || !is_string($entry['name'])) {
+                    // A nameless entry cannot be attributed — the whole map
+                    // degrades to null rather than shipping a partial lie.
+                    $packages = null;
+                    break;
+                }
+                $reference = null;
+                foreach (['source', 'dist'] as $leg) {
+                    if (isset($entry[$leg]['reference']) && is_string($entry[$leg]['reference']) && $entry[$leg]['reference'] !== '') {
+                        $reference = $entry[$leg]['reference'];
+                        break;
+                    }
+                }
+                if ($reference === null) {
+                    // No VCS reference attested (non-VCS dist): the recorded
+                    // version is the strongest honest claim left.
+                    $reference = isset($entry['version']) && is_string($entry['version']) ? $entry['version'] : '';
+                }
+                $packages[$entry['name']] = $reference;
+            }
+        }
+    }
+    if ($packages === null) {
+        fwrite(STDERR, "build-phar: vendor/composer/installed.json is unreadable or not composer-shaped; the artifact records packages=null (unknown), never an empty map.\n");
+    }
+} else {
+    fwrite(STDERR, "build-phar: vendor/composer/installed.json is missing; the artifact records packages=null (unknown), never an empty map.\n");
+}
 
 @mkdir(dirname($outArg), 0o755, true);
 @unlink($outArg);
+
+// C-SES-6.b — entry-clock pinning: phar entries carry a modification time,
+// so an epoch-pinned build normalizes every packaged file's mtime to it
+// first (content is untouched; the integrity preflight above already read
+// the tree by content, so this cannot make it dirty). With the epoch unset
+// or malformed, files are left exactly as found.
+if ($epochTs !== null) {
+    foreach ($files as $file) {
+        touch($file, $epochTs);
+    }
+}
 
 $phar = new Phar($outArg, 0, 'candy-code.phar');
 $phar->startBuffering();
@@ -269,6 +364,7 @@ $phar->setMetadata([
     'built_at'  => $builtAt,
     'commit'    => $commit !== '' ? $commit : null,
     'php_built' => PHP_VERSION,
+    'packages'  => $packages,
     'entry'     => 'bin/candy-code (as stub)',
 ]);
 $phar->setStub($binSource . "\n__HALT_COMPILER();");
@@ -286,6 +382,22 @@ if ($gz) {
     // asked for a gz artifact at --out, so replace.
     unlink($outArg);
     rename($outArg . '.gz', $outArg);
+}
+
+// C-SES-6.b — --manifest-out: the same packages map as standalone JSON, for
+// release notes and attestation logs. The build already succeeded; a
+// DISCLOSURE the caller explicitly asked for must still fail loud, not
+// vanish (no fabricated success on the reporting channel either).
+if ($manifestOut !== null) {
+    $manifestJson = json_encode($packages, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    $manifestDir = dirname($manifestOut);
+    if (!is_dir($manifestDir)) {
+        @mkdir($manifestDir, 0o755, true);
+    }
+    if ($manifestJson === false || @file_put_contents($manifestOut, $manifestJson . "\n") === false) {
+        fwrite(STDERR, "build-phar: --manifest-out={$manifestOut} could not be written; refusing to claim a disclosure that did not land.\n");
+        exit(2);
+    }
 }
 
 $bytes = filesize($outArg);

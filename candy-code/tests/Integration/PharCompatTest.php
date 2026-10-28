@@ -97,6 +97,43 @@ final class PharCompatTest extends TestCase
     ];
 
     /**
+     * C-SES-6.b — the scratch published vendor's composer attestation. The
+     * three entries pin the full reference ladder: a source reference wins,
+     * else a dist reference, else the recorded version. The fixture and the
+     * expected metadata map are SEPARATE constants on purpose — deriving one
+     * from the other would let a broken ladder satisfy both legs at once.
+     *
+     * @var list<array<string, array<string, string>|string>>
+     */
+    private const SCRATCH_INSTALLED = [
+        [
+            'name' => 'sugarcraft/sugar-core',
+            'version' => 'dev-master',
+            'source' => ['type' => 'git', 'url' => 'https://example.test/sugar-core.git', 'reference' => '0123456789abcdef0123456789abcdef01234567'],
+        ],
+        [
+            'name' => 'guzzlehttp/guzzle',
+            'version' => '7.9.0',
+            'dist' => ['type' => 'zip', 'url' => 'https://example.test/guzzle.zip', 'reference' => '89abcdef0123456789abcdef0123456789abcdef01'],
+        ],
+        [
+            'name' => 'vendor/plain-version',
+            'version' => '1.2.3',
+        ],
+    ];
+
+    /**
+     * The map build-phar must seal for {@see self::SCRATCH_INSTALLED}.
+     *
+     * @var array<string, string>
+     */
+    private const SCRATCH_PACKAGES = [
+        'sugarcraft/sugar-core' => '0123456789abcdef0123456789abcdef01234567',
+        'guzzlehttp/guzzle' => '89abcdef0123456789abcdef0123456789abcdef01',
+        'vendor/plain-version' => '1.2.3',
+    ];
+
+    /**
      * Temp trees this test minted (scratch packages and fake HOMEs). MINOR-3:
      * the heavy arm used to leave its freshPharHome directories behind on
      * every stage; every minted directory now lands here and leaves again in
@@ -436,6 +473,13 @@ final class PharCompatTest extends TestCase
         file_put_contents($root . '/src/ScratchCommand.php', "<?php\n\n// tracked seed file\n");
         file_put_contents($root . '/lang/en.php', "<?php\n\nreturn [];\n");
         file_put_contents($root . '/vendor/autoload.php', "<?php\n");
+        // C-SES-6.b: the stub published vendor carries a composer-shaped
+        // installed.json so the packages manifest is exercised on every
+        // scratch build (fixture + expectation in SCRATCH_INSTALLED).
+        self::assertTrue(mkdir($root . '/vendor/composer', 0700, true));
+        file_put_contents($root . '/vendor/composer/installed.json', (string) json_encode([
+            'packages' => self::SCRATCH_INSTALLED,
+        ], JSON_PRETTY_PRINT) . "\n");
 
         foreach ([
             ['init', '-b', 'scratch'],
@@ -587,6 +631,117 @@ final class PharCompatTest extends TestCase
         self::assertNotSame('2009-02-13T23:31:30+00:00', $wall['built_at'], 'without SOURCE_DATE_EPOCH the epoch fixture value must NOT appear');
         self::assertLessThan(120, abs(time() - (int) strtotime((string) $wall['built_at'])), 'unset epoch keeps the wall clock');
         self::assertSame('v9.9.9', Version::fromPharMetadata($unpinned), 'the stamp is independent of the clock mode');
+    }
+
+    // ------------------------------------------------------------------
+    // C-SES-6.b — the packages manifest and the epoch-pinned entry clock
+    // ------------------------------------------------------------------
+
+    public function testTheBuildSealsTheVendorPackagesManifestIntoMetadataAndManifestOut(): void
+    {
+        $root = $this->scratchPackage();
+        $dist = $root . '-dist';
+        $this->mintedPaths[] = $dist;
+        $out = $dist . '/manifest.phar';
+        $manifestPath = $dist . '/packages.json';
+
+        $build = $this->buildScratchPhar($root, $out, ['--version=candy-code/v9.9.9', '--manifest-out=' . $manifestPath]);
+        self::assertSame(0, $build['rc'], 'manifest build rc/err: ' . $build['err']);
+
+        $manifest = (new \Phar($out))->getMetadata();
+        self::assertIsArray($manifest);
+        self::assertSame(
+            self::SCRATCH_PACKAGES,
+            $manifest['packages'] ?? null,
+            'the archive must seal name => reference for EVERY package composer attested (source ref, else dist ref, else version)'
+        );
+
+        $written = file_get_contents($manifestPath);
+        self::assertIsString($written, '--manifest-out must write the file it promises');
+        self::assertSame(
+            self::SCRATCH_PACKAGES,
+            json_decode((string) $written, true),
+            '--manifest-out must carry the SAME map the archive metadata holds'
+        );
+
+        // The honest-unknown polarity: a vendor without an installed.json
+        // records null with a loud warning — an empty map would fabricate a
+        // "we froze nothing" success. The hatch mode is used because deleting
+        // a tracked file would (correctly) trip the published-mode preflight.
+        $hatchRoot = $this->scratchPackage();
+        self::assertTrue(unlink($hatchRoot . '/vendor/composer/installed.json'));
+        $hatchOut = $dist . '/unknown.phar';
+        $hatch = $this->buildScratchPhar($hatchRoot, $hatchOut, ['--vendor=monorepo']);
+        self::assertSame(0, $hatch['rc'], 'unknown-manifest hatch build rc/err: ' . $hatch['err']);
+        self::assertStringContainsString('installed.json is missing', $hatch['err'], 'the unknown polarity must announce itself');
+        $hatchManifest = (new \Phar($hatchOut))->getMetadata();
+        self::assertIsArray($hatchManifest);
+        self::assertTrue(array_key_exists('packages', $hatchManifest), 'the key is always present — its nullness is the disclosure');
+        self::assertNull($hatchManifest['packages'], 'packages must store null — never an empty map — when composer attests nothing');
+    }
+
+    public function testTwoEpochPinnedBuildsAgreeAndEveryPackagedFileCarriesThePinnedMtime(): void
+    {
+        $root = $this->scratchPackage();
+        $dist = $root . '-dist';
+        $this->mintedPaths[] = $dist;
+        $epoch = 1234567890;
+
+        $one = $dist . '/repro-one.phar';
+        $buildOne = self::launch(
+            [\PHP_BINARY, '-d', 'phar.readonly=0', $root . '/tools/build-phar.php', '--out=' . $one, '--version=candy-code/v9.9.9'],
+            $this->freshPharHome(),
+            ['SOURCE_DATE_EPOCH' => (string) $epoch],
+        );
+        self::assertSame(0, $buildOne['rc'], 'epoch build one rc/err: ' . $buildOne['err']);
+
+        // The touch door, pinned where it is measurable: every packaged file
+        // now carries the pinned instant...
+        foreach (['src/ScratchCommand.php', 'vendor/autoload.php', 'vendor/composer/installed.json', 'bin/candy-code', 'LICENSE'] as $relative) {
+            clearstatcache(true, $root . '/' . $relative);
+            self::assertSame($epoch, filemtime($root . '/' . $relative), "an epoch-pinned build must touch {$relative} to SOURCE_DATE_EPOCH");
+        }
+        // ...and the build-header disclosure holds: touching moved mtimes
+        // only. The tree is still clean BY CONTENT, so the published-mode
+        // preflight can never be dirtied by its own normalization.
+        $status = self::launch(['git', '-C', $root, 'status', '--porcelain'], $this->freshPharHome());
+        self::assertSame(0, $status['rc'], 'git status rc/err: ' . $status['err']);
+        self::assertSame('', $status['out'], 'mtime normalization must not dirty the tree the preflight reads');
+
+        // Skew one packaged file AFTER build one — the checkout-time drift
+        // the design names. A second epoch-pinned build must re-normalize it,
+        // not bake the drift in.
+        self::assertTrue(touch($root . '/src/ScratchCommand.php', $epoch + 86400));
+        $two = $dist . '/repro-two.phar';
+        $buildTwo = self::launch(
+            [\PHP_BINARY, '-d', 'phar.readonly=0', $root . '/tools/build-phar.php', '--out=' . $two, '--version=candy-code/v9.9.9'],
+            $this->freshPharHome(),
+            ['SOURCE_DATE_EPOCH' => (string) $epoch],
+        );
+        self::assertSame(0, $buildTwo['rc'], 'epoch build two rc/err: ' . $buildTwo['err']);
+        clearstatcache(true, $root . '/src/ScratchCommand.php');
+        self::assertSame($epoch, filemtime($root . '/src/ScratchCommand.php'), 'build two must re-touch the skewed file to the pinned instant');
+        self::assertSame(
+            hash_file('sha256', $one),
+            hash_file('sha256', $two),
+            'two SOURCE_DATE_EPOCH-pinned builds of one tree must be byte-identical (measured on PHP 8.3.6 the seal clock is already 0 — the mtime arms above carry the discrimination on this runtime; the hash leg guarantees the promise on any that seals source mtimes)'
+        );
+
+        // The unset polarity: without the epoch the build leaves files
+        // exactly as found — the historical behavior stays byte-compatible.
+        self::assertTrue(touch($root . '/src/ScratchCommand.php', $epoch + 86400));
+        $wall = $dist . '/repro-wall.phar';
+        $buildWall = self::launch(
+            [\PHP_BINARY, '-d', 'phar.readonly=0', $root . '/tools/build-phar.php', '--out=' . $wall, '--version=candy-code/v9.9.9'],
+            $this->freshPharHome(),
+        );
+        self::assertSame(0, $buildWall['rc'], 'unstamped build rc/err: ' . $buildWall['err']);
+        // Measured pitfall (first draft of this pin): PHP's touch() does NOT
+        // invalidate the calling process's stat cache, so every mtime read
+        // that crosses a child build (or a parent skew touch) must clear it
+        // first — the disk always held the truth; the cached read lied.
+        clearstatcache(true, $root . '/src/ScratchCommand.php');
+        self::assertSame($epoch + 86400, filemtime($root . '/src/ScratchCommand.php'), 'without SOURCE_DATE_EPOCH no file may be touched');
     }
 
     // ------------------------------------------------------------------
