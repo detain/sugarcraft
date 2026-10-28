@@ -1946,7 +1946,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-CTX-2.b (W6), C-CTX-2.c (W9)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-2.d`
 
-#### C-EXT-4.b — `bundles marketplace add/list/remove/update`, `install name@mkt`, `update`, `search`, `recommend`
+#### ✅ 3bc062fc4d7c0787f389869dcee49ffd7944cc3b C-EXT-4.b — `bundles marketplace add/list/remove/update`, `install name@mkt`, `update`, `search`, `recommend`
 - **Item:** C-EXT-4 (sources: GAP-PLG-02, GAP-SKL-09) · gap · effort M
 - **What:** `Subcommands::bundles()` (:1464) gains these verbs: **`marketplace add <git-url|path>`.** Clones with the EXISTING `bundlesCloneDefault()` spawn into a scratch dir, validates, pins the SHA, strips `.git` and renames into place. …
 - **Files — create:** none
