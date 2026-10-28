@@ -164,7 +164,7 @@
  ],
  "inflight": {},
  "blocked": [],
- "extra_agents": 1,
+ "extra_agents": 0,
  "waves_closed": [
   1,
   2,
@@ -179,7 +179,8 @@
   11,
   12,
   13,
-  14
+  14,
+  15
  ],
  "wave_loops": {
   "1": "closed r2 CLEAN",
@@ -243,6 +244,13 @@
     "AutoReviewScope filter mis-anchor noted in brief",
     "AGT-5.b dist window closed by foreign C-CTX-2.d regenerate 8d0ffa371"
    ]
+  },
+  "W15": {
+   "rounds": 2,
+   "r1": "FINDINGS 0C/1MAJOR(pr ShellMenu+label roster carry)/1NIT(hash widen) at 045751c44; verdict lanes/W15/WAVE-REVIEW-1.md",
+   "fixer": "LANDED 8dab423f0 (pr placement+label+survivor row; lead re-ran merged gate 244T 0F) + c6b1d0317 (plan full-hash); fixer caught a 4th unrostered red (PaletteSupersetDispatchTest:169) and correctly halted; lead extended scope per W14-carry ruling authority (shells/schedules precedent)",
+   "next": "r2 reviewer LIVE ses_e7c75708dffeEUBBwAa8CO8EqB -> CLEAN -> close-W15 bookkeeping (SS3 line 151 mark, waves_closed 15, lanes/W15 files, run-state STOPPED-at-scope-end) -> FINAL SCOPE REPORT",
+   "verdict": "CLEAN r2 (cures 8dab423f0+c6b1d0317; NIT folds c15427c61); closed"
   }
  },
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
@@ -827,7 +835,8 @@
    "durations": "scripts commit 37a4ef615: 2 rows NonInteractiveMcpToolsHeadlessTest 0.004/4 + McpToolProgressTest 0.007/15 (col3=testcase COUNT, tie-band alphabetical insert); tsv 1537->1539, asc-violations 4==4, set-equality +2 exact",
    "carry": "suite-figure +20T (19T new files + 1T DocFigure arm) rides closeout re-pin (welder never touched suite-figure.json)",
    "absorption": "cherry '-' expected (patch-id identical); WELD.md records salvage twin history (d7d008566 phantom, 828b709ea->58966feb9, twin-fixer 28545a1a7 tree-absorbed)"
-  }
+  },
+  "W15_loop": "r1 reviewer LIVE ses_e7c89b48fffeo34LyZsC8BV4w2 on 045751c44; CLEAN -> close-W15 bookkeeping commit (SS3 line 151 checkmark, waves_closed 15, lanes/W15 files); FINDINGS -> wave-fixer single writer then r2"
  },
  "carries": [
   "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest — closeout gate duty",
@@ -971,7 +980,7 @@
   "C-SEC-6.a",
   "(CTX-2.d in welder hands)"
  ],
- "tip": "ea68b8eae",
+ "tip": "045751c4483fa37bb287d98fc8b6cfef0e646a6f",
  "welded_count": 161,
  "tick": "87-disk-reconciled: W11 REALY closed@341f66404; trio MCP2b+TOOL5b+WEB3f real to 0b3c4ba21 (welded=122); W13/14 welds PENDING; phantom-atlas @b73@ correction: c3178096f/4d263705a/8d8c75678 GHOSTS, cure real 23fa8ab8e; C-PRV-2.b welded cf36a8458 (welded_count=157, r3 CLEAN + phantom-r2-note recorded) | W17: C-EXT-4.b real to 3bc062fc4 (r2 CLEAN, phantom-inflight-note correction: de5c16a51->1e03fa00a byte-identical amend; all-4-generator --check zero-drift) | W17: C-MCP-4.b real to 6beef34f4 (pick, content-equiv; tsv f024af640, 1535->1537); duplicate-r3 disagreement disk-adjudicated to FINDINGS (cure 796756612); foreign 1F pr-MenuBar standing report-only; C-EXT-4.b same tick -> 3bc062fc4/c569b41e6/8f0001af1",
  "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
