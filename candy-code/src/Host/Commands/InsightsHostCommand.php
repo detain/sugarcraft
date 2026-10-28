@@ -81,10 +81,16 @@ final class InsightsHostCommand implements HostCommand
         $page = InsightsCommand::compose($facts);
         $html = InsightsCommand::composeHtml($facts);
 
-        $directory = $this->exportsDir !== null ? rtrim($this->exportsDir, '/') : self::exportsDirectory();
-        $stamp = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Ymd');
-        $target = $directory . '/insights-' . $stamp . '.html';
+        // The shelf LOCATION is part of the write that can fail: with a
+        // default-constructed command it resolves through HomeDirectory::owned()
+        // and refuses outright when no home can be vouched for. Resolving it
+        // OUTSIDE the try discarded the composed page — the docblock's promise
+        // is that a run which cannot file still replies with the page and
+        // states why, so the resolution lives inside the guard.
         try {
+            $directory = $this->exportsDir !== null ? rtrim($this->exportsDir, '/') : self::exportsDirectory();
+            $stamp = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Ymd');
+            $target = $directory . '/insights-' . $stamp . '.html';
             AtomicFileWriter::write($target, $html, 0600);
         } catch (\Throwable $error) {
             return CommandResult::reply($text, $page . "\n" . Lang::t('cmd.insights.write-failed', [

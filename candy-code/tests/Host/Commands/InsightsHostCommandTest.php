@@ -163,4 +163,53 @@ final class InsightsHostCommandTest extends TestCase
         self::assertStringContainsString('Report not written:', $reply);
         self::assertStringContainsString('blocker', $reply, 'the refusal names the path that failed');
     }
+
+    /**
+     * ROUND-1 FIX (REVIEW-1 finding 1): the SHELF LOCATION itself can refuse —
+     * with a default-constructed command the exports directory resolves through
+     * `HomeDirectory::owned()`, which answers null (and the resolver throws)
+     * for a home that cannot be vouched for, `HOME=/` being the house shape
+     * HomeDirectoryTest pins that refusal with. Pre-fix that throw escaped
+     * run() before the composed page was ever returned, discarding the page
+     * and contradicting the class docblock's own write-failed promise; now the
+     * resolution sits inside the try and the reply answers with the
+     * `cmd.insights.write-failed` wording.
+     *
+     * BOTH SPELLINGS OF HOME MOVE (env + superglobal) and restore in a
+     * finally — the one-sided shape is exactly what `OneSidedHomeSandboxTest`
+     * rosters, and `SuiteHomeSandboxContractTest` states the law: half a
+     * sandbox is not a sandbox, and this half applies to the poison direction
+     * too.
+     */
+    public function testAShelfThatCannotBeLocatedIsAWriteFailureNotAThrownPageLoss(): void
+    {
+        $store = $this->insightsStore('nohome.db');
+        $store->createSession('nh-a', 'candy-code', 'm', null, null, '/home/me/alpha');
+        $savedEnv = getenv('HOME');
+        $savedServer = $_SERVER['HOME'] ?? null;
+
+        try {
+            putenv('HOME=/');
+            $_SERVER['HOME'] = '/';
+
+            $reply = (new InsightsHostCommand())
+                ->run($this->insightsContext($store), 'insights')->rows[1]->content;
+        } finally {
+            if ($savedEnv === false) {
+                putenv('HOME');
+            } else {
+                putenv('HOME=' . $savedEnv);
+            }
+            if ($savedServer === null) {
+                unset($_SERVER['HOME']);
+            } else {
+                $_SERVER['HOME'] = $savedServer;
+            }
+        }
+
+        self::assertStringStartsWith(Lang::t('cmd.insights.title'), $reply, 'the page survives the resolver refusing to name a shelf');
+        self::assertStringContainsString('Report not written:', $reply, 'the resolver refusal lands as the write-failed wording, never as a thrown page loss');
+        self::assertStringContainsString('nowhere to land', $reply, 'the refusal names why no path could be composed');
+        self::assertStringNotContainsString('HTML report:', $reply, 'no path line rides a reply whose file never had a home');
+    }
 }
