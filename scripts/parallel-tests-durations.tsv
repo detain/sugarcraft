@@ -210,6 +210,7 @@ candy-code/tests/Providers/PromptStabilityTest.php	1.375	16
 candy-code/tests/Tools/ToolSecurityTest.php	1.374	84
 candy-code/tests/MCP/McpWriteBudgetShapeTest.php	1.365	2
 candy-code/tests/Agents/AgentManagerProjectRootTest.php	1.364	9
+candy-code/tests/Tools/ShellOwnershipTest.php	1.362	10
 candy-code/tests/Support/ReflectionLineSliceReaderCensusTest.php	1.357	10
 candy-code/tests/Integration/ParallelDeadlineKillsCommandTreeTest.php	1.346	1
 candy-code/tests/Server/DrainTest.php	1.322	4
