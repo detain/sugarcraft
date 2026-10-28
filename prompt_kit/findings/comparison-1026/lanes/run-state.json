@@ -148,10 +148,12 @@
   },
   "C-CTX-2.f": {
    "branch": "cc/C-CTX-2.f",
+   "note": "build 4a36a153a@9fc915cd9 7f; r1 live w/ envelope-ruling task (updated-half per-tracker dedup vs one-row-per-session law); durations InstructionVisibilityNoticeTest +5T",
    "notes": "W19 loaded/updated instruction rows; base 9fc915cd9; disjoint-vs-3.b law given",
-   "round": 0,
-   "session": "ses_e7befc696ffejgsHPdLX14CtnT",
-   "stage": "build",
+   "round": 1,
+   "session": "ses_e7bc71ebdffeIPY6SheV3pBbLU",
+   "stage": "review",
+   "tip": "4a36a153a",
    "worktree": "/home/sites/cc-cmp-C-CTX-2.f"
   },
   "C-CTX-3.b": {
@@ -196,15 +198,6 @@
    "stage": "clean",
    "worktree": "/home/sites/cc-cmp-C-SEC-8.e"
   },
-  "C-SES-4.d": {
-   "branch": "cc/C-SES-4.d",
-   "note": "CLEAN r1 0C/0M/0m @9d59bb960@da284586a. durations row SessionHostOtelFoldTest +8T weld-carry; N1/N2 nits no-carry; REVIEW-1 canonical copied. Batch-4 pool.",
-   "notes": "base da284586a. Brief honors §6.3 owner ruling on serve OTel (ruling wins over design block if contradiction; builder must quote it). Durations row SessionHostOtelFoldTest owed at weld. Bootstrap workspace()/chat-comment regions only.",
-   "round": 1,
-   "session": "ses_e7bfb0701ffeh4sd2yPhRAZg1t",
-   "stage": "clean",
-   "worktree": "/home/sites/cc-cmp-C-SES-4.d"
-  },
   "C-TUI-2.c": {
    "branch": "cc/C-TUI-2.c",
    "note": "r1 CLEAN 0C/0M/0m @2b8bf855c; batch-4 pool; welder: durations DiffSplitRenderTest ~0.3s, +16T, LAYERED rebase conflicts vs TOOL-5.a/SES-6.b keep-both + gen-settings-doc --check",
@@ -227,12 +220,13 @@
    "base": "878047472",
    "branch": "cc/C-TUI-5.d",
    "libs": "candy-code,sugar-forms",
-   "note": "INCARNATION-4 recut (inc3 session server-side not-found, WIP on disk intact dirty); salvage-first brief; base 878047472",
+   "note": "build 963ddd0f6@878047472 10f salvage-landed; r1 live (shouldOffer doors vacuity, masked step2 purity, P-AGENT.b contamination walk); durations x2 +28T weld-carry",
    "notes": "live builder = RE-CUT ses_e7c27b478ffe (worktree progress verified @222: ProviderKeyStore.php + FirstRunWizard/ untracked, en.php+census tests dirty). Old original ses_e7c2a7e8fffe blank-returned post-recut: RETIRED, do NOT resume (double-writer hazard).",
    "resumes": 1,
-   "round": 0,
-   "session": "ses_e7bd7e6acffegI5EUjVhlQrdCl",
-   "stage": "build",
+   "round": 1,
+   "session": "ses_e7bc8b2a0ffeg74wJKddnaVTRU",
+   "stage": "review",
+   "tip": "963ddd0f6",
    "worktree": "/home/sites/cc-cmp-C-TUI-5.d"
   },
   "C-WEB-4.b": {
@@ -361,7 +355,7 @@
  ],
  "standing_reds_b985fbe51": "ADD: ChatHostLangCatalogueTest red on chat.effort.launch_unshaped (asker LaunchContext.php:2109 outside sources()) - byte-identical at base, C-PRV-1.b (a992413b0) seam -> closeout roster",
  "status": "RUNNING",
- "tick": "128-batch3",
+ "tick": "154-CTX2f-review-live",
  "tip": "0f58a906f",
  "updated": "2026-10-29",
  "wave_loops": {
@@ -814,6 +808,7 @@
    "master": "f5bd88ca3 (pick ebe47fb27 -> raw 04fcdb2d3 patch-id f48567c7 IDENTICAL -> amend f5bd88ca3 with MINOR-1 cure; %ae/%ce 1/1 detain, zero trailers; 4 files +330/-18; CLEAN onto 52da3dce3)",
    "regen": "none (non-protocol: zero src/Protocol/** + zero candy-code-web paths)"
   },
+  "C-SES-4.d": "batch-5 weld 9d59bb960->a7a361466 clean; gates 74T/290A+27T/135A EXACT, guards 224T/64665A (wobble disclosed); DUR row 1.72/8 tsv 1557->1558; +8T carry; cherry - pruned",
   "C-SES-5.c": {
    "durations_owed": "none - tools-side only, no new candy-code *Test.php",
    "gates": "tools battery 489T/2578A OK (pre- and post-cure) incl WorkflowRunInterpolation 3T/134A executing on merged tree; five-guard 133T/15735A pair-only (pinned 25,537 vs live 26,141 - closeout re-pin)",
@@ -1305,9 +1300,10 @@
   "C-SES-8.c",
   "C-TUI-3.f",
   "C-WEB-4.c",
-  "C-TOOL-5.a"
+  "C-TOOL-5.a",
+  "C-SES-4.d"
  ],
- "welded_count": 172,
+ "welded_count": 176,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
  "welder_sessions": {

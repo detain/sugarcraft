@@ -1,0 +1,23 @@
+### C-SES-4.d — Serve exports spans (per-session encoders)
+- item: C-SES-4 (sources: GAP-OBS-02 (serve half), p2-miss: serve OTel sink threading)
+- kind: gap · effort M
+- approach:
+  - **The trap.** One OTLP encoder keys open spans by `$event->step` (`OtlpEncoder.php:84-96`). Serve hosts several sessions per process, so their step numbers would collide on a shared sink.
+  - **Factory.** Add an `EventSinkFactory` that builds one `BatchEventSink`, with its own `OtlpEncoder` and a `session.id` resource attribute, per session.
+    - The sinks share both transports.
+    - The factory registers ONE PID-guarded shutdown flush covering every live sink.
+  - **Wiring.**
+    - `Bootstrap::workspace()` registers the factory as a workspace service (`->withService(EventSinkFactory::class, …)`, the same locator `ScheduleRegistry` uses) only when `OtelConfig` is lit.
+    - `SessionHost::fold()` (`src/Host/SessionHost.php:2002`) calls `consume()` on its sink, fetched lazily; `close()` flushes it.
+    - Correct the stale `Bootstrap::chat()` comment (`:1250-1256`).
+    - Flip the serve half of the ENVIRONMENT.md row and of `ObservabilityWiringTest`.
+- files.create: `candy-code/src/Observability/EventSinkFactory.php`
+- files.modify: `candy-code/src/Cli/Bootstrap.php` (workspace(): service registration; chat(): comment), `candy-code/src/Host/SessionHost.php` (fold(), close()), `candy-code/src/Observability/OtelConfig.php` (factory builder), `candy-code/docs/ENVIRONMENT.md` (the OTLP endpoint row), `candy-code/tests/Observability/ObservabilityWiringTest.php`
+- tests: create `candy-code/tests/Host/SessionHostOtelFoldTest.php`: two sessions with identical step numbers produce two distinct spans carrying different `session.id`; dark registers no service.
+- docs/guards: the ENVIRONMENT.md row and `ObservabilityWiringTest` flip in-step
+- serialized: [bootstrap:workspace,chat(comment only)] [hot:candy-code/src/Host/SessionHost.php] [docs:ENVIRONMENT.md]
+- deps: C-SES-4.b (the serve loop must never block on a POST)
+- phase: normal
+- ruling: Serve telemetry: should `serve` export OTel spans when `OTEL_EXPORTER_OTLP_ENDPOINT` is set? (Owner-gated per OBS-02 and the Bootstrap comment.)
+- risks: Sub-agent and background folds run on their own hosts. Check that `SessionHost::fold()` is the single choke for served turns.
+

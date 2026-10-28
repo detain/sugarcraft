@@ -2281,7 +2281,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-PRV-4.a`
 
-#### C-SES-4.d — Serve exports spans (per-session encoders)
+#### ✅ a7a361466 C-SES-4.d — Serve exports spans (per-session encoders)
 - **Item:** C-SES-4 (sources: GAP-OBS-02 (serve half), p2-miss: serve OTel sink threading) · gap · effort M
 - **What:** **The trap.** One OTLP encoder keys open spans by `$event->step` (`OtlpEncoder.php:84-96`). Serve hosts several sessions per process, so their step numbers would collide on a shared sink. **Factory.** Add an `EventSinkFactory` …
 - **Files — create:** `candy-code/src/Observability/EventSinkFactory.php`
