@@ -1184,6 +1184,7 @@ candy-code/tests/Chat/TitleBackendFallbackTest.php	0.003	3
 candy-code/tests/Chat/TokenProxyScriptWeightTest.php	0.003	16
 candy-code/tests/Chat/TurnEndNotificationTest.php	0.003	8
 candy-code/tests/Cli/BypassLaunchBannerTest.php	0.003	6
+candy-code/tests/Cli/EncodeDocumentEscapingTest.php	0.003	4
 candy-code/tests/Cli/NonInteractiveMentionsTest.php	0.003	5
 candy-code/tests/Cli/NonInteractiveSpendCapTest.php	0.003	6
 candy-code/tests/Cli/NonInteractiveTurnHookTest.php	0.003	5
