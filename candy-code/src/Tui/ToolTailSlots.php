@@ -28,9 +28,10 @@ namespace SugarCraft\Code\Tui;
 final class ToolTailSlots
 {
     /**
-     * Leak-law backstop (C-TOOL-3.a, mirroring PreviewSlots' W2.4 cap): settle
-     * clears each slot, and a frame for an abandoned call (a turn that died
-     * mid-render) can never accumulate - the map holds at most this many
+     * Leak-law backstop (C-TOOL-3.a, mirroring PreviewSlots' W2.4 cap): the
+     * settle-clear C-TOOL-3.b will wire empties slots as calls finish; the cap
+     * itself holds regardless, so a frame for an abandoned call (a turn that
+     * died mid-render) can never accumulate - the map holds at most this many
      * newest slots.
      */
     private const MAX_SLOTS = 8;
