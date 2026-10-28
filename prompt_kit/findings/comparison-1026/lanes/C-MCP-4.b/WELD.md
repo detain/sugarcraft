@@ -27,6 +27,7 @@ Separate scripts commit `f024af640ac276eae9bdb581f4a71034500e518d`: 2 rows from 
 - Pre-existing ~66-file durations-row backlog (other lanes' new test files without rows) — closeout duty, NOT C-MCP-4.b-attributable.
 - Foreign standing 1F above (`pr` MenuBar roster row) + 1S (in-filter skip, pre-existing shape).
 
-## Absorption + cleanup
-- `git cherry master cc/C-MCP-4.b` → see commit-time record below; '+' expected as patch-id false-positive (context drift), content-equivalence per Pick section.
-- worktree `/home/sites/cc-cmp-C-MCP-4.b` removed; branch `cc/C-MCP-4.b` deleted after proof.
+## Absorption + cleanup (post-weld stamp)
+- Weld commit: `0575e7c62351c7ac64cde2f15f46834a51eb2f7d` (plan §4 ✅ mark, 6 evidence files incl collected REVIEW-2.md, WELD.md, run-state welded=159).
+- `git cherry master cc/C-MCP-4.b` → `+ 796756612` = patch-id false-positive from context drift (stable patch-ids 91a65e06 vs f7704259). CONCLUSIVE content-equivalence proof: mechanical walk of the full base(e4a705244)..tip(796756612) diff — 12 files with additions, EVERY non-blank added line present verbatim in the master blob (missing lines: 0). Absorbed.
+- worktree `/home/sites/cc-cmp-C-MCP-4.b` removed; branch `cc/C-MCP-4.b` deleted (was 796756612). `git worktree list` → main + foreign (cc-cmp-C-AGT-5.c @a812ea659, cc-cmp-C-MCP-3.b @58966feb9) only.
