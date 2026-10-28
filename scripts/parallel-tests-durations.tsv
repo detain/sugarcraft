@@ -1139,6 +1139,7 @@ candy-code/tests/Providers/StreamedToolCallFlushTest.php	0.007	21
 candy-code/tests/Providers/ToolCallRawArgumentsReplayTest.php	0.007	22
 candy-code/tests/Renderer/PaletteQueryCaretTest.php	0.007	14
 candy-code/tests/Renderer/SlashMenuTierBadgeTest.php	0.007	4
+candy-code/tests/Tools/McpToolProgressTest.php	0.007	15
 candy-code/tests/Tools/PathJailTest.php	0.007	16
 candy-code/tests/Tui/AgentViewPaneTest.php	0.007	9
 candy-code/tests/Agents/AgentPresetAnchorKeyTest.php	0.006	8
@@ -1209,6 +1210,7 @@ candy-code/tests/Chat/PaletteFullQueryMatchTest.php	0.004	6
 candy-code/tests/Chat/PositionalCommandColonSpellingTest.php	0.004	15
 candy-code/tests/Chat/TokenEstimateCalibrationTest.php	0.004	12
 candy-code/tests/Cli/LaunchNoticeOwnPeriodTest.php	0.004	3
+candy-code/tests/Cli/NonInteractiveMcpToolsHeadlessTest.php	0.004	4
 candy-code/tests/Cli/TitleBackendAuxiliaryModelTest.php	0.004	7
 candy-code/tests/Context/Triggers/TriggerTest.php	0.004	33
 candy-code/tests/Host/TranscriptProjectorParityTest.php	0.004	6
