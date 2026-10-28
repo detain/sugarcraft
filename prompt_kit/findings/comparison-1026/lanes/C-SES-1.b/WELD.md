@@ -19,3 +19,10 @@ Preflight: `git branch --show-current` = master; tree dirt confined to `prompt_k
 - `git cherry master cc/C-SES-1.b` -> `- 15b274513...` (absorbed, patch-id identity).
 - `git patch-id --stable`: lane 15b274513 and pick 46d64b18a -> `d4bb9137569b131a4721934666f1e7e7fd8d23bc` (identical).
 - Content check: `git diff master cc/C-SES-1.b -- <both welded files>` -> 0 lines (byte-identical on master).
+
+## Step 5 — cleanup (ran after the proof, before the weld commit — pick already landed)
+- `git worktree remove /home/sites/cc-cmp-C-SES-1.b` -> OK (`git worktree list | grep -c cc-cmp-C-SES-1.b` = 0).
+- `git branch -D cc/C-SES-1.b` -> "Deleted branch cc/C-SES-1.b (was 15b274513)".
+
+## Step 6 — weld commit
+- LANDED: master 717e7fda1 `weld: C-SES-1.b` (§4 mark ✅ 46d64b18a + lanes/C-SES-1.b/{BRIEF,REPORT,REVIEW-1,WELD}.md + run-state welded 102 / inflight 8; untracked lane files staged via `git add -N` then explicit-path `-o` commit; %ae/%ce detain 1/1 separate greps, `%(trailers)` empty, no caliber — no pre-commit hook installed).

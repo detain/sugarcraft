@@ -19,3 +19,6 @@ Base master: b985fbe51. Lane: cc/C-SES-9.b single commit b187b2e6f1852dca22d34bf
 ## Step 4 — absorption proof
 - `git cherry master cc/C-SES-9.b` -> `- b187b2e6f...` (absorbed).
 - `git patch-id --stable`: b187b2e6f and pick b2b049b5b -> 85f0269c5e166d9ac3b1171e540d9c80156e9bbf (identical).
+
+## Step 5 — weld commit
+- LANDED: master 307ffb44f `weld: C-SES-9.b` (Chat.php cure + §4 mark ✅ b2b049b5b + lanes/C-SES-9.b review files + run-state welded 101; %ae/%ce detain 1/1 separate greps, zero trailers).
