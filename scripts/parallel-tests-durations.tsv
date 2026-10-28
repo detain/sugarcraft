@@ -809,6 +809,7 @@ candy-code/tests/MCP/SseLineParserTest.php	0.048	14
 candy-code/tests/Server/ServerConfigWebhooksTest.php	0.048	23
 candy-code/tests/Skills/CompiledPatternCacheBoundTest.php	0.048	6
 candy-code/tests/Tools/BuiltIn/SkillPathScopingTest.php	0.048	12
+candy-code/tests/Cli/DoctorSandboxProbeTest.php	0.048	51
 candy-code/tests/Agents/Live/TranscriptLogTailTest.php	0.047	11
 candy-code/tests/Tui/ToolTailSlotsTest.php	0.047	5
 candy-code/tests/Observability/BatchEventSinkTest.php	0.047	7
