@@ -755,6 +755,7 @@ candy-code/tests/Tui/RendererTest.php	0.066	23
 candy-code/tests/App/AgentShellCommandsTest.php	0.065	15
 candy-code/tests/App/DockDividerZoneTest.php	0.065	7
 candy-code/tests/App/HostedFrameReadsThePaneTest.php	0.065	4
+candy-code/tests/Context/InstructionWalkPastRootTest.php	0.065	17
 candy-code/tests/Providers/SglangProviderServerLimitsTest.php	0.065	35
 candy-code/tests/Tools/BuiltIn/ApplyPatchTest.php	0.065	17
 candy-code/tests/Tui/Settings/SettingsFilesAndProfilesTest.php	0.065	16
