@@ -1957,7 +1957,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SEC-1.a (W1), C-SEC-3.a (W2), C-SEC-3.b (W3), C-EXT-7.b (W7), C-EXT-4.a (W14)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ext.md` → `### C-EXT-4.b`
 
-#### C-EXT-5.a — PaletteCatalog core (action + prefill rows)
+#### ✅ 179ac2e3f7e7ccb11e25d12b103503ef78c64297 C-EXT-5.a — PaletteCatalog core (action + prefill rows)
 - **Item:** C-EXT-5 (sources: GAP-CMD-08) · gap · effort S
 - **What:** a pure `PaletteCatalog::rows(list<CommandSpec> $slashRows): list<PaletteEntry>`. It emits every `PaletteAction` row, with order and labels unchanged. It then adds one Prefill row per slash-visible spec that has no …
 - **Files — create:** `candy-code/src/Palette/PaletteCatalog.php`, `candy-code/src/Palette/PaletteEntry.php`, `candy-code/src/Palette/PaletteEntryKind.php`

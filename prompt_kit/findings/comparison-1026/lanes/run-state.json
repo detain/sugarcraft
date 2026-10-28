@@ -150,7 +150,8 @@
   "C-AGT-6.d",
   "C-EXT-3.c",
   "P-TABS.g",
-  "C-SEC-8.c"
+  "C-SEC-8.c",
+  "C-EXT-5.a"
  ],
  "inflight": {
   "C-CTX-2.d": {
@@ -164,12 +165,6 @@
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-EXT-4.b",
    "branch": "cc/C-EXT-4.b"
-  },
-  "C-EXT-5.a": {
-   "stage": "review",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-EXT-5.a",
-   "branch": "cc/C-EXT-5.a"
   },
   "C-MCP-3.b": {
    "stage": "build",
@@ -940,8 +935,8 @@
  "weld_queue": [
   "C-CTX-4.c"
  ],
- "tip": "bd539b638fdd31398a002f50185153d198e7abd6",
- "welded_count": 151,
+ "tip": "179ac2e3f7e7ccb11e25d12b103503ef78c64297",
+ "welded_count": 152,
  "tick": "87-disk-reconciled: W11 REALY closed@341f66404; trio MCP2b+TOOL5b+WEB3f real to 0b3c4ba21 (welded=122); W13/14 welds PENDING; phantom-atlas @b73@ correction: c3178096f/4d263705a/8d8c75678 GHOSTS, cure real 23fa8ab8e",
  "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
  "blocked_notes": {
