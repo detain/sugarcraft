@@ -149,8 +149,8 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Code\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — FORTY-THREE
- *     of them, in EIGHTEEN files. THE SECOND EMITTER-SIDE FUNNEL, and the same
+ *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — FORTY-FIVE
+ *     of them, in NINETEEN files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
  *     with the ONE site in `src/Diagnostics/RuntimeNoticeSink.php` and cannot
@@ -623,6 +623,11 @@ final class StderrEmitterCensusTest extends TestCase
         // `git worktree remove` leaves the path registered and `prunable`, so
         // the NEXT createWorktree() for that agent id is refused.
         'src/Agents/WorktreeManager.php' => 5,
+        // C-AGT-5.e: outbound webhook deliveries report their terminal
+        // failures through the sink, never through a raw emitter — one site
+        // per failure episode (the exhausted-ladder drop) and one per queue
+        // overflow episode, both gated by in-class once-per-streak latches.
+        'src/Automation/WebhookDispatcher.php' => 2,
         // P10.S3 (wave 11): the one-time prompt-cache health notice - three
         // consecutive replies that reported no cache buckets while marks
         // were sent. The routing decision: the session is paying full price
@@ -971,7 +976,7 @@ final class StderrEmitterCensusTest extends TestCase
         'twenty-nine' => 29, 'thirty' => 30, 'thirty-one' => 31, 'thirty-two' => 32,
         'thirty-three' => 33, 'thirty-four' => 34, 'thirty-five' => 35, 'thirty-six' => 36,
         'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39, 'forty' => 40,
-        'forty-one' => 41, 'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44,
+        'forty-one' => 41, 'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44, 'forty-five' => 45,
     ];
 
     public function testTheDirectFwriteStderrRosterIsUnchanged(): void
