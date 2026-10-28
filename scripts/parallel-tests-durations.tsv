@@ -994,6 +994,7 @@ candy-code/tests/PaneClickTest.php	0.013	13
 candy-code/tests/Providers/BedrockRoleAlternationTest.php	0.013	12
 candy-code/tests/Providers/ProviderTuningSettingsTest.php	0.013	11
 candy-code/tests/Tools/BuiltIn/WorktreeJailedSearchToolsTest.php	0.013	5
+candy-code/tests/Format/FormatAutoTableTest.php	0.013	6
 candy-code/tests/Attachments/FileMentionsTest.php	0.012	11
 candy-code/tests/Chat/ChatHookInputEncodingTest.php	0.012	5
 candy-code/tests/Chat/EscapeSoftCancelTest.php	0.012	9
