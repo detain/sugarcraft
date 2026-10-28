@@ -124,7 +124,8 @@
     "P-TABS.h",
     "C-SEC-5.d",
     "C-TOOL-3.c",
-    "C-TOOL-5.c"
+    "C-TOOL-5.c",
+    "C-AGT-5.a"
   ],
   "inflight": {
     "C-AGT-6.b": {
@@ -167,13 +168,6 @@
       "worktree": "/home/sites/cc-cmp-C-AGT-4.a",
       "branch": "cc/C-AGT-4.a",
       "tip": "b065962c3"
-    },
-    "C-AGT-5.a": {
-      "stage": "clean",
-      "round": 2,
-      "worktree": "/home/sites/cc-cmp-C-AGT-5.a",
-      "branch": "cc/C-AGT-5.a",
-      "tip": "3d1cf8626"
     }
   },
   "blocked": [],
@@ -738,7 +732,7 @@
     "STOP STATE @2052@: master b4b4404c5 (wind-down commit; 9 files). welded=100/328 LIST. waves_closed [1..9] (W8/W9 rows + marks committed inside b4b4404c5; W9 per lead ruling r1-CLEAN-no-r2 — disclosed). Owed loops: W10 (blocked on unwelded members C-EXT-2.c + C-PRV-5.c), then W11+ per scheduler waves_fully_welded. Only live artifact: /home/sites/cc-cmp-P-TABS.g + branch cc/P-TABS.g @f25a697c1 (parked; re-dispatch plan:1549 after P-TABS.e+P-TABS.f weld). LATE W33+ gated on §6.3 owner rulings (C-TOOL-6 c/e/h + C-TUI-6: Windows shell, Windows self-update helper, web i18n scope, locale choice, parity strictness, voice endpoint, push-to-talk key). NEVER pushed; origin advanced owner-side only.",
     "C-EXT-2.c welded 4b771634d; closeout roster in its WELD.md (Bootstrap:5955 comment, ChatHostLangCatalogue standing red=C-PRV-1.b (a992413b0) seam, TROUBLESHOOTING allowed-tools/effort half=C-EXT-2.b)"
   ],
-  "updated": "weld-run C-TOOL-5.c: welded 14d37bbf5 (patch-id 7e40b53449fb both; durations 0b74f4412 LspInstallerTest 0.080/20, tsv 1491->1492; gates measured path-form 199T/1452A OK = as-built 197/1437 + 2 FIX-1 pins; substring filter 72T/914A green; roster 212/1527 = lane composite incl 13 foreign BinCandyCodeWiring rows, disclosed in WELD.md)",
+  "updated": "weld-run C-AGT-5.a: welded 5cd68af7e (patch-id ba1a64d2dc5c both; durations db4a5dbc8 tsv 1492->1494; gates 27T/103A 0F + 154T/689A with exactly 1F foreign DreamPassTest:288; gen-tool/command-docs --check rc0; WELD.md carries C-AGT-5.b cross-root delete OPEN owner-ruling + 125T/445A stale-brief erratum)",
   "wind_down": {
     "master_tip_at_close": "b4b4404c5",
     "welded_count": 101,
@@ -799,7 +793,7 @@
     "C-AGT-6.b(after r2 review)",
     "C-TOOL-4.a"
   ],
-  "tip": "see git log; C-TOOL-5.c welded 125",
-  "welded_count": 125,
+  "tip": "see git log; C-AGT-5.a welded 126",
+  "welded_count": 126,
   "tick": "87-disk-reconciled: W11 REALY closed@341f66404; trio MCP2b+TOOL5b+WEB3f real to 0b3c4ba21 (welded=122); W13/14 welds PENDING; phantom-atlas @b73@ correction: c3178096f/4d263705a/8d8c75678 GHOSTS, cure real 23fa8ab8e"
 }

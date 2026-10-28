@@ -1642,7 +1642,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Ruling:** LSP download policy: may candy-code download and run pinned third-party language-server binaries (and npm packages with `--ignore-scripts`), and which servers … — see §6
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tool.md` → `### C-TOOL-5.c`
 
-#### C-AGT-5.a — Model-callable `Schedule` tool
+#### ✅ 5cd68af7e C-AGT-5.a — Model-callable `Schedule` tool
 - **Item:** C-AGT-5 (sources: GAP-TL-22, p1-miss: schedules UX) · gap · effort M
 - **What:** Add a `Schedule` tool (`#[BuiltInTool]` Ask class, position 41) with `create|list|delete` over `schedules.json`. Turns run forked, so the tool writes PERSISTED rows only; the file under its lock is the channel, and hosts reload …
 - **Files — create:** `candy-code/src/Tools/BuiltIn/ScheduleTool.php`, `candy-code/src/Background/ScheduleFactory.php`
