@@ -278,14 +278,14 @@ final class InstructionFileLoader
      *
      * Each entry is one document as {@see loadDocuments()} returns it.
      *
-     * @var list<array{path: string, body: ?string, bytes: int}>|null
+     * @var list<array{path: string, body: ?string, bytes: int, imports?: list<string>}>|null
      */
     private ?array $rootCache = null;
 
-    /** @var list<array{path: string, body: ?string, bytes: int}>|null */
+    /** @var list<array{path: string, body: ?string, bytes: int, imports?: list<string>}>|null */
     private ?array $forcedCache = null;
 
-    /** @var list<array{path: string, body: ?string, bytes: int}>|null */
+    /** @var list<array{path: string, body: ?string, bytes: int, imports?: list<string>}>|null */
     private ?array $personalCache = null;
 
     /**
@@ -447,8 +447,9 @@ final class InstructionFileLoader
                 $contents[] = ['path' => $path, 'body' => '', 'bytes' => 0];
             } else {
                 [$doc, $note] = $this->utf8Document($raw, $path);
-                $body = $this->expandImports($doc, dirname($path), $this->repoRoot) . $note;
-                $contents[] = ['path' => $path, 'body' => $body, 'bytes' => strlen($body)];
+                $children = [];
+                $body = $this->expandImports($doc, dirname($path), $this->repoRoot, $children) . $note;
+                $contents[] = ['path' => $path, 'body' => $body, 'bytes' => strlen($body), 'imports' => $children];
             }
         }
 
@@ -475,7 +476,7 @@ final class InstructionFileLoader
      * otherwise. Same memoized reads as the two string-list methods — calling
      * both forms reads nothing twice.
      *
-     * @return list<array{path: string, body: ?string, bytes: int}>
+     * @return list<array{path: string, body: ?string, bytes: int, imports?: list<string>}>
      */
     public function loadDocuments(): array
     {
@@ -519,7 +520,7 @@ final class InstructionFileLoader
      *
      * Memoized like the other whole-session loaders.
      *
-     * @return list<array{path: string, body: ?string, bytes: int}>
+     * @return list<array{path: string, body: ?string, bytes: int, imports?: list<string>}>
      */
     public function loadPersonal(): array
     {
@@ -580,8 +581,9 @@ final class InstructionFileLoader
             $this->personalCache = [['path' => $path, 'body' => null, 'bytes' => (int) $bytes]];
         } elseif ($raw !== false) {
             [$doc, $note] = $this->utf8Document($raw, $path);
-            $body = $this->expandImports($doc, \dirname($path), $anchor) . $note;
-            $this->personalCache = [['path' => $path, 'body' => $body, 'bytes' => strlen($body)]];
+            $children = [];
+            $body = $this->expandImports($doc, \dirname($path), $anchor, $children) . $note;
+            $this->personalCache = [['path' => $path, 'body' => $body, 'bytes' => strlen($body), 'imports' => $children]];
         }
 
         return $this->personalCache;
@@ -700,7 +702,7 @@ final class InstructionFileLoader
     }
 
     /**
-     * @param list<array{path: string, body: ?string, bytes: int}> $documents
+     * @param list<array{path: string, body: ?string, bytes: int, imports?: list<string>}> $documents
      * @return list<string>
      */
     private static function bodies(array $documents): array
@@ -759,7 +761,7 @@ final class InstructionFileLoader
      * read loop stays in that method, which is the read decision the docs and
      * the containment census credit with it; this only hands its records out.
      *
-     * @return list<array{path: string, body: ?string, bytes: int}>
+     * @return list<array{path: string, body: ?string, bytes: int, imports?: list<string>}>
      */
     private function rootDocuments(): array
     {
@@ -774,7 +776,7 @@ final class InstructionFileLoader
      * The memoized forced-instruction documents {@see loadForced()} reads,
      * handed out the same way as {@see rootDocuments()}.
      *
-     * @return list<array{path: string, body: ?string, bytes: int}>
+     * @return list<array{path: string, body: ?string, bytes: int, imports?: list<string>}>
      */
     private function forcedDocuments(): array
     {
@@ -906,7 +908,7 @@ final class InstructionFileLoader
      * `/etc/…`) is refused AND RECORDED, so this pass does not reintroduce the
      * silent-escape shape the class docblock describes.
      *
-     * @return list<array{path: string, body: ?string, bytes: int}>
+     * @return list<array{path: string, body: ?string, bytes: int, imports?: list<string>}>
      */
     private function loadAncestorRoots(): array
     {
@@ -982,8 +984,9 @@ final class InstructionFileLoader
                     $contents[] = ['path' => $path, 'body' => '', 'bytes' => 0];
                 } else {
                     [$doc, $note] = $this->utf8Document($raw, $path);
-                    $body = $this->expandImports($doc, \dirname($path), $ancestorRoot) . $note;
-                    $contents[] = ['path' => $path, 'body' => $body, 'bytes' => strlen($body)];
+                    $children = [];
+                    $body = $this->expandImports($doc, \dirname($path), $ancestorRoot, $children) . $note;
+                    $contents[] = ['path' => $path, 'body' => $body, 'bytes' => strlen($body), 'imports' => $children];
                 }
             }
         }
@@ -1144,8 +1147,9 @@ final class InstructionFileLoader
                     // one invalid byte here used to fail every request
                     // (audit 15d-08) — see utf8Document().
                     [$doc, $note] = $this->utf8Document($raw, $path);
-                    $body = $this->expandImports($doc, \dirname($path), $this->repoRoot) . $note;
-                    $contents[] = ['path' => $path, 'body' => $body, 'bytes' => strlen($body)];
+                    $children = [];
+                    $body = $this->expandImports($doc, \dirname($path), $this->repoRoot, $children) . $note;
+                    $contents[] = ['path' => $path, 'body' => $body, 'bytes' => strlen($body), 'imports' => $children];
                 }
             }
         }
@@ -1789,8 +1793,15 @@ final class InstructionFileLoader
      * depth — which is why the de-duplication lives here rather than in
      * ImportResolver (which is stateless and shared) or in the caller (which
      * only ever sees the finished string).
+     *
+     * $children (when given) receives the resolved paths of exactly the files
+     * whose bytes this call inlined — every depth, blocked/deferred/skipped
+     * excluded — collected by ImportResolver at the splice point itself, so
+     * the loader pays no re-walk: the child list rides the expansion the body
+     * was already produced by. Document rows carry it under `imports` for
+     * {@see InstructionDiffTracker::capture()} to stat-gate.
      */
-    private function expandImports(string $content, string $baseDir, string $boundary): string
+    private function expandImports(string $content, string $baseDir, string $boundary, ?array &$children = null): string
     {
         // THE DOCUMENT'S CEILING IS SHARED BY EVERYTHING INLINED INTO IT (C3):
         // an import is priced against what is LEFT of MAX_DOCUMENT_BYTES after
@@ -1854,6 +1865,6 @@ final class InstructionFileLoader
             return null; // in-repo, not yet seen, fits -- let ImportResolver expand it
         };
 
-        return $this->importResolver->expand($content, $baseDir, 0, $gate);
+        return $this->importResolver->expand($content, $baseDir, 0, $gate, $children);
     }
 }

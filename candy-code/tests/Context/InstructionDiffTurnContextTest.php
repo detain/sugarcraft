@@ -184,6 +184,93 @@ final class InstructionDiffTurnContextTest extends TestCase
         $this->assertStringNotContainsString('@@', $section);
     }
 
+    public function testAChildOnlyEditRendersOneReReadPointerLineForTheChild(): void
+    {
+        mkdir($this->repo . '/notes', 0o700, true);
+        $child = $this->repo . '/notes/imported.md';
+        file_put_contents($child, "Child convention one\n");
+        file_put_contents($this->claude, "Alpha rule\nBeta rule\n@./notes/imported.md\n");
+
+        $tracker = InstructionDiffTracker::capture($this->loader());
+        $this->assertSame('', $tracker->recheck(), 'an unmoved child costs one stat and renders nothing');
+
+        file_put_contents($child, "Child convention one\nChild convention two\n");
+        $section = $tracker->recheck();
+
+        $this->assertStringContainsString('no diffable frozen baseline. Read ' . $child, $section);
+        $this->assertStringContainsString('imported.md (', $section, 'the child names itself in its own line label');
+        $this->assertStringNotContainsString('@@', $section, 'a child has no content baseline, so it can only ever point');
+        $this->assertSame(
+            1,
+            substr_count($section, 'no diffable frozen baseline. Read '),
+            'the child contributes exactly one pointer line',
+        );
+        $this->assertStringNotContainsString('CLAUDE.md (', $section, "the root's own bytes did not move, so it renders no line");
+    }
+
+    public function testAnUnmovedChildStaysHiddenEvenWhenItsBytesDiffer(): void
+    {
+        mkdir($this->repo . '/notes', 0o700, true);
+        $child = $this->repo . '/notes/imported.md';
+        file_put_contents($child, "Child bytes one\n");
+        file_put_contents($this->claude, "Alpha rule\nBeta rule\n@./notes/imported.md\n");
+
+        $tracker = InstructionDiffTracker::capture($this->loader());
+
+        $captured = stat($child);
+        file_put_contents($child, "Child bytes two\n"); // same length as the captured bytes
+        touch($child, (int) $captured['mtime']);
+        clearstatcache();
+        $this->assertSame(
+            '',
+            $tracker->recheck(),
+            'the child rides the same stat-first gate as a root: no mtime or size move, no hash, no line',
+        );
+
+        clearstatcache();
+        touch($child, time() + 2); // explicit forward mtime: crossing the second is not the fixture's bet to make
+        clearstatcache();
+        $this->assertStringContainsString(
+            'no diffable frozen baseline. Read ' . $child,
+            $tracker->recheck(),
+            'once the stat does move the child tells, even though its bytes never changed shape',
+        );
+    }
+
+    public function testChildrenBeyondThePerRootCapStayInvisible(): void
+    {
+        mkdir($this->repo . '/notes', 0o700, true);
+        $refs = '';
+        $children = [];
+        $count = InstructionDiffTracker::MAX_TRACKED_CHILDREN + 1;
+        for ($i = 0; $i < $count; $i++) {
+            $path = $this->repo . '/notes/' . sprintf('child-%02d.md', $i);
+            file_put_contents($path, "Convention {$i} one\n");
+            $refs .= '@./notes/' . sprintf('child-%02d.md', $i) . "\n";
+            $children[] = $path;
+        }
+        file_put_contents($this->claude, "Alpha rule\n" . $refs);
+
+        $tracker = InstructionDiffTracker::capture($this->loader());
+        $this->assertSame('', $tracker->recheck(), 'an untouched child census renders nothing');
+
+        foreach ($children as $i => $path) {
+            file_put_contents($path, "Convention {$i} one\nand two\n");
+        }
+        $section = $tracker->recheck();
+
+        $this->assertSame(
+            InstructionDiffTracker::MAX_TRACKED_CHILDREN,
+            substr_count($section, 'no diffable frozen baseline. Read '),
+            'the cap is a hard bound on the per-step child stat walk, not a suggestion',
+        );
+        $this->assertStringNotContainsString(
+            sprintf('child-%02d.md (', $count - 1),
+            $section,
+            'the overflow child — the last in expansion order — is the invisible one',
+        );
+    }
+
     public function testAForgedFenceArrivesEscapedAsDataInsideTheRow(): void
     {
         $tracker = InstructionDiffTracker::capture($this->loader());

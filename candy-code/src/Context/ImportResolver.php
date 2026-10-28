@@ -115,14 +115,22 @@ final class ImportResolver
      * recurse) or a replacement string to substitute in place of following
      * the reference.
      *
+     * $inlined (when given) collects the resolved path of every file whose
+     * BYTES were actually spliced into the result, at every depth — imports
+     * the gate blocked, deferred or skipped were not inlined and are not
+     * named. The loader threads it to learn which children a document row
+     * carries, so {@see InstructionDiffTracker} can stat-gate them; the
+     * collector adds no read, only one append per inlined file.
+     *
      * @param string $content  Raw file content that may contain @-import references.
      * @param string $baseDir  Absolute path used to resolve relative import paths.
      * @param int    $depth    Current recursion depth (starts at 0). Used internally.
      * @param ?callable(string, string, string): ?string $boundaryCheck Optional guard,
      *        threaded through every recursive call; see above.
+     * @param ?list<string> $inlined By-ref collector of inlined child paths; see above.
      * @return string Content with all reachable @-imports expanded.
      */
-    public function expand(string $content, string $baseDir, int $depth = 0, ?callable $boundaryCheck = null): string
+    public function expand(string $content, string $baseDir, int $depth = 0, ?callable $boundaryCheck = null, ?array &$inlined = null): string
     {
         if ($depth >= self::MAX_DEPTH) {
             return $content;
@@ -143,7 +151,7 @@ final class ImportResolver
             // Odd indices are the captured fenced blocks themselves -- leave as-is.
             $result .= ($i % 2 === 1)
                 ? $segment
-                : $this->expandOutsideFences($segment, $baseDir, $depth, $boundaryCheck);
+                : $this->expandOutsideFences($segment, $baseDir, $depth, $boundaryCheck, $inlined);
         }
 
         return $result;
@@ -154,8 +162,9 @@ final class ImportResolver
      * fenced code block, still skipping inline single-backtick spans.
      *
      * @param ?callable(string, string, string): ?string $boundaryCheck
+     * @param ?list<string> $inlined By-ref inlined-child collector, threaded through.
      */
-    private function expandOutsideFences(string $content, string $baseDir, int $depth, ?callable $boundaryCheck): string
+    private function expandOutsideFences(string $content, string $baseDir, int $depth, ?callable $boundaryCheck, ?array &$inlined = null): string
     {
         // Inline spans are split out the same way expand() splits fences
         // (ISS-066). The single-backtick lookaround this method used to rely
@@ -175,7 +184,7 @@ final class ImportResolver
         foreach ($spans as $i => $span) {
             $result .= ($i % 2 === 1)
                 ? $span
-                : $this->expandReferences($span, $baseDir, $depth, $boundaryCheck);
+                : $this->expandReferences($span, $baseDir, $depth, $boundaryCheck, $inlined);
         }
 
         return $result;
@@ -186,8 +195,9 @@ final class ImportResolver
      * outside any inline span.
      *
      * @param ?callable(string, string, string): ?string $boundaryCheck
+     * @param ?list<string> $inlined By-ref inlined-child collector, threaded through.
      */
-    private function expandReferences(string $content, string $baseDir, int $depth, ?callable $boundaryCheck): string
+    private function expandReferences(string $content, string $baseDir, int $depth, ?callable $boundaryCheck, ?array &$inlined = null): string
     {
         // (?<!`) keeps the inline-span adjacency skip the class has always
         // stated (and that DocFigure pins as a pattern literal — the span MASK
@@ -199,7 +209,7 @@ final class ImportResolver
         // class `(?<![\w`])` would. (?!`) is kept for the same belt reason.
         $result = preg_replace_callback(
             '/(?<!`)(?<!\w)@(\.?\/?[\w\-\.\/~]+\.md)(?!`)/',
-            function (array $m) use ($baseDir, $depth, $boundaryCheck): string {
+            function (array $m) use ($baseDir, $depth, $boundaryCheck, &$inlined): string {
                 $pathFragment = $m[1];
 
                 // Resolve ~ (home directory) and relative paths.
@@ -288,7 +298,13 @@ final class ImportResolver
                 // Recurse with the directory of the imported file as new base.
                 // $boundaryCheck is threaded through so a reference found
                 // INSIDE this just-imported file is checked too, at every depth.
-                return $this->expand($imported, dirname($resolved), $depth + 1, $boundaryCheck)
+                // This is the one point where an import's bytes actually enter
+                // the result, so it is the one point the collector names it.
+                if ($inlined !== null) {
+                    $inlined[] = $shown;
+                }
+
+                return $this->expand($imported, dirname($resolved), $depth + 1, $boundaryCheck, $inlined)
                     . Utf8Scrub::notice($replaced, $pathFragment);
             },
             $content,

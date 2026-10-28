@@ -904,6 +904,18 @@ ancestor, forced and imported files the prompt leaves out, and a nested
 (a link out of the checkout, a file over the 60 KiB ceiling) gets one
 transcript notice the first time it happens.
 
+### Instruction diff
+
+Mid-session edits do not move the frozen slab; they surface one turn later in
+the `<turn-context>` row (`InstructionDiffTracker`). The capture fingerprints
+every tracked instruction document — roots keep their bytes (diffable up to
+`MAX_DIFFABLE_BYTES`) — **and every `@import` child the expansion actually
+inlined**, stat-only, capped per root at `InstructionDiffTracker::MAX_TRACKED_CHILDREN`
+in expansion order. The child list rides the loader's already-expanded rows, so
+the capture pays no re-expansion: a child costs one stat per turn, never a read.
+A child whose stat moved renders one `Read <path>` pointer line — its new bytes
+are never re-spliced mid-session; the next refresh point absorbs them.
+
 ## On-disk layout summary
 
 ```

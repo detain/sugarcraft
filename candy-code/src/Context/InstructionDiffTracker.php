@@ -7,8 +7,10 @@ namespace SugarCraft\Code\Context;
 use SugarCraft\Diff\Diff;
 
 /**
- * Fingerprints the root instruction files at session freeze and reports, each
- * turn, what has changed on disk since then (plan_comparison CTX-3).
+ * Fingerprints the root instruction files — and the `@import` children their
+ * expansions inlined, stat-only — at session freeze and reports, each turn,
+ * what has changed on disk since then (plan_comparison CTX-3; the child
+ * census is C-CTX-1.c).
  *
  * WHY THIS EXISTS. The standing instruction slab is a PerSession layer of
  * {@see SessionPromptMemo}: CLAUDE.md / AGENTS.md / personal notes are read
@@ -58,11 +60,16 @@ use SugarCraft\Diff\Diff;
  * {@see TurnContextBlock::render()} like every other payload here.
  *
  * DECLARED LIMITS (each accepted, not overlooked):
- * - Nested `@import:` children of a root document are not tracked on their
- *   own; an edit to a child surfaces only through the parent's own bytes when
- *   the import line itself moved, so a child-only edit is invisible until the
- *   next refresh point. Tracking the expansion would mean re-expanding per
- *   turn — the exact per-step re-read this design exists to avoid.
+ * - Nested `@import:` children of a root document are tracked stat-only,
+ *   capped at {@see MAX_TRACKED_CHILDREN} per root in expansion order. The
+ *   child list rides the loader's already-expanded document rows, so the
+ *   capture pays no re-expansion; the per-step cost is one stat per tracked
+ *   child, exactly like a root's. A moved child renders the `Read <path>`
+ *   pointer line — its new bytes are never re-inlined per turn (that is the
+ *   per-step re-read this design exists to avoid); the next refresh point
+ *   absorbs them. Imports past the cap stay invisible until a refresh point,
+ *   and a child cannot cancel its line by reverting (no content baseline
+ *   exists to cancel against) — both accepted.
  * - `loadForPath()` on-touch delivery and `Skill` bodies keep their own
  *   channels and are not session instructions.
  * - The capture rides the parent's pre-fork prime of this slot
@@ -117,6 +124,17 @@ final class InstructionDiffTracker
     public const MAX_DIFFABLE_BYTES = InstructionFileLoader::MAX_DOCUMENT_BYTES;
 
     /**
+     * Cap on the `@import` children tracked stat-only per root document.
+     *
+     * A document's import graph is repository-controlled and a deep one is
+     * cheap to state but expensive to walk every step; the cap bounds the
+     * child half of the stat sweep at this many per document, in expansion
+     * order. Children past the cap keep the pre-C-CTX-1.c behaviour: an edit
+     * surfaces only through the parent's own bytes at a refresh point.
+     */
+    public const MAX_TRACKED_CHILDREN = 32;
+
+    /**
      * Cap on a path's rendered length inside a line — mirrors the loader's
      * own pointer budget without reaching into its private constant.
      */
@@ -129,7 +147,7 @@ final class InstructionDiffTracker
     private const GONE = -1;
 
     /**
-     * @param list<array{path: string, real: string, body: ?string, sha: ?string, mtime: int, size: int}> $frozen
+     * @param list<array{path: string, real: string, body: ?string, sha: ?string, mtime: int, size: int, statOnly?: bool}> $frozen
      *        Frozen entries in tracked order (the loader's own precedence
      *        order), each holding the disk stat — and, for diffable files, the
      *        raw body and its hash — as measured at capture. Never mutated.
@@ -149,8 +167,14 @@ final class InstructionDiffTracker
      *
      * The path list comes from the loader's memoised document lists — reads
      * nothing from disk beyond one stat and (for diffable files) one read per
-     * path. A path that no longer resolves is skipped: there is no baseline
-     * to hold.
+     * path. The expanded rows also carry their inlined `@import` children,
+     * frozen in a second pass stat-only (one stat each, never read, never
+     * hashed) up to {@see MAX_TRACKED_CHILDREN} per root. A path that no
+     * longer resolves is skipped: there is no baseline to hold.
+     *
+     * Roots freeze before children so a file that is both a root and another
+     * document's child keeps its full body/sha tracking — the realpath dedup
+     * below can only ever skip the child copy, never the root.
      *
      * Dedup is by REALPATH so a per-library file symlinked to the monorepo's
      * shared one fingerprints once — the same rule the loader applies to its
@@ -163,6 +187,8 @@ final class InstructionDiffTracker
         $seen = [];
         /** @var array<string, true> $byReal */
         $byReal = [];
+        /** @var list<list<string>> $childLists */
+        $childLists = [];
 
         foreach ([...$loader->loadDocuments(), ...$loader->loadPersonal()] as $document) {
             $path = (string) ($document['path'] ?? '');
@@ -204,6 +230,54 @@ final class InstructionDiffTracker
                 'size' => $entry['size'],
                 'pending' => null,
             ];
+
+            $imports = $document['imports'] ?? [];
+            if (is_array($imports) && $imports !== []) {
+                $childLists[] = $imports;
+            }
+        }
+
+        // Pass two, the children — roots are all frozen first, so a later
+        // root's realpath can never lose its body/sha tracking to an earlier
+        // document's child entry at the $byReal dedup.
+        foreach ($childLists as $imports) {
+            $budget = self::MAX_TRACKED_CHILDREN;
+            foreach ($imports as $child) {
+                if ($budget-- <= 0) {
+                    break;
+                }
+                $child = (string) $child;
+                if ($child === '') {
+                    continue;
+                }
+                $stat = @stat($child);
+                if ($stat === false) {
+                    continue;
+                }
+                $real = realpath($child) ?: '';
+                if ($real === '' || isset($byReal[$real])) {
+                    continue;
+                }
+                $byReal[$real] = true;
+
+                $entry = [
+                    'path' => $child,
+                    'real' => $real,
+                    'body' => null,
+                    'sha' => null,
+                    'mtime' => (int) $stat['mtime'],
+                    'size' => (int) $stat['size'],
+                    'statOnly' => true,
+                ];
+                $frozen[] = $entry;
+                $seen[$child] = [
+                    'real' => $real,
+                    'sha' => null,
+                    'mtime' => $entry['mtime'],
+                    'size' => $entry['size'],
+                    'pending' => null,
+                ];
+            }
         }
 
         return new self($frozen, $seen);
@@ -220,7 +294,7 @@ final class InstructionDiffTracker
      */
     public function recheck(): string
     {
-        /** @var list<array{entry: array{path: string, real: string, body: ?string, sha: ?string, mtime: int, size: int}, size: int, body: ?string, reason: string}> $changed */
+        /** @var list<array{entry: array{path: string, real: string, body: ?string, sha: ?string, mtime: int, size: int, statOnly?: bool}, size: int, body: ?string, reason: string}> $changed */
         $changed = [];
 
         foreach ($this->frozen as $entry) {
@@ -264,6 +338,21 @@ final class InstructionDiffTracker
                 $current = [
                     'real' => $real, 'sha' => null, 'mtime' => $mtime, 'size' => $size,
                     'pending' => ['reason' => 'moved', 'body' => null, 'size' => $size],
+                ];
+                $this->seen[$path] = $current;
+                $changed[] = self::carried($entry, $current['pending']);
+                continue;
+            }
+
+            if (($entry['statOnly'] ?? false) === true) {
+                // A tracked @import child: its bytes ride the parent's frozen
+                // expansion, so there is no baseline to diff against and none
+                // is bought here — the moved stat surfaces as the `Read <path>`
+                // pointer line (the 'no-baseline' degradation) and the next
+                // refresh point absorbs the new bytes into the slab.
+                $current = [
+                    'real' => $real, 'sha' => null, 'mtime' => $mtime, 'size' => $size,
+                    'pending' => ['reason' => 'no-baseline', 'body' => null, 'size' => $size],
                 ];
                 $this->seen[$path] = $current;
                 $changed[] = self::carried($entry, $current['pending']);
@@ -339,10 +428,10 @@ final class InstructionDiffTracker
      * Shape one change item out of the frozen entry plus a recorded (or just
      * measured) pending change.
      *
-     * @param array{path: string, real: string, body: ?string, sha: ?string, mtime: int, size: int} $entry
+     * @param array{path: string, real: string, body: ?string, sha: ?string, mtime: int, size: int, statOnly?: bool} $entry
      * @param array{reason: string, body: ?string, size: int} $pending
      *
-     * @return array{entry: array{path: string, real: string, body: ?string, sha: ?string, mtime: int, size: int}, size: int, body: ?string, reason: string}
+     * @return array{entry: array{path: string, real: string, body: ?string, sha: ?string, mtime: int, size: int, statOnly?: bool}, size: int, body: ?string, reason: string}
      */
     private static function carried(array $entry, array $pending): array
     {
@@ -355,7 +444,7 @@ final class InstructionDiffTracker
      * from the measurement pass — this renders the bytes that were hashed, so
      * one disk state renders one answer however many turns see it.
      *
-     * @param list<array{entry: array{path: string, real: string, body: ?string, sha: ?string, mtime: int, size: int}, size: int, body: ?string, reason: string}> $changed
+     * @param list<array{entry: array{path: string, real: string, body: ?string, sha: ?string, mtime: int, size: int, statOnly?: bool}, size: int, body: ?string, reason: string}> $changed
      */
     private function render(array $changed): string
     {
