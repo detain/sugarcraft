@@ -125,30 +125,30 @@
   },
   "C-CTX-6.b": {
    "stage": "review",
-   "round": 1,
+   "round": 2,
    "worktree": "/home/sites/cc-cmp-C-CTX-6.b",
    "branch": "cc/C-CTX-6.b"
   },
   "C-EXT-2.d": {
-   "stage": "review",
-   "round": 1,
+   "stage": "clean",
+   "round": 2,
    "worktree": "/home/sites/cc-cmp-C-EXT-2.d",
    "branch": "cc/C-EXT-2.d"
   },
   "C-MCP-2.b": {
-   "stage": "build",
+   "stage": "review",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-MCP-2.b",
    "branch": "cc/C-MCP-2.b"
   },
   "C-TOOL-5.b": {
    "stage": "review",
-   "round": 1,
+   "round": 2,
    "worktree": "/home/sites/cc-cmp-C-TOOL-5.b",
    "branch": "cc/C-TOOL-5.b"
   },
   "C-TOOL-5.c": {
-   "stage": "build",
+   "stage": "review",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-TOOL-5.c",
    "branch": "cc/C-TOOL-5.c"
@@ -160,10 +160,16 @@
    "branch": "cc/C-AGT-5.a"
   },
   "C-SES-3.d": {
-   "stage": "build",
+   "stage": "review",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-SES-3.d",
    "branch": "cc/C-SES-3.d"
+  },
+  "C-TUI-6.k": {
+   "stage": "fix",
+   "round": 2,
+   "worktree": "/home/sites/cc-cmp-C-TUI-6.k",
+   "branch": "cc/C-TUI-6.k"
   }
  },
  "blocked": [],
@@ -177,7 +183,8 @@
   6,
   7,
   8,
-  9
+  9,
+  10
  ],
  "wave_loops": {
   "1": "closed r2 CLEAN",
@@ -188,12 +195,7 @@
   "6": "closed r1 CLEAN",
   "7": "closed r2 CLEAN + cure",
   "8": "closed r2 CLEAN @ 30b7d4f08 (10/10 marks ancestors; battery all-green incl WorkflowRunInterpolation; hygiene clean; carries: docs/MCP.md :629-634 C-AGT-3 closeout, TrustTarget wiring C-SEC-5.b) — §3 flip committed in wind-down",
-  "W10": {
-   "round": 1,
-   "status": "FINDINGS",
-   "detail": "2 MAJOR (StderrEmitterCensus 3F = W10-created rosters owed by C-AGT-7.b e359fc884 + BinCandyCodeAutoloadGuard 33→34; TreeWideGuardRoster JsonSchemaEnvelopeTest glob license row) + durations gap (5 files zero rows: ToolTailSlotsTest, PtyRunToolProgressTest, TrustDialogTest, ContextSourcesMcpUserTierTest, ToollessBackendThinkingTest) + 2 MINOR (§4 C-AGT-7.b ✅ stamp; ChatHostLangCatalogue seam re-attributed to C-PRV-1.b a992413b0). Fixer QUEUED behind live welder (single master writer). ReadmeSuiteFigureDrift pair + ProjectTierRefusal 2F stay standing (closeout/base); AccessorDeprecation GREEN at tip - stale listing corrected.",
-   "verdict_file": "lanes/W10/WAVE-REVIEW-1.md"
-  }
+  "W10": "closed r2 CLEAN @ 533ab1431 (r1 FINDINGS 3 MAJOR + 2 MINOR -> cures 743681f84 StderrEmitterCensus/TreeWideGuardRoster rosters, 8be7334f8 durations rows x5, 533ab1431 §4 C-AGT-7.b ✅ e359fc884 stamp; MINOR-5 attribution cure C-AGT-7.b -> C-PRV-1.b (a992413b0) folded into this close commit; verdicts lanes/W10/WAVE-REVIEW-1.md + WAVE-REVIEW-2.md; 10/10 §4 marks cat-file + ancestor-verified; cross-wave sweep 175T/4702A OK; reviewer ses_e7eaf469cffeggs78fM6cLM1LJ; standing NOT-W10: ReadmeSuiteFigureDrift staleness pair + ProjectTierRefusal 2F = §7 closeout)"
  },
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "weld_notes": {
@@ -609,9 +611,12 @@
    "prune": "cherry proof '-'; worktree+branch pruned"
   },
   "C-TUI-7.a": "CLEAN r3 tip fa64a39b9 (deriveGatherKey session\\0root exact-boundary proven NUL-safe; pins non-vacuous). Weld owes: durations row StartupSummaryGatherTest; RouteTraitParity union vs master 27757dd94 (keep master ModelCatalogReadyMsg+TelemetryRetryTickMsg rows, add lane StartupSummaryGatheredMsg after StatusLineTickMsg); 2 foreign AccessorDeprecation deprecations = weld glance",
-  "C-CTX-6.b": "weld owes durations row DocumentAggregateBudgetTest (9T); deviation accepted: chat.attach.pdf_pages unminted (raw-sprintf notices, catalogue sources exclude src/Attachments); toTypedMessages region extension disclosed",
-  "C-EXT-2.d": "weld owes durations row SkillsEnableDisableTest (6T); foreign ChatHostLangCatalogue base-red re-confirmed (C-PRV-1.b seam, W10 fixer cures per wave review)",
-  "C-TOOL-5.b": "weld owes durations rows FormatAutoTableTest(13T)+FormatRunnerHookTest(4T); 51-file diff = regen-heavy, reviewer verifying declared-set"
+  "C-CTX-6.b": "amended 723418d56; NEW DocumentAggregateBudgetTest 11T → durations row; r1 MINOR fixed+verified",
+  "C-EXT-2.d": "tip 578eda331 r2 CLEAN; weld owes durations row SkillsEnableDisableTest (7T); NIT carries recorded in REPORT.md",
+  "C-TOOL-5.b": "commit fb441bbf7; DocFigure widen 9000->12000:2290 in-step; LayeredSettings.php:620 'formatAuto' hub edit design-forced (weld note); durations=FormatAutoTableTest only",
+  "C-TUI-6.k": "r1 3 MINORs (docblock truth, unmount pin, emitted-undefined leg) + NIT listening-toggle; fixer live; weld owes dist regen",
+  "C-TOOL-5.c": "commit 08e4d7d6a; NEW LspInstallerTest 19T → durations row; LspReleases live pins 2026-10-26; CLI verb rides C-TOOL-5.d",
+  "C-MCP-2.b": "commit ec48dc189 protocol lane: welder regen trio on merged tree; NEW CommandMethodsMcpPromptsTest+McpMethodsTest → durations rows; suite-figure +10T gate duty"
  },
  "carries": [
   "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest — closeout gate duty",
@@ -696,9 +701,9 @@
   "W9 CLOSED at wind-down per owner ruling @2036@: WAVE-REVIEW-1.md on disk CLEAN (r2 never persisted — reviewer returned mid-truncate; recorded as r1-CLOSED-NO-R2). W10 close NOT granted: members C-EXT-2.c + C-PRV-5.c unwelded.",
   "WIND-DOWN RESIDUALS @2052@ (owner freeze — bookkeeping only): UNSTAGED dirt left for next lead: M lanes/C-MCP-4.a/REVIEW-1.md (unattributed post-weld modification; lane welded at 604ccdc3d — next lead diff vs git show 604ccdc3d:...REVIEW-1.md and reconcile or checkout); ?? lane dirs C-AGT-3.b/REVIEW-1.md, C-MCP-4.c/BRIEF.md, C-SEC-5.d/(BRIEF+REVIEW-1..3 = the four-phantom record, step NOT STARTED), C-SES-1.b/BRIEF.md (+ /tmp/opencode/C-SES-1.b-RESUME-BRIEF.md copy), C-SES-9.e/(BRIEF+REPORT = NOT-A-STEP record; family ends .d), C-TOOL-7.b/measure.php (reviewer evidence), P-TABS.f/BRIEF.md, P-TABS.g/(BRIEF+REPORT+PARKED-DIFF.patch zero-length — the parked record). None staged: owner froze lane work; next lead folds them into evidence with normal weld/close discipline.",
   "STOP STATE @2052@: master b4b4404c5 (wind-down commit; 9 files). welded=100/328 LIST. waves_closed [1..9] (W8/W9 rows + marks committed inside b4b4404c5; W9 per lead ruling r1-CLEAN-no-r2 — disclosed). Owed loops: W10 (blocked on unwelded members C-EXT-2.c + C-PRV-5.c), then W11+ per scheduler waves_fully_welded. Only live artifact: /home/sites/cc-cmp-P-TABS.g + branch cc/P-TABS.g @f25a697c1 (parked; re-dispatch plan:1549 after P-TABS.e+P-TABS.f weld). LATE W33+ gated on §6.3 owner rulings (C-TOOL-6 c/e/h + C-TUI-6: Windows shell, Windows self-update helper, web i18n scope, locale choice, parity strictness, voice endpoint, push-to-talk key). NEVER pushed; origin advanced owner-side only.",
-  "C-EXT-2.c welded 4b771634d; closeout roster in its WELD.md (Bootstrap:5955 comment, ChatHostLangCatalogue standing red=C-AGT-7.b seam, TROUBLESHOOTING allowed-tools/effort half=C-EXT-2.b)"
+  "C-EXT-2.c welded 4b771634d; closeout roster in its WELD.md (Bootstrap:5955 comment, ChatHostLangCatalogue standing red=C-PRV-1.b (a992413b0) seam, TROUBLESHOOTING allowed-tools/effort half=C-EXT-2.b)"
  ],
- "updated": "welder tick: C-TUI-7.a welded onto cc14518d5 (picks 97113b210+03280fdea, union RouteTraitParity resolution; scripts durations row a5f5b15b8; welded 115; inflight C-TUI-7.a removed)",
+ "updated": "close W10: §3 flip + waves_closed [1..10] + r2 CLEAN record (cures 743681f84/8be7334f8/533ab1431); WAVE-REVIEW-1/2 folded; attribution cure (C-PRV-1.b a992413b0) landed; welded unchanged 115",
  "wind_down": {
   "master_tip_at_close": "b4b4404c5",
   "welded_count": 101,
@@ -731,7 +736,7 @@
   "residual_unstaged": "see carries WIND-DOWN RESIDUALS"
  },
  "status": "RUNNING",
- "standing_reds_b985fbe51": "ADD: ChatHostLangCatalogueTest red on chat.effort.launch_unshaped (asker LaunchContext.php:2109 outside sources()) - byte-identical at base, C-AGT-7.b seam -> closeout roster",
+ "standing_reds_b985fbe51": "ADD: ChatHostLangCatalogueTest red on chat.effort.launch_unshaped (asker LaunchContext.php:2109 outside sources()) - byte-identical at base, C-PRV-1.b (a992413b0) seam -> closeout roster",
  "late_rulings": [
   {
    "answered": "2026-10-28 owner",
