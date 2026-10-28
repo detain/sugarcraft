@@ -154,7 +154,7 @@ describe('ContextPanel (WEB-3a)', () => {
   })
 })
 
-/** WEB-3b: the trust prompt — plain-span rendering, verdict buttons on context.trust. */
+/** WEB-3b: the trust prompts — plain-span rendering, verdict buttons on context.trust; C-SEC-5.b made them a per-door LIST. */
 
 const TRUST = {
   askId: 'trust-9f0e1d2c3',
@@ -171,7 +171,7 @@ describe('ContextPanel trust prompt (WEB-3b)', () => {
   async function openWithTrust(): Promise<ReturnType<typeof mount>> {
     const wrapper = mount(ContextPanel, { props: { sessionId: 's1' } })
     await flushPromises()
-    await wire.answer('context.sources', { ...SOURCES, trust: TRUST })
+    await wire.answer('context.sources', { ...SOURCES, trusts: [TRUST] })
     await flushPromises()
     return wrapper
   }
@@ -207,11 +207,48 @@ describe('ContextPanel trust prompt (WEB-3b)', () => {
     expect(wrapper.find('[data-testid="context-trust-settled"]').text()).toContain('next launch')
   })
 
+  /**
+   * C-SEC-5.b: the answer is a LIST — one row per pending grant door.
+   * Answering one row settles that door only; the other row keeps its own
+   * three verdict buttons, and each answer carries its own askId.
+   */
+  it('renders one row per pending door and answers them independently', async () => {
+    await wire.connect()
+    const settings = {
+      ...TRUST,
+      askId: 'trust-5a5b5c5d6',
+      target: 'settings' as const,
+      reason: 'This project carries a settings layer at /repo/project, but it is not in your trusted projects — its settings layer is dropped.',
+    }
+    const wrapper = mount(ContextPanel, { props: { sessionId: 's1' } })
+    await flushPromises()
+    await wire.answer('context.sources', { ...SOURCES, trusts: [TRUST, settings] })
+    await flushPromises()
+
+    const rows = wrapper.findAll('[data-testid="context-trust-row"]')
+    expect(rows).toHaveLength(2)
+    expect(rows[0].attributes('data-target')).toBe('mcp')
+    expect(rows[1].attributes('data-target')).toBe('settings')
+    expect(rows[1].find('[data-testid="context-trust-reason"]').text()).toContain('settings layer is dropped')
+
+    await rows[1].find('[data-testid="context-trust-user"]').trigger('click')
+    expect(wire.sent('context.trust').at(-1)?.params).toEqual({ sessionId: 's1', askId: 'trust-5a5b5c5d6', decision: 'grant', remember: 'user' })
+    await wire.answer('context.trust', { askId: 'trust-5a5b5c5d6', status: 'granted', persisted: true })
+    await flushPromises()
+
+    // The settings row settled; the mcp row never loses its buttons.
+    const after = wrapper.findAll('[data-testid="context-trust-row"]')
+    expect(after[0].find('[data-testid="context-trust-user"]').exists()).toBe(true)
+    expect(after[0].find('[data-testid="context-trust-settled"]').exists()).toBe(false)
+    expect(after[1].find('[data-testid="context-trust-user"]').exists()).toBe(false)
+    expect(after[1].find('[data-testid="context-trust-settled"]').text()).toContain('user config')
+  })
+
   it('adopts a live trust prompt even when the measurement returned none', async () => {
     await wire.connect()
     const wrapper = mount(ContextPanel, { props: { sessionId: 's1' } })
     await flushPromises()
-    await wire.answer('context.sources', { ...SOURCES, trust: null })
+    await wire.answer('context.sources', { ...SOURCES, trusts: [] })
     await flushPromises()
     expect(wrapper.find('[data-testid="context-trust"]').exists()).toBe(false)
 

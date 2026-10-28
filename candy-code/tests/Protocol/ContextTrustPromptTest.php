@@ -10,13 +10,15 @@ use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Protocol\TrustAsks;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
+use SugarCraft\Code\Tests\Server\Support\WireClient;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Tests\Support\McpLaunchEnabledTrait;
 
 /**
  * WEB-3b: the server-scope trust prompt. A `context.sources` measurement that
- * finds an untrusted project `.mcp.json` puts a `kind:"trust"` ask over the
- * existing `permission.asked` channel — once per root — and `context.trust`
+ * finds a pending project-trust verdict puts a `kind:"trust"` ask over the
+ * existing `permission.asked` channel — once per (root, target) since
+ * C-SEC-5.b, the rows riding the answer's `trusts` LIST — and `context.trust`
  * answers it: the user-tier grant persists through the one writer the CLI
  * already owns, the session grant settles without writing, and a
  * project-tier remember is refused exactly as `permission.respond` refuses
@@ -61,7 +63,7 @@ final class ContextTrustPromptTest extends TestCase
         $sessionId = $this->fixture->session($client);
         $this->declareMcpServers();
 
-        $asked = $this->sources($client, $sessionId)['trust'];
+        $asked = $this->trustRow($client, $sessionId);
         self::assertSame('trust', $asked['kind']);
         self::assertSame('mcp', $asked['target']);
         self::assertSame('asked', $asked['status']);
@@ -69,7 +71,7 @@ final class ContextTrustPromptTest extends TestCase
         self::assertSame(realpath($this->fixture->root), $asked['root']);
 
         // The once law: a reload re-reads the same record and puts no second ask.
-        $again = $this->sources($client, $sessionId)['trust'];
+        $again = $this->trustRow($client, $sessionId);
         self::assertSame($asked['askId'], $again['askId']);
 
         $announced = \array_values(\array_filter(
@@ -88,11 +90,11 @@ final class ContextTrustPromptTest extends TestCase
         $client = $this->fixture->client();
         $sessionId = $this->fixture->session($client);
 
-        self::assertNull($this->sources($client, $sessionId)['trust'], 'no .mcp.json, nothing to ask');
+        self::assertSame([], $this->sources($client, $sessionId)['trusts'], 'no .mcp.json, nothing to ask');
 
         file_put_contents($this->fixture->root . '/.mcp.json', "{\"mcpServers\":{\"local\":{\"command\":\"true\",\"args\":[]}}}\n");
         self::assertSame('untrusted', $this->sources($client, $sessionId)['mcp']['status']);
-        self::assertSame('asked', $this->sources($client, $sessionId)['trust']['status']);
+        self::assertSame('asked', $this->trustRow($client, $sessionId)['status']);
     }
 
     public function testAProjectTierRememberIsRefusedTheWayPermissionRulesAre(): void
@@ -100,13 +102,13 @@ final class ContextTrustPromptTest extends TestCase
         $client = $this->fixture->client();
         $sessionId = $this->fixture->session($client);
         $this->declareMcpServers();
-        $askId = $this->sources($client, $sessionId)['trust']['askId'];
+        $askId = $this->trustRow($client, $sessionId)['askId'];
 
         $reply = $client->request('context.trust', ['sessionId' => $sessionId, 'askId' => $askId, 'decision' => 'grant', 'remember' => 'project']);
 
         self::assertSame(-32003, $reply['error']['code'], 'Forbidden, the same refusal the respond arm gives');
         self::assertSame('remember_refused', $reply['error']['data']['kind']);
-        self::assertSame('asked', $this->sources($client, $sessionId)['trust']['status'], 'a refused write leaves the question open');
+        self::assertSame('asked', $this->trustRow($client, $sessionId)['status'], 'a refused write leaves the question open');
         self::assertFileDoesNotExist($this->homeRoot . '/.candy-code/config.json');
     }
 
@@ -115,7 +117,7 @@ final class ContextTrustPromptTest extends TestCase
         $client = $this->fixture->client();
         $sessionId = $this->fixture->session($client);
         $this->declareMcpServers();
-        $askId = $this->sources($client, $sessionId)['trust']['askId'];
+        $askId = $this->trustRow($client, $sessionId)['askId'];
 
         $result = $client->call('context.trust', ['sessionId' => $sessionId, 'askId' => $askId, 'decision' => 'grant', 'remember' => 'user']);
 
@@ -125,7 +127,7 @@ final class ContextTrustPromptTest extends TestCase
 
         // Settled for the process: the panel keeps the truth, and answering
         // twice is the same `already_resolved` a settled question gives.
-        $settled = $this->sources($client, $sessionId)['trust'];
+        $settled = $this->trustRow($client, $sessionId);
         self::assertSame('granted', $settled['status']);
         self::assertTrue($settled['persisted']);
         $again = $client->request('context.trust', ['sessionId' => $sessionId, 'askId' => $askId, 'decision' => 'grant', 'remember' => 'user']);
@@ -138,13 +140,13 @@ final class ContextTrustPromptTest extends TestCase
         $client = $this->fixture->client();
         $sessionId = $this->fixture->session($client);
         $this->declareMcpServers();
-        $askId = $this->sources($client, $sessionId)['trust']['askId'];
+        $askId = $this->trustRow($client, $sessionId)['askId'];
 
         $result = $client->call('context.trust', ['sessionId' => $sessionId, 'askId' => $askId, 'decision' => 'grant']);
 
         self::assertSame(['askId' => $askId, 'status' => 'granted', 'persisted' => false], $result);
         self::assertFileDoesNotExist($this->homeRoot . '/.candy-code/config.json', 'a session grant writes nothing');
-        self::assertSame($askId, $this->sources($client, $sessionId)['trust']['askId'], 'one prompt per root, not per reload');
+        self::assertSame($askId, $this->trustRow($client, $sessionId)['askId'], 'one prompt per root, not per reload');
     }
 
     public function testARejectionIsADecisionNotAQuestionToNag(): void
@@ -152,13 +154,13 @@ final class ContextTrustPromptTest extends TestCase
         $client = $this->fixture->client();
         $sessionId = $this->fixture->session($client);
         $this->declareMcpServers();
-        $askId = $this->sources($client, $sessionId)['trust']['askId'];
+        $askId = $this->trustRow($client, $sessionId)['askId'];
 
         $client->call('context.trust', ['sessionId' => $sessionId, 'askId' => $askId, 'decision' => 'reject']);
 
         $relaunched = $this->fixture->client();
         $other = $this->fixture->session($relaunched);
-        self::assertSame('rejected', $this->sources($relaunched, $other)['trust']['status']);
+        self::assertSame('rejected', $this->trustRow($relaunched, $other)['status']);
         self::assertCount(0, \array_filter(
             $relaunched->events('permission.asked'),
             static fn (array $envelope): bool => ($envelope['data']['kind'] ?? null) === 'trust',
@@ -170,14 +172,14 @@ final class ContextTrustPromptTest extends TestCase
         $client = $this->fixture->client();
         $sessionId = $this->fixture->session($client);
         $this->declareMcpServers();
-        $askId = $this->sources($client, $sessionId)['trust']['askId'];
+        $askId = $this->trustRow($client, $sessionId)['askId'];
 
         // The trust prompt is NOT in the host's turn-question registry — no
         // ask timeout, no turn-teardown sweep — so the gate's own answer
         // channel honestly reports it never held that id.
         $reply = $client->request('permission.respond', ['sessionId' => $sessionId, 'askId' => $askId, 'reply' => 'reject']);
         self::assertSame('ask_not_found', $reply['error']['data']['kind']);
-        self::assertSame('asked', $this->sources($client, $sessionId)['trust']['status']);
+        self::assertSame('asked', $this->trustRow($client, $sessionId)['status']);
 
         $unknown = $client->request('context.trust', ['sessionId' => $sessionId, 'askId' => 'trust-000000000', 'decision' => 'reject']);
         self::assertSame('ask_not_found', $unknown['error']['data']['kind']);
@@ -188,7 +190,7 @@ final class ContextTrustPromptTest extends TestCase
         $client = $this->fixture->client();
         $sessionId = $this->fixture->session($client);
         $this->declareMcpServers();
-        $asked = $this->sources($client, $sessionId)['trust'];
+        $asked = $this->trustRow($client, $sessionId);
         self::assertSame('asked', $asked['status']);
 
         // The record is the single truth between the answer and the next
@@ -197,7 +199,7 @@ final class ContextTrustPromptTest extends TestCase
         $client->call('context.trust', ['sessionId' => $sessionId, 'askId' => $asked['askId'], 'decision' => 'reject']);
         $second = $this->fixture->client();
         $secondSession = $this->fixture->session($second);
-        self::assertSame('rejected', $this->sources($second, $secondSession)['trust']['status']);
+        self::assertSame('rejected', $this->trustRow($second, $secondSession)['status']);
     }
 
     /**
@@ -216,7 +218,7 @@ final class ContextTrustPromptTest extends TestCase
         $client = $this->fixture->client();
         $sessionId = $this->fixture->session($client);
         $this->declareMcpServers();
-        $askId = $this->sources($client, $sessionId)['trust']['askId'];
+        $askId = $this->trustRow($client, $sessionId)['askId'];
 
         chmod($this->homeRoot . '/.candy-code', 0o500);
         try {
@@ -229,7 +231,7 @@ final class ContextTrustPromptTest extends TestCase
         self::assertSame('trust_write_failed', $reply['error']['data']['kind']);
         self::assertIsString($reply['error']['data']['error'] ?? null);
         self::assertNotSame('', $reply['error']['data']['error'], 'the write failure is admitted, never silent');
-        self::assertSame('asked', $this->sources($client, $sessionId)['trust']['status'], 'the refusal leaves the prompt open');
+        self::assertSame('asked', $this->trustRow($client, $sessionId)['status'], 'the refusal leaves the prompt open');
 
         // The same answer against a writable config now lands.
         $result = $client->call('context.trust', ['sessionId' => $sessionId, 'askId' => $askId, 'decision' => 'grant', 'remember' => 'user']);
@@ -260,7 +262,7 @@ final class ContextTrustPromptTest extends TestCase
 
         // The measurement reads the SAME record — the once-per-root law holds
         // across both minting paths, so the panel and the badge never diverge.
-        $asked = $this->sources($client, $sessionId)['trust'];
+        $asked = $this->trustRow($client, $sessionId);
         self::assertSame($announced[0]['data']['askId'], $asked['askId']);
         self::assertSame('asked', $asked['status']);
     }
@@ -275,7 +277,7 @@ final class ContextTrustPromptTest extends TestCase
         $client = $this->fixture->client();
         $sessionId = $this->fixture->session($client);
         $this->declareMcpServers();
-        $askId = $this->sources($client, $sessionId)['trust']['askId'];
+        $askId = $this->trustRow($client, $sessionId)['askId'];
 
         try {
             TrustAsks::settle($askId, 'grant', null, '/definitely-not-the-asked-root');
@@ -285,7 +287,7 @@ final class ContextTrustPromptTest extends TestCase
             self::assertSame('ask_not_found', $failure->kind);
         }
 
-        self::assertSame('asked', $this->sources($client, $sessionId)['trust']['status'], 'the refusal leaves the record untouched');
+        self::assertSame('asked', $this->trustRow($client, $sessionId)['status'], 'the refusal leaves the record untouched');
     }
 
     /**
@@ -299,22 +301,39 @@ final class ContextTrustPromptTest extends TestCase
         $client = $this->fixture->client();
         $sessionId = $this->fixture->session($client);
         $this->declareMcpServers();
-        $askId = $this->sources($client, $sessionId)['trust']['askId'];
+        $askId = $this->trustRow($client, $sessionId)['askId'];
 
         $reply = $client->request('context.trust', ['askId' => $askId, 'decision' => 'grant']);
 
         self::assertSame(-32602, $reply['error']['code']);
         self::assertSame('invalid_params', $reply['error']['data']['kind']);
-        self::assertSame('asked', $this->sources($client, $sessionId)['trust']['status'], 'a schema refusal changes nothing server-side');
+        self::assertSame('asked', $this->trustRow($client, $sessionId)['status'], 'a schema refusal changes nothing server-side');
     }
 
     /** @return array<string, mixed> */
-    private function sources(\SugarCraft\Code\Tests\Server\Support\WireClient $client, string $sessionId): array
+    private function sources(WireClient $client, string $sessionId): array
     {
         $answer = $client->call('context.sources', ['sessionId' => $sessionId]);
-        self::assertArrayHasKey('trust', $answer, 'the answer carries the trust prompt state');
+        self::assertArrayHasKey('trusts', $answer, 'the answer carries the root\'s trust prompt rows');
 
         return $answer;
+    }
+
+    /**
+     * C-SEC-5.b: the answer is a LIST now. This file's prompts are all the MCP
+     * door; {@see \SugarCraft\Code\Tests\Protocol\ContextTrustTargetsTest} owns
+     * the multi-target proofs.
+     *
+     * @return array<string, mixed> the row for $target — this file's world has one
+     */
+    private function trustRow(WireClient $client, string $sessionId, string $target = 'mcp'): array
+    {
+        foreach ($this->sources($client, $sessionId)['trusts'] as $row) {
+            if ($row['target'] === $target) {
+                return $row;
+            }
+        }
+        self::fail('no ' . $target . ' row in the trust list');
     }
 
     private function declareMcpServers(): void

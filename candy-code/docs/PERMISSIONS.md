@@ -1227,6 +1227,20 @@ three refuse the launch and the fourth quietly contributes nothing — which is
 still fail-closed, since the project settings layer is the lowest-trust input
 in the stack and its absence is the pre-layering behaviour.
 
+### The same doors on the web surface
+
+`context.sources` measures this root through the same entry point the launch
+notices use, `Bootstrap::pendingProjectTrust()`, and each pending target is put
+as its own row of the answer's `trusts` list — the `.mcp.json` verdict, an MCP
+pin needing re-approval because its recorded fingerprint drifted on an already
+trusted root, hooks, command shell forms, the settings layer. A row is minted
+once per root and target for the life of the process; `context.trust` answers
+one row at a time, and granting one never silences the others. A user-tier
+grant writes that target's own `trustedProject*` list — through the MCP door
+for `mcp` and `mcp-pin` (which also re-records the refused fingerprints),
+through the settings writer for the other three — and because the four keys are
+frozen at launch, every grant takes effect at the next launch, not this one.
+
 ## Sandbox
 
 The gate decides *whether* a `Bash` call runs; it cannot bound what the shell

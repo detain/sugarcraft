@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Protocol\Methods;
 
-use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Host\SessionHost;
-use SugarCraft\Code\Lang;
 use SugarCraft\Code\Share\ShareSession;
 use SugarCraft\Code\Share\ShareStore;
 use SugarCraft\Code\Host\SessionSnapshot;
@@ -153,24 +151,21 @@ final class SessionMethods
     }
 
     /**
-     * Mint (once per root) the project-trust prompt an untrusted project
-     * `.mcp.json` verdict warrants, announcing it exactly as
+     * Mint (once per root, per target) the project-trust prompts the launch
+     * census says are pending, announcing each exactly as
      * {@see ContextMethods::sources()} does; nothing else is read.
+     * C-SEC-5.b: this is the widened census from 5.a, not just the MCP
+     * verdict — a root with an untrusted `.mcp.json` plus untrusted hooks and
+     * settings files opens three prompts on subscribe, and answering one
+     * leaves the others open.
      */
     private static function discoverTrustOnSubscribe(CallContext $call, string $sessionId, SessionHost $host): void
     {
         $root = $host->workspace()->root;
-        if ((Bootstrap::mcpServerInventory($root)['status'] ?? null) !== Bootstrap::MCP_UNTRUSTED) {
-            return;
-        }
 
-        TrustAsks::discover(
-            $root,
-            Lang::t('server.trust.ask.mcp', ['root' => $root]),
-            static function (array $record) use ($call, $sessionId): void {
-                $call->server->broadcast(EventEnvelope::server(EventType::PERMISSION_ASKED, ['sessionId' => $sessionId] + $record));
-            },
-        );
+        TrustAsks::discoverPending($root, static function (array $record) use ($call, $sessionId): void {
+            $call->server->broadcast(EventEnvelope::server(EventType::PERMISSION_ASKED, ['sessionId' => $sessionId] + $record));
+        });
     }
 
     /** @return array<string, mixed> */

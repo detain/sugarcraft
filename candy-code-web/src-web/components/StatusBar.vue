@@ -26,12 +26,13 @@ const emit = defineEmits<{ setMode: [mode: PermissionMode]; runCommand: [text: s
  * second source of truth about what is selected (the session summary is).
  */
 const socket = useConnectionStore()
-// C-SEC-4: the trust prompt can arrive before any panel measured; the shelf
-// in the context store keeps it, and the badge sends the user to the panel
-// that answers it.
+// C-SEC-4: the trust prompts can arrive before any panel measured; the shelf
+// in the context store keeps them, and the badge sends the user to the panel
+// that answers them. C-SEC-5.b: the shelf is a list — the badge COUNTS the
+// rows still awaiting their answer (one per pending grant door).
 const context = useContextSourcesStore()
 const panels = usePanelsStore()
-const trustAwaiting = computed(() => context.pendingTrust?.status === 'asked')
+const trustAwaiting = computed(() => context.pendingTrusts.filter((row) => row.status === 'asked').length)
 const providers = ref<string[]>([])
 
 onMounted(async () => {
@@ -110,7 +111,7 @@ const cachePct = computed<number | null>(() => {
 <template>
   <footer class="status" data-testid="status-bar" :data-status="state.status">
     <span class="item state" :class="state.status">{{ statusText }}</span>
-    <button v-if="trustAwaiting" type="button" class="item action" data-testid="trust-badge" title="This project is not trusted — open the Context panel to answer" @click="panels.show('context')">trust?</button>
+    <button v-if="trustAwaiting" type="button" class="item action" data-testid="trust-badge" :title="trustAwaiting === 1 ? 'This project is not trusted — open the Context panel to answer' : `${trustAwaiting} project-trust prompts await — open the Context panel to answer`" @click="panels.show('context')">{{ trustAwaiting === 1 ? 'trust?' : `trust? (${trustAwaiting})` }}</button>
     <button type="button" class="item action" data-testid="context-meter" title="Context used — open the Context panel" @click="panels.show('context')">
       ~{{ tokens(state.contextTokens) }} tok<template v-if="contextPct !== null"> · {{ contextPct }}%</template>
       <span v-if="contextPct !== null" class="meter" aria-hidden="true"><span :style="{ width: `${contextPct}%` }" /></span>

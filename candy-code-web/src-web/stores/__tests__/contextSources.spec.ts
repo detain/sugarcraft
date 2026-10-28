@@ -21,7 +21,7 @@ function sourcesFor(id: string): Record<string, unknown> {
     mcp: { status: 'trusted', error: null, skipped: [], servers: [] },
     untrusted: [],
     breakdown: null,
-    trust: null,
+    trusts: [],
   }
 }
 
@@ -91,21 +91,23 @@ describe('contextSources ordering latch (WEB-3a MINOR-2)', () => {
     wire.socket().answer(
       {
         ...sourcesFor('s1'),
-        trust: {
-          askId: 'trust-9f0e1d2c3',
-          kind: 'trust',
-          target: 'mcp',
-          root: '/repo-s1',
-          status: 'asked',
-          persisted: false,
-        },
+        trusts: [
+          {
+            askId: 'trust-9f0e1d2c3',
+            kind: 'trust',
+            target: 'mcp',
+            root: '/repo-s1',
+            status: 'asked',
+            persisted: false,
+          },
+        ],
       },
       frame?.id as string,
     )
     await load
     await flushPromises()
 
-    const settled = store.respondTrust('grant', 'user')
+    const settled = store.respondTrust('trust-9f0e1d2c3', 'grant', 'user')
     await flushPromises()
     expect(wire.sent('context.trust').at(-1)?.params).toEqual({
       sessionId: 's1',
@@ -118,6 +120,6 @@ describe('contextSources ordering latch (WEB-3a MINOR-2)', () => {
       wire.sent('context.trust').at(-1)?.id as string,
     )
     await expect(settled).resolves.toBe(true)
-    expect(store.pendingTrust?.status).toBe('granted')
+    expect(store.pendingTrusts.find((row) => row.askId === 'trust-9f0e1d2c3')?.status).toBe('granted')
   })
 })

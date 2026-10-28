@@ -13,9 +13,12 @@ import { ProtocolError } from '../../protocol/jsonrpc'
  * rule from WEB-1b: server-supplied strings are data, never markup). MCP
  * rows carry name and transport only; the server never sends the URL.
  *
- * WEB-3b: the trust prompt rides the same answer (`sources.trust`). Its
+ * WEB-3b: the trust prompts ride the same answer (`sources.trusts`). Their
  * verdict buttons call `context.trust` on the Approve scope; the root and
- * reason stay plain spans under the same rule.
+ * reason stay plain spans under the same rule. C-SEC-5.b: the answer is a
+ * LIST — one row per pending grant door of the launch census (mcp, mcp-pin,
+ * hooks, commands, settings) — and each row is answered on its own `askId`;
+ * settling one door never settles another.
  *
  * WEB-3b review MINOR-3: the session-tier wording speaks the truth of the
  * frozen-trust-roster law (`trustedRootsForThisProcess`): a session grant
@@ -32,12 +35,14 @@ const canAnswer = computed(() => connection.scopes.includes('approve'))
 const busy = ref(false)
 const trustError = ref<string | null>(null)
 
-async function answer(decision: 'grant' | 'reject', remember: 'session' | 'user'): Promise<void> {
+async function answer(askId: string, decision: 'grant' | 'reject', remember: 'session' | 'user'): Promise<void> {
   if (busy.value) return
   busy.value = true
   trustError.value = null
   try {
-    const settled = await context.respondTrust(decision, remember)
+    // C-SEC-5.b: the verdict names the row it answers — settling one door
+    // never settles the others of the same measurement.
+    const settled = await context.respondTrust(askId, decision, remember)
     if (!settled) trustError.value = 'The prompt was settled elsewhere — reload to re-measure.'
   } catch (failure) {
     // C-SEC-4: a refused write is not a lost prompt — the server kept the
@@ -295,24 +300,24 @@ onMounted(() => void context.load(props.sessionId))
         </template>
       </section>
 
-      <section v-if="context.sources.trust || trustError" data-testid="context-trust">
+      <section v-if="(context.sources.trusts?.length ?? 0) > 0 || trustError" data-testid="context-trust">
         <h3>Project trust</h3>
-        <template v-if="context.sources.trust">
-          <p class="reason" data-testid="context-trust-reason">{{ context.sources.trust.reason }}</p>
-          <p class="meta">root: <span class="path" data-testid="context-trust-root">{{ context.sources.trust.root }}</span></p>
-        </template>
         <p v-if="trustError" class="error" role="alert" data-testid="context-trust-error">{{ trustError }}</p>
-        <div v-if="context.sources.trust?.status === 'asked'" class="actions">
-          <button type="button" data-testid="context-trust-session" :disabled="busy || !canAnswer" @click="answer('grant', 'session')">Silence prompts (this run)</button>
-          <button type="button" data-testid="context-trust-user" :disabled="busy || !canAnswer" @click="answer('grant', 'user')">Always trust</button>
-          <button type="button" data-testid="context-trust-reject" :disabled="busy || !canAnswer" @click="answer('reject', 'session')">Leave untrusted</button>
+        <div v-for="prompt in context.sources.trusts" :key="prompt.askId" class="trust-row" data-testid="context-trust-row" :data-target="prompt.target">
+          <p class="reason" data-testid="context-trust-reason">{{ prompt.reason }}</p>
+          <p class="meta">root: <span class="path" data-testid="context-trust-root">{{ prompt.root }}</span></p>
+          <div v-if="prompt.status === 'asked'" class="actions">
+            <button type="button" data-testid="context-trust-session" :disabled="busy || !canAnswer" @click="answer(prompt.askId, 'grant', 'session')">Silence prompts (this run)</button>
+            <button type="button" data-testid="context-trust-user" :disabled="busy || !canAnswer" @click="answer(prompt.askId, 'grant', 'user')">Always trust</button>
+            <button type="button" data-testid="context-trust-reject" :disabled="busy || !canAnswer" @click="answer(prompt.askId, 'reject', 'session')">Leave untrusted</button>
+          </div>
+          <p v-else class="meta" data-testid="context-trust-settled">
+            <template v-if="prompt.status === 'granted'">
+              {{ prompt.persisted ? 'Trusted and written to your user config — the servers start at the next launch.' : 'Question settled for this run — the trust roster was frozen at launch, so this grant only silences further prompts while this server process runs; the servers start after a saved (user-tier) trust at next launch.' }}
+            </template>
+            <template v-else>Left untrusted — nothing of this project starts.</template>
+          </p>
         </div>
-        <p v-else-if="context.sources.trust" class="meta" data-testid="context-trust-settled">
-          <template v-if="context.sources.trust.status === 'granted'">
-            {{ context.sources.trust.persisted ? 'Trusted and written to your user config — the servers start at the next launch.' : 'Question settled for this run — the trust roster was frozen at launch, so this grant only silences further prompts while this server process runs; the servers start after a saved (user-tier) trust at next launch.' }}
-          </template>
-          <template v-else>Left untrusted — nothing of this project starts.</template>
-        </p>
       </section>
     </template>
   </div>

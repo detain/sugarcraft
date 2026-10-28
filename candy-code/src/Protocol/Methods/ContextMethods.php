@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Protocol\Methods;
 
 use SugarCraft\Code\Cli\Bootstrap;
-use SugarCraft\Code\Lang;
+use SugarCraft\Code\Config\Settings\SettingsWriter;
 use SugarCraft\Code\Protocol\CallContext;
 use SugarCraft\Code\Protocol\EventEnvelope;
 use SugarCraft\Code\Protocol\EventType;
@@ -30,15 +30,18 @@ use SugarCraft\Code\Protocol\TrustAsks;
  * prompt listing and `candy-code mcp list` surfaces it already has.
  *
  * WEB-3b joined the measurement with the trust prompt: the same answer that
- * reports an untrusted project `.mcp.json` verdict is where that verdict is
- * DISCOVERED over the wire, so the first sighting mints the prompt once per
- * root ({@see TrustAsks}) — the discovery is a notification raised by a read,
- * the same posture as the launch notices the CLI prints while answering any
- * question (C-SEC-4 added the same discovery to `session.subscribe`, so the
- * prompt reaches a watcher without the panel having to mount first);
- * answering still takes a write, `context.trust`, under the
- * Approve scope, and the one grantable verdict (MCP) persists through the
- * one user-tier writer `Bootstrap::trustProjectMcp()` already owns.
+ * reports a pending project-trust verdict is where that verdict is DISCOVERED
+ * over the wire, so the first sighting mints that target's prompt once per
+ * (root, target) ({@see TrustAsks}) — the discovery is a notification raised
+ * by a read, the same posture as the launch notices the CLI prints while
+ * answering any question (C-SEC-4 added the same discovery to
+ * `session.subscribe`, so prompts reach a watcher without the panel having to
+ * mount first); answering still takes a write, `context.trust`, under the
+ * Approve scope. C-SEC-5.b widened the answer from the one MCP verdict to the
+ * whole 5.a launch census: every pending target (`.mcp.json`, a drifted pin
+ * re-approval, hooks, command shell forms, the project settings layer) mints
+ * its own row of the `trusts` list, and a grant persists through the census's
+ * own writer door, `Bootstrap::grantProjectTrust()`.
  */
 final class ContextMethods
 {
@@ -48,8 +51,8 @@ final class ContextMethods
 
     public static function register(MethodRegistry $registry): void
     {
-        $registry->add(MethodSpec::new('context.sources', Scope::Read, 'What the session\'s context is built from: instruction files, memory notes, skills, declared MCP servers, refused paths, and the token breakdown.', self::sources(...)));
-        $registry->add(MethodSpec::new('context.trust', Scope::Approve, 'Answer a project-trust prompt (permission.asked with kind "trust"): grant or reject; a user-tier remember writes your own trustedProjectMcp list, a project-tier one is refused.', self::trust(...)));
+        $registry->add(MethodSpec::new('context.sources', Scope::Read, 'What the session\'s context is built from: instruction files, memory notes, skills, declared MCP servers, refused paths, the token breakdown, and this root\'s pending project-trust prompts.', self::sources(...)));
+        $registry->add(MethodSpec::new('context.trust', Scope::Approve, 'Answer one project-trust prompt (permission.asked with kind "trust") by its askId: grant or reject; a user-tier remember writes the answering prompt\'s target list (trustedProjectMcp for an mcp or mcp-pin row, the matching trustedProject* key for the others) in your own config, a project-tier one is refused.', self::trust(...)));
     }
 
     /** @return array<string, mixed> */
@@ -60,20 +63,15 @@ final class ContextMethods
         $answer = $host->contextSources();
         $root = $host->workspace()->root;
 
-        if (($answer['mcp']['status'] ?? null) === Bootstrap::MCP_UNTRUSTED) {
-            $answer['trust'] = TrustAsks::discover(
-                $root,
-                Lang::t('server.trust.ask.mcp', ['root' => $root]),
-                static function (array $record) use ($call, $sessionId): void {
-                    $call->server->broadcast(EventEnvelope::server(EventType::PERMISSION_ASKED, ['sessionId' => $sessionId] + $record));
-                },
-            );
-        } else {
-            // Nothing to ask — but a prompt this root already settled still
-            // tells the panel the truth (a session grant that expires with
-            // the process, a rejection that must not nag).
-            $answer['trust'] = TrustAsks::record($root);
-        }
+        // C-SEC-5.b: the 5.a launch census replaces the single MCP verdict.
+        // Every pending target mints (once) and rides the answer as its own
+        // row; settled rows restate their truth so a session grant that
+        // expires with the process, or a rejection that must not nag, still
+        // shows on the panel.
+        TrustAsks::discoverPending($root, static function (array $record) use ($call, $sessionId): void {
+            $call->server->broadcast(EventEnvelope::server(EventType::PERMISSION_ASKED, ['sessionId' => $sessionId] + $record));
+        });
+        $answer['trusts'] = TrustAsks::records($root);
 
         return $answer;
     }
@@ -86,12 +84,19 @@ final class ContextMethods
         // statics) and roots it: settle() refuses a prompt from any other
         // root, so a misroute can never answer a different project's question.
         $sessionId = SessionMethods::sessionId($params);
-        $root = $call->host($sessionId)->workspace()->root;
+        $host = $call->host($sessionId);
+        $root = $host->workspace()->root;
         $askId = $params->string('askId', 16);
         $decision = $params->enum('decision', ['grant', 'reject']);
         $remember = $params->has('remember') ? $params->enum('remember', ['session', 'user', 'project']) : null;
 
-        $record = TrustAsks::settle($askId, $decision, $remember, $root);
+        // C-SEC-5.b: the answering session's own settings writer is the door
+        // non-MCP grants land in (the SettingsMethods precedent — the same
+        // service the live settings surface uses); settle() falls back to the
+        // launch's writer when a workspace carries none, and the MCP door
+        // never consults it.
+        $service = $host->workspace()->service(SettingsWriter::class);
+        $record = TrustAsks::settle($askId, $decision, $remember, $root, $service instanceof SettingsWriter ? $service : null);
 
         return [
             'askId' => $record['askId'],

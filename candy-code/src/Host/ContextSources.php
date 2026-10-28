@@ -29,8 +29,8 @@ use SugarCraft\Code\Protocol\Methods\MemoryMethods;
  * entry's detail is a URL, and `server.hello` deliberately publishes only a
  * sha256 prefix of SD hosts, so the same restraint applies here.
  *
- * The trust-prompt half (WEB-3b, roadmap W5) is NOT here: this answers the
- * read surface only.
+ * The trust-prompt half (WEB-3b, roadmap W5 — since C-SEC-5.b the `trusts`
+ * list of the launch census) is NOT here: this answers the read surface only.
  */
 final class ContextSources
 {

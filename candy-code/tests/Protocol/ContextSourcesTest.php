@@ -59,7 +59,7 @@ final class ContextSourcesTest extends TestCase
         $answer = $client->call('context.sources', ['sessionId' => $sessionId]);
 
         self::assertSame(
-            ['breakdown', 'instructionFiles', 'mcp', 'memorySections', 'skills', 'trust', 'untrusted'],
+            ['breakdown', 'instructionFiles', 'mcp', 'memorySections', 'skills', 'trusts', 'untrusted'],
             (static function (array $a): array {
                 ksort($a);
 

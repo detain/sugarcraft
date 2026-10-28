@@ -86,7 +86,7 @@ final class GatewayTrustRoutingTest extends TestCase
 
         // The ask lives in the child's statics and nowhere else: the primary
         // process never minted (nor can it settle) this prompt.
-        self::assertNull(TrustAsks::record($this->other), 'the primary root never held this prompt');
+        self::assertSame([], TrustAsks::records($this->other), 'the primary root never held this prompt');
 
         $askId = (string) $data['askId'];
         $settled = $this->call($client, 'context.trust', ['sessionId' => $sessionId, 'askId' => $askId, 'decision' => 'grant']);
@@ -110,7 +110,9 @@ final class GatewayTrustRoutingTest extends TestCase
         $again = $this->reply($client, 'context.trust', ['sessionId' => $sessionId, 'askId' => $askId, 'decision' => 'grant']);
         self::assertSame(-32009, $again['error']['code']);
         self::assertSame('already_resolved', $again['error']['data']['kind']);
-        self::assertSame('granted', $this->call($client, 'context.sources', ['sessionId' => $sessionId])['trust']['status']);
+        $trusts = $this->call($client, 'context.sources', ['sessionId' => $sessionId])['trusts'];
+        self::assertSame('granted', $trusts[0]['status']);
+        self::assertSame('mcp', $trusts[0]['target']);
     }
 
     public function testAnAnswerOmittingTheSessionIsRefusedInsteadOfMisrouted(): void

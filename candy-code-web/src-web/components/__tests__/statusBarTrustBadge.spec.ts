@@ -9,8 +9,9 @@ import { createState } from '../../stores/reducer'
 
 /**
  * C-SEC-4: a trust prompt minted by `session.subscribe` must be visible
- * before any panel measures — the badge rides the store's `pendingTrust`
- * shelf and opens the Context panel that answers it.
+ * before any panel measures — the badge rides the store's `pendingTrusts`
+ * shelf list and opens the Context panel that answers it. C-SEC-5.b: the
+ * badge counts the rows still awaiting an answer.
  */
 
 let wire: Wire
@@ -84,5 +85,26 @@ describe('StatusBar trust badge (C-SEC-4)', { retry: 0 }, () => {
     wire.serverEvent('permission.asked', { ...TRUST, status: 'granted', persisted: true })
     await flushPromises()
     expect(wrapper.find('[data-testid="trust-badge"]').exists()).toBe(false)
+  })
+
+  it('C-SEC-5.b: the badge counts the doors still awaiting an answer', async () => {
+    const wrapper = await mountConnected()
+    wire.serverEvent('permission.asked', TRUST)
+    wire.serverEvent('permission.asked', {
+      ...TRUST,
+      askId: 'trust-444455556',
+      target: 'hooks',
+      reason: 'This project declares hooks in .candy-code/hooks.yaml.',
+    })
+    await flushPromises()
+
+    const badge = wrapper.find('[data-testid="trust-badge"]')
+    expect(badge.exists()).toBe(true)
+    expect(badge.text()).toBe('trust? (2)')
+
+    // Settling one door leaves the other counted, never the pair.
+    wire.serverEvent('permission.asked', { ...TRUST, status: 'rejected' })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="trust-badge"]').text()).toBe('trust?')
   })
 })

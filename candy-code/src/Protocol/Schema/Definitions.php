@@ -86,10 +86,10 @@ final class Definitions
             self::TRUST_PROMPT => Schema::object([
                 'askId' => Schema::string(16),
                 'kind' => Schema::enum(['trust'])->describe('WEB-3b: the marker that makes a `permission.asked` payload a project-trust prompt — answered by `context.trust`; `permission.respond` never sees these (they are not in the turn\'s question registry).'),
-                'target' => Schema::enum(['mcp'])->describe('What a grant would enable — today only the project `.mcp.json` census verdict, the one launch-time trust with a user-tier grant writer.'),
-                'root' => Schema::string(4096)->describe('The project root the prompt is about — the exact string a `trustedProjectMcp` entry becomes.'),
+                'target' => Schema::enum(['mcp', 'mcp-pin', 'hooks', 'commands', 'settings'])->describe('C-SEC-5.b: which grant door this prompt is about — the project `.mcp.json` census verdict (`mcp`), a drifted MCP command needing re-approval (`mcp-pin`, which answers through the same list), lifecycle hooks, `` !`cmd` `` command shell forms, or the project settings layer. A grant lands the root in that door\'s `trustedProject*` list (see the census in `Bootstrap::pendingProjectTrust`).'),
+                'root' => Schema::string(4096)->describe('The project root the prompt is about — the exact string the grant writes into that door\'s trusted list.'),
                 'reason' => Schema::string()->describe('Why the prompt was put, for the panel line.'),
-                'status' => Schema::enum(['asked', 'granted', 'rejected'])->describe('`asked` while open; one answer settles it for the process (the once-per-untrusted-root law).'),
+                'status' => Schema::enum(['asked', 'granted', 'rejected'])->describe('`asked` while open; one answer settles it for the process (the once-per-(root, target) law — the other targets\' prompts stay open beside it).'),
                 'persisted' => Schema::boolean()->describe('True when the answer wrote the user-tier trust list; a session grant or a refusal leaves it false.'),
             ], ['askId', 'kind', 'target', 'root', 'status']),
             self::QUEUE_ENTRY => Schema::object([
@@ -249,7 +249,7 @@ final class Definitions
                     'path' => Schema::string(4096),
                     'reason' => Schema::string(),
                 ], ['path', 'reason']))->describe('Instruction paths the loader refused and why.'),
-                'trust' => Schema::ref(self::TRUST_PROMPT)->nullable()->describe('WEB-3b: this root\'s trust prompt — measured here is where it is DISCOVERED: an untrusted project `.mcp.json` verdict mints the prompt (once per root) and server-scopes it as `permission.asked`; null while the verdicts need no grant or one was already settled.'),
+                'trusts' => Schema::arrayOf(Schema::ref(self::TRUST_PROMPT))->describe('C-SEC-5.b: this root\'s trust prompts — the 5.a launch census\' pending targets, measured here is where they are DISCOVERED: each one mints a row (once per root and target) and server-scopes it as `permission.asked`; the list also re-states rows this process already settled (a session grant that expires at next launch, a rejection that must not nag), so an empty list means nothing of this project is pending a grant.'),
                 'breakdown' => Schema::object([
                     'window' => Schema::integer(0),
                     'sections' => Schema::arrayOf(Schema::object([
