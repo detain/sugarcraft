@@ -9,22 +9,28 @@ use PHPUnit\Framework\TestCase;
 /**
  * OBS-1 wiring pins over the live source: the two Chat fold sites exist
  * with their three consume points (settle queue, pump head, coalesced run),
- * the production construction threads the sink, the build seam is dark by
- * default with a bounded shutdown flush, and the whole feature still owes
- * zero open-telemetry packages.
+ * the production construction threads the sink, the headless path dials
+ * the same seam from its event observer (C-SES-4.c), the build seam is
+ * dark by default with a bounded shutdown flush, and the whole feature
+ * still owes zero open-telemetry packages.
  *
- * These are CHAT-path pins by design: the sink is wired at the single
- * `Bootstrap::chat()` construction site, and `serve` runs no Chat (its
- * sessions live on `Host\SessionHost`, which carries no sink), so a serve
- * process exports nothing today — the gap is the OBS-02 row of
- * COMPARISON.md and wiring it is an owner-gated product decision. Nothing
- * here asserts serve coverage; if serve ever grows a sink, that wiring
- * needs its own pin, not a rewording of these.
+ * The sink now has TWO wiring sites: `Bootstrap::chat()` threads the
+ * built sink into Chat (the TUI and every host that builds a Chat), and
+ * `NonInteractive::run()` dials `Bootstrap::observabilitySink()`
+ * statically and consumes every `$onEvent` event — pinned structurally
+ * here and behaviourally by `tests/Cli/NonInteractiveOtelExportTest.php`.
+ * `serve` is still the dark host: it runs no Chat (its sessions live on
+ * `Host\SessionHost`, which carries no sink), so a serve process exports
+ * nothing today — the remaining half of OBS-02 in COMPARISON.md, and an
+ * owner-gated product decision until C-SES-4.d wires it. Nothing here
+ * asserts serve coverage; when serve grows a sink, that wiring needs its
+ * own pin, not a rewording of these.
  */
 final class ObservabilityWiringTest extends TestCase
 {
     private const CHAT_SOURCE = __DIR__ . '/../../src/Chat.php';
     private const BOOTSTRAP_SOURCE = __DIR__ . '/../../src/Cli/Bootstrap.php';
+    private const NON_INTERACTIVE_SOURCE = __DIR__ . '/../../src/Cli/NonInteractive.php';
     private const OTEL_CONFIG_SOURCE = __DIR__ . '/../../src/Observability/OtelConfig.php';
     private const MANIFEST = __DIR__ . '/../../composer.json';
 
@@ -47,12 +53,39 @@ final class ObservabilityWiringTest extends TestCase
         $this->assertStringContainsString('private readonly EventSink $eventSink = new NullEventSink(),', $chat, 'a Chat nobody configures is dark by the parameter default');
 
         $bootstrap = self::read(self::BOOTSTRAP_SOURCE);
-        $this->assertStringContainsString('eventSink: $eventSink,', $bootstrap, 'chat() threads the built sink — the ONLY wiring site: serve builds no Chat at all and exports nothing (OBS-02 in COMPARISON.md)');
+        $this->assertStringContainsString('eventSink: $eventSink,', $bootstrap, 'chat() threads the built sink — one of the two wiring sites; serve builds no Chat at all and is the remaining OBS-02 gap in COMPARISON.md');
         $seam = self::methodBody($bootstrap, 'public static function observabilitySink');
         $this->assertStringContainsString('OtelConfig::sinkFromEnvironment(', $seam, 'the production seam runs through the single OtelConfig gate');
         $this->assertSame(0, substr_count($seam, 'exportsEvents'), 'the seam holds no second copy of the dark decision — F2 unification');
         $this->assertStringContainsString('register_shutdown_function', $seam);
         $this->assertStringContainsString('$sink->flush();', $seam, 'bounded shutdown flush — an exit-time HTTP POST the request timeout caps, not a wall-clock kill (E646)');
+    }
+
+    public function testTheHeadlessPathDialsTheSameSeamAndFoldsItsObserver(): void
+    {
+        // C-SES-4.c: `-p` carries no Chat, so it dials the static seam
+        // itself. The behavioural half (a lit run really posts a
+        // chat.turn span) lives in tests/Cli/NonInteractiveOtelExportTest.php;
+        // this pins that the fold sits INSIDE the observer the backend is
+        // handed, so no event path can bypass it.
+        $headless = self::read(self::NON_INTERACTIVE_SOURCE);
+        $run = self::methodBody($headless, 'public static function run(');
+
+        $this->assertStringContainsString('Bootstrap::observabilitySink();', $run, 'the one-shot path dials the single production seam, no second OtelConfig call');
+        $this->assertSame(1, substr_count($run, 'Bootstrap::observabilitySink();'), 'dialled once per run — the seam hands each run its own fresh batch sink');
+        $observerStart = strpos($run, '$onEvent = static function (object $event) use (');
+        $this->assertIsInt($observerStart, 'the observer the backend is handed is no longer there to pin');
+        // methodBody()'s "\n    }" terminator cannot cut out a closure: the
+        // $onEvent body ends at an 8-space `};`. Slice to its own terminator.
+        $observerEnd = strpos($run, "\n        };", $observerStart);
+        $this->assertIsInt($observerEnd, 'unterminated $onEvent observer');
+        $observer = substr($run, $observerStart, $observerEnd - $observerStart);
+        $this->assertStringContainsString('$eventSink', $observer, 'the sink rides the observer closure, not a side channel');
+        $this->assertStringContainsString('$eventSink->consume($event);', $observer, 'every event the backend emits folds into the sink');
+
+        $complete = strpos($run, '$backend->complete(');
+        $this->assertIsInt($complete);
+        $this->assertLessThan($complete, strpos($run, '$eventSink->consume($event);'), 'the sink is dialled before the backend call that feeds it');
     }
 
     public function testTheDarkDecisionLivesOnceInTheConfigGate(): void

@@ -586,8 +586,17 @@ final class NonInteractive
         $onReasoning = static function (string $text) use ($emitter): void {
             $emitter?->onReasoning($text);
         };
+        // C-SES-4.c (GAP-OBS-02, `-p` half): the one-shot path exports OTLP
+        // spans through the SAME static seam `buildChat()` threads into Chat,
+        // dialed once here — no second copy of the dark/lit decision, and no
+        // `Bootstrap.php` edit. Dark (unset `OTEL_EXPORTER_OTLP_ENDPOINT`)
+        // the call is one `getenv()` read and a `NullEventSink` whose
+        // `consume()` is a no-op; lit, the seam already carries the bounded
+        // shutdown flush (E646: the per-request HTTP timeout bounds it, never
+        // a wall-clock kill), and this run's events ride it in batches.
+        $eventSink = Bootstrap::observabilitySink();
         $sawToolResult = false;
-        $onEvent = static function (object $event) use ($observeRefusals, $emitter, &$sawToolResult): void {
+        $onEvent = static function (object $event) use ($observeRefusals, $eventSink, $emitter, &$sawToolResult): void {
             // C-AGT-7.b: "the turn ran a tool" is read off the SAME observer
             // stream, not re-derived. ToolFinished is the terminating half of
             // EVERY call — executed, unknown-name, or hook-denied all arrive
@@ -600,6 +609,12 @@ final class NonInteractive
                 $sawToolResult = true;
             }
             $observeRefusals($event);
+            // The sink folds EVERY event the observer sees — the same shapes
+            // Chat's three consume points (settle queue, pump head, coalesced
+            // run) hand it, so a `-p` run's `chat.turn` spans carry the same
+            // step openings and settle closings. Pure observation: consume()
+            // never throws and never waits (E646).
+            $eventSink->consume($event);
             $emitter?->onEvent($event);
         };
 
