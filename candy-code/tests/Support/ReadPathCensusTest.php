@@ -1157,6 +1157,9 @@ final class ReadPathCensusTest extends TestCase
                 . 'only for its `gitdir:` line; the path it names is believed only after the next read',
             'CALLER_SUPPLIED — git\'s back-pointer `<gitdir>/gitdir`, read bounded and compared to the '
                 . 'root\'s own `.git`; nothing reaches the model, a mismatch binds nothing',
+            'PROCESS_DERIVED — the AppArmor userns sysctl (C-TOOL-4.a): the kernel interface named by '
+                . 'appArmorRestrictsUserns()\'s parameter default, read bounded at 16 bytes; the content '
+                . 'is the kernel\'s own, the path is a test seam, and nothing model-supplied reaches either',
         ],
         'Workflows/WorkflowEngine.php|file_get_contents' => [
             'SELF_LOCATED — a pause file this engine wrote',

@@ -179,6 +179,29 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
     }
 
     /**
+     * Why the configured jail cannot start on this host, or null when it
+     * starts — or none is configured. Extracted from {@see execute()} so
+     * `candy-code doctor`'s `sandbox` row (C-TOOL-4.a) asks Bash's EXACT
+     * question through Bash's own machinery: the same {@see runCaptured}
+     * spawn discipline, the same 4096-byte stderr tail, the same 10-second
+     * bound, and {@see Bubblewrap::probe()}'s once-per-process memo means a
+     * doctor row and a first command cost the host one spawn, not two. No new
+     * proc_open site exists in this diff — the closure moved verbatim.
+     */
+    public function sandboxRefusal(): ?string
+    {
+        if ($this->sandbox === null) {
+            return null;
+        }
+
+        return $this->sandbox->probe(function (string $probe): array {
+            $result = $this->runCaptured($probe, null, 4096, 10.0);
+
+            return ['exitCode' => $result['exitCode'], 'stderr' => $result['stderr']];
+        });
+    }
+
+    /**
      * This tool with the git-guidance settings replaced and every other field
      * kept - the {@see RebindsWorktreeJail} rebuild, for the same reason:
      * every property is constructor-promoted, so the object's own vars are
@@ -585,11 +608,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         // start REFUSES the command: running it unconfined because the jail
         // failed would turn the setting into a promise nobody keeps.
         if ($this->sandbox !== null) {
-            $refusal = $this->sandbox->probe(function (string $probe): array {
-                $result = $this->runCaptured($probe, null, 4096, 10.0);
-
-                return ['exitCode' => $result['exitCode'], 'stderr' => $result['stderr']];
-            });
+            $refusal = $this->sandboxRefusal();
             if ($refusal !== null) {
                 return new ToolResult(
                     toolCallId: $args['id'] ?? '',

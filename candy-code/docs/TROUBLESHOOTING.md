@@ -7,7 +7,7 @@ trust this page.
 Start here:
 
 ```sh
-candy-code doctor                       # fifteen checks; exits 1 if any FAILs
+candy-code doctor                       # sixteen checks; exits 1 if any FAILs
 candy-code doctor --output-format json  # the same, machine-readable
 ```
 
@@ -578,7 +578,12 @@ not Linux, or a kernel policy that blocks unprivileged user namespaces (Ubuntu
 24.04's AppArmor default: `setting up uid map: Permission denied`) — every
 `Bash` call is refused with the reason rather than run unsandboxed. Install
 bubblewrap, allow its user namespaces, or set `bashSandbox` back to `off`. See
-[`PERMISSIONS.md`](PERMISSIONS.md#sandbox).
+[`PERMISSIONS.md`](PERMISSIONS.md#sandbox). Before typing a first command,
+`candy-code doctor`'s `sandbox` row answers the same question: it prints the
+configured mode, where `bwrap` resolves, and whether the jail actually starts —
+run through the Bash tool's own probe, so a `bwrap` the kernel will not let run
+(Ubuntu 24.04's `apparmor_restrict_unprivileged_userns` sysctl) is reported as
+WARN with the AppArmor profile remedy, not as a healthy install.
 
 ## Terminal and display problems
 

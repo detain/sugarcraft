@@ -272,6 +272,33 @@ final class BashSandboxTest extends TestCase
         self::assertFileDoesNotExist($this->root . '/should-not-exist');
     }
 
+    /**
+     * C-TOOL-4.a: sandboxRefusal() is the extracted form of the refusal above
+     * — the doctor's `sandbox` row asks this without running a command. Both
+     * directions are pinned: the method answers with the very reason
+     * execute() embeds in its refusal, and a Bash with no jail has nothing
+     * to refuse over.
+     */
+    public function testSandboxRefusalAnswersWhatExecuteRefusesWith(): void
+    {
+        $broken = $this->tmpDir . '/broken-bwrap-extract';
+        file_put_contents($broken, "#!/bin/sh\necho 'bwrap: setting up uid map: Permission denied' >&2\nexit 1\n");
+        chmod($broken, 0o755);
+
+        $bash = new Bash($this->root, sandbox: Bubblewrap::new($broken));
+        $refusal = $bash->sandboxRefusal();
+
+        self::assertIsString($refusal);
+        self::assertStringContainsString('setting up uid map: Permission denied', $refusal);
+
+        $result = $bash->execute(['command' => 'touch should-not-exist-extract', 'description' => 'probe']);
+        self::assertTrue($result->isError());
+        self::assertStringContainsString('(' . $refusal . ')', $result->content(), 'the refusal the doctor prints IS the parenthesised reason execute() prints');
+        self::assertFileDoesNotExist($this->root . '/should-not-exist-extract');
+
+        self::assertNull((new Bash($this->root))->sandboxRefusal());
+    }
+
     public function testAMissingBinaryRefuses(): void
     {
         $result = (new Bash($this->root, sandbox: Bubblewrap::new($this->tmpDir . '/no-such-bwrap')))

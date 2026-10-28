@@ -56,6 +56,14 @@ final readonly class Bubblewrap
     public const MODES = [self::MODE_OFF, self::MODE_ON, self::MODE_NO_NETWORK];
 
     /**
+     * The kernel interface Ubuntu 24.04 gates unprivileged user namespaces
+     * behind — the sysctl named in the class doc-block, spelled out so
+     * {@see appArmorRestrictsUserns()} and the doctor row read ONE constant
+     * rather than each carrying their own copy of the path.
+     */
+    public const APPARMOR_RESTRICT_USERNS_PATH = '/proc/sys/kernel/apparmor_restrict_unprivileged_userns';
+
+    /**
      * Paths under the writable root that are re-bound read-only, relative to
      * that root. See the class doc-block for why each one is an escape hatch.
      */
@@ -225,6 +233,23 @@ final readonly class Bubblewrap
         }
 
         return $verdicts[$key];
+    }
+
+    /**
+     * Whether this host restricts unprivileged user namespaces — the commonest
+     * reason a PRESENT bwrap still refuses (the class doc-block names Ubuntu
+     * 24.04's AppArmor default). Null when the file cannot be read: a kernel
+     * without the interface answers "unknown", never "no".
+     *
+     * $path is the test seam over the kernel interface; the default is the
+     * real one. The read is bounded because a sysctl value is a digit and a
+     * newline, and an unreadable file must not become a hung doctor row.
+     */
+    public static function appArmorRestrictsUserns(string $path = self::APPARMOR_RESTRICT_USERNS_PATH): ?bool
+    {
+        $raw = @file_get_contents($path, length: 16);
+
+        return $raw === false ? null : trim($raw) === '1';
     }
 
     /**

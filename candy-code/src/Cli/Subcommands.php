@@ -14,6 +14,8 @@ use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Bundles\Bundle;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Code\Tools\BuiltIn\Bash;
+use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
 use SugarCraft\Code\Session\SessionQuery;
 use SugarCraft\Code\Session\SessionResolver;
 use SugarCraft\Code\Session\SessionRow;
@@ -60,9 +62,9 @@ use SugarCraft\Core\Util\Tty;
  * sugar-image image protocol — with a 16x16 PNG capability swatch attached.
  * It is called by a model mid-conversation. This one is typed by a human at a
  * shell, reports the install (PHP, extensions, config file, permission policy,
- * provider selection, session database, MCP config), takes no model, and
- * cannot be reached by a tool call. Neither calls the other; the only thing
- * they share is the English word.
+ * provider selection, session database, MCP config, sandbox jail), takes no
+ * model, and cannot be reached by a tool call. Neither calls the other; the
+ * only thing they share is the English word.
  *
  * EXIT CODES are the convention `bin/candy-code` and {@see NonInteractive}
  * already document at five exits, reused rather than re-invented:
@@ -547,6 +549,10 @@ final class Subcommands
                     : Lang::t('cli.doctor.mode_split', ['tui' => $tui->mode()->value, 'headless' => $gate->mode()->value])];
             },
 
+            'sandbox' => static function (): array {
+                return self::sandboxProbe();
+            },
+
             'provider' => static function (): array {
                 [$name, $model] = Bootstrap::selectedProviderLabel();
                 if (Bootstrap::selectedProviderName() === null) {
@@ -637,6 +643,108 @@ final class Subcommands
                         ])],
                 };
             },
+        ];
+    }
+
+    /**
+     * The `sandbox` doctor row (C-TOOL-4.a): the three facts someone typing
+     * "sandboxing is not working" needs, each answered through the SAME code
+     * the Bash tool uses, never a second opinion —
+     *   1. what `bashSandbox` is configured to;
+     *   2. where `bwrap` resolves;
+     *   3. whether the jail actually STARTS — exercised through
+     *      {@see Bash::sandboxRefusal()}, the probe the tool itself runs
+     *      before its first command. Presence is not capability: a host with
+     *      /usr/bin/bwrap and AppArmor's `apparmor_restrict_unprivileged_userns`
+     *      set carries a jail that never runs, and `doctor` used to say
+     *      nothing about it while every `Bash` call died refusing.
+     *
+     * The row NEVER FAILs. A configured-but-dead jail is a WARN with a remedy:
+     * `bashSandbox: off` is a supported configuration, so the install is not
+     * broken — only the jail is — and FAIL belongs to the checks that say the
+     * program itself cannot run (doctor()'s exit convention).
+     *
+     * $jail, $sysctlPath and $osFamily are test seams: injecting them makes
+     * every verdict arm reachable on ANY host — Linux or not, bwrap or not —
+     * without the live row (all three defaulted) ever lying about the real
+     * one. The live row still spawns exactly what Bash would spawn, once per
+     * process, which is the whole point of asking through Bash.
+     *
+     * @param ?\Closure(): ?string $jail
+     */
+    private static function sandboxProbe(?\Closure $jail = null, ?string $sysctlPath = null, string $osFamily = \PHP_OS_FAMILY): array
+    {
+        $configured = Bubblewrap::fromSetting(Bootstrap::readUserConfig()['bashSandbox'] ?? null);
+        $mode = $configured?->mode() ?? Bubblewrap::MODE_OFF;
+
+        if ($osFamily !== 'Linux') {
+            // The jail cannot exist here. OK when nothing was configured —
+            // off is honest on every OS — WARN when something was, because
+            // that setting will never take effect on this host.
+            return [
+                'status' => $configured === null ? 'OK' : 'WARN',
+                'detail' => Lang::t($configured === null
+                    ? 'cli.doctor.sandbox_nonlinux_off'
+                    : 'cli.doctor.sandbox_nonlinux', [
+                    'mode' => $mode,
+                    'os' => $osFamily,
+                ]),
+            ];
+        }
+
+        // The jail is exercised even while `off`: "off, and a working bwrap is
+        // sitting right there" is a different sentence from "off, and it would
+        // not start anyway", and the first one tells the user the fix is a
+        // setting rather than an install.
+        $sandbox = $configured ?? Bubblewrap::new();
+        $binary = $sandbox->resolvedBinary();
+        $refusal = ($jail ?? static fn (): ?string => (new Bash(sandbox: $sandbox))->sandboxRefusal())();
+
+        if ($configured === null) {
+            return [
+                'status' => 'OK',
+                'detail' => Lang::t($refusal === null
+                    ? 'cli.doctor.sandbox_off'
+                    : 'cli.doctor.sandbox_off_blocked', [
+                    'bwrap' => $binary === ''
+                        ? Lang::t('cli.doctor.sandbox_binary_absent')
+                        : Lang::t('cli.doctor.sandbox_binary', ['path' => $binary]),
+                    'reason' => (string) $refusal,
+                ]),
+            ];
+        }
+
+        if ($refusal === null) {
+            // Reaching this arm with a jail that starts means the binary
+            // resolved — Bubblewrap::probe() answers 'not found on PATH'
+            // first — so the path form is the only one printed here.
+            return [
+                'status' => 'OK',
+                'detail' => Lang::t('cli.doctor.sandbox_ready', [
+                    'mode' => $mode,
+                    'bwrap' => Lang::t('cli.doctor.sandbox_binary', ['path' => $binary]),
+                ]),
+            ];
+        }
+
+        // The remedy arms split on the one host fact that turns "install
+        // bubblewrap" into bad advice: when the kernel restricts unprivileged
+        // user namespaces, bwrap is probably already installed and a fresh
+        // install changes nothing — the fix is the AppArmor profile, with the
+        // sysctl as the blunt fallback. An unreadable sysctl (null) is not
+        // "permissive": absence answers unknown, and the generic remedy stays
+        // honest for the missing-binary case it also covers.
+        $appArmor = Bubblewrap::appArmorRestrictsUserns($sysctlPath ?? Bubblewrap::APPARMOR_RESTRICT_USERNS_PATH);
+
+        return [
+            'status' => 'WARN',
+            'detail' => Lang::t('cli.doctor.sandbox_refused', [
+                'mode' => $mode,
+                'reason' => $refusal,
+                'remedy' => Lang::t($appArmor === true
+                    ? 'cli.doctor.sandbox_remedy_apparmor'
+                    : 'cli.doctor.sandbox_remedy_generic'),
+            ]),
         ];
     }
 
