@@ -303,6 +303,14 @@ final class FirstRunWizardTest extends TestCase
             FirstRunWizard::shouldOffer(false, false, \stream_isatty(STDOUT)),
             'the piped suite environment must never be offered the wizard',
         );
+
+        // Positive control (weld cure, REVIEW-1 MINOR): the SAME inputs with
+        // the TTY door open answer offer — the fresh-sandbox default-stamp
+        // composition the wiring step (C-TUI-5.e) will trust.
+        self::assertTrue(
+            FirstRunWizard::shouldOffer(false, false, true),
+            'with every other door passing, the default stamp path offers the wizard',
+        );
     }
 
     public function testTheDefaultStampStaysInsideTheSandboxedHome(): void
