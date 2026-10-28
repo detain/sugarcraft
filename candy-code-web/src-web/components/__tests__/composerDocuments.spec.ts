@@ -1,6 +1,13 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it } from 'vitest'
+import type { PastedDocument, PastedImage } from '../../lib/paste'
+import type { Delivery } from '../../stores/session'
 import Composer from '../Composer.vue'
+
+/** The `send` payload tuple, mirroring Composer.vue's declared emit signature —
+ *  VTU's `emitted<T>` default types payloads as `unknown[]`, so a further index
+ *  into a leg needs the tuple declared (C-WEB-4.e weld STOP-1 cure). */
+type SendEmit = [text: string, delivery: Delivery, images: PastedImage[], documents: PastedDocument[]]
 
 /**
  * C-WEB-4.e: PDF attachments in the browser. A dropped, pasted or picked PDF
@@ -141,7 +148,7 @@ describe('Composer document attachments (C-WEB-4.e)', () => {
     await wrapper.find('[data-testid="composer-delivery"]').setValue('interrupt')
     expect(send.attributes('disabled')).toBeUndefined()
     await send.trigger('click')
-    const emitted = wrapper.emitted('send')?.[0]
+    const emitted = wrapper.emitted<SendEmit>('send')?.[0]
     expect(emitted?.[1]).toBe('interrupt')
     expect(emitted?.[3]?.[0]).toMatchObject({ name: 'paper.pdf' })
   })
