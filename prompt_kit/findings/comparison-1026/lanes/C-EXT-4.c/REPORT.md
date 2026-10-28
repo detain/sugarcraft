@@ -76,3 +76,50 @@ Both cp-restored, md5-verified.
 **Welder duties.** NEW test file `tests/Commands/BundleCommandNamespaceTest.php` (7 tests)
 needs a `scripts/parallel-tests-durations.tsv` row (lane forbidden from that file) and the
 suite-figure re-pin (+7 tests) at gate.
+
+---
+
+## FIX ROUND 1 (review-1, 2026-10-28)
+
+**MINOR (step-local) — sources staged for refused aliases.** Cured as the review
+prescribes: the staging pass in `loadFromDirectory()` no longer writes
+`commandSources[$flat]` (the line after the `bundleAliasRows` stage is deleted);
+the flat attribution is copied at ADMISSION by the new public
+`CommandLoader::admitBundleAliasSource($flat, $qualified)`, called from
+`ForeignCommandDiscovery::walk()`'s admission leg inside
+`isset($commands[$qualified])` — it copies the qualified row's path (same file)
+and writes nothing without it, mirroring "an alias may not outlive its row".
+The `bundleAliasRows` docblock claim that refused candidates' source entries
+"sit unused, keyed by names nothing consults" is rewritten truthful (the
+mixed-case consult was exactly the defect face).
+
+**Pins.** `BundleCommandNamespaceTest` +2 methods (reflection reads the private
+`commandSources` map — its live consumers are all loadAll-after-native-rewrite,
+so the map contents are today's observable face):
+`testRefusedFlatAliasesLeaveNoAttributionEntry` (two-bundle collision: both
+qualified sources kept, no `review` key);
+`testFlatAliasAttributionIsWrittenAtAdmissionNotStaging` (admitted alias shares
+its row's path; the reviewer's mixed case — project-plain winner walked BEFORE
+the user bundle — keeps its own source, with a positive control that the bundle
+qualified row IS attributed).
+Mutations: full revert of the cure (restore staged write + drop admit call) →
+EXACTLY these 2 reds, 7 old tests green; admission-copy-only removal → exactly
+1 red (`...WrittenAtAdmission...`). cp-backups + md5-verified restores.
+
+**NITs (docs-only, taken).** `bundleSegment()` docblock now discloses the
+non-injective fold (`a.b`/`a-b` share segment `a-b` → segment-level
+last-write-wins for exotic pairs; disambiguation ruled out-of-scope); the
+staging comment states the double-parse cost (qualified + flat spec) as
+accepted.
+
+**Gate (targeted, post-fix, this tree).** `BundleCommandNamespaceTest`
+isolated: 9T/62A green (same 2 pre-existing `AccessorDeprecationTest`-style
+deprecations family). Brief filter re-derived:
+**276 tests / 4891 assertions / 1 failure / 2 deprecations** — exact +2T/+12A
+on review-1's 274/4879 shape; sole red remains the FOREIGN-standing
+`DocFigureProseDriftTest::testArchitecturePageCountersAreLiveOrDigitless`
+(ARCHITECTURE 59-vs-60, cure a2d5d0e3f on master, welder absorbs — not
+chased, per review).
+
+**Welder duties updated.** durations.tsv row for `BundleCommandNamespaceTest`
+is now 9 tests (was 7); suite-figure +9T re-pin.

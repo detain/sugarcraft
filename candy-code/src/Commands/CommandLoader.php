@@ -295,9 +295,13 @@ final class CommandLoader
      * loader stages candidates here and
      * {@see \SugarCraft\Code\Commands\ForeignCommandDiscovery::walk()} judges
      * them ONCE, after every directory has had its say. Rows staged but never
-     * admitted are simply absent from the command map; their
-     * {@see $commandSources} entries sit unused, keyed by names nothing
-     * consults.
+     * admitted are simply absent from the command map, and they leave no
+     * trace in {@see $commandSources} either: the staging pass writes no
+     * source for a flat candidate, and the entry appears only through
+     * {@see admitBundleAliasSource()}, called by walk() at the moment of
+     * admission — a staged source for a refused candidate would answer a
+     * consult of a live name (a plain row's own entry) with the refused
+     * file's path (review-1 cure).
      *
      * Only a call passing the $bundle parameter of
      * {@see loadFromDirectory()} writes here, and the only such caller is
@@ -324,6 +328,30 @@ final class CommandLoader
     public function resetBundleAliasRows(): void
     {
         $this->bundleAliasRows = [];
+    }
+
+    /**
+     * Record the source path of a bundle row's FLAT alias, at the moment
+     * {@see \SugarCraft\Code\Commands\ForeignCommandDiscovery::walk()}
+     * admits it — the sole writer of a flat key into
+     * {@see $commandSources} (C-EXT-4.c review-1).
+     *
+     * WRITTEN ON ADMISSION, not at staging: most staged flat candidates are
+     * refused (two bundles claimed the name, or a plain foreign row already
+     * owns it), and {@see $commandSources} answers "which file is this
+     * name" for consults that live names DO reach. The copy takes the
+     * qualified row's attribution, which is the same file; without a
+     * qualified attribution there is nothing honest to write, so the
+     * guard mirrors walk()'s own "an alias may not outlive its row".
+     */
+    public function admitBundleAliasSource(string $flat, string $qualified): void
+    {
+        $source = $this->commandSources[$qualified] ?? null;
+        if ($source === null) {
+            return;
+        }
+
+        $this->commandSources[$flat] = $source;
     }
 
     /**
@@ -564,9 +592,16 @@ final class CommandLoader
                     // A separate spec under the flat name: row keys and
                     // CommandSpec::$name must agree (CommandRegistry::filter()
                     // keys byName and its uniqueness is pinned), so the alias
-                    // row cannot ride the qualified spec.
+                    // row cannot ride the qualified spec — the accepted cost
+                    // is that a bundle file parses twice (review-1 NIT).
+                    // NO source is staged for the flat name: the
+                    // commandSources key appears only if walk() ADMITS the
+                    // alias, through admitBundleAliasSource(). Staging a
+                    // source wrote the map for candidates that are usually
+                    // refused, and a refused candidate's path landing under
+                    // a live key misattributes the winner's report rows
+                    // (review-1 cure).
                     $this->bundleAliasRows[$flat][$name] = CommandSpec::fromFile($realPath, $flat, $tier, $source);
-                    $this->commandSources[$flat] = $realPath;
                 }
             } catch (\Throwable $e) {
                 $skip = Lang::t('cmd.loader.file-failed', ['file' => $realPath, 'error' => $e->getMessage()]);
@@ -592,6 +627,15 @@ final class CommandLoader
      * bundle cannot name a row at all, and the CALLER refuses its files with
      * a skip record rather than silently loading them unqualified — an
      * unqualified row is exactly the shadow this step cures.
+     *
+     * THE FOLD IS NOT INJECTIVE (review-1 NIT, accepted): names that differ
+     * only in folded characters — `a.b` and `a-b` both become `a-b` — share
+     * one segment, so such an exotic pair collides last-write-wins at the
+     * SEGMENT level, the very shape this step retires for command files.
+     * Disambiguating would need either a separator outside NAME_PATTERN's
+     * charset or an escape protocol; distinct bundle manifest names collide
+     * far less than same-named files did, so the residue is disclosed here
+     * rather than paid for.
      */
     private static function bundleSegment(string $bundleName): string
     {

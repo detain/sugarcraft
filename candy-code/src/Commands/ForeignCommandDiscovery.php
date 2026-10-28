@@ -254,6 +254,12 @@ final class ForeignCommandDiscovery
             // after staging; an alias may not outlive its row.
             if (isset($commands[$qualified])) {
                 $commands[$bare] = $owners[$qualified];
+                // Attribution rides admission, not staging: only an alias
+                // that ACTUALLY enters the map earns a commandSources key
+                // (C-EXT-4.c review-1 — refused candidates above write
+                // nothing, so a plain winner's entry under the same name is
+                // never overwritten by a bundle path it does not own).
+                $this->loader->admitBundleAliasSource($bare, $qualified);
             }
         }
 

@@ -32,6 +32,11 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  * its colon-invocation arm still fires on a whole-name miss, and Chat's menu
  * prefix strips only the leading slash, so a colon row reaches the popup
  * whole.
+ *
+ * Attribution law (review-1 cure): the loader's commandSources map grows a
+ * flat key ONLY when walk() admits the alias (admitBundleAliasSource() at
+ * the admission leg) — a refused candidate writes nothing, so a refused
+ * bundle path can never shadow a plain winner's report rows.
  */
 final class BundleCommandNamespaceTest extends TestCase
 {
@@ -99,6 +104,25 @@ final class BundleCommandNamespaceTest extends TestCase
         $seen->useBundles($bundles);
 
         return (new ForeignCommandDiscovery($seen))->discover($this->project, $bundles);
+    }
+
+    /**
+     * The loader's private attribution map — the face the launch report's
+     * refusals and override rows key on. Read by reflection because its
+     * three consumers all run in `loadAll` after a native re-write, so the
+     * map's own contents are the observable face of the review-1 cure
+     * today.
+     *
+     * @return array<string, string>
+     */
+    private function commandSources(CommandLoader $loader): array
+    {
+        $property = new \ReflectionProperty(CommandLoader::class, 'commandSources');
+
+        /** @var array<string, string> $sources */
+        $sources = $property->getValue($loader);
+
+        return $sources;
     }
 
     public function testTwoBundlesShippingTheSameFileKeepTwoDistinctRows(): void
@@ -239,5 +263,49 @@ final class BundleCommandNamespaceTest extends TestCase
         self::assertSame([], array_filter(array_keys($commands), static fn (string $k): bool => str_contains($k, ':')), 'an unusable prefix cannot name a row');
         self::assertArrayNotHasKey('review', $commands, 'and the files do not sneak in unqualified — that is the shadow this step cures');
         self::assertNotEmpty($loader->skippedFiles(), 'the refusal is disclosed per file, not silent');
+    }
+
+    public function testRefusedFlatAliasesLeaveNoAttributionEntry(): void
+    {
+        // review-1 cure, collision face. The staging pass used to write a
+        // commandSources entry for EVERY bundle row's flat name, admitted or
+        // not; here the flat name is ambiguous between two owners, so the
+        // map grew a key for a row no one can invoke — whichever bundle
+        // walked last sat under it. Sources are now copied at admission
+        // only, so a refused candidate leaves no trace.
+        $a = $this->bundleAt($this->home . '/dev/revA', 'revA', 'user', $this->home);
+        $this->commandRows($a->dir . '/commands', ['review' => 'from A']);
+        $b = $this->bundleAt($this->home . '/dev/revB', 'revB', 'user', $this->home);
+        $this->commandRows($b->dir . '/commands', ['review' => 'from B']);
+
+        $commands = $this->load([$a, $b], $loader);
+        self::assertArrayNotHasKey('review', $commands, 'the alias belongs to neither — the refusal under test');
+
+        $sources = $this->commandSources($loader);
+        self::assertSame(realpath($a->dir . '/commands/review.md'), $sources['revA:review'], 'the admitted rows keep their own files');
+        self::assertSame(realpath($b->dir . '/commands/review.md'), $sources['revB:review']);
+        self::assertArrayNotHasKey('review', $sources, 'no loser path, neither bundle\'s, may sit under the refused flat name');
+    }
+
+    public function testFlatAliasAttributionIsWrittenAtAdmissionNotStaging(): void
+    {
+        // review-1 cure, both live faces. 'rev' has one owner and no
+        // claimant: admitted, sharing its row's attribution. 'owned' is
+        // claimed by a PROJECT-plain row, which discover() walks BEFORE the
+        // user bundles — under the old staging the later bundle pass
+        // overwrote the plain winner's source with the refused candidate's
+        // path, the exact mixed-case misattribution the cure removes.
+        $a = $this->bundleAt($this->home . '/dev/revkit', 'revkit', 'user', $this->home);
+        $this->commandRows($a->dir . '/commands', ['rev' => 'kit body', 'owned' => 'from the bundle']);
+        $this->commandRows($this->project . '/.claude/commands', ['owned' => 'from .claude']);
+
+        $commands = $this->load([$a], $loader);
+        self::assertStringContainsString('from .claude', (string) $commands['owned']->template, 'fixture: the plain row is the map winner');
+        self::assertArrayHasKey('rev', $commands);
+
+        $sources = $this->commandSources($loader);
+        self::assertSame($sources['revkit:rev'], $sources['rev'], 'an admitted alias carries its row\'s attribution');
+        self::assertSame(realpath($this->project . '/.claude/commands/owned.md'), $sources['owned'], 'the plain winner keeps its own source — the refused bundle candidate wrote nothing here');
+        self::assertStringContainsString('revkit', $sources['revkit:owned'], 'positive control: the bundle\'s qualified row IS attributed, so the leg above is a copy-shape answer, not an absent map');
     }
 }
