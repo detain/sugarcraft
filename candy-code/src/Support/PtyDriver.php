@@ -78,6 +78,8 @@ final class PtyDriver
      *
      * @param list<array{send: string, windowSeconds: float, regex: ?string}> $steps
      * @param (\Closure(): void)|null $heartbeat fired once per read pass
+     * @param (\Closure(string): void)|null $onChunk raw bytes per read window (C-TOOL-3.a live tail);
+     *     best-effort — fed inside every collectWindow, not the teardown drain
      * @param list<string> $spawnArgvPrefix jail argv (ISS-002) prefixed onto the spawn argv
      * @return array{
      *     refusal: ?string,
@@ -99,6 +101,7 @@ final class PtyDriver
         int $maxBytes,
         array $steps,
         ?\Closure $heartbeat = null,
+        ?\Closure $onChunk = null,
         array $spawnArgvPrefix = [],
     ): array {
         $empty = self::result(refusal: null, pid: -1, ran: [], retained: 0, dropped: 0, exitCode: null, exited: false, killed: false);
@@ -188,6 +191,7 @@ final class PtyDriver
                     $dropped,
                     $step['regex'],
                     $heartbeat,
+                    $onChunk,
                 );
                 $ran[] = ['output' => $output, 'matched' => $matched, 'note' => $note];
 
@@ -267,7 +271,7 @@ final class PtyDriver
      * @param \SugarCraft\Pty\Child $child
      * @return array{0: string, 1: ?bool, 2: string, 3: bool, 4: bool}
      */
-    private static function collectWindow($pty, $child, float $windowSeconds, float $deadline, int $maxBytes, int &$retained, int &$dropped, ?string $regex, ?\Closure $heartbeat): array
+    private static function collectWindow($pty, $child, float $windowSeconds, float $deadline, int $maxBytes, int &$retained, int &$dropped, ?string $regex, ?\Closure $heartbeat, ?\Closure $onChunk): array
     {
         $output = '';
         $matched = $regex === null ? null : false;
@@ -290,6 +294,12 @@ final class PtyDriver
             $tick = \min(self::READ_POLL_SECONDS, $windowEnd - $now);
             $chunk = $pty->read(self::READ_CHUNK_BYTES, $tick);
             if ($chunk !== null && $chunk !== '') {
+                if ($onChunk !== null) {
+                    // Raw screen bytes; the caller decides what a live tail is
+                    // (C-TOOL-3.a). Feeding before retain keeps the tail
+                    // independent of the transcript's byte budget.
+                    $onChunk($chunk);
+                }
                 $output = self::retain($output, $chunk, $maxBytes, $retained, $dropped);
                 if ($regex !== null && \preg_match($regex, $output) === 1) {
                     $matched = true;
@@ -299,7 +309,11 @@ final class PtyDriver
 
             if ($child->exited()) {
                 $childExited = true;
-                $output = self::retain($output, self::drain($pty), $maxBytes, $retained, $dropped);
+                $finalWindow = self::drain($pty);
+                if ($onChunk !== null && $finalWindow !== '') {
+                    $onChunk($finalWindow);
+                }
+                $output = self::retain($output, $finalWindow, $maxBytes, $retained, $dropped);
                 if ($regex !== null && $matched === false && \preg_match($regex, $output) === 1) {
                     $matched = true;
                 }

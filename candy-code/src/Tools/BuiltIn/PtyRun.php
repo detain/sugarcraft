@@ -9,12 +9,15 @@ use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\PtyDriver;
 use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
 use SugarCraft\Code\Tools\AcceptsHeartbeat;
+use SugarCraft\Code\Tools\AcceptsToolProgress;
 use SugarCraft\Code\Tools\AcceptsWorktreeJail;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;
 use SugarCraft\Code\Tools\Catalog\ToolBuildContext;
 use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
 use SugarCraft\Code\Tools\Concerns\RebindsWorktreeJail;
+use SugarCraft\Code\Tools\ShellTailRing;
+use SugarCraft\Code\Tools\TakesToolCallId;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolResult;
 
@@ -53,7 +56,7 @@ use SugarCraft\Code\Tools\ToolResult;
     position: 35,
     gloss: 'runs a terminal program on a real pseudo-terminal and drives it — each step types keystrokes and captures the screen bytes that follow, and an expectation fails loudly when the frame does not change as predicted',
 )]
-final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbeat, BuildsFromCatalog
+final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbeat, BuildsFromCatalog, TakesToolCallId, AcceptsToolProgress
 {
     use RebindsWorktreeJail;
 
@@ -152,6 +155,7 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
         private int $maxTimeoutSeconds = self::MAX_TIMEOUT_SECONDS,
         private ?\SugarCraft\Code\Agents\PathJail $worktreeJail = null,
         private ?Bubblewrap $sandbox = null,
+        private ?\Closure $toolProgressEmitter = null,
     ) {
         // The wall ceiling is what the turn waits on. Same purpose as Bash's —
         // so no single call can hold the loop forever — but deliberately
@@ -189,6 +193,17 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
     public function sandbox(): ?Bubblewrap
     {
         return $this->sandbox;
+    }
+
+    /**
+     * C-TOOL-3.a: the turn's ToolProgress channel, bound exactly as Bash's is
+     * (EngineBackend::turnTools, pid-gated closure). The ring is built per
+     * drive() only when this AND a call id are present, so an unbound or
+     * anonymous call runs the identical path it ran before.
+     */
+    public function withToolProgressEmitter(\Closure $emit): self
+    {
+        return new self(...array_replace(get_object_vars($this), ['toolProgressEmitter' => $emit]));
     }
 
     /** The directory the jail leaves writable — same rule as Bash's. */
@@ -418,6 +433,24 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
             }
         }
 
+        // C-TOOL-3.a: live tail frames on Bash's exact ring contract. The
+        // budgets are Bash's consts on purpose — one shared shell-tail size
+        // for every streaming tool, so a row resizes identically either way.
+        $progress = $this->toolProgressEmitter !== null && $toolCallId !== ''
+            ? new ShellTailRing(
+                $toolCallId,
+                $this->name(),
+                $this->toolProgressEmitter,
+                Bash::PROGRESS_TAIL_BYTES,
+                Bash::PROGRESS_FRAME_INTERVAL_SECONDS,
+            )
+            : null;
+        $onChunk = $progress === null ? null : static function (string $chunk) use ($progress): void {
+            // Pty bytes are screen-shaped (cursor moves, colours); the tail is
+            // the best-effort PLAIN text of what the program is showing.
+            $progress->onChunk(\SugarCraft\Core\Util\Ansi::strip($chunk));
+        };
+
         $run = PtyDriver::run(
             command: $command,
             cwd: $cwd,
@@ -427,8 +460,11 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
             maxBytes: $maxBytes,
             steps: $parsed,
             heartbeat: $heartbeat,
+            onChunk: $onChunk,
             spawnArgvPrefix: $this->sandbox?->argv($this->writableRoot(), interactive: true) ?? [],
         );
+
+        $progress?->finish();
 
         if ($run['refusal'] !== null) {
             return $this->refusal($toolCallId, $run['refusal']);
