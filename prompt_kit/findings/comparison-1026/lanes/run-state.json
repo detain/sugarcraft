@@ -13,6 +13,7 @@
   "C-AGT-5.e",
   "C-AGT-5.g",
   "C-AGT-6.b",
+  "C-AGT-6.d",
   "C-AGT-7.a",
   "C-AGT-7.b",
   "C-AGT-7.c",
@@ -23,6 +24,7 @@
   "C-CTX-2.b",
   "C-CTX-2.c",
   "C-CTX-2.e",
+  "C-CTX-4.c",
   "C-CTX-6.a",
   "C-CTX-6.b",
   "C-CTX-6.c",
@@ -34,7 +36,9 @@
   "C-EXT-2.c",
   "C-EXT-2.d",
   "C-EXT-2.e",
+  "C-EXT-3.c",
   "C-EXT-4.a",
+  "C-EXT-5.a",
   "C-EXT-7.a",
   "C-EXT-7.b",
   "C-MCP-1.a",
@@ -64,6 +68,7 @@
   "C-SEC-5.b",
   "C-SEC-5.c",
   "C-SEC-5.d",
+  "C-SEC-8.c",
   "C-SES-1.a",
   "C-SES-1.b",
   "C-SES-2.a",
@@ -145,62 +150,75 @@
   "P-TABS.d",
   "P-TABS.e",
   "P-TABS.f",
-  "P-TABS.h",
-  "C-CTX-4.c",
-  "C-AGT-6.d",
-  "C-EXT-3.c",
   "P-TABS.g",
-  "C-SEC-8.c",
-  "C-EXT-5.a"
+  "P-TABS.h"
  ],
  "inflight": {
   "C-CTX-2.d": {
-   "stage": "build",
+   "stage": "review",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-CTX-2.d",
-   "branch": "cc/C-CTX-2.d"
+   "branch": "cc/C-CTX-2.d",
+   "tip": "566456295"
   },
   "C-EXT-4.b": {
-   "stage": "build",
-   "round": 1,
+   "stage": "fix",
+   "round": 2,
    "worktree": "/home/sites/cc-cmp-C-EXT-4.b",
-   "branch": "cc/C-EXT-4.b"
+   "branch": "cc/C-EXT-4.b",
+   "tip": "ca7fd9f47",
+   "fixer": "ses_e7ce4c619ffedThgYrR1xKdwwe",
+   "note": "r1 FINDINGS 0C/0M/2min/2nit, gates EXACT reproduced (bundles 116T/482A; census 131T/25587A; doc-guards 136T 0F wobble-noted). Trust walk ALL PASS (refuse-by-default end-to-end, update cannot introduce unsigned sources, symlink-escape keystone pin, zero new spawn sites). 2 ProjectTier 2F = 9 occurrences/7 files, NONE in lane (Bootstrap numeral = C-SEC-7.d region). MINOR-1 two scan polarities + MINOR-2 REPORT wording -> fixer r2 live. 2 tsv rows (BundleMarketplaceCliTest+BundleUpdateTest) + re-pin = weld duties. | fixer r2 landed? pending return."
   },
   "C-MCP-3.b": {
    "stage": "build",
-   "round": 1,
+   "round": 3,
    "worktree": "/home/sites/cc-cmp-C-MCP-3.b",
-   "branch": "cc/C-MCP-3.b"
+   "branch": "cc/C-MCP-3.b",
+   "tip": "d7d008566-PHANTOM-branch-at-base"
   },
   "C-MCP-4.b": {
-   "stage": "build",
-   "round": 1,
+   "stage": "fix",
+   "round": 3,
    "worktree": "/home/sites/cc-cmp-C-MCP-4.b",
-   "branch": "cc/C-MCP-4.b"
+   "branch": "cc/C-MCP-4.b",
+   "tip": "2cfb83e04",
+   "fixer": "ses_e7ce29789ffeGG39tvZsGfsbG8",
+   "note": "r2 (fresh vs salvage-adopted commit) FINDINGS 1MAJOR/3min: trust walk + 6.1 rulings ALL PASS; pair 12T/53A EXACT; 11 files==declared; phantom-first PASS. MAJOR: SettingsWriterCensusTest red at tip - 3 new writeUserConfig sites in persistSessionToggle unrostered (row =>3 + adjudication comment, same commit). MINOR lang wording (disable.done preset-arm, enable.done launch-denied qualifier). MINOR REPORT-truth: claimed C-CTX-4.c cure hunk does not exist (pre-existing trait exemption; 1F foreign InstructionWalkPastRootTest) - REPORT-only fix. After fixer lands -> fresh r3 cure-reviewer; then weld roster: 2 tsv rows McpRuntimeDisableTest+McpAuthCommandEnableDisableTest + staleness-pair gate duty note + NO trio rider (pick fileset: src/MCP+Commands+Host+docs+tests, no src/Protocol/** - verify at weld)."
   },
   "C-PRV-2.b": {
-   "stage": "review",
-   "round": 1,
+   "stage": "fix",
+   "round": 2,
    "worktree": "/home/sites/cc-cmp-C-PRV-2.b",
-   "branch": "cc/C-PRV-2.b"
+   "branch": "cc/C-PRV-2.b",
+   "tip": "a65b7302e"
   },
   "C-SEC-6.a": {
    "stage": "review",
-   "round": 1,
+   "round": 2,
    "worktree": "/home/sites/cc-cmp-C-SEC-6.a",
-   "branch": "cc/C-SEC-6.a"
+   "branch": "cc/C-SEC-6.a",
+   "tip": "675241a04",
+   "fixer": "ses_e7cefc13effeGtVcjYYoQB7rpk",
+   "reviewer_r2": "ses_e7ce37aa2ffeUtN1wLMLz1b5zx"
   },
   "C-SEC-7.d": {
-   "stage": "build",
-   "round": 1,
+   "stage": "fix",
+   "round": 2,
    "worktree": "/home/sites/cc-cmp-C-SEC-7.d",
-   "branch": "cc/C-SEC-7.d"
+   "branch": "cc/C-SEC-7.d",
+   "tip": "59fa0d4ec",
+   "fixer": "ses_e7ce23c8cffeAtexG7lc544FiR",
+   "note": "r1 FINDINGS 0C/0M/2min: security walk PASS (breaker step-0 before evaluateAuto, no keystrokes to reviewer, narrow-only, unknown-scope fail-closed shell, broken-model warn+off, E646 clean, 7.e boundary held, census 40->43/8->11 in-step, seventy-seven=75->77 legit, red-before 10). MINOR-1 doc qualifier (PERMISSIONS ~560 + README ~1556 \"capped pending diff\" false for WebFetch; mirror lang-key \"for the write tools\"). MINOR-2 tools===[] reflection assert in AutoReviewScopeTest override leg. Gates exact 43T/135A, 95T census, 237T doc guards, PermissionsIntro 1F proven inherited. After fix -> fresh r2 cure-review. Weld roster: 1 tsv row AutoReviewScopeTest + intro-drift NOT lane debt."
   },
   "C-AGT-5.b": {
-   "stage": "build",
+   "stage": "review",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-AGT-5.b",
-   "branch": "cc/C-AGT-5.b"
+   "branch": "cc/C-AGT-5.b",
+   "tip": "5f551912e",
+   "reviewer_r2": "ses_e7ce4eb03ffe12ytUrTOI74c7f",
+   "note": "r1 (vs a3a1f573c) FINDINGS 0C/0M/2min/3nit: MINOR-1 pick-hash now = 5f551912e (supersedes a3a1f573c; web half shipped in final amend); MINOR-2 web absent = cured by same amend -> r2 cure-reviewer ses_e7ce4eb03 confirms delta + fresh web adjudication. r1 CONFIRMED deleteRefusal semantics (door->tag->root, operator sentence byte-frozen, 3-polarity pin non-vacuous both directions) + factory single-choke + READ_VERBS. Duration duty per r1: exactly 1 NEW candy-code phpunit (ScheduleCrossRootDeleteTest 8T); LoopSchedulesCommandTest = modify. REPORT.md BRIEF-name discrepancy recorded. DreamPass 1F foreign."
   }
  },
  "blocked": [],
@@ -794,7 +812,8 @@
    "carries": "r1 CLEAN 0C/0M/1m/2n; no-home command-surface pin cured r2 (blob-verify test name in git show); en-only host.skills.new.* — 11-locale LAST; SkillRegistry eight->nine docblock guard-mandated (CompiledPatternCacheBoundTest:219 live-derives)"
   },
   "C-AGT-6.d_weld": "r1 CLEAN 0C/0M/0 step-local minors (2 NITs recorded, take-or-leave); en-only cmd.pr.*/cmd.review.bad-pr -> 11-locale LAST per §6.3-h. Zero Protocol/web -> no trio/dist riders; gen-command-docs --check rc0. 3 durations rows (PrCommand 0.019/6, GhRunner 0.238/6, PrHostCommand 0.003/3 junit sums). Guards 275T/46483A, red-set = staleness pair only (foreign-era; +132A vs reviewer 46351 wobble from C-CTX-4.c era). DescriptorInheritanceGuard ::diffRange inherited-red cure (C-AGT-6.b) landed in-step. Zero new proc_open (CapturesProcessOutput choke, ChildLifetimesToolTest 9T/31A green).",
-  "P-TABS.g_weld": "3 durations rows owed: candy-code/tests/Tui/WindowStripShellTest.php 7T, candy-code/tests/App/TabAttentionTest.php 7T, tests/App/WindowTitleTest.php 3T (junit per-file sums; tsv 1523-era; desc-invariant set-equality live recount). No regen riders (no src/Protocol/** or web). §6.3-h en-only tui.pane.*+carry. WELD.md carries: Sessions auto-dock chat-readability-trial adjudication vs §6.1 P-CTX 120-col ruling (per r1), SessionTabs::tabs() list-vs-map bug fix note, AgentStrip::items() unscoped seam (P-AGENT.b chip no-ops reserved), staleness pair re-pin §7. W16-band step (owner-instructed exception) — weld bookkeeping: mark §4 but do NOT touch §3 W16 row (next lead closes W16)."
+  "P-TABS.g_weld": "3 durations rows owed: candy-code/tests/Tui/WindowStripShellTest.php 7T, candy-code/tests/App/TabAttentionTest.php 7T, tests/App/WindowTitleTest.php 3T (junit per-file sums; tsv 1523-era; desc-invariant set-equality live recount). No regen riders (no src/Protocol/** or web). §6.3-h en-only tui.pane.*+carry. WELD.md carries: Sessions auto-dock chat-readability-trial adjudication vs §6.1 P-CTX 120-col ruling (per r1), SessionTabs::tabs() list-vs-map bug fix note, AgentStrip::items() unscoped seam (P-AGENT.b chip no-ops reserved), staleness pair re-pin §7. W16-band step (owner-instructed exception) — weld bookkeeping: mark §4 but do NOT touch §3 W16 row (next lead closes W16).",
+  "C-AGT-5.b_note": "FINAL tip 5f551912e (11:18, third amend; verified 1 commit over base 8fd05587a, porcelain 0, detain greps). 15 files incl candy-code-web BackgroundPanel.vue +111 + backgroundSchedules.spec.ts +106 (lane OWNS the web schedules subsection; collision-check C-AGT-5.c fileset at its launch), root-scoped ScheduleFactory::deleteRefusal, fireDue last-outcome recording, /schedules add [--mode][--provider], MenuBarLabelDerivationTest +2/-1 (claims to flip 2 standing 'pr' reds; reviewer verifying). tsv duty: NEW phpunit candy-code files = tests/Background/ScheduleCrossRootDeleteTest.php (8T) + tests/Host/Commands/LoopSchedulesCommandTest.php -> 2 rows, per-file junit sums at weld. r1 reviewer dispatched vs superseded tip 6f4de4575: on return, if verdict names old tip, resume SAME session re-target 5f551912e (delta = docs+web+menubar-label only; core PHP unchanged)."
  },
  "carries": [
   "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest — closeout gate duty",
@@ -935,7 +954,7 @@
  "weld_queue": [
   "C-CTX-4.c"
  ],
- "tip": "179ac2e3f7e7ccb11e25d12b103503ef78c64297",
+ "tip": "271ad0619",
  "welded_count": 152,
  "tick": "87-disk-reconciled: W11 REALY closed@341f66404; trio MCP2b+TOOL5b+WEB3f real to 0b3c4ba21 (welded=122); W13/14 welds PENDING; phantom-atlas @b73@ correction: c3178096f/4d263705a/8d8c75678 GHOSTS, cure real 23fa8ab8e",
  "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
@@ -990,5 +1009,10 @@
  "laws_owner_2026_10_29": "Standing law (owner 2026-10-29): fill ALL 10 slots EVERY tick with safe work available RIGHT NOW (builders within scope cap, due reviewers, due fixers, welder while welds due) - NEVER reserve a spot for a 'future reviewer/welder'; between welds the welder slot builds. Refill same-tick on notifications. Scheduler free_slots=0 means the cap is honored, not an idle reservation.",
  "rulings": {
   "C-AGT-5.b": "(a) ROOT-SCOPE the delete guard (owner 2026-10-29, blocker 15). Chain: build 5.b -> loop clean -> weld -> W14 wave loop -> close W14 in §3; then 5.c -> weld -> W15 loop -> close W15. Then wind down: run-state STOPPED-at-scope-end + scope report; do NOT start W17+; live W16 lanes finish + weld under this lead, hand documented to next lead. Keep 10 busy (no-reservation law)."
+ },
+ "anomalies_ledger": {
+  "SEC-8.c_raw_pick_bd539b638": "RESOLVED: partial ceremony of dead welder ses_e7d052744; successor welder verified patch-id 2c8b692f identical + completed weld: 57f7d7ae1 with §4 mark; no revert owed. AGT-5.e/EXT-5.b b70238f78-hash and MCP-3.b d7d008566-hash = PHANTOM in builder reports (d7d008566 cat-file fatal; AGT-5.e actually welded, branch gone). C-AGT-5.b real tip 6f4de4575, REPORT.md absent from lane dir (builder claim false-to-disk; reviewer proceeds from commit; welder collector notes it).",
+  "sweep_hazard_1034": "SWEEP HAZARD @10:34:02: a process ran a tests-dir git checkout/clean sweep INSIDE cc-cmp-C-AGT-5.b worktree mid-lane, deleting the builder's untracked new test file and reverting test edits (src survived; builder rebuilt). Wrong-worktree-targeting family. Standing order: cp-harness in /tmp ONLY, never git checkout/clean outside the owned worktree. Perpetrator unidentified; monitor.",
+  "sec6a_selfreview_anomaly": "DISPATCH ERROR @tick1189: I accidentally resumed fixer session ses_e7cefc13e with the r2 REVIEW brief (sessionID passed by mistake). Fixer-context self-review is NOT a valid fresh verdict — the authoritative C-SEC-6.a r2 verdict comes ONLY from fresh reviewer ses_e7ce37aa2ffeUtN1wLMLz1b5zx. Watch: if the resumed fixer commits anything beyond 675241a04, diff it against 675241a04 for content identity before believing any tip movement; code must stay 675241a04-equivalent."
  }
 }
