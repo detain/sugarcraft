@@ -3637,4 +3637,12 @@ TXT,
     'session.import.refusal.unknown_format' => 'import: the file does not match a CandyCode, Claude Code, Codex or OpenCode transcript, so nothing was guessed',
     'session.import.refusal.unsupported_shape' => 'import: the transcript shape is not recognised ({detail}); unknown formats are refused, never guessed',
     // --- end session.import ---
+
+    // --- begin tui.diffreview (C-TUI-2.d: diff-review core) ---
+    'tui.diffreview.title' => 'Files changed {steps} checkpoint(s) back',
+    'tui.diffreview.turn_suffix' => ' · this turn only',
+    'tui.diffreview.empty' => '(nothing changed since that checkpoint)',
+    'tui.diffreview.omitted' => '… {lines} lines omitted at the display bound',
+    'tui.diffreview.hints' => '↑/↓ file · PgUp/PgDn body · -/+ base · t this turn · Esc close',
+    // --- end tui.diffreview (C-TUI-2.d) ---
 ];
