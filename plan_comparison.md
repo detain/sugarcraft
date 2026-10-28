@@ -1692,7 +1692,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - Chat.php region claims: P-TABS.e (withNoticeDrain (new wither)); C-TOOL-3.d (handleShellsCommand(new), isReadOnlySafeCommand)
 - Bootstrap.php method claims: C-TOOL-3.d (workspace)
 
-#### P-TABS.e — App hosts many Chats: scoped routing, park/unpark, background streaming (GAP-SES-12)
+#### ✅ 2a6cd3c1f P-TABS.e — App hosts many Chats: scoped routing, park/unpark, background streaming (GAP-SES-12)
 - **Item:** P-SESSION-TABS (sources: GAP-SES-12) · gap · effort M
 - **What:** `App` gains a `SessionDeck`. Every Cmd a Chat returns, from `delegateToChat` (:4298), `runRegistryCommand` and `feedChat`, is wrapped by `TabScope::cmd($fgKey)`. App-level Cmds stay unscoped, so shell Msgs (SettingsSaved…) can …
 - **Files — create:** none

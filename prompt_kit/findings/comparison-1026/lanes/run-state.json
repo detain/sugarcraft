@@ -135,15 +135,10 @@
   "C-TOOL-4.a",
   "C-AGT-4.a",
   "C-MCP-3.a",
-  "C-PRV-2.a"
+  "C-PRV-2.a",
+  "P-TABS.e"
  ],
  "inflight": {
-  "P-TABS.e": {
-   "stage": "clean",
-   "round": 2,
-   "worktree": "/home/sites/cc-cmp-P-TABS.e",
-   "branch": "cc/P-TABS.e"
-  },
   "C-SES-7.a": {
    "stage": "build",
    "round": 1,
@@ -164,7 +159,7 @@
   },
   "C-WEB-3.g": {
    "stage": "clean",
-   "round": 2,
+   "round": 1,
    "worktree": "/home/sites/cc-cmp-C-WEB-3.g",
    "branch": "cc/C-WEB-3.g"
   },
@@ -173,6 +168,18 @@
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-TUI-2.b",
    "branch": "cc/C-TUI-2.b"
+  },
+  "C-WEB-4.a": {
+   "stage": "build",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-C-WEB-4.a",
+   "branch": "cc/C-WEB-4.a"
+  },
+  "C-AGT-5.e": {
+   "stage": "build",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-C-AGT-5.e",
+   "branch": "cc/C-AGT-5.e"
   }
  },
  "blocked": [
@@ -798,7 +805,7 @@
   "STOP STATE @2052@: master b4b4404c5 (wind-down commit; 9 files). welded=100/328 LIST. waves_closed [1..9] (W8/W9 rows + marks committed inside b4b4404c5; W9 per lead ruling r1-CLEAN-no-r2 — disclosed). Owed loops: W10 (blocked on unwelded members C-EXT-2.c + C-PRV-5.c), then W11+ per scheduler waves_fully_welded. Only live artifact: /home/sites/cc-cmp-P-TABS.g + branch cc/P-TABS.g @f25a697c1 (parked; re-dispatch plan:1549 after P-TABS.e+P-TABS.f weld). LATE W33+ gated on §6.3 owner rulings (C-TOOL-6 c/e/h + C-TUI-6: Windows shell, Windows self-update helper, web i18n scope, locale choice, parity strictness, voice endpoint, push-to-talk key). NEVER pushed; origin advanced owner-side only.",
   "C-EXT-2.c welded 4b771634d; closeout roster in its WELD.md (Bootstrap:5955 comment, ChatHostLangCatalogue standing red=C-PRV-1.b (a992413b0) seam, TROUBLESHOOTING allowed-tools/effort half=C-EXT-2.b)"
  ],
- "updated": "2026-10-28T11:29:40Z",
+ "updated": "2026-10-28T12:20:00Z",
  "wind_down": {
   "master_tip_at_close": "b4b4404c5",
   "welded_count": 101,
@@ -854,10 +861,11 @@
   "C-WEB-7.d (W13, after review, 1 row)",
   "C-MCP-3.a (W13, after review, 1 row SessionHostMcpSurfaceTest? per real build)",
   "C-TOOL-4.a (W14, 1 row DoctorSandboxProbeTest 10T)",
-  "C-AGT-4.a (W14, after r2, 1 row PrimaryAgentTest)"
+  "C-AGT-4.a (W14, after r2, 1 row PrimaryAgentTest)",
+  "C-WEB-3.g 0df1f0af0 (W15; r1 CLEAN 0C/0M/0m; collect /tmp/opencode/cc-cmp-lanes/C-WEB-3.g/ REVIEW-1+FIX-1 at weld; NO tsv rows vitest-only; NO dist rider; merged vitest dormantRoster+shutdownDormant 6/6 serial; roster details in this note; weld after bundle ses_e7db2ebe9 returns)"
  ],
  "tip": "55d66b158",
- "welded_count": 136,
+ "welded_count": 137,
  "tick": "87-disk-reconciled: W11 REALY closed@341f66404; trio MCP2b+TOOL5b+WEB3f real to 0b3c4ba21 (welded=122); W13/14 welds PENDING; phantom-atlas @b73@ correction: c3178096f/4d263705a/8d8c75678 GHOSTS, cure real 23fa8ab8e",
  "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
  "blocked_notes": {
