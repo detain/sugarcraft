@@ -515,6 +515,7 @@ candy-code/tests/Chat/ChatToolCancelKillsCommandTreeTest.php	0.248	1
 candy-code/tests/Diagnostics/NoticeSinkIsolationTest.php	0.243	6
 candy-code/tests/Server/HelloMediaFlagsTest.php	0.241	4
 candy-code/tests/Tools/ShellStopTest.php	0.240	6
+candy-code/tests/Chat/PaletteCatalogAsyncTest.php	0.239	4
 candy-code/tests/Renderer/StatusBarModelAndReadOnlyTest.php	0.239	10
 candy-code/tests/Renderer/FocusedToolRowHighlightTest.php	0.239	10
 candy-code/tests/Backend/TurnContextPersistedTest.php	0.238	3
