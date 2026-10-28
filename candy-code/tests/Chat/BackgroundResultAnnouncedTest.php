@@ -271,6 +271,34 @@ final class BackgroundResultAnnouncedTest extends TestCase
         $this->assertSame('sess_abc', $session->forkedSessionId());
     }
 
+    /**
+     * C-SES-1.b (SES-1 ≥ law): the announcement's cost figure obeys the same
+     * law every other dollar surface obeys — `SpendLedger::boundUsd()`, the
+     * status bar, `/usage`, the web BackgroundPanel. Before this it printed a
+     * bare `$` for an unpriced run (or hid the row entirely at zero), claiming
+     * an exact bill from a figure that is only a lower bound.
+     */
+    public function testTheAnnouncementCostFigureObeysTheBoundLaw(): void
+    {
+        $priced = self::session('s9', BackgroundSessionStatus::Completed, 'x');
+        $priced->costUsd = 0.0123;
+        $this->assertStringContainsString(' · $0.0123', $priced->announcement(), 'a priced figure keeps the plain exact spelling');
+        $this->assertStringNotContainsString('≥$', $priced->announcement(), 'the bound never decorates honesty');
+
+        $bound = self::session('s9', BackgroundSessionStatus::Completed, 'x');
+        $bound->costUsd = 0.0123;
+        $bound->spendUnpriced = true;
+        $this->assertStringContainsString(' · ≥$0.0123', $bound->announcement(), 'an unpriced figure reads as the lower bound it is');
+        $this->assertStringNotContainsString(' · $0.0123', $bound->announcement(), 'one figure, one spelling: the exact form is never the bound one');
+
+        $zeroBound = self::session('s9', BackgroundSessionStatus::Completed, 'x');
+        $zeroBound->spendUnpriced = true;
+        $this->assertStringContainsString(' · ≥$0.0000', $zeroBound->announcement(), 'unpriced-at-zero prints the ≥$0 floor — the blindness is the news, a hidden row would read as a known free run');
+
+        $zeroPriced = self::session('s9', BackgroundSessionStatus::Completed, 'x');
+        $this->assertStringNotContainsString('$', $zeroPriced->announcement(), 'a priced zero is a known nothing and stays hidden');
+    }
+
     public function testAPlainBgSessionHasNoResumePointer(): void
     {
         $session = self::session('s9', BackgroundSessionStatus::Completed, 'x');

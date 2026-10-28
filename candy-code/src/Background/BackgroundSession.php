@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Background;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentResult;
 use SugarCraft\Code\Agents\AgentStatus;
+use SugarCraft\Code\Host\SpendLedger;
 
 /**
  * Represents a single background session running an agent in a child process.
@@ -289,6 +290,10 @@ final class BackgroundSession
      * The stats line lists only what is known: tokens and cost appear once
      * the daemon reports them, and the resume pointer only for a `/fork`
      * session, whose stored transcript is the one thing there is to resume.
+     * The cost is spelled by the SES-1 ≥ law ({@see SpendLedger::boundUsd()}):
+     * an unpriced run's figure prints `≥$` like every other dollar surface —
+     * even at zero, where the floor IS the disclosure — while a priced zero
+     * is a known nothing and stays off the line.
      */
     public function announcement(int $maxOutputChars = self::ANNOUNCE_OUTPUT_MAX_CHARS): string
     {
@@ -324,8 +329,8 @@ final class BackgroundSession
         if ($this->tokensUsed > 0) {
             $stats[] = $this->usageDisplay();
         }
-        if ($this->costUsd > 0.0) {
-            $stats[] = sprintf('$%.4f', $this->costUsd);
+        if ($this->costUsd > 0.0 || $this->spendUnpriced) {
+            $stats[] = SpendLedger::boundUsd($this->spendUnpriced, $this->costUsd);
         }
         $fork = $this->forkedSessionId();
         if ($fork !== null) {
