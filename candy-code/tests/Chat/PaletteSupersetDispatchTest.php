@@ -75,6 +75,13 @@ final class PaletteSupersetDispatchTest extends TestCase
         // a W5-micro judgement, not a silent promotion here.
         'review' => 'needs a diff range; the bare form only answers with usage',
         'security-review' => 'needs a diff range; the bare form only answers with usage',
+        // C-AGT-6.a (w16): /commit landed after VIS-4 cut this census; the
+        // spec file (builtin-commands/2850-commit.php) records its own
+        // judgement — a palette row would tempt an unintended whole-tree
+        // commit, and no PaletteAction arm was minted. Census order follows
+        // the registry, so this row sits on its 2850 spec position, before
+        // pr's 2860.
+        'commit' => 'honestly a write; the typed command IS the intent — no PaletteAction arm was minted',
         // C-AGT-6.d (w15): /pr landed after VIS-4 cut this census; the spec
         // file (builtin-commands/2860-pr.php) records its own judgement —
         // the push and the PR post run as gated writes inside the turn

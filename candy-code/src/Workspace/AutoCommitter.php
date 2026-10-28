@@ -435,6 +435,80 @@ final class AutoCommitter
     }
 
     /**
+     * Every path the work tree changed since HEAD — modified, added, deleted,
+     * renamed (C-AGT-6.a, roadmap GAP-GIT-03, for `/commit`). Unlike
+     * {@see self::dirtyAmong()}, which filters a candidate list, this walks the
+     * whole tree with no pathspec, and it KEEPS a rename's source: `git add -A`
+     * over both sides records the move, while staging only the destination
+     * would split it into an unrelated deletion left behind.
+     *
+     * @return list<string> tree-relative paths, or empty outside a work tree
+     */
+    public function changedPaths(): array
+    {
+        $top = $this->topLevel();
+        if ($top === null) {
+            return [];
+        }
+        $status = $this->git($top)->run('status', '--porcelain=v1', '-z', '--untracked-files=all');
+        if (!$status['ok']) {
+            return [];
+        }
+        $paths = [];
+        $fields = explode("\0", $status['stdout']);
+        for ($i = 0; $i < \count($fields); $i++) {
+            $entry = $fields[$i];
+            if (\strlen($entry) < 4) {
+                continue;
+            }
+            $paths[substr($entry, 3)] = true;
+            // A rename/copy entry is followed by its source path; the source
+            // must ride with the destination, not just be skipped (see above).
+            if (($entry[0] === 'R' || $entry[0] === 'C') && isset($fields[$i + 1]) && $fields[$i + 1] !== '') {
+                $paths[$fields[++$i]] = true;
+            }
+        }
+
+        return array_keys($paths);
+    }
+
+    /**
+     * The bounded diff {@see self::commitAll()} drafts a message from: the same
+     * byte cap the `turn`-mode commit feeds the title model, so a manual
+     * `/commit` asks it with exactly what an automatic one would (C-AGT-6.a).
+     *
+     * @param list<string> $paths
+     */
+    public function draftDiff(array $paths): string
+    {
+        $top = $this->topLevel();
+
+        return $top === null ? '' : $this->diff($top, $paths);
+    }
+
+    /**
+     * Commit EVERY changed path through the hardened {@see self::commit()}
+     * path, recorded with kind `command` — which is what lets `/undo` revert a
+     * manual `/commit` (C-AGT-6.a, roadmap GAP-GIT-03): `undo()` reverts every
+     * kind but `snapshot`, and the record is session-scoped exactly like the
+     * `turn`-mode commit's, so the session's own `/undo` finds it first.
+     *
+     * The empty tree is refused rather than committed: git would answer with
+     * its own "nothing to commit" exit code; this says it before spawning.
+     *
+     * @return array{ok: bool, sha: ?string, subject: string, paths: list<string>, snapshot?: null, reason: string}
+     */
+    public function commitAll(string $subject): array
+    {
+        $paths = $this->changedPaths();
+        if ($paths === []) {
+            return self::failure([], $subject, 'there is nothing to commit');
+        }
+
+        return $this->commit($paths, $subject, 'command');
+    }
+
+    /**
      * Aider's dirty commit: of $paths, those the user had changed before the
      * turn (the checkpoint differs from the HEAD it was taken on) and that no
      * commit has touched since, committed as the user had them, in a commit of

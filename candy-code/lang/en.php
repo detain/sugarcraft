@@ -3650,4 +3650,16 @@ TXT,
     'tui.diffreview.omitted' => '… {lines} lines omitted at the display bound',
     'tui.diffreview.hints' => '↑/↓ file · PgUp/PgDn body · -/+ base · t this turn · Esc close',
     // --- end tui.diffreview (C-TUI-2.d) ---
+    // --- begin commit (C-AGT-6.a: /commit builtin) ---
+    // Strings of the manual whole-tree commit: src/Host/Commands/
+    // CommitHostCommand.php and builtin-commands/2850-commit.php. The drafting
+    // itself rides CommitMessageWriter, shared with the `turn`-mode auto-commit.
+    'cmd.commit.description' => 'Commit all changed files, drafting the message when you give none',
+    'cmd.commit.hint' => '<message>',
+    'host.commit.nothing' => 'Nothing to commit: the work tree is clean.',
+    'host.commit.not_repo' => '/commit was not run: this project is not a git work tree.',
+    'host.commit.committed' => 'Committed {sha} ({subject}): {files} went in; /undo can take it back.',
+    'host.commit.failed' => 'Nothing was committed: {reason}.',
+    'host.commit.no_reason' => 'no reason given',
+    // --- end commit (C-AGT-6.a) ---
 ];

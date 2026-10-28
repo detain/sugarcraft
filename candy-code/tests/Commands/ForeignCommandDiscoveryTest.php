@@ -170,14 +170,21 @@ final class ForeignCommandDiscoveryTest extends TestCase
         // override; a FOREIGN one of the same name must not replace it at all
         // AND must not report anything — the silent loss is the ruling, and
         // this is the one place silence is the asserted behaviour.
+        // C-AGT-6.a (R7): `/commit` is the live case the plan's risks block
+        // names — a cloned project carrying its own `.claude/commands/
+        // commit.md` must still answer with the built-in, because strict-bottom
+        // puts the import below every built-in, not merely above the tiers an
+        // override may cross.
         $loader = new CommandLoader();
         $this->put('.claude/commands/compact.md', $this->described('imported compact'));
         $this->put('.claude/commands/exit.md', $this->described('imported exit'));
+        $this->put('.claude/commands/commit.md', $this->described('imported commit'));
 
         $merged = $loader->loadAll($this->repo);
 
         self::assertFalse($merged['compact']->isFileBased(), 'the built-in row must still answer /compact');
         self::assertFalse($merged['exit']->isFileBased(), 'and the control-plane reservation is not even reached — the foreign row never won');
+        self::assertFalse($merged['commit']->isFileBased(), 'the C-AGT-6.a built-in must still answer /commit');
         self::assertSame([], $loader->overrides(), 'a row that never won overrides nothing');
         self::assertSame([], $loader->refusedCommands(), 'and loses its name in silence, by ruling');
     }

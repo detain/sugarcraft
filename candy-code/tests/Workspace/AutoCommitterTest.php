@@ -283,6 +283,77 @@ final class AutoCommitterTest extends TestCase
         self::assertNull($committer->topLevel());
         self::assertNull($committer->commitEdit($plain . '/a.txt', static fn (): string => 'chore: x', null));
         self::assertFalse($committer->hasCommits());
+        // C-AGT-6.a: the whole-tree collector and the drafter's diff answer
+        // the same way outside a work tree — empty, not an error.
+        self::assertSame([], $committer->changedPaths());
+        self::assertSame('', $committer->draftDiff(['a.txt']));
+        self::assertFalse($committer->commitAll('chore: x')['ok'], 'there is nothing to commit outside a work tree');
+    }
+
+    public function testChangedPathsWalksTheWholeTreeAndKeepsARenameSourceWithIt(): void
+    {
+        // C-AGT-6.a: `/commit` commits what the tree changed, and a rename
+        // must carry BOTH sides into `git add -A` or the move splits into an
+        // unrelated deletion left behind.
+        file_put_contents($this->repo . '/new.txt', "brand new\n");
+        $this->gitAt('mv', 'file.txt', 'renamed.txt');
+        file_put_contents($this->repo . '/late.txt', "after\n");
+
+        $paths = $this->committer()->changedPaths();
+        sort($paths);
+
+        self::assertSame(
+            ['file.txt', 'late.txt', 'new.txt', 'renamed.txt'],
+            $paths,
+            'the rename\'s destination AND its stale side ride, plus both untracked files',
+        );
+
+        $diff = $this->committer()->draftDiff(['late.txt']);
+        self::assertStringContainsString('new file late.txt', $diff, 'the drafter sees the untracked file by name');
+    }
+
+    public function testCommitAllLeavesARecordTheUndoRevertsAndRefusesACommitThatAddsFiles(): void
+    {
+        file_put_contents($this->repo . '/file.txt', "model\n");
+
+        $committer = $this->committer();
+        $outcome = $committer->commitAll('fix: the edit');
+
+        self::assertTrue($outcome['ok'], $outcome['reason']);
+        self::assertNotNull($outcome['sha']);
+        self::assertSame(['file.txt'], $outcome['paths']);
+        self::assertSame($outcome['sha'], $this->gitAt('rev-parse', 'HEAD'));
+        self::assertSame(['fix: the edit', 'base'], $this->subjects());
+
+        // The kind is `command`, not `snapshot`: the session's own `/undo`
+        // reverts it, file and record together.
+        $undone = $committer->undo();
+        self::assertTrue($undone['ok'], $undone['reason'] ?? '');
+        self::assertSame($outcome['sha'], $undone['sha']);
+        self::assertSame(['base'], $this->subjects());
+
+        // A commit that ADDS a path its parent lacked is refused by name —
+        // the rule every kind shares, so the work tree never ends up half
+        // reverted; the new file stays in place with its commit.
+        file_put_contents($this->repo . '/added.txt', "new\n");
+        $added = $committer->commitAll('feat: adds a file');
+        self::assertTrue($added['ok'], $added['reason']);
+
+        $refused = $committer->undo();
+        self::assertFalse($refused['ok']);
+        self::assertSame(AutoCommitter::REFUSED_ABSENT_IN_PARENT, $refused['refusal']);
+        self::assertStringContainsString('added.txt did not exist before', $refused['reason']);
+        self::assertSame(['feat: adds a file', 'base'], $this->subjects(), 'nothing was half-reverted');
+    }
+
+    public function testCommitAllOnACleanTreeIsRefusedBeforeAnySpawn(): void
+    {
+        $outcome = $this->committer()->commitAll('chore: nothing');
+
+        self::assertFalse($outcome['ok']);
+        self::assertNull($outcome['sha']);
+        self::assertSame('there is nothing to commit', $outcome['reason']);
+        self::assertSame(['base'], $this->subjects());
     }
 
     private function committer(): AutoCommitter

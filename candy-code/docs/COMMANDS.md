@@ -396,6 +396,7 @@ edit it by hand.
 | `/diff` | ✓ | | `[n]` | Show what changed in the files since a checkpoint |
 | `/review` | ✓ | | `[<tree-ish\|A..B\|A...B>\|--pr <n>]` | Review the diff against a revision and report findings without editing |
 | `/security-review` | ✓ | | `[<ref>]` | Security-review the diff against a revision and report findings without editing |
+| `/commit` | ✓ | | `<message>` | Commit all changed files, drafting the message when you give none |
 | `/pr` | ✓ | | `[<focus>]` | Push the current branch and open a pull request for it with gh |
 | `/bg` | ✓ | | `<task>` | Run a task in a background session |
 | `/shells` | ✓ | | `[list\|output <id> [cursor]\|stop <id>]` | List, read output from, and stop background shells |

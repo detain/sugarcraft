@@ -16110,6 +16110,19 @@ final class Chat implements Model
     }
 
     /**
+     * `/commit [message]` (C-AGT-6.a, roadmap GAP-GIT-03) — commit every
+     * changed path, drafting the message on the title model when none is
+     * given — {@see \SugarCraft\Code\Host\Commands\CommitHostCommand}.
+     * Off-turn; `/undo` reverts it.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleCommitCommand(string $inputText): array
+    {
+        return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\CommitHostCommand(), $inputText);
+    }
+
+    /**
      * Handle /memory commands — {@see \SugarCraft\Code\Host\Commands\MemoryCommand} (roadmap O-2h):
      * list, add, search, delete, edit, clear, import, log and restore over the
      * session's home store and project root, through the router the `Memory`
