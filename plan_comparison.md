@@ -1273,7 +1273,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tool.md` → `### C-TOOL-3.a`
 
-#### C-AGT-7.b — Headless honesty: `session_id`, `--json-schema`
+#### ✅ e359fc884 C-AGT-7.b — Headless honesty: `session_id`, `--json-schema`
 - **Item:** C-AGT-7 (sources: AUT-2-P1, AUT-4-P1, AUT-4-P2) · fix · MINOR · effort M
 - **What:** AUT-2-P1: the envelope carries `$opened['id']` (`src/Cli/NonInteractive.php:597-612`) and is printed (:636-641) before the save (:653-664). For `json`/`stream-json`, persist first inside the same try and render after, with …
 - **Files — create:** none
