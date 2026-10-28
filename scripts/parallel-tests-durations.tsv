@@ -333,6 +333,7 @@ candy-code/tests/Cli/NonInteractiveBackendErrorExitTest.php	0.770	3
 candy-code/tests/Cli/NonInteractiveStopTrailersTest.php	0.762	8
 candy-code/tests/Integration/ForeignSkillWiringTest.php	0.748	10
 candy-code/tests/Backend/AwaitPromiseDiagnosticArmTest.php	0.744	11
+candy-code/tests/Tui/WindowStripShellTest.php	0.744	8
 candy-code/tests/Acp/AcpCancelTest.php	0.739	4
 candy-code/tests/Runtime/ParallelBoardNoticeTest.php	0.735	7
 candy-code/tests/Session/TranscriptSchemaV2MigrationTest.php	0.734	10
@@ -968,6 +969,7 @@ candy-code/tests/Tools/BuiltIn/EditMultiEditTest.php	0.019	9
 candy-code/tests/Tui/MediaForm/ImageSectionGateTest.php	0.019	14
 candy-code/tests/Tui/MediaForm/OverrideRowsTest.php	0.019	39
 candy-code/tests/Tui/PaneDataWiringTest.php	0.019	24
+candy-code/tests/App/WindowTitleTest.php	0.019	4
 candy-code/tests/Cli/BootstrapLaunchNoticeCapCensusTest.php	0.018	4
 candy-code/tests/Commands/CommandsTableTakesColumnDriftTest.php	0.018	3
 candy-code/tests/Context/CompactorScriptWeightTest.php	0.018	5
@@ -1026,6 +1028,7 @@ candy-code/tests/Providers/BedrockRoleAlternationTest.php	0.013	12
 candy-code/tests/Providers/ProviderTuningSettingsTest.php	0.013	11
 candy-code/tests/Tools/BuiltIn/WorktreeJailedSearchToolsTest.php	0.013	5
 candy-code/tests/Format/FormatAutoTableTest.php	0.013	6
+candy-code/tests/App/TabAttentionTest.php	0.013	6
 candy-code/tests/Attachments/FileMentionsTest.php	0.012	11
 candy-code/tests/Chat/ChatHookInputEncodingTest.php	0.012	5
 candy-code/tests/Chat/EscapeSoftCancelTest.php	0.012	9
