@@ -180,8 +180,18 @@ final class DiffReviewTest extends TestCase
     {
         $review = DiffReview::open(self::pairRows(), 3, 3, false, 0);
 
-        [$on, $action] = $review->update(new KeyMsg(KeyType::Char, 't'));
+        // r1 MINOR-1: the turn flip changes which diff the rows show, so the
+        // cursor and body position the ordinary view carried are as dead as
+        // on a base step — reset, not remembered.
+        [$moved] = $review->update(new KeyMsg(KeyType::Down));
+        [$dirty] = $moved->update(new KeyMsg(KeyType::PageDown));
+        self::assertSame(1, $dirty->selectedIndex());
+        self::assertGreaterThan(0, $dirty->scroll(), 'the flip starts from a moved cursor and a scrolled body');
+
+        [$on, $action] = $dirty->update(new KeyMsg(KeyType::Char, 't'));
         self::assertTrue($on->turnOnly());
+        self::assertSame(0, $on->selectedIndex(), 'the flip sends the selection back to the first row');
+        self::assertSame(0, $on->scroll(), 'and the body back to its top');
         self::assertSame(2, $on->stepsBack(), 'a turn needs both sides, so the oldest single turn is back to the second checkpoint');
         self::assertInstanceOf(DiffReviewAction::class, $action);
         self::assertSame(2, $action->stepsBack);
@@ -289,15 +299,22 @@ final class DiffReviewTest extends TestCase
         $first = $this->store->saveCheckpoint('s', ['inputBuf' => '']);
         self::assertSame('captured', $this->store->captureWorkspace('s', $first, $this->repo)['status']);
 
+        // r1 MINOR-2: a turn that never captured a workspace is a HOLE in the
+        // middle of the history — the newest checkpoint is still captured, so
+        // a filter that merely stopped at the first miss would pass unnoticed.
+        // bases() must skip it and keep the rest of the list.
+        $hole = $this->store->saveCheckpoint('s', ['inputBuf' => '']);
+
         file_put_contents($this->repo . '/a.txt', "turn-one\n");
         $second = $this->store->saveCheckpoint('s', ['inputBuf' => '']);
         self::assertSame('captured', $this->store->captureWorkspace('s', $second, $this->repo)['status']);
 
         file_put_contents($this->repo . '/b.txt', "turn-two\n");
 
-        self::assertSame(2, DiffReviewSource::baseCount($this->store, 's'));
+        self::assertSame(2, DiffReviewSource::baseCount($this->store, 's'), 'the hole is not a base, so it does not inflate the step bound');
         $bases = DiffReviewSource::bases($this->store, 's');
         self::assertSame([$second, $first], array_column($bases, 'index'), 'newest first, like /diff counts');
+        self::assertNotContains($hole, array_column($bases, 'index'), 'the uncaptured checkpoint never appears as a base');
 
         $againstWorkTree = DiffReviewSource::load($this->store, 's', $this->repo, 1);
         self::assertInstanceOf(DiffReview::class, $againstWorkTree);
