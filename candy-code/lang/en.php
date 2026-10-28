@@ -3475,6 +3475,7 @@ TXT,
     'hooks.notice.advisory' => '⚠ The `async` Claude Code hook `{hook}` exited {code}. An `async` hook asks to watch a tool call rather than gate it, so it has no power to block one and the call proceeded. What it said: {reason}',
     'hooks.notice.claude_dialect' => '⚠ The Claude Code hook `{hook}` exited {code}, which Claude Code reads as a non-blocking complaint rather than a decision, so the tool call proceeded. What it said: {reason}',
     'hooks.notice.said_nothing' => '(nothing on stderr)',
+    'hooks.notice.system_message' => '⚠ The hook `{hook}` left a message for you: {message}',
 
 
     // --- settings help (W3-B i18n migration) ---

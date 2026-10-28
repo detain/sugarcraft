@@ -639,21 +639,38 @@ final class ScriptHookTest extends TestCase
         $this->assertSame('', $result['additionalContext'], 'the JSON text of a suppression request reached the model as context — the exact leak ISS-090(e) is about');
     }
 
-    public function testSuppressOutputDropsTheNoteAndSystemMessageNeverReachesTheModel(): void
+    /**
+     * C-EXT-6.a flipped this pin: the string is no longer *stripped* — it is
+     * HONORED as a one-line notice for the human, and it still has no surface
+     * in the model's context. Both halves are asserted together so a future
+     * "simplify" that routes the message into `additionalContext` reddens the
+     * notice leg and the model leg at once.
+     */
+    public function testASystemMessageEnvelopeReachesTheHumanInboxNotTheModel(): void
+    {
+        $result = $this->runHookBounded('printf %s \'{"systemMessage":"human only"}\'');
+
+        $this->assertSame('allow', $result['action']);
+        $this->assertSame('', $result['additionalContext'], 'a human-directed string must not borrow the model\'s surface');
+        $this->assertCount(1, $result['notices']);
+        $this->assertStringContainsString('human only', $result['notices'][0]);
+        $this->assertStringContainsString('bounded_hook', $result['notices'][0], 'the row must name the hook that wrote it');
+    }
+
+    /**
+     * `suppressOutput` drops the NOTE, never the NOTICE (Claude Code parity,
+     * C-EXT-6.a): the same envelope with `suppressOutput: true` keeps the
+     * human row while the model surface stays empty.
+     */
+    public function testSuppressOutputDropsTheNoteButNeverTheSystemMessageNotice(): void
     {
         $result = $this->runHookBounded('printf %s \'{"suppressOutput":true,"systemMessage":"ask the human","additionalContext":"a note anyway"}\'');
 
         $this->assertSame('allow', $result['action']);
         $this->assertSame('', $result['additionalContext']);
         $this->assertStringNotContainsString('ask the human', $result['message']);
-    }
-
-    public function testASystemMessageEnvelopeIsStrippedNotForwarded(): void
-    {
-        $result = $this->runHookBounded('printf %s \'{"systemMessage":"human only"}\'');
-
-        $this->assertSame('allow', $result['action']);
-        $this->assertSame('', $result['additionalContext'], 'a human-directed string has no surface here and must not borrow the model\'s');
+        $this->assertCount(1, $result['notices']);
+        $this->assertStringContainsString('ask the human', $result['notices'][0]);
     }
 
     public function testSuppressOutputFalseKeepsTheNote(): void
@@ -763,7 +780,7 @@ final class ScriptHookTest extends TestCase
      *        from $seconds, which is this test's external clock on the whole
      *        child process
      *
-     * @return array{action: string, message: string, length: int, elapsed: float, cpu: float}
+     * @return array{action: string, message: string, additionalContext: string, length: int, elapsed: float, cpu: float, notices: list<string>}
      */
     private function runHookBounded(
         string $command,
@@ -781,6 +798,12 @@ final class ScriptHookTest extends TestCase
             <?php
             declare(strict_types=1);
             require {$this->export($autoload)};
+
+            // C-EXT-6.a: arm the inbox in the child so the test can SEE the
+            // human notice a `systemMessage` now records. A native row built
+            // inline here records nothing else, so a non-empty drain is fully
+            // attributable to the envelope under test.
+            SugarCraft\Code\Diagnostics\RuntimeNoticeSink::arm(crossFork: false);
 
             \$signalAfter = {$signal};
             if (\$signalAfter !== null) {
@@ -822,6 +845,7 @@ final class ScriptHookTest extends TestCase
                 'action' => \$result->action,
                 'message' => \$result->message,
                 'additionalContext' => \$result->additionalContext,
+                'notices' => SugarCraft\Code\Diagnostics\RuntimeNoticeSink::drain(),
                 'length' => strlen(\$result->message),
                 'elapsed' => microtime(true) - \$started,
                 'cpu' => \$cpu() - \$cpuBefore,
@@ -842,6 +866,7 @@ final class ScriptHookTest extends TestCase
         self::assertIsString($decoded['action'] ?? null);
         self::assertIsString($decoded['message'] ?? null);
         self::assertIsString($decoded['additionalContext'] ?? null);
+        self::assertIsArray($decoded['notices'] ?? null);
         self::assertIsInt($decoded['length'] ?? null);
         self::assertIsFloat($decoded['elapsed'] ?? null);
         self::assertIsFloat($decoded['cpu'] ?? null);

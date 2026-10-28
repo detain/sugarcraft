@@ -10,6 +10,7 @@ use SugarCraft\Code\Support\HookContextFiles;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Support\ToolIpcFiles;
+use SugarCraft\Core\Util\Sanitize;
 
 /**
  * A hook that executes an external script.
@@ -983,9 +984,10 @@ final readonly class ScriptHook implements BoundedHookInterface
      * instead of disappearing with the child — and because the row is read
      * between turns rather than interrupting one.
      *
-     * SHARED BY BOTH DOWNGRADES, and the intended home for the next one
-     * (C-EXT-6.a's hook-argument forms add a shape here, not a second Lang key
-     * per call site).
+     * SHARED BY BOTH DOWNGRADES. C-EXT-6.a's `systemMessage` notice is its
+     * sibling — {@see recordSystemMessageNotice()} — not a shape added here:
+     * its Lang row carries no `$exitCode` at all, so the two keys stay apart
+     * on purpose while riding the same sink.
      */
     private function recordDialectNotice(int $exitCode, string $errors): void
     {
@@ -999,6 +1001,39 @@ final readonly class ScriptHook implements BoundedHookInterface
                     : Lang::t('hooks.notice.said_nothing'),
             ],
         ));
+    }
+
+    /**
+     * The one-line human notice for a hook's `systemMessage` (C-EXT-6.a).
+     *
+     * Same carrier as {@see recordDialectNotice()} for the same reasons: the
+     * sink crosses forks, and the row lands in an inbox a human scans between
+     * turns instead of interrupting one. `Sanitize::untrusted()` runs FIRST —
+     * a foreign hook speaks JSON, not the terminal, and its string must not
+     * smuggle SGR or OSC bytes into the next repaint — then the whitespace
+     * sweep and trim from {@see \SugarCraft\Code\Hooks\BuiltIn\PostEditDiagnosticsHook::render()},
+     * the house idiom for one-line notices: an inbox row is ONE row, so a
+     * newline in the message becomes a space rather than a torn frame.
+     * {@see clip()} caps the already-cleaned value at
+     * {@see self::NOTICE_REASON_BYTES} so the ceiling applies to what is
+     * actually displayed. Claude Code parity: suppressing the hook's stdout
+     * does NOT hide this line, and it never rides model context — see the note
+     * in {@see fromEnvelope()} where it is recorded.
+     */
+    private function recordSystemMessageNotice(string $message): void
+    {
+        $shown = trim((string) preg_replace('/\s+/', ' ', Sanitize::untrusted($message)));
+        if ($shown === '') {
+            // Nothing displayable survived the sweep (the message was all
+            // control bytes or blank); a notice of "(nothing)" would be the
+            // envelope saying nothing — record nothing.
+            return;
+        }
+
+        RuntimeNoticeSink::record(Lang::t('hooks.notice.system_message', [
+            'hook' => $this->name,
+            'message' => self::clip($shown, self::NOTICE_REASON_BYTES),
+        ]));
     }
 
     /**
@@ -1799,6 +1834,16 @@ final readonly class ScriptHook implements BoundedHookInterface
             ));
         }
 
+        // C-EXT-6.a: a string `systemMessage` is HONORED — as a notice to the
+        // HUMAN, never as model context. Placed after every malformed return
+        // above so a broken envelope records nothing, and before every verdict
+        // below so an allow, a stop, a deny and an ask all still show the line
+        // its hook wrote for the person at the terminal. The sink is drained
+        // only by human-facing paths; nothing here reaches the transcript.
+        if ($systemMessage !== null && trim($systemMessage) !== '') {
+            $this->recordSystemMessageNotice($systemMessage);
+        }
+
         if ($continue === false) {
             $stopReason = trim((string) $stopReason);
 
@@ -1822,11 +1867,10 @@ final readonly class ScriptHook implements BoundedHookInterface
         // ISS-090(e): `suppressOutput: true` kills the hook's stdout. Our only
         // stdout-borne surface is the additional-context note; the deny reason
         // and the ask question are verdicts, not output, and Claude Code's own
-        // renderer keeps showing those. `systemMessage` — HONORED BY REMOVAL:
-        // a human-directed string with no human surface in this pipeline (no
-        // UI prints a HookResult field that is neither verdict nor model
-        // context), and half-shipping it into the model context would show the
-        // human note to exactly the party it was not written for.
+        // renderer keeps showing those. C-EXT-6.a completes the pair: a string
+        // `systemMessage` is honored ABOVE as a human notice, and a notice is
+        // not stdout — suppressing does not hide it, exactly as Claude Code
+        // keeps showing a suppressed hook's system message to its human.
         if ($suppress === true) {
             $note = null;
         }

@@ -674,6 +674,8 @@ one hook say several things at once:
 | `updatedInput` | exit `4` | a JSON object replacing the tool's arguments, refused over the same ceiling; with `ask` it rides the question as a proposal the chain re-scans |
 | `additionalContext` | stdout on exit `0` | the model-visible note, capped at 10,000 bytes |
 | `continue` + `stopReason` | — | `"continue": false` refuses the call and ends the turn (`HookResult::haltsTurn()`); `stopReason` is the operator-facing reason the reply closes with |
+| `suppressOutput` | — | drops the hook's stdout note (its `additionalContext`), never a verdict — see the rules below |
+| `systemMessage` | — | a one-line message for the human through the `RuntimeNoticeSink` inbox, never model context, and it survives `suppressOutput` — see the rules below |
 
 The same keys are accepted under `hookSpecificOutput`, where
 `permissionDecision` and `permissionDecisionReason` spell `decision` and
@@ -703,7 +705,15 @@ Rules worth knowing before you rely on it:
   with `[turn stopped by hook "<name>": <stopReason>]`. On `Stop` and
   `SubagentStop` it ends the turn the same way (see *The stop events*). The
   TUI's own tool path (`Chat::gateToolCall()`) still only refuses the call.
-- `suppressOutput` and `systemMessage` are not read.
+- `suppressOutput` is read: it drops the hook's stdout note (its
+  `additionalContext`), never a verdict — a deny reason and an ask question are
+  not output, and keep reaching you as in Claude Code.
+- `systemMessage` is read: a string one is shown to the **human** through the
+  same `RuntimeNoticeSink` drain described above — clipped, with control
+  characters stripped, and never added to the model context. `suppressOutput`
+  does not hide it: the notice is not the hook's stdout, exactly as in Claude
+  Code. A session hosted by `candy-code serve` shows it once the hosted notice
+  drain lands.
 
 ### Environment handed to the script
 
