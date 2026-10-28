@@ -5644,6 +5644,7 @@ final class Renderer
             ->render(Lang::t($queued ? 'tui.tool.queued' : 'tui.tool.running', ['call' => self::oneLine($msg->content)]));
         $running .= self::agentLines($runs, $theme, $width, $agents, $frame);
         $running .= self::previewLines((string) $msg->pendingToolCallId, $theme, $width, $images, $mosaic, $imageRows);
+        $running .= self::tailLines((string) $msg->pendingToolCallId, $theme, $width);
 
         if ($msg->reasoning === null || trim($msg->reasoning) === '') {
             return $running;
@@ -5709,6 +5710,70 @@ final class Renderer
 
         return $parts === [] ? '' : '  ' . implode(' · ', $parts);
     }
+
+    /**
+     * Tail lines painted under a running tool row (C-TOOL-3.b): the newest
+     * {@see TAIL_LINES} lines of the shell output the live pump has fed into
+     * {@see \SugarCraft\Code\Tui\ToolTailSlots}.
+     *
+     * Same contract as {@see previewLines()}: '' - leaving the row
+     * byte-identical to a no-tail render - when no slot exists, and each line
+     * runs the frame sanitizer (ANSI/C0/C1/DEL stripped, CR mapped to a break
+     * so a progress-bar repaint can never overwrite a neighbouring pane,
+     * invisible bidi marked, zone sentinels stripped) before it is dim-rendered
+     * and cell-clipped through {@see clipWithEllipsis()} - one line per row,
+     * the render invariant every other transcript row obeys. When the tail
+     * holds more lines than the paint budget, a dim `… N earlier lines`
+     * caption says so above the shown ones; the ring's byte cap is honest
+     * bookkeeping the caption line count alone cannot express, so it is the
+     * visible overflow, not the slot's `truncated` flag, that earns the row.
+     */
+    private static function tailLines(string $callId, Theme $theme, int $width): string
+    {
+        if ($callId === '' || $width <= 0) {
+            return '';
+        }
+
+        $slot = \SugarCraft\Code\Tui\ToolTailSlots::peek($callId);
+        if ($slot === null || $slot['tail'] === '') {
+            return '';
+        }
+
+        $lines = explode("\n", self::untrusted($slot['tail']));
+        // A frame that ends on a newline owns no blank row: the shell's next
+        // write will fill that line, so painting it now would show a gap.
+        while ($lines !== [] && trim($lines[count($lines) - 1]) === '') {
+            array_pop($lines);
+        }
+        if ($lines === []) {
+            return '';
+        }
+
+        $earlier = max(0, count($lines) - self::TAIL_LINES);
+        if ($earlier > 0) {
+            $lines = array_slice($lines, $earlier);
+        }
+
+        $block = '';
+        if ($earlier > 0) {
+            $block .= "\n" . self::dim($theme)->render(self::clipWithEllipsis(
+                Lang::t('tui.tool.tail_more', ['count' => $earlier]),
+                $width,
+            ));
+        }
+        foreach ($lines as $line) {
+            $block .= "\n" . self::dim($theme)->render(self::clipWithEllipsis('  ' . $line, $width));
+        }
+
+        return $block;
+    }
+
+    /**
+     * Live-tail paint budget (C-TOOL-3.b): how many newest tail lines the
+     * running row shows before the earlier-lines caption appears.
+     */
+    private const TAIL_LINES = 6;
+
 
     /**
      * The live lines of the runs under one Task row (roadmap P-B2), each on

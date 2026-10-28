@@ -7,21 +7,19 @@ namespace SugarCraft\Code\Tui;
 /**
  * Process-global holding pen for live shell tails (C-TOOL-3.a).
  *
- * NOT YET WIRED: as of this commit the store is built and tested but has no
- * production callers. C-TOOL-3.b wires it: a ToolProgress frame will land here
- * from the turn's event fold instead of the transcript, and the Renderer's
- * running-tool row will peek the slot on every paint, so the progressive tail
- * replaces itself in place - single-slot, never append. (Today the ToolProgress
- * folds only recordEvent, per the in-tree "paints no live tail this wave" note;
- * the mirror PreviewSlots is already wired at Chat.php - this class is not.)
+ * WIRED (C-TOOL-3.b): a ToolProgress frame lands here from the turn's event
+ * fold - both the live pump arm and the settled-queue twin - instead of the
+ * transcript, and the Renderer's running-tool row peeks the slot on every
+ * paint, so the progressive tail replaces itself in place - single-slot,
+ * never append. (The mirror PreviewSlots is wired at Chat.php the same way;
+ * replaceToolRunningPlaceholder now clears this store beside that one.)
  *
  * OUT-OF-ORDER FRAMES ARE DROPPED. Each frame carries the call's sequence
  * number from 1, and the slot keeps only the newest sequence it has seen: a
  * frame that arrives late (or belongs to an earlier write of a recycled id)
  * can never repaint the row backwards.
  *
- * LEAK LAW (for C-TOOL-3.b's wiring): every slot is cleared when its tool call
- * settles (replaceToolRunningPlaceholder) and on session resets. Nothing in
+ * LEAK LAW: every slot is cleared when its tool call settles (replaceToolRunningPlaceholder) and on session resets. Nothing in
  * here is ever serialized, persisted, or replayed from the session store; the
  * bytes exist only as long as the render is in flight.
  */
@@ -29,7 +27,7 @@ final class ToolTailSlots
 {
     /**
      * Leak-law backstop (C-TOOL-3.a, mirroring PreviewSlots' W2.4 cap): the
-     * settle-clear C-TOOL-3.b will wire empties slots as calls finish; the cap
+     * settle-clear wired in C-TOOL-3.b empties slots as calls finish; the cap
      * itself holds regardless, so a frame for an abandoned call (a turn that
      * died mid-render) can never accumulate - the map holds at most this many
      * newest slots.

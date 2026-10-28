@@ -3742,12 +3742,16 @@ final class Chat implements Model
         }
 
         if ($event instanceof ToolProgress) {
-            // WEB-4 settled-queue twin: the tail records like the deltas do —
-            // ephemeral in the log either way (the runner never writes it) —
-            // and the fold returns WITHOUT touching the placeholder chain, so
-            // the settled ToolFinished that follows still pairs with its
-            // ToolStarted exactly as if the frame had never arrived.
+            // WEB-4 + C-TOOL-3.b settled-queue twin: the tail records like the
+            // deltas do — ephemeral in the log either way (the runner never
+            // writes it) — and lands in the display slot beside it, so a
+            // settled queue paints the same live tail the pump would have.
+            // The fold still returns WITHOUT touching the placeholder chain,
+            // so the settled ToolFinished that follows pairs with its
+            // ToolStarted exactly as if the frame had never arrived; the
+            // settle clears the slot the way the pump arm's rows never can.
             $runner->recordEvent($msg->turn, $event);
+            \SugarCraft\Code\Tui\ToolTailSlots::set($event->toolCallId, $event->tail, $event->truncated, $event->seq);
 
             return [$this, $this->foldHop($rest, $msg->replay)];
         }
@@ -4270,13 +4274,15 @@ final class Chat implements Model
         }
 
         if ($event instanceof ToolProgress) {
-            // WEB-4: live shell tail — recorded like the deltas (broadcast to
-            // listeners, never written: the runner's ephemeral gate and the
-            // log's durable list both keep it out of the store). The TUI
-            // paints no live tail this wave, so the fold returns WITHOUT
-            // touching the placeholder chain; the ToolFinished that pairs
-            // this call follows in order, untouched by the frame.
+            // WEB-4 + C-TOOL-3.b: live shell tail — recorded like the deltas
+            // (broadcast to listeners, never written: the runner's ephemeral
+            // gate and the log's durable list both keep it out of the store)
+            // AND written to the display slot, which is what the running row
+            // now paints beneath itself. The fold still returns WITHOUT
+            // touching the placeholder chain: the ToolFinished that pairs this
+            // call follows in order, and the settle clears the slot.
             $this->turnRunner()->recordEvent($this->liveTurn($generation), $event);
+            \SugarCraft\Code\Tui\ToolTailSlots::set($event->toolCallId, $event->tail, $event->truncated, $event->seq);
 
             return [$this, $more];
         }
@@ -4388,7 +4394,11 @@ final class Chat implements Model
     {
         // W2.4 leak law: the render settled, so its live-preview slot dies
         // here - the settled row owns the final image through ToolResult.
+        // C-TOOL-3.b carries the same law for the shell-tail slot: the tail
+        // was the running row's live paint, and the finished row's own output
+        // block replaces it, so an un-cleared slot would leak past its call.
         PreviewSlots::clear($event->toolCallId);
+        \SugarCraft\Code\Tui\ToolTailSlots::clear($event->toolCallId);
         $runner = $this->turnRunner();
         [$history, $row, $replaced] = $runner->projector()->finish($this->history, $event);
         // Lane B (skills-qa F3): the engine path lands its row through the
