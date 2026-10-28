@@ -751,10 +751,12 @@ candy-code/tests/Commands/GenerateCommandTest.php	0.057	23
 candy-code/tests/Observability/OtlpEncoderTest.php	0.057	12
 candy-code/tests/Chat/AgentComposerTest.php	0.056	9
 candy-code/tests/Context/AbsoluteThresholdTest.php	0.056	23
+candy-code/tests/Tui/ComposerVimCountTest.php	0.056	18
 candy-code/tests/Tui/ComposerVimTest.php	0.056	27
 candy-code/tests/Backend/StepSummaryCompactHooksTest.php	0.055	3
 candy-code/tests/Cli/StreamJsonEmitterTest.php	0.055	7
 candy-code/tests/Commands/MacAltNoticeTest.php	0.055	4
+candy-code/tests/Tui/ComposerVimTextObjectTest.php	0.055	9
 candy-code/tests/App/AgentsPaneDockedFooterTest.php	0.054	3
 candy-code/tests/Backend/TurnStartPruneTest.php	0.054	3
 candy-code/tests/Bundles/BundleManifestTest.php	0.054	9
