@@ -564,6 +564,27 @@ same money reason as `maxOutputTokens`.
   wire. None of this has been checked against a live Vertex or Bedrock
   endpoint.
 
+A fifth key shapes the `openai` provider alone: `api`, which picks the wire
+(`ProviderFactory::createOpenAI()` → `OpenAIProvider`). Unset, or `"chat"`,
+keeps the Chat Completions path the provider has always spoken, byte for byte.
+`"responses"` sends every request to the Responses endpoint instead: the
+system prompt rides `instructions`, the transcript rides `input` items —
+messages, plus `function_call` and `function_call_output` for tool turns —
+and tools are the flat `{"type": "function", ...}` shape that endpoint takes.
+The responses arm always sends `store: false`, so nothing persists
+server-side; it always carries a `max_output_tokens` ceiling — the configured
+one, or the chat arm's 4096 default, exactly as the chat arm always carries
+its `max_tokens` default — and sends the `reasoning.effort` arm only for the
+reasoning families that take it, round-downed by the same table `/effort`
+uses.
+Temperature rides only when you set one explicitly, and `jsonSchema`, `topP`
+and `topK` are not sent there, exactly as the chat arm ignores them. The
+block's `organization` key is already sent on the chat wire by the SDK client
+that reads it; the responses wire carries it as its own
+`OpenAI-Organization` header. Any value
+other than the two names is refused by name when the provider is built, the
+way the sandbox key's unknown spellings are.
+
 One more key shapes a provider but lives **only** in its block, never in a
 settings file: `fallbackModels`, the other model ids of the same provider to
 try, in order, when a request fails transiently or overflows the context window

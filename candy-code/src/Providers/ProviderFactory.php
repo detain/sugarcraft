@@ -122,7 +122,7 @@ final readonly class ProviderFactory
             // `openai` was the one stuck to the SDK's hardcoded host, which
             // made gateways and self-hosted compat servers require renaming
             // the block to `custom` and re-declaring everything.
-            'optional' => ['baseUrl', 'organization', 'model', 'modelPrices', 'contextWindow', 'supportsVision', 'fallbackModels'],
+            'optional' => ['baseUrl', 'organization', 'model', 'modelPrices', 'contextWindow', 'supportsVision', 'fallbackModels', 'api'],
         ],
         'anthropic' => [
             'required' => ['apiKey'],
@@ -883,6 +883,23 @@ final readonly class ProviderFactory
 
         $model = $config['model'] ?? 'gpt-4o';
 
+        // C-PRV-2.a: the block's `api` key picks the wire. Absent/null is
+        // the historical chat arm byte-for-byte; anything else must be one
+        // of the two names, refused at build with the sandbox key's
+        // precedent prose (an unknown spelling that reached the provider
+        // would silently route to neither arm's door check — the value is
+        // compared against constants below).
+        $api = $config['api'] ?? OpenAIProvider::API_CHAT;
+        if ($api === null) {
+            $api = OpenAIProvider::API_CHAT;
+        }
+        if (!is_string($api) || !in_array($api, OpenAIProvider::validApis(), true)) {
+            throw new \InvalidArgumentException(sprintf(
+                'api must be "chat" or "responses", got %s',
+                is_string($api) ? "'$api'" : get_debug_type($api),
+            ));
+        }
+
         // Billing fix: operator-declared rates ride the provider all the way to
         // `calculateCost()`. An explicit `modelPrices` inside THIS provider's
         // file config wins (it is the narrower statement); otherwise the key is
@@ -915,6 +932,12 @@ final readonly class ProviderFactory
             // mirroring `models all`; the literal lives in one place now.
             is_string($baseUrl) && trim($baseUrl) !== '' ? trim($baseUrl) : OpenAIProvider::SDK_DEFAULT_BASE,
             is_string($config['apiKey'] ?? null) && $config['apiKey'] !== '' ? $config['apiKey'] : null,
+            // C-PRV-2.a: the wire choice + the org header the raw arm needs.
+            api: $api,
+            organization: is_string($config['organization'] ?? null)
+                && trim($config['organization']) !== ''
+                ? trim($config['organization'])
+                : null,
         );
     }
 

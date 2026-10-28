@@ -12,6 +12,7 @@ use SugarCraft\Code\Messages\AssistantMessage;
 use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Messages\SystemMessage;
 use SugarCraft\Code\Messages\ToolResultMessage;
+use SugarCraft\Code\Providers\Concerns\OpenAiResponsesWire;
 use SugarCraft\Code\Providers\Concerns\ReasoningExtractor;
 use SugarCraft\Code\Providers\Concerns\ReassemblesStreamedToolCalls;
 use SugarCraft\Code\Tools\Tool;
@@ -28,6 +29,24 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
     use ReasoningExtractor;
 
     use ReassemblesStreamedToolCalls;
+
+    use OpenAiResponsesWire;
+
+    /**
+     * C-PRV-2.a: the two wire arms the config block's `api` key picks.
+     * `chat` is the historical openai-php SDK path; `responses` speaks
+     * `POST {base}/responses` through {@see OpenAiResponsesWire}. The
+     * default keeps every existing config byte-identical.
+     */
+    public const API_CHAT = 'chat';
+
+    public const API_RESPONSES = 'responses';
+
+    /** The `api` key's accepted values — the factory validates against this. */
+    public static function validApis(): array
+    {
+        return [self::API_CHAT, self::API_RESPONSES];
+    }
 
     /**
      * PRV-1 (MINOR-1): the public API root the SDK itself defaults to when
@@ -184,6 +203,21 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
         // "no catalog", never a guess at api.openai.com.
         private ?string $modelsBaseUrl = null,
         private ?string $modelsApiKey = null,
+        // C-PRV-2.a: which wire this object speaks. 'chat' (the default,
+        // so every hand-built 2-arg test construction survives byte-for-
+        // byte) routes complete()/completeStream() through the openai-php
+        // SDK path; 'responses' routes both through OpenAiResponsesWire.
+        // The factory validates the value; an unknown string never reaches
+        // here.
+        private string $api = self::API_CHAT,
+        // C-PRV-2.a: the block's `organization`, threaded for the raw arm
+        // — the SDK client already carries it on the chat arm, the
+        // Responses arm needs it as its own header.
+        private ?string $organization = null,
+        // Test seam for the raw arm (a MockHandler-bound Guzzle client);
+        // production passes nothing and guzzleClient() builds bounded
+        // transports per call.
+        private ?\GuzzleHttp\Client $responsesClient = null,
     ) {
         if ($contextWindowOverride !== null && $contextWindowOverride < 1) {
             throw new \InvalidArgumentException(sprintf(
@@ -527,6 +561,13 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
 
     public function complete(CompleteRequest $request): CompleteResponse
     {
+        // C-PRV-2.a: the Responses arm is a complete wire, not a field
+        // tweak — everything below (params, the SDK client, parseResponse)
+        // is the chat wire and stays byte-identical for it.
+        if ($this->api === self::API_RESPONSES) {
+            return $this->responsesComplete($request);
+        }
+
         $params = array_merge([
             'model' => $request->model,
             'messages' => $this->formatMessages($request->messages),
@@ -586,6 +627,14 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
      */
     public function completeStream(CompleteRequest $request): \Generator
     {
+        // C-PRV-2.a: same split as complete() — the chat generator below
+        // is byte-untouched for every `api: chat` config.
+        if ($this->api === self::API_RESPONSES) {
+            yield from $this->responsesCompleteStream($request);
+
+            return;
+        }
+
         $params = array_merge([
             'model' => $request->model,
             'messages' => $this->formatMessages($request->messages),

@@ -83,6 +83,14 @@ A new built-in type must appear in the README's provider list and in
 roster guard diffs variable names against those tables, and an ambient
 `OPENAI_*`-style name it cannot find there goes red.
 
+An existing type may also split into two wires behind one block. The `openai`
+arm's `api` key (documented in [SETTINGS.md](SETTINGS.md)) selects between the
+Chat Completions path and the Responses path: one class, one registration, and
+a route taken at the top of `complete()` and `completeStream()` before either
+arm builds a request. A split like that must stay binary — an unknown
+spelling throws by name when the provider is built, because a value that
+reached the live object would answer neither arm's endpoint.
+
 ## Behavior laws a provider must not break
 
 - **No blanket request timeouts on the LLM call path.** A provider must not
