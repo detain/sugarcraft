@@ -1,0 +1,28 @@
+### C-PRV-3.a — `serviceTier` setting and provider rebinding (core)
+- item: C-PRV-3 (sources: GAP-MOD-N2)
+- kind: gap · effort M
+- approach:
+  - Add a `serviceTier` setting (`default|fast`; RiskClass Spend; layered; env `CANDY_CODE_SERVICE_TIER`).
+  - New interface `Providers\ShapesServiceTier`, with `serviceTierFor(string $model): ?string` (the wire value for fast) and `withServiceTier(?string): static`.
+  - Implement it in `OpenAIProvider` (`service_tier: "priority"`).
+  - Implement it in `AnthropicProvider` only if the lane confirms the current Messages API field for fast output against the API docs (the `claude-api` skill). Otherwise Anthropic is left out of the roster and refuses honestly.
+  - `EngineBackend::withServiceTier()` is an overlay applied at the same provider-rebinding seam `RebindsModel::withModel()` uses. No `Runtime`/`App`/`CompleteRequest` change.
+  - The launch tail applies the configured tier the way `withResolvedReasoningEffort` does.
+- files.create: `candy-code/src/Providers/ShapesServiceTier.php`, `candy-code/tests/Providers/ServiceTierTest.php`
+- files.modify:
+  - `candy-code/src/Providers/OpenAIProvider.php`
+  - `candy-code/src/Providers/AnthropicProvider.php` (conditional, see above)
+  - `candy-code/src/Backend/EngineBackend.php` (overlay + rebinding seam)
+  - `candy-code/src/Cli/LaunchContext.php` (launch tail)
+  - `candy-code/src/Config/Settings/Definitions/ModelProviderSettings.php`
+  - `candy-code/src/Config/LayeredSettings.php` (generated region)
+  - `candy-code/docs/SETTINGS.md` (gen)
+  - `candy-code/docs/ENVIRONMENT.md` (gen column)
+- tests: create ServiceTierTest: wire pins for fast/default; a provider without the interface ignores nothing silently (the gate answers false); the launch tail applies the setting.
+- docs/guards: `php tools/gen-settings-doc.php --write` under `candy-code/tests/Config/Settings/SettingsSchemaDocDriftTest.php`; `candy-code/tests/Config/EnvRosterDriftTest.php`
+- serialized: [lang:settings.serviceTier.*] [docs:SETTINGS.md] [docs:ENVIRONMENT.md] [hot:candy-code/src/Backend/EngineBackend.php] [hot:candy-code/src/Providers/OpenAIProvider.php] [hot:candy-code/src/Providers/AnthropicProvider.php] [hot:candy-code/src/Config/Settings/Definitions/ModelProviderSettings.php] [hot:candy-code/src/Config/LayeredSettings.php] [hot:candy-code/src/Cli/LaunchContext.php]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: priority tiers bill at a higher rate. The spend ledger must price them, or show "unpriced" (the existing unpriced-model notice path).
+

@@ -1,0 +1,9 @@
+# C-PRV-3.a WELD (batch-9, 2026-10-28)
+
+- Picks: f59fff349 -> 36cc39ad1, bff8226b8 -> a3c9f92a8, 21bd0a79e -> 21732353d (final; §4 cites master hash 21732353d per brief, lane tip 21bd0a79e). Branch tip verified == 21bd0a79e.
+- Pre-batch base: 978ff28895 (batch-8 closeout) — brief said 4aa9ea204; disk moved one docs-only commit ahead (TreeWideGuardRoster licences only, zero overlap). Recorded per phantom law.
+- Foreign ancestor e68270a09 (C-WEB-4.e PDF upload) rode branch cc/C-PRV-3.a but master..cc listed it; NOT picked (not a batch-9 lane; zero file overlap with lane commits — verified before picking).
+- Conflict: candy-code/README.md settings:layered region (generated) — resolved lane-side (serviceTier word + list entry), then `php tools/gen-settings-doc.php --check` rc0 on the merged tree proves the region byte-current. Never hand-fixed beyond taking the lane side of the generated hunk.
+- Gates on merged tree (cwd candy-code, plain pipe, env -u LINES -u COLUMNS): --filter ServiceTierTest 29T/96A EXACT; --filter 'ServiceTierTest|LayeredSettingsTest' 128T/489A EXACT; window 'ServiceTier|LayeredSettings|EngineBackend|LaunchContext|SettingsSchemaDocDrift|TrustKey|EnvRoster' 595T/42869A 0F (brief expected staleness-pair-only reds — tree ran FULLY GREEN; assertions +201A vs lane-reported 42668A is merged-era drift: LayeredSettingsTest roster +2A from 21732353d plus foreign-era methods in the window families; no FAILURES present).
+- DUR: minted scripts/parallel-tests-durations.tsv row ServiceTierTest.php 4.981/29 at descending position (violations 4 before == 4 after, baseline held).
+- Review-file delta: brief named lanes/C-PRV-3.a/REVIEW-3.md as canonical; file ABSENT on disk (only REVIEW-1.md exists). r3 CLEAN verdict recorded in run-state inflight note; builder REPORT carries FIX ROUND 1/2 stamps incl. dated MAJOR-3 errata. Welding per that verdict; WELD.md is the record of the mismatch.

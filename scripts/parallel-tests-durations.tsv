@@ -66,6 +66,7 @@ candy-code/tests/Chat/InstructionQuickAddTest.php	5.111	16
 candy-code/tests/Support/InterpolationOpenerTokenTest.php	5.109	6
 candy-code/tests/Cli/LoginSubcommandTest.php	5.097	17
 candy-code/tests/Support/ProcessUniqueTempNameTest.php	5.035	17
+candy-code/tests/Providers/ServiceTierTest.php	4.981	29
 candy-code/tests/Cli/InstallScriptTest.php	4.959	13
 candy-code/tests/Integration/ParallelToolCallsTest.php	4.956	27
 candy-code/tests/Backend/TaskSpendPropagationTest.php	4.927	13

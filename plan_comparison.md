@@ -2165,7 +2165,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-AGT-4.a (W14), P-AGENT.b (W17)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-4.b`
 
-#### C-PRV-3.a — `serviceTier` setting and provider rebinding (core)
+#### ✅ 21732353d C-PRV-3.a — `serviceTier` setting and provider rebinding (core)
 - **Item:** C-PRV-3 (sources: GAP-MOD-N2) · gap · effort M
 - **What:** Add a `serviceTier` setting (`default|fast`; RiskClass Spend; layered; env `CANDY_CODE_SERVICE_TIER`). New interface `Providers\ShapesServiceTier`, with `serviceTierFor(string $model): ?string` (the wire value for fast) and …
 - **Files — create:** `candy-code/src/Providers/ShapesServiceTier.php`, `candy-code/tests/Providers/ServiceTierTest.php`
