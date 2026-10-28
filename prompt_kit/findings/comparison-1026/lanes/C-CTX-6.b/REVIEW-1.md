@@ -1,0 +1,16 @@
+# C-CTX-6.b REVIEW-1 (c82b89249, base 4b771634d) — FINDINGS (0C/0M/1min/1nit)
+
+Scope: diff == exactly the 6 declared files; no suite-figure/durations/dist; HEAD^==declared base; single commit; %ae and %ce separately == detain@interserver.net; zero trailers; worktree clean after gates. Region extension typedUserMessage()→toTypedMessages() disclosed in REPORT and functionally mandatory (cross-row budget + per-turn notice cannot live in a row method).
+
+Non-vacuity (run myself, no stash): base-preload harness (/tmp/opencode/c6b-boot.php require_once of `git show HEAD^:` copies of both src files) → filter 'FileMentions|DocumentAggregateBudget' = 26T/**8E** pre-fix (all 9 budget legs except 3 base-true pass/under-budget legs; both new page tests fatal on undefined constants); tip = OK 26T/91A; family 'FileMentions|DocumentAggregateBudget|EngineBackend' = OK 314T/1894A. Newest-first is behavior-discriminating: an oldest-first walk mutation reds testTheBudgetSpendsNewestFirstAcrossRows (three.pdf falls at 15,728,648 > 15,723,168 remaining). Hand-traced 15+10 MiB pair → newest rides, oldest withheld. MEDIA.md table matches code constants (256Ki/5Mi/20Mi/100/30Mi).
+
+Page refusal: positive-count law holds — lookahead (?![a-zA-Z0-9]) excludes /Pages and /PageLabels; 200×/Pages fixture passes (testAPdfHidingItsPagesFromTheEstimatePasses); refusal strictly > cap; 100-attach / 101-refuse pinned (99 shares the 100 arm). Cost model 4·ceil(n/3) matches AttachmentEncoding.php:94 base64_encode of raw data.
+
+Capability probe: memo-seeded by pre-pass; testADocumentOnlyRequestAsksTheProviderExactlyOnce is load-bearing — a re-probe per row (memo not seeded) → documentQueries()==2 → red. Notice composed once per turn after the row walk, joined after capability notice; capability-vs-budget arms mutually exclusive in code. LangParity/LangLaunchLocale/GlobDialect/DocFigure/DuplicatedTestHelper = OK 126T/7372A; en-only new key legal (lang/ ships en.php alone; §6.3-h strict-parity set lands LAST). ChatHostLangCatalogue 1F = chat.effort.launch_unshaped, key pre-exists at base (git grep HEAD^), not our diff — builder disclosure true.
+
+Design conformance (§6.2 = design default): schedule/design text fixes "older withheld, newest kept", per-turn notice, placeholder sentence — all match; the 30 MiB figure is the lane's (design states only the 32 MiB wire law), reasoned in the const docblock + pinned test + MEDIA.md — consistent, no contradiction.
+
+- MINOR (step-local) DocumentAggregateBudgetTest: "one notice per turn" is only structurally pinned — no test substr_counts the notice or covers a MULTI-withhold turn (two over-budget docs → both names in the single sentence). A per-notice-emission refactor survives current assertions. Fix: extend testTwoDocumentsOverTheBudgetWithholdTheOlderOne with substr_count($reply->attachmentNotice,'withheld')===1 and add one three-doc row (two withheld names, one notice).
+- NIT REPORT.md gate figures not reproducible at tip: claimed 3-file run "35T/134A"; closest trio (FileMentions|DocumentAggregateBudget|EngineBackendAttachmentsTest) = 36T/140A, and pre-fix run = 26T/8E vs claimed 25T/58A/8E (±1T both sides). All green/red shapes correct; numbers off.
+
+Weld note: durations.tsv row owed for the new test file (REPORT already lists it). No blocking findings.

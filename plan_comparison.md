@@ -1355,7 +1355,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SEC-3.a (W2), C-SEC-3.b (W3)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-mcp.md` → `### C-MCP-2.a`
 
-#### C-CTX-6.b — PDF page check and an aggregate document budget
+#### ✅ b72a169f2 C-CTX-6.b — PDF page check and an aggregate document budget
 - **Item:** C-CTX-6 (sources: CTX-2-P1) · fix · MINOR · effort M
 - **What:** Root cause: PDFs have only a per-file 20 MiB cap (`FileMentions.php:58-64`). `AttachmentEncoding.php:87-95` re-encodes every earlier document on every request, so a 15 MB + 10 MB pair puts every later request over 32 MiB and each …
 - **Files — create:** `candy-code/tests/Backend/DocumentAggregateBudgetTest.php`
