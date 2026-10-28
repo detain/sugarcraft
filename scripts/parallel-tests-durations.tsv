@@ -197,6 +197,7 @@ candy-code/tests/Cli/BootstrapConfigPathOverrideTest.php	1.570	17
 candy-code/tests/Workspace/WorkspaceCheckpointerTest.php	1.568	15
 candy-code/tests/Host/ServedPromptSuggestionTest.php	1.565	4
 candy-code/tests/Tools/ToolDescriptionSentenceFloorTest.php	1.543	32
+candy-code/tests/Protocol/ShellsMethodsTest.php	1.543	7
 candy-code/tests/Server/BgPermissionAskRelayTest.php	1.539	12
 candy-code/tests/Backend/StopHookContinuesTurnTest.php	1.534	8
 candy-code/tests/Tui/KeyboardHandlerTest.php	1.522	84

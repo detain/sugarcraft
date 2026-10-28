@@ -2138,7 +2138,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tool.md` → `### C-TOOL-2.d`
 
-#### C-TOOL-3.e — Web Processes section + `shells.*` methods
+#### ✅ eed6630d3eb9a129f4087fa6896840b56865d548 C-TOOL-3.e — Web Processes section + `shells.*` methods (welded 2026-10-29)
 - **Item:** C-TOOL-3 (sources: CLAW-new#6, p2-miss: SHL no web/serve shell list) · gap · effort M
 - **What:** Structured protocol methods: `shells.list` (Read scope), `shells.output {shellId, cursor}` (Read) and `shells.stop {shellId}` (Write, idempotent). They resolve the session's workspace registry like the other per-session methods …
 - **Files — create:** `candy-code/src/Protocol/Methods/ShellsMethods.php`, `candy-code/tests/Protocol/ShellsMethodsTest.php`, `candy-code-web/src-web/stores/agents/shells.ts`, `candy-code-web/src-web/components/panels/ProcessesSection.vue`, `candy-code-web/src-web/components/panels/__tests__/processesSection.spec.ts`

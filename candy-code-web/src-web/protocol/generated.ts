@@ -40,6 +40,19 @@ export interface BackgroundSession {
   adopted: boolean
 }
 
+/** A background shell row from the launch's shell table, as the Shell tool started it; never its output — `shells.output` reads that. */
+export interface BackgroundShell {
+  shellId: string
+  label: string
+  state: "running" | "finished" | "unknown"
+  exitCode?: number | null
+  /** Set when the shell settled without an ordinary exit code — its output sink hit the cap, the lifetime wall stopped it, or the exit record was unreadable. */
+  exitNote?: string | null
+  /** True when the lifetime wall stopped the shell. */
+  expired: boolean
+  ageSeconds: number
+}
+
 /** WEB-3a: what the session's context is built from — structure for the panel `/context` prints as text. */
 export interface ContextSources {
   /** The documents the system prompt splices — names and sizes, bodies never (roadmap VIS-2a); null when this server could not price them. */
@@ -1337,6 +1350,55 @@ export interface Methods {
       appliesByKey?: Record<string, string>
     }
   }
+  /** The background shells this session may see — its own plus the untagged ones — without their output. */
+  "shells.list": {
+    params: {
+      sessionId: SessionId
+    }
+    result: {
+      items: BackgroundShell[]
+    }
+  }
+  /** One windowed read of a background shell's output from a cursor. */
+  "shells.output": {
+    params: {
+      sessionId: SessionId
+      shellId: string
+      /** The "out.err" token a previous read answered, or a byte count; omitted (or 0) reads fresh — a fresh window tail-wins, and skippedBytes says how much fell off the head. */
+      cursor?: number | string
+    }
+    result: {
+      shellId: string
+      stdout: string
+      stderr: string
+      cursor: string
+      skippedBytes: number
+      bytesAvailable: number
+      state: "running" | "finished" | "unknown"
+      exitCode?: number | null
+      exitNote?: string | null
+      expired: boolean
+    }
+  }
+  /** Stop a background shell through the launch's kill ladder; a settled or foreign id is a no-op answer. */
+  "shells.stop": {
+    params: {
+      sessionId: SessionId
+      shellId: string
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      shellId: string
+      /** False for an unknown id AND for another session's shell — the two answers are identical by design. */
+      found: boolean
+      wasRunning: boolean
+      confirmed: boolean
+      grouped: boolean
+      exitCode?: number | null
+      expired: boolean
+    }
+  }
   /** A session's todo list, as its Todo tool last wrote it. */
   "todo.get": {
     params: {
@@ -1559,6 +1621,9 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "settings.preview": "admin",
   "settings.schema": "read",
   "settings.set": "admin",
+  "shells.list": "read",
+  "shells.output": "read",
+  "shells.stop": "write",
   "todo.get": "read",
   "tool.output": "read",
   "workflow.list": "read",
@@ -1599,6 +1664,7 @@ export const IDEMPOTENT_METHODS: readonly MethodName[] = [
   "session.share",
   "session.unshare",
   "settings.set",
+  "shells.stop",
   "workflow.pause",
   "workflow.resume",
   "workflow.run",

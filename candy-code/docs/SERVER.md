@@ -486,6 +486,9 @@ it and the two tables below are generated from the code
 | `settings.preview` | admin |  | — | What a save would write — the target file's diff, when each change applies, and what blocks it — without writing. |
 | `settings.schema` | read |  | — | Every setting: type, default, help, apply mode, and whether a client may write it; and the tiers a save can target. |
 | `settings.set` | admin | yes | — | Write allowlisted settings to the user tier or a trusted project's local or shared file, in one write. |
+| `shells.list` | read |  | `sessionId` | The background shells this session may see — its own plus the untagged ones — without their output. |
+| `shells.output` | read |  | `sessionId`, `shellId` | One windowed read of a background shell's output from a cursor. |
+| `shells.stop` | write | yes | `sessionId`, `shellId` | Stop a background shell through the launch's kill ladder; a settled or foreign id is a no-op answer. |
 | `todo.get` | read |  | `sessionId` | A session's todo list, as its Todo tool last wrote it. |
 | `tool.output` | read |  | `sessionId`, `toolCallId` | A finished tool call's full output, from an offset. |
 | `workflow.list` | read |  | — | The workflows /workflow run can start. |

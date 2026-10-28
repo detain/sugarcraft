@@ -133,6 +133,53 @@
             ],
             "description": "A background (/bg) session; never its output."
         },
+        "BackgroundShell": {
+            "type": "object",
+            "properties": {
+                "shellId": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "state": {
+                    "enum": [
+                        "running",
+                        "finished",
+                        "unknown"
+                    ]
+                },
+                "exitCode": {
+                    "type": [
+                        "integer",
+                        "null"
+                    ]
+                },
+                "exitNote": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "description": "Set when the shell settled without an ordinary exit code — its output sink hit the cap, the lifetime wall stopped it, or the exit record was unreadable."
+                },
+                "expired": {
+                    "type": "boolean",
+                    "description": "True when the lifetime wall stopped the shell."
+                },
+                "ageSeconds": {
+                    "type": "number",
+                    "minimum": 0
+                }
+            },
+            "required": [
+                "shellId",
+                "label",
+                "state",
+                "expired",
+                "ageSeconds"
+            ],
+            "description": "A background shell row from the launch's shell table, as the Shell tool started it; never its output — `shells.output` reads that."
+        },
         "ContextSources": {
             "type": "object",
             "properties": {
@@ -4857,6 +4904,191 @@
                     "scope",
                     "written",
                     "changed"
+                ]
+            }
+        },
+        "shells.list": {
+            "description": "The background shells this session may see — its own plus the untagged ones — without their output.",
+            "scope": "read",
+            "idempotent": false,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    }
+                },
+                "required": [
+                    "sessionId"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/$defs/BackgroundShell"
+                        }
+                    }
+                },
+                "required": [
+                    "items"
+                ]
+            }
+        },
+        "shells.output": {
+            "description": "One windowed read of a background shell's output from a cursor.",
+            "scope": "read",
+            "idempotent": false,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "shellId": {
+                        "type": "string",
+                        "maxLength": 128
+                    },
+                    "cursor": {
+                        "oneOf": [
+                            {
+                                "type": "integer",
+                                "minimum": 0
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 64
+                            }
+                        ],
+                        "description": "The \"out.err\" token a previous read answered, or a byte count; omitted (or 0) reads fresh — a fresh window tail-wins, and skippedBytes says how much fell off the head."
+                    }
+                },
+                "required": [
+                    "sessionId",
+                    "shellId"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "shellId": {
+                        "type": "string"
+                    },
+                    "stdout": {
+                        "type": "string"
+                    },
+                    "stderr": {
+                        "type": "string"
+                    },
+                    "cursor": {
+                        "type": "string"
+                    },
+                    "skippedBytes": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "bytesAvailable": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "state": {
+                        "enum": [
+                            "running",
+                            "finished",
+                            "unknown"
+                        ]
+                    },
+                    "exitCode": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
+                    },
+                    "exitNote": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "expired": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "shellId",
+                    "stdout",
+                    "stderr",
+                    "cursor",
+                    "skippedBytes",
+                    "bytesAvailable",
+                    "state",
+                    "expired"
+                ]
+            }
+        },
+        "shells.stop": {
+            "description": "Stop a background shell through the launch's kill ladder; a settled or foreign id is a no-op answer.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "shellId": {
+                        "type": "string",
+                        "maxLength": 128
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "sessionId",
+                    "shellId"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "shellId": {
+                        "type": "string"
+                    },
+                    "found": {
+                        "type": "boolean",
+                        "description": "False for an unknown id AND for another session's shell — the two answers are identical by design."
+                    },
+                    "wasRunning": {
+                        "type": "boolean"
+                    },
+                    "confirmed": {
+                        "type": "boolean"
+                    },
+                    "grouped": {
+                        "type": "boolean"
+                    },
+                    "exitCode": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
+                    },
+                    "expired": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "shellId",
+                    "found",
+                    "wasRunning",
+                    "confirmed",
+                    "grouped",
+                    "expired"
                 ]
             }
         },
