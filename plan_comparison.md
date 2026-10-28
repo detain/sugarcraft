@@ -145,7 +145,7 @@ So while 2 lanes are in review, the other 8 slots build steps from the next wave
 | ✅ W9 (closed 2026-10-28) | 10 | C-SES-5.c · P-MENU.e · C-CTX-2.c · C-WEB-3.d · C-AGT-7.c · C-CTX-6.c · C-CTX-6.d · C-EXT-7.a · C-MCP-6.a · C-PRV-5.a |
 | ✅ W10 (closed 2026-10-28) | 10 | C-CTX-6.a · C-EXT-2.c · C-SEC-5.c · C-TOOL-3.a · C-AGT-7.b · C-CTX-1.c · C-CTX-2.e · C-MCP-4.a · C-PRV-5.b · C-PRV-5.c |
 | ✅ W11 (closed 2026-10-28) | 10 | C-MCP-2.a · C-CTX-6.b · C-EXT-2.d · C-PRV-5.d · C-SEC-5.b · C-SES-1.b · C-SES-9.b · C-TOOL-3.b · C-TOOL-7.b · C-TOOL-7.d |
-| W12 | 10 | C-MCP-2.b · C-SEC-5.d · C-TOOL-7.e · C-TUI-1.a · C-TUI-7.a · C-TUI-7.b · C-WEB-3.f · C-WEB-7.a · C-WEB-7.b · C-TOOL-5.b |
+| ✅ W12 (closed 2026-10-28) | 10 | C-MCP-2.b · C-SEC-5.d · C-TOOL-7.e · C-TUI-1.a · C-TUI-7.a · C-TUI-7.b · C-WEB-3.f · C-WEB-7.a · C-WEB-7.b · C-TOOL-5.b |
 | W13 | 10 | C-EXT-2.e · C-WEB-7.c · C-WEB-7.d · C-TOOL-3.c · C-MCP-3.a · C-TOOL-5.c · C-AGT-5.a · C-SES-3.d · C-TUI-6.k · C-AGT-6.b |
 | W14 | 10 | P-TABS.e · C-WEB-3.e · C-TOOL-4.a · C-AGT-4.a · C-AGT-5.b · C-EXT-4.a · C-PRV-2.a · C-SES-7.a · C-TOOL-3.d · C-TUI-2.a |
 | W15 | 10 | P-TABS.f · C-WEB-3.g · C-TUI-2.b · C-WEB-4.a · C-AGT-5.c · C-AGT-5.e · C-AGT-5.g · C-AGT-6.d · C-CTX-4.c · C-EXT-3.c |
