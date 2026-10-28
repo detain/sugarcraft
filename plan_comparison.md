@@ -1328,7 +1328,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-PRV-5.b`
 
-#### C-PRV-5.c — Non-blocking model-catalog prefetch
+#### ✅ 27757dd94 C-PRV-5.c — Non-blocking model-catalog prefetch
 - **Item:** C-PRV-5 (sources: PRV-1-P1) · fix · MINOR · effort M
 - **What:** Root cause: `Chat::pickPaletteProvider()` (`Chat.php:17060`, call at :17129) calls `ModelCatalog::prefetch()` → `OpenAiModelsEndpoint::fetch()`, a blocking Guzzle GET with a 3 s budget (`OpenAiModelsEndpoint.php:63-89`). On a …
 - **Files — create:** `candy-code/src/App/ModelCatalogReadyMsg.php`, `candy-code/tests/Chat/PaletteCatalogAsyncTest.php`

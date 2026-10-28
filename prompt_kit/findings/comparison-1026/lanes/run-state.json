@@ -38,6 +38,7 @@
   "C-PRV-1.c",
   "C-PRV-5.a",
   "C-PRV-5.b",
+  "C-PRV-5.c",
   "C-PRV-5.d",
   "C-SEC-1.a",
   "C-SEC-2.a",
@@ -110,26 +111,20 @@
  ],
  "inflight": {
   "C-EXT-2.c": {
-   "stage": "review",
-   "round": 1,
+   "stage": "fix",
+   "round": 2,
    "worktree": "/home/sites/cc-cmp-C-EXT-2.c",
    "branch": "cc/C-EXT-2.c"
   },
-  "C-PRV-5.c": {
-   "stage": "review",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-PRV-5.c",
-   "branch": "cc/C-PRV-5.c"
-  },
   "C-SEC-5.b": {
-   "stage": "fix",
+   "stage": "review",
    "round": 2,
    "worktree": "/home/sites/cc-cmp-C-SEC-5.b",
    "branch": "cc/C-SEC-5.b",
    "note": "builder derailed @attempt1 (injection-shaped return, zero commits, WIP on disk 5 protocol files); resumed same session with disk-grounding @attempt2"
   },
   "C-TUI-1.a": {
-   "stage": "review",
+   "stage": "clean",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-TUI-1.a",
    "branch": "cc/C-TUI-1.a"
@@ -153,7 +148,7 @@
    "branch": "cc/C-WEB-3.f"
   },
   "C-WEB-7.a": {
-   "stage": "build",
+   "stage": "review",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-WEB-7.a",
    "branch": "cc/C-WEB-7.a"
@@ -555,7 +550,8 @@
   "C-TOOL-7.d": "NIT skipped by decision: (string) cast PCRE-null -> silent empty stdout, practically unreachable (~10^6 Cf chars)",
   "C-TOOL-3.b": "NEW tests/Renderer/RunningToolTailTest.php + tests/Chat/ToolTailFoldTest.php: durations rows at weld.",
   "C-TOOL-7.e": "accepted residual (reviewer-labelled minor, WELD recommended): discards lost if later sequence throws - mirrors pre-existing dropped-attempt shape; NIT none open",
-  "C-MCP-2.a": "REVIEW-2.md lives at /tmp/opencode/cc-cmp-lanes/C-MCP-2.a/REVIEW-2.md (reviewer perms) - welder copies into lanes dir; queued NIT: refusal-literal shared constant NonInteractive:462 vs TurnController:1098 -> closeout"
+  "C-MCP-2.a": "REVIEW-2.md lives at /tmp/opencode/cc-cmp-lanes/C-MCP-2.a/REVIEW-2.md (reviewer perms) - welder copies into lanes dir; queued NIT: refusal-literal shared constant NonInteractive:462 vs TurnController:1098 -> closeout",
+  "C-PRV-5.c": "WELDED 2026-10-28 master 27757dd94 (pick of e142cf955, patch-id 4368ae9a identical, git cherry '-', zero conflicts). Duties discharged: durations row 0.239/4T in scripts commit d86efaa29; [chat:dispatch]->HandlesSessionSurface mapping + async first-open reopen-gate base-rows note in lanes/C-PRV-5.c/WELD.md. Gates reviewer-exact: family 199T/649A OK, Palette 209T/3227A OK, RouteTraitParityTest 4T/44A OK. Regen none: 3 doc generators zero diffs, schema --check up to date."
  },
  "carries": [
   "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest — closeout gate duty",
@@ -641,7 +637,7 @@
   "WIND-DOWN RESIDUALS @2052@ (owner freeze — bookkeeping only): UNSTAGED dirt left for next lead: M lanes/C-MCP-4.a/REVIEW-1.md (unattributed post-weld modification; lane welded at 604ccdc3d — next lead diff vs git show 604ccdc3d:...REVIEW-1.md and reconcile or checkout); ?? lane dirs C-AGT-3.b/REVIEW-1.md, C-MCP-4.c/BRIEF.md, C-SEC-5.d/(BRIEF+REVIEW-1..3 = the four-phantom record, step NOT STARTED), C-SES-1.b/BRIEF.md (+ /tmp/opencode/C-SES-1.b-RESUME-BRIEF.md copy), C-SES-9.e/(BRIEF+REPORT = NOT-A-STEP record; family ends .d), C-TOOL-7.b/measure.php (reviewer evidence), P-TABS.f/BRIEF.md, P-TABS.g/(BRIEF+REPORT+PARKED-DIFF.patch zero-length — the parked record). None staged: owner froze lane work; next lead folds them into evidence with normal weld/close discipline.",
   "STOP STATE @2052@: master b4b4404c5 (wind-down commit; 9 files). welded=100/328 LIST. waves_closed [1..9] (W8/W9 rows + marks committed inside b4b4404c5; W9 per lead ruling r1-CLEAN-no-r2 — disclosed). Owed loops: W10 (blocked on unwelded members C-EXT-2.c + C-PRV-5.c), then W11+ per scheduler waves_fully_welded. Only live artifact: /home/sites/cc-cmp-P-TABS.g + branch cc/P-TABS.g @f25a697c1 (parked; re-dispatch plan:1549 after P-TABS.e+P-TABS.f weld). LATE W33+ gated on §6.3 owner rulings (C-TOOL-6 c/e/h + C-TUI-6: Windows shell, Windows self-update helper, web i18n scope, locale choice, parity strictness, voice endpoint, push-to-talk key). NEVER pushed; origin advanced owner-side only."
  ],
- "updated": "weld: C-MCP-2.a -> master 51812d155 (pick of 8b98aeec9); welded 107, inflight 9",
+ "updated": "weld: C-PRV-5.c -> master 27757dd94 (pick of e142cf955); welded 108, inflight 8",
  "wind_down": {
   "master_tip_at_close": "b4b4404c5",
   "welded_count": 101,
@@ -674,5 +670,5 @@
   "residual_unstaged": "see carries WIND-DOWN RESIDUALS"
  },
  "status": "RUNNING",
- "standing_reds_b985fbe51": "StderrEmitterCensus 3F (NonInteractive 15, ArgvParser 36, autoload-guard 33/34) + TreeWideGuardRoster 2F (JsonSchemaEnvelopeTest, MemoryRecallBlockTest) + staleness pair + ProjectTierRefusalInventory 2F - ALL base-inherited (two builders proved byte-identical at pristine base). Assign cure to W10 wave-loop fixer when W10 closes."
+ "standing_reds_b985fbe51": "ADD: ChatHostLangCatalogueTest red on chat.effort.launch_unshaped (asker LaunchContext.php:2109 outside sources()) - byte-identical at base, C-AGT-7.b seam -> closeout roster"
 }
