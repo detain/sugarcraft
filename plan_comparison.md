@@ -1493,7 +1493,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tool.md` → `### C-TOOL-7.e`
 
-#### C-TUI-1.a — Vim text objects, `c` and counts in ComposerVim
+#### ✅ d88f83e87 C-TUI-1.a — Vim text objects, `c` and counts in ComposerVim
 - **Item:** C-TUI-1 (sources: GAP-UI-07, k3-dorm#2, k3-sum §6.6 vim, p2-miss: TUI-3 counts/`cw`/text objects) · dormant-wire · effort M
 - **What:** The sugar-forms text-object machinery is never called from the composer: `VimKeyHandler::handleTextObject()` (`sugar-forms/src/Vim/VimKeyHandler.php:289-304`) `TextObject::isTarget()`/`resolve()` …
 - **Files — create:** none

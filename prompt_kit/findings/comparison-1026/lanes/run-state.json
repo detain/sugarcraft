@@ -75,6 +75,7 @@
   "C-TOOL-7.a",
   "C-TOOL-7.b",
   "C-TOOL-7.c",
+  "C-TUI-1.a",
   "C-WEB-1.a",
   "C-WEB-1.b",
   "C-WEB-1.c",
@@ -122,12 +123,6 @@
    "worktree": "/home/sites/cc-cmp-C-SEC-5.b",
    "branch": "cc/C-SEC-5.b",
    "note": "builder derailed @attempt1 (injection-shaped return, zero commits, WIP on disk 5 protocol files); resumed same session with disk-grounding @attempt2"
-  },
-  "C-TUI-1.a": {
-   "stage": "clean",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-TUI-1.a",
-   "branch": "cc/C-TUI-1.a"
   },
   "C-TUI-7.a": {
    "stage": "build",
@@ -551,7 +546,8 @@
   "C-TOOL-3.b": "NEW tests/Renderer/RunningToolTailTest.php + tests/Chat/ToolTailFoldTest.php: durations rows at weld.",
   "C-TOOL-7.e": "accepted residual (reviewer-labelled minor, WELD recommended): discards lost if later sequence throws - mirrors pre-existing dropped-attempt shape; NIT none open",
   "C-MCP-2.a": "REVIEW-2.md lives at /tmp/opencode/cc-cmp-lanes/C-MCP-2.a/REVIEW-2.md (reviewer perms) - welder copies into lanes dir; queued NIT: refusal-literal shared constant NonInteractive:462 vs TurnController:1098 -> closeout",
-  "C-PRV-5.c": "WELDED 2026-10-28 master 27757dd94 (pick of e142cf955, patch-id 4368ae9a identical, git cherry '-', zero conflicts). Duties discharged: durations row 0.239/4T in scripts commit d86efaa29; [chat:dispatch]->HandlesSessionSurface mapping + async first-open reopen-gate base-rows note in lanes/C-PRV-5.c/WELD.md. Gates reviewer-exact: family 199T/649A OK, Palette 209T/3227A OK, RouteTraitParityTest 4T/44A OK. Regen none: 3 doc generators zero diffs, schema --check up to date."
+  "C-PRV-5.c": "WELDED 2026-10-28 master 27757dd94 (pick of e142cf955, patch-id 4368ae9a identical, git cherry '-', zero conflicts). Duties discharged: durations row 0.239/4T in scripts commit d86efaa29; [chat:dispatch]->HandlesSessionSurface mapping + async first-open reopen-gate base-rows note in lanes/C-PRV-5.c/WELD.md. Gates reviewer-exact: family 199T/649A OK, Palette 209T/3227A OK, RouteTraitParityTest 4T/44A OK. Regen none: 3 doc generators zero diffs, schema --check up to date.",
+  "C-TUI-1.a": "WELDED 2026-10-28 master d88f83e87 (pick of cf5f0f925, patch-id c57fd999 identical, git cherry '-', zero conflicts - lang/en.php context risk never fired). REVIEW-1 CLEAN 0C/0M no findings. Durations rows 0.055/9T + 0.056/18T in scripts commit 69dfca1b2. Gates merged-tree: 'ComposerVim|LangParity' OK 82T/3293A (brief 3292A, +1A from C-TOOL-3.b lang row landed post-lane-cut - attributed in WELD.md), guards filter OK 27T/560A. Regen none (generators zero diffs, schema --check up to date)."
  },
  "carries": [
   "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest — closeout gate duty",
@@ -637,7 +633,7 @@
   "WIND-DOWN RESIDUALS @2052@ (owner freeze — bookkeeping only): UNSTAGED dirt left for next lead: M lanes/C-MCP-4.a/REVIEW-1.md (unattributed post-weld modification; lane welded at 604ccdc3d — next lead diff vs git show 604ccdc3d:...REVIEW-1.md and reconcile or checkout); ?? lane dirs C-AGT-3.b/REVIEW-1.md, C-MCP-4.c/BRIEF.md, C-SEC-5.d/(BRIEF+REVIEW-1..3 = the four-phantom record, step NOT STARTED), C-SES-1.b/BRIEF.md (+ /tmp/opencode/C-SES-1.b-RESUME-BRIEF.md copy), C-SES-9.e/(BRIEF+REPORT = NOT-A-STEP record; family ends .d), C-TOOL-7.b/measure.php (reviewer evidence), P-TABS.f/BRIEF.md, P-TABS.g/(BRIEF+REPORT+PARKED-DIFF.patch zero-length — the parked record). None staged: owner froze lane work; next lead folds them into evidence with normal weld/close discipline.",
   "STOP STATE @2052@: master b4b4404c5 (wind-down commit; 9 files). welded=100/328 LIST. waves_closed [1..9] (W8/W9 rows + marks committed inside b4b4404c5; W9 per lead ruling r1-CLEAN-no-r2 — disclosed). Owed loops: W10 (blocked on unwelded members C-EXT-2.c + C-PRV-5.c), then W11+ per scheduler waves_fully_welded. Only live artifact: /home/sites/cc-cmp-P-TABS.g + branch cc/P-TABS.g @f25a697c1 (parked; re-dispatch plan:1549 after P-TABS.e+P-TABS.f weld). LATE W33+ gated on §6.3 owner rulings (C-TOOL-6 c/e/h + C-TUI-6: Windows shell, Windows self-update helper, web i18n scope, locale choice, parity strictness, voice endpoint, push-to-talk key). NEVER pushed; origin advanced owner-side only."
  ],
- "updated": "weld: C-PRV-5.c -> master 27757dd94 (pick of e142cf955); welded 108, inflight 8",
+ "updated": "weld: C-TUI-1.a -> master d88f83e87 (pick of cf5f0f925); welded 109, inflight 7",
  "wind_down": {
   "master_tip_at_close": "b4b4404c5",
   "welded_count": 101,
