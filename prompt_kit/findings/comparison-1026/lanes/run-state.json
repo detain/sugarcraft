@@ -36,6 +36,7 @@
   "sec6a_selfreview_anomaly": "DISPATCH ERROR @tick1189: I accidentally resumed fixer session ses_e7cefc13e with the r2 REVIEW brief (sessionID passed by mistake). Fixer-context self-review is NOT a valid fresh verdict — the authoritative C-SEC-6.a r2 verdict comes ONLY from fresh reviewer ses_e7ce37aa2ffeUtN1wLMLz1b5zx. Watch: if the resumed fixer commits anything beyond 675241a04, diff it against 675241a04 for content identity before believing any tip movement; code must stay 675241a04-equivalent.",
   "sweep_hazard_1034": "SWEEP HAZARD @10:34:02: a process ran a tests-dir git checkout/clean sweep INSIDE cc-cmp-C-AGT-5.b worktree mid-lane, deleting the builder's untracked new test file and reverting test edits (src survived; builder rebuilt). Wrong-worktree-targeting family. Standing order: cp-harness in /tmp ONLY, never git checkout/clean outside the owned worktree. Perpetrator unidentified; monitor."
  },
+ "batch3_close_note": "batch-3 welder DONE 2026-10-29: welded 5 of 6 (P-AGENT.b f77460186, C-SES-8.c ebbb14984, C-TUI-3.f 7bcd40016 cure-at-weld, C-WEB-4.c 72c9aaa36 dist-swap, C-TOOL-5.a 7cae5cc33 gated on stage==clean unlock). C-WEB-4.d STOPPED-WITH-RECORD 81c47175f (NEW lane-attributable TS2554 statusBarTimer.spec.ts:191; r1 vue-tsc rc=0 claim vacuous; cure wording in STOP-1.md; branch+worktree HELD, now restacked 4935cce08). tsv 1550->1557. Close sanity battery 150T/25861A ALL GREEN at final tip. suite-figure carry +59T (14+15+4+0+20... web lanes 0) = P-AGENT.b +14, C-SES-8.c +15, C-TUI-3.f +4, C-TOOL-5.a +20 -> re-pin owed at closeout. Standing surface: vue-tsc 20-error base-residual (proven identical at e14c3cc7c, NOT lane). Vitest full re-run at 72c9aaa36 gate (76F/593T) stands; brief close-condition (web 4+5 both) unmet by lane-5 stop.",
  "blocked": [],
  "blocked_notes": {
   "C-AGT-5.b": "OWNER RULING NEEDED (gates W14 full closure + C-AGT-5.c cascade in W15): C-AGT-5.a r1 MINOR-2 — ScheduleFactory delete guard is createdBy-scoped, not root-scoped, so a model-created row in ANOTHER root can be deleted without include_operator_rows. Options (a) root-scope the guard (stricter; may break legit cross-root cleanup), (b) keep createdBy-scope + document. Per C-AGT-5.a r2 CLEAN the lane shipped as-designed; ruling owed before any rebuild of 5.b."
@@ -177,6 +178,14 @@
    "session": "ses_e7bcdaa69ffdZXQr0ItaM5Z365",
    "stage": "build",
    "worktree": "/home/sites/cc-cmp-C-CTX-5.a"
+  },
+  "C-EXT-3.b": {
+   "branch": "cc/C-EXT-3.b",
+   "note": "re-added after welder clobber; builder live @453",
+   "round": 0,
+   "session": "ses_e7bcc770cffeuVqnOPzaRMMhoF",
+   "stage": "build",
+   "worktree": "/home/sites/cc-cmp-C-EXT-3.b"
   },
   "C-SEC-8.e": {
    "base": "c8e8a1f42",
@@ -352,7 +361,7 @@
  ],
  "standing_reds_b985fbe51": "ADD: ChatHostLangCatalogueTest red on chat.effort.launch_unshaped (asker LaunchContext.php:2109 outside sources()) - byte-identical at base, C-PRV-1.b (a992413b0) seam -> closeout roster",
  "status": "RUNNING",
- "tick": "128-batch3-weld-C-TOOL-5.a",
+ "tick": "128-batch3",
  "tip": "0f58a906f",
  "updated": "2026-10-29",
  "wave_loops": {
@@ -364,6 +373,12 @@
    "session": "ses_e7c63fdfbffeK74ABgkUv3b3E9",
    "stage": "clean",
    "verdict": "CLEAN 0C/0M/0minor/3nit"
+  },
+  "17": {
+   "reviewed_at_master": "86f95e191",
+   "round": 1,
+   "session": "ses_e7bcc770bffekio0LHWDoJjYld",
+   "stage": "review"
   },
   "2": "closed r1 CLEAN battery green",
   "3": "closed r3 (static proof + lead battery)",
