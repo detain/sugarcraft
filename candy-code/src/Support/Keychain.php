@@ -76,7 +76,8 @@ final class Keychain
      *
      * @return string|null the secret, or null for every miss shape — an
      *                     unset entry, a missing binary, a timeout, an empty
-     *                     name, or a family with no backend. Each miss has
+     *                     name, a name the backends could misread, or a
+     *                     family with no backend. Each miss has
      *                     already raised its launch notice by the time this
      *                     returns; callers resolve null to `''` exactly where
      *                     an unset `${VAR}` resolves to `''` today.
@@ -160,6 +161,20 @@ final class Keychain
         }
 
         $family = self::$osOverride ?? \PHP_OS_FAMILY;
+
+        // A name the backends could misread is refused before anything is
+        // spawned: a leading `-` is option-parseable (secret-tool's GLib
+        // parser absorbs `-u`-shaped forms), and a control byte anywhere —
+        // a JSON `\u0000`-poisoned config value — reaches proc_open's argv
+        // as a PHP ValueError mid-launch. Both fold to the ordinary miss
+        // notice, so the entry is named, nothing is spawned, and the
+        // launch still stands.
+        if (\preg_match('/^-|[\x00-\x1f\x7f]/', $name) === 1) {
+            self::announce('cli.keychain.miss', ['entry' => $name, 'os' => $family]);
+
+            return null;
+        }
+
         $argv = self::argvFor($family, $name);
         if ($argv === null) {
             self::announce('cli.keychain.no_backend', ['entry' => $name, 'os' => $family]);

@@ -224,6 +224,79 @@ final class KeychainTest extends TestCase
         $this->assertStringContainsString('no keychain backend', $rows[0]);
     }
 
+    public function testALeadingDashEntryNameTakesTheMissNoticeWithoutSpawning(): void
+    {
+        // C-SEC-8.e review: `-u`-shaped names are option-parseable by
+        // secret-tool's GLib argv reader. The fold is a miss notice naming
+        // the entry — the seam never sees an argv, so neither the option
+        // shape nor a fatal crosses the spawn boundary.
+        $calls = 0;
+        Keychain::armOsForTesting('Linux');
+        Keychain::armSpawnSeamForTesting(
+            static function (array $argv) use (&$calls): array {
+                $calls++;
+
+                return ['status' => 'hit', 'stdout' => 'never', 'exitCode' => 0];
+            },
+        );
+
+        $this->assertNull(Keychain::lookup('-rf'));
+        $this->assertSame(0, $calls);
+        $rows = LaunchNotices::rows();
+        $this->assertCount(1, $rows);
+        $this->assertStringContainsString('-rf', $rows[0]);
+        $this->assertStringContainsString('not found', $rows[0]);
+    }
+
+    public function testAControlByteEntryNameTakesTheMissNoticeWithoutSpawning(): void
+    {
+        // A JSON "\u0000"-poisoned entry name: the same fold, and the point
+        // is WHERE it happens — proc_open rejects NUL in argv with a
+        // ValueError that would abort the launch, so the guard must sit
+        // before the spawn, proven by the zero seam counter, not by the
+        // notice text alone.
+        $calls = 0;
+        Keychain::armOsForTesting('Linux');
+        Keychain::armSpawnSeamForTesting(
+            static function (array $argv) use (&$calls): array {
+                $calls++;
+
+                return ['status' => 'hit', 'stdout' => 'never', 'exitCode' => 0];
+            },
+        );
+
+        $this->assertNull(Keychain::lookup("bad\x00name"));
+        $this->assertNull(Keychain::lookup("mid\x01dle"));
+        $this->assertNull(Keychain::lookup("del\x7fete"));
+        $this->assertSame(0, $calls);
+        // Each distinct name announces once; none of them spawned.
+        $this->assertCount(3, LaunchNotices::rows());
+        foreach (LaunchNotices::rows() as $row) {
+            $this->assertStringContainsString('not found', $row);
+        }
+    }
+
+    public function testAWellFormedNameStillReachesTheSpawnSeam(): void
+    {
+        // Discriminates the fold from a blanket refusal: an ordinary entry,
+        // and one merely CONTAINING a dash, are spawned exactly as before.
+        $captured = [];
+        Keychain::armOsForTesting('Linux');
+        Keychain::armSpawnSeamForTesting(
+            static function (array $argv) use (&$captured): array {
+                $captured[] = $argv;
+
+                return ['status' => 'hit', 'stdout' => 'fine', 'exitCode' => 0];
+            },
+        );
+
+        $this->assertSame('fine', Keychain::lookup('candy-openai'));
+        $this->assertSame('fine', Keychain::lookup('team-key/v2'));
+        $this->assertCount(2, $captured);
+        $this->assertSame('candy-openai', $captured[0][5]);
+        $this->assertSame('team-key/v2', $captured[1][5]);
+    }
+
     // ---- the real spawn path (plain shells; no secret anywhere) ----------
 
     /**

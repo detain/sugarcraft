@@ -479,6 +479,9 @@ final readonly class ProviderFactory
         // naming it, never the launch. The ${VAR} pattern below cannot lexically
         // collide: `keychain:` is lowercase with a colon, which its [A-Z_]
         // head never matches, so no env-var name is shadowed by this form.
+        // The one accepted tradeoff of running first: a stored secret that
+        // literally spells `${VAR}` text is still expanded by the env pass
+        // below — stored API keys never carry that shape.
         $value = preg_replace_callback(
             '/\$\{keychain:([^}]*)\}/',
             static fn (array $matches): string => Keychain::lookup($matches[1]) ?? '',
