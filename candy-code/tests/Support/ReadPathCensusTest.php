@@ -281,6 +281,22 @@ final class ReadPathCensusTest extends TestCase
             'NAMES_ONLY — lists one container\'s children; the jail decision rides guard()\'s '
                 . 'per-directory containment in this file, and manifest bytes are read in Bundle',
         ],
+        'Bundles/BundleRecommender.php|scandir' => [
+            'NAMES_ONLY — recommend() lists the caller-supplied project root one level to see '
+                . 'which manifest signals exist; no content is read, nothing is installed, and '
+                . 'a later content read of any of these names would carry its own gate',
+        ],
+        'Bundles/BundleSource.php|file_get_contents' => [
+            'CONTAINED — the provenance record inside a bundle directory, gated by a '
+                . 'ContainedPath::below() compare in this file against the boundary the caller '
+                . 'names; a planted link out of the tree fails the compare before any bytes are read',
+        ],
+        'Bundles/Marketplace.php|file_get_contents' => [
+            'CONTAINED — a checkout\'s catalog file, gated by a ContainedPath::below() compare '
+                . 'in this file against that checkout; a .claude-plugin symlinked elsewhere '
+                . 'resolves outside the boundary and answers null, as does every relative '
+                . 'source through resolveRelative()\'s second compare in this same file',
+        ],
         'Chat.php|file_get_contents' => [
             'SELF_LOCATED — a forked child\'s result file, named by Support\ToolIpcFiles',
             'USER_TYPED — pastedImagePath() sniffs 16 bytes of a path the user pasted or dropped, to '

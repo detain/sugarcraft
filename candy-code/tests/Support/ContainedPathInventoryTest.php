@@ -177,6 +177,17 @@ final class ContainedPathInventoryTest extends TestCase
         'Agents/WorktreeConfig.php' => 2,
         'Agents/WorktreeManager.php' => 2,
         'Bundles/BundleDiscovery.php' => 1,
+        // C-EXT-4.a: the provenance record is read inside the boundary the
+        // caller names, never through a link out of it.
+        'Bundles/BundleSource.php' => 1,
+        // C-EXT-4.a: the catalog file and every relative source inside its
+        // checkout are bounded by one compare each — the read gate in
+        // read(), the path gate in resolveRelative().
+        'Bundles/Marketplace.php' => 2,
+        // C-EXT-4.a: the checkout a catalog is read from is re-checked below
+        // the base the registry was built with, so a planted link out of it
+        // answers null instead of a path.
+        'Bundles/MarketplaceRegistry.php' => 1,
         'Cli/McpDecision.php' => 1,
         'Commands/CommandLoader.php' => 2,
         'Commands/CommandSpec.php' => 1,
@@ -364,6 +375,7 @@ final class ContainedPathInventoryTest extends TestCase
             'THIRTY-SIX' => 36, 'THIRTY-SEVEN' => 37, 'THIRTY-EIGHT' => 38, 'THIRTY-NINE' => 39,
             'FORTY' => 40, 'FORTY-ONE' => 41, 'FORTY-TWO' => 42, 'FORTY-THREE' => 43,
             'FORTY-FOUR' => 44, 'FORTY-FIVE' => 45, 'FORTY-SIX' => 46, 'FORTY-SEVEN' => 47, 'FORTY-EIGHT' => 48, 'FORTY-NINE' => 49, 'FIFTY' => 50, 'FIFTY-ONE' => 51, 'FIFTY-THREE' => 53, 'FIFTY-FOUR' => 54, 'FIFTY-FIVE' => 55, 'FIFTY-SIX' => 56,
+            'SIXTY' => 60,
             'TWENTY-ONE' => 21, 'TWENTY-TWO' => 22, 'TWENTY-THREE' => 23, 'TWENTY-FOUR' => 24, 'TWENTY-FIVE' => 25,
         ];
 
