@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Attachments;
 
 use SugarCraft\Code\Attachment;
 use SugarCraft\Code\AttachmentType;
+use SugarCraft\Code\Lang;
 
 /**
  * `@file` mentions in a prompt (audit 15b-15): finding them, turning them into
@@ -333,12 +334,14 @@ final class FileMentions
                 $bytes = $head . (string) stream_get_contents($handle);
                 $pages = self::estimatePdfPages($bytes);
                 if ($pages > self::DOCUMENT_MAX_PAGES) {
-                    return [null, sprintf(
-                        '@%s was not attached: the document is estimated at %d pages, over the %d page limit.',
-                        self::shown($display),
-                        $pages,
-                        self::DOCUMENT_MAX_PAGES,
-                    )];
+                    // The only mention refusal promised as a lang key (C-CTX-6.b,
+                    // docs/MEDIA.md): routed through Lang so a translated launch
+                    // can localize it; the byte-identical English rides lang/en.php.
+                    return [null, Lang::t('chat.attach.pdf_pages', [
+                        'path' => self::shown($display),
+                        'pages' => $pages,
+                        'limit' => self::DOCUMENT_MAX_PAGES,
+                    ])];
                 }
 
                 return [new Attachment($display, AttachmentType::Document, $bytes, $mime), null];
