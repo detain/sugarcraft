@@ -110,15 +110,10 @@
   "C-TOOL-7.d",
   "C-TOOL-7.e",
   "C-SEC-5.b",
-  "C-WEB-7.a"
+  "C-WEB-7.a",
+  "C-EXT-2.c"
  ],
  "inflight": {
-  "C-EXT-2.c": {
-   "stage": "review",
-   "round": 2,
-   "worktree": "/home/sites/cc-cmp-C-EXT-2.c",
-   "branch": "cc/C-EXT-2.c"
-  },
   "C-TUI-7.a": {
    "stage": "review",
    "round": 1,
@@ -138,7 +133,7 @@
    "branch": "cc/C-WEB-3.f"
   },
   "C-WEB-7.b": {
-   "stage": "review",
+   "stage": "clean",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-WEB-7.b",
    "branch": "cc/C-WEB-7.b"
@@ -557,7 +552,9 @@
    "durations": "no row (zero new test files); suite-figure.json untouched",
    "nit_deferrals": "REVIEW-1 CLEAN; both cosmetic NITs skipped per review (test header 'two contracts' wording + docblock wrap) - none open",
    "cherry": "'-' clean single-commit pick, zero overlap vs master since base 581ac6ede"
-  }
+  },
+  "C-EXT-2.c": "weld owes durations rows SkillForkTest+SkillToolForkTest; closeout: Bootstrap.php:5955 comment, ChatHostLangCatalogue standing red, TROUBLESHOOTING allowed-tools/effort half",
+  "C-WEB-7.b": "closeout seam: promptHistory.ts hardcodes STORAGE_KEY duplicating storage.ts PREFIX (cross-tab leg drift risk); dist rebuild rides weld; suite-figure +live re-pin is gate duty"
  },
  "carries": [
   "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest — closeout gate duty",
@@ -643,7 +640,7 @@
   "WIND-DOWN RESIDUALS @2052@ (owner freeze — bookkeeping only): UNSTAGED dirt left for next lead: M lanes/C-MCP-4.a/REVIEW-1.md (unattributed post-weld modification; lane welded at 604ccdc3d — next lead diff vs git show 604ccdc3d:...REVIEW-1.md and reconcile or checkout); ?? lane dirs C-AGT-3.b/REVIEW-1.md, C-MCP-4.c/BRIEF.md, C-SEC-5.d/(BRIEF+REVIEW-1..3 = the four-phantom record, step NOT STARTED), C-SES-1.b/BRIEF.md (+ /tmp/opencode/C-SES-1.b-RESUME-BRIEF.md copy), C-SES-9.e/(BRIEF+REPORT = NOT-A-STEP record; family ends .d), C-TOOL-7.b/measure.php (reviewer evidence), P-TABS.f/BRIEF.md, P-TABS.g/(BRIEF+REPORT+PARKED-DIFF.patch zero-length — the parked record). None staged: owner froze lane work; next lead folds them into evidence with normal weld/close discipline.",
   "STOP STATE @2052@: master b4b4404c5 (wind-down commit; 9 files). welded=100/328 LIST. waves_closed [1..9] (W8/W9 rows + marks committed inside b4b4404c5; W9 per lead ruling r1-CLEAN-no-r2 — disclosed). Owed loops: W10 (blocked on unwelded members C-EXT-2.c + C-PRV-5.c), then W11+ per scheduler waves_fully_welded. Only live artifact: /home/sites/cc-cmp-P-TABS.g + branch cc/P-TABS.g @f25a697c1 (parked; re-dispatch plan:1549 after P-TABS.e+P-TABS.f weld). LATE W33+ gated on §6.3 owner rulings (C-TOOL-6 c/e/h + C-TUI-6: Windows shell, Windows self-update helper, web i18n scope, locale choice, parity strictness, voice endpoint, push-to-talk key). NEVER pushed; origin advanced owner-side only."
  ],
- "updated": "weld C-WEB-7.a: welded=111, inflight=5, tip pending (weld commit carries)",
+ "updated": "weld C-EXT-2.c: welded=112, inflight=4, tip pending (weld commit carries)",
  "wind_down": {
   "master_tip_at_close": "b4b4404c5",
   "welded_count": 101,

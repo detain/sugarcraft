@@ -1240,7 +1240,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-6.a`
 
-#### C-EXT-2.c — Forked skills (`context: fork`) via the turn-bound Task tool
+#### ✅ 8ad2de199 C-EXT-2.c — Forked skills (`context: fork`) via the turn-bound Task tool
 - **Item:** C-EXT-2 (sources: GAP-SKL-15, k2-dorm `dispatchSkill`, k1-dorm#8) · dormant-wire · effort M
 - **What:** **What's dormant.** `App::dispatchSkill()` (`App.php:2528`) has no production caller; it is a single-shot pool run. `SkillTool::execute()` loads every skill inline. **SkillTool fork path.** SkillTool gains …
 - **Files — create:** `candy-code/src/Skills/SkillFork.php`

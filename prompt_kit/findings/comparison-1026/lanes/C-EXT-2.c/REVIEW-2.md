@@ -1,0 +1,10 @@
+# C-EXT-2.c REVIEW-2 (round 2) — worktree /home/sites/cc-cmp-C-EXT-2.c @ 4ef0283d7
+
+VERDICT: CLEAN — 0C/0M/0 step-local MINOR.
+
+- Diff 3897f5aa4..4ef0283d7 = exactly the two prescribed fix hunks: BootstrapLaunchNoticeRoutingTest docblock :928-937 now teaches live truth (context: fork passes, C-EXT-2.c made it live) and expected row :965-969 drops the inert `context: fork` leg with the `user_invocable` leg byte-verbatim; fixture :945 still declares BOTH fields so the row stays non-vacuous (a fork re-inert would re-add a segment and move the "1 skill" numeral — reddens; round-1 already proved the old row red at tip, so re-injection discrimination stands). assertCount(4) + once-each stderr loop intact.
+- Gates re-run myself (cwd=candy-code, plain pipe, -u LINES -u COLUMNS): 'BootstrapLaunchNoticeRouting' 22T/148A OK; 'SkillForkTest|SkillToolForkTest|InertFrontmatterDocumentationDrift|DocFigureProseDrift' 114T/4099A OK. The 2 PHPUnit deprecations in both runs are base-inherited private-provider metadata in foreign AccessorDeprecationTest (not in the lane stat); rc 0.
+- TROUBLESHOOTING:163-167 — no guard pins the row (DocFigure arms read the file only for hook-roster/timeout/env negative legs; InertFrontmatter pins README wording, whose guard assert already demands the same live claim). Wording truthful, matches pinned README sentence and SKILLS.md:271 (degrade-inline caveat lives there). allowed-tools/effort half left per ruling — STILL OWED at closeout (false since C-EXT-2.b at base).
+- Remaining "context: fork is not acted on" strings only in FrontmatterKeyAuditTest:152-163 as synthetic notice() input — round-1 NIT, welder discretion unchanged.
+- Tree clean after gates; full lane stat 25 files, weld-only files absent; single commit, %ae and %ce separately detain@interserver.net, zero trailers, amend kept message.
+- Weld/closeout roster reaffirmed: durations.tsv rows SkillForkTest + SkillToolForkTest; suite-figure/README re-pin; Bootstrap.php:5955 stale comment; ChatHostLangCatalogue standing red (run-state roster); TROUBLESHOOTING allowed-tools/effort half.
