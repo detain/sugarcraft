@@ -812,6 +812,7 @@ candy-code/tests/Host/Commands/SkillsEnableDisableTest.php	0.051	7
 candy-code/tests/Bundles/BundleRecommenderTest.php	0.051	10
 candy-code/tests/Skills/BuiltInSkillsTest.php	0.050	116
 candy-code/tests/Automation/OutboundWebhookConfigTest.php	0.05	59
+candy-code/tests/Permissions/AutoReviewScopeTest.php	0.050	12
 candy-code/tests/Context/Compaction/SummarySafeguardTest.php	0.049	11
 candy-code/tests/MCP/McpElicitationTest.php	0.049	14
 candy-code/tests/Sessions/ScheduleTest.php	0.049	20
