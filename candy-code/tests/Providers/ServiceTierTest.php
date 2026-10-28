@@ -417,6 +417,35 @@ final class ServiceTierTest extends TestCase
         self::assertStringContainsString('claude-sonnet-4-6', (string) $reason);
     }
 
+    public function testTheAzureLegOfTheOpenAiWireShapesNoTierAndRefusesWithARow(): void
+    {
+        // C-PRV-3.a r1 (MINOR-1): Azure mints this same class under its own
+        // `type` key, and the wire docs cited in-lane (the auth-header and
+        // endpoint notes on the class and the factory) never record
+        // `service_tier` as accepted on a deployment — so the tier gate
+        // closes that leg and a fast launch refuses loudly rather than
+        // silently riding 'priority' onto a third-party provisioning.
+        $azure = new OpenAIProvider(
+            $this->createMock(ClientContract::class),
+            'gpt-4o',
+            providerName: OpenAIProvider::AZURE_NAME,
+            apiKeyHeader: 'sk-azure',
+        );
+
+        self::assertNull($azure->serviceTierFor('gpt-4o'), 'an Azure-minted pair shapes no fast lane');
+        self::assertSame('priority', $this->tierChatProvider(null)->serviceTierFor('gpt-4o'), 'the public leg still answers — the gate carves out Azure only');
+
+        Bootstrap::writeUserConfig(['serviceTier' => 'fast']);
+        $engine = EngineBackend::new($azure, 'gpt-4o');
+
+        [$carried, $reason] = LaunchContext::withResolvedServiceTier($engine);
+
+        self::assertSame($engine, $carried, 'the same untouched-engine refusal shape as every other non-shaper');
+        self::assertNull($carried->serviceTier(), 'the word is not stored even on the pair riding OpenAI\'s class');
+        self::assertStringContainsString('azure', (string) $reason, 'the row names provider->name() — `azure`, never a silent pass');
+        self::assertStringContainsString('left off this launch', (string) $reason);
+    }
+
     public function testTheDefaultWordIsAppliedWithoutConsultingTheGate(): void
     {
         Bootstrap::writeUserConfig(['serviceTier' => 'default']);

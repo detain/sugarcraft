@@ -74,6 +74,14 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
     public const DEFAULT_NAME = 'openai';
 
     /**
+     * C-PRV-3.a r1 (MINOR-1): the `type` key Azure mints this class under
+     * (the factory's `createAzure()` passes it as `$providerName`). Naming
+     * the spelling makes the azure leg of the wire checkable at the tier
+     * gate instead of only in the factory comment.
+     */
+    public const AZURE_NAME = 'azure';
+
+    /**
      * C-PRV-3.a: the wire value for the fast lane. OpenAI renamed Priority
      * processing to Fast mode mid-2026; both `fast` and `priority` request
      * the same lane and every response reports `service_tier=priority`, so
@@ -609,18 +617,35 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
     }
 
     /**
-     * C-PRV-3.a: the OpenAI surface answers `service_tier` for every model
-     * it speaks for. The field is documented on BOTH arms this class drives
-     * (Chat Completions and Responses) with the same value vocabulary, and
-     * Fast-mode eligibility is a property of the PROJECT and the model line,
-     * not of this file's tables — which ids accept `priority` changes with
-     * every release. An unsupported pair answers with the API's own 400
-     * prose, the same "the API's rejection is better guidance than a local
-     * guess" doctrine {@see openAiReasoningEffort()} records for effort
-     * spellings, so the pair never needs a stale local allowlist here.
+     * C-PRV-3.a: the public OpenAI surface answers `service_tier` for every
+     * model it speaks for. The field is documented on BOTH arms this class
+     * drives (Chat Completions and Responses) with the same value
+     * vocabulary, and Fast-mode eligibility is a property of the PROJECT
+     * and the model line, not of this file's tables — which ids accept
+     * `priority` changes with every release. An unsupported pair answers
+     * with the API's own 400 prose, the same "the API's rejection is better
+     * guidance than a local guess" doctrine {@see openAiReasoningEffort()}
+     * records for effort spellings, so the pair never needs a stale local
+     * allowlist here.
+     *
+     * C-PRV-3.a r1 (MINOR-1): the Azure leg is gated OFF. Azure deployments
+     * ride this same class under {@see AZURE_NAME}, and no wire doc cited
+     * in-lane records `service_tier` accepted on the Azure endpoint —
+     * unlike the public API, a wrong premium guess there could 400 a working
+     * deployment or bill a lane absent from the caller's agreement, and the
+     * "let the API's 400 guide us" doctrine presumes the field is at least
+     * documented on the surface. So an Azure-minted pair answers null: the
+     * launch door then treats it as a non-shaper and refuses with a row
+     * (`chat.serviceTier.launch_unshaped`) instead of letting the tier ride
+     * silently to the deployment. Silence was not an option; a guessed doc
+     * claim is worse.
      */
     public function serviceTierFor(string $model): ?string
     {
+        if ($this->providerName === self::AZURE_NAME) {
+            return null;
+        }
+
         return self::SERVICE_TIER_PRIORITY;
     }
 
