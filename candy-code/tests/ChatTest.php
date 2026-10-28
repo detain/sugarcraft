@@ -17,6 +17,7 @@ use SugarCraft\Code\Agents\ExecutorInterface;
 use SugarCraft\Code\Agents\AgentResult;
 use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\App\BackendToolEventsMsg;
+use SugarCraft\Code\App\StartupSummaryGatheredMsg;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Events\ToolFinished;
@@ -607,9 +608,26 @@ final class ChatTest extends TestCase
         $this->assertStringContainsString('ping', $final->history[1]->content);
     }
 
-    public function testInitReturnsNoCmd(): void
+    public function testInitCarriesTheStartupGatherAndNothingElseForAnUnappointedChat(): void
     {
-        $this->assertNull((new Chat())->init());
+        // VIS-1-P2: init() answers every host now. The wake member stays null
+        // for a chat that does not drain runtime notices, so the batch is
+        // exactly the startup-summary gather — and that gather settles to the
+        // message HandlesRunControl stores, off the paint path.
+        $cmd = (new Chat())->init();
+        $this->assertInstanceOf(\Closure::class, $cmd);
+
+        $batch = $cmd();
+        $this->assertInstanceOf(BatchMsg::class, $batch);
+        $this->assertCount(1, $batch->cmds, 'an unappointed chat carries only the gather');
+
+        $async = ($batch->cmds[0])();
+        $this->assertInstanceOf(AsyncCmd::class, $async);
+        $resolved = null;
+        $async->promise->then(static function ($msg) use (&$resolved): void {
+            $resolved = $msg;
+        });
+        $this->assertInstanceOf(StartupSummaryGatheredMsg::class, $resolved);
     }
 
     public function testNonKeyMessageIgnored(): void

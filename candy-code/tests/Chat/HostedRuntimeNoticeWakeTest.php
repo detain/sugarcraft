@@ -91,9 +91,11 @@ final class HostedRuntimeNoticeWakeTest extends TestCase
     /**
      * AND THE OBLIGATION DISCHARGED: run `init()`'s Cmd and the watcher is on.
      *
-     * The Cmd is a `\Closure` returning a promise — the shape
-     * `SugarCraft\Core\Program` invokes — so a host calls it exactly like
-     * this. The loop is never run here on purpose: arming is what `init()`
+     * The Cmd is a `\Closure` returning a `BatchMsg` the recursive way
+     * `SugarCraft\Core\Program` fans it out — VIS-1-P2 put the
+     * startup-summary gather in the same batch as the wake, so a host (and
+     * this test) must walk one level deeper than it used to. The loop is
+     * never run here on purpose: arming is what `init()`
      * buys, and the delivery half is the test below, which does not need a
      * loop either because the sink's transport is a socket pair this process
      * owns both ends of.
@@ -105,7 +107,14 @@ final class HostedRuntimeNoticeWakeTest extends TestCase
         $cmd = self::hostedOwner()->init();
 
         self::assertInstanceOf(\Closure::class, $cmd, 'init() handed a host nothing to arm the seam with');
-        $cmd();
+        $fanOut = static function (object $msg) use (&$fanOut): void {
+            if ($msg instanceof BatchMsg) {
+                foreach ($msg->cmds as $child) {
+                    $fanOut($child());
+                }
+            }
+        };
+        $fanOut($cmd());
 
         self::assertTrue(RuntimeNoticeSink::isNotificationArmed());
     }
@@ -136,19 +145,34 @@ final class HostedRuntimeNoticeWakeTest extends TestCase
 
     /**
      * THE NEGATIVE THE THREE ABOVE NEED (rule 15): with no transport open,
-     * `init()` hands back NOTHING and that is correct rather than broken.
+     * running `init()`'s Cmd end to end still arms nothing, and that is
+     * correct rather than broken.
      *
-     * `null` here is the sink on its in-process array backend, which only this
-     * process can write to and only synchronously — see
-     * {@see Chat::init()}. Without this row, an `init()` that returned null
-     * unconditionally would satisfy the dormancy test above and be caught only
-     * by the arming one, which is a single assertion away from the same hole.
+     * Since VIS-1-P2 every `init()` hands a Cmd (the startup-summary gather
+     * always rides), so null-vs-Closure is no longer the discriminator — the
+     * sink on its in-process array backend simply refuses to arm, which only
+     * this process can write to and only synchronously — see
+     * {@see Chat::init()}. Without this row, an `init()` that armed the
+     * watcher unconditionally would satisfy every arming test above and be
+     * caught only here, which is a single assertion away from the same hole.
      */
-    public function testWithNoTransportOpenInitHandsAHostNothingToArm(): void
+    public function testWithNoTransportOpenInitArmsNothingEvenAfterTheFullFanOut(): void
     {
         self::assertFalse(RuntimeNoticeSink::hasTransport());
 
-        self::assertNull(self::hostedOwner()->init());
+        $cmd = self::hostedOwner()->init();
+        self::assertInstanceOf(\Closure::class, $cmd, 'VIS-1-P2: init() answers every host now');
+
+        $wakeThenGather = static function (object $msg) use (&$wakeThenGather): void {
+            if ($msg instanceof BatchMsg) {
+                foreach ($msg->cmds as $child) {
+                    $wakeThenGather($child());
+                }
+            }
+        };
+        $wakeThenGather($cmd());
+
+        self::assertFalse(RuntimeNoticeSink::isNotificationArmed());
     }
 
     /**
@@ -181,9 +205,17 @@ final class HostedRuntimeNoticeWakeTest extends TestCase
         $batch = $cmd();
         self::assertInstanceOf(BatchMsg::class, $batch, 'App::init() stopped batching; the walk below is '
             . 'checking something other than what a host would do');
-        foreach ($batch->cmds as $child) {
-            $child();
-        }
+        // VIS-1-P2 nests a second level: the hosted chat's member answers its
+        // own BatchMsg, and Program's dispatch fans it out recursively — a
+        // host that walks only the outer batch arms nothing.
+        $explode = static function (object $msg) use (&$explode): void {
+            if ($msg instanceof BatchMsg) {
+                foreach ($msg->cmds as $child) {
+                    $explode($child());
+                }
+            }
+        };
+        $explode($batch);
 
         self::assertTrue(
             RuntimeNoticeSink::isNotificationArmed(),

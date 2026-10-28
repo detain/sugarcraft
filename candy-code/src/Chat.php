@@ -43,6 +43,7 @@ use SugarCraft\Code\Tui\SessionTabs;
 use SugarCraft\Code\Tui\TextSelection;
 use SugarCraft\Code\Tui\Components\PaneLabel;
 use SugarCraft\Code\Support\EnvBool;
+use SugarCraft\Code\Support\StartupSummary;
 use SugarCraft\Code\Support\SystemClipboard;
 use SugarCraft\Code\Attachments\FileMentions;
 use SugarCraft\Code\Attachments\MentionIndex;
@@ -1862,10 +1863,12 @@ final class Chat implements Model
     }
 
     /**
-     * Arm the mid-session seam's edge-driven wake-up (E193).
+     * Arm the mid-session seam's edge-driven wake-up (E193) AND gather the
+     * startup summary's expensive facts off the paint path (VIS-1-P2).
      *
-     * THE ONLY THING THIS MODEL WANTS AT STARTUP, and it is deliberately not a
-     * subscription. {@see subscriptions()}' runtime-notice tick is declared on
+     * ## THE WAKE: WHY IT IS NOT A SUBSCRIPTION
+     *
+     * {@see subscriptions()}' runtime-notice tick is declared on
      * `$inFlight || RuntimeNoticeSink::hasPending()`, and `Program` re-evaluates
      * that only when it reconciles — after `init()` and after every dispatched
      * `Msg`. A notice raised while the UI is IDLE therefore arms nothing and
@@ -1876,11 +1879,17 @@ final class Chat implements Model
      * doc-block, which is also where the argument against fixing it with an
      * unconditional tick lives.
      *
-     * RETURNS null FOR EVERY Chat THAT IS NOT THE PROCESS'S DRAIN OWNER, which
-     * is the same gate {@see subscriptions()} applies first and for the same
-     * reason: {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::drain()}
+     * THE WAKE HALF IS STILL GATED on this Chat being the process's drain
+     * owner, which is the same gate {@see subscriptions()} applies first and
+     * for the same reason: {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::drain()}
      * is destructive, so a second listening `Chat` would take rows out from
-     * under the real transcript.
+     * under the real transcript. THE GATHER HALF IS NOT gated and always
+     * rides, so `init()` hands every host a Cmd now rather than null for the
+     * unappointed — the honest discriminator for the wake's absence is no
+     * longer "null vs Closure" but "running what init hands back does not
+     * arm the seam", pinned that way in
+     * {@see \SugarCraft\Code\Tests\Chat\HostedRuntimeNoticeWakeTest} and
+     * {@see \SugarCraft\Code\Tests\Diagnostics\RuntimeNoticeSinkDeliveryTest}.
      *
      * ## A HOST THAT DRIVES `update()` ITSELF OWNS THE PUMPING (E223)
      *
@@ -1893,13 +1902,14 @@ final class Chat implements Model
      * straight through untouched. So the in-tree hosted pane already
      * discharges both parts below, and the gap E223 records belongs to an
      * embedder OUTSIDE this tree that drives `update()` itself. Such a host
-     * gets the seam's idle wake-up only if it does what those two do, in two
-     * parts:
+     * gets the seam's idle wake-up — and the startup summary's facts — only
+     * if it does what those two do, in two parts:
      *
-     *  1. CALL THIS AND RUN WHAT IT HANDS BACK. The return is the arming
-     *     `Cmd`; a host that never runs it never installs the watcher, and the
-     *     seam is back to "the notice waits for whatever `Msg` arrives next",
-     *     which on an idle session is the user's next keystroke.
+     *  1. CALL THIS AND RUN WHAT IT HANDS BACK, fanning out any batch. A
+     *     host that never runs it never installs the watcher, and the
+     *     seam is back to "the notice waits for whatever `Msg` arrives
+     *     next", which on an idle session is the user's next keystroke —
+     *     and the startup block never gets its expensive rows either.
      *  2. KEEP RUNNING THE Cmd `update()` RETURNS. Handling a
      *     {@see RuntimeNoticePumpMsg} drains the inbox AND hands back a
      *     RE-arm; drop it and the seam delivers one notice per session.
@@ -1916,8 +1926,9 @@ final class Chat implements Model
     public function init(): ?\Closure
     {
         $wake = $this->runtimeNoticeWake();
+        $gather = StartupSummary::gatherCmd($this);
         if ($this->initialPrompt === null) {
-            return $wake;
+            return Cmd::batch($wake, $gather);
         }
 
         // The command-line prompt (audit CLI-2(b)) rides init() as a Msg so
@@ -1925,7 +1936,7 @@ final class Chat implements Model
         // the same road a prompt typed into the box and sent with Enter takes.
         $prompt = Cmd::send(new InitialPromptMsg($this->initialPrompt));
 
-        return $wake === null ? $prompt : Cmd::batch($wake, $prompt);
+        return Cmd::batch($wake, $prompt, $gather);
     }
 
     /**
@@ -11727,11 +11738,16 @@ final class Chat implements Model
         $cursor = null;
         $openTitleEditor = false;
         $mode = null;
+        $summaryRegather = false;
 
         foreach ($result->effects as $effect) {
             switch ($effect->kind) {
                 case \SugarCraft\Code\Host\Commands\CommandEffectKind::ClearTranscript:
                     $history = [];
+                    // VIS-1-P2: the summary is on screen again the moment the
+                    // transcript empties — schedule a fresh off-view gather so
+                    // its expensive rows describe the now, not the launch.
+                    $summaryRegather = true;
                     $changes = [
                         ...$changes,
                         'streamingText' => '',
@@ -11769,6 +11785,10 @@ final class Chat implements Model
 
                 case \SugarCraft\Code\Host\Commands\CommandEffectKind::SwitchSession:
                     $changes['currentSessionId'] = $effect->sessionId();
+                    // VIS-1-P2: a different session (often a different root
+                    // or mode paint-under) is a new memo key — gather its
+                    // facts off the view path like every other landing.
+                    $summaryRegather = true;
                     // ISS-102: `/branch` moves this window onto its copy —
                     // the session coming to the front opens its tab.
                     $changes['openTabs'] = $this->tabState->opening(
@@ -11846,6 +11866,11 @@ final class Chat implements Model
         }
         if ($openTitleEditor) {
             $next = $next->openTitleEditor();
+        }
+        if ($summaryRegather) {
+            // AFTER the mutate: the gather keys on the settled model, so the
+            // bag lands under the session and root that will paint it.
+            $cmds[] = StartupSummary::gatherCmd($next);
         }
 
         return [$next, match (\count($cmds)) {

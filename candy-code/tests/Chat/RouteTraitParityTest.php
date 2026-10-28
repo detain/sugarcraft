@@ -81,6 +81,7 @@ final class RouteTraitParityTest extends TestCase
         'SideQuestionAnsweredMsg',
         'StatusLineResultMsg',
         'StatusLineTickMsg',
+        'StartupSummaryGatheredMsg',
         'TelemetryRetryTickMsg', // C-SES-4.b arm landed without its roster row — base red cured in-step (C-PRV-5.c)
         'TickRequest',
         'ToolEventPumpMsg',

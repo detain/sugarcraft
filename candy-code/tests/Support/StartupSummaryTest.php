@@ -30,6 +30,16 @@ final class StartupSummaryTest extends TestCase
     /** The block's row separator, pinned literally — it is display wire. */
     private const SEP = ' · ';
 
+    protected function setUp(): void
+    {
+        // The gathered store is process-global; sibling files that exercise
+        // Chat::update()/init() fan-out can land a bag under the default
+        // (null-session, cwd-rooted) key, and this file's stability pins must
+        // not inherit it.
+        StartupSummary::clearCacheForTesting();
+        parent::setUp();
+    }
+
     protected function tearDown(): void
     {
         StartupSummary::clearCacheForTesting();
@@ -152,6 +162,112 @@ final class StartupSummaryTest extends TestCase
         }
     }
 
+    /**
+     * VIS-1-P1: /context lists the personal AGENTS.md but the startup summary
+     * did not, because instructionFiles() only walked loadDocuments(). The
+     * gathered bag now carries a `personal` provenance flag; compose() marks
+     * those rows through the chat.startup.personal key and treats any
+     * misshapen flag (a string, anything non-true) as "not personal".
+     */
+    public function testComposeMarksPersonalDocumentsAndToleratesMisshapenProvenance(): void
+    {
+        $rows = explode("\n", StartupSummary::compose([
+            'cwd' => '/x',
+            'tipIndex' => 0,
+            'instructionFiles' => [
+                ['name' => 'AGENTS.md', 'bytes' => 10, 'personal' => false],
+                ['name' => 'CLAUDE.md', 'bytes' => 20, 'personal' => true],
+                ['name' => 'MISTAKEN.md', 'bytes' => 30, 'personal' => 'yes'],
+            ],
+        ]));
+
+        $this->assertCount(4, $rows);
+        $this->assertSame(
+            'AGENTS.md (10 B) · '
+                . Lang::t('chat.startup.personal', ['name' => 'CLAUDE.md'])
+                . ' (20 B) · MISTAKEN.md (30 B)',
+            $rows[2],
+        );
+    }
+
+    /**
+     * The gather side of VIS-1-P1: instructionFiles() appends the loader's
+     * personal document under its personal marker, and a file reachable twice
+     * (once as a repo document, once as the personal one) is listed once,
+     * repo-first, unmarked. Home is sandboxed with BOTH spellings per the
+     * OneSidedHomeSandbox law; roots are fresh unique dirs because the loader
+     * walks ancestor roots and memoizes emitted paths per instance.
+     */
+    public function testInstructionFilesListsPersonalDocumentsAndDeduplicatesByRealpath(): void
+    {
+        $method = new \ReflectionMethod(StartupSummary::class, 'instructionFiles');
+
+        $home = getenv('HOME');
+        $serverHome = $_SERVER['HOME'] ?? null;
+        $scratch = '/tmp/opencode/ctui7a-instructions-' . \uniqid('', true);
+        mkdir($scratch, 0700, true);
+        try {
+            // (A) distinct files: repo document and personal document both list.
+            $rootA = $scratch . '/repoA';
+            $homeA = $scratch . '/homeA';
+            mkdir($rootA, 0700, true);
+            mkdir($homeA . '/.candy-code', 0700, true);
+            \file_put_contents($rootA . '/AGENTS.md', \str_repeat('r', 40));
+            \file_put_contents($homeA . '/.candy-code/AGENTS.md', \str_repeat('p', 60));
+            putenv('HOME=' . $homeA);
+            $_SERVER['HOME'] = $homeA;
+
+            $listed = $method->invoke(null, $rootA);
+            $byPair = [];
+            foreach ($listed as $entry) {
+                $byPair[$entry['name'] . '|' . ($entry['personal'] ? 'p' : 'r')] = $entry;
+            }
+            $this->assertArrayHasKey('AGENTS.md|r', $byPair, 'the repo document must stay listed');
+            $this->assertArrayHasKey('AGENTS.md|p', $byPair, 'the personal document must now be listed too (VIS-1-P1)');
+            $this->assertSame(40, $byPair['AGENTS.md|r']['bytes']);
+            $this->assertSame(60, $byPair['AGENTS.md|p']['bytes']);
+
+            // (B) same file twice: HOME's personal directory IS the project
+            // root passed in — one realpath reached as a repo document first,
+            // so it must appear exactly once and unmarked. (A symlinked repo
+            // copy would be refused by the loader's own containment before
+            // any dedup could apply, so the identity is pinned through the
+            // directory itself.)
+            $personalRoot = $scratch . '/personal-home/.candy-code';
+            mkdir($personalRoot, 0700, true);
+            \file_put_contents($personalRoot . '/AGENTS.md', \str_repeat('s', 24));
+            putenv('HOME=' . $scratch . '/personal-home');
+            $_SERVER['HOME'] = $scratch . '/personal-home';
+
+            $deduped = $method->invoke(null, $personalRoot);
+            $agents = \array_values(\array_filter(
+                $deduped,
+                static fn (array $entry): bool => $entry['name'] === 'AGENTS.md',
+            ));
+            $this->assertCount(1, $agents, 'one file on disk is one row, however many names reach it');
+            $this->assertFalse($agents[0]['personal'], 'the surviving entry is the repo one — provenance follows first sight');
+            $this->assertSame(24, $agents[0]['bytes']);
+        } finally {
+            putenv($home === false ? 'HOME' : 'HOME=' . $home);
+            if ($serverHome === null) {
+                unset($_SERVER['HOME']);
+            } else {
+                $_SERVER['HOME'] = $serverHome;
+            }
+            foreach (\array_reverse(\iterator_to_array(new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($scratch, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::CHILD_FIRST,
+            ))) as $node) {
+                if ($node->isDir()) {
+                    @rmdir($node->getPathname());
+                } else {
+                    @unlink($node->getPathname());
+                }
+            }
+            @rmdir($scratch);
+        }
+    }
+
     public function testTipIndexIsDeterministicWithinTheRoster(): void
     {
         $seen = [];
@@ -202,16 +318,26 @@ final class StartupSummaryTest extends TestCase
      * shrink the pin either. New impure sources must extend BOTH the roster
      * and the denylist vocabulary below; covering one without the other is
      * exactly the rot this arm refuses to allow.
+     *
+     * VIS-1-P2 re-derived the roster for the cheap/expensive split: the old
+     * single gather() became cheapFacts() (on the paint path, version only)
+     * and gatherExpensive() (off it, landed through store()). The wrapper
+     * totals are unchanged — 1 + 4 where the single body held 5.
      */
     public function testEveryFactReadOnTheGatherPathIsWrappedInTheFailSoft(): void
     {
         $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Support/StartupSummary.php');
 
         $readers = [
-            'private static function gather' => [
-                'wraps' => 5,
+            'private static function cheapFacts' => [
+                'wraps' => 1,
                 'reads' => [
                     'Help::versionString(',
+                ],
+            ],
+            'private static function gatherExpensive' => [
+                'wraps' => 4,
+                'reads' => [
                     'self::instructionFiles(',
                     'self::memoryCount(',
                     'self::skillCount(',

@@ -113,7 +113,10 @@ final class InitialPromptTest extends TestCase
     /**
      * The InitialPromptMsg init()'s Cmd produces, unwrapping a batch, or null.
      * These Chats are not the runtime-notice drain owner, so init() carries no
-     * promise-backed wake that running the Cmd could arm on the loop.
+     * promise-backed wake that running the Cmd could arm on the loop. Since
+     * VIS-1-P2 the batch also carries the startup-summary gather; its member
+     * runs here (a read-only fact sweep) and its promise settles to a message
+     * this walk deliberately ignores.
      */
     private static function initialPromptMsgOrNull(Chat $chat): ?InitialPromptMsg
     {

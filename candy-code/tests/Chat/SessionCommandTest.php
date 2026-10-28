@@ -356,8 +356,10 @@ final class SessionCommandTest extends TestCase
      * Regression test for the R20 review finding: reproduces the exact
      * shape {@see \SugarCraft\Code\Cli\Bootstrap::chat()} constructs a
      * live Chat with — a real sessionStore, but `currentSessionId` left at
-     * its null default (Bootstrap never passes one, and {@see Chat::init()}
-     * returns null so nothing selects one at startup either). Feeding a
+     * its null default (Bootstrap never passes one; VIS-1-P2 turned
+     * {@see Chat::init()} into an always-present Cmd, but all it settles to is
+     * a startup-summary store, which selects nothing at startup either).
+     * Feeding a
      * `KeyMsg(KeyType::Tab, ctrl: true)` here bypasses the disclosed
      * InputReader `CSI 1;5I` decoder gap entirely (this is already a raw
      * KeyMsg), yet the update is still a complete no-op — proving Ctrl+Tab
@@ -376,7 +378,34 @@ final class SessionCommandTest extends TestCase
             backend: new EchoBackend(),
             sessionStore: $this->sessionStore,
         );
-        $this->assertNull($chat->init());
+        // VIS-1-P2: init() hands a Cmd now — fan it out the way Program would
+        // and land everything it settles to; none of it may pick a session.
+        $startupCmd = $chat->init();
+        $this->assertInstanceOf(\Closure::class, $startupCmd);
+        $settled = [];
+        $queue = [$startupCmd()];
+        while ($queue !== []) {
+            $msg = array_shift($queue);
+            if ($msg instanceof \SugarCraft\Core\BatchMsg) {
+                foreach ($msg->cmds as $child) {
+                    $queue[] = $child();
+                }
+                continue;
+            }
+            if ($msg instanceof \SugarCraft\Core\AsyncCmd) {
+                $msg->promise->then(static function (object $landed) use (&$queue): void {
+                    $queue[] = $landed;
+                });
+                continue;
+            }
+            $settled[] = $msg;
+        }
+        $this->assertCount(1, $settled);
+        $this->assertInstanceOf(\SugarCraft\Code\App\StartupSummaryGatheredMsg::class, $settled[0]);
+        [$stored, $storeCmd] = $chat->update($settled[0]);
+        $this->assertNull($storeCmd, 'the startup gather must not trigger follow-up work, least of all a session switch');
+        $this->assertNull($stored->currentSessionId());
+        \SugarCraft\Code\Support\StartupSummary::clearCacheForTesting();
         $this->assertNull($chat->currentSessionId());
 
         [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Tab, ctrl: true));

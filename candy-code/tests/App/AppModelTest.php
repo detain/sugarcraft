@@ -126,10 +126,11 @@ final class AppModelTest extends TestCase
         $batch = $bare();
         $this->assertInstanceOf(BatchMsg::class, $batch);
 
-        // Chat::init() is null today, and Cmd::batch() drops nulls, so the
-        // query and the E705 Kitty push are the only members — asserting the
-        // count is what would catch a null leaking through as a member and
-        // TypeError-ing scheduleCmd().
+        // This App hosts no Chat at all, so `$this->chat?->init()` contributes
+        // nothing, and Cmd::batch() also drops null members — the query and the
+        // E705 Kitty push are the only members. Asserting the count is what
+        // would catch a null leaking through as a member and TypeError-ing
+        // scheduleCmd().
         $this->assertCount(2, $batch->cmds);
 
         $raw = ($batch->cmds[0])();
@@ -145,19 +146,25 @@ final class AppModelTest extends TestCase
 
     /**
      * The hosted chat's own startup Cmd is still run — it is batched, not
-     * replaced. Chat::init() returns null today, so this drives a stub Model
-     * whose init() is non-null to prove the batching rather than asserting on
-     * a null that would pass either way.
+     * replaced. VIS-1-P2 made Chat::init() always answer (it carries the
+     * startup-summary gather), so the batching is asserted against the real
+     * Model: the App batch grows by exactly the chat's member, and the chat's
+     * own BatchMsg rides inside it unexpanded — Program fans it out
+     * recursively (sugar-core dispatch/scheduleCmd), a host must not assume
+     * one level.
      */
     public function testInitBatchesRatherThanReplacesAHostedChatsStartupCmd(): void
     {
         $chat = new Chat();
-        $this->assertNull($chat->init(), 'guard: if Chat gains a startup Cmd, assert on it here');
+        $chatCmd = $chat->init();
+        $this->assertInstanceOf(\Closure::class, $chatCmd, 'VIS-1-P2: Chat now answers init() — the guard in this test\'s sibling still reads true');
 
         $batch = ($this->app()->withChat($chat)->init())();
         $this->assertInstanceOf(BatchMsg::class, $batch);
-        // Query + E705 Kitty push; the null Chat::init() is dropped by batch().
-        $this->assertCount(2, $batch->cmds);
+        // Query + E705 Kitty push + the hosted chat's own startup Closure.
+        $this->assertCount(3, $batch->cmds);
+        $inner = ($batch->cmds[2])();
+        $this->assertInstanceOf(BatchMsg::class, $inner, 'the chat member is itself a batch — nothing here executes it');
     }
 
     /**

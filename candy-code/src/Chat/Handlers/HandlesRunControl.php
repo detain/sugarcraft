@@ -41,6 +41,7 @@ use SugarCraft\Code\Tui\SessionTabs;
 use SugarCraft\Code\Tui\TextSelection;
 use SugarCraft\Code\Tui\Components\PaneLabel;
 use SugarCraft\Code\Support\SystemClipboard;
+use SugarCraft\Code\Support\StartupSummary;
 use SugarCraft\Code\Attachments\FileMentions;
 use SugarCraft\Code\Attachments\MentionIndex;
 use SugarCraft\Code\Support\ClipboardImage;
@@ -129,6 +130,7 @@ use SugarCraft\Code\App\BackgroundTickMsg;
 use SugarCraft\Code\App\CancelAgentRunMsg;
 use SugarCraft\Code\App\CloseAgentViewMsg;
 use SugarCraft\Code\App\StatusLineTickMsg;
+use SugarCraft\Code\App\StartupSummaryGatheredMsg;
 use SugarCraft\Code\App\InitialPromptMsg;
 use SugarCraft\Code\App\OpenAgentViewMsg;
 use SugarCraft\Code\App\SessionTitledMsg;
@@ -274,6 +276,16 @@ trait HandlesRunControl
         }
         if ($msg instanceof StatusLineResultMsg) {
             StatusLineCommand::settle($msg->line);
+
+            return [$this, null];
+        }
+        if ($msg instanceof StartupSummaryGatheredMsg) {
+            // VIS-1-P2 landing: the off-view gather's bag parks for the next
+            // paint (store() also drops this key's memoized frame). Returns
+            // $this unchanged — the facts live in the summary's own cache,
+            // not on the model — and Program repaints after every Msg anyway,
+            // the StatusLineResultMsg precedent one line above.
+            StartupSummary::store($this, $msg->facts);
 
             return [$this, null];
         }

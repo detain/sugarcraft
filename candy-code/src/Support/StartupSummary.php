@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Support;
 
+use React\Promise\PromiseInterface;
+use SugarCraft\Code\App\StartupSummaryGatheredMsg;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Cli\Bootstrap;
@@ -16,6 +18,7 @@ use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tui\Components\PaneLabel;
 use SugarCraft\Code\Workspace\GitRunner;
 use SugarCraft\Code\Lang;
+use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Style\Style;
 
@@ -31,12 +34,19 @@ use SugarCraft\Style\Style;
  * mode, the git branch, the instruction documents the system prompt splices,
  * and the memory/skill/MCP inventories the host commands enumerate.
  *
- * It is VIEW-SIDE ONLY by construction: the transcript is untouched, so no
- * row is persisted, no compaction budget is spent, and clearing history
- * brings the summary back rather than having buried it. {@see compose()} is
- * pure — it lays out a parsed fact bag and reads nothing; every impure
- * accessor sits behind {@see gather()}'s per-fact fail-soft, because a
- * summary line is never worth a paint-time fatal.
+ * It is VIEW-SIDE LIGHT by construction (VIS-1-P2): the transcript is
+ * untouched, so no row is persisted, no compaction budget is spent, and
+ * clearing history brings the summary back rather than having buried it —
+ * and `view()` itself resolves NOTHING expensive. {@see compose()} is pure —
+ * it lays out a parsed fact bag and reads nothing. The cheap facts (version,
+ * backend, mode, cwd, tip) are recomputed per frame behind
+ * {@see tryFact()}'s fail-soft; the expensive ones (git branch, instruction
+ * documents, memory/skill/MCP inventories) are gathered off the paint path
+ * by {@see gatherCmd()} and land through {@see store()}, exactly as the
+ * context pane's "read, never fetched" law spells it. Until a bag lands —
+ * and for any fact whose read threw — the block paints the rows it can
+ * establish, because a summary line is never worth a paint-time stall or
+ * fatal.
  *
  * The tip rotates over a const roster by `crc32(session id)` — deterministic
  * per conversation, stable across frames, and with no timer and no RNG, so
@@ -73,20 +83,79 @@ final class StartupSummary
     private static array $cache = [];
 
     /**
+     * Expensive fact bags gathered off the paint path, keyed exactly like
+     * {@see $cache} — the {@see gatherCmd()} producer fills it and
+     * {@see store()} invalidates the memoized frame for the same key, so the
+     * next paint composes cheap facts plus the fresh bag. A key with no bag
+     * yet is the "still gathering" state: {@see render()} paints cheap rows.
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    private static array $gathered = [];
+
+    /**
      * The painted block: the summary rows, each one faint (ISS-096's lesson —
      * the placeholder's mood was always "quiet context", which is what a
      * Style spells, not what literal delimiters fake).
+     *
+     * NEVER gathers here (VIS-1-P2): on a memo miss with no landed bag this
+     * paints the cheap rows only; once {@see store()} has landed the
+     * expensive bag for this key, the full frame composes and memoizes.
      */
     public static function render(Chat $chat): string
     {
         $mode = $chat->currentPermissionMode()?->value;
         [$provider, $model] = self::providerAndModel($chat);
-        $key = ($chat->currentSessionId() ?? '') . "\0" . $chat->projectRoot()
-            . "\0" . ($mode ?? '') . "\0" . ($provider ?? '') . "\0" . ($model ?? '');
+        $key = self::deriveKey($chat, $mode, $provider, $model);
+        $cheap = self::cheapFacts($chat, $mode, $provider, $model);
+
+        $expensive = self::$gathered[$key] ?? null;
+        if ($expensive === null) {
+            return self::faintRows(self::compose($cheap));
+        }
 
         return self::$cache[$key] ??= self::faintRows(
-            self::compose(self::gather($chat, $mode, $provider, $model))
+            self::compose([...$cheap, ...$expensive])
         );
+    }
+
+    /**
+     * The Cmd that gathers the expensive facts off the paint path (VIS-1-P2).
+     * Factored as a Cmd — a `git branch` child and a full skill scan belong
+     * on the launch/command channel, where the Program already tolerates
+     * work of that shape, never inside `view()`.
+     *
+     * The read itself runs when the Cmd runs (not when it is constructed),
+     * and lands a {@see StartupSummaryGatheredMsg}; the run-control arm hands
+     * the bag to {@see store()} on the settled model, so it is keyed by the
+     * session and root of the Chat that will paint it.
+     */
+    public static function gatherCmd(Chat $chat): \Closure
+    {
+        return Cmd::promise(static fn (): PromiseInterface => \React\Promise\resolve(
+            new StartupSummaryGatheredMsg(self::gatherExpensive($chat)),
+        ));
+    }
+
+    /**
+     * Park a gathered bag for the key this Chat paints under, and drop the
+     * memoized full frame so the next paint composes the fresh facts.
+     *
+     * @param array<string, mixed> $facts
+     */
+    public static function store(Chat $chat, array $facts): void
+    {
+        [$provider, $model] = self::providerAndModel($chat);
+        $key = self::deriveKey($chat, $chat->currentPermissionMode()?->value, $provider, $model);
+        self::$gathered[$key] = $facts;
+        unset(self::$cache[$key]);
+    }
+
+    /** The memo key for the frame this Chat paints: every fact that moves it. */
+    private static function deriveKey(Chat $chat, ?string $mode, ?string $provider, ?string $model): string
+    {
+        return ($chat->currentSessionId() ?? '') . "\0" . $chat->projectRoot()
+            . "\0" . ($mode ?? '') . "\0" . ($provider ?? '') . "\0" . ($model ?? '');
     }
 
     /**
@@ -136,7 +205,13 @@ final class StartupSummary
         if (\is_array($files)) {
             foreach ($files as $document) {
                 if (\is_array($document) && \is_string($document['name'] ?? null) && \is_int($document['bytes'] ?? null)) {
-                    $knowledge[] = $document['name'] . ' (' . self::bytes($document['bytes']) . ')';
+                    $name = $document['name'];
+                    // Only the gathered bag marks provenance; a truthy check
+                    // on the exact `true` keeps a misshapen value a plain row.
+                    if (($document['personal'] ?? null) === true) {
+                        $name = Lang::t('chat.startup.personal', ['name' => $name]);
+                    }
+                    $knowledge[] = $name . ' (' . self::bytes($document['bytes']) . ')';
                 }
             }
         }
@@ -178,21 +253,24 @@ final class StartupSummary
         return crc32($sessionId ?? $fallbackSeed) % count(self::TIP_KEYS);
     }
 
-    /** Drop every memoized frame — test seam, same shape as the other caches. */
+    /** Drop every memoized frame and landed bag — test seam, as the other caches. */
     public static function clearCacheForTesting(): void
     {
         self::$cache = [];
+        self::$gathered = [];
     }
 
     /**
-     * Read every fact the summary shows. Each read is individually fail-soft:
-     * the value is null (a count) or omitted (a segment) when its subsystem
-     * is unavailable, throws, or reports nothing, so the block always paints
-     * what the process can actually establish and never a fatal.
+     * The facts a frame can settle without touching git or the disk scan:
+     * the Composer version, the live backend's provider and model, the
+     * permission mode, the working directory, and the conversation's tip
+     * slot. Read on the paint path on purpose — every one is an in-process
+     * value this process already holds (or a const version string), so
+     * {@see render()} never stalls, gathered bag or not.
      *
-     * @return array{version: string, provider: ?string, model: ?string, mode: ?string, cwd: string, branch: ?string, instructionFiles: list<array{name: string, bytes: int}>, memories: ?int, skills: ?int, mcpServers: ?int, tipIndex: int}
+     * @return array{version: string, provider: ?string, model: ?string, mode: ?string, cwd: string, tipIndex: int}
      */
-    private static function gather(Chat $chat, ?string $mode, ?string $provider, ?string $model): array
+    private static function cheapFacts(Chat $chat, ?string $mode, ?string $provider, ?string $model): array
     {
         $root = $chat->projectRoot();
 
@@ -202,6 +280,25 @@ final class StartupSummary
             'model' => $model,
             'mode' => $mode,
             'cwd' => $root,
+            'tipIndex' => self::tipIndex($chat->currentSessionId(), $root),
+        ];
+    }
+
+    /**
+     * The expensive half of the fact bag — the reads that spawned a git child
+     * and re-scanned the skill tiers from `view()` before VIS-1-P2 moved
+     * them onto the Cmd channel. Each read is individually fail-soft: the
+     * value is null (a count), null (no branch), or [] (no documents) when
+     * its subsystem is unavailable, throws, or reports nothing, so a landed
+     * bag always paints what the process can actually establish.
+     *
+     * @return array{branch: ?string, instructionFiles: list<array{name: string, bytes: int, personal: bool}>, memories: ?int, skills: ?int, mcpServers: ?int}
+     */
+    private static function gatherExpensive(Chat $chat): array
+    {
+        $root = $chat->projectRoot();
+
+        return [
             'branch' => self::branch($root),
             'instructionFiles' => self::tryFact(
                 static fn(): array => self::instructionFiles($root),
@@ -209,7 +306,6 @@ final class StartupSummary
             'memories' => self::tryFact(static fn(): int => self::memoryCount($chat, $root)),
             'skills' => self::tryFact(static fn(): int => self::skillCount($root)),
             'mcpServers' => self::tryFact(static fn(): int => self::mcpCount($root)),
-            'tipIndex' => self::tipIndex($chat->currentSessionId(), $root),
         ];
     }
 
@@ -272,18 +368,38 @@ final class StartupSummary
     }
 
     /**
-     * The instruction documents the system prompt splices, as display names
-     * with their byte sizes. {@see Bootstrap::instructionLoader()} is the
-     * launch's own memoized loader, so this reads nothing the prompt did not
-     * already read.
+     * The instruction documents the summary lists: the repository-shipped
+     * ones the system prompt splices, then the operator's personal document
+     * (VIS-1-P1 — `/context` lists `loadPersonal()` but this block used to
+     * show only `loadDocuments()`, so the file that follows the user across
+     * checkouts was invisible in exactly the view that answers "what does it
+     * already know"). Carried with a personal marker for {@see compose()},
+     * and deduplicated by resolved path: a personal file that IS a listed
+     * repository document (same realpath, or a path that resolves to nothing
+     * yet falls back to its raw spelling for the comparison) is not shown
+     * twice. {@see Bootstrap::instructionLoader()} is the launch's own
+     * memoized loader, so this reads nothing the prompt did not already read.
      *
-     * @return list<array{name: string, bytes: int}>
+     * @return list<array{name: string, bytes: int, personal: bool}>
      */
     private static function instructionFiles(string $root): array
     {
+        $loader = Bootstrap::instructionLoader($root);
         $files = [];
-        foreach (Bootstrap::instructionLoader($root)->loadDocuments() as $document) {
-            $files[] = ['name' => basename($document['path']), 'bytes' => $document['bytes']];
+        $seen = [];
+        foreach ($loader->loadDocuments() as $document) {
+            $canonical = realpath($document['path']);
+            $seen[$canonical === false ? $document['path'] : $canonical] = true;
+            $files[] = ['name' => basename($document['path']), 'bytes' => $document['bytes'], 'personal' => false];
+        }
+        foreach ($loader->loadPersonal() as $document) {
+            $canonical = realpath($document['path']);
+            $path = $canonical === false ? $document['path'] : $canonical;
+            if (isset($seen[$path])) {
+                continue;
+            }
+            $seen[$path] = true;
+            $files[] = ['name' => basename($document['path']), 'bytes' => $document['bytes'], 'personal' => true];
         }
 
         return $files;

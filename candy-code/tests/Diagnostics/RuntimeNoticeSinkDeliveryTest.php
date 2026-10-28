@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Diagnostics;
 use PHPUnit\Framework\ExpectationFailedException;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
+use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Kind;
 use SugarCraft\Core\Msg\KeyMsg;
@@ -1060,7 +1061,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
     }
 
     /**
-     * THE WAKE Cmd IS NULL FOR EVERY Chat THAT MUST NOT LISTEN.
+     * THE WAKE ARMS FOR EXACTLY ONE OF THE FOUR STARTUP SHAPES.
      *
      * Two gates, and they are different questions. A Chat nobody appointed must
      * not install a watcher, for {@see RuntimeNoticeSink::drain()}'s
@@ -1070,25 +1071,47 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
      * in-process backend can only be written by this process, synchronously,
      * inside an `update()` that `Program` reconciles after anyway.
      *
-     * THE KNOWN-POSITIVE IS THE LAST ASSERTION, because the three above are
-     * `assertNull()` and an `init()` hard-wired to `return null` satisfies all
-     * of them.
+     * VIS-1-P2 retired the null-vs-Closure discriminator — every `init()` now
+     * answers a Cmd carrying at least the startup gather — so the pins below
+     * run each startup to its end (the same recursive fan-out Program applies)
+     * and judge `isNotificationArmed()`. THE KNOWN-POSITIVE IS THE LAST
+     * ASSERTION: every leg before it is a false, so a startup that armed
+     * nothing anywhere would still sail through them — the final true is what
+     * proves the walk really delivers the arm.
      */
     public function testOnlyAnAppointedChatWithATransportArmsTheWake(): void
     {
-        self::assertNull((new Chat())->init(), 'an unarmed, unappointed Chat armed the wake');
+        $fanOut = static function (object $msg) use (&$fanOut): void {
+            if ($msg instanceof BatchMsg) {
+                foreach ($msg->cmds as $child) {
+                    $fanOut($child());
+                }
+            }
+        };
+        $startup = static function (Chat $chat) use ($fanOut): void {
+            $cmd = $chat->init();
+            self::assertNotNull($cmd, 'VIS-1-P2: init() answers every host; a null here means the startup gather went missing');
+            $fanOut($cmd());
+        };
+
+        self::assertFalse(RuntimeNoticeSink::isNotificationArmed(), 'setUp reset must leave the seam asleep');
+        $startup(new Chat());
+        self::assertFalse(RuntimeNoticeSink::isNotificationArmed(), 'an unarmed, unappointed Chat armed the wake');
 
         RuntimeNoticeSink::arm(false);
         self::assertFalse(RuntimeNoticeSink::hasTransport(), 'arm(false) built a transport; this test is moot');
-        self::assertNull(self::ownerChat()->init(), 'the array backend has no fd, but a watcher was armed for it');
-        self::assertNull((new Chat())->init());
+        $startup(self::ownerChat());
+        $startup(new Chat());
+        self::assertFalse(RuntimeNoticeSink::isNotificationArmed(), 'the array backend has no fd, but a watcher was armed for it');
 
         RuntimeNoticeSink::reset();
         self::assertTrue(RuntimeNoticeSink::arm(), 'no cross-fork transport on this host; the control below is moot');
-        self::assertNull((new Chat())->init(), 'an unappointed Chat armed the wake on a real transport');
-        self::assertNotNull(
-            self::ownerChat()->init(),
-            'the appointed Chat did not arm the wake either, so every null above is vacuous',
+        $startup(new Chat());
+        self::assertFalse(RuntimeNoticeSink::isNotificationArmed(), 'an unappointed Chat armed the wake on a real transport');
+        $startup(self::ownerChat());
+        self::assertTrue(
+            RuntimeNoticeSink::isNotificationArmed(),
+            'the appointed Chat did not arm the wake either, so every false above is vacuous',
         );
     }
 
