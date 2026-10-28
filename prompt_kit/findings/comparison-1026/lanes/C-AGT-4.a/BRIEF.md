@@ -1,0 +1,18 @@
+# C-AGT-4.a — Primary-agent core (preset → main backend)
+- item: C-AGT-4 (sources: GAP-AGT-01/02) · kind: gap · effort M · phase: normal
+- approach: Add `Agents\PrimaryAgent`, which applies a preset to the MAIN backend and can be undone:
+- narrow tools through a new public `AgentManager::toolsForPrimary(Agent)`, a wrapper over `resolveGrantedTools()` that carries C-AGT-3's MCP scoping;
+- set the model with `withModel` unless the preset says `inherit`, and effort with `withReasoningEffort`;
+- narrow the permission mode only (stricter wins);
+- carry the preset body as a new fenced, PromptFence-escaped `<agent-instructions>` section in `Runtime::systemPromptSections()`, PerSession, set through `EngineBackend::withAgentInstructions(?string)`;
+- `PrimaryAgent::revert()` restores the launch tools, model and effort it recorded.
+- A new `mode: primary|subagent|all` preset key (OpenCode spelling, new enum `AgentMode`, default `all`) decides which presets the cycle offers.
+- `/context` (and P-CTX-BREAKDOWN) gets an `agent-instructions` row for free, from the section label.
+- files.create: `candy-code/src/Agents/PrimaryAgent.php`, `candy-code/src/Agents/AgentMode.php`
+- files.modify: `candy-code/src/Agents/AgentManager.php` (`toolsForPrimary`), `candy-code/src/Backend/EngineBackend.php` (`withAgentInstructions`), `candy-code/src/Runtime.php` (`systemPromptSections`: the section slot behind the maxims/tool-guidance layers), `candy-code/src/Agents/AgentPreset.php` (`mode`), `candy-code/src/Agents/AgentPresetRegistry.php` and `candy-code/src/Agents/ForeignAgentPresetRegistry.php` (parse `mode`), `candy-code/src/Support/FrontmatterKeyAudit.php` (known keys), `candy-code/docs/AGENTS_AUTHORING.md` (`mode` row)
+- tests: create `candy-code/tests/Agents/PrimaryAgentTest.php` (apply narrows tools/model/effort; the mode only narrows; revert restores; the section appears once and is escaped); modify `candy-code/tests/Agents/AgentPresetRegistryTest.php` (`mode` parse)
+- docs/guards: `docs/AGENTS_AUTHORING.md`; `InertFrontmatterDocumentationDriftTest` if it enumerates known keys. The `ForeignAgentPresetWiringTest` permissionMode census needs a ROW for `Agents/PrimaryAgent.php`, which reads `->permissionMode`; the row goes in-step.
+- serialized: [runtime:systemPromptSections] [hot:candy-code/src/Backend/EngineBackend.php] [hot:candy-code/src/Agents/AgentManager.php] [docs:AGENTS_AUTHORING.md]
+- deps: C-AGT-3.a, C-AGT-3.b
+- ruling: none
+- risks: a mid-session section change busts the provider prompt cache once per switch. That is expected, but say so in docs/AGENTS.md (4.b).

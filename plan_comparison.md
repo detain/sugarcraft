@@ -1725,7 +1725,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tool.md` → `### C-TOOL-4.a`
 
-#### C-AGT-4.a — Primary-agent core (preset → main backend)
+#### ✅ 093ea6e13 C-AGT-4.a — Primary-agent core (preset → main backend)
 - **Item:** C-AGT-4 (sources: GAP-AGT-01/02) · gap · effort M
 - **What:** Add `Agents\PrimaryAgent`, which applies a preset to the MAIN backend and can be undone: narrow tools through a new public `AgentManager::toolsForPrimary(Agent)`, a wrapper over `resolveGrantedTools()` that carries C-AGT-3's MCP …
 - **Files — create:** `candy-code/src/Agents/PrimaryAgent.php`, `candy-code/src/Agents/AgentMode.php`
