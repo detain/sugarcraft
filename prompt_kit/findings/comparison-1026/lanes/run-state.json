@@ -869,7 +869,7 @@
   "next_session_resume_recipe": "fresh lead: read this run-state.json + git log --oneline -30; reconcile inflight vs `git worktree list`/`git branch --list cc/*` (phantom law: cat-file every SHA at brief time); scheduler: python3 -I prompt_kit/findings/comparison-1026/schedule_plan.py prompt_kit/findings/comparison-1026 --next --state prompt_kit/findings/comparison-1026/lanes/run-state.json --slots 10 — welded is a LIST; keep ~10 busy; ONE welder at a time (pre-dispatch: zero live welder + git log head-20 + git cherry proof); §4 marks stay UNSTAGED except wave-closes/closing commits; lanes never touch suite-figure.json/durations.tsv/dist; gates plain-pipe cwd <wt>/candy-code env -u LINES -u COLUMNS targeted-only, PtyRunToolTest NEVER in filters; vitest --no-file-parallelism; protocol trio regen-verify-RESTORE in-lane, welder regenerates+commits (+dist commit-if-changed); P-TABS.g: re-dispatch per plan:1549 AFTER P-TABS.e+P-TABS.f weld (parked worktree kept); C-SEC-5.d: NOT STARTED — branch/worktree/claimed SHAs (72f3d8f4e,b98b61b5c) all absent (4 phantom rounds; lanes/C-SEC-5.d/REVIEW-1..3.md record it); fresh build per plan:1474 after the drain. C-SES-1.b: EMPTY CUT (branch was creation-only bd6b14128, zero commits — pruned @2029@; earlier f3132e45e claims phantom); step is welded only in the OLD-era record if at all — next lead cat-file the §4 mark before trusting, else fresh build. C-SES-9.e = NOT-A-STEP (phantom id; design-ses family ends at .d); §6.3 LATE gating: W33+ steps NEVER startable until owner answers LATE rulings C-TOOL-6 c/e/h (Script tool language/sandbox floor; user-tier script tools; client-hosted tools) + C-TUI-6 six calls (Windows shell; Windows self-update helper; web i18n scope; locale choice + translation-parity strictness; voice endpoint; push-to-talk key) — on first startable LATE step return LATE-RULINGS-NEEDED. NEVER push.",
   "residual_unstaged": "see carries WIND-DOWN RESIDUALS"
  },
- "status": "RUNNING",
+ "status": "RUNNING-scope-boundary",
  "standing_reds_b985fbe51": "ADD: ChatHostLangCatalogueTest red on chat.effort.launch_unshaped (asker LaunchContext.php:2109 outside sources()) - byte-identical at base, C-PRV-1.b (a992413b0) seam -> closeout roster",
  "late_rulings": [
   {
@@ -891,16 +891,12 @@
  "weld_queue": [
   "C-CTX-4.c"
  ],
- "tip": "a1adc4f35",
+ "tip": "8d7817be0",
  "welded_count": 149,
  "tick": "87-disk-reconciled: W11 REALY closed@341f66404; trio MCP2b+TOOL5b+WEB3f real to 0b3c4ba21 (welded=122); W13/14 welds PENDING; phantom-atlas @b73@ correction: c3178096f/4d263705a/8d8c75678 GHOSTS, cure real 23fa8ab8e",
  "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
  "blocked_notes": {
-  "C-AGT-5.b": {
-   "id": "C-AGT-5.b",
-   "reason": "owner-gated HOLD: delete cross-root createdBy-scope ruling owed (carried from C-AGT-5.a r1 review, WELD.md note b59485333-era). Scheduler keeps suggesting it (W14, deps C-AGT-5.a welded); do NOT start until owner answers.",
-   "since": "tick 98b"
-  }
+  "C-AGT-5.b": "OWNER RULING NEEDED (gates W14 full closure + C-AGT-5.c cascade in W15): C-AGT-5.a r1 MINOR-2 — ScheduleFactory delete guard is createdBy-scoped, not root-scoped, so a model-created row in ANOTHER root can be deleted without include_operator_rows. Options (a) root-scope the guard (stricter; may break legit cross-root cleanup), (b) keep createdBy-scope + document. Per C-AGT-5.a r2 CLEAN the lane shipped as-designed; ruling owed before any rebuild of 5.b."
  },
  "next_lead": {
   "written_by": "lead tick110",
@@ -936,5 +932,12 @@
  "standing_reds_add": [
   "AutomaticCompactionModelSummaryTest::testClearingTheTranscriptUnarmsTheBreaker 1F deterministic base-inherited (P-TABS.f r1 proof; Chat-region ≤W10 band owner)",
   "MenuBarTest placement-rows 1F + PaletteClickTest mid-turn dataset 1F: P-TABS.f Close tab row gate miss (fixer dispatched tick143) — ShellMenuTest cure LANDED 9120011fc"
- ]
+ ],
+ "scope_notes": {
+  "as_of": "2026-10-29 tick ~148",
+  "W14": "9/10 welded; only C-AGT-5.b (owner-gated) missing; loop cannot run",
+  "W15": "9/10 welded; only C-AGT-5.c (cascade on 5.b) missing; loop cannot run",
+  "W16plus": "scheduler offers W16 (P-TABS.g owner-instructed exception in flight; other 9 W16 steps NEVER start per cap)",
+  "phantom_law": "several compressed summaries (f4d48b051 chain, WEB-3.h weld, 097e70c6f tip, AGT-7.c agent-pane prose) were CONFABULATED; disk greps above are truth — re-cat-file every hash every decision"
+ }
 }
