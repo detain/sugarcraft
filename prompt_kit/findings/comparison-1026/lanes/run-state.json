@@ -161,7 +161,8 @@
   "C-MCP-4.b",
   "C-MCP-3.b",
   "C-AGT-5.c",
-  "C-SES-4.c"
+  "C-SES-4.c",
+  "C-SES-6.b"
  ],
  "inflight": {
   "P-AGENT.b": {
@@ -197,21 +198,6 @@
    "review": "lanes/C-PRV-2.c/REVIEW-1.md (copied from /tmp)",
    "closeout_carry": "ENVIRONMENT.md azure wording NIT; CliLangCatalogue figure MINOR out-of-scope",
    "fix_session": "ses_e7c316b37ffejhMQGju9ZugnqC"
-  },
-  "C-SES-6.b": {
-   "stage": "clean",
-   "round": 2,
-   "worktree": "/home/sites/cc-cmp-C-SES-6.b",
-   "branch": "cc/C-SES-6.b",
-   "session": "ses_e7c63fdf7ffedY5jx0v61dXrtB",
-   "commit": "bb5cacc06",
-   "review_session": "ses_e7c3a85e9ffeZLaoTgB29ydjkP",
-   "fix_session": "ses_e7c3e2623ffenXQy9IOF51LuDK",
-   "review_verdict": "r1 APPROVE 0C/0M/1-minor-step-local/2nit",
-   "verdict": "r2 CLEAN 0C/0M/0m (r1 1m cured bb5cacc06)",
-   "carries": [
-    "PharCompatTest:627-632 DST-1-era unframed wall leg false-reds under ambient SOURCE_DATE_EPOCH (pre-existing at base; one-line frame cure for closeout)"
-   ]
   },
   "C-SES-6.c": {
    "stage": "review",
@@ -1087,7 +1073,7 @@
   "(CTX-2.d in welder hands)"
  ],
  "tip": "0f58a906f",
- "welded_count": 162,
+ "welded_count": 163,
  "tick": "104: C-SES-6.c fix bcb1769f6 verified -> r2 review; live = 2 reviews + 1 review-r2 + 2 fixers... = 6 agents + welder",
  "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
  "blocked_notes": {
@@ -1243,7 +1229,7 @@
  "note": "W15 FULLY WELDED \u2014 wave loop r1 next",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
  "laws_premise_correction": "2026-10-29: plan_comparison.md is TRACKED (ls-files + full weld history commit its marks). \u00a73/\u00a74 progress marks MUST be committed with the weld. The never-stage rule applies ONLY to root ./run-state.json stray, ./escalated, and foreign dirt.",
- "master_tip": "f5bd88ca3",
+ "master_tip": "8fce79ce0",
  "prestage_w18": {
   "briefs": "all 10 extracted to lanes/<id>/BRIEF.md",
   "notes": {

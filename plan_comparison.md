@@ -2083,7 +2083,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SES-4.a (W2)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-4.c`
 
-#### C-SES-6.b — Reproducible phar build + package manifest
+#### ✅ 8fce79ce04516d0bb6cb25ead42f8f01a947ea82 C-SES-6.b — Reproducible phar build + package manifest (welded 2026-10-29)
 - **Item:** C-SES-6 (sources: p2-miss: reproducible phar builds) · gap · effort S
 - **What:** **The gap.** `release-phar.yml:6-15` discloses lock-less `dev-master` resolution, and phar entries carry checkout-time mtimes. **Fix.** Before adding files (`:224` sorts them; `:270` adds them), `touch()` every packaged file to …
 - **Files — create:** none
