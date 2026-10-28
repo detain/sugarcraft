@@ -1,0 +1,31 @@
+# C-EXT-4.d — Contextual bundle recommendations at launch
+
+Status: DONE. Commit `232ae55e4` on `cc/C-EXT-4.d` (base `e6188662a`, never pushed). 6 files, +653/−9.
+
+## What shipped
+
+- `Bootstrap::reportBundleRecommendations()` in the `buildChat()` launch drain (after `reportTerminalGuidance()`): joins every added marketplace's catalog first-offering-wins, runs the landed `BundleRecommender` (C-EXT-4.b), and emits ONE aggregate row — `Bundles matching this project: name@marketplace, … . Nothing was installed — adopt one deliberately with candy-code bundles install <name>@<marketplace>.` — through `warnLaunchRows()` + `Lang::t` (house law: no new sprintf, no emitter-channel move).
+- Limits honored: silent when no marketplace is added; silent when the project's fixed signal walk answers nothing; once per project per marketplace PIN via a stamp written fail-open into `~/.candy-code/marketplaces.json` under top-level key `launchRecommendations` (`{root: {marketplace: sha}}`) — the registry's loader ignores unknown top-level keys, and its writer drops the stamp on the next mutation, which is exactly when a re-show is owed (add/remove/repin). NEVER network: one `@scandir` of the project root against `BundleRecommender`'s fixed signal list, local catalog reads via the registry, one scandir of the home install root for the exclusion list, plus stat-level reads of the stamp file.
+- Census moves in-step: roster row `reportBundleRecommendations => 1` (bounded worst case is the single aggregate sentence, not `MAX_RECOMMENDATIONS`), sum 47→48, so `LAUNCH_NOTICE_LIMIT` 48→49 with its docblock prose truth-rewritten (cap test asserts strictly below), cap-census assertion flipped, `ReadPathCensusTest` gained a `Cli/Bootstrap.php|scandir` NAMES_ONLY row, and the tracked generated `docs/SETTINGS.md` regenerated for the new documented default (exactly one cell; `gen-settings-doc --check` rc 0).
+- `lang/en.php`: one new key `bundles.recommend.launch` ({names} only). `en.php` is the sole locale.
+
+## Tests
+
+`tests/Cli/BundleRecommendationNoticeTest.php` — 11 tests, 49 assertions: silent-empty-registry (no stamp minted), silent-no-signal, one aggregate row + X@Y vocabulary + install-suggestion wording, cap bounds content (4 matches → 1 row naming the first three by name-asc tie-break), installed exclusion + no stamp for silence, once-per-project-per-pin with re-show after `repin()`, registry-mutation stamp drop → widened re-show once then silence, stamp rides the envelope without disturbing registry reload (version/rows/loadErrors intact), absent stamp file → row shows and file is never minted by the drain, corrupt stamp file → fail-open row and bytes untouched, and a structural pin that the drain runs exactly once from `buildChat()` after terminal guidance. The once-gate is decisive by construction: shelf is reset between calls, so re-show vs suppression is the stamp, not dedupe.
+
+## Gates (targeted, cwd candy-code, plain pipe)
+
+- `BundleRecommendationNotice|BootstrapLaunchNoticeCapCensus|StderrEmitterCensus|BootstrapLaunchFormatConstants|BootstrapTranscriptSeamCallSiteCensus|CliLangCatalogue|ReadPathCensus|PromptCapSettings|BootstrapLaunchNoticeRouting|SettingsSchemaDocDrift|ReadmeSettingsTierClaim|ConfigWriteProducer|BootstrapTerminalGuidanceNotice|BootstrapHomeStandInNotice|ClaudeSettingsHooksSkipRecord` → 275T/24270A, 1F = FOREIGN base-red, see below.
+- `DocFigureProseDrift|ReadmeSuiteFigureDrift|ReadmeRosterDrift|EnvRosterDrift` → 143T/43355A, 2F = the known suite-figure staleness pair (live 25537 pinned vs 27574 live — includes this lane's +11 tests; welder re-pin).
+
+## Foreign findings (not mine; verified pre-existing)
+
+1. `BootstrapLaunchFormatConstantsTest::testEveryDocPageQuotingAPromotedFormatIsOnTheReadersRoster` is RED at base `e6188662a`, and not because the quotation vanished: README.md:1506 and docs/SETTINGS.md:885 both DO carry the rendered sample at base (`tools your own settings left` greps 1 each on `git show e6188662a:` of either page). The arm reds on the OTHER leg — `pagesQuoting()` does not nominate those two pages for `PROJECT_TIER_TOOL_REMOVAL_FORMAT`, because `shapePatternFor()` turns each conversion into a wildcard bounded by `PAGE_QUOTE_FIELD_BYTES` (282) and the sample's 32-name removed list flattens to 296 bytes across its line breaks, so the match fails on length while the `PAGE_QUOTES` roster claims both pages. The set comparison therefore mismatches on the sweep's side, not the docs'. Fix belongs to that guard's owning batch (widen the bound, or nominate the pages another way) — not to a reword of a line that is still on the page. Base-red and foreign either way: no master commit since `e6188662a` touches Bootstrap.php, this census test, README.md or SETTINGS.md, and this lane's SETTINGS diff is the one unrelated `transcriptLimit` cell.
+2. `CliLangCatalogueTest::testTheCliBlockIsOneSortedRunBetweenItsMarkers` was ALSO red at base (unsorted `marketplace.none`/`renamed` insertion from the 4.a/4.b batches). CURED in-step here: pure two-pair line reorder in `lang/en.php` (my owned file), zero content change.
+
+## Welder carries
+
+- `scripts/parallel-tests-durations.tsv`: add a row for NEW file `tests/Cli/BundleRecommendationNoticeTest.php` (unlisted files run in zero shards).
+- `suite-figure.json` + README headline re-pin (+11 tests live; the pin pair was already stale before this lane).
+- PLUGINS.md DOC-ROW for the 4.b/4.c doc owner (docs are NOT in this lane's ownership): a booting `candy-code` in a project whose files match an added marketplace's catalog prints one line — `Bundles matching this project: name@marketplace, …` — once per project per marketplace pin; nothing is installed. The once-per-pin stamp lives as the `launchRecommendations` key inside `~/.candy-code/marketplaces.json`; the registry loader ignores it and any later marketplace add/remove/repin drops it, re-arming exactly one fresh row. Nothing is ever fetched to build it.
+- Foreign base-red #1 needs its owning batch.

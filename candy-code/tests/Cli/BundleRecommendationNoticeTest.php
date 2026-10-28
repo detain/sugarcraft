@@ -210,6 +210,15 @@ final class BundleRecommendationNoticeTest extends TestCase
         // BOTH — first offering wins, registration order, same as the verb.
         $widened = MarketplaceRegistry::atPaths($this->stampFile, $this->checkouts);
         $this->addMarketplace('hub', self::SHA_B, [$this->entry('php-beta', ['php'])], existing: $widened);
+        // Read the raw envelope, not the drain's view of it: the drop is the
+        // registry writer's doing, so a persist() that carried the stamp key
+        // forward would leave this leg red even though the re-show below
+        // happens to pass for the other reason (pin mismatch).
+        $this->assertArrayNotHasKey(
+            'launchRecommendations',
+            json_decode((string) file_get_contents($this->stampFile), true),
+            'the registry mutation dropped the stamp from marketplaces.json on write',
+        );
         $this->resetNoticeStatics();
         Bootstrap::reportBundleRecommendations(
             $this->projectRoot,
