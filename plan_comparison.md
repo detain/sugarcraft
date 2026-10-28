@@ -1885,7 +1885,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-AGT-1.c (W1), C-AGT-2.c (W2)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-5.g`
 
-#### ✅ b6369af7869b565dea865497f3b8ba515f407eb0 C-AGT-6.d — `/pr` canned turn + `/review --pr <n>`
+#### ✅ b6369af7869b565dea865497f3b8ba515f407eb0 C-AGT-6.d — `/pr` canned turn + `/review --pr <n>` (+ roster flips 8dab423f0)
 - **Item:** C-AGT-6 (sources: GAP-GIT-04, p2-miss: GIT-10 review scope parity (`--pr`)) · gap · effort M
 - **What:** `/pr [focus]` is a canned turn (a `PrCommand::PROMPT` const, shaped like `ReviewCommand`) telling the agent to push the branch and open a PR with `gh pr create`, honouring `attribution.pr`. Its host body `PrHostCommand` returns …
 - **Files — create:** `candy-code/builtin-commands/2860-pr.php`, `candy-code/src/Commands/PrCommand.php`, `candy-code/src/Host/Commands/PrHostCommand.php`, `candy-code/src/Workspace/GhRunner.php`

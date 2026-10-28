@@ -12,7 +12,9 @@ use SugarCraft\Code\Lang;
 // through the Bash tool, where the session's permission mode gates them —
 // the write is honest about being a write. `/pr [focus]` appends the focus
 // line like `/init` does. A command that STARTS A TURN — see
-// Chat::handlePrCommand(); it belongs to no read-only roster.
+// Chat::handlePrCommand(); it belongs to no read-only roster. It carries
+// no `paletteAction` arm: a row that opens nothing would only pad the
+// picker, so `/pr` stays a typed dispatch.
 return BuiltInCommand::new(CommandSpec::new(
     'pr',
     Lang::t('cmd.pr.description'),
