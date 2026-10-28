@@ -505,6 +505,7 @@ candy-code/tests/Backend/ChildChannelVerdictTest.php	0.286	2
 candy-code/tests/Hooks/BuiltIn/PostEditFormatHookTest.php	0.284	9
 candy-code/tests/Cli/BootstrapMcpUserScopeTest.php	0.283	19
 candy-code/tests/Server/CommandRowsReachDriversTest.php	0.283	2
+candy-code/tests/App/LaunchTrustDialogTest.php	0.283	6
 candy-code/tests/Agents/AgentManagerRetentionTest.php	0.282	7
 candy-code/tests/Backend/SessionAffinityWiringTest.php	0.279	6
 candy-code/tests/Backend/EngineBackendCompactorConfigTest.php	0.276	4
