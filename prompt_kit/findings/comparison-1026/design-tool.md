@@ -865,7 +865,7 @@ Totals: 44 steps. 13 S, 31 M, 0 L. 18 LATE (C-TOOL-4.b–h, C-TOOL-6.b–l); 26 
 - serialized: [hot:candy-code/tests/Support/DescriptorInheritanceGuardTest.php]
 - deps: C-TOOL-4.b (`SandboxBackend`/`SandboxFactory` and the `$chdir` parameter)
 - phase: LATE
-- ruling: Two questions. Script language: a PHP child (`PHP_BINARY -n`, always present; recommended) or node (absent on many hosts)? Isolation floor: when no jail probes (no bwrap, no `sandbox-exec`, Windows), does Script refuse (recommended: without the jail, plain PHP in the child writes the tree and every per-call gate is theatre), or run with an every-call Ask that shows the full source?
+- ruling: **ANSWERED 2026-10-28 — ADOPT.** PHP child (`PHP_BINARY -n`), not node; when no jail probe exists (no bwrap, no `sandbox-exec`, Windows) Script REFUSES — no ungated every-call-Ask arm.
 - risks: bwrap must pass the inherited fd 3 through; it does not close unnamed fds by default, and the jailed leg proves this per host. With `-n`, a script gets no mbstring or ctype on distros that ship those as shared extensions.
 
 ### C-TOOL-6.d — `Script` catalog tool: nested calls through the gate and hook chain
@@ -989,7 +989,7 @@ Totals: 44 steps. 13 S, 31 M, 0 L. 18 LATE (C-TOOL-4.b–h, C-TOOL-6.b–l); 26 
 - serialized: [bootstrap:userScriptTools(new)] [runtime:USER_TOOL_PREFIX(new),isWriteCapableTool] [lang:cli.usertools.] [docs:PLUGINS.md] [docs:PERMISSIONS.md] [hot:candy-code/src/Cli/LaunchContext.php] [hot:candy-code/src/Permissions/PermissionGate.php] [hot:candy-code/tests/Support/ReadPathCensusTest.php]
 - deps: C-TOOL-4.b
 - phase: LATE
-- ruling: May user-tier JSON define model-callable exec tools (recommended: yes — user tier only, write class, `auto` asks)? May plugin bundles ship them (recommended: no — a third declined surface beside `hooks/` and `.mcp.json`)?
+- ruling: **ANSWERED 2026-10-28 — ADOPT.** User-tier only, write class, `auto` always asks; plugin bundles shipping script tools: NO (third declined surface).
 - risks: tests must never see a developer's real `~/.candy-code/tools/`. The loader keys off `HomeDirectory::owned()`, which the suites already sandbox; one test asserts that sandboxing.
 
 ### C-TOOL-6.f — `Canvas` tool core (HTML artifact into the session MediaStore)
@@ -1173,7 +1173,7 @@ Totals: 44 steps. 13 S, 31 M, 0 L. 18 LATE (C-TOOL-4.b–h, C-TOOL-6.b–l); 26 
 - serialized: [runtime:CLIENT_TOOL_PREFIX(new),isWriteCapableTool] [docs:PERMISSIONS.md] [hot:candy-code/src/Backend/EngineBackend.php] [hot:candy-code/src/Backend/ChildChannel.php] [hot:candy-code/src/Permissions/PermissionGate.php] [hot:candy-code/src/Host/SessionHost.php] [hot:candy-code/src/Host/TurnRunner.php] [hot:candy-code/src/Tools/Catalog/ToolDocGenerator.php] [hot:candy-code/tests/RuntimeTest.php]
 - deps: C-TOOL-6.e (edits the same `isWriteTool()`/`isWriteCapableTool()`/`evaluateAuto()` lines and the RuntimeTest prefix pin)
 - phase: LATE
-- ruling: Which client may register tools, and is the feature off by default? Recommended:
+- ruling: **ANSWERED 2026-10-28 — ADOPT all three bullets.** Which client may register tools, and is the feature off by default?
   - any client holding Write scope on the session may register, and its registrations die with its connection;
   - the feature is OFF by default, behind a user-config-only `server.clientTools: false`. A project config can never turn it on;
   - every `client__*` call is write class, so `default` asks.

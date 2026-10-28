@@ -4140,20 +4140,24 @@ Every picked item, its steps and the waves they land in.
   - CLI-provider isolation on by default for the Claude Code and Codex CLI routes.
 - C-WEB-5 implementation sources: an in-tree QR encoder and in-tree Web Push crypto (no new dependency). The push payload defaults to redacted generic text.
 
-### 6.3 Still open (LATE items; ask before their wave starts)
+### 6.3 ANSWERED — owner rulings, 2026-10-28 (LATE unlocked; scheduler gate unchanged: LATE steps start only when no normal step remains)
 
-C-TOOL-6 has three calls, each with a proposed default in `design-tool.md`:
-- the Script tool's language and sandbox floor (C-TOOL-6.c);
-- whether user-tier script tools are allowed (C-TOOL-6.e);
-- whether client-hosted tools are allowed (C-TOOL-6.h).
+Step-letter mapping: the owner's C-TUI-6 letters below are §6.3 item letters; the design steps are: Windows shell = C-TUI-6.a, Windows self-update helper = C-TUI-6.e, web i18n scope = C-TUI-6.f, community locale = C-TUI-6.h, voice endpoint = C-TUI-6.l, push-to-talk = C-TUI-6.m.
 
-C-TUI-6 has six calls, each with a proposed default in `design-tui.md`:
-- the Windows shell;
-- the Windows self-update helper;
-- web i18n scope;
-- which locale to ship and how strict translation parity is;
-- the voice endpoint;
-- the push-to-talk key.
+C-TOOL-6 (all ADOPT recommendations):
+- **C-TOOL-6.c — Script language + sandbox floor.** PHP child (`PHP_BINARY -n`), not node. Where no jail probe exists (no bwrap, no sandbox-exec, Windows) Script REFUSES — no ungated every-call-Ask arm.
+- **C-TOOL-6.e — User-tier script tools.** Yes: user-tier only, write class, `auto` always asks. Plugin bundles shipping script tools: NO (third declined surface).
+- **C-TOOL-6.h — Client-hosted tools.** Yes, but OFF by default behind user-config-only `server.clientTools: false` (project config can never enable). Any client holding Write scope may register; registrations die with the connection; every `client__*` call is write class so `default` asks.
+
+C-TUI-6:
+- **a — Windows shell.** Git-for-Windows `bash.exe` only (PATH → `%ProgramFiles%\Git\bin\bash.exe`); NO cmd.exe fallback; missing bash refuses with "install Git for Windows". Array spawn spec, host-independent PosixShellQuote, WindowsTaskKill (`taskkill /T /F`) tree kill; background rows stay `grouped:false`.
+- **e — Windows self-update helper.** Yes — detached `PHP_BINARY -r` helper is the relaunch swap dance SelfUpdate waits on.
+- **f — Web i18n scope.** Yes — chrome/UI strings only (`server.strings`); server, tool and model text stay untranslated.
+- **h — Community locale (owner expanded: ONE → the recommended SET).** Ship ALL 11 recommended non-English codes from LOCALES.md: fr, de, es, pt, pt-br, zh-cn, zh-tw, ja, ru, it, ko (bare base codes per rule 1; regional file only where the set already has one, e.g. pt-br). Translation source: MACHINE TRANSLATION with MACHINE REVIEW — no native-review gate. Parity STRICT, lands LAST: every file carries the full English key set; later English key additions must be translated in-step across the shipped files. Step brief `design-tui.md` → C-TUI-6.h updated to match (11 files, `lang:whole-file` serialized reads, README Languages note lists all codes).
+- **l — Voice endpoint.** No default endpoint; voice off until a user-tier sets `voice.baseUrl`; audio never leaves the machine by default.
+- **m — Push-to-talk key.** Alt+V.
+
+No further owner questions outstanding for LATE.
 
 ## 7. Closeout gate (one gate agent, after the last wave)
 

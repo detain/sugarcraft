@@ -48,7 +48,7 @@ Scope: the owner's picks C-TUI-1, C-TUI-2, C-TUI-3, C-TUI-4, C-TUI-5, C-TUI-6 (L
 | C-TUI-6.l | Voice core: Transcriber, AudioRecorder, voice settings (LATE) | M | [lang:settings.voice., media.voice.] [docs:SETTINGS.md] [docs:README.md] [docs:MEDIA.md] [hot:MediaSettings.php, LayeredSettings.php, ReadPathCensusTest.php, DescriptorInheritanceGuardTest.php] | none |
 | C-TUI-6.m | TUI push-to-talk wiring (LATE) | M | [hot:KeyBindingRegistry.php, HandlesKeys.php, HandlesSessionSurface.php] [renderer:Renderer::renderStatusBar] [lang:keys.chat.voice, chat.voice.] [docs:README.md] [docs:MEDIA.md] | C-TUI-6.l |
 | C-TUI-6.n | Web MediaRecorder + `audio.transcribe` + `canTranscribe` flag (LATE) | M | [protocol] [docs:SERVER.md] [docs:MEDIA.md] [lang:web.composer.voice.] [hot:Composer.vue, stores/connection.ts] | C-TUI-6.l, C-TUI-6.k, C-TUI-6.g |
-| C-TUI-6.h | Community locale `candy-code/lang/<code>.php` (LATE; lands last) | M | [lang:whole file] [docs:README.md] | C-TUI-6.g, C-TUI-6.e, C-TUI-6.j, C-TUI-6.m, C-TUI-6.n (and, under strict parity, every lane that adds lang keys) |
+| C-TUI-6.h | Community locales `candy-code/lang/<code>.php` ×11 ruled set (LATE; lands last) | M | [lang:whole file ×11] [docs:README.md] | C-TUI-6.g, C-TUI-6.e, C-TUI-6.j, C-TUI-6.m, C-TUI-6.n (and, under strict parity, every lane that adds lang keys) |
 
 **Totals:** 40 steps: 9 S, 31 M, 0 L. 27 are `phase: normal` (C-TUI-1/2/3/4/5/7 plus C-TUI-6.k) and 13 are `phase: LATE` (the rest of C-TUI-6). No normal step depends on a LATE step.
 
@@ -702,6 +702,7 @@ Every step here is `phase: LATE` except C-TUI-6.k (web dictation), which is `pha
   - **Spawn shape.** On Windows, Bash and the background wrapper hand `proc_open` an ARRAY, `[bash.exe, '-c', $script]`. PHP quotes it by CreateProcess rules, with no `cmd.exe` in between, and it still passes through `ProcessContainment::spawnSpec()`, which already returns it unchanged there (`:193`, `:227-232`).
   - **Tree kill.** `terminate()` (`:495`) falls back to `proc_terminate()`, which kills the wrapper only. `terminatePid()`, `killTree()` and `killTreeAsync()` (`:616`, `:694`, `:809`) return early without `posix_kill`, so every descendant survives. The Windows arm calls `WindowsTaskKill::tree($pid)`, which runs `taskkill /T /F /PID <pid>` as a short-lived child through `spawnSpec`. `ProcessTree` (`ProcessTree.php:31`) stays Linux-only by construction, and the Windows arm never consults it.
   - Background rows keep `grouped: false` on Windows, which is honest. The wall falls to C-TOOL-4's watchdog fallback.
+  - **RULING ANSWERED 2026-10-28 — ADOPT (all bullets as written):** Git-for-Windows bash.exe only (PATH → `%ProgramFiles%\Git\bin\bash.exe`), NO cmd.exe fallback, missing bash refuses with "install Git for Windows"; array spawn spec; host-independent PosixShellQuote; WindowsTaskKill `taskkill /T /F` tree kill; background rows stay grouped:false.
   - **Ownership.** This step owns ONLY the Windows arms. C-TOOL-4 owns the sandbox-backend seam, the macOS setsid helper and the `timeout` fallback in these same files.
 - files.create: `candy-code/src/Support/PosixShellQuote.php`; `candy-code/src/Support/WindowsShell.php`; `candy-code/src/Support/WindowsTaskKill.php`
 - files.modify:
@@ -871,7 +872,7 @@ Every step here is `phase: LATE` except C-TUI-6.k (web dictation), which is `pha
 - serialized: [lang:cli.selfupdate.staged_windows, cli.selfupdate.swap_] [hot:candy-code/src/Cli/SelfUpdate.php] [hot:candy-code/tests/Support/DescriptorInheritanceGuardTest.php] [hot:candy-code/tests/Support/ReadPathCensusTest.php]
 - deps: C-SES-5.a, C-SES-5.b (other area: self-update fixes on the same `SelfUpdate.php`), C-TUI-6.a
 - phase: LATE
-- ruling: confirm that the detached `PHP_BINARY -r` helper is the relaunch dance `SelfUpdate.php:76-78` waits on. Proposed: yes; this step is that dance.
+- ruling: **ANSWERED 2026-10-28 — yes.** The detached `PHP_BINARY -r` helper is the relaunch swap dance `SelfUpdate.php:76-78` waits on; this step is that dance.
 - risks: an antivirus scanner holding the new file can outlast 60 s. The log plus the preserved `.old` keep the outcome recoverable, and the next `self-update` reports a leftover `.new`.
 
 ### C-TUI-6.k — Web dictation via the Web Speech API
@@ -900,7 +901,7 @@ Every step here is `phase: LATE` except C-TUI-6.k (web dictation), which is `pha
 - ruling: none
 - risks: C-WEB-4 and C-CTX-3 also edit `Composer.vue`, so keep this step out of their wave. Firefox has no SpeechRecognition, so the button is simply absent there.
 
-### C-TUI-6.f — Web i18n infrastructure: `server.strings` + chrome migration
+### C-TUI-6.f — Web i18n infrastructure: `server.strings` + chrome migration  <!-- RULING ANSWERED 2026-10-28: chrome/UI strings only (server.strings); server/tool/model text stay untranslated -->
 - item: C-TUI-6 (sources: GAP-PLAT-10, p2-miss: WEB-7c i18n)
 - kind: gap · effort M
 - approach: Web chrome strings are hard-coded English in the `.vue` files, and there is no i18n code in `src-web`. `candy-code/src/Lang.php` already resolves exact → base → `en` per key.
@@ -948,7 +949,7 @@ Every step here is `phase: LATE` except C-TUI-6.k (web dictation), which is `pha
 - serialized: [protocol] [lang:web.chrome.] [docs:SERVER.md] [hot:candy-code-web/src-web/App.vue] [hot:candy-code-web/src-web/components/StatusBar.vue] [hot:candy-code-web/src-web/components/panels/SidePanels.vue] [hot:candy-code-web/src-web/components/ConnectionBanner.vue] [hot:candy-code-web/package.json] [hot:candy-code/tests/Support/ReadPathCensusTest.php]
 - deps: none
 - phase: LATE
-- ruling: reverse R6's deferral of WEB-7c and scope web i18n to chrome strings only, leaving server, tool and model text untranslated. Proposed: yes.
+- ruling: **ANSWERED 2026-10-28 — yes.** Chrome/UI strings only (`server.strings`); server, tool and model text stay untranslated. (R6 deferral reversed.)
 - risks: `navigator.language` and the server's launch `LANG` can differ. This step follows the browser; a picker is out of scope.
 
 ### C-TUI-6.g — Web i18n: migrate the remaining components
@@ -1086,7 +1087,7 @@ Every step here is `phase: LATE` except C-TUI-6.k (web dictation), which is `pha
 - serialized: [lang:settings.voice., media.voice.] [docs:SETTINGS.md] [docs:README.md] [docs:MEDIA.md] [hot:candy-code/src/Config/Settings/Definitions/MediaSettings.php] [hot:candy-code/src/Config/LayeredSettings.php] [hot:candy-code/tests/Support/ReadPathCensusTest.php] [hot:candy-code/tests/Support/DescriptorInheritanceGuardTest.php]
 - deps: none
 - phase: LATE
-- ruling: the voice endpoint/egress default. Proposed: no default endpoint, and voice stays off until the user tier sets `voice.baseUrl`. Audio never leaves the machine by default.
+- ruling: **ANSWERED 2026-10-28 — ADOPT.** No default endpoint; voice off until a user-tier sets `voice.baseUrl`; audio never leaves the machine by default.
 - risks: no recorder exists on stock Windows or macOS without sox. That is reported as "unavailable", not faked; an ffmpeg backend is a follow-up.
 
 ### C-TUI-6.m — TUI push-to-talk wiring
@@ -1114,7 +1115,7 @@ Every step here is `phase: LATE` except C-TUI-6.k (web dictation), which is `pha
 - serialized: [hot:candy-code/src/Commands/KeyBindingRegistry.php] [hot:candy-code/src/Chat/Handlers/HandlesKeys.php] [hot:candy-code/src/Chat/Handlers/HandlesSessionSurface.php] [renderer:Renderer::renderStatusBar] [lang:keys.chat.voice, chat.voice.] [docs:README.md] [docs:MEDIA.md]
 - deps: C-TUI-6.l
 - phase: LATE
-- ruling: the chord. Proposed: Alt+V, which is free in `KeyBindingRegistry`; Ctrl+V is `chat.paste-image` (L923), and the permission prompt's bare `v` is not a chord.
+- ruling: **ANSWERED 2026-10-28 — Alt+V.** Alt+V is free in `KeyBindingRegistry`; Ctrl+V stays `chat.paste-image` (L923); the permission prompt's bare `v` is not a chord.
 - risks: Mac terminals without Option-as-Meta deliver `√` for Alt+V (see C-TUI-7.b), so the README Keys row must name the `keybindings` override.
 
 ### C-TUI-6.n — Web MediaRecorder + `audio.transcribe` + the `canTranscribe` flag
@@ -1161,14 +1162,14 @@ Every step here is `phase: LATE` except C-TUI-6.k (web dictation), which is `pha
 - item: C-TUI-6 (sources: GAP-PLAT-10)
 - kind: gap · effort M
 - approach: Only `lang/en.php` ships, at 3,292 lines. `Lang::useLaunchLocale()` already picks `lang/<tag>.php` from `LC_ALL`/`LC_MESSAGES`/`LANG`, and C-TUI-6.f's `server.strings` serves the same file's `web.*` slice to the browser.
-  - Ship ONE locale: `<code>` from LOCALES.md's recommended set, a bare base-language code per its rule 1.
+  - **RULING ANSWERED 2026-10-28 (owner): ship the SET, not one.** All 11 recommended non-English codes from LOCALES.md — fr, de, es, pt, pt-br, zh-cn, zh-tw, ja, ru, it, ko — bare base codes per its rule 1, regional file only where the set already carries one (pt-br). Translation source: machine translation with machine review (no native-review gate).
   - It translates every key, `web.*` included, and keeps every `{placeholder}`.
   - Model-read text (tool descriptions, prompt layers) is not in `lang/` and stays English.
-  - Add a short "Languages" note to the README (`LANG=<code>_XX.UTF-8 candy-code`) and the translation and parity rule to `docs/CONTRIBUTING.md`.
+  - Add a short "Languages" note to the README listing ALL shipped codes (`LANG=fr_FR.UTF-8 candy-code` as the example) and the translation and parity rule to `docs/CONTRIBUTING.md`.
   - **Parity policy, strict by default.** `LangParityTest::testEveryLocaleCarriesEveryEnglishKey` (L59-71) requires the exact English key set. Once the locale ships, every later lane that adds an English key must translate it.
     - So this is the plan's FINAL lane, after every other lane (all LATE items included) that adds `lang/en.php` keys.
     - The alternative is to relax the test to "present keys must match placeholders, missing keys fall back to English". That is a one-method edit to `LangParityTest`, and only that option allows landing earlier.
-- files.create: `candy-code/lang/<code>.php` (the code is set by the ruling; only `en.php` exists today, so any code is absent)
+- files.create: `candy-code/lang/<code>.php` × **11** (fr.php de.php es.php pt.php pt-br.php zh-cn.php zh-tw.php ja.php ru.php it.php ko.php; only `en.php` exists today, so all are absent)
 - files.modify: `candy-code/README.md` (a Languages note near Install L112); `candy-code/docs/CONTRIBUTING.md` (translation and parity rule); `candy-code/tests/LangParityTest.php` ONLY under the relaxed option
 - tests:
   - `LangParityTest` picks the file up by glob (L42-50), with no edit under strict.
@@ -1177,10 +1178,10 @@ Every step here is `phase: LATE` except C-TUI-6.k (web dictation), which is `pha
     - `WebStrings::forLocale('<code>')` answers `<code>`;
     - a regional tag (`<code>-xx`) falls back to the base.
 - docs/guards: LangParityTest; LangLaunchLocaleTest; the generated pages stay English because the generators run under `Lang::inLocale('en')`
-- serialized: [lang:whole file — reads every key] [docs:README.md]
+- serialized: [lang:whole file ×11 — each locale file is read whole, one lane owns all 11] [docs:README.md]
 - deps: C-TUI-6.g, C-TUI-6.e, C-TUI-6.j, C-TUI-6.m, C-TUI-6.n (and, under strict, every other lane in the plan that adds `lang/en.php` keys)
 - phase: LATE
-- ruling: which locale, which translation source (machine translation plus native review, or a community PR), and which parity policy. Default: strict and land last.
+- ruling: **ANSWERED 2026-10-28** — the 11-code recommended set; machine translation + machine review; strict parity, lands last.
 - risks: a test asserting English `Lang::t()` text without pinning the locale goes red on a host whose `LANG` is `<code>`. CI runs `C.UTF-8`, so audit for this before shipping.
 
 ## Notes for the orchestrator
