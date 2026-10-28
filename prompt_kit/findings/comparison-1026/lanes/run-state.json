@@ -159,20 +159,21 @@
   },
   "C-EXT-3.d": {
    "branch": "cc/C-EXT-3.d",
-   "note": "r1 FINDINGS 0C/0M/1m: symlinked draft read-through+promote TOCTOU (is_link refusal 1-line + pin); NITs: REPORT filter text, live-run-id-new shadow by-design. Consent gate+security CONFIRMED real both polarities; combo 424T/5380A reconciles EXACTLY; 3 standing reds base-proven (chat.* keys 5 SavedRules/StartupSummary stranded, SchedulesCommand blob, cli block 0 lane lines). Weld carries: durations AgentsNewAcceptTest 16T, +16T, \u00a74 cites fix tip",
-   "round": 1,
-   "session": "PENDING-FIXER",
+   "note": "r1 fix REAL 90e206721 (parent 0da862e69, is_link door + victim-bytes pin, 17T/96A, mutation-exact). DISCLOSED: committed tip RED on ReadPathCensus (lane read-sink rows missing \u2014 builder gap) + stray uncommitted 2nd-writer edits (graft-dir? \u2014 inspect, do not absorb unless lane-scoped). fixer-2: census rows + triage dirt; then re-review",
+   "round": 2,
+   "session": "PENDING",
    "stage": "fix",
    "worktree": "/home/sites/cc-cmp-C-EXT-3.d",
-   "tip": "0da862e69"
+   "tip": "90e206721"
   },
   "C-PRV-3.a": {
    "branch": "cc/C-PRV-3.a",
-   "note": "ground-resume LIVE, 12 dirty salvage-forward @e68270a09",
-   "round": 0,
-   "session": "ses_e7bb0aa00ffeybpTrYo7FxLI8C",
-   "stage": "build",
-   "worktree": "/home/sites/cc-cmp-C-PRV-3.a"
+   "note": "r1 reviewer (on real tip): code SOUND; MAJOR-1=phantom-hash process noise (my brief hash 9a38c195 phantom; disk honest unpriced route); MINOR-1 step-local azure service_tier silent (1-clause docblock/help fix or providerName gate); NIT report filter-window figures. fixer NEXT SLOT; carries durations ONE row ServiceTierTest (25T), \u00a74 f59fff349, seam C-PRV-3.b",
+   "round": 1,
+   "session": null,
+   "stage": "fix",
+   "worktree": "/home/sites/cc-cmp-C-PRV-3.a",
+   "tip": "f59fff349"
   },
   "C-SES-7.e": {
    "branch": "cc/C-SES-7.e",
@@ -194,12 +195,12 @@
   },
   "C-WEB-4.b": {
    "branch": "cc/C-WEB-4.b",
-   "note": "r1 FINDINGS 1M/3m/1n canonical REVIEW-1.md; fixer LIVE: SettingsView keymapRows refresh MAJOR + mirror/poll confinement MINORs + ?-polling-input closest() + conflict exact-equality; NIT stranger-sweep closeout. Dist rider at weld; NO durations",
+   "note": "r2 verdicts: twin-A CLEAN-1nit vs twin-B FINDINGS 2m (claims-truth prose fix + select/contenteditable pin one-liners). Take STRICTER: small fixer round; NIT REPORT broken\u2192sound fold",
    "notes": "(key was clobbered by welder run-state write; builder live)",
-   "round": 1,
-   "session": "ses_e7b81b107ffePQ15Wu8CGx6p2o",
+   "round": 2,
+   "session": "PENDING",
    "stage": "fix",
-   "tip": "35e0837ea",
+   "tip": "36c52f1f6",
    "worktree": "/home/sites/cc-cmp-C-WEB-4.b"
   },
   "C-AGT-6.c": {
@@ -291,7 +292,8 @@
  },
  "note": "W15 FULLY WELDED \u2014 wave loop r1 next",
  "notes": {
-  "batch6_weld_1029": "batch-6 weld 2026-10-29: TUI-5.d aa0e46158+cure 54730fdcd; WEB-4.e 5a89b0b20+47d19563f (dist rider, trio rederive zero-diff); CTX-4.a 42939645a+603d2f167; EXT-3.b a42d85304+93e301ef2 cite f5b8a273b; CTX-3.b STOPPED-WITH-RECORD (branch moved to b4245ba44, unreviewed fixer delta; pick reverted, inflight kept); W17 wave closed (r2 CLEAN @d3536ac91); weld-cure a2d5d0e3f ARCHITECTURE slash counter 59->60 = batch-5 C-AGT-6.a carry red cured (base-proven zero-delta); tsv 1563->1568 asc-viol 4 held; phantom hashes confirmed non-existent: f14d0f983 (WEB-4.e STOP2 note), 87075738d (CTX-4.a note), c17a3fd24 (EXT-3.b brief) \u2014 canonical disk files governed"
+  "batch6_weld_1029": "batch-6 weld 2026-10-29: TUI-5.d aa0e46158+cure 54730fdcd; WEB-4.e 5a89b0b20+47d19563f (dist rider, trio rederive zero-diff); CTX-4.a 42939645a+603d2f167; EXT-3.b a42d85304+93e301ef2 cite f5b8a273b; CTX-3.b STOPPED-WITH-RECORD (branch moved to b4245ba44, unreviewed fixer delta; pick reverted, inflight kept); W17 wave closed (r2 CLEAN @d3536ac91); weld-cure a2d5d0e3f ARCHITECTURE slash counter 59->60 = batch-5 C-AGT-6.a carry red cured (base-proven zero-delta); tsv 1563->1568 asc-viol 4 held; phantom hashes confirmed non-existent: f14d0f983 (WEB-4.e STOP2 note), 87075738d (CTX-4.a note), c17a3fd24 (EXT-3.b brief) \u2014 canonical disk files governed",
+  "batch6_closeout_1029": "CLOSE battery at final master 041cf425a+2ee1c62b4: phpunit 6-family 187T/65303A OK after PathGlob corpus cure 2ee1c62b4 (304,700->305,805, batch-6 corpus growth, live-derivation law); durations full-tree file_exists sweep ZERO phantoms (1568 rows); vitest full serial 79 files/618 tests passed rc0; vue-tsc delta EMPTY. Pruned: cc/C-TUI-5.d (en.php-union content-equivalence proven), cc/C-CTX-4.a, cc/C-EXT-3.b (cherry -/-). HELD: cc/C-WEB-4.e (restacked, unreviewed r4 delta 7a9f8de48), cc/C-CTX-3.b (STOP, unreviewed b4245ba44). Batch-6 net: 4 lanes welded, W17 closed, welded_count 186, +2 master weld-cures (54730fdcd, a2d5d0e3f, 2ee1c62b4). suite-figure carry ~+56T (TUI-5d 28 + WEB-4e 8 + CTX-4a 7+5adj + EXT-3b 16) \u2014 re-pin OWED at program closeout per lead law."
  },
  "notes_ruling_chain": "owner ruling 15 executed: AGT-5.b welded a812ea659; W14 loop r1 running; next: AGT-5.c build (W15) on 5.b-landed base, then W15 loop after its members complete",
  "owed": [
@@ -326,7 +328,7 @@
  ],
  "standing_reds_b985fbe51": "ADD: ChatHostLangCatalogueTest red on chat.effort.launch_unshaped (asker LaunchContext.php:2109 outside sources()) - byte-identical at base, C-PRV-1.b (a992413b0) seam -> closeout roster",
  "status": "RUNNING",
- "tick": "201-CTX2f-stale-r1-superseded",
+ "tick": "207-3fixers-8-live",
  "tip": "0f58a906f",
  "updated": "2026-10-28 batch-5 weld step 6",
  "wave_loops": {

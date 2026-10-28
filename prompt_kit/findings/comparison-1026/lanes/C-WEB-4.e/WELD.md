@@ -9,3 +9,5 @@ REGEN at merged tree (one pass, per §2 step 2): `php scripts/gen-protocol-schem
 GATES at merged tip: SessionSendDocumentsTest 7T/29A OK (junit 1.751/7); TurnMethods 1T/6A; protocol drift set 13T/362A + tests/Protocol dir 127T/1193A OK; vitest --no-file-parallelism composerDocuments+sessionView neighborhood 41 files 319T/319 pass rc0 (lane claim 304T = pre-master-move count, restamp 319); vue-tsc --build --force sorted error-TS set = 20 lines, delta vs /tmp/opencode/vue-tsc-cweb4c-base-e14.txt EMPTY (r1 lesson honored: --build, not --noEmit). TS7053 count 0.
 
 DUR row: Protocol/SessionSendDocumentsTest 1.751/7. §4 cites 76527aec1. Absorption: git cherry '+' expected on b0ea554b4 (dist resolved-away); patch-id of src/test/doc payload verified identical.
+
+POST-WELD: branch restacked — cc/C-WEB-4.e tip now 7a9f8de48 ('review fixes (round 4)') stacked ON my master picks (5a89b0b20/47d19563f are its ancestors). r4 delta UNREVIEWED → branch+worktree HELD for r3/r4 review disposition; NOT pruned. Welded scope = exactly the r1/r2-reviewed pair per canonical REVIEW-2.md; absorption = identity (picks are the branch's own ancestors).
