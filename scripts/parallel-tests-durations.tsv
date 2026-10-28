@@ -781,6 +781,7 @@ candy-code/tests/Tui/DirectoryPickerTest.php	0.052	9
 candy-code/tests/Tui/StallDetectorTest.php	0.052	21
 candy-code/tests/Context/ProjectMemoryWriterTest.php	0.051	10
 candy-code/tests/Permissions/ReadOnlySedAndLoopsTest.php	0.051	75
+candy-code/tests/Host/Commands/SkillsEnableDisableTest.php	0.051	7
 candy-code/tests/Skills/BuiltInSkillsTest.php	0.050	116
 candy-code/tests/Context/Compaction/SummarySafeguardTest.php	0.049	11
 candy-code/tests/Sessions/ScheduleTest.php	0.049	20
