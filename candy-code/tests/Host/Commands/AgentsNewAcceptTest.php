@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Host\Commands;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Backend\EchoBackend;
+use SugarCraft\Code\Chat;
 use SugarCraft\Code\Hooks\BuiltIn\ProtectFilesHook;
 use SugarCraft\Code\Host\Commands\AgentsHostCommand;
 use SugarCraft\Code\Host\Commands\CommandContext;
@@ -12,9 +14,12 @@ use SugarCraft\Code\Host\Commands\CommandEffectKind;
 use SugarCraft\Code\Host\Commands\CommandResult;
 use SugarCraft\Code\Host\Commands\NewAgentPrompt;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Support\FrontmatterKeyAudit;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
 
 /**
  * `/agents new` drafts and `/agents accept` promotes (C-EXT-3.d).
@@ -103,6 +108,38 @@ final class AgentsNewAcceptTest extends TestCase
         self::assertSame(CommandEffectKind::SubmitPrompt, $result->effects[0]->kind);
         self::assertStringContainsString('reviewer for migrations', $result->effects[0]->promptText(), 'the focus rides the dispatched prompt');
         self::assertStringContainsString(NewAgentPrompt::DIRECTORY . '/', $result->effects[0]->promptText());
+    }
+
+    // ------------------------------------------------------------ chat intercept
+
+    /**
+     * The TUI half: typing `/agents new ...` in the composer is intercepted
+     * in Chat::handleAgentsCommand() and the CANNED draft request — focus and
+     * live names folded in — rides an ordinary turn to the backend. Deleting
+     * the intercept falls through to the host command, whose SubmitPrompt
+     * effect Chat does not consume: no turn starts and the canned prompt is
+     * never sent, so the positive legs below redden (measured: the negative
+     * scoping legs stay green — they police the route boundary, not the
+     * intercept).
+     */
+    public function testTypedAgentsNewSwapsInTheCannedPromptAndSubmitsIt(): void
+    {
+        $this->writeFinal('worker', "---\nname: worker\ndescription: Builds.\n---\nBody.\n");
+
+        $next = $this->chatSubmitting('/agents new reviewer for migrations');
+
+        self::assertTrue($next->inFlight, 'the routed draft request starts a real turn');
+        $expected = NewAgentPrompt::prompt('reviewer for migrations', NewAgentPrompt::existingPresets($this->project));
+        self::assertSame([$expected], $this->promptsSent($next), 'what reaches the backend is the canned request, focus and taken names included');
+    }
+
+    /** The swap is scoped to the `/agents` route: plain `new` is ordinary input. */
+    public function testPlainNewWordIsNotSwallowedByTheAgentsIntercept(): void
+    {
+        $next = $this->chatSubmitting('new');
+
+        self::assertTrue($next->inFlight);
+        self::assertSame(['new'], $this->promptsSent($next), 'an un-prefixed `new` reaches the backend as typed, no draft request injected');
     }
 
     // --------------------------------------------------------------- accept
@@ -419,5 +456,23 @@ final class AgentsNewAcceptTest extends TestCase
         return isset(FrontmatterKeyAudit::metaOf($content)[$key])
             ? (string) FrontmatterKeyAudit::metaOf($content)[$key]
             : null;
+    }
+
+    /** Submits a composer draft through a Chat wired to this project, as the TUI does. */
+    private function chatSubmitting(string $draft): Chat
+    {
+        $chat = (new Chat(inputBuf: $draft, backend: new EchoBackend(), projectRoot: $this->project))->withSize(100, 30);
+        [$next] = $chat->update(new KeyMsg(KeyType::Enter));
+
+        return $next;
+    }
+
+    /** @return list<string> the user prompts a submitted Chat sent to its backend */
+    private function promptsSent(Chat $chat): array
+    {
+        return array_values(array_map(
+            static fn (Message $m): string => $m->content,
+            array_filter($chat->history, static fn (Message $m): bool => $m->role === Role::User),
+        ));
     }
 }

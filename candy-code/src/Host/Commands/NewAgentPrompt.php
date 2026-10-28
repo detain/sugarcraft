@@ -75,7 +75,7 @@ final class NewAgentPrompt
     public const PROMPT = <<<'PROMPT'
         Please turn what this conversation has established into a proposed agent preset for this repository.
 
-        Write ONE new markdown file in %1$s/ at the project root, named with a short lowercase kebab-case name for the kind of agent it describes (for example %1$s/reviewer.md), matching the grammar a-z 0-9 and hyphens. The file is a DRAFT: no loader reads that directory, and it changes no session until the user reviews it and runs /agents accept with the file name.
+        Write ONE new markdown file in %1$s/ at the project root, named with a short lowercase kebab-case name for the kind of agent it describes (for example %1$s/reviewer.md), matching the name grammar /agents accept enforces: lowercase letters, digits, dots, underscores and hyphens, starting with a letter or digit. The file is a DRAFT: no loader reads that directory, and it changes no session until the user reviews it and runs /agents accept with the file name.
 
         Start the file with frontmatter: a line ---, then the keys, then a line ---. You may declare ONLY these keys: %2$s. Three of them are policy, and the accept step prints each one verbatim to the human before it promotes the file: `permissionMode` (use `default` unless the user explicitly asked for a wider mode - `bypass-permissions` and `dont-ask` are self-grants and will be shown loudly), `tools` (a list of tool names the agent may use; leave the key out to inherit the default roster), and `mcpServers`. After the frontmatter write the preset's system prompt: the role, when a delegation should reach for it, and its working rules as short bullet points.
 

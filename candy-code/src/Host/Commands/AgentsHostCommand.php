@@ -182,6 +182,12 @@ final class AgentsHostCommand implements HostCommand
         if (!is_dir($targetDir) && !@mkdir($targetDir, 0700, true) && !is_dir($targetDir)) {
             throw new \RuntimeException('could not create ' . $targetDir);
         }
+        // Disclosed window (review NIT-2): the consent above was printed from
+        // the bytes read a few statements back; a concurrent rewrite of the
+        // draft between that read and this rename would promote the newer
+        // body under an older print. The tree is the human's own project and
+        // the move is one-shot — the audit accepted the trade as disclosed
+        // rather than re-reading and re-printing under a lock.
         if (!rename($draft, $final)) {
             throw new \RuntimeException('could not move the draft into ' . $targetDir);
         }
