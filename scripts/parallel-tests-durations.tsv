@@ -390,6 +390,7 @@ candy-code/tests/Agents/TeamTest.php	0.528	28
 candy-code/tests/Backend/PerStepUsageFrameTest.php	0.527	4
 candy-code/tests/Tools/PtyRunToolProgressTest.php	0.523	5
 candy-code/tests/Backend/EngineBackendFrameSocketInheritanceTest.php	0.522	2
+candy-code/tests/Protocol/GenerateVideoSubmitTest.php	0.522	5
 candy-code/tests/ClaudeCodeMcpClientTest.php	0.521	21
 candy-code/tests/Session/SessionEventsTableTest.php	0.520	7
 candy-code/tests/Share/ShareStoreTest.php	0.519	14
