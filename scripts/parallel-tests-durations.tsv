@@ -257,6 +257,7 @@ candy-code/tests/Chat/SessionStartHookWireTest.php	1.129	14
 candy-code/tests/Integration/ForeignAgentPresetWiringTest.php	1.126	17
 candy-code/tests/Chat/ToolChildReapTest.php	1.113	5
 candy-code/tests/Tui/TextSelectionSugarMouseTest.php	1.113	4
+candy-code/tests/Protocol/AskUserChoicesWireTest.php	1.110	32
 candy-code/tests/Commands/MemoryImportCommandTest.php	1.104	11
 candy-code/tests/Backend/CancelToolStopsOnlyTheRunningCallTest.php	1.099	8
 candy-code/tests/Protocol/CommandMethodsMcpPromptsTest.php	1.099	7
