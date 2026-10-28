@@ -142,8 +142,9 @@ export interface SessionState {
    * `turn.started`/`turn.completed` arms write it. A snapshot resume has no
    * observed start — `applySnapshot` deliberately never sets this — so the
    * timer stays hidden on a mid-turn reload instead of guessing. A server
-   * clock behind ours reads as 0:00 until real time catches up (the display
-   * clamps); nothing else follows from the skew.
+   * clock ahead of ours (stamp in our future) reads as 0:00 until real time
+   * catches up (the display clamps); behind reads inflated by the skew;
+   * nothing else follows from it.
    */
   turnStartedAt: number | null
 }

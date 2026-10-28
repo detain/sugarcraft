@@ -103,7 +103,7 @@ onScopeDispose(stopTick)
 const elapsedLabel = computed(() => {
   const start = props.state.turnStartedAt
   if (props.state.status !== 'busy' || start === null) return null
-  // Server clock behind ours (skew): clamp at 0:00 until real time catches up.
+  // Server clock ahead of ours (skew): clamp at 0:00 until real time catches up; behind reads inflated by the skew.
   const seconds = Math.max(0, Math.floor((tickNow.value - start) / 1000))
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
 })

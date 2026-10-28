@@ -188,7 +188,9 @@ describe('StatusBar elapsed turn timer (C-WEB-4.d)', { retry: 0 }, () => {
 
     vi.advanceTimersByTime(60_000)
     await tick(wrapper)
-    expect(statusOf(wrapper)).toBe('working', 'no ticking without a start')
+    // 'working' persists with no ticking without a start (was a toBe message
+    // argument; toBe takes one — the intent lives here instead).
+    expect(statusOf(wrapper)).toBe('working')
   })
 
   it('clamps a server clock ahead of ours to 0:00 instead of going negative', async () => {
