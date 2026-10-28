@@ -839,6 +839,20 @@ trait AnthropicMessagesWire
         // exactly the body shape it got before CTX-1.
         if ($thinkingBudget !== null && $msg instanceof AssistantMessage) {
             foreach ($msg->thinkingBlocks() as $block) {
+                // C-PRV-2.b: the carrier list is shared fleet-wide, so it
+                // can hold the OpenAI Responses arm's tagged items (a store
+                // replayed under a provider switch, or a future cross-family
+                // fold). The Messages API 400s on a content block it does
+                // not name, so only this wire's own two shapes replay.
+                if (!is_array($block)) {
+                    continue;
+                }
+
+                if (($block['type'] ?? null) !== 'thinking'
+                    && ($block['type'] ?? null) !== 'redacted_thinking') {
+                    continue;
+                }
+
                 $blocks[] = $block;
             }
         }
@@ -891,6 +905,11 @@ trait AnthropicMessagesWire
      * every image-bearing turn. On those wires the caption travels alone, and
      * the caption names its own visibility; the bytes stay in the
      * human-visible tool-result channel.
+     * C-PRV-2.b TRUTH-PATCH: that objection was always about the CHAT wire
+     * and still describes it. The Responses sibling does not need the
+     * smuggle — its `function_call_output` row takes a parts list natively,
+     * so images ride the tool's own row over there ({@see
+     * OpenAiResponsesWire}); nothing about THIS decision changes.
      *
      * @return ?array<string, mixed>
      */

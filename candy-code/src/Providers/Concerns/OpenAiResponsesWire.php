@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Providers\Concerns;
 
+use SugarCraft\Code\Attachments\FileMentions;
 use SugarCraft\Code\Messages\AssistantMessage;
 use SugarCraft\Code\Messages\SystemMessage;
 use SugarCraft\Code\Messages\ToolResultMessage;
@@ -38,6 +39,15 @@ use SugarCraft\Code\Tools\ToolCall;
  * the class of seam a raw JSON wire avoids — here the `reasoning` summary
  * items are read whole.
  *
+ * C-PRV-2.b extends the arm with the two replay legs the Responses
+ * vocabulary uniquely allows: encrypted reasoning items round-trip through
+ * `include: ["reasoning.encrypted_content"]` (the chat wire has no place to
+ * put them), and `function_call_output` accepts a PARTS LIST, so a tool's
+ * image rides its own row instead of the chat arm's smuggled follow-up turn
+ * (which {@see AnthropicMessagesWire}'s toolResultImage prose rejects on
+ * role-alternation grounds — a list-typed output is not affected by that
+ * objection).
+ *
  * MEASURED VS NOT: the request body, the `store:false` law (a candy-code
  * session never server-stores its transcript), the flat tool spelling,
  * the usage fold and every SSE event shape below are pinned by
@@ -51,6 +61,15 @@ use SugarCraft\Code\Tools\ToolCall;
 trait OpenAiResponsesWire
 {
     use HttpClientDefaults;
+
+    /**
+     * The tag stored on replayable reasoning items inside the shared
+     * `CompleteResponse::$thinkingBlocks` list. Anthropic's signed blocks
+     * keep their wire types verbatim; this arm's items are spelled here so
+     * neither wire mistakes the other's blocks — {@see
+     * AnthropicMessagesWire} filters them out of its replay by name.
+     */
+    private const REASONING_BLOCK_TYPE = 'openai_reasoning_item';
 
     /**
      * The one request-body builder for both arms (batch and stream share
@@ -99,7 +118,23 @@ trait OpenAiResponsesWire
         }
 
         if ($request->reasoningEffort !== null && $this->shapesEffortFor($request->model)) {
-            $body['reasoning'] = ['effort' => self::openAiReasoningEffort($request->reasoningEffort)];
+            $body['reasoning'] = [
+                'effort' => self::openAiReasoningEffort($request->reasoningEffort),
+                // C-PRV-2.b: ask for the public summary alongside the
+                // effort — the batch arm already folds `summary_text` parts
+                // into the ticker's reasoning channel, but without this
+                // field the endpoint never sends them.
+                'summary' => 'auto',
+            ];
+            // C-PRV-2.b: the opaque encrypted blob is what makes a reasoning
+            // item REPLAYABLE (the item reference contract — a follow-up
+            // request that returns the item keeps the model's chain of
+            // thought across tool turns). Gated with the effort, never on
+            // its own: a session that never asks for reasoning keeps its
+            // exact pre-C-PRV-2.b bytes, and the prompt-cache prefix of
+            // every request in a reasoning session stays byte-stable
+            // because this list is a fixed literal, not per-turn state.
+            $body['include'] = ['reasoning.encrypted_content'];
         }
 
         return $body;
@@ -120,16 +155,65 @@ trait OpenAiResponsesWire
 
         foreach ($request->messages as $msg) {
             if ($msg instanceof ToolResultMessage) {
+                $output = $msg->content();
+                // C-PRV-2.b: this wire's `output` is a parts list, so the
+                // pixels ride the tool row itself — the chat arm's string
+                // restriction (and its follow-up-turn workaround) does not
+                // apply here. No image keeps the plain-string spelling
+                // byte-identical to the pre-C-PRV-2.b arm.
+                $image = $this->responsesToolResultImage($msg);
+                if ($image !== null) {
+                    $output = [];
+                    if ($msg->content() !== '') {
+                        $output[] = ['type' => 'input_text', 'text' => $msg->content()];
+                    }
+
+                    $output[] = ['type' => 'input_image', 'image_url' => $image];
+                }
+
                 $items[] = [
                     'type' => 'function_call_output',
                     'call_id' => $msg->toolCallId(),
-                    'output' => $msg->content(),
+                    'output' => $output,
                 ];
 
                 continue;
             }
 
             if ($msg instanceof AssistantMessage) {
+                // C-PRV-2.b: encrypted reasoning items replay FIRST — the
+                // generation order the endpoint produced was reasoning,
+                // then calls, then (after outputs) the message, and this
+                // arm's own tagged blocks are the only ones it re-sends;
+                // another provider family's blocks in the same transcript
+                // (a hand-merged or future-shared store) stay skipped.
+                //
+                // FIX-1 (review 1, M1): the replay rides the SAME door the
+                // request body gates `reasoning`/`include` with — Anthropic
+                // replays thinking only while its live budget hook is on
+                // ({@see AnthropicMessagesWire} "only while the budget hook
+                // is on"); this arm's live equivalent is shapesEffortFor()
+                // on the REQUEST's model, because the Responses surface
+                // only names `reasoning` items for the reasoning families
+                // that accept them. A mid-session switch onto a text-only
+                // model (the store carries items the earlier model
+                // collected) re-sent the encrypted items unconditionally —
+                // an endpoint 400 on every follow-up turn wedges the
+                // transcript. Text-only arm => items stay in the store,
+                // off the wire; a later switch back replays them again.
+                if ($this->shapesEffortFor($request->model)) {
+                    foreach ($msg->thinkingBlocks() as $block) {
+                        if (!is_array($block)) {
+                            continue;
+                        }
+
+                        $replay = self::responsesReasoningReplay($block);
+                        if ($replay !== null) {
+                            $items[] = $replay;
+                        }
+                    }
+                }
+
                 // The call RECORDS come first: a turn that thought, then
                 // called, then (after outputs) answered must replay in
                 // generation order, and the Responses wire wants
@@ -218,6 +302,151 @@ trait OpenAiResponsesWire
     }
 
     /**
+     * The one rule for a stored block earning replay on this arm: OUR tag,
+     * and both identity fields (id + encrypted_content) present as
+     * non-empty strings. A half-item cannot be referenced by the endpoint,
+     * and the shape may have been persisted by an older build or hand-edited
+     * into the store — the re-validation is the same hostile-blob hygiene the
+     * Anthropic arm's signature law applies to its blocks, applied sideways.
+     * The summary parts ride only in re-validated wire shape: display text
+     * has no chain-of-custody duty, so a malformed part is dropped rather
+     * than replayed.
+     *
+     * @param array<string, mixed> $block
+     *
+     * @return ?array<string, mixed>
+     */
+    private static function responsesReasoningReplay(array $block): ?array
+    {
+        if (($block['type'] ?? null) !== self::REASONING_BLOCK_TYPE) {
+            return null;
+        }
+
+        $id = $block['id'] ?? null;
+        $encrypted = $block['encrypted_content'] ?? null;
+        if (!is_string($id) || $id === '' || !is_string($encrypted) || $encrypted === '') {
+            return null;
+        }
+
+        $item = ['type' => 'reasoning', 'id' => $id, 'encrypted_content' => $encrypted];
+
+        $summary = self::responsesSummaryParts($block['summary'] ?? null);
+        if ($summary !== []) {
+            $item['summary'] = $summary;
+        }
+
+        return $item;
+    }
+
+    /**
+     * One reasoning wire item (batch output or stream `item.done`) → the
+     * tagged stored block, or null when it cannot replay. The collect-side
+     * twin of {@see responsesReasoningReplay()}: BOTH require id +
+     * encrypted_content, so a block that entered the store can always leave
+     * it as the item it came from.
+     *
+     * @param array<string, mixed> $item
+     *
+     * @return ?array<string, mixed>
+     */
+    private static function responsesReasoningBlock(array $item): ?array
+    {
+        $id = $item['id'] ?? null;
+        $encrypted = $item['encrypted_content'] ?? null;
+        if (!is_string($id) || $id === '' || !is_string($encrypted) || $encrypted === '') {
+            return null;
+        }
+
+        $block = [
+            'type' => self::REASONING_BLOCK_TYPE,
+            'id' => $id,
+            'encrypted_content' => $encrypted,
+        ];
+
+        $summary = self::responsesSummaryParts($item['summary'] ?? null);
+        if ($summary !== []) {
+            $block['summary'] = $summary;
+        }
+
+        return $block;
+    }
+
+    /**
+     * Re-validate a hostile-or-benign summary payload down to the wire's
+     * own `{type: summary_text, text: string}` parts (anything else in the
+     * list is not text this code may persist or replay).
+     *
+     * @return array<array<string, string>>
+     */
+    private static function responsesSummaryParts(mixed $parts): array
+    {
+        if (!is_array($parts)) {
+            return [];
+        }
+
+        $summary = [];
+        foreach ($parts as $part) {
+            if (is_array($part) && ($part['type'] ?? null) === 'summary_text'
+                && is_string($part['text'] ?? null)) {
+                $summary[] = ['type' => 'summary_text', 'text' => $part['text']];
+            }
+        }
+
+        return $summary;
+    }
+
+    /**
+     * The using class answers for itself (SHL-3 T2): images ride the tool
+     * row only for a vision-capable model. Both OpenAI arms' host already
+     * implements it from {@see \SugarCraft\Code\Providers\ProviderInterface};
+     * the declaration exists so this trait's call is defined, exactly as
+     * {@see AnthropicMessagesWire} declares the same hook for its own arm.
+     */
+    abstract public function supportsVision(): bool;
+
+    /**
+     * Byte budget for a tool-row image, named through the host: PHP forbids
+     * direct access to another trait's constant, so the using class answers
+     * with the shared ceiling. One budget then covers images on both wires —
+     * {@see \SugarCraft\Code\Providers\Concerns\AnthropicMessagesWire::TOOL_RESULT_IMAGE_MAX_BYTES}
+     * is the source of truth (it shipped first, SHL-3), and a cross-wire
+     * image that fit on one row fits on the other.
+     */
+    abstract protected function responsesToolResultImageBudget(): int;
+
+    /**
+     * C-PRV-2.b: the pixels a tool carried, as a data URL for this row's
+     * `input_image` part. The gate ladder mirrors the Anthropic arm's
+     * toolResultImage by DECISION, not by copy-paste habit: every rung is
+     * the same judgement about the same untrusted bytes (error rows are
+     * text, the model must see, the budget must hold, and the header is
+     * re-sniffed so forged payload stays caption text instead of a 400).
+     * The size budget comes from {@see responsesToolResultImageBudget()} so
+     * one constant budgets images on both wires.
+     */
+    private function responsesToolResultImage(ToolResultMessage $msg): ?string
+    {
+        if ($msg->isError() || !$msg->hasImage() || !$this->supportsVision()) {
+            return null;
+        }
+
+        $bytes = (string) $msg->imageBytes();
+        if ($bytes === '' || strlen($bytes) > $this->responsesToolResultImageBudget()) {
+            return null;
+        }
+
+        $mediaType = FileMentions::sniffImage($bytes);
+        if ($mediaType === null) {
+            return null;
+        }
+
+        // The data-URL spelling {@see AttachmentEncoding::openAiContent()}
+        // uses for user images — one format for image bytes on this wire,
+        // no matter which turn they entered the transcript from.
+        return 'data:' . $mediaType . ';base64,' . base64_encode($bytes);
+    }
+
+    /**
      * Tools FLAT: the Responses wire moved the function name/description/
      * parameters out of a nested `function` object onto the tool itself.
      * Reusing the chat arm's {@see
@@ -266,7 +495,10 @@ trait OpenAiResponsesWire
      * The streaming arm: same body, `stream:true`, and the documented
      * Responses SSE vocabulary —
      *   `response.output_text.delta`            → content delta
-     *   `response.output_item.added/done`       → function_call bookends
+     *   `response.reasoning_summary_text.delta` → reasoning-summary delta (C-PRV-2.b)
+     *   `response.output_item.added/done`       → function_call bookends, and the
+     *                                             reasoning item.done carries the
+     *                                             encrypted replay block (C-PRV-2.b)
      *   `response.function_call_arguments.delta`/`.done` → argument reassembly
      *   `response.completed`                    → the usage carrier frame
      *
@@ -343,6 +575,18 @@ trait OpenAiResponsesWire
 
                     break;
 
+                case 'response.reasoning_summary_text.delta':
+                    // C-PRV-2.b: the public summary streams on the ticker's
+                    // reasoning channel (same carrier the batch fold and the
+                    // chat arm's `reasoning_content` use) — display text,
+                    // protocol state is NOT smuggled in deltas.
+                    $delta = is_string($event['delta'] ?? null) ? $event['delta'] : '';
+                    if ($delta !== '') {
+                        yield new CompleteResponse(content: '', reasoning: $delta);
+                    }
+
+                    break;
+
                 case 'response.output_item.added':
                     $item = is_array($event['item'] ?? null) ? $event['item'] : [];
                     if (($item['type'] ?? null) === 'function_call') {
@@ -373,6 +617,25 @@ trait OpenAiResponsesWire
 
                 case 'response.output_item.done':
                     $item = is_array($event['item'] ?? null) ? $event['item'] : [];
+
+                    // C-PRV-2.b: a completed reasoning item is the
+                    // protocol-state carrier for this stream — collected
+                    // with the same both-fields rule as the batch arm and
+                    // handed up on its own frame (Runtime folds the list
+                    // per-frame before the usage carrier lands, the same
+                    // mid-stream carrier the batch return relies on).
+                    if (($item['type'] ?? null) === 'reasoning') {
+                        $block = self::responsesReasoningBlock($item);
+                        if ($block !== null) {
+                            yield new CompleteResponse(
+                                content: '',
+                                thinkingBlocks: [$block],
+                            );
+                        }
+
+                        break;
+                    }
+
                     if (($item['type'] ?? null) !== 'function_call') {
                         break;
                     }
@@ -430,7 +693,8 @@ trait OpenAiResponsesWire
 
                 default:
                     // Every other documented event (created/queued/
-                    // output_item.added non-call types, reasoning deltas,
+                    // output_item.added non-call types, the reasoning
+                    // part-boundary and non-summary reasoning deltas,
                     // and whatever vocabulary OpenAI adds next) carries no
                     // engine-visible payload here; unknown-delta-tolerant
                     // by the same law as the chat arm's chunk parser.
@@ -484,6 +748,7 @@ trait OpenAiResponsesWire
         $content = '';
         $reasoning = null;
         $toolCalls = null;
+        $thinkingBlocks = [];
 
         foreach (is_array($doc['output'] ?? null) ? $doc['output'] : [] as $item) {
             if (!is_array($item)) {
@@ -505,16 +770,22 @@ trait OpenAiResponsesWire
                     // parts (public reasoning summaries); the chat arm's
                     // DTO dropped `reasoning_content` whole — this is the
                     // seam the raw JSON arm exists to close.
-                    $summary = [];
-                    foreach (is_array($item['summary'] ?? null) ? $item['summary'] : [] as $part) {
-                        if (is_array($part) && ($part['type'] ?? null) === 'summary_text'
-                            && is_string($part['text'] ?? null)) {
-                            $summary[] = $part['text'];
-                        }
+                    $summary = self::responsesSummaryParts($item['summary'] ?? null);
+                    $summaryTexts = array_column($summary, 'text');
+
+                    if ($summaryTexts !== []) {
+                        $reasoning = ($reasoning === null ? '' : $reasoning . "\n") . implode("\n", $summaryTexts);
                     }
 
-                    if ($summary !== []) {
-                        $reasoning = ($reasoning === null ? '' : $reasoning . "\n") . implode("\n", $summary);
+                    // C-PRV-2.b: the same item is protocol state when it
+                    // carries its encrypted blob — collected beside the
+                    // display fold so the next turn can reference the model's
+                    // own reasoning, not just its summary. No blob, no block:
+                    // an unreplayable half-item is not stored (Anthropic's
+                    // signature law, restated for this wire).
+                    $block = self::responsesReasoningBlock($item);
+                    if ($block !== null) {
+                        $thinkingBlocks[] = $block;
                     }
 
                     break;
@@ -556,6 +827,7 @@ trait OpenAiResponsesWire
             costUsd: $usage->costUsd,
             usage: $usage,
             truncated: $truncated,
+            thinkingBlocks: $thinkingBlocks,
         );
     }
 

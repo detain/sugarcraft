@@ -36,7 +36,10 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
      * C-PRV-2.a: the two wire arms the config block's `api` key picks.
      * `chat` is the historical openai-php SDK path; `responses` speaks
      * `POST {base}/responses` through {@see OpenAiResponsesWire}. The
-     * default keeps every existing config byte-identical.
+     * default keeps every existing config byte-identical. C-PRV-2.b lives
+     * only on the responses arm: encrypted reasoning items replay through
+     * it, and a tool's image renders inside its own output row when the
+     * model sees — the chat arm keeps both legs exactly as they shipped.
      */
     public const API_CHAT = 'chat';
 
@@ -333,6 +336,18 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
         }
 
         return false;
+    }
+
+    /**
+     * C-PRV-2.b ({@see OpenAiResponsesWire}): the tool-image ceiling is
+     * ANTHROPIC's constant — it shipped the ladder first (SHL-3) — and this
+     * is the one legitimate path to it: a trait constant becomes a class
+     * constant of the class that uses the trait, and direct `Trait::CONST`
+     * access is a PHP fatal across traits.
+     */
+    protected function responsesToolResultImageBudget(): int
+    {
+        return AnthropicProvider::TOOL_RESULT_IMAGE_MAX_BYTES;
     }
 
     public function supportsJsonSchema(): bool

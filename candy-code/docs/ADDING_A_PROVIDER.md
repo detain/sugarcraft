@@ -91,6 +91,18 @@ arm builds a request. A split like that must stay binary — an unknown
 spelling throws by name when the provider is built, because a value that
 reached the live object would answer neither arm's endpoint.
 
+The thinking-block carrier (`CompleteResponse::$thinkingBlocks`, replayed by
+`AssistantMessage::thinkingBlocks()`) is owned by the WIRE that produced the
+blocks, not by the store that persisted them: every parse seam collects only
+shapes its own replay understands, tags them so the list can be shared
+fleet-wide, and every replay seam filters by tag before re-sending. Anthropic
+replays `thinking`/`redacted_thinking` verbatim; the Responses arm re-sends
+its tagged `openai_reasoning_item` entries as `reasoning` items carrying the
+encrypted content the endpoint asked for via `include` (C-PRV-2.b). A block
+that cannot be replayed is never collected, and a block from another family's
+wire is skipped, not rejected — a store replayed under a different provider
+must degrade to text, not 400.
+
 ## Behavior laws a provider must not break
 
 - **No blanket request timeouts on the LLM call path.** A provider must not

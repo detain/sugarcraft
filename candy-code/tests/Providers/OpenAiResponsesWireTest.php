@@ -252,8 +252,11 @@ final class OpenAiResponsesWireTest extends TestCase
 
         $this->assertSame(0.25, $body['temperature']);
         // SAME predicate + SAME `max`/`xhigh` -> `high` round-down as the
-        // chat arm's reasoning_effort (C-PRV-1.a's shared door).
-        $this->assertSame(['effort' => 'high'], $body['reasoning']);
+        // chat arm's reasoning_effort (C-PRV-1.a's shared door). C-PRV-2.b
+        // added `summary:auto` + the encrypted-content include INSIDE the
+        // same gate — the round-down itself is untouched.
+        $this->assertSame(['effort' => 'high', 'summary' => 'auto'], $body['reasoning']);
+        $this->assertSame(['reasoning.encrypted_content'], $body['include']);
     }
 
     public function testEffortDroppedForNonReasoningFamilyModels(): void
@@ -267,6 +270,9 @@ final class OpenAiResponsesWireTest extends TestCase
         $body = json_decode((string) $this->wireHistory[0]['request']->getBody(), true);
 
         $this->assertArrayNotHasKey('reasoning', $body);
+        // C-PRV-2.b: the include rides the SAME gate — a non-reasoning
+        // session keeps its exact pre-2.b bytes.
+        $this->assertArrayNotHasKey('include', $body);
     }
 
     public function testToolsAreFlatAndSchemasGoThroughNormalization(): void
