@@ -617,6 +617,7 @@ final class LayeredSettings
         'vimMode',
         'lintCommands',
         'formatCommands',
+        'formatAuto',
         'disabledMcpServers',
         'mcp.enabled',
         'mcp.lazySchemaTokens',

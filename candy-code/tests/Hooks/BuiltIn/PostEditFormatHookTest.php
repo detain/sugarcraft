@@ -295,6 +295,53 @@ final class PostEditFormatHookTest extends TestCase
         }
     }
 
+    public function testTheLaunchArmsTheTableOnlyForATrustedProject(): void
+    {
+        // C-TOOL-5.b: formatAuto registers the hook with an EMPTY map — the
+        // armed table is the something-to-run — but only when the same root
+        // is in trustedProjectHooks, the gate the project hook files need.
+        $this->useHomeSandbox($this->root . '/home3');
+        mkdir($this->root . '/home3/.candy-code', 0o700, true);
+        file_put_contents(
+            $this->root . '/home3/.candy-code/config.json',
+            (string) json_encode([
+                'formatAuto' => true,
+                'trustedProjectHooks' => [$this->root],
+            ]),
+        );
+        try {
+            $registered = Bootstrap::hooks(null, $this->root)->hook(HookEvent::PostToolUse->value, PostEditFormatHook::NAME);
+
+            $this->assertInstanceOf(PostEditFormatHook::class, $registered);
+            $this->assertSame([], $registered->runner()->commands(), 'the arm registers with the map still empty, not with a synthesized entry');
+            $this->assertTrue($registered->runner()->autoArmed());
+        } finally {
+            @unlink($this->root . '/home3/.candy-code/config.json');
+            @rmdir($this->root . '/home3/.candy-code');
+            @rmdir($this->root . '/home3');
+        }
+    }
+
+    public function testTheLaunchRefusesTheArmedTableForAnUntrustedProject(): void
+    {
+        $this->useHomeSandbox($this->root . '/home4');
+        mkdir($this->root . '/home4/.candy-code', 0o700, true);
+        file_put_contents(
+            $this->root . '/home4/.candy-code/config.json',
+            (string) json_encode(['formatAuto' => true]),
+        );
+        try {
+            $chain = Bootstrap::hooks(null, $this->root);
+
+            $this->assertNull($chain->hook(HookEvent::PostToolUse->value, PostEditFormatHook::NAME), 'the settings bit alone must not arm the table in an untrusted checkout');
+            $this->assertNotNull($chain->hook(HookEvent::PostToolUse->value, PostEditLintHook::NAME), 'the lint is still unconditional');
+        } finally {
+            @unlink($this->root . '/home4/.candy-code/config.json');
+            @rmdir($this->root . '/home4/.candy-code');
+            @rmdir($this->root . '/home4');
+        }
+    }
+
     // ── harness ────────────────────────────────────────────────────────
 
     private function context(string $tool, string $path): HookContext

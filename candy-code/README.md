@@ -1203,9 +1203,9 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and twenty-nine keys are layered — `provider`,
-`models`, `providers`, `titleModel`, `summaryModel`, `maxOutputTokens`,
-`modelPrices`, `extraBody`, `thinkingBudget`, `reasoningEffort`, `promptCache`,
+Only these one hundred and thirty keys are layered — `provider`, `models`,
+`providers`, `titleModel`, `summaryModel`, `maxOutputTokens`, `modelPrices`,
+`extraBody`, `thinkingBudget`, `reasoningEffort`, `promptCache`,
 `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxToolSteps`,
 `maxCostUsd`, `compaction.reminderPercent`, `compaction.autoPercent`,
 `compaction.blockPercent`, `compaction.keepRecent`,
@@ -1238,9 +1238,10 @@ Only these one hundred and twenty-nine keys are layered — `provider`,
 `diffPreviewRows`, `toolOutputPreviewLines`, `sessionRetentionDays`,
 `sessions.autoTitle`, `promptSuggestions`, `promptSuggestionHistory`,
 `expandToolOutput`, `maxCheckpoints`, `keybindings`, `vimMode`, `lintCommands`,
-`formatCommands`, `disabledMcpServers`, `mcp.enabled`, `mcp.lazySchemaTokens`,
-`connectTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`,
-`debug.skills`, `debug.commands`, `debug.rules`, `debug.stream`.
+`formatCommands`, `formatAuto`, `disabledMcpServers`, `mcp.enabled`,
+`mcp.lazySchemaTokens`, `connectTimeoutSeconds`, `providerRetryAttempts`,
+`providerRetryBaseBackoffMs`, `debug.skills`, `debug.commands`, `debug.rules`,
+`debug.stream`.
 <!-- settings:layered:end -->
 
 That roster (and its count) is generated from `SettingsSchema` by
@@ -1283,14 +1284,14 @@ in precedence only.
 > user-tier only. Details per key in
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
-Even for a trusted project, seventy-three keys are **never** taken from a project file:
+Even for a trusted project, seventy-four keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
 the same reason — each value is a lint command the post-edit hook runs after an
 edit; `formatCommands`, for the same reason with the write added — each value
 is a formatter the post-edit format hook runs over, and rewrites, the file just
-edited; `lsp`, for the same reason again — each entry is a language server this app
+edited; `formatAuto`, because it lets a table this app carries pick the formatter and run it over the edited file even where the map names none — the `formatCommands` argument one layer up, gated additionally on the hooks trust like `lspAutoDetect` is on starting; `lsp`, for the same reason again — each entry is a language server this app
 starts at launch; `lspAutoDetect`, because it switches that starting on for
 whichever servers the project's own files fingerprint — the `lsp` argument one
 layer up, where the named entry list is replaced by a table this app carries; `mcp.enabled`, because whether a checkout's

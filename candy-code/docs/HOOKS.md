@@ -1086,7 +1086,8 @@ Twelve more exist and are **not** registered by default:
   (`HookRegistry::isReserved()`): no other hook may register under it, and a
   disable naming it is ignored.
 - `PostEditFormatHook` — the post-edit format, registered by `Bootstrap::hooks()`
-  when `formatCommands` names a command, after the three above and ahead of
+  when `formatCommands` names a command, or `formatAuto` arms the built-in table
+  for a trusted project, after the three above and ahead of
   the post-edit lint, so the linter reads formatted bytes. See
   [Post-edit format](#post-edit-format).
 - `PostEditLintHook` — the post-edit lint, registered by `Bootstrap::hooks()`
@@ -1151,13 +1152,28 @@ After every `Write`, `Edit` or `ApplyPatch` that did NOT fail, `PostEditFormatHo
 runs the formatter named by `formatCommands` over each edited file and lets it
 REWRITE the file. It is registered ahead of `PostEditLintHook` — the linter
 then reads the bytes that actually stand on disk — and only registers at all
-when the map names a command: `formatCommands` is off by default, and where
-the lint falls back to a built-in `php -l`, a formatter has no safe default
-to pick for you.
+when something can run: the map naming a command, or `formatAuto` arming the
+built-in table for a trusted project. `formatCommands` is off by default, and
+where the lint falls back to a built-in `php -l`, a formatter has no safe
+default to pick for you.
 
 ```json
-{"formatCommands": {"php": "vendor/bin/php-cs-fixer fix {file}", "ts": "npx prettier --write"}}
+{"formatCommands": {"php": "vendor/bin/php-cs-fixer fix {file}", "ts": "npx prettier --write"}, "formatAuto": true}
 ```
+
+- **`formatAuto` (C-TOOL-5.b, off by default) arms a built-in candidate
+  table** for extensions the map names no command for: `gofmt -w`, `rustfmt`,
+  `ruff format` then `black`, `shfmt -w`, `terraform fmt`, and the project's
+  own `node_modules/.bin/prettier --write` for the js/ts/json/css/md/yaml
+  family. Explicit `formatCommands` entries win per extension, and an
+  extension switched off with `false` stays off under the arm too. A
+  candidate runs only when it is actually present — a `PATH` lookup for the
+  named tools, the project's own `node_modules` for prettier, never a global
+  prettier. Because the table runs binaries the operator never typed, and the
+  project-local prettier loads plugins that are JavaScript from that same
+  `node_modules`, the arm is gated twice: the user (never a project file)
+  must set `formatAuto`, and the project must be listed in
+  `trustedProjectHooks` — the same grant the project's hook files need.
 
 - The command line is built exactly like a lint command: the file goes last,
   shell-quoted, or wherever the command writes `{file}`; the command runs in

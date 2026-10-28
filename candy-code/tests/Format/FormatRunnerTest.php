@@ -341,6 +341,120 @@ final class FormatRunnerTest extends TestCase
         );
     }
 
+    // ── the auto arm (C-TOOL-5.b) ─────────────────────────────────────
+
+    public function testTheAutoArmFillsExtensionsTheMapNamesNoCommandFor(): void
+    {
+        $armed = FormatRunner::new()->withAuto(true, true, static fn(string $binary): bool => $binary === 'gofmt');
+
+        $this->assertTrue($armed->autoArmed());
+        $this->assertSame('gofmt -w', $armed->commandFor('src/a.go', $this->root));
+        $this->assertNull($armed->commandFor('src/a.nope', $this->root), 'an extension off the table stays off');
+
+        // Without the arm, the same probe would never run: the pre-arm read
+        // answers purely from the map.
+        $this->assertNull(FormatRunner::new()->withAuto(true, true, static fn(string $binary): bool => true)->commandFor('src/a.go'), 'the arm must not probe without a root to probe the table in');
+    }
+
+    public function testTheAutoArmTakesTheFirstPresentCandidateInOrder(): void
+    {
+        $probed = [];
+        $probe = static function (string $binary) use (&$probed): bool {
+            $probed[] = $binary;
+            return $binary === 'black';
+        };
+        $armed = FormatRunner::new()->withAuto(true, true, $probe);
+
+        $this->assertSame('black', $armed->commandFor('src/a.py', $this->root));
+        $this->assertSame(['ruff', 'black'], $probed, 'the preference order skipped or re-ordered');
+
+        $nothingHere = FormatRunner::new()->withAuto(true, true, static fn(string $binary): bool => false);
+        $this->assertNull($nothingHere->commandFor('src/a.py', $this->root), 'a host with no candidate formats nothing');
+    }
+
+    public function testAnExplicitEntryWinsOverTheArmedTable(): void
+    {
+        $runner = FormatRunner::new()
+            ->withCommands(['go' => 'our-gofork --fix {file}'])
+            ->withAuto(true, true, static fn(string $binary): bool => true);
+
+        $this->assertSame('our-gofork --fix {file}', $runner->commandFor('src/a.go', $this->root));
+        // Other extensions still get the table: the map and the arm coexist.
+        $this->assertSame('rustfmt', $runner->commandFor('src/a.rs', $this->root));
+    }
+
+    public function testASuppressedExtensionStaysOffEvenUnderTheArm(): void
+    {
+        $runner = FormatRunner::new()
+            ->withCommands(['go' => false])
+            ->withAuto(true, true, static fn(string $binary): bool => true);
+
+        $this->assertNull($runner->commandFor('src/a.go', $this->root), 'a false suppression is an answer, not an absence for the table to step into');
+        $this->assertSame('rustfmt', $runner->commandFor('src/a.rs', $this->root), 'the suppression is per extension only');
+
+        // Re-naming the extension clears the suppression — the map spoke last.
+        $renamed = FormatRunner::new()->withCommands(['go' => false])->withCommands(['go' => 'our-gofork']);
+        $this->assertSame('our-gofork', $renamed->commandFor('src/a.go', $this->root));
+        $this->assertSame('our-gofork', $renamed->withAuto(true, true, static fn(string $b): bool => true)->commandFor('src/a.go', $this->root), 'a revived explicit entry still wins');
+    }
+
+    public function testTheArmNeedsTheSettingsBitAndTheTrustTogether(): void
+    {
+        $always = static fn(string $binary): bool => true;
+
+        $this->assertFalse(FormatRunner::new()->withAuto(true, false, $always)->autoArmed(), 'an untrusted project must not get the table');
+        $this->assertNull(FormatRunner::new()->withAuto(true, false, $always)->commandFor('src/a.go', $this->root));
+        $this->assertFalse(FormatRunner::new()->withAuto(false, true, $always)->autoArmed(), 'trust alone does not switch formatting on');
+        $this->assertNull(FormatRunner::new()->withAuto(false, true, $always)->commandFor('src/a.go', $this->root));
+        // The explicit map is untouched by the fold either way.
+        $this->assertSame('fixer', FormatRunner::new()->withCommands(['php' => 'fixer'])->withAuto(true, false, $always)->commandFor('src/a.php', $this->root));
+    }
+
+    public function testTheArmedTableFormatsEndToEndUnderTheMutateGuard(): void
+    {
+        // The real spawn path over a planted project-local prettier: this is
+        // the whole feature — the table's command rides the same line build,
+        // jail, timeout and restore wall as an explicit command.
+        $this->put('src/a.js', "one\n");
+        $this->put('node_modules/.bin/prettier', "#!/bin/sh\nprintf 'two\\n' >> \"\$2\"\n");
+        chmod($this->root . '/node_modules/.bin/prettier', 0o755);
+
+        try {
+            $report = FormatRunner::new()->withAuto(true, true)->format('src/a.js', $this->root);
+
+            $this->assertNotNull($report, 'the planted project-local prettier is present — the default probe must find it');
+            $this->assertTrue($report->changed);
+            $this->assertNull($report->restored);
+            $this->assertSame('node_modules/.bin/prettier --write ' . escapeshellarg('src/a.js'), $report->command);
+            $this->assertSame("one\ntwo\n", file_get_contents($this->root . '/src/a.js'));
+
+            // The untrusted fold answers before any probe: same tree, no run.
+            $untrusted = FormatRunner::new()->withAuto(true, false)->format('src/a.js', $this->root);
+            $this->assertNull($untrusted);
+            $this->assertSame("one\ntwo\n", file_get_contents($this->root . '/src/a.js'));
+        } finally {
+            @unlink($this->root . '/node_modules/.bin/prettier');
+            @rmdir($this->root . '/node_modules/.bin');
+            @rmdir($this->root . '/node_modules');
+        }
+    }
+
+    public function testTheAutoBuilderIsImmutableAndCarriesItsState(): void
+    {
+        $base = FormatRunner::new()->withCommands(['php' => 'fixer'])->withTimeout(5.0);
+        $armed = $base->withAuto(true, true);
+
+        $this->assertNotSame($base, $armed);
+        $this->assertFalse($base->autoArmed(), 'the builder must not flip the original');
+        $this->assertTrue($armed->autoArmed());
+        $this->assertSame(['php' => 'fixer'], $armed->commands(), 'withAuto dropped the map');
+        $this->assertSame(5.0, $armed->timeoutSeconds(), 'withAuto dropped the timeout');
+        // And the other direction: later map/timeout copies keep the arm.
+        $again = $armed->withCommands(['go' => 'gofmt-x'])->withTimeout(2.0);
+        $this->assertTrue($again->autoArmed(), 'withCommands/withTimeout dropped the auto fold');
+        $this->assertSame('gofmt-x', $again->commandFor('src/a.go', $this->root));
+    }
+
     public function testImmutabilityOfTheBuilder(): void
     {
         $base = FormatRunner::new();

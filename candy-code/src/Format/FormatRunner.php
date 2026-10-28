@@ -46,6 +46,16 @@ use SugarCraft\Code\Tools\PathJail;
  * AND they overwrite files — a project file naming a formatter would let a
  * clone rewrite the operator's sources with no tool call and no gate.
  *
+ * THE AUTO ARM (C-TOOL-5.b). `formatAuto` ({@see AUTO_SETTINGS_KEY}) lets
+ * {@see FormatAutoTable} supply the formatter for extensions the map names no
+ * command for — but only when the arm is TRUST-folded: {@see withAuto()}
+ * takes the settings bit AND the project's hooks-trust answer together, and
+ * the auto candidate is reached only if both hold, the same gate the lsp
+ * auto-detect table carries. Explicit entries win per extension, and an
+ * extension the map switches OFF with `false` stays off under the auto arm
+ * too — a suppression is an answer, not an absence. {@see commandFor()}
+ * answers auto candidates only when handed the $root to probe them in.
+ *
  * BOUNDED, and every child accounted for, by riding
  * {@see CapturesProcessOutput} — {@see \SugarCraft\Code\Lint\LintRunner}'s
  * reason, unchanged: the one bounded spawn path in the package.
@@ -58,6 +68,16 @@ final class FormatRunner
 
     /** The settings key the extension => command map is read from. */
     public const SETTINGS_KEY = 'formatCommands';
+
+    /**
+     * The settings key the auto arm is read from (C-TOOL-5.b): a user-tier
+     * bool that lets {@see FormatAutoTable} format extensions the map names no
+     * command for, gated additionally on the project's hooks trust — the
+     * `lspAutoDetect` reasoning, with the write added: the table's output is
+     * REWRITING edited files with binaries the operator never typed, so a
+     * checkout must not be able to turn it on.
+     */
+    public const AUTO_SETTINGS_KEY = 'formatAuto';
 
     /** Where a command wants the file path, when not as its last argument. */
     public const FILE_PLACEHOLDER = '{file}';
@@ -84,10 +104,18 @@ final class FormatRunner
 
     /**
      * @param array<string, string> $commands extension (lower case, no dot) => command
+     * @param array<string, true> $suppressed extensions an explicit read switched OFF — absent from $commands, and the auto arm stays off for them too
+     * @param bool $autoEnabled the `formatAuto` settings bit as read
+     * @param bool $projectTrusted the project's answer to the hooks-trust gate, folded in by the caller (C-TOOL-5.b)
+     * @param ?\Closure(string): bool $binaryPresent presence seam, same shape as {@see \SugarCraft\Code\LSP\LspLauncher::fromConfig()}'s
      */
     private function __construct(
         private readonly array $commands,
         private readonly float $timeoutSeconds,
+        private readonly array $suppressed = [],
+        private readonly bool $autoEnabled = false,
+        private readonly bool $projectTrusted = false,
+        private readonly ?\Closure $binaryPresent = null,
     ) {}
 
     /** A runner with no commands at all — the feature is off until configured. */
@@ -107,6 +135,7 @@ final class FormatRunner
         }
 
         $commands = $this->commands;
+        $suppressed = $this->suppressed;
         foreach ($settings as $extension => $command) {
             $key = strtolower(ltrim(trim((string) $extension), '.'));
             if ($key === '') {
@@ -115,21 +144,52 @@ final class FormatRunner
 
             if ($command === null || $command === false || (is_string($command) && trim($command) === '')) {
                 unset($commands[$key]);
+                // A suppression is an ANSWER, not an absence: the auto arm
+                // must not step into the hole the operator just dug (C-TOOL-5.b).
+                $suppressed[$key] = true;
                 continue;
             }
 
             if (is_string($command)) {
                 $commands[$key] = trim($command);
+                unset($suppressed[$key]);
             }
         }
 
-        return new self($commands, $this->timeoutSeconds);
+        return new self($commands, $this->timeoutSeconds, $suppressed, $this->autoEnabled, $this->projectTrusted, $this->binaryPresent);
     }
 
     /** The same runner with each format run bounded at $seconds (floored at 10 ms). */
     public function withTimeout(float $seconds): self
     {
-        return new self($this->commands, is_finite($seconds) ? max(0.01, $seconds) : self::DEFAULT_TIMEOUT_SECONDS);
+        return new self($this->commands, is_finite($seconds) ? max(0.01, $seconds) : self::DEFAULT_TIMEOUT_SECONDS, $this->suppressed, $this->autoEnabled, $this->projectTrusted, $this->binaryPresent);
+    }
+
+    /**
+     * The same runner with the {@see FormatAutoTable} arm set: $enabled is the
+     * `formatAuto` settings bit, $projectTrusted the launch's answer to the
+     * hooks-trust gate, and $binaryPresent an optional presence seam — the
+     * exact {@see \SugarCraft\Code\LSP\LspLauncher::fromConfig()} shape, EDT-2's
+     * reasoning carried here: the caller (the frozen launch, not this class)
+     * holds the config read and the trust check, so it hands both down, and a
+     * test can probe the table without any host formatter installed.
+     */
+    public function withAuto(bool $enabled, bool $projectTrusted, ?callable $binaryPresent = null): self
+    {
+        return new self(
+            $this->commands,
+            $this->timeoutSeconds,
+            $this->suppressed,
+            $enabled,
+            $projectTrusted,
+            $binaryPresent === null ? null : \Closure::fromCallable($binaryPresent),
+        );
+    }
+
+    /** Whether the auto arm is live: the settings bit AND the trust gate. */
+    public function autoArmed(): bool
+    {
+        return $this->autoEnabled && $this->projectTrusted;
     }
 
     /** @return array<string, string> extension => command */
@@ -143,12 +203,35 @@ final class FormatRunner
         return $this->timeoutSeconds;
     }
 
-    /** The command that formats $path, or null when its extension has none. */
-    public function commandFor(string $path): ?string
+    /**
+     * The command that formats $path, or null when its extension has none —
+     * the explicit map first, then the auto arm (C-TOOL-5.b): an explicit
+     * entry wins per extension even with the arm live, an extension switched
+     * off with `false` stays off, and auto candidates are probed only when
+     * handed the $root to probe them in (with the arm off, an omitted $root
+     * answers exactly what it answered before the arm existed).
+     */
+    public function commandFor(string $path, ?string $root = null): ?string
     {
         $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        if ($extension === '') {
+            return null;
+        }
 
-        return $extension === '' ? null : ($this->commands[$extension] ?? null);
+        $explicit = $this->commands[$extension] ?? null;
+        if ($explicit !== null || !$this->autoArmed() || $root === null || $root === '' || isset($this->suppressed[$extension])) {
+            return $explicit;
+        }
+
+        foreach (FormatAutoTable::candidatesFor($extension) as $candidate) {
+            $binary = $candidate['binary'];
+            $present = $this->binaryPresent ?? static fn(string $name): bool => FormatAutoTable::isPresent($name, $root);
+            if ($present($binary)) {
+                return FormatAutoTable::commandString($candidate);
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -180,7 +263,7 @@ final class FormatRunner
      */
     public function format(string $path, string $root): ?FormatReport
     {
-        $command = $this->commandFor($path);
+        $command = $this->commandFor($path, $root);
         if ($command === null || $root === '') {
             return null;
         }

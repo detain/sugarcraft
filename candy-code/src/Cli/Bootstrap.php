@@ -6054,13 +6054,23 @@ public static function useMaxCost(?string $maxCost): void
         // external edit. Registered AHEAD of the lint hook on purpose — the
         // linter then sees the bytes that actually stand on disk. Same
         // user-tier, ahead-of-files reasoning as the lint; unlike the lint it
-        // registers ONLY when a command exists, since the map has no built-in
-        // default and a hook with nothing to run would cost chain dispatch
-        // for silence.
+        // registers ONLY when there is something to run: a command the map
+        // names, or — C-TOOL-5.b — the armed `formatAuto` table. The trust
+        // fold mirrors lspClient's lspAutoDetect read: the AUTO_TABLE rewrites
+        // files with binaries a CLONE's extension picks, so it runs only where
+        // the hooks-trust grant already says this root's code may run here.
+        // Short-circuited on the key: with formatAuto off this stays the exact
+        // pre-arm read, and a corrupt config costs nothing new here
+        // ({@see projectHooksAreTrusted()} throws, readUserConfig() does not).
+        $formatConfig = self::readUserConfig();
         $formatRunner = \SugarCraft\Code\Format\FormatRunner::new()->withCommands(
-            self::readUserConfig()[\SugarCraft\Code\Format\FormatRunner::SETTINGS_KEY] ?? null,
+            $formatConfig[\SugarCraft\Code\Format\FormatRunner::SETTINGS_KEY] ?? null,
         );
-        if ($formatRunner->commands() !== []) {
+        $formatAuto = ($formatConfig[\SugarCraft\Code\Format\FormatRunner::AUTO_SETTINGS_KEY] ?? false) === true;
+        if ($formatAuto) {
+            $formatRunner = $formatRunner->withAuto(true, $root !== null && self::projectHooksAreTrusted($root));
+        }
+        if ($formatRunner->commands() !== [] || $formatRunner->autoArmed()) {
             $hooks->register(new \SugarCraft\Code\Hooks\BuiltIn\PostEditFormatHook($formatRunner, self::readLedger($root)));
         }
 

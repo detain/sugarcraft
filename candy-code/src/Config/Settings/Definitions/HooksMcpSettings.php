@@ -58,6 +58,22 @@ final class HooksMcpSettings implements SettingDefinitionSet
                 ->withHelp(Lang::t('settings.formatCommands.help'))
                 ->withReaderSymbol(Bootstrap::class . '::hooks')
                 ->withReadBy('`Bootstrap::hooks()` → `FormatRunner::withCommands()`'),
+            // C-TOOL-5.b: the built-in formatter table behind the post-edit
+            // format hook. Exec for `formatCommands`' reason plus lspAutoDetect's:
+            // the table's values are binaries the operator never typed, chosen by
+            // the file's extension, and they OVERWRITE the edited file — the
+            // riskiest entry (the project's own node_modules prettier, whose
+            // plugins are arbitrary JavaScript) is why the arm additionally
+            // requires the project's hooks trust, and why no checkout may set
+            // the bit itself.
+            SettingDefinition::new(\SugarCraft\Code\Format\FormatRunner::AUTO_SETTINGS_KEY, SettingType::Bool, false)
+                ->withCategory(SettingCategory::HooksMcp)
+                ->withRiskClass(RiskClass::Exec)
+                ->withLayered()
+                ->withLabel(Lang::t('settings.formatAuto.label'))
+                ->withHelp(Lang::t('settings.formatAuto.help'))
+                ->withReaderSymbol(Bootstrap::class . '::hooks')
+                ->withReadBy('`Bootstrap::hooks()` → `FormatRunner::withAuto()`'),
             // The bound a hook entry with no `timeout:` gets. config.json only:
             // a hook run is a SECURITY bound (a stuck hook freezes the CLI), so
             // no repository may raise it for the operator.

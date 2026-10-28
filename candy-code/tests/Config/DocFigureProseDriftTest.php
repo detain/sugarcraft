@@ -2238,7 +2238,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame(1, preg_match('/`(\w+)` and `(\w+)` — the repeat-call loop guard,\s*registered per turn by `EngineBackend::(\w+)\(\)`/', $bullets, $guardRow), 'the loop-guard bullet no longer names its pair and the EngineBackend seam that registers them');
         self::assertSame(1, preg_match('/`(\w+)` — the delegated run\'s own tool declaration, registered\s*by `EngineBackend::(\w+)\(\)`/', $bullets, $grantRow), 'the sub-agent grant bullet no longer names its class and the EngineBackend seam that registers it (step 4.2)');
         self::assertSame(1, preg_match('/`(\w+)` — the post-edit lint, registered by `Bootstrap::(\w+)\(\)`\s*on every launch, after the three above and ahead of the hook files/', $bullets, $lintRow), 'the post-edit lint bullet no longer names its class, its Bootstrap seam and its place in the chain (step 3.E)');
-        self::assertSame(1, preg_match('/`(\w+)` — the post-edit format, registered by\s*`Bootstrap::(\w+)\(\)`\s*when `formatCommands` names a command, after the three above and ahead of\s*the post-edit lint/', $bullets, $formatRow), 'the post-edit format bullet no longer names its class, its Bootstrap seam and its place ahead of the lint (EDT-1)');
+        self::assertSame(1, preg_match('/`(\w+)` — the post-edit format, registered by\s*`Bootstrap::(\w+)\(\)`\s*when `formatCommands` names a command, or\s*`formatAuto` arms the built-in table\s*for a trusted project, after the three above and ahead of\s*the post-edit lint/', $bullets, $formatRow), 'the post-edit format bullet no longer names its class, its Bootstrap seam, its auto-table arm and its place ahead of the lint (EDT-1, C-TOOL-5.b)');
         self::assertSame(1, preg_match('/`(\w+)` — the post-edit diagnostics, registered by `Bootstrap::(\w+)\(\)`\s*when a language server is configured under `lsp` and started, right after the\s*post-edit lint and ahead of the hook files/', $bullets, $diagnosticsRow), 'the post-edit diagnostics bullet no longer names its class, its Bootstrap seam and its place in the chain (step 3.F)');
         self::assertSame(1, preg_match('/`(\w+)` — the auto-commit of each edit, registered by `Bootstrap::(\w+)\(\)`\s*when `autoCommit` is `edit`, after the post-edit diagnostics and ahead of the\s*hook files/', $bullets, $commitRow), 'the auto-commit bullet no longer names its class, its Bootstrap seam and its place in the chain (step 3.G)');
         self::assertSame(1, preg_match('/`(\w+)` and `(\w+)` — auto-test reflection, registered by `Bootstrap::(\w+)\(\)`\s*when `autoTest` is on and `testCommand` is set, after the auto-commit and ahead of the\s*hook files/', $bullets, $testRow), 'the auto-test bullet no longer names its two classes, its Bootstrap seam and its place in the chain (step 3.H)');
@@ -2287,7 +2287,9 @@ final class DocFigureProseDriftTest extends TestCase
             self::assertStringContainsString('register(new ' . $guardClass . '(', $guardSeam, "EngineBackend::{$guardRow[3]}() no longer registers {$guardClass} — the bullet names the wrong seam");
         }
         self::assertTrue(method_exists(Bootstrap::class, $gateRow[2]), "Bootstrap::{$gateRow[2]}() no longer exists — the bullet names the wrong seam");
-        $hooksBody = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $gateRow[2], 9000);
+        // C-TOOL-5.b widened 9000 -> 12000: the formatAuto arm added ~14 lines
+        // to hooks(), and the gate-hook needle sits at the tail of the body.
+        $hooksBody = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $gateRow[2], 12000);
         foreach (['registerBuiltIns()', 'loadEntries(', 'new ' . $gateRow[1] . '('] as $needle) {
             self::assertStringContainsString($needle, $hooksBody, "Bootstrap::{$gateRow[2]}() no longer contains {$needle} — the ordering and gate claims lost their referent");
         }
