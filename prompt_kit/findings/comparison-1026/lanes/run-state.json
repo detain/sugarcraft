@@ -160,80 +160,113 @@
   "C-EXT-4.b",
   "C-MCP-4.b",
   "C-MCP-3.b",
-  "C-AGT-5.c"
+  "C-AGT-5.c",
+  "C-SES-4.c"
  ],
  "inflight": {
   "P-AGENT.b": {
-   "stage": "build",
-   "round": 0,
+   "stage": "review",
+   "round": 1,
    "worktree": "/home/sites/cc-cmp-P-AGENT.b",
    "branch": "cc/P-AGENT.b",
-   "session": "ses_e7c63fdfaffev7sWJ7mm4JUwOh"
+   "session": "ses_e7c63fdfaffev7sWJ7mm4JUwOh",
+   "commit": "19830f687",
+   "review_session": "ses_e7c3e262affesAFc1JRvLQwUuC"
   },
   "C-CTX-5.c": {
-   "stage": "build",
-   "round": 0,
+   "stage": "clean",
+   "round": 1,
    "worktree": "/home/sites/cc-cmp-C-CTX-5.c",
    "branch": "cc/C-CTX-5.c",
-   "session": "ses_e7c63fdfaffdNDNGOBxSXMNn0E"
+   "session": "ses_e7c63fdfaffdNDNGOBxSXMNn0E",
+   "commit": "585c465ef",
+   "review_session": "ses_e7c3e2624ffecPUgRljxiic2lm",
+   "verdict": "r1 APPROVE 0C/0M/1-minor-out-of-scope/1nit",
+   "weld_cite": "REPORT Idle-filter figures are BASE; tip=256T/20371A green \u2014 weld cites 256",
+   "note": "stash-recovery integrity walked hunk-by-hunk clean"
   },
   "C-PRV-2.c": {
-   "stage": "build",
-   "round": 0,
+   "stage": "fix",
+   "round": 2,
    "worktree": "/home/sites/cc-cmp-C-PRV-2.c",
    "branch": "cc/C-PRV-2.c",
-   "session": "ses_e7c63fdf9ffeZx3BnvALCeWB5P"
-  },
-  "C-SES-4.c": {
-   "stage": "build",
-   "round": 0,
-   "worktree": "/home/sites/cc-cmp-C-SES-4.c",
-   "branch": "cc/C-SES-4.c",
-   "session": "ses_e7c63fdf8ffePPSIB7G1a3R3tu"
+   "session": "ses_e7c63fdf9ffeZx3BnvALCeWB5P",
+   "commit": "e8668b386",
+   "review_session": "ses_e7c3e2626ffdM98B47FFlOJfJB",
+   "verdict": "r1 CLEAN 0C/0M but 1 step-local MINOR (refusal-leg pins)",
+   "review": "lanes/C-PRV-2.c/REVIEW-1.md (copied from /tmp)",
+   "closeout_carry": "ENVIRONMENT.md azure wording NIT; CliLangCatalogue figure MINOR out-of-scope",
+   "fix_session": "ses_e7c316b37ffejhMQGju9ZugnqC"
   },
   "C-SES-6.b": {
-   "stage": "build",
-   "round": 0,
+   "stage": "clean",
+   "round": 2,
    "worktree": "/home/sites/cc-cmp-C-SES-6.b",
    "branch": "cc/C-SES-6.b",
-   "session": "ses_e7c63fdf7ffedY5jx0v61dXrtB"
+   "session": "ses_e7c63fdf7ffedY5jx0v61dXrtB",
+   "commit": "bb5cacc06",
+   "review_session": "ses_e7c3a85e9ffeZLaoTgB29ydjkP",
+   "fix_session": "ses_e7c3e2623ffenXQy9IOF51LuDK",
+   "review_verdict": "r1 APPROVE 0C/0M/1-minor-step-local/2nit",
+   "verdict": "r2 CLEAN 0C/0M/0m (r1 1m cured bb5cacc06)",
+   "carries": [
+    "PharCompatTest:627-632 DST-1-era unframed wall leg false-reds under ambient SOURCE_DATE_EPOCH (pre-existing at base; one-line frame cure for closeout)"
+   ]
   },
   "C-SES-6.c": {
-   "stage": "build",
-   "round": 0,
+   "stage": "review",
+   "round": 2,
    "worktree": "/home/sites/cc-cmp-C-SES-6.c",
    "branch": "cc/C-SES-6.c",
-   "session": "ses_e7c63fdf6ffeKrziN28q7Sjg0L"
+   "session": "ses_e7c63fdf6ffeKrziN28q7Sjg0L",
+   "commit": "bcb1769f6",
+   "review_session": "ses_e7c2f6d0dffeY1fkocMx5vSYZw",
+   "verdict": "r1 FINDINGS 1M/2n"
   },
   "C-SES-8.c": {
-   "stage": "build",
-   "round": 0,
+   "stage": "review",
+   "round": 1,
    "worktree": "/home/sites/cc-cmp-C-SES-8.c",
    "branch": "cc/C-SES-8.c",
-   "session": "ses_e7c63fdf5ffe852eymhA47QkXw"
+   "session": "ses_e7c63fdf5ffe852eymhA47QkXw",
+   "note": "blank x3 -> same-session continue resumes (owner rule), attempt 3 of 10",
+   "blanks": 3,
+   "commit": "e2759d081",
+   "review_session": "ses_e7c316b39ffdWpAT4TEkLTa5lO"
   },
   "C-SES-8.f": {
-   "stage": "build",
-   "round": 0,
+   "stage": "review",
+   "round": 1,
    "worktree": "/home/sites/cc-cmp-C-SES-8.f",
    "branch": "cc/C-SES-8.f",
-   "session": "ses_e7c63fdf3ffeaiZO4c7WxDPHO1"
+   "session": "ses_e7c63fdf3ffeaiZO4c7WxDPHO1",
+   "commit": "25c91d6eb",
+   "review_session": "ses_e7c3e2627ffefNPTaZZrkLHhKd"
   },
   "C-TOOL-2.d": {
-   "stage": "build",
-   "round": 0,
+   "stage": "clean",
+   "round": 1,
    "worktree": "/home/sites/cc-cmp-C-TOOL-2.d",
    "branch": "cc/C-TOOL-2.d",
-   "session": "ses_e7c63fde9ffe5CA98KOLungu0z"
+   "session": "ses_e7c63fde9ffe5CA98KOLungu0z",
+   "commit": "a14d85245",
+   "review_session": "ses_e7c3be713ffeWVfpgzvRGxwBoj",
+   "verdict": "r1 CLEAN 0C/0M/0step-minor",
+   "note": "durations rows + figure re-pin at weld; gen-tool-docs --check into weld battery"
   },
   "C-TOOL-3.e": {
-   "stage": "build",
-   "round": 0,
+   "stage": "clean",
+   "round": 2,
    "worktree": "/home/sites/cc-cmp-C-TOOL-3.e",
    "branch": "cc/C-TOOL-3.e",
    "session": "ses_e7c59bc03ffeeu1Jk1uDbrdeEI",
    "base": "cf0cfd0be",
-   "note": "web lane: npm ci rc=0"
+   "note": "web lane: npm ci rc=0",
+   "commit": "264ffa6d8",
+   "review_session": "ses_e7c316b39ffeEckICPOQ1WrYdT",
+   "verdict": "r1 APPROVE 1m -> fix 264ffa6d8 -> r2 CLEAN 0C/0M/0m",
+   "fix_session": "ses_e7c362794ffeFUuzQ0AKltTKs5",
+   "weld_cite": "protocol trio regen at weld (lane dirt uncommitted per law); NIT cursor-order closeout"
   }
  },
  "blocked": [],
@@ -918,7 +951,16 @@
    "carry": "suite-figure +20T (19T new files + 1T DocFigure arm) rides closeout re-pin (welder never touched suite-figure.json)",
    "absorption": "cherry '-' expected (patch-id identical); WELD.md records salvage twin history (d7d008566 phantom, 828b709ea->58966feb9, twin-fixer 28545a1a7 tree-absorbed)"
   },
-  "W15_loop": "r1 reviewer LIVE ses_e7c89b48fffeo34LyZsC8BV4w2 on 045751c44; CLEAN -> close-W15 bookkeeping commit (SS3 line 151 checkmark, waves_closed 15, lanes/W15 files); FINDINGS -> wave-fixer single writer then r2"
+  "W15_loop": "r1 reviewer LIVE ses_e7c89b48fffeo34LyZsC8BV4w2 on 045751c44; CLEAN -> close-W15 bookkeeping commit (SS3 line 151 checkmark, waves_closed 15, lanes/W15 files); FINDINGS -> wave-fixer single writer then r2",
+  "C-SES-4.c": {
+   "master": "f5bd88ca3 (pick ebe47fb27 -> raw 04fcdb2d3 patch-id f48567c7 IDENTICAL -> amend f5bd88ca3 with MINOR-1 cure; %ae/%ce 1/1 detain, zero trailers; 4 files +330/-18; CLEAN onto 52da3dce3)",
+   "regen": "none (non-protocol: zero src/Protocol/** + zero candy-code-web paths)",
+   "fold": "r1 MINOR-1 CURED in-weld: NonInteractive.php observer comment 'Chat's two doors' -> three consume points (settle queue, pump head, coalesced run) matching ObservabilityWiringTest story; sole content delta vs lane (git diff ebe47fb27 HEAD -- candy-code = 1 file +4/-3)",
+   "gates": "REPRODUCED EXACT on merged tree: NonInteractiveOtelExport 2T/9A; 6-file bundle 72T/38885A; guards 76T/21480A; Deprecations:2 = run-wide config baseline re-proven (untouched twin file alone also 2)",
+   "durations": "tsv 1540->1541: NEW NonInteractiveOtelExportTest 0.339/2 (junit per-file sum) + MODIFIED ObservabilityWiringTest 0.074/5->0.021/6 standalone re-measure; desc-violations 4==4; file is ROOT scripts/ (task brief's candy-code/tools path stale)",
+   "carry": "MINOR-2 serve-side twin wording -> C-SES-4.d; non-memoised sink seam flagged for 4.d review; Bootstrap:1250-1256 stale comment stays 4.d's flip; suite-figure +3T rides closeout re-pin",
+   "absorption": "git cherry '+' BY DESIGN (amended cure) \u2014 patch-id pair + cure-bound diff prove absorption; cc/C-SES-4.c branch+worktree kept for LEAD prune"
+  }
  },
  "carries": [
   "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest \u2014 closeout gate duty",
@@ -1045,8 +1087,8 @@
   "(CTX-2.d in welder hands)"
  ],
  "tip": "0f58a906f",
- "welded_count": 161,
- "tick": "89-fleet-live: 10 builders (9 W17 + C-TOOL-3.e) + W16-close welder; W16 loop CLEAN",
+ "welded_count": 162,
+ "tick": "104: C-SES-6.c fix bcb1769f6 verified -> r2 review; live = 2 reviews + 1 review-r2 + 2 fixers... = 6 agents + welder",
  "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
  "blocked_notes": {
   "C-AGT-5.b": "OWNER RULING NEEDED (gates W14 full closure + C-AGT-5.c cascade in W15): C-AGT-5.a r1 MINOR-2 \u2014 ScheduleFactory delete guard is createdBy-scoped, not root-scoped, so a model-created row in ANOTHER root can be deleted without include_operator_rows. Options (a) root-scope the guard (stricter; may break legit cross-root cleanup), (b) keep createdBy-scope + document. Per C-AGT-5.a r2 CLEAN the lane shipped as-designed; ruling owed before any rebuild of 5.b."
@@ -1096,7 +1138,7 @@
   "owner_continue_2026-10-29": "Owner @1085@ 'continue' after LATE-RULINGS-NEEDED = rolling run extended into W16 band (9 builders launched at e4a705244 per scheduler --slots 10). C-AGT-5.b/5.c REMAIN blocked pending explicit delete-scope ruling (bare continue != letter answer). W14/W15 loops stay owner-gated.",
   "wind_down_plan": "After W15 \u00a73 close: batch final run-state (STOPPED-at-scope-end, waves_closed [1..15], W16 live ledger, resume recipe for W16-W20) + commit + return scope report. W16 \u00a73 close + wave loop belongs to the NEXT lead; the nine W16 lanes (CTX-2.d, EXT-4.b, EXT-5.a, MCP-3.b, MCP-4.b, PRV-2.b, SEC-6.a, SEC-7.d, SEC-8.c) finish review+weld under this lead."
  },
- "laws_owner_2026_10_29": "Standing law (owner 2026-10-29): fill ALL 10 slots EVERY tick with safe work available RIGHT NOW (builders within scope cap, due reviewers, due fixers, welder while welds due) - NEVER reserve a spot for a 'future reviewer/welder'; between welds the welder slot builds. Refill same-tick on notifications. Scheduler free_slots=0 means the cap is honored, not an idle reservation. | OWNER 2026-10-29 tick88+: spawn EVERY agent background=true (state it in each brief), never block on foreground children; ONE welder at a time; keep driving weld->wave-loop->fill on notifications; phantom law always; NEVER push. | OWNER 2026-10-29b: ALWAYS keep 10 agents busy \u2014 every tick fills all free slots (later-wave eligible steps via schedule_plan.py --next, sole pick authority: deps welded, no collision, LATE gating unchanged); every spawn background=true AND stated in the child brief. | OWNER 2026-10-29c (apply to self + EVERY child brief): (1) BLANK-RETURN: on any blank/empty agent response, resume THAT session with message 'continue', up to 10x before fresh spawn/prompt change. (2) COMPRESSION TIMING: compress only content already USED (e.g. after writing the report file), never material about to be acted on. (3) NEAR-END SKIP: agents near task end must skip context compression entirely \u2014 finish and respond.",
+ "laws_owner_2026_10_29": "Standing law (owner 2026-10-29): fill ALL 10 slots EVERY tick with safe work available RIGHT NOW (builders within scope cap, due reviewers, due fixers, welder while welds due) - NEVER reserve a spot for a 'future reviewer/welder'; between welds the welder slot builds. Refill same-tick on notifications. Scheduler free_slots=0 means the cap is honored, not an idle reservation. | OWNER 2026-10-29 tick88+: spawn EVERY agent background=true (state it in each brief), never block on foreground children; ONE welder at a time; keep driving weld->wave-loop->fill on notifications; phantom law always; NEVER push. | OWNER 2026-10-29b: ALWAYS keep 10 agents busy \u2014 every tick fills all free slots (later-wave eligible steps via schedule_plan.py --next, sole pick authority: deps welded, no collision, LATE gating unchanged); every spawn background=true AND stated in the child brief. | OWNER 2026-10-29c (apply to self + EVERY child brief): (1) BLANK-RETURN: on any blank/empty agent response, resume THAT session with message 'continue', up to 10x before fresh spawn/prompt change. (2) COMPRESSION TIMING: compress only content already USED (e.g. after writing the report file), never material about to be acted on. (3) NEAR-END SKIP: agents near task end must skip context compression entirely \u2014 finish and respond. | 2026-10-29d: RESUMES also background=true. STASH BAN for all lanes: repo-global stash list is SHARED across worktrees (P-AGENT.b consumed C-CTX-5.c's WIP twice; recovered, evidence /tmp/opencode/cc-cmp-lanes/C-CTX-5.c/foreign-dirt-P-AGENT.b/) \u2014 lanes use cp backups under /tmp/opencode/ ONLY. stash@{0} in cc/P-AGENT.b worktree = verified dup, welder may drop.",
  "rulings": {
   "C-AGT-5.b": "(a) ROOT-SCOPE the delete guard (owner 2026-10-29, blocker 15). Chain: build 5.b -> loop clean -> weld -> W14 wave loop -> close W14 in \u00a73; then 5.c -> weld -> W15 loop -> close W15. Then wind down: run-state STOPPED-at-scope-end + scope report; do NOT start W17+; live W16 lanes finish + weld under this lead, hand documented to next lead. Keep 10 busy (no-reservation law)."
  },
@@ -1132,6 +1174,12 @@
   "tick89": {
    "welder": "ses_e7c59bc04ffeNt0cfQLBhIFCQG",
    "C-TOOL-3.e": "ses_e7c59bc03ffeeu1Jk1uDbrdeEI"
+  },
+  "tick94": {
+   "welder-C-SES-4.c": "ses_e7c372e47ffe4xVvmkxYJAULO1"
+  },
+  "tick96": {
+   "C-TOOL-3.e-fixer": "ses_e7c362794ffeFUuzQ0AKltTKs5"
   }
  },
  "waved_loops": {
@@ -1193,5 +1241,20 @@
  "notes_ruling_chain": "owner ruling 15 executed: AGT-5.b welded a812ea659; W14 loop r1 running; next: AGT-5.c build (W15) on 5.b-landed base, then W15 loop after its members complete",
  "notes": {},
  "note": "W15 FULLY WELDED \u2014 wave loop r1 next",
- "welder_session": "ses_e7c59bc04ffeNt0cfQLBhIFCQG"
+ "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
+ "laws_premise_correction": "2026-10-29: plan_comparison.md is TRACKED (ls-files + full weld history commit its marks). \u00a73/\u00a74 progress marks MUST be committed with the weld. The never-stage rule applies ONLY to root ./run-state.json stray, ./escalated, and foreign dirt.",
+ "master_tip": "f5bd88ca3",
+ "prestage_w18": {
+  "briefs": "all 10 extracted to lanes/<id>/BRIEF.md",
+  "notes": {
+   "C-TUI-2.d": "refresh --libs=candy-code,sugar-diff",
+   "C-TUI-5.d": "refresh --libs=candy-code,sugar-forms",
+   "C-WEB-4.b/C-WEB-4.c": "npm ci web lanes",
+   "C-AGT-4.b": "dep P-AGENT.b+shared files - eligible only after P-AGENT.b welds"
+  }
+ },
+ "owed": [
+  "RESUME ses_e7c57a9d9ffeJDrZGvVKNBGGli to WRITE lanes/C-SES-6.b/REVIEW-1.md from its loaded context (r1 reviewer replied in chat, file never landed). Do in next free slot before other fills if none owed.",
+  "CLOSEOUT: frame SOURCE_DATE_EPOCH at PharCompatTest.php:627-632 (pre-existing leg, reds only under hostile ambient env)"
+ ]
 }

@@ -478,6 +478,7 @@ candy-code/tests/Host/SessionHubTest.php	0.346	5
 candy-code/tests/Attachments/ContextMentionsTest.php	0.344	13
 candy-code/tests/ClaudeCodeMcpClientArgumentsShapeTest.php	0.343	3
 candy-code/tests/Cli/BootstrapStatusLineWiringTest.php	0.340	4
+candy-code/tests/Cli/NonInteractiveOtelExportTest.php	0.339	2
 candy-code/tests/Chat/SessionChangeResetsTest.php	0.335	4
 candy-code/tests/Skills/SkillLoaderTest.php	0.335	61
 candy-code/tests/Context/SortedWalkCapTest.php	0.334	9
@@ -728,7 +729,6 @@ candy-code/tests/Tui/Settings/SettingsEditorKeysTest.php	0.076	12
 candy-code/tests/Chat/ModelCommandSelectsModelTest.php	0.075	11
 candy-code/tests/Backend/StepLevelSummaryTest.php	0.074	5
 candy-code/tests/Chat/InitialPromptTest.php	0.074	5
-candy-code/tests/Observability/ObservabilityWiringTest.php	0.074	5
 candy-code/tests/Providers/BedrockSglangContextWindowTest.php	0.074	9
 candy-code/tests/SessionTest.php	0.074	18
 candy-code/tests/Support/ToolOutputSpillTest.php	0.074	16
@@ -955,6 +955,7 @@ candy-code/tests/Chat/CustomCommandModelOverrideTest.php	0.021	22
 candy-code/tests/Chat/MainMailboxWakeTest.php	0.021	4
 candy-code/tests/Hooks/AuditHookProductionPathIsolationTest.php	0.021	2
 candy-code/tests/Tui/ComponentTest.php	0.021	22
+candy-code/tests/Observability/ObservabilityWiringTest.php	0.021	6
 candy-code/tests/Tui/MediaForm/VideoSectionTest.php	0.021	16
 candy-code/tests/Agents/AgentPresetSkipMalformedFileTest.php	0.020	12
 candy-code/tests/Agents/AgentWorkerPoolForkFailureTest.php	0.020	4

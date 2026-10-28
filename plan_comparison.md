@@ -2072,7 +2072,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-PRV-2.c`
 
-#### C-SES-4.c — Headless `-p` exports spans
+#### ✅ f5bd88ca37bed4ab43136d0a49b3f15681dc3475 C-SES-4.c — Headless `-p` exports spans (welded 2026-10-28)
 - **Item:** C-SES-4 (sources: GAP-OBS-02 (`-p` half), p2-miss: serve + headless OTel sink threading) · gap · effort S
 - **What:** `NonInteractive::run()` obtains `Bootstrap::observabilitySink()`, a static call, so `Bootstrap.php` is not edited. It is a null sink while dark. The `$onEvent` observer (`src/Cli/NonInteractive.php:576-579`) also calls …
 - **Files — create:** none
