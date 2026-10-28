@@ -927,7 +927,7 @@ final class LayeredSettings
      * DERIVED, not written out, so the two lists above cannot drift apart into a
      * third list that agrees with neither. Today it is `provider`, `models`,
      * `titleModel`, `summaryModel`, `maxOutputTokens`, `modelPrices`,
-     * `extraBody`, `thinkingBudget`, `promptCache`, `maxToolSteps`,
+     * `extraBody`, `thinkingBudget`, `serviceTier`, `promptCache`, `maxToolSteps`,
      * `contextWindow`, `secretEnvAllowlist`, `allowedTools`, `instructions`,
      * `instructionsExclude`, `disabledRules`, `enabledSkills`, `attribution`,
      * `statusLine`, `layout`, `lintCommands` and `formatCommands`, in {@see LAYERED_KEYS} order — named rather than numbered

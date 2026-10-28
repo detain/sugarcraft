@@ -29,8 +29,10 @@ use SugarCraft\Code\Providers\CodexProvider;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CustomProvider;
 use SugarCraft\Code\Providers\EchoProvider;
+use SugarCraft\Code\Providers\FallbackProvider;
 use SugarCraft\Code\Providers\GeminiProvider;
 use SugarCraft\Code\Providers\OpenAIProvider;
+use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Providers\SglangProvider;
 use SugarCraft\Code\Providers\ShapesServiceTier;
 use SugarCraft\Code\Providers\VertexProvider;
@@ -130,7 +132,7 @@ final class ServiceTierTest extends TestCase
 
     public function testTheRefusalSetCarriesTheMarkerNotAtAll(): void
     {
-        foreach ([CustomProvider::class, EchoProvider::class, SglangProvider::class, GeminiProvider::class, VertexProvider::class, BedrockProvider::class, CodexProvider::class, ClaudeCodeProvider::class] as $class) {
+        foreach ([CustomProvider::class, EchoProvider::class, FallbackProvider::class, SglangProvider::class, GeminiProvider::class, VertexProvider::class, BedrockProvider::class, CodexProvider::class, ClaudeCodeProvider::class] as $class) {
             self::assertNotContains(ShapesServiceTier::class, class_implements($class) ?: [], $class . ' must stay a loud refusal');
         }
     }
@@ -444,6 +446,68 @@ final class ServiceTierTest extends TestCase
         self::assertNull($carried->serviceTier(), 'the word is not stored even on the pair riding OpenAI\'s class');
         self::assertStringContainsString('azure', (string) $reason, 'the row names provider->name() — `azure`, never a silent pass');
         self::assertStringContainsString('left off this launch', (string) $reason);
+    }
+
+    public function testAFastTierOnAFallbackBlockRefusesWithARowNamingTheWrapper(): void
+    {
+        // C-PRV-3.a r2 (MAJOR-2): the door used to unwrap the block and ask the
+        // PRIMARY, which answers yes for openai — while EngineBackend mints the
+        // wire leg on `$this->provider`, the WRAPPER, which shapes nothing. The
+        // word stored, the wire stayed clean, and no reason was said: the exact
+        // set-but-ignored this door exists to ban, on the production path every
+        // `fallbackModels` block takes (ProviderFactory).
+        Bootstrap::writeUserConfig(['serviceTier' => 'fast']);
+        $wrapped = FallbackProvider::new(
+            $this->tierChatProvider(null),
+            'gpt-4o',
+            ['gpt-4o-mini' => fn (): ProviderInterface => $this->tierChatProvider(null)],
+        );
+        $engine = EngineBackend::new($wrapped, 'gpt-4o');
+
+        [$carried, $reason] = LaunchContext::withResolvedServiceTier($engine);
+
+        self::assertSame($engine, $carried, 'a wrapped pair comes back untouched: no provider leg exists to arm');
+        self::assertNull($carried->serviceTier(), 'the word is not stored, so a status surface cannot promise a lane this wire will not ride');
+        self::assertStringContainsString('fast', (string) $reason);
+        self::assertStringContainsString('fallback(', (string) $reason, 'the row names the block, because the missing leg is the block\'s');
+        self::assertStringContainsString('fallback(openai)', (string) $reason, 'and the provider it fronts — a name() alone would accuse a wire that does shape');
+        self::assertStringContainsString('gpt-4o', (string) $reason);
+        self::assertStringContainsString('left off this launch', (string) $reason);
+    }
+
+    public function testAFallbackBlockOverANonShapingPrimaryRefusesTheSameRow(): void
+    {
+        // The refusal is the door's answer to the pair it carries, not to a
+        // question it asked the primary: an echo block names itself as
+        // fallback(echo) and no leg is minted either way.
+        Bootstrap::writeUserConfig(['serviceTier' => 'fast']);
+        $engine = EngineBackend::new(
+            FallbackProvider::new(new EchoProvider(), 'm', ['m2' => static fn (): ProviderInterface => new EchoProvider()]),
+            'm',
+        );
+
+        [$carried, $reason] = LaunchContext::withResolvedServiceTier($engine);
+
+        self::assertSame($engine, $carried);
+        self::assertNull($carried->serviceTier());
+        self::assertStringContainsString('fallback(echo)', (string) $reason);
+    }
+
+    public function testTheDefaultWordLandsOnAFallbackBlockWithNoRefusal(): void
+    {
+        // `default` is the lane every pair is already on, so a block takes it
+        // without argument — the gate that refuses `fast` here must not turn
+        // the absence of a premium into a loud nothing.
+        Bootstrap::writeUserConfig(['serviceTier' => 'default']);
+        $engine = EngineBackend::new(
+            FallbackProvider::new(new EchoProvider(), 'm', ['m2' => static fn (): ProviderInterface => new EchoProvider()]),
+            'm',
+        );
+
+        [$carried, $reason] = LaunchContext::withResolvedServiceTier($engine);
+
+        self::assertSame('default', $carried->serviceTier(), 'the standard lane is recorded, wrapper or not');
+        self::assertNull($reason, 'default never refuses');
     }
 
     public function testTheDefaultWordIsAppliedWithoutConsultingTheGate(): void

@@ -2165,19 +2165,31 @@ final class LaunchContext
         ], true) ? $word : null;
     }
     /**
-     * C-PRV-3.a: lower the configured tier onto a freshly built engine only
-     * where the pair SHAPES it — the door
-     * {@see withResolvedReasoningEffort()} opened for effort, relocated in
-     * intent for money. `default` never refuses: it is the standard lane,
-     * which every pair is on whether or not it can leave it, so applying it
-     * just clears any armed fast leg. `fast` consults
-     * {@see \SugarCraft\Code\Providers\ShapesServiceTier::serviceTierFor()}
-     * through the same unwrapped-primary shape the effort door uses, and on
-     * a no-the-engine comes back UNTOUCHED with a reason beside it: the word
-     * is deliberately not stored either, so a status surface reads the
-     * truth (no tier armed) instead of a promise this wire will not keep.
+     * C-PRV-3.a: the configured fast tier is lowered only where the pair the
+     * engine ACTUALLY carries shapes it. `default` never refuses: it is the
+     * standard lane, which every pair is on whether or not it can leave it, so
+     * applying it just clears any armed fast leg. `fast` consults
+     * {@see \SugarCraft\Code\Providers\ShapesServiceTier::serviceTierFor()} on
+     * `$engine->provider()` — NOT on an unwrapped primary. The earlier shape
+     * unwrapped a {@see FallbackProvider}, copied from
+     * {@see withResolvedReasoningEffort()}, where the unwrap is sound because
+     * effort rides the REQUEST and reaches whichever provider instance answers;
+     * the tier is no request field. It is a provider leg
+     * {@see \SugarCraft\Code\Backend\EngineBackend::withServiceTier()} mints by
+     * overlaying `$this->provider` — which, under a `fallbackModels` block, is
+     * the wrapper, and the wrapper implements no such interface. So the door
+     * said yes, the engine stored the word, and the wire stayed clean on the
+     * production path (a block with fallbacks): the set-but-ignored this door
+     * exists to ban. A wrapped pair therefore comes back UNTOUCHED with a
+     * reason beside it, and the word is deliberately not stored either, so a
+     * status surface reads the truth (no tier armed) instead of a promise this
+     * wire will not keep. Delegating a tier THROUGH the wrapper is not merely
+     * wider — a block spans several provider+model PAIRS whose families differ
+     * on fast eligibility (Anthropic gates `speed` by family), and one wire
+     * value for all of them could buy the premium on a model that never asked
+     * for it; the per-pair resolution belongs to the C-PRV-3.b seam.
      * The reason half is unsaid by this caller for the documented shelf
-     * reason above; saying it is the C-PRV-3.b seam.
+     * reason above; saying it is that same seam.
      *
      * @return array{0: EngineBackend, 1: ?string} the engine to carry, and
      *         the reason to say when the pair shapes no fast lane
@@ -2195,17 +2207,22 @@ final class LaunchContext
         }
 
         $provider = $engine->provider();
-        if ($provider instanceof \SugarCraft\Code\Providers\FallbackProvider) {
-            $provider = $provider->primary();
-        }
 
         $shapes = $provider instanceof \SugarCraft\Code\Providers\ShapesServiceTier
             && $provider->serviceTierFor($engine->model()) !== null;
 
         if (!$shapes) {
+            // A wrapper's name() answers FOR the primary (transparent by
+            // design), and that primary may shape the tier perfectly well — so
+            // naming it here would accuse a provider whose own wire does carry
+            // the field. The leg that is missing belongs to the wrapper.
+            $named = $provider instanceof \SugarCraft\Code\Providers\FallbackProvider
+                ? 'fallback(' . $provider->name() . ')'
+                : $provider->name();
+
             return [$engine, Lang::t('chat.serviceTier.launch_unshaped', [
                 'tier' => $tier,
-                'provider' => $provider->name(),
+                'provider' => $named,
                 'model' => $engine->model(),
             ])];
         }
