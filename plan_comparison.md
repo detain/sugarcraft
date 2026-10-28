@@ -2220,7 +2220,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tui.md` → `### C-TUI-3.c`
 
-#### C-TUI-3.f — Recap core (`RecapHostCommand`)
+#### ✅ 83ef5e0a2 C-TUI-3.f — Recap core (`RecapHostCommand`) (pick of 033ba8947 tip + weld-cure docblock folded; welded 2026-10-29)
 - **Item:** C-TUI-3 (sources: GAP-UI-N4) · gap · effort S
 - **What:** `/btw` already does a tool-less side call on the title backend as an async effect, with a server row mapper (`src/Host/Commands/BtwHostCommand.php:44-111`, `CommandEffect::async($call, self::answerRowMessage(...))`, …
 - **Files — create:** `candy-code/src/Host/Commands/RecapHostCommand.php`

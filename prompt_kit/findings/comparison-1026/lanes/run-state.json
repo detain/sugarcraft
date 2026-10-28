@@ -154,11 +154,11 @@
   },
   "C-CTX-3.b": {
    "branch": "cc/C-CTX-3.b",
-   "note": "died missing-id-at-spawn x1, zero disk; resumed same-session disk-grounded @367",
+   "note": "builder resumed post-harness-death then committed; r1 live",
    "notes": "W19 # quick-add TUI; Chat.php submit/ctor/key-dispatch regions; base 9fc915cd9",
-   "round": 0,
-   "session": "ses_e7befc694ffekasBg3Y8o6SuZm",
-   "stage": "build",
+   "round": 1,
+   "session": "ses_e7be4b1d6ffe",
+   "stage": "review",
    "worktree": "/home/sites/cc-cmp-C-CTX-3.b"
   },
   "C-CTX-4.a": {
@@ -172,10 +172,10 @@
   "C-SEC-8.e": {
    "base": "c8e8a1f42",
    "branch": "cc/C-SEC-8.e",
-   "note": "build 851b6614a@c8e8a1f42 7f; r1 review live (argv option-injection probe, memo leak, shelf deviation, vacuity); durations KeychainTest 18T +18T weld-carry",
+   "note": "r1 FINDINGS 0C/0M/2min/2nit; fixer on MINOR-1 control-char name fold (no-spawn miss) + MINOR-2 comment truth; nit closeout carries; REVIEW-1 canonical",
    "round": 1,
-   "session": "ses_e7bedc7f0ffe30V5nxid6hZ267",
-   "stage": "review",
+   "session": "ses_e7be0bd94ffeuCN1sDtqiqJkWY",
+   "stage": "fix",
    "worktree": "/home/sites/cc-cmp-C-SEC-8.e"
   },
   "C-SES-4.d": {
@@ -199,10 +199,11 @@
   },
   "C-TUI-2.c": {
    "branch": "cc/C-TUI-2.c",
+   "note": "build 2b8bf855c@da284586a; r1 live; welder carries durations DiffSplitRenderTest +16T + LAYERED rebase-conflict note vs TOOL-5.a/SES-6.b",
    "notes": "base da284586a. diffStyle setting multi-guard move; width-invariant pin load-bearing.",
-   "round": 0,
-   "session": "ses_e7c1074d2ffeMSSFckwqe4HDx2",
-   "stage": "build",
+   "round": 1,
+   "session": "ses_e7be60e50ffe4ansoXJSTH7bCM",
+   "stage": "review",
    "worktree": "/home/sites/cc-cmp-C-TUI-2.c"
   },
   "C-TUI-2.d": {
@@ -213,13 +214,6 @@
    "session": null,
    "stage": "clean",
    "worktree": "/home/sites/cc-cmp-C-TUI-2.d"
-  },
-  "C-TUI-3.f": {
-   "branch": "cc/C-TUI-3.f",
-   "notes": "r1: 0C/0M/1 step-local MINOR (RecapHostCommand.php:16-19 docblock overclaims recap-voiced TUI row — Chat.php:12010 drops Async describe mapper; default btw heading lands until 3.g registers) + 2 NITs (REPORT HostErrorRowFlag 31-not-33; host.recap.failed failureKey unpinned, btw-mirrored). CURE AT WELD (C-SES-4.c fold-in precedent): qualify docblock + REPORT stamp, no re-review round. Welder carries: durations RecapHostCommandTest row, +4T, §4 cites 033ba8947, 3.g brief seam note, optional failureKeyRoster add.",
-   "round": 1,
-   "stage": "clean",
-   "worktree": "/home/sites/cc-cmp-C-TUI-3.f"
   },
   "C-TUI-5.d": {
    "base": "878047472",
@@ -366,7 +360,7 @@
  ],
  "standing_reds_b985fbe51": "ADD: ChatHostLangCatalogueTest red on chat.effort.launch_unshaped (asker LaunchContext.php:2109 outside sources()) - byte-identical at base, C-PRV-1.b (a992413b0) seam -> closeout roster",
  "status": "RUNNING",
- "tick": "128-batch3-weld-C-SES-8.c",
+ "tick": "128-batch3-weld-C-TUI-3.f",
  "tip": "0f58a906f",
  "updated": "2026-10-29",
  "wave_loops": {
@@ -906,6 +900,7 @@
   "C-TUI-1.a": "WELDED 2026-10-28 master d88f83e87 (pick of cf5f0f925, patch-id c57fd999 identical, git cherry '-', zero conflicts - lang/en.php context risk never fired). REVIEW-1 CLEAN 0C/0M no findings. Durations rows 0.055/9T + 0.056/18T in scripts commit 69dfca1b2. Gates merged-tree: 'ComposerVim|LangParity' OK 82T/3293A (brief 3292A, +1A from C-TOOL-3.b lang row landed post-lane-cut - attributed in WELD.md), guards filter OK 27T/560A. Regen none (generators zero diffs, schema --check up to date).",
   "C-TUI-2.a_fix": "r1 FINDINGS 0C/0M/1MINOR/1NIT @ d73f06c61; fixer live ses_e7dbd5566 (docblock move + ruby backtick positive pin); lib-local NO tsv rows; gates core 80T+markdown 81T re-check; after CLEAN -> weld (lib-local, no tsv, candy-code smoke 62T/605A identical required)",
   "C-TUI-2.b_review": "r1 live ses_e7dbd5563 @ d3d5e7825; lib-local sugar-diff 70->116T/339A; deviation isPaired() accessor + hunk-body walk; NO tsv rows",
+  "C-TUI-3.f": "batch-3 weld: pick 033ba8947->83ef5e0a2 + docblock cure (Chat drop-describe TUI-voice seam -> C-TUI-3.g carry); gates green; durations +0.006/4; §4 cites 83ef5e0a2; base master ebbb14984",
   "C-TUI-6.k": "clean r2 @2887468af; weld roster: dist rebuild rides weld, NO phpunit durations rows; merged-tree recheck vitest 25/25+44/44; vue-tsc 19 standing baseline",
   "C-TUI-7.a": "CLEAN r3 tip fa64a39b9 (deriveGatherKey session\\0root exact-boundary proven NUL-safe; pins non-vacuous). Weld owes: durations row StartupSummaryGatherTest; RouteTraitParity union vs master 27757dd94 (keep master ModelCatalogReadyMsg+TelemetryRetryTickMsg rows, add lane StartupSummaryGatheredMsg after StatusLineTickMsg); 2 foreign AccessorDeprecation deprecations = weld glance",
   "C-TUI-7.b": {
@@ -1298,7 +1293,8 @@
   "C-SES-8.f",
   "C-TUI-3.c",
   "P-AGENT.b",
-  "C-SES-8.c"
+  "C-SES-8.c",
+  "C-TUI-3.f"
  ],
  "welded_count": 172,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
