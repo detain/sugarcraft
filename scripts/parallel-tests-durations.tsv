@@ -257,6 +257,7 @@ candy-code/tests/Chat/ToolChildReapTest.php	1.113	5
 candy-code/tests/Tui/TextSelectionSugarMouseTest.php	1.113	4
 candy-code/tests/Commands/MemoryImportCommandTest.php	1.104	11
 candy-code/tests/Backend/CancelToolStopsOnlyTheRunningCallTest.php	1.099	8
+candy-code/tests/Protocol/CommandMethodsMcpPromptsTest.php	1.099	7
 candy-code/tests/Providers/RuntimeLengthStopFoldTest.php	1.095	5
 candy-code/tests/Session/UsageRecordsTest.php	1.092	14
 candy-code/tests/Cli/SessionSubcommandsTest.php	1.089	14
@@ -371,6 +372,7 @@ candy-code/tests/Session/RedoStackTest.php	0.582	6
 candy-code/tests/Backend/ScaledClockHelperSeamTest.php	0.579	6
 candy-code/tests/Workspace/ShadowRepoTest.php	0.572	6
 candy-code/tests/Protocol/ContextTrustTargetsTest.php	0.570	3
+candy-code/tests/Protocol/McpMethodsTest.php	0.566	5
 candy-code/tests/Chat/CallbackAuthoredRefusalTest.php	0.563	8
 candy-code/tests/DenialPrefixRosterTest.php	0.563	17
 candy-code/tests/Media/PngTest.php	0.556	28
