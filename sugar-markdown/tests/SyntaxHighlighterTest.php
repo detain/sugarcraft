@@ -12,8 +12,9 @@ use SugarCraft\Style\Style;
 /**
  * Comprehensive tests for the SyntaxHighlighter class.
  *
- * Covers: PHP, JavaScript/TypeScript, Python, Go, Bash, SQL, JSON
- * highlighting, line numbers, language aliases, and unknown-language fallback.
+ * Covers: PHP, JavaScript/TypeScript, Python, Go, Bash, SQL, JSON, Rust,
+ * Java, C, C++, Ruby, YAML, HTML and CSS highlighting, line numbers,
+ * language aliases, and unknown-language fallback.
  */
 final class SyntaxHighlighterTest extends TestCase
 {
@@ -807,6 +808,57 @@ final class SyntaxHighlighterTest extends TestCase
         $this->assertLessThan(1.0, $elapsed, 'Unterminated HTML comment took too long');
         $this->assertStringNotContainsString("\x1b[1m", $out);
         $this->assertStringContainsString('no close', $out);
+    }
+
+    public function testRustHighlightsKeywordsStringsAndComments(): void
+    {
+        $code = 'fn main() { let s = "hi"; /* greet */ }';
+        $out  = SyntaxHighlighter::highlight($code, 'rust', self::themed());
+
+        self::assertKeywordStyled('fn', $out);
+        self::assertKeywordStyled('let', $out);
+        self::assertStringStyled('"hi"', $out);
+        self::assertCommentStyled('/* greet */', $out);
+    }
+
+    public function testRustAliasReachesCoreTokeniser(): void
+    {
+        $out = SyntaxHighlighter::highlight('fn run() {}', 'rs', self::themed());
+
+        self::assertKeywordStyled('fn', $out);
+    }
+
+    public function testRubyDelegatesKeywordAndCommentRulesToCore(): void
+    {
+        $out = SyntaxHighlighter::highlight('def go # hi', 'ruby', self::themed());
+
+        self::assertKeywordStyled('def', $out);
+        self::assertCommentStyled('# hi', $out);
+    }
+
+    public function testYamlDelegatesLineCommentAndStringsToCore(): void
+    {
+        $code = "flag: true # note\nname: \"x\"";
+        $out  = SyntaxHighlighter::highlight($code, 'yaml', self::themed());
+
+        self::assertCommentStyled('# note', $out);
+        self::assertStringStyled('"x"', $out);
+    }
+
+    public function testHtmlDelegatesOnlyHtmlCommentsAndStringsToCore(): void
+    {
+        $code = '<div class="x"> <!-- note -->';
+        $out  = SyntaxHighlighter::highlight($code, 'html', self::themed());
+
+        self::assertStringStyled('"x"', $out);
+        self::assertCommentStyled('<!-- note -->', $out);
+    }
+
+    public function testCssDelegatesBlockCommentsToCore(): void
+    {
+        $out = SyntaxHighlighter::highlight('p { color: "x"; /* note */ }', 'css', self::themed());
+
+        self::assertCommentStyled('/* note */', $out);
     }
 
     /**

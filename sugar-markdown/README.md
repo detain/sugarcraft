@@ -171,7 +171,8 @@ $writer->close();
 
 - Headings 1-6, paragraphs, `**bold**`, `_italic_`, `~~strike~~`.
 - Inline code, fenced code blocks (with regex syntax highlighting for
-  PHP / JS / TS / JSON / Python / Go / Bash / SQL), indented code.
+  PHP / JS / TS / JSON / Python / Go / Bash / SQL / Rust / Java / C / C++ /
+  Ruby / YAML / HTML / CSS), indented code.
 - Bullet + ordered + nested lists.
 - Block quotes (▎-prefixed).
 - GFM tables (rounded border, via the sugar-style table renderer

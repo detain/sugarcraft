@@ -18,8 +18,11 @@ use SugarCraft\Core\Syntax\TokenKind;
  * primitive shared with other consumers (e.g. candy-codeshot). This class is
  * the render half: it maps each {@see \SugarCraft\Core\Syntax\TokenSpan} onto
  * a {@see Theme} slot and emits ANSI, plus the optional line-number gutter.
- * The set of recognised languages is intentionally small — PHP, JS, TS,
- * JSON, Python, Go, Bash, SQL.
+ * The set of recognised languages follows the core tokeniser — PHP, JS, TS,
+ * JSON, Python, Go, Bash, SQL, Rust, Java, C, C++, Ruby, YAML, HTML and CSS
+ * (plus core's aliases, e.g. rs, rb, yml, cc, htm); see
+ * {@see \SugarCraft\Core\Syntax\RegexHighlighter::languageForPath()} for the
+ * path → language mapping that feeds these ids.
  */
 final class SyntaxHighlighter
 {
