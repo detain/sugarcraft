@@ -618,6 +618,11 @@ final class TreeWideGuardRosterTest extends TestCase
         // resume witness leaves behind (db, WAL sidecars, child script, both
         // homes) — unlink-first recursion, the dot-glob being its listing walk.
         'Cli/JsonSchemaEnvelopeTest.php' => ['glob($path.\'/{,.*}*\',GLOB_BRACE)'],
+        // C-AGT-6.c: removeDirectory() in tearDown() unlinks-then-rmdir's the
+        // sys_get_temp_dir() scratch tree the --worktree launch tests build
+        // (fake homes, repos, registry dirs); scandir is that listing walk and
+        // it never leaves the test's own sandbox.
+        'Cli/LaunchFlagsTest.php' => ['scandir($dir)'],
         // w1e: tearDown() empties the sys_get_temp_dir() fake HOME the test mkdir'd
         // (0700, nih_be_exit_* prefix) before its own rmdir.
         'Cli/NonInteractiveBackendErrorExitTest.php' => ['RecursiveDirectoryIterator($this->tempHome,\FilesystemIterator::SKIP_DOTS)'],
@@ -657,6 +662,14 @@ final class TreeWideGuardRosterTest extends TestCase
         // derivation promotes the file through channel B and settles membership
         // BEFORE consulting the residue — the tempDir glob can never be read
         // again, and rule 33 says the licence goes with the promotion.
+        // C-SES-7.e: tearDown() purges the sys_get_temp_dir() crush-session-hub-*
+        // fixture tree setUp() made (session.db, transcripts, locks); the three
+        // globs are that unlink-then-rmdir walk, confined to the test's own dir.
+        'Host/SessionHubTest.php' => [
+            "glob(\$this->dir.'/{,.}*',GLOB_BRACE)",
+            "glob(\$this->dir.'/*',GLOB_ONLYDIR)",
+            "glob(\$sub.'/*')",
+        ],
         'Host/WebTwoHostCommandsTest.php' => ['glob($this->dir.\'/*\')'],
         'Integration/BinCandyCodeAutoloadGuardTest.php' => ['scandir($dir)'],
         'Integration/BinCandyCodeDispatchTest.php' => ['RecursiveDirectoryIterator($this->tempHome,\FilesystemIterator::SKIP_DOTS)'],
