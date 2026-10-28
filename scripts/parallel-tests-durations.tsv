@@ -56,6 +56,7 @@ candy-code/tests/Sessions/BackgroundShellRegistryTest.php	5.839	18
 candy-code/tests/Server/HookWebhooksTest.php	5.749	12
 candy-code/tests/Providers/TransientFailureTest.php	5.581	57
 candy-code/tests/Host/CompactionFallbackParityTest.php	5.562	7
+candy-code/tests/Tools/Web/Search/HostedBackendShapesTest.php	5.447	19
 candy-code/tests/Agents/AgentWorkerPoolTest.php	5.395	50
 candy-code/tests/Context/InstructionVisibilityNoticeTest.php	5.329	12
 candy-code/tests/Cli/HelpTest.php	5.276	90
@@ -72,6 +73,7 @@ candy-code/tests/Integration/ParallelToolCallsTest.php	4.956	27
 candy-code/tests/Backend/TaskSpendPropagationTest.php	4.927	13
 candy-code/tests/Backend/EngineBackendTest.php	4.923	35
 candy-code/tests/Tools/PtyRunToolTest.php	4.919	13
+candy-code/tests/Tools/Web/Search/SearchBackendsTest.php	4.902	9
 candy-code/tests/Commands/BundleCommandNamespaceTest.php	4.878	9
 candy-code/tests/Server/WorkspaceHostTest.php	4.554	8
 candy-code/tests/Support/ForkedChildExitConventionTest.php	4.496	4

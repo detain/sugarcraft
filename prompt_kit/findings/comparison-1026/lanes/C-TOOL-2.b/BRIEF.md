@@ -1,0 +1,14 @@
+### C-TOOL-2.b — Pluggable search backends
+- item: C-TOOL-2 (sources: GAP-TL-13)
+- kind: gap · effort M
+- approach: `WebSearch` (`candy-code/src/Tools/BuiltIn/WebSearch.php` ctor :90-115) talks only to a SearXNG endpoint (`CANDY_CODE_SEARCH_ENDPOINT` / `webSearchEndpoint`) and has no default. Extract a `SearchBackend` interface with a `SearxngBackend` (today's code, moved), plus `BraveBackend`, `TavilyBackend` and `ExaBackend`, each over fixed https hosts with an API key from env (`BRAVE_SEARCH_API_KEY`, `TAVILY_API_KEY`, `EXA_API_KEY`). The backend is chosen by a new user-tier setting `webSearchBackend` (enum `searxng|brave|tavily|exa`; default `searxng`, so behaviour is unchanged). `C-TOOL-2.c` adds `anthropic` to the enum. WebSearch keeps constructing itself (Bootstrap, Chat and `/websearch` construction sites are untouched); the unconfigured refusal names the chosen backend's missing key. Results are normalised to one `SearchHit` shape, so the digest is backend-agnostic. Upstream dials reuse WebFetch's pinned resolver and blocklist.
+- files.create: `candy-code/src/Tools/Web/Search/SearchBackend.php`, `candy-code/src/Tools/Web/Search/SearchHit.php`, `candy-code/src/Tools/Web/Search/SearxngBackend.php`, `candy-code/src/Tools/Web/Search/BraveBackend.php`, `candy-code/src/Tools/Web/Search/TavilyBackend.php`, `candy-code/src/Tools/Web/Search/ExaBackend.php`, `candy-code/src/Tools/Web/Search/SearchBackends.php` (factory), `candy-code/tests/Tools/Web/Search/SearchBackendsTest.php`, `candy-code/tests/Tools/Web/Search/HostedBackendShapesTest.php`
+- files.modify: `candy-code/src/Tools/BuiltIn/WebSearch.php` (ctor, execute, unconfiguredRefusal), `candy-code/src/Tools/ToolLimits.php` (`WEB_SEARCH_BACKEND_KEY`), `candy-code/src/Config/Settings/Definitions/ToolSettings.php` (definition beside `webSearchEndpoint` :262-275, user tier), `candy-code/lang/en.php`, `candy-code/README.md` + `candy-code/docs/SETTINGS.md` (via `php tools/gen-settings-doc.php --write`), `candy-code/docs/ENVIRONMENT.md` + README env table (three key rows)
+- tests: create the two above (fake transport per backend: request shape, key header, response→SearchHit mapping, missing-key refusal); modify `candy-code/tests/Tools/WebSearchToolTest.php`, `candy-code/tests/Tools/WebSearchEndpointSettingTest.php` (default stays searxng)
+- docs/guards: `EnvRosterDriftTest` (three env vars, both directions), `SettingsSchemaDocDriftTest`, `TrustKeyDocumentationDriftTest` (README user-tier key enumeration); verify `ProcessContainment::isSecretEnvName()` strips the three keys from child envs (add a pin in `tests/Cli/BootstrapSecretEnvAllowlistTest.php` if not)
+- serialized: [lang:settings.webSearchBackend.] [docs:SETTINGS.md] [docs:README.md] [docs:ENVIRONMENT.md]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: hosted APIs change response shapes; keep each mapper tolerant and pinned by a recorded-fixture test.
+

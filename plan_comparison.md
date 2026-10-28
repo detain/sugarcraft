@@ -2293,7 +2293,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Ruling:** Serve telemetry: should `serve` export OTel spans when `OTEL_EXPORTER_OTLP_ENDPOINT` is set? (Owner-gated per OBS-02 and the Bootstrap comment.) — see §6
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-4.d`
 
-#### C-TOOL-2.b — Pluggable search backends
+#### ✅ 5cdc6f440 C-TOOL-2.b — Pluggable search backends
 - **Item:** C-TOOL-2 (sources: GAP-TL-13) · gap · effort M
 - **What:** `WebSearch` (`candy-code/src/Tools/BuiltIn/WebSearch.php` ctor :90-115) talks only to a SearXNG endpoint (`CANDY_CODE_SEARCH_ENDPOINT` / `webSearchEndpoint`) and has no default. Extract a `SearchBackend` interface with a …
 - **Files — create:** `candy-code/src/Tools/Web/Search/SearchBackend.php`, `candy-code/src/Tools/Web/Search/SearchHit.php`, `candy-code/src/Tools/Web/Search/SearxngBackend.php`, `candy-code/src/Tools/Web/Search/BraveBackend.php`, `candy-code/src/Tools/Web/Search/TavilyBackend.php`, `candy-code/src/Tools/Web/Search/ExaBackend.php`, `candy-code/src/Tools/Web/Search/SearchBackends.php`, `candy-code/tests/Tools/Web/Search/SearchBackendsTest.php`, `candy-code/tests/Tools/Web/Search/HostedBackendShapesTest.php`
