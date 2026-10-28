@@ -126,7 +126,7 @@ final class ShellMenu
         'agent' => [
             'model', 'effort', 'agents', 'btw',
             self::SEP,
-            ['automate' => ['goal', 'grind', 'loop', 'bg', 'shells', 'schedules', 'workflow']],
+            ['automate' => ['goal', 'grind', 'loop', 'bg', 'shells', 'schedules', 'pr', 'workflow']],
             ['context' => ['context', 'sweep', 'pruning', 'compress', 'decompress', 'recompress']],
             ['knowledge' => ['memory', 'skills', 'init', 'rules', 'newrule']],
         ],
