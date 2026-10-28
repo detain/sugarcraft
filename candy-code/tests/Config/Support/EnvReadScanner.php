@@ -102,6 +102,9 @@ final class EnvReadScanner
      * (`ANTHROPIC_API_KEY`, `OPENAI_BASE_URL`, `AWS_REGION`, …) and the two
      * Claude Code names the foreign-memory import reads where Claude Code
      * keeps its own state (`CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_PROJECT_DIR_NAME`).
+     * Since C-TOOL-2.b it also carries the three hosted `WebSearch` backend
+     * keys (`BRAVE_SEARCH_API_KEY`, `TAVILY_API_KEY`, `EXA_API_KEY`), read by
+     * the backend constructors when the `webSearchBackend` setting picks them.
      *
      * WHY AN EXACT LIST AND NOT A PREFIX RULE: the `CANDY_CODE_` family earns
      * fail-closed treatment because every occurrence of one of OUR names is a
@@ -127,8 +130,9 @@ final class EnvReadScanner
 
     /** The alternation body shared by {@see AMBIENT_PATTERN} and the roster scrape. */
     public const AMBIENT_NAMES = 'ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_BASE_URL'
-        . '|AWS_DEFAULT_REGION|AWS_REGION|AZURE_OPENAI_API_KEY|CLAUDE_CODE_PROJECT_DIR_NAME|CLAUDE_CONFIG_DIR'
-        . '|GCP_PROJECT_ID|GEMINI_API_KEY|GEMINI_BASE_URL|OPENAI_API_KEY|OPENAI_BASE_URL|OPENAI_ORG_ID|OPENROUTER_API_KEY|SGLANG_API_KEY';
+        . '|AWS_DEFAULT_REGION|AWS_REGION|AZURE_OPENAI_API_KEY|BRAVE_SEARCH_API_KEY'
+        . '|CLAUDE_CODE_PROJECT_DIR_NAME|CLAUDE_CONFIG_DIR|EXA_API_KEY|GCP_PROJECT_ID|GEMINI_API_KEY'
+        . '|GEMINI_BASE_URL|OPENAI_API_KEY|OPENAI_BASE_URL|OPENAI_ORG_ID|OPENROUTER_API_KEY|SGLANG_API_KEY|TAVILY_API_KEY';
 
     /**
      * The synthetic token id for a string whose value is assembled at runtime.

@@ -12,8 +12,9 @@ use SugarCraft\Code\Tools\BuiltIn\WebSearch;
 /**
  * WebSearch's real transport and endpoint guard (audit F-W3, part a).
  *
- * {@see WebSearchToolTest} stubs `fetch()` and so cannot see the wire: these
- * tests drive the production `fetch()` against a forked loopback fixture,
+ * {@see WebSearchToolTest} stubs the transport closure and so cannot see the
+ * wire: these tests drive the production transport (`SearchBackends::openHttp`)
+ * against a forked loopback fixture,
  * with a fake resolver mapping a made-up name to 127.0.0.2 and a blocklist
  * that admits only that literal, so nothing leaves the machine and nothing
  * else is dialable even if a seam regressed. The guard tests run the
@@ -182,27 +183,19 @@ final class WebSearchTransportTest extends TestCase
 
     /**
      * A WebSearch with the production blocklist and a fake resolver, whose
-     * fetch fails the test: every case using it must be refused first.
+     * transport fails the test: every case using it must be refused first.
      *
      * @param array<string, list<string>> $dns
      */
     private function guardedSearch(string $endpoint, array $dns): WebSearch
     {
-        return new class ($endpoint, $dns) extends WebSearch {
-            /** @param array<string, list<string>> $dns */
-            public function __construct(string $endpoint, array $dns)
-            {
-                parent::__construct(
-                    $endpoint,
-                    resolveAddresses: static fn (string $host): array => $dns[$host] ?? [],
-                );
-            }
-
-            protected function fetch(string $url, string $dialAddress): array
-            {
-                throw new \LogicException("the guard admitted $dialAddress and dialed it");
-            }
-        };
+        return new WebSearch(
+            $endpoint,
+            resolveAddresses: static fn (string $host): array => $dns[$host] ?? [],
+            transport: static function (array $request, string $dial): array {
+                throw new \LogicException("the guard admitted $dial and dialed it");
+            },
+        );
     }
 
     /** @param list<string> $extraHeaders */

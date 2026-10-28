@@ -89,6 +89,14 @@ final readonly class ToolLimits
      */
     public const WEB_SEARCH_ENDPOINT_KEY = 'webSearchEndpoint';
 
+    /**
+     * Which backend WebSearch dials: `searxng` (the default, reading
+     * {@see self::WEB_SEARCH_ENDPOINT_KEY}), or one of the hosted services
+     * `brave`, `tavily`, `exa`, whose API keys come from the environment.
+     * The choice itself is never a secret and is user-tier only.
+     */
+    public const WEB_SEARCH_BACKEND_KEY = 'webSearchBackend';
+
     /** Silence an `interactive: true` Bash run may keep before it is stopped. */
     public const INTERACTIVE_IDLE_KEY = 'bashInteractiveIdleSeconds';
 
@@ -164,6 +172,7 @@ final readonly class ToolLimits
         self::WEB_SEARCH_MAX_RESULTS_KEY,
         self::WEB_SEARCH_TIMEOUT_KEY,
         self::WEB_SEARCH_ENDPOINT_KEY,
+        self::WEB_SEARCH_BACKEND_KEY,
         self::INTERACTIVE_IDLE_KEY,
         self::BASH_TIMEOUT_KEY,
         self::BASH_MAX_TIMEOUT_KEY,

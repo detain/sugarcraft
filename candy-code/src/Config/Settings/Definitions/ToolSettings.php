@@ -27,6 +27,7 @@ use SugarCraft\Code\Tools\McpToolBridge;
 use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
 use SugarCraft\Code\Support\ToolOutputSpill;
 use SugarCraft\Code\Tools\ToolLimits;
+use SugarCraft\Code\Tools\Web\Search\SearchBackends;
 
 /**
  * The "Tools" category's keys. One file per category so a step adding a
@@ -270,6 +271,22 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withDefaultText('unset: no default; WebSearch refuses every call until one is set')
                 ->withLabel(Lang::t('settings.webSearchEndpoint.label'))
                 ->withHelp(Lang::t('settings.webSearchEndpoint.help'))
+                ->withReaderSymbol(WebSearch::class . '::__construct')
+                ->withReadBy('`WebSearch::__construct()`, at launch and for `/websearch`'),
+            // Roadmap C-TOOL-2.b. Egress, so user tier only: the choice decides
+            // WHICH host receives every model-composed query, and the hosted
+            // arms read their API key from the environment — a project file
+            // must never be able to send the user's searches (or a live key to
+            // the wrong service) somewhere the user did not pick. The default
+            // `searxng` keeps the pre-existing behaviour byte-for-byte: the
+            // backend reads the endpoint above and nothing else changed.
+            SettingDefinition::new(ToolLimits::WEB_SEARCH_BACKEND_KEY, SettingType::Enum, SearchBackends::BACKEND_SEARXNG)
+                ->withCategory(SettingCategory::Tools)
+                ->withRiskClass(RiskClass::Egress)
+                ->withLayered()
+                ->withEnumValues(SearchBackends::NAMES)
+                ->withLabel(Lang::t('settings.webSearchBackend.label'))
+                ->withHelp(Lang::t('settings.webSearchBackend.help'))
                 ->withReaderSymbol(WebSearch::class . '::__construct')
                 ->withReadBy('`WebSearch::__construct()`, at launch and for `/websearch`'),
             SettingDefinition::new(ToolLimits::INTERACTIVE_IDLE_KEY, SettingType::Float, 8.0)

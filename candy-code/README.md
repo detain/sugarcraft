@@ -1244,12 +1244,12 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and thirty-six keys are layered — `provider`, `models`,
-`providers`, `titleModel`, `summaryModel`, `maxOutputTokens`, `modelPrices`,
-`extraBody`, `thinkingBudget`, `reasoningEffort`, `serviceTier`, `promptCache`,
-`parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxToolSteps`,
-`maxCostUsd`, `compaction.reminderPercent`, `compaction.autoPercent`,
-`compaction.blockPercent`, `compaction.keepRecent`,
+Only these one hundred and thirty-seven keys are layered — `provider`,
+`models`, `providers`, `titleModel`, `summaryModel`, `maxOutputTokens`,
+`modelPrices`, `extraBody`, `thinkingBudget`, `reasoningEffort`, `serviceTier`,
+`promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
+`maxToolSteps`, `maxCostUsd`, `compaction.reminderPercent`,
+`compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`,
 `compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
 `compaction.toolOutputChars`, `compaction.reminderTokens`,
 `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`,
@@ -1266,14 +1266,14 @@ Only these one hundred and thirty-six keys are layered — `provider`, `models`,
 `toolInstructionCapBytes`, `toolSpillCaptureBytes`, `toolSpillMinCapBytes`,
 `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`,
 `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`,
-`bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`,
-`chatToolTimeoutSeconds`, `grepTimeoutSeconds`, `requireReadBeforeWrite`,
-`sd.baseUrl`, `sd.apiKey`, `sd.timeoutSeconds`, `sd.defaultModel`,
-`ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`,
-`sd.savePattern`, `skills.pathNudges`, `instructions`,
-`instructions.walkToRoot`, `instructionsExclude`, `disabledRules`,
-`embeddingModel`, `disabledSkills`, `enabledSkills`, `pluginPaths`,
-`subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
+`webSearchBackend`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`,
+`bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `grepTimeoutSeconds`,
+`requireReadBeforeWrite`, `sd.baseUrl`, `sd.apiKey`, `sd.timeoutSeconds`,
+`sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`,
+`ui.mediaDisplayOverrides`, `sd.savePattern`, `skills.pathNudges`,
+`instructions`, `instructions.walkToRoot`, `instructionsExclude`,
+`disabledRules`, `embeddingModel`, `disabledSkills`, `enabledSkills`,
+`pluginPaths`, `subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
 `subagentMaxDepth`, `subagentMaxActive`, `includeGitInstructions`,
 `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `theme`, `statusLine`,
 `layout`, `notify`, `watchFiles`, `queueMode`, `terminalBackground`, `mouse`,
@@ -1327,7 +1327,7 @@ in precedence only.
 > user-tier only. Details per key in
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
-Even for a trusted project, seventy-nine keys are **never** taken from a project file:
+Even for a trusted project, eighty keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -1408,7 +1408,10 @@ either block off only removes text, and a trusted project *may* do that);
 `webSearchEndpoint`, because it decides which host
 receives every WebSearch query, and those queries routinely quote the
 repository's code, file names and error text — the `provider` argument applied
-to search; `sd.baseUrl` and `sd.apiKey`, because they decide which host and
+to search; `webSearchBackend`, for the same reason one layer up — it decides
+which hosted service receives those same queries and which of the operator's
+search credentials rides the request, so a checkout choosing it could send both
+to a service of its own; `sd.baseUrl` and `sd.apiKey`, because they decide which host and
 credential every generation request is sent to — the `provider` and
 `webSearchEndpoint` arguments applied to the diffusion server; `sd.defaultModel`
 and `sd.presets`, because they choose which model burns the operator's GPU time

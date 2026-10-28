@@ -565,6 +565,7 @@ final class LayeredSettings
         'webSearchMaxResults',
         'webSearchTimeoutSeconds',
         'webSearchEndpoint',
+        'webSearchBackend',
         'bashInteractiveIdleSeconds',
         'bashTimeoutSeconds',
         'bashMaxTimeoutSeconds',

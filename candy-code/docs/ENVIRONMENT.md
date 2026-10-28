@@ -216,6 +216,15 @@ takes priority; nothing here is consulted in that case. The `claude-code`
 launch additionally forwards the `ANTHROPIC_*` trio into the environment of
 the `claude` binary it spawns.
 
+The last three rows are not provider credentials but the same kind of thing
+one level over: the hosted `WebSearch` backends read theirs from
+`Tools\Web\Search\*Backend` when the `webSearchBackend` setting names their
+service, and each key travels in its own request header. Each is read in the
+backend's constructor — when the `WebSearch` tool is built — so a change
+applies from the next launch, exactly like `webSearchEndpoint` beside them.
+With the variable unset or empty the backend is unconfigured: every call is
+refused by a message that names the variable and echoes no value of it.
+
 | Variable | Provider | Description |
 |----------|----------|-------------|
 | `OPENAI_API_KEY` | `openai`, optionally `codex` | API key. Defaults to the empty string, which the provider will reject. The `codex` arm needs it only when the operator chooses key billing over `codex login`: otherwise the subscription token lives in `~/.codex`, untouched by this process. |
@@ -230,6 +239,9 @@ the `claude` binary it spawns.
 | `GEMINI_BASE_URL` | `gemini` | API base URL. Defaults to `https://generativelanguage.googleapis.com`; the requests go to `<base>/v1beta/models/<model>:generateContent` (and `:streamGenerateContent?alt=sse`), and a base that already ends in `/v1` or `/v1beta` is used as it is. |
 | `AZURE_OPENAI_API_KEY` | `azure` | API key for the Azure OpenAI resource, sent as the `api-key` header (never `Authorization`). Defaults to the empty string, which the provider will reject. The block still needs a `resource` or `baseUrl` to name the host. |
 | `OPENROUTER_API_KEY` | `openrouter` | API key for OpenRouter, sent as a bearer token on the OpenAI-compatible wire. Defaults to the empty string, which the provider will reject. |
+| `BRAVE_SEARCH_API_KEY` | `brave` (WebSearch backend) | API key for the Brave Search endpoint, sent as the `X-Subscription-Token` header. Read when the `WebSearch` tool is built, like `webSearchEndpoint` beside it, and only while `webSearchBackend` is `brave`; an empty value counts as unset. Without it every call is refused with a message naming this variable (and pointing back to `searxng`), which never echoes any key value. |
+| `TAVILY_API_KEY` | `tavily` (WebSearch backend) | API key for the Tavily endpoint, sent as a bearer token in the `Authorization` header. Read at the same points as `BRAVE_SEARCH_API_KEY` while `webSearchBackend` is `tavily`; unset counts as unconfigured and refuses every call by this name. |
+| `EXA_API_KEY` | `exa` (WebSearch backend) | API key for the Exa endpoint, sent as the `x-api-key` header. Read at the same points as `BRAVE_SEARCH_API_KEY` while `webSearchBackend` is `exa`; unset counts as unconfigured and refuses every call by this name. |
 
 `bedrock` reads two variables of its own, both naming the region; credentials
 stay the AWS SDK's ambient chain (`AWS_*` variables, `~/.aws/credentials`,

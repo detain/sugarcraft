@@ -19,7 +19,7 @@ final class WebSearchToolTest extends TestCase
      * uptime rather than the tool's behaviour — CI went red on
      * `testQueryLengthBoundaryAt1000Chars` the first day the box did not
      * answer, and the other two paid a 30s connect timeout each on every day
-     * it did. Overriding {@see WebSearch::fetch()} leaves every other step
+     * it did. Stubbing the transport closure leaves every other step
      * (validation, the SSRF host checks, status mapping, JSON decode,
      * formatting) on the real code path.
      *
@@ -30,29 +30,17 @@ final class WebSearchToolTest extends TestCase
     private function stubbedSearch(string|false $body, array $headers = [], string $endpoint = 'http://example.com/search'): WebSearch
     {
         // An explicit public endpoint AND a fake resolver on purpose: the SSRF
-        // guard resolves the host before the (stubbed) fetch, so the real
+        // guard resolves the host before the (stubbed) transport, so the real
         // resolver would put a DNS lookup back into a test that is supposed
         // to touch no network at all. The answer is example.com's own public
         // address, so the production blocklist still runs and admits it.
-        return new class ($body, $headers, $endpoint) extends WebSearch {
-            public function __construct(
-                private readonly string|false $stubBody,
-                private readonly array $stubHeaders,
-                string $endpoint,
-            ) {
-                parent::__construct(
-                    $endpoint,
-                    resolveAddresses: static fn (string $host): array => filter_var($host, FILTER_VALIDATE_IP) !== false
-                        ? [$host]
-                        : ['93.184.215.14'],
-                );
-            }
-
-            protected function fetch(string $url, string $dialAddress): array
-            {
-                return [$this->stubBody, $this->stubHeaders];
-            }
-        };
+        return new WebSearch(
+            $endpoint,
+            resolveAddresses: static fn (string $host): array => filter_var($host, FILTER_VALIDATE_IP) !== false
+                ? [$host]
+                : ['93.184.215.14'],
+            transport: static fn (array $request, string $dial): array => [$body, $headers],
+        );
     }
 
     public function testImplementsToolInterface(): void
@@ -129,16 +117,15 @@ final class WebSearchToolTest extends TestCase
 
         try {
             foreach ([null, '', '   '] as $endpoint) {
-                $tool = new class ($endpoint) extends WebSearch {
-                    public int $fetches = 0;
-
-                    protected function fetch(string $url, string $dialAddress): array
-                    {
-                        ++$this->fetches;
+                $fetches = 0;
+                $tool = new WebSearch(
+                    $endpoint,
+                    transport: static function (array $request, string $dial) use (&$fetches): array {
+                        ++$fetches;
 
                         return [false, []];
-                    }
-                };
+                    },
+                );
 
                 $result = $tool->execute(['query' => 'php 8.3', 'description' => 'test', 'id' => 'c1']);
 
@@ -148,7 +135,7 @@ final class WebSearchToolTest extends TestCase
                 $this->assertStringContainsString('no built-in default', $result->content());
                 $this->assertStringNotContainsString('skynet2', $result->content());
                 $this->assertSame('c1', $result->toolCallId());
-                $this->assertSame(0, $tool->fetches, "endpoint {$label}: nothing may be dialled without an endpoint");
+                $this->assertSame(0, $fetches, "endpoint {$label}: nothing may be dialled without an endpoint");
             }
         } finally {
             putenv($saved === false ? 'CANDY_CODE_SEARCH_ENDPOINT' : 'CANDY_CODE_SEARCH_ENDPOINT=' . $saved);
@@ -166,27 +153,19 @@ final class WebSearchToolTest extends TestCase
 
         try {
             $seen = static function (?string $endpoint): string {
-                $tool = new class ($endpoint) extends WebSearch {
-                    public string $url = '';
-
-                    public function __construct(?string $endpoint)
-                    {
-                        parent::__construct(
-                            $endpoint,
-                            resolveAddresses: static fn (string $host): array => ['93.184.215.14'],
-                        );
-                    }
-
-                    protected function fetch(string $url, string $dialAddress): array
-                    {
-                        $this->url = $url;
+                $url = '';
+                $tool = new WebSearch(
+                    $endpoint,
+                    resolveAddresses: static fn (string $host): array => ['93.184.215.14'],
+                    transport: static function (array $request, string $dial) use (&$url): array {
+                        $url = $request['url'];
 
                         return [json_encode(['query' => 'q', 'results' => []]), ['HTTP/1.1 200 OK']];
-                    }
-                };
+                    },
+                );
                 $tool->execute(['query' => 'q', 'description' => 'test']);
 
-                return $tool->url;
+                return $url;
             };
 
             $this->assertStringStartsWith('https://from-env.example/search?', $seen(null));
@@ -196,24 +175,36 @@ final class WebSearchToolTest extends TestCase
         }
     }
 
+    /**
+     * The assembled digest for one canned SearXNG payload, driven all the way
+     * through execute() with only the HTTP call stubbed. This replaced six
+     * tests that reached into the old private `formatResults()` by reflection;
+     * the formatting now begins where a backend's pieces end, so the honest
+     * way to pin it is through the tool itself.
+     *
+     * @param array<mixed> $data
+     */
+    private function digestOf(array $data, int $maxResults = 10): string
+    {
+        $tool = new WebSearch(
+            'http://example.com/search',
+            maxResults: $maxResults,
+            resolveAddresses: static fn (string $host): array => ['93.184.215.14'],
+            transport: static fn (array $request, string $dial): array => [json_encode($data), ['HTTP/1.1 200 OK']],
+        );
+        $result = $tool->execute(['query' => 'test', 'description' => 'test']);
+        $this->assertFalse($result->isError(), $result->content());
+
+        return $result->content();
+    }
+
     public function testFormatResultsHandlesEmptyData(): void
     {
-        $tool = new WebSearch();
-        $reflection = new \ReflectionClass($tool);
-        $method = $reflection->getMethod('formatResults');
-        $method->setAccessible(true);
-
-        $result = $method->invoke($tool, []);
-        $this->assertSame('No results found for the query.', $result);
+        $this->assertSame('No results found for the query.', $this->digestOf([]));
     }
 
     public function testFormatResultsHandlesFullData(): void
     {
-        $tool = new WebSearch();
-        $reflection = new \ReflectionClass($tool);
-        $method = $reflection->getMethod('formatResults');
-        $method->setAccessible(true);
-
         $data = [
             'query' => 'test query',
             'results' => [
@@ -227,7 +218,7 @@ final class WebSearchToolTest extends TestCase
             'unresponsive_engines' => ['engine1'],
         ];
 
-        $result = $method->invoke($tool, $data);
+        $result = $this->digestOf($data);
 
         $this->assertStringContainsString('Search query: test query', $result);
         $this->assertStringContainsString('Direct answers:', $result);
@@ -240,11 +231,6 @@ final class WebSearchToolTest extends TestCase
 
     public function testFormatResultsTruncatesLongContent(): void
     {
-        $tool = new WebSearch();
-        $reflection = new \ReflectionClass($tool);
-        $method = $reflection->getMethod('formatResults');
-        $method->setAccessible(true);
-
         $longContent = str_repeat('a', 300);
         $data = [
             'results' => [
@@ -252,25 +238,19 @@ final class WebSearchToolTest extends TestCase
             ],
         ];
 
-        $result = $method->invoke($tool, $data);
+        $result = $this->digestOf($data);
         $this->assertStringContainsString('...', $result);
         $this->assertStringNotContainsString(str_repeat('a', 250), $result);
     }
 
     public function testFormatResultsLimitsTo10Results(): void
     {
-        $tool = new WebSearch();
-        $reflection = new \ReflectionClass($tool);
-        $method = $reflection->getMethod('formatResults');
-        $method->setAccessible(true);
-
         $results = [];
         for ($i = 1; $i <= 15; $i++) {
             $results[] = ['title' => "Result $i", 'url' => "https://example.com/$i", 'content' => 'content'];
         }
-        $data = ['results' => $results];
 
-        $result = $method->invoke($tool, $data);
+        $result = $this->digestOf(['results' => $results]);
         $this->assertStringContainsString('... and 5 more results', $result);
         $this->assertStringNotContainsString('Result 11', $result);
     }
@@ -342,23 +322,12 @@ final class WebSearchToolTest extends TestCase
 
     public function testFormatResultsHandlesEmptyResults(): void
     {
-        $tool = new WebSearch();
-        $reflection = new \ReflectionClass($tool);
-        $method = $reflection->getMethod('formatResults');
-        $method->setAccessible(true);
-
-        $data = ['query' => 'test', 'results' => []];
-        $result = $method->invoke($tool, $data);
+        $result = $this->digestOf(['query' => 'test', 'results' => []]);
         $this->assertStringContainsString('Search query: test', $result);
     }
 
     public function testFormatResultsHandlesAllNullFields(): void
     {
-        $tool = new WebSearch();
-        $reflection = new \ReflectionClass($tool);
-        $method = $reflection->getMethod('formatResults');
-        $method->setAccessible(true);
-
         $data = [
             'query' => null,
             'results' => null,
@@ -368,8 +337,7 @@ final class WebSearchToolTest extends TestCase
             'infoboxes' => null,
             'unresponsive_engines' => null,
         ];
-        $result = $method->invoke($tool, $data);
-        $this->assertSame('No results found for the query.', $result);
+        $this->assertSame('No results found for the query.', $this->digestOf($data));
     }
 
     public function testRejectsLocalhostEndpoint(): void
@@ -410,17 +378,11 @@ final class WebSearchToolTest extends TestCase
 
     public function testFormatResultsUsesConfigurableMaxResults(): void
     {
-        $tool = new WebSearch('http://example.com/search', maxResults: 3);
-        $reflection = new \ReflectionClass($tool);
-        $method = $reflection->getMethod('formatResults');
-        $method->setAccessible(true);
-
         $results = [];
         for ($i = 1; $i <= 5; $i++) {
             $results[] = ['title' => "Result $i", 'url' => "https://example.com/$i", 'content' => 'content'];
         }
-        $data = ['results' => $results];
-        $result = $method->invoke($tool, $data);
+        $result = $this->digestOf(['results' => $results], maxResults: 3);
 
         // With maxResults=3, only 3 should appear
         $this->assertStringContainsString('Result 1', $result);
