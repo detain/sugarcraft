@@ -1421,7 +1421,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-9.b`
 
-#### C-TOOL-3.b — TUI paints the live shell tail
+#### ✅ 1999f4114 C-TOOL-3.b — TUI paints the live shell tail
 - **Item:** C-TOOL-3 (sources: GAP-SH-08, k2-sum live defect, k2-dorm) · dormant-wire · effort M
 - **What:** `Chat.php` records `ToolProgress` and discards it in both folds: `applyBackendToolEvent()` :3702 (settled queue) and `pumpLiveToolEvents()` :4230 (live pump; the comment says "The TUI paints no live tail this wave"). Both arms …
 - **Files — create:** `candy-code/tests/Renderer/RunningToolTailTest.php`, `candy-code/tests/Chat/ToolTailFoldTest.php`

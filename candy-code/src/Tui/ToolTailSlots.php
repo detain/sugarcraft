@@ -19,9 +19,10 @@ namespace SugarCraft\Code\Tui;
  * frame that arrives late (or belongs to an earlier write of a recycled id)
  * can never repaint the row backwards.
  *
- * LEAK LAW: every slot is cleared when its tool call settles (replaceToolRunningPlaceholder) and on session resets. Nothing in
- * here is ever serialized, persisted, or replayed from the session store; the
- * bytes exist only as long as the render is in flight.
+ * LEAK LAW: every slot is cleared when its tool call settles
+ * (replaceToolRunningPlaceholder); the MAX_SLOTS cap bounds anything else.
+ * Nothing in here is ever serialized, persisted, or replayed from the
+ * session store; the bytes exist only as long as the render is in flight.
  */
 final class ToolTailSlots
 {

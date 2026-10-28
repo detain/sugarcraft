@@ -5774,7 +5774,6 @@ final class Renderer
      */
     private const TAIL_LINES = 6;
 
-
     /**
      * The live lines of the runs under one Task row (roadmap P-B2), each on
      * its own row after a newline, or '' when there are none to draw. Queued
