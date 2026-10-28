@@ -54,10 +54,12 @@ candy-code/tests/Server/HookWebhooksTest.php	5.749	12
 candy-code/tests/Providers/TransientFailureTest.php	5.581	57
 candy-code/tests/Host/CompactionFallbackParityTest.php	5.562	7
 candy-code/tests/Agents/AgentWorkerPoolTest.php	5.395	50
+candy-code/tests/Context/InstructionVisibilityNoticeTest.php	5.329	12
 candy-code/tests/Cli/HelpTest.php	5.276	90
 candy-code/tests/Backend/CacheReusingSummaryBackendTest.php	5.148	11
 candy-code/tests/Support/DescriptorInheritanceGuardTest.php	5.147	15
 candy-code/tests/Config/AccessorDeprecationTest.php	5.117	729
+candy-code/tests/Chat/InstructionQuickAddTest.php	5.111	16
 candy-code/tests/Support/InterpolationOpenerTokenTest.php	5.109	6
 candy-code/tests/Cli/LoginSubcommandTest.php	5.097	17
 candy-code/tests/Support/ProcessUniqueTempNameTest.php	5.035	17
@@ -77,8 +79,6 @@ candy-code/tests/Agents/AgentTest.php	4.162	40
 candy-code/tests/Agents/SubAgentProviderErrorSurfacingTest.php	4.115	13
 candy-code/tests/Tools/BuiltIn/BashTimeoutTest.php	4.069	18
 candy-code/tests/Context/EnvironmentBlockGitTimeoutTest.php	4.040	3
-candy-code/tests/Context/InstructionVisibilityNoticeTest.php	5.329	12
-candy-code/tests/Chat/InstructionQuickAddTest.php	5.111	16
 candy-code/tests/Chat/ExecuteAgentsTimeoutTest.php	4.006	2
 candy-code/tests/Server/RequestIngressTest.php	3.979	4
 candy-code/tests/ClaudeCodeMcpClientShutdownTest.php	3.895	7

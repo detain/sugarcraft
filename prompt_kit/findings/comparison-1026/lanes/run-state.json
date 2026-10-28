@@ -157,31 +157,28 @@
    "worktree": "/home/sites/cc-cmp-C-EXT-3.d"
   },
   "C-EXT-3.e": {
+   "stage": "review",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-C-EXT-3.e",
    "branch": "cc/C-EXT-3.e",
-   "note": "W21 self-learning SkillWorkshop tool; R-EXT-2 ANSWERED: go live immediately with announce-and-undo; base e6188662a refresh rc0",
-   "round": 0,
-   "session": "ses_e7b6585cdffe6h1AbeWlk2tm28",
-   "stage": "build",
-   "tip": null,
-   "worktree": "/home/sites/cc-cmp-C-EXT-3.e"
+   "session": "ses_e7b40799cffeb38iPy2o3CnUHZ",
+   "note": "build f18b8cd86@e6188662a 22f +1782/-31 clean; R-EXT-2 live+announce+undo; r1 reviewer live (ChatHostLangCatalogue 1F foreign base-proven claim to re-derive). Carries if clean: DUR x3 LearnedSkills/SkillWorkshop/SkillsHistoryUndo, +32T, §4 f18b8cd86, PromptCatalog/BinSugarcrush brief-filters were phantoms."
   },
   "C-EXT-4.c": {
+   "stage": "review",
+   "round": 2,
+   "worktree": "/home/sites/cc-cmp-C-EXT-4.c",
    "branch": "cc/C-EXT-4.c",
-   "note": "FRESH builder @cd87233d0 (prior LANDED narrative PHANTOM; honest stop-record real: NAME_PATTERN rejects colons -> lead-APPROVED widening ONE leading [A-Za-z0-9][A-Za-z0-9_-]*: segment, cite ruling in commit; NEW BundleCommandNamespaceTest two-bundle matrix)",
-   "round": 0,
-   "session": "ses_e7b7d49a9ffenAO2eTxu76O3jo",
-   "stage": "build",
-   "tip": null,
-   "worktree": "/home/sites/cc-cmp-C-EXT-4.c"
+   "session": "ses_e7b41d20fffedJZIH9wUfqPeju",
+   "note": "fix d19029a14 verified real (parent 896f09903, detain, 4f incl tracked lane REPORT, tree clean). r2 delta reviewer live. Weld carries: DUR BundleCommandNamespaceTest row 7->9T, +9T, §4 d19029a14."
   },
   "C-EXT-4.d": {
+   "stage": "review",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-C-EXT-4.d",
    "branch": "cc/C-EXT-4.d",
-   "note": "W21 bundle recommendations launch row; offline-only, once/project/pin stamp; cap-census+emitter+format flips in-step",
-   "round": 0,
-   "session": "ses_e7b63eb9affeRMVntMe2QZqfuc",
-   "stage": "build",
-   "tip": null,
-   "worktree": "/home/sites/cc-cmp-C-EXT-4.d"
+   "session": "ses_e7b3fc6b5ffeowjATU6B2ovxps",
+   "note": "build 232ae55e4@e6188662a 6f +653/-9 clean; r1 live: stamp-drop deviation, never-network audit, PAGE_QUOTES base-red re-prove (NOT on standing roster before), rebase-collision scan vs master Bootstrap census numerals. Carries: DUR row, +11T, PLUGINS DOC-ROW at weld, §4 232ae55e4."
   },
   "C-EXT-6.a": {
    "branch": "cc/C-EXT-6.a",
@@ -211,11 +208,12 @@
    "worktree": "/home/sites/cc-cmp-C-SES-7.e"
   },
   "C-TOOL-2.b": {
-   "stage": "clean",
+   "stage": "fix",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-TOOL-2.b",
    "branch": "cc/C-TOOL-2.b",
-   "note": "r1 CLEAN 0C/0M/3MINOR (2 narrative-truth step-local + 1 accepted scope) -> FIXER r1: REPORT narrative fixes (resolve-timing claim, 323T figure) cheap; then batch-8. Welder carries DUR x2 WebSearchBackendTest+WebSearchFactoryTest, +28T, §4 eaae19bdc, COLLISION flag vs EXT-4.c (README/LAYERED/ENVIRONMENT numerals), gen-settings-doc --check post-pick, re-run 9 guard reds at master."
+   "session": "ses_e7b4034d4ffeqqfk2o7bl0Lv3c",
+   "note": "BOTH r1 twins CLEAN; fixer = REPORT-truth only (resolve-timing, 323T re-run/name, 171T filter name), tracked-REPORT follow-up commit. Weld carries: DUR x2, +28T/+~136A, §4 eaae19bdc, COLLISION vs PRV-3.a shared README/SETTINGS/ENV/en/LayeredSettings -> weld TOOL-2.b AFTER PRV-3.a, gen-settings-doc+trio at tip both-in; foreign battery red SettingsEditorTest caused by e36d86d84 (C-TOOL-7.c) -> closeout owner."
   },
   "C-WEB-4.b": {
    "branch": "cc/C-WEB-4.b",
@@ -334,7 +332,7 @@
  ],
  "standing_reds_b985fbe51": "ADD: ChatHostLangCatalogueTest red on chat.effort.launch_unshaped (asker LaunchContext.php:2109 outside sources()) - byte-identical at base, C-PRV-1.b (a992413b0) seam -> closeout roster",
  "status": "RUNNING",
- "tick": "236-TOOL-2b-clean-r1",
+ "tick": "239-EXT-4d-r1-live; 10/10 (welder-b7, 2 builders, 4 reviewers, 3 fixers) | BATCH-7-DONE by welder: C-CTX-3.b d665c01e5, C-CTX-2.f b138e5c73, C-CTX-5.a 2123c6582, C-WEB-4.e fb3bc2a26; all four pruned; closeout repositioned lane-1/2 durations rows (asc-violations back to 4)",
  "tip": "0f58a906f",
  "updated": "2026-10-28 batch-5 weld step 6",
  "wave_loops": {
