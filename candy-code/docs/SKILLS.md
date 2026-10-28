@@ -782,7 +782,9 @@ the review. Three doors make that safe rather than merely fast:
   `~/.candy-code/skills/<name>/history/<n>.md` *before* writing the live
   file, so no live state exists that the history does not already hold.
   `undo` restores the previous revision (or, for revision 1, removes the
-  skill whole); `history` prints the window. The newest
+  skill whole — and when the filesystem denies one of those removals, undo
+  fails loudly naming the bytes that survived instead of claiming a removal
+  it did not finish); `history` prints the window. The newest
   `LearnedSkills::MAX_REVISIONS` revisions stay active and older ones move
   whole to `history/archive/` — the undo door is bounded, the record is not.
 

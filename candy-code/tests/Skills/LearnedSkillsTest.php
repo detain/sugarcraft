@@ -208,6 +208,83 @@ final class LearnedSkillsTest extends TestCase
         self::assertDirectoryDoesNotExist($dir . '/history');
     }
 
+    /**
+     * A removal the filesystem denies is an error, never a silent "removed".
+     * With the skill directory itself sealed (no write permission) the live
+     * file survives its unlink leg and undo raises before touching anything
+     * else; with the history directory sealed the revision survives instead,
+     * and the raised refusal names it while the saved bytes stay whole for a
+     * retry. Under root the seals do not bite — the same pins then assert
+     * the honest-success polarity (the AtomicEditWriteTest precedent), so
+     * the test never skips and never passes vacuously.
+     */
+    public function testUndoOfTheSoleRevisionRefusesLoudlyWhenARemovalIsBlocked(): void
+    {
+        $asRoot = \function_exists('posix_geteuid') && \posix_geteuid() === 0;
+
+        // Leg 1: the live file cannot go. Sealing the skill directory also
+        // blocks the later rmdir legs, so this asserts the pre-state refusal
+        // only; the retry below lifts the seal and runs the undo to its end.
+        $this->store->create(SkillProposal::new('undo-stuck-live', 'Sealed live file.', 'Body.'));
+        $dir = $this->root . '/undo-stuck-live';
+        self::assertTrue(chmod($dir, 0500), 'the seal must apply');
+
+        if ($asRoot) {
+            $through = $this->store->undo('undo-stuck-live');
+            self::assertSame('removed', $through['action'], 'root ignores the mode, so the undo simply succeeds');
+            self::assertNull($through['residue']);
+        } else {
+            $liveStuck = null;
+            try {
+                $this->store->undo('undo-stuck-live');
+            } catch (\RuntimeException $e) {
+                $liveStuck = $e;
+            }
+            self::assertTrue(chmod($dir, 0700), 'the seal must lift for the asserts and tearDown');
+            self::assertNotNull($liveStuck, 'undo must refuse loudly when the live file cannot be removed');
+            self::assertStringContainsString('cannot remove the live file', $liveStuck->getMessage());
+            self::assertFileExists($dir . '/SKILL.md', 'the refusal says nothing was removed, and it is true');
+            self::assertFileExists($dir . '/history/1.md');
+
+            $done = $this->store->undo('undo-stuck-live');
+            self::assertSame('removed', $done['action']);
+            self::assertDirectoryDoesNotExist($dir, 'the retry after the seal completes the removal');
+        }
+
+        // Leg 2: the revision file cannot go. The live file is removed first
+        // (the write law in reverse), so the saved bytes are the survivor and
+        // the refusal must name them rather than claim a finished removal.
+        $this->store->create(SkillProposal::new('undo-stuck-head', 'Sealed head.', 'Body.'));
+        $dir = $this->root . '/undo-stuck-head';
+        $history = $dir . '/history';
+        self::assertTrue(chmod($history, 0500), 'the seal must apply');
+
+        if ($asRoot) {
+            $through = $this->store->undo('undo-stuck-head');
+            self::assertSame('removed', $through['action'], 'root ignores the mode, so the undo simply succeeds');
+            self::assertNull($through['residue']);
+
+            return;
+        }
+
+        $headStuck = null;
+        try {
+            $this->store->undo('undo-stuck-head');
+        } catch (\RuntimeException $e) {
+            $headStuck = $e;
+        }
+        self::assertTrue(chmod($history, 0700), 'the seal must lift for the retry and tearDown');
+        self::assertNotNull($headStuck, 'undo must refuse loudly when the head revision cannot be removed');
+        self::assertStringContainsString('cannot remove revision 1', $headStuck->getMessage());
+        self::assertFileDoesNotExist($dir . '/SKILL.md', 'the live file was already removed by the half-applied undo');
+        self::assertFileExists($history . '/1.md', 'the saved bytes survive a refused removal — undo is retryable');
+
+        $done = $this->store->undo('undo-stuck-head');
+        self::assertSame('removed', $done['action']);
+        self::assertSame(0, $done['revision']);
+        self::assertDirectoryDoesNotExist($dir, 'the retry completes the removal with nothing left mislabelled');
+    }
+
     /** A skill that arrived another way has nothing saved to undo. */
     public function testUndoWithoutSavedHistoryRefuses(): void
     {

@@ -220,13 +220,17 @@ final class LearnedSkills
      *    drop revision N (the window shrinks by the undone head);
      *  - sole revision 1: the skill only ever existed as a learned one —
      *    remove SKILL.md and the history; the skill directory is pruned only
-     *    when empty, so files the user added beside it are never deleted;
+     *    when empty, so files the user added beside it are never deleted. A
+     *    removal the filesystem denies is RAISED, naming what survived —
+     *    never reported as a removal whose bytes are still sitting there;
      *  - no saved revision: refused (a hand-written or accepted-draft skill
      *    has no undo through this store).
      *
      * @return array{action: string, name: string, revision: int, path: string, residue: ?string}
      *
-     * @throws \RuntimeException when the skill has nothing saved to undo
+     * @throws \RuntimeException when the skill has nothing saved to undo, or
+     *         when one of the head's files cannot be removed (the refusal
+     *         names exactly what survived the half-applied undo)
      */
     public function undo(string $name): array
     {
@@ -244,14 +248,37 @@ final class LearnedSkills
         $head = (int) max($numbers);
 
         if ($head === 1) {
+            // Removal walks the write law in reverse: the live file goes
+            // FIRST, while the history still covers its bytes, then the
+            // revision it was copied from. Each leg checks its own result —
+            // a denial is raised with the surviving path named, because a
+            // false "removed" would mislabel every later history read, and
+            // the file_exists() re-read keeps the check honest for a file
+            // that was already gone (a retry after a raised refusal, or a
+            // live file the user deleted by hand).
             $file = $dir . '/SKILL.md';
-            @unlink($file);
-            @unlink($dir . '/' . self::HISTORY_SUBDIR . '/1.md');
+            if (@unlink($file) === false && file_exists($file)) {
+                throw new \RuntimeException(sprintf(
+                    'cannot remove the live file of "%s" to undo it — %s is still there and nothing was removed',
+                    $name,
+                    $file,
+                ));
+            }
+            $revision = $dir . '/' . self::HISTORY_SUBDIR . '/1.md';
+            if (@unlink($revision) === false && file_exists($revision)) {
+                throw new \RuntimeException(sprintf(
+                    'cannot remove revision 1 of "%s" to undo it — the live file is gone but the saved revision survives at %s; run undo again once the block clears',
+                    $name,
+                    $revision,
+                ));
+            }
             @rmdir($dir . '/' . self::HISTORY_SUBDIR);
             $residue = null;
             if (!@rmdir($dir)) {
-                // Only an empty tree is fully undone; anything else the
-                // directory holds was not ours to delete.
+                // Both recorded files are gone by this point; a directory
+                // that survives holds only what the store never wrote, so
+                // the report names the residue rather than the unlink legs
+                // needing one.
                 clearstatcache(true, $dir);
                 $residue = is_dir($dir) ? $dir : null;
             }
