@@ -42,12 +42,14 @@ candy-code/tests/Integration/McpToolWiringTest.php	6.462	33
 candy-code/tests/Config/StatusLineCommandTest.php	6.432	41
 candy-code/tests/Backend/ReasoningProgressTest.php	6.277	16
 candy-code/tests/Sessions/BackgroundSupervisorStopTest.php	6.186	8
+candy-code/tests/Server/SessionArchiveMethodsTest.php	6.174	7
 candy-code/tests/Host/GoalHostLoopTest.php	6.134	8
 candy-code/tests/Sessions/BackgroundSessionRunnerTest.php	6.089	31
 candy-code/tests/RuntimeTest.php	6.087	153
 candy-code/tests/Agents/EngineExecutorTest.php	6.046	17
 candy-code/tests/Workflows/WorkflowPauseResumeTest.php	6.023	13
 candy-code/tests/Session/SessionStoreTest.php	5.977	45
+candy-code/tests/Server/SessionImportMethodTest.php	5.974	9
 candy-code/tests/Cli/BootstrapToolAndPermissionSettingsTest.php	5.888	57
 candy-code/tests/Sessions/BackgroundShellRegistryTest.php	5.839	18
 candy-code/tests/Server/HookWebhooksTest.php	5.749	12

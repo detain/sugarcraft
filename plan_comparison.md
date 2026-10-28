@@ -2388,7 +2388,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - protocol lanes: C-SES-7.e (weld regenerates schema → SERVER.md → generated.ts once)
 - Chat.php region claims: C-CTX-3.a (READ_ONLY_COMMANDS, handleInstructionsCommand (new), memoryOpenArm region); C-EXT-3.d (handleAgentsCommand)
 
-#### C-SES-7.e — Protocol: `session.import`, ephemeral `session.create`, archive/unarchive + list filter
+#### ✅ 14bb7487f C-SES-7.e — Protocol: `session.import`, ephemeral `session.create`, archive/unarchive + list filter
 - **Item:** C-SES-7 (sources: GAP-SES-14 (server half), GAP-SES-N1 (serve half), OC-new#8, GAP-SES-10) · gap · effort M
 - **What:** One protocol lane carries three server surfaces, plus the web side. **(1) `session.import {format, content, name?}`** (Write, idempotent). It runs the C-SES-7.a importer in-process and answers the new summary. It is bounded by …
 - **Files — create:** `candy-code/tests/Server/SessionImportMethodTest.php`, `candy-code/tests/Server/SessionArchiveMethodsTest.php`
