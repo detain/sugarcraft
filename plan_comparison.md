@@ -1344,7 +1344,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - protocol lanes: C-SEC-5.b (weld regenerates schema → SERVER.md → generated.ts once)
 - Chat.php region claims: C-TOOL-3.b (applyBackendToolEvent, pumpLiveToolEvents, replaceToolRunningPlaceholder)
 
-#### C-MCP-2.a — `@mcp:` mentions in serve and `-p`; MCP prompt commands in serve
+#### ✅ 51812d155 C-MCP-2.a — `@mcp:` mentions in serve and `-p`; MCP prompt commands in serve
 - **Item:** C-MCP-2 (sources: GAP-MCP-06, GAP-MCP-07, GAP-CMD-09, MCP-1-P1, p1-miss "MCP surfaces in serve/web and -p", k2-dorm `ContextMentions`/`McpPromptCommands`) · dormant-wire · effort M
 - **What:** Root cause: only Chat passes an MCP provider. `TurnController::userTurnMessage()` already accepts `$mcpProvider` and arms `withMcpReader` (`candy-code/src/Host/TurnController.php:1032-1075`), but `SessionHost::admitPrompt` omits …
 - **Files — create:** `candy-code/tests/Host/SessionHostMcpSurfaceTest.php`
