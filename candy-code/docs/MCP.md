@@ -608,7 +608,7 @@ Sharing is made safe in the transport:
   skips the fragment of a half-read reply.
 - **Server-initiated traffic on a stdio stream is answered in place (C-MCP-3).**
   A `ping` is answered, `roots/list` names the spawn directory the entry was
-  approved for, `elicitation/create` is declined-with-cancel unless the caller
+  approved for, `elicitation/create` is answered `cancel` unless the caller
   passed per-call answers, `notifications/progress` is absorbed, and any other
   request gets an honest `Method not found` — never silence. Answers are
   written while the exchange lock is held, so a server that waits mid-call for

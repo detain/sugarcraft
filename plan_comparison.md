@@ -1619,7 +1619,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-TOOL-1.a (W1), C-TOOL-7.a (W5)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tool.md` → `### C-TOOL-3.c`
 
-#### C-MCP-3.a — Server-request seam: ping, roots, elicitation, progress (library + core)
+#### ✅ e71d398aa C-MCP-3.a — Server-request seam: ping, roots, elicitation, progress (library + core)
 - **Item:** C-MCP-3 (sources: GAP-MCP-08, p1-miss "MCP elicitation/sampling/roots/logging/ping", OC-new#1, CC-new#2) · gap · effort M
 - **What:** Today the client advertises `capabilities: {}` (`sugar-mcp-client/src/StdioMcpServer.php:408-414`), and `readResponse()` skips every method-bearing frame unanswered (`:1106-1160`), so a server's `ping`, `roots/list` or …
 - **Files — create:** `candy-code/src/MCP/AnswersServerRequests.php`, `candy-code/src/MCP/McpServerRequests.php`, `candy-code/src/MCP/McpElicitation.php`, `sugar-mcp-client/tests/StdioMcpServerServerRequestTest.php`, `sugar-mcp-client/tests/Fixtures/server_request_server.php`, `candy-code/tests/MCP/McpServerRequestsTest.php`, `candy-code/tests/MCP/McpElicitationTest.php`
