@@ -1173,8 +1173,8 @@ written against; the zone names are the live `*_ZONE_PREFIX` constants):
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
-│ menu bar            L1 titles `menu:`, items `menuitem:`,     │  ← dropdowns
-│                     pane tabs `panetab:`                      │
+│ menu bar  titles `menu:`, items `menuitem:`, Panes rows       │  ← dropdowns
+│           `panetab:`, the `Currently:` door `panesmenu`       │
 ├──────────────────────────────────────────────────────────────┤
 │ session tabs `tab:` — one row per open session                │  ← L2
 ├───────────────────────────────┬──────────────────────────────┤
@@ -1197,12 +1197,15 @@ Keyboard focus order and meaning:
 - **Tab** (`shell.pane-next`) cycles the highlighted **docked pane**; a pane's
   border marks it focused. While the transcript holds focus, typing goes to
   the input; navigation keys move through panes first.
-- **menu bar** holds the drop-down titles; **pane tabs** select a docked pane
-  by name (Agents, Todo, Background, Workflows, Memory); **session tabs**
-  switch whole sessions.
+- **menu bar** holds the drop-down titles; **View ▸ Panes** toggles a pane's
+  docking from its row (the list is the tab cycle — Chat, Files, Tools,
+  Skills, Agents, Settings, Todo, Context), reached by click or keyboard;
+  the bar's right-end `Currently:` indicator is that menu's door;
+  **session tabs** switch whole sessions.
 - **dividers** between panes are grab targets: dragging one resizes the
-  panes either side; grabbing a pane's header or its `panetab:` row drags the
-  pane to a new dock position.
+  panes either side; grabbing a pane's header or its View ▸ Panes row (the
+  same `panetab:` zone since P-MENU.e) drags the pane to a new dock
+  position.
 - **overlays** intercept every key while open — Esc closes the top-most one;
   the palette's rows are arrow-key navigable before Enter picks.
 

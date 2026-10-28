@@ -17,11 +17,13 @@ use SugarCraft\Code\Renderer as LiveRenderer;
 use SugarCraft\Code\Tui\Components\MenuBar;
 use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Tui\Renderer as TuiRenderer;
+use SugarCraft\Code\Tests\Support\CarriesStandardFrameTrait;
 use SugarCraft\Constraints\Dock\Side;
 use SugarCraft\Mouse\Zone;
 
 /**
- * Docking L2 feature 1 — a completed click on a menu-bar pane-tab label
+ * Docking L2 feature 1, P-MENU.e surface — a completed click on a
+ * View ▸ Panes toggle row (which carries the old tabs' `panetab:` zone)
  * toggles that pane's docked visibility, through the ONE dock entry point.
  *
  * The clicks are driven end-to-end (render the frame → read the zone the
@@ -34,14 +36,12 @@ use SugarCraft\Mouse\Zone;
  *
  * Focus semantics pinned here: docking focuses the pane that just appeared;
  * undocking the focused pane drops focus to Chat (togglePaneDocking's own
- * rule); Chat's label only ever moves focus — the center column has no dock
+ * rule); Chat's row only ever moves focus — the center column has no dock
  * slot to toggle away, and the layout bytes prove it stays untouched.
  */
 final class MenuBarPaneTabClickTest extends TestCase
 {
-    private const FRAME_COLS = 120;
-
-    private const FRAME_ROWS = 40;
+    use CarriesStandardFrameTrait;
 
     private ProviderInterface $provider;
 
@@ -61,6 +61,10 @@ final class MenuBarPaneTabClickTest extends TestCase
         putenv('CANDY_CODE_DISABLE_MOUSE');
         putenv('CANDY_CODE_DISABLE_MOUSE_CLICKS');
 
+        // P-MENU.e: a row tap leaves the submenu open (R-MENU-3) — the door
+        // this class now taps opens a real menu, so the cursor is class state
+        // to surrender, exactly like the scanners'.
+        MenuBar::closeMenu();
         TuiRenderer::setSize(200, 60);
         TuiRenderer::chromeScanner()->clear();
         LiveRenderer::scanner()->clear();
@@ -74,6 +78,8 @@ final class MenuBarPaneTabClickTest extends TestCase
 
     protected function tearDown(): void
     {
+        MenuBar::closeMenu();
+
         putenv(
             $this->originalDisableMouse === false
                 ? 'CANDY_CODE_DISABLE_MOUSE'
@@ -196,12 +202,23 @@ final class MenuBarPaneTabClickTest extends TestCase
     }
 
     /**
-     * Press+release at the painted cell of the label's chrome zone and feed
-     * both messages through {@see App::update()} — the live routing, from the
-     * scan the last {@see TuiRenderer::renderView()} published.
+     * P-MENU.e moved the zone onto the View ▸ Panes row, so the drive opens
+     * the door first: render the frame → tap the painted `panesmenu`
+     * indicator → render again → press/release at the painted row cell, all
+     * through {@see App::update()} — the live routing, from the scan the last
+     * {@see TuiRenderer::renderView()} published. The submenu is left OPEN
+     * behind the toggle (R-MENU-3); this file's own assertions pin the dock
+     * state, PanesSubmenuToggleTest pins the open-ness row by row.
      */
     private function tapPaneTab(App $app, Pane $pane): App
     {
+        $this->render($app);
+        $door = TuiRenderer::chromeScanner()->get(MenuBar::PANES_DOOR_ZONE);
+        self::assertNotNull($door, 'fixture: the painted bar marked the indicator door');
+
+        [$app] = $app->update(new MouseClickMsg($door->startCol, $door->startRow, MouseButton::Left, MouseAction::Press));
+        [$app] = $app->update(new MouseReleaseMsg($door->startCol, $door->startRow, MouseButton::Left, MouseAction::Release));
+
         $this->render($app);
         $zone = $this->paneTabZone($pane);
 
@@ -214,7 +231,7 @@ final class MenuBarPaneTabClickTest extends TestCase
     private function paneTabZone(Pane $pane): Zone
     {
         $zone = TuiRenderer::chromeScanner()->get(MenuBar::PANE_TAB_ZONE_PREFIX . $pane->value);
-        self::assertNotNull($zone, 'fixture: the painted bar marked panetab:' . $pane->value);
+        self::assertNotNull($zone, 'fixture: the open Panes rows carried panetab:' . $pane->value);
 
         return $zone;
     }

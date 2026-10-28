@@ -8,6 +8,7 @@ use SugarCraft\Code\App\App;
 use SugarCraft\Code\Commands\CommandRegistry;
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Tui\Components\MenuBar;
 use SugarCraft\Code\Tui\Pane;
 
 /**
@@ -321,8 +322,15 @@ final class ShellMenu
     /**
      * View ▸ Panes ▸: one toggle per tab-cycle pane, checks read off the App.
      * Chat is focus-only but always on screen (the frame's center column,
-     * never a dock slot), so — exactly like `MenuBar::paneTabs()`'s enabled
-     * rule — its check is on whenever there is an App to ask.
+     * never a dock slot), so its check is on whenever there is an App to ask.
+     *
+     * P-MENU.e: this is now the ONE pane-toggle surface. Each row carries
+     * {@see MenuBar::PANE_TAB_ZONE_PREFIX} as its node zone, so the marked
+     * twin paints the row with the same `panetab:<value>` click zone the old
+     * menu-bar tab had — the shell's click and drag-to-dock arms keep
+     * working off the row untouched. The tab's three visual states live on
+     * as the cascade's native ones: the highlighted row is `shellPrimary`
+     * bold, a docked row checks ✓, an undocked row is blank.
      *
      * @return list<MenuNode>
      */
@@ -336,6 +344,7 @@ final class ShellMenu
                 $pane->label(),
                 $a !== null && (!$pane->dockable() || $a->isDocked($pane)),
                 $pane->icon(),
+                zone: MenuBar::PANE_TAB_ZONE_PREFIX . $pane->value,
             );
         }
 

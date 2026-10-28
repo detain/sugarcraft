@@ -278,11 +278,19 @@ final class SettingsPaneTest extends TestCase
         $this->assertStringContainsString('/settings', $frame);
     }
 
-    /** And the bar advertises it, so Tab and the strip agree. */
-    public function testTheTabStripAdvertisesSettings(): void
+    /** And View ▸ Panes advertises it, so Tab and the menu agree (P-MENU.e: the bar's tab strip retired). */
+    public function testTheViewPanesMenuAdvertisesSettings(): void
     {
-        $bar = Ansi::strip(\SugarCraft\Code\Tui\Components\MenuBar::render($this->app(), 200));
+        $tree = \SugarCraft\Code\Tui\Menu\ShellMenu::tree($this->app());
+        $absolute = $tree->pathOf('pane:' . Pane::Settings->value);
 
-        $this->assertStringContainsString('[' . Pane::Settings->icon() . ' Settings]', $bar);
+        $this->assertNotNull($absolute, 'the View ▸ Panes rows carry a Settings toggle');
+        $node = $tree->node($absolute);
+        $this->assertNotNull($node);
+        $this->assertSame('Settings', $node->label);
+        $this->assertSame(
+            \SugarCraft\Code\Tui\Components\MenuBar::PANE_TAB_ZONE_PREFIX . Pane::Settings->value,
+            $node->zone,
+        );
     }
 }

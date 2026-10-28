@@ -12,6 +12,7 @@ use SugarCraft\Code\Theme;
 use SugarCraft\Code\Tui\Menu\MenuCascade;
 use SugarCraft\Code\Tui\Menu\MenuCursor;
 use SugarCraft\Code\Tui\Menu\MenuNode;
+use SugarCraft\Code\Tui\Menu\MenuNodeKind;
 use SugarCraft\Code\Tui\Menu\MenuPanel;
 use SugarCraft\Code\Tui\Menu\MenuStep;
 use SugarCraft\Code\Tui\Menu\MenuTree;
@@ -20,8 +21,9 @@ use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Mouse\Mark;
 
 /**
- * The shell's top menu bar: the command menus on the left, the quick-switch
- * pane tabs and the current-pane indicator on the right.
+ * The shell's top menu bar: the command menus on the left, and on the right
+ * the `Currently:` pane indicator — itself the click door into View ▸ Panes,
+ * which owns the pane toggles (P-MENU.e).
  *
  * The menus come from {@see ShellMenu} — the five-title placement the plan
  * ruled (R-MENU-1) over the {@see MenuTree} the command registry feeds. The
@@ -51,17 +53,21 @@ final class MenuBar
     public const MENU_ITEM_ZONE_PREFIX = 'menuitem:';
 
     /**
-     * Zone-id prefix every clickable PANE-TAB label in the strip carries.
-     * The suffix is the pane's enum value, so the click routes through
+     * Zone-id prefix every View ▸ Panes toggle ROW carries (P-MENU.e).
+     * {@see \SugarCraft\Code\Tui\Menu\ShellMenu::paneRows()} sets it as the
+     * node zone, so {@see \SugarCraft\Code\Tui\Menu\MenuCascade} marks the
+     * painted row with THIS id instead of its own `menuitem:` dot path —
+     * the suffix is the pane's enum value, and the click routes through
      * {@see \SugarCraft\Code\Tui\Pane::tryFrom()} exactly like a docked
-     * pane's header zone does — and lands in the same
-     * `App::dispatchChromeClick()` door.
+     * pane's header zone does — landing in the same
+     * `App::dispatchChromeClick()` door. It is also the drag handle:
+     * `App::dragTargetPane()` reads this prefix off the row.
      *
      * What the click MEANS is the docking phase's rule: on a dockable
-     * pane's tab it toggles that pane's docked visibility through
-     * {@see \SugarCraft\Code\App\App::togglePaneFromChrome()} — the one door
-     * the View ▸ Panes menu row now shares — and on Chat's tab it focuses
-     * the always-visible center column without toggling anything, because
+     * pane's row it toggles that pane's docked visibility through
+     * {@see \SugarCraft\Code\App\App::togglePaneFromChrome()} and leaves the
+     * submenu open (R-MENU-3), and on Chat's row it focuses the
+     * always-visible center column without toggling anything, because
      * Chat has no dock slot to lose.
      */
     public const PANE_TAB_ZONE_PREFIX = 'panetab:';
@@ -105,37 +111,28 @@ final class MenuBar
     }
 
     /**
-     * Panes surfaced as quick-switch tabs in the bar, in display order.
-     *
-     * Each is also a click-to-toggle target ({@see PANE_TAB_ZONE_PREFIX}):
-     * a dockable one's tab shows its docked visibility (highlighted when
-     * docked, dimmed when not) and toggles it; Chat's tab only focuses the
-     * center column, which is always visible.
-     *
-     * @var list<Pane>
+     * Zone id the `Currently:` indicator carries in the marked twin: the
+     * bar's ONE door into View ▸ Panes (P-MENU.e). A completed click on it
+     * opens the View menu with the Panes row lit and its submenu previewed —
+     * {@see openPanesMenu()}, reached from `App::dispatchChromeClick()`.
      */
-    private const PANE_TABS = [
-        Pane::Chat,
-        Pane::Files,
-        Pane::Tools,
-        Pane::Skills,
-        Pane::Agents,
-        Pane::Settings,
-        Pane::Todo,
-        Pane::Context,
-    ];
+    public const PANES_DOOR_ZONE = 'panesmenu';
 
     /**
-     * The strip's three densities, widest first ({@see density()}): every tab
-     * `[icon Label]` beside `Currently: Label`; every tab its icon alone
-     * (`[icon]`) with the indicator still naming the focused pane; and, when
-     * even that would be cut, the indicator's bare label.
+     * Indicator folding (P-MENU.e, R-MENU-2): `Currently: <pane>` down to
+     * {@see INDICATOR_TERSE_FROM} columns, the focused pane's bare label
+     * from there, and GONE below it — so the five menu titles always come
+     * first. The indicator only ever APPEARS at widths where all five
+     * titles already fit (five titles spend 40 cells; the widest indicator
+     * the bar ever paints beside them costs 40+9+1 = 50), which is what
+     * makes {@see fold()}'s budget non-decreasing in $cols: widening the
+     * terminal can never take a title away. MenuBarCompactStripTest pins
+     * the sweep. Null $cols (a caller measuring the bar on its own) is the
+     * full spelling.
      */
-    private const DENSITY_FULL = 0;
+    private const INDICATOR_TERSE_FROM = 50;
 
-    private const DENSITY_ICONS = 1;
-
-    private const DENSITY_TERSE = 2;
+    private const INDICATOR_FULL_FROM = 61;
 
     /**
      * The whole menu state: which title is open, which row each open panel
@@ -189,9 +186,9 @@ final class MenuBar
     }
 
     /**
-     * The very same bar, with every menu title AND every pane-tab label
+     * The very same bar, with every menu title AND the pane-indicator door
      * wrapped in a sugar-mouse click zone ({@see MENU_TITLE_ZONE_PREFIX},
-     * {@see PANE_TAB_ZONE_PREFIX}).
+     * {@see PANES_DOOR_ZONE}).
      *
      * A SEPARATE render rather than a flag on the painted one, because the
      * sentinels are Private-Use cells that
@@ -213,18 +210,20 @@ final class MenuBar
     private static function compose(App $a, ?int $cols, bool $marked): string
     {
         $theme = $a->theme();
-        // The budget is measured on the PLAIN strip even in the marked pass:
-        // the zone sentinels are Private-Use cells Width counts as content,
-        // and the whole point of the marked twin is that its visible columns
-        // land where the painted ones do.
-        $density = self::density($a, $theme, $cols);
-        $tabsMeasure = self::paneTabs($a, $theme, false, $density);
+        // The budget is measured on the PLAIN indicator even in the marked
+        // pass: the zone sentinels are Private-Use cells Width counts as
+        // content, and the whole point of the marked twin is that its
+        // visible columns land where the painted ones do.
+        $indicator = self::indicator($a, $theme, false, $cols);
 
-        // The tab strip and the "Currently:" indicator are how the shell is
-        // navigated, so when the terminal cannot hold the whole bar it is the
-        // MENU NAMES that give way — dropped from the right, rarest-used
-        // first — instead of the navigational tail being cut off the end.
-        $budget = $cols === null ? null : $cols - Width::string($tabsMeasure) - 1;
+        // The indicator is how the shell's pane state is read, so when the
+        // terminal cannot hold the whole bar it is the MENU NAMES that give
+        // way — dropped from the right, rarest-used first — instead of the
+        // navigational tail being cut off the end. P-MENU.e made that giving
+        // way monotonic: the indicator is what folds away FIRST, and the
+        // five titles still fit at every width where an indicator appears at
+        // all ({@see INDICATOR_TERSE_FROM}; MenuBarCompactStripTest sweeps it).
+        $budget = $cols === null ? null : $cols - Width::string($indicator) - 1;
 
         [$roots, $folded] = self::fold(ShellMenu::tree($a)->menus, $budget);
         // Record what this frame's title row IS, so the cursor, the panels
@@ -250,7 +249,7 @@ final class MenuBar
         }
         $output .= ' ';
 
-        return $output . self::paneTabs($a, $theme, $marked, $density);
+        return $output . self::indicator($a, $theme, $marked, $cols);
     }
 
     /**
@@ -318,87 +317,33 @@ final class MenuBar
     }
 
     /**
-     * How dense the tab strip must be to fit $cols (roadmap 3.C remainder).
+     * The bar's right end: the `Currently:` indicator, and nothing else
+     * (P-MENU.e — the pane-tab strip it used to carry moved into the
+     * View ▸ Panes submenu rows, the one list
+     * {@see \SugarCraft\Code\Tui\Pane::tabCycle()} feeds).
      *
-     * The full strip is about ninety cells since the Todo tab, so below
-     * roughly a hundred columns it left room for no menu at all — F10 opened
-     * a dropdown under a title nobody could see — and below ninety-odd it ran
-     * off the edge, where the frame's clip cut the "Currently:" indicator and
-     * then the tabs themselves. So the full strip is kept only while the
-     * FIRST menu still fits beside it; narrower, every tab shrinks to its
-     * icon (the indicator still names the focused pane, and every tab keeps
-     * its click zone); narrower still, the indicator drops its "Currently:"
-     * prefix. Null — a caller measuring the bar on its own — is the full
-     * strip.
+     * {@see INDICATOR_TERSE_FROM} documents the three widths: the full
+     * spelling, the focused pane's bare label, and gone. Null $cols — a
+     * caller measuring the bar on its own — is the full spelling. In the
+     * marked twin the line carries the {@see PANES_DOOR_ZONE} click zone.
+     * The per-tab visual states the strip used to carry (focused
+     * bold-underlined, docked full foreground, undocked muted) are told now
+     * by the Panes rows' check marks and the cascade's own row highlight —
+     * nothing lost, only moved.
      */
-    private static function density(App $a, Theme $theme, ?int $cols): int
+    private static function indicator(App $a, Theme $theme, bool $marked, ?int $cols): string
     {
-        if ($cols === null) {
-            return self::DENSITY_FULL;
+        if ($cols !== null && $cols < self::INDICATOR_TERSE_FROM) {
+            return '';
         }
 
-        $first = array_key_first(self::menus());
-        $menu = $first === null ? 0 : Width::string((string) $first) + 3;
-        // One leading cell, the first menu, the cell before the strip.
-        if ($cols >= 2 + $menu + Width::string(self::paneTabs($a, $theme, false, self::DENSITY_FULL))) {
-            return self::DENSITY_FULL;
-        }
+        $text = $cols !== null && $cols < self::INDICATOR_FULL_FROM
+            ? $a->pane->label()
+            : Lang::t('tui.menu.currently', ['pane' => $a->pane->label()]);
 
-        return $cols >= 2 + Width::string(self::paneTabs($a, $theme, false, self::DENSITY_ICONS))
-            ? self::DENSITY_ICONS
-            : self::DENSITY_TERSE;
-    }
+        $line = Style::new()->foreground($theme->shellWarning)->render($text);
 
-    /**
-     * Render the quick-switch pane tabs plus the current-pane indicator.
-     *
-     * Every tab is `[icon Label]`, the picture composed from
-     * {@see \SugarCraft\Code\Tui\Pane::icon()} — the same mapping the pane's
-     * own frame title uses, so the strip and the frame always agree.
-     *
-     * Three visual states per tab, so both state dimensions are legible at
-     * once — which panes are ON, and which one has focus:
-     *
-     * - docked + focused: `shellPrimary`, bold, underlined;
-     * - docked (enabled), not focused: `shellForeground`;
-     * - not docked: `shellMuted` (dimmed — clicking it turns the pane on).
-     *
-     * Chat is the center column and always visible, so it only ever shows
-     * the two focus states. With `$marked` every label also carries a
-     * {@see PANE_TAB_ZONE_PREFIX} click zone — scan-only, for the reason
-     * {@see renderMarked()} gives. $density is {@see density()}'s answer: a
-     * narrower one drops each tab's label, then the indicator's prefix, and
-     * changes nothing else.
-     */
-    private static function paneTabs(App $a, Theme $theme, bool $marked, int $density = self::DENSITY_FULL): string
-    {
-        $tabs = ' ';
-        foreach (self::PANE_TABS as $pane) {
-            $focused = $a->pane === $pane;
-            // A non-dockable pane has no visibility to toggle and is always
-            // on screen (Chat is the frame's center column), so it counts as
-            // enabled for the highlight rule.
-            $enabled = !$pane->dockable() || $a->isDocked($pane);
-
-            $style = match (true) {
-                $focused => Style::new()->foreground($theme->shellPrimary)->bold()->underline(),
-                $enabled => Style::new()->foreground($theme->shellForeground),
-                default => Style::new()->foreground($theme->shellMuted),
-            };
-
-            $label = $style->render($density === self::DENSITY_FULL
-                ? '[' . $pane->icon() . ' ' . $pane->label() . ']'
-                : '[' . $pane->icon() . ']');
-            $tabs .= $marked
-                ? Mark::zone(self::PANE_TAB_ZONE_PREFIX . $pane->value, $label)
-                : $label;
-            $tabs .= ' ';
-        }
-
-        $current = Style::new()->foreground($theme->shellWarning)
-            ->render($density === self::DENSITY_TERSE ? $a->pane->label() : Lang::t('tui.menu.currently', ['pane' => $a->pane->label()]));
-
-        return $tabs . ' ' . $current;
+        return ' ' . ($marked ? Mark::zone(self::PANES_DOOR_ZONE, $line) : $line);
     }
 
     /**
@@ -424,7 +369,11 @@ final class MenuBar
         }
 
         $step = $cursor->key($key, self::tree());
-        if ($step->chosen !== null) {
+        if ($step->chosen !== null && $step->chosen->kind !== MenuNodeKind::Toggle) {
+            // R-MENU-3 (P-MENU.e): a TOGGLE row's choice flips its check in
+            // place and leaves the menu open — the list of panes is read one
+            // after another, closing it on every press would mean reopening
+            // it per toggle. Any other choice (a command) still closes.
             self::closeMenu();
         } else {
             self::$cursor = $step->cursor->isClosed() ? null : $step->cursor;
@@ -531,7 +480,14 @@ final class MenuBar
         $step = $hovered->key('enter', $tree);
         if ($step->chosen !== null) {
             $msg = self::selectionMessage($step->chosen);
-            self::closeMenu();
+            if ($step->chosen->kind !== MenuNodeKind::Toggle) {
+                self::closeMenu();
+            } else {
+                // R-MENU-3: the clicked toggle flips its check in place and
+                // the submenu stays open — the same law handleKey() applies
+                // to the keyboard's Enter.
+                self::$cursor = $step->cursor->isClosed() ? null : $step->cursor;
+            }
 
             return $msg;
         }
@@ -539,6 +495,84 @@ final class MenuBar
         self::$cursor = $step->cursor;
 
         return null;
+    }
+
+    /**
+     * Point the open menu at the row a mouse motion crossed (P-MENU.e
+     * hover). $zoneId is a marked-paint zone id: either a
+     * {@see MENU_ITEM_ZONE_PREFIX} 1-based dotted dropdown path, or a
+     * {@see PANE_TAB_ZONE_PREFIX} pane value carried by a View ▸ Panes row
+     * ({@see \SugarCraft\Code\Tui\Menu\ShellMenu::paneRows()}).
+     *
+     * This is the front half of {@see selectItem()} without the Enter: the
+     * row lights up and, when it names a submenu, that submenu previews
+     * ({@see MenuCursor::hover()}). A path that does not exist, lands on a
+     * row no cursor may rest on, or arrives with no menu open leaves the
+     * cursor exactly where it was.
+     */
+    public static function hover(string $zoneId): bool
+    {
+        $cursor = self::$cursor;
+        if ($cursor === null) {
+            return false;
+        }
+
+        $tree = self::tree();
+        if (str_starts_with($zoneId, self::PANE_TAB_ZONE_PREFIX)) {
+            // A Panes row: the painted position of a given pane is the
+            // (dynamic) tab cycle's business, so resolve it by node id
+            // rather than reading any index out of the zone suffix.
+            $absolute = $tree->pathOf('pane:' . substr($zoneId, strlen(self::PANE_TAB_ZONE_PREFIX)));
+            if ($absolute === null || count($absolute) < 2) {
+                return false;
+            }
+
+            $path = array_slice($absolute, 1);
+        } elseif (str_starts_with($zoneId, self::MENU_ITEM_ZONE_PREFIX)) {
+            $parts = array_map('intval', explode('.', substr($zoneId, strlen(self::MENU_ITEM_ZONE_PREFIX))));
+            foreach ($parts as $part) {
+                if ($part < 1) {
+                    return false;
+                }
+            }
+
+            $path = array_map(static fn(int $n): int => $n - 1, $parts);
+        } else {
+            return false;
+        }
+
+        $hovered = $cursor->hover($path, $tree);
+        if ($hovered === $cursor || $hovered->isClosed()) {
+            return false;
+        }
+
+        self::$cursor = $hovered;
+
+        return true;
+    }
+
+    /**
+     * Open the View menu with its Panes row lit and the Panes submenu
+     * previewed — the click door behind {@see PANES_DOOR_ZONE} (P-MENU.e,
+     * R-MENU-2). Re-pressing the door re-affirms the preview rather than
+     * toggling the menu shut. Returns the now-open menu's 1-based index.
+     */
+    public static function openPanesMenu(): int
+    {
+        $absolute = self::tree()->pathOf('sub:panes');
+        if ($absolute === null || $absolute === []) {
+            return self::activeMenu();
+        }
+
+        [$menuIndex] = $absolute;
+        // activateMenu, not openMenu: the door is never a close.
+        self::activateMenu($menuIndex + 1);
+        self::hover(self::MENU_ITEM_ZONE_PREFIX . implode('.', array_map(
+            static fn(int $n): int => $n + 1,
+            array_slice($absolute, 1),
+        )));
+
+        return self::activeMenu();
     }
 
     /**

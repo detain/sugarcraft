@@ -20,6 +20,8 @@ use SugarCraft\Code\ToolResult;
 use SugarCraft\Code\Tools\BuiltIn\Todo;
 use SugarCraft\Code\Tui\Components\MenuBar;
 use SugarCraft\Code\Tui\Components\TodoPane;
+use SugarCraft\Code\Tui\Menu\MenuNode;
+use SugarCraft\Code\Tui\Menu\ShellMenu;
 use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Tui\Renderer as TuiRenderer;
 
@@ -95,11 +97,22 @@ final class TodoPaneTest extends TestCase
         $this->assertStringContainsString('Wire the pane', $frame);
     }
 
-    public function testTheMenuBarAdvertisesTheTodoTab(): void
+    public function testTheViewPanesMenuAdvertisesTheTodoRow(): void
     {
-        $bar = self::plain(MenuBar::render(self::app([])));
+        // P-MENU.e: the bar's tab strip retired; View ▸ Panes rows advertise
+        // the quick switches now, each carrying the panetab: click zone.
+        $tree = ShellMenu::tree(self::app([]));
+        $absolute = $tree->pathOf('pane:' . Pane::Todo->value);
 
-        $this->assertStringContainsString('[' . Pane::Todo->icon() . ' Todo]', $bar);
+        $this->assertNotNull($absolute, 'the View ▸ Panes rows carry a Todo toggle');
+        $node = $tree->node($absolute);
+        $this->assertInstanceOf(MenuNode::class, $node);
+        $this->assertSame('Todo', $node->label);
+        $this->assertSame(
+            MenuBar::PANE_TAB_ZONE_PREFIX . Pane::Todo->value,
+            $node->zone,
+            'the row carries the zone the click and drag arms read',
+        );
     }
 
     // ── harness ─────────────────────────────────────────────────────────

@@ -39,8 +39,10 @@ use SugarCraft\Mouse\Zone;
  * ERRATUM (docking L2): the door this test asked for has now landed, as a
  * new fixture — {@see \SugarCraft\Code\Tests\App\MenuBarPaneTabClickTest} —
  * so "the pane tabs paint without a zone" and "NO mouse path changes
- * `App::$pane`" above describe round-65, not this tree: a menu-bar pane-tab
- * click now carries a `panetab:` zone and moves focus (and docking). What
+ * `App::$pane`" above describe round-65, not this tree: the pane toggles
+ * carry a `panetab:` zone and move focus (and docking). Since P-MENU.e that
+ * zone rides the View ▸ Panes TOGGLE ROWS (the menu-bar strip retired), and
+ * MenuBarPaneTabClickTest reaches the rows through the indicator door. What
  * stays true, and what the assertions below still police, is that the door
  * routes through `withPane`/`togglePaneDocking` directly and `SelectPaneMsg`
  * remains a consumer-without-producer in `src/`.

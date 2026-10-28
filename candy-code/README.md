@@ -372,7 +372,8 @@ are registered during the render pass, so clicks land on what you see: wheel
 scrolls the transcript, clicking a tool call or a `💭 Thought` row
 expands/collapses it, clicking a `Task` row's live agent line (or an agent on
 the strip) opens that agent's transcript, clicking a session tab switches sessions, clicking a docked pane's header focuses that
-pane, clicking a pane tab on the menu bar toggles its docking (see below),
+pane, clicking the menu bar's `Currently:` indicator opens View ▸ Panes, whose rows toggle
+docking (see below),
 clicking a palette/picker row selects it, clicking the menu bar opens a
 menu (and clicking a `▸` row opens its submenu), and in the settings view a click on a category tab switches to it, a
 click on a row highlights it and the wheel moves the highlight. Click-vs-drag is
@@ -394,18 +395,21 @@ Seven panes dock — **Files** and **Tools** to the left, **Skills**, **Agents**
 On a wide terminal the **Context** box offers itself once: after the first reply's
 measurement settles it docks at ≥120 columns (never at the chat's readable width's
 expense); close it by hand and the offer is spent for good. The
-menu bar's right end carries a tab for chat plus each dockable pane, and the
-tab tells you the whole state at a glance: muted when the pane is undocked,
-full foreground when it is docked, bold-underlined when it also holds focus.
-Below about a hundred columns each tab shrinks to its icon (`[◫]` for Files)
-so the menus keep their room, the `Currently:` indicator still naming the
-focused pane; on a very narrow terminal the indicator drops its prefix too.
-Clicking a tab toggles docking — docking lands the pane on its home side and
-focuses it; undocking the focused pane hands focus back to chat. Clicking the
-**Chat** tab never hides anything (the center pane is always up); it just
+menu bar's right end carries a `Currently:` indicator, and the indicator is
+the door: a click opens **View ▸ Panes**, whose one row per pane tells you
+the whole state — a docked pane checks ✓, an undocked one leaves the check
+column blank, and the row the pointer rests on lights up. Below 61 columns
+the indicator goes terse (the focused pane's label alone) and below 50 it
+steps aside entirely, so the five menu titles always come first; only when
+even they cannot fit do the right-most ones fold into a `»` overflow.
+Clicking a row toggles docking — docking lands the pane on its home side and
+focuses it; undocking the focused pane hands focus back to chat — and the
+submenu stays open, the check flipping in place, so the list reads while you
+work it. Clicking the
+**Chat** row never hides anything (the center pane is always up); it just
 returns focus. `/pane dock left|right` and `/pane toggle [name]` drive the
-same state from the keyboard. Dragging either header of a docked pane — the
-frame's title row, or the menu-bar tab standing for it — carries the pane to
+same state from the keyboard. Press-dragging a docked pane's row in
+View ▸ Panes — or its frame's title row — carries the pane to
 the side under the release: the side band itself, or the outer third of the
 chat facing it (so an empty side, which paints no band, is still a target);
 dropping in the chat's middle third cancels, and the release row picks the

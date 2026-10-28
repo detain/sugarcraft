@@ -11,8 +11,9 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Providers\ProviderInterface;
-use SugarCraft\Code\Tui\Components\MenuBar;
 use SugarCraft\Code\Tui\KeyboardHandler;
+use SugarCraft\Code\Tui\Menu\MenuNode;
+use SugarCraft\Code\Tui\Menu\ShellMenu;
 use SugarCraft\Code\Tui\Pane;
 
 /**
@@ -264,24 +265,35 @@ final class PaneReverseCycleTest extends TestCase
     // =========================================================================
 
     /**
-     * The traversal order and the tab strip that advertises it must match.
+     * The traversal order and the View ▸ Panes rows that advertise it must
+     * match.
      *
-     * `Pane::tabCycle()` and `MenuBar::PANE_TABS` are two hand-maintained lists
-     * of the same six panes, declared in different files, with nothing but this
-     * test connecting them. That is exactly how Settings came to be advertised
-     * as a tab while Tab refused to stop on it. Read through reflection because
-     * `PANE_TABS` is private and giving it visibility purely for a test would
-     * widen the class's API to describe the test rather than the program.
+     * `Pane::tabCycle()` is the one list; the Panes submenu rows
+     * ({@see ShellMenu::paneRows()}) are derived from it, so after P-MENU.e
+     * folded the menu bar's private `PANE_TABS` copy away this pin reads the
+     * menu tree itself: the `pane:<value>` node ids, in order. That is
+     * exactly how Settings once came to be advertised as a tab while Tab
+     * refused to stop on it — two lists, one truth — and deriving both sides
+     * here keeps that from regrowing.
      */
-    public function testTheTabCycleMatchesTheStripTheMenuBarAdvertises(): void
+    public function testTheTabCycleMatchesThePanesRowsTheMenuBarAdvertises(): void
     {
-        $advertised = (new \ReflectionClass(MenuBar::class))->getConstant('PANE_TABS');
+        $tree = ShellMenu::tree();
+        $absolute = $tree->pathOf('sub:panes');
 
-        $this->assertIsArray($advertised);
+        $this->assertNotNull($absolute, 'fixture: the shell tree has no View ▸ Panes');
+        $submenu = $tree->node($absolute);
+        $this->assertNotNull($submenu);
+
+        $advertised = array_map(
+            static fn (MenuNode $row): string => $row->id,
+            $submenu->children,
+        );
+
         $this->assertSame(
-            Pane::tabCycle(),
+            array_map(static fn (Pane $pane): string => 'pane:' . $pane->value, Pane::tabCycle()),
             $advertised,
-            'Pane::tabCycle() and MenuBar::PANE_TABS have drifted apart',
+            'Pane::tabCycle() and the View ▸ Panes rows have drifted apart',
         );
     }
 }

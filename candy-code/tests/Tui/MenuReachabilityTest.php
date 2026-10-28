@@ -10,10 +10,13 @@ use SugarCraft\Code\App\App;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\CommandRegistry;
 use SugarCraft\Code\Message;
+use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\RawMsg;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Tui\Components\MenuBar;
+use SugarCraft\Code\Tui\Menu\MenuNodeKind;
 use SugarCraft\Code\Tui\Menu\ShellMenu;
 use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Tui\Renderer as TuiRenderer;
@@ -23,10 +26,12 @@ use SugarCraft\Code\Tui\Renderer as TuiRenderer;
  * plausible terminal width — by keyboard, and by clicking through the painted
  * titles (or the `»` fold the bar drops overflowing menus into).
  *
- * The narrow end of the sweep is the interesting one: below the width where
- * the pane-tab strip leaves room, titles stop being painted, and the doors
- * left are the keyboard plus the panel zones (which anchor at the fold's
- * column instead of somewhere off-screen). At those widths the fold records
+ * The narrow end of the sweep is the interesting one: since P-MENU.e the bar
+ * always paints at least one title at every swept width — the `Currently:`
+ * indicator gives way before a title does — and below the width where all
+ * five fit, the fold nests the rest under `»`, whose panel zones anchor at
+ * the fold's column instead of somewhere off-screen. At those widths the fold
+ * records
  * itself in MenuBar's render state while {@see MenuBar::closeMenu()} erases
  * it again — so every leaf iteration re-paints a closed bar before walking,
  * which is exactly what the shell does between keypresses in a live frame.
@@ -123,7 +128,13 @@ final class MenuReachabilityTest extends TestCase
                     $step = MenuBar::handleKey('enter');
                     self::assertNotNull($step->chosen, "Enter on {$leaf->id} at {$cols} cols must choose it");
                     self::assertSame($leaf->id, $step->chosen->id);
-                    self::assertSame(0, MenuBar::getActiveMenu(), 'choosing closes the menu');
+                    if ($step->chosen->kind === MenuNodeKind::Toggle) {
+                        // R-MENU-3: a View ▸ Panes toggle flips its check in
+                        // place and keeps the submenu open.
+                        self::assertSame($path[0] + 1, MenuBar::getActiveMenu(), "toggling {$leaf->id} at {$cols} cols keeps its menu open");
+                    } else {
+                        self::assertSame(0, MenuBar::getActiveMenu(), 'choosing closes the menu');
+                    }
                 } else {
                     MenuBar::handleKey('right');
                     self::assertCount($d + 1, MenuBar::cursor()->rows, "entering the submenu at depth {$d} for {$leaf->id}");
@@ -174,17 +185,31 @@ final class MenuReachabilityTest extends TestCase
             // render marks a string; the scanner registry belongs to
             // TuiRenderer::renderView(), which also splices the open panels.
             TuiRenderer::renderView($app, $cols, 30);
-            $zones = TuiRenderer::chromeScanner()->prefixed(MenuBar::MENU_ITEM_ZONE_PREFIX);
-            self::assertArrayHasKey(
-                MenuBar::MENU_ITEM_ZONE_PREFIX . $clickPath,
-                $zones,
-                "{$leaf->id} has no clickable zone (menuitem:{$clickPath}) at {$cols} cols",
-            );
+            if (str_starts_with($leaf->id, 'pane:')) {
+                // P-MENU.e: a Panes toggle row carries its pane zone, not a
+                // positional menuitem zone — the node zone wins at the mark.
+                self::assertArrayHasKey(
+                    MenuBar::PANE_TAB_ZONE_PREFIX . substr($leaf->id, 5),
+                    TuiRenderer::chromeScanner()->prefixed(MenuBar::PANE_TAB_ZONE_PREFIX),
+                    "{$leaf->id} has no clickable panetab zone at {$cols} cols",
+                );
+            } else {
+                $zones = TuiRenderer::chromeScanner()->prefixed(MenuBar::MENU_ITEM_ZONE_PREFIX);
+                self::assertArrayHasKey(
+                    MenuBar::MENU_ITEM_ZONE_PREFIX . $clickPath,
+                    $zones,
+                    "{$leaf->id} has no clickable zone (menuitem:{$clickPath}) at {$cols} cols",
+                );
+            }
 
             $msg = MenuBar::selectItem($clickPath);
             self::assertNotNull($msg, "the click door on menuitem:{$clickPath} does not dispatch at {$cols} cols");
             self::assertSame($leaf->id, $msg->action, 'a clicked row raises exactly the id it paints');
-            self::assertSame(0, MenuBar::getActiveMenu(), 'a click that chooses closes the menu');
+            if (str_starts_with($leaf->id, 'pane:')) {
+                self::assertSame($path[0] + 1, MenuBar::getActiveMenu(), 'a Panes row click keeps its menu open (R-MENU-3)');
+            } else {
+                self::assertSame(0, MenuBar::getActiveMenu(), 'a click that chooses closes the menu');
+            }
         }
     }
 
@@ -194,9 +219,9 @@ final class MenuReachabilityTest extends TestCase
         // contiguous left block menu:1..menu:n, n never exceeds the effective
         // root count, every effective root is painted once any fold engages
         // (the `»` slot IS a root), and at full width all five titles answer
-        // the mouse. At the narrow end the tab strip eats the whole budget and
-        // nothing is painted — the keyboard sweeps above still reach every
-        // leaf there.
+        // the mouse. Since P-MENU.e the narrow end paints SOMETHING at every
+        // swept width: the `Currently:` indicator gives way before a title is
+        // ever costed, so the empty-bar regime the tab strip once left is gone.
         foreach (self::WIDTHS as $cols) {
             MenuBar::closeMenu();
             $this->repaint($cols);
@@ -204,6 +229,8 @@ final class MenuReachabilityTest extends TestCase
             $keys = array_keys(TuiRenderer::chromeScanner()->prefixed(MenuBar::MENU_TITLE_ZONE_PREFIX));
             $nums = array_map(static fn (string $z): int => (int) substr($z, strlen(MenuBar::MENU_TITLE_ZONE_PREFIX)), $keys);
             sort($nums);
+
+            self::assertNotSame([], $nums, "the bar painted no title at {$cols} cols — the indicator must give way first, never a title");
 
             if ($nums !== []) {
                 self::assertSame(range(1, max($nums)), $nums, "painted menu titles at {$cols} cols must be the contiguous left block");
@@ -213,40 +240,33 @@ final class MenuReachabilityTest extends TestCase
             if ($cols >= 200) {
                 self::assertSame([1, 2, 3, 4, 5], $nums, "all five shell titles are clickable at full width");
             }
-
-            if ($cols <= 40) {
-                self::assertSame([], $nums, "the tab strip leaves no bar budget at {$cols} cols — nothing painted");
-            }
         }
     }
 
-    public function testTheMediaFormIsReachableThroughTheFold(): void
+    public function testTheMediaFormIsReachableFromThePaintedToolsMenu(): void
     {
         // R-MENU-1: the bare /generate command is hidden from the palette; the
-        // menu row IS its door. The README advertises F10 → → ENTER — and AT
-        // 80 COLUMNS THAT MEANS THE FOLD: the chain repaints 80 first, so
-        // compose() records the fold and the title ring the keys walk is the
-        // painted one, "Session Agent »" — the third root is the `»` slot,
-        // not Tools. The advertised keystroke therefore needs TWO Enters at
-        // this width: the first ENTERS the fold's shed Tools row (a submenu —
-        // chosen stays null, the cursor path grows one level), the second
-        // CHOOSES cmd:generate-form. The choice raises exactly the command
-        // the palette row and Ctrl+D raise: a closure emitting
-        // OpenMediaFormMsg, which the update loop delivers one hop later
-        // (AppModelTest's law).
+        // menu row IS its door. Since P-MENU.e the 80-col bar spends its room
+        // on the `Currently:` indicator without costing a title: ALL FIVE real
+        // titles paint and the `»` fold that once sat at the third slot is gone
+        // at this width. The README's `F10` **Tools ▸ Generate image…** path
+        // therefore walks straight in — F10 opens Session, two Rights land on
+        // Tools itself, and ONE Enter chooses row 0, the command the palette
+        // row and Ctrl+D raise: a closure emitting OpenMediaFormMsg, delivered
+        // one hop later by the update loop (AppModelTest's law).
         $this->repaint(80);
         $app = $this->barApp();
 
         $titles = array_keys(TuiRenderer::chromeScanner()->prefixed(MenuBar::MENU_TITLE_ZONE_PREFIX));
         sort($titles);
         self::assertSame(
-            ['menu:1', 'menu:2', 'menu:3'],
+            ['menu:1', 'menu:2', 'menu:3', 'menu:4', 'menu:5'],
             $titles,
-            'the 80-col chrome pass paints Session, Agent and the » fold — three titles, not five',
+            'the 80-col chrome pass paints all five real titles — no » fold this wide',
         );
-        $folded = MenuBar::tree();
-        self::assertCount(3, $folded->menus, 'the fold replaced the five-title ring at 80 cols');
-        self::assertSame(MenuBar::MORE_MENU_ID, $folded->menus[2]->id, 'the third painted title IS the » fold');
+        $tree = MenuBar::tree();
+        self::assertCount(5, $tree->menus, 'nothing was shed into a fold at 80 cols');
+        self::assertNotSame(MenuBar::MORE_MENU_ID, $tree->menus[2]->id, 'the third painted title is Tools itself');
 
         [$app] = $app->update(new KeyMsg(KeyType::F10));
         self::assertSame(1, MenuBar::getActiveMenu(), 'F10 opened the first shell menu');
@@ -255,25 +275,28 @@ final class MenuReachabilityTest extends TestCase
         self::assertSame(2, MenuBar::getActiveMenu());
 
         [$app] = $app->update(new KeyMsg(KeyType::Right));
-        self::assertSame(3, MenuBar::getActiveMenu(), 'two rights land on the » fold, not on Tools directly');
+        self::assertSame(3, MenuBar::getActiveMenu(), 'two rights land on Tools directly — there is no fold to enter');
         $under = MenuBar::tree()->node(MenuBar::cursor()->absolutePath());
-        self::assertNotNull($under, 'the fold root has a highlighted row');
-        self::assertSame('menu:tools', $under->id, 'the fold row under the cursor is the shed Tools submenu');
-
-        [$app, $cmd] = $app->update(new KeyMsg(KeyType::Enter));
-        self::assertNull($cmd, 'Enter on a submenu row enters it — it must not choose or dispatch');
-        self::assertSame(3, MenuBar::getActiveMenu(), 'the menu stays open one level deeper');
-        self::assertCount(2, MenuBar::cursor()->rows, 'Tools is now an entered level of the cursor path');
-        $under = MenuBar::tree()->node(MenuBar::cursor()->absolutePath());
-        self::assertNotNull($under, 'the entered Tools menu has a highlighted row');
+        self::assertNotNull($under, 'the Tools menu has a highlighted row');
         self::assertSame('cmd:generate-form', $under->id, 'Tools row 0 is Generate image');
 
         [$app, $cmd] = $app->update(new KeyMsg(KeyType::Enter));
         self::assertSame(0, MenuBar::getActiveMenu(), 'choosing closes the menu');
         self::assertInstanceOf(\Closure::class, $cmd, 'the row raises its command as the palette door does');
 
-        [$app] = $app->update($cmd());
+        // P-MENU.e: closing the menu batches the CellMotion restore onto the
+        // command — the shape Program explodes (byte-writers go to the screen,
+        // msgs go back through update), which is what this leg now mirrors.
+        $emitted = $cmd();
+        $parts = $emitted instanceof BatchMsg ? $emitted->cmds : [$cmd];
+        foreach ($parts as $part) {
+            $msg = $part();
+            if ($msg instanceof RawMsg) {
+                continue;
+            }
+            [$app] = $app->update($msg);
+        }
 
-        self::assertNotNull($app->mediaForm, 'the 80-col fold walk F10 → → ENTER ENTER must open the interactive generation form');
+        self::assertNotNull($app->mediaForm, 'the 80-col walk F10 → → ENTER must open the interactive generation form');
     }
 }

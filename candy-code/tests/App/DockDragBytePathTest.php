@@ -27,7 +27,9 @@ use SugarCraft\Constraints\Dock\Side;
  * every constructed-message test. The bar's pane tabs (docking L2) became the
  * header the eye reaches first, yet only the frame header (`pane:`) armed the
  * drag — a press-drag-release on `panetab:` was a cancelled click with zero
- * observable effect. These pins ride the bytes a terminal actually sends, and
+ * observable effect. P-MENU.e moved the toggles (and their `panetab:` zones)
+ * onto the View ▸ Panes rows; these pins open the bar's `Currently:` door
+ * first, then grab the row the eye reaches. These pins ride the bytes a terminal actually sends, and
  * aim at the cells the frame actually PAINTS (located off the rendered body,
  * independent of the scanner), so the two coordinate systems can never again
  * drift apart silently: an icon inserted into a label without the zone
@@ -68,6 +70,7 @@ final class DockDragBytePathTest extends TestCase
         putenv('CANDY_CODE_DISABLE_MOUSE_CLICKS');
 
         TuiRenderer::setSize(200, 60);
+        MenuBar::closeMenu();
         TuiRenderer::chromeScanner()->clear();
         LiveRenderer::scanner()->clear();
         LiveRenderer::setZoneOrigin(0, 0);
@@ -94,18 +97,19 @@ final class DockDragBytePathTest extends TestCase
     }
 
     // =========================================================================
-    // The reported dead path: dragging the menu-bar pane tab
+    // The reported dead path: dragging the View ▸ Panes row
     // =========================================================================
 
-    public function testARawByteDragFromThePaintedMenuBarTabMovesTheDockedPane(): void
+    public function testARawByteDragFromThePaintedPanesRowMovesTheDockedPane(): void
     {
         $app = $this->castApp();
+        $body = $this->openPanesDoor($app);
         $body = $this->paintBody($app);
 
-        [$tabX, $tabY] = $this->paintedTabCell($body, 'Files');
+        [$tabX, $tabY] = $this->paneRowCell($body, 'Files');
 
         // Alignment first: the cell the user AIMED at by reading the painted
-        // label must be the cell whose chrome zone names that pane's tab.
+        // label must be the cell whose chrome zone names that pane's row.
         $zone = TuiRenderer::chromeZoneAt($tabX, $tabY);
         self::assertSame(MenuBar::PANE_TAB_ZONE_PREFIX . Pane::Files->value, $zone?->id);
 
@@ -120,11 +124,12 @@ final class DockDragBytePathTest extends TestCase
         self::assertTrue(App::paneDragController()->isIdle(), 'the release retires the gesture');
     }
 
-    public function testTheTabDragArmsOnlyAfterThePointerLeavesTheTolerance(): void
+    public function testTheRowDragArmsOnlyAfterThePointerLeavesTheTolerance(): void
     {
         $app = $this->castApp();
+        $body = $this->openPanesDoor($app);
         $body = $this->paintBody($app);
-        [$tabX, $tabY] = $this->paintedTabCell($body, 'Files');
+        [$tabX, $tabY] = $this->paneRowCell($body, 'Files');
 
         // One cell of travel: still inside the tolerance, so the gesture
         // stays a POTENTIAL drag — a release now must complete the plain
@@ -136,29 +141,43 @@ final class DockDragBytePathTest extends TestCase
         // Two cells total: the tolerance is passed, the drag is real now.
         $app = $this->driveBytes($app, "\x1b[<32;" . ($tabX + 2) . ";{$tabY}M");
         self::assertTrue(App::paneDragController()->isArmed());
+        self::assertSame(
+            0,
+            MenuBar::activeMenu(),
+            'once the drag arms, the menu steps aside (P-MENU.e) and the cell-motion restore rides update()',
+        );
     }
 
-    public function testAStationaryRawByteClickOnTheTabOfADockedPaneStillTogglesItUndocked(): void
+    public function testAStationaryRawByteClickOnARowOfADockedPaneStillTogglesItUndocked(): void
     {
         $app = $this->castApp();
+        $body = $this->openPanesDoor($app);
         $body = $this->paintBody($app);
-        [$tabX, $tabY] = $this->paintedTabCell($body, 'Files');
+        [$tabX, $tabY] = $this->paneRowCell($body, 'Files');
 
         // The press arms the controller (it cannot know the release is
         // coming without travel); the UNARMED release falls through to the
-        // click the tab always completed.
+        // click the tab always completed; the row additionally keeps the
+        // submenu OPEN across the toggle (R-MENU-3).
+
         $app = $this->driveBytes($app, "\x1b[<0;{$tabX};{$tabY}M\x1b[<0;{$tabX};{$tabY}m");
 
         self::assertSame(['tools'], $this->slotIdsOn($app, Side::Left), 'the stationary click toggled Files away');
         self::assertCount(1, $this->writes, 'the toggle persists, once, as before the drag existed');
         self::assertTrue(App::paneDragController()->isIdle(), 'a fall-through release leaves no gesture behind');
+        self::assertGreaterThan(
+            0,
+            MenuBar::activeMenu(),
+            'the submenu stayed open across the toggle (R-MENU-3)',
+        );
     }
 
-    public function testARawByteTabDragReleasedInsideTheCentreCancelsWithoutWriting(): void
+    public function testARawByteRowDragReleasedInsideTheCentreCancelsWithoutWriting(): void
     {
         $app = $this->castApp();
+        $body = $this->openPanesDoor($app);
         $body = $this->paintBody($app);
-        [$tabX, $tabY] = $this->paintedTabCell($body, 'Files');
+        [$tabX, $tabY] = $this->paneRowCell($body, 'Files');
 
         $frame = TuiRenderer::lastDockFrame();
         self::assertNotNull($frame);
@@ -172,17 +191,18 @@ final class DockDragBytePathTest extends TestCase
         self::assertTrue(App::paneDragController()->isIdle());
     }
 
-    public function testADragBurstFromTheTabOfAnUndockedPaneArmsNothingAndWritesNothing(): void
+    public function testADragBurstFromTheRowOfAnUndockedPaneArmsNothingAndWritesNothing(): void
     {
         $app = $this->castApp();
         $this->paintBody($app);
         // Undock Tools first (keyboard path, one write), then repaint so the
-        // tab carries the muted state the press will be tested against.
+        // row shows the blank check the press will be tested against.
         $app = $app->togglePaneDocking(Pane::Tools);
         $this->writes = [];
         $body = $this->paintBody($app);
 
-        [$tabX, $tabY] = $this->paintedTabCell($body, 'Tools');
+        $body = $this->openPanesDoor($app);
+        [$tabX, $tabY] = $this->paneRowCell($body, 'Tools');
 
         // A press-drag-release FROM the undocked tab: nothing to move, so no
         // gesture arms and the burst is behaviourally a cancelled click —
@@ -196,7 +216,7 @@ final class DockDragBytePathTest extends TestCase
         self::assertSame([], $this->writes, 'and nothing was written');
     }
 
-    public function testTheUndockedTabStillClicksToDockOnItsHomeSide(): void
+    public function testTheUndockedRowStillClicksToDockOnItsHomeSide(): void
     {
         $app = $this->castApp();
         $this->paintBody($app);
@@ -204,7 +224,8 @@ final class DockDragBytePathTest extends TestCase
         $this->writes = [];
         $body = $this->paintBody($app);
 
-        [$tabX, $tabY] = $this->paintedTabCell($body, 'Tools');
+        $body = $this->openPanesDoor($app);
+        [$tabX, $tabY] = $this->paneRowCell($body, 'Tools');
         $app = $this->driveBytes($app, "\x1b[<0;{$tabX};{$tabY}M\x1b[<0;{$tabX};{$tabY}m");
 
         self::assertSame(['files', 'tools'], $this->slotIdsOn($app, Side::Left), 'click-to-dock semantics unchanged');
@@ -517,15 +538,43 @@ final class DockDragBytePathTest extends TestCase
     }
 
     /**
-     * The 1-based terminal cell of a menu-bar tab label, found by READING
-     * the painted frame (line 1, marker- and SGR-free) — never by asking the
-     * scanner, so the zone-vs-paint alignment is part of the assertion.
+     * P-MENU.e: the pane toggles left the bar. These helpers are the new
+     * opening act — press+release on the painted `Currently:` indicator (the
+     * door, zone `panesmenu`), and the 1-based cell of a toggle row read off
+     * the open cascade's panel lines (row order: Panes ▸, Layout ▸, Theme,
+     * then the pane rows under the door's preview).
      *
      * @return array{0: int, 1: int} col, row (1-based)
      */
-    private function paintedTabCell(string $body, string $label): array
+    private function paneRowCell(string $body, string $label): array
     {
-        return $this->paintedCellOnLine($this->plainLine($body, 0), $label, 1);
+        $lines = explode("\n", $body);
+
+        for ($i = 1; $i <= 10 && $i < count($lines); $i++) {
+            $plain = $this->plainText($lines[$i]);
+
+            if (str_contains($plain, '│') && mb_strpos($plain, $label) !== false) {
+                return $this->paintedCellOnLine($plain, $label, $i + 1);
+            }
+        }
+
+        self::fail("the open Panes submenu never painted a row labelled '{$label}'");
+    }
+
+    private function openPanesDoor(App $app, ?string $body = null): string
+    {
+        $this->driveBytes($app, $this->doorBurst($body ?? $this->paintBody($app)));
+        self::assertGreaterThan(0, MenuBar::activeMenu(), 'fixture: the door opened View and previewed Panes');
+
+        return $this->paintBody($app);
+    }
+
+    /** The raw-byte tap on the bar's `Currently:` door. */
+    private function doorBurst(string $body): string
+    {
+        [$x, $y] = $this->paintedCellOnLine($this->plainLine($body, 0), 'Currently:', 1);
+
+        return "\x1b[<0;{$x};{$y}M\x1b[<0;{$x};{$y}m";
     }
 
     /**

@@ -9,6 +9,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg as CoreMsg;
 use SugarCraft\Core\MouseButton;
+use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Msg\BackgroundColorMsg;
 use SugarCraft\Core\Msg\KeyboardEnhancementsMsg;
 use SugarCraft\Core\Msg\KeyMsg;
@@ -2788,7 +2789,18 @@ final class App implements Model
      */
     public function update(CoreMsg $msg): array
     {
-        return match (true) {
+        // P-MENU.e hover: the bar's menus highlight rows under the pointer,
+        // and button-less motion is reported ONLY in all-motion mouse mode —
+        // CellMotion (the Chat's steady state) never sends it. So ONE
+        // transition check here, comparing the open-menu count before and
+        // after the message, swaps AllMotion in for every open path and back
+        // out for EVERY close path — Esc, a row that ran, a click-away, a
+        // drag that armed — without any of those sites knowing about it.
+        // Skipped entirely when the mouse is Off (there is no mode to
+        // restore and no motion to feed).
+        $menuWasOpen = MenuBar::activeMenu() > 0;
+
+        $result = match (true) {
             $msg instanceof WindowSizeMsg => $this->handleWindowSize($msg),
             $msg instanceof OpenSettingsMsg => [$this->openSettings($msg->query), null],
             $msg instanceof SettingsSavedMsg => $this->settingsSaved($msg),
@@ -2834,6 +2846,18 @@ final class App implements Model
             $msg instanceof BackgroundColorMsg => $this->observeBackground($msg),
             default => $this->delegateToChat($msg),
         };
+
+        $menuIsOpen = MenuBar::activeMenu() > 0;
+        if ($menuWasOpen !== $menuIsOpen && Chat::mouseMode() !== MouseMode::Off) {
+            $result[1] = CoreCmd::batch(
+                $result[1],
+                $menuIsOpen
+                    ? CoreCmd::enableMouseAllMotion()
+                    : CoreCmd::enableMouseCellMotion(),
+            );
+        }
+
+        return $result;
     }
 
     /**
@@ -2972,6 +2996,26 @@ final class App implements Model
             return $this->advancePaneDrag($drag, $msg);
         }
 
+        // P-MENU.e hover: while a menu is open the shell arms AllMotion (see
+        // update()), so motion arrives — and the menu owns it. Over a
+        // `menuitem:` or `panetab:` row it lights that row (a submenu row
+        // previews); anywhere else it is SWALLOWED, never handed to the
+        // chat, whose hover would otherwise move text-selection and caret
+        // state under the open panel. Presses and releases keep falling
+        // through: a click must still run a row, and a press-drag from a
+        // docked row must still arm the dock drag below.
+        if ($msg instanceof MouseMotionMsg && MenuBar::activeMenu() > 0) {
+            $zone = TuiRenderer::chromeZoneAt($msg->x, $msg->y);
+            if ($zone !== null
+                && (str_starts_with($zone->id, MenuBar::MENU_ITEM_ZONE_PREFIX)
+                    || str_starts_with($zone->id, MenuBar::PANE_TAB_ZONE_PREFIX))
+            ) {
+                MenuBar::hover($zone->id);
+            }
+
+            return [$this, null];
+        }
+
         // A text selection the chat anchored owns the gesture until its
         // release, wherever the pointer wanders: a release over a sidebar or
         // the menu bar would otherwise be swallowed as a cancelled chrome
@@ -3049,6 +3093,16 @@ final class App implements Model
             }
         }
 
+        if ($press && $zone === null && MenuBar::activeMenu() > 0) {
+            // P-MENU.e: a press OUTSIDE the chrome dismisses an open menu —
+            // the Windows-95 law the hover feature leans on for its
+            // click-away close path (the update() transition then swaps the
+            // mouse mode back, exactly as for Esc). The press itself still
+            // goes on to Chat below: dismissing the bar is not swallowing
+            // the click.
+            MenuBar::closeMenu();
+        }
+
         $event = $press
             ? MouseEvent::press($msg->x, $msg->y)
             : MouseEvent::release($msg->x, $msg->y);
@@ -3067,11 +3121,10 @@ final class App implements Model
      * resize seam (box border, divider, centre border — every band row) owns
      * a live resize, a docked pane owns a
      * potential dock drag from EITHER of its header surfaces — the frame
-     * header row (`pane:<id>`) and the menu-bar tab (L2's
-     * {@see MenuBar::PANE_TAB_ZONE_PREFIX}, the live-report fix: the bar tab
-     * is the header the eye reaches first, and until it armed the gesture a
-     * press-drag-release there was a cancelled click with no visible answer)
-     * — and an intra-stack gap row is consumed as a no-op (its height drag
+     * header row (`pane:<id>`) and its View ▸ Panes toggle row (the row's
+     * {@see MenuBar::PANE_TAB_ZONE_PREFIX} node zone, the live-report fix
+     * inherited from the old bar tab: a press-drag-release there arms the
+     * gesture) — and an intra-stack gap row is consumed as a no-op (its height drag
      * is the documented follow-up on {@see PaneDragController}). Anything
      * else — including a tab of an UNDOCKED pane (its click still docks on
      * the home side; grabbing it to move would strand a pane the pointer
@@ -3086,7 +3139,7 @@ final class App implements Model
      * NOT swallow — it arms the controller and falls through — because an
      * UNARMED release must complete exactly the click the tracker would have
      * completed before this phase existed: focus on a frame header, the
-     * dock toggle on a bar tab.
+     * dock toggle on a Panes row.
      *
      * @return ?array{0: self, 1: ?\Closure}
      */
@@ -3138,6 +3191,12 @@ final class App implements Model
         if ($pane !== null && $this->isDocked($pane)) {
             self::$paneDrag = self::paneDragController()->beginDockDrag($pane->value, $pressX, $pressY);
             self::$paneDragOrigin = $this->dock();
+            // P-MENU.e: a dock drag now STARTS from a View ▸ Panes row, so a
+            // press here may land while the menu is open. The menu must step
+            // aside once the drag ARMS — not on this press: a press with no
+            // following motion is a plain click-to-toggle (the old bar tab's
+            // stationary-click law), which keeps the submenu open (R-MENU-3).
+            // The arming transition closes it inside advancePaneDrag().
         }
 
         return null;
@@ -3145,8 +3204,9 @@ final class App implements Model
 
     /**
      * The pane a pressed chrome zone-id names, when it names one: the pane's
-     * frame header ({@see Renderer::PANE_ZONE_PREFIX}) or the menu-bar tab
-     * standing for it ({@see MenuBar::PANE_TAB_ZONE_PREFIX}) — the two
+     * frame header ({@see Renderer::PANE_ZONE_PREFIX}) or a View ▸ Panes row
+     * standing for it via its `panetab:` node zone
+     * ({@see MenuBar::PANE_TAB_ZONE_PREFIX}) — the two
      * surfaces where “grab this pane and move it” is a legitimate reading of
      * the press. Any other id (menu title, session tab, divider remainders
      * handled above, a stray prefix that is not a Pane) resolves to null and
@@ -3186,6 +3246,18 @@ final class App implements Model
 
         if ($msg instanceof MouseMotionMsg) {
             self::$paneDrag = $drag->withMotion($msg->x, $msg->y);
+
+            // P-MENU.e: the gesture has just taken the pane — if that arming
+            // happened inside an open menu (a drag begun on a View ▸ Panes
+            // row), the menu steps aside NOW, on the transition, not on the
+            // press: a stationary press-release must still read as a plain
+            // toggle with the submenu kept open (R-MENU-3). Closing here
+            // lets update()'s transition check restore CellMotion; motion
+            // with the button held is still reported under CellMotion, so
+            // the gesture survives its own success.
+            if (!$drag->isArmed() && self::$paneDrag->isArmed()) {
+                MenuBar::closeMenu();
+            }
 
             if ($drag->isSplitResizing()) {
                 return [$this->previewSplitResize($drag, $msg->x), null];
@@ -3446,8 +3518,9 @@ final class App implements Model
      * arrows move and returns the same {@see MenuSelectedMsg} Enter produces
      * — so it is handed to {@see consumeShellCmd()}, the one place that runs
      * it. A pane-header click is the same `withPane` selection the
-     * `tab`/`shift+tab` cycle makes, and a menu-bar pane-tab click is the
-     * same {@see togglePaneDocking()} the `/pane dock` command calls (see
+     * `tab`/`shift+tab` cycle makes, and a View ▸ Panes row click (the
+     * `panetab:` zone, on the row since P-MENU.e) is the same
+     * {@see togglePaneDocking()} the `/pane dock` command calls (see
      * the arm comments for each rule's focus semantics).
      *
      * @return array{0: self, 1: ?\Closure}
@@ -3482,6 +3555,15 @@ final class App implements Model
             $selected = MenuBar::selectItem(substr($zoneId, strlen($items)));
 
             return $selected === null ? [$this, null] : $this->consumeShellCmd($selected);
+        }
+
+        if ($zoneId === MenuBar::PANES_DOOR_ZONE) {
+            // P-MENU.e (R-MENU-2): the bar's right-end `Currently:` indicator
+            // is a door — one completed click opens View ▸ Panes with the
+            // Panes row lit and its toggle list previewed.
+            MenuBar::openPanesMenu();
+
+            return [$this, null];
         }
 
         // A click on a run's row in the full-pane agent dashboard
@@ -3543,8 +3625,9 @@ final class App implements Model
             return [$this, null];
         }
 
-        // A completed click on a menu-bar pane-tab label toggles that pane's
-        // docked visibility (docking L2): through togglePaneDocking — the ONE
+        // A completed click on a View ▸ Panes TOGGLE ROW — the `panetab:`
+        // zone P-MENU.e moved off the menu-bar strip and onto the row —
+        // toggles that pane's docked visibility (docking L2): through togglePaneDocking — the ONE
         // entry point already carrying the seed-shares first-mutation rule
         // and the persist-once law — so a click and a `/pane dock` command
         // are indistinguishable downstream. Docking focuses the pane that
@@ -4143,14 +4226,22 @@ final class App implements Model
      * The row label came from {@see \SugarCraft\Code\Commands\CommandRegistry},
      * so it maps back to exactly one {@see CommandSpec} — which is what makes
      * "Enter dispatches the command it names" possible at all. Selecting also
-     * closes the menu: leaving it open would keep the shell swallowing every
+     * closes the menu — EXCEPT a View ▸ Panes toggle, which keeps the
+     * submenu open and flips its check in place (R-MENU-3) — since leaving
+     * a command-runner's menu open would keep the shell swallowing every
      * subsequent keypress while the command it launched runs.
      *
      * @return array{0: self, 1: ?\Closure}
      */
     private function dispatchMenuSelection(MenuSelectedMsg $selected): array
     {
-        MenuBar::closeMenu();
+        // R-MENU-3 (P-MENU.e): a pane TOGGLE keeps its submenu open and
+        // flips the check in place — the eye is still reading the list.
+        // Every other selection closes the menu as always (leaving a
+        // command-runner open would keep the shell swallowing keys).
+        if ($selected->action === null || !str_starts_with($selected->action, 'pane:')) {
+            MenuBar::closeMenu();
+        }
 
         if ($selected->item === '') {
             return [$this, null];

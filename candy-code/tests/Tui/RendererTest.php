@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Providers\ReportsServedModel;
+use SugarCraft\Code\Tui\Components\MenuBar;
 use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Tui\Renderer;
 use SugarCraft\Style\Bar\Segment;
@@ -231,16 +232,42 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('Chat', $output);
     }
 
-    public function testRenderOutputContainsMenuBarTabs(): void
+    /**
+     * P-MENU.e retired the menu-bar tab strip: the pane toggles now live on
+     * the View ▸ Panes rows, which paint only while that menu is open (the
+     * bar's closed render carries the `Currently:` indicator, never a bracket
+     * caption). This is the frame-level proof of that move.
+     */
+    public function testThePanesRowsPaintOnlyWhileTheMenuIsOpen(): void
     {
         [$app] = $this->makeAppWithSize(120, 40);
 
-        $output = Renderer::render($app);
+        $closed = $this->plainRender(Renderer::render($app));
+        $this->assertStringNotContainsString('[' . Pane::Chat->icon() . ' Chat]', $closed, 'the menu-bar tab strip retired with P-MENU.e');
+        $this->assertStringContainsString('Currently:', $closed, 'the indicator took the strip\'s place on the right end');
 
-        // Menu bar should contain these tabs
-        $this->assertStringContainsString('[' . Pane::Chat->icon() . ' Chat]', $output);
-        $this->assertStringContainsString('[' . Pane::Files->icon() . ' Files]', $output);
-        $this->assertStringContainsString('[' . Pane::Tools->icon() . ' Tools]', $output);
+        MenuBar::openPanesMenu();
+
+        try {
+            $open = $this->plainRender(Renderer::render($app));
+        } finally {
+            MenuBar::closeMenu();
+        }
+
+        // The rows the old tabs were: icon, one space, label — and the docked
+        // ones carry the cascade's check the tab's full-foreground told.
+        $this->assertStringContainsString('✓ ' . Pane::Chat->icon() . ' Chat', $open, 'the Chat row carries the docked check');
+        $this->assertStringContainsString('✓ ' . Pane::Files->icon() . ' Files', $open, 'Files is docked by default');
+        $this->assertStringContainsString(Pane::Tools->icon() . ' Tools', $open, 'an undocked pane still advertises its row');
+        $this->assertStringNotContainsString('✓ ' . Pane::Tools->icon() . ' Tools', $open, 'Tools starts undocked — blank check');
+    }
+
+    /** Strip the click-zone sentinels and SGR bytes for readable frame asserts. */
+    private function plainRender(string $frame): string
+    {
+        $plain = preg_replace('/\x{e000}(?:[^\x{e001}]*)\x{e001}/u', '', $frame);
+
+        return (string) preg_replace('/\e\[[0-9;]*m/', '', (string) $plain);
     }
 
     public function testRenderOutputContainsSwitchPaneHint(): void
