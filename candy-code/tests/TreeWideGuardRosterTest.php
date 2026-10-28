@@ -600,6 +600,10 @@ final class TreeWideGuardRosterTest extends TestCase
         'Cli/BootstrapTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         'Cli/BootstrapToolAndPermissionSettingsTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         'Cli/BootstrapTrustGateSelfGrantTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)', 'scandir($probe)'],
+        // C-TOOL-4.a (1945e347f): doctor's sandbox-probe legs empty the
+        // sys_get_temp_dir() tree setUp() made under $this->tmpDir before their
+        // own rmdir — the walk never leaves the test's sandbox.
+        'Cli/DoctorSandboxProbeTest.php' => ['RecursiveDirectoryIterator($this->tmpDir,\FilesystemIterator::SKIP_DOTS)'],
         // tearDown() unlinks and rmdir's the sys_get_temp_dir() poison catalogue setUp() made (E453 pin).
         'Cli/HelpTest.php' => ['glob($this->poisonDir.\'/*.php\')'],
         // C-AGT-7.b (449b0f248): removeCarriedTree() empties the scratch tree the
@@ -662,6 +666,10 @@ final class TreeWideGuardRosterTest extends TestCase
             'scandir($this->worktreesBase)',
         ],
         'LSP/LspConnectionStdinWedgeTest.php' => ['scandir($dir)'],
+        // C-TOOL-5.c (14d37bbf5): listDir()/removeTree() probe and wipe the
+        // candidate install dirs the installer test planted under its own
+        // sandbox root — scandir over a directory the test made.
+        'LSP/LspInstallerTest.php' => ['scandir($dir)'],
         // The C-TOOL-5.c install-precedence trio plants an .lsp tree under its
         // sandbox root; tearDown's wipe walks it. Plain scandir, bounded to the
         // test's own directory, no glob or iterator.

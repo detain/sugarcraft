@@ -5422,6 +5422,11 @@ final class DocFigureProseDriftTest extends TestCase
         $wordNumbers['thirty-three'] = 33;
         $wordNumbers['thirty-four'] = 34;
         $wordNumbers['thirty-six'] = 36;
+        // Lag from C-AGT-5.a (5cd68af7e): that commit grew src/Tools/BuiltIn
+        // 36→37 with ScheduleTool and re-spelled both docs pages to
+        // thirty-seven, but left this word map at thirty-six — the in-step
+        // rule. Cured here; the (page + scandir) pair already agreed.
+        $wordNumbers['thirty-seven'] = 37;
         self::assertArrayHasKey($word[1], $wordNumbers, "the spelled count '{$word[1]}' is outside the pinned word map — extend it deliberately");
 
         $files = array_values(array_filter(scandir($root . '/src/Tools/BuiltIn') ?: [], static fn(string $f): bool => str_ends_with($f, '.php')));
