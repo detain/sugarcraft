@@ -179,4 +179,28 @@ final class StreamJsonEmitterTest extends TestCase
             'the terminal line IS the json-format success document, byte for byte',
         );
     }
+
+    /**
+     * C-TOOL-7.d: the emitter inherits the encoder's invisibility post-pass.
+     * A provider that answers with a bidi override inside its text must see
+     * it arrive on EVERY line as an escape — raw, those bytes let the payload
+     * spoof what the consumer's terminal shows — while decoding stays exact.
+     */
+    public function testABidiOverridePayloadArrivesEscapedOnEveryLine(): void
+    {
+        $payload = "flip\u{202E}flop";
+        $emitter = new StreamJsonEmitter($this->out);
+        $emitter->onToken($payload);
+        $emitter->emitLine(NonInteractive::encodeDocument(['schema' => NonInteractive::SCHEMA, 'result' => $payload]));
+
+        \rewind($this->out);
+        $raw = (string) \stream_get_contents($this->out);
+        $this->assertStringNotContainsString("\u{202E}", $raw, 'a raw U+202E reached the stream-json lines');
+        $this->assertStringContainsString('\u202e', $raw, 'the override arrives in the escaped spelling');
+
+        $rows = $this->lines();
+        $this->assertCount(2, $rows);
+        $this->assertSame($payload, $rows[0]['data']['text'], 'the delta row decodes back to the exact payload');
+        $this->assertSame($payload, $rows[1]['result'], 'the terminal row decodes back to the exact payload');
+    }
 }

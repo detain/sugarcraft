@@ -1455,6 +1455,23 @@ final class NonInteractive
      * invalid-UTF-8 hole described above for every session name and MCP command
      * string, which are bytes this package does not control.
      *
+     * THE INVISIBILITY POST-PASS (C-TOOL-7.d). `JSON_UNESCAPED_UNICODE` is
+     * what keeps CJK and emoji grep-able on the consumer side; it is also what
+     * lets DEL (U+007F), the whole C1 range (U+0080-U+009F — `json_encode()`
+     * escapes C0 only) and every Unicode Cf format character — the bidi
+     * overrides U+202A-U+202E and U+2066-U+2069, the zero-widths
+     * U+200B-U+200F, soft hyphen U+00AD, Arabic letter mark U+061C, the BOM
+     * U+FEFF, the astral tag characters — reach a consumer's terminal raw,
+     * carried by provider answers, file paths and session names: bytes this
+     * package does not control. After encoding they are rewritten as
+     * `\uXXXX` (astral code points as their surrogate pair). The sweep is safe
+     * over the whole encoded string because `json_encode()` emits those code
+     * points only inside strings, never as structure, and
+     * `JSON_INVALID_UTF8_SUBSTITUTE` has already made every byte valid UTF-8;
+     * decoding the swept document is identical to decoding the unswept one.
+     * The TUI half of this line has been drawn since ISS-100 by
+     * `Message::escapeInvisible()`; this is the machine-readable half.
+     *
      * @param array<string, mixed> $document
      *
      * @throws \JsonException
@@ -1469,9 +1486,34 @@ final class NonInteractive
         // json_encode() is declared `string|false`; JSON_THROW_ON_ERROR turns
         // every false into an exception, so this is unreachable — asserted
         // rather than silently cast, because the silent cast IS the bug above.
-        return $json === false
+        $encoded = $json === false
             ? throw new \JsonException('json_encode() returned false without raising')
             : $json;
+
+        // C-TOOL-7.d: the invisibility post-pass the doc-block above describes.
+        // A `/u` code-point class rather than a byte list, so every match is
+        // exactly one whole character; the escape it writes is the shape
+        // json_encode() itself uses for those code points when
+        // JSON_UNESCAPED_UNICODE is NOT passed, which is why decoding stays
+        // byte-identical on the other side.
+        return (string) \preg_replace_callback(
+            '/[\x{007F}-\x{009F}\p{Cf}]/u',
+            static function (array $match): string {
+                $code = (int) \mb_ord($match[0], 'UTF-8');
+
+                if ($code <= 0xFFFF) {
+                    return \sprintf('\\u%04x', $code);
+                }
+
+                // Astral Cf (the Unicode tag characters): JSON has no astral
+                // escape, so the surrogate pair spells it the way
+                // json_encode() would have.
+                $code -= 0x10000;
+
+                return \sprintf('\\u%04x\\u%04x', 0xD800 + ($code >> 10), 0xDC00 + ($code & 0x3FF));
+            },
+            $encoded,
+        );
     }
 
     /**
