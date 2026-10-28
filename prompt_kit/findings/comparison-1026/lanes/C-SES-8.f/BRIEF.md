@@ -1,0 +1,21 @@
+### C-SES-8.f — JSONL transcript writer + `jsonl` export format
+- item: C-SES-8 (sources: GAP-OBS-05)
+- kind: gap · effort M
+- approach:
+  - **Format.** `Exporter::toJsonl()` writes one `Message::toArray()` object per line. `ShareSession` gains `FORMAT_JSONL` (in `SUPPORTED_FORMATS`, with mime and extension), and `ExportCommand` maps `jsonl`.
+  - **Protocol untouched.** The `session.export` schema enum is a literal `['markdown','json','text']` (`MethodSchemas.php:185`) and stays unchanged; jsonl is TUI and CLI only.
+  - **`JsonlTranscriptWriter`.**
+    - An append-only per-session file at `~/.candy-code/transcripts/<project-slug>/<session-id>.jsonl` (dir 0700, file 0600).
+    - A high-water mark, so a re-save appends only new messages.
+    - A rewind writes a `{"type":"rewind","to":N}` marker line instead of rewriting the file.
+    - `pathFor($sessionId, $root)`, so hooks can name the file.
+- files.create: `candy-code/src/Share/JsonlTranscriptWriter.php`, `candy-code/tests/Share/JsonlTranscriptWriterTest.php`
+- files.modify: `candy-code/src/Util/Exporter.php` (toJsonl()), `candy-code/src/Share/ShareSession.php` (FORMAT_JSONL), `candy-code/src/Commands/ExportCommand.php` (the format/extension map at `:216-219`), `candy-code/lang/en.php` (`cmd.export.hint`), `candy-code/docs/COMMANDS.md` (regen)
+- tests: create `candy-code/tests/Share/JsonlTranscriptWriterTest.php`: append-only; idempotent re-save; the rewind marker; modes 0600/0700. Modify `candy-code/tests/Commands/ExportCommandTest.php` (`/export x.jsonl`).
+- docs/guards: the COMMANDS.md regen; `CommandDocsDriftTest`
+- serialized: [lang:cmd.export.] [docs:COMMANDS.md]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: `ShareCommand::parseFormat()` reads `SUPPORTED_FORMATS`, so `/share jsonl` becomes legal. Pin or exclude it in-step.
+

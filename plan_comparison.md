@@ -2116,7 +2116,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SES-9.a (W7)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-8.c`
 
-#### C-SES-8.f — JSONL transcript writer + `jsonl` export format
+#### ✅ f9f079205 C-SES-8.f — JSONL transcript writer + `jsonl` export format
 - **Item:** C-SES-8 (sources: GAP-OBS-05) · gap · effort M
 - **What:** **Format.** `Exporter::toJsonl()` writes one `Message::toArray()` object per line. `ShareSession` gains `FORMAT_JSONL` (in `SUPPORTED_FORMATS`, with mime and extension), and `ExportCommand` maps `jsonl`. **Protocol untouched.** …
 - **Files — create:** `candy-code/src/Share/JsonlTranscriptWriter.php`, `candy-code/tests/Share/JsonlTranscriptWriterTest.php`

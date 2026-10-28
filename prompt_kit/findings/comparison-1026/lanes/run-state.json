@@ -167,7 +167,8 @@
   "C-TOOL-2.d",
   "C-TOOL-3.e",
   "C-SES-6.c",
-  "C-PRV-2.c"
+  "C-PRV-2.c",
+  "C-SES-8.f"
  ],
  "inflight": {
   "P-AGENT.b": {
@@ -183,13 +184,6 @@
    "worktree": "/home/sites/cc-cmp-C-SES-8.c",
    "branch": "cc/C-SES-8.c",
    "notes": "r2 CLEAN 0C/0M/0m/0n @cc8ea765f (old base cf0cfd0be; pick range e2759d081..cc8ea765f, 2 commits). Welder carries: durations rows InsightsCommandTest+InsightsHostCommandTest, +15T carry, \u00a74 cites cc8ea765f, OneSided roster accusation routes to C-CTX-4.c owner (closeout)."
-  },
-  "C-SES-8.f": {
-   "stage": "clean",
-   "round": 2,
-   "worktree": "/home/sites/cc-cmp-C-SES-8.f",
-   "branch": "cc/C-SES-8.f",
-   "notes": "r2 CLEAN 0C/0M/0m (REVIEW-2.md canonical). Weld range 25c91d6eb..f9f079205 (2 commits), \u00a74 cites f9f079205. Carries: README:621 jsonl DOC-ROW at weld; no durations row (+2A existing file)."
   },
   "C-TOOL-5.a": {
    "stage": "build",
@@ -1104,8 +1098,8 @@
   ]
  },
  "tip": "0f58a906f",
- "welded_count": 168,
- "tick": "batch-2 weld: C-PRV-2.c welded (welder subagent). queue: C-SES-6.c, C-PRV-2.c, C-SES-8.f, C-TUI-3.c (welding in order).",
+ "welded_count": 169,
+ "tick": "batch-2 weld: C-SES-8.f welded (welder subagent). queue: C-SES-6.c, C-PRV-2.c, C-SES-8.f, C-TUI-3.c (welding in order).",
  "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
  "blocked_notes": {
   "C-AGT-5.b": "OWNER RULING NEEDED (gates W14 full closure + C-AGT-5.c cascade in W15): C-AGT-5.a r1 MINOR-2 \u2014 ScheduleFactory delete guard is createdBy-scoped, not root-scoped, so a model-created row in ANOTHER root can be deleted without include_operator_rows. Options (a) root-scope the guard (stricter; may break legit cross-root cleanup), (b) keep createdBy-scope + document. Per C-AGT-5.a r2 CLEAN the lane shipped as-designed; ruling owed before any rebuild of 5.b."
@@ -1260,7 +1254,7 @@
  "note": "W15 FULLY WELDED \u2014 wave loop r1 next",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
  "laws_premise_correction": "2026-10-29: plan_comparison.md is TRACKED (ls-files + full weld history commit its marks). \u00a73/\u00a74 progress marks MUST be committed with the weld. The never-stage rule applies ONLY to root ./run-state.json stray, ./escalated, and foreign dirt.",
- "master_tip": "ac5eb1749",
+ "master_tip": "9a8a96f23",
  "prestage_w18": {
   "briefs": "all 10 extracted to lanes/<id>/BRIEF.md",
   "notes": {

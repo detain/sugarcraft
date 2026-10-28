@@ -636,7 +636,7 @@ By task (every command, with its arguments, is in
 
 | Task | Commands |
 |---|---|
-| Sessions | `/new [dir]`, `/sessions [query]`, `/rename [name\|--auto]`, `/branch`, `/handoff [focus]`, `/fork <prompt>`, `/bg <task>`, `/share [md\|html\|json] [path]`, `/export [md\|html\|json\|text] [path]`, `/clear` |
+| Sessions | `/new [dir]`, `/sessions [query]`, `/rename [name\|--auto]`, `/branch`, `/handoff [focus]`, `/fork <prompt>`, `/bg <task>`, `/share [md\|html\|json] [path]`, `/export [md\|html\|json\|jsonl\|text] [path]`, `/clear` |
 | Checkpoints | `/undo`, `/redo`, `/rewind [n] [--chat\|--files\|--both]`, `/diff [n]` |
 | Context | `/context`, `/compact [--self] [focus]`, `/sweep [n]`, `/pruning [mode]`, `/compress [focus]`, `/decompress [bN]`, `/recompress [bN]` |
 | Working | `/goal <condition>`, `/grind <condition>`, `/btw <question>`, `/init [focus]`, `/editor [text]`, `/websearch <query>`, `/workflow …` |
