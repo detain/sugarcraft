@@ -8,6 +8,7 @@ use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Agents\AgentResult;
 use SugarCraft\Code\Agents\AgentWorkerPool;
+use SugarCraft\Code\Agents\Effort;
 use SugarCraft\Code\Agents\Live\ActivityItem;
 use SugarCraft\Code\Agents\Live\SubAgentActivityBuffer;
 use SugarCraft\Code\Agents\Live\SubAgentTranscriptLog;
@@ -29,6 +30,8 @@ use SugarCraft\Code\Permissions\PermissionRule;
 use SugarCraft\Code\Support\ParentProcessGuard;
 use SugarCraft\Code\Support\SiblingSpendLedger;
 use SugarCraft\Code\Providers\CompleteRequest;
+use SugarCraft\Code\Skills\Skill;
+use SugarCraft\Code\Skills\SkillFork;
 use SugarCraft\Code\Skills\SkillPromptLine;
 use SugarCraft\Code\Tools\AcceptsInstructionLoader;
 use SugarCraft\Code\Tools\DelegatesToEngine;
@@ -1242,6 +1245,80 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
     // @endregion execute
 
     /**
+     * Run a `context: fork` skill as this turn's delegation (C-EXT-2.c) —
+     * the non-schema sibling of {@see execute()}, called by
+     * {@see SkillTool::execute()} on the Task copy
+     * {@see \SugarCraft\Code\Backend\EngineBackend::turnTools()} bound for
+     * the turn, never by the model: it appears in no {@see schema()} and no
+     * {@see description()}, so a fork cannot be summoned by a tool call the
+     * model writes for it.
+     *
+     * `$skill` supplies the routing fields — `agent:` names the roster
+     * preset ({@see SkillFork::agentName()} defaults to
+     * {@see SkillFork::DEFAULT_AGENT}, one of the six built-ins every launch
+     * registers), `model:` and `effort:` ride the declared overrides of
+     * {@see runOnEngine()} — and `$task` is the body SkillTool already
+     * composed (heading, base directory, substituted instructions).
+     * Everything else is exactly the delegation execute() performs: roster
+     * lookup, gate narrowing through createSubAgent, then the same engine
+     * loop — engine, permission relay, activity emitter and sibling spend
+     * ride the Task path unchanged.
+     *
+     * The refusals wear fork-specific wording, never execute()'s: a
+     * transcript line must say a skill asked for this run, not a model tool
+     * call, and pins that count execute()'s refusal shapes stay untouched.
+     */
+    public function runForkedSkill(Skill $skill, string $task, string $toolCallId): ToolResult
+    {
+        $startedAt = microtime(true);
+
+        if ($this->agentManager === null) {
+            return $this->refusal(
+                $toolCallId,
+                'the Task tool is not wired to a session AgentManager on this launch, so it cannot run a forked skill (the registration feed is the documented Bootstrap seam; refusing rather than inventing a manager)',
+            );
+        }
+        if ($this->engine === null) {
+            return $this->refusal(
+                $toolCallId,
+                sprintf('no engine is bound to the Task tool on this turn, so the forked skill "%s" cannot run (the turn binding is the documented EngineBackend seam; refusing rather than faking a detached run)', $skill->name),
+            );
+        }
+
+        $agentName = SkillFork::agentName($skill);
+        $preset = $this->agentManager->get($agentName);
+        if ($preset === null) {
+            return $this->refusal(
+                $toolCallId,
+                sprintf('agent "%s" is not in the session roster (registered: %s)', $agentName, $this->rosterNames()),
+            );
+        }
+
+        try {
+            $subAgent = $this->agentManager->createSubAgent(
+                $agentName,
+                $task,
+                $preset->permissionMode,
+                $this->engine->permissionGate()?->mode(),
+            );
+        } catch (\RuntimeException | \LogicException $e) {
+            return $this->refusal($toolCallId, $e->getMessage());
+        }
+
+        return $this->runOnEngine(
+            $this->engine,
+            $this->agentManager,
+            $subAgent,
+            $toolCallId,
+            $startedAt,
+            description: sprintf('forked skill "%s"', $skill->name),
+            requestedModel: trim((string) $skill->model),
+            declaredEffort: Effort::tryFrom(trim((string) $skill->effort)),
+            declaredEffortBy: sprintf('skill "%s"', $skill->name),
+        );
+    }
+
+    /**
      * Run $subAgent to completion through the bound engine's tool loop — see
      * the class doc for what it inherits and what it is narrowed to.
      *
@@ -1257,6 +1334,13 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         ?array $suspension = null,
         string $description = '',
         string $requestedModel = '',
+        // C-EXT-2.c: a forked skill declares its own model/effort WITHOUT a
+        // new Agent or a mutated roster Agent — createSubAgent shares the
+        // roster's object, so mutating one fork's effort would stain every
+        // later delegation. Declared here, it overrides the roster preset's
+        // fields for THIS run only. Null/'' preserve today's read.
+        ?Effort $declaredEffort = null,
+        string $declaredEffortBy = '',
     ): ToolResult {
         // @region setup
         $agentName = $subAgent->agent->name;
@@ -1276,15 +1360,16 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             'model' => $engine->servedModel() ?? $engine->model(),
             'asked' => $modelFallback['asked'],
         ])];
-        $effort = $subAgent->agent->effort;
+        $effort = $declaredEffort ?? $subAgent->agent->effort;
+        $effortBy = $declaredEffort !== null ? $declaredEffortBy : sprintf('agent "%s"', $agentName);
         if ($effort !== null) {
             if ($engine->honoursReasoningEffort()) {
                 $engine = $engine->withReasoningEffort($effort->value);
             } else {
                 $runNotes[] = sprintf(
-                    'effort: %s ignored (agent "%s" declares it, but provider "%s" sends no reasoning effort)',
+                    'effort: %s ignored (%s declares it, but provider "%s" sends no reasoning effort)',
                     $effort->value,
-                    $agentName,
+                    $effortBy,
                     $engine->provider()->name(),
                 );
                 $trailNotes[] = \SugarCraft\Code\Lang::t('agents.trail.effort_ignored', [

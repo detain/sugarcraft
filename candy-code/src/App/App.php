@@ -31,7 +31,6 @@ use SugarCraft\Code\Commands\CommandRegistry;
 use SugarCraft\Code\Commands\KeyBindingRegistry;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Context\ContextCategory;
-use SugarCraft\Code\Context\EnvironmentBlock;
 use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Context\RulesState;
 use SugarCraft\Code\Lang;
@@ -42,6 +41,7 @@ use SugarCraft\Code\Messages\ToolResultMessage;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Skills\Skill;
+use SugarCraft\Code\Skills\SkillFork;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Theme;
 use SugarCraft\Code\Tools\Tool;
@@ -2431,9 +2431,12 @@ final class App implements Model
     /**
      * Apply enabled skills to the base system prompt.
      *
-     * Skills declared `context: fork` are excluded — they run as isolated
-     * sub-agents via dispatchSkill()/AgentWorkerPool::executeOne() rather
-     * than being inlined into the primary conversation's system prompt.
+     * Skills declared `context: fork` are excluded from the splice — their
+     * bodies belong to a forked sub-agent. The model-driven fork runs them
+     * through the Skill tool on the turn's bound Task (C-EXT-2.c);
+     * {@see dispatchSkill()} stays the embedder seam for a caller holding a
+     * pool. Neither path inlines a fork's body into the primary
+     * conversation's system prompt.
      */
     public function applySkillsToSystemPrompt(string $baseSystemPrompt): string
     {
@@ -2500,6 +2503,14 @@ final class App implements Model
      * conversation: this runs them through AgentWorkerPool::executeOne() as
      * a standalone SubAgent and returns only the finished result, instead of
      * inlining the skill's content into the primary thread's system prompt.
+     *
+     * C-EXT-2.c added the OTHER fork path — the model-driven one: a
+     * `context: fork` skill invoked through the Skill tool now runs on the
+     * turn's bound Task ({@see \SugarCraft\Code\Tools\BuiltIn\SkillTool},
+     * {@see \SugarCraft\Code\Tools\BuiltIn\TaskTool::runForkedSkill()}). This
+     * method stays what it always was — the embedder seam for a caller that
+     * holds an {@see AgentWorkerPool} and the task in hand — and, as the
+     * tripwire below pins, still has no production caller of its own.
      *
      * Returns null for anything that is not a fork-context skill so the
      * caller can distinguish "not handled here — fall back to the normal
@@ -2607,51 +2618,15 @@ final class App implements Model
             return null;
         }
 
-        $agent = new Agent(
-            name: $skill->name,
-            description: $skill->description,
-            prompt: $skill->content,
-            model: $skill->model ?? $this->model,
-            provider: $this->provider->name(),
-            tools: [],
-            skillNames: [$skill->name],
-            hooks: [],
-            isActive: true,
-        );
-
-        // Attached BEFORE the SubAgent is built, because two different
-        // consumers read the orientation back out and they must agree:
-        // ProcessExecutor sends the request's systemPrompt AND, separately,
-        // `$agent->agent->systemPrompt()`. Handing $skill->content straight to
-        // CompleteRequest bypassed Agent::systemPrompt() altogether, so a
-        // fork-context skill WOULD run with no cwd, no git state, no platform
-        // and no date once anything called this — the same unreached-mechanism
-        // defect as the root AGENTS.md-loading gap, resurfaced in a sibling
-        // launch path (crush_code.md section 12 finding 4). Subjunctive on
-        // purpose: see the method docblock. Nothing calls dispatchSkill() in
-        // production yet, so this repairs the payload before the path opens
-        // rather than fixing an observed misbehaviour.
-        //
-        // Captured here rather than left to Agent::systemPrompt()'s
-        // last-resort `EnvironmentBlock::capture(getcwd(), ...)` for the two
-        // reasons Bootstrap::agentManager() already established for the agent
-        // roster:
-        //
-        //   - At $root, not the process directory. The block renders the
-        //     "Working directory"/"Is directory a git repo" lines that orient
-        //     the model, and on a `--root sugar-markdown` run they have to name
-        //     the directory the tools are jailed to. The fallback spelling
-        //     mirrors Runtime::projectRoot() exactly, including that null
-        //     stays distinguishable from "explicitly rooted at getcwd()".
-        //   - At THIS agent's model, not the session's. render() writes a
-        //     `Model:` line, and a skill may declare its own `model:` in
-        //     frontmatter — one shared session-wide instance would stamp the
-        //     session's model onto a fork running a different one.
-        //   - Under the `env.*` settings (roadmap N-P4d), as the main
-        //     session's block is.
-        $agent = $agent->withEnvironment(
-            EnvironmentBlock::capture($this->root ?? (getcwd() ?: ''), $agent->model)->withSettings(),
-        );
+        // C-EXT-2.c: the Agent construction — identity, the skill's declared
+        // model over the session's, the environment block captured at $root
+        // under that model, the declared effort — moved to
+        // {@see SkillFork::agent()}, the shared shape behind both fork paths.
+        // The reasons the capture happens here rather than at
+        // `Agent::systemPrompt()`'s last resort are written down there,
+        // verbatim; nothing about the payload this method hands the pool
+        // changed.
+        $agent = SkillFork::agent($skill, $this->model, $this->provider->name(), $this->root);
 
         $subAgent = new SubAgent(
             // E329, same family as AgentManager's SubAgent id: a constant
@@ -5037,15 +5012,14 @@ final class App implements Model
         }
         $enabledSkills = $alreadyEnabled ? $this->enabledSkills : [...$this->enabledSkills, $skill];
 
-        // A `context: fork` skill is still ENABLED — {@see dispatchSkill()} reads
-        // the enabled set, so removing it here would close the seam rather than
-        // describe it — but it is not enabled in the sense the plain message
-        // means. MEASURED before this branch existed: selecting one reported
-        // "Enabled skill 'x'." while applySkillsToSystemPrompt() skipped it and
-        // nothing dispatched it, so the skill had NO EFFECT WHATSOEVER and the
-        // status bar said otherwise. The three mechanisms that keep it dormant
-        // are named on dispatchSkill(); this line's job is only to stop the
-        // interface claiming an outcome that does not happen.
+        // A `context: fork` skill is still ENABLED — the Skill tool's fork
+        // branch needs the skill registered and invocable, and
+        // {@see dispatchSkill()} reads the enabled set as the embedder seam —
+        // but it is not enabled in the sense the plain message means: a
+        // fork's body is never spliced into the system prompt. It runs in a
+        // forked sub-agent when invoked, through the Skill tool on the turn's
+        // bound Task (C-EXT-2.c). The distinct status line outlived the
+        // dormancy it was written for and says what still holds.
         $status = $this->availableSkills->isContextFork($skill->name)
             ? Lang::t('tui.app.skill_fork', ['name' => $skill->name])
             : Lang::t('tui.app.skill_enabled', ['name' => $skill->name]);

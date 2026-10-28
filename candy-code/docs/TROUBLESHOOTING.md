@@ -160,10 +160,11 @@ Then work down this list:
    does not close within its first 64 KiB, is refused and listed by
    `CANDY_CODE_DEBUG_SKILLS=1`.
 
-**My skill loads but its `allowed-tools` / `effort` / `context: fork` does
-nothing.** Correct — those fields are parsed and carried but not acted on by the
-live CLI path. See [`SKILLS.md`](SKILLS.md#frontmatter) for the field-by-field
-table.
+**My skill loads but its `allowed-tools` / `effort` does nothing.** Correct —
+those fields are parsed and carried but not acted on by the live CLI path. See
+[`SKILLS.md`](SKILLS.md#frontmatter) for the field-by-field table. A
+`context: fork` skill is acted on (C-EXT-2.c): its body runs in a sub-agent
+through the Skill tool bound to the turn, instead of being inlined.
 
 ---
 

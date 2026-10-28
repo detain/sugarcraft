@@ -37,6 +37,10 @@ final readonly class Skill
         // here is what SkillRegistry re-checks and what toArray() reports.
         /** @var array{bins?:list<string>,anyBins?:list<string>,env?:list<string>,os?:list<string>} */
         public array $requires = [],
+        // The roster agent a `context: fork` skill runs in (C-EXT-2.c). Empty
+        // means the default preset — see SkillFork::agentName(). Ignored for a
+        // `thread` skill, like every other fork-shaped field.
+        public string $agent = '',
     ) {}
 
     /**
@@ -111,6 +115,7 @@ final readonly class Skill
             content: trim($body),
             sourcePath: $sourcePath,
             requires: $meta->requires,
+            agent: $meta->agent,
         );
     }
 
@@ -211,6 +216,7 @@ final readonly class Skill
             'context' => $this->context,
             'paths' => $this->paths,
             'requires' => $this->requires,
+            'agent' => $this->agent,
             'source_path' => $this->sourcePath,
         ];
     }
@@ -233,6 +239,7 @@ final readonly class Skill
             source: $this->source,
             origin: $this->origin,
             requires: $this->requires,
+            agent: $this->agent,
         );
     }
 
@@ -258,6 +265,7 @@ final readonly class Skill
             source: $this->source,
             origin: $origin,
             requires: $this->requires,
+            agent: $this->agent,
         );
     }
 
@@ -286,6 +294,7 @@ final readonly class Skill
             source: $this->source,
             origin: $this->origin,
             requires: $this->requires,
+            agent: $this->agent,
         );
     }
 

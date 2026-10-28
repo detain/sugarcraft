@@ -14,6 +14,7 @@ use SugarCraft\Code\Messages\Message as TypedMessage;
 use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CompleteResponse;
+use SugarCraft\Code\Skills\Skill;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tools\BuiltIn\TaskTool;
 use SugarCraft\Code\Tools\Tool;
@@ -342,6 +343,52 @@ final class TaskToolEngineTest extends TestCase
         $this->assertTrue($result->isError());
         $this->assertStringStartsWith('Error: Task refused', $result->content());
         $this->assertSame([], $provider->requests);
+    }
+
+    /**
+     * C-EXT-2.c: the Task-level refusals of {@see TaskTool::runForkedSkill()}
+     * — the fork path refuses loudly rather than faking a detached run when
+     * a turn never bound it. Wording is deliberately distinct from
+     * execute()'s refusals (a transcript line must say a SKILL asked for
+     * this run, not a model tool call), and SkillToolForkTest owns the
+     * success leg end-to-end; these two pin the seams this class exists at.
+     */
+    public function testRunForkedSkillRefusesWhenNoAgentManagerIsWired(): void
+    {
+        $result = (new TaskTool(null))->withEngine(EngineBackend::new(new ScriptedProvider([]), 'm'))
+            ->runForkedSkill($this->forkRow(), 'composed task', 'call_f1');
+
+        $this->assertTrue($result->isError());
+        $this->assertStringContainsString('cannot run a forked skill', $result->content());
+        $this->assertStringNotContainsString('so it cannot delegate', $result->content(), 'the fork refusal never reuses execute()\'s delegation wording');
+    }
+
+    public function testRunForkedSkillRefusesWhenTheTurnHasBoundNoEngine(): void
+    {
+        $manager = self::manager([], RosterAgent::named('coder'));
+
+        $result = (new TaskTool($manager))->runForkedSkill($this->forkRow(), 'composed task', 'call_f2');
+
+        $this->assertTrue($result->isError());
+        $this->assertStringContainsString('no engine is bound to the Task tool', $result->content());
+    }
+
+    private function forkRow(): Skill
+    {
+        return new Skill(
+            name: 'deep-dive',
+            description: 'Deep parser work',
+            userInvocable: true,
+            disableModelInvocation: false,
+            allowedTools: null,
+            disallowedTools: null,
+            model: null,
+            effort: null,
+            context: 'fork',
+            paths: [],
+            content: 'Read the whole tree first.',
+            sourcePath: '',
+        );
     }
 
     /**

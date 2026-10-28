@@ -3262,6 +3262,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         $limits = \SugarCraft\Code\Tools\ToolLimits::fromConfig(self::userConfig());
 
         $bound = null;
+        // C-EXT-2.c: this turn's bound Task copy, the host that runs forked
+        // skills (see the post-pass after the loop).
+        $forkHost = null;
         $tools = [];
         foreach ($this->tools as $tool) {
             $tool = $limits->applyTo($tool);
@@ -3337,7 +3340,25 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 && $this->permissionApprover !== null) {
                 $boundTool = $boundTool->withPermissionApprover($this->permissionApprover);
             }
+            if ($boundTool instanceof \SugarCraft\Code\Tools\BuiltIn\TaskTool) {
+                $forkHost = $boundTool;
+            }
             $tools[] = $boundTool;
+        }
+
+        // C-EXT-2.c: hand the turn's bound Task to every SkillTool copy, so a
+        // `context: fork` skill runs as a real delegation — engine, permission
+        // relay, activity emitter and sibling spend all ride the Task path —
+        // while SkillTool itself stays the Read-class tool with no engine of
+        // its own to bind. A turn whose tool list carries no Task leaves the
+        // copies unbound, and the Skill tool then loads the fork's body inline
+        // with a note saying so (its declared degraded shape).
+        if ($forkHost !== null) {
+            foreach ($tools as $index => $candidate) {
+                if ($candidate instanceof \SugarCraft\Code\Tools\BuiltIn\SkillTool) {
+                    $tools[$index] = $candidate->withForkDelegate($forkHost);
+                }
+            }
         }
 
         return $tools;

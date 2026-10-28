@@ -86,12 +86,21 @@ final class FrontmatterKeyAuditTest extends TestCase
         self::assertSame([], FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::AGENT, ['isolation' => 'worktree']));
     }
 
+    public function testForkContextAndAgentAreLiveSoNoSkillKeyIsInert(): void
+    {
+        // C-EXT-2.c: SkillTool gained the forked-run path, so `context` left
+        // the inert map and `agent` joined the known ones — no value of
+        // either is "ignored" any more, and skills have no inert row at all.
+        self::assertSame([], FrontmatterKeyAudit::INERT[FrontmatterKeyAudit::SKILL]);
+        self::assertArrayNotHasKey('context', FrontmatterKeyAudit::INERT[FrontmatterKeyAudit::SKILL]);
+        self::assertContains('context', FrontmatterKeyAudit::KNOWN[FrontmatterKeyAudit::SKILL]);
+        self::assertContains('agent', FrontmatterKeyAudit::KNOWN[FrontmatterKeyAudit::SKILL]);
+        self::assertSame([], FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::SKILL, ['context' => 'fork']));
+        self::assertSame([], FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::SKILL, ['agent' => 'sage']));
+    }
+
     public function testAValueSensitiveInertKeyShowsTheValue(): void
     {
-        self::assertSame(
-            ['`context: fork` is not acted on'],
-            FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::SKILL, ['context' => 'fork']),
-        );
         self::assertSame(
             ['`subtask: true` is not acted on'],
             FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::COMMAND, ['subtask' => true]),

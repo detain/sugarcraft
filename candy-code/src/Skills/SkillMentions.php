@@ -35,7 +35,9 @@ use SugarCraft\Code\Tools\BuiltIn\SkillTool;
  * body that names `$ARGUMENTS` gets the rest of the prompt (the mentions
  * removed) substituted there, as {@see SkillTool::substituteArguments()} does
  * for the tool; one that does not is attached unchanged, because the prompt
- * itself already says what to do.
+ * itself already says what to do. A `context: fork` skill attaches NO body —
+ * it attaches the order to invoke it through the Skill tool (C-EXT-2.c),
+ * where the forked sub-agent, not the parent model, reads the instructions.
  *
  * At most {@see MAX_MENTIONS} skills per prompt; later ones get a notice.
  */
@@ -46,6 +48,15 @@ final class SkillMentions
 
     /** The registered name of the on-demand loader tool ({@see SkillTool::name()}). */
     private const TOOL_NAME = 'Skill';
+
+    /**
+     * What a `$`-mention of a `context: fork` skill attaches instead of the
+     * body (C-EXT-2.c): the order to route through the Skill tool, which is
+     * where the fork actually runs — `%1$s` is the mentioned name, `%2$s`
+     * {@see SkillTool::ARGUMENTS_PLACEHOLDER}, so the attachment's text
+     * reaches the model with the rest of the prompt already substituted.
+     */
+    private const FORK_DIRECTIVE = 'The skill "%1$s" declares `context: fork`: its body is not attached because it runs in a forked sub-agent. Invoke it with the Skill tool — name "%1$s", args "%2$s" — and use what that call returns.';
 
     /** A `name` argument longer than this is not a skill name worth printing. */
     private const MAX_NAME_CHARS = 120;
@@ -212,6 +223,21 @@ final class SkillMentions
 
             if (\count($attachments) >= self::MAX_MENTIONS) {
                 $notices[] = sprintf('$%s was not attached: one prompt attaches at most %d skills.', $name, self::MAX_MENTIONS);
+
+                continue;
+            }
+
+            // Forked skills (C-EXT-2.c): a `context: fork` skill's `$`-mention
+            // (and the `/name` form rewritten into one) attaches the directive
+            // to invoke it through the Skill tool, not its body. The body is
+            // the fork's sub-agent's task text; inlining it here would put the
+            // same instructions in two mouths — the parent model reading them
+            // and the fork running them — and defeat the isolation the field
+            // declares. The directive carries the placeholder, so the existing
+            // map below substitutes the rest of the prompt as it does bodies.
+            if ($this->registry->isContextFork($name)) {
+                $names[] = $name;
+                $attachments[] = [$skill->sourcePath, sprintf(self::FORK_DIRECTIVE, $name, SkillTool::ARGUMENTS_PLACEHOLDER), $name];
 
                 continue;
             }

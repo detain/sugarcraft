@@ -51,8 +51,12 @@ use InvalidArgumentException;
  * `effort` are typed here so a wrong shape is caught at the load, and a live
  * path now acts on all four: {@see \SugarCraft\Code\Skills\ActiveSkillEffects}
  * reads them off the skills invoked in the turn and feeds the gate and the
- * next request (R-EXT-1). `context: fork` stays typed-but-inert — there is no
- * fork executor, so a fork skill runs in the thread. The current inert list is
+ * next request (R-EXT-1). `context: fork` and `agent` are typed AND acted on:
+ * a fork skill's body is not spliced inline — {@see
+ * \SugarCraft\Code\Tools\BuiltIn\SkillTool} runs it through
+ * {@see \SugarCraft\Code\Tools\BuiltIn\TaskTool::runForkedSkill()} on the
+ * turn's bound Task, in the roster preset `agent` names (default `coder`)
+ * (C-EXT-2.c). The current inert list is
  * {@see \SugarCraft\Code\Support\FrontmatterKeyAudit::INERT}, not this
  * comment: the launch names every skill that sets one (or a key this class
  * does not read at all), and the step that wires a field deletes its entry
@@ -100,6 +104,7 @@ final readonly class SkillFrontmatter
         public string $context,
         public array $paths,
         public array $requires,
+        public string $agent = '',
     ) {}
 
     /**
@@ -139,6 +144,7 @@ final readonly class SkillFrontmatter
             context: self::stringField($parsed, 'context') ?? 'thread',
             paths: self::pathsField($parsed),
             requires: self::requiresField($parsed),
+            agent: self::stringField($parsed, 'agent') ?? '',
         );
 
         // After every field is typed, so a mistyped skill reports the typo

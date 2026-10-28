@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tools\BuiltIn;
 
+use SugarCraft\Code\Skills\Skill;
 use SugarCraft\Code\Skills\SkillLoader;
 use SugarCraft\Code\Skills\SkillPromptLine;
 use SugarCraft\Code\Skills\SkillRegistry;
@@ -40,9 +41,24 @@ use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
  * not by permission: it arrives inside the tool result, and the listing's
  * authority preamble says the skill author's text carries no precedence over
  * the harness layers.
+ *
+ * FORKED SKILLS (C-EXT-2.c): a skill whose frontmatter declares
+ * `context: fork` does not get its body inlined when this tool carries it —
+ * {@see SkillRegistry::isContextFork()} routes the composed heading + base
+ * directory + body + arguments through
+ * {@see TaskTool::runForkedSkill()} on the turn's bound Task copy, which
+ * {@see \SugarCraft\Code\Backend\EngineBackend::turnTools()} binds to every
+ * SkillTool each turn, so the engine, permission relay, activity emitter and
+ * spend accounting all ride the delegation path. `agent:` names the roster
+ * preset it runs as (default {@see \SugarCraft\Code\Skills\SkillFork::DEFAULT_AGENT});
+ * `model:` and `effort:` are forwarded to the run. When NO delegate is bound
+ * — a launch whose tool list never saw turnTools() bind one — the body loads
+ * inline with a one-line note, the honest degraded shape rather than a
+ * refusal that would strand the skill. `asset` reads stay inline either way:
+ * they are file reads, not executions.
  */
 #[BuiltInTool(name: 'Skill', permission: ToolPermissionClass::Read, position: 10, gloss: 'level 2 of the progressive-disclosure design below')]
-final readonly class SkillTool implements Tool, BuildsFromCatalog
+final readonly class SkillTool implements Tool, BuildsFromCatalog, \SugarCraft\Code\Tools\ExemptFromParallelDeadline
 {
     /**
      * The one placeholder a skill body may name, spelled as Claude Code's
@@ -69,6 +85,15 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
     public const RESULT_PREFIX = SkillPromptLine::HEADING_PREFIX;
 
     /**
+     * Opens the result when a `context: fork` skill is invoked on a turn with
+     * no forked-run delegate bound (C-EXT-2.c): the body still loads — a
+     * refusal would strand the skill entirely — but the result says so, so
+     * neither the model nor a reader of the transcript can mistake the
+     * degraded inline load for the declared forked run.
+     */
+    public const FORK_INLINE_NOTE = "> Note: this skill declares `context: fork`, but no forked-run delegate is bound on this turn, so its body is loaded inline here.\n\n";
+
+    /**
      * Opens the second header line: the directory the skill's SKILL.md lives
      * in, so a body's relative references (`scripts/foo.php`, `docs/x.md`)
      * resolve to a real path instead of guessing against the session CWD.
@@ -86,7 +111,24 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
     public function __construct(
         private SkillRegistry $registry,
         private ?SkillLoader $loader = null,
+        // The turn's bound Task copy that runs `context: fork` skills
+        // (C-EXT-2.c). Null on a launch copy — nothing forks until
+        // EngineBackend::turnTools() hands one over via withForkDelegate().
+        private ?TaskTool $forkDelegate = null,
     ) {
+    }
+
+    /**
+     * The same tool wired to run forked skills through $delegate — called by
+     * {@see \SugarCraft\Code\Backend\EngineBackend::turnTools()} with the
+     * Task copy it bound for this turn, so a fork inherits the engine,
+     * permission relay, emitter and spend of a real delegation. Deliberately
+     * NOT part of the catalog build: a launch-time SkillTool never forks on
+     * its own.
+     */
+    public function withForkDelegate(TaskTool $delegate): self
+    {
+        return new self($this->registry, $this->loader, $delegate);
     }
 
     public static function fromCatalog(ToolBuildContext $context): self
@@ -342,6 +384,32 @@ final readonly class SkillTool implements Tool, BuildsFromCatalog
                 $content .= "\n\n> Skill resources (load one with the `asset` argument):\n"
                     . implode("\n", $lines);
             }
+        }
+
+        // Forked skills (C-EXT-2.c): the composed text above IS the sub-agent's
+        // task, but the routing fields may not be on the registry row — a
+        // stage-1 manifest row carries `context` while `agent`/`model`/`effort`
+        // stay unset until a body read. Re-read the typed frontmatter from the
+        // skill's own file when the row looks manifest-cheap; fail-soft to the
+        // row, since a body that loaded off the same file must not strand the
+        // fork on a parse accident.
+        if ($this->registry->isContextFork($key)) {
+            if ($this->forkDelegate !== null) {
+                $typed = $skill;
+                if ($skill->sourcePath !== '' && $skill->agent === '' && $skill->model === null && $skill->effort === null) {
+                    try {
+                        $typed = Skill::fromFile($skill->sourcePath);
+                    } catch (\Throwable) {
+                    }
+                }
+
+                return $this->forkDelegate->runForkedSkill($typed, $content, $args['id'] ?? '');
+            }
+
+            // Degraded shape, said plainly: without a bound delegate there is
+            // no fork to run, and silently inlining would tell the reader a
+            // `context: fork` skill ran like one.
+            $content = self::FORK_INLINE_NOTE . $content;
         }
 
         return new ToolResult(

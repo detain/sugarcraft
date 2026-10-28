@@ -52,12 +52,13 @@ use SugarCraft\Code\Tools\BuiltIn\SkillTool;
  *    most-recent-first, and the first non-null wins, which is how the
  *    roadmap-4.1 preset ladder reads the same roster.
  *
- * WHAT DOES NOT RIDE: `context: fork` still has no fork executor (it stays
- * on {@see \SugarCraft\Code\Support\FrontmatterKeyAudit::INERT}), and the
- * grant is a PRE-APPROVAL of the listed tools, not a capability set — a
- * skill that lists `Read` does not hide `Edit`, it only stops the question
- * on `Read`. That is what the field's shape can say; a skill that wants a
- * tool refused says so through `disallowed-tools`.
+ * WHAT DOES NOT RIDE: the grant is a PRE-APPROVAL of the listed tools, not a
+ * capability set — a skill that lists `Read` does not hide `Edit`, it only
+ * stops the question on `Read`. That is what the field's shape can say; a
+ * skill that wants a tool refused says so through `disallowed-tools`.
+ * (`context: fork` used to ride here too: it left the INERT map with
+ * C-EXT-2.c, when {@see \SugarCraft\Code\Tools\BuiltIn\SkillTool} gained the
+ * forked-run path.)
  *
  * A malformed entry is skipped exactly where {@see
  * \SugarCraft\Code\Cli\Bootstrap::permissionRules()} skips one: a pattern

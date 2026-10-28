@@ -355,6 +355,7 @@ SKILL;
         $this->assertSame('high', $array['effort']);
         $this->assertSame('session', $array['context']);
         $this->assertSame(['/src'], $array['paths']);
+        $this->assertSame('', $array['agent'], 'C-EXT-2.c: the declared fork preset rides the row; unset means the default applies at the fork site');
         $this->assertSame('/path/array-test/SKILL.md', $array['source_path']);
         // Note: 'content' is intentionally excluded from toArray()
         $this->assertArrayNotHasKey('content', $array);

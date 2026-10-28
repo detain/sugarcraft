@@ -27,7 +27,16 @@ final class SkillFrontmatterTest extends TestCase
         $this->assertNull($meta->model);
         $this->assertNull($meta->effort); // C-EXT-2.b: absent means absent, not 'medium'
         $this->assertSame('thread', $meta->context);
+        $this->assertSame('', $meta->agent, 'C-EXT-2.c: unset means "no declared preset" — SkillFork::agentName() applies the default at the fork site');
         $this->assertSame([], $meta->paths);
+    }
+
+    public function testTheDeclaredForkPresetIsCarriedVerbatim(): void
+    {
+        $meta = SkillFrontmatter::fromParsed(['context' => 'fork', 'agent' => ' sage '], 'demo');
+
+        $this->assertSame('fork', $meta->context);
+        $this->assertSame(' sage ', $meta->agent, 'trimmed at the decision site, not twice');
     }
 
     public function testAScalarPathsIsAOneElementList(): void

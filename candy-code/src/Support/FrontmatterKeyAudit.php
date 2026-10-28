@@ -36,8 +36,9 @@ use SugarCraft\Code\Tui\Components\PaneLabel;
  * (`docs/SKILLS.md`'s field table, `docs/COMMANDS.md`'s frontmatter table,
  * `docs/AGENTS_AUTHORING.md`'s field table) are pinned to it by
  * `InertFrontmatterDocumentationDriftTest`, so the step that finally honours
- * a field (as 4.1 did for a preset's `model`/`effort`/`permissionMode`, and as
- * C-EXT-2.b did for a skill's tool fields and `model`/`effort`) deletes its
+ * a field (as 4.1 did for a preset's `model`/`effort`/`permissionMode`, as
+ * C-EXT-2.b did for a skill's tool fields and `model`/`effort`, and as
+ * C-EXT-2.c did for a skill's `context`/`agent`) deletes its
  * entry here and the docs go red until they stop calling it inert.
  */
 final class FrontmatterKeyAudit
@@ -86,7 +87,7 @@ final class FrontmatterKeyAudit
         self::SKILL => [
             'name', 'description', 'license', 'compatibility', 'metadata', 'user-invocable',
             'disable-model-invocation', 'allowed-tools', 'disallowed-tools', 'model', 'effort', 'context',
-            'paths', 'requires', 'os',
+            'agent', 'paths', 'requires', 'os',
         ],
         self::COMMAND => ['description', 'argument-hint', 'model', 'subtask', 'allowed-tools', 'disallowed-tools', 'agent', 'template'],
         self::RULE => ['name', 'description', 'enabled', 'models', 'keywords', 'paths', 'globs', 'alwaysApply'],
@@ -95,8 +96,9 @@ final class FrontmatterKeyAudit
     /**
      * Keys each format parses and no live path acts on, mapped to the values
      * that are no-ops anyway (lower-cased). A declared key whose value is one
-     * of those is not reported: `model: inherit` and `context: thread` ask for
-     * exactly what happens.
+     * of those is not reported: `subtask: false` asks for exactly what
+     * happens. (`context: thread` held that seat until C-EXT-2.c wired the
+     * fork half and the row left the map.)
      *
      * - agent preset: no key is inert here any more. `Task` honours `model`,
      *   `effort` and (narrow-only) `permissionMode` since roadmap 4.1,
@@ -108,8 +110,14 @@ final class FrontmatterKeyAudit
      *   C-AGT-3.b: it selects the agent's own note store, that store's index is
      *   appended to the delegated prompt, and the `Memory` tool in a delegation
      *   is re-bound to write that store (and granted when absent).
-     * - skill: only `context: fork` is inert — there is still no fork
-     *   executor. `allowed-tools`/`disallowed-tools`, `model` and `effort`
+     * - skill: no key is inert here any more. `context: fork` went LIVE with
+     *   C-EXT-2.c: {@see \SugarCraft\Code\Tools\BuiltIn\SkillTool} runs a fork
+     *   skill's body on the turn's bound Task
+     *   ({@see \SugarCraft\Code\Tools\BuiltIn\TaskTool::runForkedSkill()}) in
+     *   the roster preset `agent` names (default `coder`), forwarding the
+     *   skill's model and effort, and {@see \SugarCraft\Code\Skills\SkillMentions}
+     *   attaches the invoke-directive instead of the body.
+     *   `allowed-tools`/`disallowed-tools`, `model` and `effort`
      *   went LIVE with C-EXT-2.b (R-EXT-1):
      *   {@see \SugarCraft\Code\Skills\ActiveSkillEffects} reads them off the
      *   skills invoked in the turn, feeds the tool grants to the gate and the
@@ -129,9 +137,7 @@ final class FrontmatterKeyAudit
      */
     public const INERT = [
         self::AGENT => [],
-        self::SKILL => [
-            'context' => ['thread'],
-        ],
+        self::SKILL => [],
         self::COMMAND => [
             'model' => [],
             'subtask' => ['false'],

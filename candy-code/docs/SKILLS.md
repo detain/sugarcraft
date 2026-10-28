@@ -268,14 +268,16 @@ os: [linux, darwin]       # the platform must be listed
 | `effort` | `null` | `ActiveSkillEffects::derive()` via `Runtime::run()` | **Live** (R-EXT-1). The value rides the request's `reasoningEffort`: one of the tier names `/effort` prints buys that thinking budget, anything else falls through to the provider's default handling. A skill that declares nothing leaves the session effort untouched — the old parser default of `medium` no longer masquerades as a declaration. |
 | `requires` | none | `SkillRegistry::unmetRequirements()` via `SkillFrontmatter::fromParsed()` and `SkillRegistry::register()` | Live. An unmet requirement keeps the skill out of the registry, with the reason on `SkillManager::skipped()`. See above. |
 | `os` | any platform | same | Live, same as `requires`. |
-| `context` | `thread` | `SkillRegistry::isContextFork()` via `App::applySkillsToSystemPrompt()`, `App::dispatchSkill()`, `App::handleSelectSkill()` | **Inert** for `fork` (`thread` is what happens anyway). See below — `fork` is implemented nowhere; the one live consulter only words a status message, and the standing-body splice does not consult the field at all. |
+| `context` | `thread` | `SkillRegistry::isContextFork()` via `SkillTool::execute()` (forks on the turn's bound Task), `SkillMentions::resolve()` (attaches the invoke-directive), `EngineBackend::turnTools()` (binds that delegate), `App::applySkillsToSystemPrompt()`, `App::dispatchSkill()` (embedder seam), `App::handleSelectSkill()` | **Live** for `fork` (C-EXT-2.c) (`thread` is the default). A fork skill's body is NOT returned inline by the Skill tool: the composed instructions run in the sub-agent named by `agent:` (default `coder`) on the turn's bound Task, with the skill's `model` and `effort` forwarded, and the sub-agent's result is what the parent sees. Without a bound delegate on the turn the body loads inline with a one-line note instead. The session's standing-body splice still does not consult the field — see below. |
+| `agent` | `coder` when forked | `SkillFork::agentName()` via `TaskTool::runForkedSkill()` | **Live** (C-EXT-2.c). Names the session roster preset the forked skill runs as; unknown or blank falls back to `coder`. Inert unless `context: fork` — a thread skill is instructions, not a run. |
 
 The **Inert** rows are not a judgement written once and left: they are
 `FrontmatterKeyAudit::INERT`, which `InertFrontmatterDocumentationDriftTest`
 holds this table to, and a launch names every skill that declares one — see
-[Diagnostics](#diagnostics). Keys other than the ones above (and the
-agentskills.io spec's descriptive `name`, `license`, `compatibility` and
-`metadata`) are not read at all.
+[Diagnostics](#diagnostics). No field in this table is inert today: the last
+row left the map when C-EXT-2.c wired `context: fork`. Keys other than the
+ones above (and the agentskills.io spec's descriptive `name`, `license`,
+`compatibility` and `metadata`) are not read at all.
 
 ## How a skill reaches the model
 
@@ -359,7 +361,10 @@ nobody infers them from the shape of the code:
   consult, so a scoped rule written mid-session is delivered too. A rule's
   `keywords:` and `description:` are still not applied: `KeywordTrigger` and
   `IntentTrigger` have no consumer in `src/`.
-- **`context:` is not consulted at the splice** — see
+- **`context:` is not consulted at the STANDING-BODY splice** — the
+  `Runtime::planEnabledSkills()` path splices every enabled skill's body
+  regardless of context. It IS consulted at the Skill tool, at `$name`
+  mentions, and at the turn binding; see
   [The `context:` field today](#the-context-field-today).
 
 ### The TUI picker is a session-scoped body carry
@@ -407,28 +412,44 @@ and described here as dormant — not deleted, not stubbed, not silently unwired
 
 ## The `context:` field today
 
-`context: fork` is meant to run a skill in a spawned sub-agent instead of
-inlining its body into the conversation. `SkillRegistry::isContextFork()`
-implements the test and three methods consult it:
-`App::applySkillsToSystemPrompt()` and `App::dispatchSkill()` — **neither has a
-caller in `src/` or `bin/`**; each is a seam waiting for its executor, not dead
-code — and `App::handleSelectSkill()`, which is live but does nothing
-fork-shaped with the answer: it words a different status line ("declares
-context: fork — enabled, but not inlined, and no fork dispatch is wired yet") so
-the interface stops claiming an effect that does not happen.
+`context: fork` runs a skill in a sub-agent instead of answering the
+invocation with its body inlined into the conversation.
+`SkillRegistry::isContextFork()` implements the test and the live path consults
+it where an invocation is decided:
 
-What a real `bin/candy-code` run does instead: `Runtime::buildSystemPrompt()`
-appends `SkillMatcher::listForPrompt()` (name and description for every
-auto-invocable skill), the enabled bodies splice in through the canonical path
-above, and the on-demand body arrives through `SkillTool`. None of those three
-consults `context:`. So on today's binary a `context: fork` skill behaves exactly
-like a `context: thread` one — including on the canonical path, where a
-fork-declaring skill named in `enabledSkills` will have its body spliced like any
-other, because the splice has no `context:` predicate. If you want a skill kept
-out of the standing prompt, leave it out of the key; declaring `fork` does not.
+- `EngineBackend::turnTools()` binds every `SkillTool` copy in the turn to that
+  turn's bound `TaskTool` copy — so the engine, permission relay, activity
+  emitter and spend ledger a fork rides are exactly the ones the Task tool
+  uses (C-EXT-2.c).
+- `SkillTool::execute()` answers an invocation of a fork skill with
+  `TaskTool::runForkedSkill()`: the roster preset named by `agent:` (default
+  `coder`) receives the composed instructions — heading, base-dir line, body
+  with `$ARGUMENTS` substituted — as its task, and the skill's `model` and
+  `effort` ride the delegated request. The parent model sees the sub-agent's
+  result, not the instructions. With no delegate bound on the turn (a launch
+  without the Task tool, or a hand-built tool list), the body loads inline with
+  a one-line note — the skill stays usable and the note says what happened.
+- `SkillMentions::resolve()` attaches an invoke-directive instead of the body:
+  a `$name` mention — and the `/name` slash form, which rewrites to one —
+  orders the parent model to call the Skill tool, because the point of `fork`
+  is that the sub-agent reads the instructions, not the parent.
+- `App::handleSelectSkill()` words the picker status as the live effect it is
+  ("invoking it runs it in a forked sub-agent through the Skill tool"), and
+  `App::applySkillsToSystemPrompt()` still keeps fork bodies out of the
+  standing splice.
 
-This is written down rather than removed because the payload is finished and
-waiting for an executor; it is a seam, not dead code.
+One asymmetry stays honest: the standing-body splice
+(`Runtime::planEnabledSkills()` → the canonical path above) has no `context:`
+predicate. A fork-declaring skill named in the session's `enabledSkills` key
+still has its body spliced like any other — `fork` changes what an
+*invocation* does, not what the standing prompt carries. If you want a skill
+kept out of the standing prompt, leave it out of the key.
+
+`App::dispatchSkill()` — the embedder seam that predates this wiring — builds
+its fork Agent through `SkillFork::agent()` (shared vocabulary: preset default
+`coder` via `agentName()`, root/env block, skill model) and dispatches through
+`AgentWorkerPool::executeOne()`; it still has no caller in `src/` or `bin/` and
+stays a seam waiting for its embedder, not dead code.
 
 ## What a `paths:` glob matches
 
@@ -665,11 +686,11 @@ stderr. See [`ENVIRONMENT.md`](ENVIRONMENT.md).
 
 **A skill that loads but declares a key nothing acts on is named too.** The
 launch adds one aggregated row (stderr and transcript) for every skill that
-sets an inert field — `context: fork` — or a key this reader does not know,
-with a did-you-mean for a near miss:
+sets a key this reader does not know — or, on the formats that still have one,
+an inert field — with a did-you-mean for a near miss:
 
 ```text
-2 skills declare frontmatter candy-code ignores: `user_invocable` is not a skill field (did you mean `user-invocable`?) (gh-pr); `context: fork` is not acted on (deep-dive)
+2 skills declare frontmatter candy-code ignores: `user_invocable` is not a skill field (did you mean `user-invocable`?) (gh-pr); `trigger` is not a skill field (deep-dive)
 ```
 
 The skill is never refused for it: an imported Claude Code skill keeps its

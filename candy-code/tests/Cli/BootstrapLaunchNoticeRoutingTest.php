@@ -931,8 +931,9 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
      * the file is never refused for it. One fixture per format: a preset with
      * a misspelt key (C-AGT-3.b retired its inert `memory:` half), a skill
      * whose `allowed-tools` and `model` now pass without a row (C-EXT-2.b made
-     * them live) while `context: fork` and a misspelt `user_invocable` are
-     * named, a command with `subtask: true`,
+     * them live) and whose `context: fork` passes as well (C-EXT-2.c made it
+     * live), while a misspelt `user_invocable` is named, a command with
+     * `subtask: true`,
      * and a rule whose `enable: false` silently leaves it enabled.
      */
     public function testIgnoredFrontmatterReachesBothChannelsAsOneRowPerFormat(): void
@@ -962,7 +963,7 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
             $rows,
         );
         self::assertContains(
-            '1 skill declares frontmatter candy-code ignores: `context: fork` is not acted on (fork-me); '
+            '1 skill declares frontmatter candy-code ignores: '
             . '`user_invocable` is not a skill field (did you mean `user-invocable`?) (fork-me)',
             $rows,
         );

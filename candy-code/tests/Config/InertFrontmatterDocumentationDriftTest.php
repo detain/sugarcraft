@@ -65,7 +65,9 @@ final class InertFrontmatterDocumentationDriftTest extends TestCase
         $readme = self::read('README.md');
 
         self::assertStringNotContainsString('a fork-context skill runs through `AgentWorkerPool`', $readme);
-        self::assertStringContainsString('a `context: fork` skill behaves exactly like a `thread` one', $readme);
+        self::assertStringNotContainsString('a `context: fork` skill behaves exactly like a `thread` one', $readme);
+        self::assertStringNotContainsString('there is no fork executor', $readme);
+        self::assertStringContainsString('a `context: fork` skill runs in a forked sub-agent through the Skill tool bound to the turn', $readme);
     }
 
     /**

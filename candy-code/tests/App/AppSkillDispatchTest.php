@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\AgentResult;
 use SugarCraft\Code\Agents\AgentStatus;
 use SugarCraft\Code\Agents\AgentWorkerPool;
+use SugarCraft\Code\Agents\Effort;
 use SugarCraft\Code\Agents\ExecutorInterface;
 use SugarCraft\Code\Agents\ProcessExecutor;
 use SugarCraft\Code\Agents\SubAgent;
@@ -639,6 +640,37 @@ final class AppSkillDispatchTest extends TestCase
     }
 
     /**
+     * C-EXT-2.c: the shared SkillFork Agent builder carries the skill's
+     * declared effort too — the pin above says the fork speaks at the skill's
+     * model, this says it speaks at the skill's thinking budget. An
+     * undeclared effort stays null: the inherited Agent's preset must not
+     * masquerade as a declaration.
+     */
+    public function testDispatchSkillCarriesTheDeclaredEffortOntoTheForkAgent(): void
+    {
+        $registry = new SkillRegistry();
+        $forkSkill = $this->skillFromYaml(
+            "description: Fork skill\ncontext: fork\neffort: high",
+            'fork-skill',
+        );
+        $registry->register(['fork-skill' => $forkSkill]);
+
+        [, $subAgent] = $this->captureForkDispatch(
+            App::new($this->provider, 'test-model')->withAvailableSkills($registry),
+            $forkSkill,
+        );
+        $this->assertSame(Effort::High, $subAgent->agent->effort);
+
+        $plain = $this->skillFromYaml("description: Plain fork\ncontext: fork", 'plain-fork');
+        $registry->register([$plain]);
+        [, $plainAgent] = $this->captureForkDispatch(
+            App::new($this->provider, 'test-model')->withAvailableSkills($registry),
+            $plain,
+        );
+        $this->assertNull($plainAgent->agent->effort);
+    }
+
+    /**
      * The block has to be attached to the Agent, not merely folded into the
      * request: ProcessExecutor sends the request's systemPrompt AND, as a
      * separate field, `$agent->agent->systemPrompt()` — so an Agent carrying no
@@ -668,7 +700,9 @@ final class AppSkillDispatchTest extends TestCase
         }
     }
     // -------------------------------------------------------------------------
-    // C8 — the dormant seam, and the one thing about it that was NOT dormant
+    // C8 — the embedder seam (still caller-less), and the fork wording that
+    // started honest and stayed honest: since C-EXT-2.c the model-driven fork
+    // runs through SkillTool on the turn's bound Task, not through dispatchSkill
     // -------------------------------------------------------------------------
 
     /**
@@ -678,9 +712,12 @@ final class AppSkillDispatchTest extends TestCase
      * user-invocable, so it appears in the picker; selecting it reported
      * "Enabled skill 'x'."; and {@see App::applySkillsToSystemPrompt()} then
      * skipped it, because fork skills are excluded from the inline path by
-     * design. Nothing dispatched it either — {@see App::dispatchSkill()} has no
-     * production caller. So the skill had no effect of any kind and the status
-     * bar said the opposite.
+     * design. At the time nothing dispatched it either and the status bar said
+     * the opposite. Since C-EXT-2.c the enablement IS an effect — the Skill
+     * tool's fork branch is reachable for an enabled fork skill and runs it
+     * on the turn's bound Task — but the pin's subject still holds: the
+     * picker never claims an inlining that does not happen, and the fork
+     * body never reaches the system prompt.
      *
      * The two halves are asserted together on purpose. The status text alone
      * would be a string test; pairing it with the unchanged system prompt is

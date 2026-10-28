@@ -107,6 +107,27 @@ final class SkillMentionTest extends TestCase
         self::assertSame('No placeholder.', $result['attachments'][1]->data, 'nothing appended: the prompt already says it');
     }
 
+    public function testAForkSkillAttachesTheInvokeDirectiveNotItsBody(): void
+    {
+        $registry = $this->registry(
+            ['deep-dive' => "Read the whole tree first.\n", 'plain' => 'Thread body.'],
+            extra: ['deep-dive' => "context: fork\n"],
+        );
+
+        $result = SkillMentions::new($registry)->resolve('$deep-dive the parser, then $plain');
+
+        self::assertSame([], $result['notices']);
+        self::assertCount(2, $result['attachments']);
+        $fork = $result['attachments'][0]->data;
+        self::assertStringNotContainsString('Read the whole tree first.', $fork, 'the body stays with the forked sub-agent');
+        self::assertStringContainsString('context: fork', $fork);
+        self::assertStringContainsString('Skill tool', $fork, 'the attachment is the order to invoke through the tool');
+        self::assertStringContainsString('"deep-dive"', $fork);
+        self::assertStringContainsString('the parser, then', $fork, 'the $ARGUMENTS slot carries the rest of the prompt');
+        self::assertStringNotContainsString('$ARGUMENTS', $fork, 'the placeholder is substituted, never shipped raw');
+        self::assertSame('Thread body.', $result['attachments'][1]->data, 'a thread skill still attaches its body');
+    }
+
     public function testASkillWhoseFileVanishedIsANoticeNotACrash(): void
     {
         $registry = $this->registry(['gone' => 'x']);
@@ -212,7 +233,7 @@ final class SkillMentionTest extends TestCase
      * @param array<string, string> $bodies
      * @param array<string, bool> $userInvocable
      */
-    private function registry(array $bodies, array $userInvocable = []): SkillRegistry
+    private function registry(array $bodies, array $userInvocable = [], array $extra = []): SkillRegistry
     {
         $skills = [];
         foreach ($bodies as $name => $body) {
@@ -220,6 +241,7 @@ final class SkillMentionTest extends TestCase
             $path = $this->dir . '/' . $name . '/SKILL.md';
             $front = "---\nname: {$name}\ndescription: the {$name} skill\n"
                 . (($userInvocable[$name] ?? true) ? '' : "user-invocable: false\n")
+                . ($extra[$name] ?? '')
                 . "---\n";
             file_put_contents($path, $front . $body);
             $skills[$name] = Skill::fromFile($path);

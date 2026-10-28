@@ -3379,19 +3379,19 @@ final class DocFigureProseDriftTest extends TestCase
     }
 
     /**
-     * E686 tranche-9 (AT): the two dormancy paragraphs of SKILLS.md — the
-     * auto-match chain that "reach[es] no production path" and the
-     * "three methods consult" sentence for isContextFork(). Every call-site
-     * count below is a live token scan of src/ plus bin/, definitions
-     * excluded by the `->` needle.
+     * E686 tranche-9 (AT), flipped in-step by C-EXT-2.c: the auto-match
+     * chain that "reach[es] no production path" stays dormant and pinned,
+     * but the `context: fork` half of this arm moved with it — the field is
+     * LIVE now. Every call-site count below is a live token scan of src/
+     * plus bin/, definitions excluded by the `->` needle.
      */
     public function testDormantSkillPathsStayUnreachableThroughTheWholeChain(): void
     {
         $skills = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/SKILLS.md'));
         self::assertSame(
             1,
-            preg_match('/implements the test and three methods consult it/', $skills),
-            'the context paragraph no longer states its consulting-method count',
+            preg_match('/implements the test and the live path consults/', $skills),
+            'the context paragraph no longer states its consulting claim — C-EXT-2.c made the field live',
         );
         self::assertStringContainsString('and **reach no production path.**', $skills, 'the dormancy claim the pin polices left the page');
         self::assertStringContainsString('zero production call sites', $skills, 'the wrapper sentence left the page');
@@ -3409,8 +3409,8 @@ final class DocFigureProseDriftTest extends TestCase
             $fork[] = self::enclosingMethodName($relative, $src[$relative], $offset);
         }
         sort($fork);
-        self::assertCount(3, $fork, 'the number of methods consulting isContextFork() changed — the page names three');
-        self::assertSame(['applySkillsToSystemPrompt', 'dispatchSkill', 'handleSelectSkill'], $fork, 'the page names these exact three consulters of isContextFork()');
+        self::assertCount(5, $fork, 'the number of methods consulting isContextFork() changed — the page names five live consulters (C-EXT-2.c)');
+        self::assertSame(['applySkillsToSystemPrompt', 'dispatchSkill', 'execute', 'handleSelectSkill', 'resolve'], $fork, 'the page names these exact consulters of isContextFork(): the Skill tool fork branch, the mention directive, and the three App seams');
 
         foreach (['->applySkillsToSystemPrompt(', '->dispatchSkill('] as $needle) {
             self::assertCount(0, self::srcOccurrences($needle), $needle . ' gained a caller in src/ — the page still says the method has none');
