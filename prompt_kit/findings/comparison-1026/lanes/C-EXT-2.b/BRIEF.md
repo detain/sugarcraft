@@ -1,0 +1,29 @@
+### C-EXT-2.b — Honour skill `allowed-tools`/`disallowed-tools`/`model`/`effort` for the active turn
+- item: C-EXT-2 (sources: GAP-SKL-11, k2-dorm inert frontmatter, k1-dorm#8)
+- kind: dormant-wire · effort M (upper)
+- approach:
+  - **What's inert.** `FrontmatterKeyAudit.php:120-135` lists four skill keys as INERT; nothing on a live path reads them. Two traps:
+    - `Skill::$effort` defaults to `'medium'` when absent (`Skill.php:24`), so "declared" cannot be told from "default". Add a nullable or `effortSet` sentinel, per the house law.
+    - The eight built-ins declare `allowed-tools: "Read,Grep,Bash"` and `effort: high`.
+  - **Design.** Create `ActiveSkillEffects`. It is pure and derived from the turn's own messages since the last real user prompt: skills loaded by successful `Skill` calls (`SkillTool::invokedIn`) and by `$name` mentions (`TurnContextBlock::invokedSkillsIn`, :467), resolved through the registry. It yields:
+    - allow rules (CC grammar through `PermissionRule::fromClaudePrefixDialect`, :1305);
+    - deny rules;
+    - the latest declared model;
+    - the latest declared effort.
+  - **Gate.** `PermissionGate::withTurnGrants($allow, $deny)` returns a clone. Deny rules refuse before the mode, like a configured deny. Allow rules only answer an Ask, with the session-rule semantics of `withSessionRules()` at :389.
+  - **Wiring.**
+    - `Runtime::gate()` (:3136) evaluates through a gate carrying the turn's effects, using the PermissionGateHook swap idiom that mode switches use.
+    - The `Runtime::run()` step loop applies the effects' model and effort to the next request.
+    - `Chat::gateToolCall()` (:4664) applies the grants on the TUI-side path.
+    - The four SKILL rows leave INERT.
+  - **Stateless on purpose.** Skill and gate calls can run in forked children, so in-memory turn state would be lost.
+- files.create: `candy-code/src/Skills/ActiveSkillEffects.php`
+- files.modify: `candy-code/src/Permissions/PermissionGate.php` (`withTurnGrants`, evaluate order), `candy-code/src/Runtime.php` (`gate`, the `run` step loop), `candy-code/src/Chat.php` (`gateToolCall`), `candy-code/src/Skills/Skill.php` + `candy-code/src/Skills/SkillFrontmatter.php` (declared-effort sentinel), `candy-code/src/Support/FrontmatterKeyAudit.php` (drop four SKILL INERT rows; rewrite the docblock), `candy-code/docs/SKILLS.md` (inert rows :265-268, diagnostics :644), `candy-code/README.md` (:2370 inert sentence), `candy-code/src/Skills/BuiltIn/api-design/SKILL.md`, `candy-code/src/Skills/BuiltIn/composer-wizard/SKILL.md`, `candy-code/src/Skills/BuiltIn/laravel-best-practices/SKILL.md`, `candy-code/src/Skills/BuiltIn/php-best-practices/SKILL.md`, `candy-code/src/Skills/BuiltIn/phpunit-master/SKILL.md`, `candy-code/src/Skills/BuiltIn/security-audit/SKILL.md`, `candy-code/src/Skills/BuiltIn/symfony-best-practices/SKILL.md`, `candy-code/src/Skills/BuiltIn/testing-strategies/SKILL.md` (owner ruling: trim each built-in's `allowed-tools`/`effort` to what it truly needs; no Bash pre-approval unless the skill runs shell)
+- tests: create `candy-code/tests/Skills/ActiveSkillEffectsTest.php`, `candy-code/tests/Permissions/PermissionGateTurnGrantsTest.php` (deny wins; allow answers only an Ask; never lifts a configured deny), `candy-code/tests/Runtime/RuntimeSkillEffectsTest.php` (a grant from step 1 applies at step 2; the model and effort switch from the next step; a new user prompt clears them). Modify `candy-code/tests/Support/FrontmatterKeyAuditTest.php`, `candy-code/tests/Config/InertFrontmatterDocumentationDriftTest.php`, `candy-code/tests/Skills/BuiltInSkillsTest.php` (effort default/sentinel), `candy-code/tests/Skills/SkillFrontmatterTest.php`.
+- docs/guards: the INERT ↔ SKILLS.md guard moves in-step. README :2370.
+- serialized: [runtime:gate,run step loop] [chat:gateToolCall] [docs:SKILLS.md] [docs:README.md] [hot:candy-code/src/Permissions/PermissionGate.php] [hot:candy-code/src/Support/FrontmatterKeyAudit.php]
+- deps: none
+- phase: normal
+- ruling: R-EXT-1. Does `allowed-tools` pre-approval apply only to user-tier skills and only to argument-scoped rules (never bare `Bash`/`Write`), with project, bundle and foreign tiers able only to narrow? And are the built-ins' `allowed-tools: Read,Grep,Bash` / `effort: high` stripped?
+- risks: without R-EXT-1, a model can load a repo-supplied skill to pre-approve Bash: a permission escalation. Do not run this step before the ruling.
+
