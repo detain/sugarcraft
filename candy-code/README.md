@@ -1623,7 +1623,7 @@ $provider = $factory->create(['type' => 'openai', 'apiKey' => '${OPENAI_API_KEY}
 | AWS Bedrock     | `bedrock`     | Converse API via `aws/aws-sdk-php`; per-model pricing            |
 | GCP Vertex      | `vertex`      | `claude-*` via `/v1/messages` + `gemini-*` via `generateContent` (native SDK) |
 | Gemini          | `gemini`      | native `generateContent` wire via API key                        |
-| Codex           | `codex`       | ChatGPT subscription OAuth (`candy-code login codex`, PKCE fork) |
+| Codex           | `codex`       | ChatGPT subscription (`candy-code login codex` — a stdio passthrough to `codex login`, which owns the token) |
 | Custom          | `custom`      | any OpenAI-compatible HTTP endpoint                              |
 | Echo            | —             | `EchoProvider`: offline, echoes the last turn; default + tests   |
 

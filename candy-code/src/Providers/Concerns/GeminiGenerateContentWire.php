@@ -301,25 +301,183 @@ trait GeminiGenerateContentWire
         }
 
         // AUT-4's honesty regime asks providers only what they can actually
-        // carry; on this wire structured output is the native pair
-        // `responseSchema` + `responseMimeType: application/json` - Google's
-        // GenerationConfig ignores a schema sent without the mime type, so
-        // they are always emitted together. Unparseable schema text degrades
-        // to plain output rather than a 400 the caller cannot act on; hosts
-        // that do not advertise the capability never receive the field
-        // because no caller sets it for them (Vertex's flag states this).
+        // carry, and this wire carries structured output on ONE of two
+        // MUTUALLY EXCLUSIVE fields - `responseJsonSchema` (GenerationConfig
+        // field 28, a plain JSON value, the arm that takes the operator's
+        // STANDARD JSON Schema whole) or the older `responseSchema` (field
+        // 16, the OpenAPI-subset `Schema` message). Either way
+        // `responseMimeType: application/json` is REQUIRED beside it, so the
+        // mime type still pairs with the schema and the pair is still emitted
+        // together or not at all.
+        //
+        // Which field answers is the family question the thinking arm above
+        // already asks, and it is asked of the same single home:
+        // {@see ThinkingCapability} is the table of family GENERATIONS, so a
+        // Gemini id of the family the table knows predates the modern arms
+        // (the 1-series and 2.0) - which never received
+        // `responseJsonSchema` - takes the subset path, and every other id,
+        // a 2.5 or newer or a served name outside both families the table
+        // knows, keeps the standard-document field. That is the whole of
+        // PRV-3-P1's 400: the subset message has no `$schema`, no `$defs`
+        // and no dollar-spelled `additionalProperties` - it spells the last
+        // two dollar-less (`ref`, `defs`) - so a hand-written JSON Schema
+        // forwarded verbatim carried keys the arm cannot name.
+        //
+        // The subset path sanitises what it CAN express and drops the whole
+        // arm when it cannot: strip the three foreign keys, and if a `$ref`
+        // still survives it points at a `$defs` that is gone, which the
+        // subset cannot be translated into (rewriting `$ref` into `ref` is
+        // not this arm's to invent), so - like an unparseable schema text -
+        // it degrades to plain output rather than a 400 the caller cannot
+        // act on. Hosts that do not advertise the capability never receive
+        // either field because no caller sets it for them (Vertex's flag
+        // states this).
+        //
+        // A step that carries function declarations sends NEITHER key.
+        // Runtime hands the schema and the tool list on the SAME request
+        // (self-finishing candidate steps), and this wire deliberately sends
+        // no `tools` at all - {@see supportsFunctionCalling()} - so an answer
+        // constrained to a shape here could not be the tool call the turn
+        // needs. Re-requesting a constrained answer once the turn is ready
+        // to give one is AUT-4's terminal-answer step, another area; this
+        // step only stops the 400.
+        //
+        // Not verified live: no GCP credentials live in this repo, so every
+        // claim above rests on the vendored GenerationConfig document under
+        // vendor/google/cloud-ai-platform and Google's published reference
+        // pages, exactly as the epistemic note on {@see geminiBody()}.
         $schema = $request->jsonSchema;
         if (is_string($schema)) {
             $schema = json_decode($schema, true);
         }
-        if (is_array($schema) && $schema !== []) {
-            $generationConfig['responseSchema'] = $schema;
-            $generationConfig['responseMimeType'] = 'application/json';
+        if (is_array($schema) && $schema !== [] && ($request->tools ?? []) === []) {
+            if (self::geminiFamilyPredatesJsonSchemaField($model)) {
+                $subset = self::geminiSchemaToOpenApiSubset($schema);
+                if (!self::geminiSchemaHoldsReference($subset)) {
+                    $generationConfig['responseSchema'] = $subset;
+                    $generationConfig['responseMimeType'] = 'application/json';
+                }
+            } else {
+                $generationConfig['responseJsonSchema'] = $schema;
+                $generationConfig['responseMimeType'] = 'application/json';
+            }
         }
 
         $body['generationConfig'] = $generationConfig;
 
         return $body;
+    }
+
+    /**
+     * Whether this id belongs to a Gemini family that never received the
+     * `responseJsonSchema` arm.
+     *
+     * Asked of {@see ThinkingCapability} rather than restated here: that
+     * class is the repo's single table of model-family GENERATIONS, and its
+     * Gemini rows are the ids that predate the GenerationConfig arms the
+     * modern family added (`thinkingConfig` there, `responseJsonSchema`
+     * here - the same documented 2.5 boundary, and the table is the only
+     * place either generation claim is written down). What is borrowed is the
+     * generation fact, never the thinking field.
+     *
+     * `family()` is what makes an id the table does NOT know (a proxy's
+     * alias, a self-hosted served name) take the modern path instead: an
+     * unknown id is never a KNOWN-ANCIENT one, and the 2.0/1-series ids that
+     * do match are the family the omission protects.
+     */
+    private static function geminiFamilyPredatesJsonSchemaField(string $model): bool
+    {
+        return ThinkingCapability::family($model) === ThinkingCapability::FAMILY_GEMINI
+            && !ThinkingCapability::supportsThinking($model);
+    }
+
+    /**
+     * The keys a standard JSON Schema document carries that the OpenAPI
+     * subset message has no spelling for.
+     *
+     *   - `$schema` - the dialect anchor; neither arm names it.
+     *   - `$defs` - the subset's definitions map is `defs`, dollar-less.
+     *   - `additionalProperties` - the subset's `additional_properties` is
+     *     one Value, not the boolean-or-schema union JSON Schema uses, so a
+     *     document's claim there is not something the arm can carry.
+     *
+     * The walk descends the positions that hold SUB-schemas and nowhere else,
+     * so a property a model is being asked to emit whose NAME happens to be
+     * `$schema` is data and stays: `properties` is walked by its values,
+     * never by its keys.
+     *
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    private static function geminiSchemaToOpenApiSubset(array $schema): array
+    {
+        unset($schema['$schema'], $schema['$defs'], $schema['additionalProperties']);
+
+        foreach (['anyOf', 'oneOf', 'allOf', 'prefixItems'] as $branch) {
+            if (isset($schema[$branch]) && is_array($schema[$branch])) {
+                foreach ($schema[$branch] as $index => $sub) {
+                    if (is_array($sub)) {
+                        $schema[$branch][$index] = self::geminiSchemaToOpenApiSubset($sub);
+                    }
+                }
+            }
+        }
+
+        if (isset($schema['properties']) && is_array($schema['properties'])) {
+            foreach ($schema['properties'] as $name => $sub) {
+                if (is_array($sub)) {
+                    $schema['properties'][$name] = self::geminiSchemaToOpenApiSubset($sub);
+                }
+            }
+        }
+
+        if (isset($schema['items']) && is_array($schema['items'])) {
+            // The odd one out: `items` is EITHER one sub-schema or a tuple
+            // of them, so the shape of the value decides the walk.
+            $items = $schema['items'];
+            if ($items !== [] && array_is_list($items)) {
+                foreach ($items as $index => $sub) {
+                    if (is_array($sub)) {
+                        $items[$index] = self::geminiSchemaToOpenApiSubset($sub);
+                    }
+                }
+            } else {
+                $items = self::geminiSchemaToOpenApiSubset($items);
+            }
+
+            $schema['items'] = $items;
+        }
+
+        return $schema;
+    }
+
+    /**
+     * Whether a sanitised document still names a reference.
+     *
+     * Scanned over the WHOLE tree of the document rather than the sub-schema
+     * positions alone: a `$ref` is only ever a schema key, and looking
+     * everywhere is the conservative direction - at worst it costs the
+     * structured output on an exotic document, it cannot send a document the
+     * subset has no name for. With `$defs` gone by
+     * {@see geminiSchemaToOpenApiSubset()} a surviving `$ref` has nothing
+     * left to resolve against, and rewriting it into the subset's
+     * dollar-less `ref` is a translation this arm refuses to invent.
+     *
+     * @param array<array-key, mixed> $node
+     */
+    private static function geminiSchemaHoldsReference(array $node): bool
+    {
+        if (array_key_exists('$ref', $node)) {
+            return true;
+        }
+
+        foreach ($node as $value) {
+            if (is_array($value) && self::geminiSchemaHoldsReference($value)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

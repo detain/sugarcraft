@@ -1056,6 +1056,38 @@ Every `compaction.*` key but `compaction.refillLimit` is tuning a trusted
 project may set: a repository whose exchanges are unusually heavy may move
 them, and your own `settings.json` still outranks it.
 
+## The model catalog the palette lists
+
+The model rows the Ctrl+P "Switch Model" palette and `candy-code models all`
+show are three tiers merged by `ModelCatalog::merge()`, and the order is the
+order you read them in:
+
+1. **What this session actually speaks** — the model running now when it runs
+   on that provider, the id saved for it under `models`, and the provider's
+   configured default (`ModelChoice::paletteLabels()`), each once.
+2. **The endpoint's own answer** — a bounded sweep of its model list, asked
+   only of a provider that speaks one, and only of the provider your backend
+   is already on.
+3. **LiteLLM's names** for that provider's hosted family. `sglang` and
+   `custom` have no attribution row and so contribute no third tier: guessing
+   a hosted family for a self-hosted base is the same error the pricing table
+   refuses, and a local id would otherwise appear beside hosted look-alikes.
+
+A label already emitted by an earlier tier is dropped, so tier precedence and
+row order are one list, and the whole thing caps at
+`ModelCatalog::MAX_ROWS` (64) rows per provider — a hosted catalog with
+thousands of ids never turns the palette into an ocean.
+
+Only the leading tier is yours to configure. Making the endpoint's live
+answer outrank the ids you set is a possible alternative and was not taken:
+what you typed is what the top row should be, and the order above is the one
+shipped.
+
+Both fetches run from update-side code only (a palette open, a `/model`),
+memoise once per process — including a null, so an unreachable endpoint is
+asked about once and not per keystroke — and the render path reads nothing but
+memos. A cold catalog therefore means a shorter list, never a stalled frame.
+
 ## Every key
 
 Every key any settings file can carry, layered or not, generated from

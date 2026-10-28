@@ -92,7 +92,7 @@ final class GeminiProviderTest extends TestCase
         $this->assertFalse($provider->supportsFunctionCalling(), 'the arm builds no tool shapes - claiming the capability without the plumbing is the bug PRV-3 refuses to reintroduce');
         $this->assertTrue($provider->supportsVision(), 'inline images ride inlineData parts via the shared AttachmentEncoding');
         $this->assertFalse($provider->supportsDocuments(), 'document blocks are the Anthropic-family position, same as Vertex\'s arm takes');
-        $this->assertTrue($provider->supportsJsonSchema(), 'PRV-3 (3/3): the shared arm emits the native responseSchema/responseMimeType pair');
+        $this->assertTrue($provider->supportsJsonSchema(), 'PRV-3 (3/3): the shared arm emits a structured-output schema beside its mime type (C-PRV-5.d: responseJsonSchema on the modern family, the responseSchema subset on the families that predate it)');
 
         $this->assertCount(0, $provider->embeddings(new EmbeddingsRequest(model: 'gemini-embedding-1', input: 'x'))->embeddings);
     }
@@ -201,31 +201,36 @@ final class GeminiProviderTest extends TestCase
         $this->assertSame(['thinkingBudget' => 0], $captured['body']['generationConfig']['thinkingConfig']);
     }
 
-    public function testStructuredOutputRidesTheNativeSchemaAndMimeTypePairTogetherOrNotAtAll(): void
+    public function testStructuredOutputRidesTheJsonSchemaAndMimeTypePairTogetherOrNotAtAll(): void
     {
-        // AUT-4 honesty regime: Google's GenerationConfig ignores a
-        // responseSchema sent without responseMimeType, so the shared arm
-        // emits them as a pair — and an absent or unparseable schema emits
-        // neither half rather than a schema the server will silently drop.
+        // C-PRV-5.d: Google's GenerationConfig REQUIRES responseMimeType
+        // beside EITHER structured-output field and takes only ONE of the two
+        // at a time, so the pair still travels together or not at all — and on
+        // this family the field is responseJsonSchema, which carries the
+        // operator's standard JSON Schema whole. (The older `responseSchema`
+        // subset arm is what a pre-2.5 family still gets; that path and its
+        // sanitiser are pinned in GeminiResponseSchemaTest.) An absent or
+        // unparseable schema still emits neither half.
         $schema = ['type' => 'object', 'properties' => ['answer' => ['type' => 'string']], 'required' => ['answer']];
 
         $captured = null;
         $provider = $this->providerCapturingUnary($captured);
 
         $provider->complete(new CompleteRequest(model: 'gemini-2.5-flash', messages: [new UserMessage('hi')], jsonSchema: $schema));
-        $this->assertSame($schema, $captured['body']['generationConfig']['responseSchema']);
+        $this->assertSame($schema, $captured['body']['generationConfig']['responseJsonSchema']);
         $this->assertSame('application/json', $captured['body']['generationConfig']['responseMimeType']);
+        $this->assertArrayNotHasKey('responseSchema', $captured['body']['generationConfig'], 'the arms are mutually exclusive - the field that accepts JSON Schema says response_schema must be omitted');
 
         // The string spelling of the same schema decodes to the same pair.
         $provider->complete(new CompleteRequest(model: 'gemini-2.5-flash', messages: [new UserMessage('hi')], jsonSchema: (string) json_encode($schema)));
-        $this->assertSame($schema, $captured['body']['generationConfig']['responseSchema']);
+        $this->assertSame($schema, $captured['body']['generationConfig']['responseJsonSchema']);
 
         $provider->complete(new CompleteRequest(model: 'gemini-2.5-flash', messages: [new UserMessage('hi')], jsonSchema: 'this is not json'));
-        $this->assertArrayNotHasKey('responseSchema', $captured['body']['generationConfig'], 'an unparseable schema degrades to plain output, never a half a pair');
+        $this->assertArrayNotHasKey('responseJsonSchema', $captured['body']['generationConfig'], 'an unparseable schema degrades to plain output, never a half a pair');
         $this->assertArrayNotHasKey('responseMimeType', $captured['body']['generationConfig']);
 
         $provider->complete(new CompleteRequest(model: 'gemini-2.5-flash', messages: [new UserMessage('hi')]));
-        $this->assertArrayNotHasKey('responseSchema', $captured['body']['generationConfig']);
+        $this->assertArrayNotHasKey('responseJsonSchema', $captured['body']['generationConfig']);
     }
 
     public function testAnEmptyTranscriptRefusesThroughTheErrorCarrier(): void
