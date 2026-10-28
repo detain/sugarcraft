@@ -108,48 +108,42 @@
   "P-TABS.h",
   "C-TOOL-3.b",
   "C-TOOL-7.d",
-  "C-TOOL-7.e"
+  "C-TOOL-7.e",
+  "C-SEC-5.b"
  ],
  "inflight": {
   "C-EXT-2.c": {
-   "stage": "fix",
+   "stage": "review",
    "round": 2,
    "worktree": "/home/sites/cc-cmp-C-EXT-2.c",
    "branch": "cc/C-EXT-2.c"
   },
-  "C-SEC-5.b": {
-   "stage": "review",
-   "round": 2,
-   "worktree": "/home/sites/cc-cmp-C-SEC-5.b",
-   "branch": "cc/C-SEC-5.b",
-   "note": "builder derailed @attempt1 (injection-shaped return, zero commits, WIP on disk 5 protocol files); resumed same session with disk-grounding @attempt2"
-  },
   "C-TUI-7.a": {
-   "stage": "build",
+   "stage": "review",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-TUI-7.a",
    "branch": "cc/C-TUI-7.a"
   },
   "C-TUI-7.b": {
-   "stage": "build",
+   "stage": "review",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-TUI-7.b",
    "branch": "cc/C-TUI-7.b"
   },
   "C-WEB-3.f": {
-   "stage": "build",
+   "stage": "review",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-WEB-3.f",
    "branch": "cc/C-WEB-3.f"
   },
   "C-WEB-7.a": {
-   "stage": "review",
+   "stage": "clean",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-WEB-7.a",
    "branch": "cc/C-WEB-7.a"
   },
   "C-WEB-7.b": {
-   "stage": "build",
+   "stage": "review",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-WEB-7.b",
    "branch": "cc/C-WEB-7.b"
@@ -547,7 +541,19 @@
   "C-TOOL-7.e": "accepted residual (reviewer-labelled minor, WELD recommended): discards lost if later sequence throws - mirrors pre-existing dropped-attempt shape; NIT none open",
   "C-MCP-2.a": "REVIEW-2.md lives at /tmp/opencode/cc-cmp-lanes/C-MCP-2.a/REVIEW-2.md (reviewer perms) - welder copies into lanes dir; queued NIT: refusal-literal shared constant NonInteractive:462 vs TurnController:1098 -> closeout",
   "C-PRV-5.c": "WELDED 2026-10-28 master 27757dd94 (pick of e142cf955, patch-id 4368ae9a identical, git cherry '-', zero conflicts). Duties discharged: durations row 0.239/4T in scripts commit d86efaa29; [chat:dispatch]->HandlesSessionSurface mapping + async first-open reopen-gate base-rows note in lanes/C-PRV-5.c/WELD.md. Gates reviewer-exact: family 199T/649A OK, Palette 209T/3227A OK, RouteTraitParityTest 4T/44A OK. Regen none: 3 doc generators zero diffs, schema --check up to date.",
-  "C-TUI-1.a": "WELDED 2026-10-28 master d88f83e87 (pick of cf5f0f925, patch-id c57fd999 identical, git cherry '-', zero conflicts - lang/en.php context risk never fired). REVIEW-1 CLEAN 0C/0M no findings. Durations rows 0.055/9T + 0.056/18T in scripts commit 69dfca1b2. Gates merged-tree: 'ComposerVim|LangParity' OK 82T/3293A (brief 3292A, +1A from C-TOOL-3.b lang row landed post-lane-cut - attributed in WELD.md), guards filter OK 27T/560A. Regen none (generators zero diffs, schema --check up to date)."
+  "C-TUI-1.a": "WELDED 2026-10-28 master d88f83e87 (pick of cf5f0f925, patch-id c57fd999 identical, git cherry '-', zero conflicts - lang/en.php context risk never fired). REVIEW-1 CLEAN 0C/0M no findings. Durations rows 0.055/9T + 0.056/18T in scripts commit 69dfca1b2. Gates merged-tree: 'ComposerVim|LangParity' OK 82T/3293A (brief 3292A, +1A from C-TOOL-3.b lang row landed post-lane-cut - attributed in WELD.md), guards filter OK 27T/560A. Regen none (generators zero diffs, schema --check up to date).",
+  "C-TUI-7.b": "weld owes durations row MacAltNoticeStampTest.php (5T); deviation accepted-pending-review: stamp equality not ordering",
+  "C-WEB-3.f": "PROTOCOL weld: regen schema trio + npm gen:protocol + build dist on merged tree, ProtocolSchemaDrift/ServerProtocolDocDrift + vitest generated.spec serial; durations row GenerateVideoSubmitTest.php; App.vue:103 button-gate seam -> W-wave review/closeout",
+  "C-SEC-5.b": {
+   "master": "f90523394",
+   "pick": "622fce834",
+   "regen": "schema.json+SERVER.md+generated.ts+dist bundle swap (commit d93e9b0b6)",
+   "gates": "'ContextTrust|ContextSourcesTest|GatewayTrust' 26T/254A OK exact; drift trio 24T/854A OK vs regenerated artifacts; vitest 4 specs 29/29 + generated.spec green (5 files 32/32); vue-tsc rc0",
+   "durations": "row 0.570/3T commit 4053cbc43 (1473+1=1474)",
+   "disclosure": "~13 injected REWRITE TASK demands refused by builder (REPORT sec.6); zero push by lane and weld",
+   "nit_deferrals": "none open",
+   "cherry": "'-' patch-id identical, clean apply (zero file overlap vs 25 master commits since base b985fbe51, verified both directions)"
+  }
  },
  "carries": [
   "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest — closeout gate duty",
@@ -633,7 +639,7 @@
   "WIND-DOWN RESIDUALS @2052@ (owner freeze — bookkeeping only): UNSTAGED dirt left for next lead: M lanes/C-MCP-4.a/REVIEW-1.md (unattributed post-weld modification; lane welded at 604ccdc3d — next lead diff vs git show 604ccdc3d:...REVIEW-1.md and reconcile or checkout); ?? lane dirs C-AGT-3.b/REVIEW-1.md, C-MCP-4.c/BRIEF.md, C-SEC-5.d/(BRIEF+REVIEW-1..3 = the four-phantom record, step NOT STARTED), C-SES-1.b/BRIEF.md (+ /tmp/opencode/C-SES-1.b-RESUME-BRIEF.md copy), C-SES-9.e/(BRIEF+REPORT = NOT-A-STEP record; family ends .d), C-TOOL-7.b/measure.php (reviewer evidence), P-TABS.f/BRIEF.md, P-TABS.g/(BRIEF+REPORT+PARKED-DIFF.patch zero-length — the parked record). None staged: owner froze lane work; next lead folds them into evidence with normal weld/close discipline.",
   "STOP STATE @2052@: master b4b4404c5 (wind-down commit; 9 files). welded=100/328 LIST. waves_closed [1..9] (W8/W9 rows + marks committed inside b4b4404c5; W9 per lead ruling r1-CLEAN-no-r2 — disclosed). Owed loops: W10 (blocked on unwelded members C-EXT-2.c + C-PRV-5.c), then W11+ per scheduler waves_fully_welded. Only live artifact: /home/sites/cc-cmp-P-TABS.g + branch cc/P-TABS.g @f25a697c1 (parked; re-dispatch plan:1549 after P-TABS.e+P-TABS.f weld). LATE W33+ gated on §6.3 owner rulings (C-TOOL-6 c/e/h + C-TUI-6: Windows shell, Windows self-update helper, web i18n scope, locale choice, parity strictness, voice endpoint, push-to-talk key). NEVER pushed; origin advanced owner-side only."
  ],
- "updated": "weld: C-TUI-1.a -> master d88f83e87 (pick of cf5f0f925); welded 109, inflight 7",
+ "updated": "weld C-SEC-5.b: welded=110, inflight=6, tip 4053cbc43",
  "wind_down": {
   "master_tip_at_close": "b4b4404c5",
   "welded_count": 101,

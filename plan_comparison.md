@@ -1388,7 +1388,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-PRV-5.d`
 
-#### C-SEC-5.b — Web trust targets and MCP pin re-approval
+#### ✅ f90523394 C-SEC-5.b — Web trust targets and MCP pin re-approval
 - **Item:** C-SEC-5 (sources: GAP-PER-11 web half, GAP-MCP-N1, k3-dorm#5) · dormant-wire · effort M
 - **What:** `TrustAsks` (`src/Protocol/TrustAsks.php:33`) declares one grantable target (`TARGET_MCP`) and keys records by root. It becomes keyed by root+target. `ContextMethods::sources()` mints one prompt per …
 - **Files — create:** `candy-code/tests/Protocol/ContextTrustTargetsTest.php`
