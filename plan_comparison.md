@@ -1366,7 +1366,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-6.b`
 
-#### C-EXT-2.d — `/skills enable|disable` + picker toggle through SkillManager
+#### ✅ fa14b82c6 C-EXT-2.d — `/skills enable|disable` + picker toggle through SkillManager
 - **Item:** C-EXT-2 (sources: k2-dorm SkillManager accessors) · dormant-wire · effort M
 - **What:** `SkillManager::enable()`/`disable()` (`SkillManager.php:292-320`) have no caller. `App::handleSelectSkill()` (`App.php:4735-4785`) re-implements enable inline and can never disable. Changes: `/skills disable <name>` and `/skills …
 - **Files — create:** none
