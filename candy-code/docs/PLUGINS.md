@@ -52,6 +52,9 @@ Bundles **map onto the existing loaders** rather than opening a parallel
 plugin system, and a bundle's content lands at every loader's **lowest
 precedence seat**: a plain `.claude/skills`, `.claude/commands` or
 `.claude/agents` directory always beats a bundle's same-named entry, per tier.
+For slash commands the beat is no longer a shadow: bundle rows are namespaced
+`<bundle>:<cmd>` (C-EXT-4.c), so two bundles shipping the same file both
+survive, and the flat spelling is admitted only while no other row claims it.
 
 - **Skills** (`skills/<name>/SKILL.md`) load through the same discovery as
   every foreign skill and appear badged `[bundle]` in the skill listing, with
@@ -59,8 +62,10 @@ precedence seat**: a plain `.claude/skills`, `.claude/commands` or
   one.
 - **Slash commands** (`commands/<name>.md`) ride the foreign-command
   discovery that already backs `.claude/commands` — same frontmatter and
-  `$ARGUMENTS` rules; the `` !`cmd` `` form expands to a refusal instead of a
-  shell, see the declined surfaces below and [COMMANDS.md](COMMANDS.md).
+  `$ARGUMENTS` rules; rows are named `/<bundle>:<cmd>` with the flat
+  `/<cmd>` kept only while unclaimed, so a `review.md` arriving in a second
+  bundle replaces nothing. The `` !`cmd` `` form expands to a refusal instead
+  of a shell, see the declined surfaces below and [COMMANDS.md](COMMANDS.md).
 - **Agent presets** (`agents/<name>.md`) register like any other foreign
   preset; the file format is the Claude one by definition. A bundle preset
   loses a name collision to any plain foreign directory, then to the project

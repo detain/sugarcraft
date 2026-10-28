@@ -157,15 +157,18 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // from. Anchor discipline unchanged — still second, still optional.
 
         // The anchor survived the wiring — the gate was added BEFORE the
-        // consumer, and acquiring a consumer must not relax it. FOUR parameters
-        // now, not two or three: the third is `$tier`, added when `` !`cmd` `` shipped,
+        // consumer, and acquiring a consumer must not relax it. FIVE parameters
+        // now, not two, three or four: the third is `$tier`, added when `` !`cmd` `` shipped,
         // because which DIRECTORY a command came out of is what decides whether
-        // its shell form may run. What is pinned is that the anchor is still
-        // SECOND and still optional — the count is asserted so a fourth
-        // parameter cannot arrive unremarked, not because two was the property.
+        // its shell form may run, and the fifth is C-EXT-4.c's `$bundle`, the
+        // namespace prefix for rows read from a bundle's own tree — optional and
+        // nullable like the rest, so no existing caller moved. What is pinned is
+        // that the anchor is still SECOND and still optional — the count is
+        // asserted so a further parameter cannot arrive unremarked, not because
+        // two was the property.
         $anchored = (new \ReflectionMethod(CommandLoader::class, 'loadFromDirectory'))
             ->getParameters();
-        $this->assertCount(4, $anchored);
+        $this->assertCount(5, $anchored);
         $this->assertSame('anchoredIn', $anchored[1]->getName());
         $this->assertTrue($anchored[1]->isOptional());
         $this->assertSame('tier', $anchored[2]->getName());

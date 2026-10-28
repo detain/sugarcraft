@@ -93,12 +93,13 @@ final class CommandLoader
     /**
      * The env var that puts this loader's refusals back on stderr.
      *
-     * OFF BY DEFAULT. Four of the seven `report()` calls below are paired
+     * OFF BY DEFAULT. Four of the eight `report()` calls below are paired
      * with a collector that {@see \SugarCraft\Code\Cli\Bootstrap::chat()}
      * drains onto the transcript seam, so by default they were saying the same
-     * thing twice on one channel; two more
-     * ({@see loadFromDirectory()}'s containment skip and its parse failure) are
-     * per-FILE and are collected on {@see skippedFiles()} instead. The seventh
+     * thing twice on one channel; three more
+     * ({@see loadFromDirectory()}'s containment skip, its parse failure and its
+     * unnamed-bundle skip — C-EXT-4.c) are per-FILE and are collected on
+     * {@see skippedFiles()} instead. The eighth
      * — {@see $overrides}'s accepted-shadow announcement — is paired since
      * ISS-036's closure: {@see \SugarCraft\Code\Cli\Bootstrap::reportCommandOverrides()}
      * drains it onto the launch seam as part of ONE aggregate row, so the flag
@@ -284,6 +285,48 @@ final class CommandLoader
     private array $commandSources = [];
 
     /**
+     * C-EXT-4.c — the FLAT alias candidates staged by bundle walks,
+     * bare name => [qualified row key => its flat-named spec].
+     *
+     * A bundle row's real name is `<bundle>:<file>`; the flat spelling is kept
+     * only while nothing else claims it, which is a question no single
+     * directory can answer — the claimant may arrive from another bundle in
+     * the same tier or from a plain foreign tree walked after it. So the
+     * loader stages candidates here and
+     * {@see \SugarCraft\Code\Commands\ForeignCommandDiscovery::walk()} judges
+     * them ONCE, after every directory has had its say. Rows staged but never
+     * admitted are simply absent from the command map; their
+     * {@see $commandSources} entries sit unused, keyed by names nothing
+     * consults.
+     *
+     * Only a call passing the $bundle parameter of
+     * {@see loadFromDirectory()} writes here, and the only such caller is
+     * ForeignCommandDiscovery, which resets before each walk.
+     *
+     * @var array<string, array<string, CommandSpec>>
+     */
+    private array $bundleAliasRows = [];
+
+    /**
+     * @return array<string, array<string, CommandSpec>> the staged flat
+     *         candidates, bare name => [qualified key => flat spec]
+     */
+    public function bundleAliasRows(): array
+    {
+        return $this->bundleAliasRows;
+    }
+
+    /**
+     * Discard staged alias candidates. Called by
+     * {@see \SugarCraft\Code\Commands\ForeignCommandDiscovery::walk()} before
+     * each walk so a re-walk never judges a stale candidate from a previous one.
+     */
+    public function resetBundleAliasRows(): void
+    {
+        $this->bundleAliasRows = [];
+    }
+
+    /**
      * `*.md` files skipped during a walk that otherwise succeeded,
      * path => reason.
      *
@@ -422,9 +465,21 @@ final class CommandLoader
      *        written for, display-only where $tier is the gate. Passed only by
      *        {@see ForeignCommandDiscovery}; the native walkers leave rows
      *        unbadged, which is what "this port's own format" looks like.
+     * @param string|null $bundle C-EXT-4.c — the NAME of the bundle owning the
+     *        directory, threaded from
+     *        {@see ForeignCommandDiscovery::bundleDirs()}. When set, every row
+     *        this call produces is keyed `<segment>:<name>` (segment = the
+     *        bundle name folded into NAME_PATTERN's charset by
+     *        {@see bundleSegment()}), so two bundles shipping the same command
+     *        file keep two distinct rows instead of collapsing last-write-wins;
+     *        the flat spelling is staged in {@see $bundleAliasRows} for walk()'s
+     *        unclaimed-alias judgement. A bundle whose name folds to nothing
+     *        has no legal prefix: each of its files is refused with a skip
+     *        record rather than loaded under a bare name. Null on every
+     *        non-bundle call — those rows keep their flat names untouched.
      * @return array<string, CommandSpec>
      */
-    public function loadFromDirectory(string $dir, ?string $anchoredIn = null, ?string $tier = null, ?SkillSource $source = null): array
+    public function loadFromDirectory(string $dir, ?string $anchoredIn = null, ?string $tier = null, ?SkillSource $source = null, ?string $bundle = null): array
     {
         $realDir = realpath($dir);
         if ($realDir === false || !is_dir($realDir)) {
@@ -481,9 +536,38 @@ final class CommandLoader
 
             $name = $this->commandNameFor($realDir, $realPath);
 
+            // C-EXT-4.c: inside a bundle the file's own name becomes the
+            // TAIL of a `<bundle>:`-prefixed row, and the bare name only a
+            // candidate alias walk() admits while unclaimed. Folding the
+            // bundle name happens here (the loader stamps row shapes; the
+            // discovery class only threads the name it was given).
+            $flat = $name;
+            if ($bundle !== null) {
+                $segment = self::bundleSegment($bundle);
+                if ($segment === '') {
+                    $skip = Lang::t('cmd.loader.file-failed', [
+                        'file' => $realPath,
+                        'error' => Lang::t('cmd.file.unsafe-name', ['name' => $bundle]),
+                    ]);
+                    $this->skippedFiles[$realPath] = $skip;
+                    $this->report($skip);
+
+                    continue;
+                }
+                $name = $segment . ':' . $name;
+            }
+
             try {
                 $commands[$name] = CommandSpec::fromFile($realPath, $name, $tier, $source);
                 $this->commandSources[$name] = $realPath;
+                if ($bundle !== null) {
+                    // A separate spec under the flat name: row keys and
+                    // CommandSpec::$name must agree (CommandRegistry::filter()
+                    // keys byName and its uniqueness is pinned), so the alias
+                    // row cannot ride the qualified spec.
+                    $this->bundleAliasRows[$flat][$name] = CommandSpec::fromFile($realPath, $flat, $tier, $source);
+                    $this->commandSources[$flat] = $realPath;
+                }
             } catch (\Throwable $e) {
                 $skip = Lang::t('cmd.loader.file-failed', ['file' => $realPath, 'error' => $e->getMessage()]);
                 $this->skippedFiles[$realPath] = $skip;
@@ -496,6 +580,25 @@ final class CommandLoader
         ksort($commands);
 
         return $commands;
+    }
+
+    /**
+     * Fold a bundle's manifest name into a legal NAME_PATTERN leading segment.
+     *
+     * Bundle names carry no charset restriction (manifest `name`, else the
+     * directory's basename — {@see \SugarCraft\Code\Bundles\Bundle}), so
+     * anything outside the segment grammar becomes "-", repeats collapse, and
+     * leading/trailing decoration is trimmed. The empty answer means the
+     * bundle cannot name a row at all, and the CALLER refuses its files with
+     * a skip record rather than silently loading them unqualified — an
+     * unqualified row is exactly the shadow this step cures.
+     */
+    private static function bundleSegment(string $bundleName): string
+    {
+        $segment = (string) preg_replace('/[^A-Za-z0-9_-]+/', '-', trim($bundleName));
+        $segment = (string) preg_replace('/^[^A-Za-z0-9]+/', '', $segment);
+
+        return trim($segment, '-');
     }
 
     /**

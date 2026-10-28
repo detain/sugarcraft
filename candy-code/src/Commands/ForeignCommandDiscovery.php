@@ -125,11 +125,19 @@ final class ForeignCommandDiscovery
 
     /**
      * The command trees the given bundles contribute, in the same
-     * directory => [anchor, tier, badge] shape {@see claudeDirs()} builds.
+     * directory => [anchor, tier, badge, bundle-name] shape
+     * {@see claudeDirs()} builds (where the fourth slot is null).
      * A bundle is anchored at ITS OWN directory — the containment boundary a
      * bundle's contents may never cross, whichever tier installed it — and
      * badged {@see SkillSource::Bundle} so the popup can say where the row
      * came from.
+     *
+     * The fourth slot carries the bundle's NAME so {@see walk()} can thread it
+     * to the loader, which namespaces that bundle's rows as
+     * `<bundle>:<file>` (C-EXT-4.c): two bundles shipping `review.md` keep two
+     * distinct rows instead of one silently replacing the other in the merge
+     * below, which is what "last-write-wins" measured as when both rows
+     * carried the same bare key.
      *
      * Bundles are walked FIRST inside their tier (PLG-1, plan_comparison W6):
      * the plain foreign trees are ones the operator assembled by hand at
@@ -139,7 +147,7 @@ final class ForeignCommandDiscovery
      * applied one level down.
      *
      * @param list<\SugarCraft\Code\Bundles\Bundle> $bundles
-     * @return array<string, array{0: string, 1: string, 2: SkillSource}>
+     * @return array<string, array{0: string, 1: string, 2: SkillSource, 3: ?string}>
      */
     public static function bundleDirs(array $bundles): array
     {
@@ -147,7 +155,7 @@ final class ForeignCommandDiscovery
 
         foreach ($bundles as $bundle) {
             foreach ($bundle->commandsPaths() as $dir) {
-                $dirs[$dir] = [$bundle->dir, $bundle->tier, SkillSource::Bundle];
+                $dirs[$dir] = [$bundle->dir, $bundle->tier, SkillSource::Bundle, $bundle->name];
             }
         }
 
@@ -155,48 +163,49 @@ final class ForeignCommandDiscovery
     }
 
     /**
-     * @return array<string, array{0: string, 1: string, 2: SkillSource}>
+     * @return array<string, array{0: string, 1: string, 2: SkillSource, 3: null}>
      *         directory => [the tree the directory itself must stay inside,
-     *         the tier its rows are stamped with, the convention badging them]
+     *         the tier its rows are stamped with, the convention badging them,
+     *         the bundle name namespaceing them — null: these are plain trees]
      */
     private static function claudeDirs(string $projectRoot): array
     {
         $dirs = [
-            $projectRoot . '/.claude/commands' => [$projectRoot, 'project', SkillSource::Claude],
+            $projectRoot . '/.claude/commands' => [$projectRoot, 'project', SkillSource::Claude, null],
         ];
 
         $home = HomeDirectory::owned();
         if ($home !== null) {
-            $dirs[$home . '/.claude/commands'] = [$home, 'user', SkillSource::Claude];
+            $dirs[$home . '/.claude/commands'] = [$home, 'user', SkillSource::Claude, null];
         }
 
         return $dirs;
     }
 
     /**
-     * @return array<string, array{0: string, 1: string, 2: SkillSource}>
+     * @return array<string, array{0: string, 1: string, 2: SkillSource, 3: null}>
      */
     private static function opencodeDirs(string $projectRoot): array
     {
         $dirs = [
-            $projectRoot . '/.opencode/command' => [$projectRoot, 'project', SkillSource::Opencode],
-            $projectRoot . '/.opencode/commands' => [$projectRoot, 'project', SkillSource::Opencode],
+            $projectRoot . '/.opencode/command' => [$projectRoot, 'project', SkillSource::Opencode, null],
+            $projectRoot . '/.opencode/commands' => [$projectRoot, 'project', SkillSource::Opencode, null],
         ];
 
         $home = HomeDirectory::owned();
         if ($home !== null) {
-            $dirs[$home . '/.opencode/command'] = [$home, 'user', SkillSource::Opencode];
-            $dirs[$home . '/.opencode/commands'] = [$home, 'user', SkillSource::Opencode];
-            $dirs[$home . '/.config/opencode/command'] = [$home, 'user', SkillSource::Opencode];
-            $dirs[$home . '/.config/opencode/commands'] = [$home, 'user', SkillSource::Opencode];
+            $dirs[$home . '/.opencode/command'] = [$home, 'user', SkillSource::Opencode, null];
+            $dirs[$home . '/.opencode/commands'] = [$home, 'user', SkillSource::Opencode, null];
+            $dirs[$home . '/.config/opencode/command'] = [$home, 'user', SkillSource::Opencode, null];
+            $dirs[$home . '/.config/opencode/commands'] = [$home, 'user', SkillSource::Opencode, null];
         }
 
         return $dirs;
     }
 
     /**
-     * @param array<string, array{0: string, 1: string, 2: SkillSource}> $dirs
-     * @return array<string, array{0: string, 1: string, 2: SkillSource}>
+     * @param array<string, array{0: string, 1: string, 2: SkillSource, 3: ?string}> $dirs
+     * @return array<string, array{0: string, 1: string, 2: SkillSource, 3: ?string}>
      */
     private static function tier(array $dirs, string $tier): array
     {
@@ -211,15 +220,40 @@ final class ForeignCommandDiscovery
      * order machine-independent for the same reason the loader sorts each
      * directory.
      *
-     * @param array<string, array{0: string, 1: string, 2: SkillSource}> $dirs
+     * THE ONE EXCEPTION TO LAST-WRITE-WINS (C-EXT-4.c): bundle rows are keyed
+     * `<bundle>:<file>` and never collide with each other; their FLAT
+     * spellings are candidates the loader staged, admitted here only after
+     * every directory has merged — a flat name survives precisely when no
+     * other bundle's file claimed it and no plain foreign row of any tier did
+     * either. Judging after the walk (rather than in load order) is what makes
+     * "the operator's hand-assembled tree wins" true in BOTH directions,
+     * whichever band the plain row was read in.
+     *
+     * @param array<string, array{0: string, 1: string, 2: SkillSource, 3: ?string}> $dirs
      * @return array<string, CommandSpec>
      */
     private function walk(array $dirs): array
     {
+        $this->loader->resetBundleAliasRows();
+
         $commands = [];
-        foreach ($dirs as $dir => [$anchoredIn, $tier, $source]) {
-            foreach ($this->loader->loadFromDirectory($dir, $anchoredIn, $tier, $source) as $name => $spec) {
+        foreach ($dirs as $dir => [$anchoredIn, $tier, $source, $bundle]) {
+            foreach ($this->loader->loadFromDirectory($dir, $anchoredIn, $tier, $source, $bundle) as $name => $spec) {
                 $commands[$name] = $spec;
+            }
+        }
+
+        foreach ($this->loader->bundleAliasRows() as $bare => $owners) {
+            // Two bundles claiming one flat name cancel each other's alias;
+            // so does any row already in the map under that name.
+            if (count($owners) !== 1 || isset($commands[$bare])) {
+                continue;
+            }
+            $qualified = (string) array_key_first($owners);
+            // The qualified row could have been refused (unreadable file)
+            // after staging; an alias may not outlive its row.
+            if (isset($commands[$qualified])) {
+                $commands[$bare] = $owners[$qualified];
             }
         }
 

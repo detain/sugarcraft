@@ -48,8 +48,20 @@ final class CommandSpec
      * but a leading/trailing/doubled separator is not, which is what keeps a
      * traversal-shaped filename ("../../etc/passwd.md") from ever becoming a
      * command name.
+     *
+     * C-EXT-4.c (lead-approved ruling 2026-10-29) adds ONE optional leading
+     * `[A-Za-z0-9][A-Za-z0-9_-]*:` segment — the bundle namespace, so two
+     * bundles shipping the same command file keep two distinct rows
+     * ("reviewkit:review"). The widen is path-safe by the same argument the
+     * paragraph above makes: ":" carries no path meaning, the segment grammar
+     * admits neither "." nor "/", and every "/"-tail still must open with an
+     * alphanumeric — so nothing traversal-shaped reaches a name through the
+     * colon, and docs/PERMISSIONS.md's "tool input fields are not shell
+     * commands" boundary stays where it was: this is a KEY shape, not an
+     * execution surface. Exactly one colon position is legal (the head
+     * segment's tail edge); "a:b:c", ":a", "a:" and "../:x" all still refuse.
      */
-    private const NAME_PATTERN = '/^[A-Za-z0-9][A-Za-z0-9_-]*(\/[A-Za-z0-9][A-Za-z0-9_-]*)*$/';
+    private const NAME_PATTERN = '/^(?:[A-Za-z0-9][A-Za-z0-9_-]*:)?[A-Za-z0-9][A-Za-z0-9_-]*(\/[A-Za-z0-9][A-Za-z0-9_-]*)*$/';
 
     /**
      * ONE alternation over all four template forms, in ONE pass over the body.
@@ -384,7 +396,8 @@ final class CommandSpec
             // 15b-16). PaneLabel::of() is the project's one-row untrusted-text
             // boundary: escapes, C0/C1 controls and line breaks all go.
             // The name needs no pass of its own - NAME_PATTERN above is ASCII
-            // alphanumerics, '_', '-' and '/' only.
+            // alphanumerics, '_', '-' and '/' only, plus since C-EXT-4.c the
+            // one leading bundle-namespace colon.
             description: self::displayField($meta, 'description', $path) ?? Lang::t('cmd.custom.description', ['name' => $name]),
             category: Lang::t('cmd.category.custom'),
             argumentHint: self::displayField($meta, 'argument-hint', $path),

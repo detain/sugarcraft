@@ -25,7 +25,7 @@ Three tiers, merged by name, later overriding earlier
 | built-in | `CommandRegistry::all()` | n/a, they are PHP |
 | user | `~/.candy-code/commands/*.md` | yes |
 | project | `<root>/.candy-code/commands/*.md` | **only if this root is trusted** |
-| bundle | a plugin bundle's `commands/*.md` ([PLUGINS.md](PLUGINS.md)) | **never — refused whatever tier the bundle installed under** |
+| bundle | a plugin bundle's `commands/*.md` ([PLUGINS.md](PLUGINS.md)), rows named `<bundle>:<cmd>` | **never — refused whatever tier the bundle installed under** |
 | mcp | a fetched `prompts/get` body ([MCP.md](MCP.md)) | **never — refused whatever this project trusts** |
 | foreign | the other tools' trees (below) | the tier decides: user **yes**, project **only if this root is trusted** |
 
@@ -46,6 +46,16 @@ native name.
 `/test`; `deploy/staging.md` gives `/deploy/staging`. Subdirectories namespace,
 and the walk is capped at `CommandLoader::MAX_DEPTH` levels deep — which also
 bounds a symlink cycle inside the directory.
+
+Bundle rows are the exception to bare naming (C-EXT-4.c): a bundle's
+`review.md` is `/reviewkit:review` — the bundle name folded into the name
+pattern's charset as a leading segment, and a bundle whose name folds to
+nothing has its files refused with a skip record rather than loaded bare — so
+two bundles that both ship `review.md` keep two rows instead of one silently
+replacing the other in the floor merge above. A bundle row also holds the flat
+spelling `/review` **only while nothing else claims it**: another bundle's
+file of that name, or any plain foreign row of any tier, and the flat spelling
+is not admitted.
 
 A file-based command **may override a built-in** by name — a user-tier file
 always may, and a project-tier file only when its root is listed under

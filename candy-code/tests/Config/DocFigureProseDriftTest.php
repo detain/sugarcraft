@@ -3038,7 +3038,7 @@ final class DocFigureProseDriftTest extends TestCase
     {
         $envRaw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/ENVIRONMENT.md');
         $env = self::markdownProse($envRaw);
-        $words = ['two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7];
+        $words = ['two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8];
 
         self::assertSame(1, preg_match('/for the (\w+) that briefly differed/', $env, $pair1), 'the app-variables preamble no longer previews the alias count');
         self::assertSame(1, preg_match('/^(\w+) app variables originally carried an underscore/m', $envRaw, $pair2), 'the aliases section no longer opens with its own count');
@@ -3072,27 +3072,27 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/`CommandLoader`\'s (\w+) refusal and announcement lines back on stderr: the (\w+) tier-directory refusals, the per-file containment skip, the per-file parse failure, the control-plane name refusal, the refused built-in shadow, and the accepted built-in override/', $env, $refusals),
-            'the DEBUG_COMMANDS row no longer decomposes its seven lines in one breath',
+            preg_match('/`CommandLoader`\'s (\w+) refusal and announcement lines back on stderr: the (\w+) tier-directory refusals, the per-file containment skip, the per-file parse failure, the per-file unnamed-bundle skip, the control-plane name refusal, the refused built-in shadow, and the accepted built-in override/', $env, $refusals),
+            'the DEBUG_COMMANDS row no longer decomposes its eight lines in one breath',
         );
         $loader = self::sourceOf('Commands/CommandLoader.php');
         $reported = substr_count($loader, '$this->report(');
         self::assertSame($words[$refusals[1]] ?? -1, $reported, 'the row\'s spelled total no longer counts CommandLoader\'s report() sites');
         $perFile = substr_count($loader, '$this->skippedFiles[');
-        self::assertSame(2, $perFile, 'the two per-file refusals are no longer the two skippedFiles sinks — recount the decomposition');
+        self::assertSame(3, $perFile, 'the three per-file refusals are no longer the three skippedFiles sinks — recount the decomposition');
         self::assertSame(2, substr_count($loader, '$this->refusedDirectories['), 'the tier-directory half is no longer the two refusedDirectories sinks');
         self::assertSame($words[$refusals[2]] ?? -2, substr_count($loader, '$this->refusedDirectories['), 'the row\'s spelled tier-directory count no longer matches the refusedDirectories sinks');
         self::assertSame(
             1,
-            preg_match('/(\w+) of the seven are paired with a collector.*?Two more are per-file/s', $env, $splitDoc),
-            'the collector/per-file split sentence moved — its numbers ride the same seven sites',
+            preg_match('/(\w+) of the eight are paired with a collector.*?more are per-file/s', $env, $splitDoc),
+            'the collector/per-file split sentence moved — its numbers ride the same eight sites',
         );
         $announced = substr_count($loader, '$this->overrides[$name] = ');
-        self::assertSame(1, $announced, 'the override announcement is the seventh report site and the row names it as such');
+        self::assertSame(1, $announced, 'the override announcement is the eighth report site and the row names it as such');
         self::assertSame($reported - $perFile - $announced, $words[strtolower($splitDoc[1])] ?? -3, 'the drained count is no longer report sites minus per-file minus the uncollected announcement');
         self::assertSame(1, preg_match('/(\w+) more are per-file.*?and are collected on `CommandLoader::skippedFiles\(\)`/s', $env, $perFileDoc), 'the per-file half no longer states its count beside its sink');
         self::assertSame($perFile, $words[strtolower($perFileDoc[1])] ?? -2, 'the spelled per-file count drifted from the skippedFiles sinks');
-        self::assertStringContainsString('Four of the seven', $loader, 'the class docblock\'s own "four of the seven" agreement with the row is gone');
+        self::assertStringContainsString('Four of the eight', $loader, 'the class docblock\'s own "four of the eight" agreement with the row is gone');
     }
 
     /**

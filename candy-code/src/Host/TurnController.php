@@ -397,7 +397,10 @@ final class TurnController
      * up.
      *
      * THE COLON INVOCATION FORM, `/name:arg`, is tried only after the whole
-     * name misses (`:` is not legal in a command file's name), and its tail is
+     * name misses. A colon is legal in a command name ONLY as one leading
+     * bundle-namespace segment (`<bundle>:<file>`, C-EXT-4.c) — and the
+     * whole-name try above is what makes such a row reachable as typed; this
+     * arm still serves its original purpose for every other name. Its tail is
      * PREPENDED to the arguments, matching `parse()`'s reading of
      * `/compact:x y` — without it every built-in stayed reachable,
      * un-overridden, through its colon spelling.
