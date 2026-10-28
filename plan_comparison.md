@@ -2050,7 +2050,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** P-AGENT.a (W6), P-TABS.g (W16)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-AGENT.b`
 
-#### C-CTX-5.c — Idle fold timed to the prompt-cache TTL
+#### ✅ 8780474729d27ccbc48a06b9a27c70d280a1f0b2 C-CTX-5.c — Idle fold timed to the prompt-cache TTL (welded 2026-10-29)
 - **Item:** C-CTX-5 (sources: GAP-CTX-N2, CC-new#10, p1-miss: CTX-5 short cache-warm idle tier, CLAW-new#5 (bounded-history view, n/a)) · competitor-feature · effort M
 - **What:** `compaction.idleAuto` becomes an enum: `off | hour | cacheTtl`. The bool keeps reading as `hour`/`off`. `cacheTtl` folds a session idle just short of its provider's cache TTL, from `MarksPromptCache` (5 min for most, 1 h when …
 - **Files — create:** `candy-code/tests/Context/CacheTtlIdleFoldTest.php`

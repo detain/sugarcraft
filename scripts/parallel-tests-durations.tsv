@@ -739,6 +739,7 @@ candy-code/tests/Preview/RunningRowPreviewTest.php	0.072	8
 candy-code/tests/Chat/PreCompactHookTest.php	0.071	9
 candy-code/tests/Context/RulebookPromptRenderTest.php	0.071	14
 candy-code/tests/Session/SessionLockTest.php	0.071	10
+candy-code/tests/Context/CacheTtlIdleFoldTest.php	0.071	14
 candy-code/tests/App/KeybindingChordDispatchTest.php	0.070	4
 candy-code/tests/Config/Settings/SettingsWriterTest.php	0.070	53
 candy-code/tests/Hooks/RuntimePostToolUseBlockTest.php	0.070	7
