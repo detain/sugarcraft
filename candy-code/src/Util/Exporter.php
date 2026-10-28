@@ -105,6 +105,40 @@ final class Exporter
     }
 
     /**
+     * Export to JSON Lines: one {@see toJson()} row per physical line, each
+     * line a standalone JSON object (C-SES-8). This is the shape the append-only
+     * {@see \SugarCraft\Code\Share\JsonlTranscriptWriter} journal and
+     * `/export <file>.jsonl` share; unlike {@see toJson()} it carries no pretty
+     * printing, because line framing is the record boundary.
+     */
+    public static function toJsonl(array $messages): string
+    {
+        $messages = self::shown($messages);
+
+        $lines = [];
+        foreach ($messages as $msg) {
+            $row = match (true) {
+                $msg instanceof CrushMessage => self::crushJsonRow($msg),
+                $msg instanceof MessagesMessage => $msg->toArray(),
+                default => $msg,
+            };
+            $encoded = json_encode(
+                $row,
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+            );
+            if ($encoded === false) {
+                // A row that cannot encode (inf/nan floats ride provider wires)
+                // would desync the writer's line-count high-water mark if it
+                // vanished; a framed placeholder keeps one line per message.
+                $encoded = '{"role":"unknown","content":""}';
+            }
+            $lines[] = $encoded;
+        }
+
+        return $lines === [] ? '' : implode("\n", $lines) . "\n";
+    }
+
+    /**
      * Export to plain text format.
      */
     public static function toText(array $messages): string

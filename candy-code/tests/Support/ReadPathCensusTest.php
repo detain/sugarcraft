@@ -864,6 +864,17 @@ final class ReadPathCensusTest extends TestCase
             'CALLER_SUPPLIED — gitBranchAt(): that gitdir\'s HEAD, the same file `git branch --show-current` '
                 . 'reads; 4 KB, and only a `ref: refs/heads/<name>` line is kept, as the session\'s branch',
         ],
+        'Share/JsonlTranscriptWriter.php|fopen' => [
+            'SELF_LOCATED — the journal append: `ab` on a path this class assembled from its '
+                . 'defaultRoot()/baseDir seam, a slugFor() project segment and a segment()-contained '
+                . 'session id, under a 0077 umask with the 0700 dir and symlink doors checked first; '
+                . 'nothing is read back through this handle',
+        ],
+        'Share/JsonlTranscriptWriter.php|file_get_contents' => [
+            'OWNED_HOME — the high-water replay read of the journal file at exactly the path '
+                . 'save() just assembled, under the ~/.candy-code/transcripts root '
+                . 'HomeDirectory::owned() establishes (tests hand a temp root to the baseDir seam)',
+        ],
         'Background/BackgroundSessionRunner.php|file_get_contents' => [
             'SELF_LOCATED — the per-spawn token file the supervisor minted in its 0700 '
                 . 'IPC dir, read to authenticate the daemon\'s handshake (audit M5)',

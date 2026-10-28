@@ -97,6 +97,42 @@ final class ExportCommandTest extends TestCase
     }
 
     /**
+     * C-SES-8: `jsonl` joins the export formats — one standalone JSON row per
+     * line, raw bytes like every other local export, reachable both as a bare
+     * format word and from the `.jsonl` extension. The sibling pin keeps the
+     * design's stated risk excluded: `/share` answers `jsonl` with its OWN
+     * hardcoded four-format refusal (it never consults SUPPORTED_FORMATS), so
+     * the journal format stays local-export-only.
+     */
+    public function testJsonlExportsOneRawRowPerLineWhileShareRefusesTheFormat(): void
+    {
+        $reply = $this->slashExport('/export out/session.jsonl');
+        $this->assertStringContainsString('as jsonl', $reply->content);
+
+        $body = (string) file_get_contents($this->root . '/out/session.jsonl');
+        $this->assertStringContainsString(self::SECRET, $body, 'the raw-bytes ruling covers jsonl too');
+        $this->assertStringNotContainsString('a ui-only notice', $body, 'chrome is filtered before framing');
+
+        $roles = [];
+        foreach (explode("\n", rtrim($body, "\n")) as $line) {
+            $row = json_decode($line, true);
+            $this->assertIsArray($row, "each jsonl line is one standalone object: {$line}");
+            $this->assertArrayHasKey('role', $row);
+            $roles[] = $row['role'];
+        }
+        $this->assertSame(['system', 'user', 'assistant'], $roles);
+
+        $named = $this->slashExport('/export jsonl out/named');
+        $this->assertStringContainsString("to `{$this->root}/out/named.jsonl`", $named->content);
+
+        $refused = $this->dispatch('/share jsonl out/should-not-exist.jsonl');
+        $shareReply = $refused->history[\count($refused->history) - 1];
+        $this->assertSame(Role::System, $shareReply->role, 'a refused format answers as chrome, not an export reply');
+        $this->assertStringContainsString('Invalid format', $shareReply->content);
+        $this->assertFileDoesNotExist($this->root . '/out/should-not-exist.jsonl');
+    }
+
+    /**
      * The text-only display sweep (plan: "through the maskImageMarkers/
      * Sanitize pipeline"): private-use marker bytes and the bare bidi
      * override do not belong in a .txt a user will cat, but this is hygiene,

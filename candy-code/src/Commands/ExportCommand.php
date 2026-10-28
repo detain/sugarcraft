@@ -216,6 +216,7 @@ final class ExportCommand
             'markdown', 'md' => ShareSession::FORMAT_MARKDOWN,
             'html', 'htm' => ShareSession::FORMAT_HTML,
             'json' => ShareSession::FORMAT_JSON,
+            'jsonl' => ShareSession::FORMAT_JSONL,
             'text', 'txt', 'plain' => ShareSession::FORMAT_TEXT,
             default => null,
         };

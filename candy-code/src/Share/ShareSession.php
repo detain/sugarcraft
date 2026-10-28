@@ -13,8 +13,9 @@ use SugarCraft\Code\Util\Exporter;
  * Represents a session prepared for sharing.
  *
  * Extracts and serializes the conversation history from a Chat instance
- * into shareable export formats (Markdown, self-contained HTML, JSON, plain
- * text). `/share` writes the result to a local file (roadmap X-35a); the
+ * into shareable export formats (Markdown, self-contained HTML, JSON, JSON
+ * Lines, plain text). `/share` writes the result to a local file (roadmap
+ * X-35a); the
  * HTML rendering doubles as the published snapshot behind `/share serve`
  * ({@see ShareStore}, COMPARISON §6.5).
  *
@@ -34,6 +35,7 @@ final class ShareSession
     public const FORMAT_MARKDOWN = 'markdown';
     public const FORMAT_HTML = 'html';
     public const FORMAT_JSON = 'json';
+    public const FORMAT_JSONL = 'jsonl';
     public const FORMAT_TEXT = 'text';
 
     /** @var list<string> Supported export formats */
@@ -41,6 +43,7 @@ final class ShareSession
         self::FORMAT_MARKDOWN,
         self::FORMAT_HTML,
         self::FORMAT_JSON,
+        self::FORMAT_JSONL,
         self::FORMAT_TEXT,
     ];
 
@@ -139,6 +142,7 @@ final class ShareSession
         // Use wire format (toWire()) for export - handles the concrete Message type
         return match ($this->format) {
             self::FORMAT_JSON => Exporter::toJson($this->messages),
+            self::FORMAT_JSONL => Exporter::toJsonl($this->messages),
             self::FORMAT_HTML => Exporter::toHtml($this->messages),
             self::FORMAT_TEXT => Exporter::toText($this->messages),
             default => Exporter::toMarkdown($this->messages),
@@ -160,6 +164,7 @@ final class ShareSession
     {
         return match ($this->format) {
             self::FORMAT_JSON => 'application/json',
+            self::FORMAT_JSONL => 'application/x-ndjson',
             self::FORMAT_HTML => 'text/html',
             self::FORMAT_TEXT => 'text/plain',
             default => 'text/markdown',
@@ -173,6 +178,7 @@ final class ShareSession
     {
         return match ($this->format) {
             self::FORMAT_JSON => 'json',
+            self::FORMAT_JSONL => 'jsonl',
             self::FORMAT_HTML => 'html',
             self::FORMAT_TEXT => 'txt',
             default => 'md',
