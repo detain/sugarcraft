@@ -193,6 +193,16 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.diffPreviewRows.label'))
                 ->withHelp(Lang::t('settings.diffPreviewRows.help'))
                 ->withReaderSymbol(Renderer::class . '::diffPreviewRows'),
+            SettingDefinition::new('diffStyle', SettingType::Enum, 'auto')
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withEnumValues(['auto', 'unified', 'split'])
+                ->withLabel(Lang::t('settings.diffStyle.label'))
+                ->withHelp(Lang::t('settings.diffStyle.help'))
+                ->withReaderSymbol(Renderer::class . '::diffStyle'),
             SettingDefinition::new('toolOutputPreviewLines', SettingType::Int, Renderer::TOOL_OUTPUT_MAX_LINES)
                 ->withCategory(SettingCategory::Interface)
                 ->withRiskClass(RiskClass::Cosmetic)

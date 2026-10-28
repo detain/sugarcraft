@@ -1278,13 +1278,13 @@ Only these one hundred and thirty-four keys are layered — `provider`,
 `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `theme`, `statusLine`,
 `layout`, `notify`, `watchFiles`, `queueMode`, `terminalBackground`, `mouse`,
 `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`,
-`diffPreviewRows`, `toolOutputPreviewLines`, `sessionRetentionDays`,
-`sessions.autoTitle`, `promptSuggestions`, `promptSuggestionHistory`,
-`expandToolOutput`, `maxCheckpoints`, `keybindings`, `vimMode`, `lintCommands`,
-`formatCommands`, `formatAuto`, `disabledMcpServers`, `mcp.enabled`,
-`mcp.lazySchemaTokens`, `connectTimeoutSeconds`, `providerRetryAttempts`,
-`providerRetryBaseBackoffMs`, `debug.skills`, `debug.commands`, `debug.rules`,
-`debug.stream`.
+`diffPreviewRows`, `diffStyle`, `toolOutputPreviewLines`,
+`sessionRetentionDays`, `sessions.autoTitle`, `promptSuggestions`,
+`promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints`, `keybindings`,
+`vimMode`, `lintCommands`, `formatCommands`, `formatAuto`, `disabledMcpServers`,
+`mcp.enabled`, `mcp.lazySchemaTokens`, `connectTimeoutSeconds`,
+`providerRetryAttempts`, `providerRetryBaseBackoffMs`, `debug.skills`,
+`debug.commands`, `debug.rules`, `debug.stream`.
 <!-- settings:layered:end -->
 
 That roster (and its count) is generated from `SettingsSchema` by

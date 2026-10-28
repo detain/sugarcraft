@@ -330,4 +330,44 @@ final class DiffGutterTest extends TestCase
         }
         $this->assertSame(Width::string($gutter->prefixes[1]), $gutter->width);
     }
+
+    /**
+     * C-TUI-2.c: the split layout paints one gutter per side, so the helpers
+     * the renderer walks must agree with forDiff() — a side prefix has to be
+     * exactly the matching half of the unified prefix it replaces.
+     */
+    public function testTheSideGuttersReproduceTheUnifiedPrefixHalves(): void
+    {
+        $this->assertSame(0, DiffGutter::sideWidth(0));
+        $this->assertSame(3, DiffGutter::sideWidth(1));
+        $this->assertSame(4, DiffGutter::sideWidth(2), 'digits plus the two-cell separator');
+
+        $this->assertSame('', DiffGutter::sidePrefix(5, 0), 'a zero-digit side is a zero-width gutter');
+        $this->assertSame('5│ ', DiffGutter::sidePrefix(5, 1));
+        $this->assertSame(' │ ', DiffGutter::sidePrefix(null, 1), 'a blank number right-pads like the unified column');
+
+        $gutter = DiffGutter::forDiff(['@@ -11,2 +12,2 @@', ' ctx', '-old', '+new']);
+        // The context row is the one shape whose both number fields are digits.
+        [$oldField, $newField] = explode(' ', explode(DiffGutter::SEPARATOR, $gutter->prefixes[1])[0]);
+        $digits = strlen($oldField);
+        $this->assertSame(2, $digits);
+        $this->assertSame(
+            str_pad($oldField, $digits, ' ', STR_PAD_LEFT) . DiffGutter::SEPARATOR,
+            DiffGutter::sidePrefix((int) $oldField, $digits),
+        );
+        $this->assertSame(DiffGutter::sidePrefix((int) $newField, $digits), $newField . DiffGutter::SEPARATOR);
+    }
+
+    public function testHunkHeaderRecognitionSeparatesParseableFromNumberable(): void
+    {
+        $this->assertTrue(DiffGutter::isHunkHeader('@@ -1,2 +3,4 @@'));
+        $this->assertTrue(DiffGutter::isHunkHeader('@@ -99999999999,3 +99999999999,3 @@'), 'shape alone is a hunk header');
+        $this->assertFalse(DiffGutter::isHunkHeader('--- a/x'));
+        $this->assertFalse(DiffGutter::isHunkHeader('-@@ -1 +1 @@'));
+        $this->assertFalse(DiffGutter::isHunkHeader('@@x'));
+
+        $this->assertTrue(DiffGutter::isNumberableHunk('@@ -1,2 +3,4 @@'));
+        $this->assertFalse(DiffGutter::isNumberableHunk('@@ -99999999999,3 +99999999999,3 @@'), 'past MAX_LINE_NUMBER_DIGITS the hunk cannot be numbered');
+        $this->assertFalse(DiffGutter::isNumberableHunk('--- a/x'));
+    }
 }

@@ -10,6 +10,11 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Parser;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Token;
+use SugarCraft\Core\Syntax\RegexHighlighter;
+use SugarCraft\Core\Syntax\TokenKind;
+use SugarCraft\Diff\Line as DiffLine;
+use SugarCraft\Diff\LineKind;
+use SugarCraft\Diff\Writer\SideBySideFormat;
 use SugarCraft\Code\Config\StatusLineCommand;
 use SugarCraft\Code\Media\PreviewPaint;
 use SugarCraft\Code\Media\PreviewSlots;
@@ -301,6 +306,44 @@ final class Renderer
      * been truncated back to their `+`/`-` marker.
      */
     private const DIFF_MIN_BODY_COLS = 24;
+
+    /**
+     * Viewport columns at which `diffStyle: auto` switches from the unified
+     * paint to side-by-side (C-TUI-2.c). Below this each half would be
+     * narrower than a normal source line and every changed row would arrive
+     * as two truncated columns; at or above it each half keeps roughly 55
+     * cells past its number gutter, enough to read old against new.
+     *
+     * PUBLIC because {@see \SugarCraft\Code\Tui\DiffGutter}'s split gutters
+     * and the split render test both need the same threshold rather than a
+     * second literal.
+     */
+    public const DIFF_SPLIT_MIN_COLS = 120;
+
+    /**
+     * Cells of body (marker column included) each half of a split hunk must
+     * keep to be painted side-by-side at all. Below it the hunk falls back to
+     * full-width unified rows — a wide line-number gutter can eat both halves
+     * even in a viewport past {@see DIFF_SPLIT_MIN_COLS}.
+     */
+    private const DIFF_SPLIT_MIN_SIDE_COLS = 8;
+
+    /**
+     * Which diff layout to paint: the `diffStyle` setting (C-TUI-2.c), one of
+     * `auto`, `unified`, `split`. The setting validates as an Enum, so a bad
+     * spelling already resolved to the default before it got here; the match
+     * is defence against a future unvalidated reader, not a second validator.
+     */
+    private static function diffStyle(): string
+    {
+        $style = (string) \SugarCraft\Code\Config\Settings\UiSettings::value('diffStyle');
+
+        return match ($style) {
+            'split' => 'split',
+            'unified' => 'unified',
+            default => 'auto',
+        };
+    }
 
     /**
      * Columns the transcript shell's own chrome consumes, subtracted before
@@ -5424,6 +5467,13 @@ final class Renderer
      * {@see self::DIFF_MAX_ROWS} with a trailer for the same reason
      * {@see render()} tail-clips: a 400-line diff must not evict the
      * conversation it belongs to.
+     *
+     * Two layouts (C-TUI-2.c): `diffStyle` picks unified or side-by-side, with
+     * `auto` splitting at {@see DIFF_SPLIT_MIN_COLS} or wider; both paints run
+     * through {@see renderDiffBody()}, which tints each body row's tokens in
+     * the current file's language while the marker column keeps its
+     * add/remove colour. The one-logical-row width invariant is load-bearing
+     * for BOTH layouts — an over-wide row is the PR #1403 collision class.
      */
     private static function renderDiff(string $diff, Theme $theme, int $width): string
     {
@@ -5458,33 +5508,58 @@ final class Renderer
             $rows,
         );
 
-        // On a viewport too narrow to spare the columns, the diff text itself
-        // is worth more than knowing its line numbers - drop the gutter rather
-        // than truncate every row down to its marker.
-        $gutter = DiffGutter::forDiff($rows);
-        if ($inner - $gutter->width < self::DIFF_MIN_BODY_COLS) {
-            $gutter = DiffGutter::none(count($rows));
-        }
-
-        // Computed from the un-narrowed rows, and separately from $gutter, so
-        // that dropping the gutter for a narrow viewport does not also change
-        // how the body is coloured.
-        $headers = DiffGutter::fileHeaders($rows);
-
-        $body = $inner - $gutter->width;
         $gutterStyle = self::dim($theme);
+        $highlighter = new RegexHighlighter();
 
-        $painted = [];
-        foreach ($rows as $i => $row) {
-            $text = Width::truncate($row, $body);
-            $prefix = $gutter->prefixes[$i];
-            $painted[] = ($prefix === '' ? '' : $gutterStyle->render($prefix))
-                . self::styleDiffLine($text, $theme, $headers[$i])->render($text);
+        // C-TUI-2.c (GAP-UI-05): a wide enough viewport paints hunks
+        // side-by-side, removals against additions, each half with its own
+        // line-number column. `unified` opts out; `auto` (the default) splits
+        // only past the threshold, which is measured against the FRAME width
+        // — the inner budget is the split math's own concern below.
+        $style = self::diffStyle();
+        $split = $style === 'split'
+            || ($style === 'auto' && $width >= self::DIFF_SPLIT_MIN_COLS);
+
+        if ($split) {
+            $body = $inner;
+            $blankPrefix = '';
+            $painted = self::renderDiffSplitRows($rows, $theme, $inner, $gutterStyle, $highlighter);
+        } else {
+            // On a viewport too narrow to spare the columns, the diff text itself
+            // is worth more than knowing its line numbers - drop the gutter rather
+            // than truncate every row down to its marker.
+            $gutter = DiffGutter::forDiff($rows);
+            if ($inner - $gutter->width < self::DIFF_MIN_BODY_COLS) {
+                $gutter = DiffGutter::none(count($rows));
+            }
+
+            // Computed from the un-narrowed rows, and separately from $gutter, so
+            // that dropping the gutter for a narrow viewport does not also change
+            // how the body is coloured.
+            $headers = DiffGutter::fileHeaders($rows);
+
+            // C-TUI-2.c (GAP-UI-04): each row's body is tinted by the tokens
+            // of the file it belongs to — the language travels with the
+            // `--- `/`+++ `/`diff --git ` headers the walk below tracks.
+            $languages = self::diffRowLanguages($rows, $headers);
+
+            $body = $inner - $gutter->width;
+            $blankPrefix = $gutter->blank;
+
+            $painted = [];
+            foreach ($rows as $i => $row) {
+                $text = Width::truncate($row, $body);
+                $prefix = $gutter->prefixes[$i];
+                $painted[] = ($prefix === '' ? '' : $gutterStyle->render($prefix))
+                    . ($headers[$i]
+                        ? self::styleDiffLine($text, $theme, true)->render($text)
+                        : self::renderDiffBody($text, $theme, $languages[$i], $highlighter));
+            }
         }
 
         if ($overflow > 0) {
             $trailer = Width::truncate(Lang::t($overflow === 1 ? 'tui.tool.more_diff_line' : 'tui.tool.more_diff_lines', ['count' => $overflow]), $body);
-            $painted[] = $gutterStyle->render($gutter->blank . $trailer);
+            $painted[] = $gutterStyle->render($blankPrefix . $trailer);
         }
 
         return Style::new()
@@ -5492,6 +5567,256 @@ final class Renderer
             ->borderForeground($theme->border)
             ->padding(0, 1)
             ->render(implode("\n", $painted));
+    }
+
+    /**
+     * Split paint of a diff block ({@see renderDiff()}, C-TUI-2.c). File
+     * headers, hunk headers and any hunk the split cannot be trusted with ride
+     * full-width; trusted hunks arrive as
+     *
+     *     oldnum│ - removed    │ newnum│ + added
+     *
+     * paired by sugar-diff's {@see SideBySideFormat}. The width law (PR #1403)
+     * holds by construction: each row is at most 2*sideGutter + 2*halfBody + 1
+     * divider cells, and halfBody is `intdiv` of exactly that leftover — so
+     * nothing can exceed $inner, which is what keeps the border box within
+     * $width and the absolute-cursorTo repaint sane.
+     *
+     * @param list<string> $rows already sanitised and tab-expanded
+     * @return list<string> painted rows, no border
+     */
+    private static function renderDiffSplitRows(array $rows, Theme $theme, int $inner, Style $gutterStyle, RegexHighlighter $highlighter): array
+    {
+        $headers = DiffGutter::fileHeaders($rows);
+        $languages = self::diffRowLanguages($rows, $headers);
+
+        $painted = [];
+        $count = count($rows);
+        $i = 0;
+        while ($i < $count) {
+            $row = Width::truncate($rows[$i], $inner);
+            if ($headers[$i]) {
+                $painted[] = self::styleDiffLine($row, $theme, true)->render($row);
+                $i++;
+                continue;
+            }
+            if (!DiffGutter::isHunkHeader($rows[$i])) {
+                $painted[] = self::renderDiffBody($row, $theme, $languages[$i], $highlighter);
+                $i++;
+                continue;
+            }
+
+            $start = $i;
+            $body = [];
+            $annotated = false;
+            $i++;
+            while ($i < $count && !$headers[$i] && !DiffGutter::isHunkHeader($rows[$i])) {
+                // "\ No newline at end of file" annotates the row above it.
+                // Side-by-side would have to decide which half to hang it on;
+                // unified keeps it glued to its line, so an annotated hunk
+                // stays unified whole.
+                $annotated = $annotated || str_starts_with($rows[$i], '\\');
+                $body[] = $rows[$i];
+                $i++;
+            }
+
+            $splitHunk = $annotated
+                ? null
+                : self::renderDiffSplitHunk($rows[$start], $body, $theme, $inner, $gutterStyle, $highlighter, $languages[$start]);
+            if ($splitHunk !== null) {
+                array_push($painted, ...$splitHunk);
+                continue;
+            }
+
+            // Fallback for this hunk only — full-width unified-styled rows,
+            // every one of them: nothing is ever dropped, which is what the
+            // trust guard exists to protect.
+            for ($j = $start; $j < $i; $j++) {
+                $painted[] = self::renderDiffBody(Width::truncate($rows[$j], $inner), $theme, $languages[$j], $highlighter);
+            }
+        }
+
+        return $painted;
+    }
+
+    /**
+     * Pair one hunk with {@see SideBySideFormat} and paint it side-by-side,
+     * or return null when the pairing cannot be trusted: the format's scanner
+     * disagreeing with our classification (any parsed line missing from the
+     * pairing would silently vanish from the paint), or the two number
+     * columns leaving less than {@see DIFF_SPLIT_MIN_SIDE_COLS} per half.
+     *
+     * @param list<string> $body
+     * @return ?list<string>
+     */
+    private static function renderDiffSplitHunk(string $header, array $body, Theme $theme, int $inner, Style $gutterStyle, RegexHighlighter $highlighter, ?string $language): ?array
+    {
+        if (!DiffGutter::isNumberableHunk($header)) {
+            return null;
+        }
+
+        $pairs = SideBySideFormat::fromUnified($header . "\n" . implode("\n", $body) . "\n");
+
+        $seen = [];
+        $highest = 0;
+        foreach ($pairs as $pair) {
+            // Context rides both sides as the SAME Line instance, so unique
+            // object ids count every input line exactly once.
+            foreach ([$pair->left, $pair->right] as $line) {
+                if ($line !== null) {
+                    $seen[spl_object_id($line)] = true;
+                }
+            }
+            $highest = max($highest, $pair->left?->oldNumber ?? 0, $pair->right?->newNumber ?? 0);
+        }
+
+        if (count($seen) !== count($body)) {
+            return null;
+        }
+
+        $digits = $highest === 0 ? 0 : strlen((string) $highest);
+        $side = DiffGutter::sideWidth($digits);
+        $half = intdiv($inner - 2 * $side - 1, 2);
+        if ($half < self::DIFF_SPLIT_MIN_SIDE_COLS) {
+            return null;
+        }
+
+        $painted = [self::renderDiffBody($header, $theme, $language, $highlighter)];
+        foreach ($pairs as $pair) {
+            $leftPrefix = DiffGutter::sidePrefix($pair->left?->oldNumber, $digits);
+            $rightPrefix = DiffGutter::sidePrefix($pair->right?->newNumber, $digits);
+            $painted[] = ($leftPrefix === '' ? '' : $gutterStyle->render($leftPrefix))
+                . self::renderDiffHalf($pair->left, $theme, $language, $highlighter, $half)
+                . $gutterStyle->render('│')
+                . ($rightPrefix === '' ? '' : $gutterStyle->render($rightPrefix))
+                . self::renderDiffHalf($pair->right, $theme, $language, $highlighter, $half);
+        }
+
+        return $painted;
+    }
+
+    /**
+     * One half of a split pair: marker column restored from the line kind,
+     * truncated into the half's budget, then tinted like any body row. A null
+     * side (a deletion has no new-file line and vice versa) is blank padding
+     * so the centre divider stays put across the hunk.
+     */
+    private static function renderDiffHalf(?DiffLine $line, Theme $theme, ?string $language, RegexHighlighter $highlighter, int $half): string
+    {
+        if ($line === null) {
+            return str_repeat(' ', $half);
+        }
+
+        $marker = match ($line->kind) {
+            LineKind::Delete => '-',
+            LineKind::Insert => '+',
+            default => ' ',
+        };
+
+        return self::renderDiffBody(
+            Width::truncate($marker . $line->text, $half),
+            $theme,
+            $language,
+            $highlighter,
+        );
+    }
+
+    /**
+     * Paint one diff-body row: the marker column keeps its add/remove/context
+     * colour from {@see styleDiffLine()}, and the text after it is tinted per
+     * token in the file's language (C-TUI-2.c, GAP-UI-04). Token classes map
+     * onto the theme's markdown syntax slots — the same vocabulary code fences
+     * wear — so a diff and the rendered file agree on what a string or a
+     * keyword looks like. With no language (unknown extension, /dev/null, no
+     * file header at all) the row paints exactly as before this feature.
+     */
+    private static function renderDiffBody(string $row, Theme $theme, ?string $language, RegexHighlighter $highlighter): string
+    {
+        $style = self::styleDiffLine($row, $theme, false);
+        if ($language === null) {
+            return $style->render($row);
+        }
+
+        $marker = $row === '' ? ' ' : substr($row, 0, 1);
+        if ($marker !== ' ' && $marker !== '+' && $marker !== '-') {
+            return $style->render($row);
+        }
+
+        $spans = $highlighter->tokenize(substr($row, 1), $language);
+        if ($spans === [] || (count($spans) === 1 && $spans[0]->kind === TokenKind::Plain)) {
+            // Nothing to tint: paint the whole row in one run, byte-identical
+            // to the pre-C-TUI-2.c single-style rendering.
+            return $style->render($row);
+        }
+
+        $painted = $style->render($marker);
+        foreach ($spans as $span) {
+            $spanStyle = match ($span->kind) {
+                TokenKind::Comment => $theme->markdown->comment,
+                TokenKind::StringToken => $theme->markdown->string,
+                TokenKind::Keyword => $theme->markdown->keyword,
+                TokenKind::Number => $theme->markdown->number,
+                default => null,
+            } ?? $style;
+            $painted .= $spanStyle->render($span->text);
+        }
+
+        return $painted;
+    }
+
+    /**
+     * The language each row's body should be tinted in, travelling with the
+     * file headers exactly like the numbers travel with {@see DiffGutter}:
+     * every `diff --git ` row restarts the verdict (so a second file never
+     * wears the first one's colours even when its own name is unreadable),
+     * and a `--- `/`+++ ` side that resolves to nothing — the `/dev/null` of
+     * an added or deleted file — keeps the other side's language rather than
+     * losing it.
+     *
+     * @param list<string> $rows
+     * @param list<bool> $headers
+     * @return list<?string>
+     */
+    private static function diffRowLanguages(array $rows, array $headers): array
+    {
+        $languages = [];
+        $current = null;
+        foreach ($rows as $i => $row) {
+            if ($headers[$i]) {
+                $found = self::diffPathLanguage($row);
+                $current = str_starts_with($row, 'diff --git ') ? $found : ($found ?? $current);
+            }
+            $languages[$i] = $current;
+        }
+
+        return $languages;
+    }
+
+    /** A file-header row's path, mapped to a language (null for unknown). */
+    private static function diffPathLanguage(string $row): ?string
+    {
+        if (str_starts_with($row, '+++ ') || str_starts_with($row, '--- ')) {
+            $path = substr($row, 4);
+        } elseif (str_starts_with($row, 'diff --git ')) {
+            $tokens = preg_split('/\s+/', trim(substr($row, 11))) ?: [];
+            $path = '';
+            foreach ($tokens as $token) {
+                if (str_starts_with($token, 'b/')) {
+                    $path = $token;
+                }
+            }
+        } else {
+            return null;
+        }
+
+        // git appends a timestamp after the name, separated by whitespace
+        // (tabs were already expanded to spaces upstream).
+        $path = preg_split('/\s+/', trim($path))[0] ?? '';
+        if (str_starts_with($path, 'a/') || str_starts_with($path, 'b/')) {
+            $path = substr($path, 2);
+        }
+
+        return RegexHighlighter::languageForPath($path);
     }
 
     /**

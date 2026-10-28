@@ -50,6 +50,7 @@ final class UiSettings
         'doubleEscSeconds',
         'paletteMru',
         'diffPreviewRows',
+        'diffStyle',
         'toolOutputPreviewLines',
         'expandToolOutput',
         'sessions.autoTitle',

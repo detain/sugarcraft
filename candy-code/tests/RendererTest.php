@@ -1366,8 +1366,11 @@ final class RendererTest extends TestCase
     public function testEditToolDiffIsRenderedInTheTranscript(): void
     {
         $diff = "--- a/src/App.php\n+++ b/src/App.php\n@@ -1,3 +1,3 @@\n <?php\n-\$old = 1;\n+\$new = 2;\n";
-        $out = Renderer::render($this->sizedChat([Message::user('edit it'), $this->editResult($diff)]));
+        $out = Ansi::strip(Renderer::render($this->sizedChat([Message::user('edit it'), $this->editResult($diff)])));
 
+        // C-TUI-2.c: a php body now carries per-token SGR runs, so the needle
+        // is matched on the stripped frame; the colour bytes are pinned in
+        // tests/Tui/DiffSplitRenderTest.php.
         $this->assertStringContainsString('tool: Edit', $out);
         $this->assertStringContainsString('@@ -1,3 +1,3 @@', $out);
         $this->assertStringContainsString('-$old = 1;', $out);
@@ -1582,9 +1585,23 @@ final class RendererTest extends TestCase
 
         $out = Renderer::render($chat);
 
+        // C-TUI-2.c tints the deleted body through the file's language, so the
+        // red survives on the marker column while `table` rides the theme's
+        // keyword slot; the grammar's remaining spans stay removal-red.
+        $body = Style::new()->foreground(Color::ansi(1))->render('-');
+        $keyword = $chat->theme()->markdown->keyword;
+        $this->assertNotNull($keyword);
+        $row = array_values(array_filter(
+            explode("\n", $out),
+            static fn (string $line): bool => str_contains(Ansi::strip($line), '--- users table, legacy'),
+        ));
+        $this->assertNotCount(0, $row, 'the deleted comment row is still painted');
         $this->assertStringContainsString(
-            Style::new()->foreground(Color::ansi(1))->render('--- users table, legacy'),
-            $out,
+            $body
+            . Style::new()->foreground(Color::ansi(1))->render('-- users ')
+            . $keyword->render('table')
+            . Style::new()->foreground(Color::ansi(1))->render(', legacy'),
+            $row[0],
         );
         $this->assertStringNotContainsString(
             Style::new()->foreground($theme->systemLabel)->bold()->render('--- users table, legacy'),

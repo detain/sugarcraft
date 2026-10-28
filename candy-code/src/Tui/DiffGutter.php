@@ -48,7 +48,7 @@ final class DiffGutter
      * A rule rather than blank space because the marker column is itself made
      * of punctuation: without a divider, `  12 -$x` reads as one token.
      */
-    private const SEPARATOR = '│ ';
+    public const SEPARATOR = '│ ';
 
     /**
      * Largest `@@` start line this will number. A hunk claiming to begin past
@@ -141,6 +141,72 @@ final class DiffGutter
         );
     }
 
+    /**
+     * The raw start-line digits of a `@@ ... @@` hunk header, or null when the
+     * row is not one. Shared by the numbering walk and the split layout so the
+     * two cannot disagree about where a hunk starts — and so an oversized
+     * header is still RECOGNISED (numbering itself only opts out via
+     * {@see numberable()}, for the float-promotion reason at
+     * {@see MAX_LINE_NUMBER_DIGITS}).
+     *
+     * @return ?array{0:string,1:string}
+     */
+    private static function hunkStarts(string $line): ?array
+    {
+        if (preg_match('/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/', $line, $m) === 1) {
+            return [$m[1], $m[2]];
+        }
+
+        return null;
+    }
+
+    /** Whether this row is a hunk header at all, numberable or not. */
+    public static function isHunkHeader(string $line): bool
+    {
+        return self::hunkStarts($line) !== null;
+    }
+
+    /**
+     * Whether this row is a hunk header whose numbers may be trusted — the
+     * precondition the split layout needs before it derives two line-number
+     * columns from {@see \SugarCraft\Diff\Writer\SideBySideFormat}.
+     */
+    public static function isNumberableHunk(string $line): bool
+    {
+        $starts = self::hunkStarts($line);
+
+        return $starts !== null && self::numberable($starts[0]) && self::numberable($starts[1]);
+    }
+
+    /**
+     * Display width of ONE side's number column in the split layout: the old
+     * file numbers ride the left column, the new file numbers the right, so
+     * each half pays $digits plus the separator instead of the unified
+     * gutter's two number columns. 0 digits means no numbers at all — then no
+     * column either, the same opt-out {@see none()} gives the unified paint.
+     */
+    public static function sideWidth(int $digits): int
+    {
+        return $digits <= 0 ? 0 : $digits + Width::string(self::SEPARATOR);
+    }
+
+    /**
+     * The number column for one side of a split row: a right-aligned line
+     * number followed by the separator, or blank cells where the side has no
+     * line (a pure insertion has no old line, a pure deletion no new one).
+     * Mirrors {@see format()} half-for-half so both paints pad identically.
+     */
+    public static function sidePrefix(?int $number, int $digits): string
+    {
+        if ($digits <= 0) {
+            return '';
+        }
+
+        return ($number === null
+            ? str_repeat(' ', $digits)
+            : str_pad((string) $number, $digits, ' ', STR_PAD_LEFT)) . self::SEPARATOR;
+    }
+
     private static function format(?int $old, ?int $new, int $digits): string
     {
         return str_pad((string) $old, $digits, ' ', STR_PAD_LEFT)
@@ -177,15 +243,15 @@ final class DiffGutter
         $out = [];
 
         foreach ($lines as $line) {
-            if (preg_match('/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/', $line, $m) === 1) {
-                // Matched with an unbounded \d+ on purpose: the header has to
-                // be RECOGNISED even when its numbers are absurd, or the rows
-                // after it get counted as context and a previous hunk's
-                // numbering silently continues through them. Only the
-                // numbering opts out. See MAX_LINE_NUMBER_DIGITS.
-                $inHunk = self::numberable($m[1]) && self::numberable($m[2]);
-                $old = $inHunk ? (int) $m[1] : 0;
-                $new = $inHunk ? (int) $m[2] : 0;
+            // Recognised with an unbounded \d+ on purpose: the header has to
+            // be RECOGNISED even when its numbers are absurd, or the rows
+            // after it get counted as context and a previous hunk's
+            // numbering silently continues through them. Only the
+            // numbering opts out. See MAX_LINE_NUMBER_DIGITS.
+            if (($starts = self::hunkStarts($line)) !== null) {
+                $inHunk = self::numberable($starts[0]) && self::numberable($starts[1]);
+                $old = $inHunk ? (int) $starts[0] : 0;
+                $new = $inHunk ? (int) $starts[1] : 0;
                 $out[] = [null, null, false];
                 continue;
             }
