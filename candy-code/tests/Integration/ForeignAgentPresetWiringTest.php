@@ -496,6 +496,12 @@ final class ForeignAgentPresetWiringTest extends TestCase
                 // land on the roster even though none touches
                 // `Agent::$permissionMode`.
                 'Background/Schedule.php',
+                // NOT an Agent reader: the factory settles the REQUESTED mode
+                // of the row it is creating against the live SESSION's mode
+                // (C-AGT-7.a ceiling — stricterOf), and the `permission_mode`
+                // needle is its tool-argument KEY. It never looks at a preset
+                // or an Agent's field.
+                'Background/ScheduleFactory.php',
                 'Background/ScheduleRegistry.php',
                 'Background/ScheduleSpawner.php',
                 // NOT an Agent reader: Chat applies a slash command's
@@ -532,6 +538,14 @@ final class ForeignAgentPresetWiringTest extends TestCase
                 // SERVER's session mode off the gateway's spawn line (stdin),
                 // validated against PermissionMode, as `serve` itself does.
                 'Server/Workspace/WorkspaceHostProcess.php',
+                // C-AGT-5.a: NOT an Agent reader. ScheduleTool reads the live
+                // engine's PERMISSION GATE (EngineBackend::permissionGate()
+                // ->mode()) to settle the ceiling for a row it creates
+                // (stricterOf — the same shape TaskTool's session-mode read
+                // has, and never a preset's field), and the `->permissionMode`
+                // needle is its own freshly-created row's recorded mode being
+                // echoed into the result line.
+                'Tools/BuiltIn/ScheduleTool.php',
                 // Roadmap 4.1-2: the gate was decided. TaskTool hands the mode
                 // to AgentManager::createSubAgent(), which narrows it to the
                 // session's (stricter-of, never wider), and fromPreset()

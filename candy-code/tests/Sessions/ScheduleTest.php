@@ -34,7 +34,7 @@ final class ScheduleTest extends TestCase
     {
         $row = new Schedule(name: 'a', everySeconds: 60, prompt: 'p', nextDue: 0);
 
-        $this->assertSame(['name', 'every', 'prompt', 'provider', 'permissionMode', 'nextDue', 'enabled', 'root', 'timeoutSeconds'], array_keys($row->toArray()));
+        $this->assertSame(['name', 'every', 'prompt', 'provider', 'permissionMode', 'nextDue', 'enabled', 'root', 'timeoutSeconds', 'createdBy'], array_keys($row->toArray()));
     }
 
     /**

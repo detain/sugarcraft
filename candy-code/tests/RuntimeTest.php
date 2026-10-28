@@ -3681,13 +3681,34 @@ DOC;
         // is historical, and a correction is a claim that gets measured like
         // any other (§16.8 rule 7).
         $this->assertSame(
-            $gateSorted,
-            $ourSorted,
-            'Runtime::WRITE_CAPABLE_TOOL_NAMES has drifted from PermissionGate::isWriteTool(). '
-            . 'The two answer DIFFERENT questions - the gate asks "may this call be denied", this '
-            . 'roster asks "did the working tree move" - so making them equal is not automatically '
-            . 'the fix. A name REMOVED from the gate for a permissions reason must not be removed '
-            . 'here unless the tool also stopped writing.',
+            [],
+            array_values(array_diff($gateSorted, $ourSorted)),
+            'PermissionGate::isWriteTool() names a write tool that Runtime::WRITE_CAPABLE_TOOL_NAMES '
+            . 'no longer carries. The gate asking "may this call be denied" and this roster asking '
+            . '"did the working tree move" means equality is not automatic — but a name the GATE '
+            . 'treats as a write must never fall off THIS roster silently: dropping it here while '
+            . 'the gate still denies it is the drift that lets a step-contains-write check read a '
+            . 'mutation as a read.',
+        );
+
+        // THE ROSTER-ONLY SIDE, adjudicated by name (C-AGT-5.a). A name may sit
+        // on this roster WITHOUT the gate's Write class only on a written
+        // judgement that it mutates state the batch depends on while its
+        // permission class is earned some other way — exactly the Task/
+        // ShellStop story, which was lockstep-Write by luck of classification.
+        // `Schedule` is the one such member today: Ask class (every call asks,
+        // because a row outlives the turn), but a create/delete rewrites the
+        // machine-shared schedules.json every host reloads — the roster's real
+        // question. A second roster-only name reds this arm, and the red is the
+        // point: each one must be argued here and in Runtime's doc-block, never
+        // just added.
+        $this->assertSame(
+            ['Schedule'],
+            array_values(array_diff($ourSorted, $gateSorted)),
+            'Runtime::WRITE_CAPABLE_TOOL_NAMES carries a name the gate does not class as Write, and '
+            . 'the roster-only set above is no longer the one adjudicated list — argue the new '
+            . 'member (Ask-class-but-state-mutating, like Schedule) in Runtime\'s doc-block and '
+            . 'here, or take the name off this roster.',
         );
 
         // The content control, and a SUBSET one for the same reason the corpus

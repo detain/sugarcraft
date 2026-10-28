@@ -7,7 +7,7 @@ between you and the window you typed it in.
 
 | | **File row** | **`/loop` row** |
 |---|---|---|
-| Created by | you, editing `schedules.json` | `/loop 30m <prompt>` in a running session |
+| Created by | the `Schedule` tool, or you editing `schedules.json` by hand | `/loop 30m <prompt>` in a running session |
 | Lives in | `~/.candy-code/schedules.json` | this process's memory only |
 | Runs | as a supervised background session (a `schedule:<name>` daemon) | as a queued turn **in that window** |
 | Belongs to | the project named by its `root` field | the session that made it, and dies with it |
@@ -64,6 +64,7 @@ relaunch.
 | `nextDue` | no | Unix seconds at which the row next becomes due. A row without it is armed one interval out, so a file you write at midnight does not fire immediately at midnight. |
 | `enabled` | no | `false` parks the row without deleting it. Defaults to `true`. |
 | `timeoutSeconds` | no | Wall-clock ceiling on one fired run, 60 up to 31,622,400 seconds. Absent means the background session's default of 3600. This bounds the daemon's whole run; no timeout anywhere on the schedule path bounds a model request. |
+| `createdBy` | no | The creation tag (C-AGT-5.a). The only spelling a row may carry is `model`, written by the `Schedule` tool; absence means the row arrived by a human hand. The tool's delete guard reads the tag: it removes its own rows freely, and refuses untagged ones unless the human opts in. A forged or misspelled tag is refused at load by name — the field exists precisely to police that forgery. |
 
 An unknown key is tolerated; a malformed known key is not. A row that fails to
 parse is skipped **by name** while its siblings keep running, and the refusal is
@@ -167,6 +168,42 @@ background-session ceiling on the daemon itself: 3600 seconds unless the row
 raises its own with `timeoutSeconds` — a wall-clock cap on the whole run, never
 a timeout on any individual model request.
 
+## The `Schedule` tool
+
+The model can create, list and delete rows too — through the `Schedule` tool
+(Ask class, position 41), which is what `schedule:` daemons actually need: a
+turn that finishes before its next interval should not exist, so there is
+nothing here to keep a clock. The tool writes PERSISTED, ROOT-BOUND rows —
+the same file, the same lock, the same grammar this page describes — and every
+host then reloads by digest, so a row made in one window fires in whichever
+window owns the project it names.
+
+The bounds are deliberate, and they exist because the caller is a model that
+may itself have been talked into something by a prompt it read:
+
+- **Every call asks.** `Ask` permission class: each create, delete — even a
+  `list` — appears to the human before it runs. A schedule is a promise that
+  outlives the turn, and the approval is where that promise is looked at.
+- **The mode ceiling.** A created row's permission mode is settled at
+  creation to the stricter of what the model asked for and what the session
+  itself runs under — and never to a bypass-class spelling: naming
+  `bypass-permissions` or `dont-ask` in `permission_mode` is refused by name,
+  and omitting it lands on the read-only `dont-ask` floor the code grants. A
+  scheduled run therefore answers its own permission asks with refusals unless
+  a human deliberately spelled something looser at the create approval.
+- **The row cap.** At most 8 model-created (`createdBy: "model"`) rows per
+  project root. Operator rows never count against it.
+- **The delete guard.** The tool removes rows it created; an operator-written
+  row (untagged) is refused unless the call spells `include_operator_rows:
+  true` — a sentence the Ask approval shows verbatim, so forcing it is the
+  asking, not a bypass. `/schedules delete <name>` remains the human surface.
+- **No self-widening.** A fired run executes under its recorded floor, where
+  anything requiring a human answer is refused — so the clock cannot mint
+  another clock or escalate its own mode.
+
+`docs/PERMISSIONS.md` covers what each mode admits; nothing about the tool
+changes the floor, the ceiling, or the lock discipline described above.
+
 ## `/schedules`
 
 ```
@@ -177,9 +214,11 @@ a timeout on any individual model request.
 /schedules delete <name>
 ```
 
-There is deliberately no `add` verb: rows arrive by writing the file, the same
-config-authority posture the user-scope `mcp.json` takes, rather than a command
-parser re-inventing JSON grammar. `list` reads this process's roster and the one
+There is deliberately no `add` verb yet: rows arrive by writing the file, or
+through the `Schedule` tool above — the same config-authority posture the
+user-scope `mcp.json` takes, rather than a command parser re-inventing JSON
+grammar from scratch (a thin `add` over the tool's own factory is the planned
+follow-up). `list` reads this process's roster and the one
 `0600` file and changes nothing, so it works in a read-only window; the mutating
 verbs do not, because they persist consent-bearing rows that later turns will act
 on. Enable, disable and delete write the file back before answering, so the change

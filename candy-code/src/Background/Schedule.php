@@ -55,6 +55,19 @@ use SugarCraft\Code\Server\ServerConfig;
  * serialises the settled floor as a null `permissionMode` — writing the
  * spelling back would poison the very file this build wrote.
  *
+ * THE CREATION TAG (C-AGT-5.a). The tenth field, {@see self::$createdBy},
+ * records WHO authored the row: a row the Schedule tool wrote carries the
+ * literal `model`, and everything else — a hand-written line, a row from
+ * before the field existed — reads null. It is a TRUST marker, not
+ * decoration: the tool's delete guard refuses to remove an untagged row
+ * unless the human explicitly opts in, so a prompt-injected model cannot
+ * quietly erase an operator's cron while appearing to tidy its own. The tag
+ * is therefore read strictly at the file boundary: {@see fromArray()}
+ * refuses any spelling but the one the tool writes, because a forged tag is
+ * precisely the attack this field exists to police. The constructor stays
+ * permissive for the same reason the mode floor does — the wither
+ * round-trips (`mutate()`) carry the settled value back in.
+ *
  * THE RUN BOUND. Every fire spawns an ordinary background session, so the
  * run is bounded by that contract's timeout — 3600 seconds by default,
  * per-row raisable via {@see self::$timeoutSeconds}. This is the daemon's
@@ -98,6 +111,13 @@ final class Schedule
 
     /** The floor a missing or unparseable mode falls to; see the class doc-block. */
     public const DEFAULT_PERMISSION_MODE = PermissionMode::DontAsk;
+
+    /**
+     * The only spelling {@see self::$createdBy} may carry in a file row (see
+     * the creation-tag note in the class doc-block): the tag the Schedule tool
+     * writes. Absence means the operator; a row never claims any other author.
+     */
+    public const CREATED_BY_MODEL = 'model';
 
     public readonly string $name;
 
@@ -150,6 +170,19 @@ final class Schedule
      */
     public readonly ?int $timeoutSeconds;
 
+    /**
+     * Who created this row (C-AGT-5.a): {@see self::CREATED_BY_MODEL} when the
+     * Schedule tool wrote it, null for every other origin — a hand-edited line,
+     * a legacy row, or an in-process grant that never spells a tag. The tool's
+     * delete guard only removes rows carrying the tag without further asking;
+     * untagged rows need the human's explicit opt-in, so the marker is what
+     * keeps a prompt-injected model from quietly erasing an operator's cron.
+     * {@see fromArray()} reads it strictly: only the model spelling or absence;
+     * the constructor itself stays permissive (the wither round-trips pass the
+     * settled value back in).
+     */
+    public readonly ?string $createdBy;
+
     public function __construct(
         string $name,
         int $everySeconds,
@@ -162,6 +195,7 @@ final class Schedule
         ?string $root = null,
         ?string $sessionId = null,
         ?int $timeoutSeconds = null,
+        ?string $createdBy = null,
     ) {
         if (preg_match(self::NAME_PATTERN, $name) !== 1) {
             throw new \InvalidArgumentException(
@@ -230,6 +264,11 @@ final class Schedule
         $this->root = $resolved;
         $this->sessionId = $sessionId;
         $this->timeoutSeconds = $timeoutSeconds;
+        // The tag is TRIMMED to absence, never validated: the file-boundary
+        // strictness is {@see fromArray()}'s job, exactly like the mode
+        // normalisation above — an in-process grant that spells nothing (the
+        // `/loop` row, a legacy wither) reads null, not ''.
+        $this->createdBy = $createdBy === null || trim($createdBy) === '' ? null : $createdBy;
     }
 
     /**
@@ -248,6 +287,10 @@ final class Schedule
      * `persisted` is deliberately NOT readable from
      * the wire: an on-disk row is by definition persisted, and the ephemeral
      * flag cannot survive a restart anyway.
+     * `createdBy` may be ABSENT — that is an operator row, the default and the
+     * legacy shape — and the literal `model` is the only spelling a row may
+     * carry (C-AGT-5.a); anything else is refused by name at this boundary,
+     * because the tag gates the Schedule tool's delete privilege.
      *
      * @param array<array-key, mixed> $row
      * @throws \InvalidArgumentException naming the offending field
@@ -312,6 +355,21 @@ final class Schedule
         if ($timeout !== null && !(is_int($timeout) || (is_string($timeout) && ctype_digit($timeout)))) {
             throw new \InvalidArgumentException("schedule '{$name}' carries a non-integer \"timeoutSeconds\"");
         }
+        // C-AGT-5.a, the creation tag read STRICTLY at the boundary. Only the
+        // model spelling may be spelled; absence is the operator's own
+        // statement. A forged or misspelled tag is refused by name rather than
+        // coerced, because the tag gates the tool's delete privilege — a value
+        // that quietly became something else would hand that privilege to (or
+        // hide it from) the wrong rows.
+        $creator = $row['createdBy'] ?? null;
+        if ($creator !== null && !is_string($creator)) {
+            throw new \InvalidArgumentException("schedule '{$name}' carries a non-string \"createdBy\"");
+        }
+        if ($creator !== null && $creator !== '' && $creator !== self::CREATED_BY_MODEL) {
+            throw new \InvalidArgumentException(
+                'schedule \'' . $name . '\' spells "createdBy" as "' . $creator . '"; only "' . self::CREATED_BY_MODEL . '" may be spelled — leave the key out for an operator row',
+            );
+        }
 
         return new self(
             name: $name,
@@ -323,12 +381,18 @@ final class Schedule
             enabled: $enabled,
             root: $root,
             timeoutSeconds: $timeout === null ? null : (int) $timeout,
+            createdBy: $creator === '' ? null : $creator,
         );
     }
 
     /**
      * The file-row form. `model`/`reuseSession`-style keys are NOT part of
-     * this format — the plan's row is these nine fields and nothing else.
+     * this format — the plan's row is these ten fields and nothing else.
+     *
+     * `createdBy` serialises as the literal `model` only on rows the Schedule
+     * tool created (C-AGT-5.a); every other origin writes a null, which the
+     * next load reads as absence — the operator's statement, per the tag note
+     * in the class doc-block.
      *
      * `permissionMode` serialises the settled FLOOR as null rather than as
      * the spelling `dont-ask`: {@see fromArray()} refuses bypass-class
@@ -353,6 +417,7 @@ final class Schedule
             'enabled' => $this->enabled,
             'root' => $this->root,
             'timeoutSeconds' => $this->timeoutSeconds,
+            'createdBy' => $this->createdBy,
         ];
     }
 

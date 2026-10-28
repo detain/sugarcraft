@@ -163,7 +163,7 @@ Three name classes drive the evaluators. Each built-in tool declares its class i
 - **write-capable**: `Bash`, `Edit`, `Write`, `Workflow`, `ApplyPatch`, `PtyRun`, `ShellStop`, `mcp_call`, `Task`, and anything starting `mcp__`
 - **no-ask** (allowed in every mode; they write only harness-owned state): `Memory`, `Prune`, `Todo`, `Compress`, `Recall`, `Team`, `AskUser`, `PlanExit`, `SendMessage`, `Subagents`, `InterruptAgent`, `BoardPost`
 
-Note what is in *none* of these lists: `WebFetch`, `WebSearch`, `doctor`, `GenerateImage` and `GenerateVideo`.
+Note what is in *none* of these lists: `WebFetch`, `WebSearch`, `doctor`, `GenerateImage`, `GenerateVideo` and `Schedule`.
 <!-- tools:classes:end -->
 They fall through to each mode's default arm — `Ask` under `default`,
 `accept-edits` and `plan`, `Deny` under `dont-ask`.

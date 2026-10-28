@@ -716,6 +716,21 @@ final class Runtime
      * one is judged exactly like a synchronous one. The full argument lives
      * in `ShellStop`'s class doc-block.
      *
+     * C-AGT-5.a: `Schedule` joined on the Task/ShellStop judgement, not a
+     * primitive scan — the tool calls no write primitive itself, it hands
+     * {@see \SugarCraft\Code\Background\ScheduleRegistry} a row and the
+     * registry rewrites `schedules.json` under its lock. But that file IS the
+     * shared state of the whole feature: every host on the machine reloads it
+     * by digest and fires its rows, so a batch that created or deleted a
+     * schedule changed something the next turn — and another window's pump —
+     * depends on. It is also the honest half of a boundary note the gate will
+     * keep making: `Schedule` is Ask class in the catalog, not Write, so this
+     * roster carries a name the approval gate would not classify as a write;
+     * the two rosters answer different questions ("did something the batch
+     * depends on change" vs "may this call be denied"), and
+     * `RuntimeTest::testTheWriteToolRosterDoesNotDriftFromThePermissionGate`
+     * adjudicates the one roster-only member by name.
+     *
      * THE SHELL PAIR IS NOT RESPELLED HERE (rv-php-2b, crush-review-1014).
      * `Bash` and `PtyRun` ride in from {@see ShellSubjectTools::NAMES} by
      * spread — the same adoption the f-perms-sec sites made — so an eighth
@@ -729,7 +744,11 @@ final class Runtime
     // 'mcp_call' joined at MCP-7: the dispatcher writes whatever the tool it
     // NAMES writes, so a dispatched write moves the working tree exactly like
     // a bridged one (which the mcp__ prefix half of this rule already covers).
-    public const WRITE_CAPABLE_TOOL_NAMES = [...ShellSubjectTools::NAMES, 'Edit', 'Write', 'ApplyPatch', 'Task', 'Workflow', 'ShellStop', 'mcp_call'];
+    // 'Schedule' joined at C-AGT-5.a: the Ask-class tool that persists rows
+    // into schedules.json — shared state every host reloads by digest — so a
+    // batch that created or deleted one changed something the NEXT turn (and
+    // another window's pump) depends on, on the same judgement Task rides.
+    public const WRITE_CAPABLE_TOOL_NAMES = [...ShellSubjectTools::NAMES, 'Edit', 'Write', 'ApplyPatch', 'Task', 'Workflow', 'ShellStop', 'Schedule', 'mcp_call'];
 
     /**
      * MCP tool-name prefix — an `mcp__<server>__<tool>` call's capability is
