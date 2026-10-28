@@ -69,6 +69,8 @@ final class EventType
         SessionEvent::TODO_UPDATED => [true, self::SCOPE_SESSION, 'A Todo call rewrote the session\'s todo list; carries the whole list.'],
         SessionEvent::SPEND_CAP_BREACHED => [true, self::SCOPE_SESSION, 'The session spend cap stopped the turn.'],
         SessionEvent::COMPACTION_COMPLETED => [true, self::SCOPE_SESSION, 'The history was compacted before a turn.'],
+        SessionEvent::PROMPT_SUGGESTED => [false, self::SCOPE_SESSION, 'A one-line follow-up suggestion for the turn that just settled, proposed by the title model and billed on it; live-only, never a transcript row, and the next settle replaces it.'],
+        SessionEvent::CONTEXT_CHANGED => [false, self::SCOPE_SESSION, 'What this session\'s context is built from has moved (a settle, a compaction, a rules/memory/init command); live-only, and the client re-reads context.sources.'],
         self::SESSION_CREATED => [false, self::SCOPE_SERVER, 'A session was created.'],
         self::SESSION_UPDATED => [false, self::SCOPE_SERVER, 'A session was renamed, its mode changed, its model changed, or its status changed (idle, busy, waiting_permission). A served `/model` or `/rename` reaches every client through this arm, not only the status lane.'],
         self::SESSION_DELETED => [false, self::SCOPE_SERVER, 'A session was deleted.'],

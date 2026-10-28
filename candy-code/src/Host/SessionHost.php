@@ -44,6 +44,7 @@ use SugarCraft\Code\App\DreamPassCompletedMsg;
 use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\App\HistoryCompactedMsg;
+use SugarCraft\Code\App\PromptSuggestionMsg;
 use SugarCraft\Code\Host\Commands\CommandContext;
 use SugarCraft\Code\Host\Commands\CommandEffect;
 use SugarCraft\Code\Host\Commands\CommandEffectKind;
@@ -289,6 +290,16 @@ final class SessionHost
 
     /** How many settled questions {@see resolution()} remembers. */
     private const RESOLUTIONS_KEPT = 64;
+
+    /**
+     * The built-ins whose accepted answer rewrites what the prompt is built
+     * from, so their result earns a `context.changed` announce (C-CTX-2.d):
+     * `/rules` toggles a rule pack in the shared RulesState, `/memory` writes
+     * a note to a memory store, `/init` sets an instruction file in motion.
+     * Keyed on the dispatched name because these three answer with plain
+     * reply rows no effect kind marks.
+     */
+    private const CONTEXT_CHANGING_COMMANDS = ['rules', 'memory', 'init'];
 
     /**
      * @param list<Message> $history
@@ -987,7 +998,7 @@ final class SessionHost
         $result = $this->dispatchCommand($text)
             ?? CommandResult::refused(Lang::t('host.command.unknown', ['name' => $name]));
         if (!$result->isRefused()) {
-            $this->applyCommandResult($result);
+            $this->applyCommandResult($result, trim($name));
         }
 
         return $result;
@@ -1613,7 +1624,12 @@ final class SessionHost
             return TurnTicket::refused((string) $result->error);
         }
 
-        $this->applyCommandResult($result);
+        // C-CTX-2.d: the dispatched name rides into the result application
+        // so the context-changing roster can be keyed on it (see
+        // {@see self::CONTEXT_CHANGING_COMMANDS}); the parser's own name is
+        // what dispatchCommand matched, including the bare-MCP-auth shape.
+        $parsed = (new CommandParser())->parse($text);
+        $this->applyCommandResult($result, $parsed?->name ?? ltrim(CommandText::tokens($text)[0] ?? '', '/'));
 
         return TurnTicket::handled();
     }
@@ -1690,8 +1706,12 @@ final class SessionHost
      * - An occupying run (a workflow) holds the session as a turn does, until
      *   its report lands; a cancelled run's report still lands, and releases
      *   nothing.
+     *
+     * $commandName is the dispatched name ('' when the caller has none); it
+     * is what lets {@see self::CONTEXT_CHANGING_COMMANDS} mark a result that
+     * rewrote the prompt's sources (C-CTX-2.d).
      */
-    private function applyCommandResult(CommandResult $result): void
+    private function applyCommandResult(CommandResult $result, string $commandName = ''): void
     {
         // WEB-2: a prompt an init-style command queued is submitted only AFTER
         // this command's own rows have landed — the transcript reads echo,
@@ -1786,6 +1806,17 @@ final class SessionHost
             ($this->onSummaryChanged)();
         }
 
+        // C-CTX-2.d: the handful of built-ins whose answer rewrites what the
+        // prompt is built from — `/rules` toggles a rule pack, `/memory`
+        // writes a note, `/init` sets an instruction file in motion — all
+        // return plain reply rows no effect marks, so the roster is keyed on
+        // the name the caller dispatched. A client hears `context.changed`
+        // and re-reads `context.sources`; commands outside the roster cannot
+        // move it, so they stay quiet.
+        if ($commandName !== '' && \in_array($commandName, self::CONTEXT_CHANGING_COMMANDS, true)) {
+            $this->announce(SessionEvent::new(SessionEvent::CONTEXT_CHANGED, ['reason' => $commandName], $this->sessionId));
+        }
+
         if ($queuedPrompt !== '') {
             $ticket = $this->submit($queuedPrompt);
             if (!$ticket->isAdmitted()) {
@@ -1845,6 +1876,11 @@ final class SessionHost
         foreach (array_slice($this->history, $before) as $row) {
             $this->announceTranscriptRow($row);
         }
+
+        // C-CTX-2.d: the fold rewrote the history the token breakdown and the
+        // spliced sources ride on — but only past the safeguard-hold door,
+        // which returns above without folding anything.
+        $this->announce(SessionEvent::new(SessionEvent::CONTEXT_CHANGED, ['reason' => 'compaction'], $this->sessionId));
     }
 
     private function runAsync(CommandEffect $effect): void
@@ -2316,6 +2352,14 @@ final class SessionHost
             // auto-commit and the dream pass all ride the settle of the turn
             // that prompt starts, exactly as Chat's gate does.
             $this->runSettleWork($carriedOn, $goal !== null);
+
+            // C-CTX-2.d: whatever the turn's tools wrote, the notice landers
+            // appended, or a `/memory`-style row settled into the stores, the
+            // answer is the same to a client — re-read `context.sources`.
+            // One announce per settle, after the settle work has been armed,
+            // so a client that reloads on hearing it measures a history that
+            // already carries the reply.
+            $this->announce(SessionEvent::new(SessionEvent::CONTEXT_CHANGED, ['reason' => 'settle'], $this->sessionId));
         });
     }
 
@@ -2327,10 +2371,10 @@ final class SessionHost
      * auxiliary call's runtime records land where C-CTX-2.a drains them, and
      * each landed through its own bill-then-show lander.
      *
-     * The suggestion slot is deliberately never run here: a served session
-     * has no input box to drop a ghost prompt into (C-CTX-2.e decides where
-     * — if anywhere — the guess rides on web), so the table's answer for it
-     * is read and left in the table.
+     * The suggestion slot runs here too (C-CTX-2.d): a served session has a
+     * composer — the web client's input box — and the answer rides it as the
+     * ephemeral `prompt.suggested` event through
+     * {@see self::landPromptSuggestion()}, never as a transcript row.
      */
     private function runSettleWork(bool $carriedOn, bool $goalActive): void
     {
@@ -2351,6 +2395,13 @@ final class SessionHost
             sessionStore: $this->workspace->sessionStore,
         );
 
+        if ($work->suggestion !== null) {
+            $factory = $work->suggestion;
+            RuntimeNoticeSink::using($this->notices, static fn(): PromiseInterface => $factory())
+                ->then(function (mixed $msg): void {
+                    $this->landPromptSuggestion($msg);
+                });
+        }
         if ($work->consolidation !== null) {
             $factory = $work->consolidation;
             RuntimeNoticeSink::using($this->notices, static fn(): PromiseInterface => $factory())
@@ -2372,6 +2423,48 @@ final class SessionHost
                     $this->landDream($msg, $engine);
                 });
         }
+    }
+
+    /**
+     * Land a prompt-suggestion answer (C-CTX-2.d, mirroring Chat's
+     * `PromptSuggestionMsg` arm): billed FIRST whatever becomes of it — the
+     * guess ran on the user's key on the title engine, so the OBS-3 model
+     * the ledger sees is that engine's — then shown to the composer as the
+     * ephemeral `prompt.suggested` event only while it is still current:
+     * same generation, same history length, same session, nothing in flight.
+     * A suggestion is NEVER persisted — the point is a ghost prompt the user
+     * may decline, and a transcript row would show the model its own guess
+     * as conversation on the next turn. An answer arriving late, or after
+     * {@see self::release()}, is billed and dropped.
+     */
+    private function landPromptSuggestion(mixed $msg): void
+    {
+        if (!$msg instanceof PromptSuggestionMsg) {
+            return;
+        }
+
+        $title = $this->workspace->titleBackend;
+        $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), $title instanceof EngineBackend ? $title->model() : null);
+        if ($this->released) {
+            return;
+        }
+
+        // Chat's staleness test verbatim: any of these means the guess is no
+        // longer about the turn that settled — a new turn moved the
+        // generation, a queued prompt or a landed notice row moved the
+        // history, and an in-flight turn has its own settle coming.
+        $text = TitleService::sanitizeSuggestion($msg->suggestion);
+        $stale = $msg->generation !== $this->generation
+            || $msg->historyCount !== count($this->history)
+            || $msg->sessionId !== $this->sessionId;
+        if ($text === '' || $stale || $this->turn !== null) {
+            return;
+        }
+
+        $this->announce(SessionEvent::new(SessionEvent::PROMPT_SUGGESTED, [
+            'text' => $text,
+            'generation' => $msg->generation,
+        ], $this->sessionId));
     }
 
     /**

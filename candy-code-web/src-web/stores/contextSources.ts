@@ -123,6 +123,20 @@ export const useContextSourcesStore = defineStore('contextSources', () => {
     }
   }
 
+  // C-CTX-2.d: trailing debounce for the `context.changed` reload. Half a second
+  // covers the burst a settle produces (settle + compaction + command reasons
+  // land back-to-back), and a pending timer never re-arms, so a long run of
+  // changes refetches at most once per half second. The reload itself obeys the
+  // measured-only law below.
+  let reloadTimer: ReturnType<typeof setTimeout> | null = null
+  function scheduleReload(id: string): void {
+    if (reloadTimer !== null) return
+    reloadTimer = setTimeout(() => {
+      reloadTimer = null
+      void load(id)
+    }, 500)
+  }
+
   connection.onEvent((envelope) => {
     if (envelope.type === 'turn.completed') {
       // P-CTX.g: the turn that just settled changed the prompt — the category
@@ -134,6 +148,15 @@ export const useContextSourcesStore = defineStore('contextSources', () => {
       // session switch does.
       const sid = envelope.sessionId
       if (sid !== null && sid !== undefined && sources.value !== null && sessionId.value === sid) void load(sid)
+      return
+    }
+    if (envelope.type === 'context.changed') {
+      // C-CTX-2.d: what the context is built from moved — a settle, a compaction,
+      // or a rules/memory/init command. The same measured-only law as the reload
+      // above (an unmeasured session is never dialed for), debounced so a burst
+      // costs one refetch; the generation latch inside load() drops stragglers.
+      const sid = envelope.sessionId
+      if (sid !== null && sid !== undefined && sources.value !== null && sessionId.value === sid) scheduleReload(sid)
       return
     }
     if (envelope.type !== 'permission.asked') return

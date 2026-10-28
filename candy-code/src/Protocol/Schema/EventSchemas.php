@@ -187,6 +187,17 @@ final class EventSchemas
                     'status' => Schema::enum(\SugarCraft\Code\Todo\TodoStatus::values()),
                 ], ['content', 'status'])),
             ], ['items']),
+            // C-CTX-2.d: the live-only pair. `generation` is the settle's turn
+            // generation, so a client holding an older suggestion can tell a
+            // replacement from a straggler; `text` is already the
+            // single-line safe form (TitleService::sanitizeSuggestion).
+            E::PROMPT_SUGGESTED => Schema::object([
+                'text' => Schema::string(),
+                'generation' => Schema::integer(0),
+            ], ['text', 'generation']),
+            E::CONTEXT_CHANGED => Schema::object([
+                'reason' => Schema::string()->describe('What moved it: settle, compaction, or the name of the context-changing command (rules, memory, init).'),
+            ], ['reason']),
             BackgroundEvents::STARTED => Schema::ref(D::BACKGROUND_SESSION),
             BackgroundEvents::STATUS => Schema::object([
                 'bgId' => Schema::string(),

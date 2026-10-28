@@ -36,8 +36,9 @@ use function React\Promise\resolve;
  * table and landed through this host's own channels: billed first on the rule
  * OBS-3 pins (the model of the engine that actually ran the call), then one
  * display-only notice row from the producer, and a landing after release()
- * billed but dropped. The next-prompt suggestion is deliberately never run
- * here — a served session has no input box to show it in.
+ * billed but dropped. The next-prompt suggestion answers off here because
+ * these pins clear its env switch: the suggestion lane is C-CTX-2.d's
+ * {@see \SugarCraft\Code\Tests\Host\ServedPromptSuggestionTest}.
  *
  * The pins: a settle schedules consolidation, lands its notice, and bills the
  * summary model's cost under the summary model; a queued prompt carries the

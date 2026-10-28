@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Host\SessionEvent;
 use SugarCraft\Code\Protocol\EventEnvelope;
 use SugarCraft\Code\Protocol\EventType;
+use SugarCraft\Code\Protocol\Schema\EventSchemas;
 
 /**
  * The event catalogue a client is promised (`server.hello` `features.events`)
@@ -46,6 +47,22 @@ final class EventTypeTest extends TestCase
         self::assertSame($live->toArray(), $replayed->toArray());
         self::assertSame(['sessionId' => 's1', 'seq' => 7, 'type' => 'turn.started', 'ts' => 1000, 'turnId' => 't1', 'durable' => true, 'data' => ['messageId' => 'm1']], $live->toArray());
         self::assertTrue($live->isNumbered());
+    }
+
+    /**
+     * C-CTX-2.d: the live-only pair must stay out of the session log — a
+     * replay of a stale ghost suggestion or a redundant re-read cue would be
+     * worse than silence — while still being schema-typed on the wire.
+     */
+    public function testTheLiveOnlyPairIsCataloguedEphemeralWithADataSchema(): void
+    {
+        foreach ([SessionEvent::PROMPT_SUGGESTED, SessionEvent::CONTEXT_CHANGED] as $type) {
+            self::assertTrue(EventType::isKnown($type));
+            self::assertFalse(EventType::isDurable($type), $type . ' must never enter the session log');
+            self::assertFalse(\in_array($type, SessionEvent::DURABLE_TYPES, true), $type . ' joined the host durable column');
+            self::assertSame(EventType::SCOPE_SESSION, EventType::scope($type));
+            self::assertNotNull(EventSchemas::data($type), $type . ' has no data schema');
+        }
     }
 
     public function testAnEphemeralOrServerEventCarriesNoSeq(): void

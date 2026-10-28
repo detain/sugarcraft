@@ -132,6 +132,10 @@ export interface SessionState {
   hasMoreOlder: boolean
   /** Exclusive bound to ask the next older page with; null when the server never named one. */
   olderCursor: number | null
+  /** C-CTX-2.d: the served settle's one-line follow-up suggestion (`prompt.suggested`),
+   *  offered as a ghost prompt until the next turn starts. Live-only: never an item,
+   *  and every snapshot starts it back at null. */
+  suggestedPrompt: string | null
 }
 
 export function createState(sessionId: string): SessionState {
@@ -156,6 +160,7 @@ export function createState(sessionId: string): SessionState {
     lastStop: null,
     hasMoreOlder: false,
     olderCursor: null,
+    suggestedPrompt: null,
   }
 }
 
@@ -277,6 +282,8 @@ export function applySnapshot(state: SessionState, snapshot: SessionSnapshot): v
   state.asks = [...snapshot.pendingAsks]
   state.live = null
   state.reasoning = null
+  // C-CTX-2.d: the suggestion is live-only — a snapshot never carries one.
+  state.suggestedPrompt = null
   state.subagents = {}
   for (const raw of snapshot.subagents ?? []) {
     const agent = raw as unknown as SubAgent
@@ -416,6 +423,15 @@ export function applyEvent(state: SessionState, envelope: EventEnvelope): void {
       break
     }
 
+    case 'prompt.suggested': {
+      // C-CTX-2.d: the served settle's ephemeral offer for the next prompt. It is
+      // never an item — the event skips the transcript entirely, the same rule
+      // the TUI's input-line ghost follows — and a fresh offer replaces the old.
+      const { data } = envelope as unknown as Ev<'prompt.suggested'>
+      if (typeof data.text === 'string' && data.text !== '') state.suggestedPrompt = data.text
+      break
+    }
+
     case 'turn.started': {
       const { data } = envelope as unknown as Ev<'turn.started'>
       state.turnId = data.turnId
@@ -425,6 +441,9 @@ export function applyEvent(state: SessionState, envelope: EventEnvelope): void {
       state.live = null
       state.reasoning = null
       state.lastStop = null
+      // C-CTX-2.d: a new turn means the ghost suggestion is about a conversation
+      // state that no longer holds — drop it whether or not the user accepted.
+      state.suggestedPrompt = null
       break
     }
 

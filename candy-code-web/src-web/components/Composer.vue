@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import HistorySearch from "./HistorySearch.vue";
 import type { CommandInfo, Delivery } from "../stores/session";
+import { useSessionStore } from "../stores/session";
 import {
     loadPromptHistory,
     onPromptHistoryCleared,
@@ -37,6 +39,19 @@ const emit = defineEmits<{
     send: [text: string, delivery: Delivery, images: PastedImage[]];
     stop: [];
 }>();
+
+// C-CTX-2.d: the ghost prompt. A served `prompt.suggested` lives on the
+// session store; a mount without a routed session (no id, or no pinia owner
+// for one) simply never has an offer to show.
+const route = useRoute();
+const sessionId = computed(() =>
+    typeof route?.params?.id === "string" ? route.params.id : "",
+);
+const suggestion = computed<string | null>(() =>
+    sessionId.value === ""
+        ? null
+        : useSessionStore(sessionId.value).state.suggestedPrompt,
+);
 
 const initialDelivery = (): Delivery => props.defaultDelivery ?? "steer";
 const delivery = ref<Delivery>(initialDelivery());
@@ -492,6 +507,26 @@ function onKeydown(event: KeyboardEvent): void {
         }
         return;
     }
+    if (
+        popup === 0 &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        props.modelValue === "" &&
+        suggestion.value !== null &&
+        (event.key === "ArrowRight" || event.key === "Tab")
+    ) {
+        // C-CTX-2.d: an empty draft and a ghost offer — → (or Tab, the TUI's
+        // accept chord) fills the draft and retires the offer exactly once.
+        // Read the offer before retiring it: the store is reactive, and a
+        // clear-then-read would emit null.
+        event.preventDefault();
+        const offer = suggestion.value;
+        if (sessionId.value !== "")
+            useSessionStore(sessionId.value).state.suggestedPrompt = null;
+        emit("update:modelValue", offer);
+        return;
+    }
     if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
         event.preventDefault();
         if (commands === 0 && files.value.length > 0) {
@@ -598,7 +633,8 @@ defineExpose({ focus: () => input.value?.focus() });
                 :placeholder="
                     busy
                         ? 'Type to queue, steer or interrupt…'
-                        : 'Message CandyCode… (Enter sends, Shift+Enter for a new line, / for commands, @ for files, paste or drop images, Ctrl+↑ history, Ctrl+G search)'
+                        : (suggestion ??
+                            'Message CandyCode… (Enter sends, Shift+Enter for a new line, / for commands, @ for files, paste or drop images, Ctrl+↑ history, Ctrl+G search)')
                 "
                 aria-label="Message"
                 data-testid="composer-input"

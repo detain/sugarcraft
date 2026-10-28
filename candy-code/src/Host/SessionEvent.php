@@ -59,6 +59,14 @@ final class SessionEvent
     public const TURN_STEERED = 'turn.steered';
     public const COMPACTION_COMPLETED = 'compaction.completed';
     public const TODO_UPDATED = 'todo.updated';
+    // C-CTX-2.d: the live-only pair a served session adds. `prompt.suggested`
+    // carries the one-line follow-up a settled turn prompts the title model
+    // for; `context.changed` says what the session's context was built from
+    // has moved. Both are ephemeral by nature — a client that missed one has
+    // no log to repair it from, it simply re-reads `context.sources` or waits
+    // for the next settle — so neither joins DURABLE_TYPES.
+    public const PROMPT_SUGGESTED = 'prompt.suggested';
+    public const CONTEXT_CHANGED = 'context.changed';
 
     /**
      * The types Appendix O §6.5 marks durable (D) among those this package
