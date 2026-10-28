@@ -1703,7 +1703,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** P-TABS.b (W4), P-TABS.d (W4), C-TOOL-3.c (W13)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-picks.md` → `### P-TABS.e`
 
-#### C-WEB-3.e — Share link / Revoke on the session row
+#### ✅ 395bc096a C-WEB-3.e — Share link / Revoke on the session row
 - **Item:** C-WEB-3 (sources: k1-dorm#5, SES-3-P4, WEB-1-P1, p2-miss: cross-session web share UI) · dormant-wire · S
 - **What:** **Gap.** `session.share` and `session.unshare` (`SessionMethods.php:57-58`) have no caller. **Share.** The row menu gets "Share page…". It calls `session.share {sessionId, days?}` and shows `origin + path` with expiry and a copy …
 - **Files — create:** `candy-code-web/src-web/components/__tests__/sidebarShare.spec.ts`

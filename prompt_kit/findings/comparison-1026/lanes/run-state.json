@@ -126,16 +126,10 @@
     "C-TOOL-3.c",
     "C-TOOL-5.c",
     "C-AGT-5.a",
-    "C-AGT-6.b"
+    "C-AGT-6.b",
+    "C-WEB-3.e"
   ],
   "inflight": {
-    "C-WEB-3.e": {
-      "stage": "clean",
-      "round": 1,
-      "worktree": "/home/sites/cc-cmp-C-WEB-3.e",
-      "branch": "cc/C-WEB-3.e",
-      "tip": "0718479db"
-    },
     "C-EXT-4.a": {
       "stage": "clean",
       "round": 1,
@@ -726,7 +720,7 @@
     "STOP STATE @2052@: master b4b4404c5 (wind-down commit; 9 files). welded=100/328 LIST. waves_closed [1..9] (W8/W9 rows + marks committed inside b4b4404c5; W9 per lead ruling r1-CLEAN-no-r2 — disclosed). Owed loops: W10 (blocked on unwelded members C-EXT-2.c + C-PRV-5.c), then W11+ per scheduler waves_fully_welded. Only live artifact: /home/sites/cc-cmp-P-TABS.g + branch cc/P-TABS.g @f25a697c1 (parked; re-dispatch plan:1549 after P-TABS.e+P-TABS.f weld). LATE W33+ gated on §6.3 owner rulings (C-TOOL-6 c/e/h + C-TUI-6: Windows shell, Windows self-update helper, web i18n scope, locale choice, parity strictness, voice endpoint, push-to-talk key). NEVER pushed; origin advanced owner-side only.",
     "C-EXT-2.c welded 4b771634d; closeout roster in its WELD.md (Bootstrap:5955 comment, ChatHostLangCatalogue standing red=C-PRV-1.b (a992413b0) seam, TROUBLESHOOTING allowed-tools/effort half=C-EXT-2.b)"
   ],
-  "updated": "weld-run C-AGT-6.b: welded bec7fc651 (stale base applied clean, patch-id 85ef9f2e4094 both, auto-merge keep-both; NO durations owed; gates ContextMentions 21T/194A + ReviewCommandTest 17T/122A exact; gen-command-docs rc0; SKIP never needed)",
+  "updated": "weld-run C-WEB-3.e: welded 395bc096a + dist rider 5a45aa4c0 (web share row; vitest green; vue-tsc 19 standing; no durations - vitest spec)",
   "wind_down": {
     "master_tip_at_close": "b4b4404c5",
     "welded_count": 101,
@@ -787,7 +781,7 @@
     "C-AGT-6.b(after r2 review)",
     "C-TOOL-4.a"
   ],
-  "tip": "see git log; C-AGT-6.b welded 127",
-  "welded_count": 127,
+  "tip": "see git log; C-WEB-3.e welded 128",
+  "welded_count": 128,
   "tick": "87-disk-reconciled: W11 REALY closed@341f66404; trio MCP2b+TOOL5b+WEB3f real to 0b3c4ba21 (welded=122); W13/14 welds PENDING; phantom-atlas @b73@ correction: c3178096f/4d263705a/8d8c75678 GHOSTS, cure real 23fa8ab8e"
 }
