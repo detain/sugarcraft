@@ -1990,7 +1990,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-mcp.md` → `### C-MCP-4.b`
 
-#### C-PRV-2.b — Responses reasoning replay and image tool outputs
+#### ✅ cf36a8458c6bb299af289c23bafe4a3ef7f04423 C-PRV-2.b — Responses reasoning replay and image tool outputs
 - **Item:** C-PRV-2 (sources: GAP-MOD-02 (reasoning items), p1-miss: OpenAI Responses API (encrypted reasoning replay), candidates: "Responses also unlocks images in tool … · gap · effort M
 - **What:** On the responses arm, request `include: ["reasoning.encrypted_content"]` and `reasoning.summary: "auto"`. Stream `response.reasoning_summary_text.delta` into the existing thinking channel. Store each reasoning item (`id`, …
 - **Files — create:** `candy-code/tests/Providers/OpenAiResponsesReasoningTest.php`
