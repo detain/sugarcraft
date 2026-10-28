@@ -2,8 +2,7 @@
 description: PHPUnit testing best practices, mocking, data providers, and test organization.
 user-invocable: true
 disable-model-invocation: false
-allowed-tools: "Read,Grep,Bash"
-effort: high
+allowed-tools: "Read, Grep"
 paths:
   - "**/*Test.php"
 ---

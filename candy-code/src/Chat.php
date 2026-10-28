@@ -30,6 +30,7 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\ItemList\LoadMoreMsg;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Config\StatusLineCommand;
+use SugarCraft\Code\Skills\ActiveSkillEffects;
 use SugarCraft\Code\Skills\SkillMentions;
 use SugarCraft\Code\Host\SessionTabState;
 use SugarCraft\Code\Host\SessionSwitch;
@@ -4744,6 +4745,14 @@ final class Chat implements Model
             provider: '',
             projectRoot: $this->projectRoot(),
         );
+
+        // C-EXT-2.b (R-EXT-1): this dispatch shares the hook chain — and so
+        // the gate — with the engine, and the skills active in this turn carry
+        // their tool scoping into it the same way the engine's step does:
+        // re-derive from the transcript and swap the chain's gate. Chat builds
+        // no CompleteRequest here, so only the tool scoping travels on this
+        // path; `model:`/`effort:` ride in Runtime::run()'s step loop.
+        ActiveSkillEffects::apply($this->hooks, $this->history, $this->workspace?->skills);
 
         $hookResult = $this->hooks->preToolUse($context);
 

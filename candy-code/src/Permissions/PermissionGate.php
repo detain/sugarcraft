@@ -224,6 +224,22 @@ final class PermissionGate
     private array $sessionRules = [];
 
     /**
+     * The tool grants the skills active in THIS turn carry (R-EXT-1,
+     * C-EXT-2.b) — see {@see withTurnGrants()}. Not constructor parameters,
+     * and not readonly: set only on a CLONE, exactly like the session rules
+     * above, and carried by {@see withMode()} so a mid-turn mode toggle
+     * cannot drop them.
+     *
+     * @var list<PermissionRule>
+     */
+    private array $turnAllowRules = [];
+
+    /**
+     * @var list<PermissionRule>
+     */
+    private array $turnDenyRules = [];
+
+    /**
      * The read-only auto-allow, pinned by {@see withReadOnlyAutoAllow()}; null
      * reads the setting on use ({@see readOnlyAutoAllow()}).
      */
@@ -316,6 +332,8 @@ final class PermissionGate
     {
         $gate = new self($mode, $this->rules, $this->classifier, $source ?? $this->modeSource, $this->reviewer);
         $gate->sessionRules = $this->sessionRules;
+        $gate->turnAllowRules = $this->turnAllowRules;
+        $gate->turnDenyRules = $this->turnDenyRules;
         $gate->toggledFrom = $this->mode;
         $gate->launchMode = $this->launchMode();
 
@@ -408,6 +426,88 @@ final class PermissionGate
     public function sessionRules(): array
     {
         return $this->sessionRules;
+    }
+
+    /**
+     * This gate, plus the tool grants the skills ACTIVE IN THIS TURN carry
+     * ({@see \SugarCraft\Code\Skills\ActiveSkillEffects}, R-EXT-1).
+     *
+     * THE TWO LISTS DO DIFFERENT JOBS, and each obeys the strictest rule the
+     * gate already has for its kind:
+     *  - `$deny` refuses BEFORE the mode speaks, like a configured `Deny`
+     *    rule and the step-0 breaker: a skill that disallows `Bash` this turn
+     *    means it even in `acceptEdits`, `bypassPermissions` or `dontAsk` —
+     *    the ask it removes is the ask the skill asked for away. It cannot,
+     *    however, outrank the configured rules that already answered (a
+     *    configured Deny was decided by the operator, not the skill).
+     *  - `$allow` answers an `Ask` and nothing else, on the session-rule
+     *    model: consulted after everything else has decided, never touching
+     *    a `Deny`, never answering a FORCED ask (a security finding's or a
+     *    keystroke-typing question is put every time — a skill body is not
+     *    the user saying "don't ask me again"). Unlike a session grant it
+     *    matches each rule AS WRITTEN per call: the memo's argument rewrite
+     *    and chain-segment coverage answer a question the USER already
+     *    answered; a skill's pre-approval stretches to no more than the
+     *    pattern its author typed.
+     *
+     * A CLONE, like {@see withSessionRules()}. The lists live exactly one
+     * turn: the step loop re-derives from the messages at every step and
+     * carries `[]` the moment no skill is active, so a grant cannot outlive
+     * the prompt that earned it.
+     *
+     * @param list<PermissionRule> $allow
+     * @param list<PermissionRule> $deny
+     *
+     * @throws \InvalidArgumentException when an `$allow` entry is not an
+     *         `Allow` or a `$deny` entry is not a `Deny` — a grant that
+     *         takes capability away is not a grant, and a refusal smuggled
+     *         into the allow list would never be honoured as one either
+     */
+    public function withTurnGrants(array $allow, array $deny): self
+    {
+        foreach ($allow as $rule) {
+            if (!$rule instanceof PermissionRule || $rule->action !== PermissionAction::Allow) {
+                throw new \InvalidArgumentException('A turn permission grant can only allow.');
+            }
+        }
+        foreach ($deny as $rule) {
+            if (!$rule instanceof PermissionRule || $rule->action !== PermissionAction::Deny) {
+                throw new \InvalidArgumentException('A turn permission refusal can only deny.');
+            }
+        }
+
+        $copy = clone $this;
+        $copy->turnAllowRules = array_values($allow);
+        $copy->turnDenyRules = array_values($deny);
+
+        return $copy;
+    }
+
+    /**
+     * The active turn's grants, read-only — see {@see withTurnGrants()}.
+     *
+     * @return list<PermissionRule>
+     */
+    public function turnAllowRules(): array
+    {
+        return $this->turnAllowRules;
+    }
+
+    /**
+     * @return list<PermissionRule>
+     */
+    public function turnDenyRules(): array
+    {
+        return $this->turnDenyRules;
+    }
+
+    /**
+     * Whether this gate carries any turn grants at all — the cheap test the
+     * step loop uses to decide whether a clear needs a swap.
+     */
+    public function hasTurnGrants(): bool
+    {
+        return $this->turnAllowRules !== [] || $this->turnDenyRules !== [];
     }
 
     /**
@@ -647,6 +747,19 @@ final class PermissionGate
             $fromRules = null;
         }
 
+        // R-EXT-1 (C-EXT-2.b): a skill's `disallowed-tools` refuses BEFORE the
+        // mode speaks — deny beats mode, exactly as a configured Deny and the
+        // step-0 breaker do, so an acceptEdits/bypass/dontAsk turn that loaded
+        // the skill still cannot reach the tool it names, and a configured
+        // `Ask` is taken away rather than asked (that is what removing a tool
+        // for the turn means). It does NOT reach past the rules layer's own
+        // first-match ANSWER: `Ask Bash(git *)` is a question, and a Deny from
+        // the settings file is already the answer. The breaker above it and a
+        // configured Deny below are structurally untouched.
+        if (($fromRules === null || $fromRules === PermissionDecision::Ask) && $this->turnDenies($call, $argumentsKnown, $projectRoot)) {
+            return PermissionDecision::Deny;
+        }
+
         $decision = $fromRules
             ?? $this->evaluateMode($call, $commitAutoStrikes, $argumentsKnown, $projectRoot, $sessionId);
 
@@ -655,7 +768,8 @@ final class PermissionGate
         // Keystroke-typing (above) earns the same respect in every mode.
         $forced = ($commitAutoStrikes && $this->forcedAsk) || $typesKeystrokes;
 
-        return $decision === PermissionDecision::Ask && !$forced && $this->sessionAllows($call, $argumentsKnown, $projectRoot)
+        return $decision === PermissionDecision::Ask && !$forced
+            && ($this->sessionAllows($call, $argumentsKnown, $projectRoot) || $this->turnAllows($call, $argumentsKnown, $projectRoot))
             ? PermissionDecision::Allow
             : $decision;
     }
@@ -762,6 +876,59 @@ final class PermissionGate
             $projectRoot,
             $this->readOnlyAutoAllow(),
         );
+    }
+
+    /**
+     * Whether the turn's active skills pre-approved this call
+     * ({@see withTurnGrants()}, R-EXT-1). Matching is AS WRITTEN: a plain
+     * first-match over the granted rules, with none of the session machinery —
+     * no {@see SessionPermissionMemo::grantArguments()} rewrite and no
+     * {@see SessionPermissionMemo::coversBySegments()} chain widening. Those
+     * exist because a remembered grant was earned by seeing one real command
+     * and should stretch to its in-project `cd` and its covered chain; a
+     * skill's `allowed-tools: Bash(git *)` was never earned by watching
+     * anything, it is a sentence in a file, and honouring it as-written is
+     * honouring it as the author spelled it. The permissive arm of
+     * {@see PermissionRule::matches()} still applies, so a chain with a
+     * non-matching or writing part grants nothing, and a declaration (no
+     * knowable arguments) matches nothing argument-scoped.
+     */
+    private function turnAllows(ToolCall $call, bool $argumentsKnown, ?string $projectRoot): bool
+    {
+        if ($this->turnAllowRules === []) {
+            return false;
+        }
+
+        foreach ($this->turnAllowRules as $rule) {
+            if ($rule->matches($call, $argumentsKnown, $projectRoot)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether the turn's active skills refuse this call outright
+     * ({@see withTurnGrants()}, R-EXT-1). Same as-written first-match as
+     * {@see turnAllows()}; the deny arm of
+     * {@see PermissionRule::matches()} fails closed on an absent subject, so a
+     * `Write(src/**)`-style refusal never matches a bare declaration while a
+     * `WebFetch`-style name refusal does.
+     */
+    private function turnDenies(ToolCall $call, bool $argumentsKnown, ?string $projectRoot): bool
+    {
+        if ($this->turnDenyRules === []) {
+            return false;
+        }
+
+        foreach ($this->turnDenyRules as $rule) {
+            if ($rule->matches($call, $argumentsKnown, $projectRoot)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function actionToDecision(PermissionAction $action): PermissionDecision

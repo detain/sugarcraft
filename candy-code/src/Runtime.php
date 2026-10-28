@@ -33,6 +33,7 @@ use SugarCraft\Code\Memory\MemoryStore;
 use SugarCraft\Code\Permissions\DenialKind;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\ShellSubjectTools;
+use SugarCraft\Code\Skills\ActiveSkillEffects;
 use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\SiblingSpendLedger;
@@ -1455,8 +1456,18 @@ final class Runtime
             }
         }
 
+        // C-EXT-2.b (R-EXT-1): the skills active in THIS turn carry their
+        // frontmatter into this step. `allowed-tools`/`disallowed-tools` reach
+        // the gate through the same PermissionGateHook swap a mode toggle
+        // uses; `model:`/`effort:` re-spell the request below. Derived fresh
+        // from the turn's own messages every step — the grant a step-1 Skill
+        // call earned answers step 2 (its ToolResultMessage is in `$messages`
+        // by then), and a new user prompt clears the slice. Stateless on
+        // purpose: a forked child re-derives from the same transcript.
+        $effects = ActiveSkillEffects::apply($this->hookManager, $messages, $app->availableSkills);
+
         $request = new CompleteRequest(
-            model: $app->model,
+            model: $effects->model ?? $app->model,
             messages: $messages,
             tools: $app->tools ?: null,
             systemPrompt: $systemPrompt,
@@ -1477,7 +1488,9 @@ final class Runtime
             sessionId: $app->sessionId,
             // Roadmap 4.1-1: a delegated run's preset `effort:`. Null on
             // every other App, so the provider's own tiers answer.
-            reasoningEffort: $app->reasoningEffort,
+            // C-EXT-2.b: a skill's declared `effort:` rides over it for the
+            // steps its turn is active — the latest declaring skill wins.
+            reasoningEffort: $effects->effort ?? $app->reasoningEffort,
             // AUT-4: the launch's --json-schema, on self-finishing candidate
             // requests only ({@see jsonSchemaFor()} gates the tool-loop
             // steps out). Null everywhere the flag was not given.

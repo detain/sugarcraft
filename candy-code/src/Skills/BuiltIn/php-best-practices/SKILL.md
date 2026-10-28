@@ -2,8 +2,7 @@
 description: PHP best practices, PSR-12 compliance, type safety, and modern PHP patterns. Use when reviewing or writing PHP code.
 user-invocable: true
 disable-model-invocation: false
-allowed-tools: "Read,Grep,Bash"
-effort: high
+allowed-tools: "Read, Grep"
 paths:
   - "**/*.php"
 ---

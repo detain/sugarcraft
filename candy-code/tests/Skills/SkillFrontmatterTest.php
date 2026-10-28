@@ -25,7 +25,7 @@ final class SkillFrontmatterTest extends TestCase
         $this->assertNull($meta->allowedTools);
         $this->assertNull($meta->disallowedTools);
         $this->assertNull($meta->model);
-        $this->assertSame('medium', $meta->effort);
+        $this->assertNull($meta->effort); // C-EXT-2.b: absent means absent, not 'medium'
         $this->assertSame('thread', $meta->context);
         $this->assertSame([], $meta->paths);
     }

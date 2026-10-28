@@ -18,8 +18,9 @@ use SugarCraft\Code\Tui\Components\PaneLabel;
  *  - an INERT key: parsed, typed, carried on the value object, and consumed by
  *    nothing on a live path. `context: fork` on a skill was documented in the
  *    README as running the skill in an isolated sub-agent; no production code
- *    dispatches it. A skill's `effort:` rides onto the roster row and no live
- *    path applies it.
+ *    dispatched it. A skill's `effort:` rode onto the roster row with no live
+ *    path applying it. Both have since moved: the map below is the truth of
+ *    today, not the founding report.
  *  - an UNKNOWN key: a typo (`permisionMode`, `keyword`, `enable: false`) or
  *    another tool's field. The typo is the dangerous one — a rule written
  *    `enable: false` stays enabled — and nothing said so.
@@ -35,7 +36,8 @@ use SugarCraft\Code\Tui\Components\PaneLabel;
  * (`docs/SKILLS.md`'s field table, `docs/COMMANDS.md`'s frontmatter table,
  * `docs/AGENTS_AUTHORING.md`'s field table) are pinned to it by
  * `InertFrontmatterDocumentationDriftTest`, so the step that finally honours
- * a field (as 4.1 did for a preset's `model`/`effort`/`permissionMode`) deletes its
+ * a field (as 4.1 did for a preset's `model`/`effort`/`permissionMode`, and as
+ * C-EXT-2.b did for a skill's tool fields and `model`/`effort`) deletes its
  * entry here and the docs go red until they stop calling it inert.
  */
 final class FrontmatterKeyAudit
@@ -106,10 +108,12 @@ final class FrontmatterKeyAudit
      *   C-AGT-3.b: it selects the agent's own note store, that store's index is
      *   appended to the delegated prompt, and the `Memory` tool in a delegation
      *   is re-bound to write that store (and granted when absent).
-     * - skill: no tool-scoping code reads `allowed-tools`/`disallowed-tools`;
-     *   `model` is read only by `App::dispatchSkill()`, which has no
-     *   production caller; `effort` is read by nothing; `context: fork` has no
-     *   fork executor.
+     * - skill: only `context: fork` is inert — there is still no fork
+     *   executor. `allowed-tools`/`disallowed-tools`, `model` and `effort`
+     *   went LIVE with C-EXT-2.b (R-EXT-1):
+     *   {@see \SugarCraft\Code\Skills\ActiveSkillEffects} reads them off the
+     *   skills invoked in the turn, feeds the tool grants to the gate and the
+     *   model and thinking effort to the step loop's next request.
      * - command: `Chat` expands a file command's template into the current
      *   conversation on the current model; nothing reads `model` or `subtask`.
      * - rule: `keywords` reaches {@see \SugarCraft\Code\Context\Rule::$models}'s
@@ -126,10 +130,6 @@ final class FrontmatterKeyAudit
     public const INERT = [
         self::AGENT => [],
         self::SKILL => [
-            'allowed-tools' => [],
-            'disallowed-tools' => [],
-            'model' => [],
-            'effort' => [],
             'context' => ['thread'],
         ],
         self::COMMAND => [

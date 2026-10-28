@@ -48,7 +48,12 @@ final class BuiltInSkillsTest extends TestCase
     /**
      * Expected definitions for the eight built-in skills.
      *
-     * @return array<string, array{name: string, description: string, userInvocable: bool, effort: string, paths: array<string>}>
+     * `effort` is null on every entry: C-EXT-2.b (R-EXT-1) trimmed the
+     * built-ins to what each truly needs — no built-in forces a thinking
+     * tier any more — and the parser default that used to masquerade as a
+     * declaration (`medium`) became a null sentinel, so absent means absent.
+     *
+     * @return array<string, array{name: string, description: string, userInvocable: bool, effort: ?string, allowedTools: ?string, paths: array<string>}>
      */
     private function getExpectedSkills(): array
     {
@@ -57,56 +62,64 @@ final class BuiltInSkillsTest extends TestCase
                 'name' => 'php-best-practices',
                 'description' => 'PHP best practices, PSR-12 compliance, type safety, and modern PHP patterns. Use when reviewing or writing PHP code.',
                 'userInvocable' => true,
-                'effort' => 'high',
+                'effort' => null,
+                'allowedTools' => 'Read, Grep',
                 'paths' => ['**/*.php'],
             ],
             'security-audit' => [
                 'name' => 'security-audit',
                 'description' => 'Security audit for PHP code. Check for SQL injection, XSS, CSRF, authentication issues, and other vulnerabilities.',
                 'userInvocable' => true,
-                'effort' => 'high',
+                'effort' => null,
+                'allowedTools' => 'Read, Grep',
                 'paths' => ['**/*.php'],
             ],
             'phpunit-master' => [
                 'name' => 'phpunit-master',
                 'description' => 'PHPUnit testing best practices, mocking, data providers, and test organization.',
                 'userInvocable' => true,
-                'effort' => 'high',
+                'effort' => null,
+                'allowedTools' => 'Read, Grep',
                 'paths' => ['**/*Test.php'],
             ],
             'composer-wizard' => [
                 'name' => 'composer-wizard',
                 'description' => 'Composer dependency management, version constraints, and autoloading configuration.',
                 'userInvocable' => true,
-                'effort' => 'medium',
+                'effort' => null,
+                'allowedTools' => 'Read, Grep, Bash(composer:*)',
                 'paths' => ['composer.json', 'composer.lock'],
             ],
             'api-design' => [
                 'name' => 'api-design',
                 'description' => 'REST conventions, JSON:API patterns, authentication flows, error handling. Use when designing APIs, implementing endpoints, handling authentication, or structuring JSON responses.',
                 'userInvocable' => true,
-                'effort' => 'medium',
+                'effort' => null,
+                'allowedTools' => null,
                 'paths' => [],
             ],
             'laravel-best-practices' => [
                 'name' => 'laravel-best-practices',
                 'description' => 'Laravel coding standards, Eloquent optimization, service container patterns, Blade conventions. Use when writing Laravel code, optimizing queries, structuring services, or working with Blade templates.',
                 'userInvocable' => true,
-                'effort' => 'medium',
+                'effort' => null,
+                'allowedTools' => null,
                 'paths' => [],
             ],
             'symfony-best-practices' => [
                 'name' => 'symfony-best-practices',
                 'description' => 'Symfony coding standards, service definition, event dispatcher patterns, form handling. Use when writing Symfony code, configuring services, handling forms, or working with event subscribers.',
                 'userInvocable' => true,
-                'effort' => 'medium',
+                'effort' => null,
+                'allowedTools' => null,
                 'paths' => [],
             ],
             'testing-strategies' => [
                 'name' => 'testing-strategies',
                 'description' => 'PHPUnit best practices, mock patterns, test organization, coverage goals. Use when writing tests, setting up test suites, creating mocks, or analyzing test coverage.',
                 'userInvocable' => true,
-                'effort' => 'medium',
+                'effort' => null,
+                'allowedTools' => null,
                 'paths' => [],
             ],
         ];
@@ -116,7 +129,11 @@ final class BuiltInSkillsTest extends TestCase
      * Expected definitions for the four SugarCraft-monorepo skills, which ship
      * in the repository root's project tier rather than as built-ins.
      *
-     * @return array<string, array{name: string, description: string, userInvocable: bool, effort: string, paths: array<string>}>
+     * They declare no `allowed-tools`/`effort`, so both read null now that
+     * the parser default is a null sentinel rather than an implicit
+     * `medium` (C-EXT-2.b); they are not part of the built-in trim.
+     *
+     * @return array<string, array{name: string, description: string, userInvocable: bool, effort: ?string, allowedTools: ?string, paths: array<string>}>
      */
     private function getExpectedMonorepoSkills(): array
     {
@@ -125,28 +142,32 @@ final class BuiltInSkillsTest extends TestCase
                 'name' => 'explore-codebase',
                 'description' => 'Fast read-only pass for tracing an unfamiliar lib\'s structure before editing it. Use when you need to understand a candy-*/sugar-*/honey-* lib\'s layout, dependencies, and conventions before making changes — without spawning a full sub-agent. Triggers automatically when an agent first touches a file inside an unfamiliar lib.',
                 'userInvocable' => true,
-                'effort' => 'medium',
+                'effort' => null,
+                'allowedTools' => null,
                 'paths' => [],
             ],
             'matchups-sync' => [
                 'name' => 'matchups-sync',
                 'description' => 'Keeps docs/MATCHUPS.md and PROJECT_NAMES.md in sync whenever a new port lands. Automatically run at the end of any workflow stage that adds a library. Triggers on "sync matchups", "new port landed", or when a lib is added to the monorepo.',
                 'userInvocable' => false,
-                'effort' => 'medium',
+                'effort' => null,
+                'allowedTools' => null,
                 'paths' => [],
             ],
             'mcp-authoring' => [
                 'name' => 'mcp-authoring',
                 'description' => 'Scaffolds a new MCP tool inside a SugarCraft lib that wants to expose itself over the protocol. Use when a lib maintainer says \'add MCP tool\', \'expose over protocol\', \'register MCP handler\', or creates files under a lib\'s `src/MCP/` directory. Generates the tool schema, McpServer wiring, and a smoke test.',
                 'userInvocable' => true,
-                'effort' => 'medium',
+                'effort' => null,
+                'allowedTools' => null,
                 'paths' => [],
             ],
             'worktree-workflow' => [
                 'name' => 'worktree-workflow',
                 'description' => 'Walks a teammate through claiming a task, creating its worktree, and opening the merge-back PR per the ship-as-you-go cadence. Use when a teammate says \'claim task\', \'create worktree\', \'open PR\', or \'start work on <slug>\'. Keeps the worktree lifecycle consistent across all teammates.',
                 'userInvocable' => true,
-                'effort' => 'medium',
+                'effort' => null,
+                'allowedTools' => null,
                 'paths' => [],
             ],
         ];
@@ -161,7 +182,7 @@ final class BuiltInSkillsTest extends TestCase
     /**
      * Built-in plus monorepo expectations, for the per-file metadata tests.
      *
-     * @return array<string, array{name: string, description: string, userInvocable: bool, effort: string, paths: array<string>}>
+     * @return array<string, array{name: string, description: string, userInvocable: bool, effort: ?string, allowedTools: ?string, paths: array<string>}>
      */
     private function getAllExpectedSkills(): array
     {
@@ -290,6 +311,25 @@ final class BuiltInSkillsTest extends TestCase
 
         // Assert
         $this->assertSame($expected['effort'], $skill->effort);
+    }
+
+    /**
+     * C-EXT-2.b (R-EXT-1): the built-in tool lists are honoured now, so the
+     * trimmed strings are pinned exactly as written — a re-widening of any
+     * built-in's pre-approval goes red here.
+     *
+     * @dataProvider allSkillFilePathsProvider
+     */
+    public function testSkillHasCorrectAllowedTools(string $skillPath, string $expectedName): void
+    {
+        // Arrange
+        $expected = $this->getAllExpectedSkills()[$expectedName];
+
+        // Act
+        $skill = Skill::fromFile($skillPath);
+
+        // Assert
+        $this->assertSame($expected['allowedTools'], $skill->allowedTools);
     }
 
     /**

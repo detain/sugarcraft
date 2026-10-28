@@ -21,7 +21,7 @@ final readonly class Skill
         public ?string $allowedTools,
         public ?string $disallowedTools,
         public ?string $model,
-        public string $effort,
+        public ?string $effort,
         public string $context,
         public array $paths,
         public string $content,

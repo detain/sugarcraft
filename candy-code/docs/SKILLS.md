@@ -262,10 +262,10 @@ os: [linux, darwin]       # the platform must be listed
 | `user-invocable` | `true` | `SkillRegistry::isUserInvocable()` → `App::userInvocableSkills()` | Live on the App shell's skill picker. `false` hides the skill from the picker while leaving it model-invocable. |
 | `disable-model-invocation` | `false` | `SkillRegistry::isAutoInvocable()` | Live. `true` keeps the skill out of the prompt listing **and** makes `SkillTool` refuse it by name — the check is re-done in the tool so a skill added to a registry by some other route still cannot be reached. |
 | `paths` | `[]` | `SkillRegistry::forPaths()`, `SkillPathNudge` | Live. Glob patterns (see [What a `paths:` glob matches](#what-a-paths-glob-matches) for the semantics — they are not `FNM_PATHNAME`); touching a matching file nudges the skill into view once per session. Read from the Stage-1 manifest, so it costs no body read. The nudge is bounded: at most 8 entries, each at most 300 bytes, and where it is spent depends on the tool: `Grep` and `Glob` subtract it from their own `maxOutputBytes`, so it is spent INSIDE the cap; `Read` takes an eighth BESIDE its cap (hence its stated 1.375x `maxBytes` total, a ceiling: the page `Read` returns is itself at most `maxBytes`, and 50 KiB by default, while the eighth is still figured from `maxBytes`); `Edit` and `Write` have no output cap at all, so the class ceiling of 2,636 bytes is the whole bound there. A `description` too long for an entry is clipped and marked, and a skill held back is announced by a later call rather than dropped. Only model-invocable skills are ever nudged — a `disable-model-invocation: true` skill is filtered out of the nudge, because telling the model to open a skill it may not invoke is a dead instruction. |
-| `allowed-tools` | `null` | nothing | **Inert.** Parsed, carried on the `Skill` object, copied by `ForeignSkillDiscovery`, and read by no tool-scoping code in `src/`. Writing it does not restrict anything. |
-| `disallowed-tools` | `null` | nothing | **Inert**, same as above. |
-| `model` | `null` | `App::dispatchSkill()` only | **Inert.** Not reachable on any live path: `App::dispatchSkill()` reads it (`$skill->model ?? $this->model`) and that method has no production caller; `ForeignSkillDiscovery` merely copies the value onto the imported object. See [`context: fork`](#the-context-field-today). |
-| `effort` | `medium` | nothing acts on it | **Inert.** Parsed and carried; the only read of `Skill::$effort` in `src/` is `ForeignSkillDiscovery` copying it onto the imported object. No execution path consults it. |
+| `allowed-tools` | `null` | `ActiveSkillEffects::derive()` via `Runtime::run()` and `Chat::gateToolCall()` | **Live** (R-EXT-1). Each comma-separated entry becomes a turn-scoped Allow rule at the permission gate for the rest of the turn — from the invocation to the next real user prompt — matching as written: `Read` pre-approves Reads, `Bash(composer:*)` pre-approves only composer calls. An answer to Ask only: it cannot lift a configured `Deny` or a security question, and it never persists past the turn. |
+| `disallowed-tools` | `null` | `ActiveSkillEffects::derive()` via `Runtime::run()` and `Chat::gateToolCall()` | **Live**, same shape as `allowed-tools`, as refusals: a listed tool is refused before the mode gets a say, for the rest of the turn. |
+| `model` | `null` | `ActiveSkillEffects::derive()` via `Runtime::run()` | **Live** (R-EXT-1). The latest-invoked skill in the turn that declares a `model` swaps it onto the next request from the step loop; absent a declaration the session model stands. (`App::dispatchSkill()` still has no production caller; `ForeignSkillDiscovery` merely copies the value onto the imported object.) |
+| `effort` | `null` | `ActiveSkillEffects::derive()` via `Runtime::run()` | **Live** (R-EXT-1). The value rides the request's `reasoningEffort`: one of the tier names `/effort` prints buys that thinking budget, anything else falls through to the provider's default handling. A skill that declares nothing leaves the session effort untouched — the old parser default of `medium` no longer masquerades as a declaration. |
 | `requires` | none | `SkillRegistry::unmetRequirements()` via `SkillFrontmatter::fromParsed()` and `SkillRegistry::register()` | Live. An unmet requirement keeps the skill out of the registry, with the reason on `SkillManager::skipped()`. See above. |
 | `os` | any platform | same | Live, same as `requires`. |
 | `context` | `thread` | `SkillRegistry::isContextFork()` via `App::applySkillsToSystemPrompt()`, `App::dispatchSkill()`, `App::handleSelectSkill()` | **Inert** for `fork` (`thread` is what happens anyway). See below — `fork` is implemented nowhere; the one live consulter only words a status message, and the standing-body splice does not consult the field at all. |
@@ -665,17 +665,16 @@ stderr. See [`ENVIRONMENT.md`](ENVIRONMENT.md).
 
 **A skill that loads but declares a key nothing acts on is named too.** The
 launch adds one aggregated row (stderr and transcript) for every skill that
-sets an inert field — `allowed-tools`, `disallowed-tools`, `model`, `effort`,
-`context: fork` — or a key this reader does not know, with a did-you-mean for a
-near miss:
+sets an inert field — `context: fork` — or a key this reader does not know,
+with a did-you-mean for a near miss:
 
 ```text
-4 skills declare frontmatter candy-code ignores: `allowed-tools` is not acted on (pdf, review, gh-pr); `user_invocable` is not a skill field (did you mean `user-invocable`?) (gh-pr); `context: fork` is not acted on (deep-dive)
+2 skills declare frontmatter candy-code ignores: `user_invocable` is not a skill field (did you mean `user-invocable`?) (gh-pr); `context: fork` is not acted on (deep-dive)
 ```
 
 The skill is never refused for it: an imported Claude Code skill keeps its
-`allowed-tools`, and the row is how you learn that the restriction it asks for
-is not applied here. Built-in skills are not audited.
+keys, and the row is how you learn which of them ask for something this
+program does not do. Built-in skills are not audited.
 
 A skill left out because the host lacks what its `requires` or `os` names is a
 skip like any other. Its reason starts with `is unavailable on this host` and

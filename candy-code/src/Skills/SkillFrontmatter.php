@@ -47,9 +47,12 @@ use InvalidArgumentException;
  * check runs once per launch per skill, and only for a skill that declares
  * requirements: the rest pay nothing.
  *
- * TYPED IS NOT HONOURED. `allowed-tools`, `disallowed-tools`, `model`,
- * `effort` and `context: fork` are typed here so a wrong shape is caught, and
- * nothing on a live path acts on them. That list is
+ * TYPING EARNS ITS KEEP. `allowed-tools`, `disallowed-tools`, `model` and
+ * `effort` are typed here so a wrong shape is caught at the load, and a live
+ * path now acts on all four: {@see \SugarCraft\Code\Skills\ActiveSkillEffects}
+ * reads them off the skills invoked in the turn and feeds the gate and the
+ * next request (R-EXT-1). `context: fork` stays typed-but-inert — there is no
+ * fork executor, so a fork skill runs in the thread. The current inert list is
  * {@see \SugarCraft\Code\Support\FrontmatterKeyAudit::INERT}, not this
  * comment: the launch names every skill that sets one (or a key this class
  * does not read at all), and the step that wires a field deletes its entry
@@ -93,7 +96,7 @@ final readonly class SkillFrontmatter
         public ?string $allowedTools,
         public ?string $disallowedTools,
         public ?string $model,
-        public string $effort,
+        public ?string $effort,
         public string $context,
         public array $paths,
         public array $requires,
@@ -132,7 +135,7 @@ final readonly class SkillFrontmatter
             allowedTools: self::toolListField($parsed, 'allowed-tools'),
             disallowedTools: self::toolListField($parsed, 'disallowed-tools'),
             model: self::stringField($parsed, 'model'),
-            effort: self::stringField($parsed, 'effort') ?? 'medium',
+            effort: self::stringField($parsed, 'effort'),
             context: self::stringField($parsed, 'context') ?? 'thread',
             paths: self::pathsField($parsed),
             requires: self::requiresField($parsed),

@@ -43,10 +43,17 @@ final class FrontmatterKeyAuditTest extends TestCase
 
     public function testAnInertKeyIsNamed(): void
     {
+        // C-EXT-2.b (R-EXT-1): a skill's `allowed-tools`/`disallowed-tools`
+        // feed the turn's gate grants and its `model`/`effort` ride the step
+        // loop's next request — declaring them is acted on and names nothing.
         self::assertSame(
-            ['`allowed-tools` is not acted on', '`effort` is not acted on'],
+            [],
             FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::SKILL, ['effort' => 'high', 'allowed-tools' => 'Read']),
         );
+        self::assertArrayNotHasKey('allowed-tools', FrontmatterKeyAudit::INERT[FrontmatterKeyAudit::SKILL]);
+        self::assertArrayNotHasKey('disallowed-tools', FrontmatterKeyAudit::INERT[FrontmatterKeyAudit::SKILL]);
+        self::assertArrayNotHasKey('model', FrontmatterKeyAudit::INERT[FrontmatterKeyAudit::SKILL]);
+        self::assertArrayNotHasKey('effort', FrontmatterKeyAudit::INERT[FrontmatterKeyAudit::SKILL]);
         // ISS-068: `keywords` has no matcher and stays inert. `models` left
         // INERT[RULE] when the seam closed — Runtime threads the session model
         // into RuleLoader — so declaring it is acted on and must NOT be named.
@@ -133,8 +140,8 @@ final class FrontmatterKeyAuditTest extends TestCase
     public function testTheNoticeGroupsByLabelAndCountsFiles(): void
     {
         $row = FrontmatterKeyAudit::notice(FrontmatterKeyAudit::SKILL, [
-            'a' => ['`allowed-tools` is not acted on'],
-            'b' => ['`allowed-tools` is not acted on', '`effort` is not acted on'],
+            'a' => ['`context: fork` is not acted on'],
+            'b' => ['`context: fork` is not acted on', '`user_invocable` is not a skill field'],
             'c' => [],
         ]);
 
@@ -144,7 +151,7 @@ final class FrontmatterKeyAuditTest extends TestCase
                 2,
                 'skills',
                 '',
-                '`allowed-tools` is not acted on (a, b); `effort` is not acted on (b)',
+                '`context: fork` is not acted on (a, b); `user_invocable` is not a skill field (b)',
             ),
             $row,
         );

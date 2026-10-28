@@ -2,8 +2,7 @@
 description: Composer dependency management, version constraints, and autoloading configuration.
 user-invocable: true
 disable-model-invocation: false
-allowed-tools: "Read,Grep,Bash,Composer"
-effort: medium
+allowed-tools: "Read, Grep, Bash(composer:*)"
 paths:
   - "composer.json"
   - "composer.lock"

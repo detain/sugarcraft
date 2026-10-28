@@ -929,8 +929,10 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
      * X-37a: a key that a file which LOADED declares and nothing acts on is
      * named at launch — one aggregated row per format, on both channels — and
      * the file is never refused for it. One fixture per format: a preset with
-     * a misspelt key (C-AGT-3.b retired its inert `memory:` half), a skill with
-     * `allowed-tools` and `context: fork`, a command with `subtask: true`,
+     * a misspelt key (C-AGT-3.b retired its inert `memory:` half), a skill
+     * whose `allowed-tools` and `model` now pass without a row (C-EXT-2.b made
+     * them live) while `context: fork` and a misspelt `user_invocable` are
+     * named, a command with `subtask: true`,
      * and a rule whose `enable: false` silently leaves it enabled.
      */
     public function testIgnoredFrontmatterReachesBothChannelsAsOneRowPerFormat(): void
@@ -939,7 +941,7 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
         mkdir($sc . '/agents', 0o700, true);
         file_put_contents($sc . '/agents/rev.md', "---\ndescription: Reviews.\npermisionMode: plan\n---\nReview.\n");
         mkdir($sc . '/skills/fork-me', 0o700, true);
-        file_put_contents($sc . '/skills/fork-me/SKILL.md', "---\ndescription: Forks.\nallowed-tools: Read\ncontext: fork\n---\nbody\n");
+        file_put_contents($sc . '/skills/fork-me/SKILL.md', "---\ndescription: Forks.\nallowed-tools: Read\nmodel: big\ncontext: fork\nuser_invocable: true\n---\nbody\n");
         mkdir($sc . '/commands', 0o700, true);
         file_put_contents($sc . '/commands/iso.md', "---\ndescription: Isolated.\nsubtask: true\n---\nDo it.\n");
         mkdir($sc . '/rules', 0o700, true);
@@ -960,8 +962,8 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
             $rows,
         );
         self::assertContains(
-            '1 skill declares frontmatter candy-code ignores: `allowed-tools` is not acted on (fork-me); '
-            . '`context: fork` is not acted on (fork-me)',
+            '1 skill declares frontmatter candy-code ignores: `context: fork` is not acted on (fork-me); '
+            . '`user_invocable` is not a skill field (did you mean `user-invocable`?) (fork-me)',
             $rows,
         );
         self::assertContains(

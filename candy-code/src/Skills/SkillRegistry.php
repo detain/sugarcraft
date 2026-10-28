@@ -529,7 +529,7 @@ final class SkillRegistry
             allowedTools: null,
             disallowedTools: null,
             model: null,
-            effort: 'medium',
+            effort: null,
             context: $manifest['context'],
             paths: $manifest['paths'],
             content: '',

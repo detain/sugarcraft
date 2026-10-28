@@ -70,7 +70,7 @@ SKILL;
         $this->assertNull($skill->allowedTools); // default
         $this->assertNull($skill->disallowedTools); // default
         $this->assertNull($skill->model); // default
-        $this->assertSame('medium', $skill->effort); // default
+        $this->assertNull($skill->effort); // default — nothing declared (C-EXT-2.b sentinel)
         $this->assertSame('thread', $skill->context); // default
         $this->assertSame([], $skill->paths); // default
         $this->assertSame('This is plain content without any frontmatter.', $skill->content);
@@ -135,7 +135,7 @@ SKILL;
         $this->assertNull($skill->allowedTools);
         $this->assertNull($skill->disallowedTools);
         $this->assertNull($skill->model);
-        $this->assertSame('medium', $skill->effort);
+        $this->assertNull($skill->effort); // default — nothing declared (C-EXT-2.b sentinel)
         $this->assertSame('thread', $skill->context);
         $this->assertSame([], $skill->paths);
         $this->assertSame('Only description set.', $skill->content);
