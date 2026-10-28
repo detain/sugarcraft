@@ -202,9 +202,19 @@ final class InstructionFileLoader
      * union (EngineBackend's
      * {@see \SugarCraft\Code\Backend\EngineBackend::sessionStateFromTools()})
      * flattens each key's payload to a `list<string>` of its VALUES — a map
-     * would arrive as bare fingerprints with their paths stripped. Pair
-     * strings survive both carriers intact and dedup byte-identically in that
-     * union (all three tools share ONE loader, so their exports are equal).
+     * would arrive as bare fingerprints with their paths stripped.
+     *
+     * What is byte-identical is the KEY NAME: all three carriers spell it
+     * from this const ({@see \SugarCraft\Code\Tools\BuiltIn\Read},
+     * {@see \SugarCraft\Code\Tools\BuiltIn\Grep} and
+     * {@see \SugarCraft\Code\Tools\BuiltIn\Glob}, export and merge halves),
+     * so the contract cannot drift between files. The VALUE shape is
+     * versioned by its content, not by a counter: repeated identical pair
+     * strings collapse in the union's strict dedup (all three tools share
+     * ONE loader, so their exports are equal), while two different
+     * fingerprints for one path both survive the union and settle at
+     * {@see self::markInstructionUpdates()}'s last-wins write — one row
+     * per path, never a stack.
      *
      * Mirrors {@see \SugarCraft\Code\Tools\ReadLedger::SESSION_STATE_KEY}:
      * a class-owned ledger key merged by the tools that carry it.

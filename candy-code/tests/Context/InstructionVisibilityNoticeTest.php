@@ -377,6 +377,99 @@ final class InstructionVisibilityNoticeTest extends TestCase
     }
 
     /**
+     * Round 2 MINOR-1 (the loader-side leg): once-per-path is the LOADER
+     * key's law, not only the tracker capture's. Two trackers captured on
+     * ONE loader before the edit — the shape a per-turn recapture against
+     * the session loader takes — both hold an empty own view at announce
+     * time; the first's row rides the loader through
+     * {@see InstructionFileLoader::instructionUpdateFingerprint()}'s live
+     * read and silences the second while the model half still renders.
+     * Deleting that guard disjunct reddens exactly here: the fork-carry pin
+     * cannot catch it (its parent view is silenced through the same line
+     * only because the merge landed before the recheck — here there is no
+     * wire at all, only the shared loader).
+     */
+    public function testTheSecondTrackerOnOneLoaderIsSilencedByTheLoaderKey(): void
+    {
+        $loader = $this->trackerFixture();
+        $first = InstructionDiffTracker::capture($loader);
+        $second = InstructionDiffTracker::capture($loader);
+
+        file_put_contents($this->claude, "Alpha rule\nBeta rule\nGamma rule\n");
+        clearstatcache();
+
+        $section = $first->recheck();
+        self::assertNotSame('', $section, 'fixture: the first fresh detection reached the section');
+        self::assertSame(
+            [Lang::t('chat.instructions.updated', ['file' => 'CLAUDE.md'])],
+            RuntimeNoticeSink::drain(),
+            'fixture: the first tracker said the row, through the shared loader',
+        );
+
+        $again = $second->recheck();
+        self::assertSame($section, $again, 'the second tracker re-detects: the model half renders again');
+        self::assertSame(
+            [],
+            RuntimeNoticeSink::drain(),
+            'the second announce consults the loader key and says nothing — 1 row to 0 on the shared ledger',
+        );
+    }
+
+    /**
+     * Round 2 MINOR-2 (the merge law, pinned as it IS): the ledger is a
+     * path => fingerprint map with NO counter — a fresh row announced in
+     * the parent view and an updated row for the same path announced in the
+     * child view merge to ONE entry, the child's, by
+     * {@see InstructionFileLoader::markInstructionUpdates()}'s last-wins
+     * write. Not a sum, not a stack, not a max of hits: re-merging the same
+     * wire is a no-op, so the entry count is topology-independent.
+     */
+    public function testMergingAParentFreshRowAndAChildUpdateIsOneEntryLastWins(): void
+    {
+        $parentLoader = $this->trackerFixture();
+        $parent = InstructionDiffTracker::capture($parentLoader);
+
+        $one = "Alpha rule\nBeta rule\nGamma rule\n";
+        file_put_contents($this->claude, $one);
+        clearstatcache();
+        self::assertNotSame('', $parent->recheck(), 'fixture: the parent detected the change');
+        self::assertSame(
+            [Lang::t('chat.instructions.updated', ['file' => 'CLAUDE.md'])],
+            RuntimeNoticeSink::drain(),
+            'fixture: the parent view holds the fresh row',
+        );
+        self::assertSame([$this->claude => sha1($one)], $parentLoader->instructionUpdateLedger());
+
+        $childLoader = new InstructionFileLoader($this->repo, [], null, $this->personal);
+        $child = InstructionDiffTracker::capture($childLoader);
+        $two = "Alpha rule\nBeta rule\nGamma rule\nDelta rule\n";
+        file_put_contents($this->claude, $two);
+        clearstatcache();
+        self::assertNotSame('', $child->recheck(), 'fixture: the child detected a further change');
+        self::assertSame(
+            [Lang::t('chat.instructions.updated', ['file' => 'CLAUDE.md'])],
+            RuntimeNoticeSink::drain(),
+            'fixture: the child view holds the updated row for the same path',
+        );
+
+        $wire = json_decode(json_encode((new Read(instructionLoader: $childLoader))->exportSessionState()), true);
+        (new Read(instructionLoader: $parentLoader))->mergeSessionState($wire);
+        self::assertSame(
+            [$this->claude => sha1($two)],
+            $parentLoader->instructionUpdateLedger(),
+            'the merge takes the child row for the path — replaced, not added: one entry, no counter',
+        );
+        self::assertCount(1, $parentLoader->announcedInstructionUpdates(), 'the export stays one pair string for the path');
+
+        (new Read(instructionLoader: $parentLoader))->mergeSessionState($wire);
+        self::assertSame(
+            [$this->claude => sha1($two)],
+            $parentLoader->instructionUpdateLedger(),
+            're-merging the same wire changes nothing — the union is not additive',
+        );
+    }
+
+    /**
      * The tracker fixture shape from the existing turn-context pins: root
      * instruction files present, a pinned personal directory so no real
      * `~/.candy-code` note can leak in. Only CLAUDE.md is ever touched, so
