@@ -1,0 +1,25 @@
+### P-TABS.f — Chat goes deck-aware: session-opening routes become tabs, mid-turn refusals lifted, palette Close tab
+- item: P-SESSION-TABS (sources: GAP-SES-12)
+- kind: gap · effort M
+- approach:
+  - Inside Chat, four routes still swap the session in place through `switchToSession()` (`src/Chat.php:2355`):
+    - session-picker Enter (:15166) and fork (:15080);
+    - Agent View "open as session" (:9263);
+    - palette New session (`handlePaletteNewSession`, :17681).
+  - Several are refused mid-turn by `refuseWhileInFlight` (:10596).
+  - Add a `tabHosted` flag (constructor + mutate carry; set by `App::withChat` when the deck is armed) and `presentSession(id, name)`:
+    - deck-hosted, it returns `Cmd::send(new OpenTabMsg(id, name))` and touches nothing else;
+    - standalone, it is the old in-place switch.
+  - Route all four through it. In deck mode those routes are allowed mid-turn, because they no longer touch the running history.
+  - Add a palette-only `Close tab` (new file `0105-close-tab.php`, `PaletteAction::CloseTab`) that sends `CloseTabMsg`.
+  - The in-chat `tab:` click arm stays for standalone Chats.
+- files.create: `candy-code/builtin-commands/0105-close-tab.php` (new per-command file, not serialized)
+- files.modify: `candy-code/src/Chat.php` (constructor `tabHosted`; new `presentSession()`; `handleSessionPickerKey()` :15080/:15166; Agent View open-as-session :9263; `handlePaletteNewSession()` :17681; `refuseWhileInFlight()` :10596; palette dispatch arm for CloseTab), `candy-code/src/Palette/PaletteAction.php` (`CloseTab`), `candy-code/src/App/App.php` (`withChat()` sets the flag), `candy-code/lang/en.php` (`chat.tabs.*`, `cmd.close-tab.*`), `candy-code/docs/COMMANDS.md` (regenerated: the table lists palette-only rows)
+- tests: create `candy-code/tests/Chat/DeckHostedSessionRoutesTest.php` (each route emits OpenTabMsg when hosted and switches in place when standalone; allowed mid-turn only when hosted); modify `candy-code/tests/MouseModalGuardTest.php` (standalone pins unchanged; add the hosted cases)
+- docs/guards: `docs/COMMANDS.md` via `tools/gen-command-docs.php` with `tests/Commands/CommandDocsDriftTest.php`; the README slash roster does not move (`slashVisible: false`)
+- serialized: [chat:constructor(tabHosted) + presentSession + handleSessionPickerKey + Agent-View open-as-session + handlePaletteNewSession + refuseWhileInFlight + palette arm,ctor] [lang] (prefix `chat.tabs.`, `cmd.close-tab.`) [docs:COMMANDS.md] [hot:candy-code/src/Palette/PaletteAction.php] [hot:candy-code/src/App/App.php]
+- deps: P-TABS.e
+- phase: normal
+- ruling: none
+- risks: a palette action needs its PaletteAction→spec roster row. Check `PaletteAction::spec()`'s exhaustiveness test.
+

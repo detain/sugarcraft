@@ -1807,7 +1807,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - Chat.php region claims: P-TABS.f (constructor(tabHosted) + presentSession + handleSessionPickerKey + Agent-View open-as-session + handlePaletteNewSession + refuseWhileInFlight + palette arm, ctor); C-AGT-5.c (pumpBackgroundSessions); C-AGT-6.d (handlePrCommand (new), reviewTurn)
 - Bootstrap.php method claims: C-CTX-4.c (forcedInstructions, instructionLoader)
 
-#### P-TABS.f — Chat goes deck-aware: session-opening routes become tabs, mid-turn refusals lifted, palette Close tab
+#### ✅ 0fb10ffbf0ca7014da60b7212026ad0e8e6d68a7 P-TABS.f — deck-aware session routes + palette Close tab
 - **Item:** P-SESSION-TABS (sources: GAP-SES-12) · gap · effort M
 - **What:** Inside Chat, four routes still swap the session in place through `switchToSession()` (`src/Chat.php:2355`): session-picker Enter (:15166) and fork (:15080); Agent View "open as session" (:9263); palette New session …
 - **Files — create:** `candy-code/builtin-commands/0105-close-tab.php`

@@ -8,6 +8,9 @@
   "C-AGT-2.c",
   "C-AGT-3.a",
   "C-AGT-3.b",
+  "C-AGT-4.a",
+  "C-AGT-5.a",
+  "C-AGT-6.b",
   "C-AGT-7.a",
   "C-AGT-7.b",
   "C-AGT-7.c",
@@ -28,18 +31,22 @@
   "C-EXT-2.b",
   "C-EXT-2.c",
   "C-EXT-2.d",
+  "C-EXT-2.e",
+  "C-EXT-4.a",
   "C-EXT-7.a",
   "C-EXT-7.b",
   "C-MCP-1.a",
   "C-MCP-1.b",
   "C-MCP-2.a",
   "C-MCP-2.b",
+  "C-MCP-3.a",
   "C-MCP-4.a",
   "C-MCP-4.c",
   "C-MCP-6.a",
   "C-PRV-1.a",
   "C-PRV-1.b",
   "C-PRV-1.c",
+  "C-PRV-2.a",
   "C-PRV-5.a",
   "C-PRV-5.b",
   "C-PRV-5.c",
@@ -54,6 +61,7 @@
   "C-SEC-5.a",
   "C-SEC-5.b",
   "C-SEC-5.c",
+  "C-SEC-5.d",
   "C-SES-1.a",
   "C-SES-1.b",
   "C-SES-2.a",
@@ -70,6 +78,7 @@
   "C-SES-5.c",
   "C-SES-5.d",
   "C-SES-6.a",
+  "C-SES-7.a",
   "C-SES-9.a",
   "C-SES-9.b",
   "C-SES-9.c",
@@ -79,13 +88,19 @@
   "C-TOOL-1.c",
   "C-TOOL-3.a",
   "C-TOOL-3.b",
+  "C-TOOL-3.c",
+  "C-TOOL-3.d",
+  "C-TOOL-4.a",
   "C-TOOL-5.b",
+  "C-TOOL-5.c",
   "C-TOOL-7.a",
   "C-TOOL-7.b",
   "C-TOOL-7.c",
   "C-TOOL-7.d",
   "C-TOOL-7.e",
   "C-TUI-1.a",
+  "C-TUI-2.a",
+  "C-TUI-2.b",
   "C-TUI-6.k",
   "C-TUI-7.a",
   "C-TUI-7.b",
@@ -97,9 +112,13 @@
   "C-WEB-3.b",
   "C-WEB-3.c",
   "C-WEB-3.d",
+  "C-WEB-3.e",
   "C-WEB-3.f",
+  "C-WEB-3.g",
   "C-WEB-7.a",
   "C-WEB-7.b",
+  "C-WEB-7.c",
+  "C-WEB-7.d",
   "P-AGENT.a",
   "P-AGENT.c",
   "P-AGENT.d",
@@ -121,62 +140,46 @@
   "P-TABS.b",
   "P-TABS.c",
   "P-TABS.d",
-  "P-TABS.h",
-  "C-SEC-5.d",
-  "C-TOOL-3.c",
-  "C-TOOL-5.c",
-  "C-AGT-5.a",
-  "C-AGT-6.b",
-  "C-WEB-3.e",
-  "C-EXT-4.a",
-  "C-EXT-2.e",
-  "C-WEB-7.d",
-  "C-WEB-7.c",
-  "C-TOOL-4.a",
-  "C-AGT-4.a",
-  "C-MCP-3.a",
-  "C-PRV-2.a",
   "P-TABS.e",
-  "C-TUI-2.a",
-  "C-TUI-2.b",
-  "C-TOOL-3.d",
-  "C-SES-7.a",
-  "C-WEB-3.g"
+  "P-TABS.f",
+  "P-TABS.h"
  ],
  "inflight": {
   "C-WEB-4.a": {
    "stage": "review",
    "round": 2,
+   "tip": "bf6331eb0",
    "worktree": "/home/sites/cc-cmp-C-WEB-4.a",
    "branch": "cc/C-WEB-4.a",
-   "tip": "bf6331eb0"
+   "note": "REVIEW-1.md in /tmp fallback; r2 cure-reviewer @drop fix; weld = dist rider, no tsv"
   },
   "C-AGT-5.e": {
    "stage": "review",
-   "round": 1,
+   "round": 2,
+   "tip": "291da3a554a563ebb9708876f7c155d749aeb0e8",
    "worktree": "/home/sites/cc-cmp-C-AGT-5.e",
    "branch": "cc/C-AGT-5.e",
-   "tip": "2ebd53542084c82ccb6eb4db64a1f4ab6bca0bc1"
+   "note": "r2 cure-reviewer: ctor SCHEMA/boundedData pin; weld owes 3 tsv rows tests/Automation/{OutboundWebhookConfigTest,WebhookSignerTest,WebhookDispatcherTest}; MINOR2 Browser timeout-floor glance"
   },
   "C-AGT-5.g": {
    "stage": "review",
    "round": 2,
+   "tip": "b5f0033e9",
    "worktree": "/home/sites/cc-cmp-C-AGT-5.g",
    "branch": "cc/C-AGT-5.g",
-   "tip": "b5f0033e9"
-  },
-  "P-TABS.f": {
-   "stage": "review",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-P-TABS.f",
-   "branch": "cc/P-TABS.f",
-   "tip": "c991c6d10cc1028da8b81af1828109c2b44e885c"
+   "note": "r2 cure-reviewer @ b5f0033e9 (prior r2 on stale 5b4ab4ebd never delivered); docs-only; weld no tsv no regen"
   },
   "C-CTX-4.c": {
    "stage": "build",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-CTX-4.c",
    "branch": "cc/C-CTX-4.c"
+  },
+  "C-AGT-6.d": {
+   "stage": "build",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-C-AGT-6.d",
+   "branch": "cc/C-AGT-6.d"
   }
  },
  "blocked": [
@@ -720,7 +723,8 @@
   "C-SES-7.a_pick": "pick 78f34d0f0?? NO — welder MUST use branch tip 16057843d (fixer round-2 unknown-kind fail-loud + backtick legs; r1 reviewer CLEAN @ 16057843d); 2 durations rows SessionImporterTest+TranscriptReadersTest junit sums; +25T-era closeout carry; NIT-3 ImporterRegistry.php:19 'eight' stale carried.",
   "C-TOOL-3.d_pick": "tip 5c7d49307 (r2 CLEAN-era 1de8e9266 + round-2 ReadOnlySessionTest pins curing dup-r1 MINOR via blob-proof path); 1 durations row ShellsCommandTest 11T recount; merged guards 130T/16148A 0F + ShellsCommand 11T/59A + read-only pair 31T/93A + gen-command-docs --check rc0; DocFigure thirty-seven hunk == e6d830327 cure — keep-either, no double-add.",
   "C-WEB-3.g_pick": "tip 0df1f0af0 r1 CLEAN; NO tsv rows (vitest NEVER); NO dist (test-only); merged vitest dormantRoster+shutdownDormant 6/6 serial; trio regen NOT owed (zero src/Protocol/** in pick); collect /tmp/opencode/cc-cmp-lanes/C-WEB-3.g/ REVIEW/FIX files into lanes dir at weld.",
-  "bundle5": "welder#5: C-TOOL-3.d 1de8e9266 (W14, 1 tsv ShellsCommandTest; DocFigure thirty-seven hunk ALREADY on master via 9fbb73173 - on conflict take master side) -> C-SES-7.a 8bc6f307f (W14, 2 tsv SessionImporterTest+TranscriptReadersTest; REVIEW-2.md absent on disk - record r2 CLEAN verdict from notification per EXT-4.a reconstruction precedent; NIT-3 ImporterRegistry eight-stale carry) -> C-WEB-3.g 0df1f0af0 (W15, NO tsv NO dist NO trio; vitest 6/6 merged; collect REVIEW/FIX from /tmp/opencode/cc-cmp-lanes/C-WEB-3.g/)"
+  "bundle5": "LANDED 3/3 by welder ses_e7d927a48: C-TOOL-3.d pick 734f97dda(weld 872d6da44), C-SES-7.a pick bc898875f(weld c385e13df, 13-file disk-truth erratum), C-WEB-3.g pick 770f8ee9b(weld cbe74fb5a). tsv 1514-era. W14 now 9/10 (C-AGT-5.b owner-gated sole remaining; C-AGT-5.c dep-cascades on 5.b). W15 welded: WEB-3.g, TUI-2.b, (TUI-2.a is W14 per plan line 150 — yes TUI-2.a W14). Remaining W15: P-TABS.f(review), WEB-4.a(r2), AGT-5.c(BLOCKED-cascade), AGT-5.e(fix r2), AGT-5.g(r2), AGT-6.d(build), CTX-4.c(build), EXT-3.c(not offered — claims collide w/ 6.d docs; revisit post-6.d)",
+  "P-TABS.f_weld": "pick 0fb10ffbf (of c991c6d10; DocFigure thirty-seven comment union-resolved keep-once — master-side comment governs, line already landed by C-TOOL-3.d); Chat.php/App.php auto-merged, zero regen (no src/Protocol, no web files); durations row DeckHostedSessionRoutesTest 0.031/14 in scripts commit (tsv 1514->1515); gates: Deck 14T/77A OK, App-family filter 82T/617A OK, CommandDocs|LangParity 13T/2915A OK, DocFigure|PaletteSuperset 97T/4209A OK, GlobDialect|StderrEmitterCensus 109T/21650A OK; STANDING RED foreign C-TOOL-3.d (734f97dda): ShellMenuTest placement-bijection x2 — shells row never placed, RED at base cbe74fb5a, gate owed by that weld's lead, NOT P-TABS.f; recorded standing red AutomaticCompactionModelSummaryTest::testClearingTheTranscriptUnarmsTheBreaker (base-reproduced at r1); +14T suite-figure closeout carry; NIT accepted: withTabHosted identity-preserving"
  },
  "carries": [
   "W2 wave reviewer: durations W2 rows AskDiffPreviewTest/PendingAskDiffTest/PermissionAskDiffEventTest/ShareHostCommandBufferTest/CommandShellPostureTest/TurnControllerBundleShellTest/EffortGateTest — closeout gate duty",
@@ -807,7 +811,7 @@
   "STOP STATE @2052@: master b4b4404c5 (wind-down commit; 9 files). welded=100/328 LIST. waves_closed [1..9] (W8/W9 rows + marks committed inside b4b4404c5; W9 per lead ruling r1-CLEAN-no-r2 — disclosed). Owed loops: W10 (blocked on unwelded members C-EXT-2.c + C-PRV-5.c), then W11+ per scheduler waves_fully_welded. Only live artifact: /home/sites/cc-cmp-P-TABS.g + branch cc/P-TABS.g @f25a697c1 (parked; re-dispatch plan:1549 after P-TABS.e+P-TABS.f weld). LATE W33+ gated on §6.3 owner rulings (C-TOOL-6 c/e/h + C-TUI-6: Windows shell, Windows self-update helper, web i18n scope, locale choice, parity strictness, voice endpoint, push-to-talk key). NEVER pushed; origin advanced owner-side only.",
   "C-EXT-2.c welded 4b771634d; closeout roster in its WELD.md (Bootstrap:5955 comment, ChatHostLangCatalogue standing red=C-PRV-1.b (a992413b0) seam, TROUBLESHOOTING allowed-tools/effort half=C-EXT-2.b)"
  ],
- "updated": "weld-C-WEB-3.g",
+ "updated": "2026-10-28T08:37:11-04:00",
  "wind_down": {
   "master_tip_at_close": "b4b4404c5",
   "welded_count": 101,
@@ -866,8 +870,8 @@
   "C-AGT-4.a (W14, after r2, 1 row PrimaryAgentTest)",
   "C-WEB-3.g 0df1f0af0 (W15; r1 CLEAN 0C/0M/0m; collect /tmp/opencode/cc-cmp-lanes/C-WEB-3.g/ REVIEW-1+FIX-1 at weld; NO tsv rows vitest-only; NO dist rider; merged vitest dormantRoster+shutdownDormant 6/6 serial; roster details in this note; weld after bundle ses_e7db2ebe9 returns)"
  ],
- "tip": "770f8ee9b",
- "welded_count": 142,
+ "tip": "0fb10ffbf",
+ "welded_count": 143,
  "tick": "87-disk-reconciled: W11 REALY closed@341f66404; trio MCP2b+TOOL5b+WEB3f real to 0b3c4ba21 (welded=122); W13/14 welds PENDING; phantom-atlas @b73@ correction: c3178096f/4d263705a/8d8c75678 GHOSTS, cure real 23fa8ab8e",
  "weld_queue_note": "Welder bundle when mega (ses_e7e3ce994) returns: verify C-EXT-4.a weld commit + mark4 + prune; then wave order among cleans: EXT-2.e, WEB-7.d, WEB-7.c, MCP-3.a, PRV-2.a (post-review), then W14 TOOL-4.a + AGT-4.a; then close-W12 bookkeeping (mark3 W12 mark, waves_closed 12, lanes/W12 files).",
  "blocked_notes": {
@@ -907,5 +911,8 @@
    "stale-duplicate notifications: judge by disk",
    "zombie notifications from ses_e7e3ce994/ses_e7de40bb = ignore after disk-check"
   ]
- }
+ },
+ "standing_reds_add": [
+  "AutomaticCompactionModelSummaryTest::testClearingTheTranscriptUnarmsTheBreaker 1F deterministic base-inherited (P-TABS.f r1 proof; Chat-region ≤W10 band owner)"
+ ]
 }
