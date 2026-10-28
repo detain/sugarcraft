@@ -2567,7 +2567,7 @@
             }
         },
         "generate.submit": {
-            "description": "Start an image generation; answers with its job id.",
+            "description": "Start an image or video generation; answers with its job id.",
             "scope": "write",
             "idempotent": true,
             "params": {
@@ -2575,6 +2575,12 @@
                 "properties": {
                     "sessionId": {
                         "$ref": "#/$defs/SessionId"
+                    },
+                    "kind": {
+                        "enum": [
+                            "image",
+                            "video"
+                        ]
                     },
                     "prompt": {
                         "type": "string",
@@ -2635,6 +2641,34 @@
                     "save_to_disk": {
                         "type": "boolean",
                         "description": "Also ask the server to write its own copy into its output directory; the tool always saves its copy regardless"
+                    },
+                    "num_frames": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "duration_seconds": {
+                        "type": "number",
+                        "minimum": 0
+                    },
+                    "fps": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "cfg": {
+                        "type": "number",
+                        "minimum": 0
+                    },
+                    "cfg2": {
+                        "type": "number",
+                        "minimum": 0
+                    },
+                    "motion": {
+                        "type": "number",
+                        "minimum": 0
+                    },
+                    "first_frame_image": {
+                        "type": "string",
+                        "maxLength": 4096
                     },
                     "idempotencyKey": {
                         "type": "string",

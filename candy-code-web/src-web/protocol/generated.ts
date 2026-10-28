@@ -685,10 +685,11 @@ export interface Methods {
       artifacts?: MediaRef[]
     }
   }
-  /** Start an image generation; answers with its job id. */
+  /** Start an image or video generation; answers with its job id. */
   "generate.submit": {
     params: {
       sessionId: SessionId
+      kind?: "image" | "video"
       /** What to render, self-contained: style, subject, framing. Required, non-empty */
       prompt: string
       /** What to steer away from, in the same comma-clause style */
@@ -713,6 +714,13 @@ export interface Methods {
       n_iter?: number
       /** Also ask the server to write its own copy into its output directory; the tool always saves its copy regardless */
       save_to_disk?: boolean
+      num_frames?: number
+      duration_seconds?: number
+      fps?: number
+      cfg?: number
+      cfg2?: number
+      motion?: number
+      first_frame_image?: string
       /** A retry with the same key gets the original answer (5 min). */
       idempotencyKey?: string
     }

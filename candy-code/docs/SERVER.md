@@ -447,7 +447,7 @@ it and the two tables below are generated from the code
 | `fs.listDirs` | read |  | — | The child directories (names only, never files) of a directory under the browse root; needs serve --allow-dir-browse. |
 | `fs.search` | read |  | — | Workspace file names ranked against a partial (the web composer @-mention popup); jailed to the project root. |
 | `generate.status` | read |  | `sessionId`, `jobId` | A generation job's state, progress and artifact refs, from its ledger. |
-| `generate.submit` | write | yes | `sessionId`, `prompt` | Start an image generation; answers with its job id. |
+| `generate.submit` | write | yes | `sessionId`, `prompt` | Start an image or video generation; answers with its job id. |
 | `mcp.resources` | read |  | `sessionId` | The launch-frozen MCP resource rows of the session root, without starting any server. |
 | `media.fetch` | read |  | `sessionId` | A stored media artifact's bytes, in base64 slices. |
 | `memory.add` | write | yes | `content` | Add a note, routed like `/memory add`: a project note goes to the repository store when the tree can host one. |
