@@ -68,6 +68,7 @@ candy-code/tests/Integration/ParallelToolCallsTest.php	4.956	27
 candy-code/tests/Backend/TaskSpendPropagationTest.php	4.927	13
 candy-code/tests/Backend/EngineBackendTest.php	4.923	35
 candy-code/tests/Tools/PtyRunToolTest.php	4.919	13
+candy-code/tests/Commands/BundleCommandNamespaceTest.php	4.878	9
 candy-code/tests/Server/WorkspaceHostTest.php	4.554	8
 candy-code/tests/Support/ForkedChildExitConventionTest.php	4.496	4
 candy-code/tests/Commands/ExportCommandTest.php	4.400	24

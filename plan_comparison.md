@@ -2487,7 +2487,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ext.md` → `### C-EXT-3.d`
 
-#### C-EXT-4.c — `/<bundle>:<cmd>` namespacing
+#### ✅ d19029a14 C-EXT-4.c — `/<bundle>:<cmd>` namespacing
 - **Item:** C-EXT-4 (sources: GAP-CMD-10) · gap · effort S
 - **What:** **Root cause.** `ForeignCommandDiscovery::bundleDirs()` (:143-155) and `walk()` (:217-229) key bundle rows by bare file name. Two bundles that both ship `review.md` collapse last-write-wins. **Fix.** Bundle rows are keyed …
 - **Files — create:** none
