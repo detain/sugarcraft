@@ -79,6 +79,13 @@ final readonly class Write implements Tool, AcceptsWorktreeJail, AcceptsInstruct
      * 3.I-2): with one, overwriting a file that changed on disk since the
      * model last read it is refused, and every write that lands is recorded
      * as the model's picture of the file. Null skips both.
+     *
+     * $requireReadBeforeWrite (roadmap C-TOOL-5) tightens the same ledger
+     * from "out of date" to "never seen": on, overwriting an EXISTING file
+     * the session never read is refused outright. It only bites alongside a
+     * ledger (the marks live there), and the shipped default is off, which
+     * leaves today's behaviour byte-identical. Creating a new file is never
+     * affected — there is nothing on disk to have missed seeing.
      */
     public function __construct(
         private ?string $root = null,
@@ -89,6 +96,7 @@ final readonly class Write implements Tool, AcceptsWorktreeJail, AcceptsInstruct
         private int $maxDiffBytes = self::DEFAULT_MAX_DIFF_BYTES,
         private ?\Closure $writeSeam = null,
         private ?ReadLedger $readLedger = null,
+        private bool $requireReadBeforeWrite = false,
     ) {}
 
     public static function fromCatalog(ToolBuildContext $context): self
@@ -100,6 +108,16 @@ final readonly class Write implements Tool, AcceptsWorktreeJail, AcceptsInstruct
     public function readLedger(): ?ReadLedger
     {
         return $this->readLedger;
+    }
+
+    /**
+     * This tool with the read-before-write rule claimed (roadmap C-TOOL-5).
+     * Same shape as {@see Edit::withRequireReadBeforeWrite()}: every property
+     * is a promoted constructor argument, so the object vars round-trip.
+     */
+    public function withRequireReadBeforeWrite(bool $on): self
+    {
+        return new self(...array_replace(get_object_vars($this), ['requireReadBeforeWrite' => $on]));
     }
 
     public function name(): string
@@ -117,7 +135,10 @@ final readonly class Write implements Tool, AcceptsWorktreeJail, AcceptsInstruct
             . '`Edit` is the right operation.'
             // Claimed only by an instance that enforces it (roadmap 3.I-2).
             . ($this->readLedger === null ? '' : ' Overwriting a file that changed on disk after you last '
-                . 'read it is refused the same way: Read it again first.');
+                . 'read it is refused the same way: Read it again first.')
+            // Claimed only by an instance that enforces it (roadmap C-TOOL-5).
+            . ($this->readLedger === null || !$this->requireReadBeforeWrite ? '' : ' Overwriting a file the '
+                . 'session has never read is refused before anything else is tried: Read it first.');
     }
 
     /**
@@ -242,6 +263,17 @@ final readonly class Write implements Tool, AcceptsWorktreeJail, AcceptsInstruct
             );
         }
 
+        // Roadmap C-TOOL-5 (opt-in): with the rule on, an overwrite of a file
+        // the session never read is refused before its bytes are read at all
+        // — same sentence Edit refuses with, because the cure is identical.
+        // A create (no $exists) never trips this: there is nothing to see.
+        if ($exists && $this->requireReadBeforeWrite && $this->readLedger !== null && !$this->readLedger->has($path)) {
+            return $this->error(
+                $args,
+                "Error: $path has not been read in this session; Read it first; file left unchanged",
+            );
+        }
+
         // The previous contents are read only to diff against, so a file over
         // $maxDiffBytes is not read at all: the overwrite goes ahead and the
         // result says why it has no diff. Reading it in full used to cost the
@@ -297,6 +329,15 @@ final readonly class Write implements Tool, AcceptsWorktreeJail, AcceptsInstruct
         // given, exactly as the model spelled it.
         if ($previous !== null) {
             $content = IndentShift::inheritEndings($previous, $content);
+        }
+
+        // Roadmap C-TOOL-5, the same law for the UTF-8 BOM: an overwrite of a
+        // BOM-spelled file keeps its mark unless the new content carries one
+        // of its own (no doubling). A BOM-less file never gains one. The
+        // oversized-previous case has no $previous bytes to mirror, so the
+        // mark rides the same skip as the endings above — written as given.
+        if ($previous !== '') {
+            $content = IndentShift::inheritBom($previous, $content);
         }
 
         $nestedContent = $this->instructionLoader?->loadForPath($path);

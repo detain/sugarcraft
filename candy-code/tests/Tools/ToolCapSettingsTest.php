@@ -103,6 +103,7 @@ final class ToolCapSettingsTest extends TestCase
             ToolLimits::BASH_MAX_TIMEOUT_KEY => Bash::MAX_TIMEOUT_SECONDS,
             ToolLimits::PARALLEL_TIMEOUT_KEY => Chat::PARALLEL_TOOL_TIMEOUT_SECONDS,
             ToolLimits::GREP_TIMEOUT_KEY => Grep::DEFAULT_TIMEOUT_SECONDS,
+            ToolLimits::REQUIRE_READ_BEFORE_WRITE_KEY => false,
         ];
         self::assertSame(ToolLimits::KEYS, array_keys($expected));
         foreach ($expected as $key => $default) {
@@ -127,12 +128,19 @@ final class ToolCapSettingsTest extends TestCase
             ToolLimits::INSTRUCTION_CAP_KEY,
         ];
         // The endpoint is Egress, pinned by WebSearchEndpointSettingTest.
+        // The read-before-write switch (roadmap C-TOOL-5) is Narrowing and
+        // user-tier only: which way a clone polices the machine's files is
+        // the person's call, not the repository's, in either direction.
+        $gates = [ToolLimits::REQUIRE_READ_BEFORE_WRITE_KEY];
         foreach (array_diff(ToolLimits::KEYS, [ToolLimits::WEB_SEARCH_ENDPOINT_KEY]) as $key) {
             $definition = SettingsSchema::byKey($key);
             self::assertNotNull($definition);
             self::assertTrue($definition->layered, "{$key} is layered");
             if (\in_array($key, $spend, true)) {
                 self::assertSame(RiskClass::Spend, $definition->riskClass, $key);
+                self::assertFalse($definition->projectSettable, "{$key} must stay out of a repository's reach");
+            } elseif (\in_array($key, $gates, true)) {
+                self::assertSame(RiskClass::Narrowing, $definition->riskClass, $key);
                 self::assertFalse($definition->projectSettable, "{$key} must stay out of a repository's reach");
             } else {
                 self::assertSame(RiskClass::Tuning, $definition->riskClass, $key);

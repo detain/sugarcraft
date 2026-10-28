@@ -80,6 +80,13 @@ final readonly class ApplyPatch implements Tool, AcceptsWorktreeJail, AcceptsIns
      * $readLedger is the session's record of what the model has seen (roadmap
      * 3.I-2), shared with Read/Edit/Write: a section whose file changed on
      * disk since the model last read it refuses the whole patch.
+     *
+     * $requireReadBeforeWrite (roadmap C-TOOL-5) tightens the same ledger
+     * from "out of date" to "never seen": on, a section that touches an
+     * EXISTING file the session never read refuses the whole patch. New
+     * files ("*** Add File:") are never blocked. It only bites alongside a
+     * ledger (the marks live there), and the shipped default is off, which
+     * leaves today's behaviour byte-identical.
      */
     public function __construct(
         private ?string $root = null,
@@ -90,6 +97,7 @@ final readonly class ApplyPatch implements Tool, AcceptsWorktreeJail, AcceptsIns
         private ?RulePathNudge $ruleNudge = null,
         private ?\Closure $writeSeam = null,
         private ?ReadLedger $readLedger = null,
+        private bool $requireReadBeforeWrite = false,
     ) {
     }
 
@@ -102,6 +110,16 @@ final readonly class ApplyPatch implements Tool, AcceptsWorktreeJail, AcceptsIns
     public function readLedger(): ?ReadLedger
     {
         return $this->readLedger;
+    }
+
+    /**
+     * This tool with the read-before-write rule claimed (roadmap C-TOOL-5).
+     * Same shape as {@see Edit::withRequireReadBeforeWrite()}: every property
+     * is a promoted constructor argument, so the object vars round-trip.
+     */
+    public function withRequireReadBeforeWrite(bool $on): self
+    {
+        return new self(...array_replace(get_object_vars($this), ['requireReadBeforeWrite' => $on]));
     }
 
     public function name(): string
@@ -127,7 +145,10 @@ final readonly class ApplyPatch implements Tool, AcceptsWorktreeJail, AcceptsIns
             . 'lists each file with its added and removed line counts; it does not echo the files back.'
             // Claimed only by an instance that enforces it (roadmap 3.I-2).
             . ($this->readLedger === null ? '' : ' If a file you change or delete changed on disk after you last '
-                . 'read it, the patch is refused: Read it again and retry against what is there now.');
+                . 'read it, the patch is refused: Read it again and retry against what is there now.')
+            // Claimed only by an instance that enforces it (roadmap C-TOOL-5).
+            . ($this->readLedger === null || !$this->requireReadBeforeWrite ? '' : ' Patching a file the '
+                . 'session has never read is refused before anything else is tried: Read it first.');
     }
 
     public function inputSchema(): array
@@ -227,6 +248,13 @@ final readonly class ApplyPatch implements Tool, AcceptsWorktreeJail, AcceptsIns
         if (!is_file($path)) {
             return "Error: {$where}not a regular file: {$path}; no file changed";
         }
+        // Roadmap C-TOOL-5: the never-read rule fires before the file's bytes
+        // are even opened — same words as Edit/Write carry, so one instruction
+        // covers all three tools. Covers Update, Move AND Delete sources: each
+        // rewrites or removes bytes the model has never seen.
+        if ($this->requireReadBeforeWrite && $this->readLedger !== null && !$this->readLedger->has($path)) {
+            return "Error: {$where}{$path} has not been read in this session; Read it first; no file changed";
+        }
 
         // The cap is checked before the read and again on the bytes read, as
         // in Edit: a file can grow between the stat and the open.
@@ -272,12 +300,17 @@ final readonly class ApplyPatch implements Tool, AcceptsWorktreeJail, AcceptsIns
             }
         }
 
-        $applied = self::applyHunks($content, $operation->hunks, $path, $where);
+        // Roadmap C-TOOL-5: hunks are matched against the BODY — the BOM is
+        // stripped for the walk (fuzzy offsets are then meaningful) and the
+        // mark is put back on the written bytes; `before` keeps the raw read,
+        // so undo restores the file byte-for-byte and the diff shows the same
+        // first line the model saw.
+        $applied = self::applyHunks(IndentShift::stripBom($content), $operation->hunks, $path, $where);
         if (\is_string($applied)) {
             return $applied;
         }
 
-        return ['action' => PatchAction::Update, 'path' => $path, 'target' => $target, 'before' => $content, 'after' => $applied[0], 'notes' => $applied[1]];
+        return ['action' => PatchAction::Update, 'path' => $path, 'target' => $target, 'before' => $content, 'after' => IndentShift::inheritBom($content, $applied[0]), 'notes' => $applied[1]];
     }
 
     /**
@@ -711,11 +744,11 @@ final readonly class ApplyPatch implements Tool, AcceptsWorktreeJail, AcceptsIns
                 if ($operation->action === PatchAction::Delete) {
                     $after = '';
                 } else {
-                    $applied = self::applyHunks($original, $operation->hunks, $resolved, '');
+                    $applied = self::applyHunks(IndentShift::stripBom($original), $operation->hunks, $resolved, '');
                     if (\is_string($applied)) {
                         return null;
                     }
-                    $after = $applied[0];
+                    $after = IndentShift::inheritBom($original, $applied[0]);
                 }
             }
 

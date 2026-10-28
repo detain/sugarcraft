@@ -335,6 +335,22 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withHelp(Lang::t('settings.grepTimeoutSeconds.help'))
                 ->withReaderSymbol(Grep::class . '::searchTimeoutSeconds')
                 ->withReadBy('`Grep::searchTimeoutSeconds()` → `ToolLimits::current()`, as each search starts'),
+            // Roadmap C-TOOL-5: an OPT-IN narrowing — it refuses Edit, Write
+            // and ApplyPatch touches of existing files the session never
+            // read. Off by default (a scripted flow that writes from a
+            // template without a Read would otherwise stop dead), user-tier
+            // only — a clone has no business deciding how closely its tools
+            // police the machine's files, in either direction — and
+            // turn-time, like every other ToolLimits rebind above.
+            SettingDefinition::new(ToolLimits::REQUIRE_READ_BEFORE_WRITE_KEY, SettingType::Bool, false)
+                ->withCategory(SettingCategory::Tools)
+                ->withRiskClass(RiskClass::Narrowing)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::NextTurn)
+                ->withLabel(Lang::t('settings.requireReadBeforeWrite.label'))
+                ->withHelp(Lang::t('settings.requireReadBeforeWrite.help'))
+                ->withReaderSymbol(ToolLimits::class . '::applyTo')
+                ->withReadBy('`EngineBackend::turnTools()` → `ToolLimits::applyTo()`'),
         ];
     }
 }

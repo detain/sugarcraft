@@ -18,6 +18,9 @@ namespace SugarCraft\Code\Tools\Edit;
  */
 final class IndentShift
 {
+    /** The UTF-8 byte order mark, the first three bytes of a BOM-spelled file. */
+    public const BOM = "\xEF\xBB\xBF";
+
     private function __construct()
     {
     }
@@ -86,6 +89,47 @@ final class IndentShift
         }
 
         return self::toCrlf($replacement);
+    }
+
+    /** Whether $bytes opens with the UTF-8 byte order mark. */
+    public static function hasBom(string $bytes): bool
+    {
+        return str_starts_with($bytes, self::BOM);
+    }
+
+    /**
+     * $bytes without its leading UTF-8 BOM, or $bytes untouched when it
+     * carries none. The matching side of the BOM rule: an edit's offsets and
+     * a patch hunk's line-1 context are computed against the BODY, because
+     * no model spells the invisible mark inside `old_string` deliberately.
+     */
+    public static function stripBom(string $bytes): string
+    {
+        return self::hasBom($bytes) ? substr($bytes, \strlen(self::BOM)) : $bytes;
+    }
+
+    /**
+     * $replacement carrying $fileBytes' UTF-8 BOM (roadmap C-TOOL-5).
+     *
+     * Windows editors and Excel's CSV writer save UTF-8 text with a leading
+     * BOM; it is on-disk bytes every consumer may key on — a signature
+     * sniffer, a CSV import, the model's own "what Read showed me" byte
+     * contract, since the mark rides line 1 of the shown content. A write
+     * path that strands it silently rewrites bytes nobody asked it to
+     * change, the same defect class {@see inheritEndings()} exists for. The
+     * rule mirrors the endings rule exactly: $replacement gains the file's
+     * mark when the file HAS one and the replacement does not already carry
+     * its own (doubling is corruption, and content that spells the mark
+     * spelled it deliberately); a BOM-less file NEVER gains one, because
+     * this is the only adder and it only mirrors an existing mark.
+     */
+    public static function inheritBom(string $fileBytes, string $replacement): string
+    {
+        if ($fileBytes === '' || !self::hasBom($fileBytes) || self::hasBom($replacement)) {
+            return $replacement;
+        }
+
+        return self::BOM . $replacement;
     }
 
     /**

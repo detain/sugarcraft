@@ -1244,7 +1244,7 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and thirty-three keys are layered — `provider`,
+Only these one hundred and thirty-four keys are layered — `provider`,
 `models`, `providers`, `titleModel`, `summaryModel`, `maxOutputTokens`,
 `modelPrices`, `extraBody`, `thinkingBudget`, `reasoningEffort`, `promptCache`,
 `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxToolSteps`,
@@ -1267,12 +1267,13 @@ Only these one hundred and thirty-three keys are layered — `provider`,
 `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`,
 `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`,
 `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`,
-`chatToolTimeoutSeconds`, `grepTimeoutSeconds`, `sd.baseUrl`, `sd.apiKey`,
-`sd.timeoutSeconds`, `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`,
-`ui.mediaDisplayOverrides`, `sd.savePattern`, `skills.pathNudges`,
-`instructions`, `instructions.walkToRoot`, `instructionsExclude`,
-`disabledRules`, `embeddingModel`, `disabledSkills`, `enabledSkills`,
-`pluginPaths`, `subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
+`chatToolTimeoutSeconds`, `grepTimeoutSeconds`, `requireReadBeforeWrite`,
+`sd.baseUrl`, `sd.apiKey`, `sd.timeoutSeconds`, `sd.defaultModel`,
+`ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`,
+`sd.savePattern`, `skills.pathNudges`, `instructions`,
+`instructions.walkToRoot`, `instructionsExclude`, `disabledRules`,
+`embeddingModel`, `disabledSkills`, `enabledSkills`, `pluginPaths`,
+`subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
 `subagentMaxDepth`, `subagentMaxActive`, `includeGitInstructions`,
 `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `theme`, `statusLine`,
 `layout`, `notify`, `watchFiles`, `queueMode`, `terminalBackground`, `mouse`,
@@ -1326,7 +1327,7 @@ in precedence only.
 > user-tier only. Details per key in
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
-Even for a trusted project, seventy-seven keys are **never** taken from a project file:
+Even for a trusted project, seventy-eight keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -1347,6 +1348,10 @@ more at stake — each launch deletes the unnamed sessions it outlives, and a
 checkout setting it to 1 would delete yesterday's conversations; `testCommand` and `autoTest`, for the lint reason — the first is
 a shell command auto-test runs at the end of a turn that edited a file, the
 second switches that run on;
+`requireReadBeforeWrite`, because it is the operator's policy on how hard the
+write tools must prove the session saw a file before changing it — a checkout
+must not be able to lower a guard the operator raised, nor quietly raise one
+the operator left off;
 `provider`, because it decides which host every prompt in the session is sent
 to;
 `providers`, for the same host-and-bill reason — each entry pins a provider's base URL

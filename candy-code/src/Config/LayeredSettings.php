@@ -569,6 +569,7 @@ final class LayeredSettings
         'bashMaxTimeoutSeconds',
         'chatToolTimeoutSeconds',
         'grepTimeoutSeconds',
+        'requireReadBeforeWrite',
         'sd.baseUrl',
         'sd.apiKey',
         'sd.timeoutSeconds',

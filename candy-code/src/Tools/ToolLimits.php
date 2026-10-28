@@ -7,11 +7,14 @@ namespace SugarCraft\Code\Tools;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Config\Settings\SettingsSchema;
 use SugarCraft\Code\Config\Settings\SettingType;
+use SugarCraft\Code\Tools\BuiltIn\ApplyPatch;
 use SugarCraft\Code\Tools\BuiltIn\Bash;
+use SugarCraft\Code\Tools\BuiltIn\Edit;
 use SugarCraft\Code\Tools\BuiltIn\Glob;
 use SugarCraft\Code\Tools\BuiltIn\Read;
 use SugarCraft\Code\Tools\BuiltIn\TaskTool;
 use SugarCraft\Code\Tools\BuiltIn\WebFetch;
+use SugarCraft\Code\Tools\BuiltIn\Write;
 use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
 
 /**
@@ -134,6 +137,16 @@ final readonly class ToolLimits
      */
     public const SUBAGENT_MAX_ACTIVE_KEY = 'subagentMaxActive';
 
+    /**
+     * Refuse Edit, Write and ApplyPatch touches of an EXISTING file the
+     * session has never read (roadmap C-TOOL-5). Off by default: the shared
+     * ledger already refuses out-of-date edits, and a scripted flow that
+     * writes from a template without a Read must keep working. A Bool, so it
+     * rides {@see BOOL_KEYS}; the rule narrows what the model may do, so user
+     * tier only.
+     */
+    public const REQUIRE_READ_BEFORE_WRITE_KEY = 'requireReadBeforeWrite';
+
     /** The tool bounds this class resolves (roadmap N-P4c, N-P4e). */
     public const KEYS = [
         self::OUTPUT_CAP_KEY,
@@ -156,6 +169,15 @@ final readonly class ToolLimits
         self::BASH_MAX_TIMEOUT_KEY,
         self::PARALLEL_TIMEOUT_KEY,
         self::GREP_TIMEOUT_KEY,
+        self::REQUIRE_READ_BEFORE_WRITE_KEY,
+    ];
+
+    /**
+     * The Bool members of {@see KEYS}, read through {@see honouredBool()}
+     * rather than the numeric/text reader (roadmap C-TOOL-5).
+     */
+    public const BOOL_KEYS = [
+        self::REQUIRE_READ_BEFORE_WRITE_KEY,
     ];
 
     /** The delegation caps {@see applyTo()} hands the session's `Task` (roadmap N-P4f). */
@@ -164,7 +186,7 @@ final readonly class ToolLimits
         self::SUBAGENT_MAX_ACTIVE_KEY,
     ];
 
-    /** @param array<string, int|float|string> $values every key that is set and honoured */
+    /** @param array<string, int|float|string|bool> $values every key that is set and honoured */
     private function __construct(private array $values)
     {
     }
@@ -174,7 +196,9 @@ final readonly class ToolLimits
     {
         $values = [];
         foreach ([...self::KEYS, ...self::DELEGATION_KEYS] as $key) {
-            $value = self::honoured($config, $key);
+            $value = \in_array($key, self::BOOL_KEYS, true)
+                ? self::honouredBool($config, $key)
+                : self::honoured($config, $key);
             if ($value !== null) {
                 $values[$key] = $value;
             }
@@ -223,6 +247,27 @@ final readonly class ToolLimits
         return $definition->validate($raw) === null ? $raw : null;
     }
 
+    /**
+     * $config[$key] when it is a set, valid Bool, else null. The Bool twin of
+     * {@see honoured()} — kept separate because honoured()'s declared
+     * `int|float|string|null` is consumed by callers outside this class
+     * (`ScriptHook`, `AgentPoolConfig`, `EngineExecutor`) that must not
+     * suddenly see a bool; a Bool spelled `"true"` or 1 is NOT honoured, the
+     * same strictness the settings editor itself demands.
+     *
+     * @param array<string, mixed> $config
+     */
+    public static function honouredBool(array $config, string $key): ?bool
+    {
+        $definition = SettingsSchema::byKey($key);
+        $raw = $config[$key] ?? null;
+        if ($definition === null || $definition->type !== SettingType::Bool || !\is_bool($raw)) {
+            return null;
+        }
+
+        return $definition->validate($raw) === null ? $raw : null;
+    }
+
     /** The honoured whole-number value of $key, or null when it is unset. */
     public function int(string $key): ?int
     {
@@ -237,6 +282,14 @@ final readonly class ToolLimits
         $value = $this->values[$key] ?? null;
 
         return \is_string($value) ? $value : null;
+    }
+
+    /** The honoured Bool of $key, or null when it is unset. */
+    public function bool(string $key): ?bool
+    {
+        $value = $this->values[$key] ?? null;
+
+        return \is_bool($value) ? $value : null;
     }
 
     /** The honoured number of seconds of $key, or null when it is unset. */
@@ -287,6 +340,17 @@ final readonly class ToolLimits
             return $maxBytes === null && $pageLines === null && $pageBytes === null
                 ? $tool
                 : $tool->withReadLimits($maxBytes, $pageLines, $pageBytes);
+        }
+
+        // Roadmap C-TOOL-5: the write family's never-read refusal rides the
+        // same turn-time rebind. Unset leaves the tool as built — off, which
+        // is byte-identical to every earlier turn. A `false` spelling still
+        // rebinds explicitly (the merged config said so), harmlessly.
+        if ($tool instanceof Edit || $tool instanceof Write || $tool instanceof ApplyPatch) {
+            $require = $this->bool(self::REQUIRE_READ_BEFORE_WRITE_KEY);
+            if ($require !== null) {
+                $tool = $tool->withRequireReadBeforeWrite($require);
+            }
         }
 
         if ($tool instanceof Bash) {

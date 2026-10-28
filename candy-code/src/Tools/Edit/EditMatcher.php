@@ -96,6 +96,20 @@ final class EditMatcher
             return null;
         }
 
+        // Roadmap C-TOOL-5: the BOM is stripped on both sides so matching is
+        // always computed against the BODY — a model that echoes the U+FEFF
+        // it saw on line 1 of a Read still matches, and a fuzzy stage's
+        // offsets stay meaningful to a caller that stripped its file bytes
+        // the same way (defense-in-depth: an unstripped caller would place
+        // an offset match three bytes early, and an exact str_replace would
+        // see the mark in the text but not in the model's `old_string`).
+        $content = IndentShift::stripBom($content);
+        $old = IndentShift::stripBom($old);
+        $new = IndentShift::stripBom($new);
+        if ($old === '') {
+            return null;
+        }
+
         $ambiguous = null;
         foreach ($this->stages as $stage) {
             $found = self::distinct($stage->find($content, $old, $new));

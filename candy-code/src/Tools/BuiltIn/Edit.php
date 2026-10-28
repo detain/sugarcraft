@@ -14,6 +14,7 @@ use SugarCraft\Code\Tools\Concerns\BuildsUnifiedDiff;
 use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Code\Tools\Edit\EditFailureHints;
 use SugarCraft\Code\Tools\Edit\EditMatcher;
+use SugarCraft\Code\Tools\Edit\IndentShift;
 use SugarCraft\Code\Tools\AcceptsInstructionLoader;
 use SugarCraft\Code\Tools\AcceptsWorktreeJail;
 use SugarCraft\Code\Tools\Concerns\RebindsInstructionLoader;
@@ -53,6 +54,12 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, AcceptsInstructi
      * 3.I-2): with one, an edit of a file that changed on disk since the
      * model last read it is refused, and every edit that lands is recorded as
      * the model's new picture of the file. Null skips both.
+     *
+     * $requireReadBeforeWrite (roadmap C-TOOL-5) tightens the same ledger
+     * from "out of date" to "never seen": on, an edit of an EXISTING file
+     * the session never read is refused outright. It only bites alongside a
+     * ledger (the marks live there), and the shipped default is off, which
+     * leaves today's behaviour byte-identical.
      */
     public function __construct(
         private ?string $root = null,
@@ -64,6 +71,7 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         private ?RulePathNudge $ruleNudge = null,
         private ?\Closure $writeSeam = null,
         private ?ReadLedger $readLedger = null,
+        private bool $requireReadBeforeWrite = false,
     ) {}
 
     public static function fromCatalog(ToolBuildContext $context): self
@@ -75,6 +83,16 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, AcceptsInstructi
     public function readLedger(): ?ReadLedger
     {
         return $this->readLedger;
+    }
+
+    /**
+     * This tool with the read-before-write rule claimed (roadmap C-TOOL-5).
+     * Same shape as {@see withWorktreeJail()}: every property is a promoted
+     * constructor argument, so the object vars round-trip.
+     */
+    public function withRequireReadBeforeWrite(bool $on): self
+    {
+        return new self(...array_replace(get_object_vars($this), ['requireReadBeforeWrite' => $on]));
     }
 
     public function name(): string
@@ -119,7 +137,10 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             // Claimed only by an instance that enforces it (roadmap 3.I-2).
             . ($this->readLedger === null ? '' : ' If the file changed on disk after you last read it — '
                 . 'an edit by the user, a formatter or a command — the edit is refused and the file left '
-                . 'untouched: Read it again and retry against what is there now.');
+                . 'untouched: Read it again and retry against what is there now.')
+            // Claimed only by an instance that enforces it (roadmap C-TOOL-5).
+            . ($this->readLedger === null || !$this->requireReadBeforeWrite ? '' : ' Editing a file the '
+                . 'session has never read is refused before anything else is tried: Read it first.');
     }
 
     public function inputSchema(): array
@@ -255,6 +276,22 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             );
         }
 
+        // Roadmap C-TOOL-5 (opt-in): the file exists, and with the rule on
+        // the session must have SEEN it before any tool will change it —
+        // checked before the read, the size guard and the matcher, because
+        // an unread file's refusal is not about its bytes at all. A file
+        // the session never read has no ledger entry; Read (and every tool
+        // write) records one, and a forked child's marks ride back on the
+        // CarriesSessionState channel, so the rule follows what the model
+        // actually saw, not which process saw it.
+        if ($this->requireReadBeforeWrite && $this->readLedger !== null && !$this->readLedger->has($path)) {
+            return new ToolResult(
+                toolCallId: $args['id'] ?? '',
+                content: self::unreadRefusal($path),
+                isError: true,
+            );
+        }
+
         // $maxBytes is enforced BEFORE the read (audit F-T2). It used to be
         // declared and never consulted, and the edit path holds the file
         // several times over (the bytes, the replaced copy, the diff), so a
@@ -314,7 +351,13 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // edits, every one is matched against the text the ones before it
         // produced, IN MEMORY, and the file is written once, after the last,
         // so a failure at edit 3 leaves edits 1 and 2 unwritten too.
-        $content = $originalContent;
+        // Roadmap C-TOOL-5: matching runs on the BODY. The BOM rides line 1
+        // of $originalContent (that is what Read showed), no matcher wants to
+        // see it in old_string, and a fuzzy match's offsets must be usable
+        // against the same text applyTo() gets. inheritBom() puts the mark
+        // back exactly once below, before the single write, so the ledger and
+        // the diff see the file's real bytes either way.
+        $content = IndentShift::stripBom($originalContent);
         $notes = [];
         $total = \count($edits);
         $matcher = EditMatcher::new();
@@ -348,7 +391,7 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             }
         }
 
-        $newContent = $content;
+        $newContent = IndentShift::inheritBom($originalContent, $content);
 
         // Temp-then-rename, not file_put_contents() (audit F-T7): that
         // truncated the file first, so a SIGKILL of the turn fork (Esc-Esc,
@@ -502,6 +545,17 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, AcceptsInstructi
     }
 
     /**
+     * The refusal for an EXISTING file the session never read, under the
+     * opt-in `requireReadBeforeWrite` rule (roadmap C-TOOL-5). Same three
+     * clauses as every other refusal here: what is wrong, what to do about
+     * it, and the promise that nothing was touched.
+     */
+    private static function unreadRefusal(string $path): string
+    {
+        return "Error: {$path} has not been read in this session; Read it first; file left unchanged";
+    }
+
+    /**
      * The refusal for a file over $maxBytes. It names the cap and the file's
      * size so the model can tell "too big for Edit" from a transient failure,
      * and says the file was not touched, matching the other refusals.
@@ -590,7 +644,9 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             return null;
         }
 
-        $content = $original;
+        // Same BOM rule as execute(): match on the body, compare and diff
+        // the full bytes, so the preview is what the write would produce.
+        $content = IndentShift::stripBom($original);
         $matcher = EditMatcher::new();
         foreach ($edits as $edit) {
             $match = $matcher->match($content, $edit['old'], $edit['new']);
@@ -599,6 +655,8 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             }
             $content = $match->applyTo($content);
         }
+
+        $content = IndentShift::inheritBom($original, $content);
 
         if ($content === $original) {
             return null;
