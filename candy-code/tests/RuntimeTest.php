@@ -1589,6 +1589,11 @@ final class RuntimeTest extends TestCase
             // Audit F-P8: the structural refusal kind — dropped here, a real
             // refusal would stop being one the moment anything annotated it.
             'denial' => \SugarCraft\Code\Permissions\DenialKind::Hook,
+            // C-TOOL-2.d (weld eadec1a44): Read's in-budget PDF document pair —
+            // carried through withContent()'s get_object_vars rebuild, so the
+            // map is all this tripwire needed when the ctor grew the fields.
+            'documentBytes' => 'RAW-PDF-BYTES',
+            'documentName' => 'paper.pdf',
         ];
 
         $constructor = (new \ReflectionClass(ToolResult::class))->getConstructor();
@@ -6678,7 +6683,12 @@ DOC;
         // exactly means a NEW read-only tool that spawns anything reds here and
         // its author has to say why, while a correct one does not red at all.
         $this->assertSame(
-            ['Grep' => ['proc_open']],
+            [
+                'Grep' => ['proc_open'],
+                // Read's PDF text leg shells to a fixed pdftotext through the same
+                // trait-spawn shape as Grep, added by C-TOOL-2.d (weld eadec1a44).
+                'Read' => ['proc_open'],
+            ],
             $subprocess,
             'the set of read-only tools that reach a subprocess changed. Spawning is not itself a write, '
             . 'but the argv decides and this scan cannot read it - so a new entry needs a stated reason, '
