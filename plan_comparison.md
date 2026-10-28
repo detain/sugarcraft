@@ -2198,7 +2198,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tool.md` → `### C-TOOL-5.a`
 
-#### C-TUI-2.d — Diff-review core (model, per-file stats, per-turn diff)
+#### ✅ a03990a0f C-TUI-2.d — Diff-review core (model, per-file stats, per-turn diff)
 - **Item:** C-TUI-2 (sources: GAP-GIT-09) · gap · effort M
 - **What:** Today `/diff [n]` prints fenced text (`src/Host/Commands/DiffCommand.php`) from `CheckpointDiff::of()`, which is the checkpoint against now. `CheckpointDiff` gains `files()`: per-file `{status, path, added, removed, patch slice}` …
 - **Files — create:** `candy-code/src/Tui/DiffReview/DiffReview.php`, `candy-code/src/Tui/DiffReview/DiffReviewAction.php`, `candy-code/src/Tui/DiffReview/DiffReviewActionKind.php`, `candy-code/src/Tui/DiffReview/DiffReviewSource.php`, `candy-code/src/Tui/DiffReview/OpenDiffReviewMsg.php`

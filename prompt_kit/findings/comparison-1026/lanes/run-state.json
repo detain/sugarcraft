@@ -198,15 +198,6 @@
    "stage": "clean",
    "worktree": "/home/sites/cc-cmp-C-SEC-8.e"
   },
-  "C-TUI-2.d": {
-   "branch": "cc/C-TUI-2.d",
-   "note": "r2 CLEAN 0C/0M/0m @6697ce667; batch-4 pool; weld carries durations x2 +~21T §4 c49418587+6697ce667",
-   "notes": "build c49418587 (parent 878047472, 9 files +1279/-4). r1 reviewer live.",
-   "round": 2,
-   "session": null,
-   "stage": "clean",
-   "worktree": "/home/sites/cc-cmp-C-TUI-2.d"
-  },
   "C-TUI-5.d": {
    "base": "878047472",
    "branch": "cc/C-TUI-5.d",
@@ -895,6 +886,7 @@
   "C-TUI-2.a_fix": "r1 FINDINGS 0C/0M/1MINOR/1NIT @ d73f06c61; fixer live ses_e7dbd5566 (docblock move + ruby backtick positive pin); lib-local NO tsv rows; gates core 80T+markdown 81T re-check; after CLEAN -> weld (lib-local, no tsv, candy-code smoke 62T/605A identical required)",
   "C-TUI-2.b_review": "r1 live ses_e7dbd5563 @ d3d5e7825; lib-local sugar-diff 70->116T/339A; deviation isPaired() accessor + hunk-body walk; NO tsv rows",
   "C-TUI-2.c": "batch-5 weld 2b8bf855c->18822cc20; SETTINGS.md CONFLICT resolved by regen (gen-settings-doc --write, --check rc0, amended into pick); gates 320T/29250A EXACT + sextet 105T + all-family runs 0F; DUR 0.28/12 tsv->1559; +16T carry",
+  "C-TUI-2.d": "picks e05f83340+a03990a0f; gates 19/195+11/91 EXACT, combo 152T, census 130T; durations x2 minted; README 135 rider",
   "C-TUI-3.f": "batch-3 weld: pick 033ba8947->83ef5e0a2 + docblock cure (Chat drop-describe TUI-voice seam -> C-TUI-3.g carry); gates green; durations +0.006/4; §4 cites 83ef5e0a2; base master ebbb14984",
   "C-TUI-6.k": "clean r2 @2887468af; weld roster: dist rebuild rides weld, NO phpunit durations rows; merged-tree recheck vitest 25/25+44/44; vue-tsc 19 standing baseline",
   "C-TUI-7.a": "CLEAN r3 tip fa64a39b9 (deriveGatherKey session\\0root exact-boundary proven NUL-safe; pins non-vacuous). Weld owes: durations row StartupSummaryGatherTest; RouteTraitParity union vs master 27757dd94 (keep master ModelCatalogReadyMsg+TelemetryRetryTickMsg rows, add lane StartupSummaryGatheredMsg after StatusLineTickMsg); 2 foreign AccessorDeprecation deprecations = weld glance",
@@ -1294,9 +1286,10 @@
   "C-WEB-4.c",
   "C-TOOL-5.a",
   "C-SES-4.d",
-  "C-TUI-2.c"
+  "C-TUI-2.c",
+  "C-TUI-2.d"
  ],
- "welded_count": 177,
+ "welded_count": 178,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
  "welder_sessions": {
