@@ -662,6 +662,10 @@ final class TreeWideGuardRosterTest extends TestCase
             'scandir($this->worktreesBase)',
         ],
         'LSP/LspConnectionStdinWedgeTest.php' => ['scandir($dir)'],
+        // The C-TOOL-5.c install-precedence trio plants an .lsp tree under its
+        // sandbox root; tearDown's wipe walks it. Plain scandir, bounded to the
+        // test's own directory, no glob or iterator.
+        'LSP/LspLauncherAutoDetectTest.php' => ['scandir($dirs[$i])'],
         // sweepChildHome() empties the 0700 sandbox HOME the ISS-125 locale
         // launch made (however deep the child wrote) before removing it.
         'LangLaunchLocaleTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],

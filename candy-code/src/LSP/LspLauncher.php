@@ -104,8 +104,11 @@ final class LspLauncher
 
     /**
      * Fingerprint => language => candidate servers, in preference order (the
-     * first candidate whose binary is on PATH wins; none present, nothing
-     * starts). A row fires only when EVERY file in `files` is missing its
+     * first candidate with a present binary wins; none present, nothing
+     * starts). "Present" consults the LSP install tree first — a server the
+     * user installed via {@see \SugarCraft\Code\LSP\LspInstaller} beats an
+     * same-named binary on PATH — then falls back to the PATH lookup
+     * (C-TOOL-5.c). A row fires only when EVERY file in `files` is missing its
      * `any` flag or at least one is present with it; the language is the
      * standard LSP `didOpen` identifier and `extensions` the suffixes that
      * route into it ({@see \SugarCraft\Code\LSP\LspClient::languageFor()}).
@@ -182,11 +185,16 @@ final class LspLauncher
      * fills only a
      * language NO explicit entry spoke for — including a `disabled` one,
      * because switching a language off is the user speaking for it — and only
-     * when a candidate binary passes `$binaryPresent`. `$binaryPresent` is a
-     * seam so tests never read the real PATH; production leaves it null and
-     * gets the shared capability-memo lookup.
+     * when a candidate binary resolves. `$binaryPresent` is a seam so tests
+     * never read the real PATH nor the install tree: injecting it keeps the
+     * bare-name contract byte-identical, and the install dir is never
+     * consulted. Production leaves it null and gets the C-TOOL-5.c ladder —
+     * `$installRoot` (default {@see LspInstaller::installRoot()}) bin/ and
+     * node_modules/.bin/ checked first, an install-dir hit stores the
+     * ABSOLUTE path so launch() execs the installed copy, then the shared
+     * capability-memo PATH lookup stores the bare name.
      */
-    public static function fromConfig(mixed $raw, string $root, bool $autoDetect = false, ?callable $binaryPresent = null, bool $projectTrusted = false): self
+    public static function fromConfig(mixed $raw, string $root, bool $autoDetect = false, ?callable $binaryPresent = null, bool $projectTrusted = false, ?string $installRoot = null): self
     {
         if ($raw === null || $raw === [] || $raw === false) {
             $raw = [];
@@ -233,7 +241,15 @@ final class LspLauncher
             // "matched nothing".
             $problems[] = 'lsp: auto-detect skipped — this project is not trusted for hooks';
         } elseif ($autoDetect) {
-            $binaryPresent ??= static fn (string $binary): bool => self::capabilityPresent($binary);
+            // C-TOOL-5.c: with no injected probe, resolution prefers the
+            // install tree (bin/ then node_modules/.bin/) over PATH, and an
+            // install-dir hit is stored as an ABSOLUTE path so launch()
+            // execs the installed copy, not whatever PATH answers. An
+            // injected probe keeps the old bare-name contract byte-for-byte
+            // and the install tree is never consulted.
+            if ($binaryPresent === null) {
+                $installRoot ??= LspInstaller::installRoot();
+            }
             foreach (self::AUTO_TABLE as $row) {
                 if (isset($claimed[$row['language']]) || \count($servers) >= self::MAX_SERVERS) {
                     continue;
@@ -242,12 +258,18 @@ final class LspLauncher
                     continue;
                 }
                 foreach ($row['candidates'] as $command => $args) {
-                    if (!$binaryPresent($command)) {
+                    if ($binaryPresent === null) {
+                        $installed = LspInstaller::installedBinaryPath($command, $installRoot);
+                        $chosen = $installed ?? (self::capabilityPresent($command) ? $command : '');
+                    } else {
+                        $chosen = $binaryPresent($command) ? $command : '';
+                    }
+                    if ($chosen === '') {
                         continue;
                     }
                     $servers[] = [
                         'language' => $row['language'],
-                        'command' => $command,
+                        'command' => $chosen,
                         'args' => $args,
                         'extensions' => $row['extensions'],
                         'env' => [],
@@ -258,7 +280,7 @@ final class LspLauncher
                     // surface that shows WHERE a server came from, and a
                     // server started by fingerprint rather than by name must
                     // never look like the user's own entry.
-                    $problems[] = sprintf('lspAutoDetect started %s=%s', $row['language'], $command);
+                    $problems[] = sprintf('lspAutoDetect started %s=%s', $row['language'], $chosen);
                     break;
                 }
             }

@@ -621,6 +621,16 @@ final class ReadPathCensusTest extends TestCase
             'SELF_LOCATED — sweepStale(): the temp dir listed for this class\' own FILE_PREFIX',
             'SELF_LOCATED — destroy(): the owner sweeping its own `<lock>.*` sidecars and temps',
         ],
+        // C-TOOL-5.c: the pinned release download for `lsp install rust`. The
+        // tree is the private `.candy-code/lsp` dir (HomeDirectory::owned()
+        // by default, and PrivateDir::ensure screens whatever root a caller
+        // names BEFORE any fetch), the temp carries this class' own
+        // `.dl-<pid>-<rand>.gz` spelling, and nothing opens until the bytes
+        // already match the manifest's pinned sha256.
+        'LSP/LspInstaller.php|fopen' => [
+            'OWNED_HOME — the gzip read of this class\'s own `.dl-` download temp inside the private install tree',
+            'OWNED_HOME — the staged decompression write beside that temp; only the checksummed stream lands there, and it renames into bin/ when closed',
+        ],
         // WAS `CALLER_SUPPLIED — nothing in src/ builds one yet, so the first caller
         // owns the boundary`, and the first caller has now arrived:
         // Cli\Bootstrap::mcpClient() resolves `$root/.mcp.json` and refuses it

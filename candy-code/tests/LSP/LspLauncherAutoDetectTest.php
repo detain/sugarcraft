@@ -12,10 +12,11 @@ use SugarCraft\Code\LSP\LspLauncher;
 
 /**
  * EDT-2: `lspAutoDetect` lets {@see LspLauncher}'s AUTO_TABLE start the
- * server a project fingerprint names. Every case here injects
- * `$binaryPresent` — the tests never read the real PATH — and the default-off
- * half is pinned case by case, because "byte-identical without the key" IS
- * the compatibility promise the feature ships on.
+ * server a project fingerprint names. Every case injects `$binaryPresent`
+ * or passes an explicit install root (the C-TOOL-5.c trio) — no test here
+ * depends on the real PATH — and the default-off half is pinned case by
+ * case, because "byte-identical without the key" IS the compatibility
+ * promise the feature ships on.
  */
 final class LspLauncherAutoDetectTest extends TestCase
 {
@@ -41,6 +42,7 @@ final class LspLauncherAutoDetectTest extends TestCase
         foreach ($this->created as $name) {
             @unlink($this->root . '/' . $name);
         }
+        $this->wipeInstallTree($this->root . '/.lsp');
         @rmdir($this->root);
     }
 
@@ -316,6 +318,62 @@ final class LspLauncherAutoDetectTest extends TestCase
         $this->assertStringContainsString('LspLauncher::SETTINGS_KEY] ?? null,', $body, 'the manual map keeps its own read');
     }
 
+    // ── the install tree beats PATH (C-TOOL-5.c) ──────────────────────
+
+    public function testAnInstalledServerInBinLaunchesByAbsolutePathNotByPathName(): void
+    {
+        $this->touch('composer.json');
+        $installed = $this->plantInstalledServer('bin/intelephense');
+
+        $launcher = LspLauncher::fromConfig(null, $this->root, true, null, true, $this->root . '/.lsp');
+
+        $this->assertSame(['php'], $launcher->languages());
+        $this->assertSame([[$installed, ['--stdio']]], $this->commandsOf($launcher), 'launch must exec the installed copy, not whatever a later PATH export would answer');
+        $this->assertContains('lspAutoDetect started php=' . $installed, $launcher->problems(), 'the provenance row names the absolute winner');
+    }
+
+    public function testTheNodeModulesArmOfTheInstallTreeCountsToo(): void
+    {
+        $this->touch('setup.py');
+        $installed = $this->plantInstalledServer('node_modules/.bin/pyright-langserver');
+
+        $launcher = LspLauncher::fromConfig(null, $this->root, true, null, true, $this->root . '/.lsp');
+
+        $this->assertSame(['python'], $launcher->languages());
+        $this->assertSame([[$installed, ['--stdio']]], $this->commandsOf($launcher));
+    }
+
+    public function testAnInjectedProbeStillIgnoresTheInstallTreeEntirely(): void
+    {
+        $this->touch('composer.json');
+        $this->plantInstalledServer('bin/intelephense');
+
+        $launcher = LspLauncher::fromConfig(null, $this->root, true, $this->probeWith([]), projectTrusted: true, installRoot: $this->root . '/.lsp');
+
+        $this->assertSame([], $launcher->languages(), 'the compat seam keeps its exact meaning: what the probe says is all that counts');
+    }
+
+    public function testTheChosenExpressionResolvesTheInstallTreeAheadOfThePathProbe(): void
+    {
+        // MINOR-1 discriminator: the trio above stays green even if the
+        // precedence flips to PATH-first, because the planted names never
+        // answer on a test host's or CI's PATH — behavior cannot pin what
+        // the environment hides. The ORDER is pinned structurally, the
+        // same source-slice genre as the Bootstrap seam above: inside the
+        // install arm, $installed must bind with ?? before
+        // self::capabilityPresent() is consulted at all.
+        $source = (string) file_get_contents(__DIR__ . '/../../src/LSP/LspLauncher.php');
+        $start = strpos($source, 'LspInstaller::installedBinaryPath($command, $installRoot);');
+        $this->assertIsInt($start, 'the install arm must resolve the install tree through LspInstaller::installedBinaryPath()');
+        $arm = substr($source, $start, 200);
+
+        $probe = strpos($arm, 'self::capabilityPresent');
+        $this->assertIsInt($probe, 'the PATH fallback must live in this same arm — if it moved, this pin must be re-derived against the new shape, not deleted');
+        $installedFirst = strpos($arm, '$installed ??');
+        $this->assertIsInt($installedFirst, 'the chosen-expression must try the installed absolute path with ?? before consulting PATH');
+        $this->assertLessThan($probe, $installedFirst, 'PATH-first reorder: the probe answers before the install tree is even given the chance');
+    }
+
     // ── harness ────────────────────────────────────────────────────────
 
     /** @param list<string> $installed */
@@ -403,5 +461,44 @@ final class LspLauncherAutoDetectTest extends TestCase
     {
         file_put_contents($this->root . '/' . $name, "{}\n");
         $this->created[] = $name;
+    }
+
+    /** Plants an executable under the test-local install tree and returns its absolute path. */
+    private function plantInstalledServer(string $relative): string
+    {
+        $path = $this->root . '/.lsp/' . $relative;
+        mkdir(\dirname($path), 0o700, true);
+        file_put_contents($path, "#!/bin/sh\n");
+        chmod($path, 0o755);
+
+        return $path;
+    }
+
+    private function wipeInstallTree(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        $dirs = [$dir];
+        $files = [];
+        for ($i = 0; $i < count($dirs); $i++) {
+            foreach ((array) scandir($dirs[$i]) as $name) {
+                if ($name === '.' || $name === '..') {
+                    continue;
+                }
+                $child = $dirs[$i] . '/' . $name;
+                if (is_dir($child) && !is_link($child)) {
+                    $dirs[] = $child;
+                } else {
+                    $files[] = $child;
+                }
+            }
+        }
+        foreach ($files as $file) {
+            @unlink($file);
+        }
+        for ($level = count($dirs) - 1; $level >= 0; $level--) {
+            @rmdir($dirs[$level]);
+        }
     }
 }
