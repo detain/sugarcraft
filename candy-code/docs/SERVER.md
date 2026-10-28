@@ -469,7 +469,7 @@ it and the two tables below are generated from the code
 | `session.create` | write | yes | — | Create a session and open it. |
 | `session.delete` | write | yes | `sessionId` | Delete a session and its history. |
 | `session.dequeue` | write | yes | `sessionId`, `queueId` | Remove a queued prompt. |
-| `session.export` | read |  | `sessionId` | A session's transcript as markdown, json or text. |
+| `session.export` | read |  | `sessionId` | A session's transcript as markdown, json or text; limit/offset page it and revision guards the walk. |
 | `session.fork` | write | yes | `sessionId` | Branch a session into a new one carrying its transcript. |
 | `session.get` | read |  | `sessionId` | A session's snapshot: rows, status, queue, open questions, usage; limit/beforeIndex page the rows. |
 | `session.list` | read |  | — | The workspace's sessions, newest activity first, paged. |

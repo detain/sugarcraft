@@ -1060,15 +1060,31 @@ export interface Methods {
       dequeued: boolean
     }
   }
-  /** A session's transcript as markdown, json or text. */
+  /** A session's transcript as markdown, json or text; limit/offset page it and revision guards the walk. */
   "session.export": {
     params: {
       sessionId: SessionId
       format?: "markdown" | "json" | "text"
+      /** Byte offset into the rendered transcript; the page backs up to a UTF-8 lead byte. Only read with limit. */
+      offset?: number
+      /** Ask for a page instead of the whole transcript; the answer shrinks further if the page would not fit the frame. Omitted: one unpaged answer. */
+      limit?: number
+      /** The revision a previous page reported; a page 2+ whose session re-rendered is refused export_changed so pages from two renders can never splice. */
+      revision?: string
     }
     result: {
       format: "markdown" | "json" | "text"
       content: string
+      /** The lead-byte-aligned byte this page starts at. */
+      offset?: number
+      /** Where the next page begins; the offset to send back (computed by the server, never by re-encoding the text). */
+      nextOffset?: number
+      /** Total bytes of the rendered transcript this revision covers. */
+      total?: number
+      /** False on the last page; join the contents seen so far. */
+      more?: boolean
+      /** xxh128 of the whole rendered transcript; echo it on the next page. */
+      revision?: string
     }
   }
   /** Branch a session into a new one carrying its transcript. */

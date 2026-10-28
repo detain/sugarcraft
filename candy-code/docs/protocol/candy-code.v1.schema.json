@@ -3898,7 +3898,7 @@
             }
         },
         "session.export": {
-            "description": "A session's transcript as markdown, json or text.",
+            "description": "A session's transcript as markdown, json or text; limit/offset page it and revision guards the walk.",
             "scope": "read",
             "idempotent": false,
             "params": {
@@ -3913,6 +3913,22 @@
                             "json",
                             "text"
                         ]
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Byte offset into the rendered transcript; the page backs up to a UTF-8 lead byte. Only read with limit."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 65536,
+                        "maximum": 1048576,
+                        "description": "Ask for a page instead of the whole transcript; the answer shrinks further if the page would not fit the frame. Omitted: one unpaged answer."
+                    },
+                    "revision": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "The revision a previous page reported; a page 2+ whose session re-rendered is refused export_changed so pages from two renders can never splice."
                     }
                 },
                 "required": [
@@ -3931,6 +3947,30 @@
                     },
                     "content": {
                         "type": "string"
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "The lead-byte-aligned byte this page starts at."
+                    },
+                    "nextOffset": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Where the next page begins; the offset to send back (computed by the server, never by re-encoding the text)."
+                    },
+                    "total": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Total bytes of the rendered transcript this revision covers."
+                    },
+                    "more": {
+                        "type": "boolean",
+                        "description": "False on the last page; join the contents seen so far."
+                    },
+                    "revision": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "xxh128 of the whole rendered transcript; echo it on the next page."
                     }
                 },
                 "required": [
