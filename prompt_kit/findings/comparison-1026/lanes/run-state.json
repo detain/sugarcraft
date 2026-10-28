@@ -198,15 +198,6 @@
    "stage": "clean",
    "worktree": "/home/sites/cc-cmp-C-SEC-8.e"
   },
-  "C-TUI-2.c": {
-   "branch": "cc/C-TUI-2.c",
-   "note": "r1 CLEAN 0C/0M/0m @2b8bf855c; batch-4 pool; welder: durations DiffSplitRenderTest ~0.3s, +16T, LAYERED rebase conflicts vs TOOL-5.a/SES-6.b keep-both + gen-settings-doc --check",
-   "notes": "base da284586a. diffStyle setting multi-guard move; width-invariant pin load-bearing.",
-   "round": 1,
-   "session": "done",
-   "stage": "clean",
-   "worktree": "/home/sites/cc-cmp-C-TUI-2.c"
-  },
   "C-TUI-2.d": {
    "branch": "cc/C-TUI-2.d",
    "note": "r2 CLEAN 0C/0M/0m @6697ce667; batch-4 pool; weld carries durations x2 +~21T §4 c49418587+6697ce667",
@@ -903,6 +894,7 @@
   "C-TUI-1.a": "WELDED 2026-10-28 master d88f83e87 (pick of cf5f0f925, patch-id c57fd999 identical, git cherry '-', zero conflicts - lang/en.php context risk never fired). REVIEW-1 CLEAN 0C/0M no findings. Durations rows 0.055/9T + 0.056/18T in scripts commit 69dfca1b2. Gates merged-tree: 'ComposerVim|LangParity' OK 82T/3293A (brief 3292A, +1A from C-TOOL-3.b lang row landed post-lane-cut - attributed in WELD.md), guards filter OK 27T/560A. Regen none (generators zero diffs, schema --check up to date).",
   "C-TUI-2.a_fix": "r1 FINDINGS 0C/0M/1MINOR/1NIT @ d73f06c61; fixer live ses_e7dbd5566 (docblock move + ruby backtick positive pin); lib-local NO tsv rows; gates core 80T+markdown 81T re-check; after CLEAN -> weld (lib-local, no tsv, candy-code smoke 62T/605A identical required)",
   "C-TUI-2.b_review": "r1 live ses_e7dbd5563 @ d3d5e7825; lib-local sugar-diff 70->116T/339A; deviation isPaired() accessor + hunk-body walk; NO tsv rows",
+  "C-TUI-2.c": "batch-5 weld 2b8bf855c->18822cc20; SETTINGS.md CONFLICT resolved by regen (gen-settings-doc --write, --check rc0, amended into pick); gates 320T/29250A EXACT + sextet 105T + all-family runs 0F; DUR 0.28/12 tsv->1559; +16T carry",
   "C-TUI-3.f": "batch-3 weld: pick 033ba8947->83ef5e0a2 + docblock cure (Chat drop-describe TUI-voice seam -> C-TUI-3.g carry); gates green; durations +0.006/4; §4 cites 83ef5e0a2; base master ebbb14984",
   "C-TUI-6.k": "clean r2 @2887468af; weld roster: dist rebuild rides weld, NO phpunit durations rows; merged-tree recheck vitest 25/25+44/44; vue-tsc 19 standing baseline",
   "C-TUI-7.a": "CLEAN r3 tip fa64a39b9 (deriveGatherKey session\\0root exact-boundary proven NUL-safe; pins non-vacuous). Weld owes: durations row StartupSummaryGatherTest; RouteTraitParity union vs master 27757dd94 (keep master ModelCatalogReadyMsg+TelemetryRetryTickMsg rows, add lane StartupSummaryGatheredMsg after StatusLineTickMsg); 2 foreign AccessorDeprecation deprecations = weld glance",
@@ -1301,9 +1293,10 @@
   "C-TUI-3.f",
   "C-WEB-4.c",
   "C-TOOL-5.a",
-  "C-SES-4.d"
+  "C-SES-4.d",
+  "C-TUI-2.c"
  ],
- "welded_count": 176,
+ "welded_count": 177,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
  "welder_sessions": {

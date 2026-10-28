@@ -2304,7 +2304,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tool.md` → `### C-TOOL-2.b`
 
-#### C-TUI-2.c — TUI split diffs, highlighted diff bodies, `diffStyle`
+#### ✅ 18822cc20 C-TUI-2.c — TUI split diffs, highlighted diff bodies, `diffStyle`
 - **Item:** C-TUI-2 (sources: GAP-UI-05, GAP-UI-04) · gap · effort M
 - **What:** Split mode: `Renderer::renderDiff()` (`candy-code/src/Renderer.php` ~L5388-5600) paints unified rows through `DiffGutter::forDiff()`. Add a split layout from `SideBySideFormat::fromUnified()` when the new `diffStyle` setting …
 - **Files — create:** none

@@ -1,0 +1,29 @@
+# C-TUI-2.c — TUI split diffs, highlighted diff bodies, `diffStyle` — CLOSED
+
+- **Commit:** `2b8bf855c` on `cc/C-TUI-2.c` (worktree `/home/sites/cc-cmp-C-TUI-2.c`, base `da284586a`). Never pushed. Author/committer detain-verified (`%ae`/`%ce` separate greps == 1), zero Co-Authored trailers, tree clean post-commit.
+- **Diffstat:** 11 files, +913/−59 — candy-code: `README.md` 16, `docs/SETTINGS.md` 35, `lang/en.php` +2, `src/Config/LayeredSettings.php` +2, `src/Config/Settings/Definitions/InterfaceSettings.php` +10, `src/Config/Settings/UiSettings.php` +1, `src/Renderer.php` 367, `src/Tui/DiffGutter.php` 86, `tests/RendererTest.php` 23, `tests/Tui/DiffGutterTest.php` 40, `tests/Tui/DiffSplitRenderTest.php` NEW 390.
+
+## What shipped
+- **Split mode:** `Renderer::renderDiff()` gained a split layout built from `SideBySideFormat::fromUnified()` (sugar-diff, consumed read-only). Resolution via new `diffStyle` setting (`auto|unified|split`, default `auto`): `auto` splits at ≥ `Renderer::DIFF_SPLIT_MIN_COLS` (120); `split` forces two columns at any width down to the half-floor (`DIFF_SPLIT_MIN_SIDE_COLS`=8); `unified` never splits. Per-side number gutters come from new `DiffGutter::sideWidth()/sidePrefix()` (one digit-width both sides from the highest old/new); dim `│` middle divider. Annotated hunks (`\ No newline at end of file`) and non-numberable `@@` hunks fall back to full-width unified-style rows — a row is NEVER dropped (spl_object_id seen-count guard: if pairing consumes fewer Line instances than the group has rows, the whole hunk falls back).
+- **Width invariant (PR #1403 law, the one thing the brief says to pin):** every painted row satisfies `Width::string(Ansi::strip(row)) <= cols` in BOTH layouts — swept 110..150 cols × 6 fixtures (php, Makefile tabs, CJK, 10-digit oversized `@@ -9999999999,3` unnumberable, annotated, plain text) = 1574 row-width assertions; force-split at 40 cols also holds. `PaneWidthInvariantTest` + `RendererTest` stay green.
+- **Highlighting:** tokens inside `+`/`-`/context bodies tinted via `RegexHighlighter::languageForPath()` of the file header (php/js/ts/json/python/go/bash/sql/rust/java/c/cpp/ruby/yaml/html/css + aliases; language tracked per file, `/dev/null` side keeps the other side's language), painted through `$theme->markdown->{keyword,string,number,comment}` slots with the row style as fallback. The marker column keeps its `styleDiffLine()` colour. Languageless/whole-plain bodies short-circuit to the exact legacy paint bytes. `--- ` file-header and `@@` rows are never tokenized.
+- **Setting plumbing (multi-guard §1.8, all in-step):** `InterfaceSettings` Enum def (Interface, Cosmetic, `withLayered()->withProjectSettable()->ApplyMode::Live`, `withReaderSymbol(Renderer::class.'::diffStyle')`), insertions after `diffPreviewRows` in `LAYERED_KEYS` + `PROJECT_TIER_KEYS` + `UiSettings::KEYS`, `lang/en.php` label+help, `php tools/gen-settings-doc.php --write` regenerated SETTINGS.md + README.md (layered roster 133→134, "forty live", "twenty-two … env" prose flips auto-carried). ENVIRONMENT.md untouched (no env var — generator agrees).
+- **Tests:** NEW `tests/Tui/DiffSplitRenderTest.php` (12 tests: threshold/auto pairing sweep, unified-never-pairs@200, force-split@40, width sweep, tabs expanded, unnumberable + annotated fallback needles-present/frame-count-exact, lone-addition blank half, keyword+string spans present in split AND unified, languageless .txt NOT painted, marker bytes contiguous `Style->render('+')` inside raw row, per-side gutter prefixes). `tests/Tui/DiffGutterTest.php` +4 methods (side gutters reproduce unified prefix halves; hunk-header vs numberable-hunk recognition). `tests/RendererTest.php` 2 in-step pin flips (justified behavior change — see deviations).
+
+## Gates (cwd=candy-code, `-c phpunit.xml`, env -u LINES -u COLUMNS, plain pipe)
+- Combined lane battery (DiffSplitRender + DiffGutter + **SettingsSchemaDocDriftTest** + **ReadmeRosterDriftTest** + ReadmeSettingsTierClaimTest + **DocFigureProseDriftTest** settings arms + UiSettingsTest): **OK 180T / 6104A, EXIT=0**.
+- **PaneWidthInvariantTest** + RendererTest: **OK 320T / 29250A**.
+- Settings-guard sextet (SettingsSchemaDocDrift + ReadmeRosterDrift + ReadmeSettingsTierClaim + EnvRosterDrift + TrustKeyDocumentationDrift + UiSettingsTest): OK 105T / 39761A.
+
+## Base-reds proven NOT-lane (6)
+Broad run `tests/Tui/ tests/Renderer/ tests/RendererTest.php`: 2584T/238370A/**6F** — all 6 reproduce with identical messages on a pristine `da284586a` probe worktree (created, run, removed; worktree list clean): SettingsEditorTest search 'trusted' gained the pre-existing Git-category lspAutoDetect row, and KeyHelpTest ×5 (slash-help count 59, footer 157-vs-156, footer box 63-vs-35, live-binding scroll, ellipsis clip) — foreign weld-era roster drift (C-TOOL-3.e/agent-window), not touched by this lane; main tree fails identically.
+
+## Deviations (all pinned or justified)
+1. `diffStyle=split` forces two columns below 120 cols (by design; auto is the 120-gated mode).
+2. Annotated + non-numberable hunks fall back full-width (never drop rows).
+3. `DiffGutter::SEPARATOR` private→public const (test-visible layout token, my region).
+4. RendererTest flips: php transcript-diff pin moved to Ansi::strip (number span breaks raw needle — colour bytes re-pinned in DiffSplitRenderTest); sql `--- users table, legacy` deletion row now red-marker + keyword-tinted `table` (sql grammar truth: `table` is a keyword, `--` not matched as comment there); still asserts not-bold-header.
+
+## Welder owes
+- NEW durations.tsv row: `candy-code/tests/Tui/DiffSplitRenderTest.php` (~0.3s).
+- suite-figure.json/README re-pin: **+16 tests** (+12 DiffSplitRender, +4 DiffGutterTest; RendererTest count unchanged) + assertion deltas from the runs above. ReadmeSuiteFigureDrift staleness pair expected red until re-pin (forbidden file for this lane — untouched).
