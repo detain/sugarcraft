@@ -1,0 +1,66 @@
+import { describe, expect, it } from 'vitest'
+import { METHOD_SCOPES } from '../protocol/generated'
+
+/**
+ * C-WEB-3 (WEB-1-P1): the standing dormant-method roster.
+ *
+ * Every `METHOD_SCOPES` key must either have a browser caller in a shipped
+ * module or carry a deliberate-dormancy reason below. The derivation reuses
+ * the `shutdownDormant.spec.ts` source scan: a method counts as called when
+ * some shipped module matches `request('M'` (with optional generic) or a
+ * literal frame body `method: 'M'`. A protocol lane that adds a method with
+ * no caller now fails loudly here until the method is wired or declared
+ * dormant; the step that later adds the caller removes the entry.
+ *
+ * `shutdownDormant.spec.ts` stays the behavioural pin for `server.shutdown`;
+ * this spec is the roster that makes the same rule apply fleet-wide.
+ */
+
+/** Method name -> one-line reason it is deliberately dormant today. */
+const DORMANT_REASONS: Record<string, string> = {
+  // C-MCP-2.b shipped the mcp.resources method; the composer @mcp: resource
+  // picker (C-MCP-2.c) will be the first browser caller — drop this row when it lands.
+  'mcp.resources': 'MCP resource listing has no browser caller until the composer @ popup wires it (C-MCP-2.c)',
+  // Scope::Admin host verb: the browser may receive the event but must never
+  // call the method; C-WEB-5.g wires the confirmed Admin caller later.
+  'server.shutdown': 'admin-scope shutdown is a host operator verb; the client only receives the event (WEB-1)',
+}
+
+/** Every module that ships to the browser: src minus the generated schema, tests and fixtures. */
+const MODULES = Object.entries(
+  import.meta.glob<string>('../**/*.{ts,vue}', { query: '?raw', import: 'default', eager: true }),
+).filter(([path]) => !path.includes('__tests__') && !path.startsWith('../protocol/generated.'))
+
+/** Same call idiom the shutdownDormant negative control matches. */
+function callsMethod(text: string, method: string): boolean {
+  const dotted = method.replace(/\./g, '\\.')
+  return new RegExp(`\\brequest(?:<[^(]*>)?\\(\\s*['"]${dotted}['"]|method:\\s*['"]${dotted}['"]`).test(text)
+}
+
+function derivedDormant(): string[] {
+  return Object.keys(METHOD_SCOPES)
+    .filter((method) => !MODULES.some(([, text]) => callsMethod(String(text), method)))
+    .sort()
+}
+
+describe('dormant-method roster (C-WEB-3)', () => {
+  it('every schema method has a browser caller or a roster reason', () => {
+    expect(MODULES.length).toBeGreaterThan(40)
+    expect(derivedDormant()).toEqual(Object.keys(DORMANT_REASONS).sort())
+  })
+
+  it('the roster declares only real schema methods, each with a reason', () => {
+    const scopes = METHOD_SCOPES as Readonly<Record<string, string>>
+    for (const method of Object.keys(DORMANT_REASONS)) {
+      expect(scopes[method], `${method} must exist in METHOD_SCOPES`).toBeTypeOf('string')
+      expect(DORMANT_REASONS[method].length, `${method} needs a reason`).toBeGreaterThan(0)
+    }
+  })
+
+  it('rostered methods are genuinely uncalled in the shipped modules', () => {
+    for (const method of Object.keys(DORMANT_REASONS)) {
+      const callers = MODULES.filter(([, text]) => callsMethod(String(text), method))
+      expect(callers.map(([path]) => path), `${method} is called, drop the roster row`).toEqual([])
+    }
+  })
+})
