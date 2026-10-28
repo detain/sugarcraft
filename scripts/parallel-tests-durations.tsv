@@ -875,6 +875,7 @@ candy-code/tests/Memory/MemoryWriterTest.php	0.032	10
 candy-code/tests/Backend/ReasoningPaintTest.php	0.031	23
 candy-code/tests/Chat/ApplySettingsTest.php	0.031	10
 candy-code/tests/Tui/Settings/SettingsFieldFactoryTest.php	0.031	13
+candy-code/tests/Chat/DeckHostedSessionRoutesTest.php	0.031	14
 candy-code/tests/Chat/BudgetCommandTest.php	0.030	48
 candy-code/tests/Chat/MouseTextSelectionTest.php	0.030	9
 candy-code/tests/Commands/SendToCommandTest.php	0.030	13
