@@ -24,8 +24,10 @@
 #     guard).
 #
 # Comments created with GITHUB_TOKEN do not trigger workflow runs, so the
-# bot cannot loop on its own replies. Pin the action ref to a full commit
-# SHA, as everywhere else in these docs.
+# bot cannot loop on its own replies — which holds only because BOTH steps
+# bind secrets.GITHUB_TOKEN as GH_TOKEN. Swap in a personal access token
+# and every reply re-triggers the bot against itself, with MEMBER standing.
+# Pin the action ref to a full commit SHA, as everywhere else in these docs.
 name: pr-comment-bot
 
 on:
@@ -73,9 +75,14 @@ jobs:
   # a comment. The review text arrives via a job output bound into `env:`,
   # and it carries a warning banner because GitHub renders comment bodies
   # as Markdown: this text may be shaped by whatever the PR author wrote.
+  #
+  # The status leg below is not decoration. A SKIPPED review (the gate did
+  # not match) has no outputs.result at all, and in workflow expression
+  # syntax null != '' is TRUE — without the check the bot would post the
+  # warning banner with no review under it beneath every unmatched comment.
   post:
     needs: review
-    if: needs.review.outputs.result != ''
+    if: needs.review.result == 'success' && needs.review.outputs.result != ''
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

@@ -146,10 +146,15 @@ never needs the artifact split below, and it earns that with three load-bearing 
   crosses into that job as a job output bound through `env:`, exactly the shape above.
 
 Comments created with `GITHUB_TOKEN` do not trigger workflow runs, so the bot cannot loop on its
-own replies. Pin the action ref to a full commit SHA as everywhere else on this page, and note
-that the example is guarded in the build by `tools/tests/PrCommentBotExampleTest.php` — the
-association gate, the absence of any checkout, the solitary write scope and the env-only
-crossings are pins, not suggestions.
+own replies — an assurance that holds only while both steps bind `secrets.GITHUB_TOKEN` (swap in
+a PAT and every reply re-triggers the bot with MEMBER standing). The post job's condition also
+starts with `needs.review.result == 'success'`: a skipped review has no `outputs.result` at all,
+and `null != ''` is true in workflow expression syntax, so the status leg is what keeps the bot
+from posting a bare warning banner beneath every unmatched comment. Pin the action ref to a full
+commit SHA as everywhere else on this page, and note that the example is guarded in the build by
+`tools/tests/PrCommentBotExampleTest.php` — the association gate, the absence of any checkout,
+the solitary write scope, the success-gated post and the env-only crossings are pins, not
+suggestions.
 
 ## The doctrine — read this before automating anything untrusted
 

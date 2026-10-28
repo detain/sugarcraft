@@ -41,6 +41,11 @@ use PHPUnit\Framework\TestCase;
  *   5. The run leg is `plan` mode with a `max-cost` ceiling — the example is
  *      the recommended shape for other people's repos, and an unbounded
  *      write-capable review bot is not a thing to be teaching.
+ *   6. The no-loop premise: both GH_TOKEN bindings are secrets.GITHUB_TOKEN
+ *      (a PAT re-triggers the bot on its own replies, with MEMBER standing),
+ *      and the post leg checks the review job's RESULT before its output —
+ *      a skipped job yields null, and null != '' is true, so without the
+ *      status check the banner posts beneath every unmatched comment.
  *
  * Like its neighbours this guard parses YAML as TEXT (the `tools-guards` job
  * runs a phpunit PHAR with no composer autoload — symfony/yaml would be a
@@ -74,10 +79,12 @@ final class PrCommentBotExampleTest extends TestCase
     /**
      * Every `run:` body of the example, in file order, newlines intact.
      *
-     * The two spellings GitHub accepts — `run: |` / `run: >` block scalars
-     * whose content is indented deeper than the `run:` line, and one-line
-     * `run: cmd` — with or without the sequence dash; a comment line naming
-     * `run:` cannot match because keys anchor at line start.
+     * The three spellings GitHub accepts — `run: |` / `run: >` block scalars
+     * whose content is indented deeper than the `run:` line, one-line
+     * `run: cmd`, and a quoted scalar whose closing quote lands on a later
+     * line (M-4: the capture swallows continuations so nothing executable
+     * hides between the opening quote and the parser's view); a comment line
+     * naming `run:` cannot match because keys anchor at line start.
      *
      * @return list<string>
      */
@@ -117,7 +124,28 @@ final class PrCommentBotExampleTest extends TestCase
             if ($rest === '') {
                 continue;
             }
-            if ($rest[0] !== '|' && $rest[0] !== '>') {
+            $opening = $rest[0];
+            if ($opening !== '|' && $opening !== '>') {
+                // M-4 (round-1 review): a quoted scalar may stay open past its
+                // line — `run: "echo` with the expression on the continuation
+                // line folds to ONE executable string. A one-line capture would
+                // hand that interpolation to the headline arm as a free pass.
+                // Consume until the quote closes (a double quote preceded by a
+                // backslash does not close it). Unclosed to EOF: swallow the
+                // remainder anyway, so the scan accuses rather than acquits.
+                if (($opening === '"' || $opening === "'") && !self::quoteClosesIn($rest, $opening)) {
+                    $buf = [$rest];
+                    for ($j = $i + 1; $j < $total; $j++) {
+                        $next = \rtrim($lines[$j], "\r");
+                        $buf[] = $next;
+                        if (self::quoteClosesIn($next, $opening, 0)) {
+                            $i = $j;
+                            break;
+                        }
+                    }
+                    $bodies[] = \implode("\n", $buf);
+                    continue;
+                }
                 $bodies[] = $rest;
                 continue;
             }
@@ -144,6 +172,41 @@ final class PrCommentBotExampleTest extends TestCase
         }
 
         return $bodies;
+    }
+
+    /**
+     * Does a quote character close inside $text? Scan starts at $from: the
+     * opening line skips its own opening quote ($from 1), a continuation line
+     * must consider every character ($from 0). For double quotes, an odd run
+     * of preceding backslashes makes the occurrence an escaped literal, not a
+     * closer; in single-quoted YAML, a doubled '' is a literal quote.
+     */
+    private static function quoteClosesIn(string $text, string $quote, int $from = 1): bool
+    {
+        for ($offset = $from; $offset < \strlen($text); $offset++) {
+            if ($text[$offset] !== $quote) {
+                continue;
+            }
+            if ($quote === "'") {
+                if ($offset + 1 < \strlen($text) && $text[$offset + 1] === "'") {
+                    $offset++; // doubled: a literal quote, keep scanning
+                    continue;
+                }
+
+                return true;
+            }
+            $slashes = 0;
+            for ($k = $offset - 1; $k >= 0 && $text[$k] === '\\'; $k--) {
+                $slashes++;
+            }
+            if ($slashes % 2 === 1) {
+                continue; // escaped: not a closer
+            }
+
+            return true;
+        }
+
+        return false;
     }
 
     private static function read(): string
@@ -251,6 +314,24 @@ final class PrCommentBotExampleTest extends TestCase
                     . 'without the full gate any passerby directs a token-bearing paid run'
             );
         }
+
+        // M-1 (round-1 review): the six needles above are substring tests — a
+        // yml that swapped the top-level conjunctions to || carries every one
+        // of them while gating nothing (any PR comment OR any association is
+        // nearly always true). The normalized verbatim gate pins the whole
+        // connective structure: pull_request AND mention AND (association
+        // disjunction), exactly.
+        $normalized = (string) \preg_replace('/\s+/', ' ', $gate);
+        self::assertStringContainsString(
+            "github.event.issue.pull_request && contains(github.event.comment.body, '@candy-code') "
+                . '&& (github.event.comment.author_association == \'OWNER\' '
+                . "|| github.event.comment.author_association == 'MEMBER' "
+                . "|| github.event.comment.author_association == 'COLLABORATOR')",
+            $normalized,
+            'the gate legs are present but no longer joined as the doctrine requires — the top-level legs '
+                . 'must be ANDed and the three associations ORed inside parentheses; weakening a connective '
+                . 'turns the gate into the open door it is meant to be'
+        );
     }
 
     /**
@@ -309,6 +390,25 @@ final class PrCommentBotExampleTest extends TestCase
             $read[0][1],
             'the read scope no longer sits in the job above post — the run job lost its side of the split'
         );
+
+        // M-2 (round-1 review): the block-line pattern above only sees the
+        // spelling `pull-requests: write` at end of line. A job1 that grew
+        // `permissions: write-all`, or a flow-style second grant on its own
+        // line, kept every assertion green while gutting the split. Count the
+        // WORD after comment lines are stripped: prose in comments cannot
+        // inflate it, and any real grant of any spelling must contain it.
+        self::assertStringNotContainsString(
+            'write-all',
+            $raw,
+            'the example grew write-all — the nuclear scope defeats the entire two-job split'
+        );
+        $codeOnly = (string) \preg_replace('/^\s*#.*$/m', '', $raw);
+        self::assertSame(
+            1,
+            \substr_count($codeOnly, 'write'),
+            'the word write appears more than once outside comments — the write scope is no longer solitary, '
+                . 'whatever spelling the second grant chose (block, flow, or write-all)'
+        );
     }
 
     /**
@@ -331,6 +431,65 @@ final class PrCommentBotExampleTest extends TestCase
         self::assertStringContainsString('"$PR_URL"', $joined, 'no run body reads the PR_URL env binding');
         self::assertStringContainsString('"$REVIEW"', $joined, 'no run body reads the REVIEW env binding');
         self::assertStringContainsString('"$RUNNER_TEMP', $joined, 'no run body reads the RUNNER_TEMP path binding');
+    }
+
+    /**
+     * Pin 6 (M-3 + M-5, round-1 review): the two premises the header prose
+     * rests on. First, the no-loop assurance is that comments created with
+     * GITHUB_TOKEN do not trigger runs — so every GH_TOKEN binding in the
+     * file MUST be secrets.GITHUB_TOKEN; a PAT swap (the classic local fix
+     * for "gh can't see my repo") makes the bot's own reply re-trigger it,
+     * with MEMBER standing, forever. Second, the post leg must check the job
+     * result, not just the output: a skipped review carries no outputs.result,
+     * and null != '' is true in workflow expression syntax — without the
+     * success leg the bot posts the warning banner, review-less, beneath
+     * every unmatched PR comment.
+     */
+    public function testTheAntiRecursionAndSkipGatingPremisesHold(): void
+    {
+        $raw = self::read();
+        self::assertSame(
+            2,
+            \preg_match_all('/GH_TOKEN:\s*\$\{\{\s*secrets\.GITHUB_TOKEN\s*\}\}/', $raw),
+            'a GH_TOKEN binding is missing or points at another secret — GITHUB_TOKEN comments do not '
+                . 're-trigger runs, any other token does, and with MEMBER standing the bot loops on itself'
+        );
+        self::assertMatchesRegularExpression(
+            '/^ +if: needs\.review\.result == ' . "'success'" . '\s+&&\s+needs\.review\.outputs\.result != ' . "''" . '$/m',
+            $raw,
+            'the post step is no longer gated on the review job SUCCEEDING before its output is pasted — '
+                . 'a skipped review carries null outputs, and null != ' . "''" . ' is true'
+        );
+    }
+
+    /**
+     * M-4 (round-1 review) discriminator: the run: parser must see inside a
+     * quoted scalar whose closing quote lands on a continuation line — the
+     * shape that previously evaded the headline arm, because the capture
+     * stopped at the opening line and the folded `${{ }}` rode into the
+     * script unaccused. The forgery is assembled from fragments (plan §1.9:
+     * no GitHub-expression literal in a test file), and the assertion is that
+     * the parser's OWN output carries the marker the headline arm polices.
+     */
+    public function testTheRunParserSeesMultiLineQuotedScalars(): void
+    {
+        $marker = '$' . '{' . '{ steps.bot.outputs.result }' . '}';
+        $synthetic = "jobs:\n  x:\n    steps:\n      - run: \"printf %s\n            "
+            . $marker . "\"\n      - run: echo plain\n";
+
+        $bodies = self::runBodies($synthetic);
+        self::assertCount(2, $bodies, 'the parser did not yield both steps of the synthetic doc');
+        self::assertMatchesRegularExpression(
+            self::INTERPOLATES_ANYTHING,
+            $bodies[0],
+            'a continuation line of a multi-line quoted run scalar hid from the capture — the exact '
+                . 'evasion this leg was added to close'
+        );
+        self::assertDoesNotMatchRegularExpression(
+            self::INTERPOLATES_ANYTHING,
+            $bodies[1],
+            'the parser now accuses plain one-line run bodies too — it would convict the correct file'
+        );
     }
 
     /**
