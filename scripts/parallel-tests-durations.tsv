@@ -293,6 +293,7 @@ candy-code/tests/Cli/SwallowingCatchSrcCensusTest.php	0.968	3
 candy-code/tests/Cli/CliLangCatalogueTest.php	0.966	8
 candy-code/tests/Cli/SessionLaunchFlagsTest.php	0.961	27
 candy-code/tests/Cli/ProjectTierRefusalInventoryTest.php	0.960	15
+candy-code/tests/Host/Commands/ShellsCommandTest.php	0.943	9
 candy-code/tests/Cli/ArgvParserDuplicatePromptTest.php	0.940	5
 candy-code/tests/Tools/TaskToolResumeFinishedRunTest.php	0.937	6
 candy-code/tests/Sessions/BackgroundSupervisorAskChannelTest.php	0.934	9
