@@ -1830,7 +1830,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-WEB-3.a (W8), C-WEB-3.b (W8), C-WEB-3.c (W8), C-WEB-3.d (W9), C-WEB-3.e (W14)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web.md` → `### C-WEB-3.g`
 
-#### ✅ e2bc4292d C-TUI-2.b — sugar-diff side-by-side writer
+#### ✅ e2bc4292dafc00444a13fc9687e4622507981fd3 C-TUI-2.b — sugar-diff side-by-side writer
 - **Item:** C-TUI-2 (sources: GAP-UI-05) · gap · effort S
 - **What:** sugar-diff writes unified output only (`sugar-diff/src/Writer/UnifiedFormat.php`). Add `SideBySideFormat`: `rows(Diff)` and `fromUnified(string)`, the latter over `Reader/UnifiedScan`. Both return paired `[left?, right?]` rows. …
 - **Files — create:** `sugar-diff/src/Writer/SideBySideFormat.php`, `sugar-diff/src/Writer/SideBySideRow.php`
