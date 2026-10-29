@@ -625,12 +625,12 @@ context: it is listed with the others but sends nothing on its own. `#`, `//`,
 `/commit` `/compact` `/compress` `/context` (`/tokens`) `/decompress` `/diff`
 `/editor` `/effort` `/exit` (`/quit`) `/export` `/fast` `/fork` `/generate`
 `/goal` `/grind` `/handoff` `/help` `/hooks` `/init` `/instructions` `/keys`
-`/layout` `/loop` `/mcp` `/memory` `/model` `/new` `/newrule` `/notices` `/pane`
-`/permissions` `/play` `/pr` `/pruning` `/recompress` `/redo` `/rename`
-`/rendermode` `/review` `/rewind` `/rules` `/schedules` (`/schedule`)
-`/security-review` `/sendto` `/sessions` `/settings` (`/config`) `/share`
-`/shells` `/skills` `/status` `/sweep` `/theme` `/undo` `/usage` `/websearch`
-`/workflow`.
+`/layout` `/loop` `/mcp` `/memory` `/model` `/new` `/newrule` `/notices`
+`/output-style` `/pane` `/permissions` `/play` `/pr` `/pruning` `/recompress`
+`/redo` `/rename` `/rendermode` `/review` `/rewind` `/rules`
+`/schedules` (`/schedule`) `/security-review` `/sendto` `/sessions`
+`/settings` (`/config`) `/share` `/shells` `/skills` `/status` `/sweep` `/theme`
+`/undo` `/usage` `/websearch` `/workflow`.
 <!-- commands:roster:end -->
 
 The parenthesised spellings are aliases: they dispatch, but they have no

@@ -13979,6 +13979,20 @@ final class Chat implements Model
     }
 
     /**
+     * `/output-style [name|off]` — select the one output-style rulebook
+     * that rides this session's prompt, or clear the slot (C-CTX-4.e) —
+     * {@see \SugarCraft\Code\Host\Commands\OutputStyleHostCommand}. The switch
+     * mutates the shared {@see RulesState} this model carries by identity, so
+     * the transcript and the next prompt cannot disagree about a style.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function handleOutputStyleCommand(string $inputBuf): array
+    {
+        return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\OutputStyleHostCommand(), $inputBuf);
+    }
+
+    /**
      * `/pane dock <left|right> [name]` / `/pane toggle [name]` — the command
      * twins of the drag gesture: dock moves a pane into the named side's
      * dock column, appended at the end of it (a drag picks its slot by the row

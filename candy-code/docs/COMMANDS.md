@@ -385,6 +385,7 @@ edit it by hand.
 | `/recompress` | ✓ | | `[bN]` | Restore the summary of a section /decompress took back |
 | `/hooks` | ✓ | | — | List the hook chain: every registered hook, its matcher and state, plus matchers that failed to evaluate |
 | `/rules` | ✓ | | `[name]` | List the rule packs, or toggle one for this session |
+| `/output-style` | ✓ | | `[name\|off]` | List the output styles, or select one for this session; `off` clears it |
 | `/newrule` | ✓ | | `[focus]` | Have the agent draft a project rule from this conversation |
 | `/pane` | ✓ | | `dock <left\|right>\|toggle [name]` | Dock a pane to a side, or toggle its docked state |
 | `/layout` | ✓ | | `reset` | Reset the pane layout to the launch default |
