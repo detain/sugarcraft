@@ -161,11 +161,28 @@ final class SettingsWriterCensusTest extends TestCase
             // reasoningEffort key alone; a failed save rides the note, never
             // fatal.
             'Chat.php::persistEffort->write' => 2,
+            // C-PRV-3.b (carried by the W21 wave loop): /fast remembers the
+            // chosen service lane across launches — the `serviceTier` key
+            // pairs with persistEffort's `reasoningEffort`. One token-site:
+            // every accepting invocation writes exactly once through the
+            // sanctioned writer, user tier, the one key alone. There is no
+            // delete arm by design ('default' IS an affirmative word in the
+            // user tier), and a failed save rides the note, never fatal.
+            'Chat.php::persistFast->write' => 1,
             // C-SEC-5.a: the census's one grant door. The list/settings targets
             // go through the sanctioned writer exactly as the settings editor's
             // own confirmed action does — one site, the writer still built only
             // by the launch.
             'Cli/Bootstrap.php::grantProjectTrust->grantTrust' => 1,
+            // C-EXT-4.d (W21): the launch-recommendation STAMP — a notice's
+            // seen-pins, not a settings key. One site through AtomicJsonFile
+            // at 0600, rewriting the marketplace registry's own envelope only
+            // over a file the registry already minted (it never creates the
+            // stamp), fail-open: the row rides anyway and a lost stamp costs
+            // one re-shown line next launch. Listed because this census walks
+            // EVERY `->write(` token-site in src/ — an unannounced writer into
+            // a JSON file is exactly what it exists to catch.
+            'Cli/Bootstrap.php::stampBundleRecommendations->write' => 1,
             'Config/Settings/ModelChoice.php::persist->write' => 1,
             // crush-media W5.7: /rendermode writes the chosen render mode
             // through the sanctioned writer — the one command that mutates a
