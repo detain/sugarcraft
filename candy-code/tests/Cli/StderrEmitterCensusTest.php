@@ -572,7 +572,13 @@ final class StderrEmitterCensusTest extends TestCase
         // The write-path refusals and every note ride the existing
         // `mcpImportLine` funnel and the failUsage door, so the DIRECT_SITES
         // roster stayed 6 for this file.
-        'src/Cli/Subcommands.php' => 40,
+        // C-SEC-8.f 2026-10-29: +1 — the login --keychain not-a-key-arm
+        // refusal (the `--keychain` door for a provider whose key candy-code
+        // does not store itself), a failUsage envelope fired BEFORE any
+        // prompt or spawn. Same stderr-only decision as every sibling here:
+        // a separate CLI process, no live session transcript to name,
+        // nothing was opened or changed.
+        'src/Cli/Subcommands.php' => 41,
         'src/Permissions/PermissionPrompt.php' => 1,
         // Not a message: the protocol schema's `$id` URN
         // (`urn:sugarcraft:candy-code:protocol:v1`, roadmap O-3c) spells the

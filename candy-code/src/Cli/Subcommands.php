@@ -1136,6 +1136,10 @@ final class Subcommands
                     'missing' => Lang::t('cli.login.keychain.missing', ['backend' => $backend, 'provider' => $type]),
                     'timeout' => Lang::t('cli.login.keychain.timeout', ['backend' => $backend, 'provider' => $type]),
                     'unsupported' => Lang::t('cli.login.keychain.unsupported', ['os' => $family, 'provider' => $type]),
+                    // C-SEC-8.f review NIT: a refused paste is the size
+                    // bound firing — "try again" cannot help, so the
+                    // sentence names the bound instead.
+                    'refused' => Lang::t('cli.login.keychain.refused', ['provider' => $type]),
                     default => Lang::t('cli.login.keychain.failed', ['provider' => $type]),
                 } . "\n";
 

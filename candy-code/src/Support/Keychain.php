@@ -53,6 +53,20 @@ final class Keychain
     private const MAX_STDOUT_BYTES = 65536;
 
     /**
+     * The WRITE bound, minted by the C-SEC-8.f review: the store path's
+     * blocking `fwrite` runs BEFORE the drain loop arms the deadline, so
+     * the only thing keeping it off a wedged reader was pipe capacity —
+     * and MAX_STDOUT_BYTES (65536) is exactly Linux's default, which left
+     * a just-under-the-cap secret free to sleep forever in a full pipe
+     * against a stalled secret-service backend. An input bound reusing a
+     * read-side output constant was the semantic mismatch; this is the
+     * real one: 8 KiB is an eighth of the default pipe capacity (the
+     * write always completes into the buffer unread) and triple the
+     * longest API key in the wild.
+     */
+    private const MAX_SECRET_BYTES = 8192;
+
+    /**
      * Poll slice for the exit-await loop, mirroring
      * {@see ProcessReaper::POLL_INTERVAL_US}.
      */
@@ -123,9 +137,11 @@ final class Keychain
             return 'refused';
         }
         // A secret is one line; empty has nothing to store, and anything
-        // beyond the read side's runaway-output bound could outstay the pipe
-        // buffer before a slow backend starts draining it.
-        if ($secret === '' || \strlen($secret) >= self::MAX_STDOUT_BYTES) {
+        // beyond the write bound is refused HERE, before any spawn — the
+        // store path's fwrite is blocking and precedes the drain loop's
+        // deadline, so acceptance is what keeps the write inside the
+        // pipe buffer even if the backend never drains (MAX_SECRET_BYTES).
+        if ($secret === '' || \strlen($secret) >= self::MAX_SECRET_BYTES) {
             return 'refused';
         }
 
@@ -370,9 +386,13 @@ final class Keychain
             \fclose($pipes[0]);
         } else {
             // The store path's secret. One bounded write (store() refuses
-            // secrets at the pipe-capacity bound, so this cannot deadlock
-            // against a slow drain), then close for EOF — a line-reading
-            // backend takes its value from here and nowhere else.
+            // secrets at MAX_SECRET_BYTES, an eighth of the default pipe
+            // capacity, so this write completes into the buffer even if
+            // the backend never drains), then close for EOF — a
+            // line-reading backend takes its value from here and nowhere
+            // else. The write stays blocking BY DESIGN: a partial write
+            // could store a truncated secret, and the bound above is what
+            // makes one impossible.
             @\fwrite($pipes[0], $stdinPayload . "\n");
             \fclose($pipes[0]);
         }

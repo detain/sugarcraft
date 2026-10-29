@@ -329,6 +329,29 @@ final class LoginKeychainTest extends TestCase
         $this->assertCount(0, $this->stores, 'validation comes before the keychain');
     }
 
+    public function testAnOversizedPasteIsRefusedAtTheDispatchAndNamesTheBound(): void
+    {
+        // C-SEC-8.f review NIT: the verdict `refused` (the size bound) must
+        // not answer with the generic "try again" sentence — the advice
+        // cannot help a runaway paste. The sentence names the bound, and
+        // the reflection tie below is what stops the lang numeral drifting
+        // away from Keychain::MAX_SECRET_BYTES.
+        Keychain::armOsForTesting('Linux');
+        $this->armStoreRecorder('ok');
+        $this->armKeyPaste(str_repeat('k', 8192));
+
+        [$code, $out] = $this->capture(fn (): int => $this->dispatch(['login', 'openai', '--keychain']));
+
+        $this->assertSame(NonInteractive::EXIT_FAILURE, $code);
+        $this->assertCount(0, $this->stores, 'the bound refuses before any dial');
+        $bound = (new \ReflectionClass(Keychain::class))
+            ->getReflectionConstant('MAX_SECRET_BYTES')
+            ->getValue();
+        $this->assertStringContainsString((string) $bound, $out, 'the sentence names the live bound');
+        $this->assertStringNotContainsString('try again', $out, 'retrying cannot help an oversized secret');
+        $this->assertStringContainsString('without --keychain', $out, 'the fallback advice survives');
+    }
+
     // ── Keychain::store guards at the API level ─────────────────────────
 
     public function testStoreRefusesMalformedNamesAndSecretsWithoutSpawning(): void
@@ -340,8 +363,28 @@ final class LoginKeychainTest extends TestCase
         $this->assertSame('refused', Keychain::store('-rf', 'secret'), 'a leading dash is option-parseable');
         $this->assertSame('refused', Keychain::store("bad\name", 'secret'), 'a control byte never reaches argv');
         $this->assertSame('refused', Keychain::store('good-name', ''), 'an empty secret has nothing to store');
-        $this->assertSame('refused', Keychain::store('good-name', str_repeat('s', 65536)), 'runaway payloads are out');
+        $this->assertSame('refused', Keychain::store('good-name', str_repeat('s', 8192)), 'runaway payloads are out');
         $this->assertCount(0, $this->stores);
+    }
+
+    public function testTheSecretBoundRefusesWithoutDialingAndAcceptsTheByteBelowIt(): void
+    {
+        // C-SEC-8.f review MINOR: the write bound guards the pre-drain
+        // blocking fwrite. At exactly MAX_SECRET_BYTES the paste is
+        // refused and NOTHING is spawned; the byte below it is the
+        // accepted edge that still reaches the backend.
+        Keychain::armOsForTesting('Linux');
+        $this->armStoreRecorder('ok');
+        $bound = (new \ReflectionClass(Keychain::class))
+            ->getReflectionConstant('MAX_SECRET_BYTES')
+            ->getValue();
+
+        $this->assertSame(8192, $bound, 'the sentence in cli.login.keychain.refused names this number');
+        $this->assertSame('refused', Keychain::store('good-name', str_repeat('s', $bound)), 'refuses AT the bound');
+        $this->assertCount(0, $this->stores, 'refusal means no dial, no argv, no pipe');
+
+        $this->assertSame('ok', Keychain::store('good-name', str_repeat('s', $bound - 1)), 'the edge below is stored');
+        $this->assertCount(1, $this->stores);
     }
 
     public function testAnUnsupportedFamilyRefusesBeforeTheSeamIsConsulted(): void
@@ -395,6 +438,31 @@ SH);
         $this->assertStringContainsString('store service candy-code account candy-openai', $argv);
         $this->assertStringNotContainsString('REAL-SECRET-XYZ', $argv, 'the process listing carries names only');
         $this->assertSame("REAL-SECRET-XYZ\n", $stdin, 'the newline is the line-reading backend\'s EOF');
+    }
+
+    public function testTheRealStorePathKeepsABoundSizedSecretOutOfArgv(): void
+    {
+        // The argv-never-see-secret invariant holds AT the accepted edge,
+        // not just for toy secrets: the biggest paste store() will take
+        // (MAX_SECRET_BYTES - 1) still travels only down stdin.
+        $this->armShimPath(<<<'SH'
+echo "$*" > "$KEYCHAIN_SHIM_DIR/argv.txt"
+: > "$KEYCHAIN_SHIM_DIR/stdin.txt"
+while IFS= read -r line || [ -n "$line" ]; do
+    printf '%s\n' "$line" >> "$KEYCHAIN_SHIM_DIR/stdin.txt"
+done
+exit 0
+SH);
+        Keychain::armOsForTesting('Linux');
+
+        $secret = str_repeat('k', 8191);
+        $this->assertSame('ok', Keychain::store('candy-openai', $secret));
+
+        $argv = (string) file_get_contents($this->binDir . '/argv.txt');
+        $stdin = (string) file_get_contents($this->binDir . '/stdin.txt');
+        $this->assertStringContainsString('store service candy-code account candy-openai', $argv);
+        $this->assertStringNotContainsString('kkkk', $argv, 'even at the bound the process listing carries names only');
+        $this->assertSame($secret . "\n", $stdin, 'all 8191 bytes arrive on stdin with the EOF newline');
     }
 
     public function testTheRealStorePathReportsANonZeroExitAsFailed(): void
