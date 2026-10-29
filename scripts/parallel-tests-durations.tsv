@@ -379,6 +379,7 @@ candy-code/tests/Chat/AutomaticCompactionModelSummaryTest.php	0.713	37
 candy-code/tests/Backend/EngineBackendAttachmentsTest.php	0.711	6
 candy-code/tests/Backend/ResultFrameTranscriptCodecTest.php	0.710	4
 candy-code/tests/Backend/StepPressureCheckTest.php	0.702	5
+candy-code/tests/Chat/FastCommandTest.php	0.696	18
 candy-code/tests/Commands/MemoryLogRestoreCommandTest.php	0.695	6
 candy-code/tests/Agents/TaskListCasAndCycleTest.php	0.691	16
 candy-code/tests/Backend/TurnPathContractTest.php	0.689	9
@@ -386,6 +387,7 @@ candy-code/tests/Cli/HeadlessPermissionPromptAttachmentTest.php	0.685	29
 candy-code/tests/Backend/ModelPruneInTurnTest.php	0.681	3
 candy-code/tests/MCP/McpDenyPatternsTest.php	0.677	4
 candy-code/tests/Server/AgentsBackgroundControlTest.php	0.670	3
+candy-code/tests/App/CommandKeybindingDispatchTest.php	0.660	7
 candy-code/tests/Host/EventLogTest.php	0.658	8
 candy-code/tests/Host/UsageModelThreadingTest.php	0.656	12
 candy-code/tests/Agents/WorktreeRemovalReportingTest.php	0.653	10
@@ -507,6 +509,7 @@ candy-code/tests/Host/SessionHostAheadOfNeedTest.php	0.364	3
 candy-code/tests/Commands/SlashDispatchTest.php	0.358	21
 candy-code/tests/Context/ContextCompactorTest.php	0.355	96
 candy-code/tests/Workspace/CheckpointDiffTest.php	0.349	3
+candy-code/tests/Host/Commands/FastHostCommandTest.php	0.349	7
 candy-code/tests/Chat/SessionLazyMintTest.php	0.347	5
 candy-code/tests/Host/SessionHubTest.php	0.346	5
 candy-code/tests/Attachments/ContextMentionsTest.php	0.344	13
@@ -526,6 +529,7 @@ candy-code/tests/MCP/McpFrameCapTest.php	0.316	3
 candy-code/tests/Backend/MemoryFlushBeforeCompactionTest.php	0.314	11
 candy-code/tests/Chat/MentionFilePopupTest.php	0.314	10
 candy-code/tests/Automation/WebhookDispatcherTest.php	0.314	80
+candy-code/tests/Commands/KeyBindingCommandBindingTest.php	0.313	11
 candy-code/tests/Backend/EngineBackendReapTest.php	0.312	12
 candy-code/tests/Chat/EffortCommandTest.php	0.312	11
 candy-code/tests/Context/EnvironmentBlockGitConfigIsolationTest.php	0.312	4
