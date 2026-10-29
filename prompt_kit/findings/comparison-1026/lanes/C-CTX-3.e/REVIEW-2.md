@@ -1,0 +1,12 @@
+# C-CTX-3.e — Round 2 DELTA review (877062eab..f799a5429)
+
+VERDICT: CLEAN
+
+Delta scope: exactly 4 files (lang/en.php, src/Host/Commands/MemoryCommand.php, tests/Commands/MemoryImportCommandTest.php, lane REPORT.md). No protocol/schema/dist/suite-figure files. tip f799a5429 real; %ae/%ce detain==1 separate greps; zero Co-Authored; tree clean.
+
+- MAJOR-1 cured: :786 now ternary of full literals (exact r1 prescription); host.memory.usage.export deleted with ZERO orphan callers (all usage.* sites full literals; export usage rides help.export). ChatHostLangCatalogue: placeholders arm green, 1F = exactly the 6 foreign stranded chat.* keys (startup.personal, attach.pdf_pages, effort.launch_unshaped, permission.not_persisted, permission.persisted, serviceTier.launch_unshaped) — all present in master:en.php, all called OUTSIDE the catalogue's scan areas (SavedRules/StartupSummary/LaunchContext/FileMentions) = inherited, not lane. LangParity 7T/3123A green.
+- MINOR cured: section 9, 2 tests (Import 14T/90A->16T/101A). Non-vacuity structural: project-smuggle pins assertSame([], repo-store project list), assertSame([], home project tier), assertCount(1,agent), tags===['source:claude'] (claim-not-a-tag leg); agent-smuggle --scope user pins count(1,user)+assertSame([],agent). Any meta->scope wiring reddens BOTH (landing moves tiers; a slug-mismatched seed also reddens loudly via counts — pass at run proves seed scanned).
+- NIT: carry EXISTS in REPORT.md:59-65 and is truthful (ShareCommand file_exists==0, no collision loop; ExportCommand.php:123 cmd.export.conflict refusal real). Overwrite is same-session same-second default-path on user's own 0600 data; adding a suffix-walk is a behavior decision for owner, not a step defect. Carried-by-design ruling ACCEPTED, not step-local.
+- Gates re-derived EXACT (cwd=candy-code, plain pipe, env -u LINES -u COLUMNS): MemoryExport|MemoryImport 78T/273A OK; MemoryCommand 36T/138A OK; DocFigureProseDrift|MemoryDocumentationDrift|FrontmatterCallSites 108T/4160A OK; five-family census 159T/27061A OK; ChatHostLangCatalogue 3T/9A 1F(foreign-6 only); LangParity OK.
+
+Weld carries: picks 877062eab + f799a5429; trio/dist untouched (verified, nothing to weld there); §4 cites f799a5429. DURATIONS: new file is candy-code/tests/Host/Commands/MemoryExportCommandTest.php (8 test methods; needs a minted row with re-derived duration). The "+13T lane total" = Export 8 + Import 5-vs-master; Import file's row already exists (tsv:287) and needs re-derivation, NOT a new row.

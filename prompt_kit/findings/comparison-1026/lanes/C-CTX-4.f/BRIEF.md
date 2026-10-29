@@ -1,0 +1,29 @@
+### C-CTX-4.f — Project references (extra read-only roots)
+- item: C-CTX-4 (sources: GAP-PRM-N2)
+- kind: gap · effort M
+- approach:
+  - New user-tier only setting `references: [{path, name}]`.
+  - Each reference is advertised in `<env>` through `EnvironmentBlock::withSettings()`, with a capped `RepoMapBlock` summary.
+  - Read, Grep, Glob and Ls accept paths under a reference as read-only roots, through a new `ToolBuildContext::$readRoots` that `LaunchContext::tools()` fills.
+  - Write, Edit, Bash and the worktree jail stay confined to the session root.
+  - A missing or non-directory reference becomes a launch notice. A reference inside the session root is refused as redundant.
+- files.create: `candy-code/tests/Context/ProjectReferencesTest.php`
+- files.modify:
+  - `candy-code/src/Context/EnvironmentBlock.php` (`withSettings()`)
+  - `candy-code/src/Tools/Catalog/ToolBuildContext.php`
+  - `candy-code/src/Cli/LaunchContext.php` (`tools()`)
+  - `candy-code/src/Tools/BuiltIn/Read.php`, `candy-code/src/Tools/BuiltIn/Grep.php`, `candy-code/src/Tools/BuiltIn/Glob.php`, `candy-code/src/Tools/BuiltIn/Ls.php` (jail check)
+  - `candy-code/src/Config/Settings/Definitions/ToolSettings.php`
+  - `candy-code/src/Config/LayeredSettings.php` (gen)
+  - `candy-code/docs/SETTINGS.md` (gen)
+  - `candy-code/docs/PERMISSIONS.md`
+- tests: ProjectReferencesTest: Read inside a reference allowed; Write refused; a project-tier `references` key ignored; `<env>` lists them; modify `candy-code/tests/Tools/BuiltIn/GlobTest.php`
+- docs/guards: settings gen + `SettingsSchemaDocDriftTest`; `candy-code/tests/Config/PermissionsIntroDriftTest.php` if the intro roster moves
+- serialized: [docs:SETTINGS.md] [docs:PERMISSIONS.md] [hot:candy-code/src/Cli/LaunchContext.php] [hot:candy-code/src/Context/EnvironmentBlock.php] [hot:candy-code/src/Config/LayeredSettings.php] [hot:candy-code/src/Tools/BuiltIn/{Read,Grep,Glob,Ls}.php]
+- deps: none
+- phase: normal
+- ruling: none
+- risks:
+  - Widening read jails is security-relevant. It stays user tier only, read-only and listed in `<env>`.
+  - The C-SEC area may want to review it.
+

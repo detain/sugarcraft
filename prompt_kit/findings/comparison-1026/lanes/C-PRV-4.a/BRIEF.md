@@ -1,0 +1,28 @@
+### C-PRV-4.a — Host permission mode and isolation for claude-code `bare: false`
+- item: C-PRV-4 (sources: CLAW-new#4)
+- kind: competitor-feature · effort M
+- approach:
+  - With `bare: false` (the subscription route, `ClaudeCodeProvider.php:142-157`), the CLI loads the user's own `~/.claude` setting sources, CLAUDE.md, auto-memory, hooks, plugins and MCP. Its tools then run under foreign hooks and permission settings, outside candy-code's engine.
+  - New interface `Providers\HonoursHostPermissionMode::withHostPermissionMode(?PermissionMode): static`. `EngineBackend` rebinds the provider per turn with its gate's current mode, at the same seam as C-PRV-3.a, so Shift+Tab is honoured.
+  - `ClaudeCodeProvider` maps the mode to `--permission-mode`, narrowing only: plan → `plan`, never a bypass the host did not grant.
+  - Under a new block key `isolate` (default true, ignored when `bare` is true), the provider adds the isolation flags verified in `claude --help` 2.1.311: a narrowed `--setting-sources`, `--strict-mcp-config` (no foreign MCP) and `--disable-slash-commands`.
+  - CLAUDE.md and auto-memory discovery have no confirmed switch outside `--bare`. If the probe finds none, the docs and a one-time launch notice say so, rather than claiming isolation.
+  - Record a `PROBED_CLAUDE_VERSION` constant (house doctrine).
+- files.create: `candy-code/src/Providers/HonoursHostPermissionMode.php`, `candy-code/tests/Providers/CliProviderIsolationTest.php`
+- files.modify:
+  - `candy-code/src/Providers/ClaudeCodeProvider.php` (`options()`, constructor `isolate`)
+  - `candy-code/src/Providers/ClaudeCodeInvocation.php` (`printModeArgs()`)
+  - `candy-code/src/Backend/EngineBackend.php` (per-turn rebinding)
+  - `candy-code/src/Providers/ProviderFactory.php` (`TYPE_SCHEMAS['claude-code']` `isolate`, builder)
+  - `candy-code/README.md` (L176 "safety hooks wire automatically" claim, claude-code row)
+  - `candy-code/docs/SETTINGS.md` (claude-code block prose)
+- tests: CliProviderIsolationTest: argv pins for `bare:false` + isolate; plan → `--permission-mode plan`; `isolate:false` keeps today's argv; `bare:true` unchanged.
+- docs/guards: README and SETTINGS prose; lang for the disclosure notice
+- serialized: [docs:README.md] [docs:SETTINGS.md] [lang:provider.claude_code.isolation*] [hot:candy-code/src/Backend/EngineBackend.php] [hot:candy-code/src/Providers/ClaudeCode*.php] [hot:candy-code/src/Providers/ProviderFactory.php]
+- deps: none
+- phase: normal
+- ruling: none (default-on isolation with an `isolate: false` escape. If the owner prefers opt-in, see Notes.)
+- risks:
+  - A narrowed `--setting-sources` must not break the OAuth login, which lives in credentials, not settings. Probe it with a real subscription login before flipping the default.
+  - No new spawn, so no roster row.
+

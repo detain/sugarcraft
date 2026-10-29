@@ -2270,7 +2270,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - Chat.php region claims: C-AGT-6.a (new handleCommitCommand); C-CTX-3.b (ctor, key dispatch, submit)
 - Bootstrap.php method claims: C-SES-4.d (chat(comment only), workspace)
 
-#### C-PRV-4.a — Host permission mode and isolation for claude-code `bare: false`
+#### ✅ 204c33848 C-PRV-4.a — Host permission mode and isolation for claude-code `bare: false` (picks 958c5b939 -> b5c81dff2, 204c33848 -> 0a7582f13; DUR row minted CliProviderIsolationTest 29T/0.135s; batch-14)
 - **Item:** C-PRV-4 (sources: CLAW-new#4) · competitor-feature · effort M
 - **What:** With `bare: false` (the subscription route, `ClaudeCodeProvider.php:142-157`), the CLI loads the user's own `~/.claude` setting sources, CLAUDE.md, auto-memory, hooks, plugins and MCP. Its tools then run under foreign hooks and …
 - **Files — create:** `candy-code/src/Providers/HonoursHostPermissionMode.php`, `candy-code/tests/Providers/CliProviderIsolationTest.php`
@@ -2540,7 +2540,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-CTX-1.a (W3), C-CTX-2.d (W16)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-3.c`
 
-#### C-CTX-3.e — Memory export and prompt-visible import scope
+#### ✅ f799a5429 C-CTX-3.e — Memory export and prompt-visible import scope (picks 877062eab -> fdcb23bb1, f799a5429 -> f2d31b13a; DUR row minted MemoryExportCommandTest 8T/0.231s, Import row re-derived 11T/1.104s -> 16T/1.874s; batch-14)
 - **Item:** C-CTX-3 (sources: GAP-MEM-14) · gap · effort S
 - **What:** Imports land in the agent scope (`ForeignMemoryImporter.php:254, 317`, `MemoryScope::Local`), outside the index and recall. `/memory import … --scope project|user` routes through `MemoryWriter`, so imported notes are indexed and …
 - **Files — create:** `candy-code/tests/Host/Commands/MemoryExportCommandTest.php`
@@ -2551,7 +2551,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-3.e`
 
-#### C-CTX-4.f — Project references (extra read-only roots)
+#### ✅ 94b96cf8e C-CTX-4.f — Project references (extra read-only roots) (picks 9e47c4366 -> c1fd3757b, 94b96cf8e -> f0a3413e4; DUR row minted ProjectReferencesTest 14T/0.283s; batch-14)
 - **Item:** C-CTX-4 (sources: GAP-PRM-N2) · gap · effort M
 - **What:** New user-tier only setting `references: [{path, name}]`. Each reference is advertised in `<env>` through `EnvironmentBlock::withSettings()`, with a capped `RepoMapBlock` summary. Read, Grep, Glob and Ls accept paths under a …
 - **Files — create:** `candy-code/tests/Context/ProjectReferencesTest.php`
@@ -2724,7 +2724,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-PRV-3.a (W18)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-PRV-3.b`
 
-#### C-PRV-3.c — `ultrathink` raises effort for one turn
+#### ✅ 1493c8e87 C-PRV-3.c — `ultrathink` raises effort for one turn (picks 01c230f8c -> aa6e9ecc2, 1493c8e87 -> 385d3face; DUR row minted UltrathinkTurnTest 18T/0.159s; MINOR-1 3-copy effort-keyword finder deferred post-W22; batch-14)
 - **Item:** C-PRV-3 (sources: GAP-MOD-N1 (sic: CC-new#7 effort keyword), CC-new#7) · gap · effort S
 - **What:** A typed prompt that contains the word `ultrathink` (case-insensitive, whole word, outside code fences) raises effort for that dispatch only. `TurnRunner::start()` serves both hosts (Chat at `Chat.php:12731`, SessionHost at …
 - **Files — create:** `candy-code/src/Providers/EffortKeyword.php`, `candy-code/tests/Host/UltrathinkTurnTest.php`
@@ -2830,7 +2830,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SEC-6.a (W16)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-6.c`
 
-#### C-SEC-6.e — OTel safety events per verdict
+#### ✅ ee4789c04 C-SEC-6.e — OTel safety events per verdict (pick ee4789c04 -> af169e2ba; DUR row minted OtlpSafetyEventTest 11T/0.096s; batch-14)
 - **Item:** C-SEC-6 (sources: CC-new#4) · gap · effort S
 - **What:** Every refusal already reaches the encoder: `ToolFinished->result->denial` (`src/ToolResult.php:140`, a `DenialKind` of refused / unanswered / hook) crosses the fork today. Asks arrive as `PermissionAsked`, and rejections as …
 - **Files — create:** `candy-code/tests/Observability/OtlpSafetyEventTest.php`
