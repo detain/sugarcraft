@@ -10,7 +10,9 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Context\MemoryBlock;
+use SugarCraft\Code\Context\ProjectMemoryWriter;
 use SugarCraft\Code\Memory\MemoryStore;
+use SugarCraft\Code\Memory\MemoryWriter;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
@@ -23,12 +25,15 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  * `MemoryStore` (the {@see SlashDispatchTest} header idiom): the thing under
  * test is the command's two guards — target parsing plus project root, and
  * the `.imported-{target}` sentinel — the refusal surfacing, and one measured
- * scope fact: imports land in the `agent` scope and can NEVER crowd the
- * prompt block, because `MemoryBlock::capture()` folds only the project and
- * user scopes.
+ * scope fact: imports land in the `agent` scope by default and can NEVER
+ * crowd the prompt block there, because `MemoryBlock::capture()` folds only
+ * the project and user scopes — while an explicit `--scope project|user`
+ * files the same notes through the shared writer into the prompt-visible
+ * stores (section 8).
  *
  * MEASURED and pinned here, not assumed: `importClaudeCode()`/`importOpencode()`
- * write `MemoryScope::Local`, which `MemoryStore::normalizeScope()` persists
+ * write the scope they are handed, defaulting to `MemoryScope::Local`, which
+ * `MemoryStore::normalizeScope()` persists
  * under the string `'agent'`; `MemoryBlock::capture()` on the other hand lists
  * `MemoryScope::Project` and `MemoryScope::User` (the `capture()` body), which is why the
  * command applies no entry cap and why its response makes no cap claim. The
@@ -122,7 +127,7 @@ final class MemoryImportCommandTest extends TestCase
     public function testBareAndUnknownTargetsAnswerWithHelp(): void
     {
         $bare = $this->reply('/memory import');
-        $this->assertStringContainsString('Usage: /memory import claude|opencode', $bare);
+        $this->assertStringContainsString('Usage: /memory import claude|opencode [--scope <scope>]', $bare);
         $this->assertStringContainsString('**Available /memory commands:**', $bare);
 
         $unknown = $this->reply('/memory import gemini');
@@ -363,5 +368,81 @@ final class MemoryImportCommandTest extends TestCase
             'render stops at the entry cap regardless of which note lost the id tiebreak'
         );
         $this->assertStringContainsString('1 further note(s) were omitted by those limits.', $block);
+    }
+
+    // ── 8. promoted scope: an explicit --scope files through the writer ─────
+
+    public function testProjectScopePromotionFilesIntoTheRepoStoreAndReachesThePrompt(): void
+    {
+        $this->seedOpencodeMemory('build-notes.md', 'deploy-notes.md');
+
+        $reply = $this->reply('/memory import opencode --scope project');
+
+        $this->assertStringContainsString('**Imported 2** `opencode` memories into the `project` scope.', $reply);
+        $this->assertStringContainsString('Sentinel: `', $reply, 'the one-shot guard guards a promoted import too');
+
+        $repo = ProjectMemoryWriter::forRoot($this->projectRoot)?->store();
+        $this->assertNotNull($repo, 'the promoted path must have created the repository store');
+        $entries = $repo->list('project');
+        $this->assertCount(2, $entries);
+        foreach ($entries as $entry) {
+            $this->assertSame(['source:opencode'], $entry->tags(), 'provenance tags ride the promotion');
+        }
+        $this->assertSame([], $this->store->list('agent'), 'a promoted import files nothing into the agent scope');
+
+        // Indexed and recalled: the search surface the `Memory` tool uses
+        // finds the promoted bodies (an `add`-path note is only prompt-
+        // visible because it is also in the index).
+        $writer = MemoryWriter::new(fn (): ?MemoryStore => $this->store, $this->projectRoot);
+        $hits = $writer->recall('deploy');
+        $this->assertNotSame([], $hits, 'a promoted note is indexed, not merely present');
+        $this->assertSame('project', $hits[0]->scope());
+
+        // And the prompt folds it: capture() takes the repository store as
+        // its first tier — the same precedence `/memory add --scope project`
+        // files under.
+        $this->assertCount(2, MemoryBlock::capture($this->store, $repo)->entries());
+    }
+
+    public function testUserScopePromotionFilesIntoTheHomeStorePromptTier(): void
+    {
+        // Flag-first spelling, mirroring `/memory add`, whose `--scope` may
+        // come before or after the content.
+        $this->seedOpencodeMemory('solo.md');
+
+        $reply = $this->reply('/memory import --scope user opencode');
+
+        $this->assertStringContainsString('**Imported 1** `opencode` memories into the `user` scope.', $reply);
+        $entries = $this->store->list('user');
+        $this->assertCount(1, $entries);
+        $this->assertSame(['source:opencode'], $entries[0]->tags());
+        $this->assertCount(
+            1,
+            MemoryBlock::capture($this->store)->userEntries(),
+            'user notes fold into the prompt the same D4 tier `/memory add --scope user` answers to'
+        );
+    }
+
+    public function testDefaultStaysAgentScopeAndAnUnknownScopeWordNeverImports(): void
+    {
+        // Byte-compatibility pin: no flag, no promoted writes. (The import
+        // sentinel itself lives under `.candy-code/memory/`, so the repo
+        // directory legitimately exists after any import — the pin is that
+        // the default path files no PROJECT-scope note into it.)
+        $this->seedOpencodeMemory('plain.md');
+        $reply = $this->reply('/memory import opencode');
+        $this->assertStringContainsString('memories into the `agent` scope.', $reply);
+        $this->assertCount(1, $this->store->list('agent'));
+        $this->assertSame(
+            [],
+            ProjectMemoryWriter::forRoot($this->projectRoot)?->store()->list('project') ?? [],
+            'the default path files nothing into the repository store'
+        );
+
+        // A scope word outside the vocabulary never strips into a bare
+        // import: the usage answers and nothing further is written.
+        $bad = $this->reply('/memory import --scope gemini opencode');
+        $this->assertStringContainsString('Usage: /memory import claude|opencode [--scope <scope>]', $bad);
+        $this->assertCount(1, $this->store->list('agent'), 'the misread scope must not import anything');
     }
 }

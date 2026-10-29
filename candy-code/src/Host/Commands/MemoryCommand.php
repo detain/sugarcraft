@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Host\Commands;
 
+use SugarCraft\Code\Agents\MemoryScope;
 use SugarCraft\Code\Commands\MemoryHistoryCommand;
+use SugarCraft\Code\Commands\ShareCommand;
 use SugarCraft\Code\Context\MemoryBlock;
 use SugarCraft\Code\Context\ProjectMemoryWriter;
 use SugarCraft\Code\Lang;
@@ -15,11 +17,15 @@ use SugarCraft\Code\Memory\MemoryStore;
 use SugarCraft\Code\Memory\MemoryWriter;
 use SugarCraft\Code\Memory\UnreadableNotes;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Support\AtomicFileWriter;
 use SugarCraft\Code\Support\ContainedPath;
+use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\ProjectRoot;
+use SugarCraft\Code\Tools\PathJail;
+use Symfony\Component\Yaml\Yaml;
 
 /**
- * `/memory list|add|search|delete|edit|clear|import|log|restore` (moved out of
+ * `/memory list|add|search|delete|edit|clear|import|export|log|restore` (moved out of
  * `Chat::handleMemoryCommand()` in roadmap O-2h, which now delegates here).
  *
  * Every sub-command reads the session's HOME store and its project root, and
@@ -74,6 +80,7 @@ final class MemoryCommand implements HostCommand
             // notice, never a silent success.
             'open' => self::respond($inputText, Lang::t('host.memory.open-needs-terminal')),
             'import' => self::import($home, $root, $inputText, $args),
+            'export' => self::export($home, $root, $inputText, $args, $context->currentSessionId()),
             'log' => self::respond($inputText, MemoryHistoryCommand::log($history, $args)),
             'restore' => self::respond($inputText, MemoryHistoryCommand::restore($history, $args)),
             default => self::help($inputText, Lang::t('host.memory.unknown_command', ['command' => $command])),
@@ -118,6 +125,7 @@ final class MemoryCommand implements HostCommand
         $lines[] = Lang::t('host.memory.help.open');
         $lines[] = Lang::t('host.memory.help.clear');
         $lines[] = Lang::t('host.memory.help.import');
+        $lines[] = Lang::t('host.memory.help.export');
         $lines[] = Lang::t('host.memory.help.log', ['count' => MemoryHistory::DEFAULT_LOG_ENTRIES]);
         $lines[] = Lang::t('host.memory.help.restore');
         $lines[] = Lang::t('host.memory.help.self');
@@ -206,18 +214,21 @@ final class MemoryCommand implements HostCommand
      * — `MemoryStore::add()` mints a fresh UUID per entry, so the one-shot
      * guard IS the de-duplication).
      *
-     * There is deliberately NO entry cap here. Imports land in the `agent`
-     * scope (`MemoryScope::Local`, which the store persists under the string
-     * 'agent'), and `MemoryBlock` folds only the project and user scopes into
-     * the prompt — its own docblock lists the agent scope under "WHAT IS
-     * DELIBERATELY NOT HERE" and `capture()` reads exactly
-     * `list(MemoryScope::Project)` and `list(MemoryScope::User)`. No
+     * There is deliberately NO entry cap on the default path. Imports land
+     * in the `agent` scope (`MemoryScope::Local`, which the store persists
+     * under the string 'agent'), and `MemoryBlock` folds only the project
+     * and user scopes into the prompt — its own docblock lists the agent
+     * scope under "WHAT IS DELIBERATELY NOT HERE" and `capture()` reads
+     * exactly `list(MemoryScope::Project)` and `list(MemoryScope::User)`. No
      * number of imported entries can therefore crowd the prompt's memory
      * index, and agent scope is the point, not an oversight: the provenance-
-     * badge attack story in {@see ForeignMemoryImporter}'s class docblock
-     * (:106-124) is why another tool's memory bodies do not get direct
-     * prompt access — they stay listable and searchable until the user
-     * promotes what they actually want.
+     * badge attack story in {@see ForeignMemoryImporter::importClaudeCode()}
+     * is why another tool's memory bodies do not get direct prompt access on
+     * this command's own decision. An explicit `--scope project|user` is the
+     * USER electing that access with their own hand at the trigger point; a
+     * promoted import then files through {@see MemoryWriter::save()} exactly
+     * as `/memory add` does, so the note is indexed, recalled and folded —
+     * which is precisely why the flag exists and the default does not move.
      *
      * Refusals the importer records ({@see ForeignMemoryImporter::refusedDirectories()})
      * surface in the response text — the command answers, it does not warn
@@ -225,8 +236,21 @@ final class MemoryCommand implements HostCommand
      */
     public static function import(MemoryStore $home, string $root, string $inputText, string $args): CommandResult
     {
-        $target = strtolower(trim($args));
-        if ($target === '') {
+        // `--scope user|project|agent` is accepted in either position around
+        // the target, mirroring how `/memory add` reads its own scope flag;
+        // an unknown scope word never strips, so it falls through to the
+        // usage answer below rather than importing under a misread scope.
+        $rest = trim($args);
+        $scope = 'agent';
+        if (preg_match('/^--scope\s+(user|project|agent)\s+(.*)$/s', $rest, $m) === 1) {
+            $scope = $m[1];
+            $rest = trim($m[2]);
+        } elseif (preg_match('/^(.*?)\s+--scope\s+(user|project|agent)\s*$/s', $rest, $m) === 1) {
+            $rest = trim($m[1]);
+            $scope = $m[2];
+        }
+        $target = strtolower($rest);
+        if ($target === '' || str_starts_with($target, '--scope')) {
             return self::help($inputText, Lang::t('host.memory.usage.import'));
         }
         if ($target !== 'claude' && $target !== 'opencode') {
@@ -260,17 +284,35 @@ final class MemoryCommand implements HostCommand
         }
 
         try {
-            $importer = new ForeignMemoryImporter($home);
+            $memoryScope = match ($scope) {
+                'project' => MemoryScope::Project,
+                'user' => MemoryScope::User,
+                default => MemoryScope::Local,
+            };
+            // The default path keeps the pre-C-CTX-3.e shape: the importer
+            // writes straight into the home store's `agent` directory. A
+            // promoted scope hands the importer the SAME router `/memory add`
+            // and the `Memory` tool share, so each note files (and indexes)
+            // through one writer, not a second copy of that policy.
+            $importer = $scope === 'agent'
+                ? new ForeignMemoryImporter($home)
+                : new ForeignMemoryImporter($home, self::writer($home, $root));
             $imported = $target === 'claude'
-                ? $importer->importClaudeCode($projectRoot)
-                : $importer->importOpencode($projectRoot);
+                ? $importer->importClaudeCode($projectRoot, scope: $memoryScope)
+                : $importer->importOpencode($projectRoot, scope: $memoryScope);
             $refused = $importer->refusedDirectories();
 
             $lines = [];
             if ($imported > 0) {
                 $sentinelNote = self::writeImportSentinel($root, $sentinel, $target, $imported);
-                $lines[] = Lang::t('host.memory.import.done', ['count' => $imported, 'target' => $target])
-                    . $sentinelNote;
+                $params = ['count' => $imported, 'target' => $target];
+                if ($scope !== 'agent') {
+                    $params['scope'] = $scope;
+                }
+                $lines[] = Lang::t(
+                    $scope === 'agent' ? 'host.memory.import.done' : 'host.memory.import.done_promoted',
+                    $params
+                ) . $sentinelNote;
             } else {
                 $lines[] = Lang::t($refused === [] ? 'host.memory.import.none' : 'host.memory.import.none_refused', [
                     'target' => $target,
@@ -704,5 +746,120 @@ final class MemoryCommand implements HostCommand
             'query' => $query,
             'count' => $total,
         ]);
+    }
+
+    /**
+     * Handle `/memory export [path]` — bundle every note in both stores into
+     * ONE markdown file. Each note carries the same frontmatter fields, in
+     * the same order, that {@see MemoryStore::writeEntry()} persists, so the
+     * bundle reads back the way a store file does. This arm is READ-ONLY: no
+     * history commit, no scope mutation, and no jail escape — the path is
+     * anchored like `/export`'s, inside the project root or inside the
+     * `~/.candy-code` shelf, and the file lands mode 0600 through
+     * {@see AtomicFileWriter} because a memory bundle is the user's own
+     * words with no regeneration story.
+     */
+    private static function export(
+        MemoryStore $home,
+        string $root,
+        string $inputText,
+        string $args,
+        ?string $sessionId
+    ): CommandResult {
+        $stores = ['home' => $home];
+        $repository = self::writer($home, $root)->repository();
+        if ($repository !== null && $repository->path() !== $home->path()) {
+            $stores['repo'] = $repository;
+        }
+
+        $sections = [];
+        $total = 0;
+        foreach ($stores as $which => $store) {
+            $blocks = [];
+            foreach (['user', 'project', 'agent'] as $scope) {
+                foreach ($store->list($scope) as $entry) {
+                    $blocks[] = self::exportBlock($entry);
+                    ++$total;
+                }
+            }
+            if ($blocks !== []) {
+                $sections[] = Lang::t('host.memory.export.section.' . $which, ['path' => $store->path()])
+                    . "\n\n" . implode("\n\n", $blocks);
+            }
+        }
+        if ($total === 0) {
+            return self::respond($inputText, Lang::t('host.memory.export.none'));
+        }
+        $body = "# Candy-Code memory export\n\n" . implode("\n\n", $sections) . "\n";
+
+        $path = trim($args);
+        $owned = HomeDirectory::owned();
+        if ($path === '') {
+            if ($owned === null) {
+                return self::respond($inputText, Lang::t('host.memory.export.no_home'));
+            }
+            $target = rtrim($owned, '/') . '/' . ShareCommand::EXPORTS_SUBDIR . '/' . self::exportName($sessionId);
+        } else {
+            $probe = $path;
+            if ($owned !== null && ($probe === '~' || str_starts_with($probe, '~/'))) {
+                $probe = rtrim($owned, '/') . substr($probe, 1);
+            }
+            $target = $root === '' ? null : PathJail::resolveForCreate($root, $probe);
+            if ($target === null && $owned !== null) {
+                $shelf = rtrim($owned, '/') . '/.candy-code';
+                $underShelf = PathJail::resolveForCreate($owned, $probe);
+                if ($underShelf !== null
+                    && ($underShelf === $shelf || str_starts_with($underShelf, $shelf . '/'))) {
+                    $target = $underShelf;
+                }
+            }
+            if ($target === null) {
+                return self::respond($inputText, Lang::t('host.memory.export.outside', [
+                    'path' => $path,
+                    'exports' => ShareCommand::EXPORTS_SUBDIR,
+                ]));
+            }
+            if (is_dir($target)) {
+                $target .= '/' . self::exportName($sessionId);
+            } elseif (pathinfo($target, PATHINFO_EXTENSION) === '') {
+                $target .= '.md';
+            }
+        }
+
+        try {
+            AtomicFileWriter::write($target, $body, 0600);
+        } catch (\Throwable $e) {
+            return self::respond($inputText, Lang::t('host.memory.error', ['error' => $e->getMessage()]));
+        }
+
+        return self::respond($inputText, implode("\n", [
+            Lang::t('host.memory.export.done', ['count' => $total, 'path' => $target]),
+            '',
+            Lang::t('host.memory.export.note'),
+        ]));
+    }
+
+    /** The bundle entry for one note — a frontmatter copy of what a store file holds. */
+    private static function exportBlock(MemoryEntry $entry): string
+    {
+        $frontmatter = Yaml::dump([
+            'id' => $entry->id(),
+            'type' => $entry->type(),
+            'tags' => $entry->tags(),
+            'scope' => $entry->scope(),
+            'createdAt' => $entry->createdAt()->format(\DateTimeInterface::ATOM),
+            'modifiedAt' => $entry->modifiedAt()->format(\DateTimeInterface::ATOM),
+        ]);
+
+        return "---\n" . $frontmatter . "---\n" . $entry->content();
+    }
+
+    /** The session-stamped default file name, filesystem-safe and UTC-stamped. */
+    private static function exportName(?string $sessionId): string
+    {
+        $clean = preg_replace('/[^A-Za-z0-9_-]+/', '-', $sessionId ?? '') ?: 'session';
+        $stamp = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Ymd\THis\Z');
+
+        return 'memory-' . $clean . '-' . $stamp . '.md';
     }
 }

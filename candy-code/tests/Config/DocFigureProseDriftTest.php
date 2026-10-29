@@ -4925,12 +4925,17 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/writes every entry with `MemoryScope::(\w+)`, which `MemoryStore::normalizeScope\(\)` lands in the `(\w+)` directory/u', $doc, $scope),
+            preg_match('/defaulting to `MemoryScope::(\w+)`, which `MemoryStore::normalizeScope\(\)` lands\s+in the `(\w+)` directory/u', $doc, $scope),
             'the scope-landing sentence left its pinned shape',
         );
-        $scopeWrites = preg_match_all('/scope: MemoryScope::(\w+)/', $importer, $written);
-        self::assertGreaterThan(0, $scopeWrites, 'the importer no longer spells its scope at the construction sites the page describes');
-        self::assertSame([$scope[1]], array_values(array_unique($written[1])), 'the importer writes more than one scope — "every entry" needs rewriting alongside it');
+        $scopeWrites = preg_match_all('/\$this->note\(\s*\$(\w+),/s', $importer, $written);
+        self::assertSame(2, $scopeWrites, 'the page describes two import routes filing one note each; the call sites moved');
+        self::assertSame(['scope'], array_values(array_unique($written[1])), 'the importer notes are no longer all handed the caller\'s scope variable');
+        preg_match_all('/MemoryScope \$(\w+) = MemoryScope::(\w+)/', $importer, $defaults);
+        self::assertSame(2, count($defaults[0]), 'the page says both import entries default a handed scope; the signatures moved');
+        self::assertSame(['scope'], array_values(array_unique($defaults[1])), 'the defaulted scope parameter is not the one the call sites pass');
+        self::assertSame([$scope[1]], array_values(array_unique($defaults[2])), 'the default scope the signatures carry and the one the page states have come apart');
+        self::assertStringContainsString('$this->writer->save($content,', $importer, 'the promoted path no longer files through the shared writer the page names');
         $scopeCase = null;
         foreach (MemoryScope::cases() as $case) {
             if ($case->name === $scope[1]) {

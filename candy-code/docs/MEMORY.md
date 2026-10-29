@@ -159,7 +159,8 @@ subdirectory.
 /memory delete <id>
 /memory edit <id> <new_content>
 /memory clear --scope <scope> --confirm
-/memory import claude|opencode            one-shot import of a foreign tree
+/memory import claude|opencode [--scope <scope>] one-shot import of a foreign tree
+/memory export [path]                       bundle every note into one markdown file
 /memory log [count]                       the memory history, newest first (default 20, at most 200)
 /memory restore <commit>                  memory as it stood at <commit>, as a new commit
 ```
@@ -526,20 +527,29 @@ ceiling rather than bloating past it once each `<` costs four bytes
 tree and opencode's `.opencode/memory`, and writes into CandyCode's own store
 tagged `source:<skill-source>` — the same `SkillSource` vocabulary that badges
 imported skills and agent presets. It is **read-only by design**: the foreign
-tree is harness-managed, so there is no export direction.
+tree is harness-managed, so there is no export direction back into a foreign
+tree; `/memory export` bundles CandyCode's own stores for the user, never a
+foreign tree.
 
 **`Host\Commands\MemoryCommand::import()` constructs it behind `/memory import claude|opencode`**
-(wired in P7.S6). The importer writes every entry with `MemoryScope::Local`, which
-`MemoryStore::normalizeScope()` lands in the `agent` directory — so imported
-entries reach `/memory list agent` and `/memory search`, and, per the
-project-scope-only policy above, are **deliberately never folded into the prompt**.
-That is the real reason an import cannot crowd the prompt block: it is a *scope
-separation*, not a size limit. `MemoryBlock::capture()` reads the `project` list
-alone, so however many entries pile into `agent` the captured block is unchanged
+(wired in P7.S6). The importer writes every entry at the scope it is handed,
+defaulting to `MemoryScope::Local`, which `MemoryStore::normalizeScope()` lands
+in the `agent` directory — so an import on the default path reaches
+`/memory list agent` and `/memory search` and, per the project-scope-only policy
+above, is **deliberately never folded into the prompt**.
+That is the real reason a default import cannot crowd the prompt block: it is a
+*scope separation*, not a size limit. `MemoryBlock::capture()` reads the
+`project` list alone, so however many entries pile into `agent` the captured
+block is unchanged
 (`MemoryImportCommandTest::testImportBeyondTwelveSucceedsAndCannotTouchThePromptBlock`,
 `MemoryImportCommandTest::testRenderCapBoundsOnlyTheProjectScopeThePromptFolds`).
-There is accordingly **no entry cap on `/memory import`** and no prompt-cap clamp
-on its response — none is needed once imports and the prompt share no scope.
+There is accordingly **no entry cap on `/memory import`** on that path and no
+prompt-cap clamp on its response — none is needed once imports and the prompt
+share no scope. An explicit `--scope project|user` is the USER electing prompt
+visibility at the trigger point: the promoted notes then file through
+`MemoryWriter::save()` exactly like `/memory add` does — into the repo store,
+indexed, recalled, and folded — and the ordinary `MemoryBlock` budgets answer
+them the same way they answer any hand-written note.
 
 A project-scope write is stricter than a home one: the project store REFUSES an
 oversized note outright, while the same note filed to the home store would have
@@ -563,6 +573,23 @@ replaces `~/.claude`, and while it is set `CLAUDE_CODE_PROJECT_DIR_NAME` replace
 [`ENVIRONMENT.md`](ENVIRONMENT.md#claude-code-variables) tabulates. A relative,
 world-writable or foreign-owned `CLAUDE_CONFIG_DIR` is refused, like the derived
 home, and the refusal is named in the reply.
+
+### Exporting the store
+
+`/memory export [path]` writes ONE markdown bundle of every note in both
+stores — home and repository — grouped under a heading naming each store's
+directory, the user, project and agent scopes in that order. Each note carries
+the same frontmatter fields, in the same order, that
+`MemoryStore::writeEntry()` persists (`id`, `type`, `tags`, `scope`,
+`createdAt`, `modifiedAt`), so the bundle reads back the way a store file
+does. The command is read-only: exporting commits no history and mutates no
+scope. The path is jailed like `/export`'s — inside the project root, or
+inside the `~/.candy-code` shelf; an empty path lands in
+`~/.candy-code/exports` under a session- and UTC-stamped `memory-*.md` name —
+and the file is written mode `0600` through `AtomicFileWriter`, because a
+memory bundle is the user's own words with no regeneration story. The bundle
+deliberately includes `agent`-scope notes: what the prompt never folds, the
+user still owns.
 
 ---
 

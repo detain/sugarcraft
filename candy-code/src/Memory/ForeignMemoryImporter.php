@@ -37,6 +37,12 @@ use SugarCraft\Code\Skills\SkillSource;
  * (`.candy-code/memory/.imported-claude`) written by whoever invokes the
  * import, because only the caller knows whether a re-import was intentional.
  *
+ * Writes are caller-scoped. Every entry defaults to {@see MemoryScope::Local},
+ * the `agent` directory the prompt never folds; only an explicit `--scope`
+ * promotion at the trigger point hands a body to the
+ * {@see MemoryWriter::save()} path that makes it prompt-visible. Provenance
+ * tags ride either way.
+ *
  * WIRED INTO THE RUNTIME as of P7.S6: `Chat::memoryImport()` constructs this
  * class for the `/memory import claude|opencode` chat subcommand, surfaces the
  * refusals {@see refusedDirectories()} collects into the command response, and
@@ -105,7 +111,42 @@ final class ForeignMemoryImporter
      */
     private array $refusedDirectories = [];
 
-    public function __construct(private readonly MemoryStore $store) {}
+    /**
+     * @param MemoryStore      $store  the home store every entry lands in when
+     *                                 no router is given (the pre-C-CTX-3.e shape)
+     * @param ?MemoryWriter $writer the router `/memory` shares with the `Memory`
+     *                              tool; when set, promoted imports file through
+     *                              {@see MemoryWriter::save()} so a
+     *                              `--scope project` note lands in the repo
+     *                              store, indexed and recalled like a typed note
+     */
+    public function __construct(
+        private readonly MemoryStore $store,
+        private readonly ?MemoryWriter $writer = null,
+    ) {
+    }
+
+    /**
+     * File one imported note under the scope the caller handed.
+     *
+     * Without a router this is the plain home-store write the class shipped
+     * with; with one, the note takes the same road `/memory add` takes —
+     * {@see MemoryWriter::save()} — so the router's store choice, index mint
+     * and prompt fold apply unchanged. The router speaks the on-disk scope
+     * vocabulary, and `MemoryScope::Local` is spelled `agent` there: the same
+     * mapping {@see MemoryStore::normalizeScope()} applies. `type` rides the
+     * writer's default (`pattern`), which is what the plain write stamps.
+     */
+    private function note(MemoryScope $scope, string $content, array $tags): void
+    {
+        if ($this->writer === null) {
+            $this->store->add(content: $content, scope: $scope, tags: $tags);
+
+            return;
+        }
+
+        $this->writer->save($content, $scope === MemoryScope::Local ? 'agent' : $scope->value, tags: $tags);
+    }
 
     /**
      * What this importer refused to read, and why.
@@ -176,10 +217,18 @@ final class ForeignMemoryImporter
      *
      * @param  string      $projectRoot Absolute project path, as Claude Code slugs it.
      * @param  string|null $claudeHome  Override for `~/.claude` (tests, non-default installs).
+     * @param  MemoryScope $scope       Destination scope; the command's default is Local. An
+     *                                  explicit `--scope project|user` from the USER routes
+     *                                  through the injected writer into a prompt-visible
+     *                                  scope — that promotion is the user's own hand, taken
+     *                                  at the trigger point, not this class deciding it.
      * @return int Number of entries imported.
      */
-    public function importClaudeCode(string $projectRoot, ?string $claudeHome = null): int
-    {
+    public function importClaudeCode(
+        string $projectRoot,
+        ?string $claudeHome = null,
+        MemoryScope $scope = MemoryScope::Local
+    ): int {
         $this->refusedDirectories = [];
         $projectDirName = null;
 
@@ -249,10 +298,10 @@ final class ForeignMemoryImporter
             $meta = is_array($meta) ? $meta : [];
             $body = trim(substr($raw, strlen($m[0])));
 
-            $this->store->add(
-                content: $this->title($meta, $file) . "\n\n" . $body,
-                scope: MemoryScope::Local,
-                tags: $this->claudeTags($meta),
+            $this->note(
+                $scope,
+                $this->title($meta, $file) . "\n\n" . $body,
+                $this->claudeTags($meta),
             );
             $imported++;
         }
@@ -266,10 +315,14 @@ final class ForeignMemoryImporter
      * opencode's memory files carry no frontmatter, so the whole file is
      * imported under a title derived from its filename.
      *
-     * @param  string $projectRoot Project checkout root.
+     * @param  string      $projectRoot Project checkout root.
+     * @param  MemoryScope $scope       Destination scope, exactly as in
+     *                                  {@see importClaudeCode()}: Local keeps the
+     *                                  note out of the prompt; a promoted scope
+     *                                  routes through the injected writer.
      * @return int Number of entries imported.
      */
-    public function importOpencode(string $projectRoot): int
+    public function importOpencode(string $projectRoot, MemoryScope $scope = MemoryScope::Local): int
     {
         $this->refusedDirectories = [];
 
@@ -312,10 +365,10 @@ final class ForeignMemoryImporter
             }
             $content = Utf8Scrub::clean($content);
 
-            $this->store->add(
-                content: '# ' . basename($file, '.md') . "\n\n" . trim($content),
-                scope: MemoryScope::Local,
-                tags: [$this->sourceTag(SkillSource::Opencode)],
+            $this->note(
+                $scope,
+                '# ' . basename($file, '.md') . "\n\n" . trim($content),
+                [$this->sourceTag(SkillSource::Opencode)],
             );
             $imported++;
         }
