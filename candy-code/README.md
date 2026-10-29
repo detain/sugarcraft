@@ -554,6 +554,11 @@ taken as written. `Tab` completes the path under the cursor.
     connection, redirects and status codes are checked) and refused outright when a
     `Deny WebFetch(domain:…)` rule names its host; the model is told the page is
     untrusted data, and fence tags inside it are escaped.
+  - `@agent:<name>` — a request to delegate this turn to a sub-agent: the
+    attachment tells the model to call `Task` with `agent: "<name>"`, and the
+    run's own roster answers the name — one that is not in it is a notice, never
+    a guess, and a refusal costs the rest of the prompt nothing
+    ([`docs/AGENTS.md`](docs/AGENTS.md)).
 
   The keywords are reserved **before** any path lookup: `@diff` is the diff even
   when the project has a file named `diff`, which is still `@./diff` or `@"diff"`.

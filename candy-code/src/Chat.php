@@ -17744,9 +17744,11 @@ final class Chat implements Model
      * session's roster names, not files — the same manager `Task` and
      * `/agent use` read, so the popup can never offer a delegation the
      * mention scanner would refuse. Ranked through the SAME fuzzy seam files
-     * use ({@see MentionIndex::rankPaths()}); an empty roster (or a chat
-     * with no manager) falls back to the file list, where `@agent:x` simply
-     * resolves as a path-shaped miss like any other token.
+     * use ({@see MentionIndex::rankPaths()}); a chat with no manager, or a
+     * roster with nothing to offer, returns no rows and the menu closes —
+     * the popup promises nothing the scanner would not honour at send,
+     * where the same partial lands as {@see ContextMentions}'s refusal
+     * notice.
      *
      * @return list<array{path: string, subject: string, indices: list<int>, score: int}>
      */

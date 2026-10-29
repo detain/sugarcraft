@@ -108,6 +108,22 @@ permission question comes up in the same y/n/a modal as the main agent's,
 naming the agent that asked; this holds for parallel members too, whose
 questions are relayed through the turn one at a time.
 
+### You delegate from the prompt: `@agent:<name>`
+
+The user-side twin of the `agent` parameter. Writing `@agent:reviewer …` in a
+prompt attaches a directive for that one turn — the model is told the user
+asks it to delegate this to agent `reviewer` via the `Task` tool — and the
+model still makes the call itself, under the same gates and narrowing that
+judge every other delegation. Names answer from THIS run's roster (what
+`/agents <name>` describes): a name that is not in it is a notice, never a
+guess, so no neighbouring agent gets picked silently, and a refusal costs the
+prompt nothing else — its other mentions attach as usual. Mid-typing,
+`@agent:` opens a popup of the roster names in the TUI, and the same popup in
+the web composer reads the roster the launch already fetched. The bare
+`@agent` without a colon is not a keyword — like `@mcp:`, only the colon form
+is reserved, because `@agent` alone is a path far more often than a
+delegation. Headless `-p` runs resolve the same form from the launch's roster.
+
 ### Parallel and nested runs
 
 Several `Task` calls in one assistant message run **in parallel**, each in its

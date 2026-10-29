@@ -242,7 +242,9 @@ watch(
         }
         if (
             partial === null ||
-            (!props.searchFiles && !props.searchMcpResources)
+            (!props.searchFiles &&
+                !props.searchMcpResources &&
+                !props.agentRoster)
         ) {
             files.value = [];
             mcpMentions.value = [];

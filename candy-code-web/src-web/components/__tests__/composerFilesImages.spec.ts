@@ -199,13 +199,18 @@ describe('Composer @search debounce (WEB-5-P3 client half)', () => {
 })
 
 describe('Composer @agent popup (C-AGT-4.d)', () => {
+  // Each row is two sibling spans (keyword + description); the DOM text runs
+  // them together, so join per span to assert the row's two halves at once.
+  const label = (li: { findAll: (selector: string) => Array<{ text(): string }> }) =>
+    li.findAll('span').map((span) => span.text()).join(' ')
+
   it('screens the launch roster on an @agent: partial and Enter inserts the keyword', async () => {
     const agentRoster = () => ['reviewer', 'researcher', 'tester']
     const searchFiles = vi.fn(async () => ['src/a.rs'])
     const wrapper = mountComposer({ agentRoster, searchFiles })
     await typeInto(wrapper, '@agent:res')
     const items = wrapper.findAll('[data-testid="agent-suggestions"] li')
-    expect(items.map((li) => li.text())).toEqual(['agent:researcher delegate this prompt'])
+    expect(items.map(label)).toEqual(['agent:researcher delegate this prompt'])
     expect(searchFiles).not.toHaveBeenCalled()
     await wrapper.find('[data-testid="composer-input"]').trigger('keydown', { key: 'Enter' })
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['@agent:researcher '])
@@ -217,7 +222,7 @@ describe('Composer @agent popup (C-AGT-4.d)', () => {
     const wrapper = mountComposer({ agentRoster })
     await typeInto(wrapper, '@agent:')
     const items = wrapper.findAll('[data-testid="agent-suggestions"] li')
-    expect(items.map((li) => li.text())).toEqual([
+    expect(items.map(label)).toEqual([
       'agent:researcher delegate this prompt',
       'agent:reviewer delegate this prompt',
       'agent:tester delegate this prompt',
@@ -230,11 +235,11 @@ describe('Composer @agent popup (C-AGT-4.d)', () => {
 
   it('an unmatched partial hands the line back to the file search, as @mcp: does', async () => {
     const agentRoster = () => ['reviewer']
-    const searchFiles = vi.fn(async (query: string) => (query === '@agent:nope' ? ['nope.txt'] : []))
+    const searchFiles = vi.fn(async (query: string) => (query === 'agent:nope' ? ['nope.txt'] : []))
     const wrapper = mountComposer({ agentRoster, searchFiles })
     await typeInto(wrapper, '@agent:nope')
     expect(wrapper.find('[data-testid="agent-suggestions"]').exists()).toBe(false)
-    expect(searchFiles).toHaveBeenCalledWith('@agent:nope')
+    expect(searchFiles).toHaveBeenCalledWith('agent:nope')
     expect(wrapper.find('[data-testid="file-suggestions"]').exists()).toBe(true)
   })
 
