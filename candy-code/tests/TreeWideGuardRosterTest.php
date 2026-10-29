@@ -698,6 +698,9 @@ final class TreeWideGuardRosterTest extends TestCase
         // sweepChildHome() empties the 0700 sandbox HOME the ISS-125 locale
         // launch made (however deep the child wrote) before removing it.
         'LangLaunchLocaleTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
+        // C-MCP-3.d: tearDown() empties the mcp-background registry the
+        // test's own forked child created under its sandboxed HOME.
+        'MCP/McpBackgroundCallTest.php' => ['scandir($registry)'],
         'MCP/McpClientTest.php' => ['glob($this->tempDir.\'/*\')'],
         // W4 (WEB-3a): purgeTree() in tearDown() empties the sys_get_temp_dir()
         // sandbox the test itself built (fake HOME, project dir, session store).
