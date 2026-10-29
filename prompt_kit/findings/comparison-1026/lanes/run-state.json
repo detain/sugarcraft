@@ -142,16 +142,6 @@
  ],
  "extra_agents": 1,
  "inflight": {
-  "C-AGT-4.b": {
-   "base": "d3d4b54f4",
-   "branch": "cc/C-AGT-4.b",
-   "note": "build c4fb3580f 17f +1002/-6 (PRIMARY AGT-5.b palette-collision check in review); DUR carry PrimaryAgentSwitchTest; seams: no serve-dispatch consumer, typed-mid-turn generic notice above effect door",
-   "round": 1,
-   "session": "ses_e7a8a7394ffePeSfbOVb7dTp87",
-   "stage": "review",
-   "tip": "c4fb3580f",
-   "worktree": "/home/sites/cc-cmp-C-AGT-4.b"
-  },
   "C-AGT-6.e": {
    "base": "e91eb1d47",
    "branch": "cc/C-AGT-6.e",
@@ -223,15 +213,6 @@
    "session": "ses_e7a8129e1ffecp4Ki68eVZ0SBJ",
    "stage": "build",
    "worktree": "/home/sites/cc-cmp-C-SEC-6.d"
-  },
-  "C-SES-7.f": {
-   "base": "e91eb1d47",
-   "branch": "cc/C-SES-7.f",
-   "note": "attach server-slash + foreign-turn feed; [chat:dispatchCommand,subscriptions] regions; turnId-keyed buffer law; launch at vacancy",
-   "round": 0,
-   "session": null,
-   "stage": "queued",
-   "worktree": "/home/sites/cc-cmp-C-SES-7.f"
   }
  },
  "late_rulings": [
@@ -271,7 +252,7 @@
   "CTX-3.d-r2",
   "AGT-5.d-fix"
  ],
- "master_tip": "40e8de2fd",
+ "master_tip": "5d3b47f05",
  "next_fill_queue": [
   "C-MCP-4.d (W23, design-mcp.md)"
  ],
@@ -348,9 +329,9 @@
   "BootstrapLaunchFormatConstantsTest:1287 PAGE_QUOTES (foreign, batch-8-innocent)"
  ],
  "status": "RUNNING",
- "tick": "329-batch14-welded+pruned (weld 40e8de2fd; count 215; W20 findings->wave fixer owed on master; fleet: b14 popped, 9 live + 1 queued)",
- "tip": "40e8de2fd",
- "updated": "2026-10-28",
+ "tick": "330-batch15-welded (C-AGT-4.b + C-SES-7.f popped from inflight, count 215->217; weld-15: picks 5e30f5e94+5d3b47f05, cure 3a044bc91, meta atop; lead resync reconciles main-tree run-state M + stamps final tip; no push)",
+ "tip": "5d3b47f05",
+ "updated": "2026-10-29",
  "wave_loops": {
   "1": "closed r2 CLEAN",
   "16": {
@@ -1160,6 +1141,7 @@
   "C-AGT-3.a",
   "C-AGT-3.b",
   "C-AGT-4.a",
+  "C-AGT-4.b",
   "C-AGT-5.a",
   "C-AGT-5.b",
   "C-AGT-5.c",
@@ -1281,6 +1263,7 @@
   "C-SES-6.d",
   "C-SES-7.a",
   "C-SES-7.e",
+  "C-SES-7.f",
   "C-SES-8.c",
   "C-SES-8.f",
   "C-SES-9.a",
@@ -1367,7 +1350,7 @@
   "P-TABS.g",
   "P-TABS.h"
  ],
- "welded_count": 215,
+ "welded_count": 217,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
  "welder_sessions": {
@@ -1408,5 +1391,6 @@
   },
   "scope": "owner directive @197@/@1108@: W10 loop + W11-W15 fully welded + wave loops closed; W16 band finished + welded under this lead per owner extension; W17+ builders NEVER started",
   "this_run": "welded 100 -> 161; waves closed W10,W11,W12,W13,W14,W15 (W14 96d36db45, W15 15046565a)"
- }
+ },
+ "batch15_note": "b15 welded 2026-10-29 off 6742a2ad3: c4fb3580f->5e30f5e94 (C-AGT-4.b /agent use + Alt+A primary cycle; zero-conflict, C-AGT-5.b/5.c collision auto-merged BOTH intents; gates 11T/35A + 65T/272A + 265T/3152A EXACT vs REVIEW-1; DUR mint PrimaryAgentSwitchTest 11T/0.51) + 31691640f->5d3b47f05 (C-SES-7.f attached-window server commands + foreign-turn feed; DUR mints x2 5T/2.03 + 3T/1.77; WELD-CURE 3a044bc91 ATTACH_TOKEN -> ACCEPTED_CONST_DUPLICATION, merged-tree DuplicatedTestHelperDrift catch lane+review missed, guard green 14T/198A; gates 8T/74A + 26T/201A(1F standing) + 52T/652A + family 129T/8994A/3F standing-only). Generators all --check rc0; no regen/dist (zero protocol/web-src). Foreign standings recorded not touched: MemoryPromptWiring null-$seen E, ForeignAgentPreset SchedulesCommand roster, OneSidedHomeSandbox CTX-5.a x2 rows, SwallowingCatch MainWorktreeTest x2 (fixer live in main tree). Figure pair + \u00a73 wave marks = battery/wave-loop duty. welded 217; push still owed at wave close."
 }

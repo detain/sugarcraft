@@ -2154,7 +2154,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 
 - Chat.php region claims: C-AGT-4.b (applyCommandResult, ctor, handleAgentsCommand, key dispatch)
 
-#### C-AGT-4.b — `/agent use`, Alt+A cycle, TUI badge, serve effect
+#### ✅ c4fb3580f C-AGT-4.b — `/agent use`, Alt+A cycle, TUI badge, serve effect (pick c4fb3580f -> 5e30f5e94, zero-conflict on master 6742a2ad3 — the C-AGT-5.b/5.c palette/primary-agent collision the lead flagged auto-merged; Chat.php holds BOTH arms (handleAgentsCommand/cyclePrimaryAgent + SchedulesCommand write); DUR row minted PrimaryAgentSwitchTest 11T/0.51s; batch-15)
 - **Item:** C-AGT-4 (sources: GAP-AGT-01/02) · gap · effort M
 - **What:** `/agent use <preset>` and `/agent use default` become a verb of `AgentsCommand`/`AgentsHostCommand`, returning a new `CommandEffect::setPrimaryAgent(?string)`. Chat's `applyCommandResult` arm applies it through `PrimaryAgent` …
 - **Files — create:** none
@@ -3010,7 +3010,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-7.b`
 
-#### C-SES-7.f — `attach` runs server slash commands and follows foreign turns
+#### ✅ 31691640f C-SES-7.f — `attach` runs server slash commands and follows foreign turns (pick 31691640f -> 5d3b47f05, zero-conflict; DUR rows minted AttachRemoteCommandsTest 5T/2.03s + AttachForeignTurnTest 3T/1.77s; weld-cure 3a044bc91 rosters ATTACH_TOKEN in the duplication polity (merged-tree DuplicatedTestHelperDrift catch, green 14T/198A); batch-15)
 - **Item:** C-SES-7 (sources: GAP-WEB-N5) · gap · effort M
 - **What:** **Today.** An attached window runs slash commands on its own copy of the transcript and shows another client's turn only on re-attach (`docs/SERVER.md:1011-1014`). **Server-side commands.** When the backend is a `RemoteBackend`, …
 - **Files — create:** `candy-code/src/App/RemoteFeedPumpMsg.php`, `candy-code/tests/Server/AttachRemoteCommandsTest.php`, `candy-code/tests/Server/AttachForeignTurnTest.php`

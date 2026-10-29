@@ -1,0 +1,23 @@
+### C-SES-7.f — `attach` runs server slash commands and follows foreign turns
+- item: C-SES-7 (sources: GAP-WEB-N5)
+- kind: gap · effort M
+- approach:
+  - **Today.** An attached window runs slash commands on its own copy of the transcript and shows another client's turn only on re-attach (`docs/SERVER.md:1011-1014`).
+  - **Server-side commands.** When the backend is a `RemoteBackend`, `Chat::dispatchCommand()` (`:11256`) routes a `/name` through `command.exec` whenever the cached `command.list` (`RemoteSessionHost::serverCommands()`, fetched once after `hello`) says `runsIn: "server"`. The reply rows render the same way `runHostCommand()` results do.
+  - **Foreign turns.**
+    - `RemoteBackend` keeps a persistent listener (`host->onEvent`) outside `runTurn()`, which buffers `turn.started`, `assistant.delta` and `turn.completed` from turns it did not start.
+    - `Chat::subscriptions()` declares a `RemoteFeedPumpMsg` tick while attached.
+    - The pump folds that buffer into history.
+  - **Docs.** Flip the SERVER.md paragraph.
+- files.create: `candy-code/src/App/RemoteFeedPumpMsg.php`, `candy-code/tests/Server/AttachRemoteCommandsTest.php`, `candy-code/tests/Server/AttachForeignTurnTest.php`
+- files.modify: `candy-code/src/Backend/RemoteBackend.php` (the persistent foreign-turn inbox), `candy-code/src/Host/RemoteSessionHost.php` (serverCommands()), `candy-code/src/Chat.php` (dispatchCommand(): the remote arm; subscriptions()), `candy-code/src/Chat/Handlers/HandlesSessionSurface.php` (the RemoteFeedPumpMsg arm), `candy-code/docs/SERVER.md` (`:1011-1014`)
+- tests: create:
+  - `candy-code/tests/Server/AttachRemoteCommandsTest.php`: `/compact` typed in an attached window executes server-side; a client-only command still runs locally;
+  - `candy-code/tests/Server/AttachForeignTurnTest.php`: a second client's turn appears in the attached window without re-attaching.
+- docs/guards: SERVER.md prose; `ServerProtocolDocumentationDriftTest` (no roster change)
+- serialized: [chat:dispatchCommand,subscriptions] [hot:candy-code/src/Chat/Handlers/HandlesSessionSurface.php] [docs:SERVER.md]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: Deltas of a foreign turn must not interleave with the window's own queued turn. Key the buffer by `turnId`.
+

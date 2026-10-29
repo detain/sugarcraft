@@ -174,6 +174,7 @@ candy-code/tests/Permissions/BashPermissionPromptTest.php	2.064	21
 candy-code/tests/Host/ServedSkillSlashTest.php	2.05	7
 candy-code/tests/TtyStreamArgumentCensusTest.php	2.044	46
 candy-code/tests/App/AppSkillDispatchTest.php	2.041	26
+candy-code/tests/Server/AttachRemoteCommandsTest.php	2.03	5
 candy-code/tests/Chat/RewindFilesTest.php	2.025	11
 candy-code/tests/Config/DocFigureProseDriftTest.php	2.018	89
 candy-code/tests/Cli/BootstrapTest.php	2.017	27
@@ -194,6 +195,7 @@ candy-code/tests/Host/WebTwoHostCommandsTest.php	1.776	16
 candy-code/tests/Chat/UndoRefusalsTest.php	1.773	8
 candy-code/tests/Context/GlobDialectDifferentialTest.php	1.771	13
 candy-code/tests/Host/Commands/CommitHostCommandTest.php	1.770	7
+candy-code/tests/Server/AttachForeignTurnTest.php	1.77	3
 candy-code/tests/Agents/AgentWorkerPoolCancelTreeTest.php	1.766	3
 candy-code/tests/Host/SessionHostCommandsTest.php	1.765	17
 candy-code/tests/Integration/SystemPromptWiringTest.php	1.763	14
@@ -430,6 +432,7 @@ candy-code/tests/ClaudeCodeMcpClientTest.php	0.521	21
 candy-code/tests/Session/SessionEventsTableTest.php	0.520	7
 candy-code/tests/Cli/AppendSystemPromptTest.php	0.52	18
 candy-code/tests/Share/ShareStoreTest.php	0.519	14
+candy-code/tests/Chat/PrimaryAgentSwitchTest.php	0.51	11
 candy-code/tests/Server/WsUpgradeTest.php	0.505	7
 candy-code/tests/Agents/WorktreeManagerReleaseTest.php	0.501	6
 candy-code/tests/Acp/AcpSessionLoadTest.php	0.500	6
