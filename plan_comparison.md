@@ -2477,7 +2477,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ext.md` → `### C-EXT-3.b`
 
-#### C-EXT-3.d — `/agents new` drafts, `/agents accept` promotes
+#### ✅ f227b2b56 C-EXT-3.d — `/agents new` drafts, `/agents accept` promotes (picks b1c24fa69+1d8e9c906 era: f8b027ce5+f227b2b56; cure folded into f227b2b56; weld-cure bff8919ca on lane 2 roster)
 - **Item:** C-EXT-3 (sources: GAP-AGT-07) · gap · effort M
 - **What:** **Why the GAP's plan fails.** The GAP proposes a canned prompt that Writes `.candy-code/agents/<name>.md`. `ProtectFilesHook::WRITE_ONLY_PATTERNS` (`ProtectFilesHook.php:244`) denies that path outright, because a preset's …
 - **Files — create:** `candy-code/src/Host/Commands/NewAgentPrompt.php`

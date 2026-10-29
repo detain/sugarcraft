@@ -1,0 +1,9 @@
+# C-EXT-3.d WELD (batch-9, 2026-10-28)
+
+- Picks: b1c24fa69 -> f8b027ce5, 1d8e9c906 -> 39e568d63, amended to f227b2b56 folding the step-local WELD-CURE (final; §4 cites f227b2b56).
+- WELD-CURE (folded): 1d8e9c906's AgentsNewAcceptTest docblock claimed deleting the Chat intercept reddens "both legs below together" — FALSE under mutation (only the positive turn+prompt leg reddens; the negative plain-`new` leg polices the route boundary, stays green). Comment truth-fixed in place; the fixer's 2 Chat pins untouched. r2 CLEAN 0C/0M/1 step-local MINOR per run-state note.
+- Disk delta: REVIEW-2.md on disk is from the OLD pre-rebuild chain (0da862e69/90e206721 era, FINDINGS/ghost-closeout report); the rebuilt b1c24fa69+1d8e9c906 chain's r2/r3 CLEAN verdicts live only in run-state + REPORT r3 addendum. Stale REVIEW-2 committed as-is with this note; canonical-review delta recorded.
+- NEW red caught in the merged window (attributed to LANE 2, cured separately): combo filter answered 82T/1415A/4F — the 4th failure was ReadPathCensusTest (WebSearch.php|fopen roster row orphaned when eaae19bdc moved the sink to SearchBackends.php; lane 2's own gate list lacked ReadPathCensus). Cured as weld-cure bff8919ca (re-keyed row, verdict prose kept + moved-sink note) — ReadPathCensusTest then 19T/668A green and the window returned to the expected 82T/1415A/3F standing-foreign trio (ChatHostLangCatalogue, CliLangCatalogue sort, FAPW no-source-reads-agents-permissionMode; +7A vs the 1408A-era combo = merged-era doc/roster drift, no new identities).
+- Gates on merged tree: AgentsNewAcceptTest 21T/108A EXACT after cure; combo above per REVIEW-2-era expectation; gen-command-docs --check rc0 (lane committed its COMMANDS.md regen).
+- DUR: MINTED tests/Host/Commands/AgentsNewAcceptTest.php 4.926/21; asc-violations 4 held (1580 rows).
+- Chat.php/lang/en.php merges auto-clean against lane 2's picks (disjoint regions; lane order by design).

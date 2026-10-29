@@ -71,6 +71,7 @@ candy-code/tests/Providers/ServiceTierTest.php	4.981	29
 candy-code/tests/Cli/InstallScriptTest.php	4.959	13
 candy-code/tests/Integration/ParallelToolCallsTest.php	4.956	27
 candy-code/tests/Backend/TaskSpendPropagationTest.php	4.927	13
+candy-code/tests/Host/Commands/AgentsNewAcceptTest.php	4.926	21
 candy-code/tests/Backend/EngineBackendTest.php	4.923	35
 candy-code/tests/Tools/PtyRunToolTest.php	4.919	13
 candy-code/tests/Tools/Web/Search/SearchBackendsTest.php	4.902	9
