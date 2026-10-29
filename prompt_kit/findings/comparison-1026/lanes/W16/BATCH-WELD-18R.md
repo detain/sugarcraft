@@ -34,11 +34,17 @@ Zero lane picks landed ⇒ merged tree code == 54da7d43d (already gated 2x by 18
 ## Duty 5: meta
 Close commit d68c2e043 (`W22: close wave`) carries §3 flip + lanes/W22/WAVE-REVIEW-1.md + run-state (waves_closed=[1..22]; ONLY that key changed vs lead working copy — proven by JSON-tree diff). Meta commit (this + tip stamp + batch18r_note) follows: welded UNCHANGED at 241 (no landings; see phantom-disclosure — lead owes the 241→240 call), tip := d68c2e043, inflight/notes/weld_pending verbatim from lead copy, updated := now.
 
-## Duty 6: push (wave close)
-(see push+prune ledger appended at batch close)
+## Duty 6: push (wave close) — EXECUTED
+ls-remote pre: 54da7d43d == local base; fetch; FF-capable proven; pushed 54da7d43d..0a9e206a5; ls-remote post == local master == 0a9e206a5fd768573108da9041528f1a05 (W22 close = wave close, push law satisfied).
 
 ## Duty 7: prune ledger
 - cc/C-WEB-5.a, cc/C-SES-9.b, cc/C-TOOL-4.a: branch+worktree ALREADY ABSENT on disk (nothing to prune; 18q pruned 4/4 trio-era per its log).
-- weld-18p: (status after cherry proof)
-- cc/C-SES-8.a: (status after porcelain check)
+- weld-18p: cherry EMPTY + ancestor-of-master PROVEN + worktree clean -> worktree removed, branch -D (was 52532632f).
+- cc/C-SES-8.a: cherry EMPTY + ancestor-of-master PROVEN (tip d83e4eed4 was an old weld-18c close-record commit) + porcelain clean -> worktree removed, branch -D (was d83e4eed4).
 - cc/C-SEC-7.a: KEPT (in review — fresh r1 owed). All other live lane worktrees untouched.
+
+## Final ledger (this commit = git rev-parse HEAD after commit; self-hash law)
+- master chain this batch: 54da7d43d -> d68c2e043 (W22: close wave) -> 0a9e206a5 (weld: batch-18r meta) -> <push+prune ledger follow-up>.
+- authors: %ae==%ce==detain@interserver.net per commit (separate greps), zero Co-Authored trailers, no caliber run (hook absent), suite-figure.json/durations.tsv untouched, dist untouched (no web moves), lead inflight folded verbatim (backup /tmp/opencode/lead-1029/run-state-pre-ff18r.json, sha1 b8e5648c9... re-verified unchanged pre-ff).
+- welded_count HELD 241 with the C-WEB-5.a phantom INSIDE the list flagged for lead decision (I add-only per brief).
+- weld-18r branch+worktree self-pruned after final push (tip == master).
