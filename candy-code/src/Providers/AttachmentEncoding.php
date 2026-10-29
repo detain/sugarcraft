@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Providers;
 
+use SugarCraft\Code\Attachment;
+use SugarCraft\Code\Attachments\FileMentions;
 use SugarCraft\Code\Messages\UserMessage;
 
 /**
@@ -30,10 +32,13 @@ use SugarCraft\Code\Messages\UserMessage;
  *
  * CTX-2 adds the Anthropic family's `document` block for PDF attachments;
  * capability is decided the same upstream way by
- * {@see ProviderInterface::supportsDocuments()}. The OpenAI/Gemini/Bedrock
- * encoders decline the block this slice - a document reaching one of those
- * anyway (hand-built past the gate) is named in the text, never dropped and
- * never inlined as bytes.
+ * {@see ProviderInterface::supportsDocuments()}. C-TOOL-2.e opens the native
+ * legs one wire at a time: Bedrock Converse now carries a well-formed PDF as
+ * a `document` block (format `pdf`, RAW bytes like the image leg, and a name
+ * shaved to the Converse charset). What the wire cannot carry - a forged or
+ * truncated PDF, one past the inbound capture ceiling, and every document on
+ * the still-declining OpenAI/Gemini encoders - is named in the text, never
+ * dropped and never inlined as bytes.
  */
 final class AttachmentEncoding
 {
@@ -160,15 +165,17 @@ final class AttachmentEncoding
     }
 
     /**
-     * Bedrock Converse: a text block, then one `image` block per image. The
-     * bytes go RAW - the AWS SDK base64-encodes a blob member itself, so
-     * encoding here would send the model base64 of base64.
+     * Bedrock Converse: a text block, then one `image` block per image, then
+     * one `document` block per carryable PDF (C-TOOL-2.e). The bytes go RAW -
+     * the AWS SDK base64-encodes a blob member itself, so encoding here would
+     * send the model base64 of base64.
      *
      * @return list<array<string, mixed>>
      */
     public static function bedrockBlocks(UserMessage $message): array
     {
-        $blocks = [['text' => self::withDeclinedDocuments($message->wireText(), $message)]];
+        [$carried, $refused] = self::partitionDocuments($message);
+        $blocks = [['text' => self::nameUndelivered($message->wireText(), $refused)]];
         foreach ($message->images() as $image) {
             $format = self::bedrockFormat((string) $image->mimeType);
             if ($format === null) {
@@ -181,6 +188,13 @@ final class AttachmentEncoding
                 continue;
             }
             $blocks[] = ['image' => ['format' => $format, 'source' => ['bytes' => (string) $image->data]]];
+        }
+        foreach ($carried as $document) {
+            $blocks[] = ['document' => [
+                'format' => 'pdf',
+                'name' => self::bedrockDocumentName($document->name()),
+                'source' => ['bytes' => (string) $document->data],
+            ]];
         }
 
         return $blocks;
@@ -198,10 +212,75 @@ final class AttachmentEncoding
     }
 
     /**
+     * C-TOOL-2.e split for the native document wires: documents whose bytes
+     * are an actual PDF within the inbound capture ceiling become blocks,
+     * everything else is named. The declared mime is ignored on purpose -
+     * the bytes decide the presentation, exactly as the tool-result leg's
+     * re-sniff: forged PDF bytes under any mime name themselves instead of
+     * poisoning the block, and the block itself always spells its own
+     * `application/pdf` / `format => pdf`.
+     *
+     * @return array{0: list<Attachment>, 1: list<Attachment>}
+     */
+    private static function partitionDocuments(UserMessage $message): array
+    {
+        $carried = [];
+        $refused = [];
+        foreach ($message->documents() as $document) {
+            $bytes = (string) $document->data;
+            if (str_starts_with($bytes, '%PDF-') && strlen($bytes) <= FileMentions::DOCUMENT_MAX_BYTES) {
+                $carried[] = $document;
+            } else {
+                $refused[] = $document;
+            }
+        }
+
+        return [$carried, $refused];
+    }
+
+    /**
+     * The never-silent naming line for documents a native wire cannot carry.
+     * Same shape as {@see withDeclinedDocuments()}, true wording: the wire
+     * does build document blocks - these bytes are what it refuses.
+     *
+     * @param list<Attachment> $refused
+     */
+    private static function nameUndelivered(string $text, array $refused): string
+    {
+        if ($refused === []) {
+            return $text;
+        }
+
+        $line = '[Document attachment '
+            . implode(', ', array_map(static fn (Attachment $d): string => $d->name(), $refused))
+            . ' was not sent: the wire carries only well-formed PDFs up to '
+            . number_format(FileMentions::DOCUMENT_MAX_BYTES) . ' bytes as blocks.]';
+
+        return $text === '' ? $line : $text . "\n\n" . $line;
+    }
+
+    /**
+     * Converse wants the document name to match `[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}`;
+     * a filename is not that, so it is shaved into the charset: every foreign
+     * byte becomes `_`, a leading `_`/`-` is trimmed (first character must be
+     * alphanumeric), and the result is capped at 64. An empty outcome falls
+     * back to `document`.
+     */
+    private static function bedrockDocumentName(string $name): string
+    {
+        $safe = ltrim(substr((string) preg_replace('/[^a-zA-Z0-9_-]/', '_', $name), 0, 64), '-_');
+
+        return $safe === '' ? 'document' : $safe;
+    }
+
+    /**
      * CTX-2: this wire family does not build document blocks. A sendable
      * PDF can only reach here past the upstream capability gate (a
      * hand-built message), and the never-silent rule says such an arrival
      * is named, not dropped - the bytes are never inlined as text either.
+     * C-TOOL-2.e keeps this leg for the wires that still decline; the
+     * native legs name only their refused documents, through
+     * {@see nameUndelivered()}.
      */
     private static function withDeclinedDocuments(string $text, UserMessage $message): string
     {

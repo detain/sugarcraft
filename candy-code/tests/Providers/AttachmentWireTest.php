@@ -158,15 +158,14 @@ final class AttachmentWireTest extends TestCase
         );
     }
 
-    public function testTheDeclinedFamiliesNameTheDocumentAndNeverInlineIt(): void
+    public function testDocumentsBecomeBlocksOnlyWhereTheWireCarriesThem(): void
     {
         $message = self::attachedWithPdf();
 
         $openAi = json_encode(AttachmentEncoding::openAiContent($message), JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
         $gemini = json_encode(AttachmentEncoding::geminiParts($message), JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
-        $bedrock = json_encode(AttachmentEncoding::bedrockBlocks($message), JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
 
-        foreach (['openai' => $openAi, 'gemini' => $gemini, 'bedrock' => $bedrock] as $family => $wire) {
+        foreach (['openai' => $openAi, 'gemini' => $gemini] as $family => $wire) {
             $this->assertStringContainsString(
                 '[Document attachment spec.pdf was not sent: this wire does not accept PDF document blocks.]',
                 $wire,
@@ -175,6 +174,14 @@ final class AttachmentWireTest extends TestCase
             $this->assertStringNotContainsString(base64_encode(self::PDF), $wire, $family . ': no document part is built');
             $this->assertStringNotContainsString('%PDF-1.7', $wire, $family . ': the bytes are never inlined as text');
         }
+
+        // C-TOOL-2.e: Converse carries the same PDF as a `document` block -
+        // with RAW bytes, like the image leg, not a base64 of base64.
+        $bedrock = json_encode(AttachmentEncoding::bedrockBlocks($message), JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
+        $this->assertStringContainsString('"format":"pdf"', $bedrock, 'bedrock: the document block is built');
+        $this->assertStringContainsString('spec_pdf', $bedrock, 'bedrock: the name is shaved to the Converse charset');
+        $this->assertStringContainsString('%PDF-1.7', $bedrock, 'bedrock: blob members take raw bytes');
+        $this->assertStringNotContainsString(base64_encode(self::PDF), $bedrock, 'bedrock: no double-encoding');
 
         // The string path (no images at all) names it too.
         $textOnly = AttachmentEncoding::openAiContent(

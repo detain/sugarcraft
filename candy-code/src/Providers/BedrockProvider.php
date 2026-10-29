@@ -444,6 +444,19 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
     }
 
     /**
+     * C-TOOL-2.e: document blocks ride the same family rule as images - see
+     * {@see supportsVision()} for the allow-list, and
+     * {@see AttachmentEncoding::bedrockBlocks()} for the `document` block
+     * shape (format `pdf`, RAW bytes, name shaved to the Converse charset).
+     * Every family that reads a Converse image block reads a document one;
+     * sending either to a family that does not is the same ValidationException.
+     */
+    public function supportsDocuments(): bool
+    {
+        return $this->supportsVision();
+    }
+
+    /**
      * Audit 15b-15: whether Converse may be sent this model an `image` block
      * ({@see AttachmentEncoding::bedrockBlocks()}). Every Claude from the 3
      * generation on reads images, as do Nova Lite/Pro/Premier; Claude 2,
@@ -454,15 +467,6 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
      * image as a named text placeholder plus a transcript notice
      * ({@see \SugarCraft\Code\Backend\EngineBackend::toTypedMessages()}).
      */
-    public function supportsDocuments(): bool
-    {
-        // CTX-2 DECLINES Bedrock for this slice: Converse document blocks
-        // have their own shape (`format => 'pdf'`) and the wire here builds
-        // only image blocks, so a Claude-on-Bedrock model gets the PDF
-        // withheld with a notice rather than a part this encoder cannot make.
-        return false;
-    }
-
     public function supportsVision(): bool
     {
         $family = self::family($this->defaultModel);
