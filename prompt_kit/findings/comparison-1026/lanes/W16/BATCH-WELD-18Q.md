@@ -33,6 +33,7 @@ STATUS: STARTED. Backgrounded welder. SPAWN LAW: obeyed (I am backgrounded; I ne
   - CTX-4.e row ✅ b2943d1cb + gates/DUR/r-cite-vs-run note. TOOL-2.e row ✅ 618c093da + gates/DUR/quartet-exact.
 - [x] W21 wave-close: WAVE-REVIEW-2.md VERDICT CLEAN (0C/0M) on disk; cures 77072a840/f8f9e6a18/d63163d87 proven ancestors of master; §3 row flipped ✅ with dated loop note; WAVE-REVIEW-2.md evidence staged (WAVE-REVIEW-1 + FIX-MASTER-1 already committed by lead).
 - [x] run-state fold (from freshest committed copy == main-tree working copy at 410f5ac58, file NOT dirty in main tree): waves_closed += 21, wave_loops.21 closed, tick batch18q, batch18q_note with 7 disclosures. KEY DECISION — welded_count HELD at 240, spawn's "(243)" NOT applied: lead's own park already moved CTX-4.e + TOOL-2.e into welded (238->240) and MCP-4.c rode the 10-27 count; all 3 present exactly once; +3 = double-count. Deviation disclosed in run-state + report. inflight = lead's 7 keys verbatim (TOOL-2.e key already absent). weld_pending {} already.
-- [ ] ff main tree
-- [ ] push
-- [ ] prune
+- [x] meta commit: content 1c67ca96e (cat-file OK; %ae/%ce separate greps 1/1 detain; zero Co-Authored; 5 files: plan §3+§4, tsv+3, run-state, WAVE-REVIEW-2.md, batch log) then stamp commit 'weld-18q: C-MCP-4.c + C-CTX-4.e + C-TOOL-2.e + W21 wave-close — meta 1c67ca96e' setting master_tip=tip=1c67ca96e + this log line.
+- [ ] ff main tree (re-check lead dirt immediately pre-ff per FOLD law; cp-backup lead run-state to /tmp/opencode/lead-1029/ first)
+- [ ] push (origin must still be c72edd4a1 else STOP-no-push)
+- [ ] prune (cherry proofs per lane, worktrees C-MCP-4.c/C-CTX-4.e/C-TOOL-2.e/weld-18q + branches, audit weld-18/18d/18e ancestors; NEVER touch CTX-4.d/SES-7.b/SES-8.a/SES-9.b/TOOL-4.a/WEB-5.a/PRV-3.d live worktrees)

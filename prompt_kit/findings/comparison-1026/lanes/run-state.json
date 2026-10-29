@@ -225,7 +225,7 @@
     "CTX-3.d-r2",
     "AGT-5.d-fix"
   ],
-  "master_tip": "10950ade2",
+  "master_tip": "1c67ca96e",
   "next_fill_queue": [],
   "next_lead": {
     "gates": "scheduler free=0 remaining=195 late=False; blocked=['C-AGT-5.b'] owner-gated delete-cross-root ruling (options (a) root-scope guard (b) keep+document) \u2014 strings-only entries law; W14 list re-derive from plan \u00a73",
@@ -342,7 +342,7 @@
   ],
   "status": "RUNNING",
   "tick": "batch18q-welded (11 zero-conflict picks off 410f5ac58: C-MCP-4.c eb3a17dcc/628a5abf3/68d6b28fa -> 71d977594/827f20e5c/eea5615e3 (r3 CLEAN); C-CTX-4.e 39073913e/6d7072876/98470d6de -> f7d312948/b515d2e2c/b2943d1cb (r2 CLEAN); C-TOOL-2.e 1a0d724b3/fe49217ac/e2d8c01e5/056298ca7/9a20c6632 -> c47ab4133/b4156cc76/8d421ca15/3ab554a64/618c093da (r3 CLEAN 0C/0M/1nit); DUR rows x3 minted tsv 1627->1630; protocol ServerContext touched by 827f20e5c but gen-protocol-schema --check 'up to date' = zero drift, no web/dist rider; gen-command/tool/settings-docs --check up to date; W21 wave-closed here; welded_count HELD 240 per batch18q_note; inflight kept lead's 7 keys verbatim; meta atop)",
-  "tip": "52532632f",
+  "tip": "1c67ca96e",
   "updated": "2026-10-29T17:30:00-04:00",
   "wave_loops": {
     "1": "closed r2 CLEAN",
