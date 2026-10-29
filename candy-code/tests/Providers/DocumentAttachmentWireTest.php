@@ -169,4 +169,39 @@ final class DocumentAttachmentWireTest extends TestCase
             'C-TOOL-2.e: the arm that already reads inlineData images reads application/pdf parts',
         );
     }
+
+    /**
+     * C-TOOL-2.e round-1 doc-truth pair: docs/ADDING_A_PROVIDER.md attributes
+     * the byte fail-closed check to exactly the legs that build it. The
+     * Anthropic Messages leg is a pass-through — its PDF guarantee lives in
+     * the capture-time magic-number sniff, not the encoder — so the sentence
+     * claiming every leg re-reads the bytes would be a doc lie, and this
+     * test reddens together with it, from both directions.
+     */
+    public function testTheProviderDocScopesTheByteFailClosedClaimToTheLegsThatReSniff(): void
+    {
+        $doc = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/ADDING_A_PROVIDER.md');
+
+        $this->assertStringContainsString('The three C-TOOL-2.e legs fail', $doc);
+        $this->assertStringContainsString('magic-number sniff', $doc);
+        $this->assertStringNotContainsString(
+            'named in the text on every leg',
+            $doc,
+            'round-1 cure: only the three native legs re-read the bytes, never "every leg"',
+        );
+
+        $forged = (new UserMessage('x'))
+            ->withAttachment(new Attachment('forge.pdf', AttachmentType::Document, 'not a pdf at all', 'application/pdf'));
+
+        // The pass-through side: on the CTX-2 leg a declared document becomes
+        // a block whatever its bytes say - which is exactly what the scoped
+        // sentence says the OTHER legs refuse to do.
+        $blocks = AttachmentEncoding::anthropicBlocks($forged);
+        $this->assertSame('document', $blocks[1]['type']);
+
+        // The three native sides: forged bytes name themselves, no block.
+        $this->assertCount(1, AttachmentEncoding::bedrockBlocks($forged));
+        $this->assertCount(1, AttachmentEncoding::geminiParts($forged));
+        $this->assertIsString(AttachmentEncoding::openAiContent($forged, documentsAsBlocks: true));
+    }
 }

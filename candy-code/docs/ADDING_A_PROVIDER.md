@@ -27,12 +27,17 @@ Vertex's Gemini arm through the same shared encoders — (`application/pdf`
 `data:application/pdf` URL; the Responses arm shares `openAiContent()` but
 maps only image parts, so it stays on the named decline, as do the SGLang
 and Custom servers that speak neither document shape). Answer
-`supportsDocuments()` true only when the body actually carries the part:
-true-but-undeclared is a silent drop, declared-but-unbuilt is a wire error,
-and either one is the bug the never-silent rule exists to refuse. The encoders
-fail closed on the bytes themselves — a forged or oversized PDF (no `%PDF-`
-head, or past `FileMentions::DOCUMENT_MAX_BYTES`) is named in the text on
-every leg, never dropped and never inlined.
+`supportsDocuments()` true only when the body actually carries the part: a
+true flag over a body that never builds the part is a silent drop, a part
+built for a model that cannot read it is a wire error, and either one is the
+bug the never-silent rule exists to refuse. The three C-TOOL-2.e legs fail
+closed on the bytes themselves: on each of them a forged or oversized PDF (no
+`%PDF-` head, or past `FileMentions::DOCUMENT_MAX_BYTES`) is named in the
+text, never dropped and never inlined — and a leg that outright declines
+documents names every one of them. The Anthropic Messages leg has built its
+base64 `document` block since CTX-2 and trusts the inbound capture's
+magic-number sniff (`FileMentions`) rather than re-reading the bytes at
+encode time.
 
 Reasoning-effort shaping is a separate opt-in: `ShapesReasoningEffort` adds
 `shapesEffortFor(string $model): bool`, and the `/effort` surface consults it
