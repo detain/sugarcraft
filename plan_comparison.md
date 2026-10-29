@@ -2752,7 +2752,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-AGT-1.b (W6), C-AGT-3.b (W7), C-AGT-7.a (W7)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-4.e`
 
-#### C-AGT-5.f — Outbound webhooks wiring + `webhooksOut` setting
+#### ✅ b8abbacd4 C-AGT-5.f — Outbound webhooks wiring + `webhooksOut` setting (picks 07ea10067, 4c1dbe12d, cdbd0e488, 7d5eeda73 -> 35174c5ea, ec2f94cd7, aa1321be3, b8abbacd4 on weld-18p (rebased onto weld-18o tip 7342d0e95, zero-conflict); r1 FINDINGS -> r2 fix round -> r3 CLEAN (REVIEW-3.md); merged gates: OutboundWebhook 44T/124A green, lane filter 2411T with 2 foreign-inherited reds only (PermissionsIntroDrift + ForeignAgentPresetWiring, byte-identical shape vs base — disclosed, NOT batch), five-guard sole reds = ReadmeSuiteFigureDrift staleness pair 25537-vs-28402 standing closeout duty (lane +11T carry); DUR row OutboundWebhookWiringTest.php (green-run 11T/59A per r3); protocol: ServerContext.php touched, gen-protocol-schema --write 'up to date' (zero drift); batch-18p)
 - **Item:** C-AGT-5 (sources: p1-miss: outbound webhooks, p2-miss: outbound webhooks) · gap · effort M
 - **What:** Register a `webhooksOut` setting, user tier only, so a project can never add egress, through `SettingDefinition` in `ServerSettings.php`, read at restart. `Bootstrap::workspace()` registers one `WebhookDispatcher` service. TUI …
 - **Files — create:** none
@@ -2841,7 +2841,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SES-4.a (W2), C-SES-4.b (W8), C-SES-4.c (W17), C-SES-4.d (W19)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-6.e`
 
-#### C-SEC-7.c — Plan mode drops the tools the gate always refuses
+#### ✅ 7516e7e42 C-SEC-7.c — Plan mode drops the tools the gate always refuses (picks 2bc6bb703, 873354b78, 4b678a480 -> e850dd9a4, 62528ab70, 7516e7e42 on weld-18p (rebased onto weld-18o tip 7342d0e95, zero-conflict); r1 FIX-1 -> r2 CLEAN (REVIEW-2.md 6013B); merged gates: PlanMode family 159T/293A green, guard family sole reds = staleness pair standing closeout duty; DUR row PlanModeToolRosterTest.php; carry: COMPARISON.md :383/:938/:3545 stale 'same in every mode' quotes -> closeout doc-truth pass (NOT edited at weld); batch-18p)
 - **Item:** C-SEC-7 (sources: GAP-TL-27, k2-sum TL-27 web ✅→🟡) · gap · effort M
 - **What:** Plan mode refuses writes at the gate, but the model still sees every tool (`docs/PERMISSIONS.md:487-488`: "The tool list is the same in every mode"). The gap's proposal (drop `Runtime::WRITE_CAPABLE_TOOL_NAMES`) is wrong. Plan …
 - **Files — create:** `candy-code/tests/Backend/PlanModeToolRosterTest.php`

@@ -148,53 +148,36 @@
   ],
   "extra_agents": 1,
   "inflight": {
-    "C-PRV-3.d": {
-      "stage": "build",
-      "tip": "1565be0d4",
-      "note": "builder LIVE dirty16 mid-write AdvisorTool"
-    },
-    "C-SES-7.b": {
-      "stage": "build",
-      "tip": "efb97a1b5",
-      "note": "builder LIVE session-import verb step"
-    },
-    "C-SES-8.a": {
-      "stage": "build",
-      "tip": "d83e4eed4",
-      "note": "finisher LIVE rebuilding commit-EARLY (4 phantom-class dead-loops prior)"
-    },
-    "C-AGT-5.f": {
+    "C-TOOL-2.e": {
       "stage": "fix",
-      "tip": "4c1dbe12d",
-      "dirty": 2,
-      "note": "finisher ses_e76f02759ffeZUGUw5UVfFB4Vw commit dirty-2 repair"
+      "round": 2,
+      "tip": "056298ca7"
     },
     "C-MCP-4.c": {
-      "stage": "review-r2",
-      "round": 2,
-      "tip": "628a5abf3",
-      "worktree": "/home/sites/cc-cmp-C-MCP-4.c",
-      "session": "ses_e76d10705ffeECjdvDumXIxwf2",
-      "note": "r2 CLEAN 0C/0M/1step-local MINOR (two-session independence pin required pre-weld); fixer LIVE; then r3; weld carries: DUR McpLoginServedTest + re-pin + foreign RemoteSessionPush ReadPathCensus red + fd-inheritance glance"
-    },
-    "C-SEC-7.c": {
-      "stage": "clean",
-      "tip": "4b678a480",
-      "note": "r2 CLEAN REVIEW-2.md 4303B; weld carry DUR PlanModeToolRosterTest; parked"
+      "stage": "review",
+      "round": 3,
+      "tip": "68d6b28fa"
     },
     "C-CTX-4.e": {
       "stage": "review",
-      "tip": "6d7072876",
-      "note": "FIXER ses_e76ed787effeA6dcD6RxLPORrC (DocFigure roster + gate-figure errata per r1 wake)",
-      "round": 1,
-      "session": "ses_e76d10707ffdUSVWZRIYEeVQO6"
-    },
-    "C-TOOL-2.e": {
-      "stage": "review",
-      "tip": "056298ca7",
-      "note": "r1#2 LIVE (REVIEW-1.md vanished from disk)",
       "round": 2,
-      "session": "ses_e76b9c5fcffenAIeV94r0VSXTE"
+      "tip": "98470d6de"
+    },
+    "C-PRV-3.d": {
+      "stage": "build",
+      "tip": "1565be0d4"
+    },
+    "C-SES-7.b": {
+      "stage": "build",
+      "tip": "0f4224a93"
+    },
+    "C-SES-8.a": {
+      "stage": "build",
+      "tip": "f61048a3a"
+    },
+    "C-CTX-4.d": {
+      "stage": "build",
+      "tip": "d9a3dc110"
     }
   },
   "last_lead": "fresh-lead-1029-r15",
@@ -235,7 +218,7 @@
     "CTX-3.d-r2",
     "AGT-5.d-fix"
   ],
-  "master_tip": "a0e3f2ce2",
+  "master_tip": "7342d0e95",
   "next_fill_queue": [],
   "next_lead": {
     "gates": "scheduler free=0 remaining=195 late=False; blocked=['C-AGT-5.b'] owner-gated delete-cross-root ruling (options (a) root-scope guard (b) keep+document) — strings-only entries law; W14 list re-derive from plan §3",
@@ -351,8 +334,8 @@
   ],
   "status": "RUNNING",
   "tick": "331-batch17-welded (C-MCP-4.d + C-SEC-6.b popped from inflight, count 223->225; weld-17: picks 74c980368+303c87928+fecfe7b4e+6598d32c2, NIT-3/4 doc riders, meta atop 6598d32c2; chain rebased over mid-run origin vhs bot push 17e6b440e; pushed; final tip d258ea4fa + this stamp row; push at ff)",
-  "tip": "a0e3f2ce2",
-  "updated": "2026-10-29T16:48:43-04:00",
+  "tip": "7342d0e95",
+  "updated": "2026-10-29T17:30:00-04:00",
   "wave_loops": {
     "1": "closed r2 CLEAN",
     "16": {
@@ -1174,33 +1157,7 @@
     },
     "cure-w7": "MASTER REPAIR 2026-10-27 d3395595e (pick of 08862c003, lane base 8eab506d9; clean zero conflicts; 2 files: candy-code/src/Session/EnhancedSessionStore.php +31/-1, candy-code/tests/Session/UsageRecordsTest.php +54/0; %ae/%ce separate greps 1/1 detain@interserver.net, zero Co-Authored trailers). NOT a plan step: no §4 mark, welded count unchanged (90). Gates (plain pipe cwd candy-code env -u LINES -u COLUMNS): --filter 'UsageRecords|SessionStore|Tombstone' = Tests: 130, Assertions: 477 OK (2 pre-existing deprecations) EXACT; --filter 'SessionEventsTable|TranscriptResume|EventLog|DebouncedTranscript|ShareStore' = Tests: 61, Assertions: 306 OK EXACT; gen-command-docs/gen-tool-docs/gen-settings-doc --check all up-to-date rc0 (lane touched no docs); five-guard 133T/15816A F2 = staleness pair ONLY (25,537 pinned vs live - closeout re-pin). DUR: no new *Test.php (pins ride existing UsageRecordsTest). inflight entry removed at this weld."
   },
-  "weld_pending": {
-    "C-AGT-4.d": {
-      "tip": "73a589cae",
-      "verdict": "REVIEW-2 CLEAN",
-      "carries": [
-        "+12T re-pin closeout",
-        "no DUR"
-      ]
-    },
-    "C-AGT-5.f": {
-      "tip": "7d5eeda73",
-      "verdict": "REVIEW-3 CLEAN 5858B",
-      "carries": [
-        "DUR row tests/Automation/OutboundWebhookWiringTest.php (derive from green run: 11T/59A)",
-        "+11T re-pin"
-      ]
-    },
-    "C-SEC-7.c": {
-      "tip": "4b678a480",
-      "verdict": "REVIEW-2 CLEAN 6013B",
-      "carries": [
-        "DUR row tests/Backend/PlanModeToolRosterTest.php",
-        "re-pin",
-        "out-of-scope MINOR: COMPARISON.md :383/:938/:3545 stale same-in-every-mode quotes -> closeout doc-truth pass"
-      ]
-    }
-  },
+  "weld_pending": {},
   "weld_queue": {
     "_legacy_list": [
       "C-SEC-7.d",
@@ -1449,9 +1406,11 @@
     "P-TABS.e",
     "P-TABS.f",
     "P-TABS.g",
-    "P-TABS.h"
+    "P-TABS.h",
+    "C-SEC-7.c",
+    "C-AGT-5.f"
   ],
-  "welded_count": 236,
+  "welded_count": 238,
   "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
   "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
   "welder_sessions": {
@@ -1559,5 +1518,6 @@
       "note": "builder LIVE (16 dirty @698@); r1 after completion"
     }
   },
-  "batch18o_note": "C-AGT-4.d welded (3 picks fde5f268b/1b9baf4a0/73a589cae -> 7c87beae6/c384ca46e/cd2062466, rebased over lead W21 wave-review commits d63163d87 zero-conflict; dist rider rebuilt, trio byte-clean; lane filter 273T green, guards sole-red staleness pair standing, vitest 710T green; W22 10/10 steps welded after this — wave loop owed; weld+meta hashes ride meta follow-up per own-SHA law) | meta stamp a0e3f2ce2 | HAZARD DISCLOSED: lead working-copy run-state edits made AFTER fold source 61939ca0 (file measured 5c96e5dc pre-ff) were discarded by pre-ff checkout -- and are unrecoverable; committed fold preserves lead state through 61939ca0 + weld fields; lead should re-apply any tick/notes advanced since."
+  "batch18o_note": "C-AGT-4.d welded (3 picks fde5f268b/1b9baf4a0/73a589cae -> 7c87beae6/c384ca46e/cd2062466, rebased over lead W21 wave-review commits d63163d87 zero-conflict; dist rider rebuilt, trio byte-clean; lane filter 273T green, guards sole-red staleness pair standing, vitest 710T green; W22 10/10 steps welded after this — wave loop owed; weld+meta hashes ride meta follow-up per own-SHA law) | meta stamp a0e3f2ce2 | HAZARD DISCLOSED: lead working-copy run-state edits made AFTER fold source 61939ca0 (file measured 5c96e5dc pre-ff) were discarded by pre-ff checkout -- and are unrecoverable; committed fold preserves lead state through 61939ca0 + weld fields; lead should re-apply any tick/notes advanced since.",
+  "batch18p_note": "weld-18p: C-SEC-7.c (r2 CLEAN) + C-AGT-5.f (r3 CLEAN) welded zero-conflict on 7342d0e95. C-AGT-4.d dropped (landed via 18o). DUR rows: PlanModeToolRosterTest.php, OutboundWebhookWiringTest.php (11T/59A green-run shape per r3). +11T re-pin closeout carry; staleness pair now pinned-25537 vs live-28402. Carries: COMPARISON.md :383/:938/:3545 stale same-in-every-mode quotes -> closeout doc-truth; foreign-inherited reds PermissionsIntroDrift+ForeignAgentPresetWiring unchanged at tip (byte-identical vs base). NO push (main-tree run-state.json dirty — lead completes ff)."
 }
