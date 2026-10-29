@@ -116,6 +116,8 @@ final readonly class ParsedArgs
             '--parent-pid' => true,
             '--port' => true,
             '--rotate' => false,
+            '--tls-cert' => true,
+            '--tls-key' => true,
             '--web-root' => true,
             '-f' => false,
         ],

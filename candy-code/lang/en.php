@@ -371,6 +371,7 @@ session; acp runs turns for an editor, until the editor disconnects):
         [--allowed-ips <list>] [--allowed-origin <list>] [--allow-dir-browse]
         [--browse-root <dir>] [--web-root <dir>] [--no-web] [--allow-bypass]
         [--allow-root] [--detach] [--parent-pid <pid>]
+        [--tls-cert <file>] [--tls-key <file>]
                          Run the WebSocket + HTTP server the web UI talks to,
                          in the foreground until Ctrl+C. Binds 127.0.0.1:7420
                          by default and prints a sign-in URL whose one-time
@@ -381,10 +382,18 @@ session; acp runs turns for an editor, until the editor disconnects):
                          also count as loopback). Any other address is refused
                          unless --allow-remote is given too.
       --port <n>         Port to bind (default 7420; 0 picks a free one).
-      --allow-remote     Permit a non-loopback --host. There is no built-in
-                         TLS: put a reverse proxy in front of it. On 0.0.0.0
-                         or :: the server answers to this machine's own
+      --allow-remote     Permit a non-loopback --host. Without --tls-cert and
+                         --tls-key this is plain HTTP: put a TLS reverse proxy
+                         in front of it, or serve TLS directly (see below). On
+                         0.0.0.0 or :: the server answers to this machine's own
                          addresses, and the sign-in URL names them.
+      --tls-cert <file>  PEM certificate the listener itself serves TLS with,
+                         given together with --tls-key. The sign-in URL then
+                         reads https://, the session cookie carries Secure,
+                         and a plaintext http:// client gets no answer at all.
+      --tls-key <file>   PEM private key for --tls-cert: a readable file no
+                         group or world bits expose, matching the certificate.
+                         A bad or half pair is refused at startup.
       --allowed-host <list>
                          Comma-separated extra host names (or host:port) the
                          server answers to, e.g. a DNS name for this machine.
@@ -1040,6 +1049,13 @@ TXT,
     'cli.serve.stop.stopped' => 'stopped the server (pid {pid})',
     'cli.serve.stop.unidentified' => 'a server holds the lock in {dir} but published no record, so it cannot be identified to stop',
     'cli.serve.stopping' => 'candy-code serve: stopping ({reason})',
+    'cli.serve.tls.cert_unreadable' => 'the TLS certificate at {path} is not a readable PEM certificate',
+    'cli.serve.tls.key_open' => 'the TLS private key at {path} is readable by group or world — the endpoint is only as private as its key: chmod it (for example, 0600) and start again',
+    'cli.serve.tls.key_unreadable' => 'the TLS private key at {path} is not a readable PEM private key',
+    'cli.serve.tls.missing' => 'the TLS {what} at {path} is not a readable file',
+    'cli.serve.tls.mismatch' => 'the TLS certificate {cert} and private key {key} are not a pair — the key does not sign what the certificate carries',
+    'cli.serve.tls.needs_both' => '--tls-cert and --tls-key belong together: give both, or neither and the server serves plain HTTP',
+    'cli.serve.tls.no_openssl' => '--tls-cert/--tls-key need the openssl extension (openssl_x509_check_private_key); it is not available in this PHP',
     'cli.serve.token.env_print' => 'candy-code serve token: the server token comes from CANDY_CODE_SERVER_TOKEN here; it is not printed',
     'cli.serve.token.env_rotate' => 'candy-code serve token: the server token comes from CANDY_CODE_SERVER_TOKEN here; unset it to rotate the stored one',
     'cli.serve.token.not_reloaded' => 'candy-code serve token: the running server (pid {pid}) could not be told and keeps accepting the old token until it restarts: candy-code serve stop && candy-code serve --detach',
@@ -1051,7 +1067,7 @@ TXT,
     'cli.serve.url.no_answer' => 'the server did not answer on {path}',
     'cli.serve.url.one_time_code' => '(one-time code, valid {seconds} s)',
     'cli.serve.url.token_refused' => 'the server refused this token (was it started with a different CANDY_CODE_SERVER_TOKEN?)',
-    'cli.serve.usage' => 'Usage: candy-code serve [--host <ip>] [--port <n>] [--allow-remote] [--allowed-host <hosts>] [--allowed-ips <ips>] [--allowed-origin <origins>] [--allow-dir-browse] [--browse-root <dir>] [--web-root <dir>] [--no-web] [--allow-bypass] [--allow-root] [--detach] [--parent-pid <pid>] | serve status | serve stop [--force] | serve logs [-f] | serve url | serve token [--rotate]',
+    'cli.serve.usage' => 'Usage: candy-code serve [--host <ip>] [--port <n>] [--allow-remote] [--allowed-host <hosts>] [--allowed-ips <ips>] [--allowed-origin <origins>] [--allow-dir-browse] [--browse-root <dir>] [--web-root <dir>] [--no-web] [--allow-bypass] [--allow-root] [--detach] [--parent-pid <pid>] [--tls-cert <file>] [--tls-key <file>] | serve status | serve stop [--force] | serve logs [-f] | serve url | serve token [--rotate]',
     'cli.serve.workspace_unavailable' => 'cannot open the workspace: {error}',
     'cli.session.accepts' => 'session {action} accepts: {flags}.',
     'cli.session.ambiguous' => 'session {action} {target}: ambiguous id prefix, {count} sessions match',

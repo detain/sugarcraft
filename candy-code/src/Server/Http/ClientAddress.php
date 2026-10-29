@@ -52,14 +52,20 @@ final class ClientAddress
     }
 
     /**
-     * Whether the browser reached this server over TLS: only a trusted proxy's
-     * `X-Forwarded-Proto: https` can say so, since the listener itself never
-     * speaks TLS in v1.
+     * Whether the browser reached this server over TLS: a direct TLS
+     * connection (C-WEB-5.a — the listener itself answers `--tls-cert`/
+     * `--tls-key`, and react/http stamps `HTTPS=on` on its server params),
+     * or a trusted proxy's `X-Forwarded-Proto: https`. Only a TRUSTED proxy
+     * may assert the latter; an untrusted one cannot forge the Secure flag.
      *
      * @param list<string> $trustedProxies
      */
     public static function isSecure(ServerRequestInterface $request, array $trustedProxies): bool
     {
+        if (($request->getServerParams()['HTTPS'] ?? '') === 'on') {
+            return true;
+        }
+
         $peer = (string) ($request->getServerParams()['REMOTE_ADDR'] ?? '');
 
         return $peer !== ''

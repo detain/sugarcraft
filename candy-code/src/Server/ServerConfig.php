@@ -117,6 +117,8 @@ final class ServerConfig
      * @param string|null  $browseRoot     the directory they are confined to (resolved by {@see \SugarCraft\Code\Cli\Serve::config()}; null = the user's home)
      * @param array<string,array{secret:string,prompt:string,permissionMode:PermissionMode|null,rate:int,signature:null|array{scheme:string,header:string,deliveryHeader:string|null}}> $webhooks
      *                                     AUT-6 inbound webhook hooks, validated at launch ({@see self::webhooksValue()}); empty = the route is not mounted at all
+     * @param string|null  $tlsCert        C-WEB-5.a: the PEM certificate the public listener serves with; null (with null {@see $tlsKey}) = plain HTTP ({@see self::withTls()})
+     * @param string|null  $tlsKey         the PEM private key paired with {@see $tlsCert}; validated together at launch
      */
     private function __construct(
         public readonly string $host,
@@ -141,6 +143,8 @@ final class ServerConfig
         public readonly bool $dirBrowse = false,
         public readonly ?string $browseRoot = null,
         public readonly array $webhooks = [],
+        public readonly ?string $tlsCert = null,
+        public readonly ?string $tlsKey = null,
     ) {
     }
 
@@ -258,6 +262,17 @@ final class ServerConfig
         // half-mounted route or a surprise on the first delivery.
         if (isset($userConfig['webhooks'])) {
             $config = $config->withWebhooks(self::webhooksValue($userConfig['webhooks']));
+        }
+
+        // C-WEB-5.a: built-in TLS is flag-only — no env var, no config key.
+        // A certificate path in a persisted config would outlive the operator
+        // who chose it and silently change what the next launch serves over;
+        // like `--detach`, TLS is decided at the command line, every time.
+        if (isset($flags['--tls-cert']) || isset($flags['--tls-key'])) {
+            $config = $config->withTls(
+                isset($flags['--tls-cert']) ? self::stringValue('server tls certificate path', $flags['--tls-cert']) : null,
+                isset($flags['--tls-key']) ? self::stringValue('server tls key path', $flags['--tls-key']) : null,
+            );
         }
 
         $mode = $permissionModeFlag;
@@ -433,6 +448,72 @@ final class ServerConfig
     public function withWebhooks(array $webhooks): self
     {
         return $this->mutate(webhooks: $webhooks);
+    }
+
+    /**
+     * C-WEB-5.a: turn on built-in TLS for the public listener. Both paths or
+     * neither — a lone `--tls-cert` (or lone `--tls-key`) is refused rather
+     * than silently serving cleartext while the operator believes otherwise.
+     *
+     * The pair is validated here, at launch, so a bad path, an unreadable or
+     * mismatched certificate, or a world-readable key is a startup refusal
+     * (exit 2) — never a surprise on the first connection, and never a private
+     * key that another user on the machine can read. {@see \React\Socket\SecureServer}
+     * loads the material lazily per connection, so without this check a broken
+     * pair would only surface as an `error` event after clients arrived.
+     *
+     * The key must not be group- or world-readable (mode bits in 0o077 set):
+     * a TLS endpoint whose private key leaks is no endpoint at all.
+     */
+    public function withTls(?string $tlsCert, ?string $tlsKey): self
+    {
+        if (($tlsCert === null) !== ($tlsKey === null)) {
+            throw new ServerConfigException(Lang::t('cli.serve.tls.needs_both'));
+        }
+        if ($tlsCert === null || $tlsKey === null) {
+            return $this->mutate(tlsCert: null, tlsKey: null);
+        }
+        if (!\function_exists('openssl_x509_check_private_key')) {
+            throw new ServerConfigException(Lang::t('cli.serve.tls.no_openssl'));
+        }
+        foreach (['certificate' => $tlsCert, 'key' => $tlsKey] as $what => $path) {
+            if (!\is_file($path) || !\is_readable($path)) {
+                throw new ServerConfigException(Lang::t('cli.serve.tls.missing', ['what' => $what, 'path' => $path]));
+            }
+        }
+        if ((@\fileperms($tlsKey) & 0o077) !== 0) {
+            throw new ServerConfigException(Lang::t('cli.serve.tls.key_open', ['path' => $tlsKey]));
+        }
+        $certPem = @\file_get_contents($tlsCert);
+        $keyPem = @\file_get_contents($tlsKey);
+        if ($certPem === false || $keyPem === false) {
+            throw new ServerConfigException(Lang::t('cli.serve.tls.missing', ['what' => 'certificate or key', 'path' => $tlsCert . ' / ' . $tlsKey]));
+        }
+        $x509 = @\openssl_x509_read($certPem);
+        if ($x509 === false) {
+            throw new ServerConfigException(Lang::t('cli.serve.tls.cert_unreadable', ['path' => $tlsCert]));
+        }
+        $private = @\openssl_pkey_get_private($keyPem);
+        if ($private === false) {
+            throw new ServerConfigException(Lang::t('cli.serve.tls.key_unreadable', ['path' => $tlsKey]));
+        }
+        if (@\openssl_x509_check_private_key($x509, $private) !== true) {
+            throw new ServerConfigException(Lang::t('cli.serve.tls.mismatch', ['cert' => $tlsCert, 'key' => $tlsKey]));
+        }
+
+        return $this->mutate(tlsCert: $tlsCert, tlsKey: $tlsKey);
+    }
+
+    /** Whether the public listener serves over TLS ({@see self::withTls()}). */
+    public function hasTls(): bool
+    {
+        return $this->tlsCert !== null && $this->tlsKey !== null;
+    }
+
+    /** The URL scheme a browser reaches this server over: `https` with TLS, else `http`. */
+    public function urlScheme(): string
+    {
+        return $this->hasTls() ? 'https' : 'http';
     }
 
     public function withWebRoot(?string $webRoot): self

@@ -16,6 +16,7 @@ use React\Http\Middleware\StreamingRequestMiddleware;
 use React\Promise\Promise;
 use React\Promise\PromiseInterface;
 use React\Socket\ConnectionInterface;
+use React\Socket\SecureServer;
 use React\Stream\ReadableStreamInterface;
 use Ratchet\RFC6455\Messaging\Frame;
 use SugarCraft\Code\Share\ShareStore;
@@ -258,6 +259,27 @@ final class Server
         $this->listener->on('error', function (\Throwable $e): void {
             ($this->log)('accept error: ' . $e->getMessage());
         });
+        // C-WEB-5.a: built-in TLS wraps the public listener only — the
+        // control socket and the Workspace gateway never pass through here,
+        // and the unix pair stays plaintext by construction (a local peer is
+        // already authenticated by filesystem ownership of the state dir).
+        // The read-deadline timer below stays on the RAW listener on purpose:
+        // it bounds "connected and sent nothing", and under TLS the first
+        // bytes are the ClientHello, so a silent TCP client is still cut.
+        // Handshake failures emit `error` on the wrapper and close the socket
+        // — a plaintext client therefore gets no HTTP response at all, which
+        // is what refusing `http://` on a TLS endpoint means.
+        $source = $this->config->hasTls()
+            ? new SecureServer($this->listener, $this->loop, [
+                'local_cert' => (string) $this->config->tlsCert,
+                'local_key' => (string) $this->config->tlsKey,
+            ])
+            : $this->listener;
+        if ($source !== $this->listener) {
+            $source->on('error', function (\Throwable $e): void {
+                ($this->log)('tls error: ' . $e->getMessage());
+            });
+        }
         // ISS-055, the header half: a connection that has not sent its first
         // byte by the deadline never gets to hold a slot at all — close it.
         // (Once bytes arrive the parser owns the request and $this->readDeadline
@@ -271,7 +293,7 @@ final class Server
                 $this->loop->cancelTimer($timer);
             });
         });
-        $http->listen($this->listener);
+        $http->listen($source);
 
         $this->expirySweep ??= $this->loop->addPeriodicTimer(self::EXPIRY_SWEEP_SECONDS, function (): void {
             $this->closeExpiredSessions();
@@ -286,10 +308,10 @@ final class Server
         return $this->listener?->port();
     }
 
-    /** `http://host:port` as a browser on this machine reaches it. */
+    /** `http(s)://host:port` as a browser on this machine reaches it (scheme follows TLS). */
     public function url(): string
     {
-        return 'http://' . $this->config->hostForUrl() . ':' . ($this->port() ?? $this->config->port);
+        return $this->config->urlScheme() . '://' . $this->config->hostForUrl() . ':' . ($this->port() ?? $this->config->port);
     }
 
     /**
@@ -314,9 +336,10 @@ final class Server
     {
         $code = $this->auth->loginCodes->mint();
         $port = $this->port() ?? $this->config->port;
+        $scheme = $this->config->urlScheme();
 
         return \array_map(
-            static fn (string $host): string => 'http://' . $host . ':' . $port . '/#code=' . $code,
+            static fn (string $host): string => $scheme . '://' . $host . ':' . $port . '/#code=' . $code,
             $this->config->reachableHosts(),
         );
     }

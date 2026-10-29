@@ -91,7 +91,7 @@ final class Serve
      * @var array<string, list<string>>
      */
     public const ACTION_FLAGS = [
-        '' => ['--allow-bypass', '--allow-dir-browse', '--allow-remote', '--allow-root', '--allowed-host', '--allowed-ips', '--allowed-origin', '--browse-root', '--detach', '--host', '--no-web', '--parent-pid', '--port', '--web-root'],
+        '' => ['--allow-bypass', '--allow-dir-browse', '--allow-remote', '--allow-root', '--allowed-host', '--allowed-ips', '--allowed-origin', '--browse-root', '--detach', '--host', '--no-web', '--parent-pid', '--port', '--tls-cert', '--tls-key', '--web-root'],
         'status' => [],
         'stop' => ['--force'],
         'logs' => ['--follow', '-f'],
@@ -1336,7 +1336,10 @@ final class Serve
         if ($config->isWildcard() && $config->interfaceAddresses === []) {
             $lines[] = Lang::t('cli.serve.announce.no_interface');
         }
-        if (!$config->isLoopback()) {
+        // C-WEB-5.a: the cleartext warning is about plain HTTP beyond
+        // loopback. With --tls-cert/--tls-key the listener itself speaks TLS,
+        // so the warning no longer describes what crosses the wire.
+        if (!$config->isLoopback() && !$config->hasTls()) {
             $lines[] = '';
             $lines[] = Lang::t('cli.serve.announce.remote', ['host' => $config->host]);
         }
