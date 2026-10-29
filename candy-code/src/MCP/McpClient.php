@@ -1013,7 +1013,8 @@ final class McpClient
         if ($explicit !== null) {
             if (!is_string($explicit) || !self::pathIsAbsolute($explicit) || !is_dir($explicit)) {
                 throw new \RuntimeException(sprintf(
-                    'stdio cwd must be an absolute existing directory, got %s',
+                    'MCP cwd (stdio, http and sse arms alike) must be an absolute existing '
+                    . 'directory, got %s',
                     is_string($explicit) ? '"' . $explicit . '"' : get_debug_type($explicit),
                 ));
             }

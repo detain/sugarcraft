@@ -81,7 +81,11 @@ use SugarCraft\Code\Cli\NonInteractive;
  *
  * AND EVERY SCAN GOES RED ON WHAT IT CANNOT PARSE, rather than skipping it.
  * A shape-A call whose type argument stops being a single string literal, a
- * shape-B envelope with no literal `type` key, a shape-C literal naming a type
+ * shape-B envelope with no literal `type` key — unless it is an adjudicated
+ * JSON-RPC wire error object ({@see self::JSONRPC_WIRE_ERROR_SITES}, the
+ * protocol's `code`/`message` envelope, which is not a stdout document and
+ * whose roster liveness the derivation re-checks every run) — a shape-C
+ * literal naming a type
  * no shape-A or shape-B site produces, an envelope built by string
  * interpolation, or a site with no `return …::EXIT_*` and no `exit(<int>)`
  * closing it — each fails with a message saying the contract can no longer be
@@ -113,6 +117,47 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
      * README side and the source side together and they cannot drift apart.
      */
     private const TYPE_NAME = '[a-z][a-z0-9_-]*';
+
+    /**
+     * The `file::method` sites that write a JSON-RPC 2.0 protocol error
+     * object — `['error' => ['code' => …, 'message' => …]]` — on the MCP
+     * server-to-client WIRE, adjudicated as not-part-of-the-contract.
+     *
+     * THE ADJUDICATION. C-MCP-3.c taught both HTTP transports to answer a
+     * server-initiated frame, and when the answer desk declines a method the
+     * fallback writes the protocol's own error object. That `error` key names
+     * the JSON-RPC envelope, not a `--output-format json` document: JSON-RPC
+     * errors carry a numeric `code` (-32601 here, method-not-found), and
+     * JSON-RPC has NO `type` member to add — a `'type' => <literal>` entry
+     * would be a lie about the protocol, and joining these to README.md's
+     * union would lie to its published contract. So they are skipped here —
+     * but SKIPPED BY NAME, at these two exact sites, only after the envelope
+     * is re-read as genuinely JSON-RPC-shaped (`code` and `message` entries,
+     * no `type`): "give this test a way to read the new shape rather than
+     * letting it skip" is a request for an adjudication, not a licence for a
+     * blanket `no type => not a producer` rule, which would be a hole shaped
+     * exactly like the next un-rostered contract document.
+     *
+     * LIVENESS IS PINNED TOO. {@see shippedTypes()} collects the roster keys
+     * the scan actually skipped and requires the set to equal this list, so
+     * either transport being refactored away reddens as a stale roster row
+     * just as loudly as a third one appearing unrostered.
+     *
+     * THE ROSTER'S SIZE, AND WHY IT IS NOT TWO. The C-MCP-3.c review named
+     * the two transport sites; the desk's own refusal and its elicitation
+     * rejections (both pre-existing since C-MCP-3.b) carry the SAME shape and
+     * were already reddening this walk — invisible only because the file
+     * walk aborted at the alphabetically-first offender, `HttpMcpServer.php`,
+     * every time. A roster that names the two new sites leaves the guard red
+     * on the old ones, so the adjudication is written for the whole wire
+     * family: four functions, one protocol, one decision.
+     */
+    private const JSONRPC_WIRE_ENVELOPES = [
+        'src/MCP/HttpMcpServer.php::onInboundFrames',
+        'src/MCP/McpServerRequests.php::elicitation',
+        'src/MCP/McpServerRequests.php::handle',
+        'src/MCP/SseMcpServer.php::onInboundFrames',
+    ];
 
     /**
      * The exit constants a document-emitting branch can return, resolved from
@@ -320,11 +365,13 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
      * exit code of their own, because the branch that reaches them has already
      * decided one.
      *
-     * @param list<PhpToken> $tokens
+     * @param list<PhpToken>  $tokens
+     * @param list<string>|null $wireSkipped by-ref accumulator: roster keys of
+     *                       JSON-RPC wire envelopes this file skipped
      *
      * @return list<array{type: string, at: int}>
      */
-    private function producerSites(array $tokens, string $where): array
+    private function producerSites(array $tokens, string $where, ?array &$wireSkipped = null): array
     {
         $n = count($tokens);
         $sites = [];
@@ -369,6 +416,24 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
                 self::assertSame('=>', $entry[1]->text, "{$where}: malformed `type` entry in an error envelope");
                 $type = $this->literalType(array_slice($entry, 2), $where, "the `'error' => […]` envelope");
             }
+            if ($type === null && self::isJsonRpcErrorEnvelope($entries)) {
+                $key = $this->enclosingFunctionKey($tokens, $where, $i);
+                if (in_array($key, self::JSONRPC_WIRE_ENVELOPES, true)) {
+                    if ($wireSkipped !== null) {
+                        $wireSkipped[] = $key;
+                    }
+
+                    continue;
+                }
+                self::fail(
+                    "{$where}: a JSON-RPC `error` envelope (`code` and `message`, no `type`) sits at "
+                    . "an unadjudicated site: {$key}. A JSON-RPC protocol error is not a "
+                    . '`--output-format json` document and has no `type` member at all — if that is '
+                    . 'what this is, name its site in JSONRPC_WIRE_ENVELOPES with the decision '
+                    . "written out; if it is a contract document, it needs its `'type' => <literal>` "
+                    . 'entry.'
+                );
+            }
             self::assertNotNull(
                 $type,
                 "{$where}: an `'error' => […]` envelope literal has no `'type' => <literal>` entry. "
@@ -398,6 +463,60 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
         );
 
         return trim($tokens[0]->text, "'\"");
+    }
+
+    /**
+     * Is this shape-B entry list a JSON-RPC 2.0 error object — `code` and
+     * `message` members, no `type` — rather than a contract document with a
+     * misspelled or missing key? Read off the entry KEYS only: the shipped
+     * `code` value is a class constant, not a literal, and the point of the
+     * shape test is not to grade the protocol but to refuse every other
+     * type-less `error` envelope to the loud path.
+     *
+     * @param list<list<PhpToken>> $entries
+     */
+    private static function isJsonRpcErrorEnvelope(array $entries): bool
+    {
+        $keys = [];
+        foreach ($entries as $entry) {
+            if ($entry !== [] && $entry[0]->is(T_CONSTANT_ENCAPSED_STRING)) {
+                $keys[] = trim($entry[0]->text, "'\"");
+            }
+        }
+
+        return !in_array('type', $keys, true)
+            && in_array('code', $keys, true)
+            && in_array('message', $keys, true);
+    }
+
+    /**
+     * `file::method` of the innermost named function containing token $at —
+     * the key the JSON-RPC roster is written against. The innermost range
+     * wins, so an envelope smuggled into a closure inside a rostered method
+     * keys on `{closure}`, which is on no roster by construction and fails
+     * closed to the loud path rather than borrowing its enclosing method's
+     * adjudication.
+     *
+     * @param list<PhpToken> $tokens
+     */
+    private function enclosingFunctionKey(array $tokens, string $where, int $at): string
+    {
+        $best = null;
+        $width = PHP_INT_MAX;
+        foreach ($this->functionRanges($tokens) as [$start, $close]) {
+            if ($at >= $start && $at <= $close && ($close - $start) < $width) {
+                $width = $close - $start;
+                $best = $start;
+            }
+        }
+
+        if ($best === null) {
+            return "{$where}::<top-level>";
+        }
+
+        $name = $tokens[$best + 1] ?? null;
+
+        return "{$where}::" . ($name !== null && $name->is(T_STRING) ? $name->text : '{closure}');
     }
 
     /**
@@ -530,11 +649,12 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
     {
         $map = [];
         $rawLiterals = [];
+        $wireSeen = [];
 
         foreach ($this->shippedSourceFiles() as $relative) {
             $tokens = $this->significantTokens($this->repoFile($relative));
             $ranges = $this->functionRanges($tokens);
-            $sites = $this->producerSites($tokens, $relative);
+            $sites = $this->producerSites($tokens, $relative, $wireSeen);
             $indexes = array_column($sites, 'at');
 
             foreach ($sites as $site) {
@@ -581,6 +701,19 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
                 . 'derived until it is one or the other.',
             );
         }
+
+        $seen = array_values(array_unique($wireSeen));
+        sort($seen);
+        $roster = self::JSONRPC_WIRE_ENVELOPES;
+        sort($roster);
+        self::assertSame(
+            $roster,
+            $seen,
+            'the JSON-RPC wire-envelope roster and the sites the scan actually skipped have moved '
+            . 'apart. A rostered site that no longer writes one is a stale adjudication waiting to '
+            . 'cover the next un-rostered document; add or remove rows only with the decision '
+            . 'written out.',
+        );
 
         ksort($map);
 
