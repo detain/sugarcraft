@@ -10911,13 +10911,28 @@ final class Chat implements Model
      * with the session picker or key reference up the keys went there
      * instead. This dispatches the action directly, from a fresh root palette
      * so the handlers see the state Enter on that row would (MRU recorded,
-     * palette closed by the handler), and leaves the draft alone.
+     * palette closed by the handler), and leaves the draft alone — the
+     * PREFILL half this method's C-EXT-5.b revision added is the standing
+     * exception: a label naming no PaletteAction but matching a live catalog
+     * row is a draft write, not an action, filling a blank draft with the
+     * bare command (or keeping a non-blank one under the draft-preservation
+     * law, answering with a notice).
      *
-     * Mid-turn it is refused exactly as Enter on that palette row is
-     * ({@see runSelectedPaletteActionWhileInFlight()}): Exit quits, View
-     * settings opens the read-only view, anything else gets
+     * Mid-turn an ACTION label is refused exactly as Enter on that palette
+     * row is ({@see runSelectedPaletteActionWhileInFlight()}): Exit quits,
+     * View settings opens the read-only view, anything else gets
      * {@see refuseInFlightAction()}'s notice, which closes the palette and
-     * claims nothing about the draft.
+     * claims nothing about the draft. A PREFILL label is the one place the
+     * two mid-turn routes diverge (disclosed seam, owner ruling pending):
+     * this public arm allows it — a draft write touches no turn state —
+     * while the interactive Enter/click arm has no prefill case and
+     * blanket-refuses it. In production this arm never carries a prefill
+     * label at all: its only caller, App::runRegistryCommand(), routes
+     * slash-visible commands through {@see runCommand()} and palette-only
+     * rows by their action labels. So a prefill flows from the interactive
+     * route while the turn is idle (Enter/click →
+     * {@see runSelectedPaletteAction()} → {@see runRootPaletteAction()})
+     * and, mid-turn, only from a direct call of this method.
      *
      * @return array{0: self, 1: ?\Closure}
      */
