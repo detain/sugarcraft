@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Protocol\Methods;
 
 use SugarCraft\Code\Agents\Agent;
+use SugarCraft\Code\Agents\AgentMode;
 use SugarCraft\Code\Agents\Live\AgentInbox;
 use SugarCraft\Code\Agents\Live\AgentMessage;
 use SugarCraft\Code\Agents\Live\AgentTranscriptTail;
@@ -110,6 +111,12 @@ final class AgentsMethods
                 'provider' => $agent->provider,
                 'permissionMode' => $agent->permissionMode->value,
                 'active' => $agent->isActive,
+                // C-AGT-4.c: the presenting filter the TUI's /agent primary
+                // cycle already applies, on the wire so a web picker offers
+                // the same list. A mode never rides the loaded Agent (the
+                // preset-field-carry law), so it is read back off the
+                // declaring file here, exactly where Chat reads it.
+                'mode' => self::declaredMode($agent),
             ];
             // The preset's `color:` vocabulary resolved to a hex the browser
             // can paint, the same AgentColor law the TUI strip follows; a
@@ -122,6 +129,31 @@ final class AgentsMethods
 
             return $item;
         }, $agents))];
+    }
+
+    /**
+     * The `mode:` a preset declares, by its own file — the AgentMode shape of
+     * {@see \SugarCraft\Code\Chat::presentsAsPrimary()}'s leniency, lifted to
+     * name all three tiers: a built-in (no sourcePath), an unreadable file, or
+     * a mode the enum does not hold all answer `all`, so the worst a broken
+     * frontmatter can do is offer the agent where the TUI would too.
+     */
+    private static function declaredMode(Agent $agent): string
+    {
+        $path = $agent->sourcePath;
+        if ($path === null || $path === '') {
+            return AgentMode::All->value;
+        }
+        $contents = @file_get_contents($path);
+        if (!is_string($contents)) {
+            return AgentMode::All->value;
+        }
+        $mode = \SugarCraft\Code\Support\FrontmatterKeyAudit::metaOf($contents)['mode'] ?? null;
+        if (!is_string($mode)) {
+            return AgentMode::All->value;
+        }
+
+        return (AgentMode::tryFrom(strtolower(trim($mode))) ?? AgentMode::All)->value;
     }
 
     /** @return array<string, mixed> */

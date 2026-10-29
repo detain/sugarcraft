@@ -48,6 +48,12 @@ final class Definitions
                 'name' => Schema::string()->nullable(),
                 'provider' => Schema::string()->nullable(),
                 'model' => Schema::string()->nullable(),
+                // C-AGT-4.c: the session's chosen primary agent — the live
+                // host's /agent use override, null when none is set. Like the
+                // model override it is host-lifetime state: a closed host
+                // reports null, because the choice never persists (C-AGT-4.b
+                // law), and the next launch starts on the default again.
+                'agent' => Schema::string()->nullable(),
                 'kind' => Schema::string()->nullable(),
                 'parentId' => Schema::string()->nullable(),
                 'createdAt' => Schema::string()->nullable(),

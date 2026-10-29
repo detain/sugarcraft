@@ -538,6 +538,13 @@ final class MethodSchemas
                 'provider' => Schema::string(),
                 'permissionMode' => Schema::ref(D::PERMISSION_MODE),
                 'active' => Schema::boolean(),
+                // C-AGT-4.c: the preset's declaring `mode:` frontmatter,
+                // through the same leniency law the TUI's primary cycle
+                // follows (Chat::presentsAsPrimary): a preset naming no mode
+                // — or naming one the enum does not hold — answers `all`.
+                // `subagent` presets are what a web primary-agent picker must
+                // not offer; `all`/`primary` rows may be.
+                'mode' => Schema::enum(['primary', 'subagent', 'all'])->describe('The preset\'s declaring frontmatter `mode:`; absent or unreadable answers `all`.'),
                 'color' => Schema::string(7)->describe('The preset\'s `color:` vocabulary resolved through the same AgentColor law the TUI strip follows, as a `#rrggbb` hex against the server\'s default theme; omitted when the preset names no colour or names one that does not resolve legibly.'),
             ], ['name']))],
             'agents.subtree' => [$sessionOnly, $items(Schema::map(Schema::any())->describe('A delegated run\'s latest `subagent.*` event data, from the session\'s log and the live feed.'))],

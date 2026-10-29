@@ -1905,6 +1905,10 @@ final class SessionHost
                     // `/agent use default`) stores null, which is the same
                     // state a fresh host starts in.
                     $this->primaryAgentOverride = $effect->primaryAgentName();
+                    // C-AGT-4.c: the choice is summary state (the wire carries
+                    // it), so a switch announces session.updated exactly like
+                    // the SetModel arm above — no client re-poll needed.
+                    $summaryChanged = true;
                     break;
 
                 case CommandEffectKind::CompactTranscript:

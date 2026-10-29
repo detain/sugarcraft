@@ -357,6 +357,10 @@ final class ServerContext
             'name' => $row['name'] ?? null,
             'provider' => ($override['provider'] ?? '') !== '' ? $override['provider'] : ($row['provider'] ?? null),
             'model' => ($override['model'] ?? '') !== '' ? $override['model'] : ($row['model'] ?? null),
+            // C-AGT-4.c: the served /agent use choice, read off the open host
+            // — the same override-only, never-persisted shape as the pair
+            // above. No host, no override: null is the default-agent state.
+            'agent' => $host?->primaryAgentOverride(),
             'kind' => $row['kind'] ?? null,
             'parentId' => $row['parent_id'] ?? null,
             'createdAt' => $row['created_at'] ?? null,

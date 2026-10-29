@@ -309,6 +309,9 @@ final class ReadPathCensusTest extends TestCase
                 . 'discarded by the tool fan-out and the turn-hook fork alike',
             'USER_TYPED — pastedImagePath() sniffs 16 bytes of a path the user pasted or dropped, to '
                 . 'tell an image from text',
+            'CONTAINED_UPSTREAM:Agents/AgentPresetRegistry.php — C-AGT-4.b\'s presentsAsPrimary() '
+                . 'reads the preset body for its `mode:` frontmatter, only ever for an Agent whose '
+                . 'sourcePath the launch registry set after its two containment compares',
         ],
         'Cli/Bootstrap.php|file_get_contents' => [
             'CONTAINED_UPSTREAM:Providers/ProviderFactory.php — the dev provider config, whose '
@@ -814,6 +817,12 @@ final class ReadPathCensusTest extends TestCase
                 . 'from a hand-written one; never returned or rendered',
             'SELF_LOCATED — a scope index this store wrote',
             'SELF_LOCATED — an entry this store wrote',
+        ],
+        'Protocol/Methods/AgentsMethods.php|file_get_contents' => [
+            'CONTAINED_UPSTREAM:Agents/AgentPresetRegistry.php — C-AGT-4.c\'s declaredMode() reads '
+                 . 'the preset body for its `mode:` frontmatter, mirroring Chat\'s presentsAsPrimary: '
+                . 'the path is an Agent->sourcePath the launch registry set after its two compares, '
+                 . 'never a wire-supplied one (agents.list params are $empty)',
         ],
         'Protocol/Methods/AgentsMethods.php|fopen' => [
             'CALLER_SUPPLIED — `agents.transcript` (roadmap O-6c): a sub-agent transcript log, opened only '
