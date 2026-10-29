@@ -29,6 +29,7 @@ use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\ItemList\LoadMoreMsg;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Code\Automation\WebhookEvent;
 use SugarCraft\Code\Config\StatusLineCommand;
 use SugarCraft\Code\Skills\SkillMentions;
 use SugarCraft\Code\Host\SessionTabState;
@@ -340,6 +341,35 @@ trait HandlesTurnCompletion
             // notification, once the turn is really over — not while a queued
             // prompt or a goal's judging carries it on.
             $notify = $done->inFlight ? null : $done->terminalNotification('candy-code: ' . Lang::t('chat.notify.turn_finished'));
+            // C-AGT-5.f: the same settled turn, announced to outbound webhook
+            // subscribers as `turn.completed`, under the identical "really
+            // over" guard as the bell — a turn a queued prompt or goal judge
+            // carries on has not completed yet. The window re-derives exactly
+            // what Message::settleTurnTranscript() folded: everything after
+            // the newest visible user row, so tool calls made mid-turn count
+            // once and hidden harness rows cost nothing. dispatch() never
+            // blocks and never throws here, so this needs no Cmd slot.
+            if (!$done->inFlight) {
+                $turnToolCalls = \count($message->toolCalls);
+                $turnPrompt = null;
+                $windowStart = 0;
+                for ($i = \count($turnHistory) - 1; $i >= 0; $i--) {
+                    $row = $turnHistory[$i];
+                    if ($row->role === \SugarCraft\Code\Role::User && !$row->uiOnly && $row->userVisible && $row->stepId === null) {
+                        $windowStart = $i + 1;
+                        $turnPrompt = $row;
+                        break;
+                    }
+                }
+                for ($i = $windowStart, $n = \count($turnHistory); $i < $n; $i++) {
+                    $turnToolCalls += \count($turnHistory[$i]->toolCalls);
+                }
+                $done->dispatchOutboundWebhook(WebhookEvent::turnCompleted(
+                    $done->currentSessionId ?? '',
+                    $turnPrompt === null ? 0.0 : \max(0.0, (float) ($message->createdAt - $turnPrompt->createdAt)),
+                    $turnToolCalls,
+                ));
+            }
             // P-CTX.d: the context pane's stamp refreshes off the loop, from
             // the transcript this settle just produced.
             $measure = $done->inFlight ? null : $done->measureContextCmd();

@@ -52,6 +52,27 @@ final class ServerContext
 
     private bool $backgroundResolved = false;
 
+    /**
+     * C-AGT-5.f: the launch's `webhooksOut` dispatcher, resolved once from
+     * the workspace service table on the first heard session event (like
+     * {@see background()}'s laziness). Null is dark — no setting, no egress.
+     */
+    private ?\SugarCraft\Code\Automation\WebhookDispatcher $outboundWebhooks = null;
+
+    private bool $outboundWebhooksResolved = false;
+
+    /**
+     * C-AGT-5.f: per-session turn bookkeeping for the outbound
+     * `turn.completed` delivery — the served event stream does not carry a
+     * turn's duration or tool-call total (TURN_STARTED gives the start,
+     * TURN_COMPLETED only a stop reason), so the feed listener counts
+     * `tool.started` events between them, the same window the TUI's settle
+     * re-derives from its transcript.
+     *
+     * @var array<string, array{startedMs: int, tools: int}>
+     */
+    private array $webhookTurns = [];
+
     /** @var (\Closure(?float): void)|null */
     private ?\Closure $shutdown = null;
 
@@ -182,6 +203,10 @@ final class ServerContext
                     // `bg.started` rows come from this poll's own status diff.
                     $workspace->service(\SugarCraft\Code\Background\ScheduleRegistry::class),
                     $workspace->agentManager,
+                    // C-AGT-5.f: the schedule verdicts this pump makes reach
+                    // `webhooksOut` subscribers through the same dispatcher
+                    // the TUI's pump uses — one queue per launch.
+                    $workspace->service(\SugarCraft\Code\Automation\WebhookDispatcher::class),
                 );
             }
         }
@@ -322,8 +347,74 @@ final class ServerContext
             $this->loop,
             $this->config->askTimeoutSeconds,
             $this->clock,
-            fn (SessionEvent $event) => $this->heard($sessionId, $event),
+            function (SessionEvent $event) use ($sessionId): void {
+                $this->heard($sessionId, $event);
+                // C-AGT-5.f: the SAME stream, mirrored to `webhooksOut`
+                // subscribers. Read at the feed, not in `heard()`: `heard()`
+                // switches only on the types the client protocol cares
+                // about, while the outbound contract (docs/SERVER.md) names
+                // turn.completed and permission.asked among the events an
+                // operator may subscribe to — and TURN_COMPLETED never
+                // reaches `heard()` at all.
+                $this->announceOutbound($sessionId, $event);
+            },
         );
+    }
+
+    /**
+     * C-AGT-5.f: mirror one served session event onto the launch's outbound
+     * webhook dispatcher (dark without `webhooksOut`). Bookkeeping is
+     * deliberately minimal — a start stamp and a tool counter per session —
+     * because the dispatcher's own queue, retries and signing are the
+     * delivery story; this method only decides WHAT happened, WHEN.
+     */
+    private function announceOutbound(string $sessionId, SessionEvent $event): void
+    {
+        if (!$this->outboundWebhooksResolved) {
+            $this->outboundWebhooksResolved = true;
+            $this->outboundWebhooks = $this->hub->workspace()
+                ->service(\SugarCraft\Code\Automation\WebhookDispatcher::class);
+        }
+        $dispatcher = $this->outboundWebhooks;
+        if ($dispatcher === null) {
+            return;
+        }
+
+        switch ($event->type) {
+            case SessionEvent::TURN_STARTED:
+                // A serve host runs one turn at a time per session, so a
+                // per-session stamp is the whole window; a second start
+                // before a completed one simply re-marks the window.
+                $this->webhookTurns[$sessionId] = ['startedMs' => $event->ts, 'tools' => 0];
+                break;
+
+            case SessionEvent::TOOL_STARTED:
+                if (isset($this->webhookTurns[$sessionId])) {
+                    ++$this->webhookTurns[$sessionId]['tools'];
+                }
+                break;
+
+            case SessionEvent::PERMISSION_REQUESTED:
+                $dispatcher->dispatch(\SugarCraft\Code\Automation\WebhookEvent::permissionAsked(
+                    $sessionId,
+                    (string) ($event->data['tool'] ?? ''),
+                ));
+                break;
+
+            case SessionEvent::TURN_COMPLETED:
+                $turn = $this->webhookTurns[$sessionId] ?? null;
+                unset($this->webhookTurns[$sessionId]);
+                $dispatcher->dispatch(\SugarCraft\Code\Automation\WebhookEvent::turnCompleted(
+                    $sessionId,
+                    // Milliseconds on the wire, seconds in the payload — the
+                    // WebhookEvent contract speaks seconds. A completed turn
+                    // with no start stamp (a feed attached mid-turn) reports
+                    // 0 honestly rather than guessing.
+                    $turn === null ? 0.0 : \max(0.0, (float) ($event->ts - $turn['startedMs']) / 1000.0),
+                    $turn['tools'] ?? 0,
+                ));
+                break;
+        }
     }
 
     /**

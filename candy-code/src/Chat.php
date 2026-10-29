@@ -47,6 +47,7 @@ use SugarCraft\Code\Support\StartupSummary;
 use SugarCraft\Code\Support\SystemClipboard;
 use SugarCraft\Code\Attachments\FileMentions;
 use SugarCraft\Code\Attachments\MentionIndex;
+use SugarCraft\Code\Automation\WebhookEvent;
 use SugarCraft\Code\Support\ClipboardImage;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\QueueMode;
@@ -2954,8 +2955,35 @@ final class Chat implements Model
         ]);
         $wait = Cmd::promise(static fn(): PromiseInterface => $armed->deferred->promise());
         $notify = $this->terminalNotification($armed->notifyTitle);
+        // C-AGT-5.f: the same armed question, announced to outbound webhook
+        // subscribers as `permission.asked`. Beside the terminal bell on
+        // purpose — a subscriber that mirrors approvals to a chat service
+        // wants the moment the human sees the prompt, and a superseded ask
+        // (the null arm above) never reached a human, so it never rides out.
+        // dispatch() returns before the loop runs a byte; no Cmd is needed.
+        $this->dispatchOutboundWebhook(WebhookEvent::permissionAsked(
+            $this->currentSessionId ?? '',
+            $msg->toolCall->name(),
+        ));
 
         return [$next, $notify === null ? $wait : Cmd::batch($wait, $notify)];
+    }
+
+    /**
+     * C-AGT-5.f: hand one automation event to this launch's outbound webhook
+     * dispatcher — the workspace service registered by
+     * {@see \SugarCraft\Code\Cli\Bootstrap::workspace()} when `webhooksOut`
+     * names endpoints. Dark launches (no service) and headless workspaces
+     * without one are silent no-ops; the dispatcher itself never blocks the
+     * caller and never throws at it (its own contract: failures become
+     * RuntimeNoticeSink warnings after the retry ladder is spent).
+     */
+    private function dispatchOutboundWebhook(WebhookEvent $event): void
+    {
+        $dispatcher = $this->workspace?->service(\SugarCraft\Code\Automation\WebhookDispatcher::class);
+        if ($dispatcher instanceof \SugarCraft\Code\Automation\WebhookDispatcher) {
+            $dispatcher->dispatch($event);
+        }
     }
 
     /**
@@ -20282,6 +20310,19 @@ final class Chat implements Model
                 };
                 if ($notice !== null) {
                     $notices[] = Message::notice($notice);
+                }
+                // C-AGT-5.f: the same verdict, announced to outbound webhook
+                // subscribers as `schedule.fired`. Only the two decision rows
+                // the operator hears about ride out — a skip stays quiet
+                // because the TUI itself does not notice it either, and the
+                // `outcome` word is the transcript's own verdict vocabulary
+                // (`launched` / `spawn_failed`), not the raw action name.
+                if ($result['action'] === 'fired' || $result['action'] === 'error') {
+                    $this->dispatchOutboundWebhook(WebhookEvent::scheduleFired(
+                        (string) ($result['sessionId'] ?? ''),
+                        (string) $result['name'],
+                        $result['action'] === 'fired' ? 'launched' : 'spawn_failed',
+                    ));
                 }
             }
             // A fired row's daemon settled (or vanished): the row may claim

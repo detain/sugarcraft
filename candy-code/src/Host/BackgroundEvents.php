@@ -12,6 +12,8 @@ use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Background\ScheduleRegistry;
 use SugarCraft\Code\Background\ScheduleSpawner;
 use SugarCraft\Code\Agents\AgentManager;
+use SugarCraft\Code\Automation\WebhookDispatcher;
+use SugarCraft\Code\Automation\WebhookEvent;
 
 /**
  * A host's view of its workspace's background (`/bg`) sessions as events
@@ -109,6 +111,7 @@ final class BackgroundEvents
         private readonly \Closure $emit,
         private readonly ?ScheduleRegistry $schedules = null,
         private readonly ?AgentManager $agentManager = null,
+        private readonly ?WebhookDispatcher $webhooks = null,
     ) {
     }
 
@@ -118,6 +121,9 @@ final class BackgroundEvents
      * @param ScheduleRegistry|null $schedules the AUT-1 roster this host fires
      *        persisted rows from on every poll (the row lock arbitrates with
      *        any other host); null runs no clock, as before
+     * @param WebhookDispatcher|null $webhooks C-AGT-5.f's launch-time
+     *        `webhooksOut` dispatcher (a WorkspaceContext service); null
+     *        keeps schedule verdicts off the wire to the outside
      */
     public static function new(
         BackgroundSupervisor $supervisor,
@@ -125,8 +131,9 @@ final class BackgroundEvents
         \Closure $emit,
         ?ScheduleRegistry $schedules = null,
         ?AgentManager $agentManager = null,
+        ?WebhookDispatcher $webhooks = null,
     ): self {
-        return new self($supervisor, $root, $emit, $schedules, $agentManager);
+        return new self($supervisor, $root, $emit, $schedules, $agentManager, $webhooks);
     }
 
     public function supervisor(): BackgroundSupervisor
@@ -221,6 +228,12 @@ final class BackgroundEvents
      * quiet path became a legible one without an event being minted. An
      * error'd row still advances and will retry next period; the recorded
      * error says why the last attempt did not land.
+     *
+     * C-AGT-5.f: when the launch registered the optional `webhooksOut`
+     * dispatcher, the fired/error verdicts also ride out as `schedule.fired`
+     * deliveries — that is webhook EGRESS on the workspace service, not a
+     * minted wire event, so the paragraph above stands and the Protocol/
+     * fence stays whole. Skips stay quiet on both surfaces.
      */
     private function pumpSchedules(): void
     {
@@ -228,10 +241,25 @@ final class BackgroundEvents
             return;
         }
         $this->schedules->reloadIfChanged();
-        $this->schedules->fireDue(
+        // C-AGT-5.f: the fire verdicts ride out to `webhooksOut` subscribers
+        // as `schedule.fired` — the same two rows the TUI's pump announces
+        // (`fired` as `launched`, `error` as `spawn_failed`); skips stay
+        // quiet there too. The client-facing `bg.*` event set is unchanged.
+        foreach ($this->schedules->fireDue(
             time(),
             ScheduleSpawner::closure($this->supervisor, $this->agentManager, $this->root ?? ''),
-        );
+        ) as $result) {
+            if ($this->webhooks === null) {
+                continue;
+            }
+            if ($result['action'] === 'fired' || $result['action'] === 'error') {
+                $this->webhooks->dispatch(WebhookEvent::scheduleFired(
+                    (string) ($result['sessionId'] ?? ''),
+                    (string) $result['name'],
+                    $result['action'] === 'fired' ? 'launched' : 'spawn_failed',
+                ));
+            }
+        }
         foreach ($this->schedules->firedNames() as $name) {
             $sessionId = $this->schedules->busySession($name);
             $session = $sessionId === null ? null : $this->supervisor->session($sessionId);

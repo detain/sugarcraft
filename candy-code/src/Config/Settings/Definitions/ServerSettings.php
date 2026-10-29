@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Config\Settings\Definitions;
 
+use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Config\Settings\RiskClass;
 use SugarCraft\Code\Config\Settings\SettingCategory;
 use SugarCraft\Code\Config\Settings\SettingDefinition;
@@ -156,6 +157,22 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withHelp(Lang::t('settings.webhooks.help'))
                 ->withReaderSymbol(ServerConfig::class . '::webhooksValue')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
+            // C-AGT-5.f: the OUTBOUND sibling. Same top-level naming as the
+            // inbound hook map above (it names endpoints, not server knobs)
+            // and the same user-config-only law — a cloned repository must
+            // not be able to point the machine's events at attacker-chosen
+            // URLs. Read once at launch by `Bootstrap::workspace()`, which
+            // parses via `Automation\OutboundWebhookConfig::parse()` and
+            // refuses the launch (exit 2) on any malformed endpoint, so a
+            // typo costs a restart message and never a silent no-webhooks.
+            SettingDefinition::new('webhooksOut', SettingType::Map, [])
+                ->withCategory(SettingCategory::Server)
+                ->withRiskClass(RiskClass::Security)
+                ->withUi(UiEditability::Complex)
+                ->withLabel(Lang::t('settings.webhooksOut.label'))
+                ->withHelp(Lang::t('settings.webhooksOut.help'))
+                ->withReaderSymbol(Bootstrap::class . '::outboundWebhookEndpoints')
+                ->withReadBy('`Cli\Bootstrap::workspace()` → `Automation\WebhookDispatcher` service'),
         ];
     }
 }

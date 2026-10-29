@@ -341,9 +341,24 @@ A push payload past the 64 KiB body cap arrives loud: the signed route answers
 never false-strike a legitimate large sender into the lockout (raising the
 per-route cap is a separate change).
 
-Webhook delivery covers **inbound** only; there is no outbound webhook (the
-server posting events to external URLs) in this build — deferred by design, so
-the first webhook surface is the one an operator explicitly opens.
+Outbound webhooks are wired since C-AGT-5.f: the `webhooksOut` user-tier map
+(see [SETTINGS.md](SETTINGS.md)) posts signed event deliveries to endpoints the
+operator names. The setting is read once at launch — a malformed endpoint is an
+exit-2 startup refusal, never a silent no-webhooks — and a cloned project can
+never add an endpoint, because the key is deliberately outside the layered
+tiers. Both hosts emit: the TUI announces `turn.completed` when a turn really
+settles, `permission.asked` when a prompt reaches the human, and
+`schedule.fired` for fired/error rows its pump makes; `serve` mirrors
+`turn.completed` and `permission.asked` off each hosted session's event stream
+and announces `schedule.fired` from its own schedule pump (the row lock means
+exactly one host fires a row, so exactly one delivery follows). Each delivery
+is an HMAC-SHA256-signed POST (`X-Candy-Code-Signature: sha256=<hex>` over the
+exact body, paired `X-Candy-Code-Timestamp`) on the event loop — dispatch never
+blocks the turn that caused it, redirects are refused rather than followed,
+transport failures and 5xx answers climb a 2/8/30-second retry ladder, and the
+in-flight queue is capped so a dead endpoint sheds new events instead of
+growing memory. `session.ended` completes the event vocabulary of the
+dispatcher itself; no emitter posts it yet in either host.
 
 ## WebSocket
 

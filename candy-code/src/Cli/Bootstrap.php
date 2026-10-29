@@ -2156,11 +2156,59 @@ final class Bootstrap
             );
         }
 
+        // C-AGT-5.f: outbound webhooks, read ONCE here at launch from the
+        // user tier only — `webhooksOut` is not in LayeredSettings'
+        // LAYERED_KEYS, so a project or system file can never widen it. A
+        // present-but-unusable value throws PermissionConfigException, the
+        // same exit-2 launch refusal as the spend cap and keybindings
+        // above: a mis-typed endpoint should cost a restart message, not a
+        // silently missing delivery. The dispatcher is registered as a
+        // workspace SERVICE (like the OTel sink factory directly above) so
+        // both hosts of this workspace — the TUI Chat and every served
+        // SessionHost — reach the same single queue through
+        // WorkspaceContext::service(); the dark branch never registers it.
+        $outboundWebhooks = self::outboundWebhookEndpoints($userConfig);
+        if ($outboundWebhooks !== []) {
+            $workspace = $workspace->withService(
+                \SugarCraft\Code\Automation\WebhookDispatcher::class,
+                \SugarCraft\Code\Automation\WebhookDispatcher::fromConfig($outboundWebhooks),
+            );
+        }
+
         $events = $transcripts->events();
 
         return $events === null
             ? $workspace
             : $workspace->withService(\SugarCraft\Code\Host\EventLog::class, $events);
+    }
+
+    /**
+     * C-AGT-5.f: the `webhooksOut` user-tier map, validated for launch.
+     * Parsing lives in {@see \SugarCraft\Code\Automation\OutboundWebhookConfig::parse()}
+     * (https-only except literal loopback, secrets of at least 16 bytes,
+     * known event names only); this method only decides *where* the setting
+     * is read and turns a parse refusal into the exit-2 launch refusal.
+     * Absent key means dark, exactly like an empty map.
+     *
+     * @param array<string,mixed> $userConfig the user-tier view from {@see readUserConfig()}
+     *
+     * @return array<string,array{url:string,secret:string,events:list<string>}>
+     *
+     * @throws PermissionConfigException when the key is present and unusable
+     */
+    public static function outboundWebhookEndpoints(array $userConfig): array
+    {
+        if (!isset($userConfig['webhooksOut'])) {
+            return [];
+        }
+
+        try {
+            return \SugarCraft\Code\Automation\OutboundWebhookConfig::parse($userConfig['webhooksOut']);
+        } catch (\InvalidArgumentException $e) {
+            throw new PermissionConfigException(
+                Lang::t('settings.webhooksOut.refuse', ['reason' => $e->getMessage()]),
+            );
+        }
     }
 
     /**
