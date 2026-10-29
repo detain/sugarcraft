@@ -52,7 +52,11 @@ final class PlanModeSectionTest extends TestCase
         self::assertStringContainsString('Alt+M', $body);
         self::assertStringContainsString(\SugarCraft\Code\Tools\BuiltIn\PlanExitTool::NAME, $body, 'plan mode names its own way out (roadmap 5.7-2)');
         self::assertStringContainsString(\SugarCraft\Code\Tools\BuiltIn\AskUserTool::NAME, $body);
-        self::assertStringContainsString('The tool list is the same in every mode', $body);
+        // C-SEC-7.c round-1: the roster is now narrowed in plan mode; the body
+        // must say so truthfully in both directions (dropped, and the keep trio).
+        self::assertStringContainsString('The tool list is not the same in every mode', $body);
+        self::assertStringContainsString('drops the tools its gate always refuses', $body);
+        self::assertStringContainsString('keeping this mode\'s own `Write`, `Bash` and `PlanExit`', $body);
     }
 
     public function testOnlyAPlanModeGateAddsTheSlotAndItSitsDirectlyAheadOfEnv(): void
