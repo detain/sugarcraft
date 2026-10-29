@@ -341,7 +341,7 @@
     "BootstrapLaunchFormatConstantsTest:1287 PAGE_QUOTES (foreign, batch-8-innocent)"
   ],
   "status": "RUNNING",
-  "tick": "batch18p-welded (C-SEC-7.c + C-AGT-5.f popped, count 236->238; weld-18p: 7 zero-conflict picks on 7342d0e95; C-AGT-4.d dropped as 18o-landed; NO push \u2014 main-tree run-state.json dirty (lead live), lead completes ff + push law applies at wave close only; meta atop 10950ade2)",
+  "tick": "batch18q-welded (11 zero-conflict picks off 410f5ac58: C-MCP-4.c eb3a17dcc/628a5abf3/68d6b28fa -> 71d977594/827f20e5c/eea5615e3 (r3 CLEAN); C-CTX-4.e 39073913e/6d7072876/98470d6de -> f7d312948/b515d2e2c/b2943d1cb (r2 CLEAN); C-TOOL-2.e 1a0d724b3/fe49217ac/e2d8c01e5/056298ca7/9a20c6632 -> c47ab4133/b4156cc76/8d421ca15/3ab554a64/618c093da (r3 CLEAN 0C/0M/1nit); DUR rows x3 minted tsv 1627->1630; protocol ServerContext touched by 827f20e5c but gen-protocol-schema --check 'up to date' = zero drift, no web/dist rider; gen-command/tool/settings-docs --check up to date; W21 wave-closed here; welded_count HELD 240 per batch18q_note; inflight kept lead's 7 keys verbatim; meta atop)",
   "tip": "52532632f",
   "updated": "2026-10-29T17:30:00-04:00",
   "wave_loops": {
@@ -467,10 +467,11 @@
       "verdict": "CLEAN r2 (cures 8dab423f0+c6b1d0317; NIT folds c15427c61); closed"
     },
     "21": {
-      "stage": "findings",
-      "round": 1,
-      "verdict": "FINDINGS 0C/2M (lanes/W21/WAVE-REVIEW-1.md, tip efb97a1b5)",
-      "note": "batch-18n: dispatch wake claimed cures 6ad96d2c3+4c65a48e2 but both objects DO NOT EXIST (cat-file fatal) \u2014 loop fix never landed; waves_closed phantom 21 removed; cures owed (SettingsWriterCensus 2 rows + /fast roster trio) then r2 review, then \u00a73 flip + close + push"
+      "note": "r1 FINDINGS 0C/2M (WAVE-REVIEW-1.md, tip efb97a1b5) -> W18-era fixer cures landed on master as 77072a840 (SettingsWriterCensus rows) + f8f9e6a18 (PaletteSuperset 'fast' survivor + ShellMenu/MenuBarLabel) + d63163d87 -> r2 CLEAN (WAVE-REVIEW-2.md 0C/0M; cure filter 35T/5824A green, re-verified at 7342d0e95; broadened Menu 275T + KeyBinding 301T OK; deviations A/B adjudicated ACCEPTED). batch-18q weld-close: \u00a73 flip + WAVE-REVIEW-2.md evidence commit + push per law.",
+      "report": "lanes/W21/WAVE-REVIEW-{1,2}.md",
+      "round": 2,
+      "stage": "closed",
+      "verdict": "CLEAN 0C/0M"
     }
   },
   "waved_loops": {
@@ -549,7 +550,8 @@
     17,
     18,
     19,
-    20
+    20,
+    21
   ],
   "weld_notes": {
     "C-AGT-1.b": "WELDED 2026-10-27 master 2d45b868f (pick 38f0b3790, base b24e81154-era atop 144fe7955, clean auto-merge lang/en.php, zero conflicts; %ae/%ce 1/1, zero trailers). Regen no-op (command/tool/settings all up to date - LoopCommand hint did not move COMMANDS.md row; no regen commit). Gates: Loop|ScheduleRegistry|SessionHost|ServerContext 317T/1470A OK EXACT; five-guard 133T/15632A F2 staleness pair only (pinned 25,537 - closeout re-pin). DURATIONS duty: NEW candy-code/tests/Host/SessionHostLoopFireTest.php (5T) + ScheduleRegistryTest +2T figure note - LIST ONLY. NIT carry (from r1 review): SessionHost.php:918-931 notice wording. \u00a74 mark \u2705 2d45b868f UNSTAGED. Cherry proof '-'; worktree+branch pruned.",
@@ -1529,5 +1531,6 @@
     }
   },
   "batch18o_note": "C-AGT-4.d welded (3 picks fde5f268b/1b9baf4a0/73a589cae -> 7c87beae6/c384ca46e/cd2062466, rebased over lead W21 wave-review commits d63163d87 zero-conflict; dist rider rebuilt, trio byte-clean; lane filter 273T green, guards sole-red staleness pair standing, vitest 710T green; W22 10/10 steps welded after this \u2014 wave loop owed; weld+meta hashes ride meta follow-up per own-SHA law) | meta stamp a0e3f2ce2 | HAZARD DISCLOSED: lead working-copy run-state edits made AFTER fold source 61939ca0 (file measured 5c96e5dc pre-ff) were discarded by pre-ff checkout -- and are unrecoverable; committed fold preserves lead state through 61939ca0 + weld fields; lead should re-apply any tick/notes advanced since.",
-  "batch18p_note": "weld-18p: C-SEC-7.c (r2 CLEAN) + C-AGT-5.f (r3 CLEAN) welded zero-conflict on 7342d0e95. C-AGT-4.d dropped (landed via 18o). DUR rows: PlanModeToolRosterTest.php, OutboundWebhookWiringTest.php (11T/59A green-run shape per r3). +11T re-pin closeout carry; staleness pair now pinned-25537 vs live-28402. Carries: COMPARISON.md :383/:938/:3545 stale same-in-every-mode quotes -> closeout doc-truth; foreign-inherited reds PermissionsIntroDrift+ForeignAgentPresetWiring unchanged at tip (byte-identical vs base). NO push (main-tree run-state.json dirty \u2014 lead completes ff)."
+  "batch18p_note": "weld-18p: C-SEC-7.c (r2 CLEAN) + C-AGT-5.f (r3 CLEAN) welded zero-conflict on 7342d0e95. C-AGT-4.d dropped (landed via 18o). DUR rows: PlanModeToolRosterTest.php, OutboundWebhookWiringTest.php (11T/59A green-run shape per r3). +11T re-pin closeout carry; staleness pair now pinned-25537 vs live-28402. Carries: COMPARISON.md :383/:938/:3545 stale same-in-every-mode quotes -> closeout doc-truth; foreign-inherited reds PermissionsIntroDrift+ForeignAgentPresetWiring unchanged at tip (byte-identical vs base). NO push (main-tree run-state.json dirty \u2014 lead completes ff).",
+  "batch18q_note": "weld-18q deviations+disclosures (2026-10-29): (1) weld-count: spawn cited 'welded += 3 (243)' NOT applied \u2014 lead's own park 410f5ac58 had already moved C-CTX-4.e + C-TOOL-2.e into welded (238->240) and C-MCP-4.c rode the stale 10-27 pre-landing count; all three ids are present exactly once and list-invariants (sorted, set, len==count==240) hold \u2014 +3 would double-count; bump to 243 is lead's call if the accounting intends re-run=extra weld. (2) stale-mark erratum: C-MCP-4.c \u00a74 row cited 2ad862baf (real OAuth-side pre-landing, weld f25a697c1, mark via b4b4404c5); spawn's ghost pair e549f913f/d9b0f171 NEVER appears in plan history (git log -S zero hits) \u2014 correction satisfied trivially; row now cites eea5615e3 chain. (3) vendor source: spawn-cited C-WEB-5.a/candy-code/vendor absent on disk; cp -a from cc-cmp-weld-18p instead (no composer/package.json touch by any pick \u2014 validity proven by file census). (4) gate-window variances vs prose cites: OAuth six-class file-list = 96T/294A green (spawn 'pair 65T', REVIEW-3 '102T/332A' \u2014 definitions differ; green is the gate); bare --filter OAuth hangs >570s \u2014 use file lists; CTX band filter = 163T/1604A green (spawn band ~922T/9306A not reproduced); OutputStyleTest green-run 15T/77A (REVIEW-2 r-cites 16T \u2014 run authoritative per spawn law); tsv was 1627 rows at tip, not 1625. (5) standing reds reproduced at merged tip, all disclosed-foreign, none chased: ReadPathCensus RemoteSessionPush, SwallowingCatch SkillTool::execute, ReadmeSuiteFigureDrift staleness pair (closeout \u00a77 re-pin duty; +40T-era carries absorb); 'PHPUnit Deprecations: 2' baseline every run. (6) tsv descending-insert at sorted positions; 3 rows: McpLoginServedTest 3.407/10, DocumentAttachmentWireTest 0.517/15, OutputStyleTest 0.392/15. (7) no full suites run (welder law); PtyRunToolTest never touched."
 }
