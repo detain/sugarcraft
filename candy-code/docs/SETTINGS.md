@@ -1572,6 +1572,23 @@ opted the repository in, and the project tier cannot reach `provider`,
 `instructions` or any permission key — but "trusted, frozen" would otherwise
 read as covering both halves.
 
+One launch-time key deserves the point spelled out: `instructions` entries come
+in two spellings. A path pattern globs against the checkout (or, when it is
+absolute or `~`-prefixed, against your own home — a shape only the user tier is
+trusted to name); an `https://` entry is a document to FETCH. The fetch runs
+once per session before the first fork, through `Support\PublicUrlGuard` — the
+same guard `WebFetch`'s refusals live in: loopback, private, link-local and
+cloud-metadata addresses, URL credentials, `http://` (instruction sources are
+HTTPS-only) and redirects that are not absolute HTTPS are all refused. What
+comes back is capped at the on-disk instruction documents' size budget
+(`InstructionFileLoader::MAX_DOCUMENT_BYTES`) and fenced as untrusted remote
+content with its URL stated in the header and its block markers and role labels
+neutralised, so it can inform the prompt but cannot forge maintainer authority;
+every refusal or failure lands in the launch-notice list keyed by its spelled
+form. A project tier can never spell a URL at all — the same law that keeps
+absolute patterns out of that tier: a checked-out repository must not dial out
+on the operator's behalf.
+
 ### `/keys reload` — the keybinding word
 
 `keybindings` is the one launch-time key that does not wait for the next

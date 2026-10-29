@@ -887,7 +887,19 @@ precedence order (`InstructionFileLoader::FILENAMES`):
   the user tier, and each of its matches is then contained by your home the
   same way a checkout pattern is contained by the checkout (a symlink out of
   home is refused by path); a project tier can never name one — the loader
-  keeps the tiers apart precisely so it cannot; the
+  keeps the tiers apart precisely so it cannot; an entry spelled `https://`
+  is a document to FETCH rather than a path to glob-resolve — fetched once per
+  session before the first fork, through the same guard the `WebFetch` tool's
+  refusals live in (`Support\PublicUrlGuard`: loopback, private, link-local and
+  cloud-metadata addresses, URL credentials, non-HTTPS endpoints and redirects
+  that are not absolute HTTPS are all refused); the document shares the
+  instruction files' size budget (`InstructionFileLoader::MAX_DOCUMENT_BYTES`),
+  arrives fenced as untrusted remote content stating its URL provenance — it
+  carries no maintainer authority and its block markers and role labels are
+  neutralised — and every refusal or failure lands in the launch-notice list
+  keyed by its spelled form; a project-tier URL is refused outright, the same
+  law that keeps absolute patterns from that tier: a checked-out repository
+  never dials out on the operator's behalf; the
   sibling user-tier key `instructionsExclude` skips (and records as refusals)
   the repository-tier instruction files its globs match — a checkout can never
   silence context its operator chose, and the personal tier is outside the
