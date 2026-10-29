@@ -29,16 +29,19 @@ use SugarCraft\Code\Util\PathGlob;
  * ISS-067 — a forced file's own imports were dead text.
  *
  * EVERY read here is bounded through {@see ContainedPath}, and the count is
- * deliberate rather than incidental: EIGHT call sites, one per read decision this
- * class makes — `loadPersonal()`'s personal entry and its `~/.claude` fallback,
+ * deliberate rather than incidental: NINE call sites, one per read decision this
+ * class makes — `loadPersonal()`'s personal-directory gate (one site shared by
+ * the `AGENTS.md` head and its persona candidates) and its `~/.claude`
+ * fallback,
  * `loadRoot()`'s root entry, `loadAncestorRoots()`'s ancestor entry,
  * `loadForced()`'s glob match,
- * `loadForPath()`'s starting directory and its per-level candidate, and
+ * `loadForPath()`'s starting directory and its per-level candidate,
+ * `ancestorRoot()`'s home floor, and
  * `expandImports()`'s gate closure. Pinned as a count in
  * {@see \SugarCraft\Code\Tests\Support\ContainedPathInventoryTest}::ROUTED_CALL_SITES.
  *
  * BOUNDED BY WHICH ROOT IS NOW A REAL QUESTION, and the answer is per-tier
- * rather than "repoRoot" — five of the eight pass `$repoRoot`,
+ * rather than "repoRoot" — five of the nine pass `$repoRoot`,
  * `loadAncestorRoots()` and the `expandImports()` gate it calls pass
  * {@see ancestorRoot()}, because an ancestor file is by construction outside
  * `$repoRoot` and judging it against `$repoRoot` would refuse all of them, and
@@ -570,39 +573,48 @@ final class InstructionFileLoader
     }
 
     /**
-     * The operator's personal instruction document, `~/.candy-code/AGENTS.md`
-     * (roadmap 5.14j) — the one instruction file that follows the PERSON across
-     * every checkout rather than arriving with one. Zero or one entry, in the
-     * path-keyed shape {@see loadDocuments()} returns. When that file does not
-     * exist, Claude Code's personal memory file `~/.claude/CLAUDE.md` stands in
+     * The operator's personal instruction documents under `~/.candy-code`
+     * (roadmap 5.14j; the persona files join per C-CTX-4.b) — the instruction
+     * files that follow the PERSON across every checkout rather than arriving
+     * with one. The head is {@see PERSONAL_FILENAME}, `AGENTS.md`; behind it
+     * ride {@see PERSONA_FILENAMES} — `SOUL.md`, the operator's voice and
+     * standing behavior, and `USER.md`, facts about the operator. Zero to four
+     * entries, head first and personas in const order, in the path-keyed shape
+     * {@see loadDocuments()} returns. When the head does not exist, Claude
+     * Code's personal memory file `~/.claude/CLAUDE.md` stands in FOR THE HEAD
      * (roadmap 6.4): operators who have invested in that convention get their
      * context without being asked to duplicate it, and the two are never both
-     * read — the primary wins whenever it is a file the containment gate
-     * ADOPTS; a containment-refused primary records its refusal and hands the
-     * stand-in role to the fallback (INT-M2, round r10 fix-lane).
+     * read — the head wins whenever it is a file the containment gate ADOPTS; a
+     * containment-refused head records its refusal and hands the stand-in role
+     * to the fallback (INT-M2, round r10 fix-lane). The stand-in answers for
+     * the head slot only: a persona has no `~/.claude` spelling and no
+     * candidate other than itself.
      *
      * KEPT OUT OF {@see loadDocuments()} ON PURPOSE, because provenance picks the
      * framing: every document that list returns is repository-shipped and is
      * spliced behind the "written by this repository's maintainers" preamble,
      * which these bytes do not have. {@see \SugarCraft\Code\Runtime::planInstructionDocuments()}
-     * prices this one FIRST, under the same combined budget, and frames it with
-     * the operator's own user-tier voice — the voice `~/.candy-code/rules`
-     * already speaks with, since both are bytes the operator wrote in their own
+     * prices each of these FIRST, under the same combined budget, and frames it
+     * with the operator's own user-tier voice — the voice `~/.candy-code/rules`
+     * already speaks with, since all are bytes the operator wrote in their own
      * home directory.
      *
-     * BOUNDED BY THE CANDIDATE'S OWN DIRECTORY, not by `$repoRoot`: both files
-     * are by construction outside every checkout. Each entry is gated with
-     * {@see ContainedPath::within()} against its own anchor — `personalDir()`
-     * for `~/.candy-code/AGENTS.md`, the sibling `~/.claude` for the fallback —
-     * the same kind of hold RuleLoader keeps on `~/.candy-code/rules/*.md`, so
-     * either file symlinked out of its directory is refused AND RECORDED exactly
-     * as a user-tier rule would be, and its `@import`s are bounded by the same
-     * directory. Refusal of the PRIMARY does not close the personal channel: its
-     * loud provenance line lands in {@see refusedPaths()} and the fallback is
-     * then judged on its own merits, the same as when no primary exists — a
-     * broken primary must not silently un-house the operator's other personal
-     * file. Size ceiling, UTF-8 scrub and the shared dedup set are the root
-     * documents' own.
+     * BOUNDED BY THE CANDIDATE'S OWN DIRECTORY, not by `$repoRoot`: these files
+     * are by construction outside every checkout. The head and the persona loop
+     * share ONE {@see ContainedPath::within()} site against the `personalDir()`
+     * anchor; the fallback keeps its own compare against ITS OWN anchor, the
+     * sibling `~/.claude` — the same kind of hold RuleLoader keeps on
+     * `~/.candy-code/rules/*.md`, so any candidate symlinked out of its
+     * directory is refused AND RECORDED exactly as a user-tier rule would be,
+     * and its `@import`s are bounded by the same directory. Refusal of the
+     * PRIMARY does not close the personal channel: its loud provenance line
+     * lands in {@see refusedPaths()} and the fallback is then judged on its own
+     * merits, the same as when no primary exists — a broken primary must not
+     * silently un-house the operator's other personal file. Read the same law
+     * sideways: a refused PERSONA records its own line and is skipped, and the
+     * head's channel (and the other persona's) stays open. An absent candidate
+     * costs one stat. Size ceiling, UTF-8 scrub and the shared dedup set are
+     * the root documents' own.
      *
      * Memoized like the other whole-session loaders.
      *
@@ -620,19 +632,35 @@ final class InstructionFileLoader
             return [];
         }
 
-        $path = $dir . '/' . self::PERSONAL_FILENAME;
-        $anchor = $dir;
-        $primaryAdopted = is_file($path);
-        if ($primaryAdopted && !ContainedPath::within($path, $anchor)) {
-            // INT-M2: record the refusal loudly, then let the fallback below
-            // stand in exactly as it would when no primary exists — refusing
-            // the escaped symlink is the whole gate's job; quietly un-housing
-            // the operator's other personal file was never part of it.
-            $this->refusedPaths[$path] = 'the personal instruction file resolves outside ' . $anchor;
-            $primaryAdopted = false;
+        $documents = [];
+        $headAdopted = false;
+
+        foreach ([self::PERSONAL_FILENAME, ...self::PERSONA_FILENAMES] as $filename) {
+            $path = $dir . '/' . $filename;
+            if (!is_file($path)) {
+                continue;
+            }
+            if (!ContainedPath::within($path, $dir)) {
+                // INT-M2: record the refusal loudly, then let the fallback
+                // below stand in exactly as it would when no primary exists —
+                // refusing the escaped symlink is the whole gate's job;
+                // quietly un-housing the operator's other personal file was
+                // never part of it. The law reads sideways for a persona: its
+                // escape skips IT and nothing else on this list.
+                $this->refusedPaths[$path] = 'the personal instruction file resolves outside ' . $dir;
+
+                continue;
+            }
+            if ($filename === self::PERSONAL_FILENAME) {
+                $headAdopted = true;
+            }
+            $entry = $this->readPersonalEntry($path, $dir);
+            if ($entry !== null) {
+                $documents[] = $entry;
+            }
         }
 
-        if (!$primaryAdopted) {
+        if (!$headAdopted) {
             // Claude Code's personal memory file stands in when the operator
             // has not written ours (roadmap 6.4) — or when ours was written but
             // containment-refused above (INT-M2). The fallback is judged by ITS
@@ -645,34 +673,62 @@ final class InstructionFileLoader
             // scratch home), so the fallback is the sibling `.claude` tree.
             $anchor = \dirname($dir) . '/.claude';
             $path = $anchor . '/CLAUDE.md';
-            if (!is_file($path)) {
-                return [];
-            }
-            if (!ContainedPath::within($path, $anchor)) {
-                $this->refusedPaths[$path] = 'the personal instruction file resolves outside ' . $anchor;
-
-                return [];
+            if (is_file($path)) {
+                if (!ContainedPath::within($path, $anchor)) {
+                    $this->refusedPaths[$path] = 'the personal instruction file resolves outside ' . $anchor;
+                } else {
+                    $entry = $this->readPersonalEntry($path, $anchor);
+                    if ($entry !== null) {
+                        // The stand-in takes the HEAD slot, so personas ride
+                        // behind it exactly as they ride behind AGENTS.md.
+                        array_unshift($documents, $entry);
+                    }
+                }
             }
         }
 
+        $this->personalCache = $documents;
+
+        return $this->personalCache;
+    }
+
+    /**
+     * The shared tail of every personal-tier read (C-CTX-4.b): the dedup
+     * through the one shared "already emitted" set — marked BEFORE the read,
+     * so a document importing itself costs one entry — then the size ceiling,
+     * UTF-8 scrub and `@import` expansion bounded by the candidate's own
+     * directory. Carries NO containment gate of its own: every caller has
+     * already resolved the candidate against its own anchor, which is what
+     * keeps the one-compare-per-read-decision census explainable. Null means
+     * the file costs the prompt nothing (unreadable, or already emitted under
+     * another spelling); a ceiling-tripped document still returns its
+     * null-body pointer entry, the same shape the single-candidate tail
+     * returned before the personas joined it.
+     *
+     * @return ?array{path: string, body: ?string, bytes: int, imports?: list<string>}
+     */
+    private function readPersonalEntry(string $path, string $anchor): ?array
+    {
         $realPath = realpath($path) ?: $path;
         if (isset($this->emittedPaths[$realPath])) {
-            return [];
+            return null;
         }
 
         $this->emittedPaths[$realPath] = true;
 
         $raw = $this->readBounded($realPath, $path, $bytes);
         if ($raw === null) {
-            $this->personalCache = [['path' => $path, 'body' => null, 'bytes' => (int) $bytes]];
-        } elseif ($raw !== false) {
-            [$doc, $note] = $this->utf8Document($raw, $path);
-            $children = [];
-            $body = $this->expandImports($doc, \dirname($path), $anchor, $children) . $note;
-            $this->personalCache = [['path' => $path, 'body' => $body, 'bytes' => strlen($body), 'imports' => $children]];
+            return ['path' => $path, 'body' => null, 'bytes' => (int) $bytes];
+        }
+        if ($raw === false) {
+            return null;
         }
 
-        return $this->personalCache;
+        [$doc, $note] = $this->utf8Document($raw, $path);
+        $children = [];
+        $body = $this->expandImports($doc, \dirname($path), $anchor, $children) . $note;
+
+        return ['path' => $path, 'body' => $body, 'bytes' => strlen($body), 'imports' => $children];
     }
 
     /**

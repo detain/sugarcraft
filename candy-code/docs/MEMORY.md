@@ -862,16 +862,20 @@ plus four other agents' spellings of the same convention — `GEMINI.md`,
 rank keeps it from ever winning a level from the names above) — in that
 precedence order (`InstructionFileLoader::FILENAMES`):
 
-- **your personal file** — `~/.candy-code/AGENTS.md`, always, at session start,
-  in every project. It is priced first under the same instruction budget and
-  framed in your own voice (the `<user-rules>` fence and preamble your
+- **your personal files** — `~/.candy-code/AGENTS.md`, always, at session start,
+  in every project, and behind it the two persona files `SOUL.md` (your voice
+  and standing behavior) and `USER.md` (facts about you), each read only when
+  present and each priced under the same instruction budget and framed in your
+  own voice (the `<user-rules>` fence and preamble your
   `~/.candy-code/rules` use — the `~/.claude/rules` and
   `~/.cursor/rules` imports share exactly that framing and tier, differing only
   by the `[claude]`/`[cursor]` badge `/rules` prints), ahead of anything a
-  repository ships. Only an
+  repository ships; every one of them that exists shows up as its own
+  personal-tier row in the `/context` panel, the `/instructions` listing and
+  the wire shape. Only an
   owned home is consulted (`HomeDirectory::owned()`); when you have not written
-  that file, Claude Code's personal memory file `~/.claude/CLAUDE.md` stands in,
-  gated by its own directory the same way — the two are never both read;
+  the head file, Claude Code's personal memory file `~/.claude/CLAUDE.md`
+  stands in for the head slot only — the two are never both read;
 - **root files** — always, at session start, plus any files the walk above the
   checkout reaches: by default that walk stops at the nearest enclosing `.git`,
   and with the user-tier `instructions.walkToRoot` on it continues past that
@@ -886,7 +890,7 @@ precedence order (`InstructionFileLoader::FILENAMES`):
   keeps the tiers apart precisely so it cannot; the
   sibling user-tier key `instructionsExclude` skips (and records as refusals)
   the repository-tier instruction files its globs match — a checkout can never
-  silence context its operator chose, and the personal file is outside the
+  silence context its operator chose, and the personal tier is outside the
   filter by construction;
 - **nested files** — a `CLAUDE.md`/`AGENTS.md` (or alias) in a subdirectory is
   injected when a tool touches a path under it, at most once per session.
@@ -958,7 +962,8 @@ protection — a file that imports itself is marked before its own expansion run
 ### Containment
 
 Every read is bounded by its own root through `ContainedPath` — nine call
-sites, one per read decision: `loadPersonal()`'s personal entry and its
+sites, one per read decision: `loadPersonal()`'s personal-directory gate
+(shared by the head file and its persona candidates) and its
 `~/.claude` fallback (each bounded by its own directory),
 `loadRoot()`'s root entry,
 `loadAncestorRoots()`'s ancestor entry, `loadForced()`'s glob match,
@@ -1040,6 +1045,8 @@ as it does to `open`.
 ~/.candy-code/
 ├── config.json        settings, permissions, the four trustedProject* keys
 ├── AGENTS.md          your personal instruction file (every project)
+├── SOUL.md            personal persona — your voice, optional
+├── USER.md            personal persona — facts about you, optional
 ├── settings.json      hand-authored settings   → SETTINGS.md
 ├── session.db         SQLite session store
 ├── memory/<scope>/    the memory store (project/<key>/ per project)
