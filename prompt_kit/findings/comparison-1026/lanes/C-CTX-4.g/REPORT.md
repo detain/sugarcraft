@@ -37,10 +37,10 @@ honored) to produce the fail-before evidence.
   EngineBackendWitherPreservesStateTest census row + carrier pin.
 
 ## Measured gates (cwd candy-code, env -u LINES -u COLUMNS, plain pipe, -c phpunit.xml)
-- AppendSystemPromptTest: **19 tests / 145 assertions OK** (fail-before at base src: 19T/Errors 9/Failures 10 — cp-swap, `/tmp/opencode/C-CTX-4g/fail-before-real.txt`).
+- AppendSystemPromptTest: **18 tests / 145 assertions OK** (fail-before at base src: 18T with the filter 19T/Errors+Failures 19 — cp-swap, `/tmp/opencode/C-CTX-4g/fail-before-real.txt`). WELD-ERRATUM (lead ruling at weld, batch-13): the class holds 18 test methods; the 19 seen at the lane was the `--filter AppendSystemPrompt` shape (file 18 + ArgvParserTest recognizer). Merged-tree re-measure: file alone 18T/145A OK; filter 19T/147A OK.
 - `LaunchFlagsTest|ArgvParserTest|EngineBackendWitherPreservesStateTest`: 280T/2091A OK (now +recognizer/+census/+carrier = 282-shape confirmed inside the 497T battery).
 - Battery `Completion|LangCatalogue|HelpTest|AppendSystemPrompt`: 263T / **9F = the 9 base-proven reds, identical names** (base-swap run `helptest-base.txt`/`completion-base.txt` reproduced them with all my files at base).
-- Battery `DocFigure|ReadmeRoster|ArchAssemblyOrder|PromptSnapshot|PrimaryAgent|BaseSystemPrompt|Stderr|ReadPath`: **259T/27290A, 0F**.
+- Battery `DocFigure|ReadmeRoster|ArchAssemblyOrder|PromptSnapshot|PrimaryAgent|BaseSystemPrompt|Stderr|ReadPath`: **259T/27290A, 0F**. WELD-DISCLOSURE: the 259T figure was not reproducible at weld or review; the closest true band on the merged tree measures 393T/2F (ChildStderrCapture, base-owned) — battery-quote corrected to actuals; the merged-tree guard run GlobDialect|TreeWideGuardRoster|StderrEmitterCensus|ReadPathCensus|DocFigureProseDrift = 237T/31028A OK.
 - Battery `AppendSystemPrompt|LaunchFlags|ArgvParser|Wither|NonInteractive|BinGuard|JsonErrorContract`: 497T/**16F all base-proven** (NonInteractive trio 12F+3W byte-identical at base NonInteractive.php; JsonErrorContract 4F = McpServerRequests foreign shape at base).
 - ReadmeSuiteFigureDrift staleness pair NOT re-run here — welder re-pin carries the figure.
 
@@ -50,8 +50,8 @@ carrier + whole-chain pins red (2F). M4 requires_prompt gate neutered: refusal p
 variant `&& !prompt` removed → 5F, disclosed). M5 append pushed after `<env>`: order pin red (1F).
 
 ## Welder owes
-- durations.tsv row: `AppendSystemPromptTest.php` (measured **19** tests).
-- suite-figure/README re-pin carry: **+22 tests** (19 new file + 1 ArgvParserTest recognizer + 1 WitherFeeds
+- durations.tsv row: `AppendSystemPromptTest.php` (measured **18** tests, 0.52s — weld-minted).
+- suite-figure/README re-pin carry: **+21 tests** (WELD-ERRATUM: 18 new file, not 19 + 1 ArgvParserTest recognizer + 1 WitherFeeds
   method + 1 withers() sweep data-set).
 - Pre-existing standing reds re-confirmed at this base (NOT this lane): NonInteractive trio 12, JsonErrorContract 4,
   KeyHelp 5, SERVICE_TIER, CliLangCatalogue marketplace sort, ChatHost catalogue, BinCandyCode verb.
