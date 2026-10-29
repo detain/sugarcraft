@@ -631,6 +631,13 @@ final class ReadPathCensusTest extends TestCase
                 . '$path)`, size-capped at `FormatRunner::MAX_SOURCE_BYTES` like the runner\'s own '
                 . 'baseline read; the bytes feed only `ReadLedger::staleness()` evidence',
         ],
+        'Hooks/BuiltIn/AuditLogReader.php|fopen' => [
+            'SELF_LOCATED — window(): the `audit.log` (and its rotated `audit.log.1`) inside the per-uid '
+                . 'audit directory `AuditHook::defaultLogDirectory()` names, which AuditHook creates and '
+                . 'appends; lstat refuses anything but a regular file before the open, and every read is '
+                . 'a bounded tail window. A serve under a different HOME/TMPDIR simply finds no file — '
+                . '`filesize()` false answers as the empty trail the class note promises',
+        ],
         // CALLER_SUPPLIED, not CONTAINED_UPSTREAM, and the correction was made BY
         // this test: the first draft claimed the upstream gate was in
         // `Cli/Bootstrap.php`, and the measured check refused it, because Bootstrap's

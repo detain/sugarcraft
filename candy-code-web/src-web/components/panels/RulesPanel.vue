@@ -11,6 +11,12 @@ import { describe } from '../../stores/session'
  * moves through the status bar's select (`session.setMode`), and the rules
  * are the settings' doing; this panel is the audit view, not the dial.
  * With no session on screen it shows the server-wide picture.
+ *
+ * C-SEC-6.d: the view grew the other half of an audit — `permission.audit`,
+ * the recent tool-call DECISIONS (`Recent decisions` below), read from the
+ * server's own redacted audit trail. Its failure is deliberately silent in
+ * the loudest sense: an older server without the method (or a log it will
+ * not read) answers nothing here and never sinks the policy view above it.
  */
 const props = defineProps<{ sessionId: string | null }>()
 const connection = useConnectionStore()
@@ -29,6 +35,12 @@ const configured = computed(() => (rules.value as RuleRow[]).filter((rule) => ru
 const saved = computed(() => (rules.value as RuleRow[]).filter((rule) => rule.tier === 'user'))
 const forgetting = ref<string | null>(null)
 const forgetError = ref<string | null>(null)
+
+/** C-SEC-6.d: one row of `permission.audit`. NULL rows means this server does not
+ * answer the method (older build) — visibly different from an empty trail. */
+type AuditRow = MethodResult<'permission.audit'>['rows'][number]
+const auditRows = ref<AuditRow[] | null>(null)
+const auditUnreadable = ref(false)
 
 /** Take one saved rule back out, then re-read so the panel shows the truth. */
 async function forget(row: RuleRow): Promise<void> {
@@ -60,6 +72,7 @@ async function load(): Promise<void> {
   const mine = ++generation
   loading.value = true
   error.value = null
+  void loadAudit(mine)
   try {
     const result = await connection.request('permission.rules', props.sessionId === null ? {} : { sessionId: props.sessionId })
     if (mine !== generation) return
@@ -73,6 +86,26 @@ async function load(): Promise<void> {
     error.value = describe(failure)
   } finally {
     if (mine === generation) loading.value = false
+  }
+}
+
+/**
+ * C-SEC-6.d: the decisions trail rides its own settle on the SAME generation
+ * stamp — a session switch invalidates both in-flight reads together, but a
+ * failed `rules` read must not blind the audit one (and vice versa). An
+ * answer failure here is NOT an error: it is an older server that has no
+ * `permission.audit`, and the policy view above stays exactly as honest.
+ */
+async function loadAudit(mine: number): Promise<void> {
+  try {
+    const result = await connection.request('permission.audit', props.sessionId === null ? {} : { sessionId: props.sessionId })
+    if (mine !== generation) return
+    auditRows.value = result.rows
+    auditUnreadable.value = result.unreadable
+  } catch {
+    if (mine !== generation) return
+    auditRows.value = null
+    auditUnreadable.value = false
   }
 }
 
@@ -121,6 +154,20 @@ onMounted(() => void load())
       <ul v-else data-testid="grants-list">
         <li v-for="grant in sessionGrants" :key="grant" data-testid="grant-row">{{ grant }}</li>
       </ul>
+      <h3>Recent decisions</h3>
+      <p v-if="auditUnreadable" class="error" data-testid="rules-audit-unreadable">The server could not read its audit trail just now.</p>
+      <p v-else-if="auditRows === null" class="empty" data-testid="rules-audit-none">This server does not report audited decisions.</p>
+      <p v-else-if="auditRows.length === 0" class="empty" data-testid="rules-audit-none">No tool calls have been audited yet.</p>
+      <ul v-else data-testid="rules-audit">
+        <li v-for="(row, index) in auditRows" :key="`${row.time}-${index}`" class="decision" :class="`decision-${row.verdict}`" data-testid="audit-row" :data-verdict="row.verdict">
+          <span class="idx">{{ row.time }}</span>
+          <span class="tool">{{ row.tool }}</span>
+          <span class="action">{{ row.verdict }}</span>
+          <span v-if="row.kind" class="kind">{{ row.kind }}</span>
+          <span v-if="row.reason" class="reason">{{ row.reason }}</span>
+        </li>
+      </ul>
+      <p class="note" data-testid="rules-audit-note">The trail is this user's own redacted audit log, read from a bounded tail on the server. A serve started under a different HOME or TMPDIR reads a different — usually empty — one.</p>
     </template>
   </div>
 </template>
@@ -185,6 +232,23 @@ h3 {
 }
 .action[data-action='ask'] {
   color: var(--warn);
+}
+.decision-deny .action {
+  color: var(--error);
+}
+.decision-withheld .action {
+  color: var(--warn);
+}
+.kind {
+  margin-left: 0.35rem;
+  font-variant: small-caps;
+}
+.reason {
+  color: var(--muted);
+  margin-left: 0.35rem;
+}
+.reason::before {
+  content: '— ';
 }
 ul {
   margin: 0;

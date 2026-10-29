@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Protocol\Methods;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Backend\PendingAsk;
 use SugarCraft\Code\Config\Settings\SettingsWriter;
+use SugarCraft\Code\Hooks\BuiltIn\AuditLogReader;
 use SugarCraft\Code\Permissions\PermissionAction;
 use SugarCraft\Code\Permissions\PermissionReply;
 use SugarCraft\Code\Permissions\PermissionRule;
@@ -48,6 +49,13 @@ use SugarCraft\Code\Protocol\SessionFeed;
  *   `cascade` on one is refused `cascade_unavailable`, and `remember: "user"`
  *   on one is refused `remember_user_unavailable` — a relayed answer carries
  *   no session grant to persist, so there is nothing to save.
+ *
+ * `permission.audit` (C-SEC-6.d) answers a different question — what has
+ * ALREADY been decided — by reading {@see \SugarCraft\Code\Hooks\BuiltIn\AuditHook}'s
+ * redacted log through {@see AuditLogReader}. It sits at `Scope::Approve`,
+ * deliberately tighter than the gap's original Read: the log spans every
+ * session and every project root of this user, so a viewer who cannot answer
+ * one permission question should not read its whole history either.
  */
 final class PermissionMethods
 {
@@ -61,6 +69,7 @@ final class PermissionMethods
         $registry->add(MethodSpec::new('permission.pending', Scope::Read, 'The questions still open, for one session or all open sessions.', self::pending(...)));
         $registry->add(MethodSpec::new('permission.rules', Scope::Read, 'The effective permission mode and rules, read-only; saved user-tier rows carry their tier and 1-based saved index.', self::rules(...)));
         $registry->add(MethodSpec::new('permission.forget', Scope::Approve, 'Remove one saved permission rule from the user config, addressed by its pattern or by its 1-based saved index.', self::forget(...), true));
+        $registry->add(MethodSpec::new('permission.audit', Scope::Approve, 'Recent tool-call decisions from this user\'s redacted audit log tail; a bounded read, every session unless one is named.', self::audit(...)));
     }
 
     /** @return array<string, mixed> */
@@ -359,5 +368,24 @@ final class PermissionMethods
             ], $gone),
             'path' => (string) $rules->path(),
         ];
+    }
+
+    /**
+     * The recent decisions, newest last (C-SEC-6.d — the web panel's data
+     * arm). Deliberately NOT tied to a hosted session: the audit log is
+     * this process's own per-user trail, and a server may be asked about it
+     * before (or without) any session. `unreadable` answers only when the
+     * named log exists but refused to open, so "no decisions yet" and "the
+     * trail is there and I could not read it" stay two different sentences;
+     * a missing file is the honest empty list the class note promises.
+     *
+     * @return array<string, mixed>
+     */
+    private static function audit(CallContext $call, Params $params): array
+    {
+        $sessionId = $params->has('sessionId') ? SessionMethods::sessionId($params) : null;
+        $limit = $params->optionalInt('limit', 1, AuditLogReader::MAX_ROWS) ?? AuditLogReader::DEFAULT_ROWS;
+
+        return AuditLogReader::tail($limit, null, $sessionId);
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Protocol\Schema;
 
+use SugarCraft\Code\Hooks\BuiltIn\AuditLogReader;
 use SugarCraft\Code\Host\SessionSnapshot;
 use SugarCraft\Code\Memory\MemoryHistory;
 use SugarCraft\Code\Protocol\Methods\FsMethods;
@@ -334,6 +335,20 @@ final class MethodSchemas
                     'removed' => Schema::arrayOf(Schema::object(['pattern' => Schema::string(), 'action' => Schema::string()], ['pattern', 'action'])),
                     'path' => Schema::string(),
                 ], ['removed', 'path']),
+            ],
+            'permission.audit' => [
+                Schema::object([...$sid, 'limit' => Schema::integer(1, AuditLogReader::MAX_ROWS)->describe('Rows wanted, newest last; the server caps the read at ' . AuditLogReader::MAX_ROWS . '.')]),
+                Schema::object([
+                    'rows' => Schema::arrayOf(Schema::object([
+                        'time' => Schema::string(19),
+                        'session' => Schema::string(),
+                        'tool' => Schema::string(),
+                        'verdict' => Schema::enum(AuditLogReader::verdicts()),
+                        'kind' => Schema::string(512)->nullable(),
+                        'reason' => Schema::string()->nullable(),
+                    ], ['time', 'session', 'tool', 'verdict']), AuditLogReader::MAX_ROWS),
+                    'unreadable' => Schema::boolean(),
+                ], ['rows', 'unreadable']),
             ],
 
             'command.list' => [$sessionOnly, $items(Schema::object([
