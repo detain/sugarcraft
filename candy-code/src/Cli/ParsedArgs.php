@@ -266,6 +266,11 @@ final readonly class ParsedArgs
          *  the parser performs no filesystem read (the same raw-store-and-
          *  later-judge law as {@see $jsonSchema}). */
         public ?string $appendSystemPrompt = null,
+        /** C-SES-7.c: `--incognito` — the launch writes no session row and
+         *  runs with every automatic durable pass off. Carried as a plain
+         *  bool; the refusal against `--continue`/`--resume` is decided in
+         *  {@see ArgvParser::parse()} because both legs open a stored row. */
+        public bool $incognito = false,
     ) {
     }
 
@@ -354,7 +359,8 @@ final readonly class ParsedArgs
         bool $worktreeRequested = false,
         ?string $worktreeName = null,
         ?string $appendSystemPrompt = null,
+        bool $incognito = false,
     ): self {
-        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt);
+        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito);
     }
 }

@@ -153,6 +153,7 @@ final class ArgvParser
         $resumeRequested = false;
         $worktreeRequested = false;
         $worktreeName = null;
+        $incognito = false;
 
         $i = 1; // skip $argv[0] (script name)
         while ($i < \count($argv)) {
@@ -780,6 +781,16 @@ final class ArgvParser
                 continue;
             }
 
+            // --incognito (C-SES-7.c): launch without a session row at all.
+            // Reads of stored memory stay on; every automatic write is off —
+            // the TUI/`-p` sibling of the serve-side ephemeral host
+            // (C-SES-7.e). A bare switch: no value, no short form.
+            if ($arg === '--incognito') {
+                $incognito = true;
+                ++$i;
+                continue;
+            }
+
             // --worktree=<name> (C-AGT-6.c): a main session run in its own
             // git worktree. Empty after `=` means bare, as --resume's does.
             if (\str_starts_with($arg, '--worktree=')) {
@@ -928,6 +939,13 @@ final class ArgvParser
             $usageError = 'candy-code: ' . Lang::t('cli.argv.continue_with_resume');
             $usageHint = Lang::t('cli.argv.hint.continue_or_resume');
         }
+        // C-SES-7.c: --incognito promises no session row is written, and
+        // --continue/--resume both open a stored row — the pair contradicts
+        // itself, so the launch is refused before either reading wins.
+        if ($usageError === null && $incognito && ($continueSession || $resumeRequested)) {
+            $usageError = 'candy-code: ' . Lang::t('cli.argv.incognito_with_session');
+            $usageHint = Lang::t('cli.argv.hint.incognito_no_session');
+        }
         // AUT-2: a session flag beside -p is no longer refused wholesale.
         // --continue and a TARGETED --resume seed the one-shot's history from
         // the stored transcript and save the answer back to the same row -
@@ -998,7 +1016,7 @@ final class ArgvParser
             $root = \array_shift($positional);
         }
 
-        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt);
+        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito);
     }
 
     /**
