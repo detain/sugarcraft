@@ -311,6 +311,7 @@ export interface SessionSummary {
   name?: string | null
   provider?: string | null
   model?: string | null
+  agent?: string | null
   kind?: string | null
   parentId?: string | null
   createdAt?: string | null
@@ -399,16 +400,18 @@ export interface Methods {
   "agents.list": {
     params: Record<string, unknown>
     result: {
-      items: {
+      items: ({
         name: string
         description?: string
         model?: string
         provider?: string
         permissionMode?: PermissionMode
         active?: boolean
+        /** The preset's declaring frontmatter `mode:`; absent or unreadable answers `all`. */
+        mode?: "primary" | "subagent" | "all"
         /** The preset's `color:` vocabulary resolved through the same AgentColor law the TUI strip follows, as a `#rrggbb` hex against the server's default theme; omitted when the preset names no colour or names one that does not resolve legibly. */
         color?: string
-      }[]
+      })[]
     }
   }
   /** Message a delegated run: into its mailbox while it runs, as a follow-up once it finished. */

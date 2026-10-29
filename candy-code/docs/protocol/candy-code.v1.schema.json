@@ -1219,6 +1219,12 @@
                         "null"
                     ]
                 },
+                "agent": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
                 "kind": {
                     "type": [
                         "string",
@@ -1610,6 +1616,14 @@
                                 },
                                 "active": {
                                     "type": "boolean"
+                                },
+                                "mode": {
+                                    "enum": [
+                                        "primary",
+                                        "subagent",
+                                        "all"
+                                    ],
+                                    "description": "The preset's declaring frontmatter `mode:`; absent or unreadable answers `all`."
                                 },
                                 "color": {
                                     "type": "string",

@@ -13858,7 +13858,7 @@ final class Chat implements Model
      *
      * Preset MODE is a presenting property that never rides the loaded Agent
      * (`mode: subagent` in the preset's own frontmatter is its only home —
-     * see {@see \SugarCraft\Code\Agents\AgentPresetFieldCarryTest}), so the
+     * see {@see \SugarCraft\Code\Tests\Agents\AgentPresetFieldCarryTest}), so the
      * cycle re-reads that one key from the file the preset came from,
      * identified through {@see \SugarCraft\Code\Agents\Agent::$sourcePath}.
      * A launch-trusted file: the roster arm that registered it already
