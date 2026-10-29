@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Permissions;
 use SugarCraft\Code\Config\Settings\UiSettings;
 use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\Tools\BuiltIn\ApplyPatch;
+use SugarCraft\Code\Tools\BuiltIn\SendMessageTool;
 use SugarCraft\Code\Tools\Catalog\ToolCatalog;
 use SugarCraft\Code\Tools\Edit\PatchParser;
 use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
@@ -1792,9 +1793,20 @@ final class PermissionGate
     /**
      * Tools declaring {@see ToolPermissionClass::NoAsk}: they write only
      * harness-owned state, so {@see evaluateMode()} allows them in every mode.
+     * The one exception (C-AGT-4.e): a `SendMessage` aimed at `session:<id>`
+     * opens a conversation with a different session — not this session's own
+     * harness state — so it falls through to the mode's normal rules and gets
+     * asked like the delegation it is.
      */
     private function isNoAskTool(ToolCall $call): bool
     {
+        if ($call->name === SendMessageTool::NAME
+            && is_string($call->arguments['to'] ?? null)
+            && str_starts_with($call->arguments['to'], SendMessageTool::SESSION_PREFIX)
+        ) {
+            return false;
+        }
+
         return in_array($call->name, ToolCatalog::namesOf(ToolPermissionClass::NoAsk), true);
     }
 

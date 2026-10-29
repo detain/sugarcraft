@@ -8,9 +8,13 @@ use SugarCraft\Code\Agents\Live\AgentInbox;
 use SugarCraft\Code\Agents\Live\AgentMessage;
 use SugarCraft\Code\Agents\Live\AgentRunCards;
 use SugarCraft\Code\Agents\Live\MessageMode;
+use SugarCraft\Code\Agents\Live\SessionMailbox;
 use SugarCraft\Code\Agents\SuspendedDelegations;
 use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Permissions\PermissionDecision;
+use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;
 use SugarCraft\Code\Tools\Catalog\ToolBuildContext;
@@ -61,8 +65,20 @@ use SugarCraft\Code\Tools\ToolResult;
  * direction that approves nothing ({@see \SugarCraft\Code\Backend\MailboxTurnInbox::AUTHORITY});
  * a reply reaching the session's agent is fenced as a worker's report
  * ({@see SubagentsTool::frame()}).
+ *
+ * ACROSS SESSIONS (C-AGT-4.e). A `to:` of `session:<id>` addresses another
+ * candy-code session at the SAME project root: the message travels through
+ * the receiver's disk mailbox ({@see SessionMailbox}), signed under the key
+ * that mailbox minted, and the receiver drains it as a followup — never as a
+ * steer into a running turn. Because that starts a conversation outside this
+ * session's delegation graph, the call is NOT no-ask on this path:
+ * {@see \SugarCraft\Code\Permissions\PermissionGate::isNoAskTool()} hands
+ * `session:` targets to the mode's normal rules, so plan and default modes
+ * ask. Only the session's own agent may send it (a sub-agent's copy refuses),
+ * background daemons have no inbox, and a foreign root, an unknown session or
+ * a closed inbox is refused with the reason.
  */
-#[BuiltInTool(name: 'SendMessage', permission: ToolPermissionClass::NoAsk, position: 30, gloss: 'message a sub-agent it launched — steer a running one, continue a finished one — or, from inside a sub-agent, its parent')]
+#[BuiltInTool(name: 'SendMessage', permission: ToolPermissionClass::NoAsk, position: 30, gloss: 'message a sub-agent it launched — steer a running one, continue a finished one — or, from inside a sub-agent, its parent; a "session:<id>" target reaches another session at the same root (asked, not no-ask)')]
 final readonly class SendMessageTool implements Tool, BuildsFromCatalog, DelegatesToEngine, TakesToolCallId
 {
     public const NAME = 'SendMessage';
@@ -75,10 +91,15 @@ final readonly class SendMessageTool implements Tool, BuildsFromCatalog, Delegat
 
     public const MODES = ['steer', 'followup', 'note'];
 
+    /** What a `to:` starting with this addresses another candy-code session (C-AGT-4.e), not a sub-agent. */
+    public const SESSION_PREFIX = 'session:';
+
     /**
      * @param string|null $selfId   the run this copy speaks for; null is the session's own agent
      * @param string|null $parentId who launched $selfId ({@see MAIN} or a run id)
      * @param string|null $scope    the session the run's seats and cards are kept under; null is the engine's
+     * @param string|null $projectRoot the workspace root the catalog bound this copy to ({@see ToolBuildContext::$root}),
+     *                                 compared against the store row for a `session:` target
      */
     private function __construct(
         private ?EngineBackend $engine = null,
@@ -89,6 +110,8 @@ final readonly class SendMessageTool implements Tool, BuildsFromCatalog, Delegat
         private ?string $scope = null,
         private ?string $root = null,
         private ?SuspendedDelegations $suspended = null,
+        private ?string $projectRoot = null,
+        private ?SessionStore $sessionStore = null,
     ) {
     }
 
@@ -99,7 +122,7 @@ final readonly class SendMessageTool implements Tool, BuildsFromCatalog, Delegat
 
     public static function fromCatalog(ToolBuildContext $context): self
     {
-        return new self();
+        return new self(projectRoot: $context->root);
     }
 
     public function withEngine(EngineBackend $engine, ?\Closure $heartbeat = null, ?\Closure $subAgentEmitter = null): self
@@ -129,6 +152,12 @@ final readonly class SendMessageTool implements Tool, BuildsFromCatalog, Delegat
         return $this->mutate(['suspended' => $store]);
     }
 
+    /** The same tool, speaking for workspace $projectRoot and checking `session:` targets against $store (test seams, C-AGT-4.e). */
+    public function withSessionRoot(?string $projectRoot, ?SessionStore $store = null): self
+    {
+        return $this->mutate(['projectRoot' => $projectRoot, 'sessionStore' => $store]);
+    }
+
     /** The run this copy speaks for, null for the session's own agent. */
     public function selfId(): ?string
     {
@@ -155,7 +184,11 @@ final readonly class SendMessageTool implements Tool, BuildsFromCatalog, Delegat
             . ' instruction and returns its new report, exactly as Task with `resume` would, while `followup` is'
             . ' kept for whichever run continues it next. You can message only your own sub-agents and your own'
             . ' parent, never a sibling. A sub-agent reads your message as task direction, not as the user\'s'
-            . ' approval, and its answer comes back as its report.';
+            . ' approval, and its answer comes back as its report. From the session itself, `to: "session:<id>"`'
+            . ' (a candy-code session id)'
+            . ' leaves a message in another candy-code session at this same project root: it reads it when idle as'
+            . ' a followup, never as an interruption, and it carries the same zero authority. That path asks'
+            . ' permission; sub-agents cannot use it.';
     }
 
     /**
@@ -170,7 +203,8 @@ final readonly class SendMessageTool implements Tool, BuildsFromCatalog, Delegat
                     'type' => 'string',
                     'description' => 'The sub-agent: its run id, background `agent_id` or resume id, as Task or'
                         . ' Subagents `list` named it; from inside a sub-agent, "parent" for the agent that'
-                        . ' launched you',
+                        . ' launched you; from the session itself, "session:<id>" for another candy-code session'
+                        . ' at this same project root (asked, and read as a followup when that session is idle)',
                 ],
                 'text' => [
                     'type' => 'string',
@@ -213,6 +247,10 @@ final readonly class SendMessageTool implements Tool, BuildsFromCatalog, Delegat
         }
         if (!\in_array($mode, self::MODES, true)) {
             return $this->refusal($callId, sprintf('`mode` is one of %s', implode(', ', self::MODES)));
+        }
+
+        if (str_starts_with($to, self::SESSION_PREFIX)) {
+            return $this->crossSession($callId, $scope, trim(substr($to, \strlen(self::SESSION_PREFIX))), $text, $mode);
         }
 
         if ($to === self::PARENT || $to === self::MAIN || ($this->parentId !== null && $to === $this->parentId)) {
@@ -397,6 +435,84 @@ final readonly class SendMessageTool implements Tool, BuildsFromCatalog, Delegat
 
         return $result->withContent(sprintf('[continued finished sub-agent "%s" (resume id %s) with your message]', $agent, $resumeId)
             . "\n\n" . $result->content());
+    }
+
+    /**
+     * A `session:<id>` target (C-AGT-4.e): mail to another candy-code session
+     * at this same root, through its {@see SessionMailbox}. Every check that
+     * fails is a refusal naming the reason; the message itself is an ordinary
+     * {@see AgentMessage} sent as the session's own agent, signed under the
+     * receiver's key, and the receiver submits it as a followup — this call
+     * never interrupts a running turn there.
+     */
+    private function crossSession(string $callId, string $scope, string $target, string $text, string $mode): ToolResult
+    {
+        if ($this->selfId !== null) {
+            return $this->refusal($callId, Lang::t('send.session.subagent'));
+        }
+        if ($target === '' || preg_match(SessionMailbox::ID_PATTERN, $target) !== 1 || $target === '.' || $target === '..') {
+            return $this->refusal($callId, Lang::t('send.session.target_invalid', ['target' => $target]));
+        }
+        if ($target === $scope) {
+            return $this->refusal($callId, Lang::t('send.session.self'));
+        }
+        $store = $this->sessionStoreHandle();
+        if ($store === null) {
+            return $this->refusal($callId, Lang::t('send.session.no_store'));
+        }
+        $theirs = $store->session($target);
+        if ($theirs === null) {
+            return $this->refusal($callId, Lang::t('send.session.unknown', ['target' => $target]));
+        }
+        if (($theirs['kind'] ?? '') === 'background') {
+            // A /bg daemon has no session host or idle pump to drain an inbox.
+            return $this->refusal($callId, Lang::t('send.session.background', ['target' => $target]));
+        }
+        // Own root: the workspace this copy was bound to, falling back to the
+        // stored cwd of the sending session, then the process cwd. A session
+        // row is written at first save, so a brand-new session is still
+        // messageable via the launch root the catalog carried.
+        $ownRow = $store->session($scope);
+        $own = false;
+        foreach ([$this->projectRoot, (string) ($ownRow['cwd'] ?? ''), (string) getcwd()] as $candidate) {
+            $own = $candidate === '' ? false : realpath($candidate);
+            if ($own !== false) {
+                break;
+            }
+        }
+        $theirsRoot = realpath((string) ($theirs['cwd'] ?? ''));
+        if ($own === false || $theirsRoot === false || $theirsRoot !== $own) {
+            return $this->refusal($callId, Lang::t('send.session.foreign_root', ['target' => $target]));
+        }
+
+        $why = SessionMailbox::send($target, AgentMessage::new(AgentMessage::FROM_AGENT_PREFIX . $scope, $text, MessageMode::from($mode)), $this->root);
+        if ($why !== null) {
+            return $this->refusal($callId, Lang::t('send.session.failed', ['target' => $target, 'why' => $why]));
+        }
+
+        return new ToolResult($callId, Lang::t('send.session.sent', ['target' => $target, 'id' => $scope]));
+    }
+
+    /**
+     * The session store to read rows from: the seam when given, else the
+     * launch's own config db when it exists. Never created here — a launch
+     * that has not stored a session has no rows to compare, which is the same
+     * refusal as an unknown target.
+     */
+    private function sessionStoreHandle(): ?SessionStore
+    {
+        if ($this->sessionStore !== null) {
+            return $this->sessionStore;
+        }
+        $db = Bootstrap::trustedConfigDirPath() . '/session.db';
+        if (!is_file($db)) {
+            return null;
+        }
+        try {
+            return new SessionStore($db);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function sender(): string
