@@ -1665,7 +1665,10 @@ final class RendererTest extends TestCase
     /** An open palette, optionally with $query already typed into it. */
     private function openPalette(string $query = ''): Chat
     {
-        [$current] = $this->chat()->withSize(100, 80)->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
+        // C-EXT-5.b: the `/<name>` prefill rows grew the empty-query list
+        // past the old 80-row viewport; the same honest height adaptation
+        // VIS-4 recorded for this file keeps the whole box painted.
+        [$current] = $this->chat()->withSize(100, 140)->update(new KeyMsg(KeyType::Char, 'p', ctrl: true));
         foreach (str_split($query) as $ch) {
             [$current] = $current->update(new KeyMsg(KeyType::Char, $ch));
         }
@@ -1763,11 +1766,12 @@ final class RendererTest extends TestCase
         // host: at the bootstrap-pinned ambient size the overlay merge glues
         // the MRU row onto the input-box line, and stripBox cannot peel a
         // mid-line frame. Same honest adaptation as openPalette(): give the
-        // palette a viewport tall enough to render it un-glued.
+        // palette a viewport tall enough to render it un-glued — grown again
+        // for C-EXT-5.b's prefill rows.
         $chat = (new Chat(
             palette: \SugarCraft\Code\Palette\PaletteState::root(),
             paletteMru: ['Switch theme'],
-        ))->withSize(100, 80);
+        ))->withSize(100, 140);
 
         $rows = [];
         foreach ($this->visibleLines(Renderer::render($chat)) as $line) {

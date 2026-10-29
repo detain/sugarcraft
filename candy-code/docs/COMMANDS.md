@@ -438,6 +438,13 @@ drive the COMPLETE command text (`/pane dock left`) through
 `Chat::handlePaneCommand()`, the handler the real `/pane` row dispatches to.
 The Ctrl+P palette and the draft box are two different surfaces over one
 registry, and a palette row may be a fuller sentence than a slash spelling.
+Since C-EXT-5.b the palette lists EVERY slash-visible command: rows with a
+palette action dispatch as before, and every other row is a prefill row —
+running it closes the palette and fills a blank draft with `/<name> `, caret
+at the end, while a draft that already holds text is KEPT and the row answers
+with a one-line notice instead (the draft-preservation law). Prefilling is
+allowed mid-turn, because filling a draft is not running the command — the
+typed spelling still has to be submitted.
 
 `/new` is the one row that is both: typed, it opens the folder picker
 (`Chat::handleNewCommand()`; `/new <dir>` chooses straight away), while its

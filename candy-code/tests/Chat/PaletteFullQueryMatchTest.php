@@ -26,8 +26,13 @@ final class PaletteFullQueryMatchTest extends TestCase
         sort($mdl);
         // VIS-4 grew the label set: "Ask the model" (the compact row) covers
         // m-d-l too, as a subsequence of "…mo**d**e**l**". The rule this test
-        // pins is coverage, not a fixed list — both rows belong here.
-        self::assertSame(['Ask the model', 'Switch model'], $mdl);
+        // pins is coverage, not a fixed list — all three rows belong here:
+        // C-EXT-5.b's prefill row for /schedules covers m-d-l as a
+        // subsequence of its argument hint ("<na**m**e> … **d**i**l**able").
+        self::assertSame(
+            ['/schedules [list|add <name> <interval> <prompt>|enable|disable|delete <name>]', 'Ask the model', 'Switch model'],
+            $mdl,
+        );
     }
 
     public function testInitialsStyleQueriesStillMatch(): void

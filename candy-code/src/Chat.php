@@ -80,6 +80,9 @@ use SugarCraft\Code\Tools\BuiltIn\WebSearch;
 use SugarCraft\Code\Observability\EventSink;
 use SugarCraft\Code\Observability\NullEventSink;
 use SugarCraft\Code\Palette\PaletteAction;
+use SugarCraft\Code\Palette\PaletteCatalog;
+use SugarCraft\Code\Palette\PaletteEntry;
+use SugarCraft\Code\Palette\PaletteEntryKind;
 use SugarCraft\Code\Palette\PaletteState;
 use SugarCraft\Forms\TextArea\TextArea;
 use SugarCraft\Forms\Vim\VimState;
@@ -10922,6 +10925,16 @@ final class Chat implements Model
     {
         $action = PaletteAction::byLabel($label);
         if ($action === null) {
+            // C-EXT-5.b: the palette's PREFILL half. A catalog prefill row
+            // dispatches without an action: it closes the palette and writes
+            // the bare command into the draft. Allowed mid-turn on purpose —
+            // it edits the draft (or, under the draft-preservation law, a
+            // non-blank draft is kept and the row only answers with a
+            // notice), and draft writes never touch turn state.
+            $prefill = $this->palettePrefillEntry($label);
+            if ($prefill !== null) {
+                return $this->rememberPaletteUse($label)->applyPalettePrefill($prefill);
+            }
             throw new \InvalidArgumentException(sprintf('No palette action is labelled "%s".', $label));
         }
 
@@ -17949,8 +17962,78 @@ final class Chat implements Model
             'providers' => array_keys(\SugarCraft\Code\Cli\Bootstrap::availableProviders()),
             'models' => $this->paletteModelLabels((string) $this->palette->provider),
             'themes' => Theme::names(),
-            default => array_map(static fn(PaletteAction $a): string => $a->label(), PaletteAction::all()),
+            // C-EXT-5.b: the root list is the catalog — every PaletteAction
+            // row in declared order, then a '/<name>' prefill row for every
+            // other slash-visible command the session can reach (registry,
+            // file commands and MCP prompts alike). The palette is the full
+            // superset of the slash surface now, not the action enum alone.
+            default => array_map(
+                static fn(PaletteEntry $entry): string => $entry->label,
+                PaletteCatalog::rows($this->slashCommandRows()),
+            ),
         };
+    }
+
+    /**
+     * The live catalog row behind a palette label, if the label is one of
+     * the PREFILL rows {@see paletteItemLabels()} just offered. Prefill rows
+     * carry no {@see PaletteAction} — this is how their dispatch resolves the
+     * command name instead of failing closed. A label that is neither an
+     * action nor a live prefill row (a stale row from a reopened session, a
+     * command hidden since the list was painted) gets null, and each caller
+     * decides its own refusal shape.
+     */
+    private function palettePrefillEntry(string $label): ?PaletteEntry
+    {
+        if (!str_starts_with($label, '/')) {
+            // Action labels are prose sentences; only prefill rows spell the
+            // '/name' shape. The guard keeps the common Enter-on-an-action
+            // case from rebuilding the catalog a second time.
+            return null;
+        }
+
+        foreach (PaletteCatalog::rows($this->slashCommandRows()) as $entry) {
+            if ($entry->kind === PaletteEntryKind::Prefill && $entry->label === $label) {
+                return $entry;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Run a catalog PREFILL row: close the palette, then hand the bare
+     * command to the draft.
+     *
+     * A BLANK draft receives `'/<name> '` with the caret at the end —
+     * {@see Chat::mutate()} drops the input widget on an `inputBuf`-only
+     * write, so the constructor re-seeds it and E4 documents the cursor
+     * landing at the end. A NON-BLANK draft is KEPT (the draft-preservation
+     * law, the same one {@see refuseInFlightCommand()} enforces for typed
+     * mid-turn commands): the row never silently eats what the user typed,
+     * and it says so in one notice line instead. Mid-turn the blank-draft
+     * write still stands — this method touches the draft and the transcript
+     * only, never turn state.
+     *
+     * @return array{0: self, 1: null}
+     */
+    private function applyPalettePrefill(PaletteEntry $entry): array
+    {
+        $command = '/' . $entry->commandName;
+
+        if (trim($this->inputBuf) !== '') {
+            return [$this->mutate([
+                'palette' => null,
+                'history' => [...$this->history, Message::notice(
+                    Lang::t('palette.prefill_draft_kept', ['command' => $command]),
+                )],
+            ]), null];
+        }
+
+        return [$this->mutate([
+            'palette' => null,
+            'inputBuf' => $command . ' ',
+        ]), null];
     }
 
     /**
@@ -18370,6 +18453,15 @@ final class Chat implements Model
     {
         $action = PaletteAction::byLabel($label);
         if ($action === null) {
+            // C-EXT-5.b: the interactive Enter/click route to a catalog
+            // prefill row. The palette still closes either way (the fail-
+            // closed no-op below kept for labels that are neither an action
+            // nor a live prefill row); a prefill writes its command into the
+            // draft, or keeps a non-blank draft with a one-line notice.
+            $prefill = $this->palettePrefillEntry($label);
+            if ($prefill !== null) {
+                return $this->applyPalettePrefill($prefill);
+            }
             return [$this->mutate(['palette' => null]), null];
         }
 

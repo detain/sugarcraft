@@ -50,12 +50,20 @@ enum PaletteAction: string
 
     // VIS-4: the palette became a superset of the slash commands — every
     // registry row whose BARE '/name' form does something meaningful lists
-    // here too. These cases exist to make their rows visible to the palette
+    // here too. These cases exist to make their rows dispatch by action
     // ({@see CommandRegistry::paletteEntries()}); their dispatch is generic
     // ({@see \SugarCraft\Code\Chat::dispatchPaletteCommand()}), so no handler
     // name lives on any of them. The case VALUES are wire-stable ids like the
     // older ones' — none may be renamed, and rows whose bare form only prints
     // usage stayed slash-only with the judgement recorded in their spec file.
+    // C-EXT-5.b moved the VISIBILITY half of this comment: this enum is no
+    // longer what bounds the palette. Every slash-visible row now reaches the
+    // list — an action row when it names a case like these, a
+    // {@see PaletteCatalog} PREFILL row otherwise, whose Enter fills the
+    // blank draft with '/name ' instead of dispatching. What stays true of
+    // the enum is only that no case may be renamed, and that a row WITHOUT a
+    // case here has no bare-action dispatch anywhere — the prefill is a draft
+    // write, not the command's execution.
     case ShowKeys = 'show_keys';
     case ShowHelp = 'show_help';
     case ShowPermissions = 'show_permissions';

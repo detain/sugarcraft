@@ -11,6 +11,7 @@ use SugarCraft\Code\Commands\CommandRegistry;
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Palette\PaletteAction;
+use SugarCraft\Code\Palette\PaletteState;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
@@ -30,6 +31,14 @@ use SugarCraft\Core\Msg\KeyMsg;
  * in `runRootPaletteAction()` — rows with no bare-slash meaning, second-level
  * lists, shell overlays and specific sub-command texts. The staleness arm keeps
  * it from accreting rows the generic tail could have carried.
+ *
+ * C-EXT-5.b widened the palette from "superset by judgement" to full superset:
+ * the survivor roster below now lists rows that carry no PALETTE ACTION, not
+ * rows absent from the palette — every slash-visible command reaches the root
+ * list, survivors as `/<name>` PREFILL rows that fill a blank draft instead of
+ * dispatching. {@see testTheRootPaletteListsEverySlashVisibleRow()} is the
+ * coverage arm that proves it; the survivor census above stays honest next to
+ * it because the census measures the action half, which is unchanged.
  */
 final class PaletteSupersetDispatchTest extends TestCase
 {
@@ -50,9 +59,12 @@ final class PaletteSupersetDispatchTest extends TestCase
     ];
 
     /**
-     * Rows VIS-4 judged to stay slash-only, name => the measured reason. The
-     * roster test below is bidirectional: an unjudged promotion reddens it, and
-     * so does a survivor quietly gaining a palette row elsewhere.
+     * Rows VIS-4 judged to stay WITHOUT a palette action, name => the measured
+     * reason. Since C-EXT-5.b every one of them still reaches the palette as a
+     * `/<name>` prefill row (coverage is the test below); what this roster
+     * pins is the absence of an ACTION. The roster test below is
+     * bidirectional: an unjudged promotion reddens it, and so does a survivor
+     * quietly gaining a PaletteAction elsewhere.
      */
     private const SLASH_ONLY_SURVIVORS = [
         // PRV-2 (w5b): /effort stays a typed command by the judgement recorded
@@ -69,6 +81,11 @@ final class PaletteSupersetDispatchTest extends TestCase
         // typed readout of the durable ledger, not a panel the palette can
         // pre-open; the cross-launch /budget pairing rides the argument hint.
         'usage' => 'bare /usage is the whole ledger readout; no palette pane exists to open',
+        // C-CTX-3.a: /instructions (2405 spec) landed after VIS-4 cut this
+        // census and no PaletteAction arm was minted for it; the bare form is
+        // the list read, `open <n|path>` needs an argument. Since C-EXT-5.b
+        // it reaches the palette as its prefill row.
+        'instructions' => 'bare /instructions is the whole list read; the open verb needs a file argument',
         // W4 merge coupling: GIT-1 (w4c) added /review and /security-review
         // after VIS-4 cut this census — no PaletteAction arm yet (VIS-4
         // predates GIT-1), typed dispatch only. A palette row for the pair is
@@ -190,6 +207,57 @@ final class PaletteSupersetDispatchTest extends TestCase
         foreach (self::SLASH_ONLY_SURVIVORS as $name => $reason) {
             self::assertNotSame('', $reason, $name);
         }
+    }
+
+    /**
+     * C-EXT-5.b: the coverage half of the superset. Every slash-visible row
+     * this session can reach — registry rows, file commands and MCP prompts
+     * alike (`Chat::slashCommandRows()`) — carries a row in the root palette:
+     * its {@see PaletteAction}'s label for rows with one, a `/<name>` prefill
+     * row (plus the row's argument hint when it has one) for every other.
+     * Derived from the live rows, not from the rosters above: an untabulated
+     * promotion or a silently vanishing row reddens this, whichever way the
+     * palette's own list is assembled.
+     */
+    public function testTheRootPaletteListsEverySlashVisibleRow(): void
+    {
+        $chat = (new Chat(palette: PaletteState::root()))->withSize(100, 30);
+        $labels = $chat->paletteMatches();
+        $walked = 0;
+        $prefills = 0;
+
+        foreach ($chat->slashCommandRows() as $spec) {
+            if (!$spec->slashVisible) {
+                continue;
+            }
+            ++$walked;
+
+            if ($spec->paletteAction !== null) {
+                self::assertContains(
+                    $spec->paletteAction->label(),
+                    $labels,
+                    "the action row for /{$spec->name} left the palette",
+                );
+                continue;
+            }
+
+            ++$prefills;
+            $carried = false;
+            foreach ($labels as $label) {
+                if ($label === '/' . $spec->name || str_starts_with($label, '/' . $spec->name . ' ')) {
+                    $carried = true;
+                    break;
+                }
+            }
+            self::assertTrue($carried, "no prefill row carries /{$spec->name} in the root palette");
+        }
+
+        self::assertGreaterThanOrEqual(30, $walked, 'fixture: the coverage walk must span the real slash surface');
+        self::assertGreaterThanOrEqual(
+            count(self::SLASH_ONLY_SURVIVORS),
+            $prefills,
+            'C-EXT-5.b: every survivor row must arrive as a prefill row next to the built-ins',
+        );
     }
 
     public function testEveryParityExceptionStillCarriesItsPaletteRow(): void

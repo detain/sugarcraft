@@ -2663,6 +2663,9 @@ TXT,
     // --- end tabs ---
     // --- tui/palette (W11-d) ---
     'palette.no_matches' => 'No matches',
+    // C-EXT-5.b: the one-line notice a prefill row answers with when the
+    // draft box is not blank — the draft-preservation law, voiced.
+    'palette.prefill_draft_kept' => 'Draft kept — {command} was not typed into the box. Type {command} there to run it.',
     'palette.title.commands' => 'command palette',
     'palette.title.models' => 'switch model: {provider}',
     'palette.title.providers' => 'switch model',
