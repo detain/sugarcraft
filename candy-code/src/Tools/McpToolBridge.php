@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tools;
 
+use SugarCraft\Code\Attachments\FileMentions;
 use SugarCraft\Code\Context\McpOutputFence;
 use SugarCraft\Code\Events\ToolProgress;
 use SugarCraft\Code\Hooks\HookResult;
@@ -14,6 +15,8 @@ use SugarCraft\Code\MCP\McpElicitation;
 use SugarCraft\Code\MCP\McpServerRequests;
 use SugarCraft\Code\MCP\McpTool;
 use SugarCraft\Code\Permissions\ApprovalVerdict;
+use SugarCraft\Code\Providers\AnthropicProvider;
+use SugarCraft\Code\ToolResult as BootProbe;
 use SugarCraft\Code\Tools\BuiltIn\AskUserTool;
 use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
 
@@ -1046,12 +1049,144 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat, RelaysPermissionAsk
      */
     public static function replyResult(array $raw, string $id, float|int $start, string $server, string $tool, callable $truncate): ToolResult
     {
+        // C-TOOL-2 (GAP-MCP-14): the render stays text-complete, but the FIRST
+        // in-budget image part and the first in-budget PDF resource part also
+        // ride the result's media channel, the same way {@see \SugarCraft\Code\Tools\BuiltIn\Read}
+        // carries a file it sniffed as an image or a document. The provider wire
+        // decides — capability and its own budget — whether the bytes reach the
+        // model as a real image/document block; a non-vision wire loses nothing,
+        // because the size line is still in the text below.
+        $carried = self::carriedMedia($raw);
+
         return new ToolResult(
             toolCallId: $id,
-            content: $truncate(McpOutputFence::wrap(self::announceUnreadableErrorFlag($raw) . self::renderContent($raw), $server, $tool)),
+            content: $truncate(McpOutputFence::wrap(self::announceUnreadableErrorFlag($raw) . self::renderContent($raw, $carried['imageIndex']), $server, $tool)),
             isError: self::isError($raw),
             durationMs: self::elapsedMs($start),
+            imageBytes: $carried['imageBytes'],
+            imageProtocol: $carried['imageBytes'] === null ? null : BootProbe::mosaic()->protocol(),
+            documentBytes: $carried['documentBytes'],
+            documentName: $carried['documentName'],
         );
+    }
+
+    /**
+     * Which media bytes, if any, ride the ToolResult channel out-of-band.
+     *
+     * FIRST PASSING PART WINS, per channel: a server that returns ten
+     * screenshots sends exactly one, and
+     * {@see renderInlineBytes()} spells that out in the part's own line so the
+     * model is never misled about the rest. A part that fails any gate — not
+     * base64, empty once decoded, over the tool-side budget, or bytes that do
+     * not sniff as what the mime claims — leaves its line saying "not shown"
+     * and the walk moves on to the next candidate, mirroring how
+     * {@see \SugarCraft\Code\Providers\Concerns\AnthropicMessagesWire}
+     * re-sniffs at the wire instead of trusting the server's claim.
+     *
+     * THE BUDGETS MIRROR READ's CARRY DECISION, not the wire's: an image is
+     * kept to {@see FileMentions::IMAGE_MAX_BYTES} (the wire applies its own
+     * tighter tool-result cap downstream), a PDF to the tool-result document
+     * budget {@see Read} refuses beyond — bytes over those bounds were never
+     * going to ride anywhere, so they stay text here.
+     *
+     * NOT CONDITIONED ON `isError`: a failed call whose envelope still holds a
+     * decodable image (a screenshot taken before an error) previews honestly in
+     * the transcript, and the wire's own error gate,
+     * {@see \SugarCraft\Code\Providers\Concerns\AnthropicMessagesWire::toolResultImage()},
+     * is what keeps such bytes off a provider request.
+     *
+     * Audio is deliberately absent: there is no audio channel on ToolResult,
+     * and inventing one is a C-TOOL-2 sibling's problem, not this walk's.
+     *
+     * @param array<string, mixed> $raw
+     * @return array{imageBytes: ?string, imageIndex: ?int, documentBytes: ?string, documentName: ?string}
+     */
+    private static function carriedMedia(array $raw): array
+    {
+        $none = ['imageBytes' => null, 'imageIndex' => null, 'documentBytes' => null, 'documentName' => null];
+
+        $content = $raw['content'] ?? null;
+        if (!is_array($content)) {
+            return $none;
+        }
+
+        $imageBytes = null;
+        $imageIndex = null;
+        $documentBytes = null;
+        $documentName = null;
+
+        // array_values(): the index must count POSITIONS in the part list, the
+        // same positions {@see renderContent()} walks, whatever keys the server
+        // (or json_decode's object branch) used.
+        foreach (array_values($content) as $index => $part) {
+            if (!is_array($part)) {
+                continue;
+            }
+
+            $type = $part['type'] ?? null;
+
+            if ($imageBytes === null && $type === 'image') {
+                $decoded = self::decodeSniffed($part['data'] ?? null, FileMentions::IMAGE_MAX_BYTES, true);
+                if ($decoded !== null) {
+                    $imageBytes = $decoded;
+                    $imageIndex = $index;
+                }
+            }
+
+            if ($documentBytes === null && $type === 'resource') {
+                $resource = $part['resource'] ?? null;
+                if (!is_array($resource)) {
+                    continue;
+                }
+
+                $decoded = self::decodeSniffed($resource['blob'] ?? null, AnthropicProvider::TOOL_RESULT_DOCUMENT_MAX_BYTES, false);
+                if ($decoded !== null) {
+                    $documentBytes = $decoded;
+                    $uri = $resource['uri'] ?? null;
+                    // basename() of a uri reads oddly but names right: the
+                    // document block is titled with the last path segment, and
+                    // a blob with no uri still deserves a nameable default.
+                    $documentName = is_string($uri) && $uri !== '' ? basename($uri) : 'document.pdf';
+                }
+            }
+        }
+
+        return [
+            'imageBytes' => $imageBytes,
+            'imageIndex' => $imageIndex,
+            'documentBytes' => $documentBytes,
+            'documentName' => $documentName,
+        ];
+    }
+
+    /**
+     * One base64 payload decoded for carriage, or null when it must stay text.
+     *
+     * Strict base64, non-empty result, within $maxBytes, and the bytes must
+     * SNIFF as the family the channel carries — images for the image channel,
+     * `%PDF-` for the document channel. The mime string is never consulted:
+     * the same distrust that makes the wire re-sniff applies at the source, so
+     * `data:` holding a PDF with `mimeType: image/png` reaches neither channel
+     * as the wrong thing (it sniffs as a document, and the document walk only
+     * reads `resource.blob` — an image-typed part holding PDF bytes carries
+     * nothing, which is the honest outcome for a lying server).
+     *
+     * @param mixed $payload the `data`/`blob` string the server sent
+     */
+    private static function decodeSniffed(mixed $payload, int $maxBytes, bool $wantImage): ?string
+    {
+        if (!is_string($payload) || $payload === '') {
+            return null;
+        }
+
+        $decoded = base64_decode($payload, true);
+        if ($decoded === false || $decoded === '' || strlen($decoded) > $maxBytes) {
+            return null;
+        }
+
+        $sniffed = $wantImage ? FileMentions::sniffImage($decoded) : FileMentions::sniffDocument($decoded);
+
+        return $sniffed === null ? null : $decoded;
     }
 
     /** Elapsed whole milliseconds since `$start`; public so the MCP-7 dispatcher stamps identically. */
@@ -1219,8 +1354,12 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat, RelaysPermissionAsk
      * announce says only what the envelope contained.
      *
      * @param array<mixed> $raw
+     * @param int|null $carriedImageIndex position of the part whose bytes ride
+     *                                    the result's image channel, from
+     *                                    {@see carriedMedia()}; its line says
+     *                                    "carried" instead of "not shown"
      */
-    private static function renderContent(array $raw): string
+    private static function renderContent(array $raw, ?int $carriedImageIndex = null): string
     {
         $content = $raw['content'] ?? null;
 
@@ -1237,7 +1376,14 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat, RelaysPermissionAsk
         }
 
         $parts = [];
+        $position = 0;
         foreach ($content as $part) {
+            // Counted BEFORE the branches: $carriedImageIndex names a position
+            // in the part list, and every item occupies one whether or not it
+            // renders through {@see renderPart()}.
+            $carried = $carriedImageIndex !== null && $position === $carriedImageIndex;
+            $position++;
+
             if (!is_array($part)) {
                 $parts[] = self::encode($part);
 
@@ -1250,7 +1396,7 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat, RelaysPermissionAsk
                 continue;
             }
 
-            $parts[] = self::renderPart($part);
+            $parts[] = self::renderPart($part, $carried);
         }
 
         $rendered = implode("\n", $parts);
@@ -1272,18 +1418,22 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat, RelaysPermissionAsk
      * clips this render with the trait's announced marker as its outer bound.
      *
      * A vision-attachment path (handing the bytes to a capable provider as an
-     * actual image) would have to thread provider capability through surfaces
-     * outside this class's contract; the size line keeps the answer honest
-     * about what it saw until that exists.
+     * actual image) now EXISTS for the first decodable image part: its bytes
+     * ride the result's media channel via {@see carriedMedia()} and the wire
+     * attaches them where the model can see them. That is why this part's line
+     * says "carried" rather than "not shown" when it is the one on the channel
+     * — and why every OTHER part keeps the plain size line: the answer states
+     * exactly what reached the model and what stayed described-but-unseen.
      *
      * @param array<string, mixed> $part
+     * @param bool $carried whether this part's bytes ride the image channel
      */
-    private static function renderPart(array $part): string
+    private static function renderPart(array $part, bool $carried = false): string
     {
         $type = is_string($part['type'] ?? null) ? $part['type'] : 'unknown';
 
         return match ($type) {
-            'image', 'audio' => self::renderInlineBytes($type, $part),
+            'image', 'audio' => self::renderInlineBytes($type, $part, $carried),
             'resource' => self::renderResource($part),
             'resource_link' => self::renderResourceLink($part),
             default => '[' . $type . ']',
@@ -1293,9 +1443,18 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat, RelaysPermissionAsk
     /**
      * An `image`/`audio` part: mime and size named, base64 never dumped.
      *
+     * The size line counts BASE64 TEXT bytes, the thing the part actually
+     * embeds — and when the walk in {@see carriedMedia()} put this very part's
+     * decoded bytes on the result's image channel, the tail says so, because
+     * "not shown" would misdescribe the one part whose pixels a capable model
+     * does see. Audio is never the carried part (no channel exists), so the
+     * carried line can only ever speak for images and resources reach their
+     * document channel through {@see renderResource()}'s unchanged size line.
+     *
      * @param array<string, mixed> $part
+     * @param bool $carried whether this part's bytes ride the image channel
      */
-    private static function renderInlineBytes(string $type, array $part): string
+    private static function renderInlineBytes(string $type, array $part, bool $carried = false): string
     {
         $mime = is_string($part['mimeType'] ?? null) && $part['mimeType'] !== ''
             ? $part['mimeType']
@@ -1304,6 +1463,15 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat, RelaysPermissionAsk
 
         if (!is_string($data) || $data === '') {
             return '[' . $type . ': ' . $mime . ', no data attached]';
+        }
+
+        if ($carried) {
+            return sprintf(
+                '[%s: %s, %d base64 bytes carried as an image on this result — the first decodable image part only; later image parts stay text]',
+                $type,
+                $mime,
+                strlen($data),
+            );
         }
 
         return sprintf('[%s: %s, %d base64 bytes not shown]', $type, $mime, strlen($data));

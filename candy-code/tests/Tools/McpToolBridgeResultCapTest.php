@@ -37,11 +37,20 @@ final class McpToolBridgeResultCapTest extends TestCase
                         'serverInfo' => ['name' => 'big', 'version' => '0']];
                 } elseif ($msg['method'] === 'tools/list') {
                     $out['result'] = ['tools' => [['name' => 'dump', 'description' => 'dumps',
-                        'inputSchema' => ['type' => 'object', 'properties' => ['bytes' => ['type' => 'integer']]]]]];
+                        'inputSchema' => ['type' => 'object', 'properties' => ['bytes' => ['type' => 'integer'],
+                            'image' => ['type' => 'boolean']]]]]];
                 } elseif ($msg['method'] === 'tools/call') {
                     $bytes = (int) ($msg['params']['arguments']['bytes'] ?? 10);
                     $text = str_repeat("row of dump output\n", intdiv($bytes, 19) + 1);
-                    $out['result'] = ['content' => [['type' => 'text', 'text' => substr($text, 0, $bytes)]]];
+                    $parts = [['type' => 'text', 'text' => substr($text, 0, $bytes)]];
+                    if (!empty($msg['params']['arguments']['image'])) {
+                        // C-TOOL-2: one tiny decodable PNG riding a huge text
+                        // answer — the clip eats the tail of the RENDER, the
+                        // channel carries the bytes regardless.
+                        $parts[] = ['type' => 'image', 'mimeType' => 'image/png',
+                            'data' => base64_encode("\x89PNG\r\n\x1a\nab")];
+                    }
+                    $out['result'] = ['content' => $parts];
                 }
                 echo json_encode($out), "\n";
                 fflush(STDOUT);
@@ -113,5 +122,22 @@ final class McpToolBridgeResultCapTest extends TestCase
         $content = $this->bridge(0)->execute(['bytes' => 100_000])->content();
 
         self::assertSame(100_000 + strlen(McpOutputFence::header('big', 'dump')) + 1, strlen($content), 'cap off still carries the fence');
+    }
+
+    /**
+     * C-TOOL-2 (GAP-MCP-14): the cap is a budget on the TEXT. An oversized
+     * answer whose reply also held a decodable image is still clipped with the
+     * announced marker — and the image bytes ride the result channel untouched,
+     * outside anything the cutter can reach.
+     */
+    public function testAnOversizedAnswerWithACarriableImageClipsTheTextButNotTheChannel(): void
+    {
+        $result = $this->bridge()->execute(['bytes' => 300_000, 'image' => true]);
+
+        self::assertFalse($result->isError());
+        self::assertLessThanOrEqual(65_536, strlen($result->content()), 'the render obeys the cap');
+        self::assertStringContainsString('[truncated:', $result->content(), 'and says so');
+        self::assertSame("\x89PNG\r\n\x1a\nab", $result->imageBytes(), 'the channel is not part of the clipped text');
+        self::assertNull($result->documentBytes());
     }
 }

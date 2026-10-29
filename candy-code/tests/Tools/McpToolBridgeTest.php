@@ -355,6 +355,11 @@ final class McpToolBridgeTest extends TestCase
         $result = $this->bridgeOver($server)->execute([]);
 
         $this->assertSame($this->fenced("[image: unknown mime, 4 base64 bytes not shown]\ncaption"), $result->content());
+        // C-TOOL-2: 'AAAA' decodes to three NULs — it sniffs as nothing, so this
+        // part stays description-only and the media channels of the result are
+        // empty. (What happens when a part DOES sniff is McpToolBridgeImageChannelTest.)
+        $this->assertNull($result->imageBytes());
+        $this->assertNull($result->documentBytes());
     }
 
     /** ISS-044: image bytes are COUNTED, never shown, and a stated mime survives. */
@@ -369,6 +374,10 @@ final class McpToolBridgeTest extends TestCase
 
         $this->assertSame($this->fenced('[image: image/png, 5000 base64 bytes not shown]'), $result->content());
         $this->assertFalse($result->isError());
+        // C-TOOL-2: the mime CLAIMS png; the bytes (3750 NULs) sniff as nothing,
+        // so nothing rides the channel — the line keeps saying "not shown",
+        // honestly this time.
+        $this->assertNull($result->imageBytes());
     }
 
     /** An attached part whose data never arrived says so instead of sizing `''`. */

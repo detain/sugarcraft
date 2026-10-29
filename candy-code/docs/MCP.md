@@ -878,6 +878,23 @@ splices its JSON-RPC `error.message`; http and sse rethrow what their stack
 raised), so the `Error: MCP tool ... failed` row is fenced too, identically
 under both spellings.
 
+Inside that fence every non-text part is still described rather than dropped —
+an image or audio part contributes its mime type and base64 size, an embedded
+resource its capped text or its blob size — and since C-TOOL-2 two of those
+descriptions also name real bytes riding the result beside the text: the first
+image part whose base64 decodes, stays inside the same tool-side image budget
+`Read` applies, and sniffs as a genuine image goes onto the result's image
+channel, and the first embedded resource whose blob decodes inside the
+tool-result document budget and sniffs as a PDF goes onto the document channel,
+so a vision- or document-capable wire attaches them as actual image and
+document blocks while the model still reads the size lines. Exactly one image
+is carried; the carrying part's line says so, and later image parts keep the
+plain "not shown" line. No bytes are ever dumped into the text itself, so a
+non-capable wire loses nothing but the channel. Audio stays description-only:
+there is no audio channel on a tool result. And because one `replyResult()`
+serves both spellings, a bridged `mcp__server__tool` call and a dispatched
+`mcp_call` carry the same bytes off the same reply.
+
 Three properties make this safe to turn on by default:
 
 **Nothing changes until something is deferred.** Servers under the floor, and
