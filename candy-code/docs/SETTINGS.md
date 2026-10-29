@@ -155,7 +155,13 @@ exactly as it was before layering existed. This is a security boundary, not a
 scoping shortcut: it is what stops a project file from writing
 `permissionMode`, `permissionRules`, any `trustedProject*` key — or
 `trustedProjectSettings` itself, so a project cannot add itself to the list of
-trusted projects.
+trusted projects. The one exception lives on the rules axis only, and it can
+only narrow: under `trustedProjectSettings`, a project's **shared**
+`settings.json` may contribute `deny`/`ask` entries to `permissionRules` — read
+by `Bootstrap::projectNarrowingRules()` ahead of the user's rules, `allow`
+entries dropped and reported, never through this stack, and trust itself still
+supplied by the user tier alone (see
+[`PERMISSIONS.md`](PERMISSIONS.md#the-four-trustedproject-keys)).
 
 "Through this stack" is load-bearing rather than hedging. `permissionMode` and
 `permissionRules` are answered by layers 3 **and** 4 — just not by

@@ -2615,7 +2615,18 @@ final class Bootstrap
         // the policy its sub-agents get, even if the file is edited underneath
         // a running session. That is the same "one config source for the whole
         // launch" the main-loop gate already commits to.
-        $permissionRules = self::permissionRules(self::permissionConfig());
+        //
+        // C-SEC-6.b completes that identity on the RULES axis: the trusted
+        // project's deny/ask entries ride this feed BEFORE the user's, exactly
+        // as they ride ahead at {@see permissionGate()}. Without the prepend
+        // here the project's narrowing would bind the main chat's gate only
+        // and a Task sub-agent would run under the user rules alone — a
+        // child wider than the session that spawned it, which is the one
+        // direction the deny/ask-only tier exists to forbid. The notice the
+        // load raises is signature-deduped per process, so a launch that
+        // builds both gates still says it once.
+        $subAgentUserRules = self::permissionRules(self::permissionConfig());
+        $permissionRules = [...self::projectNarrowingRules(), ...$subAgentUserRules];
 
         // ONE skill registry for the manager AND the tool set: the SkillTool in
         // the grant below reads the same instance the sub-agent prompt splice

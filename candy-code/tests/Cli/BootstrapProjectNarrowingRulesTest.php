@@ -109,6 +109,38 @@ final class BootstrapProjectNarrowingRulesTest extends TestCase
     }
 
     /**
+     * THE SAME SENTENCE, SUB-AGENT SIDE (review MINOR-1): `agentManager()`'s
+     * gate factory feed prepends the project narrowing too, so a Task child's
+     * gate is never wider than the session that spawned it. Without the
+     * prepend the child runs under the user's allow alone — under-narrowing,
+     * the one direction the deny/ask-only tier exists to forbid.
+     *
+     * Fails if the prepend in `Bootstrap::agentManager()` is removed: the
+     * child's rules shrink to the user's list and BOTH legs go red (the
+     * ordering shape and the Deny decision).
+     */
+    public function testTheSubAgentGateCarriesTheProjectNarrowingAheadOfTheUserRules(): void
+    {
+        $this->writePolicyFile([
+            LayeredSettings::PROJECT_SETTINGS_TRUST_KEY => [realpath($this->projectRootPnr)],
+            'permissionRules' => [['pattern' => 'Bash', 'action' => 'allow']],
+        ]);
+        $this->writeSharedSettingsFile(['permissionRules' => [['pattern' => 'Bash', 'action' => 'deny']]]);
+        Bootstrap::useProjectRootForSettings($this->projectRootPnr);
+
+        $manager = Bootstrap::agentManager($this->projectRootPnr);
+        $subAgent = $manager->createSubAgent('tester', 'pin the feed');
+
+        $gate = $subAgent->permissionGate;
+        self::assertNotNull($gate);
+        self::assertSame(
+            [['Bash', 'deny'], ['Bash', 'allow']],
+            self::ruleShape($gate->rules()),
+        );
+        self::assertSame(PermissionDecision::Deny, $gate->evaluate(new ToolCall('Bash', ['command' => 'ls'])));
+    }
+
+    /**
      * The trust floor from the other side: the SAME file that supplies rules
      * still cannot set the mode, and a `bypass-permissions` spelled by a
      * checkout must not reach the gate even under the settings grant —
