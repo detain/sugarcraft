@@ -986,10 +986,13 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     /**
      * This turn's provider copy, honouring the gate this backend shares
      * with the host's permission surfaces (C-PRV-4.a). The mode is READ
-     * HERE, at the head of the turn, not at launch: Shift+Tab mutates the
-     * very PermissionGate object this field points at, so a per-turn read
-     * is what keeps the child's `--permission-mode` from being frozen at
-     * whatever the launch happened to pick.
+     * HERE, at the head of the turn, not at launch: a Shift+Tab switch
+     * hands a NEW gate into this field — PermissionGate::withMode returns
+     * a new gate (never a mutation), and Chat::swapPermissionGate rebinds
+     * the backend through withPermissionGate on every switch — so the
+     * field points at whichever gate the session holds right now, and a
+     * per-turn read is what keeps the child's `--permission-mode` from
+     * being frozen at whatever the launch happened to pick.
      */
     private function honouringHostGate(): self
     {

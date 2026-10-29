@@ -218,6 +218,50 @@ final class CliProviderIsolationTest extends TestCase
         $this->assertArrayNotHasKey('permissionMode', self::providerOptions($honouring->provider()));
     }
 
+    public function testTheSummariserNeverCarriesTheHostMode(): void
+    {
+        // C-PRV-4.a exclusion, pinned (review round 1, m2). The mode mirror
+        // is a TURN-ENTRY overlay: it rides only the three turn entries
+        // (complete(), completeTranscript(), runCompleteInChild()). The
+        // step-summary path builds its Runtime straight from the provider
+        // FIELD via newRuntime(), which never routes through the mirror —
+        // a summary is not the user's turn and must not inherit the
+        // child's dial. Two legs, both red if that exclusion is neutered
+        // (e.g. by routing summaryReply's runtime through the seam).
+        $file = (new ReflectionMethod(EngineBackend::class, 'complete'))->getFileName();
+        $this->assertIsString($file);
+        $source = (string) file_get_contents((string) $file);
+
+        // Structural leg: exactly the three turn entries call the seam,
+        // and the summariser's own slice calls neither entry helper.
+        $this->assertSame(
+            3,
+            substr_count($source, '->honouringHostGate()'),
+            'a new honouringHostGate() caller has appeared — the mirror roster is the three turn entries only',
+        );
+        foreach (['summaryReply', 'newRuntime'] as $method) {
+            $reflection = new ReflectionMethod(EngineBackend::class, $method);
+            $lines = explode("\n", $source);
+            $body = implode("\n", array_slice(
+                $lines,
+                (int) $reflection->getStartLine() - 1,
+                (int) $reflection->getEndLine() - (int) $reflection->getStartLine() + 1,
+            ));
+            $this->assertStringNotContainsString('honouringHostGate', $body);
+            $this->assertStringNotContainsString('withHostPermissionMode', $body);
+        }
+
+        // Observable leg: the very object newRuntime() hands the
+        // summariser is the provider FIELD, and a backend standing on a
+        // live Plan gate still answers field-side WITHOUT the dial — the
+        // mirror only ever exists on the throwaway per-turn copies.
+        $gate = new PermissionGate(PermissionMode::Default);
+        $backend = (new EngineBackend(new ClaudeCodeProvider(new ClaudeCodeInvocation(), bare: false), 'claude-sonnet-4-6'))
+            ->withPermissionGate($gate->withMode(PermissionMode::Plan));
+
+        $this->assertArrayNotHasKey('permissionMode', self::providerOptions($backend->provider()));
+    }
+
     /**
      * @return iterable<string, array{mixed, bool}>
      */
