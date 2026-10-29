@@ -18,9 +18,9 @@ import { METHOD_SCOPES } from '../protocol/generated'
 
 /** Method name -> one-line reason it is deliberately dormant today. */
 const DORMANT_REASONS: Record<string, string> = {
-  // C-MCP-2.b shipped the mcp.resources method; the composer @mcp: resource
-  // picker (C-MCP-2.c) will be the first browser caller — drop this row when it lands.
-  'mcp.resources': 'MCP resource listing has no browser caller until the composer @ popup wires it (C-MCP-2.c)',
+  // C-MCP-2.c wired the first browser caller: the composer @mcp: resource
+  // picker (SessionView's roster fetch). The row for mcp.resources came out
+  // in the same commit that added the caller, per this spec's own rule.
   // Scope::Admin host verb: the browser may receive the event but must never
   // call the method; C-WEB-5.g wires the confirmed Admin caller later.
   'server.shutdown': 'admin-scope shutdown is a host operator verb; the client only receives the event (WEB-1)',

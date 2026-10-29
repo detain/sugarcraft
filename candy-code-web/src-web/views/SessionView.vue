@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import Composer from '../components/Composer.vue'
+import Composer, { type McpMention } from '../components/Composer.vue'
 import RunningAgentsLine from '../components/agents/RunningAgentsLine.vue'
 import type { PastedDocument, PastedImage } from '../lib/paste'
 import PermissionCard, { type Reply } from '../components/PermissionCard.vue'
@@ -49,9 +49,18 @@ const draft = computed({
   set: (value: string) => layout.setDraft(props.id, value),
 })
 
+/**
+ * C-MCP-2.c: cache slot for the `@mcp:` popup roster. Declared before the
+ * session-id watch because that watch runs immediate and resets it; the
+ * launch-frozen rows are fetched once per opened session by
+ * `mcpResourceRoster()` below.
+ */
+let mcpRoster: Promise<McpMention[]> | null = null
+
 watch(() => props.id, (id, previous) => {
   if (previous !== undefined) useSessionStore(previous).release()
   error.value = null
+  mcpRoster = null // C-MCP-2.c: the roster is frozen per session root
   layout.lastSessionId = id
   useSessionStore(id).retain()
 }, { immediate: true })
@@ -78,6 +87,43 @@ async function send(text: string, delivery: Delivery, images: PastedImage[] = []
 
 /** The composer's @ popup (WEB-5b): `fs.search` over this session's store. */
 const searchFiles = (query: string): Promise<string[]> => session.value.searchFiles(query)
+
+/**
+ * C-MCP-2.c: the `@mcp:` popup roster. `mcp.resources` reports the
+ * launch-frozen rows without starting any server, so the answer is fetched
+ * once per opened session and cached here; the popup query filters
+ * server/uri/name. A failed or `not-started` answer caches empty rows, and
+ * the composer falls back to files.
+ */
+function mcpResourceRoster(): Promise<McpMention[]> {
+  mcpRoster ??= connection
+    .request('mcp.resources', { sessionId: props.id })
+    .then((answer) =>
+      answer.servers.flatMap((entry) =>
+        entry.resources.map((resource) => ({
+          server: entry.server,
+          uri: resource.uri,
+          name: resource.name,
+        })),
+      ),
+    )
+    .catch(() => [] as McpMention[])
+  return mcpRoster
+}
+
+const searchMcpResources = (query: string): Promise<McpMention[]> => {
+  const needle = query.toLowerCase()
+  return mcpResourceRoster().then((rows) =>
+    rows
+      .filter(
+        (row) =>
+          row.server.toLowerCase().includes(needle) ||
+          row.uri.toLowerCase().includes(needle) ||
+          row.name.toLowerCase().includes(needle),
+      )
+      .slice(0, 8),
+  )
+}
 
 async function stop(): Promise<void> {
   try {
@@ -181,6 +227,7 @@ async function rename(): Promise<void> {
         :commands="session.commands"
         :default-delivery="connection.defaultDelivery"
         :search-files="searchFiles"
+        :search-mcp-resources="searchMcpResources"
         @send="send"
         @stop="stop"
       />

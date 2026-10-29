@@ -29,6 +29,13 @@ import {
     type Dictation,
 } from "../lib/dictation";
 
+/**
+ * C-MCP-2.c: one row of the `@mcp:` popup. Accepting inserts the keyword
+ * form `@mcp:<server>:<uri>` the server already resolves; the roster fetch
+ * and its cache live in `SessionView`, which owns the connection.
+ */
+export type McpMention = { server: string; uri: string; name: string };
+
 const props = defineProps<{
     modelValue: string;
     busy: boolean;
@@ -38,6 +45,12 @@ const props = defineProps<{
     defaultDelivery?: Delivery;
     /** `fs.search` behind the `@` popup (WEB-5b); without it the composer is text-only. */
     searchFiles?: (query: string) => Promise<string[]>;
+    /**
+     * C-MCP-2.c: the `mcp.resources` roster behind an `@mcp:` partial. The
+     * query is the partial after `mcp:`; the rows come filtered by
+     * server/uri/name. Without it the `@` popup is file-only, as before.
+     */
+    searchMcpResources?: (query: string) => Promise<McpMention[]>;
 }>();
 const emit = defineEmits<{
     "update:modelValue": [value: string];
@@ -113,7 +126,12 @@ const documents = ref<PastedDocument[]>([]);
 const fileInput = ref<HTMLInputElement | null>(null);
 /** Ranked `fs.search` matches for the trailing `@partial`, capped to one popup. */
 const files = ref<string[]>([]);
+/** Ranked `mcp.resources` rows for a trailing `@mcp:` partial (C-MCP-2.c). */
+const mcpMentions = ref<McpMention[]>([]);
 let fileSeq = 0;
+
+/** C-MCP-2.c: an `@mcp:` partial opens the resource popup, not the file one. */
+const MCP_MENTION_PREFIX = "mcp:";
 
 /**
  * The `@` completion rides the same keyboard as `/`: a trailing `@partial`
@@ -141,6 +159,7 @@ let lastSearchAt = Number.NEGATIVE_INFINITY;
 
 function searchMentionedFiles(partial: string): void {
     const seq = ++fileSeq;
+    mcpMentions.value = []; // the file popup has taken the line back
     lastSearchAt = Date.now();
     void props
         .searchFiles!(partial)
@@ -152,6 +171,38 @@ function searchMentionedFiles(partial: string): void {
         });
 }
 
+/**
+ * C-MCP-2.c: the `@mcp:` popup. Rows come from the session-cached
+ * `mcp.resources` roster, filtered by the caller. No rows — `not-started`,
+ * no servers, a failed fetch — hands the line to the file search the
+ * partial would have run before this feature existed.
+ */
+function searchMcpMentions(partial: string): void {
+    const seq = ++fileSeq;
+    files.value = [];
+    lastSearchAt = Date.now();
+    void props
+        .searchMcpResources!(partial.slice(MCP_MENTION_PREFIX.length))
+        .then((rows) => {
+            if (seq !== fileSeq) return;
+            mcpMentions.value = rows.slice(0, 8);
+            if (mcpMentions.value.length === 0 && props.searchFiles)
+                searchMentionedFiles(partial);
+        })
+        .catch(() => {
+            if (seq !== fileSeq) return;
+            mcpMentions.value = [];
+            if (props.searchFiles) searchMentionedFiles(partial);
+        });
+}
+
+/** Route a partial to the `@mcp:` roster popup or the `fs.search` file popup. */
+function runMentionSearch(partial: string): void {
+    if (partial.startsWith(MCP_MENTION_PREFIX) && props.searchMcpResources)
+        searchMcpMentions(partial);
+    else if (props.searchFiles) searchMentionedFiles(partial);
+}
+
 watch(
     mentionPartial,
     (partial) => {
@@ -159,18 +210,22 @@ watch(
             clearTimeout(mentionTimer);
             mentionTimer = undefined;
         }
-        if (partial === null || !props.searchFiles) {
+        if (
+            partial === null ||
+            (!props.searchFiles && !props.searchMcpResources)
+        ) {
             files.value = [];
+            mcpMentions.value = [];
             lastSearchAt = Number.NEGATIVE_INFINITY; // the next `@` opens at once
             return;
         }
         if (Date.now() - lastSearchAt >= MENTION_SEARCH_DEBOUNCE_MS) {
-            searchMentionedFiles(partial);
+            runMentionSearch(partial);
             return;
         }
         mentionTimer = setTimeout(() => {
             mentionTimer = undefined;
-            if (props.searchFiles) searchMentionedFiles(partial);
+            runMentionSearch(partial);
         }, MENTION_SEARCH_DEBOUNCE_MS);
     },
     { immediate: true },
@@ -178,7 +233,7 @@ watch(
 onBeforeUnmount(() => {
     if (mentionTimer !== undefined) clearTimeout(mentionTimer);
 });
-watch(files, () => {
+watch([files, mcpMentions], () => {
     selected.value = 0;
 });
 
@@ -186,6 +241,17 @@ function completeFile(path: string): void {
     const at = props.modelValue.lastIndexOf("@");
     if (at < 0) return;
     emit("update:modelValue", `${props.modelValue.slice(0, at)}@${path} `);
+    input.value?.focus();
+}
+
+/** C-MCP-2.c: accepting an `@mcp:` row inserts the server-resolvable keyword. */
+function completeMcp(mention: McpMention): void {
+    const at = props.modelValue.lastIndexOf("@");
+    if (at < 0) return;
+    emit(
+        "update:modelValue",
+        `${props.modelValue.slice(0, at)}@mcp:${mention.server}:${mention.uri} `,
+    );
     input.value?.focus();
 }
 
@@ -541,7 +607,9 @@ function onKeydown(event: KeyboardEvent): void {
         return;
     }
     const commands = suggestions.value.length;
-    const popup = commands > 0 ? commands : files.value.length;
+    const mcpRows = mcpMentions.value.length;
+    const popup =
+        commands > 0 ? commands : mcpRows > 0 ? mcpRows : files.value.length;
     if (
         popup > 0 &&
         !event.ctrlKey &&
@@ -559,6 +627,9 @@ function onKeydown(event: KeyboardEvent): void {
         if (commands > 0) {
             const pick = suggestions.value[selected.value];
             if (pick) complete(pick);
+        } else if (mcpRows > 0) {
+            const pick = mcpMentions.value[selected.value];
+            if (pick) completeMcp(pick);
         } else {
             const pick = files.value[selected.value];
             if (pick) completeFile(pick);
@@ -587,11 +658,19 @@ function onKeydown(event: KeyboardEvent): void {
     }
     if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
         event.preventDefault();
-        if (commands === 0 && files.value.length > 0) {
-            // Accept the highlighted file: unlike `/name`, a half-typed `@partial`
-            // is never a sendable prompt.
-            const pick = files.value[selected.value];
-            if (pick) completeFile(pick);
+        if (commands === 0 && (mcpRows > 0 || files.value.length > 0)) {
+            // Accept the highlighted row: unlike `/name`, a half-typed
+            // `@partial` — file or `mcp:` — is never a sendable prompt.
+            const pick =
+                mcpRows > 0
+                    ? mcpMentions.value[selected.value]
+                    : undefined;
+            if (pick !== undefined) {
+                completeMcp(pick);
+                return;
+            }
+            const file = files.value[selected.value];
+            if (file) completeFile(file);
             return;
         }
         submit();
@@ -638,6 +717,24 @@ defineExpose({ focus: () => input.value?.focus() });
                     command.argumentHint
                 }}</span>
                 <span class="desc">{{ command.description }}</span>
+            </li>
+        </ul>
+        <ul
+            v-if="suggestions.length === 0 && mcpMentions.length > 0"
+            class="suggest"
+            role="listbox"
+            data-testid="mcp-suggestions"
+        >
+            <li
+                v-for="(mention, i) in mcpMentions"
+                :key="`${mention.server}:${mention.uri}`"
+                role="option"
+                :aria-selected="i === selected"
+                :class="{ on: i === selected }"
+                @mousedown.prevent="completeMcp(mention)"
+            >
+                <span class="cmd">{{ `mcp:${mention.server}:${mention.uri}` }}</span>
+                <span v-if="mention.name" class="desc">{{ mention.name }}</span>
             </li>
         </ul>
         <ul
