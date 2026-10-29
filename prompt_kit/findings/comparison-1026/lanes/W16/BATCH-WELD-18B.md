@@ -26,9 +26,19 @@ Lanes (wave-then-listed): C-CTX-3.c (W21, 2 commits c33e189af, 93c08ab87; base 8
   - candy-code/tests/MCP/McpBackgroundCallTest.php 3.141/15 (OK 15T/123A)
   - candy-code/tests/Protocol/ContextInstructionWriteTest.php 1.536/11 (OK 11T/54A)
 
-## Ledger
-- [ ] §4 marks: C-CTX-3.c + C-MCP-3.d (heading ✅ with pick maps, per 18a format). No §3 flip: W21 (8 unwelded besides 3.c) and W22 (9 unwelded besides 3.d) stay open — established format = §3 touched only at wave close.
-- [ ] Evidence: lanes/C-CTX-3.c + lanes/C-MCP-3.d full dirs (main-tree copies authoritative) + lanes/W16/BATCH-WELD-18B.md.
-- [ ] run-state: welded += C-CTX-3.c C-MCP-3.d (227→229, sorted insert); weld_pending cleared of both → {}; tip=678ff50a0 at meta, stamped to meta sha by follow-up one-liner (commit can't carry own sha).
-- [ ] FF main tree (origin a612fb008, ahead 8+ → NO PUSH, no wave closes).
-- [ ] Prune after git-cherry proofs: cc/C-CTX-3.c cc/C-MCP-3.d + worktrees + /home/sites/cc-cmp-C-MCP-3d-base. Live untouched: C-MCP-4.a C-AGT-4.d C-SES-7.g C-AGT-5.f C-SEC-8.f C-PRV-4.b C-AGT-4.e.
+## Ledger — DONE
+- [x] §4 marks: C-CTX-3.c + C-MCP-3.d (heading ✅ with pick maps, per 18a format). No §3 flip: W21 (8 unwelded besides 3.c) and W22 (9 unwelded besides 3.d) stay open — established format = §3 touched only at wave close.
+- [x] Evidence: lanes/C-CTX-3.c + lanes/C-MCP-3.d full dirs (main-tree copies authoritative, byte-identity proven pre-merge) + lanes/W16/BATCH-WELD-18B.md — all landed in meta.
+- [x] run-state: welded += C-CTX-3.c C-MCP-3.d (227→229, sorted insert); weld_pending cleared of both → {}; tip=678ff50a0 at meta ed5e7aa83, stamped to ed5e7aa83 by follow-up one-liner cc2f9d387 (commit can't carry own sha).
+- [x] FF main tree: 103a385aa → cc2f9d387 (lead run-state dirt backed up to /tmp/opencode/lead-1029/run-state-pre-ff18b-lead.json and reverted for the FF; lead untracked dirs survive). origin/master stays a612fb008, master ahead 24 → NO PUSH, no wave closes.
+
+## Absorption proofs (git cherry master <lane>, post-FF)
+- cc/C-MCP-3.d: 4/4 '-' (c3de5c442 9b34f63bd 925d39ad0 e0ff98c4c).
+- cc/C-CTX-3.c: 93c08ab87 '-'; c33e189af '-' by CONTENT (git-cherry '+' = patch-id context drift — MethodSchemas.php use-block conflict resolution kept BOTH imports; diff of +/- lines vs pick 0b7cac1c4 = IDENTICAL; master blob carries InstructionFileLoader + AuditLogReader at :7-8).
+
+## Prune — DONE (post-FF, after proofs)
+- [x] cc/C-CTX-3.c + /home/sites/cc-cmp-C-CTX-3.c
+- [x] cc/C-MCP-3.d + /home/sites/cc-cmp-C-MCP-3.d
+- [x] /home/sites/cc-cmp-C-MCP-3d-base (reviewer base fixture)
+- [x] /home/sites/cc-cmp-weld-18b worktree (branch weld-18b kept at cc2f9d387)
+- [x] live untouched: C-MCP-4.a C-AGT-4.d C-SES-7.g C-AGT-5.f C-SEC-8.f C-PRV-4.b C-AGT-4.e + weld-18 (18a-era)
