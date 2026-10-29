@@ -253,7 +253,7 @@ The model reads and writes the same notes through the `Memory` tool
 | `save` | `content`, `scope` (`project` default, or `user`), `type` (`pattern` default, `convention`, `decision`, `preference`), `tags` | a new note; content over `ProjectMemoryWriter::MAX_CONTENT_BYTES` (8192) is refused — the `memory.projectNoteMaxBytes` setting (`config.json` only, read as each project note is written) moves the cap a note written into the repository is held to |
 | `str_replace` | `id`, `old_str`, `new_str` | replaces the one occurrence of `old_str`; zero or several occurrences are refused |
 | `delete` | `id` | removes the note |
-| `recall` | `query` | the notes whose content, type or tags match the query, best first (the `/memory search` ranking), at most 20 |
+| `recall` | `query`, `source` (`notes` default, `sessions`, `journal`) | `notes`: the notes whose content, type or tags match the query, best first (the `/memory search` ranking), at most 20. `sessions`: snippets from this project's earlier sessions, the current one excluded, at most 8 — needs the session search index the `/`-side body search builds. `journal`: the recent compaction journal entries through `CompactionJournal::recentView()`, oldest first, bounded by `VIEW_MAX_ENTRIES` (10) and `VIEW_MAX_BYTES` (6000). Session and journal text crosses `SecretRedactor` and is framed as untrusted data, never instructions |
 
 Every write goes through `Memory\MemoryWriter`, the router `/memory add` uses
 too, so a note the model saves lands exactly where the user's would: a

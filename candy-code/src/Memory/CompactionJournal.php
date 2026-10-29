@@ -50,6 +50,15 @@ final class CompactionJournal
     /** A record longer than this, in characters, is cut — the journal is a digest, not a transcript. */
     public const MAX_RECORD_CHARS = 4000;
 
+    /** How many of the newest entries the model-facing {@see recentView()} may offer. */
+    public const VIEW_MAX_ENTRIES = 10;
+
+    /** Total content bytes (records + state) the whole {@see recentView()} may carry. */
+    public const VIEW_MAX_BYTES = 6000;
+
+    /** Below this share an entry's text is dropped rather than clipped to noise. */
+    private const VIEW_MIN_CLIP_BYTES = 96;
+
     private function __construct(
         private readonly string $path,
         private readonly ?string $projectKey,
@@ -143,6 +152,103 @@ final class CompactionJournal
         }
 
         return $limit > 0 ? array_slice($entries, -$limit) : $entries;
+    }
+
+    /**
+     * The model-facing read view (C-CTX-3.d): at most the newest $maxEntries
+     * compaction entries, and no more than $maxBytes of record/state text in
+     * TOTAL, oldest-first. The dream pass reads full-fidelity entries; a
+     * recall answer handed to the model must cost a bounded number of prompt
+     * bytes, so when the budget runs out the entry it lands on is clipped to
+     * equal shares (never to noise: a share below {@see VIEW_MIN_CLIP_BYTES}
+     * drops the text instead), and older entries past the budget are left on
+     * disk. Entries are already redacted at append; this view only reads.
+     *
+     * @return list<array{v:int,at:string,tags:list<string>,project:?string,compaction:string,records:list<string>,state:?string}>
+     */
+    public function recentView(int $maxEntries = self::VIEW_MAX_ENTRIES, int $maxBytes = self::VIEW_MAX_BYTES): array
+    {
+        $budget = max(0, $maxBytes);
+        if ($budget === 0 || $maxEntries <= 0) {
+            return [];
+        }
+
+        // Walk newest-first so the budget trims the OLDEST entries first:
+        // the freshest summary is the one a recall most needs.
+        $picked = [];
+        foreach (array_reverse($this->entries(self::TAG, $maxEntries)) as $entry) {
+            $used = self::entryTextBytes($entry);
+            if ($used <= $budget) {
+                $picked[] = $entry;
+                $budget -= $used;
+                continue;
+            }
+            if ($budget < self::VIEW_MIN_CLIP_BYTES) {
+                break;
+            }
+            $clipped = self::clipEntryTo($entry, $budget);
+            if ($clipped['records'] !== [] || $clipped['state'] !== null) {
+                $picked[] = $clipped;
+            }
+            break;
+        }
+
+        return array_reverse($picked);
+    }
+
+    /** Content bytes one entry carries: every record plus the state, if any. */
+    private static function entryTextBytes(array $entry): int
+    {
+        $bytes = 0;
+        foreach ($entry['records'] as $record) {
+            $bytes += strlen($record);
+        }
+
+        return $bytes + strlen((string) $entry['state']);
+    }
+
+    /**
+     * $entry with its record/state texts clipped to $budget bytes TOTAL,
+     * each share equal and each share at least {@see VIEW_MIN_CLIP_BYTES} —
+     * a smaller share is dropped, never squeezed into a one-word stub.
+     *
+     * @param array{v:int,at:string,tags:list<string>,project:?string,compaction:string,records:list<string>,state:?string} $entry
+     *
+     * @return array{v:int,at:string,tags:list<string>,project:?string,compaction:string,records:list<string>,state:?string}
+     */
+    private static function clipEntryTo(array $entry, int $budget): array
+    {
+        $count = count($entry['records']) + ($entry['state'] === null ? 0 : 1);
+        $share = $count === 0 ? 0 : intdiv($budget, $count);
+        if ($share < self::VIEW_MIN_CLIP_BYTES) {
+            $entry['records'] = [];
+            $entry['state'] = null;
+
+            return $entry;
+        }
+
+        $entry['records'] = array_values(array_map(
+            static fn(string $record): string => self::clipBytes($record, $share),
+            $entry['records'],
+        ));
+        if ($entry['state'] !== null) {
+            $entry['state'] = self::clipBytes($entry['state'], $share);
+        }
+
+        return $entry;
+    }
+
+    /** $text to at most $limit bytes, cut on a UTF-8 boundary and marked. */
+    private static function clipBytes(string $text, int $limit): string
+    {
+        if (strlen($text) <= $limit) {
+            return $text;
+        }
+        if ($limit <= 3) {
+            return '';
+        }
+
+        return mb_strcut($text, 0, $limit - 3, 'UTF-8') . '…';
     }
 
     /**

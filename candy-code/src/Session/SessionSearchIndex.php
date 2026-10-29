@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Session;
 
 use PDO;
 use SugarCraft\Code\Memory\MemorySearchIndex;
+use SugarCraft\Code\Support\SqliteConnect;
 
 /**
  * The FTS5 side table behind `withBodySearch` (SES-2, plan_comparison §SES-2).
@@ -260,6 +261,114 @@ final class SessionSearchIndex
         // bm25 refuses a subquery context, so the fold to one row per
         // session happens here: rows arrive best-hit-first, the first row a
         // session owns is its entry, and iteration order is the rank.
+        return self::foldRanked($rows, self::SESSION_CAP);
+    }
+
+    /**
+     * Open the index over a session database for READING only (C-CTX-3.d,
+     * the model-facing `Memory` recall). Null means there is nothing to ask:
+     * the database file does not exist, or the connect itself failed — the
+     * caller answers "no session index is available", never a throw.
+     *
+     * The connection is a second one beside the store's own; that is safe
+     * because WAL readers never block on a writer and the opening's DDL is
+     * `IF NOT EXISTS` — on a database another process is mid-build with, the
+     * statements no-op or wait out the busy timeout, and {@see create()}
+     * latches the index exactly as it would for the store. Trust, as always,
+     * comes from the persisted marker: a database the sweep has not vouched
+     * for answers {@see needsRebuild()} true, and the reader is expected to
+     * say "not built yet" rather than serve a partial table as an answer.
+     */
+    public static function openForReadOnly(string $dbPath): ?self
+    {
+        if (!is_file($dbPath)) {
+            return null;
+        }
+
+        try {
+            $pdo = SqliteConnect::open($dbPath);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return self::create($pdo);
+    }
+
+    /**
+     * Ranked body search scoped to ONE project root, excluding one session
+     * (C-CTX-3.d): the model-facing recall leg. $cwd is the launch's root in
+     * the same raw form {@see EnhancedSessionStore::createSession()} stores
+     * (`getcwd() ?: null`), matched with `=` against the sessions table — the
+     * law the picker's own `latestResumableSessionScoped` already keeps;
+     * null answers across every root. $excludeSessionId drops that session's
+     * rows from the results entirely; the current session must never surface
+     * its own transcript back to the model as "a past session".
+     *
+     * Null semantics are {@see search()}'s: latched, wordless, or locked out
+     * means "cannot answer". The fold keeps each session's best hit and
+     * stops at $limit — the read leg wants a handful of lines, not 200.
+     *
+     * @return list<array{session_id: string, snippet: string}>|null
+     */
+    public function searchScoped(string $query, ?string $cwd, ?string $excludeSessionId, int $limit): ?array
+    {
+        if ($this->latched) {
+            return null;
+        }
+        $match = MemorySearchIndex::matchExpression($query);
+        if ($match === null) {
+            return null;
+        }
+
+        $sql = ' SELECT anchor.session_id AS session_id,'
+            . " snippet(session_messages_fts, 2, '[', ']', '…', 12) AS snippet"
+            . ' FROM session_messages_fts'
+            . ' INNER JOIN session_message_rows AS anchor ON anchor.id = session_messages_fts.rowid'
+            . ' INNER JOIN sessions AS owner ON owner.id = anchor.session_id'
+            . ' WHERE session_messages_fts MATCH ?';
+        $params = [$match];
+        if ($cwd !== null) {
+            $sql .= ' AND owner.cwd = ?';
+            $params[] = $cwd;
+        }
+        if ($excludeSessionId !== null && $excludeSessionId !== '') {
+            $sql .= ' AND anchor.session_id <> ?';
+            $params[] = $excludeSessionId;
+        }
+        $sql .= ' ORDER BY bm25(session_messages_fts) LIMIT ?';
+        $params[] = self::MESSAGE_CAP;
+
+        try {
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute($params);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $stmt->closeCursor();
+        } catch (\PDOException $error) {
+            if (self::isLockContention($error)) {
+                return null;
+            }
+            $this->dirty = true;
+
+            return null;
+        } catch (\Throwable) {
+            $this->dirty = true;
+
+            return null;
+        }
+
+        return self::foldRanked($rows, max(1, $limit));
+    }
+
+    /**
+     * The ranked-message fold, one entry per session keeping its first (best)
+     * hit, shared by {@see search()} and {@see searchScoped()}.
+     *
+     * @param list<array<string, mixed>> $rows
+     *
+     * @return list<array{session_id: string, snippet: string}>
+     */
+    private static function foldRanked(array $rows, int $cap): array
+    {
         $ranked = [];
         foreach ($rows as $row) {
             $sessionId = (string) $row['session_id'];
@@ -267,7 +376,7 @@ final class SessionSearchIndex
                 continue;
             }
             $ranked[$sessionId] = ['session_id' => $sessionId, 'snippet' => (string) $row['snippet']];
-            if (count($ranked) >= self::SESSION_CAP) {
+            if (count($ranked) >= $cap) {
                 break;
             }
         }
