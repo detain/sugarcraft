@@ -2399,7 +2399,8 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SES-7.a (W14)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-7.e`
 
-#### C-AGT-5.d — Signed inbound webhooks + delivery dedupe
+#### ✅ d3d4b54f4 C-AGT-5.d — Signed inbound webhooks + delivery dedupe
+<!-- welded batch-12 2026-10-28: picks 3596fa061/60915338b/d3d4b54f4 (44fae6291/4bbcc0f6e/18a64b8f5); WEBHOOK_BODY rename cures DuplicatedTestHelperDrift BODY collision with foreign WebhookSignerTest; gate 69T/2477A (merged drift, batch-10 precedent); +18T suite-figure carry to WELD.md -->
 - **Item:** C-AGT-5 (sources: p1-miss: inbound webhook signatures) · gap · effort M
 - **What:** Each `webhooks` row gains an optional `signature: {scheme: "github-sha256"|"hmac-sha256", header?}` (`ServerConfig::webhooksValue()` ~:700-770). With a scheme, `HookWebhooks::handle()` verifies `sha256=<hex>` over the RAW body …
 - **Files — create:** none
@@ -2433,7 +2434,8 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-CTX-1.a (W3), C-CTX-6.d (W9)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-3.a`
 
-#### C-CTX-3.d — Model recall over past sessions and the compaction journal
+#### ✅ 8754885cb C-CTX-3.d — Model recall over past sessions and the compaction journal
+<!-- welded batch-12 2026-10-28: picks ffafa16ae/8754885cb (e08dddd3e/f0f2a0922); README tools:roster fused by gen-tool-docs regen; weld-cure de0c54646 lands NIT-1+NIT-3; MemoryRecallSourcesTest 14T/81A exact; battery 252T/4817A/1F (DreamPass:288 standing); +14T carry -->
 - **Item:** C-CTX-3 (sources: GAP-MEM-11/12, GAP-SES-11 (model half)) · gap · effort M
 - **What:** The FTS5 session search is user-only, and the compaction journal feeds only the dream pass. The `Memory` tool's `recall` action gains `source: notes|sessions|journal` (default `notes`, so the existing schema keeps its meaning): …
 - **Files — create:** `candy-code/tests/Tools/BuiltIn/MemoryRecallSourcesTest.php`

@@ -1,3 +1,27 @@
+# WELD — C-AGT-5.d (batch-12, 2026-10-28) — WELDED onto master 965be930f
+
+- Pick-map (`git cherry-pick -x`, all three clean — HookWebhooks.php/ServerConfig.php untouched
+  between lane base 302e99ac2 and start-tip, so the batch-10 conflict worry did not materialize):
+  44fae6291 → 3596fa061, 4bbcc0f6e → 60915338b, 18a64b8f5 → d3d4b54f4 (final pick; §4 cites it).
+- The batch-10 STOP is CURED by the lane's own fix 18a64b8f5: `private const WEBHOOK_BODY`
+  rename in tests/Server/HookWebhooksSignatureTest.php removes the byte-different BODY pair
+  against foreign tests/Automation/WebhookSignerTest.php:23. Lead ruled no re-review.
+- Gates on merged tree (cwd candy-code, env -u LINES -u COLUMNS, -c phpunit.xml, plain pipe):
+  - `HookWebhooks|ServerConfigWebhooks|ServerProtocolDocumentationDrift`: 69T/2477A/0F/2D OK
+    (T exact vs REVIEW-2; +3A merged-tree drift — batch-10 recorded the same 2477).
+  - `DuplicatedTestHelperDrift`: 14T/197A OK GREEN — the whole point of 18a64b8f5.
+  - Wide `Server|Hooks` band: 2244T/12767A/3F — AttachPagingTest x2 + WorkspaceHostTest:119.
+    PROVEN FOREIGN-STANDING: file-revert probe (every pick-touched candy-code file back to
+    965be930f) reproduces the identical 3F; lane REPORT + C-WEB-4.f REVIEW-1 + C-SEC-4.b
+    WELD-FINDING records show the same 3F at their bases (batch-8-era carry). Not fixed here.
+- DUR mint: scripts/parallel-tests-durations.tsv += candy-code/tests/Server/HookWebhooksSignatureTest.php
+  2.90/10 (calibrated against ConformanceTest 2.965/22 and HookWebhooksTest 5.749-era shape);
+  monotonicity violations hold at 4.
+- Figure carry: +18T suite-figure.json (suite-figure NOT re-pinned here — §7 closeout duty).
+- §4 mark: `✅ d3d4b54f4` with dated weld-note. Lane review files committed with closeout.
+
+---- HISTORICAL — batch-10 STOP record (superseded by the weld above; kept verbatim) ----
+
 # WELD — C-AGT-5.d (batch-10, 2026-10-28) — STOPPED, RESET OUT OF MASTER, LEFT IN FLIGHT
 
 - Picks tried: 44fae6291 (aa0dbadfc) + 4bbcc0f6e (3247be1fe) — applied cleanly, then REVERTED

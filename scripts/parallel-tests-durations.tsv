@@ -121,6 +121,7 @@ candy-code/tests/Chat/TurnHookAsyncTest.php	2.981	8
 candy-code/tests/Backend/RemoteBackendTest.php	2.979	13
 candy-code/tests/Runtime/AgentHardCancelTest.php	2.972	7
 candy-code/tests/Server/ConformanceTest.php	2.965	22
+candy-code/tests/Server/HookWebhooksSignatureTest.php	2.90	10
 candy-code/tests/LSP/LspExchangeLockTest.php	2.852	15
 candy-code/tests/Runtime/DroppedStreamContinueTest.php	2.798	7
 candy-code/tests/SwallowingCatchCensusTest.php	2.784	2
@@ -537,6 +538,7 @@ candy-code/tests/Tools/IgnoreRulesBacktrackingTest.php	0.297	112
 candy-code/tests/Cli/BinTerminalGuardPidTest.php	0.296	3
 candy-code/tests/Support/PtyDriverRetainTest.php	0.294	11
 candy-code/tests/Cli/BootstrapHomeStandInNoticeTest.php	0.293	4
+candy-code/tests/Tools/BuiltIn/MemoryRecallSourcesTest.php	0.29	14
 candy-code/tests/Tools/TaskToolOutputFenceTest.php	0.288	6
 candy-code/tests/Renderer/SlashMenuSourceBadgeTest.php	0.287	5
 candy-code/tests/Backend/ChildChannelVerdictTest.php	0.286	2
