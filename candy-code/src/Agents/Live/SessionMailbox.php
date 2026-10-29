@@ -93,6 +93,12 @@ final class SessionMailbox
         if (!self::ensureDirectory($dir)) {
             return null;
         }
+        // Opening the inbox IS minting the key: a sender can only sign against
+        // a key that already exists, and the receiver is the only one who may
+        // write it.  A home that cannot hold the key has no inbox.
+        if (self::mintKey($dir) === null) {
+            return null;
+        }
 
         return new self($dir, $sessionId);
     }
@@ -118,13 +124,11 @@ final class SessionMailbox
      * The key belongs to the receiver: {@see forSession()} mints it, so
      * sending to a session that has never opened its inbox fails here instead
      * of writing a line nothing can verify.
-     *
-     * @throws \InvalidArgumentException for an id that cannot name a mailbox
      */
     public static function send(string $targetSessionId, AgentMessage $message, ?string $root = null): ?string
     {
         if (preg_match(self::ID_PATTERN, $targetSessionId) !== 1 || $targetSessionId === '.' || $targetSessionId === '..') {
-            throw new \InvalidArgumentException(sprintf('"%s" is not a session id', $targetSessionId));
+            return sprintf('"%s" is not a session id', $targetSessionId);
         }
         $root ??= self::defaultRoot();
         if ($root === null) {
