@@ -632,6 +632,21 @@ store, which the narrowing does not touch — the lane's probe could not exercis
 a live login, so if one ever fails in your environment, `isolate: false` is the
 first lever.
 
+The `codex` block carries `isolate` the same way: default **true**, block-only.
+It puts `--ignore-user-config` on every `codex exec` spawn — the child then
+drops `~/.codex/config.toml`, its hooks, profiles and MCP servers, while
+authentication still uses `CODEX_HOME` (probed: `codex exec --help`, 0.154.0) —
+and the spawn never defers its sandbox: `-s` always rides, the block's `sandbox`
+key when set else `workspace-write`, forced to `read-only` while the host holds
+plan or dont-ask mode and never widened by a host mode; `danger-full-access`
+reaches the wire only from your own configured spelling. `isolate: false`
+restores the config inheritance when your own codex settings are part of the
+subscribed workflow. What isolation does not cover: the child's own rollout
+files keep landing under `CODEX_HOME`, which is where its login lives. The
+route answers `supportsJsonSchema()` false until an authenticated run records
+constrained decoding, even though a schema-bearing request already spills its
+file to `--output-schema` and removes it on every exit path.
+
 Where a row names two methods, the first is the public entry point and the
 second is the method that does the read — cited because that is the one to
 grep for. The second name is a private method on `Bootstrap` in every row but
