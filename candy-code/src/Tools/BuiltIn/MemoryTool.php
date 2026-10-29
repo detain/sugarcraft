@@ -111,9 +111,10 @@ final readonly class MemoryTool implements Tool, BuildsFromCatalog, AcceptsShell
      * background shells — it claims {@see AcceptsShellOwner} because the seam
      * IS the engine's per-turn session-id binding (C-TOOL-3.c), the only one
      * a tool can take without the engine knowing the tool: a `sessions` recall
-     * needs the current id to exclude it. Null — every launch-built or
-     * standalone caller — leaves the exclusion off, exactly like the shell
-     * tools' untagged rows.
+     * needs the current id to exclude it. Null — a caller the engine has not
+     * bound on this turn (a standalone build; launch-built rows carry it only
+     * until the per-turn bind lands) — leaves the exclusion off, exactly like
+     * the shell tools' untagged rows.
      */
     public function withShellOwner(?string $owner): self
     {

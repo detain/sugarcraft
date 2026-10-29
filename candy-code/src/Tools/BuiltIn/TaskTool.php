@@ -1458,7 +1458,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // denial scoped with arguments is not a floor here — it gates at the
         // call, exactly as {@see AgentManager::resolveGrantedTools()} leaves it.
         if ($agentMemory !== null && !self::carriesMemoryTool($tools) && !self::memoryToolDenied($subAgent->agent)) {
-            $tools[] = new MemoryTool(MemoryWriter::forAgent($subAgent->agent->name, $agentMemory, $memoryRoot));
+            $tools[] = new MemoryTool(MemoryWriter::forAgent($subAgent->agent->name, $agentMemory, $memoryRoot), $memoryRoot);
         }
         // ISS-065 (full fix): the roster above — granted by the manager or
         // inherited from this engine — is made of the session's tool
