@@ -318,6 +318,7 @@ export interface SessionSummary {
   turns?: number | null
   preview?: string | null
   snippet?: string | null
+  branch?: string | null
   open: boolean
   status: "closed" | "idle" | "busy" | "waiting_permission"
   permissionMode?: PermissionMode | null

@@ -2422,7 +2422,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-AGT-2.a (W1), C-AGT-2.c (W2), C-AGT-2.b (W7)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-6.c`
 
-#### C-CTX-3.a — `/instructions [open <n|path>]`
+#### ✅ e80d84b40 C-CTX-3.a — `/instructions [open <n|path>]` (pick 84079839f -> e80d84b40; ContainedPath docblock conflict fused to the merged declared map SIXTY-FOUR/THIRTY-TWO; batch-10)
 - **Item:** C-CTX-3 (sources: GAP-INS-16) · gap · effort M
 - **What:** `/memory open <id>` edits memory notes only, and nothing opens CLAUDE.md or AGENTS.md (`EditorCommand::openFile()` has one caller). Add `/instructions`. It lists the session's instruction files with tier and bytes: the same rows …
 - **Files — create:** `candy-code/builtin-commands/2405-instructions.php`, `candy-code/src/Commands/InstructionsCommand.php`, `candy-code/src/Host/Commands/InstructionsHostCommand.php`, `candy-code/tests/Commands/InstructionsCommandTest.php`
@@ -2516,7 +2516,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web.md` → `### C-WEB-2.b`
 
-#### C-WEB-4.f — Branch badge (`SessionSummary.branch`)
+#### ✅ ddfb9b97b C-WEB-4.f — Branch badge (`SessionSummary.branch`) (pick 8d39a7ca0 -> ddfb9b97b; weld commit carries the regenerated trio + dist rebuild + vue-tsc back to standing 20 + WELD-DOC REPORT cure + DUR row; batch-10)
 - **Item:** C-WEB-4 (sources: GAP-GIT-01) · gap · S
 - **What:** **Gap.** The `sessions` row already stores `git_branch` (`candy-code/src/Session/SessionStore.php:271,311,776`), but `SessionSummary` (`src/Protocol/Schema/Definitions.php:44-60`) does not carry it. **Server.** Add a nullable …
 - **Files — create:** `candy-code/tests/Protocol/SessionSummaryBranchTest.php`, `candy-code-web/src-web/components/__tests__/branchBadge.spec.ts`
@@ -2572,7 +2572,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Ruling:** May `-p` accept `--append-system-prompt` (fenced, never an override) against PROMPT_ENGINEERING.md's documented no-append doctrine? — see §6
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-4.g`
 
-#### C-EXT-3.e — Self-learning skills: SkillWorkshop tool + versioned drafts + history/undo
+#### ✅ fdfb6ad96 C-EXT-3.e — Self-learning skills: SkillWorkshop tool + versioned drafts + history/undo (picks f18b8cd86+c607a755c+b7f980576 -> cf017b14c+985c84e07+fdfb6ad96; 2026-10-28: chain includes post-r1 hygiene commit c607a755c reviewed in r2; COMMANDS.md /skills row fused with the /instructions row; batch-10)
 - **Item:** C-EXT-3 (sources: CLAW-new#1, GAP-SKL-14) · gap · effort M
 - **What:** **Tool.** A `SkillWorkshop` tool (Write class, so it is asked in default mode) lets the model create or patch a skill during a turn. **Store.** Writes land in a versioned store, `LearnedSkills`. It wraps `ProposedSkills`; each …
 - **Files — create:** `candy-code/src/Skills/LearnedSkills.php`, `candy-code/src/Skills/LearnedSkillRevision.php`, `candy-code/src/Tools/BuiltIn/SkillWorkshop.php`
