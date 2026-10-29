@@ -344,11 +344,11 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // does (or in a sentence below that is still a source literal), so no
         // DISTINCT path left this map with them.
         //
-        // The protocol's refusal of `permission.respond remember:"user"`
-        // (roadmap O-3b) names where to add the rule by hand — a sentence
-        // to the client, not a path this file opens; rooted at `~`, so
-        // user-tier like every entry around it.
-        'Protocol/Methods/PermissionMethods.php|.candy-code/settings.json' => self::USER,
+        // C-SEC-6.c retired the sentence in `permission.respond` that named
+        // `~/.candy-code/settings.json`: remembering "user" now WRITES the rule
+        // through `SavedRules` — a writer call carrying no path literal — so the
+        // occurrence left `src/` and this row left the map with it. The path
+        // itself stays classified: `Config/LayeredSettings.php` below opens it.
         // The rulebook tier (Phase 6 P6.S3). Reused class, not a new one: the
         // classification axis here is WHO CHOSE the path, not which loader opens
         // it, and `~/.candy-code/rulebooks` is rooted at `~` exactly like the

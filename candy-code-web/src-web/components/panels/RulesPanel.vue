@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import type { MethodResult, PermissionMode } from '../../protocol/generated'
 import { useConnectionStore } from '../../stores/connection'
 import { describe } from '../../stores/session'
@@ -22,6 +22,28 @@ const sessionGrants = ref<string[]>([])
 const loading = ref(false)
 const loaded = ref(false)
 const error = ref<string | null>(null)
+
+/** C-SEC-6.c: tier classification on the rows; an older server answers none, and every row rides the configured side. */
+type RuleRow = MethodResult<'permission.rules'>['rules'][number] & { tier?: string; savedIndex?: number | null }
+const configured = computed(() => (rules.value as RuleRow[]).filter((rule) => rule.tier !== 'user'))
+const saved = computed(() => (rules.value as RuleRow[]).filter((rule) => rule.tier === 'user'))
+const forgetting = ref<string | null>(null)
+const forgetError = ref<string | null>(null)
+
+/** Take one saved rule back out, then re-read so the panel shows the truth. */
+async function forget(row: RuleRow): Promise<void> {
+  if (forgetting.value !== null) return
+  forgetting.value = row.pattern
+  forgetError.value = null
+  try {
+    await connection.request('permission.forget', { pattern: row.pattern })
+    await load()
+  } catch (failure) {
+    forgetError.value = describe(failure)
+  } finally {
+    forgetting.value = null
+  }
+}
 
 /**
  * WEB-1c review MINOR-1: the session-switch race, fixed with the same
@@ -74,12 +96,26 @@ onMounted(() => void load())
           <tr><th>Pattern</th><th>Action</th></tr>
         </thead>
         <tbody>
-          <tr v-for="rule in rules" :key="`${rule.pattern} ${rule.action}`" data-testid="rule-row">
+          <tr v-for="rule in configured" :key="`${rule.pattern} ${rule.action}`" data-testid="rule-row">
             <td class="pattern">{{ rule.pattern }}</td>
             <td class="action" :data-action="rule.action">{{ rule.action }}</td>
           </tr>
         </tbody>
       </table>
+      <h3>Saved in your config</h3>
+      <p v-if="saved.length === 0" class="empty" data-testid="rules-saved-none">Nothing has been saved for future launches.</p>
+      <template v-else>
+        <ul data-testid="rules-saved">
+          <li v-for="row in saved" :key="`saved-${row.savedIndex}-${row.pattern}`" data-testid="saved-row">
+            <span class="idx">{{ row.savedIndex }}.</span>
+            <span class="pattern">{{ row.pattern }}</span>
+            <span class="action" :data-action="row.action">{{ row.action }}</span>
+            <button type="button" class="link" :disabled="forgetting !== null" data-testid="saved-forget" @click="forget(row)">Forget</button>
+          </li>
+        </ul>
+        <p class="note" data-testid="rules-saved-note">A saved rule takes effect at the next launch — this session keeps the policy it started with.</p>
+      </template>
+      <p v-if="forgetError" class="error" role="alert" data-testid="rules-forget-error">{{ forgetError }}</p>
       <h3>Grants made this session</h3>
       <p v-if="sessionGrants.length === 0" class="empty" data-testid="grants-none">Nothing has been granted while running.</p>
       <ul v-else data-testid="grants-list">
@@ -134,6 +170,15 @@ h3 {
 }
 .action {
   white-space: nowrap;
+}
+.idx {
+  color: var(--muted);
+  margin-right: 0.35rem;
+}
+.note {
+  color: var(--muted);
+  font-size: 0.75rem;
+  margin: 0.25rem 0 0;
 }
 .action[data-action='deny'] {
   color: var(--error);

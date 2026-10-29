@@ -31,10 +31,10 @@ const attempts = ref<Record<string, number>>({})
 const canAnswer = computed(() => connection.scopes.includes('approve'))
 const notificationsAvailable = typeof Notification !== 'undefined'
 
-async function answer(ask: SessionAsk, reply: Reply, cascade: boolean, note: string, failed: () => void): Promise<void> {
+async function answer(ask: SessionAsk, reply: Reply, cascade: boolean, note: string, failed: () => void, save = false): Promise<void> {
   error.value = null
   try {
-    await approvals.respond(ask, reply, { ...(cascade ? { cascade: true } : {}), ...(note !== '' ? { note } : {}) })
+    await approvals.respond(ask, reply, { ...(cascade ? { cascade: true } : {}), ...(note !== '' ? { note } : {}), ...(save ? { remember: 'user' } : {}) })
   } catch (failure) {
     error.value = describe(failure)
     attempts.value = { ...attempts.value, [ask.askId]: (attempts.value[ask.askId] ?? 0) + 1 }
@@ -105,7 +105,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         :key="`${ask.askId}:${attempts[ask.askId] ?? 0}`"
         :ask="ask"
         :can-answer="canAnswer"
-        @answer="(reply, cascade, note, failed) => answer(ask, reply, cascade, note, failed)"
+        @answer="(reply, cascade, note, failed, save) => answer(ask, reply, cascade, note, failed, save)"
       />
     </section>
   </aside>

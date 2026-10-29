@@ -989,7 +989,10 @@ situations, not two:
   client that reconnects is handed every question still open, whatever its
   cursor. `always` is remembered for that session exactly as `a` is in
   the TUI (`remember: "project"` is refused — permission rules are user-tier
-  only), and a reject sent with `cascade: true` rejects the session's other
+  only), `remember: "user"` answers `always` and saves the question's
+  patterns as allow-rules in your user config exactly as `p` does (effective
+  next launch; reported in the answer's `saved`, and `permission.forget`
+  takes one back out), and a reject sent with `cascade: true` rejects the session's other
   open questions and stops the turn at its next step. With
   `server.askTimeoutSeconds` set, a question nobody answers in time is
   refused; unset (the default), it waits. Server sessions start in `default`,

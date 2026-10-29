@@ -138,3 +138,31 @@ describe('PermissionCard plan approval (WEB-5a-iv)', () => {
     return ask({ tool: 'AskUser', source: 'tool:AskUser', arguments: { question: '?' } })
   }
 })
+
+describe('PermissionCard Always (save) verdict (C-SEC-6.c)', () => {
+  it('offers the save button only when always is offered, and emits the save flag', async () => {
+    const wide = ask({ options: ['once', 'always', 'reject'] })
+    const wrapper = mount(PermissionCard, { props: { ask: wide, canAnswer: true } })
+    const save = wrapper.find('[data-testid="ask-always-save"]')
+    expect(save.exists()).toBe(true)
+    expect(save.text()).toBe('Always (save)')
+    await save.trigger('click')
+    const call = wrapper.emitted('answer')?.[0]
+    expect(call?.slice(0, 3)).toEqual(['always', false, ''])
+    expect(call).toHaveLength(5)
+    expect(call?.[4]).toBe(true)
+  })
+
+  it('shows no save button when the server offers no always', () => {
+    const wrapper = mount(PermissionCard, { props: { ask: ask({}), canAnswer: true } })
+    expect(wrapper.find('[data-testid="ask-always-save"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="ask-always"]').exists()).toBe(false)
+  })
+
+  it('plain Always keeps the save flag false', async () => {
+    const wide = ask({ options: ['once', 'always', 'reject'] })
+    const wrapper = mount(PermissionCard, { props: { ask: wide, canAnswer: true } })
+    await wrapper.find('[data-testid="ask-always"]').trigger('click')
+    expect(wrapper.emitted('answer')?.[0]?.[4]).toBe(false)
+  })
+})

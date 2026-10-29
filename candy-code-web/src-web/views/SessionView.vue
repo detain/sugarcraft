@@ -87,9 +87,9 @@ async function stop(): Promise<void> {
   }
 }
 
-async function answer(askId: string, reply: Reply, cascade: boolean, note: string, failed: () => void): Promise<void> {
+async function answer(askId: string, reply: Reply, cascade: boolean, note: string, failed: () => void, save = false): Promise<void> {
   try {
-    await session.value.respond(askId, reply, { ...(cascade ? { cascade: true } : {}), ...(note !== '' ? { note } : {}) })
+    await session.value.respond(askId, reply, { ...(cascade ? { cascade: true } : {}), ...(note !== '' ? { note } : {}), ...(save ? { remember: 'user' } : {}) })
   } catch (failure) {
     error.value = describe(failure)
     // ISS-110: the question is still open — hand the card back to the user.
@@ -165,7 +165,7 @@ async function rename(): Promise<void> {
           :key="ask.askId"
           :ask="ask"
           :can-answer="canAnswer"
-          @answer="(reply, cascade, note, failed) => answer(ask.askId, reply, cascade, note, failed)"
+          @answer="(reply, cascade, note, failed, save) => answer(ask.askId, reply, cascade, note, failed, save)"
         />
         <RunningAgentsLine :session-id="id" />
       </template>

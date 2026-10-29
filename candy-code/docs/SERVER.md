@@ -699,9 +699,14 @@ asked about — the `askId` is a hash of the call's id, tool and arguments.
   when the session is opened again.
 - `reject` with `cascade: true` rejects every other open question of the
   session and stops the turn at its next step.
-- `remember: "project"` is refused — permission rules are user-tier only —
-  and `remember: "user"` is not offered over the wire; add a rule to
-  `~/.candy-code/settings.json` instead.
+- `remember: "project"` is refused — permission rules are user-tier only.
+  `remember: "user"` (C-SEC-6.c, the card's **Always (save)**) answers `always`
+  and additionally saves the question's patterns as allow-rules in your user
+  config — the same set the TUI's `p` writes — reported back in the answer's
+  `saved` notice; saved rules take effect at the next launch, and the gate
+  `permission.forget` takes one back out. A relayed background question
+  refuses it (`remember_user_unavailable`): its answer carries no grant to
+  persist.
 - A question still open when its turn ends — cancelled, failed, or settled —
   is resolved `cancelled`.
 - `server.askTimeoutSeconds` refuses a question nobody answered in time. It is

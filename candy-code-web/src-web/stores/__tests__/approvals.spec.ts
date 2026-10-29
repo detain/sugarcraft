@@ -110,3 +110,28 @@ describe('approvals across sessions', () => {
     expect(approvals.total).toBe(0)
   })
 })
+
+describe('remembering a verdict (C-SEC-6.c)', () => {
+  it('carries the save verdict to the wire as remember:"user", and nothing else does', async () => {
+    const wire = await connected()
+    const approvals = useApprovalsStore()
+    wire.serverEvent('permission.asked', ask('k1', 's1'))
+
+    const answered = approvals.respond(approvals.all[0]!, 'always', { remember: 'user' })
+    expect(wire.sent('permission.respond').pop()?.params).toMatchObject({
+      sessionId: 's1',
+      askId: 'k1',
+      reply: 'always',
+      remember: 'user',
+    })
+    wire.answer('permission.respond', { applied: true, reply: 'always' })
+    await answered
+
+    // The plain once answer rides no remember at all — the field is opt-in.
+    wire.serverEvent('permission.asked', ask('k2', 's1'))
+    const plain = approvals.respond(approvals.all[0]!, 'once')
+    expect(wire.sent('permission.respond').pop()?.params).not.toHaveProperty('remember')
+    wire.answer('permission.respond', { applied: true, reply: 'once' })
+    await plain
+  })
+})

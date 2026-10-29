@@ -304,6 +304,7 @@ final class MethodSchemas
                     'askId' => Schema::string(),
                     'reply' => Schema::enum(['once', 'always', 'reject'])->nullable(),
                     'cascaded' => Schema::arrayOf(Schema::string()),
+                    'saved' => Schema::string(2048)->nullable()->describe('With remember "user" on a hosted question: the notice naming where the answer\'s patterns were saved (or why they were not); null when the question had nothing generalisable to persist.'),
                 ], ['applied', 'askId', 'cascaded']),
             ],
             'permission.pending' => [
@@ -315,9 +316,24 @@ final class MethodSchemas
                 Schema::object([
                     'mode' => Schema::ref(D::PERMISSION_MODE)->nullable(),
                     'modeSource' => Schema::string()->nullable(),
-                    'rules' => Schema::arrayOf(Schema::object(['pattern' => Schema::string(), 'action' => Schema::string()], ['pattern', 'action'])),
+                    'rules' => Schema::arrayOf(Schema::object([
+                        'pattern' => Schema::string(),
+                        'action' => Schema::string(),
+                        'tier' => Schema::enum(['user', 'config'])->describe('C-SEC-6.c: `user` for a rule the user saved through `p` / `remember: "user"` (numbered by savedIndex, the same count permission.forget and `/permissions saved` address by); `config` for every other configured row.'),
+                        'savedIndex' => Schema::integer(1)->nullable(),
+                    ], ['pattern', 'action', 'tier'])),
                     'sessionGrants' => Schema::arrayOf(Schema::string()),
                 ], ['mode', 'rules', 'sessionGrants']),
+            ],
+            'permission.forget' => [
+                Schema::object([
+                    'pattern' => Schema::string(512),
+                    'index' => Schema::integer(1)->describe('The 1-based number the saved list shows; exactly one of pattern or index.'),
+                ]),
+                Schema::object([
+                    'removed' => Schema::arrayOf(Schema::object(['pattern' => Schema::string(), 'action' => Schema::string()], ['pattern', 'action'])),
+                    'path' => Schema::string(),
+                ], ['removed', 'path']),
             ],
 
             'command.list' => [$sessionOnly, $items(Schema::object([

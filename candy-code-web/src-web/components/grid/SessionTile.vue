@@ -91,9 +91,9 @@ async function send(): Promise<void> {
   }
 }
 
-async function answer(askId: string, reply: Reply, cascade: boolean, note = ''): Promise<void> {
+async function answer(askId: string, reply: Reply, cascade: boolean, note = '', save = false): Promise<void> {
   try {
-    await session.value.respond(askId, reply, { ...(cascade ? { cascade: true } : {}), ...(note !== '' ? { note } : {}) })
+    await session.value.respond(askId, reply, { ...(cascade ? { cascade: true } : {}), ...(note !== '' ? { note } : {}), ...(save ? { remember: 'user' } : {}) })
   } catch (failure) {
     error.value = describe(failure)
   }
@@ -133,7 +133,7 @@ async function answer(askId: string, reply: Reply, cascade: boolean, note = ''):
         :key="ask.askId"
         :ask="ask"
         :can-answer="canAnswer"
-        @answer="(reply, cascade, note) => answer(ask.askId, reply, cascade, note)"
+        @answer="(reply, cascade, note, _failed, save) => answer(ask.askId, reply, cascade, note, save)"
       />
     </div>
     <form class="composer" @submit.prevent="send">

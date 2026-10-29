@@ -157,14 +157,22 @@ final class PermissionFirstWinsTest extends TestCase
         self::assertTrue($this->fixture->backend->cancellation()?->isSoftCancelled());
     }
 
-    public function testRememberingBeyondTheSessionIsRefused(): void
+    /**
+     * `remember: "project"` stays refused (permission rules are user-tier
+     * only) and leaves the question open. Since C-SEC-6.c `remember: "user"`
+     * is NOT refused here any more — a hosted answer can save now — so that
+     * leg lives in `Tests\Protocol\PermissionSavedRulesMethodsTest`, with the
+     * relayed-question refusal beside it. What stays pinned here is the
+     * session coercion: a `once` sent with `remember: "session"` answers at
+     * `always` strength.
+     */
+    public function testRememberingTheProjectTierIsRefused(): void
     {
         [$a, , $sessionId] = $this->twoClientsOnARunningTurn();
         $ask = $this->fixture->backend->ask('c1', 'Bash', ['command' => 'ls']);
         $this->fixture->run(0.08);
 
         self::assertSame('remember_refused', $a->request('permission.respond', ['sessionId' => $sessionId, 'askId' => $ask->askId, 'reply' => 'always', 'remember' => 'project'])['error']['data']['kind']);
-        self::assertSame('remember_user_unavailable', $a->request('permission.respond', ['sessionId' => $sessionId, 'askId' => $ask->askId, 'reply' => 'always', 'remember' => 'user'])['error']['data']['kind']);
         self::assertFalse($ask->isSettled());
         self::assertSame('always', $a->call('permission.respond', ['sessionId' => $sessionId, 'askId' => $ask->askId, 'reply' => 'once', 'remember' => 'session'])['reply']);
     }

@@ -15,6 +15,7 @@ use SugarCraft\Code\Host\TurnController;
 use SugarCraft\Code\Host\TurnRunner;
 use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Memory\MemoryStore;
+use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ServerContext;
 use SugarCraft\Code\Server\ServerConfig;
@@ -47,7 +48,7 @@ final class ProtocolFixture
 
     public readonly Dispatcher $dispatcher;
 
-    private function __construct(?ServerConfig $config, int $retain, ?BackgroundSupervisor $supervisor, ?WorkflowEngineInterface $workflows, ?MemoryStore $memoryStore, ?\Closure $log, ?AgentManager $agentManager)
+    private function __construct(?ServerConfig $config, int $retain, ?BackgroundSupervisor $supervisor, ?WorkflowEngineInterface $workflows, ?MemoryStore $memoryStore, ?\Closure $log, ?AgentManager $agentManager, ?PermissionGate $permissionGate)
     {
         $this->dir = \sys_get_temp_dir() . '/crush-protocol-' . \bin2hex(\random_bytes(6));
         $this->root = $this->dir . '/project';
@@ -56,7 +57,7 @@ final class ProtocolFixture
         $this->backend = new ScriptedTurnBackend();
 
         $transcripts = TranscriptStore::new($this->store, null, EventLog::new($this->store, $retain));
-        $workspace = WorkspaceContext::new(root: $this->root, sessionStore: $this->store, backend: $this->backend, agentManager: $agentManager, workflowEngine: $workflows, backgroundSupervisor: $supervisor, memoryStore: $memoryStore)
+        $workspace = WorkspaceContext::new(root: $this->root, sessionStore: $this->store, backend: $this->backend, agentManager: $agentManager, workflowEngine: $workflows, backgroundSupervisor: $supervisor, memoryStore: $memoryStore, permissionGate: $permissionGate)
             ->withService(TurnRunner::class, TurnRunner::new())
             ->withService(TurnController::class, TurnController::new())
             ->withService(TranscriptStore::class, $transcripts)
@@ -88,10 +89,12 @@ final class ProtocolFixture
      *        failure silent (the shape every existing fixture runs, ISS-057)
      * @param AgentManager|null $agentManager the workspace's agent roster; none by
      *        default, which leaves `agents.list` an empty array
+     * @param PermissionGate|null $permissionGate the workspace's permission gate;
+     *        none by default, which leaves `permission.rules` an empty rule list
      */
-    public static function new(?ServerConfig $config = null, int $retain = EventLog::DEFAULT_RETAIN, ?BackgroundSupervisor $supervisor = null, ?WorkflowEngineInterface $workflows = null, ?MemoryStore $memoryStore = null, ?\Closure $log = null, ?AgentManager $agentManager = null): self
+    public static function new(?ServerConfig $config = null, int $retain = EventLog::DEFAULT_RETAIN, ?BackgroundSupervisor $supervisor = null, ?WorkflowEngineInterface $workflows = null, ?MemoryStore $memoryStore = null, ?\Closure $log = null, ?AgentManager $agentManager = null, ?PermissionGate $permissionGate = null): self
     {
-        return new self($config, $retain, $supervisor, $workflows, $memoryStore, $log, $agentManager);
+        return new self($config, $retain, $supervisor, $workflows, $memoryStore, $log, $agentManager, $permissionGate);
     }
 
     /** A client that has said hello. */

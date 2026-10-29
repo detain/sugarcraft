@@ -91,7 +91,7 @@ export const useApprovalsStore = defineStore('approvals', () => {
    * `ask_not_found` refusal means another client won or the turn ended: the
    * question is gone either way, so it leaves the drawer.
    */
-  async function respond(ask: SessionAsk, reply: Reply, options: { cascade?: boolean; note?: string } = {}): Promise<void> {
+  async function respond(ask: SessionAsk, reply: Reply, options: { cascade?: boolean; note?: string; remember?: 'session' | 'project' | 'user' } = {}): Promise<void> {
     try {
       await connection.request('permission.respond', { sessionId: ask.sessionId, askId: ask.askId, reply, ...options })
       remove(ask.askId)

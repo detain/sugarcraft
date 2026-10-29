@@ -9,7 +9,10 @@ import type { PendingAsk } from '../protocol/generated'
 export type Reply = 'once' | 'always' | 'reject'
 
 const props = defineProps<{ ask: PendingAsk; canAnswer: boolean }>()
-const emit = defineEmits<{ answer: [reply: Reply, cascade: boolean, note: string, failed: () => void] }>()
+// C-SEC-6.c: `save` is the fifth tuple member — the "Always (save)" verdict
+// answers `always` and asks the server to persist the grant (`remember:
+// "user"`, the TUI's `p`); every consumer already passed the first four.
+const emit = defineEmits<{ answer: [reply: Reply, cascade: boolean, note: string, failed: () => void, save: boolean] }>()
 
 const busy = ref(false)
 /**
@@ -83,7 +86,7 @@ const planSummary = computed(() => {
   return planText.value !== '' && typeof summary === 'string' ? summary : ''
 })
 
-function answer(reply: Reply, cascade = false, forcedNote?: string): void {
+function answer(reply: Reply, cascade = false, forcedNote?: string, save = false): void {
   if (busy.value || !props.canAnswer) return
   busy.value = true
   const text = forcedNote ?? note.value.trim()
@@ -94,7 +97,7 @@ function answer(reply: Reply, cascade = false, forcedNote?: string): void {
   const failed = () => {
     busy.value = false
   }
-  emit('answer', reply, cascade, reply === 'reject' || (reply === 'once' && question.value) ? text : '', failed)
+  emit('answer', reply, cascade, reply === 'reject' || (reply === 'once' && question.value) ? text : '', failed, save)
 }
 
 /** WEB-5a-iii: clicking a choice answers with that exact option string. */
@@ -160,6 +163,7 @@ function onKey(event: KeyboardEvent): void {
     <div class="actions">
       <button type="button" class="primary" :disabled="busy || !canAnswer" data-testid="ask-once" @click="answer('once')">{{ planText ? 'Approve plan' : 'Allow once' }}</button>
       <button v-if="offers.has('always')" type="button" :disabled="busy || !canAnswer" data-testid="ask-always" @click="answer('always')">{{ alwaysLabel }}</button>
+      <button v-if="offers.has('always')" type="button" :disabled="busy || !canAnswer" data-testid="ask-always-save" title="Answer always, and save the rule in your config for future launches" @click="answer('always', false, undefined, true)">Always (save)</button>
       <button type="button" :disabled="busy || !canAnswer" data-testid="ask-reject" @click="answer('reject')">Reject</button>
       <button type="button" class="danger" :disabled="busy || !canAnswer" data-testid="ask-reject-stop" @click="answer('reject', true)">Reject &amp; stop</button>
     </div>

@@ -209,7 +209,7 @@ function setup(sessionId: string) {
   }
 
   /** Answer a question; an `already_resolved` refusal means another client won, and closes the card. */
-  async function respond(askId: string, reply: 'once' | 'always' | 'reject', options: { cascade?: boolean; note?: string } = {}): Promise<void> {
+  async function respond(askId: string, reply: 'once' | 'always' | 'reject', options: { cascade?: boolean; note?: string; remember?: 'session' | 'project' | 'user' } = {}): Promise<void> {
     try {
       await connection.request('permission.respond', { sessionId, askId, reply, ...options })
     } catch (failure) {
