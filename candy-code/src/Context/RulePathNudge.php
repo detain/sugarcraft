@@ -508,7 +508,15 @@ final class RulePathNudge
                 continue;
             }
 
-            $digest = $this->digests[$key] ?? $this->intentDigests[$key] ?? null;
+            // Rule marks are keyed by absolute path, intent marks by
+            // INTENT_MARK_PREFIX + the note id — while intentDigests is keyed
+            // by the RAW id. Without the strip, an intent mark could never
+            // bind, and a child-reported intent would stay `true` (announced)
+            // forever — silently disabling the re-announce-on-edit promise the
+            // markAnnouncedPaths doc-block makes (C-CTX-3.f review MINOR-1).
+            $digest = str_starts_with($key, self::INTENT_MARK_PREFIX)
+                ? ($this->intentDigests[substr($key, strlen(self::INTENT_MARK_PREFIX))] ?? null)
+                : ($this->digests[$key] ?? null);
             if ($digest !== null) {
                 $this->announced[$key] = $digest;
             }

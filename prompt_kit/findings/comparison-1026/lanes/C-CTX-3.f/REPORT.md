@@ -107,3 +107,37 @@
 - Bind site is `MemoryTool::fromCatalog` (declared file) instead of LaunchContext (not
   declared, not a hub): catalog build is where memory+ruleNudge meet; one-shot per launch;
   delegations steer from the session store by design.
+
+## FIX ROUND 1 (2026-10-28, reviewer MINORs 1-3 from REVIEW-1.md)
+- **MINOR-1 fixed** — `RulePathNudge::reload()` true-bind now strips `INTENT_MARK_PREFIX`
+  on the intent leg before the `intentDigests` lookup (raw-id keys). The doc-block promise
+  "an intent edited after the fork still re-announces" is now TRUE for the fork-union path.
+  New pin `testAForkReportedIntentReAnnouncesWhenItsTextMoves`: mark `intent:p1` via
+  `markAnnouncedPaths()`, edit the body, re-announce happens. Mutation M1 (revert the
+  strip) reddens exactly that test.
+- **MINOR-2 fixed** — the `## standing intents` index block now carries two pins. Behavior:
+  `testTheIndexNeverClaimsAnArmedHeadingForTriggerlessDiskNotes` (save an intent through
+  the tool, `view` the index: the triggerless disk note lists as a plain note, never under
+  the armed heading, and the save reply says nothing about arming — mutation M4, unguarding
+  the save reply's armed sentence, reddens exactly this test). Structural:
+  `testTheIndexHeadingBlockIsPinnedForPresenceAndTriggerGate` slices `index()`'s body and
+  pins the heading literal, the `if ($intents !== [])` firing gate, the persisted-trigger
+  guard, and the `indexLine()`-rendered armed line (mutations M2 gate-neuter and M3
+  guard-drop redden it; M3 also reddens the behavior pin). The positive e2e listing leg
+  still rides seam #1, exactly as the corrected class doc-block now states ("both legs are
+  pinned" replaced by the honest leg ledger).
+- **MINOR-3 fixed** — `description()` no longer promises tool-time riding unconditionally:
+  "an intent whose trigger its store actually holds rides a later tool result …; the save
+  reply says whether a saved note became armed" — mirroring the save-side truth-not-promise
+  guard. MemoryStore untouched (out of file set); persistence seam rides weld per §WELDER.
+- **NIT-6 taken** (one-line, test file): `testCallerBudgetBoundsTheIntentEnvelope` wide leg
+  asserts the envelope IS emitted at 4096B before bounding it (was conditional).
+- **NITs 4-5 left to closeout** (when-forgery pin needs a new test beyond one line;
+  PSR-12 blank line lives in a src file outside the round-1 scope).
+- Gate re-derivation (worktree, linked, plain pipe): StandingIntentTest **21T/90A OK**
+  (18+3); `--filter 'Nudge|Rule'` **898T/5002A OK** (unchanged); guards
+  `ToolDocDrift|GlobDialect|DocFigureProseDrift|MemoryDocumentationDrift|DuplicatedTestHelperDrift`
+  **133T/4727A OK** (unchanged vs reviewer's combined figure). Deprecations 2 = global.
+- **Weld-number correction to seams 3-4:** the file is now 21 tests — the durations row and
+  the re-pin pair should carry **+21T / +90A** (not +18/+76), and seam #1's "all 18 stay
+  green" re-reads as all 21 (the fork/index pins are disk-independent).

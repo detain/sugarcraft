@@ -66,8 +66,10 @@ use SugarCraft\Code\Tools\ToolResult;
  * same way path-scoped rules are, once per note. Because a model-written
  * intent steers later turns, the index names it under its own heading, with
  * its trigger spelled out, and `delete` removes it by id — the visibility
- * promise is that nothing can announce unseen; both legs are pinned by
- * tests/Context/StandingIntentTest.php.
+ * promise is that nothing can announce unseen; StandingIntentTest pins the
+ * trigger spelling, the index heading block and its persisted-trigger
+ * gate, and the listing's unarmed shape — the armed end-to-end listing rides
+ * the `when:` persistence seam named in the lane report.
  */
 #[BuiltInTool(name: 'Memory', permission: ToolPermissionClass::NoAsk, position: 12, gloss: 'view, save, edit, delete and recall the persistent memory notes indexed in the system prompt, the past sessions of this project, or the compaction journal')]
 final readonly class MemoryTool implements Tool, BuildsFromCatalog, AcceptsShellOwner
@@ -164,9 +166,10 @@ final readonly class MemoryTool implements Tool, BuildsFromCatalog, AcceptsShell
             . '`view` with an `id` returns that note in full; without one, the full index. '
             . '`save` stores a new note (`content`, optional `scope` project|user, `type` '
             . 'preference|convention|decision|pattern|intent, `tags`). A `type` of `intent` also '
-            . 'requires `when`: `path:<glob>` or `keyword:<word>` — the harness then rides that note '
-            . 'into a later tool result once per turn when a tool touches a matching path, tagged as '
-            . 'a system reminder like a path-scoped rule. `str_replace` replaces the one occurrence of '
+            . 'requires `when`: `path:<glob>` or `keyword:<word>` — an intent whose trigger its '
+            . 'store actually holds rides a later tool result once per turn when a tool touches a '
+            . 'matching path, tagged as a system reminder like a path-scoped rule; the save reply '
+            . 'says whether a saved note became armed. `str_replace` replaces the one occurrence of '
             . '`old_str` with `new_str` in the note `id`. `delete` removes the note `id`. `recall` searches '
             . 'for `query`; its optional `source` picks what to search: `notes` (default) these memory '
             . 'notes, `sessions` snippets from this project' . "'s earlier sessions, never this one, or "

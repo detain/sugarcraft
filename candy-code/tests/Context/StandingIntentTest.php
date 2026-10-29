@@ -279,9 +279,8 @@ final class StandingIntentTest extends TestCase
 
         $other = self::trackerWithIntents([self::intent('b1', 'keyword:deploy', 'BODY.')]);
         $wide = $other->forPaths(['/x/deploy/y.txt'], 4096);
-        if ($wide !== null) {
-            self::assertLessThanOrEqual(4096, strlen($wide));
-        }
+        self::assertIsString($wide, 'a budget the envelope fits inside must emit it');
+        self::assertLessThanOrEqual(4096, strlen($wide));
     }
 
     public function testRuleEnvelopesAreByteIdenticalWhenNoIntentIsBound(): void
@@ -418,6 +417,70 @@ final class StandingIntentTest extends TestCase
         $tool = MemoryTool::fromCatalog($context);
         $tool->withWriter($writer);
         self::assertFalse($untouched->intentSourceBound());
+    }
+
+    // ---------------------------------------------------------------- fork union (review MINOR-1)
+
+    public function testAForkReportedIntentReAnnouncesWhenItsTextMoves(): void
+    {
+        // markAnnouncedPaths() stores an intent mark under `intent:<id>` while
+        // intentDigests is keyed by the RAW id — reload()'s true-bind must
+        // strip the prefix, or a child-reported intent stays announced `true`
+        // forever and an intent edited after the fork never re-announces.
+        $tracker = self::trackerWithIntents([self::intent('p1', 'keyword:deploy', 'BEFORE BODY.')]);
+        $tracker->markAnnouncedPaths(['intent:p1']);
+
+        self::assertNull($tracker->forPaths(['/x/deploy/y.txt']), 'the inherited mark counts as announced');
+
+        $tracker->bindIntentSource(static fn (): array => [self::intent('p1', 'keyword:deploy', 'AFTER BODY.')]);
+        $again = $tracker->forPaths(['/x/deploy/y.txt']);
+        self::assertIsString($again, 'an intent edited after the fork re-announces');
+        self::assertStringContainsString('AFTER BODY.', $again);
+    }
+
+    // ---------------------------------------------------------------- index heading leg (review MINOR-2)
+
+    public function testTheIndexNeverClaimsAnArmedHeadingForTriggerlessDiskNotes(): void
+    {
+        // The end-to-end positive leg (an armed intent under its own heading)
+        // cannot exist until the `when:` frontmatter carrier lands — decode()
+        // drops the trigger — so what IS pinned today is the honest shape: a
+        // saved intent whose trigger did not persist is listed as a plain
+        // note, never announced as armed by the save reply or the index.
+        $tool = new MemoryTool(MemoryWriter::new(
+            new MemoryStore($this->dir . '/home'),
+            $this->dir . '/repo',
+        ), $this->dir . '/repo');
+
+        $saved = $tool->execute(['action' => 'save', 'content' => 'FIRE WHEN DEPLOYING.', 'type' => 'intent', 'when' => 'keyword:deploy']);
+        self::assertFalse($saved->isError());
+        self::assertStringNotContainsString('standing intent', $saved->content(), 'a trigger that did not persist is never described as armed');
+
+        $index = $tool->execute(['action' => 'view']);
+        self::assertFalse($index->isError());
+        self::assertStringNotContainsString('## standing intents', $index->content());
+        self::assertStringContainsString('## project scope (this repository)', $index->content());
+        self::assertStringContainsString('[intent]', $index->content(), 'the type stays visible even unarmed');
+    }
+
+    public function testTheIndexHeadingBlockIsPinnedForPresenceAndTriggerGate(): void
+    {
+        // Companion structural pin of index()'s body: the heading block must
+        // exist (deleting it is the MINOR-2 vacuity), stay gated on the
+        // persisted-trigger shape, and spell each armed line through
+        // indexLine() so the trigger leg and the group label ride the listing
+        // the moment seam #1 arms one.
+        $method = new ReflectionMethod(MemoryTool::class, 'index');
+        $source = implode('', array_slice(
+            (array) file((string) $method->getFileName()),
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        self::assertSame(1, substr_count($source, "'## standing intents"), 'the armed-intent heading block lives');
+        self::assertStringContainsString('if ($intents !== []) {', $source, 'the block fires exactly when intents were collected — a neutered gate is the MINOR-2 vacuity');
+        self::assertStringContainsString("\$entry->type() === 'intent' && \$entry->when() !== ''", $source, 'only a persisted trigger may arm the heading');
+        self::assertSame(1, substr_count($source, 'self::indexLine($entry) . '), 'armed lines spell the trigger through indexLine()');
     }
 
     public function testProjectIntentsLandInRepositoryMemoryCorner(): void
