@@ -23,7 +23,9 @@
  * - non-shaper: exactly one notice row naming provider and model, and no
  *   second one on the continuation re-entry;
  * - the word inside an inline span, inside a fence, or grown into a longer
- *   word moves nothing.
+ *   word moves nothing;
+ * - neither an injected row (uiOnly) nor a hidden one (userVisible false)
+ *   rules the dispatch — the walk stops at the latest VISIBLE typed row.
  */
 
 declare(strict_types=1);
@@ -175,6 +177,46 @@ final class UltrathinkTurnTest extends TestCase
 
         self::assertNull(self::dispatched($thunk)->reasoningEffort(), 'an inline span is quoted material, not an ask');
         self::assertFalse(RuntimeNoticeSink::current()->hasPending(), 'and it earns no notice either');
+    }
+
+    public function testHiddenAndInjectedRowsNeverRuleTheDispatch(): void
+    {
+        $backend = $this->shaperBackend();
+        // C-PRV-3.c review MINOR-2: the walk's two exclusion legs, pinned
+        // one row per leg. An injected row (uiOnly — hidden from the model)
+        // and a hidden row (userVisible false — reaches the model but is
+        // never painted) are not typed asks. Each carries the keyword and
+        // sits above the clean visible ask, so dropping either leg lets it
+        // win the newest-row race and lift this dispatch: the leg removal
+        // reddens the tier assert below.
+        $history = [
+            Message::user('what does the deploy log say'),
+            new Message(
+                role: Role::User,
+                content: 'ultrathink inside injected context',
+                createdAt: \time(),
+                uiOnly: true,
+            ),
+            new Message(
+                role: Role::User,
+                content: 'ultrathink inside hidden context',
+                createdAt: \time(),
+                userVisible: false,
+            ),
+        ];
+
+        $thunk = TurnRunner::new()->start(
+            $backend,
+            $history,
+            new \ArrayObject(),
+            1,
+            new CancellationToken(),
+            false,
+            notices: RuntimeNoticeSink::current(),
+        );
+
+        self::assertNull(self::dispatched($thunk)->reasoningEffort(), 'the walk skips both rows and lands on the clean ask — no lift');
+        self::assertFalse(RuntimeNoticeSink::current()->hasPending(), 'and a shaper pair earns no notice either way');
     }
 
     // ── detector pins ──────────────────────────────────────────────────
