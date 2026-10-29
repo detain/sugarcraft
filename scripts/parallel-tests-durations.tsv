@@ -114,6 +114,7 @@ candy-code/tests/Integration/BinCandyCodeAutoloadGuardTest.php	3.347	37
 candy-code/tests/Sessions/BackgroundReconnectAfterRestartTest.php	3.249	13
 candy-code/tests/Cli/BootstrapHookFileTest.php	3.236	41
 candy-code/tests/Tools/TaskNestingDepthCapTest.php	3.148	6
+candy-code/tests/MCP/McpBackgroundCallTest.php	3.141	15
 candy-code/tests/Hooks/HookRegistryTest.php	3.073	72
 candy-code/tests/Tools/CapturedProcessDeadlineTest.php	3.041	6
 candy-code/tests/Server/SessionExportPagingTest.php	3.030	61
@@ -223,6 +224,7 @@ candy-code/tests/Host/ServedPromptSuggestionTest.php	1.565	4
 candy-code/tests/Tools/ToolDescriptionSentenceFloorTest.php	1.543	32
 candy-code/tests/Protocol/ShellsMethodsTest.php	1.543	7
 candy-code/tests/Server/BgPermissionAskRelayTest.php	1.539	12
+candy-code/tests/Protocol/ContextInstructionWriteTest.php	1.536	11
 candy-code/tests/Backend/StopHookContinuesTurnTest.php	1.534	8
 candy-code/tests/Tui/KeyboardHandlerTest.php	1.522	84
 candy-code/tests/Chat/ReadOnlySessionTest.php	1.494	21
