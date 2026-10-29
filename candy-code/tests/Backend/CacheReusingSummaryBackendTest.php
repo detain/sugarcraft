@@ -18,6 +18,7 @@ use SugarCraft\Code\Message;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Providers\ContextOverflow;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Tests\Support\ScriptedProvider;
 use SugarCraft\Code\ToolResult;
 
@@ -32,8 +33,9 @@ use SugarCraft\Code\ToolResult;
  */
 final class CacheReusingSummaryBackendTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private string $sandbox = '';
-    private string|false $originalHome = false;
 
     protected function setUp(): void
     {
@@ -43,16 +45,16 @@ final class CacheReusingSummaryBackendTest extends TestCase
         RuntimeNoticeSink::reset();
         $this->sandbox = sys_get_temp_dir() . '/crush-summretry-' . bin2hex(random_bytes(6));
         @mkdir($this->sandbox . '/repo', 0700, true);
-        $this->originalHome = getenv('HOME');
-        putenv('HOME=' . $this->sandbox);
+        // W20 cure: the trait redirects BOTH HOME spellings (env and
+        // $_SERVER) and snapshots the real values before writing either,
+        // so a one-sided sandbox can no longer leak the developer's home.
+        $this->useHomeSandbox($this->sandbox);
     }
 
     protected function tearDown(): void
     {
         RuntimeNoticeSink::reset();
-        if ($this->originalHome !== false) {
-            putenv('HOME=' . $this->originalHome);
-        }
+        $this->restoreHomeSandbox();
         if (is_dir($this->sandbox)) {
             exec('rm -rf ' . escapeshellarg($this->sandbox));
         }

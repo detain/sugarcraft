@@ -80,6 +80,7 @@ final class OneSidedHomeSandboxTest extends TestCase
         'Cli/SessionRetentionWiringTest.php',
         'Context/ImportResolverTest.php',
         'Context/InstructionFileLoaderTest.php',
+        'Context/InstructionWalkPastRootTest.php',
         'Diagnostics/RuntimeNoticeSinkDeliveryTest.php',
         'Integration/MemoryPromptWiringTest.php',
         'Integration/WorkflowExecutionTest.php',

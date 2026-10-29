@@ -131,13 +131,20 @@ final class MainWorktreeTest extends TestCase
         $notRepo = $this->root . '/plain-dir';
         mkdir($notRepo, 0o700, true);
 
+        $thrown = null;
         try {
             MainWorktree::enter($notRepo, 'x');
-            $this->fail('enter() answered for a directory that is not a git work tree');
-        } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('git work tree', $e->getMessage());
-            $this->assertStringContainsString($notRepo, $e->getMessage(), 'the refusal names what is not a repository');
+        } catch (\RuntimeException $caught) {
+            // Capture only: an assertion inside this catch could be swallowed.
+            $thrown = $caught;
         }
+        $this->assertInstanceOf(
+            \RuntimeException::class,
+            $thrown,
+            'enter() answered for a directory that is not a git work tree',
+        );
+        $this->assertStringContainsString('git work tree', $thrown->getMessage());
+        $this->assertStringContainsString($notRepo, $thrown->getMessage(), 'the refusal names what is not a repository');
 
         // A launch launched at a repo subdirectory resolves the TOPLEVEL —
         // the same root the other WorktreeManager builders use.
@@ -172,13 +179,16 @@ final class MainWorktreeTest extends TestCase
      */
     public function testNamesThePathAndRefRulesRefuseAreRejected(string $name): void
     {
+        $thrown = null;
         try {
             MainWorktree::enter($this->repo, $name);
-            $this->fail("enter() accepted the name '{$name}'");
-        } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('--worktree', $e->getMessage());
-            $this->assertStringContainsString('begin with a letter or digit', $e->getMessage());
+        } catch (\RuntimeException $caught) {
+            // Capture only: an assertion inside this catch could be swallowed.
+            $thrown = $caught;
         }
+        $this->assertInstanceOf(\RuntimeException::class, $thrown, "enter() accepted the name '{$name}'");
+        $this->assertStringContainsString('--worktree', $thrown->getMessage());
+        $this->assertStringContainsString('begin with a letter or digit', $thrown->getMessage());
     }
 
     public function testABareFlagAutoNamesTheTree(): void

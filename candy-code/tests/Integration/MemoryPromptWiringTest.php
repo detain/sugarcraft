@@ -455,6 +455,20 @@ final class MemoryPromptWiringTest extends TestCase
             'withSessionPromptMemo' => fn(EngineBackend $b): EngineBackend => $b->withSessionPromptMemo(SessionPromptMemo::new()),
             'withReasoningEffort' => fn(EngineBackend $b): EngineBackend => $b->withReasoningEffort('low'),
             'withSummaryModel' => fn(EngineBackend $b): EngineBackend => $b->withSummaryModel('memory-summary-model'),
+            // W20 wave-fix roster carry: the C-CTX-4.g and C-PRV-4.a picks
+            // (b84ed2118, b5c81dff2/0a7582f13) shipped these four builders
+            // onto master without their $steps rows — same drift shape as the
+            // withJsonSchema cure above, caught by the reflected-set pair.
+            'withAgentInstructions' => fn(EngineBackend $b): EngineBackend => $b->withAgentInstructions(
+                'Fixture primary agent instructions.',
+            ),
+            'withAppendedSystemPrompt' => fn(EngineBackend $b): EngineBackend => $b->withAppendedSystemPrompt(
+                'Fixture appended rules.',
+            ),
+            'withServiceTier' => fn(EngineBackend $b): EngineBackend => $b->withServiceTier('fast'),
+            'withHostPermissionMode' => fn(EngineBackend $b): EngineBackend => $b->withHostPermissionMode(
+                PermissionMode::Default,
+            ),
             'withContextLedger' => fn(EngineBackend $b): EngineBackend => $b->withContextLedger(\SugarCraft\Code\Context\Pruning\ContextLedger::new()),
             'withTurnInbox' => fn(EngineBackend $b): EngineBackend => $b->withTurnInbox(null),
             'withWrapUpAt' => fn(EngineBackend $b): EngineBackend => $b->withWrapUpAt(70),

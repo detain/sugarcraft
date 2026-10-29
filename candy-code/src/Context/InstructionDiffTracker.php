@@ -239,6 +239,10 @@ final class InstructionDiffTracker
     public static function capture(InstructionFileLoader $loader): self
     {
         $frozen = [];
+        // W20: initialised here, not just in the loops below — a loader that
+        // resolves zero documents used to hand null to the ctor's array $seen.
+        /** @var array<string, array{real: string, sha: ?string, mtime: int, size: int, pending: mixed}> $seen */
+        $seen = [];
         /** @var array<string, true> $byReal */
         $byReal = [];
         /** @var list<list<string>> $childLists */

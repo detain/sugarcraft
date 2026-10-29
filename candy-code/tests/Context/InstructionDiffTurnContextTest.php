@@ -71,6 +71,25 @@ final class InstructionDiffTurnContextTest extends TestCase
         return new InstructionFileLoader($this->repo, [], null, $this->personal);
     }
 
+    public function testAZeroDocumentCaptureConstructsWithoutSeeingAnyFile(): void
+    {
+        // W20 cure pin: with no instruction document on disk the loops that
+        // first fill $seen never ran, and capture() reached the ctor with a
+        // null $seen — a TypeError before any assertion could speak.
+        $emptyRepo = $this->dir . '/empty-repo';
+        mkdir($emptyRepo, 0o700, true);
+        $out = [];
+        exec('git -C ' . escapeshellarg($emptyRepo) . ' init -q 2>&1', $out, $code);
+        if ($code !== 0) {
+            $this->markTestSkipped('git is unavailable: ' . implode("\n", $out));
+        }
+        $emptyPersonal = $this->dir . '/empty-personal';
+        mkdir($emptyPersonal, 0o700, true);
+
+        $tracker = InstructionDiffTracker::capture(new InstructionFileLoader($emptyRepo, [], null, $emptyPersonal));
+        $this->assertSame('', $tracker->recheck(), 'a zero-document capture must construct and has nothing to report');
+    }
+
     public function testAnUnmovedDiskSaysNothingAndTheStatGateIsLoadBearing(): void
     {
         $tracker = InstructionDiffTracker::capture($this->loader());
