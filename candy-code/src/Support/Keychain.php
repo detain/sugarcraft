@@ -32,8 +32,11 @@ use SugarCraft\Code\Lang;
  * milliseconds or is wedged behind a dead daemon, so a generous wall here
  * protects the launch rather than truncating work.
  *
- * Storing entries (`Keychain::store()`, secret on stdin) is C-SEC-8.f's scope;
- * this step only reads.
+ * C-SEC-8.f adds the write side — {@see store()} — for `login --keychain`.
+ * The secret rides the child's stdin and never appears in argv, so the
+ * backend's process-listing entry can never surface the key the way an
+ * argv-borne token would; the service and entry names are the only
+ * argv-borne words.
  */
 final class Keychain
 {
@@ -60,6 +63,9 @@ final class Keychain
 
     /** @var (Closure(list<string>):array{status:string,stdout:string,exitCode:int})|null */
     private static ?\Closure $spawnSeam = null;
+
+    /** @var (Closure(list<string>,string):array{status:string,stdout:string,exitCode:int})|null */
+    private static ?\Closure $storeSeam = null;
 
     /** Test-only OS family override; null reads the live {@see PHP_OS_FAMILY}. */
     private static ?string $osOverride = null;
@@ -92,11 +98,71 @@ final class Keychain
     }
 
     /**
+     * Write one entry through the OS backend — the `login --keychain` path.
+     *
+     * The secret is delivered on the child's stdin (followed by a newline so
+     * a line-reading backend sees EOF) and never enters argv; only the
+     * service and entry names are process-listing-visible. A successful
+     * write also drops the entry's memo, so a launch that refused to start
+     * before the key existed does not keep serving the stale miss.
+     *
+     * No launch notice is raised here: the caller (`Subcommands::login`)
+     * owns the transcript for an interactive command, and every failure
+     * verdict this returns has a distinct user-facing sentence there.
+     *
+     * @return 'ok'|'missing'|'failed'|'timeout'|'refused'|'unsupported' —
+     *         `refused` guards the same argv-shape doors {@see resolve()}
+     *         guards on the read side (empty name, a leading `-`, control
+     *         bytes) plus the empty and runaway secrets, and no spawn has
+     *         happened when it returns; `unsupported` means the OS family
+     *         has no backend to write to.
+     */
+    public static function store(string $name, string $secret): string
+    {
+        if ($name === '' || \preg_match('/^-|[\x00-\x1f\x7f]/', $name) === 1) {
+            return 'refused';
+        }
+        // A secret is one line; empty has nothing to store, and anything
+        // beyond the read side's runaway-output bound could outstay the pipe
+        // buffer before a slow backend starts draining it.
+        if ($secret === '' || \strlen($secret) >= self::MAX_STDOUT_BYTES) {
+            return 'refused';
+        }
+
+        $family = self::$osOverride ?? \PHP_OS_FAMILY;
+        $argv = self::storeArgvFor($family, $name);
+        if ($argv === null) {
+            return 'unsupported';
+        }
+
+        $result = self::$storeSeam !== null
+            ? (self::$storeSeam)($argv, $secret)
+            : self::spawn($argv, $secret);
+
+        if ($result['status'] === 'missing') {
+            return 'missing';
+        }
+        if ($result['status'] === 'timeout') {
+            return 'timeout';
+        }
+        // Unlike the read side, an empty stdout is ordinary here: a store
+        // backend says its piece only with the exit code.
+        if ($result['exitCode'] !== 0) {
+            return 'failed';
+        }
+
+        unset(self::$memo[$name]);
+
+        return 'ok';
+    }
+
+    /**
      * The backend argv for one OS family — the entry name rides argv, the
      * secret never does.
      *
-     * Public for the shared spelling C-SEC-8.f's `store()` will reuse and
-     * pinned directly by tests; production reads it through {@see lookup()}.
+     * The read-side argv, pinned directly by tests; production reads it
+     * through {@see lookup()}. {@see storeArgvFor()} is its write-side sibling
+     * and carries the same guarantee.
      *
      * @return list<string>|null null when the family has no backend at all
      */
@@ -110,6 +176,36 @@ final class Keychain
     }
 
     /**
+     * The write-side argv for one OS family — same attribute pair as
+     * {@see argvFor()}, secret on stdin, never in argv.
+     *
+     * `secret-tool store` reads the value from stdin; `security
+     * add-generic-password -U -w` with the password argument omitted reads it
+     * from the descriptor we hand it, so neither spelling can place the key
+     * where `ps` sees it. `-U` makes the write replace an existing entry, so
+     * re-running `login --keychain` rotates rather than refusing.
+     *
+     * @return list<string>|null null when the family has no backend at all
+     */
+    public static function storeArgvFor(string $osFamily, string $name): ?array
+    {
+        return match ($osFamily) {
+            'Linux' => ['secret-tool', 'store', 'service', self::SERVICE, 'account', $name],
+            'Darwin' => ['security', 'add-generic-password', '-U', '-s', self::SERVICE, '-a', $name, '-w'],
+            default => null,
+        };
+    }
+
+    /**
+     * The OS family the backends resolve against — honoring the test
+     * override, so failure wording names the same family the call used.
+     */
+    public static function osFamily(): string
+    {
+        return self::$osOverride ?? \PHP_OS_FAMILY;
+    }
+
+    /**
      * Replace the whole backend call with a recorder for tests.
      *
      * The seam receives the exact argv the real path would have spawned and
@@ -120,6 +216,20 @@ final class Keychain
     public static function armSpawnSeamForTesting(?\Closure $seam): void
     {
         self::$spawnSeam = $seam;
+    }
+
+    /**
+     * Replace the whole store backend call with a recorder for tests.
+     *
+     * The seam receives the exact argv the real path would have spawned and
+     * the secret that belongs on stdin, and returns the normalized
+     * {@see spawn()} shape; null restores the real one.
+     *
+     * @param (Closure(list<string>,string):array{status:string,stdout:string,exitCode:int})|null $seam
+     */
+    public static function armStoreSeamForTesting(?\Closure $seam): void
+    {
+        self::$storeSeam = $seam;
     }
 
     /**
@@ -145,6 +255,7 @@ final class Keychain
     {
         self::$memo = [];
         self::$spawnSeam = null;
+        self::$storeSeam = null;
         self::$osOverride = null;
         self::$timeoutOverride = null;
     }
@@ -221,13 +332,18 @@ final class Keychain
      * The handle never escapes this method: pipes close and
      * {@see ProcessReaper::terminateAndClose()} runs on every exit path, so
      * the scanner classifies the site short and no inheritance licence is
-     * owed. argv carries only service and entry names
-     * ({@see argvFor()}); the secret rides stdout alone.
+     * owed — the read and write paths share one site for the same reason.
+     * argv carries only service and entry names ({@see argvFor()},
+     * {@see storeArgvFor()}); a read secret rides stdout and a write secret
+     * rides stdin, never argv.
      *
      * @param list<string> $argv
+     * @param string|null $stdinPayload delivered to the child's stdin
+     *                                  followed by a newline (the store
+     *                                  path); null closes stdin unread
      * @return array{status:string,stdout:string,exitCode:int}
      */
-    private static function spawn(array $argv): array
+    private static function spawn(array $argv, ?string $stdinPayload = null): array
     {
         $binary = ProcessContainment::locateOnPath($argv[0]);
         if ($binary === '') {
@@ -246,11 +362,21 @@ final class Keychain
             return ['status' => 'missing', 'stdout' => '', 'exitCode' => 127];
         }
 
-        // stdin is never written — close it immediately so the child that
-        // would read (secret-tool waits for nothing, but `security -w` in a
-        // wrong spelling could) sees EOF and the drain loop below stays the
-        // only thing gating this call.
-        \fclose($pipes[0]);
+        if ($stdinPayload === null) {
+            // The read path never writes — close stdin immediately so the
+            // child that would read (secret-tool waits for nothing, but
+            // `security -w` in a wrong spelling could) sees EOF and the drain
+            // loop below stays the only thing gating this call.
+            \fclose($pipes[0]);
+        } else {
+            // The store path's secret. One bounded write (store() refuses
+            // secrets at the pipe-capacity bound, so this cannot deadlock
+            // against a slow drain), then close for EOF — a line-reading
+            // backend takes its value from here and nowhere else.
+            @\fwrite($pipes[0], $stdinPayload . "\n");
+            \fclose($pipes[0]);
+        }
+
         \stream_set_blocking($pipes[1], false);
         \stream_set_blocking($pipes[2], false);
 

@@ -623,11 +623,14 @@ final class DescriptorInheritanceGuardTest extends TestCase
         ],
         'Support/Keychain.php::spawn' => [
             'count' => 1,
-            'reason' => 'C-SEC-8.e: the keychain backend handle never leaves the method — '
-                . 'every path out of it after the successful proc_open() (hit, miss, timeout) '
-                . 'closes the two read pipes and runs '
+            'reason' => 'C-SEC-8.e/C-SEC-8.f: the keychain backend handle never leaves the '
+                . 'method — ONE site serves read and store (store() reuses spawn(), so no '
+                . 'second proc_open is minted). Every path out of it after the successful '
+                . 'proc_open() (hit, miss, timeout) closes the two read pipes and runs '
                 . 'ProcessReaper::terminateAndClose() (with the group id recorded while the '
-                . 'handle is alive on the timeout path); the pre-spawn missing-binary return '
+                . 'handle is alive on the timeout path), and the stdin pipe is closed on every '
+                . 'path too — written-then-closed on the store arm, closed-unwritten on read. '
+                . 'The pre-spawn missing-binary return '
                 . 'holds no handle at all. The short verdict rests on the CLOSING_HELPERS row '
                 . 'for that helper; if it is ever wrong this site is a long-lived exposed '
                 . 'spawn and nothing else in this file would say so.',

@@ -18,6 +18,7 @@ use SugarCraft\Code\Bundles\Marketplace;
 use SugarCraft\Code\Bundles\MarketplaceEntry;
 use SugarCraft\Code\Bundles\MarketplaceRegistry;
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Support\Keychain;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Tools\BuiltIn\Bash;
 use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
@@ -975,6 +976,12 @@ final class Subcommands
      * the entry carries `type`, the reader requires it); ambient arms get a
      * refusal naming who actually owns their credential. Tier 3 (extracting
      * MCP-OAuth into a shared store) is explicitly out of scope.
+     *
+     * C-SEC-8.f: API-key arms take `--keychain`, which hands the pasted
+     * secret to {@see Keychain::store()} (secret on stdin, never argv) and
+     * persists only the `${keychain:<provider>}` reference in the config.
+     * Subscription and ambient arms refuse the flag — no key passes through
+     * this process for them to keep.
      */
     private static function login(ParsedArgs $args): int
     {
@@ -1005,10 +1012,19 @@ final class Subcommands
             );
         }
 
+        // C-SEC-8.f: `--keychain` belongs to the paste-and-store arms only.
+        $keychain = \array_key_exists('--keychain', $args->subcommandFlags);
+        if ($keychain && !isset(self::LOGIN_KEY_ENVS[$type])) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.login.keychain.not_key', ['provider' => $type]),
+                $args->outputFormat,
+            );
+        }
+
         return match ($type) {
             'claude-code' => self::loginPassthrough(['claude', 'auth', 'login'], 'cli.sub.login.passthrough_claude'),
             'codex' => self::loginPassthrough(['codex', 'login'], 'cli.sub.login.passthrough_codex'),
-            'openai', 'azure', 'anthropic', 'gemini', 'openrouter' => self::loginStoreKey($type),
+            'openai', 'azure', 'anthropic', 'gemini', 'openrouter' => self::loginStoreKey($type, $keychain),
             default => self::loginAmbient($type),
         };
     }
@@ -1080,8 +1096,16 @@ final class Subcommands
      *
      * The read itself goes through {@see self::loginKeyLine()}: echo stays
      * off on a live terminal.
+     *
+     * With C-SEC-8.f's `$keychain` the secret is written to the OS backend
+     * FIRST and the config only ever sees the `${keychain:<provider>}`
+     * reference: a failed store leaves the config byte-untouched. A config
+     * refusal that arrives after a successful store (corrupt file, type
+     * mismatch) leaves an entry under this provider's name — harmless, as
+     * the next attempt replaces it through the same `-U`/same-attributes
+     * write.
      */
-    private static function loginStoreKey(string $type): int
+    private static function loginStoreKey(string $type, bool $keychain = false): int
     {
         $path = Bootstrap::userConfigPath();
         echo Lang::t('cli.sub.login.ask_key', ['provider' => $type, 'path' => $path]) . "\n";
@@ -1098,6 +1122,29 @@ final class Subcommands
             echo Lang::t('cli.sub.login.control_chars') . "\n";
 
             return NonInteractive::EXIT_FAILURE;
+        }
+
+        if ($keychain) {
+            // The secret leaves this process only down the child's stdin.
+            // Nothing has touched the config yet, and nothing below writes
+            // it unless this verdict is 'ok'.
+            $verdict = Keychain::store($type, $key);
+            if ($verdict !== 'ok') {
+                $family = Keychain::osFamily();
+                $backend = (Keychain::storeArgvFor($family, $type) ?? [''])[0];
+                echo match ($verdict) {
+                    'missing' => Lang::t('cli.login.keychain.missing', ['backend' => $backend, 'provider' => $type]),
+                    'timeout' => Lang::t('cli.login.keychain.timeout', ['backend' => $backend, 'provider' => $type]),
+                    'unsupported' => Lang::t('cli.login.keychain.unsupported', ['os' => $family, 'provider' => $type]),
+                    default => Lang::t('cli.login.keychain.failed', ['provider' => $type]),
+                } . "\n";
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+            // From here the ONLY thing this method knows about the secret is
+            // its reference — the settle re-read compares against this word,
+            // and an unsupported family never even reaches the store call.
+            $key = '${keychain:' . $type . '}';
         }
 
         $providers = [];
@@ -1137,7 +1184,9 @@ final class Subcommands
             return NonInteractive::EXIT_FAILURE;
         }
 
-        echo Lang::t('cli.sub.login.stored', ['provider' => $type, 'path' => $path, 'env' => self::LOGIN_KEY_ENVS[$type]]) . "\n";
+        echo ($keychain
+            ? Lang::t('cli.login.keychain.stored', ['provider' => $type, 'path' => $path, 'reference' => $key])
+            : Lang::t('cli.sub.login.stored', ['provider' => $type, 'path' => $path, 'env' => self::LOGIN_KEY_ENVS[$type]])) . "\n";
 
         return NonInteractive::EXIT_OK;
     }

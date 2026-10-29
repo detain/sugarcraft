@@ -2253,6 +2253,9 @@ store instead. Binding anything but loopback additionally needs the explicit
 candy-code doctor                    # check this installation, exit 1 if anything FAILs
 candy-code models                    # providers this install can select; * marks the selected one
 candy-code login <provider>            # log one in: upstream CLI flow, pasted key, or an owner-naming refusal
+                                     #   [--keychain] keeps the pasted key in the OS keychain instead of
+                                     #   the config: the secret goes to the backend's stdin (never argv),
+                                     #   and the config stores only the ${keychain:<provider>} reference
 candy-code session list              # stored sessions, pinned then newest first
                                      #   [--children] [--archived] [--all] [--limit N]
 candy-code session show <target>     # one session's details + transcript (Markdown)

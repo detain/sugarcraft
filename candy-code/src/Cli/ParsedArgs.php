@@ -76,6 +76,13 @@ final readonly class ParsedArgs
         'attach' => [
             '--url' => true,
         ],
+        // `login` (C-SEC-8.f): `--keychain` keeps the pasted secret in the OS
+        // keychain and stores only a `${keychain:<provider>}` reference in the
+        // config. A bare switch — it takes nothing, and the verb decides which
+        // provider kinds can honour it.
+        'login' => [
+            '--keychain' => false,
+        ],
         // `mcp` (C-MCP-4.d): `mcp import --write user` is the only value
         // flag the verb family takes. The parser checks the SHAPE (a value
         // follows); WHICH tier is honoured is `Subcommands::mcpImport()`'s
