@@ -17,6 +17,23 @@ refused at launch (`json_schema_unsupported`, exit 2) when
 `supportsJsonSchema()` says no, and vision or document requests check theirs
 before the call is ever built.
 
+Attachments ride `AttachmentEncoding`, so a new provider answers the flags
+against the shape its own body builder produces, not against the model
+vendor's marketing page. C-TOOL-2.e: the native document legs are the
+Anthropic Messages family (base64 `document` block), Bedrock Converse (RAW
+`document` block, name shaved to the Converse charset), Gemini — including
+Vertex's Gemini arm through the same shared encoders — (`application/pdf`
+`inlineData`), and the OpenAI **chat** arm only (`file` part with a
+`data:application/pdf` URL; the Responses arm shares `openAiContent()` but
+maps only image parts, so it stays on the named decline, as do the SGLang
+and Custom servers that speak neither document shape). Answer
+`supportsDocuments()` true only when the body actually carries the part:
+true-but-undeclared is a silent drop, declared-but-unbuilt is a wire error,
+and either one is the bug the never-silent rule exists to refuse. The encoders
+fail closed on the bytes themselves — a forged or oversized PDF (no `%PDF-`
+head, or past `FileMentions::DOCUMENT_MAX_BYTES`) is named in the text on
+every leg, never dropped and never inlined.
+
 Reasoning-effort shaping is a separate opt-in: `ShapesReasoningEffort` adds
 `shapesEffortFor(string $model): bool`, and the `/effort` surface consults it
 through `EffortGate::verdict()` — a marked class whose predicate answers no
