@@ -704,17 +704,23 @@ it does so exactly as quietly as the wrong-depth name above.
 
 ### The live half of the list: `/rules` is session-scoped, by pinned contract
 
-The same names are a conversation command. `/rules` lists every pack the loader
-found — both user directories, `~/.candy-code/rules` and
+The same names are a conversation command. `/rules` lists every rule pack the
+loader found — both user pack directories, `~/.candy-code/rules` and
 `~/.candy-code/rulebooks`, the second holding the named packs of the same tier
-(`RuleLoader` walks eight directories across three tiers: user rules, user
-rulebooks, user `~/.claude/rules` and `~/.cursor/rules`, project rules, project
-`.claude/rules` and `.cursor/rules`, root `RULES.md`) — and it lists them even when they are
-currently OFF, because a list that hides what is silenced cannot help you un-silence
-it. `/rules <name>` flips one pack out of, or back into, the session's
+(`RuleLoader` walks ten directories across three tiers: user rules, user
+rulebooks, user styles, user `~/.claude/rules` and `~/.cursor/rules`, project
+rules, project styles, project `.claude/rules` and `.cursor/rules`, root
+`RULES.md`) — and it lists them even when they are currently OFF, because a list
+that hides what is silenced cannot help you un-silence it. `/rules <name>` flips one pack out of, or back into, the session's
 `RulesState`; a pack whose stem sits in both user directories is two packs sharing
 one handle, and one toggle silences both
 (`RuleLoaderTest::testTheSameStemInBothUserDirectoriesStaysTwoPacksToggledByOneName()`).
+The two `styles` directories the same loader walks are not packs and stay out of
+this list: an output style is selected with `/output-style <name>`, exactly one is
+active for the session at a time, the reserved word `off` clears the slot,
+`disabledRules` naming a style is inert, and a selection rides the prompt from the
+next turn onward; with no argument, `/output-style` lists the styles found and
+their state.
 The command's own header states the scope — *"session only — nothing here is
 written to config"* — and the scope is pinned at the file level rather than in
 prose: `RulesCommandTest::testTogglingAPackLeavesTheConfigFileByteIdentical()`

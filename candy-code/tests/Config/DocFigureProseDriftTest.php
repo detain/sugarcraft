@@ -1146,16 +1146,16 @@ final class DocFigureProseDriftTest extends TestCase
         $loaderClass = new \ReflectionClass(RuleLoader::class);
 
         self::assertSame(
-            7,
+            9,
             substr_count($loader, '$this->loadFromDirectory('),
-            'RuleLoader no longer walks exactly seven directories (three native, four INT-2 imports) — flip the header sentence\'s first factor and this probe in-step',
+            'RuleLoader no longer walks exactly nine directories (five native including the two styles walks, four INT-2 imports) — flip the header sentence\'s first factor and this probe in-step',
         );
         self::assertSame(
             1,
             preg_match('/\(directories walked x MAX_FILES\) = (\d+) x (\d+)\s+\*\s+= (\d+) reads/s', $loader, $m),
             'the aggregate-arithmetic sentence no longer spells directories, cap and product in one breath',
         );
-        self::assertSame(7, (int) $m[1], 'prose directory count drifted from the live call-site count');
+        self::assertSame(9, (int) $m[1], 'prose directory count drifted from the live call-site count');
         self::assertSame((int) $loaderClass->getConstant('MAX_FILES'), (int) $m[2], 'prose per-directory cap drifted from MAX_FILES');
         self::assertSame((int) $m[1] * (int) $m[2], (int) $m[3], 'the stated product is no longer directories x cap');
         self::assertSame(

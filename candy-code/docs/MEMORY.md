@@ -930,6 +930,30 @@ not valid UTF-8 and were replaced with "?".]` line naming the file. The system
 prompt is JSON-encoded into every request, so one Latin-1 byte in a `CLAUDE.md`
 used to fail every turn of the session.
 
+### Rule packs, rulebooks, and output styles
+
+Three markdown families share one loader and one prompt fence. Rule packs live in
+`~/.candy-code/rules/` and `<root>/.candy-code/rules/`; named rulebooks in
+`~/.candy-code/rulebooks/` and `<root>/.candy-code/rulebooks/`; output styles in
+`~/.candy-code/styles/` and `<root>/.candy-code/styles/`. Every file any of them
+finds that is ON rides the system prompt inside the same `<user-rules>` fence,
+and every one of them may open with the same `name:` / `enabled:` frontmatter.
+What differs is the switch:
+
+- `/rules` and `disabledRules` toggle **packs and rulebooks** — any number ride
+  at once, each with its own ON/OFF.
+- `/output-style` selects **exactly one style** for the session. A second
+  selection replaces the first; the reserved word `off` clears the slot so no
+  style rides; with no argument it lists what was found and each one's state.
+  Style files are deliberately not in the `/rules` list, and a `disabledRules`
+  entry naming a style does nothing — the two switches are orthogonal.
+- A style whose own frontmatter says `enabled: false` stays out of the prompt
+  however it is selected; the selection row says so instead of silently lying.
+
+Both switches are session-only — nothing is written to config — and both take
+effect from the next turn onward, never retroactively into a request already
+made.
+
 ### `@import`
 
 Both file types support `@path` imports, expanded by `ImportResolver`:
