@@ -1268,6 +1268,37 @@
                         "null"
                     ]
                 },
+                "pr": {
+                    "type": [
+                        "object",
+                        "null"
+                    ],
+                    "properties": {
+                        "number": {
+                            "type": "integer",
+                            "minimum": 0
+                        },
+                        "state": {
+                            "type": "string"
+                        },
+                        "url": {
+                            "type": "string"
+                        },
+                        "checks": {
+                            "enum": [
+                                "pass",
+                                "fail",
+                                "pending"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "number",
+                        "state",
+                        "url",
+                        "checks"
+                    ]
+                },
                 "open": {
                     "type": "boolean"
                 },
@@ -3194,6 +3225,82 @@
                 },
                 "required": [
                     "restored"
+                ]
+            }
+        },
+        "permission.audit": {
+            "description": "Recent tool-call decisions from this user's redacted audit log tail; a bounded read, every session unless one is named.",
+            "scope": "approve",
+            "idempotent": false,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 200,
+                        "description": "Rows wanted, newest last; the server caps the read at 200."
+                    }
+                }
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "rows": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "time": {
+                                    "type": "string",
+                                    "maxLength": 19
+                                },
+                                "session": {
+                                    "type": "string"
+                                },
+                                "tool": {
+                                    "type": "string"
+                                },
+                                "verdict": {
+                                    "enum": [
+                                        "allow",
+                                        "deny",
+                                        "withheld"
+                                    ]
+                                },
+                                "kind": {
+                                    "type": [
+                                        "string",
+                                        "null"
+                                    ],
+                                    "maxLength": 512
+                                },
+                                "reason": {
+                                    "type": [
+                                        "string",
+                                        "null"
+                                    ]
+                                }
+                            },
+                            "required": [
+                                "time",
+                                "session",
+                                "tool",
+                                "verdict"
+                            ]
+                        },
+                        "maxItems": 200
+                    },
+                    "unreadable": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "rows",
+                    "unreadable"
                 ]
             }
         },

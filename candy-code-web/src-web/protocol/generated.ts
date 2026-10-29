@@ -319,6 +319,12 @@ export interface SessionSummary {
   preview?: string | null
   snippet?: string | null
   branch?: string | null
+  pr?: {
+    number: number
+    state: string
+    url: string
+    checks: "pass" | "fail" | "pending"
+  } | null
   open: boolean
   status: "closed" | "idle" | "busy" | "waiting_permission"
   permissionMode?: PermissionMode | null
@@ -870,6 +876,25 @@ export interface Methods {
       restored: string
       /** New commit id, or null when the restored tree equalled the current one. */
       commit?: string | null
+    }
+  }
+  /** Recent tool-call decisions from this user's redacted audit log tail; a bounded read, every session unless one is named. */
+  "permission.audit": {
+    params: {
+      sessionId?: SessionId
+      /** Rows wanted, newest last; the server caps the read at 200. */
+      limit?: number
+    }
+    result: {
+      rows: ({
+        time: string
+        session: string
+        tool: string
+        verdict: "allow" | "deny" | "withheld"
+        kind?: string | null
+        reason?: string | null
+      })[]
+      unreadable: boolean
     }
   }
   /** Remove one saved permission rule from the user config, addressed by its pattern or by its 1-based saved index. */
@@ -1659,6 +1684,7 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "memory.log": "read",
   "memory.search": "read",
   "memory.undo": "write",
+  "permission.audit": "approve",
   "permission.forget": "approve",
   "permission.pending": "read",
   "permission.respond": "approve",
