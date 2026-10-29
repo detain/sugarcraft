@@ -63,12 +63,18 @@ return [
     'cli.acp.stdin_closed' => 'candy-code acp: stdin is closed; an editor starts this agent with a pipe on stdin and stdout',
     'cli.acp.unexpected_operand' => 'candy-code acp {operand}: unexpected operand',
     'cli.acp.usage' => 'Usage: candy-code acp — run as an Agent Client Protocol agent on stdin/stdout (started by an editor)',
+    'cli.argv.append_system_prompt.empty' => '--append-system-prompt expects rules text, but the value is empty',
+    'cli.argv.append_system_prompt.flag' => '--append-system-prompt expects rules text, but the next argument is the option {option}',
+    'cli.argv.append_system_prompt.missing' => '--append-system-prompt expects rules text, but the argument list ended',
+    'cli.argv.append_system_prompt.requires_prompt' => '--append-system-prompt appends rules to a one-shot prompt, but this launch has no prompt to append to',
     'cli.argv.config.empty' => '--config expects a file path, but the value is empty',
     'cli.argv.config.flag' => '--config expects a file path, but the next argument is the option {option}',
     'cli.argv.config.missing' => '--config expects a file path, but the argument list ended',
     'cli.argv.config.no_such_file' => '--config {path}: no such file',
     'cli.argv.config.not_readable' => '--config {path}: not readable',
     'cli.argv.continue_with_resume' => '--continue and --resume both pick the session to open; use one of them',
+    'cli.argv.hint.append_system_prompt' => 'Expected the operator rules to append, written inline or as @path to a file containing them.',
+    'cli.argv.hint.append_system_prompt_needs_prompt' => 'Use --append-system-prompt with -p "<prompt>" or `candy-code run "<prompt>"`; the interactive TUI takes no append.',
     'cli.argv.hint.config_value' => 'Write it as --config=<file> if the path begins with "-"; it may not be omitted.',
     'cli.argv.hint.continue_or_resume' => 'Use --continue for the most recent session, or --resume <id|name> for a specific one.',
     'cli.argv.hint.flag_alone' => 'Write it as {flag} alone.',
@@ -190,6 +196,7 @@ return [
     'cli.bundles.update.unknown' => 'bundles update: no bundle named {name} is installed',
     'cli.bundles.usage' => 'Usage: candy-code bundles list | install <path|git-url|plugin@marketplace> | marketplace add <path|git-url> | marketplace list | marketplace remove <name> | marketplace update [name] | update [bundle] | search <query> | recommend',
     'cli.completion.no_shell' => 'completion: no shell given',
+    'cli.completion.option.append_system_prompt' => 'Append operator rules to the one-shot system prompt (inline text or @file)',
     'cli.completion.option.config' => 'Read settings and permissions from <file>',
     'cli.completion.option.continue' => 'Continue the most recent session',
     'cli.completion.option.help' => 'Show the help screen',
@@ -510,6 +517,19 @@ Options:
                          gates the turn's self-finishing request; steps
                          that continue a tool loop stay free (a forced
                          JSON answer cannot carry tool calls).
+      --append-system-prompt <text-or-@file>
+                         Append operator rules to this one launch's system
+                         prompt: inline text, or @path to a file holding
+                         them. Also accepts --append-system-prompt=<value>;
+                         the = form is the one to use when the path begins
+                         with "-". The rules arrive as one more fenced
+                         personal-instruction block, never an override: they
+                         cannot replace or demote the layers above them, and
+                         forged block markers in the text are neutralised.
+                         Bounded at the same size as an instruction document.
+                         Only with -p or the run verb: a launch with no
+                         prompt to append to refuses with exit 2 rather than
+                         silently ignoring the rules you gave.
   -c, --continue         Reopen the most recently used session, transcript
                          and all, instead of starting a new one. Without it
                          every launch opens a new session; Up in an empty
@@ -852,6 +872,9 @@ TXT,
     'cli.models.none_selected' => 'No provider is selected; set CANDY_CODE_PROVIDER or use Ctrl+P `Switch model`.',
     'cli.models.selected_legend' => '* = selected (CANDY_CODE_PROVIDER or {path}).',
     'cli.noninteractive.answer_not_json' => 'the answer could not be encoded as JSON: {error}',
+    'cli.noninteractive.append_system_prompt_no_backend' => 'the supplied backend cannot carry --append-system-prompt: it is not the engine, so there is no system prompt to append to',
+    'cli.noninteractive.append_system_prompt_too_large' => '--append-system-prompt is bounded at {max} bytes; the rules you gave are {bytes}',
+    'cli.noninteractive.append_system_prompt_unreadable' => '--append-system-prompt names no readable file: {path}',
     'cli.noninteractive.json_schema_invalid' => '--json-schema is not valid JSON: {error}',
     'cli.noninteractive.json_schema_no_backend' => 'the supplied backend cannot honour --json-schema: it is not the engine, so there is no provider to constrain the answer with',
     'cli.noninteractive.json_schema_not_object' => '--json-schema must be a JSON object (a schema); a list or a scalar is not one',

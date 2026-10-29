@@ -143,6 +143,7 @@ final class ArgvParser
         $maxCost = null;
         $maxTurns = null;
         $jsonSchema = null;
+        $appendSystemPrompt = null;
         $endOfOptions = false;
         $subcommand = null;
         $subcommandArgs = [];
@@ -692,6 +693,57 @@ final class ArgvParser
                 continue;
             }
 
+            // --append-system-prompt=<text|@file> / --append-system-prompt <text|@file> (C-CTX-4.g)
+            //
+            // The one-shot rule-append twin of --json-schema's shape split:
+            // the parser judges only PRESENCE and never touches the
+            // filesystem, so a leading `@` is carried verbatim and resolved
+            // (or refused) at NonInteractive's boundary — the same
+            // raw-store-and-later-judge law the config paths follow. The
+            // value splices as ONE fenced `<user-rules>` section at the end
+            // of the system prompt; it is never an override, and the size
+            // bound rides the splice, not this loop.
+            if (\str_starts_with($arg, '--append-system-prompt=')) {
+                $value = \substr($arg, 23); // length of "--append-system-prompt="
+                if ($value === '') {
+                    if ($usageError === null) {
+                        $usageError = self::emptyAppendSystemPromptError();
+                        $usageHint = self::appendSystemPromptValueHint();
+                    }
+                    ++$i;
+                    continue;
+                }
+                $appendSystemPrompt = $value;
+                ++$i;
+                continue;
+            }
+
+            // --append-system-prompt <text|@file>
+            if ($arg === '--append-system-prompt') {
+                $next = $argv[$i + 1] ?? null;
+                if ($next === null || self::looksLikeFlag($next)) {
+                    if ($usageError === null) {
+                        $usageError = $next === null
+                            ? 'candy-code: ' . Lang::t('cli.argv.append_system_prompt.missing')
+                            : 'candy-code: ' . Lang::t('cli.argv.append_system_prompt.flag', ['option' => $next]);
+                        $usageHint = self::appendSystemPromptValueHint();
+                    }
+                    ++$i; // leave a flag-shaped $next for the loop to judge
+                    continue;
+                }
+                if ($next === '') {
+                    if ($usageError === null) {
+                        $usageError = self::emptyAppendSystemPromptError();
+                        $usageHint = self::appendSystemPromptValueHint();
+                    }
+                    $i += 2; // the empty token is consumed; it is not a prompt
+                    continue;
+                }
+                $appendSystemPrompt = $next;
+                $i += 2;
+                continue;
+            }
+
             // -c / --continue: reopen the most recently used session, with
             // its transcript, instead of starting a new one.
             if ($arg === '--continue' || $arg === '-c') {
@@ -909,6 +961,19 @@ final class ArgvParser
             $usageHint = Lang::t('cli.argv.hint.json_schema_needs_prompt');
         }
 
+        // C-CTX-4.g: the append flag keeps --json-schema's prompt-only gate,
+        // for the same AUT-4-P1 reason. The splice arm that consumes the
+        // value lives in NonInteractive's headless path ONLY — a TUI launch
+        // parses, carries, and silently drops it, so a launch that lost its
+        // -p to a refactor would believe the operator's rules were appended
+        // while the interactive prompt shipped without them. Refused at the
+        // parser so both spellings of the clash fail identically on stdout
+        // and in the JSON error document.
+        if ($usageError === null && $appendSystemPrompt !== null && !$promptRequested) {
+            $usageError = 'candy-code: ' . Lang::t('cli.argv.append_system_prompt.requires_prompt');
+            $usageHint = Lang::t('cli.argv.hint.append_system_prompt_needs_prompt');
+        }
+
         // C-AGT-6.c, broadened at weld: --worktree is a MAIN-session flag —
         // it swaps the launch's root for a worktree before the TUI or a
         // one-shot opens there. bin exits at a subcommand verb's OWN
@@ -933,7 +998,7 @@ final class ArgvParser
             $root = \array_shift($positional);
         }
 
-        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName);
+        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt);
     }
 
     /**
@@ -1288,6 +1353,28 @@ final class ArgvParser
     private static function jsonSchemaValueHint(): string
     {
         return Lang::t('cli.argv.hint.json_schema');
+    }
+
+    /**
+     * The usage error for `--append-system-prompt=` and
+     * `--append-system-prompt ""` — the empty value rule
+     * {@see emptyJsonSchemaError()} documents, on the rule-append axis
+     * (C-CTX-4.g).
+     */
+    private static function emptyAppendSystemPromptError(): string
+    {
+        return 'candy-code: ' . Lang::t('cli.argv.append_system_prompt.empty');
+    }
+
+    /**
+     * The remedy line under the `--append-system-prompt` usage errors:
+     * plain prose like {@see jsonSchemaValueHint()}'s — the grammar is "any
+     * text, or @file to read one from", not a closed set; the read, the cap
+     * and the fence all live in NonInteractive.
+     */
+    private static function appendSystemPromptValueHint(): string
+    {
+        return Lang::t('cli.argv.hint.append_system_prompt');
     }
 
     /**

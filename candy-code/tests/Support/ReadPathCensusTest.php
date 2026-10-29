@@ -375,6 +375,10 @@ final class ReadPathCensusTest extends TestCase
                 . 'file; an inline `{` document never reaches this sink, a miss is refused before '
                 . 'reading (is_file + is_readable), and the bytes are only ever json_decode\'d into '
                 . 'a responseSchema shape — never executed, never written back',
+            'CALLER_SUPPLIED — `--append-system-prompt` @operand (C-CTX-4.g): the operator\'s own '
+                . 'argv names the file, a miss is refused before reading (is_file + is_readable), '
+                . 'the bytes are bounded at the instruction-document ceiling before use, and they '
+                . 'ride only as PromptFence-escaped rules text — never executed, never written back',
         ],
         'Cli/SelfUpdate.php|file_get_contents' => [
             'SELF_LOCATED — verifySignature() (DST-3) reads back the temp phar this very process '

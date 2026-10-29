@@ -172,6 +172,12 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
                 static fn(EngineBackend $b): EngineBackend => $b->withAgentInstructions('You review.'),
                 ['agentInstructions'],
             ],
+            // C-CTX-4.g: the headless --append-system-prompt rules text
+            // carried to the one Runtime construction site (null = no append).
+            'withAppendedSystemPrompt' => [
+                static fn(EngineBackend $b): EngineBackend => $b->withAppendedSystemPrompt('append the standing rules'),
+                ['appendedSystemPrompt'],
+            ],
             // Audit R1: the per-turn App's compaction budgets.
             'withCompactorConfig' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withCompactorConfig(new CompactorConfig(skillBudgetPerSkill: 7)),
@@ -277,6 +283,26 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
         $this->assertInstanceOf(HookManager::class, $childManager);
         $this->assertNotSame($shared, $childManager);
         $this->assertNotNull($childManager->hook('PreToolUse', 'bash-escape-deny'));
+    }
+
+    /**
+     * C-CTX-4.g: the carrier must not just STORE the rules text — the ONE
+     * Runtime construction site must READ it, or the splice leg in
+     * systemPromptSections() stays dead code behind a green wither sweep.
+     */
+    public function testWithAppendedSystemPromptFeedsTheRuntimeItConstructs(): void
+    {
+        $hooks = new HookManager(new HookRegistry());
+        $backend = EngineBackend::new($this->provider(), 'm')->withAppendedSystemPrompt('be terse');
+
+        $newRuntime = new \ReflectionMethod(EngineBackend::class, 'newRuntime');
+        $property = new \ReflectionProperty(\SugarCraft\Code\Runtime::class, 'appendedSystemPrompt');
+
+        $this->assertSame('be terse', $property->getValue($newRuntime->invoke($backend, $hooks)));
+        $this->assertNull(
+            $property->getValue($newRuntime->invoke(EngineBackend::new($this->provider(), 'm'), $hooks)),
+            'no wither, no append — the flag-absent prompt stays byte-identical',
+        );
     }
 
     public function testSweepCoversEveryPublicWither(): void

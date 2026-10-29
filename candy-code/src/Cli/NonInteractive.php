@@ -290,6 +290,18 @@ final class NonInteractive
             return self::failUsage($e->getMessage(), $outputFormat);
         }
 
+        // C-CTX-4.g: the one-shot rule-append twin, decoded at the SAME
+        // boundary for the SAME reason — deciding "inline text or @path to
+        // some" is filesystem work the parser must never do, and the size
+        // bound is a document rule, not a grammar one. A bad value is a
+        // usage error (exit 2) on every other usage refusal's shape; the
+        // splice itself rides the engine below, never a silent drop.
+        try {
+            $appendedPrompt = self::decodeAppendSystemPrompt($args->appendSystemPrompt);
+        } catch (\InvalidArgumentException $e) {
+            return self::failUsage($e->getMessage(), $outputFormat);
+        }
+
         // Step 3.D-2: only a run that built its own backend owns the session
         // whose end it reports — a caller that supplied one (the tests, a
         // headless host) owns that session's lifecycle, SessionEnd included.
@@ -428,6 +440,24 @@ final class NonInteractive
             }
 
             $backend = $backend->withJsonSchema($jsonSchema);
+        }
+
+        // C-CTX-4.g honesty gate, beside AUT-4's and for its reason: an
+        // injected non-engine backend carries the appended rules nowhere, and
+        // answering as though they had shipped would be the same silence the
+        // W1 audit names. No provider is judged here: the append is prompt
+        // text, not a wire contract, and every provider reads it from the
+        // assembly — so unlike --json-schema the refusal is about backend
+        // SHAPE only.
+        if ($appendedPrompt !== null) {
+            if (!$backend instanceof \SugarCraft\Code\Backend\EngineBackend) {
+                return self::failUsage(
+                    'candy-code: ' . Lang::t('cli.noninteractive.append_system_prompt_no_backend'),
+                    $outputFormat,
+                );
+            }
+
+            $backend = $backend->withAppendedSystemPrompt($appendedPrompt);
         }
 
         // Audit 15b-15 residual: `@` mentions resolve from the typed prompt
@@ -1143,6 +1173,59 @@ final class NonInteractive
         }
 
         return $decoded;
+    }
+
+    /**
+     * C-CTX-4.g: resolve the RAW `--append-system-prompt` token into the rules
+     * text to splice, or null when the flag never appeared. A leading `@` is
+     * the file sign. The unreadable-miss check is the law {@see
+     * decodeJsonSchema()}'s path arm already spells: file_get_contents()
+     * raises a PHP WARNING on a miss (the suite fails on warnings), so
+     * is_file()/is_readable() lead and a TOCTOU loss still lands on the same
+     * honest refusal via the false arm. The bound is
+     * {@see \SugarCraft\Code\Context\InstructionFileLoader::MAX_DOCUMENT_BYTES}
+     * — the ceiling one instruction document already carries, because this
+     * section IS one (the MAX_IMPORT_BYTES borrowing precedent). Nothing is
+     * truncated into the prompt and nothing is silently dropped: an unusable
+     * value throws, and run() turns the throw into its usage refusal.
+     */
+    private static function decodeAppendSystemPrompt(?string $raw): ?string
+    {
+        if ($raw === null) {
+            return null;
+        }
+
+        $text = \trim($raw);
+        if (\str_starts_with($text, '@')) {
+            $path = \substr($text, 1);
+            if (!\is_file($path) || !\is_readable($path)) {
+                throw new \InvalidArgumentException(Lang::t('cli.noninteractive.append_system_prompt_unreadable', ['path' => $path]));
+            }
+
+            $contents = \file_get_contents($path);
+            if ($contents === false) {
+                throw new \InvalidArgumentException(Lang::t('cli.noninteractive.append_system_prompt_unreadable', ['path' => $path]));
+            }
+
+            $text = \trim($contents);
+        }
+
+        if ($text === '') {
+            // A whitespace-only inline value and an @file that holds only
+            // whitespace both land here: the parser refused an EMPTY token,
+            // but emptiness the parser cannot see is refused at this boundary.
+            throw new \InvalidArgumentException(Lang::t('cli.argv.append_system_prompt.empty'));
+        }
+
+        $bytes = \strlen($text);
+        if ($bytes > \SugarCraft\Code\Context\InstructionFileLoader::MAX_DOCUMENT_BYTES) {
+            throw new \InvalidArgumentException(Lang::t('cli.noninteractive.append_system_prompt_too_large', [
+                'max' => (string) \SugarCraft\Code\Context\InstructionFileLoader::MAX_DOCUMENT_BYTES,
+                'bytes' => (string) $bytes,
+            ]));
+        }
+
+        return $text;
     }
 
     /**

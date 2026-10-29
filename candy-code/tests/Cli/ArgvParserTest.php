@@ -232,6 +232,21 @@ final class ArgvParserTest extends TestCase
     }
 
     /**
+     * C-CTX-4.g: `--append-system-prompt` is recognised in both spellings —
+     * an unrecognised flag lands in the unknown-flags record (which bin turns
+     * into exit 2), and a silently-unconsumed append would leave the operator
+     * rules out of the prompt while the launch still ran.
+     */
+    public function testAppendSystemPromptIsRecognisedInBothSpellings(): void
+    {
+        $spaced = ArgvParser::parse(['candy-code', '-p', 'x', '--append-system-prompt', 'be terse']);
+        $equals = ArgvParser::parse(['candy-code', '--append-system-prompt=@rules.md', '-p', 'x']);
+
+        $this->assertSame([], $spaced->unknownFlags);
+        $this->assertSame([], $equals->unknownFlags);
+    }
+
+    /**
      * `-px` is one unknown token, NOT "-p" plus a clustered "x" — the parser
      * does no short-flag clustering. "hello" then survives as a positional
      * that is not path-shaped, so it is discarded; before Phase 0 item 3 that

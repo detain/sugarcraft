@@ -4029,6 +4029,7 @@ final class Subcommands
         '--max-cost' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.max_cost'],
         '--max-turns' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.max_turns'],
         '--json-schema' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.json_schema'],
+        '--append-system-prompt' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.append_system_prompt'],
         '--continue' => ['short' => '-c', 'value' => null, 'desc' => 'cli.completion.option.continue'],
         '--resume' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.resume'],
         '--help' => ['short' => '-h', 'value' => null, 'desc' => 'cli.completion.option.help'],

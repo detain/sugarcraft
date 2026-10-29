@@ -499,7 +499,7 @@ final class StderrEmitterCensusTest extends TestCase
         // C-AGT-7.b took it to thirty-six: the --json-schema-without-a-prompt
         // hint carries its own `candy-code: ` envelope, the same pre-launch
         // exit-2 usage decision as the family above it.
-        'src/Cli/ArgvParser.php' => 37, // +3 AUT-4 --json-schema refusal family; +1 INFO-4 duplicate-prompt notice (1021); +1 C-AGT-7.b requires_prompt hint; +1 C-AGT-6.c serve-refusal message
+        'src/Cli/ArgvParser.php' => 41, // +3 AUT-4 --json-schema refusal family; +1 INFO-4 duplicate-prompt notice (1021); +1 C-AGT-7.b requires_prompt hint; +1 C-AGT-6.c serve-refusal message; +4 C-CTX-4.g --append-system-prompt refusal family
         // +1 in ISS-026: SESSION_RESUME_CROSS_PROJECT_FORMAT carries its own
         // `candy-code: ` envelope, like the retention detail line.
         // +1 in ISS-026 residual (rv6): the --resume pick twin carries its own
@@ -531,7 +531,7 @@ final class StderrEmitterCensusTest extends TestCase
         // envelope — a stderr-alone notice that never reaches a document
         // (channel 1's note; the document reports the same fact through the
         // json_schema_applied key).
-        'src/Cli/NonInteractive.php' => 11, // +2 AUT-4 refusal prefixes (gate line + decode failUsage); +1 C-AGT-7.b json_schema_unapplied
+        'src/Cli/NonInteractive.php' => 12, // +2 AUT-4 refusal prefixes (gate line + decode failUsage); +1 C-AGT-7.b json_schema_unapplied; +1 C-CTX-4.g non-engine honesty gate
         // E701: mcpAuth's five failUsage shapes (no action, unknown action,
         // JSON refusal, bad --timeout, missing server) took eleven to sixteen.
         // E710: mcpImport adds the funnel prefix literal plus its five door

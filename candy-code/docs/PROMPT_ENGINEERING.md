@@ -526,7 +526,12 @@ six — the count here is the count there, and the discrepancy is recorded rathe
    context across 32 days, drew ten issue reports, and its own author removed it. Per-call bytes
    compound.
 5. **Do not add a user-supplied system-prompt override key.** Roo removed theirs as "footgun
-   prompting"; `Config\LayeredSettings` is already right to omit it.
+   prompting"; `Config\LayeredSettings` is already right to omit it. The one permitted seam is
+   the plan §6 ruling's `-p --append-system-prompt`: a one-shot, operator-typed APPEND that
+   splices one more `<user-rules>`-fenced section at the end of the prompt through the same
+   escape and precedence framing as the standing rules — it can add instruction, never replace
+   or demote the base prompt, and it is refused without `-p` so it cannot attach to a session
+   that would carry it past the launch that asked.
 6. **Do not put a blanket total-request timeout on a completion.** Standing repo policy: a short
    connect timeout is fine, and cancellation is the mechanism for the long tail.
 

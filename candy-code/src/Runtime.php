@@ -164,6 +164,23 @@ final class Runtime
     private const AGENT_INSTRUCTIONS_PREAMBLE = 'Chosen by the operator of this machine as the agent this session runs as, read from that agent\'s preset file, included here as the active agent\'s instruction with any block markers in the text neutralised so it cannot open or close a block; where it conflicts with the identity, maxims and operator-authored layers this carries the agent\'s colouring of the task only, never precedence over them.';
 
     /**
+     * C-CTX-4.g: the appended-rules provenance preamble for the ONE
+     * `<user-rules>` section a `--append-system-prompt` launch splices at the
+     * end of the prompt. WORDING CONSTRAINTS mirror
+     * {@see self::USER_RULES_AUTHORITY_PREAMBLE} exactly and are pinned by
+     * the same guards: ASCII, no fence-tag spellings, no line-leading
+     * heading marker, none of the register needles the maxims scan polices,
+     * and the same three facts in the same order — who wrote it, that block
+     * markers were neutralised, and where precedence lands. This tier CAN
+     * claim authorship the agent preset often cannot — the bytes arrive from
+     * this operator at this invocation, inline or as an @file they pointed
+     * at — so the claim is about the WRITING and the giving, and the
+     * precedence landing is the standing user tier's own: above the
+     * project-authored layers, below identity and maxims.
+     */
+    private const APPENDED_SYSTEM_PROMPT_PREAMBLE = 'Written or chosen by the operator of this machine for this one launch and given on the command line as rules to append, included here as personal instruction with any block markers in the text neutralised so it cannot open or close a block; where it conflicts with a project-authored layer below it this carries the weight, while the identity and maxims layers above it keep precedence.';
+
+    /**
      * The `<available-skills>` provenance preamble now lives in
      * {@see \SugarCraft\Code\Skills\SkillListingSection::PREAMBLE}, the class that
      * assembles the whole fenced layer. This alias is kept because the fence
@@ -887,6 +904,17 @@ final class Runtime
          * byte-identical to the tree before this slot existed.
          */
         private ?string $agentInstructions = null,
+        /**
+         * C-CTX-4.g: the operator's `--append-system-prompt` rules text, read
+         * off {@see \SugarCraft\Code\Backend\EngineBackend::$appendedSystemPrompt}
+         * at the one construction site (newRuntime). Null — every path that
+         * never gave the flag — assembles no appended `<user-rules>` section,
+         * so the golden corpus and every launch prompt are byte-identical to
+         * the tree before this slot existed. The text is APPENDED under the
+         * operator-authority fence, never an override of the base prompt
+         * (the plan §6 ruling PROMPT_ENGINEERING.md rule 5 records).
+         */
+        private ?string $appendedSystemPrompt = null,
     ) {}
 
     /**
@@ -5136,6 +5164,27 @@ final class Runtime
             Stability::PerTurn,
             SkillListingSection::render($listing),
         );
+
+        // C-CTX-4.g: the operator's appended rules, last authority layer of
+        // the assembly. The brief splices them at the END of the prompt;
+        // <env> stays LAST (P3.S1) and the plan-mode slot stays DIRECTLY
+        // ahead of it, so the append lands directly behind the skill listing
+        // and ahead of that tail. Same opener + preamble + blank line +
+        // escaped body + closer geometry as the standing user-rules slab —
+        // the preamble re-worded for this tier's honest provenance only —
+        // and the same `user-rules` fence, whose roster entry already keeps
+        // a body spelling the closer inert. The slot joins the list ONLY
+        // when the launch gave the flag; every prompt assembled without it —
+        // the whole golden corpus — is byte-identical to the tree before
+        // this slot existed.
+        if ($this->appendedSystemPrompt !== null && trim($this->appendedSystemPrompt) !== '') {
+            $sections[] = $this->section(
+                '<user-rules>',
+                Stability::PerSession,
+                "<user-rules>\n" . self::APPENDED_SYSTEM_PROMPT_PREAMBLE . "\n\n"
+                    . PromptFence::escape(trim($this->appendedSystemPrompt)) . "\n</user-rules>",
+            );
+        }
 
         // Roadmap 5.7-1: the plan-mode contract, only while this turn's gate
         // is in `plan` mode. Read off the hook chain's gate — the one the turn

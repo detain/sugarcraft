@@ -217,7 +217,7 @@ ini_set('display_errors', 'stderr');
     // `--root` joined it in audit CLI-2; `--output-format` joined it in
     // ISS-084, which is why it is handled by its own branch below rather than
     // listed here — its consumed value is the one thing this scan reads.
-    $strictValueFlags = ['-p', '--prompt', '--root', '--config', '--model', '--permission-mode', '--max-cost', '--max-turns', '--resume', '--worktree'];
+    $strictValueFlags = ['-p', '--prompt', '--root', '--config', '--model', '--permission-mode', '--max-cost', '--max-turns', '--resume', '--worktree', '--append-system-prompt'];
     for ($i = 1, $n = count($rawArgv); $i < $n; $i++) {
         $arg = $rawArgv[$i];
         if (!is_string($arg)) {

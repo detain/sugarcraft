@@ -1824,6 +1824,7 @@ candy-code --permission-mode plan -p "audit this" # pick the permission mode for
 candy-code --max-cost 2.50 -p "audit this"        # cap this launch's spend (USD)
 candy-code --max-turns 8 -p "audit this"          # cap this launch's tool-loop steps
 candy-code --json-schema answer.json -p "extract fields" # constrain the answer to a JSON Schema
+candy-code --append-system-prompt @rules.md -p "audit this" # append operator rules to this one prompt's system prompt
 candy-code --worktree fix-bug        # run this session in its own git worktree
 candy-code --help                               # prints and exits (never opens the TUI)
 candy-code --version                            # prints the installed version and exits

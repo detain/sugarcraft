@@ -237,6 +237,12 @@ final readonly class ParsedArgs
          *  judges the charset because it is the code that turns the name
          *  into a path component and a branch name. */
         public ?string $worktreeName = null,
+        /** The RAW token `--append-system-prompt` named — inline text or an
+         *  `@file` path (C-CTX-4.g). Resolved and bounded at
+         *  {@see \SugarCraft\Code\Cli\NonInteractive}'s boundary, not here:
+         *  the parser performs no filesystem read (the same raw-store-and-
+         *  later-judge law as {@see $jsonSchema}). */
+        public ?string $appendSystemPrompt = null,
     ) {
     }
 
@@ -324,7 +330,8 @@ final readonly class ParsedArgs
         ?string $jsonSchema = null,
         bool $worktreeRequested = false,
         ?string $worktreeName = null,
+        ?string $appendSystemPrompt = null,
     ): self {
-        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName);
+        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt);
     }
 }

@@ -741,6 +741,23 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
          */
         private readonly ?string $agentInstructions = null,
         /**
+         * C-CTX-4.g: the operator's `--append-system-prompt` rules text —
+         * carried to every turn's system prompt as ONE fenced
+         * `<user-rules>` section appended after the skill listing
+         * ({@see \SugarCraft\Code\Runtime::$appendedSystemPrompt}). Set ONLY
+         * via {@see withAppendedSystemPrompt()}, which only
+         * {@see \SugarCraft\Code\Cli\NonInteractive} calls on a `-p` launch
+         * that gave the flag; the launch path never sets it, so every prompt
+         * a session builds without the flag is byte-identical to the tree
+         * before this field existed. It is an APPEND, never an override —
+         * the section rides the assembler under the same authority framing
+         * and fence-escape as the standing user-rules slab, so the text
+         * cannot outrank the base prompt. Null clears it. Main-chat scope:
+         * TaskTool and Workflow builds never set it (the same E20-style
+         * seam as {@see $jsonSchema} and {@see $agentInstructions}).
+         */
+        private readonly ?string $appendedSystemPrompt = null,
+        /**
          * C-PRV-3.a: the configured fast-service-tier WORD — 'fast',
          * 'default' or null (setting unset). This is what the user asked;
          * the WIRE value ('priority' on the OpenAI arms, 'fast' on the
@@ -998,6 +1015,24 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     public function agentInstructions(): ?string
     {
         return $this->agentInstructions;
+    }
+
+    /**
+     * @see $appendedSystemPrompt
+     */
+    public function withAppendedSystemPrompt(?string $rules): self
+    {
+        return $this->mutate(['appendedSystemPrompt' => $rules]);
+    }
+
+    /**
+     * The operator's `--append-system-prompt` rules text, if this launch gave it.
+     *
+     * @see $appendedSystemPrompt
+     */
+    public function appendedSystemPrompt(): ?string
+    {
+        return $this->appendedSystemPrompt;
     }
 
     /**
@@ -2890,6 +2925,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // body reaches every turn of this backend and no other Runtime
             // construction is touched. Null everywhere apply() never ran.
             agentInstructions: $this->agentInstructions,
+            // C-CTX-4.g: same one-site reading — the operator's appended
+            // rules reach every turn of this backend and no other Runtime
+            // construction is touched. Null everywhere the flag was not given.
+            appendedSystemPrompt: $this->appendedSystemPrompt,
         ))->withSessionPromptMemo($this->sessionPromptMemo);
     }
 
