@@ -1,0 +1,16 @@
+# W22 WAVE-REVIEW-1 (loop r1) — reviewed tip 7342d0e95 (unchanged at verdict time)
+
+VERDICT: CLEAN (0C/0M)
+
+## Landed (10/10, claims vs tree)
+- C-AGT-4.c: SessionSummary.agent (Definitions.php:56, ServerContext:363 primaryAgentOverride), agents.list mode (AgentsMethods:119/declaredMode), StatusBar select, web agents store mode — trio+dist rode riders 4f827ed71 (batch-18a) and a82e19a4e (18b).
+- C-AGT-4.d: @agent:<name> reserved in ContextMentions (withAgentRoster, refusal-without-roster), threaded TurnController:1205/SessionHost:2363/NonInteractive:500/:1685, TUI popup Chat:17743+, Composer popup in dist (rebuilt in final weld a0e3f2ce2), README:557 + AGENTS.md:111.
+- C-CTX-3.f intent type+when: (Writer TYPES, Entry normalisation, RulePathNudge intent: marks, lang host.memory.intents.heading, MEMORY.md); C-CTX-4.b PERSONA_FILENAMES SOUL/USER fenced+priced; C-EXT-3.a replaceAll+SkillRosterDiffTracker wired Runtime:6063 beside CTX-4.a withCurrentDate (no collision); C-EXT-6.a systemMessage notice (ScriptHook:1033, survives suppressOutput, HOOKS.md truth-flipped); C-MCP-3.c AnswersServerRequests x3+stream key consumed; C-MCP-3.d McpBackgroundCalls/Inbox composite EngineBackend:5349, exchange-lock ruling documented MCP.md:662/736 (§6 honored); C-PRV-3.b /fast full stack; C-PRV-3.c EffortKeyword in TurnRunner::start (gates on EffortGate, top-tier, non-shaper notice).
+- Generated: gen-protocol-schema --check rc0, gen-command-docs --check rc0, cmd-docs green; dist coherent (a0e3f2ce2 last touch, @agent markers present).
+- Gates re-run: ReadPathCensus|SettingsWriterCensus 24T/1F = disclosed W25-account RemoteSessionPush row only (C-SES-7.g origin, not W22); StderrEmitterCensus+DescriptorInheritanceGuard 110T OK; TreeWideGuardRoster+ForkedChildExitConvention+LangParity 28T OK; CommandDocs+ReadmeRoster+RegistryTranslation+ConfigWriteProducer 39T OK; DocFigure+EnvRoster+TrustKey+ServerProtocolDoc+ProtocolSchemaDrift 142T OK. W18→W22 persistFast seam CLOSED (roster SettingsWriterCensusTest:171, landed via W21 review cure 77072a840).
+- DUR rows: all 10 new test files present (McpBackgroundCall 3.141/15, Fast 0.696/18+0.349/7, Ultrathink 0.159/18, StandingIntent 0.061/22, SkillsReload 0.034/5, SkillRosterDiff 0.003/13, ScriptHookSysMsg 0.235/12, GetStream 0.12/5, SseSrvReq 0.13/5).
+- en.php: zero duplicate keys. Authors: 24/24 picks+weld+meta detain %ae/%ce, zero Co-Authored/Signed-off. Weld hygiene: no lane committed generated files; no cc/* branch or worktree belongs to W22 (all 9 live ones are in-flight lanes + weld-18p). E646 clean (usleep is job-state poll; no new wall-clock kill); dormant code all wired.
+
+## Carries (non-blocking)
+- NIT-1: COMPARISON.md closeout flip sheet additions for this wave (program CLOSEOUT duty per W18 NIT-5 precedent, apply_comparison.py): AGT-20 :273+§1 :61+narrative :928 (now ✅), MOD-15 :142 cc keyword half, MOD-N2 :154 [already carried], MEM-N3 :196+:915, PA-04 :544 (half — IDENTITY.md still absent), SKL-13 :293, HK-08 :320 (systemMessage half), MCP-N2 :354 (backgrounding half).
+- NIT-2: C-PRV-3.c MINOR-1 3-copy effort-keyword finder explicitly deferred post-W22 — unowned queue row; §3 W22 row + suite-figure re-pin remain lead/closeout duties (staleness pair standing red, not flagged).
