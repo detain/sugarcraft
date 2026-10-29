@@ -45,6 +45,7 @@ use SugarCraft\Code\Usage;
 use SugarCraft\Code\Permissions\DenialKind;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
+use SugarCraft\Code\Permissions\ToolDeclaration;
 use SugarCraft\Code\Providers\HonoursHostPermissionMode;
 use SugarCraft\Code\Providers\MarksPromptCache;
 use SugarCraft\Code\Providers\ProviderInterface;
@@ -244,6 +245,20 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * child process's environment.
      */
     private const MAX_OUTPUT_TOKENS_CONFIG_KEY = 'maxOutputTokens';
+
+    /**
+     * C-SEC-7.c: the tools `plan` mode advertises whatever the declaration
+     * verdict says — the three names the mode's own contract promises.
+     * `Write` is how the plan file itself is written (`.candy-code/plans/`),
+     * `Bash` is judged per call because its plan verdict lives in the command
+     * (a declaration cannot carry one — {@see PermissionGate::refuses()}),
+     * and `PlanExit` is how the plan reaches its approval. The list wins
+     * against a `Deny` rule too: hiding these three from a plan turn would
+     * make the mode unable to do the one thing it exists for.
+     *
+     * @var list<string>
+     */
+    private const PLAN_MODE_ADVERTISED_NAMES = ['Write', 'Bash', 'PlanExit'];
 
     /**
      * Upper bound on a single length-prefixed frame from the child. A frame
@@ -3593,6 +3608,31 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                     $tools[$index] = $candidate->withForkDelegate($forkHost);
                 }
             }
+        }
+
+        // C-SEC-7.c: while the session's gate is in `plan` mode the advertised
+        // roster is the tools that gate does NOT refuse by declaration — the
+        // model cannot be offered what it can never run, so the list can no
+        // longer drift from the enforcement. Asked through
+        // {@see PermissionGate::refuses()}, the same shared decision path the
+        // gate hook walks at dispatch (measured per mode, the table lives on
+        // that method): under `plan` this drops `Edit`, `Task`, `ApplyPatch`
+        // and every unhinted `mcp__*`, keeps `Write`/`Bash`/`PlanExit` through
+        // {@see self::PLAN_MODE_ADVERTISED_NAMES}, and leaves read-only tools
+        // and `Ask` verdicts offered. A `Deny <Tool>` rule rides the same
+        // door — in plan mode it HIDES the tool, not merely refuses it — and
+        // a fabricated call for a hidden tool now answers "Tool not found"
+        // from the dispatch that never saw it offered. Every other mode keeps
+        // advertising the full list; a mode switch therefore rewrites the
+        // request's tool block exactly once, the one prompt-cache break
+        // accepted beside the cache law in docs/PROMPT_ENGINEERING.md.
+        $gate = $this->permissionGate;
+        if ($gate !== null && $gate->mode() === PermissionMode::Plan) {
+            $tools = array_values(array_filter(
+                $tools,
+                static fn (Tool $tool): bool => in_array($tool->name(), self::PLAN_MODE_ADVERTISED_NAMES, true)
+                    || !$gate->refuses(new ToolDeclaration($tool->name())),
+            ));
         }
 
         return $tools;

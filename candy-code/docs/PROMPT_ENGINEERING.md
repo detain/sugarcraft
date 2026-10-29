@@ -104,8 +104,16 @@ static `<env>` block last. Counted from the live method, there are thirteen slot
     `Alt+M` toggle swaps between turns). It states what the gate enforces — read-only
     shell, every change refused, the one write a Markdown plan in `.candy-code/plans/` — so the
     model is told rather than finding out one denied call at a time. PerTurn, and placed directly
-    ahead of `<env>` so a mode switch moves only the prompt's tail; the tool list is deliberately
-    the same in every mode for the same cache reason.
+    ahead of `<env>` so a mode switch moves only the prompt's tail. The tool list no longer rides
+    that rule unchanged (C-SEC-7.c): while the gate is in `plan`, `EngineBackend::turnTools()`
+    drops from the request's tool block exactly the tools the gate refuses by declaration —
+    `Write`, `Bash` and `PlanExit` kept by name because the mode's one plan-file write, its
+    read-only shell and its approval door live on them. The cost is measured against this law, and
+    it is the honest one: a switch to or from `plan` rewrites the tool block once, so the session
+    pays exactly one prefix-cache break per mode change — the only accepted break in the
+    section layout — while every message row after the head keeps riding byte-for-byte
+    (`PromptPrefixByteStabilityTest::testAModeSwitchIsTheOnePrefixBreakTheRosterDropCosts()`).
+    Every other mode still advertises the full list, so staying in a mode stays whole.
 13. **Environment** (`EnvironmentBlock`) — fenced `env`, **LAST**. The stable-prefix invariant. It
     is the *static* half only — working directory, git-repo flag, platform, OS, PHP,
     model, the model's published knowledge cutoff when its family is listed in

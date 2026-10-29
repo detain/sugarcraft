@@ -484,8 +484,24 @@ the system prompt also carries the plan-mode contract
 (`Context\Sections\PlanModeSection`, a `<system-reminder>` slot just ahead of
 `<env>`): what runs, what is refused, where the plan goes, and that the user
 approves a plan by leaving the mode — so the model is told what the gate
-enforces instead of finding out one denied call at a time. The tool list is
-the same in every mode; only the gate's answers change.
+enforces instead of finding out one denied call at a time. In `plan` the
+advertised tool list is no longer the same list as in every other mode
+(C-SEC-7.c): the request's tool block drops exactly the tools the gate
+refuses **by declaration** — `Edit`, `Task`, `ApplyPatch` and every unhinted
+`mcp__*` disappear from what the model is offered — because a tool that can
+never run should not be offered either. `Write`, `Bash` and `PlanExit` stay
+whatever a declaration says (`EngineBackend::PLAN_MODE_ADVERTISED_NAMES`):
+the mode's own contract is the plan file write, the read-only shell command,
+and the exit that puts the plan up for approval — and the keep-list wins even
+against a `Deny` rule for those three names. Everywhere else a `Deny <Tool>`
+rule rides the same door, so outside the trio it now **hides** the tool in
+plan mode rather than merely refusing it; a fabricated call for a hidden tool
+answers "Tool not found" from the dispatch that never saw it offered. Every
+other mode still advertises the full list and the gate's answers alone
+change; a mode switch therefore rewrites the tool block once, the single
+prompt-cache break accepted beside the cache law in
+[docs/PROMPT_ENGINEERING.md](PROMPT_ENGINEERING.md) and pinned by
+`PlanModeToolRosterTest` + `PromptPrefixByteStabilityTest`.
 
 A `Bash` **declaration** — a name with no arguments, which is what a workflow
 stage's `tools:` list is — is still allowed under `plan`: it has no command to

@@ -11,6 +11,8 @@ use SugarCraft\Code\Context\InstructionDiffTracker;
 use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Context\TurnContextBlock;
 use SugarCraft\Code\Message as RootMessage;
+use SugarCraft\Code\Permissions\PermissionGate;
+use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Providers\CustomProvider;
@@ -315,6 +317,110 @@ final class PromptPrefixByteStabilityTest extends TestCase
             json_encode(\array_slice($later, 1, \count($earlier) - 1)),
             'the roster swap must not disturb a single message byte the earlier turn already sent',
         );
+    }
+
+    /**
+     * C-SEC-7.c, the carve-out beside the cache law: the plan-mode roster
+     * drop costs the session exactly ONE prefix break per mode switch, and
+     * nothing else. Two turns inside `plan` send the same frozen message
+     * bytes and the same advertised tool set; the turn after the switch to
+     * `default` differs from its predecessor only in message 0 — the
+     * `<system-reminder>` plan contract leaves the prompt and `Edit` (which
+     * plan had dropped) rejoins the tool block. Every message row after
+     * message 0 that the plan turns already sent rides on byte-for-byte:
+     * the switch moves the prompt's head exactly as often as the operator
+     * moves the mode, and not one byte more.
+     */
+    public function testAModeSwitchIsTheOnePrefixBreakTheRosterDropCosts(): void
+    {
+        $home = $this->tempDir();
+        mkdir($home . '/.candy-code', 0o700, true);
+        $this->useHomeSandbox($home);
+
+        $root = $this->gitFixture();
+
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: 'first answer'),
+            new CompleteResponse(content: 'second answer'),
+            new CompleteResponse(content: 'third answer'),
+        ]);
+        $backend = EngineBackend::new($provider, 'm')
+            ->withoutHooks()
+            ->withRoot($root)
+            ->withPermissionGate(new PermissionGate(PermissionMode::Plan))
+            ->withTools([
+                self::tool('Edit', static fn (): string => 'ran'),
+                self::tool('Write', static fn (): string => 'ran'),
+                self::tool('Read', static fn (): string => 'ran'),
+                self::tool('Bash', static fn (): string => 'ran'),
+            ]);
+
+        $planOne = $backend->complete([
+            RootMessage::system(self::LAUNCH_NOTICE),
+            RootMessage::user('go'),
+        ]);
+        $this->assertSame('first answer', $planOne->content);
+        $firstRow = (string) TurnContextBlock::latestIn($provider->requests[0]->messages);
+
+        $historyTwo = [
+            RootMessage::system(self::LAUNCH_NOTICE),
+            RootMessage::user('go'),
+            RootMessage::user($firstRow),
+            RootMessage::assistant('first answer'),
+            RootMessage::user('more'),
+        ];
+        $this->assertSame('second answer', $backend->complete($historyTwo)->content);
+
+        $turnOne = $provider->requests[0];
+        $turnTwo = $provider->requests[1];
+
+        // Inside the mode: the contract slot is on, the roster is the dropped
+        // one, and the second turn re-sends the first byte-for-byte.
+        $this->assertStringContainsString('# Plan mode', (string) $turnOne->systemPrompt, 'the plan contract rides the prompt while the mode is plan');
+        $this->assertSame(['Bash', 'Read', 'Write'], self::toolNames($turnOne), 'plan advertises the keep trio minus Edit');
+        $this->assertSame(self::toolNames($turnOne), self::toolNames($turnTwo), 'within the mode the tool block does not move');
+        $this->assertSame((string) $turnOne->systemPrompt, (string) $turnTwo->systemPrompt);
+        $earlier = self::wire(CustomProvider::class, $turnOne);
+        $later = self::wire(CustomProvider::class, $turnTwo);
+        $this->assertSame(
+            json_encode($earlier),
+            json_encode(\array_slice($later, 0, \count($earlier))),
+            'the second plan turn re-sends the first whole — nothing but the switch may break the prefix',
+        );
+
+        // The switch itself: a fresh gate in `default` on the next turn, the
+        // shape a mid-session mode change leaves — `Chat` swaps the gate on
+        // the backend between turns (Chat.php's mode-switch dispatch hands
+        // withBackend() the new gate).
+        $backend = $backend->withPermissionGate(new PermissionGate(PermissionMode::Default));
+        $historyThree = [
+            ...$historyTwo,
+            RootMessage::assistant('second answer'),
+            RootMessage::user('again'),
+        ];
+        $this->assertSame('third answer', $backend->complete($historyThree)->content);
+
+        $turnThree = $provider->requests[2];
+        $this->assertSame(['Bash', 'Edit', 'Read', 'Write'], self::toolNames($turnThree), 'the full roster is advertised again after the switch');
+        $this->assertStringNotContainsString('# Plan mode', (string) $turnThree->systemPrompt, 'the contract slot leaves with the mode');
+
+        // And the break is exactly one place deep: every row after message 0
+        // that turn 1 sent still rides, byte-for-byte, inside turn 3.
+        $third = self::wire(CustomProvider::class, $turnThree);
+        $this->assertSame(
+            json_encode(\array_slice($earlier, 1)),
+            json_encode(\array_slice($third, 1, \count($earlier) - 1)),
+            'the mode switch may only rewrite the head — history stays cached',
+        );
+    }
+
+    /** @return list<string> */
+    private static function toolNames(CompleteRequest $request): array
+    {
+        $names = array_map(static fn (Tool $tool): string => $tool->name(), $request->tools ?? []);
+        sort($names);
+
+        return $names;
     }
 
     /** A manifest-shaped skill fixture for the roster leg (project tier, auto-invocable). */

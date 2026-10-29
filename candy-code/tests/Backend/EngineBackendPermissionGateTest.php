@@ -60,6 +60,14 @@ final class EngineBackendPermissionGateTest extends TestCase
         $this->assertSame(0, $tool->calls);
     }
 
+    /**
+     * C-SEC-7.c reshaped this answer: under `plan` the Edit DECLARATION is
+     * refused, so the tool is no longer advertised at all, and a fabricated
+     * call meets the dispatch that never saw it offered. The refusal still
+     * reaches the model — one ToolFinished, naming the tool — only with the
+     * truer reason. What the gate-refusal wording used to be pinned by lives
+     * on a KEPT tool now: {@see \SugarCraft\Code\Tests\Backend\PlanModeToolRosterTest::testAKeptWriteStillHitsTheGateWhenTheTargetIsNotAPlanFile()}.
+     */
     public function testADenyingGateReportsTheRefusalToTheModel(): void
     {
         $finished = [];
@@ -74,7 +82,7 @@ final class EngineBackendPermissionGateTest extends TestCase
             });
 
         $this->assertCount(1, $finished);
-        $this->assertStringContainsString("mode 'plan'", $finished[0]->result->content());
+        $this->assertStringContainsString('Tool not found: Edit', $finished[0]->result->content());
     }
 
     public function testAnExplicitAllowRuleReachesTheEngine(): void
