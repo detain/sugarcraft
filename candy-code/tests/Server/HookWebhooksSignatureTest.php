@@ -31,7 +31,7 @@ final class HookWebhooksSignatureTest extends TestCase
 {
     private const SECRET = 'signed-inbound-webhook-secret-longer-than-thirty';
 
-    private const BODY = '{"ref":"refs/heads/main"}';
+    private const WEBHOOK_BODY = '{"ref":"refs/heads/main"}';
 
     private float $now = 1_700_000_000.0;
 
@@ -65,9 +65,9 @@ final class HookWebhooksSignatureTest extends TestCase
         // — the valid-header-secret-rides-a-missing-signature leg in
         // testABadSignatureIsRefusedAndStrikesTheLockout().
         $answer = $handler->handle($this->request([
-            'x-hub-signature-256' => $this->signature(self::BODY),
+            'x-hub-signature-256' => $this->signature(self::WEBHOOK_BODY),
             'x-github-delivery' => 'uuid-one',
-        ], self::BODY), 'deploy', '127.0.0.1');
+        ], self::WEBHOOK_BODY), 'deploy', '127.0.0.1');
 
         self::assertSame(200, $answer->getStatusCode());
         self::assertStringContainsString('"bgId":"bg-signature"', (string) $answer->getBody());
@@ -82,9 +82,9 @@ final class HookWebhooksSignatureTest extends TestCase
         // Wrong-case header keys: PSR-7 lookup is case-insensitive, and the
         // resolved scheme names are lower-case.
         $answer = $handler->handle($this->request([
-            'X-Cust-Sig' => $this->signature(self::BODY),
+            'X-Cust-Sig' => $this->signature(self::WEBHOOK_BODY),
             'X-Req-Id' => 'evt-1',
-        ], self::BODY), 'deploy', '127.0.0.1');
+        ], self::WEBHOOK_BODY), 'deploy', '127.0.0.1');
 
         self::assertSame(200, $answer->getStatusCode());
         self::assertCount(1, $this->deliveries);
@@ -112,7 +112,7 @@ final class HookWebhooksSignatureTest extends TestCase
             'x-hub-signature-256' => 'sha256=' . \str_repeat('0', 64),
             'x-github-delivery' => 'uuid-bad',
         ];
-        $wrong = $handler->handle($this->request($signed, self::BODY), 'deploy', '127.0.0.1');
+        $wrong = $handler->handle($this->request($signed, self::WEBHOOK_BODY), 'deploy', '127.0.0.1');
         self::assertSame(401, $wrong->getStatusCode());
         self::assertStringContainsString('"message":"the webhook signature is not valid"', (string) $wrong->getBody());
         self::assertStringContainsString('"kind":"unauthorized"', (string) $wrong->getBody());
@@ -124,27 +124,27 @@ final class HookWebhooksSignatureTest extends TestCase
         $missing = $handler->handle($this->request([
             'x-candy-code-hook' => self::SECRET,
             'x-github-delivery' => 'uuid-bad',
-        ], self::BODY), 'deploy', '127.0.0.1');
+        ], self::WEBHOOK_BODY), 'deploy', '127.0.0.1');
         self::assertSame(401, $missing->getStatusCode(), 'a missing signature is a refused signature, header secret or not');
         self::assertCount(0, $this->deliveries);
 
         // Fill the failure window with bad signatures: the strike count that
         // locks the header door locks this one too (same limiter, same key).
         for ($i = 0; $i < RateLimiter::MAX_FAILURES - 2; ++$i) {
-            self::assertSame(401, $handler->handle($this->request($signed, self::BODY), 'deploy', '127.0.0.1')->getStatusCode());
+            self::assertSame(401, $handler->handle($this->request($signed, self::WEBHOOK_BODY), 'deploy', '127.0.0.1')->getStatusCode());
         }
         $locked = $handler->handle($this->request([
-            'x-hub-signature-256' => $this->signature(self::BODY),
+            'x-hub-signature-256' => $this->signature(self::WEBHOOK_BODY),
             'x-github-delivery' => 'uuid-late',
-        ], self::BODY), 'deploy', '127.0.0.1');
+        ], self::WEBHOOK_BODY), 'deploy', '127.0.0.1');
         self::assertSame(429, $locked->getStatusCode(), 'a valid signature arrives at a locked door');
         self::assertSame((string) RateLimiter::LOCKOUT_SECONDS, (string) $locked->getHeaderLine('Retry-After'));
 
         $this->now += RateLimiter::LOCKOUT_SECONDS + 1.0;
         self::assertSame(200, $handler->handle($this->request([
-            'x-hub-signature-256' => $this->signature(self::BODY),
+            'x-hub-signature-256' => $this->signature(self::WEBHOOK_BODY),
             'x-github-delivery' => 'uuid-late',
-        ], self::BODY), 'deploy', '127.0.0.1')->getStatusCode());
+        ], self::WEBHOOK_BODY), 'deploy', '127.0.0.1')->getStatusCode());
         self::assertCount(1, $this->deliveries, 'the lockout expired; the delivery runs');
     }
 
@@ -152,15 +152,15 @@ final class HookWebhooksSignatureTest extends TestCase
     {
         $handler = $this->handler($this->hooks(['scheme' => 'github-sha256']));
         $headers = [
-            'x-hub-signature-256' => $this->signature(self::BODY),
+            'x-hub-signature-256' => $this->signature(self::WEBHOOK_BODY),
             'x-github-delivery' => 'uuid-replay',
         ];
 
-        $first = $handler->handle($this->request($headers, self::BODY), 'deploy', '127.0.0.1');
+        $first = $handler->handle($this->request($headers, self::WEBHOOK_BODY), 'deploy', '127.0.0.1');
         self::assertSame(200, $first->getStatusCode());
         self::assertStringContainsString('"bgId"', (string) $first->getBody());
 
-        $second = $handler->handle($this->request($headers, self::BODY), 'deploy', '127.0.0.1');
+        $second = $handler->handle($this->request($headers, self::WEBHOOK_BODY), 'deploy', '127.0.0.1');
         self::assertSame(200, $second->getStatusCode());
         self::assertSame('{"ok":true,"duplicate":true}', (string) $second->getBody(), 'the duplicate answer is its own shape, no background id');
         self::assertCount(1, $this->deliveries, 'the replay spawned nothing');
@@ -170,25 +170,25 @@ final class HookWebhooksSignatureTest extends TestCase
     {
         $handler = $this->handler($this->hooks(['scheme' => 'github-sha256']));
         $headers = [
-            'x-hub-signature-256' => $this->signature(self::BODY),
+            'x-hub-signature-256' => $this->signature(self::WEBHOOK_BODY),
             'x-github-delivery' => 'uuid-churn',
         ];
-        self::assertSame(200, $handler->handle($this->request($headers, self::BODY), 'deploy', '127.0.0.1')->getStatusCode());
+        self::assertSame(200, $handler->handle($this->request($headers, self::WEBHOOK_BODY), 'deploy', '127.0.0.1')->getStatusCode());
 
         // The rate row is 5 — far fewer than the strikes below. A redeliver
         // storm (GitHub resends on timeout; a broker replays on restart) must
         // neither spend the delivery rate nor feed the failure window.
         for ($i = 0; $i < RateLimiter::MAX_FAILURES + 1; ++$i) {
-            $answer = $handler->handle($this->request($headers, self::BODY), 'deploy', '127.0.0.1');
+            $answer = $handler->handle($this->request($headers, self::WEBHOOK_BODY), 'deploy', '127.0.0.1');
             self::assertSame(200, $answer->getStatusCode());
             self::assertStringContainsString('"duplicate":true', (string) $answer->getBody());
         }
         self::assertCount(1, $this->deliveries);
 
         $fresh = $handler->handle($this->request([
-            'x-hub-signature-256' => $this->signature(self::BODY),
+            'x-hub-signature-256' => $this->signature(self::WEBHOOK_BODY),
             'x-github-delivery' => 'uuid-fresh',
-        ], self::BODY), 'deploy', '127.0.0.1');
+        ], self::WEBHOOK_BODY), 'deploy', '127.0.0.1');
         self::assertSame(200, $fresh->getStatusCode(), 'the id churn cost the hook no rate budget');
         self::assertStringContainsString('"bgId"', (string) $fresh->getBody());
         self::assertCount(2, $this->deliveries);
@@ -200,15 +200,15 @@ final class HookWebhooksSignatureTest extends TestCase
         // two byte-identical deliveries are two sessions, exactly as before
         // this lane — dedupe must never silently eat legitimate repeats.
         $handler = $this->handler($this->hooks(['scheme' => 'hmac-sha256']));
-        self::assertSame(200, $handler->handle($this->request(['x-signature' => $this->signature(self::BODY)], self::BODY), 'deploy', '127.0.0.1')->getStatusCode());
-        self::assertSame(200, $handler->handle($this->request(['x-signature' => $this->signature(self::BODY)], self::BODY), 'deploy', '127.0.0.1')->getStatusCode());
+        self::assertSame(200, $handler->handle($this->request(['x-signature' => $this->signature(self::WEBHOOK_BODY)], self::WEBHOOK_BODY), 'deploy', '127.0.0.1')->getStatusCode());
+        self::assertSame(200, $handler->handle($this->request(['x-signature' => $this->signature(self::WEBHOOK_BODY)], self::WEBHOOK_BODY), 'deploy', '127.0.0.1')->getStatusCode());
         self::assertCount(2, $this->deliveries);
 
         // A github row whose header set omits the delivery id: present door,
         // no id → no dedupe.
         $gh = $this->handler($this->hooks(['scheme' => 'github-sha256']));
-        self::assertSame(200, $gh->handle($this->request(['x-hub-signature-256' => $this->signature(self::BODY)], self::BODY), 'deploy', '127.0.0.1')->getStatusCode());
-        self::assertSame(200, $gh->handle($this->request(['x-hub-signature-256' => $this->signature(self::BODY)], self::BODY), 'deploy', '127.0.0.1')->getStatusCode());
+        self::assertSame(200, $gh->handle($this->request(['x-hub-signature-256' => $this->signature(self::WEBHOOK_BODY)], self::WEBHOOK_BODY), 'deploy', '127.0.0.1')->getStatusCode());
+        self::assertSame(200, $gh->handle($this->request(['x-hub-signature-256' => $this->signature(self::WEBHOOK_BODY)], self::WEBHOOK_BODY), 'deploy', '127.0.0.1')->getStatusCode());
         self::assertCount(4, $this->deliveries);
     }
 
@@ -216,22 +216,22 @@ final class HookWebhooksSignatureTest extends TestCase
     {
         $handler = $this->handler($this->hooks(['scheme' => 'github-sha256']));
         $headers = [
-            'x-hub-signature-256' => $this->signature(self::BODY),
+            'x-hub-signature-256' => $this->signature(self::WEBHOOK_BODY),
             'x-github-delivery' => 'uuid-retry',
         ];
         $this->throwNext = true;
-        $failed = $handler->handle($this->request($headers, self::BODY), 'deploy', '127.0.0.1');
+        $failed = $handler->handle($this->request($headers, self::WEBHOOK_BODY), 'deploy', '127.0.0.1');
         self::assertSame(503, $failed->getStatusCode());
         self::assertCount(0, $this->deliveries);
 
         $this->throwNext = false;
-        $retried = $handler->handle($this->request($headers, self::BODY), 'deploy', '127.0.0.1');
+        $retried = $handler->handle($this->request($headers, self::WEBHOOK_BODY), 'deploy', '127.0.0.1');
         self::assertSame(200, $retried->getStatusCode(), 'the senders retry of a failed event must still run');
         self::assertStringContainsString('"bgId"', (string) $retried->getBody(), 'not an answer of duplicate to an event never served');
         self::assertCount(1, $this->deliveries);
 
         // And NOW the id is recorded: the third arrival is the duplicate.
-        $third = $handler->handle($this->request($headers, self::BODY), 'deploy', '127.0.0.1');
+        $third = $handler->handle($this->request($headers, self::WEBHOOK_BODY), 'deploy', '127.0.0.1');
         self::assertSame('{"ok":true,"duplicate":true}', (string) $third->getBody());
     }
 
@@ -257,9 +257,9 @@ final class HookWebhooksSignatureTest extends TestCase
         self::assertCount(0, $this->deliveries, 'the oversized body never reached the prompt');
 
         $small = $handler->handle($this->request([
-            'x-hub-signature-256' => $this->signature(self::BODY),
+            'x-hub-signature-256' => $this->signature(self::WEBHOOK_BODY),
             'x-github-delivery' => 'uuid-small',
-        ], self::BODY), 'deploy', '127.0.0.1');
+        ], self::WEBHOOK_BODY), 'deploy', '127.0.0.1');
         self::assertSame(200, $small->getStatusCode(), 'no lockout was earned by honest over-cap traffic');
         self::assertCount(1, $this->deliveries);
     }
@@ -267,7 +267,7 @@ final class HookWebhooksSignatureTest extends TestCase
     public function testTheDeliveryRingIsLeastRecentlyUsed(): void
     {
         $handler = $this->handler($this->hooks(['scheme' => 'github-sha256'], ServerConfig::MAX_HOOK_RATE_PER_MINUTE));
-        $signature = $this->signature(self::BODY);
+        $signature = $this->signature(self::WEBHOOK_BODY);
         // CAP+1 distinct fresh ids fill the ring; the rate window is the only
         // budget that could refuse them, so "now" advances every 550.
         for ($i = 1; $i <= HookWebhooks::INBOUND_DELIVERY_CAPACITY + 1; ++$i) {
@@ -277,7 +277,7 @@ final class HookWebhooksSignatureTest extends TestCase
             $answer = $handler->handle($this->request([
                 'x-hub-signature-256' => $signature,
                 'x-github-delivery' => 'd-' . $i,
-            ], self::BODY), 'deploy', '127.0.0.1');
+            ], self::WEBHOOK_BODY), 'deploy', '127.0.0.1');
             self::assertSame(200, $answer->getStatusCode(), 'delivery ' . $i . ' admitted');
             self::assertStringContainsString('"bgId"', (string) $answer->getBody());
         }
@@ -286,14 +286,14 @@ final class HookWebhooksSignatureTest extends TestCase
         $first = $handler->handle($this->request([
             'x-hub-signature-256' => $signature,
             'x-github-delivery' => 'd-1',
-        ], self::BODY), 'deploy', '127.0.0.1');
+        ], self::WEBHOOK_BODY), 'deploy', '127.0.0.1');
         self::assertStringContainsString('"bgId"', (string) $first->getBody(), 'the oldest id was evicted; its replay runs again');
         self::assertCount(HookWebhooks::INBOUND_DELIVERY_CAPACITY + 2, $this->deliveries);
 
         $newest = $handler->handle($this->request([
             'x-hub-signature-256' => $signature,
             'x-github-delivery' => 'd-' . (HookWebhooks::INBOUND_DELIVERY_CAPACITY + 1),
-        ], self::BODY), 'deploy', '127.0.0.1');
+        ], self::WEBHOOK_BODY), 'deploy', '127.0.0.1');
         self::assertSame('{"ok":true,"duplicate":true}', (string) $newest->getBody(), 'the freshest ids survived the eviction');
     }
 
