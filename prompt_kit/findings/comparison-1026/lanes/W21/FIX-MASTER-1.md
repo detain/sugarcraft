@@ -19,6 +19,15 @@ Base: live tip d9a3dc110 (review ran efb97a1b5; master advanced — every row re
 | 4 | MAJOR-2 | src/Tui/Menu/ShellMenu.php | PLACEMENT agent row: `'model', 'effort', 'fast', 'agents', 'btw',` (beside effort per R-MENU-1; no exact-order pins exist — placement test sorts, no-submenu test only needs placement) | commit 2 |
 | 5 | MAJOR-2 | tests/Commands/MenuBarLabelDerivationTest.php | DERIVED_LABELS `'instructions' => 'List the instruction',` + `'commit' => 'Commit all changed',` (the tip-true content of the reviewed red; fast row already present) | commit 2 |
 
-## GREEN-POST (to be filled before reply)
+## GREEN-POST (at 77072a840 + cure commit 2)
 
-(see below)
+- `--filter ShellMenuTest|MenuBarLabelDerivationTest|PaletteSupersetDispatchTest|SettingsWriterCensusTest` → **OK 34T / 5818A, 0F** (was 1F+1F+2F+1F).
+- Collateral sweep `--filter 'Menu|Palette'` → **OK 496T / 19685A, 0F** (2 pre-existing Risky).
+
+## Mid-cure re-derivations (file text at d9a3dc110 beat the review's letter; disclosed)
+
+1. Row 4 (ShellMenu) is THREE placements, not one: with 'fast' alone placed, `placementNames` vs registry still differed by `commit` + `instructions` (in-registry-not-placed probe: exactly those two). Both placed by registry adjacency — commit before pr in Agent▸Automate (2850 sits before 2860, write-automation sibling group), instructions between memory and skills in Agent▸Knowledge (exact 2405 registry position, design-menu.md's "Memory & rules" submenu). Same family attribution the review itself uses for the label/palette carries ("current loop's fixer", W15 8dab423f0 precedent).
+2. Row 5 (MenuBarLabel) landed as instructions+commit rows, NOT the 'fast' row (already carried by 0da9b5071). Rows re-derived live, order = CommandRegistry::all().
+3. Both enumerated reds (ShellMenuTest :71/:108, MenuBarLabel :92) were proven to predate every W21 batch weld (probe at aa38e06b1^ derived instructions+commit already, rosters never carried them) — riding waves W16..W20 uncured; the live loop cures, exactly the W15 r1→8dab423f0 shape. MAJOR-1's persistFast row is the genuinely W21-routed one; stampBundleRecommendations is W21's own C-EXT-4.d.
+
+Commits: 1 = 77072a840 (census rows + this map). 2 = (next) palette survivor + ShellMenu placements + label roster.

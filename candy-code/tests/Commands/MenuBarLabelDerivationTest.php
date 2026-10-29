@@ -55,6 +55,11 @@ final class MenuBarLabelDerivationTest extends TestCase
         'usage' => 'Show the durable spend',
         'workflow' => 'Run, pause, resume',
         'memory' => 'Add, list, search',
+        // C-CTX-3.a (2405 spec, registry position between memory and
+        // skills): never carried here when the spec landed — cured by the
+        // W21 wave loop beside the /fast family carry, re-derived from
+        // CommandRegistry::all(), not hand-authored.
+        'instructions' => 'List the instruction',
         'skills' => 'List the invocable',
         'init' => 'Study this project',
         'rewind' => 'Restore an earlier',
@@ -63,6 +68,10 @@ final class MenuBarLabelDerivationTest extends TestCase
         'diff' => 'Show what changed',
         'review' => 'Review the diff',
         'security-review' => 'Security-review',
+        // C-AGT-6.a (2850 spec, before pr's 2860): same uncured family /pr
+        // was at W15 r1 (cured in 8dab423f0); re-derived live, the row IS
+        // the derivation.
+        'commit' => 'Commit all changed',
         'pr' => 'Push the current',
         'bg' => 'Run a task',
         'shells' => 'List, read output',

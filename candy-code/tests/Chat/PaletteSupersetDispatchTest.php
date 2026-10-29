@@ -72,6 +72,12 @@ final class PaletteSupersetDispatchTest extends TestCase
         // providers refuse the tier, so the picker would be a trap with a
         // nicer frame.
         'effort' => 'the dial takes a tier as its argument; the bare form reads, never sets',
+        // C-PRV-3.b: /fast is the /effort sibling — the bare form reads the
+        // lane, `on|off` IS the argument, and a provider or model without a
+        // premium lane answers for itself. Same judgement as effort's spec
+        // records: a picker row for a dial that can refuse this model would
+        // be a trap with a nicer frame.
+        'fast' => 'bare /fast reads the lane; on|off takes the argument — /effort sibling judgement',
         // OBS-2 (w5): the spec file records its own no-paletteAction call —
         // /status is a destination, not a mode, and the palette has no status
         // pane to pre-open. Bare form IS the whole read-only restatement.

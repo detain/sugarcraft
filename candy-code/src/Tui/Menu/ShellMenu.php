@@ -124,11 +124,19 @@ final class ShellMenu
             ['share' => ['share', 'export']],
         ],
         'agent' => [
-            'model', 'effort', 'agents', 'btw',
+            'model', 'effort', 'fast', 'agents', 'btw',
             self::SEP,
-            ['automate' => ['goal', 'grind', 'loop', 'bg', 'shells', 'schedules', 'pr', 'workflow']],
+            ['automate' => ['goal', 'grind', 'loop', 'bg', 'shells', 'schedules',
+                // C-AGT-6.a carry (W21 loop, family of the /pr cure
+                // 8dab423f0): /commit sits on its registry adjacency, the
+                // write-automation row immediately before pr's 2860.
+                'commit', 'pr', 'workflow']],
             ['context' => ['context', 'sweep', 'pruning', 'compress', 'decompress', 'recompress']],
-            ['knowledge' => ['memory', 'skills', 'init', 'rules', 'newrule']],
+            ['knowledge' => ['memory',
+                // C-CTX-3.a carry (W21 loop): /instructions sits between
+                // memory and skills, its exact registry position (2405), in
+                // the design's Memory & rules submenu.
+                'instructions', 'skills', 'init', 'rules', 'newrule']],
         ],
         'tools' => [
             'generate-form',
