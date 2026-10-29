@@ -266,7 +266,9 @@ final readonly class EnvironmentBlock implements PromptSection
      * validated loudly by `LaunchContext::referenceReadRoots()` at tool-build
      * time (launch notices for unusable, missing or redundant entries);
      * {@see withSettings()} renders only what survives that same shape check
-     * here, silently, so the prompt never carries an entry the tools refuse.
+     * here, silently — every refusal leg the feed has (unusable, missing,
+     * duplicate, inside-the-root) has its match in {@see normalizeReferences()}
+     * — so the prompt never carries an entry the tools refuse.
      * Each reference's RepoMapBlock summary is capped at
      * {@see REFERENCE_SUMMARY_MAX_BYTES} before it joins the `<env>` body.
      */
@@ -1043,10 +1045,11 @@ final readonly class EnvironmentBlock implements PromptSection
     /**
      * The `references` setting as it may be advertised: a tolerant walk of a
      * list of `{path, name}` objects (or bare path strings), kept only when
-     * the path resolves to an existing directory. Entry names are taken from
-     * the setting when present, else the directory's basename. Relative paths
-     * are based on this block's cwd — the same base the session root uses —
-     * so an advertised line and a jail answer name one and the same place.
+     * the path resolves to an existing directory OUTSIDE the session root.
+     * Entry names are taken from the setting when present, else the directory's
+     * basename. Relative paths are based on this block's cwd — the same base
+     * the session root uses — so an advertised line and a jail answer name one
+     * and the same place.
      *
      * WHY SILENT: the loud validation — launch notices for unusable, missing
      * or redundant entries — lives in `LaunchContext::referenceReadRoots()`,
@@ -1054,6 +1057,9 @@ final readonly class EnvironmentBlock implements PromptSection
      * reader runs per turn and must never duplicate that announcement; an
      * entry dropped here for being gone would have announced itself there,
      * and dropping it keeps the prompt honest about what the tools accept.
+     * The refusal legs themselves are mirrored on purpose: an entry the feed
+     * withholds from the shelf must not be advertised here either, or the
+     * `<env>` block would name a root the tools never granted.
      *
      * @return list<array{name: string, path: string, summary: string}>
      */
@@ -1065,6 +1071,12 @@ final readonly class EnvironmentBlock implements PromptSection
 
         $seen = [];
         $out = [];
+
+        // C-CTX-4.f (review-1 MINOR): the inside-root refusal of
+        // `LaunchContext::referenceReadRoots()`, mirrored here. The feed
+        // compares against realpath of the root, not the raw path — a
+        // symlinked checkout makes a raw prefix comparison lie.
+        $rootReal = realpath($this->cwd);
 
         foreach ($raw as $entry) {
             // Exactly the shapes `LaunchContext::referenceReadRoots()` eats:
@@ -1093,7 +1105,17 @@ final readonly class EnvironmentBlock implements PromptSection
                 ? $path
                 : rtrim($this->cwd, '/\\') . DIRECTORY_SEPARATOR . $path;
             $real = realpath($candidate);
-            if ($real === false || !is_dir($real) || isset($seen[$real])) {
+            if ($real === false || !is_dir($real)) {
+                continue;
+            }
+            // The feed's redundant leg, mirrored: an entry inside the session
+            // root already sits behind the primary jail, so referenceReadRoots
+            // withholds it from the shelf (with a launch notice). Advertising
+            // it here would name a root off the shelf the tools never added.
+            if ($real === $rootReal || ($rootReal !== false && str_starts_with($real, $rootReal . '/'))) {
+                continue;
+            }
+            if (isset($seen[$real])) {
                 continue;
             }
             $seen[$real] = true;

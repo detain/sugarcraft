@@ -41,7 +41,8 @@ use SugarCraft\Code\Tools\Catalog\ToolBuildContext;
  *  - `EnvironmentBlock::withSettings()` advertises the survivors in the
  *    static half of `<env>` with a capped repo-map, stays byte-stable across
  *    renders of the same block, keeps the block through `withVolatile(false)`,
- *    and keeps its no-op identity law;
+ *    keeps its no-op identity law, and mirrors the feed's inside-root refusal
+ *    so nothing withheld from the shelf is ever advertised (review-1 MINOR);
  *  - the key is user-tier by construction: it is in
  *    {@see LayeredSettings::userTierOnlyKeys()} and not in
  *    {@see LayeredSettings::PROJECT_TIER_KEYS}, so a project settings file
@@ -325,6 +326,37 @@ final class ProjectReferencesTest extends TestCase
             ->withSettings(['references' => ['../ref-plain']]);
         self::assertStringContainsString($this->plain, $relativeBlock->render());
         self::assertStringNotContainsString('repo map:', $relativeBlock->render(), 'a directory with no composer maps renders no summary line');
+    }
+
+    /**
+     * Review-1 MINOR: the feed's redundant leg mirrored into the reader. An
+     * entry inside the session root is withheld from the shelf by
+     * `LaunchContext::referenceReadRoots()` (with a launch notice, not a
+     * refusal), so `EnvironmentBlock` must not advertise it either — the
+     * `<env>` block keeps the byte-shape of no references at all.
+     */
+    public function testAReferenceInsideTheSessionRootIsNeitherAdvertisedNorShelved(): void
+    {
+        mkdir($this->session . '/inner', 0700, true);
+
+        // Block side: one `{path}` under cwd. The frozen $now/$platform ride
+        // withSettings(), so both renders share the captured timestamp and the
+        // equality below is byte, not second, exact.
+        $base = new EnvironmentBlock($this->session, 'gpt-4o');
+        $inRoot = $base->withSettings(['references' => [['path' => 'inner', 'name' => 'inside-me']]]);
+
+        self::assertSame($base->withSettings([])->render(), $inRoot->render(), 'an in-root reference renders exactly like no reference');
+        self::assertStringNotContainsString('Project references', $inRoot->render(), 'the header never rides a withheld-only list');
+        self::assertStringNotContainsString('inside-me', $inRoot->render(), 'the name is not advertised either');
+
+        // Feed side: the same entry, same root — withheld and announced,
+        // launch not refused, and a real reference alongside still lands.
+        Bootstrap::writeUserConfig(['references' => [
+            ['path' => 'inner', 'name' => 'inside-me'],
+            ['path' => $this->reference, 'name' => 'Lib X'],
+        ]]);
+        self::assertSame([$this->reference], LaunchContext::referenceReadRoots($this->session), 'the feed keeps its root unchanged and the launch proceeds');
+        self::assertStringContainsString('sits inside the session workspace', implode("\n", LaunchNotices::rows()), 'the refusal is loud there, silent here — and both agree on the set');
     }
 
     public function testInjectedNamesAndPathsCannotBreakTheEnvLines(): void
