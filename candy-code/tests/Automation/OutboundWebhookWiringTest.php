@@ -15,7 +15,9 @@
  * - a TUI approval arming enqueues one signed `permission.asked` POST, and
  *   a superseded ask enqueues nothing;
  * - a served TURN_COMPLETED, heard through the feed's event stream,
- *   enqueues one signed `turn.completed` POST.
+ *   enqueues one signed `turn.completed` POST, and the served window's
+ *   arithmetic (ms stamps in, seconds and tool counts out) is pinned with
+ *   explicit stamps a constant could not fake.
  *
  * Every leg dials a fake `React\Http\Browser` (the dispatcher's seam), so
  * no socket is ever opened and no wall-clock boundary is waited on; the
@@ -46,6 +48,7 @@ use SugarCraft\Code\Hooks\HookInterface;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Hooks\HookResult;
+use SugarCraft\Code\Host\SessionEvent;
 use SugarCraft\Code\Host\SessionHost;
 use SugarCraft\Code\Host\SessionHub;
 use SugarCraft\Code\Host\WorkspaceContext;
@@ -153,12 +156,17 @@ final class OutboundWebhookWiringTest extends TestCase
 
     public function testASettledTurnEnqueuesOneSignedTurnCompletedPost(): void
     {
+        // Spaced stamps, not "whatever now is": the settle row is exactly
+        // three seconds after the visible user row, so the duration in the
+        // payload is pinned to 3.0 — a constant 0.0 could never say three
+        // (C-AGT-5.f review MINOR-3: the duration leg must discriminate).
+        $promptAt = \time() - 3;
         $chat = $this->wiredChat([WebhookEvent::TYPE_TURN_COMPLETED], 'ses_wiring_1', history: [
-            Message::user('the prompt'),
-            Message::assistant('looking')->withToolCalls([new ToolCall('Bash', ['command' => 'ls'], 'call_one')]),
+            Message::user('the prompt', $promptAt),
+            Message::assistant('looking', $promptAt)->withToolCalls([new ToolCall('Bash', ['command' => 'ls'], 'call_one')]),
         ]);
 
-        $chat->update(new AssistantMsg(Message::assistant('Done.')));
+        $chat->update(new AssistantMsg(Message::assistant('Done.', $promptAt + 3)));
 
         self::assertCount(1, $this->dialPosts, 'one settle, one delivery — the bell and the webhook share the guard');
         $post = $this->dialPosts[0];
@@ -170,8 +178,7 @@ final class OutboundWebhookWiringTest extends TestCase
         self::assertSame(WebhookEvent::TYPE_TURN_COMPLETED, $payload['event']);
         self::assertSame('ses_wiring_1', $payload['data']['session_id']);
         self::assertSame(1, $payload['data']['tool_calls'], 'the mid-turn tool call counts once and the settle row adds none');
-        self::assertIsFloat($payload['data']['duration_seconds']);
-        self::assertGreaterThanOrEqual(0.0, $payload['data']['duration_seconds']);
+        self::assertSame(3.0, $payload['data']['duration_seconds'], 'the window spans the user row to the settle row, in seconds');
     }
 
     public function testATurnCarriedOnByAQueuedPromptIsNotCompletedYet(): void
@@ -300,6 +307,48 @@ final class OutboundWebhookWiringTest extends TestCase
         self::assertSame(0, $payload['data']['tool_calls'], 'an echo turn called no tools');
         self::assertIsFloat($payload['data']['duration_seconds']);
         self::assertGreaterThanOrEqual(0.0, $payload['data']['duration_seconds']);
+    }
+
+    public function testTheServedWindowArithmeticIsNotAConstant(): void
+    {
+        // The real served turn above cannot pin the VALUE of the duration —
+        // two synchronous microtime stamps can land in the same millisecond.
+        // So this leg drives the same announce path with explicit stamps:
+        // start, two tool starts, and a completion 2500 ms later, announced
+        // through the host's own event path. The payload must speak 2.5
+        // seconds over 2 tools — a hardcoded 0.0 (or a dropped /1000, or a
+        // forgotten tool counter) reddens exactly here.
+        $store = new EnhancedSessionStore($this->sandbox . '/session.db');
+        $store->createSession('s', 'p', 'm');
+
+        $workspace = WorkspaceContext::new(
+            root: $this->project,
+            sessionStore: $store,
+            backend: new EchoBackend(),
+        )->withService(WebhookDispatcher::class, $this->wiringDispatcher([WebhookEvent::TYPE_TURN_COMPLETED]));
+
+        $hub = SessionHub::new($workspace);
+        $host = $hub->open('s');
+        $context = ServerContext::new(
+            $hub,
+            ServerConfig::new($this->sandbox)->withRoot($this->project),
+            'test',
+            Loop::get(),
+            static fn (): float => \microtime(true),
+        );
+        $context->feedFor($host);
+
+        $startMs = 1_700_000_000_000;
+        self::assertNotNull($host->announce(SessionEvent::new(SessionEvent::TURN_STARTED, [], 's', null, $startMs)));
+        self::assertNotNull($host->announce(SessionEvent::new(SessionEvent::TOOL_STARTED, [], 's', null, $startMs + 400)));
+        self::assertNotNull($host->announce(SessionEvent::new(SessionEvent::TOOL_STARTED, [], 's', null, $startMs + 900)));
+        self::assertNotNull($host->announce(SessionEvent::new(SessionEvent::TURN_COMPLETED, [], 's', null, $startMs + 2500)));
+
+        self::assertCount(1, $this->dialPosts, 'the announced window settles to exactly one delivery');
+        $payload = \json_decode((string) $this->dialPosts[0]['body'], true);
+        self::assertSame(WebhookEvent::TYPE_TURN_COMPLETED, $payload['event']);
+        self::assertSame(2.5, $payload['data']['duration_seconds'], 'milliseconds on the wire, seconds in the payload');
+        self::assertSame(2, $payload['data']['tool_calls'], 'the counted tool starts ride the same window');
     }
 
     // ── fixtures ───────────────────────────────────────────────────────
