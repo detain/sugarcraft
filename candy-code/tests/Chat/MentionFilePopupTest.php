@@ -7,10 +7,15 @@ namespace SugarCraft\Code\Tests\Chat;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Code\Agents\Agent;
+use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Attachments\MentionIndex;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Renderer;
+use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Tests\Support\ScriptedProvider;
 
 /**
  * TUI-1 (plan_comparison): the fuzzy `@` file popup — open, browse, accept,
@@ -97,6 +102,29 @@ final class MentionFilePopupTest extends TestCase
         $this->assertSame(0, $retyped->mentionMenuIndex(), 'a changed list re-highlights the top row, as the slash popup does');
     }
 
+    public function testTheAgentPrefixOffersRosterNamesAndNeverFiles(): void
+    {
+        $chat = $this->composingOverRoster('@agent:rev');
+
+        $rows = array_column($chat->mentionPopupRows(), 'path');
+        $this->assertSame(['agent:reviewer'], $rows, 'the partial screens the roster, not the file index');
+
+        [$next] = $chat->update(new KeyMsg(KeyType::Enter));
+        $this->assertSame('@agent:reviewer ', $next->inputBuf, 'Enter accepts an agent row exactly like a file row');
+        $this->assertFalse($next->mentionPopupOpen());
+    }
+
+    public function testAnAgentPartialOnARosterlessChatHidesThePopupInsteadOfFileRows(): void
+    {
+        $chat = $this->composingAt('@agent:rev');
+
+        $this->assertSame([], $chat->mentionPopupRows(), 'the scanner would refuse what the popup would offer');
+        $this->assertFalse($chat->mentionPopupOpen());
+
+        $files = $this->composingAt('@src');
+        $this->assertNotSame([], $files->mentionPopupRows(), 'plain partials still rank the file index');
+    }
+
     public function testEscapeClosesThePopupBeforeTheStopBindingArms(): void
     {
         $chat = $this->composingAt('@src');
@@ -166,6 +194,38 @@ final class MentionFilePopupTest extends TestCase
             'index 7 is the `…` slot and 8/20 are gone characters — only 0 survives',
         );
         $this->assertSame([], $clip->invoke(null, [9], 'abcdefgh', '…'), 'a fully eaten row keeps nothing');
+    }
+
+    /**
+     * A Chat whose launch roster carries three agents, on the same git root
+     * the file pins use — `agent:reviewer` is the only name the `rev`
+     * partial screens in (`researcher` fails the subsequence, `tester` never
+     * carried it).
+     */
+    private function composingOverRoster(string $draft): Chat
+    {
+        $manager = new AgentManager(new ScriptedProvider([]), new SkillRegistry(), toolRegistry: [], toolUniverse: []);
+        foreach (['reviewer', 'researcher', 'tester'] as $name) {
+            $manager->register(new Agent(
+                name: $name,
+                description: "the {$name} preset",
+                prompt: "You are {$name}.",
+                model: 'inherit',
+                provider: 'anthropic',
+                tools: [],
+                skillNames: [],
+                hooks: [],
+                isActive: true,
+                permissionMode: PermissionMode::Default,
+            ));
+        }
+
+        return (new Chat(
+            inputBuf: $draft,
+            backend: new EchoBackend(),
+            projectRoot: $this->w2bRoot,
+            agentManager: $manager,
+        ))->withSize(100, 30);
     }
 
     private function composingAt(string $draft): Chat

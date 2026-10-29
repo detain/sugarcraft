@@ -468,8 +468,9 @@ final class NonInteractive
         $mentionNotices = [];
         $mentionRoot = $args->root ?? (getcwd() ?: '');
         // The keyword mentions: `@session:` opens the session store only when
-        // one is named (read-only - no retention sweep from a -p run), and a
-        // URL a permission rule denies WebFetch is not fetched.
+        // one is named (read-only - no retention sweep from a -p run), a
+        // URL a permission rule denies WebFetch is not fetched, and
+        // `@agent:` is answered from the launch's roster below.
         $gate = $backend instanceof \SugarCraft\Code\Backend\EngineBackend ? $backend->permissionGate() : null;
         $history = self::historyFrom(
             $args->prompt,
@@ -494,7 +495,9 @@ final class NonInteractive
                     }
 
                     return $client->readResource($server, $uri);
-                }),
+                })
+                // GAP-AGT-20: `@agent:<name>` reads the launch's roster.
+                ->withAgentRoster(self::launchAgentRoster($mentionRoot)),
         );
         foreach ($mentionNotices as $notice) {
             self::noticeAttachment($notice);
@@ -1674,7 +1677,12 @@ final class NonInteractive
         // does not ask.
         if ($mentionRoot !== null && str_contains($prompt, '@')) {
             $resolved = FileMentions::resolve($prompt, $mentionRoot);
-            $context = ($contextMentions ?? ContextMentions::new($mentionRoot))->resolve($prompt);
+            // GAP-AGT-20: a caller that brings its own scanner keeps it
+            // whole; the bare fallback arms only the two legs it can
+            // answer itself — the file leg above and the launch-roster
+            // `@agent:` leg below. `@session:`/`@mcp:`/`@url` land on
+            // their existing no-store / no-client / no-policy refusals.
+            $context = ($contextMentions ?? ContextMentions::new($mentionRoot)->withAgentRoster(self::launchAgentRoster($mentionRoot)))->resolve($prompt);
             foreach ([...$resolved['attachments'], ...$context['attachments']] as $attachment) {
                 $message = match ($attachment->type) {
                     AttachmentType::Image => $message->attachImage($attachment->path, $attachment->data, $attachment->mimeType),
@@ -1686,6 +1694,29 @@ final class NonInteractive
         }
 
         return [$message];
+    }
+
+    /**
+     * The `@agent:<name>` answerer for the headless route (GAP-AGT-20): the
+     * launch's roster, built by the same {@see Bootstrap::agentManager()}
+     * the TUI and the worker pools build from. Lazy — a prompt without an
+     * `@agent:` mention never pays for it — and memoized per construction,
+     * so five named agents still build it once. A root that cannot build a
+     * manager at all throws inside the answerer and {@see
+     * \SugarCraft\Code\Attachments\ContextMentions}'s agent leg treats it as
+     * "not in the roster": the notice, never a crash.
+     *
+     * @return \Closure(string): bool
+     */
+    private static function launchAgentRoster(string $root): \Closure
+    {
+        $roster = null;
+
+        return static function (string $name) use (&$roster, $root): bool {
+            $roster ??= Bootstrap::agentManager($root);
+
+            return $roster->get($name) !== null;
+        };
     }
 
     /**

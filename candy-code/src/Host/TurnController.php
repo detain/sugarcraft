@@ -1159,12 +1159,13 @@ final class TurnController
      * the mention text itself.
      *
      * The keyword mentions (`@diff`, `@session:<id>`, `@https://…`, roadmap
-     * 5.8; `@mcp:<server>:<uri>`, MCP-1) are resolved beside the files by
-     * {@see ContextMentions}: $store answers `@session:`, a URL a permission
-     * rule denies `WebFetch` is refused rather than fetched, and $mcpProvider
-     * (a lazy read of this process's session MCP client, null where the route
-     * has none) answers `@mcp:` — refused with a notice when absent, and
-     * refused through the client's own gates when the server is denied.
+     * 5.8; `@mcp:<server>:<uri>`, MCP-1; `@agent:<name>`, GAP-AGT-20) are
+     * resolved beside the files by {@see ContextMentions}: $store answers
+     * `@session:`, a URL a permission rule denies `WebFetch` is refused
+     * rather than fetched, and $mcpProvider (a lazy read of this process's
+     * session MCP client, null where the route has none) answers `@mcp:` —
+     * refused with a notice when absent, and refused through the client's
+     * own gates when the server is denied.
      *
      * The `$name` skill mentions (roadmap 5.14l) are resolved first, against
      * $skills: each user-invocable skill named attaches its SKILL.md body for
@@ -1182,6 +1183,12 @@ final class TurnController
      * parsed from the text, so they ride even a text with no `@` in it; they
      * are sniffed, trusted Input, and join the same attach loop below.
      *
+     * $agentRoster (GAP-AGT-20) answers whether one name is in the calling
+     * session's agent roster and arms the `@agent:<name>` leg: TUI and serve
+     * hand their live AgentManager, the headless route builds the launch's.
+     * Null — or no roster open at all — lands an `@agent:` mention as a
+     * notice, never a guess.
+     *
      * @param list<\SugarCraft\Code\Attachment> $extraAttachments
      *
      * @return array{0: Message, 1: list<Message>}
@@ -1195,6 +1202,7 @@ final class TurnController
         ?\SugarCraft\Code\Skills\SkillRegistry $skills = null,
         ?\Closure $mcpProvider = null,
         array $extraAttachments = [],
+        ?\Closure $agentRoster = null,
     ): array {
         $message = Message::user($text);
         foreach ($extraAttachments as $attachment) {
@@ -1230,6 +1238,7 @@ final class TurnController
 
                     return $client->readResource($server, $uri);
                 })
+                ->withAgentRoster($agentRoster)
                 ->resolve($text);
         }
         foreach ([...$skilled['attachments'], ...$resolved['attachments'], ...$context['attachments']] as $attachment) {

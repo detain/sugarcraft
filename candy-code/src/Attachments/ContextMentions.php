@@ -48,6 +48,12 @@ use SugarCraft\Code\Workspace\GitRunner;
  *    every other colon survives for {@see FileMentions}. Resource bytes
  *    are THIRD-PARTY SERVER OUTPUT and framed as UNTRUSTED, the same law
  *    the URL leg applies to a fetched page.
+ *  - `@agent:<name>` (GAP-AGT-20) — a request to delegate THIS turn to a
+ *    roster entry: a known name attaches a directive the model acts on with
+ *    the Task tool; an unknown name is a notice, never a guess. The colon
+ *    form is deliberate for the same reason `@mcp:`'s is — a bare `@agent`
+ *    is a path (`@agent.md`'s stem, a directory called `agent`) far more
+ *    often than it is a delegation, so only `agent:<name>` is reserved.
  *
  * THE KEYWORDS ARE RESERVED BEFORE ANY PATH LOOKUP. `@diff` is the diff even in
  * a directory holding a file named `diff`; that file is still `@./diff`.
@@ -88,10 +94,10 @@ final class ContextMentions
     public const PR_TIMEOUT_SECONDS = 10.0;
 
     /** A keyword mention, at the start of the prompt or after whitespace. */
-    private const MENTION_PATTERN = '/(?<![^\s])@((?:diff|pr|session|https?|mcp)\b[^\s"]*)/u';
+    private const MENTION_PATTERN = '/(?<![^\s])@((?:diff|pr|session|https?|mcp|agent)\b[^\s"]*)/u';
 
     /** What a whole (punctuation-trimmed) token must be to be a keyword. */
-    private const KEYWORD_PATTERN = '~\A(?:diff(?::[^\s"]+)?|pr:[^\s"]+|session:[^\s"]+|https?://[^\s"]+|mcp:[^\s":]+:[^\s"]+)\z~';
+    private const KEYWORD_PATTERN = '~\A(?:diff(?::[^\s"]+)?|pr:[^\s"]+|session:[^\s"]+|https?://[^\s"]+|mcp:[^\s":]+:[^\s"]+|agent:[^\s":]+)\z~';
 
     /** Trailing punctuation a sentence puts after a mention — FileMentions' set. */
     private const TRAILING_PUNCTUATION = '.,;:!?)]}\'';
@@ -243,6 +249,11 @@ final class ContextMentions
      *        and an `@mcp:` mention is then refused, never guessed at. The
      *        reader carries the wire layer's refusal ladder — an unknown or
      *        denied server THROWS and the throw's first line becomes the notice.
+     * @param \Closure(string): bool $agentRoster answers whether one agent
+     *        name is in THIS run's roster (the launch's sub-agent list, not
+     *        the global catalog); null means no roster was handed to this
+     *        scanner, and an `@agent:` mention is then refused with a
+     *        notice, never guessed at.
      */
     private function __construct(
         private readonly string $root,
@@ -250,6 +261,7 @@ final class ContextMentions
         private readonly ?\Closure $urlPolicy = null,
         private readonly ?\Closure $fetcher = null,
         private readonly ?\Closure $mcpReader = null,
+        private readonly ?\Closure $agentRoster = null,
     ) {}
 
     /** Keyword mentions resolved against the project $root (where `@diff` reads). */
@@ -280,6 +292,12 @@ final class ContextMentions
     public function withMcpReader(?\Closure $mcpReader): self
     {
         return $this->mutate(['mcpReader' => $mcpReader]);
+    }
+
+    /** @param \Closure(string): bool|null $agentRoster */
+    public function withAgentRoster(?\Closure $agentRoster): self
+    {
+        return $this->mutate(['agentRoster' => $agentRoster]);
     }
 
     public function root(): string
@@ -328,7 +346,7 @@ final class ContextMentions
 
             if (\count($attachments) >= self::MAX_MENTIONS) {
                 $notices[] = sprintf(
-                    '@%s was not attached: one prompt attaches at most %d @diff/@session/@url/@mcp/@pr mentions.',
+                    '@%s was not attached: one prompt attaches at most %d @diff/@session/@url/@mcp/@pr/@agent mentions.',
                     self::shown($keyword),
                     self::MAX_MENTIONS,
                 );
@@ -340,6 +358,7 @@ final class ContextMentions
                 $keyword === 'diff' || str_starts_with($keyword, 'diff:') => $this->diff($keyword),
                 str_starts_with($keyword, 'pr:') => $this->pr($keyword),
                 str_starts_with($keyword, 'session:') => $this->session($keyword),
+                str_starts_with($keyword, 'agent:') => $this->agent($keyword),
                 str_starts_with($keyword, 'mcp:') => $this->mcp($keyword),
                 default => $this->url($keyword),
             };
@@ -754,6 +773,56 @@ final class ContextMentions
             AttachmentType::File,
             self::framed($header . "\n\n" . PromptFence::escape(self::utf8(rtrim($body, "\n")))),
         ), $notice];
+    }
+
+    /**
+     * `@agent:<name>`: the user's own delegation request for THIS turn. A
+     * name in the run's roster attaches a framed directive — the model
+     * answers it by calling the Task tool with `agent: "<name>"`, the same
+     * gates and narrowing as any delegation judging the eventual call. An
+     * unknown name is a notice, never a guess: no fuzzy match, no global
+     * catalog, no silently-chosen neighbour. The attachment carries no
+     * agent-authored content, so unlike the URL and MCP legs it needs no
+     * untrusted framing — it is the USER's sentence, quoted back.
+     *
+     * @return array{0: ?Attachment, 1: ?string}
+     */
+    private function agent(string $keyword): array
+    {
+        if ($this->agentRoster === null) {
+            return [null, sprintf('@%s was not attached: no agent roster is open in this run.', self::shown($keyword))];
+        }
+
+        // KEYWORD_PATTERN has already forced `agent:<name>` with a
+        // colon-free non-empty name — the whole token after the colon IS
+        // the name the roster is asked about.
+        $name = substr($keyword, \strlen('agent:'));
+
+        try {
+            $known = (bool) ($this->agentRoster)($name);
+        } catch (\Throwable) {
+            // A roster that cannot answer is a roster that says no; the
+            // notice below is the only honest landing either way.
+            $known = false;
+        }
+        if (!$known) {
+            return [null, sprintf(
+                '@%s was not attached: no agent named "%s" is in this run\'s roster.',
+                self::shown($keyword),
+                self::shown($name),
+            )];
+        }
+
+        $header = sprintf(
+            'The user asks you to delegate this to agent `%s` via the Task tool.',
+            self::flat($name),
+        );
+
+        return [new Attachment(
+            '@' . $keyword,
+            AttachmentType::File,
+            self::framed($header . "\n\n" . 'Call the Task tool with `agent: "' . self::flat($name) . '"` for what this prompt asks; the user chose the agent themselves. If the run refuses, report that — do not substitute another agent.'),
+        ), null];
     }
 
     /** One transcript message as one labelled paragraph. */

@@ -197,3 +197,52 @@ describe('Composer @search debounce (WEB-5-P3 client half)', () => {
     expect(searchFiles).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('Composer @agent popup (C-AGT-4.d)', () => {
+  it('screens the launch roster on an @agent: partial and Enter inserts the keyword', async () => {
+    const agentRoster = () => ['reviewer', 'researcher', 'tester']
+    const searchFiles = vi.fn(async () => ['src/a.rs'])
+    const wrapper = mountComposer({ agentRoster, searchFiles })
+    await typeInto(wrapper, '@agent:res')
+    const items = wrapper.findAll('[data-testid="agent-suggestions"] li')
+    expect(items.map((li) => li.text())).toEqual(['agent:researcher delegate this prompt'])
+    expect(searchFiles).not.toHaveBeenCalled()
+    await wrapper.find('[data-testid="composer-input"]').trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['@agent:researcher '])
+    expect(wrapper.emitted('send')).toBeUndefined()
+  })
+
+  it('sorts the full roster and Tab accepts the highlighted second row', async () => {
+    const agentRoster = () => ['tester', 'reviewer', 'researcher']
+    const wrapper = mountComposer({ agentRoster })
+    await typeInto(wrapper, '@agent:')
+    const items = wrapper.findAll('[data-testid="agent-suggestions"] li')
+    expect(items.map((li) => li.text())).toEqual([
+      'agent:researcher delegate this prompt',
+      'agent:reviewer delegate this prompt',
+      'agent:tester delegate this prompt',
+    ])
+    const input = wrapper.find('[data-testid="composer-input"]')
+    await input.trigger('keydown', { key: 'ArrowDown' })
+    await input.trigger('keydown', { key: 'Tab' })
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['@agent:reviewer '])
+  })
+
+  it('an unmatched partial hands the line back to the file search, as @mcp: does', async () => {
+    const agentRoster = () => ['reviewer']
+    const searchFiles = vi.fn(async (query: string) => (query === '@agent:nope' ? ['nope.txt'] : []))
+    const wrapper = mountComposer({ agentRoster, searchFiles })
+    await typeInto(wrapper, '@agent:nope')
+    expect(wrapper.find('[data-testid="agent-suggestions"]').exists()).toBe(false)
+    expect(searchFiles).toHaveBeenCalledWith('@agent:nope')
+    expect(wrapper.find('[data-testid="file-suggestions"]').exists()).toBe(true)
+  })
+
+  it('a view without the roster prop keeps the pre-C-AGT-4.d file behaviour', async () => {
+    const searchFiles = vi.fn(async () => ['src/a.rs'])
+    const wrapper = mountComposer({ searchFiles })
+    await typeInto(wrapper, '@agent:rev')
+    expect(wrapper.find('[data-testid="agent-suggestions"]').exists()).toBe(false)
+    expect(searchFiles).toHaveBeenCalledWith('agent:rev')
+  })
+})

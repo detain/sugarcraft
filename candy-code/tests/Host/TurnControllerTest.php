@@ -283,6 +283,47 @@ final class TurnControllerTest extends TestCase
         self::assertSame([], $expanded->attachments, 'a command file\'s expansion is never read for mentions');
     }
 
+    public function testTheAgentRosterIsThreadedIntoTheKeywordLegs(): void
+    {
+        $this->dir = sys_get_temp_dir() . '/crush-turn-controller-' . bin2hex(random_bytes(6));
+        mkdir($this->dir, 0700, true);
+        file_put_contents($this->dir . '/notes.txt', 'hello');
+        $turns = TurnController::new();
+
+        [$known, $knownNotices] = $turns->userTurnMessage(
+            '@agent:reviewer fix it',
+            true,
+            $this->dir,
+            null,
+            null,
+            agentRoster: static fn (string $name): bool => $name === 'reviewer',
+        );
+        self::assertSame(['@agent:reviewer'], array_map(static fn ($a): string => $a->path, $known->attachments));
+        self::assertSame([], $knownNotices);
+        self::assertStringContainsString('via the Task tool', $known->attachments[0]->data);
+
+        [$miss, $missNotices] = $turns->userTurnMessage(
+            '@agent:rev fix it',
+            true,
+            $this->dir,
+            null,
+            null,
+            agentRoster: static fn (string $name): bool => $name === 'reviewer',
+        );
+        self::assertSame([], $miss->attachments, 'a near-miss names the miss rather than guessing a roster entry');
+        self::assertCount(1, $missNotices);
+        self::assertStringContainsString('no agent named "rev"', $missNotices[0]->content);
+
+        [$noRoster, $noRosterNotices] = $turns->userTurnMessage('read @notes.txt @agent:rev', true, $this->dir, null, null);
+        self::assertSame(
+            ['notes.txt'],
+            array_map(static fn ($a): string => $a->path, $noRoster->attachments),
+            'the file leg keeps working when only the roster is missing',
+        );
+        self::assertCount(1, $noRosterNotices);
+        self::assertStringContainsString('no agent roster is open in this run', $noRosterNotices[0]->content);
+    }
+
     public function testTheCheckpointIsTheStateBeforeThePromptWithoutReminders(): void
     {
         $turns = TurnController::new();

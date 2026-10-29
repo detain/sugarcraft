@@ -10335,12 +10335,16 @@ final class Chat implements Model
      * {@see submit()} for why its `@` forms are never read here.
      *
      * The keyword mentions (`@diff`, `@session:<id>`, `@https://…`, roadmap
-     * 5.8; `@mcp:<server>:<uri>`, MCP-1) are resolved beside the files by
+     * 5.8; `@mcp:<server>:<uri>`, MCP-1; `@agent:<name>`, GAP-AGT-20) are
+     * resolved beside the files by
      * {@see \SugarCraft\Code\Attachments\ContextMentions}: this session's
      * store answers `@session:`, a URL a permission rule denies `WebFetch`
      * is refused rather than fetched, and `@mcp:` is read through this
      * session's MCP client under the client's own gates — refused with a
-     * notice where the launch has no client at all. A `$name` skill mention
+     * notice where the launch has no client at all. `@agent:` is answered
+     * by this session's agent roster — the manager `/agent use` and `Task`
+     * read, so the popup, the mention and the delegation never disagree
+     * about what exists. A `$name` skill mention
      * (roadmap 5.14l) is answered by the workspace's skill registry — the
      * launch's.
      *
@@ -10348,6 +10352,8 @@ final class Chat implements Model
      */
     private function userTurnMessage(string $text, bool $resolveMentions = true): array
     {
+        $manager = $this->agentManager;
+
         return $this->turnController()->userTurnMessage(
             $text,
             $resolveMentions,
@@ -10356,6 +10362,7 @@ final class Chat implements Model
             $this->permissionGate(),
             $this->workspace?->skills,
             $this->mcpClientProvider(),
+            agentRoster: $manager === null ? null : static fn (string $name): bool => $manager->get($name) !== null,
         );
     }
 
@@ -17733,6 +17740,14 @@ final class Chat implements Model
      * cold-index fallback ({@see FileMentions::complete()} via Tab) stays the
      * whole feature.
      *
+     * GAP-AGT-20: once the token has passed `@agent:` the rows are the
+     * session's roster names, not files — the same manager `Task` and
+     * `/agent use` read, so the popup can never offer a delegation the
+     * mention scanner would refuse. Ranked through the SAME fuzzy seam files
+     * use ({@see MentionIndex::rankPaths()}); an empty roster (or a chat
+     * with no manager) falls back to the file list, where `@agent:x` simply
+     * resolves as a path-shaped miss like any other token.
+     *
      * @return list<array{path: string, subject: string, indices: list<int>, score: int}>
      */
     public function mentionPopupRows(): array
@@ -17747,7 +17762,28 @@ final class Chat implements Model
             return [];
         }
 
+        if (str_starts_with($token['partial'], 'agent:')) {
+            $paths = $this->agentMentionPaths();
+
+            return $paths === [] ? [] : MentionIndex::rankPaths($token['partial'], $paths);
+        }
+
         return MentionIndex::rank($token['partial'], $root);
+    }
+
+    /** The popup's `@agent:` candidates, as full mention paths (GAP-AGT-20). */
+    private function agentMentionPaths(): array
+    {
+        if ($this->agentManager === null) {
+            return [];
+        }
+
+        $paths = [];
+        foreach ($this->agentManager->all() as $agent) {
+            $paths[] = 'agent:' . $agent->name;
+        }
+
+        return $paths;
     }
 
     /** The highlighted popup row, clamped — a caret move between two mention

@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import Composer, { type McpMention } from '../components/Composer.vue'
 import RunningAgentsLine from '../components/agents/RunningAgentsLine.vue'
+import { useAgentsStore } from '../stores/agents/agents'
 import type { PastedDocument, PastedImage } from '../lib/paste'
 import PermissionCard, { type Reply } from '../components/PermissionCard.vue'
 import QueueStrip from '../components/QueueStrip.vue'
@@ -110,6 +111,16 @@ function mcpResourceRoster(): Promise<McpMention[]> {
     .catch(() => [] as McpMention[])
   return mcpRoster
 }
+
+/**
+ * C-AGT-4.d (client-only): the composer's `@agent:` popup reads the launch
+ * roster straight off the agents store — the same `agents.list` catalogue the
+ * StatusBar already fetches, never a second request. Names not in the roster
+ * are refused by the server's scanner too, so the popup offers only what the
+ * run can honour.
+ */
+const agentsStore = useAgentsStore()
+const agentRosterNames = (): string[] => Object.keys(agentsStore.roster)
 
 const searchMcpResources = (query: string): Promise<McpMention[]> => {
   const needle = query.toLowerCase()
@@ -228,6 +239,7 @@ async function rename(): Promise<void> {
         :default-delivery="connection.defaultDelivery"
         :search-files="searchFiles"
         :search-mcp-resources="searchMcpResources"
+        :agent-roster="agentRosterNames"
         @send="send"
         @stop="stop"
       />

@@ -7216,11 +7216,12 @@ final class DocFigureProseDriftTest extends TestCase
 
         // The shared cap: the source sentence must name every keyword leg
         // (this family grows with the legs), and the page quotes the bound
-        // in words matching the constant.
+        // in words matching the constant. The word list joined @agent
+        // (GAP-AGT-20, dated 2026-10-29) — it names all six legs now.
         self::assertStringContainsString(
-            '@diff/@session/@url/@mcp/@pr mentions',
+            '@diff/@session/@url/@mcp/@pr/@agent mentions',
             $mentions,
-            'the cap notice no longer names all five keyword legs — a sixth leg arrived without its roster',
+            'the cap notice no longer names all six keyword legs — a seventh leg arrived without its roster',
         );
         self::assertSame(5, \SugarCraft\Code\Attachments\ContextMentions::MAX_MENTIONS, 'the cap moved off five — the page sentence and this pin move with it');
         self::assertStringContainsString(

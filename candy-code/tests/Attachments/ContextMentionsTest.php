@@ -393,7 +393,7 @@ final class ContextMentionsTest extends TestCase
 
         self::assertCount(ContextMentions::MAX_MENTIONS, $r['attachments']);
         self::assertCount(2, $r['notices']);
-        self::assertStringContainsString('at most 5 @diff/@session/@url/@mcp/@pr mentions', $r['notices'][0]);
+        self::assertStringContainsString('at most 5 @diff/@session/@url/@mcp/@pr/@agent mentions', $r['notices'][0]);
     }
 
     public function testTheContextBlockSurvivesAResume(): void
@@ -502,6 +502,83 @@ final class ContextMentionsTest extends TestCase
         self::assertTrue(ContextMentions::isReserved('pr:12'));
         self::assertFalse(ContextMentions::isReserved('pr'), 'a bare keyword is a file candidate, like session');
         self::assertFalse(ContextMentions::isReserved('pretty.png'), 'the keyword never eats a path that merely starts with it');
+    }
+
+    // ── `@agent:<name>` — the user's own delegation request (GAP-AGT-20) ──
+
+    public function testTheAgentKeywordIsReservedLikeTheOthers(): void
+    {
+        self::assertTrue(ContextMentions::isReserved('agent:reviewer'));
+        self::assertTrue(ContextMentions::isReserved('agent:reviewer,'), 'the trim applies to @agent as it does to every leg');
+        self::assertFalse(ContextMentions::isReserved('agent'), 'a bare keyword is a file candidate, like session');
+        self::assertFalse(ContextMentions::isReserved('agent:'), 'the colon alone names no one — it reads as a path');
+        self::assertFalse(ContextMentions::isReserved('agent:two:colons'), 'one colon, like the MCP server segment');
+        self::assertFalse(ContextMentions::isReserved('agency.png'), 'the keyword never eats a path that merely starts with it');
+        self::assertTrue(ContextMentions::isSourceLabel('@agent:reviewer'), 'the wire renders the delegation as a context block');
+    }
+
+    public function testAtAgentWithAKnownNameAttachesTheTaskToolDirective(): void
+    {
+        $mentions = ContextMentions::new($this->root)
+            ->withAgentRoster(static fn (string $name): bool => $name === 'reviewer');
+
+        $r = $mentions->resolve('please @agent:reviewer look at this.');
+
+        self::assertSame([], $r['notices'], 'the trailing period is trimmed, the name resolves, nothing is refused');
+        self::assertCount(1, $r['attachments']);
+        $attachment = $r['attachments'][0];
+        self::assertSame('@agent:reviewer', $attachment->path);
+        self::assertStringContainsString('The user asks you to delegate this to agent `reviewer` via the Task tool.', $attachment->data);
+        self::assertStringContainsString('agent: "reviewer"', $attachment->data);
+        self::assertStringContainsString('do not substitute another agent', $attachment->data);
+
+        $wire = (new UserMessage('please @agent:reviewer look at this.'))->withAttachment($attachment)->wireText();
+        self::assertStringContainsString('<context source="@agent:reviewer">', $wire);
+    }
+
+    public function testAtAgentWithAnUnknownNameIsANoticeNeverAGuess(): void
+    {
+        $mentions = ContextMentions::new($this->root)
+            ->withAgentRoster(static fn (string $name): bool => $name === 'reviewer');
+
+        $r = $mentions->resolve('@agent:reviwer');
+
+        self::assertSame([], $r['attachments'], 'no fuzzy match, no silently-chosen neighbour');
+        self::assertSame('@agent:reviwer was not attached: no agent named "reviwer" is in this run\'s roster.', $r['notices'][0]);
+    }
+
+    public function testAtAgentWithoutARosterAndAThrowingRosterBothRefuseAsNotices(): void
+    {
+        $bare = ContextMentions::new($this->root)->resolve('@agent:reviewer');
+        self::assertSame([], $bare['attachments']);
+        self::assertSame('@agent:reviewer was not attached: no agent roster is open in this run.', $bare['notices'][0]);
+
+        $throwing = ContextMentions::new($this->root)
+            ->withAgentRoster(static function (string $name): bool {
+                throw new \RuntimeException('the roster could not be built');
+            })
+            ->resolve('@agent:reviewer');
+        self::assertSame([], $throwing['attachments'], 'a roster that cannot answer answers no, and the run survives');
+        self::assertCount(1, $throwing['notices']);
+    }
+
+    public function testAtAgentIsCountedOnceAndWithinTheSharedKeywordCap(): void
+    {
+        $mentions = ContextMentions::new($this->root)
+            ->withFetcher(static fn (string $url): ToolResult => new ToolResult('x', 'page ' . $url))
+            ->withAgentRoster(static fn (string $name): bool => $name === 'a1');
+
+        $r = $mentions->resolve(implode(' ', [
+            '@agent:a1', '@agent:a1',
+            '@https://example.com/1', '@https://example.com/2', '@https://example.com/3',
+            '@https://example.com/4', '@https://example.com/5', '@https://example.com/6',
+        ]));
+
+        self::assertCount(ContextMentions::MAX_MENTIONS, $r['attachments'], 'the agent mention eats a slot of the shared cap');
+        self::assertSame('@agent:a1', $r['attachments'][0]->path, 'and is attached once, deduped like every keyword');
+        self::assertCount(2, $r['notices'], 'the sixth and seventh distinct keywords are capped');
+        self::assertStringContainsString('@https://example.com/5 was not attached', $r['notices'][0]);
+        self::assertStringContainsString('at most 5 @diff/@session/@url/@mcp/@pr/@agent mentions', $r['notices'][0]);
     }
 
     /**

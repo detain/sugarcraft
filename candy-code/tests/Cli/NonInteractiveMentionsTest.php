@@ -17,6 +17,7 @@ use SugarCraft\Code\MCP\McpResourceProvider;
 use SugarCraft\Code\MCP\McpServer;
 use SugarCraft\Code\MCP\McpTool;
 use SugarCraft\Code\Cli\NonInteractive;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Message;
 
 /**
@@ -26,6 +27,8 @@ use SugarCraft\Code\Message;
  */
 final class NonInteractiveMentionsTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private string $root;
 
     protected function setUp(): void
@@ -196,6 +199,109 @@ final class NonInteractiveMentionsTest extends TestCase
         $this->assertSame(NonInteractive::EXIT_OK, $code);
         $this->assertSame([], $backend->seen[0]->attachments, 'a refused mention sends nothing in its place');
         $this->assertSame('explain @mcp:srv:file://log', $backend->seen[0]->content);
+    }
+
+    /**
+     * C-AGT-4.d: the bare `historyFrom()` fallback arms the scanner with a
+     * roster over {@see Bootstrap::agentManager()} for the launch root, so a
+     * typed `@agent:` attaches its directive headlessly too. The preset file
+     * is planted in the checkout's own `.claude/agents` tier, which the
+     * ForeignAgentPresetWiringTest established needs no trust opt-in; the
+     * home is sandboxed so the roster is the code default plus this file.
+     */
+    public function testTheHeadlessFallbackResolvesATypedAgentFromTheLaunchRoster(): void
+    {
+        $home = $this->useHomeSandbox($this->root . '/probe-home');
+        mkdir($this->root . '/.claude/agents', 0755, true);
+        file_put_contents(
+            $this->root . '/.claude/agents/probe.md',
+            "---\nname: sc-probe-agent\ndescription: A probe preset.\n---\n\nPROMPT BODY.\n",
+        );
+        try {
+            $history = NonInteractive::historyFrom('use @agent:sc-probe-agent and read @a.txt', null, $this->root, $notices);
+        } finally {
+            $this->restoreHomeSandbox();
+            unlink($this->root . '/.claude/agents/probe.md');
+            rmdir($this->root . '/.claude/agents');
+            rmdir($this->root . '/.claude');
+            exec('rm -rf ' . escapeshellarg($home));
+        }
+
+        $paths = array_map(static fn ($a): string => $a->path, $history[0]->attachments);
+        $this->assertContains('@agent:sc-probe-agent', $paths);
+        $this->assertContains('a.txt', $paths, 'the file leg rides the same single resolve()');
+        $this->assertSame([], $notices);
+        $agent = $history[0]->attachments[array_search('@agent:sc-probe-agent', $paths, true)];
+        $this->assertStringContainsString('via the Task tool', $agent->data);
+    }
+
+    /**
+     * C-AGT-4.d control: an `@agent:` the launch roster does not answer is a
+     * notice, never a guessed substitute — and a roster the environment
+     * cannot build fails closed the same way, since the leg treats a
+     * throwing roster as a "no".
+     */
+    public function testTheHeadlessFallbackNeverGuessesAnUnknownAgent(): void
+    {
+        $home = $this->useHomeSandbox($this->root . '/probe-home');
+        try {
+            $history = NonInteractive::historyFrom('use @agent:sc-no-such-agent', null, $this->root, $notices);
+        } finally {
+            $this->restoreHomeSandbox();
+            exec('rm -rf ' . escapeshellarg($home));
+        }
+
+        $this->assertSame([], $history[0]->attachments);
+        $this->assertCount(1, $notices);
+        $this->assertStringContainsString('no agent named "sc-no-such-agent" is in this run\'s roster.', $notices[0]);
+    }
+
+    /**
+     * C-AGT-4.d: the real `-p` run (not just the helper) carries the roster
+     * into its armed scanner — site one of the design. The run is left on the
+     * ambient HOME exactly like the neighbouring `run()` pins.
+     */
+    public function testRunResolvesATypedAgentMentionThroughTheLaunchRoster(): void
+    {
+        $backend = new class implements Backend {
+            /** @var list<Message> */
+            public array $seen = [];
+
+            public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
+            {
+                $this->seen = $history;
+
+                return Message::assistant('ok');
+            }
+
+            public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): \React\Promise\PromiseInterface
+            {
+                return \React\Promise\resolve($this->complete($history, $onToken, $onEvent));
+            }
+        };
+
+        mkdir($this->root . '/.claude/agents', 0755, true);
+        file_put_contents(
+            $this->root . '/.claude/agents/run-probe.md',
+            "---\nname: sc-run-agent\ndescription: A run probe.\n---\n\nPROMPT BODY.\n",
+        );
+        try {
+            ob_start();
+            $code = NonInteractive::run(
+                ArgvParser::parse(['candy-code', '--root', $this->root, '-p', 'use @agent:sc-run-agent']),
+                $backend,
+            );
+            ob_end_clean();
+        } finally {
+            unlink($this->root . '/.claude/agents/run-probe.md');
+            rmdir($this->root . '/.claude/agents');
+            rmdir($this->root . '/.claude');
+        }
+
+        $this->assertSame(NonInteractive::EXIT_OK, $code);
+        $this->assertCount(1, $backend->seen[0]->attachments, 'the launch roster answers the mention the way the TUI\'s does');
+        $this->assertSame('@agent:sc-run-agent', $backend->seen[0]->attachments[0]->path);
+        $this->assertStringContainsString('via the Task tool', $backend->seen[0]->attachments[0]->data);
     }
 
     private function plantResourceClient(string $root): void

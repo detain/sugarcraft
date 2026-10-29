@@ -2347,6 +2347,9 @@ final class SessionHost
     ): TurnTicket {
         $turns = $this->turns();
         $preTurnHistory = [...$baseHistory, ...$reports];
+        // GAP-AGT-20: the served session's own roster answers `@agent:`, the
+        // same manager this host's `Task` tool delegates through.
+        $agentManager = $this->workspace->agentManager;
 
         [$userTurn, $attachmentNotes] = $turns->userTurnMessage(
             $text,
@@ -2357,6 +2360,7 @@ final class SessionHost
             $this->workspace->skills,
             mcpProvider: $this->mcpProvider,
             extraAttachments: $attachments,
+            agentRoster: $agentManager === null ? null : static fn (string $name): bool => $agentManager->get($name) !== null,
         );
         $newTurnMessages = [...$reports, ...$notes, ...$attachmentNotes, $userTurn];
         if ($commandModelNotice !== null) {

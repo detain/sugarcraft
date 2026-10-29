@@ -52,6 +52,7 @@ const props = defineProps<{
      * server/uri/name. Without it the `@` popup is file-only, as before.
      */
     searchMcpResources?: (query: string) => Promise<McpMention[]>;
+    agentRoster?: () => string[];
 }>();
 const emit = defineEmits<{
     "update:modelValue": [value: string];
@@ -129,10 +130,14 @@ const fileInput = ref<HTMLInputElement | null>(null);
 const files = ref<string[]>([]);
 /** Ranked `mcp.resources` rows for a trailing `@mcp:` partial (C-MCP-2.c). */
 const mcpMentions = ref<McpMention[]>([]);
+const agentMentions = ref<string[]>([]);
 let fileSeq = 0;
 
 /** C-MCP-2.c: an `@mcp:` partial opens the resource popup, not the file one. */
 const MCP_MENTION_PREFIX = "mcp:";
+
+/** C-AGT-4.d: an `@agent:` partial opens the roster popup, the same trick. */
+const AGENT_MENTION_PREFIX = "agent:";
 
 /**
  * The `@` completion rides the same keyboard as `/`: a trailing `@partial`
@@ -161,6 +166,7 @@ let lastSearchAt = Number.NEGATIVE_INFINITY;
 function searchMentionedFiles(partial: string): void {
     const seq = ++fileSeq;
     mcpMentions.value = []; // the file popup has taken the line back
+    agentMentions.value = [];
     lastSearchAt = Date.now();
     void props
         .searchFiles!(partial)
@@ -197,9 +203,32 @@ function searchMcpMentions(partial: string): void {
         });
 }
 
-/** Route a partial to the `@mcp:` roster popup or the `fs.search` file popup. */
+/**
+ * C-AGT-4.d (client-only): the `@agent:` popup. The names are the agents
+ * store's launch roster the StatusBar already fetched — no second wire call
+ * per keystroke — filtered and sorted right here. Empty rows — before the
+ * catalogue lands, or a roster with no match — hand the line back to the
+ * file search, exactly as the `@mcp:` popup does.
+ */
+function searchAgentMentions(partial: string): void {
+    const seq = ++fileSeq;
+    files.value = [];
+    mcpMentions.value = [];
+    lastSearchAt = Date.now();
+    const query = partial.slice(AGENT_MENTION_PREFIX.length).toLowerCase();
+    const names = (props.agentRoster?.() ?? [])
+        .filter((name) => name.toLowerCase().includes(query))
+        .sort()
+        .slice(0, 8);
+    agentMentions.value = names;
+    if (names.length === 0 && props.searchFiles) searchMentionedFiles(partial);
+}
+
+/** Route a partial to an `@agent:`/`@mcp:` roster popup or the `fs.search` file popup. */
 function runMentionSearch(partial: string): void {
-    if (partial.startsWith(MCP_MENTION_PREFIX) && props.searchMcpResources)
+    if (partial.startsWith(AGENT_MENTION_PREFIX) && props.agentRoster)
+        searchAgentMentions(partial);
+    else if (partial.startsWith(MCP_MENTION_PREFIX) && props.searchMcpResources)
         searchMcpMentions(partial);
     else if (props.searchFiles) searchMentionedFiles(partial);
 }
@@ -217,6 +246,7 @@ watch(
         ) {
             files.value = [];
             mcpMentions.value = [];
+            agentMentions.value = [];
             lastSearchAt = Number.NEGATIVE_INFINITY; // the next `@` opens at once
             return;
         }
@@ -234,7 +264,7 @@ watch(
 onBeforeUnmount(() => {
     if (mentionTimer !== undefined) clearTimeout(mentionTimer);
 });
-watch([files, mcpMentions], () => {
+watch([files, mcpMentions, agentMentions], () => {
     selected.value = 0;
 });
 
@@ -252,6 +282,21 @@ function completeMcp(mention: McpMention): void {
     emit(
         "update:modelValue",
         `${props.modelValue.slice(0, at)}@mcp:${mention.server}:${mention.uri} `,
+    );
+    input.value?.focus();
+}
+
+/**
+ * C-AGT-4.d: accepting an agent row inserts the keyword the server's mention
+ * scanner reserves — the same `@agent:<name>` text a TUI user completes, so
+ * the one resolver decides the name in every front end.
+ */
+function completeAgent(name: string): void {
+    const at = props.modelValue.lastIndexOf("@");
+    if (at < 0) return;
+    emit(
+        "update:modelValue",
+        `${props.modelValue.slice(0, at)}@agent:${name} `,
     );
     input.value?.focus();
 }
@@ -610,9 +655,16 @@ function onKeydown(event: KeyboardEvent): void {
         return;
     }
     const commands = suggestions.value.length;
+    const agentRows = agentMentions.value.length;
     const mcpRows = mcpMentions.value.length;
     const popup =
-        commands > 0 ? commands : mcpRows > 0 ? mcpRows : files.value.length;
+        commands > 0
+            ? commands
+            : agentRows > 0
+              ? agentRows
+              : mcpRows > 0
+                ? mcpRows
+                : files.value.length;
     if (
         popup > 0 &&
         !event.ctrlKey &&
@@ -630,6 +682,9 @@ function onKeydown(event: KeyboardEvent): void {
         if (commands > 0) {
             const pick = suggestions.value[selected.value];
             if (pick) complete(pick);
+        } else if (agentRows > 0) {
+            const pick = agentMentions.value[selected.value];
+            if (pick) completeAgent(pick);
         } else if (mcpRows > 0) {
             const pick = mcpMentions.value[selected.value];
             if (pick) completeMcp(pick);
@@ -661,9 +716,19 @@ function onKeydown(event: KeyboardEvent): void {
     }
     if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
         event.preventDefault();
-        if (commands === 0 && (mcpRows > 0 || files.value.length > 0)) {
+        if (
+            commands === 0 &&
+            (agentRows > 0 || mcpRows > 0 || files.value.length > 0)
+        ) {
             // Accept the highlighted row: unlike `/name`, a half-typed
-            // `@partial` — file or `mcp:` — is never a sendable prompt.
+            // `@partial` — file, `mcp:` or `agent:` — is never a sendable
+            // prompt.
+            const agent =
+                agentRows > 0 ? agentMentions.value[selected.value] : undefined;
+            if (agent !== undefined) {
+                completeAgent(agent);
+                return;
+            }
             const pick =
                 mcpRows > 0
                     ? mcpMentions.value[selected.value]
@@ -822,6 +887,24 @@ defineExpose({ focus: () => input.value?.focus() });
             >
                 <span class="cmd">{{ `mcp:${mention.server}:${mention.uri}` }}</span>
                 <span v-if="mention.name" class="desc">{{ mention.name }}</span>
+            </li>
+        </ul>
+        <ul
+            v-if="suggestions.length === 0 && agentMentions.length > 0"
+            class="suggest"
+            role="listbox"
+            data-testid="agent-suggestions"
+        >
+            <li
+                v-for="(name, i) in agentMentions"
+                :key="name"
+                role="option"
+                :aria-selected="i === selected"
+                :class="{ on: i === selected }"
+                @mousedown.prevent="completeAgent(name)"
+            >
+                <span class="cmd">{{ `agent:${name}` }}</span>
+                <span class="desc">delegate this prompt</span>
             </li>
         </ul>
         <ul
