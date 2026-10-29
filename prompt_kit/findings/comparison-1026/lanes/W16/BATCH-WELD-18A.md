@@ -2,7 +2,7 @@
 
 Base: master 6d0c79851 (ahead of origin a612fb008 by 2). Branch: weld-18 @ /home/sites/cc-cmp-weld-18.
 
-## Status: COMPLETE (meta commit closes; tip=meta sha in follow-up)
+## Status: CLOSED — master f5379f635 (meta 93cfa58b9 + run-state stamp), origin stays a612fb008 (no wave close → no push), ahead 13.
 
 ## Picks (all zero-conflict)
 - [x] C-AGT-4.c: f48f62e1f→f51949469, b185db521→758c00418, 704e15fcf→b130d4dc3
@@ -30,9 +30,14 @@ Base: master 6d0c79851 (ahead of origin a612fb008 by 2). Branch: weld-18 @ /home
 - [x] run-state.json: welded += C-AGT-4.c C-PRV-3.b C-EXT-5.c (welded_count 227; weld_pending = C-CTX-3.c, C-MCP-3.d).
 - [ ] No §3 wave closes this batch (W21/22/23/24 not fully welded) → NO PUSH. origin/master stays a612fb008.
 
-## Prune (after git-cherry absorption proofs on main tree post-FF)
-- cc/C-AGT-4.c + /home/sites/cc-cmp-C-AGT-4.c
-- cc/C-PRV-3.b + /home/sites/cc-cmp-C-PRV-3.b
-- cc/C-EXT-5.c + /home/sites/cc-cmp-C-EXT-5.c
-- stray /home/sites/cc-cmp-C-EXT-5c-pristine
-- DO NOT touch: C-CTX-4.b C-PRV-4.b C-SES-7.g C-AGT-4.e C-SEC-8.f C-MCP-3.d C-CTX-3.c weld-16 weld-15 C-MCP-4.a (held)
+## Prune — DONE (post-FF)
+  [x] cc/C-AGT-4.c + /home/sites/cc-cmp-C-AGT-4.c
+  [x] cc/C-PRV-3.b + /home/sites/cc-cmp-C-PRV-3.b
+  [x] cc/C-EXT-5.c + /home/sites/cc-cmp-C-EXT-5.c
+  [x] stray /home/sites/cc-cmp-C-EXT-5c-pristine
+  [x] live lanes untouched: C-CTX-4.b C-PRV-4.b C-SES-7.g C-AGT-4.e C-SEC-8.f C-MCP-3.d C-CTX-3.c weld-16 weld-15 C-MCP-4.a (held)
+
+## Absorption proofs (git cherry master <lane>)
+- cc/C-PRV-3.b: 2/2 '-'
+- cc/C-EXT-5.c: 2/2 '-'
+- cc/C-AGT-4.c: 2/3 '-'; f48f62e1f '-' by CONTENT (git-cherry '+' = patch-id context drift — lane base 86f80fef8 vs weld-18 neighbor hunks in ReadPathCensusTest.php; diff of +/- lines vs pick f51949469 = IDENTICAL)
