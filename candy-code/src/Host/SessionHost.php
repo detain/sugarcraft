@@ -2148,6 +2148,19 @@ final class SessionHost
     }
 
     /**
+     * C-MCP-4.c: one UI-only notice row from a later-landing process event —
+     * today the served `mcp auth login` beats that {@see \SugarCraft\Code\Host\ServedMcpLogins}
+     * collects and {@see \SugarCraft\Code\Protocol\ServerContext::pump()}
+     * routes. The row enters history, save and the `message.created`
+     * announcement exactly like a command's own row, carrying the `notice`
+     * kind Role::System rows paint with.
+     */
+    public function appendNotice(string $text): void
+    {
+        $this->appendMessageRow(Message::notice($text));
+    }
+
+    /**
      * The one place a later-landing row enters history: the row is built,
      * verdict and all, by its producer (ISS-097) — this writes and saves it.
      */

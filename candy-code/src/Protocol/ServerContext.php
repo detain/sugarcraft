@@ -10,6 +10,7 @@ use SugarCraft\Code\Host\BackgroundEvents;
 use SugarCraft\Code\Host\SessionEvent;
 use SugarCraft\Code\Host\SessionHost;
 use SugarCraft\Code\Host\SessionHub;
+use SugarCraft\Code\Host\ServedMcpLogins;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Server\ErrorLog;
 use SugarCraft\Code\Server\ServerConfig;
@@ -625,6 +626,14 @@ final class ServerContext
             if (!$this->hub->isOpen((string) $sessionId)) {
                 $this->dropFeed((string) $sessionId);
             }
+        }
+        // C-MCP-4.c: served-login beats — rows Chat would print on its own
+        // subscription ride this pump instead. A row whose session closed
+        // mid-login has nowhere to go and is dropped; the watch still ends on
+        // the child's final beat, and children self-exit after their own wait
+        // bound, so no watch lives forever.
+        foreach (ServedMcpLogins::pollDue() as [$sessionId, $row]) {
+            $this->hub->get($sessionId)?->appendNotice($row);
         }
     }
 }

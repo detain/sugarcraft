@@ -103,9 +103,10 @@ final class ServedMcpLogins
     }
 
     /**
-     * Drop every watch — test hygiene only, the same role
-     * {@see McpLoginFork::releaseAll()} plays for the slots, and with the
-     * same rule: production never calls it.
+     * Drop every watch — test hygiene only. The same rule the fork's own
+     * release method documents for its slots applies here: production never
+     * calls it, and a login still running when the process goes is
+     * deliberately left to finish.
      */
     public static function clear(): void
     {

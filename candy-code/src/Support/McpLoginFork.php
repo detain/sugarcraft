@@ -49,6 +49,12 @@ final class McpLoginFork
      */
     public const SCAN_MAX_BYTES = 65536;
 
+    /** Connect deadline for the paste-back GET to the child's own listener. */
+    public const PASTEBACK_TIMEOUT_SECONDS = 2.0;
+
+    /** How much of the child's callback answer is read and dropped (8 × 8 KiB). */
+    public const PASTEBACK_ANSWER_READS = 8;
+
     /**
      * Test seam: replaces the argv handed to the child. Production never
      * sets it; a test may point the slot at a stub script so the whole
@@ -84,11 +90,18 @@ final class McpLoginFork
      * a failed spawn, or a busy slot all answer with the row Chat should
      * print, and $armed=false means no poll is due.
      *
-     * @param list<string> $rest  the trailing CLI arguments as typed ([token-url] …)
+     * @param list<string> $rest  the trailing CLI arguments as typed ([token-url] …),
+     *                            or the paste-back pair `['--code', $url]` (C-MCP-4.c)
      * @return array{0: string, 1: bool} [transcript notice, armed]
      */
     public static function arm(string $server, array $rest, string $cwd = ''): array
     {
+        // C-MCP-4.c: `--code` is a delivery, not a spawn — judged before the
+        // busy check so a paste-back can reach the slot that IS live.
+        if (($rest[0] ?? null) === '--code') {
+            return self::deliverPasteBack($server, $rest);
+        }
+
         if (isset(self::$slots[$server])) {
             return [Lang::t('cmd.mcp-auth.login-busy', ['server' => $server]), false];
         }
@@ -186,6 +199,108 @@ final class McpLoginFork
     public static function redirectPort(string $server): ?int
     {
         return self::$redirectPorts[$server] ?? null;
+    }
+
+    /**
+     * C-MCP-4.c: the paste-back leg. A browser on another machine finished
+     * the authorize step, and its redirect to the child's loopback listener
+     * could not cross the machine boundary; the user pastes the URL the
+     * browser landed on, and the waiting child's own listener receives it
+     * through a local GET, so the child finishes the state+PKCE exchange
+     * itself. This leg validates only the ADDRESS; the authorization code
+     * rides through untouched for the child to verify.
+     *
+     * The pasted URL is untrusted input, so acceptance is narrow and the
+     * comparisons are constant-time (a timing oracle beside a listener bound
+     * to a random loopback port would leak how far a forged callback matched
+     * the live login's announced port): the scheme must be plain http, the
+     * host exactly 127.0.0.1 or localhost, and the port the slot's announced
+     * redirect_uri port. Nothing else is ever dialed — this leg must not
+     * become an SSRF carrier for a pasted address — and refusals name the
+     * reason without echoing the URL, which carries the live code. The child
+     * self-exits after its own wait bound, so a callback pasted for a dead
+     * login meets a closed port here, not a wedge.
+     *
+     * @param list<string> $rest  argv with '--code' at 0
+     * @return array{0: string, 1: bool} [transcript notice, armed] — the
+     *                            second is always false: this leg spawns nothing
+     */
+    private static function deliverPasteBack(string $server, array $rest): array
+    {
+        $refuse = static fn (string $reasonKey): array => [
+            Lang::t('cmd.mcp-auth.login-code-refused', ['server' => $server, 'reason' => Lang::t($reasonKey)]),
+            false,
+        ];
+
+        $url = (string) ($rest[1] ?? '');
+        if ($url === '' || isset($rest[2])) {
+            return $refuse('cmd.mcp-auth.login-code-reason-shape');
+        }
+
+        if (!self::isArmed($server)) {
+            return $refuse('cmd.mcp-auth.login-code-reason-noslot');
+        }
+
+        $parts = \parse_url($url);
+        if (!\is_array($parts)) {
+            return $refuse('cmd.mcp-auth.login-code-reason-shape');
+        }
+
+        if (!\hash_equals('http', \strtolower((string) ($parts['scheme'] ?? '')))) {
+            return $refuse('cmd.mcp-auth.login-code-reason-scheme');
+        }
+
+        $host = \strtolower((string) ($parts['host'] ?? ''));
+        if (!\hash_equals('127.0.0.1', $host) && !\hash_equals('localhost', $host)) {
+            return $refuse('cmd.mcp-auth.login-code-reason-host');
+        }
+
+        $port = isset($parts['port']) ? (string) $parts['port'] : '';
+        $expected = self::redirectPort($server);
+        if ($expected === null || !\hash_equals((string) $expected, $port)) {
+            return $refuse('cmd.mcp-auth.login-code-reason-port');
+        }
+
+        $target = (string) ($parts['path'] ?? '/');
+        if (isset($parts['query']) && $parts['query'] !== '') {
+            $target .= '?' . $parts['query'];
+        }
+        if (\strpbrk($target, "\r\n\0") !== false) {
+            return $refuse('cmd.mcp-auth.login-code-reason-shape');
+        }
+
+        // The dialed address is the validated literal itself: loopback, the
+        // slot's own announced port — never a host taken from the paste.
+        // HTTP/1.0 so the child closes after answering; the answer is read
+        // and dropped, because the child's beats, not this row, tell the
+        // user what the exchange decided. Nothing of request or response is
+        // ever logged — the request target carries the live authorization code.
+        $socket = @\stream_socket_client(
+            'tcp://127.0.0.1:' . $expected,
+            $errno,
+            $errstr,
+            self::PASTEBACK_TIMEOUT_SECONDS,
+        );
+        if (!\is_resource($socket)) {
+            return $refuse('cmd.mcp-auth.login-code-reason-dial');
+        }
+
+        try {
+            \stream_set_timeout($socket, (int) \ceil(self::PASTEBACK_TIMEOUT_SECONDS));
+            if (\fwrite($socket, "GET {$target} HTTP/1.0\r\nHost: 127.0.0.1:{$expected}\r\n\r\n") === false) {
+                return $refuse('cmd.mcp-auth.login-code-reason-dial');
+            }
+            for ($i = 0; $i < self::PASTEBACK_ANSWER_READS; $i++) {
+                $chunk = \fread($socket, 8192);
+                if (!\is_string($chunk) || $chunk === '') {
+                    break;
+                }
+            }
+
+            return [Lang::t('cmd.mcp-auth.login-code-delivered', ['server' => $server]), false];
+        } finally {
+            \fclose($socket);
+        }
     }
 
     /**

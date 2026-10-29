@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Host\Commands;
 
 use SugarCraft\Code\Commands\McpAuthCommand;
 use SugarCraft\Code\Host\ServedMcpLogins;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\MCP\McpAuthStore;
 use SugarCraft\Code\Support\McpLoginFork;
 
@@ -62,7 +63,15 @@ final class McpAuthHostCommand implements HostCommand
 
         [$notice, $armed] = McpLoginFork::arm($server, array_slice($argv, 2), $context->projectRoot());
         if ($armed) {
-            ServedMcpLogins::register($server, $context->currentSessionId());
+            $sessionId = $context->currentSessionId();
+            ServedMcpLogins::register($server, $sessionId);
+            if ($sessionId !== null && $sessionId !== '') {
+                // The TUI's armed row promises "finish it in a browser" on the
+                // same machine; a served client needs the paste-back dance
+                // spelled out instead, so a watch-bearing arm answers with
+                // the served row.
+                $notice = Lang::t('cmd.mcp-auth.login-served-armed', ['server' => $server]);
+            }
         }
 
         return CommandResult::reply($text, $notice);

@@ -305,4 +305,154 @@ final class McpLoginForkTest extends TestCase
 
         self::assertSame([], $callers, 'releaseAll() has no production caller — wiring one re-opens the quit-aborts-login decision and the docblock together');
     }
+
+    /**
+     * C-MCP-4.c: the paste-back legs. The browser leg of a forked login
+     * happens on the user's machine; when `candy-code serve` runs the login
+     * on another host, the redirect cannot cross that boundary, so the user
+     * pastes the callback URL back and the validated loopback GET below
+     * feeds it to the still-waiting child. These pins drive a REAL parent
+     * process listener standing in for the child's one, so the whole
+     * validate-then-dial chain is exercised over a live socket.
+     */
+
+    /** @return array{0: mixed, 1: int} [listening resource, port] */
+    private function loopbackListener(): array
+    {
+        $errno = 0;
+        $errstr = '';
+        $server = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        self::assertIsResource($server, 'the paste-back pins need a real loopback listener');
+        $name = (string) \stream_socket_get_name($server, false);
+        $port = (int) \substr($name, (int) \strrpos($name, ':') + 1);
+        self::assertGreaterThan(0, $port, 'the listener answered on a real bound port');
+        \stream_set_blocking($server, false);
+
+        return [$server, $port];
+    }
+
+    /**
+     * Arm a stub child whose announce binds redirect_uri to $port, and wait
+     * for the URL beat so the slot is live AND its port is known.
+     */
+    private function armedAwaitingCallback(int $port, string $server): void
+    {
+        // The '?' rides via chr(): a bare one makes the literal glob-shaped
+        // and moves the GlobDialect corpus census — house GlobDialect law.
+        $authorize = 'https://auth.example.test/authorize' . chr(63) . 'client_id=abc&state=s1'
+            . '&redirect_uri=' . rawurlencode('http://127.0.0.1:' . $port . '/cb');
+        $this->stubChild('echo "    ' . $authorize . '\n";', 3_000_000);
+
+        [$notice, $armed] = McpLoginFork::arm($server, [], $this->sandbox . '/tmp');
+        self::assertTrue($armed, $notice);
+        $this->pollFor($server, static fn (McpLoginProgressMsg $m): bool => $m->phase === McpLoginProgressMsg::PHASE_URL);
+        self::assertSame($port, McpLoginFork::redirectPort($server), 'the announce taught the slot its callback port');
+    }
+
+    public function testThePastedCallbackIsDeliveredToTheWaitingChildsListener(): void
+    {
+        [$listener, $port] = $this->loopbackListener();
+        $this->armedAwaitingCallback($port, 'w4cpaste');
+
+        [$notice, $armed] = McpLoginFork::arm('w4cpaste', ['--code', 'http://127.0.0.1:' . $port . '/cb' . chr(63) . 'code=live-code-1&state=s1']);
+        self::assertFalse($armed, 'the delivery leg never spawns a second child');
+        self::assertStringContainsString('delivered to the waiting login', $notice);
+
+        $conn = @\stream_socket_accept($listener, 3.0);
+        self::assertIsResource($conn, 'the validated loopback address was dialed');
+        \stream_set_timeout($conn, 1);
+        $request = (string) \fread($conn, 2048);
+        self::assertStringStartsWith('GET /cb' . chr(63) . 'code=live-code-1&state=s1 HTTP/1.0', $request, 'the code and state ride through untouched for the child to verify');
+        self::assertStringContainsString('Host: 127.0.0.1:' . $port, $request);
+        fclose($conn);
+        fclose($listener);
+    }
+
+    public function testPasteBackRefusalsNameTheirReasonAndNeverDial(): void
+    {
+        [$listener, $port] = $this->loopbackListener();
+        $this->armedAwaitingCallback($port, 'w4cref');
+
+        $canary = 'canary-code-value';
+        $cases = [
+            'scheme' => ['https://127.0.0.1:' . $port . '/cb', 'scheme'],
+            'host' => ['http://evil.example.test:' . $port . '/cb', 'loopback'],
+            'port' => ['http://127.0.0.1:' . ($port + 1) . '/cb', 'port'],
+            'noport' => ['http://localhost/cb', 'port'],
+        ];
+        foreach ($cases as $label => [$url, $word]) {
+            [$notice, $armed] = McpLoginFork::arm('w4cref', ['--code', $url . chr(63) . 'code=' . $canary]);
+            self::assertFalse($armed, $label);
+            self::assertStringStartsWith('! Could not deliver', $notice, $label);
+            self::assertStringContainsString($word, $notice, $label);
+            self::assertStringNotContainsString($canary, $notice, 'a refusal never echoes the URL — it carries a live code');
+        }
+
+        [$shape, $shapeArmed] = McpLoginFork::arm('w4cref', ['--code']);
+        self::assertFalse($shapeArmed);
+        self::assertStringContainsString('exactly one URL', $shape, 'a bare --code is the shape arm');
+        [$extra] = McpLoginFork::arm('w4cref', ['--code', 'http://127.0.0.1:' . $port . '/cb', 'extra']);
+        self::assertStringContainsString('exactly one URL', $extra, 'two URLs are not one callback');
+
+        [$noslot, $noslotArmed] = McpLoginFork::arm('w4cnoslot', ['--code', 'http://127.0.0.1:' . $port . '/cb']);
+        self::assertFalse($noslotArmed);
+        self::assertStringContainsString('waiting on this host', $noslot, 'a callback for a login nobody armed is refused, never dialed');
+
+        $reads = [$listener];
+        $writes = null;
+        $excepts = null;
+        $ready = @\stream_select($reads, $writes, $excepts, 0);
+        self::assertLessThan(1, (int) $ready, 'every refusal above left the listener untouched — the leg is not an SSRF carrier');
+        fclose($listener);
+    }
+
+    public function testCodeIsJudgedBeforeTheBusyRefusal(): void
+    {
+        [$listener, $port] = $this->loopbackListener();
+        $this->armedAwaitingCallback($port, 'w4corder');
+
+        [$notice, $armed] = McpLoginFork::arm('w4corder', ['--code']);
+        self::assertFalse($armed);
+        self::assertStringNotContainsString('already running', $notice, 'a paste-back is a delivery, not a second spawn — the busy arm must not swallow it');
+        self::assertStringContainsString('exactly one URL', $notice);
+        fclose($listener);
+    }
+
+    public function testPasteBackToADeadListenerRefusesWithoutHanging(): void
+    {
+        // Bind-then-free FIRST: a child spawned while the listener is open
+        // inherits its fd across the exec (no CLOEXEC on the test's raw
+        // socket), so the port would stay reachable through the child even
+        // after the parent closed it. The spawn-hygiene seam is recorded in
+        // this lane's report; here the port must genuinely be dead when the
+        // child announces it.
+        $errno = 0;
+        $errstr = '';
+        $probe = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        self::assertIsResource($probe, 'a free loopback port is bindable for the probe');
+        $name = (string) \stream_socket_get_name($probe, false);
+        $port = (int) \substr($name, (int) \strrpos($name, ':') + 1);
+        fclose($probe);
+
+        $authorize = 'https://auth.example.test/authorize' . chr(63) . 'client_id=abc&state=s1'
+            . '&redirect_uri=' . rawurlencode('http://127.0.0.1:' . $port . '/cb');
+        $this->stubChild('echo "    ' . $authorize . '\n";', 3_000_000);
+        [, $armed] = McpLoginFork::arm('w4cdead', [], $this->sandbox . '/tmp');
+        self::assertTrue($armed);
+        $this->pollFor('w4cdead', static fn (McpLoginProgressMsg $m): bool => $m->phase === McpLoginProgressMsg::PHASE_URL);
+
+        $start = microtime(true);
+        [$notice, $armed] = McpLoginFork::arm('w4cdead', ['--code', 'http://127.0.0.1:' . $port . '/cb']);
+        self::assertFalse($armed);
+        self::assertStringContainsString('did not answer', $notice);
+        self::assertLessThan(3.0, microtime(true) - $start, 'the bounded socket deadline answers fast (E646: a connect bound, never an LLM-call timeout)');
+    }
+
+    public function testTheDialTargetIsAValidatedLoopbackLiteralNotAPastedHost(): void
+    {
+        $fork = file_get_contents(\dirname(__DIR__, 2) . '/src/Support/McpLoginFork.php');
+        self::assertIsString($fork);
+        self::assertSame(1, substr_count($fork, "'tcp://127.0.0.1:'"), 'the only dial string in the fork is the validated loopback literal');
+        self::assertSame(1, substr_count($fork, 'stream_socket_client'), 'and exactly one place dials');
+    }
 }

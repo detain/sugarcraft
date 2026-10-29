@@ -1037,6 +1037,28 @@ without `expires_in` (the field is optional in OAuth 2.0) is stored with an
 unknown expiry and sent until you log in again: there is no deadline to
 refresh ahead of, and a server's 401 does not trigger a refresh yet.
 
+A served session runs the same fork on the server host. `/mcp login
+<server>` typed into `candy-code serve` arms the child there and the
+follow-up rows arrive over your subscription as notice events: the link
+once the child prints it, then the closing row. Your browser is a different
+machine than the child's loopback listener, so the browser's redirect cannot
+land on it — when it shows a connection-error page, copy that page's address
+and send `/mcp login <server> --code <that-url>`. The pasted address is
+judged against the callback port the child itself announced: plain `http`,
+the host `127.0.0.1` or `localhost`, that exact port, each comparison
+constant-time; a passing address receives one bounded local request through
+which the waiting login finishes the exchange itself — the code rides
+through untouched for the child to verify. Anything failing a check is
+refused with its reason named and nothing dialed, and no refusal echoes the
+URL, because the URL carries a live authorization code.
+
+Stating the risk plainly: a client holding the `Write` scope can start a
+login child on the server host and drive it until credentials land in the
+server's own store — the same power `command.exec` already carries, which is
+why both verbs sit behind that scope. The only address the login ever dials
+is the child's own announced loopback port; a pasted host, scheme, or port
+other than the child's is refused before any socket is opened.
+
 ## Resources as `@mcp:` mentions
 
 A turn can pull a named resource out of a running MCP server with the
