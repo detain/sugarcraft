@@ -27,9 +27,28 @@ use SugarCraft\Code\Config\Settings\SettingValidator;
  * THE TARGET MUST BE ALIASABLE TOO: dispatch aliases the override chord onto
  * the row's shipped chord, so a row shipped as a two-key sequence or a range
  * has no single chord to land on and is refused.
+ *
+ * COMMAND BINDINGS (plan_comparison C-EXT-5) are the ids that do NOT name a
+ * shipped row: a `command:<name>` entry binds a slash command to its own
+ * chord, dispatched by {@see KeyBindingRegistry::commandFor()} before the
+ * alias funnel, so its name is checked against the COMMAND GRAMMAR below (one
+ * optional bundle or MCP colon, `/`-separated segments — the grammar
+ * `CommandRegistry` accepts for registrable names, mirrored here deliberately
+ * and pinned equal by test) and no aliasability applies: the binding runs
+ * `/<name>` itself, it never stands in for another row's chord.
  */
 final class KeyBindingsValidator implements SettingValidator
 {
+    /**
+     * The grammar a `command:<name>` binding id must carry after the prefix.
+     * MIRRORS `CommandSpec::NAME_PATTERN` — the same rule that gates which
+     * names reach the command registry at all — because a binding for a name
+     * that cannot exist is a dead chord; the equality of the two literals is
+     * pinned by `KeyBindingCommandBindingTest` so a grammar widened on one
+     * side reddens the other's test rather than drifting.
+     */
+    private const COMMAND_NAME_PATTERN = '/^(?:[A-Za-z0-9][A-Za-z0-9_-]*:)?[A-Za-z0-9][A-Za-z0-9_-]*(\/[A-Za-z0-9][A-Za-z0-9_-]*)*$/';
+
     private function __construct()
     {
     }
@@ -61,6 +80,28 @@ final class KeyBindingsValidator implements SettingValidator
         foreach ($value as $id => $chord) {
             if (!\is_string($id) || trim($id) === '') {
                 return 'binding ids must be non-empty strings';
+            }
+
+            // A `command:<name>` id (plan_comparison C-EXT-5) names no
+            // shipped row BY DESIGN — it is its own dispatch, checked
+            // against the command grammar and the chord grammar below, and
+            // never against byId()/aliasability (there is no row to alias).
+            if (str_starts_with($id, KeyBindingRegistry::COMMAND_BINDING_PREFIX)) {
+                $name = substr($id, strlen(KeyBindingRegistry::COMMAND_BINDING_PREFIX));
+                if (preg_match(self::COMMAND_NAME_PATTERN, $name) !== 1) {
+                    return "'{$id}' is not a bindable command name (letters, digits, '-' and '_', with one optional bundle or MCP colon)";
+                }
+
+                if ($chord === null) {
+                    continue; // a "unbound" command binding claims no chord — inert, as asked
+                }
+
+                $pressed = \is_string($chord) ? KeyBinding::parseChord($chord) : null;
+                if ($pressed === null || !self::isAssignableChord($pressed)) {
+                    return "the override for '{$id}' must be a chord of the form Ctrl+<key> (or Alt+<key>, Shift+<key>, Ctrl+<named key>, F10…)";
+                }
+
+                continue;
             }
 
             if (KeyBindingRegistry::byId($id) === null) {

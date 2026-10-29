@@ -7312,6 +7312,29 @@ final class Renderer
             }
         }
 
+        // The user's OWN command bindings (plan_comparison C-EXT-5), listed
+        // last under a heading of their own: they are not part of the shipped
+        // reference, and the /keys scroll budget should spend a shipped row
+        // before it spends theirs. The chord is shown exactly as the setting
+        // spells it — there is no shipped row to relabel from.
+        $commandBindings = KeyBindingRegistry::commandBindings();
+        if ($commandBindings !== []) {
+            if ($lines !== []) {
+                $lines[] = '';
+            }
+            $lines[] = $headerStyle->render(self::clipWithEllipsis(Lang::t('keys.command.heading'), $width));
+            foreach ($commandBindings as $id => $chord) {
+                $key = self::clipWithEllipsis($chord, $keyCol);
+                $pad = str_repeat(' ', max(0, $keyCol - Width::of($key)));
+                $room = $width - $keyCol - 1;
+                $desc = $room > 0 ? self::clipWithEllipsis(
+                    Lang::t('keys.command.runs', ['name' => '/' . substr($id, strlen(KeyBindingRegistry::COMMAND_BINDING_PREFIX))]),
+                    $room,
+                ) : '';
+                $lines[] = $keyStyle->render($key) . $pad . ' ' . $descStyle->render($desc);
+            }
+        }
+
         // Clamped here rather than trusted from Chat for the reason
         // renderView() re-clamps the transcript's offset: the stored value was
         // clamped against whatever frame was on screen when the key was

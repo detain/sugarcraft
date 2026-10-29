@@ -4082,6 +4082,10 @@ final class App implements Model
     /**
      * Offer a keypress to the pane shell, falling through to the hosted chat.
      *
+     * A press claimed by a `command:` binding is the exception: it
+     * short-circuits to {@see runBoundCommand()} before the shell, any modal
+     * gate, or the alias funnel sees it (plan_comparison C-EXT-5).
+     *
      * The shell's command object is no longer dropped here: it is handed to
      * {@see consumeShellCmd()}, which TRANSLATES it into shell state changes
      * or into keystrokes the hosted {@see Chat} already answers. It is still
@@ -4094,6 +4098,18 @@ final class App implements Model
      */
     private function handleKey(KeyMsg $msg): array
     {
+        // C-EXT-5: a `command:<name>` binding claims its chord HERE, at the
+        // very top of the funnel, BEFORE the alias translation below and
+        // before every modal gate — the press runs `/<name>` instead of
+        // reaching any surface. It must precede honourKeybindingAliases():
+        // a command binding is its own dispatch, not an alias for a shipped
+        // row, and translating first would hand it to the chat input as an
+        // ordinary rune.
+        $boundCommand = KeyBindingRegistry::commandFor($msg);
+        if ($boundCommand !== null) {
+            return $this->runBoundCommand($boundCommand);
+        }
+
         // ISS-047 (rv5b): a `keybindings` override lands its chord here, at
         // the ONE user-keystroke funnel, before any surface reads the press.
         // Translating the alias to the binding's shipped rune means every
@@ -4820,6 +4836,37 @@ final class App implements Model
         // takes the foreground's deck key and its session mint rekeys the
         // deck — exactly the delegateToChat rule, at the command's own
         // return.
+        $app = $app->rekeyDeck();
+
+        return [$app, $app->scopeForegroundCmd($cmd)];
+    }
+
+    /**
+     * Run a `command:<name>` chord binding (plan_comparison C-EXT-5) by
+     * handing `/<name>` to the hosted Chat's OWN command entry point — the
+     * menu-bar tail of {@see runRegistryCommand()}, not its registry lookup.
+     *
+     * This is typing parity, and it is the point: a bound command answers
+     * exactly what typing it would answer, including Chat's refusal of every
+     * command mid-turn and the unknown-command notice for a name no longer
+     * registered, and it preserves the input draft because that is what
+     * `runCommand()` does with one. The shell-state special cases the menu
+     * row needs (`settings` opening through the shell so it works mid-turn)
+     * are deliberately NOT reproduced — a binding binds the command, not a
+     * second menu row.
+     */
+    private function runBoundCommand(string $name): array
+    {
+        if ($this->chat === null) {
+            return [$this->withStatus(Lang::t('tui.app.no_chat', ['name' => $name])), null];
+        }
+
+        [$next, $cmd] = $this->chat->runCommand('/' . $name);
+
+        // The same rules runRegistryCommand applies at a command's return:
+        // a Chat transition crosses the auto-dock choke, and its Cmd takes
+        // the foreground's deck key.
+        $app = $next === $this->chat ? $this : $this->withChat($next)->autoEnablePanes();
         $app = $app->rekeyDeck();
 
         return [$app, $app->scopeForegroundCmd($cmd)];

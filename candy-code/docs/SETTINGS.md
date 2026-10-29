@@ -313,7 +313,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `promptSuggestionHistory` | `TitleService::suggestionCall()` → `promptSuggestionHistory()` | **no** |
 | `expandToolOutput` | `Renderer::renderToolResults()`, `Chat::isToolOutputExpanded()` → `Renderer::toolOutputExpandedByDefault()` | yes |
 | `maxCheckpoints` | `EnhancedSessionStore::saveCheckpoint()` → `maxCheckpoints()` | **no** |
-| `keybindings` | `Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `aliasPress()` (via `effective()`) at `App::handleKey()` — re-applied mid-session by `/keys reload` → `Bootstrap::reloadKeybindings()` (TUI-4a) | **no** |
+| `keybindings` | `Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `aliasPress()` (via `effective()`) at `App::handleKey()`; `command:` ids split to `commandFor()` at the top of `App::handleKey()` (C-EXT-5) — re-applied mid-session by `/keys reload` → `Bootstrap::reloadKeybindings()` (TUI-4a) | **no** |
 | `vimMode` | `Chat::update()` key dispatch (arm re-sync + operator resolution, TUI-3A) → `ComposerVim` over the sugar-forms `TextArea` Vim layer (w5f) | **no** |
 | `lintCommands` | `Bootstrap::hooks()` → `LintRunner::withCommands()` | **no** |
 | `formatCommands` | `Bootstrap::hooks()` → `FormatRunner::withCommands()` | **no** |
@@ -1582,6 +1582,32 @@ launch apply one file (plan_comparison TUI-4a).
 
 This is deliberately not a file watcher: nothing reloads silently, the word
 is the door.
+
+### `command:<name>` — bind your own commands to keys
+
+Alongside the binding ids the reference lists, the map accepts one family of
+ids that name no shipped row: `"command:<name>": "Ctrl+Z"` binds the chord to
+running the slash command `/<name>` (plan_comparison C-EXT-5). `<name>` takes
+the same grammar the command registry itself accepts — letters, digits, `-`
+and `_`, one optional bundle or MCP colon — and the chord takes the same
+spelling as any override: one modifier press or a function key, `null` to
+claim nothing. Pressing the chord runs the command through the chat's own
+command entry point, exactly as if you had typed it: refused mid-turn, the
+input draft kept, and a name that stopped being registered answers with the
+unknown-command notice. `settings` keeps its shell-side opening to the menu
+row and the palette; a binding binds the command, not that special case.
+
+The reference and the reload treat them as one would hope: `/keys` lists your
+command bindings under a heading of their own at the end of the box, showing
+the chord exactly as the setting spells it, and `/keys reload` re-applies
+them with the rest of the map. A `command:` chord that steps on a shipped
+binding's chord is named by the same launch collision row any override
+collision earns. What no row announces: a `command:` entry sharing its chord
+with another override or another command — the command claims the chord
+first, at the very top of the key funnel, before the alias translation, and
+between two commands the first registered wins. And the bindings dispatch
+under `bin/candy-code`'s shell; an app embedding `Chat` bare sees only the
+alias half of the map, because the consult lives in `App::handleKey()`.
 
 ### macOS: the Option key
 

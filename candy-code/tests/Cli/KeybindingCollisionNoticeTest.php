@@ -200,6 +200,47 @@ final class KeybindingCollisionNoticeTest extends TestCase
         );
     }
 
+    public function testACommandEntryCollidingWithAShippedChordEarnsTheLaunchRow(): void
+    {
+        // C-EXT-5: command entries ride overrides() precisely so this fires.
+        // The first loop is id-generic — it walks the map and compares the
+        // entry's chord against every shipped row — so a command entry
+        // stepping on `chat.repaint`'s Ctrl+L is announced exactly like an
+        // ordinary override would be, with the entry id named in the row.
+        KeyBindingRegistry::useOverrides(['command:repaint' => 'Ctrl+L']);
+
+        Bootstrap::reportKeybindingCollisions();
+
+        $rows = self::collisionRows();
+        self::assertCount(1, $rows, 'the command entry must be announced like any other override, got: ' . print_r($rows, true));
+        self::assertStringContainsString('command:repaint', $rows[0]);
+        self::assertStringContainsString('Ctrl+L', $rows[0]);
+        self::assertStringContainsString('chat.repaint', $rows[0]);
+    }
+
+    public function testACommandSharingItsChordWithAnOverrideIsDeliberatelySilent(): void
+    {
+        // The documented silence (docs/SETTINGS.md, the `command:<name>`
+        // section): the shared-chord loop walks the shipped ROWS, and a
+        // command id is not a row — so a command and an override on the same
+        // unshipped chord earn no row either shape. The command wins at the
+        // funnel itself (the consult sits above the alias translation), not
+        // through an announcement; this pin keeps the silence declared
+        // rather than discovered.
+        KeyBindingRegistry::useOverrides([
+            'chat.palette' => 'Ctrl+Z',
+            'command:keys' => 'Ctrl+Z',
+        ]);
+
+        Bootstrap::reportKeybindingCollisions();
+
+        self::assertSame([], self::collisionRows());
+        self::assertSame([], array_values(array_filter(
+            Bootstrap::launchNotices(),
+            static fn (string $row): bool => str_contains($row, 'both claim'),
+        )), 'the shared-chord row names shipped rows against each other; a command entry must not force its way into it');
+    }
+
     /** @return list<string> every seated notice row naming a chord collision */
     private static function collisionRows(): array
     {

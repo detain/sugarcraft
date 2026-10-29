@@ -18,6 +18,8 @@ use SugarCraft\Code\Commands\Specs\BuiltInCommands;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
 
 /**
  * TUI-4a (plan_comparison 6.14): the `keybindings` map hot-reloads through
@@ -196,6 +198,33 @@ final class KeysReloadTest extends TestCase
             preg_match('/warnLaunchRows/', self::bootstrapBodyOf('reloadKeybindings')),
             'reloadKeybindings() must announce through the notice sink, not the launch buffer',
         );
+    }
+
+    public function testACommandEntryReachesTheCommandConsultThroughARealReload(): void
+    {
+        // C-EXT-5: the dispatch map is memoised on first consult, so a
+        // reload that forgot to clear the memo would keep answering from a
+        // derivation built against the previous map — the same silent-stale
+        // shape every other pin in this class proves for the claim sets.
+        // Driving the real `reloadKeybindings()` seam (not useOverrides()
+        // directly) also pins that command entries survive the reload's
+        // validator consult rather than being refused as unknown ids.
+        $this->writeSettings(['keybindings' => ['command:keys' => 'Ctrl+Q']]);
+        Bootstrap::reloadKeybindings();
+        self::assertSame('keys', KeyBindingRegistry::commandFor(new KeyMsg(KeyType::Char, 'q', ctrl: true)), 'fixture: the first chord fires before the second reload seats the memo');
+        RuntimeNoticeSink::drain();
+
+        $this->writeSettings(['keybindings' => ['command:keys' => 'Ctrl+Z']]);
+        Bootstrap::reloadKeybindings();
+
+        self::assertNull(KeyBindingRegistry::commandFor(new KeyMsg(KeyType::Char, 'q', ctrl: true)), 'the old chord must let go when the map is reloaded');
+        self::assertSame('keys', KeyBindingRegistry::commandFor(new KeyMsg(KeyType::Char, 'z', ctrl: true)), 'the command map must be re-derived, not served from the pre-reload memo');
+        self::assertSame(['command:keys' => 'Ctrl+Z'], KeyBindingRegistry::commandBindings());
+
+        // The entry stays in overrides() on purpose — that map is the launch
+        // collision drain's source, and the reload re-applies through it.
+        self::assertArrayHasKey('command:keys', KeyBindingRegistry::overrides());
+        RuntimeNoticeSink::drain();
     }
 
     public function testUnbindRidesTheReloadAndAnInvalidReReadKeepsTheLiveKeymap(): void

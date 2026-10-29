@@ -235,6 +235,14 @@ final class KeyBindingRegistry
     public const UNBOUND_SENTINEL = "\x1c\x1c";
 
     /**
+     * The id prefix that turns a `keybindings` entry into a key-bindable
+     * slash command (plan_comparison C-EXT-5): `"command:<name>": "<chord>"`
+     * binds the chord to running `/<name>` through the chat's own command
+     * dispatch, alongside the shipped bindings rather than replacing one.
+     */
+    public const COMMAND_BINDING_PREFIX = 'command:';
+
+    /**
      * Register the `keybindings` overrides for this process.
      *
      * Called once at launch ({@see \SugarCraft\Code\Cli\Bootstrap::chat()}),
@@ -300,6 +308,7 @@ final class KeyBindingRegistry
         self::$inertChordMemo = null;
         self::$ctrlRuneMemo = [];
         self::$yieldedRuneMemo = null;
+        self::$commandMemo = null;
     }
 
     /** The binding ids the setting unbound, in registration order. */
@@ -312,6 +321,95 @@ final class KeyBindingRegistry
     public static function overrides(): array
     {
         return self::$overrides;
+    }
+
+    /**
+     * The command bindings split out of the registered overrides, in
+     * registration order: binding id (`command:` + name) => chord label.
+     *
+     * The entries stay inside {@see overrides()} on purpose — the launch
+     * collision row is derived from that one map
+     * ({@see \SugarCraft\Code\Cli\Bootstrap::reportKeybindingCollisions()}),
+     * so a `command:` chord that steps on a shipped binding announces itself
+     * at launch exactly like a plain override does.
+     *
+     * @return array<string, string>
+     */
+    public static function commandBindings(): array
+    {
+        $bound = [];
+        foreach (self::$overrides as $id => $chord) {
+            if (str_starts_with($id, self::COMMAND_BINDING_PREFIX)) {
+                $bound[$id] = $chord;
+            }
+        }
+
+        return $bound;
+    }
+
+    /**
+     * Press-level consult for the command bindings: the slash-command name
+     * the keypress is bound to, or null when no `command:` entry claims it.
+     *
+     * Read at the top of {@see \SugarCraft\Code\App\App::handleKey()} BEFORE
+     * the alias funnel, because a command binding is not an alias for a
+     * shipped row — it is its own dispatch, and translating it through
+     * `aliasPress()` would hand the press to the chat input like any other
+     * rune. The press matches on the canonical chord id
+     * ({@see KeyBinding::pressId()}), so the setting spells the chord the
+     * same way it spells any override chord.
+     */
+    public static function commandFor(KeyMsg $msg): ?string
+    {
+        // Hot path: every keystroke in the App shell passes through here,
+        // and an empty override map — the default install — must answer
+        // without building (or touching) the memo.
+        if (self::$overrides === []) {
+            return null;
+        }
+
+        return self::commandMap()[KeyBinding::pressId($msg)] ?? null;
+    }
+
+    /**
+     * Derivation for {@see commandFor()}: canonical pressed-chord id =>
+     * command name. Entries with no name after the prefix, or a chord the
+     * canonical press id cannot be rebuilt from, are skipped — the validator
+     * refuses those shapes at the setting boundary
+     * ({@see \SugarCraft\Code\Config\Settings\Validator\KeyBindingsValidator}),
+     * and a reload path that somehow carried one must not crash a keystroke.
+     *
+     * Two bindings claiming the same chord resolve to the FIRST registered
+     * (the map is built with `??=`): the collision notice covers
+     * command-vs-shipped claims, and a self-inflicted double claim needs no
+     * second winner rule beyond "spelling order decides", the same way two
+     * shipped rows sharing a rune would.
+     */
+    private static ?array $commandMemo = null;
+
+    /**
+     * @return array<string, string>
+     */
+    private static function commandMap(): array
+    {
+        if (self::$commandMemo !== null) {
+            return self::$commandMemo;
+        }
+
+        $map = [];
+        foreach (self::commandBindings() as $id => $chord) {
+            $name = substr($id, strlen(self::COMMAND_BINDING_PREFIX));
+            if ($name === '') {
+                continue;
+            }
+
+            $pressId = KeyBinding::parseChord($chord);
+            if ($pressId !== null) {
+                $map[$pressId] ??= $name;
+            }
+        }
+
+        return self::$commandMemo = $map;
     }
 
     /**

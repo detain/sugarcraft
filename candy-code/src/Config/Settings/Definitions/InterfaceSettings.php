@@ -298,7 +298,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.keybindings.label'))
                 ->withHelp(Lang::t('settings.keybindings.help'))
                 ->withReaderSymbol(KeyBindingRegistry::class . '::chordFor')
-                ->withReadBy('`Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `aliasPress()` (via `effective()`) at `App::handleKey()` — re-applied mid-session by `/keys reload` → `Bootstrap::reloadKeybindings()` (TUI-4a)'),
+                ->withReadBy('`Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `aliasPress()` (via `effective()`) at `App::handleKey()`; `command:` ids split to `commandFor()` at the top of `App::handleKey()` (C-EXT-5) — re-applied mid-session by `/keys reload` → `Bootstrap::reloadKeybindings()` (TUI-4a)'),
             // TUI-3A: the composer's vim MODE (plan_comparison.md §3). USER
             // tier on purpose — like `keybindings` above it, a checked-out
             // project must not be able to flip the operator's own keystrokes;
