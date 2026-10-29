@@ -362,8 +362,10 @@ nobody infers them from the shape of the code:
   into Read, Edit, Write, ApplyPatch, Glob and Grep, which deliver the rule in their tool
   output on the first touch of a matching file — re-walking the rules on every
   consult, so a scoped rule written mid-session is delivered too. A rule's
-  `keywords:` and `description:` are still not applied: `KeywordTrigger` and
-  `IntentTrigger` have no consumer in `src/`.
+  `keywords:` and `description:` are still not applied to rules:
+  `IntentTrigger` has no consumer in `src/`, and `KeywordTrigger`'s only consumer
+  is the standing-intent seam in `RulePathNudge` (memory `when:` triggers, not
+  rule `keywords:`).
 - **`context:` is not consulted at the STANDING-BODY splice** — the
   `Runtime::planEnabledSkills()` path splices every enabled skill's body
   regardless of context. It IS consulted at the Skill tool, at `$name`

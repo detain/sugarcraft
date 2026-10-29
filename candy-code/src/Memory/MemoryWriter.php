@@ -29,7 +29,7 @@ use SugarCraft\Code\Context\ProjectMemoryWriter;
 final class MemoryWriter
 {
     /** The note types {@see MemoryEntry} carries and the prompt instructions name. */
-    public const TYPES = ['pattern', 'convention', 'decision', 'preference'];
+    public const TYPES = ['pattern', 'convention', 'decision', 'preference', 'intent'];
 
     /** @var \Closure(): ?MemoryStore */
     private \Closure $homeResolver;
@@ -100,12 +100,21 @@ final class MemoryWriter
     /**
      * Save a new note.
      *
+     * An `intent` note (C-CTX-3.f) additionally carries a `when:` trigger —
+     * `path:<glob>` or `keyword:<word>` (or a bare value classified by
+     * {@see MemoryEntry::normalizeWhen()}) — that {@see \SugarCraft\Code\Context\RulePathNudge}
+     * consults at tool time. The trigger is refused LOUD at save: an intent
+     * without one, a malformed one, and a `when:` on any other type all throw
+     * rather than persist a note whose promise its trigger cannot keep.
+     *
      * @param list<string> $tags
      *
-     * @throws \InvalidArgumentException on an empty note, an unknown scope or type
+     * @throws \InvalidArgumentException on an empty note, an unknown scope or type,
+     *                                   a missing/malformed intent trigger, or a
+     *                                   trigger on a non-intent type
      * @throws \RuntimeException when no store can take the note
      */
-    public function save(string $content, string $scope = 'project', string $type = 'pattern', array $tags = []): MemorySaveResult
+    public function save(string $content, string $scope = 'project', string $type = 'pattern', array $tags = [], ?string $when = null): MemorySaveResult
     {
         if (trim($content) === '') {
             throw new \InvalidArgumentException('a memory note must not be empty');
@@ -119,17 +128,27 @@ final class MemoryWriter
             throw new \InvalidArgumentException("unknown memory type '{$type}'");
         }
 
+        $normalizedWhen = null;
+        if ($type === 'intent') {
+            if ($when === null || trim($when) === '') {
+                throw new \InvalidArgumentException("type 'intent' needs a when: trigger ('path:<glob>' or 'keyword:<word>')");
+            }
+            $normalizedWhen = MemoryEntry::normalizeWhen($when);
+        } elseif ($when !== null) {
+            throw new \InvalidArgumentException("a when: trigger only applies to type 'intent'");
+        }
+
         $repoWriter = $scope === 'project' ? ProjectMemoryWriter::createForRoot($this->root) : null;
         if ($repoWriter !== null) {
             $id = $repoWriter->write($content, $tags);
-            self::retype($repoWriter->store(), $id, $type);
+            self::restyle($repoWriter->store(), $id, $type, $normalizedWhen);
 
             return new MemorySaveResult($id, $scope, true, false);
         }
 
         $home = $this->home() ?? throw new \RuntimeException('the memory store is not available');
         $id = $home->add($content, $scope, $tags);
-        self::retype($home, $id, $type);
+        self::restyle($home, $id, $type, $normalizedWhen);
 
         return new MemorySaveResult($id, $scope, false, $scope === 'project');
     }
@@ -216,15 +235,66 @@ final class MemoryWriter
         return array_values($found);
     }
 
-    private static function retype(MemoryStore $store, string $id, string $type): void
+    /**
+     * Intent notes carrying a live `when:` trigger, repository store first.
+     *
+     * The one reader {@see \SugarCraft\Code\Context\RulePathNudge} binds for
+     * intent lookup (C-CTX-3.f): both stores, `project` then `user` scope,
+     * deduped by id the same way {@see recall()} dedupes — the repository
+     * copy of a shared id wins, matching the precedence an edit or delete
+     * reaches. Notes whose trigger never round-tripped (or were cleared) are
+     * excluded, so the nudge can never announce an intent that lost its
+     * promise: an intent with no trigger is just a note body.
+     *
+     * @return list<MemoryEntry>
+     */
+    public function intentNotes(): array
     {
-        if ($type === 'pattern') {
+        $found = [];
+        foreach ([$this->repository(), $this->home()] as $store) {
+            if ($store === null) {
+                continue;
+            }
+            foreach (['project', 'user'] as $scope) {
+                try {
+                    $notes = $store->list($scope);
+                } catch (\Throwable) {
+                    // A store that cannot be walked is no intent source; the
+                    // nudge stays silent rather than failing the tool call.
+                    continue;
+                }
+                foreach ($notes as $entry) {
+                    if ($entry->type() === 'intent' && $entry->when() !== '') {
+                        $found[$entry->id()] ??= $entry;
+                    }
+                }
+            }
+        }
+
+        return array_values($found);
+    }
+
+    /**
+     * Apply the type (and, for an intent, the normalised trigger) a store's
+     * default constructor could not know, in one read-modify-write.
+     */
+    private static function restyle(MemoryStore $store, string $id, string $type, ?string $when): void
+    {
+        if ($type === 'pattern' && $when === null) {
             return;
         }
 
         $entry = $store->get($id);
-        if ($entry !== null) {
-            $store->update($id, $entry->withType($type));
+        if ($entry === null) {
+            return;
         }
+
+        if ($type !== 'pattern') {
+            $entry = $entry->withType($type);
+        }
+        if ($when !== null) {
+            $entry = $entry->withWhen($when);
+        }
+        $store->update($id, $entry);
     }
 }

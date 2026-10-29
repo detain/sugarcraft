@@ -54,6 +54,20 @@ use SugarCraft\Code\Tools\ToolResult;
  * words are data this session reads, never instructions it obeys. The current
  * session id reaches the tool through the turn's {@see AcceptsShellOwner}
  * binding — the one per-turn session-id seam the engine already runs.
+ *
+ * STANDING INTENTS (C-CTX-3.f): `save` with `type` `intent` also takes a
+ * `when:` trigger — `path:<glob>` or `keyword:<word>[,<word>…]` — normalised
+ * and refused loudly by {@see MemoryEntry::normalizeWhen()} before any write
+ * (a malformed trigger answers in this tool's `Error: when …` shape, never a
+ * silently inert note). A saved intent is a standing steer: the path-nudge
+ * tracker {@see \SugarCraft\Code\Context\RulePathNudge} re-walks {@see
+ * MemoryWriter::intentNotes()} at every consult
+ * and rides a matching note into the next tool result, tagged and escaped the
+ * same way path-scoped rules are, once per note. Because a model-written
+ * intent steers later turns, the index names it under its own heading, with
+ * its trigger spelled out, and `delete` removes it by id — the visibility
+ * promise is that nothing can announce unseen; both legs are pinned by
+ * tests/Context/StandingIntentTest.php.
  */
 #[BuiltInTool(name: 'Memory', permission: ToolPermissionClass::NoAsk, position: 12, gloss: 'view, save, edit, delete and recall the persistent memory notes indexed in the system prompt, the past sessions of this project, or the compaction journal')]
 final readonly class MemoryTool implements Tool, BuildsFromCatalog, AcceptsShellOwner
@@ -87,9 +101,26 @@ final readonly class MemoryTool implements Tool, BuildsFromCatalog, AcceptsShell
     ) {
     }
 
+    /**
+     * Build from the catalog and wire standing intents into the nudge seam
+     * (C-CTX-3.f). The catalog build is the one moment the memory router and
+     * the path-nudge tracker are both in hand — `ToolBuildContext` carries
+     * them — and launching tools is the only caller that ever has both, so
+     * this is where the bind lands without widening `LaunchContext`. The
+     * tracker re-walks `intentNotes()` on every consult, so a note saved
+     * mid-session answers the next tool call; `withWriter()` copies (the
+     * per-agent delegation of C-AGT-3.b) deliberately do NOT re-bind — a
+     * delegation steers from the session's own intents, not from notes only
+     * the agent could see.
+     */
     public static function fromCatalog(ToolBuildContext $context): self
     {
-        return new self($context->memory, $context->root);
+        $writer = $context->memory;
+        if ($writer !== null) {
+            $context->ruleNudge->bindIntentSource(static fn (): array => $writer->intentNotes());
+        }
+
+        return new self($writer, $context->root);
     }
 
     /**
@@ -132,7 +163,10 @@ final readonly class MemoryTool implements Tool, BuildsFromCatalog, AcceptsShell
             . 'prompt lists them as an index (type, id, opening words, tags). '
             . '`view` with an `id` returns that note in full; without one, the full index. '
             . '`save` stores a new note (`content`, optional `scope` project|user, `type` '
-            . 'preference|convention|decision|pattern, `tags`). `str_replace` replaces the one occurrence of '
+            . 'preference|convention|decision|pattern|intent, `tags`). A `type` of `intent` also '
+            . 'requires `when`: `path:<glob>` or `keyword:<word>` — the harness then rides that note '
+            . 'into a later tool result once per turn when a tool touches a matching path, tagged as '
+            . 'a system reminder like a path-scoped rule. `str_replace` replaces the one occurrence of '
             . '`old_str` with `new_str` in the note `id`. `delete` removes the note `id`. `recall` searches '
             . 'for `query`; its optional `source` picks what to search: `notes` (default) these memory '
             . 'notes, `sessions` snippets from this project' . "'s earlier sessions, never this one, or "
@@ -156,6 +190,7 @@ final readonly class MemoryTool implements Tool, BuildsFromCatalog, AcceptsShell
                     'description' => 'project (default): this repository; user: follows the user into every project (save)',
                 ],
                 'type' => ['type' => 'string', 'enum' => MemoryWriter::TYPES, 'description' => 'Note type (save; default pattern)'],
+                'when' => ['type' => 'string', 'description' => 'Trigger, save with type intent only: path:<glob> or keyword:<word>[,<word>…]; a glob matches file paths tools touch, a keyword matches one appearing as a whole word in the touched path'],
                 'tags' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Tags (save)'],
                 'old_str' => ['type' => 'string', 'description' => 'Exact text to replace; must occur once (str_replace)'],
                 'new_str' => ['type' => 'string', 'description' => 'Replacement text (str_replace)'],
@@ -186,7 +221,7 @@ final readonly class MemoryTool implements Tool, BuildsFromCatalog, AcceptsShell
             return new ToolResult($callId, 'Error: action must be one of ' . implode(', ', self::ACTIONS), true);
         }
 
-        foreach (['id', 'content', 'scope', 'type', 'old_str', 'new_str', 'query', 'source'] as $field) {
+        foreach (['id', 'content', 'scope', 'type', 'when', 'old_str', 'new_str', 'query', 'source'] as $field) {
             if (isset($args[$field]) && !\is_string($args[$field])) {
                 return new ToolResult($callId, "Error: {$field} must be a string", true);
             }
@@ -232,6 +267,36 @@ final readonly class MemoryTool implements Tool, BuildsFromCatalog, AcceptsShell
             'project scope (this repository)' => $this->writer?->repository()?->list(MemoryScope::Project) ?? [],
             'project scope (home store)' => $home?->list(MemoryScope::Project) ?? [],
         ];
+
+        // Standing intents get their own heading (C-CTX-3.f): a note that will
+        // steer later turns must never hide among the plain notes, and one
+        // heading names every armed trigger where both the user and the model
+        // can read — and remove — it. Without any armed intent the answer is
+        // byte-identical to the historical grouping.
+        $intents = [];
+        foreach ($groups as $label => $entries) {
+            $plain = [];
+            foreach ($entries as $entry) {
+                if ($entry->type() === 'intent' && $entry->when() !== '') {
+                    $intents[] = [$label, $entry];
+                    continue;
+                }
+
+                $plain[] = $entry;
+            }
+
+            $groups[$label] = $plain;
+        }
+
+        if ($intents !== []) {
+            $lines = ['## standing intents (each rides tool results once per turn when a tool touches its when: trigger; delete one by its id)'];
+            foreach ($intents as [$label, $entry]) {
+                $lines[] = self::indexLine($entry) . ' [' . $label . ']';
+            }
+
+            $sections[] = implode("\n", $lines);
+        }
+
         foreach ($groups as $label => $entries) {
             if ($entries === []) {
                 continue;
@@ -270,13 +335,30 @@ final readonly class MemoryTool implements Tool, BuildsFromCatalog, AcceptsShell
             throw new \InvalidArgumentException('tags must be a list of strings');
         }
 
-        $result = $this->writer?->save($content, $scope, (string) ($args['type'] ?? 'pattern'), $tags)
+        // `when:` belongs to type intent only; the writer normalises it and a
+        // malformed trigger throws here, landing in this tool's `Error: …`
+        // shape (C-CTX-3.f loud-refusal law — never a silently inert intent).
+        $when = isset($args['when']) && \is_string($args['when']) && trim($args['when']) !== ''
+            ? $args['when']
+            : null;
+        $result = $this->writer?->save($content, $scope, (string) ($args['type'] ?? 'pattern'), $tags, $when)
             ?? throw new \RuntimeException('the memory store is not available');
 
         $where = $result->inRepository
             ? 'in this repository (' . ProjectMemoryWriter::RELATIVE_DIRECTORY . ')'
             : 'in the home store';
         $text = "Saved note {$result->id} (scope: {$result->scope}, {$where}).";
+        // Truth, not a promise: the sentence rides only when the trigger is
+        // actually on the note the stores now hold (the frontmatter carrier
+        // lands with this same wave; a note whose trigger did not persist
+        // must never be described as armed).
+        $armed = $when !== null
+            && (($this->writer?->locate($result->id)[0] ?? null)?->when() ?? '') !== '';
+        if ($armed) {
+            $text .= ' It is a standing intent: it rides later tool results once per turn, tagged as'
+                . ' a system reminder, when a tool touches a path matching its `when:` trigger, and'
+                . ' the note index lists it under its own heading.';
+        }
         if ($result->fellBackToHome) {
             $text .= ' The repository could not host ' . ProjectMemoryWriter::RELATIVE_DIRECTORY
                 . ', so this project note is kept on this machine only.';
@@ -465,16 +547,20 @@ final readonly class MemoryTool implements Tool, BuildsFromCatalog, AcceptsShell
         }
 
         $tags = $entry->tags() === [] ? '' : ' (tags: ' . implode(', ', $entry->tags()) . ')';
+        // The trigger is named in the listing itself (C-CTX-3.f): a steer that
+        // rides later turns is auditable only if its condition is visible.
+        $when = $entry->when() === '' ? '' : ' (when: ' . $entry->when() . ')';
 
-        return '- [' . $entry->type() . '] ' . $entry->id() . ': ' . $content . $tags;
+        return '- [' . $entry->type() . '] ' . $entry->id() . ': ' . $content . $when . $tags;
     }
 
     private static function header(MemoryEntry $entry, bool $inRepository): string
     {
         $tags = $entry->tags() === [] ? '' : ' · tags: ' . implode(', ', $entry->tags());
+        $when = $entry->when() === '' ? '' : ' · when: ' . $entry->when();
 
         return '[' . $entry->type() . '] ' . $entry->id() . ' · scope: ' . $entry->scope()
-            . ($inRepository ? ' · in this repository' : ' · in the home store') . $tags
+            . ($inRepository ? ' · in this repository' : ' · in the home store') . $when . $tags
             . ' · updated ' . $entry->modifiedAt()->format('Y-m-d');
     }
 }

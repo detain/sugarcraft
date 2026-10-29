@@ -6,7 +6,9 @@ namespace SugarCraft\Code\Context;
 
 use Closure;
 use InvalidArgumentException;
+use SugarCraft\Code\Context\Triggers\KeywordTrigger;
 use SugarCraft\Code\Context\Triggers\PathTrigger;
+use SugarCraft\Code\Memory\MemoryEntry;
 
 /**
  * Session-lifetime tracker that turns a rule's `paths:` frontmatter into a live
@@ -128,6 +130,33 @@ use SugarCraft\Code\Context\Triggers\PathTrigger;
  * {@see \SugarCraft\Code\Skills\SkillPathNudge}, which it deliberately does NOT
  * share a class with: one tracker per subject keeps a skill announcement and a
  * rule delivery from inheriting each other's budget.
+ *
+ * STANDING INTENTS (C-CTX-3.f). A second subject rides the same seam: memory
+ * notes of type `intent`, each carrying a normalised `when:` trigger —
+ * `path:<glob>` (matched with {@see PathTrigger}) or `keyword:<word>[,...]`
+ * (matched with {@see KeywordTrigger}, whole-word, against the same touched
+ * paths the rules are matched against). The tracker never opens a store: it
+ * holds a caller-supplied source closure — bound once at catalog build in
+ * {@see \SugarCraft\Code\Tools\BuiltIn\MemoryTool::fromCatalog()}, the single
+ * place the session's {@see \SugarCraft\Code\Memory\MemoryWriter} and this
+ * tracker are both in hand — and re-walks it per consult exactly like the rule
+ * loader, so an intent saved, edited or deleted mid-session is judged by the
+ * current note. Intents announce in their OWN envelope under their own header,
+ * after the rule envelope, spending the LEFTOVER of the same budget: rules
+ * first, and the class ceiling stays a true statement about the whole return.
+ * The one-shot ledger is shared but key-namespaced (`intent:` prefix) so an
+ * intent mark can never collide with a repository path, an emitted intent is
+ * never re-delivered on a later touch (once per intent per turn at most —
+ * the session-lifetime rule mirrored), and the fork union in
+ * {@see markAnnouncedPaths()} carries intent marks across children for free.
+ * A digest of trigger + body means an edited intent re-announces its new text,
+ * exactly like an edited rule. Tool-name triggers are refused at save
+ * ({@see \SugarCraft\Code\Memory\MemoryEntry::normalizeWhen()}) rather than
+ * accepted and silently inert: this seam sees paths, not calling tool names.
+ * Because an intent body is model-written steering text, every byte of it
+ * rides through {@see PromptFence::escape()} like a rule body, and the listing
+ * in {@see \SugarCraft\Code\Tools\BuiltIn\MemoryTool} names each intent's
+ * trigger so what steers the model stays visible and deletable by id.
  */
 final class RulePathNudge
 {
@@ -195,6 +224,40 @@ final class RulePathNudge
      * exactly what it delivered before the gate existed.
      */
     private readonly ?RulesState $rulesState;
+
+    /**
+     * Re-produces the session's intent notes on demand, or null while the
+     * channel is unbound.
+     *
+     * Bound once at catalog build ({@see \SugarCraft\Code\Tools\BuiltIn\MemoryTool::fromCatalog()}),
+     * never by the constructor: every other construction site — tests, forks,
+     * trackers built before a memory writer exists — stays byte-identical, and
+     * the closure keeps the walk on the consult-time clock the loader law (audit
+     * 15d-20) demands: a note saved, edited or deleted mid-session is judged by
+     * its current text on the next matching call.
+     *
+     * @var (Closure(): list<MemoryEntry>)|null
+     */
+    private ?Closure $intentSource = null;
+
+    /**
+     * The intents this channel can announce, keyed by note id (first-seen wins).
+     *
+     * Rebuilt by {@see reloadIntents()} from the bound source, filtered to
+     * `intent`-typed notes with a non-blank normalised `when:` — the same shape
+     * {@see hasPendingIntents()} and {@see collectIntents()} judge, per the E72
+     * filter-equality law the candidate list follows.
+     *
+     * @var array<string, MemoryEntry>
+     */
+    private array $intents = [];
+
+    /**
+     * {@see intentDigest()} of each candidate intent, under the same key.
+     *
+     * @var array<string, string>
+     */
+    private array $intentDigests = [];
 
     /**
      * Opens every nudge. Named once so {@see maxBytes()} prices it.
@@ -265,6 +328,29 @@ final class RulePathNudge
     private const DEFERRED_NOTE = '... [%d further path-scoped rule(s) matched; they announce on a later call.]';
 
     /**
+     * Namespace prefix for an intent's mark in the shared {@see $announced}
+     * ledger. Repository paths are absolute (they start with `/`), so a marked
+     * intent can never collide with a rule path, and the fork union in
+     * {@see markAnnouncedPaths()} carries both kinds of mark in one array.
+     */
+    private const INTENT_MARK_PREFIX = 'intent:';
+
+    /**
+     * Opens an intent envelope. Its own header rather than {@see HEADER}
+     * because the provenance differs — a rule is a rulebook file the operator
+     * ships, an intent is a note the model saved earlier — and the model must
+     * be able to tell them apart from the frame alone.
+     */
+    private const INTENT_HEADER = "<system-reminder>\n"
+        . "These standing intents match paths you just touched. Follow them where they apply:\n";
+
+    /**
+     * Counts the matched intents this call left unannounced — the intent shape
+     * of {@see DEFERRED_NOTE}, which it mirrors in wording and pricing.
+     */
+    private const INTENT_DEFERRED_NOTE = '... [%d further standing intent(s) matched; they announce on a later call.]';
+
+    /**
      * The share of its own output cap a capped tool spends on the rule channel:
      * one eighth, the same share the skills channel takes.
      *
@@ -323,6 +409,38 @@ final class RulePathNudge
     }
 
     /**
+     * Bind (or unbind with null) the session's intent-note source.
+     *
+     * The one place the memory router and this tracker meet is the catalog
+     * build — {@see \SugarCraft\Code\Tools\BuiltIn\MemoryTool::fromCatalog()}
+     * holds both — so the bind is a launch-time one-shot there; every other
+     * construction site ships the pre-C-CTX-3.f shape unchanged. Re-binding
+     * clears the rebuilt lists (marks are kept: a note already delivered by the
+     * previous source is not re-delivered just because the source changed),
+     * and the next consult re-walks whatever the new source answers.
+     *
+     * @param (Closure(): list<MemoryEntry>)|null $source
+     */
+    public function bindIntentSource(?Closure $source): void
+    {
+        $this->intentSource = $source;
+        $this->intents = [];
+        $this->intentDigests = [];
+    }
+
+    /**
+     * Whether standing intents have been bound on this tracker
+     * (C-CTX-3.f). Introspection only — the launch wiring pin in
+     * tests/Context/StandingIntentTest.php names the one place the bind must
+     * happen (`MemoryTool::fromCatalog`); a tracker that never got a source
+     * silently answers without intents, so "bound" must be observable.
+     */
+    public function intentSourceBound(): bool
+    {
+        return $this->intentSource !== null;
+    }
+
+    /**
      * Replace the candidate list with the announceable subset of $rules.
      *
      * @param array<mixed> $rules
@@ -366,6 +484,11 @@ final class RulePathNudge
      */
     private function reload(): void
     {
+        // Intents first: the true-bind below consults both digest maps, and a
+        // source that threw must not leave the rule walk half-applied behind a
+        // re-bound ledger — reloadIntents() mutates only its own two arrays.
+        $this->reloadIntents();
+
         if ($this->loader === null) {
             return;
         }
@@ -380,11 +503,64 @@ final class RulePathNudge
 
         $this->adopt($rules);
 
-        foreach ($this->announced as $path => $mark) {
-            if ($mark === true && isset($this->digests[$path])) {
-                $this->announced[$path] = $this->digests[$path];
+        foreach ($this->announced as $key => $mark) {
+            if ($mark !== true) {
+                continue;
+            }
+
+            $digest = $this->digests[$key] ?? $this->intentDigests[$key] ?? null;
+            if ($digest !== null) {
+                $this->announced[$key] = $digest;
             }
         }
+    }
+
+    /**
+     * Re-walk the bound intent source and rebuild the candidate list.
+     *
+     * The same consult-time clock {@see reload()} gives the rules (audit
+     * 15d-20): an intent saved mid-session is deliverable on the next matching
+     * call, an edited one re-announces its new text, a deleted one simply stops
+     * being a candidate. Notes failing the shape test — wrong type, blank
+     * trigger, duplicate id — are refused at the rebuild so the three filters
+     * ({@see hasPendingIntents()}, {@see collectIntents()} and this one) stay
+     * byte-identical in what they admit, per the E72 lesson
+     * {@see adopt()} records.
+     */
+    private function reloadIntents(): void
+    {
+        if ($this->intentSource === null) {
+            $this->intents = [];
+            $this->intentDigests = [];
+
+            return;
+        }
+
+        $notes = ($this->intentSource)();
+        if (!is_array($notes)) {
+            throw new InvalidArgumentException(sprintf(
+                'RulePathNudge intent source must return a list of MemoryEntry instances, %s given.',
+                get_debug_type($notes),
+            ));
+        }
+
+        $intents = [];
+        $digests = [];
+        foreach ($notes as $note) {
+            if (!$note instanceof MemoryEntry
+                || $note->type() !== 'intent'
+                || trim($note->when()) === ''
+                || isset($intents[$note->id()])
+            ) {
+                continue;
+            }
+
+            $intents[$note->id()] = $note;
+            $digests[$note->id()] = self::intentDigest($note);
+        }
+
+        $this->intents = $intents;
+        $this->intentDigests = $digests;
     }
 
     /**
@@ -490,10 +666,37 @@ final class RulePathNudge
         // call is exactly what can turn a settled guard back into a pending one.
         $this->reload();
 
-        if (!$this->hasPending()) {
+        $rulesNote = $this->hasPending() ? $this->collectRules($paths, $budget) : null;
+
+        // The intent envelope spends the LEFTOVER of the same budget, rules
+        // first, so the ceiling above stays a true statement about the whole
+        // return: an intent never displaces a rule the budget had already
+        // priced, and a call with no rules matched spends its whole share on
+        // intents.
+        $room = ($budget === null ? self::maxBytes() : min($budget, self::maxBytes()))
+            - ($rulesNote === null ? 0 : strlen($rulesNote));
+        $intentNote = $room > 0 && $this->hasPendingIntents()
+            ? $this->collectIntents($paths, $room)
+            : null;
+
+        if ($rulesNote === null && $intentNote === null) {
             return null;
         }
 
+        return ($rulesNote ?? '') . ($intentNote ?? '');
+    }
+
+    /**
+     * The rule half of {@see forPaths()} — collect, price, emit, mark.
+     *
+     * Moved verbatim from that method's body when standing intents joined the
+     * seam, so a session with no bound intent source returns byte-identical
+     * rule envelopes; the frozen budget and pointer tests are the proof.
+     *
+     * @param list<string> $paths
+     */
+    private function collectRules(array $paths, ?int $budget): ?string
+    {
         // Collected before anything is marked, because how many matched rules
         // did not fit is part of the result and cannot be known mid-loop.
         // Candidates are unique by path, so no rule can be collected twice.
@@ -611,7 +814,8 @@ final class RulePathNudge
     }
 
     /**
-     * Rule paths already surfaced this session, in announcement order.
+     * Keys of the announce ledger — rule paths already surfaced this session,
+     * plus `intent:<note-id>` marks (C-CTX-3.f), in announcement order.
      *
      * `strval` over the raw keys because PHP coerces a decimal-integer string
      * key to `int` on insertion, and a path is arbitrary repository text: a
@@ -639,6 +843,11 @@ final class RulePathNudge
      * inherited, so overwriting would let a stale inherited path erase the record
      * of which text the parent delivered. A new path is marked `true` (text
      * unknown) and bound on the next reload — see {@see $announced}.
+     *
+     * `intent:<note-id>` keys ride the same union: the child reports them, the
+     * parent stores them `true`, and {@see reload()} binds them to the intent's
+     * current digest, so an intent announced in a forked child is not announced
+     * twice and an intent edited after the fork still re-announces.
      *
      * @param list<string|int> $paths
      */
@@ -675,6 +884,210 @@ final class RulePathNudge
         }
 
         return false;
+    }
+
+    /**
+     * True while at least one announceable intent is still unannounced.
+     *
+     * The intent shape of {@see hasPending()} and the same E72 contract: the
+     * filter here must equal the one {@see collectIntents()} collects with,
+     * modulo the path-match the guard exists to avoid. There is no enable gate
+     * to mirror — a note the user deleted stops being a candidate at the
+     * rebuild, and an intent whose trigger cannot even be constructed is
+     * refused here and there alike.
+     */
+    private function hasPendingIntents(): bool
+    {
+        foreach ($this->intents as $id => $note) {
+            if ($this->intentIsAnnounced($id) || self::intentTrigger($note) === null) {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Has the model already received THIS intent's current text?
+     *
+     * The mark lives in the same {@see $announced} ledger as the rule marks,
+     * under {@see INTENT_MARK_PREFIX} + note id; a `true` mark (reported by a
+     * forked child, text unknown) counts as announced and is bound to the
+     * current digest on the next reload, exactly like a rule's.
+     */
+    private function intentIsAnnounced(string $id): bool
+    {
+        $mark = $this->announced[self::INTENT_MARK_PREFIX . $id] ?? null;
+
+        return $mark === true || ($mark !== null && $mark === ($this->intentDigests[$id] ?? null));
+    }
+
+    /**
+     * The intent half of a consult: collect, price, emit, mark.
+     *
+     * Mirrors {@see collectRules()} with two differences by design. There is no
+     * pointer branch: the rule pointer works because a rule file has an absolute
+     * path the model can go and Read, and an intent note has no path worth
+     * naming — a deferred intent simply waits for a later call, counted in the
+     * trailing note. And entries are priced against $room, the leftover of the
+     * same budget the rules already spent, so the pair never overflows the
+     * ceiling {@see forPaths()} promises.
+     *
+     * @param list<string> $paths
+     */
+    private function collectIntents(array $paths, ?int $budget): ?string
+    {
+        $pending = [];
+        foreach ($this->intents as $id => $note) {
+            if ($this->intentIsAnnounced($id)) {
+                continue;
+            }
+
+            if (self::intentTrigger($note) === null || !self::intentMatches($note, $paths)) {
+                continue;
+            }
+
+            $pending[$id] = $note;
+        }
+
+        if ($pending === []) {
+            return null;
+        }
+
+        $room = $budget === null ? self::maxBytes() : min($budget, self::maxBytes());
+        $noteReserve = strlen(sprintf(self::INTENT_DEFERRED_NOTE, PHP_INT_MAX)) + 1;
+
+        $used = strlen(self::INTENT_HEADER) + strlen(self::FOOTER);
+        $total = count($pending);
+        $seen = 0;
+        $lines = [];
+        $emitted = [];
+
+        foreach ($pending as $id => $note) {
+            ++$seen;
+            if (count($lines) >= self::MAX_ENTRIES) {
+                break;
+            }
+
+            $entry = self::intentEntry($note);
+            $cost = strlen($entry) + ($lines === [] ? 0 : 1);
+            $reserve = $seen === $total ? 0 : $noteReserve;
+            // Same indivisibility as the rule channel — a half-delivered intent
+            // is a half-steered model — and no pointer fallback, so an entry
+            // that does not fit simply defers.
+            if ($used + $cost + $reserve > $room) {
+                break;
+            }
+
+            $used += $cost;
+            $lines[] = $entry;
+            $emitted[] = $id;
+        }
+
+        if ($lines === []) {
+            return null;
+        }
+
+        foreach ($emitted as $id) {
+            $this->announced[self::INTENT_MARK_PREFIX . $id] = $this->intentDigests[$id];
+        }
+
+        $deferred = $total - count($emitted);
+        if ($deferred > 0) {
+            $lines[] = sprintf(self::INTENT_DEFERRED_NOTE, $deferred);
+        }
+
+        return self::INTENT_HEADER . implode("\n", $lines) . self::FOOTER;
+    }
+
+    /**
+     * Build the trigger a note's normalised `when:` names, or null when it
+     * cannot be built.
+     *
+     * Saved intents are normalised at write ({@see MemoryEntry::normalizeWhen()})
+     * and always well-formed, but the home store is plain YAML files the user
+     * may hand-edit, so a `when: path:` with nothing after the prefix must not
+     * be able to turn a tool call into an exception. The trigger is rebuilt per
+     * consult along with the candidate — no state, no cross-note leak.
+     */
+    private static function intentTrigger(MemoryEntry $note): PathTrigger|KeywordTrigger|null
+    {
+        $glob = $note->whenPathGlob();
+        if ($glob !== null) {
+            try {
+                return PathTrigger::new([$glob]);
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        $words = $note->whenKeywords();
+        if ($words === null) {
+            return null;
+        }
+
+        try {
+            return KeywordTrigger::new($words);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Does this intent's trigger admit any of the touched paths?
+     *
+     * Matched against exactly what the tools resolved — absolute paths, the
+     * same operand {@see matchesAny()} uses, for the same anchoring reason. A
+     * keyword intent whole-word-matches its words against those paths; that is
+     * the honest reading of a keyword trigger at a seam that only ever sees
+     * paths, and it is why a `tool:` trigger is refused at save rather than
+     * accepted and silently inert here.
+     *
+     * @param list<string> $paths
+     */
+    private static function intentMatches(MemoryEntry $note, array $paths): bool
+    {
+        $trigger = self::intentTrigger($note);
+        if ($trigger === null) {
+            return false;
+        }
+
+        foreach ($paths as $path) {
+            if ($trigger->matches($path)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+    /**
+     * Identity of the text {@see intentEntry()} would deliver: trigger and
+     * body, so editing either re-announces and merely matching a different path
+     * does not.
+     */
+    private static function intentDigest(MemoryEntry $note): string
+    {
+        return hash('xxh128', $note->when() . "\0" . $note->content());
+    }
+
+    /**
+     * One delivered intent: a label line naming the note id and its trigger,
+     * and the WHOLE escaped body.
+     *
+     * The id rides because the steering must be traceable to the note that
+     * carries it — the model (or the user) who wonders where an instruction
+     * came from runs `Memory view <id>`, and the trigger rides because an
+     * intent that fires for a reason the model can see is auditable in-context.
+     * Every byte is repository text, so every byte is escaped, exactly as in
+     * {@see entry()}: an intent is model-written, and a body that could open
+     * its own reminder would forge the platform's voice out of a note file.
+     */
+    private static function intentEntry(MemoryEntry $note): string
+    {
+        return '- ' . PromptFence::escape('intent ' . $note->id() . ' (when: ' . $note->when() . ')')
+            . "\n" . PromptFence::escape($note->content());
     }
 
     /**

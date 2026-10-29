@@ -169,8 +169,9 @@ subdirectory.
 default to `project`. An `add --scope agent` reply says that agent-scope notes
 are listable but never reach the prompt. `add` creates the entry with
 `type: pattern` and no tags; `MemoryEntry` supports `pattern`, `convention`,
-`decision` and `preference`, but the chat command only ever writes the first
-(the `Memory` tool's `save` takes any of the four, and tags).
+`decision`, `preference` and `intent`, but the chat command only ever writes
+the first (the `Memory` tool's `save` takes any of the five, and tags — and an
+`intent` additionally requires its `when:` trigger, below).
 
 `search` is a keyword search ranked by BM25 (roadmap 5.3-1). Every word of the
 query must appear in a note's content, type or tags, in any order; a word also
@@ -251,10 +252,37 @@ The model reads and writes the same notes through the `Memory` tool
 | Action | Arguments | Does |
 |---|---|---|
 | `view` | `id` (optional) | the note in full, with its type, scope and store; without an `id`, the whole index grouped by scope and store |
-| `save` | `content`, `scope` (`project` default, or `user`), `type` (`pattern` default, `convention`, `decision`, `preference`), `tags` | a new note; content over `ProjectMemoryWriter::MAX_CONTENT_BYTES` (8192) is refused — the `memory.projectNoteMaxBytes` setting (`config.json` only, read as each project note is written) moves the cap a note written into the repository is held to |
+| `save` | `content`, `scope` (`project` default, or `user`), `type` (`pattern` default, `convention`, `decision`, `preference`, `intent`), `tags`, `when` (required with `intent`) | a new note; content over `ProjectMemoryWriter::MAX_CONTENT_BYTES` (8192) is refused — the `memory.projectNoteMaxBytes` setting (`config.json` only, read as each project note is written) moves the cap a note written into the repository is held to |
 | `str_replace` | `id`, `old_str`, `new_str` | replaces the one occurrence of `old_str`; zero or several occurrences are refused |
 | `delete` | `id` | removes the note |
 | `recall` | `query`, `source` (`notes` default, `sessions`, `journal`) | `notes`: the notes whose content, type or tags match the query, best first (the `/memory search` ranking), at most 20. `sessions`: snippets from this project's earlier sessions, the current one excluded, at most 8 — needs the session search index the `/`-side body search builds. `journal`: the recent compaction journal entries through `CompactionJournal::recentView()`, oldest first, bounded by `VIEW_MAX_ENTRIES` (10) and `VIEW_MAX_BYTES` (6000). Session and journal text crosses `SecretRedactor` and is framed as untrusted data, never instructions |
+
+#### Standing intents (`type` `intent`)
+
+An `intent` is a note that steers as well as records: its `when:` trigger says
+when to remind. `save` with `type` `intent` requires `when:` — `path:<glob>`
+(matches a path a tool touches) or `keyword:<word>[,<word>…]` (matches when one
+of the words appears as a whole word in the touched path). A bare value that
+looks like a glob is stored as a path; anything else as a keyword list. The
+trigger is normalised on save and a malformed one is refused loudly with
+`Error: when …` before anything is written — a `tool:` trigger names itself as
+not wired rather than saving silently inert.
+
+An armed intent rides the next matching tool result inside a
+`<system-reminder>` envelope, once per note — the same seam path-scoped rules
+use (`RulePathNudge`, C-CTX-3.f), under its own header so rule reminders and
+standing intents stay distinguishable, and every byte of the note crosses
+`PromptFence::escape()` like every other note body. The index lists intents
+under their own `## standing intents` heading with the trigger spelled out, and
+`delete` by its id turns one off — the visibility promise is pinned by
+`tests/Context/StandingIntentTest.php`.
+
+Status: this step lands the save-side vocabulary, the refusals, the index
+heading and the tool-time seam. The `when:` column of the note frontmatter (the
+`MemoryStore` reader/writer) is this step's declared welder seam — until it
+lands, a saved intent's trigger does not survive the write, no intent arms from
+disk, and the `save` reply says only `Saved note …` (never the standing-intent
+sentence). See `lanes/C-CTX-3.f` under `prompt_kit/findings/comparison-1026/`.
 
 Every write goes through `Memory\MemoryWriter`, the router `/memory add` uses
 too, so a note the model saves lands exactly where the user's would: a

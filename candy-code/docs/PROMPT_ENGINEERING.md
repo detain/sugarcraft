@@ -560,8 +560,10 @@ reason each stays out:
   rule `RulePathNudge::isPathScoped()` claims, and `Bootstrap` wires `RulePathNudge` into Read,
   Edit, Write, ApplyPatch, Glob and Grep, which deliver the rule in their tool output on the first touch of a
   matching file. The nudge re-walks the rules on every consult, so a scoped rule added or edited
-  mid-session is delivered too. `keywords:` is still not applied: `KeywordTrigger` and
-  `IntentTrigger` have no consumer in `src/`, so a `keywords:`- or `description:`-only rule
+  mid-session is delivered too. `keywords:` is still not applied to rules:
+  `KeywordTrigger` has a consumer now — the standing-intent seam in `RulePathNudge`
+  (memory `when:` triggers, not rule `keywords:`) — and `IntentTrigger` has no consumer
+  in `src/`, so a `keywords:`- or `description:`-only rule
   renders into every session — but what is ignored is now NAMED, not silent: the
   `FrontmatterKeyAudit` `INERT[RULE]` roster carries `keywords`, so a rule file
   declaring it gets an audit row at launch. The `models:` half shipped its
@@ -592,7 +594,7 @@ How each user-facing surface reaches the model, and where it does not reach:
 - **Triggers.** Built per rule; only `paths:` is applied. A `paths:`-scoped rule leaves the
   system prompt and reaches the model through `RulePathNudge`, inside the `<system-reminder>`
   block that Read, Edit, Write, ApplyPatch, Glob and Grep append to their output when they touch a matching
-  file. `KeywordTrigger` and `IntentTrigger` have no consumer in `src/` — see the register above.
+  file. `IntentTrigger` has no consumer in `src/` — see the register above; `KeywordTrigger`'s consumer is the standing-intent seam in `RulePathNudge` (memory `when:` triggers, not rule `keywords:`).
   The listing-and-selection trigger family for *skills* does ship: slot 11 exists so discovered
   skills are auto-triggerable through the `Skill` tool.
 - **Skills.** Two channels, deliberately one body path: explicitly enabled skills contribute full
