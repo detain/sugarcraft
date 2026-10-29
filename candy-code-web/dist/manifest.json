@@ -1,6 +1,6 @@
 {
   "index.html": {
-    "file": "assets/index-BEY3YBNv.js",
+    "file": "assets/index-ssB6B1oX.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
@@ -8,7 +8,7 @@
       "src-web/lib/highlight.ts"
     ],
     "css": [
-      "assets/index-DC5Hzi7k.css"
+      "assets/index-CDJzcAVO.css"
     ]
   },
   "src-web/lib/highlight.ts": {

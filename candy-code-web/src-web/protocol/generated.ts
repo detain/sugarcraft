@@ -588,6 +588,29 @@ export interface Methods {
       })[]
     }
   }
+  /** Write one instruction document the session already reads — replace it by spelling content, or append raw bytes by spelling append (exactly one). The jail is the listing itself: path must equal a context.sources instructionFiles row, or "personal" for your own ~/.candy-code/AGENTS.md. A replace whose expectBytes no longer matches the file on disk refuses instruction_changed; a document past the loader's size cap refuses instruction_too_large; a path that now resolves through a symlink outside its jail refuses instruction_symlink. A landed write announces context.changed (reason "instructions") so the panel re-measures. */
+  "context.instructionWrite": {
+    params: {
+      sessionId: SessionId
+      /** A path context.sources listed for this session (an instructionFiles row, spelled exactly), or the sentinel `personal` for your own ~/.candy-code/AGENTS.md — the jail is the listing, and `personal` resolves server-side so a first quick-add works before the file exists. */
+      path: string
+      /** The full replacement text (the loader's per-document size cap; an instruction document larger than the prompt would ever read back is refused `instruction_too_large`). Exactly one of `content` / `append` must be spelled (`instruction_mode`). */
+      content?: string
+      /** Raw bytes appended under a lock instead of replacing — the web Composer spells the TUI quick-add line (`- note\n`) through this. The result must still fit the cap. */
+      append?: string
+      /** Conflict latch: the byte count the editor measured. A different count on disk now refuses `instruction_changed` — the same law the memory note save follows — so two surfaces cannot silently overwrite each other. */
+      expectBytes?: number
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      /** The resolved file actually written. */
+      path: string
+      /** The file's byte count after the write. */
+      bytes: number
+      mode: "replace" | "append"
+    }
+  }
   /** What the session's context is built from: instruction files, memory notes, skills, declared MCP servers, refused paths, the token breakdown, and this root's pending project-trust prompts. */
   "context.sources": {
     params: {
@@ -1669,6 +1692,7 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "client.viewing": "read",
   "command.exec": "write",
   "command.list": "read",
+  "context.instructionWrite": "write",
   "context.sources": "read",
   "context.trust": "approve",
   "files.changed": "read",
@@ -1745,6 +1769,7 @@ export const IDEMPOTENT_METHODS: readonly MethodName[] = [
   "bg.spawn",
   "bg.stop",
   "command.exec",
+  "context.instructionWrite",
   "generate.submit",
   "memory.add",
   "memory.delete",

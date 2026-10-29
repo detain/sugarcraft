@@ -2268,6 +2268,74 @@
                 ]
             }
         },
+        "context.instructionWrite": {
+            "description": "Write one instruction document the session already reads — replace it by spelling content, or append raw bytes by spelling append (exactly one). The jail is the listing itself: path must equal a context.sources instructionFiles row, or \"personal\" for your own ~/.candy-code/AGENTS.md. A replace whose expectBytes no longer matches the file on disk refuses instruction_changed; a document past the loader's size cap refuses instruction_too_large; a path that now resolves through a symlink outside its jail refuses instruction_symlink. A landed write announces context.changed (reason \"instructions\") so the panel re-measures.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "path": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "description": "A path context.sources listed for this session (an instructionFiles row, spelled exactly), or the sentinel `personal` for your own ~/.candy-code/AGENTS.md — the jail is the listing, and `personal` resolves server-side so a first quick-add works before the file exists."
+                    },
+                    "content": {
+                        "type": "string",
+                        "maxLength": 61440,
+                        "description": "The full replacement text (the loader's per-document size cap; an instruction document larger than the prompt would ever read back is refused `instruction_too_large`). Exactly one of `content` / `append` must be spelled (`instruction_mode`)."
+                    },
+                    "append": {
+                        "type": "string",
+                        "maxLength": 61440,
+                        "description": "Raw bytes appended under a lock instead of replacing — the web Composer spells the TUI quick-add line (`- note\\n`) through this. The result must still fit the cap."
+                    },
+                    "expectBytes": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Conflict latch: the byte count the editor measured. A different count on disk now refuses `instruction_changed` — the same law the memory note save follows — so two surfaces cannot silently overwrite each other."
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "sessionId",
+                    "path"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "description": "The resolved file actually written."
+                    },
+                    "bytes": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "The file's byte count after the write."
+                    },
+                    "mode": {
+                        "enum": [
+                            "replace",
+                            "append"
+                        ]
+                    }
+                },
+                "required": [
+                    "path",
+                    "bytes",
+                    "mode"
+                ]
+            }
+        },
         "context.sources": {
             "description": "What the session's context is built from: instruction files, memory notes, skills, declared MCP servers, refused paths, the token breakdown, and this root's pending project-trust prompts.",
             "scope": "read",
