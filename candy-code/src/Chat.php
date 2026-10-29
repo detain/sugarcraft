@@ -13075,7 +13075,7 @@ final class Chat implements Model
     }
 
     /**
-     * `/help` (crush_code.md Phase 4 item 2) — the command list, which is what
+     * `/help` (crush_code.md Phase 4 item 2) - the command list, which is what
      * `/help` means in every other CLI. It used to be a second spelling of
      * `/keys`, i.e. two names for the keyboard reference and no name at all for
      * the thing a first-time user is actually asking for.
