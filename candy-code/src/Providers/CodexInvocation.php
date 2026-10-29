@@ -24,11 +24,21 @@ use SugarCraft\Code\Support\ProcessContainment;
  * turn.completed / turn.failed / bare error) plus the binary's serde schema
  * for the payload fields (agent_message text, TokenUsage buckets). This is
  * the house defense doctrine: pin what was measured, name what was not.
+ * C-PRV-4.b (2026-10-29) extended the record on the SAME installed release:
+ * `codex exec --help` was read live for the isolation and schema flags —
+ * `--ignore-user-config` ("Do not load $CODEX_HOME/config.toml… authentication
+ * still uses CODEX_HOME"), `--output-schema <FILE>`, and the three accepted
+ * `-s` values. What was NOT observed is constrained decoding through an
+ * authenticated run, which is why {@see CodexProvider::supportsJsonSchema()}
+ * still answers false with the channel wired.
  */
 final readonly class CodexInvocation
 {
     /** The codex-cli release every flag and event shape here was verified against. */
     public const PROBED_CODEX_VERSION = '0.154.0';
+
+    /** Temp-file prefix for a spilled output schema; see {@see spillOutputSchema()}. */
+    public const OUTPUT_SCHEMA_FILE_PREFIX = 'sc_codex_schema_';
 
     public function __construct(
         private string $codexPath = 'codex',
@@ -67,12 +77,25 @@ final readonly class CodexInvocation
      * Build the headless JSON-event flags, ending in the stdin prompt operand.
      *
      * The trailing `-` is what makes the CLI read the prompt from stdin for a
-     * fresh run AND for `exec resume` (both help texts state it). NO
-     * sandbox-bypassing flag is ever emitted: the default stays whatever the
-     * operator's ~/.codex/config.toml grants, and `sandbox` only ever NARROWS
-     * it (the three values 0.154.0 accepts are read-only, workspace-write and
-     * danger-full-access; we pass through a configured value verbatim and
-     * validate nothing, because codex itself refuses the rest).
+     * fresh run AND for `exec resume` (both help texts state it).
+     *
+     * The sandbox posture changed under C-PRV-4.b: this method used to say
+     * NOTHING about `-s` unless the operator configured one, which left the
+     * child running under whatever authority its own ~/.codex/config.toml
+     * granted — a plan-mode turn could still edit files. {@see
+     * CodexProvider::options()} now ALWAYS carries a `sandbox` key (the
+     * configured value, else workspace-write, narrowed by the host permission
+     * mode down to read-only), and `ignoreUserConfig` rides when `isolate` is
+     * on so a foreign config.toml contributes neither a wider sandbox nor MCP
+     * servers to the child. `danger-full-access` is still only ever emitted
+     * when an operator configured exactly that; nothing here widens anything.
+     * The three values 0.154.0 accepts are read-only, workspace-write and
+     * danger-full-access; we pass through verbatim and validate nothing,
+     * because codex itself refuses the rest.
+     *
+     * `outputSchemaFile` (a path from {@see spillOutputSchema()}) becomes
+     * `--output-schema <path>`; the caller MUST unlink the file once the
+     * child has exited.
      *
      * @param array<string, mixed> $options
      * @return array<string>
@@ -80,6 +103,15 @@ final readonly class CodexInvocation
     public function execArgs(array $options = []): array
     {
         $args = ['exec', ...$this->baseArgs(), '--json'];
+
+        // C-PRV-4.b (§6.2 ruling): isolation on by default for the codex
+        // route. Verified in `codex exec --help` at PROBED_CODEX_VERSION: the
+        // flag drops $CODEX_HOME/config.toml — foreign MCP servers, profiles,
+        // and any sandbox default it carries — while authentication keeps
+        // using CODEX_HOME, so subscription auth survives untouched.
+        if (!empty($options['ignoreUserConfig'])) {
+            $args[] = '--ignore-user-config';
+        }
 
         if (isset($options['model'])) {
             $args[] = '-m';
@@ -100,9 +132,55 @@ final readonly class CodexInvocation
             $args[] = 'model_reasoning_effort=' . (string) $options['reasoningEffort'];
         }
 
+        if (isset($options['outputSchemaFile'])) {
+            $args[] = '--output-schema';
+            $args[] = (string) $options['outputSchemaFile'];
+        }
+
         $args[] = '-';
 
         return $args;
+    }
+
+    /**
+     * Write the request's JSON schema to a private temp file and return its
+     * path for the `outputSchemaFile` option; the caller MUST unlink the file
+     * once the child has exited.
+     *
+     * A string schema rides verbatim (the raw JSON document as the caller
+     * holds it); an array is encoded. `tempnam()` creates the file 0600 under
+     * a name nothing else holds — the same spill doctrine as
+     * {@see ClaudeCodeInvocation::spillSystemPrompt()}, so a SIGKILLed parent
+     * leaves only private residue carrying {@see OUTPUT_SCHEMA_FILE_PREFIX}.
+     *
+     * @param string|array<mixed> $schema
+     * @throws ProviderException when the schema cannot be encoded or the file
+     *                           cannot be written: silently dropping
+     *                           `--output-schema` and asking the child to
+     *                           freestyle would be a fabricated success path.
+     */
+    public function spillOutputSchema(string|array $schema): string
+    {
+        $json = is_string($schema)
+            ? $schema
+            : json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        if (!is_string($json)) {
+            throw new ProviderException('Failed to encode the Codex output schema');
+        }
+
+        $path = @tempnam(sys_get_temp_dir(), self::OUTPUT_SCHEMA_FILE_PREFIX);
+        if ($path === false) {
+            throw new ProviderException('Failed to create the Codex output schema file');
+        }
+
+        if (@file_put_contents($path, $json) !== strlen($json)) {
+            @unlink($path);
+
+            throw new ProviderException('Failed to write the Codex output schema file');
+        }
+
+        return $path;
     }
 
     /**

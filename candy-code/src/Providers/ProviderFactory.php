@@ -144,9 +144,11 @@ final readonly class ProviderFactory
         // PRV-4: `codexPath` mirrors `claudePath` (the binary to spawn); no
         // apiKey key exists on purpose — subscription auth rides `codex login`
         // upstream and OPENAI_API_KEY rides the inherited environment.
+        // C-PRV-4.b: `isolate` mirrors the claude-code row (default true) —
+        // it decides whether the child also reads $CODEX_HOME/config.toml.
         'codex' => [
             'required' => ['codexPath'],
-            'optional' => ['model', 'sandbox', 'fallbackModels'],
+            'optional' => ['model', 'sandbox', 'isolate', 'fallbackModels'],
         ],
         'sglang' => [
             'required' => ['baseUrl', 'model'],
@@ -1447,6 +1449,12 @@ final readonly class ProviderFactory
      * OPENAI_API_KEY, and this product never mints, stores, or routes a codex
      * credential.
      *
+     * C-PRV-4.b: `isolate` defaults to true (the §6.2 ruling, twin of the
+     * claude-code arm) — the child drops $CODEX_HOME/config.toml with
+     * `--ignore-user-config`, so foreign MCP servers, profiles and sandbox
+     * defaults never reach the spawn (auth still uses CODEX_HOME); `false`
+     * restores the old full-config inheritance.
+     *
      * @param array<string, mixed> $config
      */
     private function createCodex(array $config): CodexProvider
@@ -1464,7 +1472,12 @@ final readonly class ProviderFactory
             ));
         }
 
-        return new CodexProvider($invocation, $model, $sandbox);
+        return new CodexProvider(
+            $invocation,
+            $model,
+            $sandbox,
+            self::configuredIsolate($config['isolate'] ?? null),
+        );
     }
 
     /**
@@ -1503,7 +1516,9 @@ final readonly class ProviderFactory
      * the default (true here, isolation ON), real booleans ride through,
      * boolean-ish strings parse, anything else fails loudly. An isolation
      * decision that silently picked a side on a typo is how surprise
-     * loads of ~/.claude hooks start happening.
+     * loads of ~/.claude hooks start happening. C-PRV-4.b shares this
+     * normaliser with the codex route, where the same typo would silently
+     * load a foreign ~/.codex/config.toml instead.
      */
     private static function configuredIsolate(mixed $value): bool
     {

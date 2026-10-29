@@ -9,6 +9,7 @@ use SugarCraft\Code\Messages\Message;
 use SugarCraft\Code\Messages\SystemMessage;
 use SugarCraft\Code\Messages\ToolResultMessage;
 use SugarCraft\Code\Messages\UserMessage;
+use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Usage;
@@ -29,12 +30,16 @@ use SugarCraft\Code\Usage;
  *   because candy-code's tool set is never bridged into the child: codex runs
  *   its OWN sandboxed agent upstream and we relay its text. Advertising the
  *   capability would repeat the exact lie round-65 caught in claude-code.
- * - NOT a schema channel — no `--output-schema` shape was probed against an
- *   authenticated run, so {@see supportsJsonSchema()} answers false.
+ * - NOT an ADVERTISED schema channel, even though C-PRV-4.b wired the
+ *   `--output-schema` path ({@see options()} carries the temp-file spill):
+ *   the flag exists in `codex exec --help` at PROBED_CODEX_VERSION, but
+ *   constrained decoding itself has never been observed through an
+ *   authenticated run on this host, so {@see supportsJsonSchema()} still
+ *   answers false. Flipping it is a probe record, not a code change.
  * - NOT a token-billed provider here: costPer1kTokens() returns 0.0 for the
  *   same reason claude-code's does — billing belongs to the subscription.
  */
-final readonly class CodexProvider implements ProviderInterface, RebindsModel, ShapesReasoningEffort
+final readonly class CodexProvider implements ProviderInterface, RebindsModel, ShapesReasoningEffort, HonoursHostPermissionMode
 {
     /**
      * The slug probed against codex-cli 0.154.0 on 2026-10-19.
@@ -69,13 +74,37 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel, S
      */
     private const CODEX_EFFORT_LEVELS = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
 
+    /**
+     * The `-s` values this product ever emits on its own authority. The
+     * 0.154.0 help lists read-only / workspace-write / danger-full-access;
+     * the third exists only as an operator-set {@see $sandbox} dial and is
+     * never generated here — host permission modes narrow this child, they
+     * do not widen it.
+     */
+    private const SANDBOX_READ_ONLY = 'read-only';
+    private const SANDBOX_WORKSPACE_WRITE = 'workspace-write';
+
     public function __construct(
         private CodexInvocation $invocation,
         private string $defaultModel = self::DEFAULT_MODEL,
-        // Null means "say nothing": the child keeps the operator's own
-        // ~/.codex/config.toml sandbox, the widest authority we ever grant a
-        // spawn. A set value rides `-s` verbatim and codex validates it.
+        // C-PRV-4.b rewrote what this dial means. It used to be opt-in: null
+        // said nothing and the child kept whatever sandbox its own
+        // ~/.codex/config.toml granted — the widest authority ever granted a
+        // spawn, and invisible to the host permission modes. Now options()
+        // ALWAYS emits a sandbox (this value, else workspace-write) and the
+        // host mode can only pull it tighter.
         private ?string $sandbox = null,
+        // C-PRV-4.b, mirroring the claude-code twin under the §6.2 ruling:
+        // isolation ON by default for the codex route. true adds
+        // `--ignore-user-config`, which drops $CODEX_HOME/config.toml —
+        // foreign MCP servers, profiles, sandbox defaults — while auth keeps
+        // using CODEX_HOME (the flag's own help text). Only an explicit
+        // `isolate: false` restores the old full-config inheritance.
+        private bool $isolate = true,
+        // HonoursHostPermissionMode: null means no host gate is speaking to
+        // this dial — EngineBackend rebinds per turn only when a mode is in
+        // play, and the sandbox then follows it.
+        private ?PermissionMode $hostMode = null,
     ) {}
 
     public function name(): string
@@ -119,9 +148,28 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel, S
         return false;
     }
 
+    /**
+     * False — by probe record, not by absence of plumbing. C-PRV-4.b wired
+     * the real channel: {@see options()} spills the request schema to a 0600
+     * temp file and {@see CodexInvocation::execArgs()} sends it as
+     * `--output-schema`, both verified to exist in `codex exec --help` at
+     * CodexInvocation::PROBED_CODEX_VERSION. What has NOT been observed is
+     * constrained decoding THROUGH an authenticated run (no login on the
+     * probing hosts), and advertising the capability before that record —
+     * with Runtime then billing the turn against a shape nobody verified —
+     * is the round-65 claude-code lie this class exists to not repeat. The
+     * flip to true is the probe record (and a PROBED_CODEX_VERSION bump if
+     * the CLI has moved since); callers keep refusing schema asks on the
+     * way here, so the channel stays dormant-but-honest in the meantime.
+     */
     public function supportsJsonSchema(): bool
     {
         return false;
+    }
+
+    public function isolate(): bool
+    {
+        return $this->isolate;
     }
 
     /**
@@ -131,6 +179,21 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel, S
     public function withModel(string $model): static
     {
         return new self(...array_merge(get_object_vars($this), ['defaultModel' => $model]));
+    }
+
+    /**
+     * HonoursHostPermissionMode — same clone shape as {@see withModel()},
+     * same contract as the claude-code twin: EngineBackend rebinds this
+     * provider each turn with the gate's current mode (null = no gate, dial
+     * exactly as before). For the codex route the mode lands on the CHILD's
+     * sandbox: plan and dont-ask force `-s read-only` (the modes whose own
+     * promise is "no changes" cannot be kept by a child that edits files for
+     * itself), every other mode runs the configured sandbox, and nothing
+     * here ever widens past the configuration. See {@see effectiveSandbox()}.
+     */
+    public function withHostPermissionMode(?PermissionMode $mode): static
+    {
+        return new self(...array_merge(get_object_vars($this), ['hostMode' => $mode]));
     }
 
     /**
@@ -155,11 +218,18 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel, S
     public function complete(CompleteRequest $request): CompleteResponse
     {
         $prompt = $this->buildPrompt($request);
+        $options = $this->options($request);
 
-        $output = $this->invocation->execute(
-            $this->invocation->execArgs($this->options($request)),
-            stdin: $prompt,
-        );
+        try {
+            $output = $this->invocation->execute(
+                $this->invocation->execArgs($options),
+                stdin: $prompt,
+            );
+        } finally {
+            // Twin of ClaudeCodeProvider::complete()'s spill teardown: the
+            // schema file must not outlive the call, whatever the child did.
+            self::removeSchemaFile($options);
+        }
 
         return $this->parseNdjsonResponse($output);
     }
@@ -183,7 +253,8 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel, S
             throw new ProviderException('Failed to start Codex process');
         }
 
-        $cmd = array_merge([$codexBinary], $this->invocation->execArgs($this->options($request)));
+        $options = $this->options($request);
+        $cmd = array_merge([$codexBinary], $this->invocation->execArgs($options));
 
         $process = proc_open(
             ProcessContainment::spawnSpec($cmd),
@@ -198,6 +269,10 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel, S
         );
 
         if (!is_resource($process)) {
+            // The drain finally below never runs on this path; the spill's
+            // third teardown site, exactly where the claude twin has it.
+            self::removeSchemaFile($options);
+
             throw new ProviderException('Failed to start Codex process');
         }
 
@@ -300,6 +375,10 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel, S
             }
 
             $exitCode = ProcessReaper::terminateAndClose($process, ProcessContainment::groupId($process));
+
+            // After the reap: the child has certainly read (or never will
+            // read) the schema file, so this is the last moment it may exist.
+            self::removeSchemaFile($options);
         }
 
         if ($exitCode !== 0 && $exitCode !== -1 && $exitCode !== null) {
@@ -318,14 +397,23 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel, S
     /**
      * The execArgs() options both paths share.
      *
+     * C-PRV-4.b made three of these keys structural rather than optional:
+     * `sandbox` always rides (see {@see effectiveSandbox()}), the isolation
+     * flag rides whenever `isolate` is on (its default, per the §6.2 ruling),
+     * and a request that carries a schema gets its spill here, where the
+     * file's owner — this options array — is also the last thing both execute
+     * paths see before the child dies.
+     *
      * @return array<string, mixed>
      */
     private function options(CompleteRequest $request): array
     {
         $options = ['model' => $this->defaultModel];
 
-        if ($this->sandbox !== null) {
-            $options['sandbox'] = $this->sandbox;
+        $options['sandbox'] = $this->effectiveSandbox();
+
+        if ($this->isolate) {
+            $options['ignoreUserConfig'] = true;
         }
 
         if ($request->reasoningEffort !== null) {
@@ -335,7 +423,51 @@ final readonly class CodexProvider implements ProviderInterface, RebindsModel, S
             }
         }
 
+        // The spill stays reachable while supportsJsonSchema() answers false:
+        // an internal caller that hands us a schema anyway (or the flip, once
+        // a probe records it) gets a real --output-schema ride, and neither
+        // path advertises an unprobed capability.
+        if ($request->jsonSchema !== null) {
+            $options['outputSchemaFile'] = $this->invocation->spillOutputSchema($request->jsonSchema);
+        }
+
         return $options;
+    }
+
+    /**
+     * The sandbox the child runs under for this turn.
+     *
+     * Plan and dont-ask are the host modes whose own promise is "no
+     * changes" — they force read-only even over a configured workspace-write
+     * (a plan turn whose child edits files is the exact defect C-PRV-4.b
+     * root-caused: the host gated its own tools while the codex child kept
+     * the config.toml authority). Every other mode — and no mode at all —
+     * runs the configured dial, defaulting to workspace-write instead of the
+     * old silence that deferred to config.toml. Narrowing only, ever: the
+     * configured value passes verbatim, and `danger-full-access` appears on
+     * this command line exactly when an operator configured it.
+     */
+    private function effectiveSandbox(): string
+    {
+        if ($this->hostMode === PermissionMode::Plan || $this->hostMode === PermissionMode::DontAsk) {
+            return self::SANDBOX_READ_ONLY;
+        }
+
+        return $this->sandbox ?? self::SANDBOX_WORKSPACE_WRITE;
+    }
+
+    /**
+     * Remove the per-request output-schema spill when options() made one.
+     * Both execute paths call this on every route out of the spawn —
+     * success, drain-finally, or a failure before the child ever ran.
+     *
+     * @param array<string, mixed> $options
+     */
+    private static function removeSchemaFile(array $options): void
+    {
+        if (isset($options['outputSchemaFile'])) {
+            @unlink((string) $options['outputSchemaFile']);
+        }
     }
 
     /**
