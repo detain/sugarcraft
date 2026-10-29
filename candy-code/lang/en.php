@@ -2686,6 +2686,10 @@ TXT,
     'host.workflow.usage.status' => 'Usage: /workflow status <workflowId>',
     // --- mcp: elicitation questions put to the human mid-call (C-MCP-3.b) ---
     'mcp.elicitation.ask' => 'MCP server `{server}` asks: {question}',
+    // --- mcp: the C-MCP-3.d background hand-off of a long call ---
+    'mcp.background.running' => 'MCP tool `{tool}` on server `{server}` is still running as background MCP job `{id}`; the result will arrive as a message.',
+    'mcp.background.lost' => 'The background MCP call of tool `{tool}` on server `{server}` exited without publishing a result; none will arrive.',
+    'mcp.background.finished' => 'Background MCP job `{id}` has finished:',
     // --- end chat + host (W11-c) ---
     // --- agents: lines on a delegated run's live trail (TaskTool) ---
     'agents.trail.effort_ignored' => 'effort: {effort} ignored ({provider} sends no reasoning effort)',

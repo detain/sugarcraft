@@ -8,6 +8,7 @@ use SugarCraft\Code\Context\McpOutputFence;
 use SugarCraft\Code\Events\ToolProgress;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\MCP\McpBackgroundCalls;
 use SugarCraft\Code\MCP\McpClient;
 use SugarCraft\Code\MCP\McpElicitation;
 use SugarCraft\Code\MCP\McpServerRequests;
@@ -144,6 +145,15 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat, RelaysPermissionAsk
      * MCP result was the one tool output nothing capped — a server returning
      * a whole database dump went into every later request of the turn
      * verbatim. Zero or negative disables the cap.
+     *
+     * $backgroundAfterSeconds is the C-MCP-3.d hand-off: after that many
+     * seconds of an interactive call still running, the TURN releases with a
+     * job-id placeholder while the exchange continues in a forked child
+     * ({@see McpBackgroundCalls}). Zero — every construction site predating
+     * the feature and every non-turn dispatch — keeps the plain inline call
+     * byte-identical; {@see withoutInteractiveUser()} latched runs are never
+     * handed off no matter what this holds, because headless callers wait
+     * exactly as they always did.
      */
     public function __construct(
         private McpClient $client,
@@ -152,6 +162,7 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat, RelaysPermissionAsk
         private ?\Closure $permissionApprover = null,
         private ?\Closure $toolProgressEmitter = null,
         private bool $elicitationsClosed = false,
+        private float $backgroundAfterSeconds = 0.0,
     ) {
         self::recordReadOnlyHint($this->name(), $this->readOnly());
     }
@@ -579,6 +590,13 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat, RelaysPermissionAsk
      * MCP tool always runs alone — it is a barrier, never {@see ParallelSafe}
      * — so without the beat any call longer than the turn's 120 s idle
      * ceiling cost the whole turn rather than just the wait.
+     *
+     * With the C-MCP-3.d hand-off armed the beat changes seat, not meaning:
+     * the PARENT beats roughly once a second while it waits below the
+     * threshold and the child runs its transport without a beat of its own,
+     * so the turn's idle ceiling keeps exactly the meaning it had; the
+     * threshold is a hand-off dial, never a wall-clock kill (E646 family),
+     * and the child's own bound stays its transport's `toolTimeout`.
      */
     public function executeWithHeartbeat(array $args, \Closure $heartbeat): ToolResult
     {
@@ -591,6 +609,68 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat, RelaysPermissionAsk
     private function call(array $args, ?\Closure $heartbeat): ToolResult
     {
         $id = is_string($args['id'] ?? null) ? $args['id'] : '';
+
+        if (McpBackgroundCalls::armed($this->backgroundAfterSeconds, $this->elicitationsClosed)) {
+            // C-MCP-3.d: an interactive call that outlives the hand-off keeps
+            // running in a child and answers later through the turn inbox;
+            // below the threshold the child's published row is returned HERE,
+            // rendered by the very same runExchange() the inline path runs —
+            // that is what makes a fast armed call byte-identical to a plain
+            // one, including its fence, truncation and duration semantics.
+            $start = hrtime(true);
+            $outcome = McpBackgroundCalls::await(
+                fn (): ToolResult => $this->runExchange($args, null, $id),
+                $this->backgroundAfterSeconds,
+                $heartbeat,
+                $this->descriptor->serverName,
+                $this->descriptor->name,
+                $id,
+            );
+
+            return match ($outcome['kind']) {
+                'done' => $outcome['result'],
+                'background' => new ToolResult(
+                    toolCallId: $id,
+                    content: McpOutputFence::wrap(
+                        Lang::t('mcp.background.running', [
+                            'server' => $this->descriptor->serverName,
+                            'tool' => $this->name(),
+                            'id' => $outcome['job'] ?? '',
+                        ]),
+                        $this->descriptor->serverName,
+                        $this->descriptor->name,
+                    ),
+                    isError: false,
+                    durationMs: self::elapsedMs($start),
+                ),
+                default => new ToolResult(
+                    toolCallId: $id,
+                    content: McpOutputFence::wrap(
+                        Lang::t('mcp.background.lost', [
+                            'server' => $this->descriptor->serverName,
+                            'tool' => $this->name(),
+                        ]),
+                        $this->descriptor->serverName,
+                        $this->descriptor->name,
+                    ),
+                    isError: true,
+                    durationMs: self::elapsedMs($start),
+                ),
+            };
+        }
+
+        return $this->runExchange($args, $heartbeat, $id);
+    }
+
+    /**
+     * The plain exchange — transport call, failure row, answer row. The
+     * inline path and the forked child of the background path run THIS
+     * method; no shape is duplicated between them anywhere.
+     *
+     * @param array<string, mixed> $args
+     */
+    private function runExchange(array $args, ?\Closure $heartbeat, string $id): ToolResult
+    {
         $start = hrtime(true);
 
         try {
@@ -676,6 +756,18 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat, RelaysPermissionAsk
             'permissionApprover' => null,
             'elicitationsClosed' => true,
         ]));
+    }
+
+    /**
+     * C-MCP-3.d: arm the background hand-off threshold. Only the interactive
+     * turn wiring calls this; even when armed, a copy that later passes
+     * through {@see withoutInteractiveUser()} is refused by
+     * {@see McpBackgroundCalls::armed()} through the latch, and the latch
+     * cannot be un-closed by re-arming.
+     */
+    public function withBackgroundAfter(float $seconds): self
+    {
+        return new self(...array_replace(get_object_vars($this), ['backgroundAfterSeconds' => $seconds]));
     }
 
     /**

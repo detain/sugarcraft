@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tools\BuiltIn;
 
 use SugarCraft\Code\Context\McpOutputFence;
+use SugarCraft\Code\Lang;
+use SugarCraft\Code\MCP\McpBackgroundCalls;
 use SugarCraft\Code\MCP\McpServerRequests;
 use SugarCraft\Code\MCP\McpToolShape;
 use SugarCraft\Code\Tools\AcceptsHeartbeat;
@@ -64,12 +66,17 @@ final readonly class McpCallTool implements Tool, BuildsFromCatalog, TakesToolCa
      * of the same capability and must put the same elicitation dialect, not
      * a second one. Defaults keep every existing construction site
      * byte-unchanged (the catalog builder, the corpus probe, the shape).
+     * $backgroundAfterSeconds is the C-MCP-3.d hand-off threshold, the same
+     * dial {@see McpToolBridge::__construct()} documents — zero everywhere
+     * except the armed interactive turn, and a `-p` latch still refuses to
+     * hand off no matter what it holds.
      */
     public function __construct(
         private McpToolShape $shape,
         private ?\Closure $permissionApprover = null,
         private ?\Closure $toolProgressEmitter = null,
         private bool $elicitationsClosed = false,
+        private float $backgroundAfterSeconds = 0.0,
     ) {}
 
     /**
@@ -185,6 +192,67 @@ final readonly class McpCallTool implements Tool, BuildsFromCatalog, TakesToolCa
             );
         }
 
+        if (McpBackgroundCalls::armed($this->backgroundAfterSeconds, $this->elicitationsClosed)) {
+            // C-MCP-3.d: the same hand-off the bridge spelling gets, armed
+            // only AFTER the validation arms above — a bad-argument row costs
+            // no fork — and below the threshold the child's published row is
+            // returned HERE, rendered by the same runDispatch() the inline
+            // path runs, so a fast armed call stays byte-identical.
+            $outcome = McpBackgroundCalls::await(
+                fn (): ToolResult => $this->runDispatch($server, $tool, $arguments, null, $id),
+                $this->backgroundAfterSeconds,
+                $heartbeat,
+                $server,
+                $tool,
+                $id,
+            );
+
+            return match ($outcome['kind']) {
+                'done' => $outcome['result'],
+                'background' => new ToolResult(
+                    toolCallId: $id,
+                    content: McpOutputFence::wrap(
+                        Lang::t('mcp.background.running', [
+                            'server' => $server,
+                            'tool' => McpToolBridge::wireNameFor($server, $tool),
+                            'id' => $outcome['job'] ?? '',
+                        ]),
+                        $server,
+                        $tool,
+                    ),
+                    isError: false,
+                    durationMs: McpToolBridge::elapsedMs($start),
+                ),
+                default => new ToolResult(
+                    toolCallId: $id,
+                    content: McpOutputFence::wrap(
+                        Lang::t('mcp.background.lost', [
+                            'server' => $server,
+                            'tool' => McpToolBridge::wireNameFor($server, $tool),
+                        ]),
+                        $server,
+                        $tool,
+                    ),
+                    isError: true,
+                    durationMs: McpToolBridge::elapsedMs($start),
+                ),
+            };
+        }
+
+        return $this->runDispatch($server, $tool, $arguments, $heartbeat, $id);
+    }
+
+    /**
+     * The plain dispatch — transport call, failure row, answer row. The
+     * inline path and the forked child of the background path run THIS
+     * method; no shape is duplicated between them anywhere (C-MCP-3.d).
+     *
+     * @param array<string, mixed> $arguments
+     */
+    private function runDispatch(string $server, string $tool, array $arguments, ?\Closure $heartbeat, string $id): ToolResult
+    {
+        $start = hrtime(true);
+
         try {
             $raw = $this->shape->client->callTool($server, $tool, $arguments, $heartbeat, $this->perCallDesk($id, $server));
         } catch (\Throwable $e) {
@@ -245,6 +313,15 @@ final readonly class McpCallTool implements Tool, BuildsFromCatalog, TakesToolCa
             'permissionApprover' => null,
             'elicitationsClosed' => true,
         ]));
+    }
+
+    /**
+     * C-MCP-3.d: arm the background hand-off threshold — the same dial and
+     * the same refusal law as {@see McpToolBridge::withBackgroundAfter()}.
+     */
+    public function withBackgroundAfter(float $seconds): self
+    {
+        return new self(...array_replace(get_object_vars($this), ['backgroundAfterSeconds' => $seconds]));
     }
 
     /**

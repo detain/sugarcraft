@@ -3492,6 +3492,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 ) {
                     $tool = $tool->withPermissionApprover($this->permissionApprover);
                 }
+                // C-MCP-3.d: a turn-bound MCP call — either dispatcher
+                // spelling — gets the CC-parity background hand-off. The
+                // arming is inert for `-p` copies: they carry
+                // elicitationsClosed, and McpBackgroundCalls::armed()
+                // refuses a latched run regardless of the threshold.
+                $tool = match (true) {
+                    $tool instanceof \SugarCraft\Code\Tools\McpToolBridge,
+                    $tool instanceof \SugarCraft\Code\Tools\BuiltIn\McpCallTool
+                        => $tool->withBackgroundAfter(\SugarCraft\Code\MCP\McpBackgroundCalls::DEFAULT_AFTER_SECONDS),
+                    default => $tool,
+                };
                 $tools[] = $toolProgressEmitter === null
                     ? $tool
                     : $tool->withToolProgressEmitter($toolProgressEmitter);
@@ -5329,8 +5340,14 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 $stopRequested,
                 // 1.C-3: the user's mid-turn messages, as `steer` frames;
                 // roadmap 4.4: the replies its sub-agents send the session's
-                // own agent, from the `main` mailbox.
-                CompositeTurnInbox::of(SocketSteerInbox::new($channel), $engine->mainMailbox()),
+                // own agent, from the `main` mailbox; C-MCP-3.d: finished
+                // long MCP calls handed off by an earlier turn (null when no
+                // private registry exists, which CompositeTurnInbox drops).
+                CompositeTurnInbox::of(
+                    SocketSteerInbox::new($channel),
+                    $engine->mainMailbox(),
+                    McpBackgroundInbox::forTurn(),
+                ),
             )->withAttachmentNotice($attachmentNotice);
             $transcriptRows = [];
             foreach ($message->turnTranscript as $row) {

@@ -19,9 +19,10 @@ use SugarCraft\Code\Messages\Message as TypedMessage;
  * {@see SKIPPED} rather than run, so the message is read before more work is
  * done on a plan it may change (OpenClaw's steering rule).
  *
- * Two implementations share the one seam: {@see SocketSteerInbox} (the main
- * turn's `steer` frames, 1.C-3) and {@see MailboxTurnInbox} (a sub-agent's
- * mailbox, P-D1); {@see CompositeTurnInbox} lets a turn read both.
+ * Three implementations share the one seam: {@see SocketSteerInbox} (the main
+ * turn's `steer` frames, 1.C-3), {@see MailboxTurnInbox} (a sub-agent's
+ * mailbox, P-D1) and {@see McpBackgroundInbox} (finished long MCP calls,
+ * C-MCP-3.d); {@see CompositeTurnInbox} lets a turn read them together.
  */
 interface TurnInbox
 {

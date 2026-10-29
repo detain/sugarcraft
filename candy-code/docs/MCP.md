@@ -737,6 +737,26 @@ own server's exchange lock: parallel calls to *other* servers keep running,
 and later calls to the asking server queue behind it, which is the whole
 point of the serialised exchange.
 
+A long call no longer holds the turn. An interactive bridged or dispatched
+MCP call still running after 120 seconds — the hand-off figure upstream uses
+for the same move — answers the model instead with "still running as
+background MCP job `<id>`; the result will arrive as a message", and the
+exchange keeps running in a forked child. That is possible because the
+library serialises a server's exchange behind a cross-process lock: any
+forked process may finish one, and for a `stdio` server the row above keeps
+holding — later calls to that server queue behind the child until it answers.
+The finished result arrives through the turn inbox the `steer` frames use: at
+the next step boundary of a still-running turn, or at the next turn if this
+one ends first. Nothing is killed at the hand-off — the threshold releases
+the *turn*, never the call. The child's own bound stays its transport's
+`toolTimeout`, which keeps exactly the meaning it had, and an exchange that
+errors or times out publishes that error row, which travels the same route.
+Elicitations and progress ride the child's per-call desk, so a backgrounded
+call can still put a question to the human while the turn talks to the
+model. Headless (`-p`) runs never hand off at all: a non-interactive caller
+waits for the real result exactly as before, which is also why no `-p`
+dispatch can create a background job.
+
 ---
 
 ## What the model sees
