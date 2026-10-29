@@ -82,7 +82,7 @@ use SugarCraft\Code\Cli\NonInteractive;
  * AND EVERY SCAN GOES RED ON WHAT IT CANNOT PARSE, rather than skipping it.
  * A shape-A call whose type argument stops being a single string literal, a
  * shape-B envelope with no literal `type` key — unless it is an adjudicated
- * JSON-RPC wire error object ({@see self::JSONRPC_WIRE_ERROR_SITES}, the
+ * JSON-RPC wire error object ({@see self::JSONRPC_WIRE_ENVELOPES}, the
  * protocol's `code`/`message` envelope, which is not a stdout document and
  * whose roster liveness the derivation re-checks every run) — a shape-C
  * literal naming a type
@@ -145,7 +145,7 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
      *
      * THE ROSTER'S SIZE, AND WHY IT IS NOT TWO. The C-MCP-3.c review named
      * the two transport sites; the desk's own refusal and its elicitation
-     * rejections (both pre-existing since C-MCP-3.b) carry the SAME shape and
+     * rejections (both pre-existing since C-MCP-3.a) carry the SAME shape and
      * were already reddening this walk — invisible only because the file
      * walk aborted at the alphabetically-first offender, `HttpMcpServer.php`,
      * every time. A roster that names the two new sites leaves the guard red

@@ -68,3 +68,33 @@ clean: drop-roster-row -> unadjudicated red naming the site; planted
 wire-shaped envelope in unrostered closeSocket -> unadjudicated red;
 roster row renamed -> unadjudicated red; envelope refactored away while row
 kept -> staleness-arm array-diff red.
+
+## FIX ROUND 2 (review-2 delta: 1 MAJOR, 2 NIT — one commit, renames + prose only)
+
+MAJOR CURED — DuplicatedTestHelperDriftTest unrecorded const pairs (lane-created):
+renamed per-file, descriptive, ALL five declaration sites now distinct, ZERO roster
+rows needed:
+- HttpMcpServerGetStreamTest.php: URL -> GET_URL (33,202,273,297), SESSION ->
+  GET_SESSION (34,86,97,150,322)
+- SseMcpServerServerRequestTest.php: URL -> SSE_URL (34,255)
+- HttpMcpServerStreamableHttpTest.php: pre-existing URL/SESSION left as-is (only
+  single-file bearers after the renames; no pair).
+Guard isolated: RED before (14T/196A/1F naming both drift lines) -> GREEN after
+(14T/197A), mutation-free. No other file tree-wide declares either name (grep).
+
+NITs CURED (ReadmeJsonErrorContractDriftTest.php prose): roster docblock
+attribution "pre-existing since C-MCP-3.b" -> "C-MCP-3.a" (verified: origin
+e71d398aa subject "C-MCP-3.a: answer MCP server requests inline…"); dead cite
+"{@see self::JSONRPC_WIRE_ERROR_SITES}" -> "{@see self::JSONRPC_WIRE_ENVELOPES}"
+(real const, :148).
+
+REVIEW-2.md landed canonical (prompt_kit/findings/comparison-1026/lanes/C-MCP-3.c/)
+as first act of the round.
+
+GATES (cwd=candy-code, plain pipe, -c phpunit.xml): DuplicatedTestHelperDrift
+14T GREEN; guard isolated 19T/461A byte-exact; tests/MCP 864T/3222A/1S byte-exact;
+ReadmeRosterDrift|EnvRosterDrift|ConfigWriteProducer trio 62T/39304A byte-exact.
+php -l clean on all three edited files. No durations/suite-figure/dist touches;
+broad-filter run surfaced only the known welder-carried reds (ChatTest Environment
+method + ReadmeSuiteFigureDrift staleness pair 25537-vs-27589) — unchanged by this
+delta.

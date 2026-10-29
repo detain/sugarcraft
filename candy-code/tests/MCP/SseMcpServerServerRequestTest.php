@@ -31,7 +31,7 @@ use SugarCraft\Code\MCP\SseMcpServer;
  */
 final class SseMcpServerServerRequestTest extends TestCase
 {
-    private const URL = 'http://desk.example:8791/sse';
+    private const SSE_URL = 'http://desk.example:8791/sse';
 
     /** @var list<resource> fixture-side stream ends, in session order */
     private array $sessions = [];
@@ -252,7 +252,7 @@ final class SseMcpServerServerRequestTest extends TestCase
     {
         $server = new SseMcpServer(
             name: 'desk-demo',
-            url: self::URL,
+            url: self::SSE_URL,
             headers: [],
             httpClient: new Client(['handler' => HandlerStack::create($this->actor())]),
             toolTimeoutSeconds: 2.0,

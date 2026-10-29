@@ -30,8 +30,8 @@ use SugarCraft\Code\MCP\McpServerRequests;
  */
 final class HttpMcpServerGetStreamTest extends TestCase
 {
-    private const URL = 'http://desk.example:8793/mcp';
-    private const SESSION = 'sess-get-1';
+    private const GET_URL = 'http://desk.example:8793/mcp';
+    private const GET_SESSION = 'sess-get-1';
 
     /** @var list<array{0:RequestInterface,1:array<string,mixed>}> */
     private array $history = [];
@@ -83,7 +83,7 @@ final class HttpMcpServerGetStreamTest extends TestCase
         self::assertArrayHasKey('result', $answer, 'a ping is answered, not refused');
         self::assertArrayNotHasKey('method', $answer);
         self::assertSame(
-            self::SESSION,
+            self::GET_SESSION,
             $this->request(3)->getHeaderLine('Mcp-Session-Id'),
             'the answer must carry the session header',
         );
@@ -94,7 +94,7 @@ final class HttpMcpServerGetStreamTest extends TestCase
         $requestBytes = (string) fread($fixture, 65535);
         self::assertStringContainsString('GET /mcp HTTP/1.1', $requestBytes);
         self::assertStringContainsString('Accept: text/event-stream', $requestBytes);
-        self::assertStringContainsString('Mcp-Session-Id: ' . self::SESSION, $requestBytes);
+        self::assertStringContainsString('Mcp-Session-Id: ' . self::GET_SESSION, $requestBytes);
         self::assertStringNotContainsString('Content-Type:', $requestBytes, 'a GET carries no body to type');
     }
 
@@ -147,7 +147,7 @@ final class HttpMcpServerGetStreamTest extends TestCase
             'the per-call desk must answer inside the reply walk',
         );
         self::assertSame(
-            self::SESSION,
+            self::GET_SESSION,
             $this->request(4)->getHeaderLine('Mcp-Session-Id'),
         );
         self::assertFalse($this->getConnected, 'the GET channel is opt-in only; this server never asked for one');
@@ -199,7 +199,7 @@ final class HttpMcpServerGetStreamTest extends TestCase
 
         $server = new HttpMcpServer(
             name: 'streamable',
-            url: self::URL,
+            url: self::GET_URL,
             headers: [],
             httpClient: new Client(['handler' => $this->mockStack([
                 self::initReply(),
@@ -270,7 +270,7 @@ final class HttpMcpServerGetStreamTest extends TestCase
 
         $server = new HttpMcpServer(
             name: 'streamable',
-            url: self::URL,
+            url: self::GET_URL,
             headers: [],
             httpClient: new Client(['handler' => $this->mockStack($responses)]),
             eventStream: true,
@@ -294,7 +294,7 @@ final class HttpMcpServerGetStreamTest extends TestCase
     {
         return new HttpMcpServer(
             name: 'streamable',
-            url: self::URL,
+            url: self::GET_URL,
             headers: [],
             httpClient: new Client(['handler' => $this->mockStack($responses)]),
         );
@@ -319,7 +319,7 @@ final class HttpMcpServerGetStreamTest extends TestCase
     {
         return new Response(200, [
             'Content-Type' => 'application/json',
-            'Mcp-Session-Id' => self::SESSION,
+            'Mcp-Session-Id' => self::GET_SESSION,
         ], (string) json_encode([
             'jsonrpc' => '2.0',
             'id' => 0,
