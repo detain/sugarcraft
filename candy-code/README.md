@@ -618,9 +618,9 @@ context: it is listed with the others but sends nothing on its own. `#`, `//`,
 <!-- commands:roster:begin -->
 `/agents` (`/agent`) `/bg` (`/background`) `/branch` `/btw` `/budget` `/clear`
 `/commit` `/compact` `/compress` `/context` (`/tokens`) `/decompress` `/diff`
-`/editor` `/effort` `/exit` (`/quit`) `/export` `/fork` `/generate` `/goal`
-`/grind` `/handoff` `/help` `/hooks` `/init` `/instructions` `/keys` `/layout`
-`/loop` `/mcp` `/memory` `/model` `/new` `/newrule` `/notices` `/pane`
+`/editor` `/effort` `/exit` (`/quit`) `/export` `/fast` `/fork` `/generate`
+`/goal` `/grind` `/handoff` `/help` `/hooks` `/init` `/instructions` `/keys`
+`/layout` `/loop` `/mcp` `/memory` `/model` `/new` `/newrule` `/notices` `/pane`
 `/permissions` `/play` `/pr` `/pruning` `/recompress` `/redo` `/rename`
 `/rendermode` `/review` `/rewind` `/rules` `/schedules` (`/schedule`)
 `/security-review` `/sendto` `/sessions` `/settings` (`/config`) `/share`

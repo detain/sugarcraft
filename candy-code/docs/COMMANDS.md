@@ -363,6 +363,7 @@ edit it by hand.
 | `/session-delete` | | | — | Open the session list to delete a session |
 | `/model` | ✓ | ✓ | `[provider [model]]` | Switch the active provider, or a provider and its model |
 | `/effort` | ✓ | | `[low\|medium\|high\|xhigh\|max\|auto]` | Read or set the reasoning effort tier |
+| `/fast` | ✓ | | `[on\|off]` | Read or set the fast service tier |
 | `/share` | ✓ | | `[md\|html\|json] [path] \| serve [--live] [days] \| list \| revoke [token]` | Export the session to a file, or serve and revoke share pages |
 | `/export` | ✓ | | `[md\|html\|json\|jsonl\|text] [file\|--path <file>]` | Export the transcript to a local file, raw bytes unredacted |
 | `/docs` | | | — | Open the documentation |

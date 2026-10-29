@@ -30,6 +30,7 @@ final class MenuBarLabelDerivationTest extends TestCase
      */
     private const DERIVED_LABELS = [
         'effort' => 'Read or set',
+        'fast' => 'Read or set the fast',
         'keys' => 'Show the keyboard',
         'help' => 'List every slash',
         'permissions' => 'Show permission mode',

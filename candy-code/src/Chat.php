@@ -10683,6 +10683,9 @@ final class Chat implements Model
      * it). `/diff` only reads the checkpoints and the files, so it is in.
      * `/workflow list|status` read only, and are let through by
      * {@see isReadOnlySafeCommand()}.
+     * `/fast` is in as its sibling `/effort` is: a dial read or moved touches
+     * this window's engine overlay and the user's own settings, and writes
+     * nothing into the session another window holds the lock on.
      * `/generate` (crush-media W2.3) stays OUT: egress alone is not the test —
      * `/websearch` is admitted — but a dial-out that spends money and writes
      * image artifacts is not a read.
@@ -10691,7 +10694,7 @@ final class Chat implements Model
         'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share', 'export',
         'agent', 'agents', 'memory', 'bg', 'background', 'fork', 'branch', 'sessions', 'theme',
         'mcp', 'websearch', 'pane', 'layout', 'model', 'editor', 'settings', 'config', 'diff',
-        'context', 'instructions', 'tokens', 'btw', 'play', 'hooks', 'effort', 'status', 'usage',
+        'context', 'instructions', 'tokens', 'btw', 'play', 'hooks', 'effort', 'status', 'usage', 'fast',
     ];
 
     /**
@@ -12926,7 +12929,153 @@ final class Chat implements Model
     }
 
     /**
-     * `/help` (crush_code.md Phase 4 item 2) - the command list, which is what
+     * `/fast [on|off]` (C-PRV-3.b) — the premium service-lane dial, shaped
+     * like its sibling `/effort`: bare reads what this pair's wire is doing,
+     * `on` arms the lane, `off` drops to the standard lane. A set applies
+     * live through {@see Backend\EngineBackend::withServiceTier()} — the
+     * same mid-session overlay `/effort` uses — and persists the WORD
+     * through the workspace's SettingsWriter user tier, the same door as
+     * {@see persistEffort()}; a failed save is reported, never fatal.
+     * `off` writes the affirmative 'default' rather than deleting the key:
+     * the user tier outranks every lower layer, so an explicitly-stated
+     * standard lane is exactly what was asked for, and the design carries no
+     * third 'auto' state to hand back to a model.
+     *
+     * `on` asks the eligibility question of the provider this engine
+     * CARRIES — not of an unwrapped primary — exactly as the launch door
+     * {@see \SugarCraft\Code\Cli\LaunchContext::withResolvedServiceTier()}
+     * asks it: the tier is a provider leg, not a request field, so arming it
+     * on a pair that shapes nothing would re-mint the set-but-ignored lie
+     * the door exists to ban. Such an `on` is refused out loud, with nothing
+     * persisted and nothing overlaid; a wrapper is named `fallback(...)` for
+     * the same reason the door names it, so the accusation lands on the leg
+     * that is missing.
+     *
+     * @param list<string> $args
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleFastCommand(array $args): array
+    {
+        $engine = $this->backend instanceof Backend\EngineBackend ? $this->backend : null;
+        $provider = $engine?->provider();
+        $named = match (true) {
+            $provider instanceof \SugarCraft\Code\Providers\FallbackProvider => 'fallback(' . $provider->name() . ')',
+            $provider instanceof \SugarCraft\Code\Providers\ProviderInterface => $provider->name(),
+            default => 'this backend',
+        };
+        $shapes = $provider instanceof \SugarCraft\Code\Providers\ShapesServiceTier
+            && $provider->serviceTierFor($engine?->model() ?? '') !== null;
+
+        if ($args === []) {
+            if ($engine === null) {
+                return $this->fastRow(Lang::t('host.fast.status_no_backend'));
+            }
+
+            $word = $engine->serviceTier();
+
+            if ($word === \SugarCraft\Code\Providers\ShapesServiceTier::WORD_FAST) {
+                return $this->fastRow(Lang::t('host.fast.status_on', [
+                    'provider' => $named,
+                    'model' => $engine->model(),
+                ]));
+            }
+
+            if ($word === \SugarCraft\Code\Providers\ShapesServiceTier::WORD_DEFAULT) {
+                return $this->fastRow(Lang::t('host.fast.status_default', ['provider' => $named]));
+            }
+
+            return $this->fastRow(Lang::t($shapes ? 'host.fast.status_unset_shaped' : 'host.fast.status_unset_unshaped', [
+                'provider' => $named,
+            ]));
+        }
+
+        if (count($args) > 1) {
+            return $this->fastRow(Lang::t('host.fast.usage'));
+        }
+
+        $token = strtolower(trim($args[0]));
+
+        if ($token !== 'on' && $token !== 'off') {
+            return $this->fastRow(Lang::t('host.fast.usage'));
+        }
+
+        if ($token === 'on') {
+            if (!$shapes) {
+                // The pair the user actually named answers for itself: a
+                // shaper whose wire has no premium lane for THIS model id
+                // (Anthropic off the fast-mode family) says so about the
+                // model, and a provider with no lane at all — or a plain
+                // echo backend, which reaches here as a null engine — says
+                // so about the provider. The two refusals are different
+                // sentences, not one sentence covering both.
+                return $this->fastRow($provider instanceof \SugarCraft\Code\Providers\ShapesServiceTier
+                    ? Lang::t('host.fast.refused_model', ['provider' => $named, 'model' => (string) $engine?->model()])
+                    : Lang::t('host.fast.refused', ['provider' => $named]));
+            }
+
+            [$next, $cmd] = $this->fastRow(Lang::t('host.fast.on', [
+                'provider' => $named,
+                'model' => (string) $engine?->model(),
+                'note' => $this->persistFast(\SugarCraft\Code\Providers\ShapesServiceTier::WORD_FAST),
+            ]));
+
+            // $shapes can only have been answered through a live engine, so
+            // the overlay below never dereferences null — the roster is read
+            // off it. (Same argument as handleEffortCommand's.)
+            return [$next->withBackend($engine->withServiceTier(\SugarCraft\Code\Providers\ShapesServiceTier::WORD_FAST)), $cmd];
+        }
+
+        // `off` is never refused: the standard lane is where every pair
+        // already is, whether or not it can leave it. With no engine to
+        // overlay, the save still lands — the same split `/effort auto`
+        // makes, where the clear persists and the live leg is optional.
+        [$next, $cmd] = $this->fastRow(Lang::t('host.fast.off', [
+            'provider' => $named,
+            'note' => $this->persistFast(\SugarCraft\Code\Providers\ShapesServiceTier::WORD_DEFAULT),
+        ]));
+
+        return [$engine === null ? $next : $next->withBackend($engine->withServiceTier(\SugarCraft\Code\Providers\ShapesServiceTier::WORD_DEFAULT)), $cmd];
+    }
+
+    /**
+     * One UI-only transcript row answering `/fast`, laid out exactly like
+     * {@see effortRow()}: the typed line stays out of the model's view, the
+     * answer rides `withUiOnly()`.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function fastRow(string $row): array
+    {
+        return [$this->withInputBuf('')->mutate([
+            'history' => [...$this->history, Message::assistant($row)->withUiOnly()],
+        ]), null];
+    }
+
+    /**
+     * The user-tier save door `/fast` uses — the same workspace service and
+     * the same reported-not-failed semantics as {@see persistEffort()}.
+     * Always an affirmative WORD ('fast' or 'default'); there is no
+     * delete-arm, because the design has no third state and an explicit
+     * 'default' in the user tier outranks every lower layer anyway.
+     */
+    private function persistFast(string $word): string
+    {
+        $writer = $this->workspace?->service(\SugarCraft\Code\Config\Settings\SettingsWriter::class);
+        if (!$writer instanceof \SugarCraft\Code\Config\Settings\SettingsWriter) {
+            return Lang::t('host.fast.note_unsavable');
+        }
+
+        try {
+            $path = $writer->write(\SugarCraft\Code\Config\Settings\SettingsTier::You, ['serviceTier' => $word]);
+
+            return Lang::t('host.fast.note_saved', ['path' => self::reportField($path)]);
+        } catch (\Throwable $e) {
+            return Lang::t('host.fast.note_failed', ['error' => self::reportField($e->getMessage())]);
+        }
+    }
+
+    /**
+     * `/help` (crush_code.md Phase 4 item 2) — the command list, which is what
      * `/help` means in every other CLI. It used to be a second spelling of
      * `/keys`, i.e. two names for the keyboard reference and no name at all for
      * the thing a first-time user is actually asking for.
