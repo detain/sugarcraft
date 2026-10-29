@@ -1,0 +1,17 @@
+- item: C-SES-6 (sources: p2-miss: slim phar, p2-miss: reproducible phar builds, GAP-PLAT-03)
+- kind: gap · effort S
+- approach: `release-phar.yml` gains four outputs:
+  - a second build with `--gz`, shipped as `candy-code-gz.phar` with its own `.sha256` and signatures; the plain asset stays the self-update target;
+  - `--manifest-out` uploaded as `candy-code.phar.packages.json`;
+  - the rendered `candy-code.rb` formula and `install.sh` attached as assets;
+  - an optional tap push, which needs a secret and the ruling.
+- files.create: none
+- files.modify: `.github/workflows/release-phar.yml` (build, sign, checksum, assets steps)
+- tests: none (workflow-only; C-SES-9.d's guard must stay green)
+- docs/guards: none
+- serialized: [workflows]
+- deps: C-SES-6.b, C-SES-6.c, C-SES-5.c
+- phase: normal
+- ruling: Create a Homebrew tap repo plus a push secret? (Without it the step ships the formula only as a release asset, and the push leg stays off.)
+- risks: The gz phar needs ext-zlib at runtime. Say so in the release notes.
+

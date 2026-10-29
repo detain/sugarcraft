@@ -2505,7 +2505,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - Chat.php region claims: C-WEB-2.b (skillInvocationDraft); C-EXT-5.b (palette — paletteItemLabels, runPaletteAction, runRootPaletteAction)
 - Bootstrap.php method claims: C-EXT-4.d (chat() launch drain, launch-cap census map, reportBundleRecommendations (new))
 
-#### C-WEB-2.b — Typed `/skill-name` on served sessions (shared rewrite)
+#### ✅ 5076c63c8 C-WEB-2.b — Typed `/skill-name` on served sessions (shared rewrite) (pick 5076c63c8 -> d54bd76e0; DUR x2 + +15T closeout carry in lanes/C-WEB-2.b/WELD.md)
 - **Item:** C-WEB-2 (sources: GAP-SKL-06, p1-miss: VIS-5 parity) · gap · M
 - **What:** **Gap.** Only `Chat::submit()` rewrites `/name args` into the `$name` mention channel (`candy-code/src/Chat.php:9586`, `skillInvocationDraft()` :11318). Served sessions send it as prose. **Lift.** Move the body into a pure …
 - **Files — create:** `candy-code/src/Skills/SkillSlashInvocation.php`, `candy-code/tests/Skills/SkillSlashInvocationTest.php`, `candy-code/tests/Host/ServedSkillSlashTest.php`
@@ -2677,7 +2677,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ext.md` → `### C-EXT-3.a`
 
-#### C-EXT-6.a — Hook `systemMessage` shown as a notice
+#### ✅ 5f35a8957 C-EXT-6.a — Hook `systemMessage` shown as a notice (pick 5f35a8957 -> a7dcf3c17; DUR row + +12T carry + NIT comment cure in lanes/C-EXT-6.a/WELD.md)
 - **Item:** C-EXT-6 (sources: GAP-HK-08 systemMessage half) · gap · effort S
 - **What:** **Root cause.** `ScriptHook.php:1633-1643` treats `systemMessage` as "HONORED BY REMOVAL": it is parsed and then dropped, because no human surface existed. `HOOKS.md:628` says "not read". **Fix.** A string `systemMessage` is …
 - **Files — create:** none
@@ -2934,7 +2934,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SEC-8.e (W18)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-8.f`
 
-#### C-SES-6.d — Workflows: release ships slim gz phar, manifest, formula, installer
+#### ✅ 8bdd36271 C-SES-6.d — Workflows: release ships slim gz phar, manifest, formula, installer (pick 8bdd36271 -> e306bf4fc; workflows-only, no DUR, no figure delta; §7 note in lanes/C-SES-6.d/WELD.md)
 - **Item:** C-SES-6 (sources: p2-miss: slim phar, p2-miss: reproducible phar builds, GAP-PLAT-03) · gap · effort S
 - **What:** `release-phar.yml` gains four outputs: a second build with `--gz`, shipped as `candy-code-gz.phar` with its own `.sha256` and signatures; the plain asset stays the self-update target; `--manifest-out` uploaded as …
 - **Files — create:** none

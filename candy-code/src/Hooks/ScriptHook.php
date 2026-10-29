@@ -1839,7 +1839,8 @@ final readonly class ScriptHook implements BoundedHookInterface
         // above so a broken envelope records nothing, and before every verdict
         // below so an allow, a stop, a deny and an ask all still show the line
         // its hook wrote for the person at the terminal. The sink is drained
-        // only by human-facing paths; nothing here reaches the transcript.
+        // only by human-facing paths; nothing here writes the transcript
+        // directly — the drain lands the row as a UI-only notice.
         if ($systemMessage !== null && trim($systemMessage) !== '') {
             $this->recordSystemMessageNotice($systemMessage);
         }

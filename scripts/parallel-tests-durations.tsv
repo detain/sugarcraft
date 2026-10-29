@@ -169,6 +169,7 @@ candy-code/tests/Host/Commands/HostErrorRowFlagTest.php	2.094	31
 candy-code/tests/Chat/WorkflowControlMidRunTest.php	2.076	8
 candy-code/tests/Commands/KeyBindingDriftTest.php	2.071	215
 candy-code/tests/Permissions/BashPermissionPromptTest.php	2.064	21
+candy-code/tests/Host/ServedSkillSlashTest.php	2.05	7
 candy-code/tests/TtyStreamArgumentCensusTest.php	2.044	46
 candy-code/tests/App/AppSkillDispatchTest.php	2.041	26
 candy-code/tests/Chat/RewindFilesTest.php	2.025	11
@@ -539,6 +540,7 @@ candy-code/tests/Cli/BootstrapHomeStandInNoticeTest.php	0.293	4
 candy-code/tests/Tools/TaskToolOutputFenceTest.php	0.288	6
 candy-code/tests/Renderer/SlashMenuSourceBadgeTest.php	0.287	5
 candy-code/tests/Backend/ChildChannelVerdictTest.php	0.286	2
+candy-code/tests/Skills/SkillSlashInvocationTest.php	0.286	8
 candy-code/tests/Hooks/BuiltIn/PostEditFormatHookTest.php	0.284	9
 candy-code/tests/Cli/BootstrapMcpUserScopeTest.php	0.283	19
 candy-code/tests/Server/CommandRowsReachDriversTest.php	0.283	2
@@ -573,6 +575,7 @@ candy-code/tests/Workspace/GhRunnerTest.php	0.238	6
 candy-code/tests/SuiteRootRunRefusalTest.php	0.237	4
 candy-code/tests/Context/RepoMapBlockTest.php	0.236	68
 candy-code/tests/App/TabScopedRoutingTest.php	0.236	8
+candy-code/tests/Hooks/ScriptHookSystemMessageNoticeTest.php	0.235	12
 candy-code/tests/Workflows/WorkflowFailureReportingTest.php	0.230	2
 candy-code/tests/App/TabCloseAndQuitTest.php	0.228	7
 candy-code/tests/Context/MemoryBlockUserScopeTest.php	0.223	8
