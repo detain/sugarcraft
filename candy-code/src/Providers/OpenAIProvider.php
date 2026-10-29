@@ -362,23 +362,39 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
     }
 
     /**
+     * C-TOOL-2.e: PDFs ride the chat/completions `file` part (a
+     * `data:application/pdf` `file_data`), which the official API accepts on
+     * its vision models. Only the chat arm builds that part — the Responses
+     * arm's `input_file` is a file-ID construct, not this shape — and the
+     * model gate is the vision TABLE answer, deliberately not the provider
+     * block's `supportsVision` override: an override buys images (an
+     * `image_url` part any chat model tolerates structurally), it does not
+     * teach a non-vision deployment to read PDFs.
+     */
+    public function supportsDocuments(): bool
+    {
+        return $this->api === self::API_CHAT && self::visionTable($this->defaultModel);
+    }
+
+    /**
      * Whether the configured model reads image parts: the provider block's
      * override when set, else {@see VISION_MODEL_FAMILIES} minus
      * {@see TEXT_ONLY_MODELS}. Before this every model answered yes, so an
      * image sent to a text-only model failed the turn with the API's error.
      */
-    public function supportsDocuments(): bool
-    {
-        return false;
-    }
-
     public function supportsVision(): bool
     {
-        if ($this->supportsVision !== null) {
-            return $this->supportsVision;
-        }
+        return $this->supportsVision ?? self::visionTable($this->defaultModel);
+    }
 
-        $model = strtolower($this->defaultModel);
+    /**
+     * The table half of the vision answer, shared by {@see supportsVision()}
+     * and {@see supportsDocuments()} — the latter ANDs it with the chat-arm
+     * gate and refuses the operator override.
+     */
+    private static function visionTable(string $model): bool
+    {
+        $model = strtolower($model);
         $inFamily = static function (string $family) use ($model): bool {
             return $model === $family || str_starts_with($model, $family . '-');
         };
@@ -960,7 +976,9 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
             return match (true) {
                 // Audit 15b-15: inlined files, plus image_url parts when an
                 // image was attached (only ever handed to a vision provider).
-                $msg instanceof UserMessage => ['role' => 'user', 'content' => AttachmentEncoding::openAiContent($msg)],
+                // C-TOOL-2.e opts this chat-only arm into `file` parts for
+                // well-formed PDFs; the Responses arm never reaches here.
+                $msg instanceof UserMessage => ['role' => 'user', 'content' => AttachmentEncoding::openAiContent($msg, documentsAsBlocks: true)],
                 $msg instanceof AssistantMessage => array_filter([
                     'role' => 'assistant',
                     'content' => $msg->content(),

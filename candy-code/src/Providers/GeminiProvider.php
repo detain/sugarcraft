@@ -269,9 +269,11 @@ final readonly class GeminiProvider implements ProviderInterface, RebindsModel, 
 
     public function supportsDocuments(): bool
     {
-        // The arm maps files and images, not document blocks — the same
-        // anthropic-only position Vertex takes.
-        return false;
+        // C-TOOL-2.e: a well-formed PDF rides an `application/pdf`
+        // `inlineData` part built by the shared
+        // AttachmentEncoding::geminiParts(); a forged or oversized one is
+        // named in the text, never inlined.
+        return true;
     }
 
     public function supportsJsonSchema(): bool

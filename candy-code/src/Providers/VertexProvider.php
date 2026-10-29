@@ -415,14 +415,14 @@ final readonly class VertexProvider implements ProviderInterface, MarksPromptCac
     }
 
     /**
-     * CTX-2: only the Claude arm of this host speaks the Messages `document`
-     * block. The Gemini `inlineData` document path is DECLINED for this
-     * slice, so a Gemini model gets the PDF withheld with a notice rather
-     * than a part its wire cannot carry.
+     * C-TOOL-2.e: the Claude arm speaks the Messages `document` block (CTX-2)
+     * and the Gemini arm speaks `application/pdf` `inlineData` through the
+     * shared encoders, so both native arms carry PDFs. The legacy PaLM
+     * envelope speaks neither, and gets the attachment as named text instead.
      */
     public function supportsDocuments(): bool
     {
-        return $this->isAnthropicModel($this->defaultModel);
+        return $this->isAnthropicModel($this->defaultModel) || $this->isGeminiModel($this->defaultModel);
     }
 
     public function supportsJsonSchema(): bool

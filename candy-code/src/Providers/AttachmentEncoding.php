@@ -32,13 +32,18 @@ use SugarCraft\Code\Messages\UserMessage;
  *
  * CTX-2 adds the Anthropic family's `document` block for PDF attachments;
  * capability is decided the same upstream way by
- * {@see ProviderInterface::supportsDocuments()}. C-TOOL-2.e opens the native
- * legs one wire at a time: Bedrock Converse now carries a well-formed PDF as
+ * {@see ProviderInterface::supportsDocuments()}. C-TOOL-2.e opens the three
+ * native user-attachment wires: Bedrock Converse carries a well-formed PDF as
  * a `document` block (format `pdf`, RAW bytes like the image leg, and a name
- * shaved to the Converse charset). What the wire cannot carry - a forged or
- * truncated PDF, one past the inbound capture ceiling, and every document on
- * the still-declining OpenAI/Gemini encoders - is named in the text, never
- * dropped and never inlined as bytes.
+ * shaved to the Converse charset), Gemini — and Vertex's Gemini arm through
+ * the same shared encoders — carries it as `application/pdf` `inlineData`,
+ * and the OpenAI chat arm carries it as a `file` part with a
+ * `data:application/pdf` URL (opt-in by caller, so the Responses arm and the
+ * SGLang/Custom-compatible servers that share these encoders keep declining).
+ * On the native legs a document is carried only when its bytes are a real
+ * `%PDF-` head within the inbound capture ceiling; what the wire cannot carry
+ * — a forged or oversized PDF, and every document on a still-declining
+ * encoder — is named in the text, never dropped and never inlined as bytes.
  */
 final class AttachmentEncoding
 {
@@ -47,17 +52,34 @@ final class AttachmentEncoding
      * `data:` URL. SGLang's OpenAI-compatible server and Anthropic's OpenAI
      * compatibility endpoint read the same shape.
      *
+     * C-TOOL-2.e: `documentsAsBlocks` opts the caller's wire into the
+     * chat/completions `file` part (`file_data` rides a `data:application/pdf`
+     * URL, the documented pasting form). The flag names the CALLER's wire, not
+     * the model — only {@see \SugarCraft\Code\Providers\OpenAIProvider}'s
+     * chat arm passes it. SGLang/Custom and the OpenAI Responses arm (where
+     * `input_file` is a Responses-API file-ID construct, not this shape) stay
+     * on the default and keep naming declined documents in the text instead.
+     * A well-formedness check guards the native leg either way: a forged or
+     * oversized PDF is named, never inlined.
+     *
      * @return string|list<array<string, mixed>>
      */
-    public static function openAiContent(UserMessage $message): string|array
+    public static function openAiContent(UserMessage $message, bool $documentsAsBlocks = false): string|array
     {
         $images = $message->images();
-        if ($images === []) {
-            return self::withDeclinedDocuments($message->wireText(), $message);
+        $refused = [];
+        $carried = [];
+        if ($documentsAsBlocks) {
+            [$carried, $refused] = self::partitionDocuments($message);
+            $text = self::nameUndelivered($message->wireText(), $refused);
+        } else {
+            $text = self::withDeclinedDocuments($message->wireText(), $message);
+        }
+        if ($images === [] && $carried === []) {
+            return $text;
         }
 
         $parts = [];
-        $text = self::withDeclinedDocuments($message->wireText(), $message);
         if ($text !== '') {
             $parts[] = ['type' => 'text', 'text' => $text];
         }
@@ -65,6 +87,15 @@ final class AttachmentEncoding
             $parts[] = [
                 'type' => 'image_url',
                 'image_url' => ['url' => 'data:' . $image->mimeType . ';base64,' . base64_encode((string) $image->data)],
+            ];
+        }
+        foreach ($carried as $document) {
+            $parts[] = [
+                'type' => 'file',
+                'file' => [
+                    'filename' => self::filePartName($document->name()),
+                    'file_data' => 'data:application/pdf;base64,' . base64_encode((string) $document->data),
+                ],
             ];
         }
 
@@ -153,12 +184,20 @@ final class AttachmentEncoding
     public static function geminiParts(UserMessage $message): array
     {
         $parts = [];
-        $text = self::withDeclinedDocuments($message->wireText(), $message);
+        [$carried, $refused] = self::partitionDocuments($message);
+        $text = self::nameUndelivered($message->wireText(), $refused);
         if ($text !== '') {
             $parts[] = ['text' => $text];
         }
         foreach ($message->images() as $image) {
             $parts[] = ['inlineData' => ['mimeType' => $image->mimeType, 'data' => base64_encode((string) $image->data)]];
+        }
+        // C-TOOL-2.e: a carried PDF rides the same inlineData part family as
+        // the image leg, tagged `application/pdf` — the form the Gemini files
+        // API documents for inline PDF uploads. The shared wire covers Vertex's
+        // Gemini arm unchanged.
+        foreach ($carried as $document) {
+            $parts[] = ['inlineData' => ['mimeType' => 'application/pdf', 'data' => base64_encode((string) $document->data)]];
         }
 
         return $parts;
@@ -271,6 +310,21 @@ final class AttachmentEncoding
         $safe = ltrim(substr((string) preg_replace('/[^a-zA-Z0-9_-]/', '_', $name), 0, 64), '-_');
 
         return $safe === '' ? 'document' : $safe;
+    }
+
+    /**
+     * C-TOOL-2.e: the chat/completions `file.filename` is free text, but a
+     * control byte in a JSON string is a wire hazard, so control characters
+     * and whitespace runs collapse to single spaces and the ends trim; an
+     * empty outcome falls back to `document.pdf`. Unlike the Converse name,
+     * dots and spaces are legal here and stay (the model reads the filename
+     * back, and `spec.pdf` is what the user attached).
+     */
+    private static function filePartName(string $name): string
+    {
+        $safe = trim((string) preg_replace('/[\p{C}\s]+/u', ' ', $name));
+
+        return $safe === '' ? 'document.pdf' : $safe;
     }
 
     /**

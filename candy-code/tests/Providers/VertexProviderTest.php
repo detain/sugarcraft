@@ -349,14 +349,16 @@ final class VertexProviderTest extends TestCase
     }
 
     /**
-     * CTX-2: the document block is the Messages wire's, so only the Claude arm
-     * claims it. The Gemini inlineData document path is declined this slice.
+     * C-TOOL-2.e: both native arms carry PDFs — the Claude arm through the
+     * Messages document block (CTX-2), the Gemini arm through application/pdf
+     * inlineData. The legacy PaLM envelope speaks neither and gets the named
+     * decline.
      */
-    public function testSupportsDocumentsOnTheClaudeArmOnly(): void
+    public function testSupportsDocumentsOnBothNativeArms(): void
     {
         $unused = null;
         $this->assertTrue($this->providerWithPredictor()->supportsDocuments());
-        $this->assertFalse($this->providerWithPredictor([], $unused, self::GEMINI_MODEL)->supportsDocuments());
+        $this->assertTrue($this->providerWithPredictor([], $unused, self::GEMINI_MODEL)->supportsDocuments());
         $this->assertFalse($this->providerWithPredictor([], $unused, self::LEGACY_GOOGLE_MODEL)->supportsDocuments());
     }
 

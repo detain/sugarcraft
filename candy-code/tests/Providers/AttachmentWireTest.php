@@ -162,18 +162,31 @@ final class AttachmentWireTest extends TestCase
     {
         $message = self::attachedWithPdf();
 
+        // The no-flag callers — the Responses arm, SGLang and Custom — keep
+        // the CTX-2 decline: the never-silent rule names what they cannot carry.
         $openAi = json_encode(AttachmentEncoding::openAiContent($message), JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
-        $gemini = json_encode(AttachmentEncoding::geminiParts($message), JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
+        $this->assertStringContainsString(
+            '[Document attachment spec.pdf was not sent: this wire does not accept PDF document blocks.]',
+            $openAi,
+            'openai without the opt-in: the decline line is byte-identical to CTX-2',
+        );
+        $this->assertStringNotContainsString(base64_encode(self::PDF), $openAi, 'openai without the opt-in: no document part is built');
+        $this->assertStringNotContainsString('%PDF-1.7', $openAi, 'openai without the opt-in: the bytes are never inlined as text');
 
-        foreach (['openai' => $openAi, 'gemini' => $gemini] as $family => $wire) {
-            $this->assertStringContainsString(
-                '[Document attachment spec.pdf was not sent: this wire does not accept PDF document blocks.]',
-                $wire,
-                $family . ': the never-silent rule names what it cannot carry',
-            );
-            $this->assertStringNotContainsString(base64_encode(self::PDF), $wire, $family . ': no document part is built');
-            $this->assertStringNotContainsString('%PDF-1.7', $wire, $family . ': the bytes are never inlined as text');
-        }
+        // C-TOOL-2.e: the chat arm's opt-in carries the same PDF as a `file`
+        // part with a `data:application/pdf` URL.
+        $chat = json_encode(AttachmentEncoding::openAiContent($message, documentsAsBlocks: true), JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
+        $this->assertStringContainsString('"type":"file"', $chat, 'openai chat: the file part is built');
+        $this->assertStringContainsString('spec.pdf', $chat, 'openai chat: the filename rides, dots and spaces legal');
+        $this->assertStringContainsString('data:application\/pdf;base64,' . base64_encode(self::PDF), $chat, 'openai chat: base64 inside the data URL');
+        $this->assertStringNotContainsString('does not accept PDF document blocks', $chat, 'openai chat: nothing declined');
+
+        // C-TOOL-2.e: Gemini carries it as `application/pdf` inlineData.
+        $gemini = json_encode(AttachmentEncoding::geminiParts($message), JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
+        $this->assertStringContainsString('"mimeType":"application\/pdf"', $gemini, 'gemini: the inlineData part is built');
+        $this->assertStringContainsString(base64_encode(self::PDF), $gemini, 'gemini: base64 like the image leg');
+        $this->assertStringNotContainsString('does not accept PDF document blocks', $gemini, 'gemini: nothing declined');
+        $this->assertStringNotContainsString('%PDF-1.7', $gemini, 'gemini: the bytes are never inlined as text');
 
         // C-TOOL-2.e: Converse carries the same PDF as a `document` block -
         // with RAW bytes, like the image leg, not a base64 of base64.
@@ -183,7 +196,7 @@ final class AttachmentWireTest extends TestCase
         $this->assertStringContainsString('%PDF-1.7', $bedrock, 'bedrock: blob members take raw bytes');
         $this->assertStringNotContainsString(base64_encode(self::PDF), $bedrock, 'bedrock: no double-encoding');
 
-        // The string path (no images at all) names it too.
+        // The no-flag string path (no images at all) names it too.
         $textOnly = AttachmentEncoding::openAiContent(
             (new UserMessage('just the pdf'))->withAttachment(new Attachment('a.pdf', AttachmentType::Document, self::PDF, 'application/pdf')),
         );
@@ -191,12 +204,20 @@ final class AttachmentWireTest extends TestCase
         $this->assertStringContainsString('[Document attachment a.pdf was not sent', $textOnly);
     }
 
-    public function testDocumentsAreOnlyTheAnthropicMessagesFamily(): void
+    public function testTheDocumentWiresAreAnthropicMessagesAndTheNativeArms(): void
     {
         $factory = new ProviderFactory();
 
         $this->assertTrue($factory->create(['type' => 'anthropic', 'apiKey' => 'k'])->supportsDocuments());
-        $this->assertFalse($factory->create(['type' => 'openai', 'apiKey' => 'k', 'model' => 'gpt-4o'])->supportsDocuments(), 'the chat/completions wire has no document part here');
+        // C-TOOL-2.e: the chat arm builds `file` parts for official vision models…
+        $this->assertTrue($factory->create(['type' => 'openai', 'apiKey' => 'k', 'model' => 'gpt-4o'])->supportsDocuments());
+        // …and the Responses arm does not — its file construct is a file ID,
+        // so documents keep the named decline there.
+        $this->assertFalse(
+            $factory->create(['type' => 'openai', 'apiKey' => 'k', 'model' => 'gpt-4o', 'api' => 'responses'])->supportsDocuments(),
+            'the Responses arm has no `file` part this encoder builds',
+        );
+        $this->assertTrue($factory->create(['type' => 'gemini', 'apiKey' => 'k'])->supportsDocuments(), 'PDFs ride inlineData (C-TOOL-2.e)');
         $this->assertFalse(
             $factory->create(['type' => 'custom', 'name' => 'c', 'baseUrl' => 'https://x', 'model' => 'm', 'supportsVision' => true])->supportsDocuments(),
             'a vision override does not buy a document wire',
@@ -216,7 +237,7 @@ final class AttachmentWireTest extends TestCase
             predictor: static fn (string $e, string $m, array $b): array => ['candidates' => [['content' => ['parts' => [['text' => 'ok']]]]]],
         );
         $this->assertTrue($claude->supportsDocuments(), 'the Claude arm speaks the Messages document block');
-        $this->assertFalse($gemini->supportsDocuments(), 'the Gemini inlineData document path is declined this slice');
+        $this->assertTrue($gemini->supportsDocuments(), 'the Gemini arm speaks inlineData (C-TOOL-2.e)');
     }
 
     public function testVertexClaudeCarriesTheDocumentBlockOnTheWire(): void

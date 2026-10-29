@@ -91,7 +91,7 @@ final class GeminiProviderTest extends TestCase
         $this->assertTrue($provider->supportsStreaming(), ':streamGenerateContent?alt=sse is first-class on this API');
         $this->assertFalse($provider->supportsFunctionCalling(), 'the arm builds no tool shapes - claiming the capability without the plumbing is the bug PRV-3 refuses to reintroduce');
         $this->assertTrue($provider->supportsVision(), 'inline images ride inlineData parts via the shared AttachmentEncoding');
-        $this->assertFalse($provider->supportsDocuments(), 'document blocks are the Anthropic-family position, same as Vertex\'s arm takes');
+        $this->assertTrue($provider->supportsDocuments(), 'C-TOOL-2.e: PDFs ride application/pdf inlineData parts via the shared AttachmentEncoding');
         $this->assertTrue($provider->supportsJsonSchema(), 'PRV-3 (3/3): the shared arm emits a structured-output schema beside its mime type (C-PRV-5.d: responseJsonSchema on the modern family, the responseSchema subset on the families that predate it)');
 
         $this->assertCount(0, $provider->embeddings(new EmbeddingsRequest(model: 'gemini-embedding-1', input: 'x'))->embeddings);

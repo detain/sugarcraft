@@ -12,6 +12,7 @@ use SugarCraft\Code\AttachmentType;
 use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Providers\AttachmentEncoding;
 use SugarCraft\Code\Providers\BedrockProvider;
+use SugarCraft\Code\Providers\GeminiProvider;
 
 /**
  * C-TOOL-2.e: a user PDF reaches Bedrock Converse, Gemini generateContent,
@@ -94,6 +95,78 @@ final class DocumentAttachmentWireTest extends TestCase
         $this->assertFalse(
             BedrockProvider::create('us-east-1', 'meta.llama3-70b-instruct')->supportsDocuments(),
             'a text-only family would answer the block with a ValidationException',
+        );
+    }
+
+    public function testGeminiCarriesAWellFormedPdfAsApplicationPdfInlineData(): void
+    {
+        $parts = AttachmentEncoding::geminiParts(self::pdf());
+
+        $this->assertSame([
+            ['text' => 'read this?'],
+            ['inlineData' => ['mimeType' => 'application/pdf', 'data' => base64_encode(self::PDF)]],
+        ], $parts, 'C-TOOL-2.e: the PDF rides the same inlineData family as the image leg');
+    }
+
+    public function testGeminiNamesAForgedOrOversizedPdfAndBuildsNoPart(): void
+    {
+        $forged = AttachmentEncoding::geminiParts(self::pdf('notes.pdf', 'not a pdf at all'));
+        $oversized = AttachmentEncoding::geminiParts(
+            self::pdf('big.pdf', str_pad('%PDF-1.7', FileMentions::DOCUMENT_MAX_BYTES + 1, chr(0))),
+        );
+
+        foreach (['forged' => $forged, 'oversized' => $oversized] as $case => $parts) {
+            $this->assertCount(1, $parts, $case . ': one text part, no inlineData document');
+            $this->assertStringContainsString('[Document attachment ', $parts[0]['text']);
+            $this->assertStringContainsString('was not sent: the wire carries only well-formed PDFs up to ', $parts[0]['text']);
+        }
+
+        $this->assertStringContainsString('notes.pdf', $forged[0]['text']);
+        $this->assertStringContainsString('big.pdf', $oversized[0]['text']);
+    }
+
+    public function testOpenAiChatOptInCarriesThePdfAsAFilePart(): void
+    {
+        $content = AttachmentEncoding::openAiContent(self::pdf(), documentsAsBlocks: true);
+
+        $this->assertSame([
+            ['type' => 'text', 'text' => 'read this?'],
+            ['type' => 'file', 'file' => [
+                'filename' => 'spec.pdf',
+                'file_data' => 'data:application/pdf;base64,' . base64_encode(self::PDF),
+            ]],
+        ], $content, 'C-TOOL-2.e: the chat arm pastes the PDF as a data: URL file part');
+    }
+
+    public function testOpenAiFilePartNameCollapsesControlBytesAndKeepsDots(): void
+    {
+        $content = AttachmentEncoding::openAiContent(self::pdf('handouts/sp' . chr(1) . 'ec.pdf'), documentsAsBlocks: true);
+
+        $this->assertSame('sp ec.pdf', $content[1]['file']['filename']);
+
+        $blank = AttachmentEncoding::openAiContent(self::pdf('handouts/' . chr(1) . chr(2)), documentsAsBlocks: true);
+        $this->assertSame('document.pdf', $blank[1]['file']['filename'], 'a name that collapses to nothing still gives the part a legal filename');
+    }
+
+    public function testOpenAiOptInWithoutCarriedDocumentsKeepsTheOldShapes(): void
+    {
+        $plain = AttachmentEncoding::openAiContent(new UserMessage('no attachments at all'), documentsAsBlocks: true);
+        $this->assertSame('no attachments at all', $plain, 'the string path is byte-unchanged for an opt-in caller without documents');
+
+        $forged = AttachmentEncoding::openAiContent(self::pdf('notes.pdf', 'not a pdf at all'), documentsAsBlocks: true);
+        $this->assertIsString($forged, 'a refused document alone never forces the parts shape');
+        $this->assertStringContainsString('[Document attachment notes.pdf was not sent', $forged);
+
+        $declined = AttachmentEncoding::openAiContent(self::pdf());
+        $this->assertIsString($declined);
+        $this->assertStringContainsString('this wire does not accept PDF document blocks', $declined, 'the Responses/SGLang/Custom callers keep the CTX-2 line');
+    }
+
+    public function testGeminiClaimsDocumentsForEveryGenerativeModel(): void
+    {
+        $this->assertTrue(
+            (new GeminiProvider(apiKey: 'k'))->supportsDocuments(),
+            'C-TOOL-2.e: the arm that already reads inlineData images reads application/pdf parts',
         );
     }
 }
