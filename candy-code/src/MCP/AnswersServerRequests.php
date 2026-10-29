@@ -11,10 +11,12 @@ namespace SugarCraft\Code\MCP;
  * Deliberately NOT part of {@see McpServer}: the contract stays what it
  * always was, and callers discover this capability the same way they
  * already discover `pumpStderr()` — a narrowed `instanceof` at the one
- * call site that wants it. That narrowing is precedent, not laziness: the
- * stdio transport shares a pipe with the server and can interleave an
- * answer inside a read; the HTTP arms carry no downward channel yet, and
- * pretending otherwise would advertise a capability that cannot deliver.
+ * call site that wants it. That narrowing is precedent, not laziness: a
+ * transport can only answer inside a read it actually performs — the stdio
+ * arm shares a pipe with the server, the sse arm reads a persistent GET
+ * stream, and since C-MCP-3.c the streamable-http arm can open that same
+ * inbound GET on request. Transports without such a channel stay off this
+ * list rather than advertising a capability that cannot deliver.
  *
  * @see \SugarCraft\Code\MCP\McpClient::callTool() the consuming call site
  * @see \SugarCraft\Code\MCP\McpClient::pumpStderr() the same pattern

@@ -181,8 +181,8 @@ Five types, and they are the five `McpClient::startServer()` constructs:
 | `type` | Class | Keys |
 |---|---|---|
 | `stdio` (the default when `type` is absent) | `StdioMcpServer` | `command`, `args`, `env`, `startTimeout`, `toolTimeout`, `cwd` |
-| `http` | `HttpMcpServer` | `url`, `headers`, `toolTimeout` |
-| `sse` | `SseMcpServer` | `url`, `headers`, `toolTimeout` |
+| `http` | `HttpMcpServer` | `url`, `headers`, `toolTimeout`, `stream`, `cwd` |
+| `sse` | `SseMcpServer` | `url`, `headers`, `toolTimeout`, `cwd` |
 | `git` | `GitMcpServer` | `path` (omitted → this project), `timeout` |
 | `claude-mcp` | `ClaudeCodeMcpServer` | none — the repository names nothing |
 
@@ -223,18 +223,19 @@ census, table first:
 | Transport | Works here | Config it takes | How it runs |
 |---|---|---|---|
 | Stdio | yes | `command`, `args` (+ optional `env`, `startTimeout`, `toolTimeout`) | spawned child, JSON-RPC over pipes |
-| HTTP | yes | `url` (+ optional `headers`) | Streamable HTTP: one POST per message accepting `application/json, text/event-stream`, the `Mcp-Session-Id` from `initialize` echoed on every later request, replies read from a JSON body or SSE `data:` frames; a stored OAuth bearer attaches per request, and a static `Authorization` you set in the config wins over the store |
+| HTTP | yes | `url` (+ optional `headers`, `toolTimeout`, `stream`) | Streamable HTTP: one POST per message accepting `application/json, text/event-stream`, the `Mcp-Session-Id` from `initialize` echoed on every later request, replies read from a JSON body or SSE `data:` frames; server requests riding a reply stream are answered by a POST back on the session, and `stream: true` adds the opt-in inbound GET for between-call traffic; a stored OAuth bearer attaches per request, and a static `Authorization` you set in the config wins over the store |
 | Git | yes | `path` (omit → this project) (+ optional `timeout`) | in-process — no transport, no child, no socket |
 | Claude-mcp | yes | operator-tier `claudeMcpBinary` (+ optional `claudeMcpArgs`, `claudeMcpEnv`; never the entry) | spawned child under process containment, JSON-RPC over pipes |
-| SSE | yes | `url` (+ optional `headers`, `toolTimeout`) | legacy 2024-11-05 HTTP+SSE: one long-lived `GET` of `text/event-stream`; its first `endpoint` event names where requests POST, and the client locks that target to the configured URL's origin — a cross-origin publish is refused before anything is sent, so the bearer can never ship to a host the operator did not configure; replies ride the stream matched by `id`; a dropped stream gets a bounded reconnect burst and then refusal until the next call retries it |
+| SSE | yes | `url` (+ optional `headers`, `toolTimeout`) | legacy 2024-11-05 HTTP+SSE: one long-lived `GET` of `text/event-stream`; its first `endpoint` event names where requests POST, and the client locks that target to the configured URL's origin — a cross-origin publish is refused before anything is sent, so the bearer can never ship to a host the operator did not configure; replies ride the stream matched by `id`, and the server requests and progress that ride it too are answered and routed; a dropped stream gets a bounded reconnect burst and then refusal until the next call retries it |
 
 The `sse` row has an interesting history: this transport is why
 `startServer()`'s guard is as wide as it is — before the widening, one
 unrecognized `sse` entry disabled every server listed after it in the same
 file, with no report at all — the transport the spec named arrived later.
 An `http` entry whose URL happens to end in `/sse` is unaffected — the
-transport is the `type`, never the URL. Note also that the `GET` opens its own
-socket and does not consult `HTTP_PROXY`/`HTTPS_PROXY` (unlike the Guzzle POST
+transport is the `type`, never the URL. Note also that the event-stream `GET`s
+(sse's session stream, and http's `stream: true` channel) open their own
+sockets and do not consult `HTTP_PROXY`/`HTTPS_PROXY` (unlike the Guzzle POST
 legs); on a proxied host, reach the server directly or via `url` rewriting.
 
 A fourth row deserves its own paragraph, because it is the only transport the
@@ -358,10 +359,25 @@ transport the rest of the way:
   `2025-06-18` or later, the revision that introduced it.
 - **Replies.** A `text/event-stream` reply is read as SSE: `data:` lines join
   with a newline, comments and non-`message` events are skipped, and the
-  message whose `id` matches the request is the answer — notifications and
-  server requests the stream carries first are passed over. The reply body is
-  read whole, so a server must close the stream once it has answered, as the
-  specification asks and both reference SDKs do.
+  message whose `id` matches the request is the answer. A server request or
+  `notifications/progress` riding ahead of the answer is no longer passed
+  over (C-MCP-3.c): with an answer desk installed the request is answered by
+  a fresh POST of the JSON-RPC response carrying the `Mcp-Session-Id`, and
+  progress rides the call's sink — see "Server requests" below. The reply
+  body is read whole, so a server must close the stream once it has
+  answered, as the specification asks and both reference SDKs do.
+- **Inbound GET (`stream: true`).** The buffered POST above is the default
+  and never changes. An `http` entry that opts in with `"stream": true`
+  additionally opens the spec's server-to-client channel: a persistent `GET`
+  of `text/event-stream` on the same endpoint, carrying the session id and
+  the same headers (and the same stored bearer) as every POST, opened over
+  the deadline-bounded reader the legacy `sse` transport shares —
+  `SseLineParser::openEventStream()`. Traffic that arrives between calls is
+  read at the next exchange start and on the client's idle pump, so a `ping`
+  is answered, not waited out. A server that refuses the GET (405 is the
+  spec's own answer) costs the channel, never the session; a session lost to
+  expiry closes the channel with it until the next `start()`. Like every
+  raw-socket leg in this transport family, the GET bypasses `HTTP_PROXY`.
 
 ### How the legacy SSE transport runs
 
@@ -382,6 +398,14 @@ configured URL the way a browser would resolve it). Then:
   only means the server took the message. The reply arrives on the stream,
   matched by `id`, with the same `data:`-join and non-`message` skipping the
   `http` transport uses (both read one shared `SseLineParser`).
+- **Server requests are answered (C-MCP-3.c).** A `ping`, `roots/list` or
+  `elicitation/create` riding the stream — during a call or between calls —
+  reaches the answer desk, and its JSON-RPC answer is POSTed back over the
+  origin-locked endpoint like any other client message;
+  `notifications/progress` rides the per-call sink. The handshake therefore
+  advertises the matching `roots` and `elicitation` client capabilities.
+  Between calls the client's idle pump drains the stream on a bounded window,
+  so a ping waits for the next pump or the next call, never forever.
 - **Per-call ceiling.** `toolTimeout` bounds how long one call waits for its
   reply on the stream — the same opt-in per-call IO ceiling the other wire
   transports carry, never a blanket timeout on the long-lived connection
@@ -630,10 +654,10 @@ Sharing is made safe in the transport:
 A server you approved can ask *you* things in the middle of a call: probe
 liveness with a `ping`, list the workspace roots it may touch, ask the human
 for a value with `elicitation/create`, or report how far along a long call is
-with `notifications/progress`. Only the `stdio` transport interleaves this
-traffic today: it is the one server class that carries an answer desk, so
-its requests are answered in place while the exchange lock is held. The
-other transports — `http`, `git`, `sse` and `claude-mcp` — surface no
+with `notifications/progress`. Only the `http`, `sse` and `stdio` transports
+interleave this traffic today: they are the server classes that carry an
+answer desk, so their requests are answered in place while the exchange
+lock is held. The other transports — `claude-mcp` and `git` — surface no
 server-initiated requests, and their calls simply proceed.
 
 Answers arrive through an *answer desk* (`McpServerRequests`). There are two,

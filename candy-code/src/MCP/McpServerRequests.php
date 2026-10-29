@@ -44,6 +44,24 @@ final class McpServerRequests
 
     public const PROGRESS_METHOD = 'notifications/progress';
 
+    /**
+     * Exactly what a desk-bearing transport advertises at `initialize`: a
+     * roots list this client never changes (no `listChanged` notifications
+     * are ever pushed) and an elicitation capability flagged by an empty
+     * object — the answers themselves ride this desk. Built per call because
+     * a shared empty-object instance in a constant is not something PHP
+     * class-constant syntax can even write.
+     *
+     * @return array<string,mixed>
+     */
+    public static function clientCapabilities(): array
+    {
+        return [
+            'roots' => ['listChanged' => false],
+            'elicitation' => new \stdClass(),
+        ];
+    }
+
     private readonly string $projectRoot;
 
     /**

@@ -6235,14 +6235,14 @@ final class DocFigureProseDriftTest extends TestCase
             'the factory gained or lost a constructed transport — this arm and the section move together',
         );
         self::assertSame(
-            ['stdio'],
+            ['http', 'sse', 'stdio'],
             $desking,
             'a transport gained or lost the answer-desk interface — the Server-requests sentences and this derivation re-pin together',
         );
 
         self::assertSame(
             1,
-            \preg_match('/Only the ((?:`[a-z-]+`)+) transport interleaves this traffic today/', $section, $m),
+            \preg_match('/Only the ((?:`[a-z-]+`(, | and | or )?)+) transports? interleave(?:s)? this traffic today/', $section, $m),
             'the section no longer states the interleaving transport in its pinned shape — re-derive from the desk gate',
         );
         \preg_match_all('/`([a-z-]+)`/', $m[1], $nm);

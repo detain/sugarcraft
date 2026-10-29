@@ -43,8 +43,19 @@ use SugarCraft\McpClient\RequestIdSequence;
  * on, no redirect following) with every read bounded by an explicit
  * deadline, and the POST side — short, request-shaped, header-rich — rides
  * the same Guzzle client (and therefore the same OAuth bearer precedence) as
- * the http transport. Chunked bodies are decoded here because the
- * specification requires its servers to support HTTP/1.1 chunked transfer.
+ * the http transport. Chunked bodies are decoded because the specification
+ * requires its servers to support HTTP/1.1 chunked transfer; since
+ * C-MCP-3.c that deadline-bounded reader lives in {@see SseLineParser}
+ * ({@see SseLineParser::openEventStream()}) so the Streamable HTTP inbound
+ * GET runs the exact same wire machinery rather than a second copy.
+ *
+ * ANSWER DESK (C-MCP-3.c). Server-initiated requests arriving on the GET
+ * stream — `ping`, `roots/list`, `elicitation/create` — are answered by
+ * POSTing the JSON-RPC response to the origin-locked endpoint, and
+ * `notifications/progress` rides the per-call wait sink: this class
+ * implements {@see AnswersServerRequests}. While an exchange awaits its
+ * reply, the skipped non-reply frames are routed through the same desk
+ * instead of being passed over.
  *
  * FORK SAFETY follows {@see HttpMcpServer}: ids are pid-tagged outside the
  * owner ({@see RequestIdSequence}), and POSTs go on fresh connections. The
@@ -66,7 +77,7 @@ use SugarCraft\McpClient\RequestIdSequence;
  * model-driven call tries one fresh burst. Calls are user-paced, so a burst
  * per call is the bound — this class never loops on its own clock.
  */
-final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptProvider
+final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptProvider, AnswersServerRequests
 {
     use WalksProviderPages;
     /** The revision this transport exists for; nothing else speaks `endpoint`. */
@@ -84,11 +95,8 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
      */
     public const DEFAULT_TOOL_TIMEOUT_SECONDS = StdioMcpServer::DEFAULT_TOOL_TIMEOUT_SECONDS;
 
-    /** Bound for the TCP+TLS connect. A dead host must cost seconds. */
+    /** Bound for the socket connect of the origin-locked endpoint POST. */
     private const CONNECT_TIMEOUT_SECONDS = 10.0;
-
-    /** Bound for the response-head wait after the request is written. */
-    private const OPEN_TIMEOUT_SECONDS = 10.0;
 
     /** Bound for the server's `endpoint` event after the stream opens. */
     private const ENDPOINT_TIMEOUT_SECONDS = 10.0;
@@ -110,11 +118,6 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
     private const RECONNECT_BACKOFF_SECONDS = 0.5;
     private const RECONNECT_BACKOFF_CAP_SECONDS = 4.0;
 
-    /** Hostile-input bounds: a response head or one reply-wait of stream may not grow unbounded. */
-    private const MAX_HEAD_BYTES = 65536;
-    private const MAX_LINE_BYTES = 8192;
-    private const MAX_STREAM_BYTES_PER_WAIT = 8388608;
-
     /** Headers the transport owns. Same drop-list as {@see HttpMcpServer}: a
      *  legacy server reads none of these from config, and a hand-set session
      *  id or protocol version is a 2025 concept this wire has no slot for. */
@@ -131,10 +134,8 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
 
     private readonly RequestIdSequence $ids;
 
-    /** @var resource|null the persistent GET socket, this process's own */
-    private $socket = null;
-
-    /** Pid that CREATED the CURRENT {@see $socket}. Deliberately distinct from
+    /** Pid that CREATED the CURRENT stream handle (held by {@see $parser}
+     *  since C-MCP-3.c). Deliberately distinct from
      *  {@see $sessionPid}: that one is claimed before the establish legs run,
      *  so only this stamp still knows who owns the held descriptor — exactly
      *  the question the C-MCP-6.a retain-instead-of-close rule asks at
@@ -153,23 +154,14 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
     /** The origin-locked POST target published by the server's endpoint event. */
     private ?string $postTarget = null;
 
-    /** Wait bookkeeping: the reader bounds every read by this deadline and
-     *  names this label in the refusal it raises when the deadline passes. */
-    private ?float $waitDeadlineAt = null;
+    /** The spawn-time answer desk (C-MCP-3.c): routes server-initiated
+     *  traffic seen on the stream BETWEEN calls, exactly as the stdio arm's
+     *  desk answers elicitations and pings. */
+    private readonly ?\Closure $defaultHandler;
 
-    private string $waitLabel = '';
-
-    /** Bytes handed to the parser since the current wait began (hostile-flood bound). */
-    private int $fedBytesInWait = 0;
-
-    /** Chunked-decode state (transfer-encoding: chunked is what real servers send). */
-    private bool $chunked = false;
-
-    private string $payloadBuf = '';
-
-    private ?int $chunkRemaining = null;
-
-    private bool $lastChunkSeen = false;
+    /** The desk bound to the CURRENT call while {@see
+     *     callToolAnsweringRequests()} runs; null between calls. */
+    private ?\Closure $activeHandler = null;
 
     /**
      * @param \Closure|null $pidProvider @internal test seam returning the
@@ -193,10 +185,12 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
         private readonly float $toolTimeoutSeconds = self::DEFAULT_TOOL_TIMEOUT_SECONDS,
         ?\Closure $connector = null,
         ?\Closure $sleeper = null,
+        ?\Closure $onServerMessage = null,
     ) {
         $this->pidProvider = $pidProvider ?? static fn (): int => (int) getmypid();
         $this->ids = new RequestIdSequence($pidProvider);
-        $this->connector = $connector ?? self::connectSocket(...);
+        $this->connector = $connector ?? SseLineParser::connectStream(...);
+        $this->defaultHandler = $onServerMessage;
         $this->sleeper = $sleeper ?? static function (float $seconds): void {
             usleep((int) round($seconds * 1000000));
         };
@@ -401,57 +395,29 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
      */
     private function openStream(): void
     {
-        $parts = $this->parseUrl($this->url, 'configured URL');
-        /** @var resource $socket */
-        $socket = ($this->connector)($parts['scheme'], $parts['host'], $parts['port'], self::CONNECT_TIMEOUT_SECONDS);
         $this->streamLost = false;
         $this->postTarget = null;
-        $this->payloadBuf = '';
-        $this->chunkRemaining = null;
-        $this->lastChunkSeen = false;
-        $this->chunked = false;
 
-        try {
-            $target = ($parts['path'] ?? '') !== '' ? $parts['path'] : '/';
-            if (isset($parts['query']) && $parts['query'] !== '') {
-                $target .= '?' . $parts['query'];
-            }
-
-            $request = "GET {$target} HTTP/1.1\r\n"
-                . 'Host: ' . $parts['host'] . ':' . $parts['port'] . "\r\n"
-                . "Accept: " . self::PROTOCOL_STREAM_ACCEPT . "\r\n"
-                . "Cache-Control: no-store\r\n"
-                . "Connection: keep-alive\r\n";
-            foreach ($this->filteredHeaders() as $header => $value) {
-                $request .= "{$header}: {$value}\r\n";
-            }
-            $request .= "\r\n";
-
-            if (\is_resource($this->socket) && $this->socketOpenerPid !== ($this->pidProvider)()) {
-                // C-MCP-6.a: this handle is the PARENT's connection inherited
-                // across the fork — hold it, never let its destructor fire.
-                $this->retainedSockets[] = $this->socket;
-            }
-            $this->socket = $socket;
-            $this->socketOpenerPid = ($this->pidProvider)();
-            $this->writeRequest($request);
-
-            [$status, $reason, $head] = $this->readHead();
-            $this->assertStreamHead($status, $reason, $head);
-
-            $this->chunked = str_contains(strtolower($head['transfer-encoding'] ?? ''), 'chunked');
-            $this->parser = new SseLineParser(function (): string {
-                return $this->readStreamChunk();
-            });
-        } catch (\Throwable $e) {
-            $this->closeSocket($socket);
-            $this->socket = null;
-
-            throw $e;
+        $stale = $this->parser?->detachSocket();
+        if (\is_resource($stale) && $this->socketOpenerPid !== ($this->pidProvider)()) {
+            // C-MCP-6.a: this handle is the PARENT's connection inherited
+            // across the fork — hold it, never let its destructor fire.
+            $this->retainedSockets[] = $stale;
         }
-    }
+        $this->parser = null;
 
-    private const PROTOCOL_STREAM_ACCEPT = 'text/event-stream';
+        // The opener writes, gates the head, and fcloses its own fresh socket
+        // if any leg fails; the refusal wording is the transport's, moved
+        // byte-for-byte into the shared reader by C-MCP-3.c.
+        $this->parser = SseLineParser::openEventStream(
+            $this->url,
+            $this->name,
+            $this->filteredHeaders(),
+            $this->connector,
+            10.0,
+        );
+        $this->socketOpenerPid = ($this->pidProvider)();
+    }
 
     /**
      * Wait for the `endpoint` event and hand back the URI it names. The spec
@@ -559,27 +525,7 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
      */
     private function parseUrl(string $url, string $what): array
     {
-        $parts = parse_url($url);
-        $scheme = is_array($parts) && isset($parts['scheme']) ? strtolower((string) $parts['scheme']) : '';
-        $host = is_array($parts) && isset($parts['host']) ? strtolower((string) $parts['host']) : '';
-
-        if (($scheme !== 'http' && $scheme !== 'https') || $host === '') {
-            throw new \RuntimeException(
-                'MCP server ' . $this->name . ": {$what} \"{$url}\" is not an http(s) URL with a host",
-            );
-        }
-
-        $port = is_array($parts) && isset($parts['port']) ? (int) $parts['port'] : ($scheme === 'https' ? 443 : 80);
-
-        $out = ['scheme' => $scheme, 'host' => $host, 'port' => $port];
-        if (is_array($parts) && isset($parts['path'])) {
-            $out['path'] = (string) $parts['path'];
-        }
-        if (is_array($parts) && isset($parts['query'])) {
-            $out['query'] = (string) $parts['query'];
-        }
-
-        return $out;
+        return SseLineParser::parseUrl($url, $this->name, $what);
     }
 
     /**
@@ -587,12 +533,7 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
      */
     private function compose(array $parts): string
     {
-        $url = $parts['scheme'] . '://' . $parts['host'] . ':' . $parts['port'] . ($parts['path'] ?? '/');
-        if (isset($parts['query']) && $parts['query'] !== '') {
-            $url .= '?' . $parts['query'];
-        }
-
-        return $url;
+        return SseLineParser::composeUrl($parts);
     }
 
     /**
@@ -603,7 +544,7 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
     {
         $reply = $this->exchange('initialize', [
             'protocolVersion' => self::PROTOCOL_VERSION,
-            'capabilities' => new \stdClass(),
+            'capabilities' => McpServerRequests::clientCapabilities(),
             'clientInfo' => ['name' => 'candy-code', 'version' => '1.0.0'],
         ]);
 
@@ -684,7 +625,10 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
 
         $this->beginWait($this->toolTimeoutSeconds, "a response to request {$id}");
         try {
-            $reply = $parser->replyTo($id);
+            // C-MCP-3.c: with a desk the skipped non-reply frames are routed;
+            // without one the walk keeps its original pass-over shape (same
+            // gate as the http arm's replyFromEventStream).
+            $reply = $parser->replyTo($id, $this->hasDesk() ? $this->onInboundFrames(...) : null);
         } catch (SseStreamDeadlineException) {
             $this->sendCancelled($id, 'the client abandoned the request at its configured timeout');
 
@@ -900,320 +844,30 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
     // ------------------------------------------------------------------
 
     /**
-     * The reader the shared parser pulls through: decoded SSE bytes, `''` at
-     * end of stream, every wait bounded by {@see $waitDeadlineAt}.
+     * @internal the deadline-plumbing seam pinned directly by the suite; the
+     *           bytes now come off the shared reader ({@see SseLineParser}).
      */
     private function readStreamChunk(): string
     {
-        $budget = self::MAX_STREAM_BYTES_PER_WAIT - $this->fedBytesInWait;
-        if ($budget <= 0) {
-            throw new \RuntimeException(
-                'MCP server ' . $this->name . ': the event stream carried more than '
-                . self::MAX_STREAM_BYTES_PER_WAIT . ' bytes while waiting for ' . $this->waitLabel
-                . ' — refusing to buffer an unbounded flood',
-            );
-        }
-
-        $raw = $this->readPendingPayload(min(8192, $budget));
-        if ($raw === '') {
-            return '';
-        }
-        $this->fedBytesInWait += strlen($raw);
-
-        return $raw;
-    }
-
-    /**
-     * Up to $bytes decoded payload bytes; `''` only at true end of stream.
-     * Chunked framing (size line, payload, trailer to the terminal zero
-     * chunk) or, when the server sends no transfer-encoding, the plain bytes
-     * themselves — an SSE body without chunking ends when the socket does.
-     */
-    private function readPendingPayload(int $bytes): string
-    {
-        while ($this->payloadBuf === '') {
-            if ($this->lastChunkSeen) {
-                return '';
-            }
-            if (!$this->chunked) {
-                $raw = $this->readWire($bytes);
-                if ($raw === '') {
-                    return ''; // an unchunked SSE body ends when the socket does
-                }
-                $this->payloadBuf = $raw;
-
-                continue;
-            }
-            if ($this->chunkRemaining === null) {
-                $sizeLine = $this->readWireLine();
-                if ($sizeLine === null) {
-                    return ''; // clean EOF between chunks
-                }
-                // Extensions (`;name=value`) ride after the hex size; the
-                // size terminates at the first ';' or whitespace.
-                $hex = strtolower(rtrim(strstr($sizeLine . ';', ';', true), " \t\r\n"));
-                if (ctype_xdigit($hex) === false || $hex === '') {
-                    throw new \RuntimeException(
-                        'MCP server ' . $this->name . ': malformed chunk size line in the event stream',
-                    );
-                }
-                $size = hexdec($hex);
-                if ($size < 1) {
-                    $this->lastChunkSeen = true;
-                    $this->drainTrailer();
-
-                    return '';
-                }
-                if ($size > self::MAX_STREAM_BYTES_PER_WAIT) {
-                    throw new \RuntimeException(
-                        'MCP server ' . $this->name . ': a single event-stream chunk claims '
-                        . (int) $size . ' bytes — refusing to read it',
-                    );
-                }
-                $this->chunkRemaining = (int) $size;
-
-                continue;
-            }
-            $want = min($bytes, $this->chunkRemaining);
-            $chunk = $this->readWire($want);
-            if ($chunk === '') {
-                throw new \RuntimeException(
-                    'MCP server ' . $this->name . ': the event stream died mid-chunk (expected '
-                    . $this->chunkRemaining . ' more bytes)',
-                );
-            }
-            $this->chunkRemaining -= strlen($chunk);
-            $this->payloadBuf .= $chunk;
-            if ($this->chunkRemaining === 0) {
-                // The CRLF that closes every chunk.
-                $this->readWire(2);
-                $this->chunkRemaining = null;
-            }
-        }
-
-        $out = substr($this->payloadBuf, 0, $bytes);
-        $this->payloadBuf = (string) substr($this->payloadBuf, strlen($out));
-
-        return $out;
-    }
-
-    /**
-     * Trailer headers after the terminal zero chunk, up to the final blank
-     * line. They carry no SSE payload, so they are read and dropped; a stream
-     * that ends inside the trailer is EOF, not corruption.
-     */
-    private function drainTrailer(): void
-    {
-        while (true) {
-            $line = $this->readWireLine();
-            if ($line === null || $line === '') {
-                return;
-            }
-        }
-    }
-
-    /**
-     * @return array{0: int, 1: string, 2: array<string,string>}
-     */
-    private function readHead(): array
-    {
-        $this->beginWait(self::OPEN_TIMEOUT_SECONDS, 'the response head');
-        try {
-            $head = '';
-            while (true) {
-                $byte = $this->readWireStrict(1);
-                $head .= $byte;
-                if (str_ends_with($head, "\r\n\r\n")) {
-                    break;
-                }
-                if (strlen($head) >= self::MAX_HEAD_BYTES) {
-                    throw new \RuntimeException('the event-stream response head exceeded ' . self::MAX_HEAD_BYTES . ' bytes');
-                }
-            }
-        } finally {
-            $this->endWait();
-        }
-
-        [$statusLine, $rest] = explode("\r\n", $head, 2);
-        if (preg_match('#^HTTP/\d(?:\.\d)? (\d{3}) ?(.*)$#', $statusLine, $m) !== 1) {
-            throw new \RuntimeException('the event-stream response carried no parsable status line');
-        }
-
-        $headers = [];
-        foreach (explode("\r\n", rtrim($rest, "\r\n")) as $line) {
-            if ($line === '' || !str_contains($line, ':')) {
-                continue;
-            }
-            [$name, $value] = explode(':', $line, 2);
-            $headers[strtolower(trim($name))] = trim($value);
-        }
-
-        return [(int) $m[1], trim($m[2]), $headers];
-    }
-
-    /**
-     * @param array<string,string> $head
-     */
-    private function assertStreamHead(int $status, string $reason, array $head): void
-    {
-        if ($status >= 300 && $status < 400) {
-            throw new \RuntimeException(
-                "HTTP {$status} {$reason}: the event-stream GET was redirected, and this transport"
-                . ' does not follow redirects (a redirect could move the stream off the configured origin)',
-            );
-        }
-        if ($status === 401 || $status === 403) {
-            throw new HttpMcpAuthRequiredException($this->name, $status);
-        }
-        if ($status < 200 || $status >= 300) {
-            throw new \RuntimeException(trim("HTTP {$status} {$reason}"));
-        }
-
-        $mediaType = strtolower(trim(explode(';', $head['content-type'] ?? '')[0]));
-        if ($mediaType !== self::PROTOCOL_STREAM_ACCEPT) {
-            throw new \RuntimeException(
-                'the event-stream GET was answered with content-type "' . $mediaType . '", not '
-                . self::PROTOCOL_STREAM_ACCEPT,
-            );
-        }
-    }
-
-    private function writeRequest(string $request): void
-    {
-        $socket = $this->requireSocket();
-        $deadlineAt = microtime(true) + self::OPEN_TIMEOUT_SECONDS;
-
-        $remaining = $request;
-        while ($remaining !== '') {
-            $left = $deadlineAt - microtime(true);
-            if ($left <= 0.0) {
-                throw new \RuntimeException('timed out writing the event-stream GET request');
-            }
-            $read = null;
-            $write = [$socket];
-            $except = null;
-            $ready = @stream_select($read, $write, $except, (int) $left, (int) (($left - (int) $left) * 1000000));
-            if ($ready === false) {
-                throw new \RuntimeException('the event-stream connection failed while the GET request was being written');
-            }
-            if ($ready === 0) {
-                continue;
-            }
-            $written = @fwrite($socket, $remaining);
-            if ($written === false || ($written === 0 && feof($socket))) {
-                throw new \RuntimeException('the event-stream connection was closed while the GET request was being written');
-            }
-            if ($written > 0) {
-                $remaining = substr($remaining, $written);
-            }
-        }
-    }
-
-    /**
-     * Read whatever the socket carries, blocking at most until the active
-     * wait deadline. `''` answers mean the peer closed the stream.
-     */
-    private function readWire(int $bytes): string
-    {
-        $socket = $this->requireSocket();
-
-        while (true) {
-            $remaining = ($this->waitDeadlineAt ?? microtime(true) + self::OPEN_TIMEOUT_SECONDS) - microtime(true);
-            if ($remaining <= 0.0) {
-                throw new SseStreamDeadlineException("timed out after its wait bound while waiting for {$this->waitLabel}");
-            }
-
-            $read = [$socket];
-            $write = null;
-            $except = null;
-            $ready = @stream_select($read, $write, $except, (int) $remaining, (int) (($remaining - (int) $remaining) * 1000000));
-            if ($ready === false) {
-                throw new \RuntimeException('the event-stream socket failed while waiting for ' . $this->waitLabel);
-            }
-            if ($ready === 0) {
-                continue; // spurious readiness; the deadline decides, not this tick
-            }
-
-            $chunk = @fread($socket, $bytes);
-            if ($chunk === false) {
-                if (feof($socket)) {
-                    return '';
-                }
-                continue;
-            }
-            if ($chunk !== '') {
-                return $chunk;
-            }
-            if (feof($socket)) {
-                return '';
-            }
-        }
-    }
-
-    private function readWireStrict(int $bytes): string
-    {
-        $chunk = $this->readWire($bytes);
-        if ($chunk === '') {
-            throw new \RuntimeException("the event stream closed while waiting for {$this->waitLabel}");
-        }
-
-        return $chunk;
-    }
-
-    /**
-     * One CRLF/LF-terminated head-ish line from the wire (chunk sizes,
-     * trailers). Null on clean EOF so callers can distinguish "stream ended"
-     * from "line read"; a line past the bound is a malformed stream.
-     */
-    private function readWireLine(): ?string
-    {
-        $line = '';
-        while (true) {
-            $byte = $this->readWire(1);
-            if ($byte === '') {
-                return $line === '' ? null : $line;
-            }
-            if ($byte === "\n") {
-                return rtrim($line, "\r");
-            }
-            $line .= $byte;
-            if (strlen($line) >= self::MAX_LINE_BYTES) {
-                throw new \RuntimeException('the event stream carried a framing line past ' . self::MAX_LINE_BYTES . ' bytes');
-            }
-        }
-    }
-
-    /**
-     * @return resource
-     */
-    private function requireSocket()
-    {
-        if (!\is_resource($this->socket)) {
-            throw new \RuntimeException('the event stream is not open');
-        }
-
-        return $this->socket;
+        return $this->parser?->readStreamChunk() ?? '';
     }
 
     private function closeStream(): void
     {
-        if (\is_resource($this->socket)) {
+        $socket = $this->parser?->detachSocket();
+        if (\is_resource($socket)) {
             if ($this->socketOpenerPid === ($this->pidProvider)()) {
-                $this->closeSocket($this->socket);
+                $this->closeSocket($socket);
             } else {
                 // C-MCP-6.a defense-in-depth: an inherited handle dropped
                 // before this process ever opened its own is retained too.
-                $this->retainedSockets[] = $this->socket;
+                $this->retainedSockets[] = $socket;
             }
         }
-        $this->socket = null;
         $this->socketOpenerPid = null;
         $this->parser = null;
         $this->postTarget = null;
         $this->sessionPid = null;
-        $this->payloadBuf = '';
-        $this->chunkRemaining = null;
-        $this->lastChunkSeen = false;
     }
 
     /** @param resource $socket */
@@ -1223,42 +877,112 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
     }
 
     /**
-     * The default connector. TLS via php streams with peer verification and
-     * SNI on — no option here is a relaxation of what Guzzle's curl handler
-     * did by default; the transport moved, the trust posture did not. (Proxy
-     * configuration is honoured by neither the moved GET nor any prior sse
-     * path; documented in docs/MCP.md.)
+     * Route one decoded non-reply JSON-RPC message read while awaiting a
+     * reply or pumping between calls (C-MCP-3.c). Server REQUESTS are
+     * answered over the origin-locked POST; server NOTIFICATIONS ride the
+     * desk (progress to the wait sink). Delivery only: an answer that cannot
+     * be POSTed is dropped — it must never poison the reply walk that is
+     * still waiting on this same stream.
      *
-     * @return resource
+     * @param array<mixed>|list<mixed> $decoded
      */
-    private static function connectSocket(string $scheme, string $host, int $port, float $timeoutSeconds)
+    private function onInboundFrames(array $decoded): void
     {
-        $transport = $scheme === 'https' ? 'tls' : 'tcp';
-        $context = stream_context_create([
-            'ssl' => [
-                'peer_name' => $host,
-                'SNI_enabled' => true,
-                'verify_peer' => true,
-                'verify_peer_name' => true,
-            ],
-        ]);
+        foreach (array_is_list($decoded) ? $decoded : [$decoded] as $frame) {
+            if (!\is_array($frame) || !isset($frame['method']) || !\is_string($frame['method'])) {
+                continue; // replies and junk are not inbound traffic to route
+            }
+            $params = \is_array($frame['params'] ?? null) ? $frame['params'] : null;
+            $isNotification = !\array_key_exists('id', $frame);
+            $handler = $this->activeHandler ?? $this->defaultHandler;
 
-        $socket = @stream_socket_client(
-            "{$transport}://{$host}:{$port}",
-            $errno,
-            $errstr,
-            $timeoutSeconds,
-            STREAM_CLIENT_CONNECT,
-            $context,
-        );
+            if ($isNotification) {
+                try {
+                    $handler?->__invoke($frame['method'], $params, true);
+                } catch (\Throwable) {
+                    // a dropped notification is bounded damage; the stream stays live
+                }
+                continue;
+            }
 
-        if ($socket === false) {
-            throw new \RuntimeException("cannot connect to {$transport}://{$host}:{$port}: {$errstr} ({$errno})");
+            try {
+                $answer = $handler?->__invoke($frame['method'], $params, false)
+                    ?? ['error' => ['code' => McpServerRequests::METHOD_NOT_FOUND, 'message' => 'Method not found']];
+                $this->sendPost(['jsonrpc' => '2.0', 'id' => $frame['id']] + $answer);
+            } catch (\Throwable) {
+                // delivery only
+            }
         }
-        stream_set_read_buffer($socket, 0);
-        stream_set_write_buffer($socket, 0);
+    }
 
-        return $socket;
+    /**
+     * Bounded non-blocking drain of the inbound stream (C-MCP-3.c), driven by
+     * {@see McpClient::pumpStderr()} between exchanges so server pings and
+     * elicitations posted outside a call still land on the desk. Never
+     * reconnects from here: EOF or framing damage marks the session dropped
+     * and the NEXT call's bounded burst recovers it, exactly as the drop law
+     * above already prescribes. No-op when no stream is open or the session
+     * is already lost.
+     */
+    public function pumpStream(): void
+    {
+        if ($this->parser === null || $this->streamLost || $this->sessionPid !== ($this->pidProvider)()) {
+            return;
+        }
+
+        $this->beginWait(0.001, 'the idle stream pump');
+        try {
+            while (true) {
+                $event = $this->parser->nextEvent();
+                if ($event === null) {
+                    $this->streamLost = true;
+
+                    return;
+                }
+                if ($event['event'] !== '' && $event['event'] !== 'message') {
+                    continue;
+                }
+                $decoded = json_decode($event['data'], true);
+                if (\is_array($decoded)) {
+                    $this->onInboundFrames($decoded);
+                }
+            }
+        } catch (SseStreamDeadlineException) {
+            // quiet window over — best-effort by design
+        } catch (\RuntimeException) {
+            $this->streamLost = true;
+        } finally {
+            $this->endWait();
+        }
+    }
+
+    /** Whether any desk exists to route inbound server traffic to (C-MCP-3.c). */
+    private function hasDesk(): bool
+    {
+        return $this->activeHandler !== null || $this->defaultHandler !== null;
+    }
+
+    public function callToolAnsweringRequests(
+        string $toolName,
+        array $args,
+        ?\Closure $onWait = null,
+        ?McpServerRequests $serverRequests = null,
+    ): array {
+        $inner = $serverRequests?->handler();
+        $previous = $this->activeHandler;
+        $this->activeHandler = static function (string $method, ?array $params, bool $isNotification) use ($inner, $onWait): ?array {
+            if ($isNotification && $onWait !== null && $method === McpServerRequests::PROGRESS_METHOD) {
+                $onWait($params ?? []);
+            }
+
+            return $inner?->__invoke($method, $params, $isNotification);
+        };
+
+        try {
+            return $this->callTool($toolName, $args);
+        } finally {
+            $this->activeHandler = $previous;
+        }
     }
 
     // ------------------------------------------------------------------
@@ -1374,7 +1098,7 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
         // MCP-4 (audit re-run F-1): a 3xx is refused by name, never relayed as
         // the body's words — sendPost() refused to follow it, and the refusal
         // belongs to the redirect itself. Mirrors the event-stream GET gate in
-        // assertStreamHead(), POST-side.
+        // SseLineParser::assertStreamHead(), POST-side.
         if ($status >= 300 && $status < 400) {
             throw new \RuntimeException(trim("HTTP {$status} {$response->getReasonPhrase()}")
                 . ': the endpoint POST was redirected, and this transport does not follow redirects'
@@ -1442,14 +1166,11 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
 
     private function beginWait(float $seconds, string $label): void
     {
-        $this->waitDeadlineAt = microtime(true) + $seconds;
-        $this->waitLabel = $label;
-        $this->fedBytesInWait = 0;
+        $this->parser?->beginWait($seconds, $label);
     }
 
     private function endWait(): void
     {
-        $this->waitDeadlineAt = null;
-        $this->waitLabel = '';
+        $this->parser?->endWait();
     }
 }

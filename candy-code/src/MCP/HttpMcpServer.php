@@ -33,8 +33,31 @@ use SugarCraft\McpClient\RequestIdSequence;
  * afterwards, never the inherited socket. The `Mcp-Session-Id` stays shared:
  * one session carrying many concurrent requests with distinct ids is legal
  * Streamable HTTP. Only the owner ends the session in {@see stop()}.
+ *
+ * ANSWER DESK (C-MCP-3.c). A server may ride its `text/event-stream` POST
+ * reply with its own traffic before the answer — `ping`, `roots/list`,
+ * `elicitation/create`, `notifications/progress`. With a desk installed the
+ * requests are answered by a fresh POST of the JSON-RPC response (the
+ * session header rides {@see wireHeaders()}, so the answer reaches the same
+ * session) and progress notifications reach the per-call sink; this class
+ * implements {@see AnswersServerRequests}. Without one, the walk is exactly
+ * what it always was: those frames are passed over.
+ *
+ * INBOUND GET CHANNEL (C-MCP-3.c, opt-in `stream: true`). After the
+ * handshake, {@see openStream()} asks the same endpoint for a persistent
+ * `text/event-stream` GET — the spec's server-to-client channel — over the
+ * deadline-bounded raw-socket reader the legacy SSE transport moved into
+ * {@see SseLineParser::openEventStream()}. It is drained at every exchange
+ * start and on {@see pumpStream()}'s idle pump, so pings between calls are
+ * answered; the socket is the OPENER's: a forked process never reads or
+ * closes it (C-MCP-6.a retain law, same as the sse arm). A server that
+ * refuses the GET (405 is the spec's own answer for "no SSE on GET") costs
+ * the channel, never the session: the buffered POST path is the default and
+ * stays the product. The channel opens once per start; unlike `sse` this
+ * transport never reconnects it, because every call is already a complete
+ * exchange on its own.
  */
-final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptProvider
+final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptProvider, AnswersServerRequests
 {
     use WalksProviderPages;
 
@@ -117,9 +140,34 @@ final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptPr
     private ?string $negotiatedVersion = null;
 
     /**
+     * The spawn-time answer desk (C-MCP-3.c): routes server-initiated traffic
+     * seen on a reply stream or the GET channel BETWEEN calls.
+     */
+    private readonly ?\Closure $defaultHandler;
+
+    /** The desk bound to the CURRENT call while {@see
+     *     callToolAnsweringRequests()} runs; null between calls. */
+    private ?\Closure $activeHandler = null;
+
+    /** @var SseLineParser|null the opt-in inbound GET stream, open while set */
+    private ?SseLineParser $streamParser = null;
+
+    /** Handles this process inherited across a fork and must never fclose.
+     *  @var list<resource> */
+    private array $retainedStreams = [];
+
+    /**
      * @param \Closure|null $pidProvider @internal test seam returning the
      *        current pid (default getmypid()), so the forked-process id and
      *        connection behaviour can be pinned without forking
+     * @param bool $eventStream C-MCP-3.c: the entry's `stream` key. Opens the
+     *        inbound GET channel after a successful handshake; the buffered
+     *        POST path is identical either way.
+     * @param \Closure|null $onServerMessage C-MCP-3.c: the spawn-time answer
+     *        desk, same shape as the stdio and sse arms'
+     *        ({@see McpServerRequests::handler()}).
+     * @param \Closure|null $connector @internal test seam replacing only the
+     *        GET channel's socket connect (@see SseLineParser::openEventStream)
      */
     public function __construct(
         public readonly string $name,
@@ -133,8 +181,12 @@ final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptPr
         // stdio arm's, from the entry's `toolTimeout`; the base Guzzle client's
         // own fixed 30 s is OVERRIDDEN per request, never mutated.
         private readonly float $toolTimeoutSeconds = self::DEFAULT_TOOL_TIMEOUT_SECONDS,
+        private readonly bool $eventStream = false,
+        ?\Closure $onServerMessage = null,
+        private readonly ?\Closure $connector = null,
     ) {
         $this->ids = new RequestIdSequence($pidProvider);
+        $this->defaultHandler = $onServerMessage;
     }
 
     /** The endpoint this server was configured with (ISS-042: the auth
@@ -189,6 +241,18 @@ final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptPr
         // Mark initialized only after the full handshake succeeds, so a failed
         // start can be retried rather than wedging the server half-open.
         $this->initialized = true;
+
+        // C-MCP-3.c: the opt-in inbound GET. Opened only over the owner's
+        // fresh session; a refusal (405 — the spec's own "no SSE on GET" —
+        // a dead host, a torn head) costs the channel and never the session,
+        // because the buffered POST path it supplements IS this transport.
+        if ($this->eventStream) {
+            try {
+                $this->openStream();
+            } catch (\Throwable) {
+                $this->streamParser = null;
+            }
+        }
     }
 
     /**
@@ -296,6 +360,10 @@ final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptPr
      */
     public function stop(): void
     {
+        // C-MCP-3.c: the inbound GET first — its socket belongs to the
+        // session the DELETE below ends, and only this process's own open
+        // is ever closed here (the fork law on closeStream()).
+        $this->closeStream();
         $this->endSession();
         $this->initialized = false;
     }
@@ -398,8 +466,181 @@ final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptPr
     }
 
     /**
-     * The inputSchema the tool advertised at start(), or `[]` for a name the
-     * table does not hold (ArgumentShape then converts nothing).
+     * C-MCP-3.c ({@see AnswersServerRequests}): the same call with an
+     * exchange-scoped answerer — server requests inside this call's reply
+     * stream (and anything drained off the inbound GET at exchange start)
+     * route through $serverRequests instead of the spawn-time desk, and
+     * `notifications/progress` rides $onWait. Unlike the stdio seam there is
+     * no deadline pause: the http reply is read after the body arrived, and
+     * the answer POST is its own bounded request — the call's own ceiling
+     * already covers the walk it happens inside.
+     *
+     * @param array<string,mixed> $args
+     * @param (\Closure(): void)|null $onWait
+     */
+    public function callToolAnsweringRequests(
+        string $toolName,
+        array $args,
+        ?\Closure $onWait = null,
+        ?McpServerRequests $serverRequests = null,
+    ): array {
+        $inner = $serverRequests?->handler();
+        $previous = $this->activeHandler;
+        $this->activeHandler = static function (string $method, ?array $params, bool $isNotification) use ($inner, $onWait): ?array {
+            if ($isNotification && $onWait !== null && $method === McpServerRequests::PROGRESS_METHOD) {
+                $onWait($params ?? []);
+            }
+
+            return $inner?->__invoke($method, $params, $isNotification);
+        };
+
+        try {
+            return $this->callTool($toolName, $args);
+        } finally {
+            $this->activeHandler = $previous;
+        }
+    }
+
+    /** Whether any desk exists to route inbound server traffic to (C-MCP-3.c). */
+    private function hasDesk(): bool
+    {
+        return $this->activeHandler !== null || $this->defaultHandler !== null;
+    }
+
+    /**
+     * Route one decoded non-reply JSON-RPC message read off a reply stream or
+     * the inbound GET (C-MCP-3.c). Server REQUESTS are answered by a POST of
+     * the JSON-RPC response back on the session ({@see wireHeaders()} carries
+     * its id); server NOTIFICATIONS ride the desk. Delivery only: a failed
+     * answer is dropped — it must never poison the reply walk that is still
+     * waiting on this exchange.
+     *
+     * @param array<mixed>|list<mixed> $decoded
+     */
+    private function onInboundFrames(array $decoded): void
+    {
+        $handler = $this->activeHandler ?? $this->defaultHandler;
+
+        foreach (array_is_list($decoded) ? $decoded : [$decoded] as $frame) {
+            if (!\is_array($frame) || !isset($frame['method']) || !\is_string($frame['method'])) {
+                continue; // replies and junk are not inbound traffic to route
+            }
+            $params = \is_array($frame['params'] ?? null) ? $frame['params'] : null;
+            $isNotification = !\array_key_exists('id', $frame);
+
+            if ($isNotification) {
+                try {
+                    $handler?->__invoke($frame['method'], $params, true);
+                } catch (\Throwable) {
+                    // a dropped notification is bounded damage; the walk stays live
+                }
+                continue;
+            }
+
+            try {
+                $answer = $handler?->__invoke($frame['method'], $params, false)
+                    ?? ['error' => ['code' => McpServerRequests::METHOD_NOT_FOUND, 'message' => 'Method not found']];
+                $this->send(['jsonrpc' => '2.0', 'id' => $frame['id']] + $answer, [
+                    // The answer's delivery is best-effort, bounded like the
+                    // cancel notice it mirrors; the call's own ceiling stays
+                    // on the call, not stretched to cover a side POST.
+                    'timeout' => self::CANCEL_NOTICE_TIMEOUT_SECONDS,
+                    'connect_timeout' => self::CANCEL_NOTICE_TIMEOUT_SECONDS,
+                ]);
+            } catch (\Throwable) {
+                // delivery only
+            }
+        }
+    }
+
+    /**
+     * The opt-in inbound GET channel (C-MCP-3.c). Opened by the process that
+     * started the session, after the handshake, so the GET carries the live
+     * `Mcp-Session-Id`. Every wire header rides except the two the POST
+     * shape owns alone: `Accept` is the reader's own
+     * ({@see SseLineParser::STREAM_ACCEPT}) and a GET has no body, so
+     * `Content-Type` must not claim one.
+     */
+    private function openStream(): void
+    {
+        $headers = [];
+        foreach ($this->wireHeaders() as $name => $value) {
+            $lower = strtolower((string) $name);
+            if ($lower !== 'accept' && $lower !== 'content-type') {
+                $headers[$name] = $value;
+            }
+        }
+
+        $this->streamParser = SseLineParser::openEventStream(
+            $this->url,
+            $this->name,
+            $headers,
+            $this->connector,
+        );
+    }
+
+    /**
+     * Bounded drain of the inbound GET: answer whatever the server pushed
+     * since the last read, then go. Never reconnects (this transport's calls
+     * are self-contained POSTs — see the class note); a stream that ends or
+     * breaks closes the channel and the session runs on, buffered. The fork
+     * law: only the opener reads, and only the opener closes.
+     */
+    public function pumpStream(): void
+    {
+        $parser = $this->streamParser;
+        if ($parser === null || !$this->ids->isOwner()) {
+            return;
+        }
+
+        $parser->beginWait(0.001, 'the idle stream pump');
+        try {
+            while (true) {
+                $event = $parser->nextEvent();
+                if ($event === null) {
+                    $this->closeStream();
+
+                    return;
+                }
+                if ($event['event'] !== '' && $event['event'] !== 'message') {
+                    continue;
+                }
+                $decoded = json_decode($event['data'], true);
+                if (\is_array($decoded)) {
+                    $this->onInboundFrames($decoded);
+                }
+            }
+        } catch (SseStreamDeadlineException) {
+            // quiet window over — best-effort by design
+        } catch (\Throwable) {
+            $this->closeStream();
+        } finally {
+            $parser->endWait();
+        }
+    }
+
+    /**
+     * Release the inbound GET. The socket is fclosed only by the process that
+     * opened it; a forked process RETAINS the inherited handle for its own
+     * life so no destructor ever cuts the parent's connection (C-MCP-6.a,
+     * the sse transport's rule applied to this arm).
+     */
+    private function closeStream(): void
+    {
+        $socket = $this->streamParser?->detachSocket();
+        $this->streamParser = null;
+
+        if (!\is_resource($socket)) {
+            return;
+        }
+        if ($this->ids->isOwner()) {
+            @fclose($socket);
+        } else {
+            $this->retainedStreams[] = $socket;
+        }
+    }
+
+    /**
      *
      * @return array<array-key,mixed>
      */
@@ -517,6 +758,12 @@ final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptPr
      */
     private function handshake(): void
     {
+        // The inbound GET belongs to the session it was opened for; a
+        // re-handshake (expiry recovery) closes the old channel with the old
+        // session, and only a fresh start() re-opens it (C-MCP-3.c — the
+        // answer POSTs must never carry a session id the server has
+        // forgotten).
+        $this->closeStream();
         $this->sessionId = null;
         $this->negotiatedVersion = null;
 
@@ -524,7 +771,10 @@ final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptPr
             'protocolVersion' => self::PROTOCOL_VERSION,
             // capabilities is a JSON object in the schema; PHP's `[]` would
             // reach the wire as an array, which the SDK servers refuse.
-            'capabilities' => new \stdClass(),
+            // C-MCP-3.c: the desk advertisement — roots + elicitation, the
+            // two requests this class can now answer mid-exchange; shared
+            // verbatim with the sse arm (one shape, one builder).
+            'capabilities' => McpServerRequests::clientCapabilities(),
             'clientInfo' => ['name' => 'candy-code', 'version' => '1.0.0'],
         ]);
 
@@ -614,6 +864,12 @@ final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptPr
      */
     private function dispatch(string $method, ?array $params, array $options = []): array
     {
+        // C-MCP-3.c: the exchange-start drain. Whatever the server pushed
+        // onto the inbound GET since the last pump gets answered here, even
+        // in a process that never idle-pumps; best-effort, bounded, and
+        // never a reason for this POST to fail.
+        $this->pumpStream();
+
         $id = $this->nextRequestId();
         $payload = ['jsonrpc' => '2.0', 'id' => $id, 'method' => $method];
         if ($params !== null) {
@@ -834,11 +1090,17 @@ final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptPr
         // eof — and this class keeps the two decisions that are its own: the
         // body is closed on every exit, and a stream that ended without the
         // reply is the failure this method names.
+        //
+        // C-MCP-3.c: with an answer desk installed (either this call's or the
+        // spawn-time one) the server-initiated frames this walk skips are
+        // ROUTED, not passed over — requests POST their answers back on the
+        // session, progress rides the sink. Without one, the walk is the
+        // original: pass-over, buffered, unchanged default path.
         try {
             $parser = new SseLineParser(static function () use ($body): string {
                 return $body->eof() ? '' : $body->read(8192);
             });
-            $reply = $parser->replyTo($id);
+            $reply = $parser->replyTo($id, $this->hasDesk() ? $this->onInboundFrames(...) : null);
         } finally {
             $body->close();
         }

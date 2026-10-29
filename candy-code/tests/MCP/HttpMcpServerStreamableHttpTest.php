@@ -215,7 +215,12 @@ final class HttpMcpServerStreamableHttpTest extends TestCase
         $server->callTool('get-tiny-image', []);
 
         $raw = fn (int $i): string => (string) $this->request($i)->getBody();
-        self::assertStringContainsString('"capabilities":{}', $raw(0));
+        // C-MCP-3.c: `capabilities` is no longer the bare empty object — the
+        // http arm now advertises the answer desk (roots + elicitation, the
+        // shape shared with sse via McpServerRequests::clientCapabilities()).
+        // The empty-map-as-object law this pin exists for moves INTO the
+        // advertisement: `elicitation` rides as `{}`, never as `[]`.
+        self::assertStringContainsString('"capabilities":{"roots":{"listChanged":false},"elicitation":{}}', $raw(0));
         self::assertStringNotContainsString('"params"', $raw(2), 'tools/list sends no params, like the reference TS client');
         self::assertStringContainsString('"arguments":{}', $raw(3));
         self::assertStringNotContainsString('[]', $raw(0) . $raw(2) . $raw(3));

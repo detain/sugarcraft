@@ -556,21 +556,28 @@ final class McpClient
      * a caller that knows no exchange is in flight (the parent between turns)
      * can refresh all diagnostic tails in one call instead of holding server
      * handles. The instanceof narrowing is deliberate — {@see McpServer} does
-     * NOT grow a pumpStderr(): only a spawned child has an fd 2, and making
-     * HTTP/Git servers answer with a no-op would advertise a capability their
-     * transport cannot have.
+     * NOT grow a pumpStderr(): a pump needs a real inbound channel behind it.
+     * The spawned children carry fd 2; since C-MCP-3.c the SSE transport also
+     * carries its persistent GET stream (and the streamable-HTTP arm will
+     * carry one when its operator opts in) — those are drained here. The
+     * Git arm owns no such channel, and making it answer with a no-op would
+     * advertise a capability its transport cannot have.
      *
      * Same per-server contract as {@see StdioMcpServer::pumpStderr()} —
      * bounded, idempotent, never throws on a torn-down server. E699 widens
      * the narrowing to {@see ClaudeCodeMcpServer}, which is the second
      * SPAWNED child this client can own — the law is "only a spawned child
-     * has an fd 2", and now exactly two classes qualify.
+     * has an fd 2", and now exactly two classes qualify. C-MCP-3.c adds the
+     * GET-stream elseif: the desk-bearing non-spawn arms, whose "stderr" is
+     * the inbound event stream the same law admits.
      */
     public function pumpStderr(): void
     {
         foreach ($this->servers as $server) {
             if ($server instanceof StdioMcpServer || $server instanceof ClaudeCodeMcpServer) {
                 $server->pumpStderr();
+            } elseif ($server instanceof SseMcpServer || $server instanceof HttpMcpServer) {
+                $server->pumpStream();
             }
         }
     }
@@ -896,6 +903,18 @@ final class McpClient
                 // equals stdio's 120 rather than the old implicit 30.
                 toolTimeoutSeconds: self::toolTimeout($config['toolTimeout'] ?? null)
                     ?? HttpMcpServer::DEFAULT_TOOL_TIMEOUT_SECONDS,
+                // C-MCP-3.c: the two desk legs. `stream: true` (http only)
+                // opens the opt-in inbound GET channel after the handshake —
+                // strict true, any other spelling (absent, a string, 1)
+                // stays on the buffered POST default, the same positive-only
+                // policy as every other bound here. `cwd` names the root the
+                // spawn-time desk advertises for `roots/list` — there is no
+                // child to spawn, so it is the same override the stdio arm's
+                // desk reads: the entry's directory, or the approving tier's.
+                eventStream: ($config['stream'] ?? false) === true,
+                onServerMessage: (new McpServerRequests(
+                    $this->stdioSpawnCwd($config['cwd'] ?? null, $tierPath) ?? ''
+                ))->handler(),
             ),
             // MCP-4: the legacy 2024-11-05 HTTP+SSE transport. Same config
             // shape as `http` (`url`, `headers`, `toolTimeout`) — the wire
@@ -912,6 +931,9 @@ final class McpClient
                 authStore: $this->authStore ?? McpAuthStore::new(),
                 toolTimeoutSeconds: self::toolTimeout($config['toolTimeout'] ?? null)
                     ?? SseMcpServer::DEFAULT_TOOL_TIMEOUT_SECONDS,
+                onServerMessage: (new McpServerRequests(
+                    $this->stdioSpawnCwd($config['cwd'] ?? null, $tierPath) ?? ''
+                ))->handler(),
             ),
             // `timeout` (seconds per git invocation, hooks included) is
             // OPTIONAL — audit R18. GitCommandHandlers::configuredTimeout()
