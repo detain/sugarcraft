@@ -9,7 +9,7 @@ namespace SugarCraft\Code\MCP;
  *
  * E710 promoted the tables that {@see McpClient::startServer()} grew in E708
  * (the type-alias map and the entry canonicaliser) to this class so the
- * `candy-code mcp import claude|opencode <path>` translator and the launch
+ * `candy-code mcp import claude|opencode|claude-project <path>` translator and the launch
  * path read foreign spellings through the SAME renames. That sharing is the
  * law behind this file's existence: a second hand-typed mapping would be a
  * second answer, and the two would drift the first time a spelling was added
@@ -46,13 +46,37 @@ final class McpForeignTranslate
      * Which top-level block each importable dialect carries its servers in.
      * Claude's `.mcp.json` and this port's own file share the container name —
      * that import is near-passthrough by construction — while opencode spells
-     * it `mcp`, which the translation renames on the way out.
+     * it `mcp`, which the translation renames on the way out. `claude-project`
+     * carries the SAME container word but not at the top level: Claude's
+     * `~/.claude.json` files per-project servers under a second, nested block
+     * (see {@see NESTED_CONTAINERS}), and that nesting is what distinguishes
+     * the dialect, not the name. It is a READ source only — an import from it
+     * lands wherever the operator puts the printed block (or, since
+     * C-MCP-4.d, the user tier with `--write user`); the per-project blocks of
+     * a foreign file are never written back.
      *
      * @var array<string, string>
      */
     public const CONTAINERS = [
         'claude' => 'mcpServers',
+        'claude-project' => 'mcpServers',
         'opencode' => 'mcp',
+    ];
+
+    /**
+     * Dialects whose servers are not at the document's top level: each maps
+     * to the pair `[outer-key, inner-key]` such that the block is
+     * `$document[$outer][$which][$inner]`, where `$which` is the project root
+     * {@see translateDocument()} is handed. `~/.claude.json` is the file this
+     * exists for — it stores per-project MCP servers under
+     * `projects["<root>"].mcpServers` — and a flat read of that file's top
+     * level would find no block at all, so a dialect that pretended otherwise
+     * would refuse a real config it was named for.
+     *
+     * @var array<string, array{string, string}>
+     */
+    public const NESTED_CONTAINERS = [
+        'claude-project' => ['projects', 'mcpServers'],
     ];
 
     /**
@@ -168,29 +192,68 @@ final class McpForeignTranslate
      *
      * @param string $dialect a key of {@see CONTAINERS}
      * @param array<array-key, mixed> $document the decoded foreign file
+     * @param ?string $projectRoot the root a NESTED dialect files its block
+     *        under (`projects["<root>"]`); ignored by the flat dialects, and
+     *        required — a nested import without it has no answer to give
      *
      * @return array{servers: array<string, array<string, mixed>>, notes: list<string>}
      *
      * @throws \RuntimeException the dialect is not importable, the container
-     *         is absent or not an object, or an entry is malformed (named)
+     *         is absent or not an object (for a nested dialect, the named
+     *         root's block is), or an entry is malformed (named)
      */
-    public static function translateDocument(string $dialect, array $document): array
+    public static function translateDocument(string $dialect, array $document, ?string $projectRoot = null): array
     {
         $container = self::CONTAINERS[$dialect] ?? throw new \RuntimeException(
             \sprintf('no importer dialect named "%s"', $dialect),
         );
 
-        $block = $document[$container] ?? null;
-        if (!is_array($block)) {
-            throw new \RuntimeException(\sprintf(
-                'no "%2$s" block to import — this is not %1$s config',
+        $nested = self::NESTED_CONTAINERS[$dialect] ?? null;
+        $notes = [];
+
+        if ($nested === null) {
+            $block = $document[$container] ?? null;
+            if (!is_array($block)) {
+                throw new \RuntimeException(\sprintf(
+                    'no "%2$s" block to import — this is not %1$s config',
+                    $dialect,
+                    $container,
+                ));
+            }
+        } else {
+            [$outer, $inner] = $nested;
+            if ($projectRoot === null || $projectRoot === '') {
+                throw new \RuntimeException(\sprintf(
+                    '%s keeps its servers under "%s" per project; no project root was named, so there is no key to read',
+                    $dialect,
+                    $outer,
+                ));
+            }
+            $projects = $document[$outer] ?? null;
+            $block = is_array($projects) ? ($projects[$projectRoot] ?? null) : null;
+            $block = is_array($block) ? ($block[$inner] ?? null) : null;
+            if (!is_array($block)) {
+                throw new \RuntimeException(\sprintf(
+                    'no "%3$s" block under "%4$s" for "%2$s" — this is not %1$s config for that root',
+                    $dialect,
+                    $projectRoot,
+                    $inner,
+                    $outer,
+                ));
+            }
+            // The read-from sentence is the note a flat import never needs:
+            // WHERE the block came from is the whole story of a nested
+            // dialect, and an operator diffing files later needs it stated.
+            $notes[] = \sprintf(
+                'read "%2$s"["%1$s"]."%3$s" — the per-project block of %4$s config, not its top level',
+                $projectRoot,
+                $outer,
+                $inner,
                 $dialect,
-                $container,
-            ));
+            );
         }
 
         $servers = [];
-        $notes = [];
 
         // opencode declares its servers under `mcp`; the emitted document
         // always carries THIS port's container, so the rename is the first

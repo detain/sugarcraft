@@ -564,7 +564,15 @@ final class StderrEmitterCensusTest extends TestCase
         // envelope for the marketplace/search verbs (unknown action, missing
         // operand). Same stderr-only decision as every sibling here.
         'src/Cli/SelfUpdate.php' => 3,
-        'src/Cli/Subcommands.php' => 38,
+        // C-MCP-4.d 2026-10-28: +2 — the `mcp import --write` doors: the
+        // unknown-tier refusal and the unowned-home refusal, both failUsage
+        // envelopes fired BEFORE any read or write is attempted. Same
+        // stderr-only decision as every sibling here: malformed CLI usage or
+        // an unwritable place, session never existed, nothing was written.
+        // The write-path refusals and every note ride the existing
+        // `mcpImportLine` funnel and the failUsage door, so the DIRECT_SITES
+        // roster stayed 6 for this file.
+        'src/Cli/Subcommands.php' => 40,
         'src/Permissions/PermissionPrompt.php' => 1,
         // Not a message: the protocol schema's `$id` URN
         // (`urn:sugarcraft:candy-code:protocol:v1`, roadmap O-3c) spells the

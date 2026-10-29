@@ -10,7 +10,8 @@ use SugarCraft\Code\Cli\NonInteractive;
 use SugarCraft\Code\Cli\Subcommands;
 
 /**
- * E710 — the `candy-code mcp import claude|opencode <path>` one-shot.
+ * E710 — the `candy-code mcp import claude|opencode|claude-project <path>`
+ * one-shot, DEFAULT (print) PATH.
  *
  * THE ACCEPTANCE SPAN, in-process: ArgvParser → Subcommands::dispatch down to
  * the translator call, exactly the way SubcommandsMcpAuthLoginTest drives its
@@ -20,12 +21,16 @@ use SugarCraft\Code\Cli\Subcommands;
  * BinCandyCodeDispatchTest, so nothing here pretends to read a stream it
  * cannot see.
  *
- * THE NEVER-WRITE LAW gets two independent pins: a BEHAVIOURAL one (the temp
- * directory holds the same files before and after both a success and a
- * refusal — no `.mcp.json`, no scratch, no backup) and a STRUCTURAL one (the
- * method's own source span contains no write-call shape at all, so a future
- * edit cannot add the behaviour the test would otherwise only catch when it
- * picked the right filename to look for).
+ * THE PRINT-ONLY LAW (C-MCP-4.d amended it: the law now governs every run
+ * WITHOUT `--write user`; that opt-in door and its refusals live in
+ * SubcommandsMcpImportWriteTest) gets two independent pins HERE, on the
+ * default path: a BEHAVIOURAL one (the temp directory holds the same files
+ * before and after both a success and a refusal — no `.mcp.json`, no scratch,
+ * no backup) and a STRUCTURAL one (the method's own source span, which now
+ * dispatches to the write helper by NAME only, contains no write-call shape
+ * at all, so a future edit cannot add un-gated behaviour into the verb body
+ * the test would otherwise only catch when it picked the right filename to
+ * look for).
  */
 final class SubcommandsMcpImportTest extends TestCase
 {
@@ -153,10 +158,11 @@ final class SubcommandsMcpImportTest extends TestCase
 
     public function testTheVerbWritesNothingToTheFilesystemUnderAnyExit(): void
     {
-        // The behavioural half of the never-write law: both a success and a
-        // refusal must leave the directory exactly as they found it. The
-        // canonical accident — an importer "helpfully" dropping .mcp.json
-        // (or a .bak, or a scratch copy) next to the operand — reddens here.
+        // The behavioural half of the print-path law (C-MCP-4.d): WITHOUT
+        // `--write user` both a success and a refusal must leave the
+        // directory exactly as they found it. The canonical accident — an
+        // importer "helpfully" dropping .mcp.json (or a .bak, or a scratch
+        // copy) next to the operand — reddens here.
         $good = $this->operandFile('oc.json', json_encode(['mcp' => ['s' => ['type' => 'local', 'command' => ['npx']]]]));
         $broken = $this->operandFile('broken.json', '{"mcp": }');
         $before = scandir($this->tempDir);
@@ -173,11 +179,15 @@ final class SubcommandsMcpImportTest extends TestCase
 
     public function testTheImportMethodBodyCarriesNoWriteShapeAtAll(): void
     {
-        // The structural half: the census this verb lives under reads SOURCES,
-        // and so does this pin — from `function mcpImport(` to the stderr
-        // funnel's definition, not ONE filesystem-mutating call spelling, not
-        // even a raw fwrite (every stderr line must keep going through
-        // mcpImportLine so the DIRECT_SITES census stays single per file).
+        // The structural half of the print-path law (C-MCP-4.d amended the
+        // law, not this window): the census this verb lives under reads
+        // SOURCES, and so does this pin — from `function mcpImport(` to the
+        // stderr funnel's definition, not ONE filesystem-mutating call
+        // spelling, not even a raw fwrite (every stderr line must keep going
+        // through mcpImportLine so the DIRECT_SITES census stays single per
+        // file). The `--write user` exception lives in a helper named from
+        // here and defined past the window — the body itself stays write-
+        // shape-free, which is exactly what this pin keeps true.
         $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/Subcommands.php');
         $from = strpos($source, 'private static function mcpImport(');
         $to = strpos($source, 'private static function mcpImportLine(');

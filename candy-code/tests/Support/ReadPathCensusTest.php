@@ -715,7 +715,12 @@ final class ReadPathCensusTest extends TestCase
                 . '`--config` path or `~/.candy-code/config.json`, read only to be JSON-validated and reported',
             'CALLER_SUPPLIED — `mcp import`\'s operand: the operator\'s own argv names the file, '
                 . 'the verb reads one document, translates it through the shared McpForeignTranslate '
-                . 'table, and PRINTS (the never-write law); nothing read here is ever executed',
+                . 'table, and PRINTS by default (the print-only law; `--write user` is the one '
+                . 'exception, and it reads only the owned user tier — C-MCP-4.d); nothing read here is ever executed',
+            'OWNED_HOME — `mcp import --write user`\'s merge-read of the EXISTING user-tier file: '
+                . 'the path is McpDecision::mcpUserConfigPath(), which answers only when '
+                . 'HomeDirectory::owned() vouched for the home; decoded to collide-check and append, '
+                . 'refused-not-repaired when unreadable, never executed (C-MCP-4.d)',
             // W4 (PRV-4): `candy-code login` merges its new key onto the file's EXISTING
             // providers map — same operator-named path as the `doctor` row above.
             'CALLER_SUPPLIED — `login`\'s merge-read (Subcommands::loginStoreKey): Bootstrap::userConfigPath(), '

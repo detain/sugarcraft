@@ -2255,8 +2255,10 @@ candy-code session delete <target>   # sub-agent children go too; [--with-childr
 candy-code session pin|unpin|archive|unarchive <target>
 candy-code mcp list                  # what .mcp.json declares — without starting anything
 candy-code mcp trust                 # approve .mcp.json as it is now (command/args/env pinned per server)
-candy-code mcp import claude|opencode <path>
-                                     # translate a foreign MCP config, print the block — writes nothing
+candy-code mcp import claude|opencode|claude-project <path> [--write user]
+                                     # translate a foreign MCP config and print the block — the verb
+                                     # writes nothing unless --write user appends it into the user's
+                                     # own ~/.candy-code/mcp.json (collisions refuse the whole write)
 candy-code serve                     # WebSocket + HTTP server for the web UI, until Ctrl+C
                                      #   [--host IP] [--port N] [--allow-remote] [--allowed-origin LIST]
                                      #   [--web-root DIR] [--no-web] [--allow-bypass] [--allow-root]

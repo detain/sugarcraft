@@ -76,6 +76,15 @@ final readonly class ParsedArgs
         'attach' => [
             '--url' => true,
         ],
+        // `mcp` (C-MCP-4.d): `mcp import --write user` is the only value
+        // flag the verb family takes. The parser checks the SHAPE (a value
+        // follows); WHICH tier is honoured is `Subcommands::mcpImport()`'s
+        // judgement — the project tier is never written, so `--write project`
+        // is a usage answer the verb gives, not a parse error, and the parser
+        // keeps its no-filesystem posture by not knowing the difference.
+        'mcp' => [
+            '--write' => true,
+        ],
         // `serve` (Appendix O §4.7): every flag scoped, none global — a
         // `--port` before the verb is an unknown option, not a server setting.
         // `--allowed-origin`, `--allowed-host` and `--allowed-ips` take a comma-separated list

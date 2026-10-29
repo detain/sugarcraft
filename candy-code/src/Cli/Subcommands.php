@@ -3800,19 +3800,29 @@ final class Subcommands
     }
 
     /**
-     * `candy-code mcp import claude|opencode <path>` — E710's print-only
-     * foreign-config translator.
+     * `candy-code mcp import claude|opencode|claude-project <path>` — E710's
+     * foreign-config translator, and since C-MCP-4.d the plan-§6.1 ruling's
+     * single named write door.
      *
-     * THE NEVER-WRITE LAW. This verb reads one file and PRINTS the translated
-     * `.mcp.json` block on stdout; it never touches the filesystem again. An
-     * importer that wrote the destination would decide where the operator's
-     * config lives — project root vs `--root` vs a scratch clone are three
-     * different answers a human picks — and a wrong decision silently
-     * swallowed is worse than a paste. stdout carries ONLY the document (and
-     * the JSON envelope under `--output-format json`), so
+     * THE PRINT-ONLY LAW (and the exception). Without `--write`, this verb
+     * reads one file and PRINTS the translated block on stdout; it never
+     * touches the filesystem again. An importer that always wrote the
+     * destination would decide where the operator's config lives — project
+     * root vs `--root` vs a scratch clone are three different answers a human
+     * picks — and a wrong decision silently swallowed is worse than a paste.
+     * stdout carries ONLY the document (and the JSON envelope under
+     * `--output-format json`), so
      * `candy-code mcp import opencode ~/.config/opencode.json > .mcp.json`
      * is exact; every note about WHAT the translation did rides stderr, where
-     * a redirect cannot corrupt it.
+     * a redirect cannot corrupt it. THE EXCEPTION, spelled: `--write user`
+     * appends the translated entries into the operator's OWN user-tier file
+     * `~/.candy-code/mcp.json` — owned-home gate first, collisions refusing
+     * the whole write, project tier never {@see mcpImportWriteUser()}. The
+     * ruling that lifted the blanket ban (§6.1: user tier only, collisions
+     * refused) trades the paste ceremony for the user tier's own posture,
+     * which the write names on stderr so the operator sees what they opted
+     * into; the DEFAULT path — no flag, any other tier — keeps every byte of
+     * the old law.
      *
      * The renames themselves are not spelled here: they are
      * {@see \SugarCraft\Code\MCP\McpForeignTranslate}, the same table
@@ -3822,11 +3832,15 @@ final class Subcommands
      *
      * Exit codes are the five-way convention this class documents: `2` for
      * the operand doors (no source, unknown source, no path, extra operand,
-     * unreadable file — nothing was attempted), `1` for a file that was read
-     * and then refused (not JSON, not a config of the named dialect, a
-     * malformed entry — it ran and failed, the same reading as `mcp list` on
-     * a trusted-but-unparseable `.mcp.json`), `0` for the printed document
-     * even when it came with notes.
+     * unreadable file — and, since C-MCP-4.d, the two `--write` doors: a tier
+     * other than `user`, or an unowned home with nothing to write — nothing
+     * was attempted), `1` for a file that was read and then refused (not
+     * JSON, not a config of the named dialect, a malformed entry — or a
+     * `--write user` whose existing file cannot be read or collides with the
+     * entries, which is refused with NOTHING changed, the same reading as
+     * `mcp list` on a trusted-but-unparseable `.mcp.json`), `0` for the
+     * printed document even when it came with notes — with `--write user`,
+     * only after the write itself published.
      */
     private static function mcpImport(ParsedArgs $args): int
     {
@@ -3862,12 +3876,46 @@ final class Subcommands
             );
         }
 
+        // C-MCP-4.d: the print-only law's one named exception, opt-in by
+        // spelling. The parser checked the SHAPE (a value followed `--write`);
+        // which tier is honoured is judged HERE — anything other than `user`
+        // is refused before a byte is read, because the project tier is never
+        // written and no future tier should be honoured by accident.
+        $writeTier = $args->subcommandFlags['--write'] ?? null;
+        if ($writeTier !== null && $writeTier !== 'user') {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.mcp.import.write_unknown_tier', ['tier' => (string) $writeTier]),
+                $args->outputFormat,
+                Lang::t('cli.mcp.import.write_usage'),
+            );
+        }
+        $userPath = '';
+        if ($writeTier === 'user') {
+            // The gate is the loader's own answer, not a second spelling:
+            // `McpDecision::mcpUserConfigPath()` returns '' exactly when
+            // HomeDirectory::owned() refuses the home, and an unowned home has
+            // no writable user tier. Judged BEFORE the read so an invocation
+            // that can never write does not spend its exit 2 on a file it was
+            // never going to act on.
+            $userPath = McpDecision::mcpUserConfigPath();
+            if ($userPath === '') {
+                return NonInteractive::failUsage(
+                    'candy-code: ' . Lang::t('cli.mcp.import.write_home_unowned'),
+                    $args->outputFormat,
+                    self::importUsage(),
+                );
+            }
+        }
+
         // One read, and the operator's own argv named the path — the same
         // CALLER_SUPPLIED posture as every other CLI file operand (`--config`
         // above, `session delete`'s store). The bytes are a document to
         // translate, never code to execute: nothing here reaches `buildServer`
-        // or spawns anything; the servers only START after the operator pastes
-        // the block into `.mcp.json` and trusts the root.
+        // or spawns anything; on the print path the servers only START after
+        // the operator pastes the block into `.mcp.json` and trusts the root,
+        // and on the `--write user` path only after the write below publishes
+        // them into the user tier — in both cases the read itself executes
+        // nothing.
         $raw = @file_get_contents($path);  // BARE spelling — the \-prefixed form is invisible to the read-path census scanner
         if ($raw === false) {
             return NonInteractive::failUsage(
@@ -3882,28 +3930,29 @@ final class Subcommands
             if (!\is_array($decoded)) {
                 throw new \RuntimeException(Lang::t('cli.mcp.import.not_an_object'));
             }
-            $translated = \SugarCraft\Code\MCP\McpForeignTranslate::translateDocument($source, $decoded);
+            // The root rides along for the ONE nested dialect; the flat
+            // translators ignore it. Same ambient default the nothing-written
+            // note already takes: the launch directory names which project's
+            // block `claude-project` should read unless `--root` says else.
+            $translated = \SugarCraft\Code\MCP\McpForeignTranslate::translateDocument(
+                $source,
+                $decoded,
+                \rtrim($args->root ?? getcwd(), '/'),
+            );
         } catch (\JsonException $e) {
             return self::mcpImportFailure($path, Lang::t('cli.mcp.import.invalid_json', ['error' => $e->getMessage()]), $args);
         } catch (\RuntimeException $e) {
             return self::mcpImportFailure($path, $e->getMessage(), $args);
         }
 
-        if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
-            self::emitDocument([
-                'result' => [
-                    'source' => $source,
-                    'path' => $path,
-                    'mcpServers' => $translated['servers'],
-                    'notes' => $translated['notes'],
-                ],
-            ]);
-        } else {
-            echo \json_encode(
-                ['mcpServers' => $translated['servers']],
-                \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE,
-            ) . "\n";
+        if ($writeTier === 'user') {
+            // The document translated; now the opted-to write. Every refusal
+            // the write can earn exits 1 with NO document on stdout — the
+            // print-after-paste contract survives the new door.
+            return self::mcpImportWriteUser($args, $source, $path, $translated, $userPath);
         }
+
+        self::mcpImportDocument($args, $source, $path, $translated, null);
 
         // Notes after the document, all of them on stderr: the translation
         // earned its exit 0 by printing, and the account of what it renamed
@@ -3957,6 +4006,145 @@ final class Subcommands
         }
 
         return NonInteractive::EXIT_FAILURE;
+    }
+
+    /**
+     * stdout's half of a successful import: the translated document, bare
+     * (the redirect-exact contract of the print path) or inside the JSON
+     * envelope. `$written` is the `--write user` path's one addition — the
+     * print path passes null and its bytes are exactly the ones E710 pinned,
+     * so one shared emitter cannot fork the two paths apart later.
+     *
+     * @param array{servers: array<string, array<string, mixed>>, notes: list<string>} $translated
+     */
+    private static function mcpImportDocument(ParsedArgs $args, string $source, string $path, array $translated, ?string $written): void
+    {
+        if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
+            $result = [
+                'source' => $source,
+                'path' => $path,
+                'mcpServers' => $translated['servers'],
+                'notes' => $translated['notes'],
+            ];
+            if ($written !== null) {
+                $result['written'] = $written;
+            }
+            self::emitDocument(['result' => $result]);
+        } else {
+            echo \json_encode(
+                ['mcpServers' => $translated['servers']],
+                \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE,
+            ) . "\n";
+        }
+    }
+
+    /**
+     * C-MCP-4.d — `mcp import ... --write user`, the print-only law's single
+     * named exception, per the plan §6.1 ruling (user tier only, collisions
+     * refused). Lives OUTSIDE the mcpImport body on purpose: the structural
+     * pin that keeps the verb's print path write-shape-free scans mcpImport
+     * itself, and this is the one door the ruling cut in that law — named,
+     * greppable, and nowhere else.
+     *
+     * WHERE it writes: the user tier `~/.candy-code/mcp.json`, at the path
+     * {@see McpDecision::mcpUserConfigPath()} answers — a non-empty answer
+     * exists only because HomeDirectory::owned() vouched for the home, so no
+     * bytes of this verb ever land in a home another uid could have planted.
+     * HOW: {@see \SugarCraft\Code\Support\AtomicFileWriter}'s temp-then-rename
+     * with mode 0600 settled before the publish, exactly how McpTrustPins
+     * records trust. The PROJECT tier is never written from here or anywhere:
+     * `--write project` is refused at the door above, and a checkout is never
+     * a side effect of translating someone else's file.
+     *
+     * COLLISIONS REFUSE THE WHOLE WRITE. A server name the existing file
+     * already declares is not merged, not renamed, not overwritten — the
+     * operator decides which answer wins, by editing, not by whatever an
+     * append-ordering rule silently chose. The refusal names every colliding
+     * server and leaves the file byte-identical: the check runs before
+     * anything is published. An existing file that is not readable JSON with
+     * an `mcpServers` object is refused, never repaired — the posture `mcp
+     * list` and `login`'s merge-read already keep toward a corrupt config.
+     *
+     * THE RISK, stated because it is why the flag must be typed on purpose:
+     * entries written at the user tier start at EVERY future launch from
+     * EVERY directory, with no per-repo ceremony and no trust prompt per
+     * project. That is the tier's existing posture — the loader already reads
+     * this file at every launch — and importing a foreign server into it
+     * hands that posture to servers the operator may have meant for one
+     * checkout. The stderr note says so on the success path; docs/MCP.md
+     * states it where the law lives.
+     *
+     * @param array{servers: array<string, array<string, mixed>>, notes: list<string>} $translated
+     */
+    private static function mcpImportWriteUser(ParsedArgs $args, string $source, string $path, array $translated, string $userPath): int
+    {
+        $existing = null;
+        if (\is_file($userPath)) {
+            // BARE spelling — the census row for this site says OWNED_HOME:
+            // the path is HomeDirectory::owned()'s answer, never the argv's.
+            $existingRaw = @file_get_contents($userPath);
+            if ($existingRaw === false) {
+                return self::mcpImportFailure($userPath, Lang::t('cli.mcp.import.existing_unreadable'), $args);
+            }
+            try {
+                $decodedExisting = \json_decode($existingRaw, true, 512, \JSON_THROW_ON_ERROR);
+            } catch (\JsonException) {
+                $decodedExisting = null;
+            }
+            if (!\is_array($decodedExisting) || !\is_array($decodedExisting['mcpServers'] ?? null)) {
+                return self::mcpImportFailure($userPath, Lang::t('cli.mcp.import.existing_unreadable'), $args);
+            }
+            $existing = $decodedExisting;
+        }
+
+        /** @var array<string, mixed> $existingServers */
+        $existingServers = $existing['mcpServers'] ?? [];
+        $collisions = \array_keys(\array_intersect_key($translated['servers'], $existingServers));
+        if ($collisions !== []) {
+            \sort($collisions, \SORT_STRING);
+
+            return self::mcpImportFailure(
+                $userPath,
+                Lang::t('cli.mcp.import.collisions', ['names' => \implode(', ', $collisions)]),
+                $args,
+            );
+        }
+
+        // The merge only runs collision-free, so `$existing + appended`
+        // cannot shadow a name: the file's own bytes keep their order and
+        // every other key it carries; the translated block rides in at the
+        // tail of `mcpServers`, in this port's canonical shape.
+        $document = $existing ?? ['mcpServers' => []];
+        $document['mcpServers'] = $existingServers + $translated['servers'];
+        $json = \json_encode($document, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+        if (!\is_string($json)) {
+            // A decoded document re-encoding false is the invalid-UTF-8 class
+            // json_decode can admit via \u escapes; the answer is the same
+            // refusal, not a truncate-and-hope.
+            return self::mcpImportFailure($userPath, Lang::t('cli.mcp.import.write_failed', ['error' => \json_last_error_msg()]), $args);
+        }
+
+        try {
+            \SugarCraft\Code\Support\AtomicFileWriter::write($userPath, $json . "\n", 0600);
+        } catch (\Throwable $e) {
+            // Atomic by construction: the rename never happened, so the claim
+            // "the file was not changed" is the writer's guarantee, not hope.
+            return self::mcpImportFailure($userPath, Lang::t('cli.mcp.import.write_failed', ['error' => $e->getMessage()]), $args);
+        }
+
+        self::mcpImportDocument($args, $source, $path, $translated, $userPath);
+        foreach ($translated['notes'] as $note) {
+            self::mcpImportLine($note);
+        }
+        // The written sentence REPLACES the print path's nothing-was-written
+        // one, and states the risk rather than burying it: what was written,
+        // where, and that it now starts everywhere.
+        self::mcpImportLine(Lang::t('cli.mcp.import.written', [
+            'count' => \count($translated['servers']),
+            'file' => $userPath,
+        ]));
+
+        return NonInteractive::EXIT_OK;
     }
 
     /**

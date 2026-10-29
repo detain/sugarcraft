@@ -215,6 +215,29 @@ literally spelled one — an opencode `environment` map is not a second env
 map — and `enabled: false` is a decision being honoured, not a defect being
 worked around: it costs one line in the launch report and nothing else.
 
+The same vocabulary is what `candy-code mcp import claude|opencode|claude-project <path>`
+translates. `claude-project` reads the per-project `projects["<root>"].mcpServers`
+block of a Claude Code config (`~/.claude.json` is where that block lives) for
+the root `--root` names, defaulting to the working directory — it is a READ
+source, and the verb never writes a foreign file or a project tier.
+
+The verb started life print-only (E710). That law was amended by this
+campaign's ruling: `--write user` is the one allowed exception. With the flag
+the translated entries are appended into `~/.candy-code/mcp.json` — behind the
+same `HomeDirectory::owned()` gate every user-tier write uses, published by
+`AtomicFileWriter` at mode `0600` via a temp-then-rename. The refusals are all
+whole-write refusals: if the existing file already declares any name the
+import carries, the write aborts and lists the names, changing nothing; a
+corrupt or unreadable existing file is refused, never repaired; `--write` with
+any other tier (including `project`) exits 2 having attempted nothing. Without
+the flag the verb still only prints, byte for byte as before.
+
+The risk the flag takes on is stated once, plainly: entries written to the
+user tier start at **every** future launch from **every** directory, with no
+per-repo ceremony and no project trust pin — same posture as any server you
+add to `~/.candy-code/mcp.json` by hand. Type the flag on purpose; the
+success note on stderr repeats the fact after every write.
+
 ### Supported transports
 
 The MCP specification names more transports than candy-code builds. The honest
