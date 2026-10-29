@@ -31,14 +31,27 @@ final class AgentsColorAndInterruptTest extends TestCase
 {
     private ProtocolFixture $fixture;
 
+    private string $presetDir = '';
+
     protected function setUp(): void
     {
+        // C-AGT-4.c: two of the roster's presets declare their presenting
+        // tier in frontmatter, so the mode read needs real files — written
+        // under a private per-process dir the law asks of fixtures.
+        $this->presetDir = \sys_get_temp_dir() . '/cagt4c-modes-' . \bin2hex(\random_bytes(6));
+        \mkdir($this->presetDir, 0o700);
         $this->fixture = ProtocolFixture::new(agentManager: $this->roster());
     }
 
     protected function tearDown(): void
     {
         $this->fixture->tearDown();
+        foreach (scandir($this->presetDir) ?: [] as $left) {
+            if ($left !== '.' && $left !== '..') {
+                @\unlink($this->presetDir . '/' . $left);
+            }
+        }
+        @\rmdir($this->presetDir);
     }
 
     public function testTheRosterCarriesThePresetColorResolvedAndNothingElseInvented(): void
@@ -68,6 +81,28 @@ final class AgentsColorAndInterruptTest extends TestCase
         // browser keeps its own default rather than a carried null.
         self::assertArrayNotHasKey('color', $byName['plain'], 'a preset naming no colour carries no key');
         self::assertArrayNotHasKey('color', $byName['magenta'], 'a word outside the vocabulary resolves to nothing, and nothing is omitted');
+    }
+
+    // C-AGT-4.c: the same items also carry the declaring `mode:` — the web's
+    // primary-agent picker reads it to offer what the TUI's /agent cycle
+    // would, so the leniency law must ride the wire: only a preset that
+    // actually says `subagent` answers subagent; built-ins (no sourcePath),
+    // missing files and any other spelling all answer `all`.
+    public function testTheRosterCarriesTheDeclaredPresentingMode(): void
+    {
+        $items = $this->fixture->client()->call('agents.list')['items'];
+        /** @var array<string, array<string, mixed>> $byName */
+        $byName = [];
+        foreach ($items as $item) {
+            $byName[$item['name']] = $item;
+        }
+
+        self::assertSame('primary', $byName['boss']['mode'] ?? null, 'a preset declaring primary rides');
+        self::assertSame('subagent', $byName['scout']['mode'] ?? null, 'and the picker must not offer this one');
+        self::assertSame('all', $byName['dangling']['mode'] ?? null, 'an unreadable preset answers all, the presentsAsPrimary leniency');
+        foreach (['crimson', 'hexed', 'plain', 'magenta'] as $builtin) {
+            self::assertSame('all', $byName[$builtin]['mode'] ?? null, "a built-in names no mode and answers all");
+        }
     }
 
     public function testAnInterruptMessageLandsInTheMailboxMarkedInterrupt(): void
@@ -153,7 +188,7 @@ final class AgentsColorAndInterruptTest extends TestCase
     private function roster(): AgentManager
     {
         $manager = new AgentManager($this->createStub(ProviderInterface::class), new SkillRegistry());
-        $make = fn (string $name, ?string $color): Agent => new Agent(
+        $make = fn (string $name, ?string $color, ?string $sourcePath = null): Agent => new Agent(
             name: $name,
             description: $name . ' description',
             prompt: 'Test prompt',
@@ -164,12 +199,27 @@ final class AgentsColorAndInterruptTest extends TestCase
             hooks: [],
             isActive: true,
             color: $color,
+            sourcePath: $sourcePath,
         );
         $manager->register($make('crimson', 'red'));
         $manager->register($make('hexed', '#003D99'));
         $manager->register($make('plain', null));
         $manager->register($make('magenta', 'magenta'));
+        // C-AGT-4.c: one preset per declared tier, plus a sourcePath whose
+        // file is gone — the leniency door the TUI's cycle already walks.
+        $manager->register($make('boss', null, $this->presetFile('boss', 'primary')));
+        $manager->register($make('scout', null, $this->presetFile('scout', 'subagent')));
+        $manager->register($make('dangling', null, $this->presetDir . '/no-such-preset.md'));
 
         return $manager;
+    }
+
+    /** A launch-trusted preset file whose frontmatter declares $mode. */
+    private function presetFile(string $name, string $mode): string
+    {
+        $path = $this->presetDir . '/' . $name . '.md';
+        \file_put_contents($path, "---\nmode: $mode\ndescription: preset\n---\nbody\n");
+
+        return $path;
     }
 }

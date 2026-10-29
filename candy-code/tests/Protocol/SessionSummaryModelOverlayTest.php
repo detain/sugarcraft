@@ -99,6 +99,10 @@ final class SessionSummaryModelOverlayTest extends TestCase
             sessionStore: $this->store,
             backend: $this->backend,
             backendFactory: static fn (string $provider): Backend => EngineBackend::new(new ScriptedProvider([]), 'stale-' . $provider),
+            // C-AGT-4.c: the same workspace also carries the agent roster the
+            // `/agents use` command reads — one registered preset, built the
+            // way SessionHostCommandsTest builds its worker.
+            agentManager: self::workerRoster(),
         )
             ->withService(TurnRunner::class, TurnRunner::new())
             ->withService(TurnController::class, TurnController::new())
@@ -196,6 +200,59 @@ final class SessionSummaryModelOverlayTest extends TestCase
         self::assertCount(1, $updates, 'before C-WEB-1.a the RenameSession effect was a bare break — the rename changed nothing the web heard');
         self::assertSame('By Hand', $updates[0]['data']['name']);
         self::assertSame([], self::schemaErrors('session.updated', $updates[0]['data']));
+    }
+
+    // C-AGT-4.c: the third served switch. The chosen primary agent is now
+    // summary state (ServerContext::summary() carries it), so the same one
+    // announcement per changing command holds, the refusal stays silent, and
+    // like the model pair the choice is host-lifetime — a closed session
+    // reports null, because an agent switch never persists (C-AGT-4.b).
+    public function testAServedAgentSwitchIsServedInTheSummaryAndAnnouncedOnce(): void
+    {
+        $client = $this->client();
+        $this->openHost($client);
+        $client->clear();
+
+        self::assertNull($this->context->summaryOf('s')['agent'], 'a plain session carries no agent key value');
+
+        $client->call('command.exec', ['sessionId' => 's', 'name' => 'agents', 'args' => 'use worker']);
+
+        $summary = $this->context->summaryOf('s');
+        self::assertSame('worker', $summary['agent'], 'the served summary names the chosen primary');
+
+        $updates = $this->updatesFor($client);
+        self::assertCount(1, $updates, 'the switch changes no status, so the only announcement is the summary hook');
+        self::assertSame('worker', $updates[0]['data']['agent']);
+        self::assertSame([], self::schemaErrors('session.updated', $updates[0]['data']));
+
+        $client->call('command.exec', ['sessionId' => 's', 'name' => 'agents', 'args' => 'use ghost']);
+        self::assertCount(1, $this->updatesFor($client), 'a refused name announces nothing');
+        self::assertSame('worker', $this->context->summaryOf('s')['agent'], 'and overwrites nothing');
+
+        $client->call('session.close', ['sessionId' => 's']);
+        self::assertNull($this->context->summaryOf('s')['agent'], 'the choice died with its host, exactly like the pair');
+    }
+
+    /** The one-agent roster `/agents use worker` answers against. */
+    private static function workerRoster(): \SugarCraft\Code\Agents\AgentManager
+    {
+        $manager = new \SugarCraft\Code\Agents\AgentManager(
+            \PHPUnit\Framework\TestCase::createStub(\SugarCraft\Code\Providers\ProviderInterface::class),
+            new \SugarCraft\Code\Skills\SkillRegistry(),
+        );
+        $manager->register(new \SugarCraft\Code\Agents\Agent(
+            name: 'worker',
+            description: 'Runs as the primary for one session',
+            prompt: 'You are a worker.',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+        ));
+
+        return $manager;
     }
 
     public function testTheOverrideDiesWithTheHostAndAReopenedSessionAnnouncesAgain(): void

@@ -187,6 +187,33 @@ final class SessionHostCommandsTest extends TestCase
         self::assertNull($host->primaryAgentOverride(), '`default` clears the record');
     }
 
+    // C-AGT-4.c: the choice is summary state — ServerContext::summary() reads
+    // it — so a served switch must announce exactly like the SetModel arm,
+    // or a wire client's session rows go stale until the next poll.
+    public function testAPrimaryAgentSwitchAnnouncesTheSummary(): void
+    {
+        $host = $this->host(agentManager: $this->managerWithWorker());
+        $announcements = 0;
+        $host->onSummaryChanged(static function () use (&$announcements): void {
+            ++$announcements;
+        });
+
+        self::assertSame(0, $announcements, 'arming the hook announces nothing');
+
+        $host->runCommand('agents', 'use worker');
+        self::assertSame(1, $announcements, 'an accepted switch announces the summary');
+
+        $host->runCommand('agents', 'use worker');
+        self::assertSame(2, $announcements, 'a re-pick stores and announces unconditionally, the SetModel law');
+
+        $host->runCommand('agents', 'use ghost');
+        self::assertSame(2, $announcements, 'a refused name announces nothing');
+
+        $host->runCommand('agents', 'use default');
+        self::assertSame(3, $announcements, 'clearing the record announces too');
+        self::assertNull($host->primaryAgentOverride());
+    }
+
     private function managerWithWorker(): \SugarCraft\Code\Agents\AgentManager
     {
         $manager = (new \ReflectionClass(\SugarCraft\Code\Agents\AgentManager::class))->newInstanceWithoutConstructor();
