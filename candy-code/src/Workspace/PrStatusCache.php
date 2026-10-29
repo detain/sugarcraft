@@ -193,8 +193,12 @@ final class PrStatusCache
     }
 
     /**
-     * Arm (or keep) the single shared one-shot at the earliest live due time;
-     * when nothing is live anymore the chain stops on its own.
+     * Arm the single shared one-shot at the earliest live due time when none
+     * is pending; a live timer is kept as-is and never re-compared, so an
+     * entry registering just after a beat can wait up to one TTL for its
+     * first fetch (the next beat re-arms at the earliest due time, and the
+     * chip is decoration).
+     * When nothing is live anymore the chain stops on its own.
      */
     private static function arm(LoopInterface $loop): void
     {

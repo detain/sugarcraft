@@ -708,6 +708,10 @@ final class DescriptorInheritanceGuardTest extends TestCase
             'count' => 1,
             'reason' => 'function_exists() capability probe: with proc_open disabled no walk-up runs and the launch directory stays the project root',
         ],
+        'Workspace/PrStatusCache.php::fetchViaGh' => [
+            'count' => 1,
+            'reason' => 'function_exists() capability probe: with proc_open disabled the gh pr view watch is skipped, the chip stays null',
+        ],
     ];
 
     /**
