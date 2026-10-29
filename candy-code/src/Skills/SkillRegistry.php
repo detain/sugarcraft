@@ -913,6 +913,29 @@ final class SkillRegistry
     }
 
     /**
+     * Swap the whole discovered roster in place (C-EXT-3.a, `/skills reload`).
+     *
+     * The object identity survives — every holder of this registry (the
+     * engine's `$skillRegistry`, the workspace's `skills`, every App built
+     * from them) sees the new roster on its next read, which is why the TUI
+     * and the serve path need no re-threading of the launch wiring. Only the
+     * DISCOVERY set is replaced: `$disabledSkills` is the operator's own
+     * veto, not a discovery fact, so it rides across the swap untouched and a
+     * skill disabled before the reload is still disabled after it (and a
+     * re-discovered skill the operator removed from the veto list stays
+     * live). `$unavailable` is re-derived from scratch because each new
+     * skill re-passes {@see register()}'s requirements door.
+     *
+     * @param array<string, Skill> $skills
+     */
+    public function replaceAll(array $skills): void
+    {
+        $this->skills = [];
+        $this->unavailable = [];
+        $this->register($skills);
+    }
+
+    /**
      * Get skill names.
      *
      * @return array<string>

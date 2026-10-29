@@ -406,6 +406,29 @@ mid-turn is still read as enabled by that turn's children; the persisted truth
 applies at the next launch, and a bare `/skills` listing reports the new flag
 as soon as the write lands. The name is case-exact, like the row it flips.
 
+### Reloading discovery without a relaunch
+
+`/skills reload` (C-EXT-3.a) re-runs the boot discovery itself — the same
+`SkillManager::loadAll()` walk over the project root and installed bundles —
+and swaps the result into the live registry in place through
+`SkillRegistry::replaceAll()`. Newly written skill files land, deleted ones
+leave, edited frontmatter re-reads, all without a relaunch; the object the
+engine, the workspace and every App share never changes identity, so the TUI
+and the serve path see the new roster from the next turn and forked children
+inherit it. The `disabledSkills` vetoes ride across untouched: reload
+rediscovers skills, it does not overrule the operator. Trust is the boot
+walk's exactly — same loaders, same requirement doors, same origin badges.
+
+The model is told what moved, not left to notice silently: the roster as of
+the session generation's first assembly is frozen by
+`SkillRosterDiffTracker` (the skill sibling of CTX-3's
+`InstructionDiffTracker`), and from a move onward the `<turn-context>` row
+carries a bounded delta — added skills with their live listing line,
+removals by name, changes with the new description — until a refresh point
+re-freezes the baseline. The tracker adds nothing to the prompt prefix; the
+`<available-skills>` listing it annotates stays the roster's own live
+channel, exactly as it already is for `/skills enable` and `/skills disable`.
+
 ### Auto-matching a skill into the prompt is deliberately dormant
 
 `Skill::matchesPrompt()` and `SkillRegistry::findForPrompt()` exist, are tested,

@@ -51,6 +51,7 @@ use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Tools\ToolResult;
 use SugarCraft\Code\Skills\SkillListingSection;
 use SugarCraft\Code\Skills\SkillMatcher;
+use SugarCraft\Code\Skills\SkillRosterDiffTracker;
 use SugarCraft\Code\Hooks\BuiltIn\AuditHook;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Code\Hooks\HookManager;
@@ -5159,6 +5160,17 @@ final class Runtime
         // its own leading "\n\n" for its other readers; SkillListingSection
         // trims it where the preamble's blank line is the separator.
         $listing = (new SkillMatcher())->listForPrompt($app->availableSkills, $enabledSkillNames);
+
+        // C-EXT-3.a: freeze the roster baseline beside the listing it names.
+        // This line runs in the PARENT during primeSessionPrompt() (and in
+        // the child on any assembly that finds the slot cold — remember()
+        // fills on miss), so the tracker's baseline is the roster as of this
+        // session-generation's assembly, and every later `/skills reload`
+        // renders as the bounded tail-row delta {@see skillRosterDiff()}
+        // reads back. remember() no-ops once warm: the capture pays one
+        // fingerprint walk per generation, never per assembly.
+        $this->skillRosterTracker($app);
+
         $sections[] = $this->section(
             '<available-skills>',
             Stability::PerTurn,
@@ -6047,7 +6059,8 @@ final class Runtime
             ->withRecentlyModifiedFiles(Context\TurnContextBlock::recentlyModifiedIn($app->messages))
             ->withMemoryRecall($this->memoryRecall($app)->render())
             ->withChangedSinceRead(Tools\ReadLedger::in($app->tools)?->notice() ?? '')
-            ->withInstructionDiff($this->instructionDiff($app));
+            ->withInstructionDiff($this->instructionDiff($app))
+            ->withSkillRosterDiff($this->skillRosterDiff($app));
     }
 
     /**
@@ -6125,6 +6138,44 @@ final class Runtime
     public function primeInstructionDiff(App $app): void
     {
         $this->instructionTracker($app);
+    }
+
+    /**
+     * The skill-roster delta for this step's turn-context row (C-EXT-3.a).
+     *
+     * The roster sibling of {@see instructionDiff()}: the tracker rides the
+     * session memo keyed by the registry's identity, so it is captured once
+     * per frozen generation and re-captured the moment the generation is
+     * forgotten — forget() at a refresh point drops this slot with every
+     * other, and a launch carrying a NEW registry object changes the key.
+     * Unlike the instruction tracker this recheck is pure (name→hash maps
+     * need no stat walk or recorded `pending` state), so a forked child's
+     * read can never advance the parent's slot: every child of a reloaded
+     * session sees the same delta bytes until a refresh point absorbs them.
+     * The delta rides the tail row only — nothing here joins the prompt
+     * prefix; the listing that the PerTurn skill layer re-derives is the
+     * existing, documented freshness channel for the roster itself.
+     */
+    private function skillRosterDiff(App $app): string
+    {
+        return $this->skillRosterTracker($app)->recheck();
+    }
+
+    /**
+     * The session's tracker, captured once into the shared memo's
+     * `skill-roster-diffs:<registry id>` slot. The stamp beside the
+     * listing line in {@see systemPromptSections()} fills the slot in the
+     * parent during {@see primeSessionPrompt()}; the prime and the read
+     * share this one method so the slot key has exactly one spelling, the
+     * {@see instructionTracker()} law.
+     */
+    private function skillRosterTracker(App $app): SkillRosterDiffTracker
+    {
+        return $this->sessionPromptMemo()->remember(
+            $app->sessionId,
+            'skill-roster-diffs:' . \spl_object_id($app->availableSkills),
+            static fn(): SkillRosterDiffTracker => SkillRosterDiffTracker::capture($app->availableSkills),
+        );
     }
 
     /**

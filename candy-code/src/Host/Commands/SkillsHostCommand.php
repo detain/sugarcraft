@@ -41,6 +41,14 @@ use SugarCraft\Code\Skills\SkillRegistry;
  * children, so a disable mid-turn is read by those children as still-on; the
  * next launch's boot discovery carries the truth.
  *
+ * `/skills reload` (C-EXT-3.a) re-runs the whole boot discovery into the
+ * LIVE registry in place — newly written skill files land, deleted ones
+ * leave, edited frontmatter re-reads — without a relaunch. The operator's
+ * `disabledSkills` vetoes ride across untouched, the trust posture is the
+ * boot walk's exactly (same loaders, same doors, same origin badges), and
+ * the model learns of the moves as the turn-context tail's roster delta
+ * rather than through anything this command prints into the prompt.
+ *
  * `/skills new <name> [description]` (C-EXT-3.c) is the write side of the
  * review queue: it scaffolds a draft `SKILL.md` through
  * {@see ProposedSkills::propose()} — the same door the dream pass writes
@@ -129,6 +137,14 @@ final class SkillsHostCommand implements HostCommand
                 // installed table's On column answers under.
                 'enable', 'disable' => \count($words) === 2
                     ? $this->toggleSkill($context, $text, $sub, $words[1])
+                    : CommandResult::failure($text, self::usage(), 2),
+                // C-EXT-3.a: re-run discovery into the LIVE registry so the
+                // TUI and the serve path (which share the workspace's one
+                // registry object) pick the roster up from the next turn —
+                // the model learns the moves as the turn-context tail's
+                // roster delta, never as a tracker byte in the prefix.
+                'reload' => \count($words) <= 1
+                    ? $this->reloadSkills($context, $text)
                     : CommandResult::failure($text, self::usage(), 2),
                 // C-EXT-3.e: the two doors R-EXT-2's announcement names, each
                 // taking exactly one name — and both answer only for skills
@@ -504,5 +520,49 @@ MARKDOWN;
         }
 
         return CommandResult::reply($text, Lang::t($disable ? 'host.skills.disabled_now' : 'host.skills.enabled_now', ['name' => PermissionsCommand::reportField($name)]));
+    }
+
+    /**
+     * `/skills reload` (C-EXT-3.a): re-run the whole discovery — the same
+     * {@see SkillManager::loadAll()} walk the launch performs, project root
+     * and installed bundles alike — into a fresh registry, then swap its
+     * roster into the live one in place via
+     * {@see SkillRegistry::replaceAll()}. Object identity survives the swap,
+     * so the engine, this workspace, and every App built from either read the
+     * new roster from the next assembly: the TUI's next turn and every forked
+     * child of the serve path inherit it with no re-threading of launch
+     * wiring. The operator's `disabledSkills` veto list is NOT discovery
+     * state and rides across untouched. The reply counts what moved; the
+     * model-side announcement is the turn-context tail's roster delta
+     * ({@see \SugarCraft\Code\Skills\SkillRosterDiffTracker()}), which names
+     * the added, removed and changed skills for the rest of the session
+     * generation. Without a launch-provided live registry there is nothing
+     * in-place to swap, and the command says so instead of building a
+     * private one the next turn would never read.
+     */
+    private function reloadSkills(CommandContext $context, string $text): CommandResult
+    {
+        $registry = $context->workspace?->skills;
+        if (!$registry instanceof SkillRegistry) {
+            return CommandResult::failure($text, Lang::t('host.skills.reload.no_live'), 1);
+        }
+
+        $fresh = new SkillRegistry();
+        (new SkillManager(new SkillLoader(), $fresh))->loadAll(
+            $context->projectRoot(),
+            \SugarCraft\Code\Cli\Bootstrap::bundles($context->projectRoot()),
+        );
+
+        $before = $registry->names();
+        $after = $fresh->names();
+        $added = \count(\array_diff($after, $before));
+        $removed = \count(\array_diff($before, $after));
+        $registry->replaceAll($fresh->all());
+
+        return CommandResult::reply($text, Lang::t('host.skills.reload.done', [
+            'added' => (string) $added,
+            'removed' => (string) $removed,
+            'total' => (string) \count($registry->all()),
+        ]));
     }
 }

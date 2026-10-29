@@ -15,6 +15,9 @@ use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Providers\CustomProvider;
 use SugarCraft\Code\Providers\SglangProvider;
+use SugarCraft\Code\Skills\Skill;
+use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Skills\SkillRosterDiffTracker;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Tests\Support\ScriptedProvider;
 use SugarCraft\Code\Tools\Tool;
@@ -215,6 +218,111 @@ final class PromptPrefixByteStabilityTest extends TestCase
             json_encode($earlier),
             json_encode(\array_slice($later, 0, \count($earlier))),
             'the instruction edit must not disturb a single byte the earlier turn already sent',
+        );
+    }
+
+    /**
+     * C-EXT-3.a, the roster sibling of the CTX-3 test above: two complete()
+     * turns on one backend, `/skills reload`-shaped replaceAll() between
+     * them. The tracker contributes NOTHING to the prefix — its header never
+     * appears in the system prompt and the earlier wire rows survive byte-
+     * for-byte — and the delta arrives in turn 2's appended `<turn-context>`
+     * row. The honest limit, recorded in the lane report: the
+     * `<available-skills>` listing itself is a PerTurn layer (Stability::
+     * PerTurn, assembled outside the standing-slab memo) and the swap DOES
+     * move its bytes into the next prefix — the same documented freshness
+     * `/skills enable` and `/skills disable` already have. This leg pins
+     * both halves of that truth: the delta never rides the slab, and the
+     * roster line is live where the architecture says it must be.
+     */
+    public function testAMidSessionSkillRosterSwapRidesTheTailRowAndNeverTheSlab(): void
+    {
+        $home = $this->tempDir();
+        mkdir($home . '/.candy-code', 0o700, true);
+        $this->useHomeSandbox($home);
+
+        $root = $this->gitFixture();
+
+        $registry = new SkillRegistry();
+        $registry->register([self::rosterSkill('alphaext3a', 'Alpha walk for the roster leg.')]);
+
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: 'first answer'),
+            new CompleteResponse(content: 'second answer'),
+        ]);
+        $backend = EngineBackend::new($provider, 'm')
+            ->withoutHooks()
+            ->withRoot($root)
+            ->withSkillRegistry($registry);
+
+        $history = [RootMessage::system(self::LAUNCH_NOTICE), RootMessage::user('go')];
+        $reply = $backend->complete($history);
+        $this->assertSame('first answer', $reply->content);
+
+        $turnOne = $provider->requests[0];
+        $firstRow = (string) TurnContextBlock::latestIn($turnOne->messages);
+        $this->assertStringStartsWith(TurnContextBlock::FENCE, $firstRow);
+        $this->assertStringNotContainsString(SkillRosterDiffTracker::HEADER, $firstRow, 'nothing has moved yet');
+        $this->assertStringNotContainsString(SkillRosterDiffTracker::HEADER, (string) $turnOne->systemPrompt);
+        $this->assertStringContainsString('Alpha walk for the roster leg.', (string) $turnOne->systemPrompt, 'the PerTurn listing carries the live roster — the fixture only works if it does');
+
+        // The operator reloads: the discovery walk answers with a different
+        // set. This is exactly what SkillsHostCommand::reloadSkills() does to
+        // the shared object — done here by hand so the leg tests the prompt
+        // path, not the command's disk walk.
+        $registry->replaceAll([self::rosterSkill('betaext3a', 'Beta walk after the swap.')]);
+
+        $historyTwo = [
+            RootMessage::system(self::LAUNCH_NOTICE),
+            RootMessage::user('go'),
+            RootMessage::user($firstRow),
+            RootMessage::assistant('first answer'),
+            RootMessage::user('more'),
+        ];
+        $reply = $backend->complete($historyTwo);
+        $this->assertSame('second answer', $reply->content);
+
+        $second = $provider->requests[1];
+
+        // The tracker's own bytes never enter the prefix — the delta lands
+        // in the tail, exactly like the instruction diff's law.
+        $this->assertStringNotContainsString(SkillRosterDiffTracker::HEADER, (string) $second->systemPrompt, 'the delta never rides the slab');
+
+        // The PerTurn listing is live: the swapped roster shows in the next
+        // prefix. This is the documented existing freshness of the skill
+        // layer (same as enable/disable), NOT something this step changed.
+        $this->assertStringContainsString('Beta walk after the swap.', (string) $second->systemPrompt, 'the re-derived listing carries the swap');
+        $this->assertStringNotContainsString('Alpha walk for the roster leg.', (string) $second->systemPrompt, 'and no longer carries what discovery dropped');
+
+        // The announce row: turn 2's appended tail names the moves.
+        $tail = $second->messages[array_key_last($second->messages)];
+        $this->assertTrue(TurnContextBlock::isTurnContext($tail), 'the swap must show up on the appended row — that is the whole feature');
+        $secondRow = (string) TurnContextBlock::latestIn($second->messages);
+        $this->assertStringContainsString(SkillRosterDiffTracker::HEADER, $secondRow);
+        $this->assertStringContainsString('- removed: alphaext3a', $secondRow);
+        $this->assertStringContainsString('betaext3a', $secondRow);
+        $this->assertStringContainsString('- added:', $secondRow);
+
+        // And every MESSAGE row turn 1 sent is still in turn 2 byte-for-byte
+        // — the persisted row included, swap notwithstanding. The wire's
+        // first element is the system prompt, which this architecture moves
+        // on purpose (the PerTurn listing above); it is compared by its own
+        // assertions, not folded into the row law.
+        $earlier = self::wire(CustomProvider::class, $turnOne);
+        $later = self::wire(CustomProvider::class, $second);
+        $this->assertSame(
+            json_encode(\array_slice($earlier, 1)),
+            json_encode(\array_slice($later, 1, \count($earlier) - 1)),
+            'the roster swap must not disturb a single message byte the earlier turn already sent',
+        );
+    }
+
+    /** A manifest-shaped skill fixture for the roster leg (project tier, auto-invocable). */
+    private static function rosterSkill(string $name, string $description): Skill
+    {
+        return Skill::parse(
+            "---\nname: {$name}\ndescription: {$description}\n---\n\nBody for {$name}.\n",
+            $name,
         );
     }
 

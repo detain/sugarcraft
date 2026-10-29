@@ -34,7 +34,10 @@ use SugarCraft\Code\Tools\ToolCall;
  * ({@see \SugarCraft\Code\Tools\ReadLedger::notice()}, roadmap 3.I-2), the
  * root instruction files edited since the session froze them
  * ({@see withInstructionDiff()}, plan_comparison CTX-3 — the frozen slab
- * never moves, so mid-session edits arrive here as bounded diffs), the current
+ * never moves, so mid-session edits arrive here as bounded diffs), the skills
+ * whose live roster has moved since the session froze its listing
+ * ({@see withSkillRosterDiff()}, C-EXT-3.a — `/skills reload` swaps the
+ * registry in place; the delta arrives here as bounded rows), the current
  * date once it has rolled over since `<env>` froze one
  * ({@see withCurrentDate()} — the prefix never moves, so a session that spans
  * midnight learns the new date here), the share
@@ -106,6 +109,7 @@ final readonly class TurnContextBlock
      * @param list<string> $invokedSkills    Skill names the Skill tool loaded, most recent first.
      * @param string       $reinjection      A rendered {@see \SugarCraft\Code\Context\Compaction\ReinjectionPlan}; '' for none.
      * @param string       $instructionDiff  A rendered {@see InstructionDiffTracker::recheck()} section; '' for none.
+     * @param string       $skillRosterDiff  A rendered {@see \SugarCraft\Code\Skills\SkillRosterDiffTracker::recheck()} section; '' for none.
      * @param string       $currentDate      The live-date line as {@see withCurrentDate()} builds it; '' when it carries nothing.
      */
     public function __construct(
@@ -117,6 +121,7 @@ final readonly class TurnContextBlock
         private array $invokedSkills = [],
         private string $reinjection = '',
         private string $instructionDiff = '',
+        private string $skillRosterDiff = '',
         private string $currentDate = '',
     ) {
     }
@@ -219,6 +224,23 @@ final readonly class TurnContextBlock
     public function withInstructionDiff(string $section): self
     {
         return $this->mutate(instructionDiff: $section);
+    }
+
+    /** The skill-roster-delta section this row carries, or '' for none. */
+    public function skillRosterDiff(): string
+    {
+        return $this->skillRosterDiff;
+    }
+
+    /**
+     * @param string $section a rendered {@see \SugarCraft\Code\Skills\SkillRosterDiffTracker::recheck()}
+     *                        section (C-EXT-3.a); '' clears it. Payload bytes
+     *                        arrive escaped by the tracker; this row's own
+     *                        fence is neutralised in them on render.
+     */
+    public function withSkillRosterDiff(string $section): self
+    {
+        return $this->mutate(skillRosterDiff: $section);
     }
 
     /**
@@ -330,6 +352,16 @@ final readonly class TurnContextBlock
         // frozen slab in the system prompt above it never moves.
         if (trim($this->instructionDiff) !== '') {
             $parts[] = self::escapeOwnFence($this->instructionDiff);
+        }
+
+        // Pre-escaped as data by SkillRosterDiffTracker (names and
+        // descriptions from repository-controlled skill files); this row's
+        // own fence is neutralised in it like in every other payload. Sits
+        // directly behind the instruction diff — same KIND of notice: the
+        // session's frozen view of a repository-controlled roster moved, and
+        // only the delta rides the tail (C-EXT-3.a).
+        if (trim($this->skillRosterDiff) !== '') {
+            $parts[] = self::escapeOwnFence($this->skillRosterDiff);
         }
 
         // Already escaped and fenced by MemoryRecallBlock; this row's own
@@ -576,6 +608,7 @@ final readonly class TurnContextBlock
         ?array $invokedSkills = null,
         ?string $reinjection = null,
         ?string $instructionDiff = null,
+        ?string $skillRosterDiff = null,
         ?string $currentDate = null,
     ): self {
         return new self(
@@ -587,6 +620,7 @@ final readonly class TurnContextBlock
             $invokedSkills ?? $this->invokedSkills,
             $reinjection ?? $this->reinjection,
             $instructionDiff ?? $this->instructionDiff,
+            $skillRosterDiff ?? $this->skillRosterDiff,
             $currentDate ?? $this->currentDate,
         );
     }

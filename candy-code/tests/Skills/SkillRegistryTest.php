@@ -1033,4 +1033,76 @@ SKILL,
         $names = array_map(fn($skill) => $skill->name, $result);
         $this->assertContains('path-manifest-skill', $names);
     }
+
+    // -------------------------------------------------------------------------
+    // replaceAll() — C-EXT-3.a, the /skills reload swap
+    // -------------------------------------------------------------------------
+
+    public function testReplaceAllSwapsTheDiscoveredRosterInPlace(): void
+    {
+        $registry = new SkillRegistry();
+        $registry->register(['old' => $this->createSkill('old', 'Gone after the swap.')]);
+
+        $registry->replaceAll([
+            $this->createSkill('fresh', 'Arrives with the swap.'),
+            $this->createSkill('also-fresh', 'Second arrival.'),
+        ]);
+
+        $this->assertNull($registry->get('old'));
+        $this->assertSame([], array_values(array_diff(['also-fresh', 'fresh'], $registry->names())), 'the new roster is exactly what the swap carried');
+        $this->assertContains('fresh', $registry->names());
+    }
+
+    /**
+     * The operator's veto is not a discovery fact: a skill disabled before
+     * the swap is STILL disabled after it, even when the incoming roster
+     * carries the same name again. This is the whole `replaceAll`-versus-
+     * `new registry` distinction the reload's identity law rests on.
+     */
+    public function testReplaceAllCarriesTheDisabledSetAcrossTheSwap(): void
+    {
+        $registry = new SkillRegistry();
+        $registry->register([
+            'keep' => $this->createSkill('keep', 'Vetoed by the operator.'),
+            'gone' => $this->createSkill('gone', 'Not in the incoming roster.'),
+        ]);
+        $registry->disable('keep');
+
+        $registry->replaceAll([$this->createSkill('keep', 'Vetoed by the operator, re-discovered.')]);
+
+        $this->assertTrue($registry->isDisabled('keep'), 'the veto rides across the swap untouched');
+        $this->assertNull($registry->get('keep'), 'and the skill stays dark');
+        $this->assertSame([], $registry->all());
+        $this->assertContains('keep', $registry->names(), 'names() stays RAW — the discovery set and the veto are separate facts');
+    }
+
+    /** The incoming roster re-passes the requirements door: an unmeetable skill is refused again, not trusted from the swap. */
+    public function testReplaceAllReDerivesTheUnavailableSet(): void
+    {
+        $registry = new SkillRegistry();
+        $quiet = $this->createSkill('first', 'First generation.');
+        $unmeetable = new Skill(
+            name: 'unmeetable',
+            description: 'Needs a binary this host does not have.',
+            userInvocable: true,
+            disableModelInvocation: false,
+            allowedTools: null,
+            disallowedTools: null,
+            model: null,
+            effort: null,
+            context: 'thread',
+            paths: [],
+            content: 'Body.',
+            sourcePath: '/nowhere/unmeetable/SKILL.md',
+            requires: ['bins' => ['cc-ext-3a-absent-binary']],
+        );
+        $registry->register(['first' => $quiet]);
+        $this->assertSame([], $registry->unavailable(), 'nothing refused before the swap');
+
+        $registry->replaceAll([$quiet, $unmeetable]);
+
+        $this->assertArrayHasKey('unmeetable', $registry->unavailable(), 'the door runs again on every incoming skill');
+        $this->assertNull($registry->get('unmeetable'));
+        $this->assertContains('first', $registry->names(), 'the meetable roster still lands');
+    }
 }

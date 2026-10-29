@@ -397,7 +397,7 @@ edit it by hand.
 | `/workflow` | ✓ | | — | Run, pause, resume, or inspect a workflow |
 | `/memory` | ✓ | | — | Add, list, search, edit, import, clear, or restore memory entries, and show their history |
 | `/instructions` | ✓ | | `[open <n\|path>]` | List the instruction files this session reads, and open one in the editor |
-| `/skills` | ✓ | | `[installed\|new <name> [description]\|proposed\|accept <name> [--replace]\|reject <name>\|enable <name>\|disable <name>\|history <name>\|undo <name>]` | List the invocable skills, switch them on or off, review the dream pass drafts: accept or reject one, or step a learned skill back through its history |
+| `/skills` | ✓ | | `[installed\|new <name> [description]\|proposed\|accept <name> [--replace]\|reject <name>\|enable <name>\|disable <name>\|reload\|history <name>\|undo <name>]` | List the invocable skills, switch them on or off, review the dream pass drafts: accept or reject one, or step a learned skill back through its history |
 | `/init` | ✓ | | `[focus]` | Study this project and write or improve its AGENTS.md |
 | `/branch` | ✓ | | — | Fork the current session into a new branch |
 | `/rename` | ✓ | | `[<name>\|--auto]` | Rename the current session |
@@ -663,7 +663,12 @@ one a live skill in `~/.candy-code/skills/`, `/skills reject <name>` deletes
 it. `/skills disable <name>` and `/skills enable <name>` flip a skill's
 `disabledSkills` entry in your user settings and the live registry in the same
 step, so the next bare listing and the next launch both tell the truth; an
-unknown name is refused with nothing written. `/skills new <name> [description]`
+unknown name is refused with nothing written. `/skills reload` re-runs the
+whole boot discovery into the live registry in place — files written since
+launch land, deleted ones leave, edited frontmatter re-reads — the
+`disabledSkills` vetoes riding across untouched; the reply counts what moved,
+and the model is told the same news as turn-context roster-delta rows.
+`/skills new <name> [description]`
 scaffolds a draft into the same queue — sanitised name, the rest of the line as
 its description, a skeleton body — and lives nothing by itself. Accept is the
 only way a draft becomes live — see
