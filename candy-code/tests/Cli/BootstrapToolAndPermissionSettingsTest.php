@@ -302,7 +302,7 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
         self::assertSame(PermissionMode::Plan, Bootstrap::permissionGate()->mode());
     }
 
-    public function testATrustedProjectCannotContributeAPermissionRule(): void
+    public function testATrustedProjectCanNarrowButNeverWiden(): void
     {
         $this->trustTheProject();
         $this->writeProjectSettings([
@@ -311,14 +311,24 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
         Bootstrap::useProjectRootForSettings($this->projectRoot);
 
         self::assertSame(PermissionMode::BypassPermissions, Bootstrap::permissionGate()->mode());
-        // And the rule itself is absent: under DontAsk an `Allow Read` would be
-        // indistinguishable from the mode's own read-only allowance, so the
-        // observable is that a `Deny`-shaped project rule cannot appear either.
+        // C-SEC-6.b changed this file's law: a trusted project's shared file
+        // now DOES contribute rules — deny/ask only. The floor that survives
+        // unchanged is the shape of the old assertion: an `allow` entry is
+        // dropped before it reaches the gate, so nothing a checked-in file
+        // says can widen the session. Observed on the gate's rule list
+        // directly, because under Bypass any allow would be moot anyway.
+        self::assertSame([], array_values(array_filter(
+            Bootstrap::permissionGate()->rules(),
+            static fn ($rule): bool => $rule->pattern === 'Read'
+                && $rule->action === \SugarCraft\Code\Permissions\PermissionAction::Allow,
+        )));
+        // And the other half of the new bargain: a `deny`-shaped project rule
+        // is no longer absent — it reaches the gate and answers first.
         $this->writeProjectSettings([
             'permissionRules' => [['pattern' => 'Read', 'action' => 'deny']],
         ]);
         self::assertSame(
-            \SugarCraft\Code\Permissions\PermissionDecision::Allow,
+            \SugarCraft\Code\Permissions\PermissionDecision::Deny,
             Bootstrap::permissionGate()->evaluate(
                 new \SugarCraft\Code\ToolCall('Read', ['file_path' => './x']),
             ),

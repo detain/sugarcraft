@@ -25,8 +25,10 @@ use SugarCraft\Code\Tests\Server\Support\WireClient;
  * `permission.forget` — the wire twin of `/permissions forget` — addresses by,
  * and `permission.forget` takes one back out.
  *
- * The refusals that survive: `remember: "project"` (permission rules are
- * user-tier only), a relayed background question (`remember_user_unavailable`
+ * The refusals that survive: `remember: "project"` (what it would save is an
+ * allow rule, and C-SEC-6.b's project tier carries deny/ask entries only —
+ * there is no door from this answer to a widening project file),
+ * a relayed background question (`remember_user_unavailable`
  * — the daemon's approver records no grant to persist), and every not-found /
  * already-resolved edge, each of which must leave the config file untouched —
  * a refused answer that still wrote a rule would be the lie this whole screen

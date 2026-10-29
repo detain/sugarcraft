@@ -420,11 +420,20 @@ final class PermissionsCommand implements HostCommand
             $lines[] = Lang::t('host.permissions.no_rules');
         } else {
             $lines[] = Lang::t('host.permissions.rules', ['count' => count($rules)]);
+            $projectSignatures = \SugarCraft\Code\Cli\Bootstrap::projectNarrowingRuleSignatures();
             foreach ($rules as $index => $rule) {
+                // C-SEC-6.b tier column: which file a row rode in on decides
+                // which file a `forget`-less removal has to be edited in, and
+                // the gate's rules carry no provenance of their own — the
+                // launch records the project's signatures as it loads them.
+                $tier = in_array($rule->action->value . ' ' . $rule->pattern, $projectSignatures, true)
+                    ? Lang::t('host.permissions.tier.project')
+                    : Lang::t('host.permissions.tier.user');
                 $lines[] = sprintf(
-                    '  %d. %-5s %s',
+                    '  %d. %-5s %-7s %s',
                     $index + 1,
                     $rule->action->value,
+                    $tier,
                     self::reportField($rule->pattern),
                 );
             }

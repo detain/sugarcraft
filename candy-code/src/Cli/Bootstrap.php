@@ -54,6 +54,7 @@ use SugarCraft\Code\Permissions\PermissionAction;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionRule;
+use SugarCraft\Code\Permissions\ProjectNarrowingRules;
 use SugarCraft\Code\Permissions\SafetyClassifier;
 use SugarCraft\Code\Providers\EchoProvider;
 use SugarCraft\Code\Providers\ProviderFactory;
@@ -229,8 +230,9 @@ final class Bootstrap
      * sum stops fitting under this cap — so the next source cannot spend the
      * headroom silently.
      *
-     * 49 is that sum — 48 after the C-EXT-4.d launch-recommendation
-     * aggregate row joined the roster on top of the C-PRV-1.b
+     * 50 is that sum — 49 after the C-SEC-6.b project-narrowing row
+     * joined the roster on top of the C-EXT-4.d launch-recommendation
+     * aggregate row, which joined on top of the C-PRV-1.b
      * unshaped-launch-tier row, which joined on top of the v1:F-1
      * Claude-settings skip drain, the v1:m-1 home stand-in row and the
      * v2:a11y-F3 terminal-guidance row, which joined the roster on top of the PLG-1
@@ -242,7 +244,7 @@ final class Bootstrap
      * row, because a silently truncated warning list is the defect this seam
      * exists to end.
      */
-    public const LAUNCH_NOTICE_LIMIT = 49;
+    public const LAUNCH_NOTICE_LIMIT = 50;
 
     /**
      * Roadmap N-P4d: the setting that replaces {@see LAUNCH_NOTICE_LIMIT} (its
@@ -316,6 +318,11 @@ final class Bootstrap
         'reportIgnoredFrontmatter' => 4,
         'lspClient' => 1,
         'permissionGate' => 1,
+        // C-SEC-6.b: one new PLACE that warns — the project-narrowing notice,
+        // raised by the filter it reports on, never from inside the banner
+        // branch above it. Independent worst-case row: a bypassed launch on a
+        // narrowing project raises both.
+        'projectNarrowingRules' => 1,
         // Roadmap PLG-1: two, one per fixed install container (the project
         // and user tier roots) whose walk can raise a problem row on any
         // launch; rows naming entries of the pluginPaths setting are fan-out
@@ -997,7 +1004,7 @@ final class Bootstrap
      * a private const; nothing in `src/` branches on it, and nothing should —
      * see {@see warnPermissionConfigInTranscript()} for the seam itself.
      */
-    public const TRANSCRIPT_SEAM_CALL_SITES = 31;
+    public const TRANSCRIPT_SEAM_CALL_SITES = 32;
 
     /**
      * Every directory this launch refused to read, keyed by the path as
@@ -1152,6 +1159,16 @@ final class Bootstrap
      * @var array<string, true>
      */
     private static array $reportedProjectTierRefusals = [];
+
+    /**
+     * C-SEC-6.b: the deny/ask rules {@see projectNarrowingRules()} loaded
+     * this process, keyed by `action pattern` so the tier column of
+     * `/permissions` can tell a project row from a user row, and so a
+     * repeated gate build adds nothing new.
+     *
+     * @var array<string, true>
+     */
+    private static array $projectNarrowingSignatures = [];
 
     /**
      * Resolve the launch's image render mode and hand it to
@@ -1646,7 +1663,7 @@ final class Bootstrap
 
         // LAST, so every warning the build raised is in hand — including
         // reportProjectTierRefusals() immediately above, which is one of the
-        // THIRTY-ONE call sites now routed onto the transcript seam. This said
+        // THIRTY-TWO call sites now routed onto the transcript seam. This said
         // SIXTEEN, counting reportPrunedSessions()'s retention summary (E78,
         // round 42) as the last one until E86 (round 43) added the sixteenth,
         // in mcpClient()'s start-then-throw catch, and P7.S3 added the
@@ -5442,7 +5459,7 @@ public static function useMaxCost(?string $maxCost): void
             // user meets that as `/skill` not offering something they wrote. ONE
             // ROW, whatever the count: this message is already an aggregate, which
             // is what makes it safe to put in a transcript that also has to carry
-            // thirty other sources. THIS SAID ELEVEN. Round 44 could not correct
+            // thirty-one other sources. THIS SAID ELEVEN. Round 44 could not correct
         // it — this file was outside that lane's ownership, which is the whole
         // reason, and not how long the sentence had been wrong — so it asserted
         // the gap instead, with a test whose failure message was the
@@ -7187,7 +7204,136 @@ public static function useMaxCost(?string $maxCost): void
         // rather than only when the mode currently happens to be Auto: this
         // gate instance is shared, and a mode read from config is not
         // something this method should have to predict.
-        return new PermissionGate($mode, self::permissionRules($config), new SafetyClassifier(), $modeSource, $reviewer);
+        //
+        // C-SEC-6.b: the project's narrowed rules ride BEFORE the user's.
+        // PermissionGate answers first-match-wins, so this ordering is the
+        // whole of the promise that a user `allow` cannot beat a project
+        // `deny` — and it is why the project tier may contribute deny/ask
+        // entries at all: prepended, they can only narrow what the session
+        // does, never widen it.
+        $userRules = self::permissionRules($config);
+
+        return new PermissionGate($mode, [...self::projectNarrowingRules(), ...$userRules], new SafetyClassifier(), $modeSource, $reviewer);
+    }
+
+    /**
+     * The trusted project's OWN deny/ask rules, C-SEC-6.b — the rules-axis
+     * half of the self-grant floor.
+     *
+     * Under {@see projectSettingsTrusted()} the project's shared settings
+     * file is read for `permissionRules` and NOTHING ELSE: `permissionMode`
+     * is never consulted here or anywhere else from a project file (a
+     * checked-in `bypass-permissions` would be an escape delivered by
+     * `git clone`), and the local sibling is not read for rules either —
+     * the local file's freedom is to override the SHARED file within the
+     * project tier, not to reach the permission path at all. Of the entries
+     * the shared file does carry, only deny/ask survive
+     * ({@see ProjectNarrowingRules}); an allow here would be a project
+     * granting its own session room, which is the exact thing every other
+     * trust line in this file refuses.
+     *
+     * STRICT, at the same bargain as the user files: a shared settings file
+     * that exists and cannot be used REFUSES the launch rather than silently
+     * contributing no rules, because "absent" and "unparseable" look the
+     * same to a tolerant reader and the difference is precisely whether the
+     * project meant to narrow this launch. The one clause that does not
+     * carry over from {@see readPolicyFile()} is the private-file ownership
+     * check — a checked-out file belongs to whoever ran `git clone`, and the
+     * trust grant is what stands in for ownership here. Absent-but-unreadable
+     * (chmod'd away) stays silent, the existing house doctrine for invisible
+     * files.
+     *
+     * Kept per-process so `/permissions` can say which tier each row rode
+     * in on ({@see projectNarrowingRuleSignatures()}); the rules themselves
+     * carry no provenance and a cloned `PermissionRule` cannot grow a field
+     * into the user tier's identity.
+     *
+     * @return list<PermissionRule>
+     *
+     * @throws PermissionConfigException when the trusted shared file exists
+     *         and cannot be used
+     */
+    private static function projectNarrowingRules(): array
+    {
+        $root = LaunchContext::projectRootForSettings();
+        if ($root === null || trim($root) === '' || !self::projectSettingsTrusted($root)) {
+            return [];
+        }
+
+        // The SAME containment walk {@see LayeredSettings::projectFiles()}
+        // takes, so this reader cannot see a shared file the merge itself
+        // would refuse to read — a symlinked `.candy-code` stays out.
+        $shared = null;
+        $decoded = [];
+        foreach (LayeredSettings::projectFiles($root, true) as $path => $contents) {
+            if (str_ends_with((string) $path, '/' . LayeredSettings::SHARED_PATH)) {
+                $shared = (string) $path;
+                $decoded = $contents;
+                break;
+            }
+        }
+
+        if ($shared === null) {
+            return [];
+        }
+
+        if ($decoded === []) {
+            $reason = LayeredSettings::unusableSettingsFileReason($shared);
+            if ($reason !== null) {
+                throw new PermissionConfigException(Lang::t('cli.refuse.project_settings_unusable', [
+                    'path' => $shared,
+                    'reason' => $reason,
+                ]));
+            }
+
+            return [];
+        }
+
+        if (!array_key_exists(self::PERMISSION_RULES_CONFIG_KEY, $decoded)) {
+            return [];
+        }
+
+        // The user tier's OWN strict item-wise parser — same complaints, same
+        // Claude-dialect translation, same skip-with-a-named-index tolerance,
+        // so one grammar is enforced from both tiers.
+        $narrowing = new ProjectNarrowingRules(self::permissionRules($decoded));
+        if ($narrowing->kept === [] && $narrowing->allowsDropped() === 0) {
+            return [];
+        }
+
+        foreach ($narrowing->kept as $rule) {
+            self::$projectNarrowingSignatures[$rule->action->value . ' ' . $rule->pattern] = true;
+        }
+
+        self::warnPermissionConfigInTranscript(Lang::t('appLaunch.notice.project_narrowing_rules', [
+            'file' => $shared,
+            'count' => $narrowing->narrowedRules(),
+            'dropped' => $narrowing->allowsDropped(),
+        ]));
+
+        return $narrowing->kept;
+    }
+
+    /**
+     * Signatures (`action pattern`) of the rules
+     * {@see projectNarrowingRules()} loaded this process, for the tier column
+     * of `/permissions`. Keyed-set so a repeated gate build is idempotent.
+     *
+     * @return list<string>
+     */
+    public static function projectNarrowingRuleSignatures(): array
+    {
+        return array_keys(self::$projectNarrowingSignatures);
+    }
+
+    /**
+     * Drop the per-process project-rule signatures. Launch code never calls
+     * this; the test suite does, because each test owns a different fake
+     * project and the roster has to answer only for the current one.
+     */
+    public static function resetProjectNarrowingRulesForTesting(): void
+    {
+        self::$projectNarrowingSignatures = [];
     }
 
     /**
@@ -7229,9 +7375,12 @@ public static function useMaxCost(?string $maxCost): void
      * `permissionMode`/`permissionRules` of `~/.candy-code/settings.json`
      * ({@see permissionSettingsLayer()}) beneath the whole of `config.json`.
      * Both files are read by {@see readPolicyFile()}, so the strictness is the
-     * same for either — and no project file is consulted at any trust level,
-     * which is the one thing {@see readUserConfig()} does differently and the
-     * one thing it must never do here.
+     * same for either — and no project file reaches THIS merge at any trust
+     * level, which is the one thing {@see readUserConfig()} does differently
+     * and the one thing it must never do here. The one project-side rule
+     * reader is {@see projectNarrowingRules()}, which takes deny/ask entries
+     * only from the trusted project's shared settings file and prepends them
+     * to the merged result — the same policy, narrowed, never widened.
      *
      * @return array<string, mixed>
      *
@@ -8718,7 +8867,7 @@ public static function useMaxCost(?string $maxCost): void
             ));
 
             // REACHABILITY AT THIS SITE IS DRIVEN, not inherited from the other
-            // thirty call sites: {@see chat()} holds no `self::tools(` call of
+            // thirty-one call sites: {@see chat()} holds no `self::tools(` call of
             // its own and gets here transitively through `backend()` ->
             // `tools()` -> {@see mcpTools()} -> this method, then reads
             // {@see launchNotices()} on its last line — so a row recorded now is

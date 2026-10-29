@@ -101,6 +101,12 @@ use SugarCraft\Code\Support\ContainedPath;
  * NOT mean they are unreadable from `~/.candy-code/settings.json`: they are, as
  * of Phase 6 item 4. It means they do not come through THIS class, whose reader
  * is deliberately tolerant. {@see LAYERED_KEYS} carries the full argument.
+ * Since C-SEC-6.b the SAME is true one layer down: the trusted project's
+ * shared settings file contributes its `permissionRules` — deny/ask entries
+ * only, allow entries dropped, prepended so they can narrow and never widen —
+ * through `Bootstrap::projectNarrowingRules()`, again never through this
+ * class's tolerant merge, and `permissionMode` is still read from NO project
+ * file at any trust level.
  *
  * The whitelist is also why nothing decorative can slip
  * in: every key in it is named by a real reader, cited on
@@ -465,9 +471,16 @@ final class LayeredSettings
      * permission keys through {@see merge()} would have handed them that
      * tolerance. They are read instead by
      * {@see \SugarCraft\Code\Cli\Bootstrap::permissionSettingsLayer()},
-     * which applies the strict reader to the same user-tier file and no project
-     * file at all, and whose result `Bootstrap::permissionConfigLayers()` puts
-     * BENEATH `config.json`. (`permissionPolicy()` is what this line said
+     * which applies the strict reader to the same user-tier file, and whose
+     * result `Bootstrap::permissionConfigLayers()` puts BENEATH `config.json`.
+     * C-SEC-6.b added the project tier's shared settings file to the STRICT
+     * side of this door — but beside it, not inside it:
+     * `Bootstrap::projectNarrowingRules()` reads that one file's
+     * `permissionRules` under the trust grant, keeps deny/ask entries only,
+     * and prepends them to the merged result, so the project can narrow the
+     * session and cannot grant itself anything. `permissionMode` remains
+     * user-tier-only at every trust level, exactly as this paragraph has
+     * always argued. (`permissionPolicy()` is what this line said
      * before, and no such method has ever existed — a `{@see}` naming a symbol
      * that is not there is the same defect as a decorative config key, one
      * layer up: it reads as a reader and is not one.) Listing these keys here
@@ -1299,7 +1312,16 @@ final class LayeredSettings
 
         if ($root !== null && trim($root) !== '') {
             foreach (self::projectFiles($root, true) as $path => $decoded) {
-                $rows = [...$rows, ...self::auditTopLevelKeys((string) $path, $decoded, self::PROJECT_TIER_KEYS)];
+                // C-SEC-6.b: the shared file IS read for `permissionRules`
+                // now — deny/ask entries only, under the trust grant, by
+                // `Bootstrap::projectNarrowingRules()` — so for this one file
+                // the key is allowed and its value shape gets the schema
+                // check; the local sibling stays unread for rules and still
+                // earns the wrong-tier row.
+                $allowed = str_ends_with((string) $path, '/' . self::SHARED_PATH)
+                    ? [...self::PROJECT_TIER_KEYS, 'permissionRules']
+                    : self::PROJECT_TIER_KEYS;
+                $rows = [...$rows, ...self::auditTopLevelKeys((string) $path, $decoded, $allowed)];
 
                 // v1 F-4: a corrupt project-tier file used to fail open with
                 // no word while a corrupt USER file is an exit-2 fatal. The
@@ -1348,8 +1370,12 @@ final class LayeredSettings
      * cannot be read at all stays silent: the existing doc-block in
      * {@see readFile()} argues that chmod'd-away invisibility is deliberate,
      * and v1 F-4 is about announcing corruption in files we can see.
+     *
+     * PUBLIC since C-SEC-6.b: `Bootstrap::projectNarrowingRules()` uses it to
+     * tell an absent shared file (contributes nothing, silent) from a corrupt
+     * one (refuses the launch) without re-implementing the byte-read judgment.
      */
-    private static function unusableSettingsFileReason(string $path): ?string
+    public static function unusableSettingsFileReason(string $path): ?string
     {
         if (!is_file($path)) {
             return null;

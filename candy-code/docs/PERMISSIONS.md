@@ -129,7 +129,7 @@ to `default` on import (see
 
 ```
 0. rm -rf / | rm -rf ~ circuit breaker      →  Deny, unconditionally
-1. your permissionRules, first match wins   →  Allow | Deny | Ask
+1. permissionRules — trusted-project deny/ask first, then yours — first match wins   →  Allow | Deny | Ask
 2. the mode's evaluator
 ```
 
@@ -608,6 +608,25 @@ index — `permissionRules[2] ('Write') has no valid 'action' … rule skipped
 rather than coerced`. A `permissionRules` key that is not a list at all loads
 zero rules and says so.
 
+**A trusted project can narrow these rules, never widen them** (C-SEC-6.b).
+Under `trustedProjectSettings`, the project's own `.candy-code/settings.json`
+is read for `permissionRules` by `Bootstrap::projectNarrowingRules()`: its
+`deny` and `ask` entries load **ahead of yours** — the gate answers
+first-match-wins, so a project `deny` cannot be beaten by a user `allow` — and
+its `allow` entries are dropped, because a project granting its own session
+room is the self-grant every other trust line in this app refuses. The drop is
+announced: one launch notice names the file, how many rules it added, and how
+many allows it could not honour. This reader shares the user tier's strict
+bargain — a shared settings file that exists and cannot be used **refuses the
+launch** rather than silently contributing nothing (with one clause dropped:
+the private-file ownership check makes no sense for a checked-out file, and the
+trust grant is what stands in for it) — and it shares the same item-wise
+parser, so the malformed-entry rows above are identical from both tiers. The
+`settings.local.json` sibling is not read for rules at all, `permissionMode`
+is read from no project file at any trust level, and `doctor`'s audit counts
+`permissionRules` as an allowed key of the shared file only. `/permissions`
+rows carry a tier column naming which list each rule rode in on.
+
 ### Pattern matching: a tool name, plus an optional argument glob
 
 A pattern is `Tool` or `Tool(argument-glob)`, and both halves are `fnmatch()`
@@ -988,8 +1007,9 @@ situations, not two:
   wins**, and a later one is refused `already_resolved` with the winner. A
   client that reconnects is handed every question still open, whatever its
   cursor. `always` is remembered for that session exactly as `a` is in
-  the TUI (`remember: "project"` is refused — permission rules are user-tier
-  only), `remember: "user"` answers `always` and saves the question's
+  the TUI (`remember: "project"` is refused — saving an allow rule to a
+  project file is not offered: a project file can only narrow a session with
+  deny/ask rules), `remember: "user"` answers `always` and saves the question's
   patterns as allow-rules in your user config exactly as `p` does (effective
   next launch; reported in the answer's `saved`, and `permission.forget`
   takes one back out), and a reject sent with `cascade: true` rejects the session's other

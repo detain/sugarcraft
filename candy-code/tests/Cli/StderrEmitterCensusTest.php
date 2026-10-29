@@ -230,12 +230,12 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * application does not write one. `Bootstrap`'s warnings are handed to
  * {@see \SugarCraft\Code\Cli\Bootstrap::STDERR_LINE_FORMAT}, which adds the
  * prefix on the way out, so the message literals are invisible to a scan for
- * it — FORTY-THREE call sites in `src/Cli/Bootstrap.php` (f-app-launch 2026-10-14
+ * it — FORTY-FOUR call sites in `src/Cli/Bootstrap.php` (f-app-launch 2026-10-14
  * added three: the rv-sec-1 bypass banner, the rv-sec-3 policy-freshness notice
  * and the rv-enduser-1 unselectable-override row; PLG-1 added three more: the
  * bundles() warning drain and the two declined-surface notices, and C-SEC-7.d
  * three more still: autoReviewModel's not-a-string, bad-shape and unusable
- * warnings), each producing a
+ * warnings, and C-SEC-6.b one more: the project-narrowing notice), each producing a
  * distinct `candy-code: ` line, against a channel-4 credit of eight for that
  * file (ISS-026's envelope-carrying resume notice joined the six as a raw
  * fwrite line, and its rv6 `--resume` pick twin joined the seven). Off by
@@ -619,7 +619,10 @@ final class StderrEmitterCensusTest extends TestCase
         // the override is malformed, the session is intact, and the reviewer
         // simply stays OFF rather than burning money on a half-understood
         // guess.
-        'src/Cli/Bootstrap.php' => 43,
+        // +1 in C-SEC-6.b: the project-narrowing notice rides the transcript
+        // seam from projectNarrowingRules() — the same routing as the
+        // bypass-mode banner it sits beside in the gate build.
+        'src/Cli/Bootstrap.php' => 44,
     ];
 
     /**
