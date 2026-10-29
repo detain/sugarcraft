@@ -1114,6 +1114,13 @@ window follows it live through the event feed, keyed by `turnId`, so a foreign
 turn's deltas fold into the window's history when it completes and never
 interleave with a turn this window itself queued.
 
+A served session can also teleport work outward. `/handoff --remote <url>`
+exports its transcript over `session.import` to another serve and prints the
+`candy-code attach <new-id> --url <url>` line that drives it there, leaving
+the local session untouched; the token is the one `attach` reads (see
+`docs/COMMANDS.md`). The upgrade is refused before any socket opens unless
+the target is loopback `ws://` or TLS `wss://`.
+
 ## Editors (`candy-code acp`)
 
 `candy-code acp` makes candy-code an [Agent Client

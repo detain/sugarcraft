@@ -13,15 +13,21 @@ use SugarCraft\Code\Host\CompactionService;
 use SugarCraft\Code\Host\TranscriptStore;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Protocol\Methods\SessionMethods;
 use SugarCraft\Code\Session\EnhancedSessionStore;
+use SugarCraft\Code\Session\Import\RemoteSessionPush;
 use SugarCraft\Code\Session\SessionKind;
 use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Support\TranscriptDigest;
+use SugarCraft\Code\Util\Exporter;
 use SugarCraft\Code\Usage;
 
 /**
  * `/handoff [focus]` (roadmap 5.14c) — carry the work into a NEW session that
  * starts from a state summary of this one, instead of from its whole transcript.
+ * `/handoff --remote <url>` (C-SES-7.g) is the teleport arm: same transcript
+ * question, different answer — the session is exported over `session.import`
+ * to another serve and the attach line for it is reported here.
  *
  * Cline's `/newtask` and Kilo's plan hand-over are the model: when a context is
  * full of dead ends, the cheapest way on is a fresh session that knows only
@@ -104,6 +110,13 @@ final class HandoffHostCommand implements HostCommand
 
         if (Message::agentVisible($context->history) === []) {
             return CommandResult::errorReply($text, Lang::t('host.handoff.nothing_yet'));
+        }
+
+        // C-SES-7.g: the teleport arm reads no backend and forks nothing —
+        // every refusal below happens BEFORE a socket opens.
+        $words = CommandText::words($text);
+        if (($words[0] ?? '') === '--remote') {
+            return self::remote($context, $text, $words);
         }
 
         $backend = $this->summaryBackendSet ? $this->summaryBackend : $context->titleBackend;
@@ -249,9 +262,89 @@ final class HandoffHostCommand implements HostCommand
     }
 
     /**
+     * `/handoff --remote <url>` (C-SES-7.g): teleport this transcript to
+     * another serve. The URL is validated, loopback-lawed, size-bound and
+     * tokened here — all before any socket opens — and the dial itself is
+     * the effect. The local window keeps working where it is: no fork, no
+     * switch, just the `candy-code attach` line to carry on over there.
+     *
+     * @param list<string> $words
+     */
+    private static function remote(CommandContext $context, string $text, array $words): CommandResult
+    {
+        $url = (string) ($words[1] ?? '');
+        if ($url === '' || isset($words[2])) {
+            return CommandResult::errorReply($text, Lang::t('cmd.handoff.remote.usage'));
+        }
+
+        $ws = RemoteSessionPush::websocketUrl($url);
+        if ($ws === null) {
+            return CommandResult::errorReply($text, Lang::t('cmd.handoff.remote.bad_url'));
+        }
+        if (!RemoteSessionPush::dialAllowed($ws)) {
+            return CommandResult::errorReply($text, Lang::t('cmd.handoff.remote.insecure'));
+        }
+
+        $content = Exporter::toJson($context->history);
+        if (!RemoteSessionPush::fitsWithinImportBound($content)) {
+            return CommandResult::errorReply($text, Lang::t('cmd.handoff.remote.too_large', [
+                'size' => (string) strlen($content),
+                'limit' => (string) SessionMethods::IMPORT_MAX_CONTENT_BYTES,
+            ]));
+        }
+
+        $token = RemoteSessionPush::resolveToken();
+        if ($token === null) {
+            return CommandResult::errorReply($text, Lang::t('cmd.handoff.remote.no_token'));
+        }
+
+        $display = self::oneLine($url);
+
+        return CommandResult::reply($text, Lang::t('cmd.handoff.remote.dialling', ['url' => $display]))
+            ->withEffect(CommandEffect::async(
+                self::pushCall((string) $context->sessionId, $content, $ws, $token, $display),
+                self::row(...),
+            ));
+    }
+
+    /**
+     * The teleport as a thunk resolving to a {@see HandoffSeededMsg} — never
+     * rejecting: a refused dial lands as a failure row naming the reason,
+     * a settled one carries the attach line for the new session in $seed.
+     *
+     * @return \Closure(): PromiseInterface<HandoffSeededMsg>
+     */
+    public static function pushCall(string $parentId, string $content, string $wsUrl, string $token, string $display): \Closure
+    {
+        return static function () use ($parentId, $content, $wsUrl, $token, $display): PromiseInterface {
+            return RemoteSessionPush::push($wsUrl, $token, $content)->then(
+                static fn (string $newId): HandoffSeededMsg => new HandoffSeededMsg(
+                    $parentId,
+                    null,
+                    Lang::t('cmd.handoff.remote.attached', ['id' => $newId, 'url' => $display]),
+                    false,
+                    null,
+                    null,
+                    $display,
+                ),
+                static fn (\Throwable $e): HandoffSeededMsg => new HandoffSeededMsg(
+                    $parentId,
+                    null,
+                    '',
+                    false,
+                    null,
+                    self::oneLine($e->getMessage()),
+                    $display,
+                ),
+            );
+        };
+    }
+
+    /**
      * The row a settled handoff lands as on a headless driver, verdict
      * carried (ISS-097): a handoff that opened no session FAILED, and the
-     * renderer paints flagged rows in the error colour.
+     * renderer paints flagged rows in the error colour. The teleport arm
+     * carries no local session id at all, so its verdict rides $error.
      */
     public static function row(mixed $msg): ?Message
     {
@@ -259,16 +352,29 @@ final class HandoffHostCommand implements HostCommand
             return null;
         }
 
-        return Message::assistant(self::describe($msg))->withUiOnly()->withError($msg->sessionId === null);
+        return Message::assistant(self::describe($msg))->withUiOnly()->withError(self::isFailure($msg));
+    }
+
+    /** Whether a settled handoff FAILED, on either arm (the ISS-097 verdict). */
+    private static function isFailure(HandoffSeededMsg $msg): bool
+    {
+        return $msg->remoteUrl !== null ? $msg->error !== null : $msg->sessionId === null;
     }
 
     /**
      * The row a landing adds: where the work went, or why it did not. A TUI
      * that moved onto the new session reads it there; a headless host, whose
      * session id is fixed for life, leaves the new one for a client to open.
+     * A teleport never moved anything locally, so it reports its attach line.
      */
     public static function describe(HandoffSeededMsg $msg): string
     {
+        if ($msg->remoteUrl !== null) {
+            return $msg->error === null
+                ? $msg->seed
+                : Lang::t('cmd.handoff.remote.failed', ['reason' => $msg->error]);
+        }
+
         if ($msg->sessionId === null) {
             return Lang::t('host.handoff.failed', ['reason' => $msg->error ?? Lang::t('host.handoff.no_session_opened')]);
         }

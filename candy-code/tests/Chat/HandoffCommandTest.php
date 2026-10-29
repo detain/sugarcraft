@@ -267,7 +267,7 @@ final class HandoffCommandTest extends TestCase
         $rows = array_values(array_filter(CommandRegistry::slashCommands(), static fn($s): bool => $s->name === 'handoff'));
 
         self::assertCount(1, $rows);
-        self::assertSame('[focus]', $rows[0]->argumentHint);
+        self::assertSame('[--remote <url>|focus]', $rows[0]->argumentHint);
     }
 
     /** @return list<Message> */

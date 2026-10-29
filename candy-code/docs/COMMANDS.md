@@ -419,7 +419,7 @@ edit it by hand.
 | `/goal` | ✓ | | `[<condition>\|clear]` | Work until a condition is met, judged by the title model after every turn |
 | `/grind` | ✓ | | `[<condition>\|clear]` | Like /goal, with a much longer budget of follow-up rounds |
 | `/btw` | ✓ | | `<question>` | Ask the title model a side question about this conversation, kept out of it |
-| `/handoff` | ✓ | | `[focus]` | Continue in a new session that starts from a state summary of this one |
+| `/handoff` | ✓ | | `[--remote <url>\|focus]` | Continue in a new session that starts from a state summary of this one |
 | `/generate` | ✓ | | `<prompt> [--steps N] [--size WxH] [--seed N] [--save]` | Generate an image on the configured SD server |
 | `/generate-form` | | | — | Open the interactive generation form (image and video tabs) |
 | `/sendto` | ✓ | | `<file.png> [--to img2img\|inpaint] [--mask FILE]` | Import a saved PNG's parameters back into the generate form |
@@ -653,6 +653,18 @@ its first turn; the window moves onto it when the summary lands, unless you
 switched away or started a turn meanwhile, in which case it stays and names the
 new session. A headless host opens the session and leaves it for a client to
 open, as it does a `/branch`.
+
+`/handoff --remote <url>` teleports instead of forking: the transcript is
+exported exactly as `/export json` writes it and sent to another
+`candy-code serve` over `session.import`, using the token `candy-code attach`
+reads — from `CANDY_CODE_SERVER_TOKEN` or the server state directory, never
+minted. Nothing moves here: no fork, no switch. The command answers with the
+`candy-code attach <new-id> --url <url>` line that carries on over there. A
+plain `ws://` target is accepted only while it is loopback — off this machine
+the transcript would ride the wire unencrypted, and `wss://` is the remote
+spelling — and a bad URL, a non-loopback `ws://`, a transcript over the
+import bound or a missing token are all refused before a socket opens; a
+refusal mid-dial lands as a clear failure row and changes nothing locally.
 
 `/skills` answers both skills questions. Bare (or `/skills installed`) lists
 every invocable skill the launch discovery loads — built-in, user, project, and
