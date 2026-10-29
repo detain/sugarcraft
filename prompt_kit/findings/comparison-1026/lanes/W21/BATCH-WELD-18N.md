@@ -37,3 +37,10 @@ Per commit: %ae and %ce grepped SEPARATELY (detain@interserver.net each), no Co-
 
 ## 6. State at handoff
 welded_count 235 (unchanged — nothing landed). waves_closed now true: [1..20]. master local = origin + this batch's commits; next wave-close push carries them.
+
+## 7. CLOSEOUT (same tick)
+- Record commit: 612934b77 (%ae + %ce separately grepped detain@interserver.net, single -m, zero trailers, explicit-path `commit -o --` of exactly run-state.json + W21/WAVE-REVIEW-1.md + W21/BATCH-WELD-18N.md).
+- Prunes EXECUTED: branch cc/C-SEC-8.f (was 69567f9dc) + worktree removed; branch cc/C-SES-9.c (was 44946bef0) + worktree removed; `git worktree prune` cleared stale /tmp/opencode/agt4d-base-probe.
+- Post-prune registry (own read): 9 cc/* branches = exactly the live lanes (AGT-4.d AGT-5.f CTX-4.e MCP-4.c PRV-3.d SEC-7.c SES-7.b SES-8.a TOOL-2.e) + 9 matching worktrees; zero weld-* branches. AGT-5.f worktree advanced to 7d5eeda73 (live fixer) — untouched, correctly not weld material.
+- origin still c72edd4a1; local master ahead by this batch — push owed to the W21 close (fixer → r2 review → §3 flip → ff+push, all by the next batch/lead).
+- live=0 (this welder was the only agent I spawned; none needed). VERDICT: DONE-for-scope / lead action owed: dispatch cc-cmp-fixer on master for the WAVE-REVIEW-1 five rows, then fresh W21 r2 wave-reviewer, then close+push batch.
