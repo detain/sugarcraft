@@ -151,6 +151,55 @@ describe('composer # quick-add (C-CTX-3.c)', () => {
     expect(wire.sent('context.instructionWrite')).toHaveLength(0)
   })
 
+  it('an edited draft under the chip appends the EDITED line, not the stale offer', async () => {
+    // Round-1 fix (MINOR-3): Enter re-derives the offer from the current
+    // draft. The stale offered line used to win — and the success then
+    // cleared the edit, so the edited note was lost and the unedited one
+    // landed in the personal file.
+    await wire.connect()
+    const wrapper = await mountAt('s1')
+    await wrapper.setProps({ modelValue: '# first thought' })
+    await wrapper.find(INPUT).trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(wrapper.find(CHIP).exists()).toBe(true)
+    expect(wrapper.find(CHIP).text()).toContain('- first thought')
+
+    await wrapper.setProps({ modelValue: '# second, better thought' })
+    await wrapper.find(INPUT).trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(wire.sent('context.instructionWrite').at(-1)?.params).toMatchObject({
+      sessionId: 's1',
+      path: 'personal',
+      append: '- second, better thought\n',
+    })
+
+    await wire.answer('context.instructionWrite', {
+      path: '/home/op/.candy-code/AGENTS.md',
+      bytes: 27,
+      mode: 'append',
+    })
+    await flushPromises()
+    expect(wrapper.find(CHIP).exists()).toBe(false)
+    expect(wrapper.emitted('update:modelValue')).toEqual([['']])
+    expect(wrapper.emitted('send')).toBeUndefined()
+  })
+
+  it('an edit that leaves the # shape retires the chip and sends as a prompt', async () => {
+    await wire.connect()
+    const wrapper = await mountAt('s1')
+    await wrapper.setProps({ modelValue: '# note' })
+    await wrapper.find(INPUT).trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(wrapper.find(CHIP).exists()).toBe(true)
+
+    await wrapper.setProps({ modelValue: '## prose heading now' })
+    await wrapper.find(INPUT).trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(wrapper.find(CHIP).exists()).toBe(false)
+    expect(wire.sent('context.instructionWrite')).toHaveLength(0)
+    expect(wrapper.emitted('send')?.at(-1)?.[0]).toBe('## prose heading now')
+  })
+
   it('a refused write keeps the chip up with the reason and the draft intact', async () => {
     await wire.connect()
     const wrapper = await mountAt('s1')

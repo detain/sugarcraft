@@ -185,6 +185,15 @@ final class ContextMethods
             }
         }
 
+        // Round-1 fix (MAJOR-1): the sentinel resolves WITHOUT creating (see
+        // personalWriteTarget). The latch below therefore still measures an
+        // absent primary as zero, so a panel save of the ~/.claude/CLAUDE.md
+        // stand-in row refuses `instruction_changed` and costs NOTHING —
+        // an eager 0-byte create before this point made that save refuse AND
+        // mask the stand-in (loadPersonal takes the primary whenever it
+        // exists), evicting the operator's personal instructions while landing
+        // nothing. The empty-file create rides the success path below, whose
+        // $isPersonal ? 0o600 mode arm mints the first write.
         $currentBytes = is_file($target) ? (int) filesize($target) : 0;
         if ($params->has('expectBytes') && $params->int('expectBytes', 0, 0) !== $currentBytes) {
             throw RpcError::of(ErrorCode::Conflict, 'the file on disk now holds a different byte count than the panel measured', 'instruction_changed');
@@ -222,9 +231,12 @@ final class ContextMethods
 
     /**
      * The personal file the sentinel writes, resolved under the same laws as
-     * the TUI's open-arm: owned home, private directory, no symlink, and the
-     * empty 0600 file created on demand so a first quick-add cannot fail on
-     * absence.
+     * the TUI's open-arm: owned home, private directory, no symlink. The file
+     * itself is deliberately NOT created here — a resolve that mints would
+     * leave a refused write an empty primary masking the {@see
+     * InstructionFileLoader::loadPersonal()} stand-in (round-1 MAJOR-1). The
+     * 0600 first-write happens in the success path below, where the absent
+     * file latches zero and the $isPersonal mode arm mints it.
      */
     private static function personalWriteTarget(?string $home): string
     {
@@ -252,13 +264,7 @@ final class ContextMethods
         if (is_link($target)) {
             throw RpcError::of(ErrorCode::Forbidden, 'the personal instruction file is a symlink and will not be written through', 'instruction_symlink');
         }
-        if (!is_file($target)) {
-            try {
-                AtomicFileWriter::write($target, '', 0o600);
-            } catch (\Throwable) {
-                throw RpcError::of(ErrorCode::Conflict, 'the personal instruction file could not be created', 'instruction_write_failed');
-            }
-        }
+
         return $target;
     }
 

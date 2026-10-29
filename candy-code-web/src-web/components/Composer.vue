@@ -726,6 +726,18 @@ function quickAddLine(value: string): string | null {
 function answerQuickAdd(): boolean {
     if (quickAddBusy.value) return true;
     if (quickAdd.value !== null) {
+        // Round-1 fix (MINOR-3): an offer is answered from the DRAFT, not
+        // from the moment the chip was raised. Re-derive the line against the
+        // current modelValue so an edited draft appends the EDITED line —
+        // the stale offer used to win and then clear the edit. A draft the
+        // `#` shape no longer describes retires the chip and the Enter goes
+        // through as a plain send, exactly as the block doc above promises.
+        const fresh = quickAddLine(props.modelValue);
+        if (fresh === null) {
+            cancelQuickAdd();
+            return false;
+        }
+        quickAdd.value = { line: fresh };
         void confirmQuickAdd();
         return true;
     }

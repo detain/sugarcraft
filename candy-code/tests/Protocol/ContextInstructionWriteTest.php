@@ -213,6 +213,56 @@ final class ContextInstructionWriteTest extends TestCase
         self::assertSame(13, $ok['bytes']);
     }
 
+    public function testARefusedSentinelSaveOnTheStandInRowMintsNothingAndKeepsTheStandIn(): void
+    {
+        // Round-1 fix (MAJOR-1): the sentinel must resolve WITHOUT creating.
+        // Pre-fix, personalWriteTarget minted an empty 0600 AGENTS.md before
+        // the expectBytes latch, so a panel Edit of the personal row while it
+        // stands on the ~/.claude/CLAUDE.md fallback refused
+        // `instruction_changed` (latch saw the fresh 0, the panel spelled the
+        // stand-in's bytes) AND left the empty primary in place — which
+        // loadPersonal then prefers, silently evicting the operator's
+        // personal instructions from context while landing nothing. A
+        // refusal must cost nothing, on the sentinel arm too.
+        $standIn = $this->homeRoot . '/.claude';
+        \mkdir($standIn, 0o700, true);
+        \file_put_contents($standIn . '/CLAUDE.md', "personal standing instructions\n");
+        $client = $this->fixture->client();
+        $sessionId = $this->fixture->session($client);
+        $row = $this->listedRow($client, $sessionId, $standIn . '/CLAUDE.md');
+        self::assertSame('personal', $row['tier'], 'the stand-in is listed as the personal row');
+        self::assertSame(31, $row['bytes']);
+        self::assertFalse(\is_file($this->homeRoot . '/.candy-code/AGENTS.md'), 'the fixture carries no primary');
+
+        $reply = $client->request('context.instructionWrite', [
+            'sessionId' => $sessionId,
+            'path' => 'personal',
+            'content' => "edited over the stand-in\n",
+            'expectBytes' => $row['bytes'],
+        ]);
+        self::assertSame(-32009, $reply['error']['code']);
+        self::assertSame('instruction_changed', $reply['error']['data']['kind']);
+        self::assertFalse(\is_file($this->homeRoot . '/.candy-code/AGENTS.md'), 'the refusal minted no primary');
+        self::assertSame("personal standing instructions\n", \file_get_contents($standIn . '/CLAUDE.md'), 'the refusal wrote nothing through the stand-in either');
+
+        // The stand-in is still the personal source: same path, same bytes.
+        $again = $this->listedRow($client, $sessionId, $standIn . '/CLAUDE.md');
+        self::assertSame($row['path'], $again['path']);
+        self::assertSame(31, $again['bytes']);
+
+        // Creation rides the SUCCESS path: an unlatched quick-add write mints
+        // the primary 0600 here, and only now does the primary mask the
+        // stand-in — the operator's own act, not a refused save's side effect.
+        $ok = $client->call('context.instructionWrite', [
+            'sessionId' => $sessionId,
+            'path' => 'personal',
+            'append' => "- earned the hard way\n",
+        ]);
+        self::assertSame((string) realpath($this->homeRoot . '/.candy-code/AGENTS.md'), $ok['path']);
+        self::assertSame(22, $ok['bytes']);
+        self::assertSame('600', \decoct((int) \fileperms($ok['path']) & 0o777), 'a personal file is nobody else\'s');
+    }
+
     public function testExactlyOneOfContentAndAppendMustBeSpelled(): void
     {
         $projectFile = $this->fixture->root . '/AGENTS.md';
