@@ -396,6 +396,7 @@ edit it by hand.
 | `/clear` | ✓ | ✓ | — | Clear the transcript, keeping this session |
 | `/budget` | ✓ | ✓ | `[amount\|off]` | Show this session's reported spend, or cap it |
 | `/usage` | ✓ | | `[7\|30\|all]` | Show the durable spend ledger folded by day and model |
+| `/insights` | ✓ | | `[days]` | Show insights on session activity and spend across the durable store |
 | `/workflow` | ✓ | | — | Run, pause, resume, or inspect a workflow |
 | `/memory` | ✓ | | — | Add, list, search, edit, import, clear, or restore memory entries, and show their history |
 | `/instructions` | ✓ | | `[open <n\|path>]` | List the instruction files this session reads, and open one in the editor |

@@ -87,6 +87,10 @@ final class PaletteSupersetDispatchTest extends TestCase
         // typed readout of the durable ledger, not a panel the palette can
         // pre-open; the cross-launch /budget pairing rides the argument hint.
         'usage' => 'bare /usage is the whole ledger readout; no palette pane exists to open',
+        // C-SES-8.d: /insights (2215 spec) carries the same judgement its own
+        // spec file records — the report is a typed readout of the durable
+        // store (plus a file on the export shelf), not a panel to pre-open.
+        'insights' => 'bare /insights is the whole report readout; no palette pane exists to open',
         // C-CTX-3.a: /instructions (2405 spec) landed after VIS-4 cut this
         // census and no PaletteAction arm was minted for it; the bare form is
         // the list read, `open <n|path>` needs an argument. Since C-EXT-5.b

@@ -53,6 +53,7 @@ final class MenuBarLabelDerivationTest extends TestCase
         'clear' => 'Clear the transcript',
         'budget' => 'Show reported spend',
         'usage' => 'Show the durable spend',
+        'insights' => 'Show insights',
         'workflow' => 'Run, pause, resume',
         'memory' => 'Add, list, search',
         // C-CTX-3.a (2405 spec, registry position between memory and

@@ -10730,6 +10730,7 @@ final class Chat implements Model
         'agent', 'agents', 'memory', 'bg', 'background', 'fork', 'branch', 'sessions', 'theme',
         'mcp', 'websearch', 'pane', 'layout', 'model', 'editor', 'settings', 'config', 'diff',
         'context', 'instructions', 'tokens', 'btw', 'play', 'hooks', 'effort', 'status', 'usage', 'fast',
+        'insights',
     ];
 
     /**
@@ -12739,6 +12740,24 @@ final class Chat implements Model
     {
         return $this->runHostCommand(
             new \SugarCraft\Code\Host\Commands\UsageHostCommand(),
+            $inputText,
+        );
+    }
+
+    /**
+     * `/insights [days]` (GAP-OBS-06): the durable store folded into a report
+     * — activity and spend by day and model, projects, kinds, the unpriced
+     * and imported shares — and its HTML mirror filed on the export shelf
+     * ({@see \SugarCraft\Code\Host\Commands\InsightsHostCommand}). Like
+     * `/export`, it reads the session stores and writes only a file, so
+     * {@see READ_ONLY_COMMANDS} lets it run inside a locked window.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleInsightsCommand(string $inputText): array
+    {
+        return $this->runHostCommand(
+            new \SugarCraft\Code\Host\Commands\InsightsHostCommand(),
             $inputText,
         );
     }
