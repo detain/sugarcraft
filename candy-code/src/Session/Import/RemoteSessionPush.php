@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Session\Import;
 
+use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\Promise;
+use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use RuntimeException;
 use SugarCraft\Code\Cli\Attach;
@@ -47,12 +49,20 @@ final class RemoteSessionPush
         return Attach::websocketUrl($url);
     }
 
-    /** Whether a host names this machine (loopback by name or 127.0.0.0/8). */
+    /**
+     * Whether a host names this machine: loopback BY NAME (`localhost`, `::1`)
+     * or a numeric dotted-quad inside 127.0.0.0/8. The 127. leg matches
+     * OCTETS ONLY (C-SES-7.g r1): `127.attacker.example` starts like an
+     * address but RESOLVES wherever its owner points it, and a plain `ws://`
+     * dial to it would carry the transcript and bearer token in the clear to
+     * exactly the stranger this gate exists to refuse.
+     */
     public static function isLoopbackHost(string $host): bool
     {
         $host = trim($host, '[]');
 
-        return $host === 'localhost' || $host === '::1' || preg_match('/^127\./', $host) === 1;
+        return $host === 'localhost' || $host === '::1'
+            || preg_match('/^127\.(?:[0-9]{1,3}\.){2}[0-9]{1,3}$/', $host) === 1;
     }
 
     /**
@@ -115,15 +125,54 @@ final class RemoteSessionPush
     /**
      * Dial, say hello, import the transcript, and hand back the NEW remote
      * session id. The socket `attach` opened is closed on every settled path
-     * — success, wire error or malformed answer — so a teleport never leaves
-     * a half-open attachment on the target.
+     * — success, wire error, malformed answer or expired answer window — so
+     * a teleport never leaves a half-open attachment on the target.
+     *
+     * THE ANSWER WINDOW. {@see Attach::connect()} bounds only the TCP
+     * connect; without a second bound a target that completes the upgrade
+     * and then stays silent would leave hello()/session.import pending
+     * forever — no final row, socket held (C-SES-7.g r1, HandoffHostCommand
+     * pushCall never applies the await discipline {@see Attach::run()} uses
+     * for this same chain). The handshake-and-import chain therefore rides a
+     * one-shot reject timer defaulting to
+     * {@see Attach::CONNECT_TIMEOUT_SECONDS}, cancelled the moment the chain
+     * settles so a success leaves no pending loop work; E646 shelters LLM
+     * turns from blanket timeouts, this is a connection-phase bound on a
+     * serve round-trip, not one.
+     *
+     * @param ?float $answerBound  widened only so tests can arm a short
+     *                             window; production always uses the default
      *
      * @return PromiseInterface<string>
      */
-    public static function push(string $wsUrl, string $token, string $content, ?LoopInterface $loop = null): PromiseInterface
-    {
-        return Attach::connect($wsUrl, $token, $loop)->then(
-            static function (RemoteSessionHost $host) use ($content): PromiseInterface {
+    public static function push(
+        string $wsUrl,
+        string $token,
+        string $content,
+        ?LoopInterface $loop = null,
+        ?float $answerBound = null,
+    ): PromiseInterface {
+        $loop ??= Loop::get();
+        $bound = $answerBound ?? Attach::CONNECT_TIMEOUT_SECONDS;
+        $deferred = new Deferred();
+        $settled = false;
+        $opened = null;
+
+        $timer = $loop->addTimer($bound, static function () use (&$settled, &$opened, $deferred, $bound): void {
+            if ($settled) {
+                return;
+            }
+            $settled = true;
+            if ($opened instanceof RemoteSessionHost) {
+                $opened->close();
+            }
+            $deferred->reject(new RuntimeException('the teleport target accepted the dial but answered nothing within ' . $bound . ' seconds'));
+        });
+
+        Attach::connect($wsUrl, $token, $loop)->then(
+            static function (RemoteSessionHost $host) use ($content, &$opened): PromiseInterface {
+                $opened = $host;
+
                 return $host->hello()->then(
                     static fn (array $unused): PromiseInterface => $host->call('session.import', [
                         'format' => ImportFormat::CandyCode->value,
@@ -146,7 +195,26 @@ final class RemoteSessionPush
                     },
                 );
             },
+        )->then(
+            static function (string $id) use (&$settled, $timer, $loop, $deferred): void {
+                $loop->cancelTimer($timer);
+                if ($settled) {
+                    return;
+                }
+                $settled = true;
+                $deferred->resolve($id);
+            },
+            static function (Throwable $failure) use (&$settled, $timer, $loop, $deferred): void {
+                $loop->cancelTimer($timer);
+                if ($settled) {
+                    return;
+                }
+                $settled = true;
+                $deferred->reject($failure);
+            },
         );
+
+        return $deferred->promise();
     }
 
     /**
