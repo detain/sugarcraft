@@ -304,9 +304,9 @@ final class ReadPathCensusTest extends TestCase
                 . 'source through resolveRelative()\'s second compare in this same file',
         ],
         'Chat.php|file_get_contents' => [
-            'SELF_LOCATED — a forked child\'s result file, named by Support\ToolIpcFiles',
-            'SELF_LOCATED — takeIpcPayload(): the same ToolIpcFiles-named payload shape, read once and '
-                . 'discarded by the tool fan-out and the turn-hook fork alike',
+            'SELF_LOCATED — takeIpcPayload(): a forked child\'s result payload named by '
+                . 'Support\ToolIpcFiles, read once and discarded by the tool fan-out and the '
+                . 'turn-hook fork alike (both call the one helper)',
             'USER_TYPED — pastedImagePath() sniffs 16 bytes of a path the user pasted or dropped, to '
                 . 'tell an image from text',
             'CONTAINED_UPSTREAM:Agents/AgentPresetRegistry.php — C-AGT-4.b\'s presentsAsPrimary() '
