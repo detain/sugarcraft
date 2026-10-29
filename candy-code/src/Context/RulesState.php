@@ -77,6 +77,22 @@ use InvalidArgumentException;
  * names is not a place where a user grants or withholds a repository's authority.
  * The cost is symmetric and stated: a project rule whose filename collides with
  * a pack name is NOT silenced by `/rules <that name>`.
+ *
+ * THE SECOND SWITCH, AND THE ONE-OF-ONE LAW (C-CTX-4.e). Output styles are
+ * rulebook-kind files walked from the two styles directories; a style is
+ * addressed not by the disabled set but by {@see $activeStyle}, a single
+ * nullable slot: AT MOST ONE style rides the prompt per session, selecting a
+ * second replaces the first, and `off` clears the slot. The slot lives in this
+ * class rather than in a directory scan because the splice and the listing must
+ * read one stored fact, not re-derive it - the same reason the disabled set is
+ * a field here. A style file that disables itself in frontmatter stays out
+ * whichever name is selected: the frontmatter wins over session intent for every
+ * file in this family, no exceptions. Styles deliberately bypass the disabled
+ * set in both directions: `/rules` neither lists nor silences them (its listing
+ * reads the four pack-family walk methods, and the styles walk is not one of
+ * them), and a config-seeded `disabledRules` entry naming a style file cannot
+ * substitute for `/output-style off` - the two
+ * switches stay orthogonal so their answers cannot disagree.
  */
 final class RulesState
 {
@@ -93,6 +109,14 @@ final class RulesState
      * @var list<string>
      */
     private array $disabled = [];
+
+    /**
+     * The ONE output style selected for this session by `/output-style`
+     * (C-CTX-4.e), as the exact file-stem key {@see Rule::$key}; null when no
+     * style is active. A field rather than derived state because the splice and
+     * the listing must answer from one stored fact.
+     */
+    private ?string $activeStyle = null;
 
     /**
      * @param list<string> $disabled pack identities to start off; every entry is
@@ -170,9 +194,53 @@ final class RulesState
     }
 
     /**
-     * The rule as the prompt should see it: unchanged when it is already off or
-     * outside the toggleable tier, a disabled CLONE when this session turned its
-     * pack off.
+     * The style selected for this session, or null when none is - the exact
+     * key the splice compares against ({@see effectiveRule()}).
+     */
+    public function activeStyle(): ?string
+    {
+        return $this->activeStyle;
+    }
+
+    /**
+     * Select one output style by key for this session (C-CTX-4.e). Calling
+     * this again REPLACES the previous selection - the one-of-one law is a
+     * property of the field shape, not of any check: there is a single slot, so
+     * no second style can ride alongside the first, and clearing is
+     * {@see clearStyle()} rather than a magic name.
+     *
+     * The command layer only ever selects a key it found on disk; this
+     * validation is the boundary the headless callers share - parse-don't-validate,
+     * same discipline as {@see disable()}.
+     *
+     * @throws InvalidArgumentException on a blank or non-string name
+     */
+    public function setStyle(string $style): void
+    {
+        $this->activeStyle = self::parseStyle($style, 'RulesState::setStyle()');
+    }
+
+    /**
+     * Drop the session's style selection (`/output-style off`); selecting
+     * another style replaces the slot in one act and never passes through here.
+     */
+    public function clearStyle(): void
+    {
+        $this->activeStyle = null;
+    }
+
+    /**
+     * The rule as the prompt should see it.
+     *
+     * A style rule ({@see Rule::$style}, C-CTX-4.e) takes the branch this class
+     * exists to centralise: it rides iff the file's own frontmatter is enabled
+     * AND its key is the single active style - the frontmatter wins over
+     * selection, an unselected style returns as its own disabled clone so both
+     * switches spell the same answer, and the disabled set is never consulted
+     * for a style.
+     *
+     * Everything else: unchanged when it is already off or outside the
+     * toggleable tier, a disabled CLONE when this session turned its pack off.
      *
      * Returns a new instance through {@see Rule::withEnabled()} rather than
      * editing anything, so {@see RuleLoader::load()}'s dedup ledger and the
@@ -180,6 +248,14 @@ final class RulesState
      */
     public function effectiveRule(Rule $rule): Rule
     {
+        if ($rule->style) {
+            if ($this->activeStyle !== null && $rule->key === $this->activeStyle) {
+                return $rule;
+            }
+
+            return $rule->enabled ? $rule->withEnabled(false) : $rule;
+        }
+
         if (!$rule->enabled || $rule->tier !== self::TOGGLEABLE_TIER || !$this->isDisabled($rule->key)) {
             return $rule;
         }
@@ -203,5 +279,23 @@ final class RulesState
         }
 
         return $pack;
+    }
+
+    /**
+     * Accept only a usable style name, and say which caller supplied the junk.
+     *
+     * @throws InvalidArgumentException
+     */
+    private static function parseStyle(mixed $style, string $cameFrom): string
+    {
+        if (!is_string($style) || trim($style) === '') {
+            throw new InvalidArgumentException(sprintf(
+                'An output style name must be a non-blank string, %s given (%s).',
+                get_debug_type($style),
+                $cameFrom,
+            ));
+        }
+
+        return $style;
     }
 }

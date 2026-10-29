@@ -1792,8 +1792,11 @@ final class DocFigureProseDriftTest extends TestCase
      * the two sites quoting ONE history must not fork, the one-decimal ratio
      * must survive its own pair, and RuleLoader's file-count/walk-ceiling sum
      * must stay the live product of the caps. INT-2 flipped this arm's last
-     * leg: with seven walked directories the cap product (449 x MAX_FILE_BYTES
-     * = 29,425,664) now EXCEEDS the historical 12,724,235, so the "can no
+     * leg, and C-CTX-4.e widened it again: with the seven walked directories
+     * INT-2 left, the cap product (449 x MAX_FILE_BYTES
+     * = 29,425,664) already EXCEEDED the historical 12,724,235; with the nine
+     * the styles brought (577 x MAX_FILE_BYTES = 37,814,272) it does so by more,
+     * so the "can no
      * longer emit" claim rests on the splice budget, not the walk — which is
      * exactly what the reworded sentence says, and what the re-polarised
      * assertion pins (cb's held row, promoted, re-derived).

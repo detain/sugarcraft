@@ -117,20 +117,22 @@ use SugarCraft\Code\Support\ProjectRoot;
  * order, so the files that survive them are the same on every machine.
  *
  * THE AGGREGATE ARITHMETIC OF THE FILE CAP, stated out loud because P6.S3 added a
- * directory to the walk, INT-2 added four more, and a reader is entitled to do
+ * directory to the walk, INT-2 added four more, C-CTX-4.e added two more, and a
+ * reader is entitled to do
  * the sum without opening the loop: the counter is LOCAL TO ONE
  * {@see loadFromDirectory()} CALL, so the
- * ceiling a single `load()` can spend is (directories walked x MAX_FILES) = 7 x 64
- * = 448 reads - user `rules`, user `rulebooks`, user `~/.claude/rules`, user
- * `~/.cursor/rules`, project `rules`, project `.claude/rules`, project
+ * ceiling a single `load()` can spend is (directories walked x MAX_FILES) = 9 x 64
+ * = 576 reads - user `rules`, user `rulebooks`, user `styles`, user
+ * `~/.claude/rules`, user
+ * `~/.cursor/rules`, project `rules`, project `styles`, project `.claude/rules`, project
  * `.cursor/rules` - plus the root
  * tier's single `RULES.md`, which has no walk to count it but is no uncapped
  * outlier either: the root file reaches the same {@see readRule()} stat-before-read
- * gate, so all 449 files this sum can name are bounded at {@see MAX_FILE_BYTES}
+ * gate, so all 577 files this sum can name are bounded at {@see MAX_FILE_BYTES}
  * each. What the walk's caps never bounded was the SPLICE, and FU5 closed that:
  * {@see Runtime::MAX_STANDING_RULE_BYTES} prices the standing loops at 65,536
  * framed post-escape bytes per prompt build and defers the overflow to pointer
- * lines, so the 449-file worst case can no longer emit its own 29,425,664-byte
+ * lines, so the 577-file worst case can no longer emit its own 37,814,272-byte
  * walk ceiling, let alone the 12,724,235 raw bytes
  * (20,313,188 after escape) the pre-FU5 splice actually pushed. Per-directory is the
  * semantics kept, deliberately and after measurement: the P6.S2 finding this cap
@@ -329,9 +331,11 @@ final class RuleLoader
         $ordered = [
             ...$this->loadUserRules(),
             ...$this->loadUserRulebooks(),
+            ...$this->loadUserStyles(),
             ...$this->loadUserClaudeRules(),
             ...$this->loadUserCursorRules(),
             ...$this->loadProjectRules(),
+            ...$this->loadProjectStyles(),
             ...$this->loadProjectClaudeRules(),
             ...$this->loadProjectCursorRules(),
             ...$this->loadRootRules(),
@@ -372,7 +376,11 @@ final class RuleLoader
             // reached later must not resurrect it as an enabled rule) and the
             // `enabled` bit below is the single effective value every read site
             // sees - the same one `/rules` prints.
-            $rule = $this->rulesState?->effectiveRule($rule) ?? $rule;
+            // A state-less loader has no selection machinery, and a style without
+            // machinery is an unselected style: the degenerate case spells itself
+            // the same way RulesState would (C-CTX-4.e), so a style file can never
+            // splice through a caller that forgot to thread the session's state.
+            $rule = $this->rulesState?->effectiveRule($rule) ?? ($rule->style ? $rule->withEnabled(false) : $rule);
 
             if (!$rule->enabled) {
                 continue;
@@ -522,6 +530,55 @@ final class RuleLoader
     }
 
     /**
+     * Tier 1d - `~/.candy-code/styles/*.md`, the output styles `/output-style`
+     * selects one of (C-CTX-4.e).
+     *
+     * THE SAME TIER, A DIFFERENT SWITCH. The provenance argument that files
+     * rulebooks under `user` applies unchanged: these bytes are written by the
+     * operator of this machine inside their own home directory, so they render
+     * behind `USER_RULES_AUTHORITY_PREAMBLE` like every other user-tier pack.
+     * What separates this directory from `rulebooks/` is not trust but the
+     * switch that addresses it: rulebooks are many-at-a-time toggles consulted
+     * through the disabled set, a style is a one-of-one selection consulted
+     * through {@see RulesState::activeStyle()}. Selection is a RulesState fact,
+     * not a tier fact - which is why the walk only sets {@see Rule::$style} and
+     * the filter lives in {@see RulesState::effectiveRule()} beside its twin.
+     *
+     * The bit is set at the walk, so a file MOVED between `rulebooks/` and
+     * `styles/` changes which switch addresses it; the directories are disjoint
+     * and each file is walked once, so a key can never carry both meanings.
+     *
+     * Loaded after {@see loadUserRulebooks()} and before the foreign imports,
+     * so the operator's native directories always outrank them, exactly as the
+     * rulebook method's own ordering paragraph argues.
+     *
+     * @return list<Rule>
+     */
+    public function loadUserStyles(): array
+    {
+        $home = HomeDirectory::owned();
+        if ($home === null) {
+            $reason = 'Skipping user output styles: this process cannot establish that $HOME is this user\'s own '
+                . 'directory (see HomeDirectory::owned()), so there is no anchor to hold '
+                . '~/.candy-code/styles inside.';
+            $this->report($reason);
+            // Recorded under the literal `~/...` spelling for the reason
+            // loadUserRules() gives for its own: establishing a resolved path is
+            // precisely what failed.
+            $this->refusedPaths['~/.candy-code/styles'] = $reason;
+
+            return [];
+        }
+
+        return $this->loadFromDirectory(
+            $home . '/.candy-code/styles',
+            $home . '/.candy-code',
+            'user',
+            style: true,
+        );
+    }
+
+    /**
      * Tier 1c - `~/.claude/rules/**`, Claude Code's user rules imported (INT-2).
      *
      * THE SAME TIER, A BADGE INSTEAD OF A LABEL. The authorship argument that
@@ -616,6 +673,41 @@ final class RuleLoader
             rtrim($root, '/') . '/.candy-code/rules',
             $root,
             'project',
+        );
+    }
+
+    /**
+     * Tier 2a - `<repoRoot>/.candy-code/styles/*.md`, output styles a clone
+     * ships for `/output-style` to offer (C-CTX-4.e).
+     *
+     * `$root` anchors this exactly as it anchors {@see loadProjectRules()}: the
+     * same containment gate, the same caps, and the same reasoning about a
+     * forged `styles` link escaping the checkout. The difference is only which
+     * switch reads the files: a project style is a PROPOSAL - it reaches the
+     * prompt iff the operator types its name, because {@see
+     * RulesState::effectiveRule()} filters every style by the single selected
+     * key. Cloning a repository therefore cannot put a style on the prompt;
+     * selecting it is the operator's own keystroke, and the tier frames what
+     * they selected as the repository's voice if they select a project file.
+     *
+     * A user-tier and a project-tier style may share a key. Selection is by
+     * key, so one name rides both files at once - the same semantics a name has
+     * always carried across the pack family's separate directories, where the
+     * realpath dedup ledger de-dups FILES, never names. The listing shows the
+     * collision as two rows with their own Source column, and selecting the
+     * shared name says so in a counted note, so nothing is silent.
+     *
+     * @return list<Rule>
+     */
+    public function loadProjectStyles(): array
+    {
+        $root = $this->resolvedRoot();
+
+        return $this->loadFromDirectory(
+            rtrim($root, '/') . '/.candy-code/styles',
+            $root,
+            'project',
+            style: true,
         );
     }
 
@@ -781,7 +873,7 @@ final class RuleLoader
      *
      * @return list<Rule>
      */
-    private function loadFromDirectory(string $dir, ?string $anchoredIn, string $tier, string $origin = Rule::ORIGIN_NATIVE, array $extensions = ['md']): array
+    private function loadFromDirectory(string $dir, ?string $anchoredIn, string $tier, string $origin = Rule::ORIGIN_NATIVE, array $extensions = ['md'], bool $style = false): array
     {
         $realDir = realpath($dir);
         if ($realDir === false || !is_dir($realDir)) {
@@ -906,7 +998,7 @@ final class RuleLoader
             $realPath = (string) realpath($spelled);
             $key = $this->ruleKeyFor($realDir, $realPath);
             $reads++;
-            $rule = $this->readRule($realPath, $tier, $key, $origin);
+            $rule = $this->readRule($realPath, $tier, $key, $origin, $style);
             if ($rule === null) {
                 continue;
             }
@@ -1019,8 +1111,13 @@ final class RuleLoader
      * is enforced on stat BEFORE the read so an oversized file is refused
      * without allocating it, and a file that became unreadable between the walk
      * and the read still falls through to the false-return below.
+     *
+     * `$style` (C-CTX-4.e) is threaded from the walk that found the file — the
+     * directory decides whether a pack is an output style, never the file's own
+     * bytes, so a style cannot self-declare into (or out of) `/output-style`'s
+     * namespace from inside its frontmatter.
      */
-    private function readRule(string $realPath, string $tier, string $key, string $origin = Rule::ORIGIN_NATIVE): ?Rule
+    private function readRule(string $realPath, string $tier, string $key, string $origin = Rule::ORIGIN_NATIVE, bool $style = false): ?Rule
     {
         clearstatcache(true, $realPath);
         $size = @filesize($realPath);
@@ -1061,7 +1158,7 @@ final class RuleLoader
         $content = Utf8Scrub::announced($content, 'rules file ' . basename($realPath));
 
         try {
-            $rule = Rule::new($realPath, $tier, $content, fallbackName: Utf8Scrub::clean($key), key: $key, origin: $origin);
+            $rule = Rule::new($realPath, $tier, $content, fallbackName: Utf8Scrub::clean($key), key: $key, origin: $origin, style: $style);
         } catch (\Throwable $e) {
             $reason = sprintf('Failed to load rule from %s: %s', $realPath, $e->getMessage());
             $this->report($reason);

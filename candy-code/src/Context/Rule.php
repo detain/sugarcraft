@@ -161,6 +161,7 @@ final class Rule
      * @param string           $key         The loader's pack identity for this file - never derived from frontmatter, so a `name:` cannot move what `/rules` types.
      * @param string           $origin      One of {@see ORIGINS} - which directory family the loader walked this file from; provenance for the `/rules` Source column, never an authority level.
      * @param string|null      $disabledBy  Why the PARSE switched this rule off - {@see DISABLED_ALWAYS_APPLY} for an imported `alwaysApply: false` with no patterns, null when it is enabled or its file's own `enabled: false` is the whole story. Set at {@see new()} only; {@see withEnabled()} never writes it, so a session toggle cannot masquerade as a frontmatter disable.
+     * @param bool             $style       C-CTX-4.e: whether this file was walked from an output-styles directory (`~/.candy-code/styles/` or the project's). A style is a rulebook-kind file whose IN-OR-OUT decision is made once per session by `/output-style` instead of toggled alongside every pack, so {@see \SugarCraft\Code\Context\RulesState::effectiveRule()} routes it through the single active-style slot rather than the disabled set. Set at {@see new()} only - which directory family a file came from is provenance the parse knows and no builder may change.
      */
     private function __construct(
         public readonly string $name,
@@ -174,6 +175,7 @@ final class Rule
         public readonly string $key,
         public readonly string $origin = self::ORIGIN_NATIVE,
         public readonly ?string $disabledBy = null,
+        public readonly bool $style = false,
     ) {
     }
 
@@ -199,11 +201,17 @@ final class Rule
      * - and gets the fallback, the one identifier this method already insists
      * every rule has.
      *
+     * `$style` (C-CTX-4.e) is the output-styles family bit, set only by the
+     * loader's styles-directory walks. It is an operand and never derived from
+     * the path here, so which directory a file was walked from stays the
+     * loader's declared fact - one spelling of the boundary, same discipline as
+     * `$origin`.
+     *
      * @throws InvalidArgumentException on a non-mapping frontmatter block, a
      *         non-string `name`/`description`/`models` entry, a non-boolean
      *         `enabled`/`alwaysApply`, or an out-of-range `$tier`/`$origin` operand.
      */
-    public static function new(string $path, string $tier, string $content, string $fallbackName, ?string $key = null, string $origin = self::ORIGIN_NATIVE): self
+    public static function new(string $path, string $tier, string $content, string $fallbackName, ?string $key = null, string $origin = self::ORIGIN_NATIVE, bool $style = false): self
     {
         if (!in_array($tier, self::TIERS, true)) {
             throw new InvalidArgumentException(sprintf(
@@ -285,6 +293,7 @@ final class Rule
             key: $key ?? $fallbackName,
             origin: $origin,
             disabledBy: $disabledBy,
+            style: $style,
         );
     }
 
@@ -398,8 +407,9 @@ final class Rule
      * Reconstruct with selected fields replaced, trusting already-parsed state.
      * Only the fields that have a `with*()` builder are operands here; every
      * other field carries through unchanged, and the ones a builder cannot
-     * touch (identity `name` and pack identity `key`, source `path`/`tier`/`origin`, and the read-only
-     * `description`/`models`/`disabledBy` parsed once from the file) have no parameter to
+     * touch (identity `name` and pack identity `key`, source `path`/`tier`/`origin`,
+     * the read-only `description`/`models`/`disabledBy` parsed once from the file, and the
+     * C-CTX-4.e `style` family bit set by the walking directory) have no parameter to
      * get out of sync.
      */
     private function mutate(
@@ -419,6 +429,7 @@ final class Rule
             key: $this->key,
             origin: $this->origin,
             disabledBy: $this->disabledBy,
+            style: $this->style,
         );
     }
 
