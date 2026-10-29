@@ -11709,7 +11709,10 @@ final class Chat implements Model
     /**
      * The VIS-5 rewrite: turn a typed `/name args` draft into the `$name args`
      * spelling the live mention channel already resolves, or null when this
-     * draft is not that request.
+     * draft is not that request. The gate itself is the shared
+     * {@see \SugarCraft\Code\Skills\SkillSlashInvocation::draft()} (C-WEB-2.b)
+     * — this method is the TUI's one-line call into it, kept for the refusal
+     * notice's {@see skillInvocationDraft()} cite.
      *
      * WHY A REWRITE AND NOT A SECOND DISPATCHER: `$name` is where skill bodies
      * attach ({@see \SugarCraft\Code\Skills\SkillMentions} — registry gate,
@@ -11720,9 +11723,9 @@ final class Chat implements Model
      *
      * THE PRECEDENCE IS THE POSITION, PLUS ONE GUARD: `submit()` calls this
      * only after `dispatchCommand()` and the file-command branch passed on the
-     * name, and the guard re-checks the built-in spellings so a claimed name
-     * whose `accepts()` gate declined the argument (`/exit now`) stays prose
-     * even if a skill were ever named `exit`. The registry, not the disk
+     * name, and the shared gate re-checks the built-in spellings so a claimed
+     * name whose `accepts()` gate declined the argument (`/exit now`) stays
+     * prose even if a skill were ever named `exit`. The registry, not the disk
      * manifest, gates the dispatch — exactly the gate `$name` passes through
      * one layer down, which is what keeps a disabled or non-user-invocable
      * skill from dispatching by the slash door while it cannot by the mention
@@ -11731,57 +11734,7 @@ final class Chat implements Model
      */
     private function skillInvocationDraft(string $text): ?string
     {
-        $token = \explode("\n", \explode(' ', $text, 2)[0])[0];
-        if (preg_match('#^/([A-Za-z][\w:-]*)$#', $token, $shape) !== 1) {
-            return null;
-        }
-
-        $name = \explode(':', $shape[1], 2)[0];
-        if (\SugarCraft\Code\Commands\Specs\BuiltInCommands::forSpelling($name) !== null
-            || \SugarCraft\Code\Commands\Specs\BuiltInCommands::forSpelling(strtolower($name)) !== null
-        ) {
-            return null;
-        }
-
-        $registry = $this->workspace?->skills;
-        if ($registry === null) {
-            return null;
-        }
-
-        // A colon-namespaced skill (`ns:sub`) spells its own name with a
-        // colon, and the head-truncated $name above can never find it —
-        // while the mention channel resolves that spelling freely (the
-        // SkillMentions pattern admits colons). So the colon form is walked
-        // LONGEST NAME FIRST: `/ns:sub extra` reaches ns:sub with `extra`,
-        // `/ns:sub:quickly` still reaches ns:sub with the second colon read
-        // as the separator the way `/shipit:review` always was, and a miss
-        // all the way down ends at the head, where the old lookup lived —
-        // the final candidate is exactly the former $name, so no existing
-        // spelling changes meaning (w3c review m-2).
-        $spelling = $name;
-        $skill = null;
-        $segments = \explode(':', $shape[1]);
-        for ($take = \count($segments); $skill === null && $take >= 1; $take--) {
-            $candidate = \implode(':', \array_slice($segments, 0, $take));
-            $skill = $registry->userInvocable($candidate) ?? $registry->userInvocable(strtolower($candidate));
-            if ($skill !== null) {
-                $spelling = $candidate;
-            }
-        }
-        if ($skill === null) {
-            return null;
-        }
-
-        // The name ends where the matched spelling ends, so everything typed
-        // after it — space form, colon form, or newline — becomes the
-        // mention's argument text.
-        $rest = \substr($text, 1 + \strlen($spelling));
-        if (\str_starts_with($rest, ':')) {
-            $rest = \ltrim(\substr($rest, 1));
-            $rest = $rest === '' ? '' : ' ' . $rest;
-        }
-
-        return '$' . $skill->name . $rest;
+        return \SugarCraft\Code\Skills\SkillSlashInvocation::draft($text, $this->workspace?->skills);
     }
 
     /**

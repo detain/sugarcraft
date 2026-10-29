@@ -1331,7 +1331,26 @@ final class SessionHost
             return TurnTicket::refused($turns->noBackendNotice());
         }
 
-        return $this->admitPrompt($text, $options->resolveMentions, $text, attachments: $options->attachments, modeCeiling: $options->modeCeiling);
+        // C-WEB-2.b: the VIS-5 rewrite on the served route too. A typed
+        // `/name args` whose name a user-invocable skill claims is the same
+        // request as the `$name args` mention spelling, and the shared gate
+        // that answers it in the TUI is
+        // {@see \SugarCraft\Code\Skills\SkillSlashInvocation::draft()}. The
+        // precedence matches `Chat::submit()`: the file-command and built-in
+        // branches above passed on the name, so a command-claimed name is
+        // never rewritten here. The rewrite rides only user-typed text — a
+        // send that declines mention resolution is by definition not that,
+        // and the rewritten `$name` attaches through exactly that channel —
+        // and the typed draft survives as the rewind draft, as in the TUI.
+        $draft = $text;
+        $skilled = $options->resolveMentions
+            ? \SugarCraft\Code\Skills\SkillSlashInvocation::draft($text, $this->workspace->skills)
+            : null;
+        if ($skilled !== null) {
+            $text = $skilled;
+        }
+
+        return $this->admitPrompt($text, $options->resolveMentions, $draft, attachments: $options->attachments, modeCeiling: $options->modeCeiling);
     }
 
     /**

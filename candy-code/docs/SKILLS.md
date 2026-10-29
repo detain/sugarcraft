@@ -642,10 +642,16 @@ mention attaches a file (`Skills\SkillMentions`, resolved by
 between the other doors: `enabledSkills` puts a body in every turn's system
 prompt, the Ctrl+S picker enables a skill for the session, and the model loads
 one on demand with the `Skill` tool. Typing the slash spelling —
-`/security-audit the auth module` — sends the same request: `submit()` rewrites
-a slash draft whose name the registry answers into this mention channel before
-the unknown-command refusal is consulted, so one gate, one
-`$ARGUMENTS` rule, and one `✨ Loaded skill:` row serve both spellings. A
+`/security-audit the auth module` — sends the same request:
+`Skills\SkillSlashInvocation::draft()` rewrites a slash draft whose name the
+registry answers into this mention channel before the unknown-command refusal
+is consulted, so one gate, one
+`$ARGUMENTS` rule, and one `✨ Loaded skill:` row serve both spellings. The
+gate is one shared function, not a TUI-only one: `Chat::submit()` runs it in
+the terminal and a served `session.send` runs the same decision through
+`Host\SessionHost::admit()` before its prompt is admitted (a send that
+declines mention resolution is not user-typed text, so the rewrite stays off
+that door too). A
 built-in or command-file name of the same word wins first: the rewrite only
 sees names no command claimed.
 
