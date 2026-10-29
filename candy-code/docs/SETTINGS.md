@@ -464,6 +464,17 @@ mid-session switch onto such a pair states it once in the transcript; and
 The old doc page claimed the tier "rides the reasoning-effort field of every
 request"; the true claim is narrower — every request *this pair* sends.
 
+The same dial has a second hand on it: typing the word `ultrathink` as a whole
+word anywhere in a prompt (`EffortKeyword` is the detector) asks the top tier
+for that one turn — the word stays in the text, the dispatch goes out with
+`EffortGate`'s ceiling-level spelling, and tool continuations inside the turn
+keep it. Nothing is saved: the next turn returns to the configured tier, and a
+pair the verdict refuses simply stays at that tier with one notice row saying
+so. The caveat is in the design: the word is read wherever prose reaches it,
+so a prompt that merely *uses* `ultrathink` outside code fences asks for the
+tier — fenced examples and inline code are skipped precisely so quoting the
+word cannot spend the money.
+
 `secretEnvAllowlist` is the one exception to the credential scrub (audit
 F-E1). Bash, Grep and script hooks inherit your environment **minus** every
 variable whose name matches `*_API_KEY`, `*_TOKEN`, `*_SECRET` or `AWS_*`

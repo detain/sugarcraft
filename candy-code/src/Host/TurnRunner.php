@@ -33,6 +33,12 @@ use SugarCraft\Code\Events\ToolProgress;
 use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Events\UsageUpdated;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Lang;
+use SugarCraft\Code\Providers\EffortBudget;
+use SugarCraft\Code\Providers\EffortGate;
+use SugarCraft\Code\Providers\EffortKeyword;
+use SugarCraft\Code\Providers\FallbackProvider;
+use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Permissions\SessionPermissionMemo;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Background\ActiveSubagentsBlock;
@@ -410,6 +416,57 @@ final class TurnRunner
         };
 
         $runner = $this;
+
+        // C-PRV-3.c: the `ultrathink` keyword — one dispatch, one tier lift.
+        // The LATEST typed row (the same shape the transcript settle reads:
+        // user role, not uiOnly, user-visible, not a tool step) asks for the
+        // top tier by name; the detector ignores the word inside code fences,
+        // inline code, and mere mentions in longer words. The lift rides the
+        // clone THIS dispatch uses: nothing is written to settings, and the
+        // next turn starts from the configured tier again. Tool continuations
+        // keep it for the whole turn — EngineBackend's step loop reads
+        // $this->reasoningEffort on every request, and a re-dispatch
+        // over the extended history still finds this same typed row as the
+        // latest, so the tier re-derives identically. C-PRV-5.a's
+        // EffortBudget::capToCeiling keeps the top tier's token spend legal
+        // on every family that thinks. A pair that shapes nothing gets ONE
+        // notice row instead — only on the first dispatch (the keyword row
+        // last in history), and only through the sink the drain owner
+        // handed in: an unarmed or absent sink keeps dropping (E199).
+        if ($backend instanceof EngineBackend) {
+            $typed = null;
+            $typedIndex = -1;
+            for ($i = \count($history) - 1; $i >= 0; $i--) {
+                $row = $history[$i];
+                if ($row instanceof Message
+                    && $row->role === Role::User
+                    && !$row->uiOnly
+                    && $row->userVisible
+                    && $row->stepId === null
+                ) {
+                    $typed = $row;
+                    $typedIndex = $i;
+
+                    break;
+                }
+            }
+
+            if ($typed !== null && EffortKeyword::present($typed->content)) {
+                if (EffortGate::verdict($backend->provider(), $backend->model())) {
+                    $levels = EffortBudget::levels();
+                    $backend = $backend->withReasoningEffort((string) $levels[\array_key_last($levels)]);
+                } elseif ($typedIndex === \count($history) - 1) {
+                    $named = $backend->provider();
+                    if ($named instanceof FallbackProvider) {
+                        $named = $named->primary();
+                    }
+                    $notices?->record(Lang::t('chat.effort.ultrathink_none', [
+                        'provider' => $named instanceof ProviderInterface ? $named->name() : 'this backend',
+                        'model' => $backend->model(),
+                    ]));
+                }
+            }
+        }
 
         return static function () use ($runner, $backend, $visible, $history, $onToken, $cancellation, $generation, $inbox, $transcripts, $sessionId): PromiseInterface {
             // Roadmap 2.2-2: the session's context ledger rides into the
