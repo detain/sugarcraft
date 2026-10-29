@@ -30,4 +30,4 @@ Base: live tip d9a3dc110 (review ran efb97a1b5; master advanced — every row re
 2. Row 5 (MenuBarLabel) landed as instructions+commit rows, NOT the 'fast' row (already carried by 0da9b5071). Rows re-derived live, order = CommandRegistry::all().
 3. Both enumerated reds (ShellMenuTest :71/:108, MenuBarLabel :92) were proven to predate every W21 batch weld (probe at aa38e06b1^ derived instructions+commit already, rosters never carried them) — riding waves W16..W20 uncured; the live loop cures, exactly the W15 r1→8dab423f0 shape. MAJOR-1's persistFast row is the genuinely W21-routed one; stampBundleRecommendations is W21's own C-EXT-4.d.
 
-Commits: 1 = 77072a840 (census rows + this map). 2 = (next) palette survivor + ShellMenu placements + label roster.
+Commits: 1 = 77072a840 (census rows + this map). 2 = f8f9e6a18 (palette survivor + ShellMenu placements + label roster). Both %ae=%ce=detain@interserver.net, zero Co-Authored trailers. (Map self-update: this line.)
