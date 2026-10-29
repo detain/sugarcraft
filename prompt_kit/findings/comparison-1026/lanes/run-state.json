@@ -281,8 +281,8 @@
   ],
   "status": "RUNNING",
   "tick": "331-batch17-welded (C-MCP-4.d + C-SEC-6.b popped from inflight, count 223->225; weld-17: picks 74c980368+303c87928+fecfe7b4e+6598d32c2, NIT-3/4 doc riders, meta atop 6598d32c2; chain rebased over mid-run origin vhs bot push 17e6b440e; pushed; final tip d258ea4fa + this stamp row; push at ff)",
-  "tip": "93cfa58b9",
-  "updated": "2026-10-29T02:35:00Z",
+  "tip": "678ff50a0",
+  "updated": "2026-10-29T07:00:14Z",
   "wave_loops": {
     "1": "closed r2 CLEAN",
     "16": {
@@ -1135,6 +1135,7 @@
     "C-CTX-2.f",
     "C-CTX-3.a",
     "C-CTX-3.b",
+    "C-CTX-3.c",
     "C-CTX-3.d",
     "C-CTX-3.e",
     "C-CTX-3.f",
@@ -1178,6 +1179,7 @@
     "C-MCP-3.a",
     "C-MCP-3.b",
     "C-MCP-3.c",
+    "C-MCP-3.d",
     "C-MCP-4.a",
     "C-MCP-4.b",
     "C-MCP-4.c",
@@ -1326,7 +1328,7 @@
     "P-TABS.g",
     "P-TABS.h"
   ],
-  "welded_count": 227,
+  "welded_count": 229,
   "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
   "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
   "welder_sessions": {
@@ -1369,20 +1371,10 @@
     "this_run": "welded 100 -> 161; waves closed W10,W11,W12,W13,W14,W15 (W14 96d36db45, W15 15046565a)"
   },
   "batch15_note": "b15 welded 2026-10-29 off 6742a2ad3: c4fb3580f->5e30f5e94 (C-AGT-4.b /agent use + Alt+A primary cycle; zero-conflict, C-AGT-5.b/5.c collision auto-merged BOTH intents; gates 11T/35A + 65T/272A + 265T/3152A EXACT vs REVIEW-1; DUR mint PrimaryAgentSwitchTest 11T/0.51) + 31691640f->5d3b47f05 (C-SES-7.f attached-window server commands + foreign-turn feed; DUR mints x2 5T/2.03 + 3T/1.77; WELD-CURE 3a044bc91 ATTACH_TOKEN -> ACCEPTED_CONST_DUPLICATION, merged-tree DuplicatedTestHelperDrift catch lane+review missed, guard green 14T/198A; gates 8T/74A + 26T/201A(1F standing) + 52T/652A + family 129T/8994A/3F standing-only). Generators all --check rc0; no regen/dist (zero protocol/web-src). Foreign standings recorded not touched: MemoryPromptWiring null-$seen E, ForeignAgentPreset SchedulesCommand roster, OneSidedHomeSandbox CTX-5.a x2 rows, SwallowingCatch MainWorktreeTest x2 (fixer live in main tree). Figure pair + \u00a73 wave marks = battery/wave-loop duty. welded 217; push still owed at wave close.",
-  "weld_pending": {
-    "C-CTX-3.c": {
-      "tip": "93c08ab87",
-      "base": "86f80fef8",
-      "note": "fix round 1 landed (MAJOR sentinels + 2 MINORs, 3 new tests, 5 dirty files); r2 reviewer live; batch-18 if r2 CLEAN"
-    },
-    "C-MCP-3.d": {
-      "tip": "e0ff98c4c",
-      "base": "6742a2ad3",
-      "note": "CRITICAL+3 findings closed in fix commits 925d39ad0+e0ff98c4c; r2 reviewer live; batch-18 if r2 CLEAN"
-    }
-  },
+  "weld_pending": {},
   "last_lead": "fresh-lead-1029-r15",
   "batch16_note": "batch-16 welded 2026-10-29 off 86f80fef8 by survivor welder-16: 12 picks zero-conflict \u2014 C-EXT-5.b 9d0750cd8->7730f0672+7237dafc0->08f72a2df; C-CTX-3.f 72a4003b1->edfc05c72+bac64a612->eef1d908d; C-EXT-3.a 7b416e03d->17560c4ae; C-MCP-2.c 58fff9bb6->2e29b87e1; C-AGT-6.e 15be076bc->eb965c0ea+e4cb6f6ab->c9afb4845; C-SEC-6.d ae2da2543->9806bb91e+bf4155efb->d97938b93. Rider c0bb77e7c = protocol trio regen + dist rebuild. Weld-cures in meta: ReadPathCensus Chat.php takeIpcPayload row; 7 DUR rows minted (PalettePrefillRows 6T/1.389, PermissionAuditMethod 6T/0.585, StandingIntent 22T/0.061, SkillsReload 5T/0.034, AuditLogReader 15T/0.033, PrStatusCache 27T/0.033, SkillRosterDiffTracker 13T/0.003; tsv 1611 rows TAB-format); CTX-3.f seams #1 (MemoryStore when: round-trip) + #2 (/memory intents heading + lang key) landed w/ 2 new pins + 1 flipped pin. Gates merged tip: Palette 229T OK, Skills 871T, Nudge|Rule 917T, PrStatus 28T, Memory|StandingIntent 831T/1F-foreign, guards+census 201T/2F staleness-pair-only, vitest serial 147/147 19 specs, 5 tools rc0. Foreign-inherited reds (ALL proven red at base 86f80fef8, not chased): PermissionsIntroDrift roster, ForeignAgentPresetWiring, ColdResumeFinishedAgent composer-bg, DreamPass chat-schedules, ChatHostLangCatalogue chat.* 6 keys. W19+W20 wave closes this commit (W18 counted per owner directive; S3 W18 row stays open - lead authority). +25T/+21T/+carries figure re-pin = closeout duty. Push at wave close per law.",
   "batch17_note": "batch-17 (WELD-16 survivor): cc/C-MCP-4.d (1ce61c449+3f7a2b93e -> picks 74c980368+303c87928) + cc/C-SEC-6.b (cbe7d05df+403742811 -> picks fecfe7b4e+6598d32c2) welded onto batch-16 meta 44ff31314 then REBASED over mid-run origin vhs bot push 17e6b440e (GIFs only, disjoint from all 39 touched files), wave order W23-then-W24, zero conflicts. Weld rider: Subcommands.php importUsage docblock four->five doors (comment-only). DUR rows minted: SubcommandsMcpImportWriteTest 0.010/10, ProjectNarrowingRulesTest 0.035/5, BootstrapProjectNarrowingRulesTest 0.035/9 (tsv 1614 rows). \u00a74 marks flipped for both steps; \u00a73 W23/W24 rows stay open. Gates: new-file filter 24T/155A OK; Permission band 2298T/2F = ForeignAgentPresetWiring:472 + PermissionsIntroDrift foreign standings only; guard band 527T/8F = standing set (staleness pair + Help/KeyHelp 6F, all foreign). No trio/dist rider needed. welded_count 223->225; both lanes cleared from inflight. Push at wave close: master FF to final weld-16 tip, then origin. NIT riders in meta: en.php permissionRules help discloses trusted-project deny/ask read (NIT-4); PERMISSIONS.md tier-column signature-match sentence (NIT-3); gen-settings-doc rider (notices.transcriptLimit row 49->50 staleness). Evidence collected: lanes/C-SEC-6.b/{BRIEF,FIX-1,REPORT,REVIEW-1,REVIEW-2} + lanes/C-MCP-4.d/{BRIEF,FIX-1,REVIEW-1,REVIEW-2} (pick-committed REPORT deduped). Disclosed: WebFetch.php:635 redirect-veto consults user-tier rules only (reviewer ruling: report, no edit).",
-  "batch18a_note": "welded C-AGT-4.c (3 picks; protocol trio+dist rider 4f827ed71 + SymbolCitationDrift Chat.php Tests\\ cure; no DUR), C-PRV-3.b (2 picks; DUR x2), C-EXT-5.c (2 picks; DUR x2; 5.b collision not materialized). tsv 1614->1618. Gates: php 588T/37412A OK (incl protocol+doc drift guards); vitest 90T green (generated+dormantRoster); dist determinism re-build clean. C-MCP-4.a stale REPORT.md/REVIEW-1.md deletions staged (held lane, BRIEF.md kept). suite-figure staleness pair left red by design (25T/143A re-pin = 7 closeout)."
+  "batch18a_note": "welded C-AGT-4.c (3 picks; protocol trio+dist rider 4f827ed71 + SymbolCitationDrift Chat.php Tests\\ cure; no DUR), C-PRV-3.b (2 picks; DUR x2), C-EXT-5.c (2 picks; DUR x2; 5.b collision not materialized). tsv 1614->1618. Gates: php 588T/37412A OK (incl protocol+doc drift guards); vitest 90T green (generated+dormantRoster); dist determinism re-build clean. C-MCP-4.a stale REPORT.md/REVIEW-1.md deletions staged (held lane, BRIEF.md kept). suite-figure staleness pair left red by design (25T/143A re-pin = 7 closeout).",
+  "batch18b_note": "weld-18b closed C-CTX-3.c + C-MCP-3.d (picks 0b7cac1c4/5ad8f8572 + ab4d3bcb5/2678de8a9/51340c0c3/5aeb66912 on base 103a385aa); protocol trio+dist rider a82e19a4e; DUR rows x2 in 678ff50a0 (McpBackgroundCallTest 15, ContextInstructionWriteTest 11); ReadmeSuiteFigureDrift staleness pair + foreign base-reds (ContainedPathInventory 2 arms, ReadPathCensus Chat.php fgc hunk = W18 fixer domain, ForkedChildReaperAdoptionTest = C-TOOL-3.c debt) carried per disclosures; no \u00a73 flip (W21/W22 partial); NO push (no wave close)."
 }

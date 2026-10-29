@@ -1,0 +1,26 @@
+### C-CTX-3.c — Web instruction editing and `#` quick-add (protocol lane)
+- item: C-CTX-3 (sources: GAP-INS-16 (web half))
+- kind: gap · effort M
+- approach:
+  - New write-scoped method `context.instructionWrite {sessionId, path, content? | append?}`. It is jailed to the paths `context.sources` lists for the session, plus the personal file.
+  - It refuses symlink escapes (`ContainedPath`), and its size is capped at `InstructionFileLoader::MAX_DOCUMENT_BYTES`.
+  - A successful write announces `context.changed` (from C-CTX-2.d,) so the panel refreshes.
+  - Web: each instruction row in the Context panel gets an Edit affordance: a modal textarea, save with conflict detection on the listed byte count. The Composer turns a one-line `#text` into a confirm chip that appends to the personal file through the same method.
+- files.create: `candy-code/tests/Protocol/ContextInstructionWriteTest.php`, `candy-code-web/src-web/components/panels/__tests__/contextPanelEdit.spec.ts`, `candy-code-web/src-web/components/__tests__/composerQuickAdd.spec.ts`
+- files.modify:
+  - `candy-code/src/Protocol/Methods/ContextMethods.php`
+  - `candy-code/src/Protocol/Schema/MethodSchemas.php`
+  - `candy-code/docs/protocol/candy-code.v1.schema.json` (gen)
+  - `candy-code/docs/SERVER.md` (### Methods, gen)
+  - `candy-code-web/src-web/protocol/generated.ts` (gen)
+  - `candy-code-web/src-web/components/panels/ContextPanel.vue`
+  - `candy-code-web/src-web/components/Composer.vue`
+  - `candy-code/docs/MEMORY.md`
+- tests: ContextInstructionWriteTest (listed path writes; unlisted, symlink-escaped and read-scope requests are refused; the size cap holds); the two web specs
+- docs/guards: `ServerProtocolDocumentationDriftTest`, `ProtocolSchemaDriftTest`, both gen `--check`s
+- serialized: [protocol] [docs:SERVER.md] [docs:MEMORY.md] [hot:candy-code-web/src-web/components/Composer.vue] [hot:candy-code-web/src-web/components/panels/ContextPanel.vue]
+- deps: C-CTX-1.a, C-CTX-2.d (adds the `context.changed` event this step uses)
+- phase: normal
+- ruling: none
+- risks: ContextPanel.vue is P-CTX-BREAKDOWN's main file. Sequence this step and that pick in different waves.
+

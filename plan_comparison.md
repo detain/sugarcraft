@@ -2529,7 +2529,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web.md` → `### C-WEB-4.f`
 
-#### C-CTX-3.c — Web instruction editing and `#` quick-add (protocol lane)
+#### ✅ c33e189af+93c08ab87 C-CTX-3.c — Web instruction editing and `#` quick-add (protocol lane) (picks c33e189af->0b7cac1c4, 93c08ab87->5ad8f8572 on weld-18b; one trivial conflict resolved by keeping BOTH (MethodSchemas.php `use` block vs landed AuditLogReader import — disjoint schema entries auto-merged); protocol trio regen + dist rode the batch-18b rider (schema.json -> SERVER.md -> generated.ts -> dist once, §1.8); merged re-gate ContextMethods|ContextInstruction 12T green + vitest serial composerQuickAdd/contextPanelEdit/composerMcpMentions specs (composer coexists with landed MCP-2.c @mcp popup) + generated + dormantRoster, 5 files / 27 tests serial green; DUR row minted Protocol/ContextInstructionWriteTest 11T/1.536s; foreign ContainedPathInventory 2 base-red arms reproduced at base 103a385aa and left (same shape); batch-18b)
 - **Item:** C-CTX-3 (sources: GAP-INS-16 (web half)) · gap · effort M
 - **What:** New write-scoped method `context.instructionWrite {sessionId, path, content? | append?}`. It is jailed to the paths `context.sources` lists for the session, plus the personal file. It refuses symlink escapes (`ContainedPath`), …
 - **Files — create:** `candy-code/tests/Protocol/ContextInstructionWriteTest.php`, `candy-code-web/src-web/components/panels/__tests__/contextPanelEdit.spec.ts`, `candy-code-web/src-web/components/__tests__/composerQuickAdd.spec.ts`
@@ -2701,7 +2701,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-MCP-3.b (W16)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-mcp.md` → `### C-MCP-3.c`
 
-#### C-MCP-3.d — Long MCP calls continue in background
+#### ✅ c3de5c442+9b34f63bd+925d39ad0+e0ff98c4c C-MCP-3.d — Long MCP calls continue in background (picks -> ab4d3bcb5, 2678de8a9, 51340c0c3, 5aeb66912 on weld-18b, all zero-conflict — EngineBackend/TurnInbox/McpCallTool hunks auto-merged beside landed MCP-2.c/MCP-4.d work; merged re-gate McpBackground|McpToolProgress|TurnInbox|DescriptorInheritanceGuard|TreeWideGuardRoster 76T/9141A green; E646 dial boundary 120.0 injectable pinned in-lane; ReadPathCensus registry-sink rows classify clean (+8A); DUR row minted MCP/McpBackgroundCallTest 15T/3.141s; foreign ForkedChildReaperAdoptionTest base-red reproduced at base 103a385aa and left (C-TOOL-3.c debt, owner-visible); §6 ask-relay seam owner-visible note; batch-18b)
 - **Item:** C-MCP-3 (sources: CC-new#2) · feature · effort M
 - **What:** Claude Code moves MCP calls running past 2 minutes to background tasks; candy-code has no equivalent (MCP-N2). A bridged or dispatched call runs in a forked grandchild (the house `Support/ForkedChild` helper). The library's fork …
 - **Files — create:** `candy-code/src/MCP/McpBackgroundCalls.php`, `candy-code/src/Backend/McpBackgroundInbox.php`, `candy-code/tests/MCP/McpBackgroundCallTest.php`

@@ -1,0 +1,25 @@
+### C-MCP-3.d — Long MCP calls continue in background
+- item: C-MCP-3 (sources: CC-new#2)
+- kind: feature · effort M
+- approach: Claude Code moves MCP calls running past 2 minutes to background tasks; candy-code has no equivalent (MCP-N2).
+  - A bridged or dispatched call runs in a forked grandchild (the house `Support/ForkedChild` helper). The library's fork safety already lets any forked process exchange on a shared server.
+  - The turn waits with the existing `onWait` beats.
+  - At 120 s (fixed, CC parity) the tool returns "still running as background MCP job `<id>`; the result will arrive as a message". The grandchild keeps the exchange and writes its result payload under a registry directory (`McpBackgroundCalls`).
+  - A `McpBackgroundInbox` (`TurnInbox`) composed at `EngineBackend.php:5022` delivers finished results at the next step boundary, or the next turn.
+  - Fast calls are byte-identical to today.
+  - `-p` never backgrounds: it waits for the result, as now.
+- files.create: `candy-code/src/MCP/McpBackgroundCalls.php`, `candy-code/src/Backend/McpBackgroundInbox.php`, `candy-code/tests/MCP/McpBackgroundCallTest.php`
+- files.modify: `candy-code/src/Tools/McpToolBridge.php` (`executeWithHeartbeat`), `candy-code/src/Tools/BuiltIn/McpCallTool.php` (`executeWithHeartbeat`), `candy-code/src/Backend/EngineBackend.php` (composite inbox at :5022), `candy-code/lang/en.php` (`mcp.background.*`), `candy-code/docs/MCP.md` (§"Server requests": long calls)
+- tests: create `candy-code/tests/MCP/McpBackgroundCallTest.php`:
+  - a slow stub call returns the background placeholder at the threshold (the threshold is injectable in-test);
+  - the result arrives through the inbox;
+  - a fast call is unchanged;
+  - `-p` waits;
+  - the grandchild is reaped (poll-then-reap).
+- docs/guards: the fork census (`candy-code/tests/Support/ForkedChildExitConventionTest.php`) for the new fork site. Any `proc_open` must go through `ProcessContainment::spawnSpec` and get a `candy-code/tests/Support/DescriptorInheritanceGuardTest.php` roster row. `LangParityTest`.
+- serialized: [lang:mcp.background.] [docs:MCP.md §Server requests] [hot:candy-code/src/Backend/EngineBackend.php] [hot:candy-code/src/Tools/McpToolBridge.php]
+- deps: C-MCP-3.b
+- phase: normal
+- ruling: Background stdio calls hold that server's exchange lock until they finish, so later calls to the same server queue behind them. Accept, or background http/sse servers only?
+- risks: a backgrounded call that never answers is bounded only by `toolTimeout`, which keeps its meaning; the turn no longer blocks on it.
+
