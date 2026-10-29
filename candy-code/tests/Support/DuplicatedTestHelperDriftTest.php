@@ -2629,6 +2629,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      * @var array<string,string>
      */
     private const ACCEPTED_CONST_DUPLICATION = [
+        'ATTACH_TOKEN' => 'The attach family — the backend snapshot suite (predating C-SES-7.f) and its two attached-window siblings, the command-roster suite and the foreign-turn suite — drive three suites against one local fake server that expects one bearer override; the 64-hex value is a server fixture, not a per-suite identity, so a re-roll moves the trio together (adjudicated 2026-10-29, batch-15 weld-cure after the merged-tree battery caught the pair the lane and its review never censused).',
         'BOUND_SECONDS' => 'The shutdown family pins one bound value across several suites; the single-copy bounds other suites wait are the drift polity.',
         'CHUNKED' => 'The crush-media W4.4 pair (the /sendto host command and the PNG-info importer) point at the one chunked-payload fixture; both files sit two levels under the package, so the identical relative path is a single statement about the fixture tree, not a value to diverge.',
         'CORRUPT' => 'The crush-media W5.6 pair (the image-ingress suite and the video-tab suite) point at the one corrupt-PNG fixture under fixtures/img; identical by the same depth argument as CHUNKED, and a re-roll of the fixture moves the pair together.',
