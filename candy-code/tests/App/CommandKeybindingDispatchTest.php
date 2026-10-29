@@ -10,6 +10,7 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\KeyBindingRegistry;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Providers\ProviderInterface;
+use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Tui\Renderer as TuiRenderer;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
@@ -158,6 +159,73 @@ final class CommandKeybindingDispatchTest extends TestCase
             $last->content,
             'the refusal is the ordinary in-flight notice, not a silent drop',
         );
+    }
+
+    public function testTheKeyHelpOverlayListsBoundCommandsUnderTheirOwnHeading(): void
+    {
+        // Review round 1: the renderer's command section was the step's
+        // one output with no pin. The overlay is the only place a user
+        // can audit the commands they bound, so the heading and the
+        // `Ctrl+Z … Runs /keys` row ARE the discoverability promise:
+        // deleting the section (or the commandBindings() consult feeding
+        // it) reddens this, and so does the no-binding arm below growing
+        // a heading on its own.
+        KeyBindingRegistry::useOverrides(['command:keys' => 'Ctrl+Z']);
+
+        $overlay = $this->keyHelpOverlay();
+        $imploded = implode("\n", $overlay);
+        $this->assertNotEmpty($overlay, 'fixture: the reference must paint at all');
+        $heading = Lang::t('keys.command.heading');
+        $this->assertStringContainsString(
+            $heading,
+            $imploded,
+            'the user\'s own bound commands get a heading of their own',
+        );
+
+        $runs = array_values(array_filter(
+            $overlay,
+            static fn (string $line): bool => str_contains($line, 'Runs /keys'),
+        ));
+        $this->assertNotEmpty($runs, 'the binding is listed as a Runs /keys row');
+        $this->assertStringContainsString('Ctrl+Z', $runs[0], 'the chord rides the same row, spelled as the setting spells it');
+
+        // The section is conditional on there being a section. With no
+        // command bindings the overlay is byte-for-byte the pre-feature
+        // reference: no heading, no Runs row.
+        KeyBindingRegistry::useOverrides([]);
+        $plain = $this->keyHelpOverlay();
+        $this->assertNotEmpty($plain, 'fixture: the shipped reference still paints');
+        $this->assertStringNotContainsString(
+            $heading,
+            implode("\n", $plain),
+            'no command bindings means no command section',
+        );
+        $this->assertStringNotContainsString('Runs /keys', implode("\n", $plain));
+    }
+
+    /**
+     * The overlay's own lines, reached the way {@see \SugarCraft\Code\Tests\Renderer\KeyHelpTest}
+     * reaches them — the private static taken by reflection instead of carved
+     * back out of a composited frame. The frame is made tall on purpose: the
+     * command section is appended LAST, so a viewport that still scrolls the
+     * shipped list would scroll the section out of the pin's reach.
+     *
+     * @return list<string>
+     */
+    private function keyHelpOverlay(): array
+    {
+        $chat = (new Chat())->withSize(100, 200)->withKeyHelp(0);
+
+        $rendered = (new \ReflectionMethod(Renderer::class, 'renderKeyHelp'))
+            ->invoke(null, $chat, $chat->theme(), Renderer::publishedFrame());
+
+        self::assertSame(
+            0,
+            Renderer::keyHelpMaxOffset(),
+            'fixture: the frame is tall enough that the whole reference paints, nothing scrolled out of reach',
+        );
+
+        return $rendered === '' ? [] : explode("\n", $rendered);
     }
 
     private function shell(): App
