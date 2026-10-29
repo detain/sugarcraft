@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tools;
 
+use SugarCraft\Code\Context\McpOutputFence;
 use SugarCraft\Code\Events\ToolProgress;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Lang;
@@ -609,6 +610,8 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat, RelaysPermissionAsk
             $raw,
             $id,
             $start,
+            $this->descriptor->serverName,
+            $this->descriptor->name,
             fn (string $text): string => $this->truncateOutput($text, $this->maxOutputBytes),
         );
     }
@@ -920,13 +923,18 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat, RelaysPermissionAsk
      * stop at the permission gate. `TruncatesOutput` is trait-private in each
      * class, so the cutter rides in rather than being duplicated.
      *
+     * $server and $tool name the answer's origin for {@see McpOutputFence::wrap()}
+     * (C-SEC-8.a): the body is fenced BEFORE $truncate runs, so the provenance
+     * header survives even a clipped answer, and because both call sites pass
+     * the names they dispatched on, the two spellings fence byte-identically.
+     *
      * @param array<string, mixed> $raw
      */
-    public static function replyResult(array $raw, string $id, float|int $start, callable $truncate): ToolResult
+    public static function replyResult(array $raw, string $id, float|int $start, string $server, string $tool, callable $truncate): ToolResult
     {
         return new ToolResult(
             toolCallId: $id,
-            content: $truncate(self::announceUnreadableErrorFlag($raw) . self::renderContent($raw)),
+            content: $truncate(McpOutputFence::wrap(self::announceUnreadableErrorFlag($raw) . self::renderContent($raw), $server, $tool)),
             isError: self::isError($raw),
             durationMs: self::elapsedMs($start),
         );

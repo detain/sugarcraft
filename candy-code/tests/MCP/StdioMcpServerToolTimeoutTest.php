@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\MCP;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Context\McpOutputFence;
 use SugarCraft\Code\MCP\McpClient;
 use SugarCraft\Code\MCP\McpTrustPins;
 use SugarCraft\Code\MCP\StdioMcpServer;
@@ -92,7 +93,7 @@ final class StdioMcpServerToolTimeoutTest extends TestCase
         $result = $this->bridge([])->execute(['seconds' => 1.2]);
 
         self::assertFalse($result->isError());
-        self::assertSame('rested', $result->content());
+        self::assertSame(McpOutputFence::wrap('rested', 'slow', 'nap'), $result->content());
     }
 
     /**
@@ -139,7 +140,7 @@ final class StdioMcpServerToolTimeoutTest extends TestCase
         $result = $this->bridge(['toolTimeout' => 10])->execute(['seconds' => 0.1]);
 
         self::assertFalse($result->isError());
-        self::assertSame('rested', $result->content());
+        self::assertSame(McpOutputFence::wrap('rested', 'slow', 'nap'), $result->content());
     }
 
     /** @return iterable<string, array{mixed, ?float}> */

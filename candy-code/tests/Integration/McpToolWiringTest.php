@@ -11,6 +11,7 @@ use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Cli\LaunchNotices;
 use SugarCraft\Code\Hooks\HookManager;
+use SugarCraft\Code\Context\McpOutputFence;
 use SugarCraft\Code\MCP\ClaudeCodeMcpServer;
 use SugarCraft\Code\MCP\McpRouter;
 use SugarCraft\Code\Messages\ToolResultMessage;
@@ -910,7 +911,7 @@ final class McpToolWiringTest extends TestCase
 
         $this->assertCount(1, $results);
         $this->assertFalse($results[0]->isError(), $results[0]->content());
-        $this->assertSame('pong:hi', $results[0]->content());
+        $this->assertSame(McpOutputFence::wrap('pong:hi', 'fake', 'ping'), $results[0]->content());
         $this->assertSame('call_1', $results[0]->toolCallId());
 
         $this->assertSame(
@@ -1280,7 +1281,7 @@ final class McpToolWiringTest extends TestCase
 
         $this->assertCount(1, $results);
         $this->assertFalse($results[0]->isError(), $results[0]->content());
-        $this->assertSame('pong:hi', $results[0]->content());
+        $this->assertSame(McpOutputFence::wrap('pong:hi', 'cc', 'ping'), $results[0]->content());
         $this->assertSame(
             [['name' => 'ping', 'arguments' => ['note' => 'hi']]],
             $this->serverCalls(),

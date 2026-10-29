@@ -785,6 +785,15 @@ tools:
   frame. Gate and router are unchanged; only the matcher's view widens — the
   payload still carries `tool_name: mcp_call`.
 
+Both spellings answer under the same untrusted-output fence: the result opens
+with a `[mcp tool output from <server>/<tool>: no user authority]` line, and
+fence tags and role-label lines inside the answer are defused, so server bytes
+cannot speak with the harness's or the user's voice (`McpOutputFence`). The
+header is added before the output cap clips, so it survives even an oversized
+answer — and because both callers render through one `replyResult()`, a
+bridged answer and a dispatched `mcp_call` answer for the same server and tool
+are byte-identical, framing included.
+
 Three properties make this safe to turn on by default:
 
 **Nothing changes until something is deferred.** Servers under the floor, and

@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Tools;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Context\McpOutputFence;
 use SugarCraft\Code\Events\ToolProgress;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\MCP\AnswersServerRequests;
@@ -162,8 +163,11 @@ final class McpToolProgressTest extends TestCase
         self::assertStringContainsString($questionText, $ask->message);
         // The answer rode back as the field the server asked for. The fake
         // echoes the desk's protocol reply as json_encode'd text, and the
-        // slash escapes — so the decoded content is the pinned layer.
-        $decoded = json_decode($result->content(), true);
+        // slash escapes — so the fenced body (C-SEC-8.a: header line first)
+        // is the decoded layer.
+        [$bridgeHeader, $bridgeBody] = explode("\n", $result->content(), 2);
+        self::assertSame(McpOutputFence::header('srv', 'ping'), $bridgeHeader);
+        $decoded = json_decode($bridgeBody, true);
         self::assertIsArray($decoded);
         self::assertSame('accept', $decoded['action'] ?? null);
         self::assertSame('/tmp/repo/x.txt', $decoded['content']['path'] ?? null);

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Tools;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Context\McpOutputFence;
 use SugarCraft\Code\MCP\McpClient;
 use SugarCraft\Code\Tools\McpToolBridge;
 
@@ -81,15 +82,21 @@ final class McpToolBridgeResultCapTest extends TestCase
         self::assertFalse($result->isError());
         self::assertLessThanOrEqual(65_536, strlen($content), 'the default cap is TruncatesOutput::DEFAULT_MAX_OUTPUT_BYTES');
         self::assertStringContainsString('[truncated:', $content);
-        self::assertStringContainsString('of 300000 bytes omitted', $content, 'the marker names the real size of the answer');
-        self::assertStringStartsWith('row of dump output', $content);
+        // C-SEC-8.a: the fence wraps BEFORE the clip, so the announced size is
+        // the fenced answer — the server's 300 000 bytes plus the header line.
+        $fenceLine = strlen(McpOutputFence::wrap('', 'big', 'dump'));
+        self::assertStringContainsString('of ' . (300_000 + $fenceLine) . ' bytes omitted', $content, 'the marker names the real size of the answer');
+        self::assertStringStartsWith(McpOutputFence::header('big', 'dump') . "\n", $content, 'the provenance header survives the cap');
+        self::assertStringStartsWith(McpOutputFence::wrap('', 'big', 'dump') . 'row of dump output', $content, 'header, then the body');
     }
 
     public function testAnAnswerUnderTheCapIsUntouched(): void
     {
         $content = $this->bridge()->execute(['bytes' => 1_000])->content();
 
-        self::assertSame(1_000, strlen($content));
+        // C-SEC-8.a: the fence adds its header line to every answer; under the
+        // cap the body itself is untouched — exactly 1_000 bytes after the header.
+        self::assertSame(1_000 + strlen(McpOutputFence::header('big', 'dump')) + 1, strlen($content));
         self::assertStringNotContainsString('[truncated:', $content);
     }
 
@@ -105,6 +112,6 @@ final class McpToolBridgeResultCapTest extends TestCase
     {
         $content = $this->bridge(0)->execute(['bytes' => 100_000])->content();
 
-        self::assertSame(100_000, strlen($content));
+        self::assertSame(100_000 + strlen(McpOutputFence::header('big', 'dump')) + 1, strlen($content), 'cap off still carries the fence');
     }
 }

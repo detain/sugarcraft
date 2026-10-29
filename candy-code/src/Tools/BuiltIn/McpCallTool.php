@@ -199,6 +199,8 @@ final readonly class McpCallTool implements Tool, BuildsFromCatalog, TakesToolCa
             $raw,
             $id,
             $start,
+            $server,
+            $tool,
             fn (string $text): string => $this->truncateOutput($text, self::DEFAULT_MAX_OUTPUT_BYTES),
         );
     }

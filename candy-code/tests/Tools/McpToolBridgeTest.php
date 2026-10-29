@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Tools;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Context\McpOutputFence;
 use SugarCraft\Code\MCP\McpClient;
 use SugarCraft\Code\MCP\McpServer;
 use SugarCraft\Code\MCP\McpTool;
@@ -153,7 +154,7 @@ final class McpToolBridgeTest extends TestCase
             $this->descriptor(server: 'srv', name: 'do/thing'),
         );
 
-        $this->assertSame('ok', $bridge->execute(['a' => 1])->content());
+        $this->assertSame($this->fenced('ok', tool: 'do/thing'), $bridge->execute(['a' => 1])->content());
     }
 
     public function testTheDescriptorIsReadableBack(): void
@@ -330,7 +331,7 @@ final class McpToolBridgeTest extends TestCase
 
         $result = $this->bridgeOver($server)->execute([]);
 
-        $this->assertSame("first\nsecond", $result->content());
+        $this->assertSame($this->fenced("first\nsecond"), $result->content());
         $this->assertFalse($result->isError());
     }
 
@@ -351,7 +352,7 @@ final class McpToolBridgeTest extends TestCase
 
         $result = $this->bridgeOver($server)->execute([]);
 
-        $this->assertSame("[image: unknown mime, 4 base64 bytes not shown]\ncaption", $result->content());
+        $this->assertSame($this->fenced("[image: unknown mime, 4 base64 bytes not shown]\ncaption"), $result->content());
     }
 
     /** ISS-044: image bytes are COUNTED, never shown, and a stated mime survives. */
@@ -364,7 +365,7 @@ final class McpToolBridgeTest extends TestCase
 
         $result = $this->bridgeOver($server)->execute([]);
 
-        $this->assertSame('[image: image/png, 5000 base64 bytes not shown]', $result->content());
+        $this->assertSame($this->fenced('[image: image/png, 5000 base64 bytes not shown]'), $result->content());
         $this->assertFalse($result->isError());
     }
 
@@ -378,7 +379,7 @@ final class McpToolBridgeTest extends TestCase
 
         $result = $this->bridgeOver($server)->execute([]);
 
-        $this->assertSame('[audio: audio/wav, no data attached]', $result->content());
+        $this->assertSame($this->fenced('[audio: audio/wav, no data attached]'), $result->content());
     }
 
     /**
@@ -394,7 +395,7 @@ final class McpToolBridgeTest extends TestCase
 
         $result = $this->bridgeOver($server)->execute([]);
 
-        $this->assertSame("[resource: file:///note.md]\n# hi", $result->content());
+        $this->assertSame($this->fenced("[resource: file:///note.md]\n# hi"), $result->content());
     }
 
     /** Long text excerpts at the named budget, with the true size announced. */
@@ -409,7 +410,7 @@ final class McpToolBridgeTest extends TestCase
         $result = $this->bridgeOver($server)->execute([]);
 
         $this->assertStringStartsWith(
-            "[resource: r://big]\n" . str_repeat('x', McpToolBridge::MAX_RESOURCE_TEXT_BYTES),
+            McpOutputFence::header('srv', 'ping') . "\n[resource: r://big]\n" . str_repeat('x', McpToolBridge::MAX_RESOURCE_TEXT_BYTES),
             $result->content(),
         );
         $this->assertStringEndsWith(
@@ -430,7 +431,7 @@ final class McpToolBridgeTest extends TestCase
 
         $result = $this->bridgeOver($server)->execute([]);
 
-        $this->assertSame('[resource: r://img: image/jpeg, 4 base64 bytes not shown]', $result->content());
+        $this->assertSame($this->fenced('[resource: r://img: image/jpeg, 4 base64 bytes not shown]'), $result->content());
     }
 
     /** Text wins when a server sends both; a bare resource still names its uri. */
@@ -445,7 +446,7 @@ final class McpToolBridgeTest extends TestCase
 
         $result = $this->bridgeOver($server)->execute([]);
 
-        $this->assertSame("[resource: r://a]\nT\n[resource: r://b]\n[resource]", $result->content());
+        $this->assertSame($this->fenced("[resource: r://a]\nT\n[resource: r://b]\n[resource]"), $result->content());
     }
 
     /** `resource_link` references are name/uri — the useful half of the part. */
@@ -460,7 +461,7 @@ final class McpToolBridgeTest extends TestCase
         $result = $this->bridgeOver($server)->execute([]);
 
         $this->assertSame(
-            "[resource link: spec -> file:///spec.md]\n[resource link: file:///only-uri.md]",
+            $this->fenced("[resource link: spec -> file:///spec.md]\n[resource link: file:///only-uri.md]"),
             $result->content(),
         );
     }
@@ -475,7 +476,7 @@ final class McpToolBridgeTest extends TestCase
 
         $result = $this->bridgeOver($server)->execute([]);
 
-        $this->assertSame('[terminal]', $result->content());
+        $this->assertSame($this->fenced('[terminal]'), $result->content());
     }
 
     /**
@@ -492,7 +493,7 @@ final class McpToolBridgeTest extends TestCase
 
         $result = $this->bridgeOver($server)->execute([]);
 
-        $this->assertSame('[no content]', $result->content());
+        $this->assertSame($this->fenced('[no content]'), $result->content());
         $this->assertFalse($result->isError());
     }
 
@@ -508,7 +509,7 @@ final class McpToolBridgeTest extends TestCase
 
         $result = $this->bridgeOver($server)->execute([]);
 
-        $this->assertSame('[empty content]', $result->content());
+        $this->assertSame($this->fenced('[empty content]'), $result->content());
         $this->assertFalse($result->isError());
     }
 
@@ -523,7 +524,7 @@ final class McpToolBridgeTest extends TestCase
         $result = $this->bridgeOver($server)->execute([]);
 
         $this->assertTrue($result->isError());
-        $this->assertSame('the repo is not clean', $result->content());
+        $this->assertSame($this->fenced('the repo is not clean'), $result->content());
     }
 
     /**
@@ -597,7 +598,7 @@ final class McpToolBridgeTest extends TestCase
         $result = $this->bridgeOver($server)->execute([]);
 
         $this->assertFalse($result->isError());
-        $this->assertSame('ok', $result->content());
+        $this->assertSame($this->fenced('ok'), $result->content());
     }
 
     /**
@@ -641,7 +642,7 @@ final class McpToolBridgeTest extends TestCase
 
         $result = $this->bridgeOver($server)->execute([]);
 
-        $this->assertSame('{"structuredContent":{"rows":2}}', $result->content());
+        $this->assertSame($this->fenced('{"structuredContent":{"rows":2}}'), $result->content());
         $this->assertFalse($result->isError());
     }
 
@@ -700,8 +701,8 @@ final class McpToolBridgeTest extends TestCase
 
         $this->assertSame('mcp__alpha__search', $alphaBridge->name());
         $this->assertSame('mcp__beta__search', $betaBridge->name());
-        $this->assertSame('ANSWERED-BY:ALPHA', $alphaBridge->execute([])->content());
-        $this->assertSame('ANSWERED-BY:BETA', $betaBridge->execute([])->content());
+        $this->assertSame($this->fenced('ANSWERED-BY:ALPHA', 'alpha', 'search'), $alphaBridge->execute([])->content());
+        $this->assertSame($this->fenced('ANSWERED-BY:BETA', 'beta', 'search'), $betaBridge->execute([])->content());
     }
 
     /**
@@ -728,7 +729,7 @@ final class McpToolBridgeTest extends TestCase
             'wanted' => [$wanted, $wantedTool],
         ]);
 
-        $this->assertSame('ok', (new McpToolBridge($client, $wantedTool))->execute(['q' => 'x'])->content());
+        $this->assertSame($this->fenced('ok', 'wanted', 'only_here'), (new McpToolBridge($client, $wantedTool))->execute(['q' => 'x'])->content());
     }
 
     public function testATransportThrowBecomesAnErrorResultRatherThanEscaping(): void
@@ -774,6 +775,12 @@ final class McpToolBridgeTest extends TestCase
     // =========================================================================
     // Helpers
     // =========================================================================
+
+    /** The exact bytes a body must arrive under: fenced for its server and tool. */
+    private function fenced(string $body, string $server = 'srv', string $tool = 'ping'): string
+    {
+        return McpOutputFence::wrap($body, $server, $tool);
+    }
 
     private function descriptor(
         string $server = 'srv',

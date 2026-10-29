@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Permissions;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Context\McpOutputFence;
 use SugarCraft\Code\MCP\McpClient;
 use SugarCraft\Code\MCP\McpTool;
 use SugarCraft\Code\MCP\McpToolShape;
@@ -220,5 +221,74 @@ final class McpDispatchParityTest extends TestCase
         // ordinary catalog arm, not any MCP leg — pinning that the MCP
         // translations above never accidentally speak for it.
         $this->assertSame(PermissionDecision::Allow, $gate->evaluate(new ToolCall('mcp_list', [])));
+    }
+
+    // ---- result level: the fenced answer is one renderer (C-SEC-8.a) ------
+
+    /**
+     * MCP-7 promised the two spellings byte-identical results; C-SEC-8.a
+     * extends that promise THROUGH the untrusted-output fence: bridged and
+     * dispatched answers for the same server and tool must carry the same
+     * `[mcp tool output from ...]` header over the same body. A live stdio
+     * fixture (the only route both spellings really share) answers with one
+     * constant, argument-independent line so the comparison is exact.
+     */
+    public function testTheBridgedAndDispatchedAnswersAreByteIdenticalUnderTheFence(): void
+    {
+        $srv = $this->ruleServer();
+        $dir = sys_get_temp_dir() . '/sc_mcp_fence_' . $srv;
+        mkdir($dir, 0o700, true);
+        file_put_contents($dir . '/answer.php', <<<'PHP'
+            <?php
+            while (($line = fgets(STDIN)) !== false) {
+                $msg = json_decode($line, true);
+                if (!is_array($msg) || !isset($msg['id'])) { continue; }
+                $out = ['jsonrpc' => '2.0', 'id' => $msg['id']];
+                if ($msg['method'] === 'initialize') {
+                    $out['result'] = ['protocolVersion' => '2024-11-05', 'capabilities' => new stdClass(),
+                        'serverInfo' => ['name' => 'answer', 'version' => '0']];
+                } elseif ($msg['method'] === 'tools/list') {
+                    $out['result'] = ['tools' => [['name' => 'answer', 'description' => 'answers',
+                        'inputSchema' => ['type' => 'object', 'properties' => new stdClass()]]]];
+                } elseif ($msg['method'] === 'tools/call') {
+                    $out['result'] = ['content' => [['type' => 'text', 'text' => 'PARITY-ONE-ANSWER']]];
+                }
+                echo json_encode($out), "\n";
+                fflush(STDOUT);
+            }
+            PHP);
+        file_put_contents($dir . '/.mcp.json', (string) json_encode(['mcpServers' => [$srv => [
+            'command' => PHP_BINARY,
+            'args' => [$dir . '/answer.php'],
+        ]]]));
+
+        $client = new McpClient($dir . '/.mcp.json', unrestricted: true);
+        try {
+            $client->startServers();
+            $tools = $client->listTools();
+            $this->assertCount(1, $tools, 'fixture: the server must come up with its one tool');
+
+            $bridge = (new McpToolBridge($client, $tools[0]))->execute([]);
+
+            // The deferred spelling: the same client, a fat descriptor over the
+            // floor so the shape is lazy, and mcp_call addressed at it.
+            $fat = McpTool::fromArray(['name' => 'answer', 'description' => str_repeat('a', 3000)], $srv);
+            $shape = McpToolShape::derive($client, [$fat], [], 10);
+            $this->assertTrue($shape->lazy, 'fixture: the pair must be dispatched, not first-class');
+            $dispatched = (new McpCallTool($shape))->execute(['server' => $srv, 'tool' => 'answer', 'arguments' => []]);
+
+            $this->assertFalse($bridge->isError());
+            $this->assertFalse($dispatched->isError());
+            $this->assertSame($bridge->content(), $dispatched->content(), 'one capability, one renderer, one fence');
+            $this->assertStringStartsWith(
+                McpOutputFence::header($srv, 'answer') . "\nPARITY-ONE-ANSWER",
+                $bridge->content(),
+            );
+        } finally {
+            $client->stopServers();
+            @unlink($dir . '/answer.php');
+            @unlink($dir . '/.mcp.json');
+            @rmdir($dir);
+        }
     }
 }

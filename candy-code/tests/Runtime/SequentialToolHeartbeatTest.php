@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Runtime;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\App\App;
+use SugarCraft\Code\Context\McpOutputFence;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\MCP\McpClient;
@@ -183,7 +184,7 @@ final class SequentialToolHeartbeatTest extends TestCase
             $client->stopServers();
         }
 
-        self::assertSame('rested', $messages[0]->content());
+        self::assertSame(McpOutputFence::wrap('rested', 'slow', 'nap'), $messages[0]->content());
         self::assertGreaterThanOrEqual(2, $beats);
     }
 
