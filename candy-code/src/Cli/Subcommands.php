@@ -3794,7 +3794,7 @@ final class Subcommands
     }
 
     /**
-     * The one usage line this verb's four doors all print.
+     * The one usage line this verb's five doors all print.
      */
     private static function importUsage(): string
     {

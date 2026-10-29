@@ -625,7 +625,9 @@ parser, so the malformed-entry rows above are identical from both tiers. The
 `settings.local.json` sibling is not read for rules at all, `permissionMode`
 is read from no project file at any trust level, and `doctor`'s audit counts
 `permissionRules` as an allowed key of the shared file only. `/permissions`
-rows carry a tier column naming which list each rule rode in on.
+rows carry a tier column naming which list each rule rode in on; the naming is
+by rule signature, so a user rule byte-identical to a project-contributed one
+shows as `project` — cosmetic only, the rule is in both lists.
 
 ### Pattern matching: a tool name, plus an optional argument glob
 

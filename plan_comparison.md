@@ -2796,7 +2796,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-MCP-2.b (W12)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-mcp.md` → `### C-MCP-2.c`
 
-#### C-MCP-4.d — `mcp import --write user`
+#### ✅ 1ce61c449+3f7a2b93e C-MCP-4.d — `mcp import --write user` (picks 1ce61c449->74c980368, 3f7a2b93e->303c87928 on 17e6b440e after rebase onto mid-run vhs bot push, zero-conflict — README/en.php/ReadPathCensus auto-merged cleanly; print-only law opt-in user-tier door; DUR row minted candy-code/tests/Cli/SubcommandsMcpImportWriteTest.php 10T/0.010s; lane REPORT.md rode pick; batch-17)
 - **Item:** C-MCP-4 (sources: GAP-MCP-15) · gap · effort S
 - **What:** `mcp import` is print-only by law (`candy-code/src/Cli/Subcommands.php:2348-2440`, "nothing_written"). Opt-in `--write user` appends the translated entries into `~/.candy-code/mcp.json` through `Support/AtomicFileWriter` (0600; …
 - **Files — create:** `candy-code/tests/Cli/SubcommandsMcpImportWriteTest.php`
@@ -2892,7 +2892,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-PRV-3.d`
 
-#### C-SEC-6.b — Project-tier deny/ask-only rules
+#### ✅ cbe7d05df+403742811 C-SEC-6.b — Project-tier deny/ask-only rules (picks cbe7d05df->fecfe7b4e, 403742811->6598d32c2, all on 17e6b440e post-rebase, zero-conflict — README/PERMISSIONS.md/SETTINGS.md/en.php/Chat.php/LayeredSettings.php auto-merged; src/Permissions/ProjectNarrowingRules.php + 2 test files; DUR rows minted ProjectNarrowingRulesTest 5T/0.035s + BootstrapProjectNarrowingRulesTest 9T/0.035s; r1 MINORs landed in-branch 403742811; weld rider Subcommands importUsage docblock four->five doors; Permission band 2298T/2F foreign standings only; batch-17)
 - **Item:** C-SEC-6 (sources: GAP-PER-04(b)) · gap · effort M
 - **What:** Today rules come only from the user tier: `Bootstrap::permissionConfigLayers()` (:6969) reads `settings.json` and `config.json`. Under the existing `trustedProjectSettings` grant, read `permissionRules` from …
 - **Files — create:** `candy-code/src/Permissions/ProjectNarrowingRules.php`

@@ -936,6 +936,8 @@ candy-code/tests/Providers/ProviderFactoryUserTierSettingsTest.php	0.036	33
 candy-code/tests/Backend/StepTopRemindersTest.php	0.035	2
 candy-code/tests/Chat/AgentLiveLinesTest.php	0.035	9
 candy-code/tests/Chat/BackgroundSummaryStaleFingerprintTest.php	0.035	13
+candy-code/tests/Permissions/ProjectNarrowingRulesTest.php	0.035	5
+candy-code/tests/Cli/BootstrapProjectNarrowingRulesTest.php	0.035	9
 candy-code/tests/Cli/LaunchFlagsTest.php	0.034	41
 candy-code/tests/MousePaneJumpDoesNotHandOverTest.php	0.034	3
 candy-code/tests/Host/Commands/SkillsReloadTest.php	0.034	5
@@ -1151,6 +1153,7 @@ candy-code/tests/Permissions/ShellWordsTest.php	0.010	64
 candy-code/tests/Providers/ToolSchemaEncodingTest.php	0.010	47
 candy-code/tests/Tui/CellWidthPaddingTest.php	0.010	7
 candy-code/tests/Tui/MediaForm/MediaFormClipboardTest.php	0.010	5
+candy-code/tests/Cli/SubcommandsMcpImportWriteTest.php	0.010	10
 candy-code/tests/Agents/ForeignAgentPresetDirContainmentTest.php	0.009	9
 candy-code/tests/App/MenuCommandDraftPreservationTest.php	0.009	12
 candy-code/tests/Backend/ChildChannelTest.php	0.009	15
