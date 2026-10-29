@@ -155,6 +155,20 @@ final class RemoteSessionHost
 
     private ?string $sessionName = null;
 
+    /**
+     * The server's `command.list` roster — command name to its `runsIn`
+     * ("server" or "client") — cached once per open (C-SES-7.f). Empty when
+     * the fetch failed or has not answered yet, and an empty map means every
+     * typed slash command runs locally here, which is exactly the pre-C-SES-7.f
+     * behaviour; the cache is a fast-path for {@see \SugarCraft\Code\Chat}'s
+     * dispatch gate, never a correctness authority. The map is frozen at the
+     * moment of this attach — a command added to the server's roster after
+     * that waits for the window's next attach to be seen as the server's.
+     *
+     * @var array<string, string>
+     */
+    private array $serverCommands = [];
+
     /** @var array<string, mixed> */
     private array $snapshot = [];
 
@@ -500,7 +514,25 @@ final class RemoteSessionHost
                     return $this;
                 })
                 ->then(fn (): PromiseInterface => $this->pageOlder($pageRows))
-                ->then(fn (): self => $this);
+                // C-SES-7.f: one `command.list` per attach, cached for the
+                // dispatch gate. A failed fetch stays SILENT on purpose: an
+                // unfilled map keeps every typed command local — the status
+                // quo the cache is an optimization of, not a change to.
+                ->then(fn (): PromiseInterface => $this->call('command.list', ['sessionId' => $id]))
+                ->then(
+                    function (array $roster): self {
+                        foreach ((array) ($roster['items'] ?? []) as $row) {
+                            if (\is_array($row) && isset($row['name'], $row['runsIn'])) {
+                                $this->serverCommands[(string) $row['name']] = (string) $row['runsIn'];
+                            }
+                        }
+
+                        return $this;
+                    },
+                    function (): self {
+                        return $this;
+                    },
+                );
         });
     }
 
@@ -614,6 +646,19 @@ final class RemoteSessionHost
     public function sessionName(): ?string
     {
         return $this->sessionName;
+    }
+
+    /**
+     * The cached `command.list` roster (C-SES-7.f): command name to "server"
+     * or "client". Empty until {@see open()}'s fetch answers — and it answers
+     * exactly once, so callers treat an absent name as "run it here", never
+     * as "the server refused".
+     *
+     * @return array<string, string>
+     */
+    public function serverCommands(): array
+    {
+        return $this->serverCommands;
     }
 
     /** The highest durable seq this client has seen for its session. */

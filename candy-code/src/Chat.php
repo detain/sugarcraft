@@ -11727,6 +11727,56 @@ final class Chat implements Model
             return null;
         }
 
+        // C-SES-7.f: on an attached window, a command the server declares
+        // `runsIn: "server"` is EXECUTED THERE — the server runs it against
+        // the transcript the session actually lives in (which is what other
+        // clients and the next snapshot read), and the answer queues as a
+        // result the pump folds through the very same
+        // {@see applyCommandResult()} a local host command lands through, so
+        // the rows read identically either way. A command absent from the
+        // cache — client-only spellings, or a fetch that never answered —
+        // keeps running HERE, exactly as before this step. The promise
+        // resolves to a pump Msg on BOTH arms, so the reply renders the
+        // moment the server answers rather than one feed cadence later.
+        $feedBackend = $this->backend;
+        if ($feedBackend instanceof \SugarCraft\Code\Backend\RemoteBackend
+            && ($feedBackend->host()->serverCommands()[$command->name()] ?? null) === 'server'
+            && $feedBackend->host()->isOpen()
+        ) {
+            $host = $feedBackend->host();
+            $name = $command->name();
+            $args = \trim(\substr($text, 1 + \strlen($parsed->name)));
+
+            return [
+                $this->mutate(['inputBuf' => '']),
+                Cmd::promise(static fn (): PromiseInterface => $host->call(
+                    'command.exec',
+                    $args === ''
+                        ? ['sessionId' => (string) $host->sessionId(), 'name' => $name]
+                        : ['sessionId' => (string) $host->sessionId(), 'name' => $name, 'args' => $args],
+                )->then(
+                    static function (array $answer) use ($feedBackend): \SugarCraft\Code\App\RemoteFeedPumpMsg {
+                        $feedBackend->queueRemoteExec($answer);
+
+                        return new \SugarCraft\Code\App\RemoteFeedPumpMsg();
+                    },
+                    static function (\Throwable $error) use ($feedBackend, $text, $name): \SugarCraft\Code\App\RemoteFeedPumpMsg {
+                        // The server said no (`ui_only` on a race the cache
+                        // missed, `command_refused` while a turn held the
+                        // session, transport gone). Shaped like the local
+                        // failure row so the fold does not invent a second
+                        // grammar of refusal.
+                        $feedBackend->queueRemoteResult(\SugarCraft\Code\Host\Commands\CommandResult::errorReply(
+                            $text,
+                            Lang::t('host.command.exec_failed', ['name' => $name, 'error' => $error->getMessage()]),
+                        ));
+
+                        return new \SugarCraft\Code\App\RemoteFeedPumpMsg();
+                    },
+                )),
+            ];
+        }
+
         $handler = (string) $command->handler;
 
         return match ($command->arguments) {
@@ -19588,6 +19638,27 @@ final class Chat implements Model
                 self::OTEL_RETRY_SUBSCRIPTION,
                 self::OTEL_RETRY_TICK_SECONDS,
                 static fn (): \SugarCraft\Core\Msg => new \SugarCraft\Code\App\TelemetryRetryTickMsg(),
+            );
+        }
+
+        // The attached window's foreign-turn feed (C-SES-7.f). Declared on
+        // every attached launch — the backend type is the attachment — and
+        // idle-cheap the same way the watcher above is: the factory asks the
+        // backend whether the feed holds anything and answers null when it
+        // does not, so a quiet session pays a half-second wake-up and no
+        // Msg, no update and no repaint. An exec reply does not wait on
+        // this tick at all: dispatchCommand's promise resolves straight
+        // into a pump Msg.
+        $feedBackend = $this->backend;
+        if ($feedBackend instanceof \SugarCraft\Code\Backend\RemoteBackend) {
+            $subscriptions = ($subscriptions ?? new \SugarCraft\Core\Subscriptions())->withTick(
+                'remote.feed',
+                \SugarCraft\Code\Backend\RemoteBackend::FEED_PUMP_SECONDS,
+                static function () use ($feedBackend): ?\SugarCraft\Core\Msg {
+                    return $feedBackend->remoteFeedPending()
+                        ? new \SugarCraft\Code\App\RemoteFeedPumpMsg()
+                        : null;
+                },
             );
         }
 

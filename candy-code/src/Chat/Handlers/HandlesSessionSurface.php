@@ -47,6 +47,7 @@ use SugarCraft\Code\Attachments\MentionIndex;
 use SugarCraft\Code\Support\ClipboardImage;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\QueueMode;
+use SugarCraft\Code\Backend\RemoteBackend;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Events\MediaProgress;
 use SugarCraft\Code\Events\ReasoningDelta;
@@ -142,6 +143,7 @@ use SugarCraft\Code\App\ToolResultsMsg;
 use SugarCraft\Code\App\GoalJudgedMsg;
 use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\App\TelemetryRetryTickMsg;
+use SugarCraft\Code\App\RemoteFeedPumpMsg;
 use SugarCraft\Code\Chat\Handlers\HandlesRunControl;
 use SugarCraft\Code\Chat\Handlers\HandlesTurnCompletion;
 use SugarCraft\Code\Message;
@@ -345,6 +347,42 @@ trait HandlesSessionSurface
             }
 
             return [$this, null];
+        }
+
+        if ($msg instanceof RemoteFeedPumpMsg) {
+            // C-SES-7.f: the attached window's feed drain. Two sources, one
+            // order: `command.exec` answers this window asked for come back
+            // as results and go through the very same
+            // {@see applyCommandResult()} a local host command lands
+            // through — rows, payload-free effects, the whole grammar — and
+            // the foreign turns the backend's persistent listener watched
+            // to completion fold after them as plain transcript rows.
+            // Nothing here decides display: the feed's turnId keying already
+            // kept a stranger's deltas out of the window's own turn, and
+            // the per-turn listener still owns every row of that turn.
+            $backend = $this->backend;
+            if (!$backend instanceof RemoteBackend) {
+                // The tick is armed only on an attached launch; arriving on
+                // any other backend means a reconcile raced a detach, and
+                // the feed it drained is somebody else's to drain.
+                return [$this, null];
+            }
+
+            $model = $this;
+            /** @var list<\Closure> $cmds */
+            $cmds = [];
+            foreach ($backend->takeRemoteResults() as $result) {
+                [$model, $cmd] = $model->applyCommandResult($result);
+                if ($cmd !== null) {
+                    $cmds[] = $cmd;
+                }
+            }
+            $rows = $backend->drainRemoteFeed();
+            if ($rows !== []) {
+                $model = $model->mutate(['history' => [...$model->history, ...$rows]]);
+            }
+
+            return [$model, $cmds === [] ? null : Cmd::batch(...$cmds)];
         }
 
         return null;

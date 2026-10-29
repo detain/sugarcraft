@@ -1099,10 +1099,18 @@ token, the upgrade refused, no such session — saying why on stderr, and `2` fo
 a usage error (an extra operand, a flag other than `--url`, a `--url` that is
 not an `http(s)://` or `ws(s)://` address, `--output-format json`).
 
-What an attached window does NOT yet route to the server: slash commands
-(`/compact` included) run locally on the window's own copy of the transcript,
-and a turn another client starts on the same session shows up only when the
-window next attaches.
+An attached window routes slash commands the server owns: a name whose
+`command.list` row says `runsIn: "server"` (`/compact`, `/clear`) executes on
+the server's own copy through `command.exec`, and its reply rows land in the
+window the way a locally-run host command's do. Screen-only commands
+(`/theme`, `/keys`, `/help`) still run here, on the window's copy. An effect
+replays on the window only where the wire carries it (`clear-transcript`,
+`open-title-editor`); payload-carrying effects applied to the server's copy
+arrive back with the next snapshot or resume. And a turn another client
+starts on the same session no longer waits for the window to re-attach: the
+window follows it live through the event feed, keyed by `turnId`, so a foreign
+turn's deltas fold into the window's history when it completes and never
+interleave with a turn this window itself queued.
 
 ## Editors (`candy-code acp`)
 
