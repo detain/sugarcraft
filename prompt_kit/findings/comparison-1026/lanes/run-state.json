@@ -218,7 +218,7 @@
     "CTX-3.d-r2",
     "AGT-5.d-fix"
   ],
-  "master_tip": "7342d0e95",
+  "master_tip": "10950ade2",
   "next_fill_queue": [],
   "next_lead": {
     "gates": "scheduler free=0 remaining=195 late=False; blocked=['C-AGT-5.b'] owner-gated delete-cross-root ruling (options (a) root-scope guard (b) keep+document) — strings-only entries law; W14 list re-derive from plan §3",
@@ -333,8 +333,8 @@
     "BootstrapLaunchFormatConstantsTest:1287 PAGE_QUOTES (foreign, batch-8-innocent)"
   ],
   "status": "RUNNING",
-  "tick": "331-batch17-welded (C-MCP-4.d + C-SEC-6.b popped from inflight, count 223->225; weld-17: picks 74c980368+303c87928+fecfe7b4e+6598d32c2, NIT-3/4 doc riders, meta atop 6598d32c2; chain rebased over mid-run origin vhs bot push 17e6b440e; pushed; final tip d258ea4fa + this stamp row; push at ff)",
-  "tip": "7342d0e95",
+  "tick": "batch18p-welded (C-SEC-7.c + C-AGT-5.f popped, count 236->238; weld-18p: 7 zero-conflict picks on 7342d0e95; C-AGT-4.d dropped as 18o-landed; NO push — main-tree run-state.json dirty (lead live), lead completes ff + push law applies at wave close only; meta atop 10950ade2)",
+  "tip": "10950ade2",
   "updated": "2026-10-29T17:30:00-04:00",
   "wave_loops": {
     "1": "closed r2 CLEAN",

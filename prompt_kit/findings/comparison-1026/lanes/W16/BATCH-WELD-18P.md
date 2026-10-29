@@ -25,3 +25,4 @@ Weld worktree /home/sites/cc-cmp-weld-18p branch weld-18p. NO PUSH.
 - [x] evidence committed: lanes/C-SEC-7.c + lanes/C-AGT-5.f full sets + this log
 - [x] run-state: welded 236->238 (SEC-7.c, AGT-5.f); weld_pending -= {SEC-7.c, AGT-5.f, AGT-4.d-stale-remnant}; inflight = lead brief dict (7 lanes); tip stamped 7342d0e95 pending meta stamp commit; batch18p_note added
 - ff attempt expected BLOCKED: main tree dirty run-state.json (lead live) — stop+report per brief, lead completes ff
+- [x] meta stamp: tip=10950ade2, tick batch18p
