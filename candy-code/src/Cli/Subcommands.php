@@ -548,18 +548,28 @@ final class Subcommands
                     // announceBypassMode: false — this probe READS the policy to
                     // diagnose it; the bypass transcript row describes a session
                     // about to run, and doctor starts none (audit v3:U-F3).
-                    $gate = Bootstrap::permissionGate(announceBypassMode: false);
+                    // C-SEC-7.a split the console default by surface, so the
+                    // probe resolves all three paths a launch can fall back to.
+                    $headless = Bootstrap::permissionGate(
+                        consoleSurface: Bootstrap::PERMISSION_SURFACE_HEADLESS,
+                        announceBypassMode: false,
+                    );
                     $tui = Bootstrap::permissionGate(interactive: true, announceBypassMode: false);
+                    $background = Bootstrap::permissionGate(announceBypassMode: false);
                 } catch (PermissionConfigException $e) {
                     return ['status' => 'FAIL', 'detail' => $e->getMessage()];
                 }
 
-                // With nothing configured the two paths start in different
-                // modes (decision D5), and a one-word answer would describe
-                // only one of them.
-                return ['status' => 'OK', 'detail' => $tui->mode() === $gate->mode()
-                    ? Lang::t('cli.doctor.mode', ['mode' => $gate->mode()->value])
-                    : Lang::t('cli.doctor.mode_split', ['tui' => $tui->mode()->value, 'headless' => $gate->mode()->value])];
+                // With nothing configured the paths start in different modes
+                // (decision D5, as C-SEC-7.a split it), and a one-word answer
+                // would describe only one of them.
+                return ['status' => 'OK', 'detail' => $tui->mode() === $headless->mode() && $headless->mode() === $background->mode()
+                    ? Lang::t('cli.doctor.mode', ['mode' => $headless->mode()->value])
+                    : Lang::t('cli.doctor.mode_split', [
+                        'tui' => $tui->mode()->value,
+                        'headless' => $headless->mode()->value,
+                        'background' => $background->mode()->value,
+                    ])];
             },
 
             'sandbox' => static function (): array {

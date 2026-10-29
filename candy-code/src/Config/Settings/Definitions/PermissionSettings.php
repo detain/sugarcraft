@@ -44,9 +44,10 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withOptionsSource(OptionsSource::PermissionModes)
                 ->withLabel(Lang::t('settings.permissionMode.label'))
                 ->withHelp(Lang::t('settings.permissionMode.help'))
-                // D5: the TUI asks by default; `-p` and the daemon have nobody
-                // to ask, so they keep the schema default.
-                ->withDefaultText('`default` (TUI); `bypass-permissions` (`-p`, daemon)')
+                // D5 as amended by C-SEC-7.a: the TUI and `-p` ask by default;
+                // only the spawned daemon has nobody to ask, so only it keeps
+                // the schema default.
+                ->withDefaultText('`default` (TUI, `-p`); `bypass-permissions` (daemon)')
                 ->withReaderSymbol(Bootstrap::class . '::permissionGate'),
             SettingDefinition::new('permissionRules', SettingType::Json, [])
                 ->withCategory(SettingCategory::Permissions)

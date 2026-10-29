@@ -122,7 +122,8 @@ final class Bootstrap
     /**
      * The per-invocation override and the persisted key for the launch's
      * permission mode, plus the mode used when neither says anything. See
-     * {@see permissionGate()} for why the default is the permissive one.
+     * {@see permissionGate()} for why the default depends on the surface —
+     * `-p` asks since C-SEC-7.a; only the spawned daemon is permissive.
      */
     private const PERMISSION_MODE_ENV = 'CANDY_CODE_PERMISSION_MODE';
 
@@ -194,11 +195,37 @@ final class Bootstrap
     private const TRUSTED_PROJECT_COMMANDS_CONFIG_KEY = 'trustedProjectCommands';
 
     /**
-     * The mode `-p` and the background daemon start in when nothing names
-     * one; the TUI starts in {@see INTERACTIVE_DEFAULT_PERMISSION_MODE}. See
-     * {@see permissionGate()} for why the two differ.
+     * The console surface named by {@see permissionGate()}'s `$consoleSurface`
+     * for `-p`: an approver that CAN ask (on stderr at a terminal) while the
+     * process is attached to one, so this surface starts in the asking
+     * {@see HEADLESS_DEFAULT_PERMISSION_MODE}. C-SEC-7.a reversed the old
+     * permissive `-p` default (rv-sec-1).
      */
-    private const DEFAULT_PERMISSION_MODE = PermissionMode::BypassPermissions;
+    public const PERMISSION_SURFACE_HEADLESS = 'headless';
+
+    /**
+     * The console surface a locally spawned `/bg` daemon runs on: nobody is
+     * ever attached to ask, so it keeps the permissive
+     * {@see BACKGROUND_DEFAULT_PERMISSION_MODE}. This is also the plain
+     * (no-argument) resolution of {@see permissionGate()} — the paths that
+     * pass no gate (the daemon's own build, read-only probes) land here.
+     */
+    public const PERMISSION_SURFACE_BACKGROUND = 'background';
+
+    /**
+     * The mode `-p` starts in when nothing names one: asking, like the TUI.
+     * An unattended ask is refused by {@see HeadlessPermissionPrompt} with a
+     * hint naming `--permission-mode`, so scripted runs have a one-flag fix.
+     */
+    private const HEADLESS_DEFAULT_PERMISSION_MODE = PermissionMode::Default;
+
+    /**
+     * The mode a locally spawned background daemon starts in when nothing
+     * names one: its approver has no terminal for the run's whole life, so
+     * an asking default here would refuse every unattended call. See
+     * {@see permissionGate()} for why the console defaults differ.
+     */
+    private const BACKGROUND_DEFAULT_PERMISSION_MODE = PermissionMode::BypassPermissions;
 
     /** The TUI's default mode (decision D5) — see {@see permissionGate()}. */
     private const INTERACTIVE_DEFAULT_PERMISSION_MODE = PermissionMode::Default;
@@ -6800,7 +6827,8 @@ public static function useMaxCost(?string $maxCost): void
      *
      * THE GRANT MAY NOT BE MADE BY THE THING IT GATES. `trustedProjectHooks`
      * lives in `~/.candy-code/config.json`; the shipped default permission
-     * mode is {@see DEFAULT_PERMISSION_MODE}; and `Bash` is deliberately not
+     * mode for the daemon surface is {@see BACKGROUND_DEFAULT_PERMISSION_MODE};
+     * and `Bash` is deliberately not
      * path-jailed ({@see \SugarCraft\Code\Tools\BuiltIn\Bash}). This method
      * used to re-read the file on every hook-manager build, so a repository
      * whose README prompt-injected the model into appending one line to that
@@ -7124,14 +7152,21 @@ public static function useMaxCost(?string $maxCost): void
      *   the same modal. Only a member the relay could not be opened for is
      *   still refused, with a reason the model reads
      *   (`ChildChannel::GRANDCHILD_REFUSAL`).
-     * - `-p` AND THE BACKGROUND DAEMON keep {@see DEFAULT_PERMISSION_MODE},
-     *   `bypass-permissions`. Their approver is
+     * - `-p` starts in {@see PermissionMode::Default}
+     *   ({@see HEADLESS_DEFAULT_PERMISSION_MODE}, `$consoleSurface = `
+     *   {@see PERMISSION_SURFACE_HEADLESS}, passed by
+     *   {@see NonInteractive::consoleBackend()}). Its approver is
      *   {@see HeadlessPermissionPrompt}, which asks on stderr at a terminal
-     *   and REFUSES without one — so an asking default would turn every
-     *   unattended CI run's first `Edit` into a refusal on upgrade. They opt
-     *   in to asking with `--permission-mode` or the config key, like before.
+     *   and REFUSES without one — the refusal names `--permission-mode`, so a
+     *   scripted run that must not stop has a one-flag fix. C-SEC-7.a
+     *   reversed the earlier permissive `-p` default (rv-sec-1); asking
+     *   unattended runs fail closed, loudly, instead of running unprompted.
+     * - THE BACKGROUND DAEMON keeps {@see BACKGROUND_DEFAULT_PERMISSION_MODE},
+     *   `bypass-permissions`. A locally spawned `/bg` run has no terminal for
+     *   the whole life of the process, so every ask there would be a refusal;
+     *   this is the plain (no-argument) surface below.
      *
-     * Be honest about what the console default costs — the 2026-10-06 bypass
+     * Be honest about what the daemon default costs — the 2026-10-06 bypass
      * ruling flipped the old claim inside out: BypassPermissions is NOT equal
      * to having no gate; it is NARROWER than one. A floor still refuses under
      * bypass: the step-0 `rm -rf /` circuit breaker and every explicit `Deny`
@@ -7171,11 +7206,20 @@ public static function useMaxCost(?string $maxCost): void
      *   session about to run ("every tool call runs without a prompt"). A
      *   read-only diagnosis emitting it would advertise a launch that is not
      *   happening; real launch paths leave the flag at its default
+     * @param string $consoleSurface which console path resolves here when no
+     *   mode is named: {@see PERMISSION_SURFACE_HEADLESS} for `-p` (passed
+     *   explicitly by {@see NonInteractive::consoleBackend()}), or the plain
+     *   default {@see PERMISSION_SURFACE_BACKGROUND} for a locally spawned
+     *   daemon and for read-only probes. Ignored when `$interactive` is true
+     *   or when a flag/env/config source names the mode
      *
      * @throws PermissionConfigException when a present permission input cannot be used
      */
-    public static function permissionGate(bool $interactive = false, bool $announceBypassMode = true): PermissionGate
-    {
+    public static function permissionGate(
+        bool $interactive = false,
+        bool $announceBypassMode = true,
+        string $consoleSurface = self::PERMISSION_SURFACE_BACKGROUND,
+    ): PermissionGate {
         // The LAYERS rather than the merge, so the refusal below can name the
         // file the bad value actually came from — see
         // {@see permissionConfigLayers()} for the error message that made this
@@ -7232,19 +7276,37 @@ public static function useMaxCost(?string $maxCost): void
                 break;
             }
         }
-        $mode ??= $interactive ? self::INTERACTIVE_DEFAULT_PERMISSION_MODE : self::DEFAULT_PERMISSION_MODE;
+        $fromBuiltInDefault = $mode === null;
+        $mode ??= match (true) {
+            $interactive => self::INTERACTIVE_DEFAULT_PERMISSION_MODE,
+            $consoleSurface === self::PERMISSION_SURFACE_HEADLESS => self::HEADLESS_DEFAULT_PERMISSION_MODE,
+            default => self::BACKGROUND_DEFAULT_PERMISSION_MODE,
+        };
 
-        // rv-sec-1: bypass-permissions is the mode at which NO tool call is
-        // ever asked about, and until now a launch that resolved to it — the
-        // built-in headless default as much as a `permissionMode` in config —
-        // said nothing. The statement rides the SAME launch-notices store the
-        // `/notices` panel reads, so it reaches the TUI transcript and the
-        // operator's stderr without touching DEFAULT_PERMISSION_MODE itself
-        // (owner ruling: the default stands; the silence is what changes).
+        // rv-sec-1 (reversed for `-p` by C-SEC-7.a, kept for every other path
+        // onto the mode): bypass-permissions is the mode at which NO tool call
+        // is ever asked about, and a launch that resolved to it — by an
+        // explicit `permissionMode` in config, an env override, or the built-in
+        // DAEMON default — said nothing until the notice landed. The statement
+        // rides the SAME launch-notices store the `/notices` panel reads, so it
+        // reaches the TUI transcript and the operator's stderr without touching
+        // the daemon default itself (the owner ruling that survives here is
+        // that the daemon default stands; the silence is what changed).
         // `warnPermissionConfigInTranscript` de-dups by message identity, so
         // the per-turn re-resolutions of this method cost one notice total.
         if ($announceBypassMode && $mode === PermissionMode::BypassPermissions) {
             self::warnPermissionConfigInTranscript(Lang::t('appLaunch.notice.bypass_mode'));
+        }
+
+        // C-SEC-7.a: `-p` with no named mode now resolves to the ASKING
+        // default, which means every unattended scripted run silently starts
+        // refusing — so the same launch says so out loud, once, and names the
+        // one-flag fix. Only the built-in resolution announces; a source that
+        // explicitly chose `default` already knows, and read-only probes pass
+        // $announceBypassMode = false.
+        if ($announceBypassMode && $fromBuiltInDefault && !$interactive
+            && $consoleSurface === self::PERMISSION_SURFACE_HEADLESS) {
+            self::warnPermissionConfigInTranscript(Lang::t('appLaunch.notice.headless_default'));
         }
 
         // Roadmap 5.11-2: `autoReview` in the user's own config.json — never a
@@ -7576,7 +7638,7 @@ public static function useMaxCost(?string $maxCost): void
      * mechanism. The mechanism is that `array_merge` let a valueless key win the
      * precedence walk and the merged key then normalised to absent, one step too
      * late, so {@see permissionGate()} started from
-     * {@see DEFAULT_PERMISSION_MODE}. That default merely HAPPENS to be
+     * {@see BACKGROUND_DEFAULT_PERMISSION_MODE}. That default merely HAPPENS to be
      * `bypass-permissions` today; tighten it and the identical bug would silently
      * lock the user out of the mode they configured instead. So what is fixed
      * here is "an empty value must not displace an earlier layer", and a fix

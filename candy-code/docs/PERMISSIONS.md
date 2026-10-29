@@ -25,8 +25,10 @@ Four places, highest first:
 3. `permissionMode` in `~/.candy-code/config.json` (or the file named by
    `--config`), or in `~/.candy-code/settings.json`, which `config.json`
    outranks.
-4. The shipped default, which depends on the path: **`default` in the TUI**,
-   **`bypass-permissions` for `-p` and locally spawned `/bg` sessions**. A daemon
+4. The shipped default, which depends on the path: **`default` in the TUI and
+   for `-p`** (C-SEC-7.a; an unattended `-p` ask is refused with a hint naming
+   `--permission-mode`), **`bypass-permissions` for locally spawned `/bg`
+   sessions**, which have no terminal for the whole life of the run. A daemon
    spawned by `serve` (`bg.spawn` or the host `/bg`) is the exception: it runs in
    the server's admitted permission mode, and its asks die at the no-terminal
    approver — see [`docs/SERVER.md`](SERVER.md).

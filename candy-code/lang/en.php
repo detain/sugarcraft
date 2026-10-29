@@ -247,7 +247,7 @@ return [
     'cli.doctor.mcp_servers' => '{count} server(s) declared in {path}',
     'cli.doctor.mcp_untrusted' => '{path} is present but this root is not trusted; its servers are not started',
     'cli.doctor.mode' => 'mode {mode}',
-    'cli.doctor.mode_split' => 'mode {tui} in the TUI, {headless} for -p and background sessions (built-in defaults)',
+    'cli.doctor.mode_split' => 'mode {tui} in the TUI, {headless} for -p, {background} for spawned daemons (built-in defaults)',
     'cli.doctor.no_problems' => 'No problems detected.',
     'cli.doctor.pdo' => 'pdo_{driver} {state}; ext-sqlite3 {sqlite3} — the Team task list opens SQLite3 directly',
     'cli.doctor.pdo_unusable' => 'UNUSABLE — the session store cannot open its database: {error}',
@@ -932,6 +932,7 @@ TXT,
     'cli.noninteractive.json_schema_invalid' => '--json-schema is not valid JSON: {error}',
     'cli.noninteractive.json_schema_no_backend' => 'the supplied backend cannot honour --json-schema: it is not the engine, so there is no provider to constrain the answer with',
     'cli.noninteractive.json_schema_not_object' => '--json-schema must be a JSON object (a schema); a list or a scalar is not one',
+    'cli.headless.permission_hint' => '  hint: a `-p` run with no named mode starts in the asking `default` mode (C-SEC-7.a); unattended asks have nobody to answer, so they fail closed. Scripted runs can name --permission-mode bypass-permissions (or accept-edits) to keep going.',
     'cli.noninteractive.json_schema_unapplied' => 'the schema you asked for with --json-schema could not constrain the settled answer: the turn ran tools, and the schema rides only the first request (see README.md)',
     'cli.noninteractive.json_schema_unreadable' => '--json-schema names no readable file: {path}',
     'cli.noninteractive.json_schema_unsupported' => 'the {name} provider does not honour --json-schema: the answer would be billed as structured and arrive unconstrained',
@@ -3673,6 +3674,11 @@ TXT,
     'appLaunch.notice.policy_changed' => '⚠ config.json or hooks.yaml changed since the last launch. New project hooks stay quarantined for this launch only — review ~/.candy-code/config.json and hooks.yaml, then they are honoured',
     'appLaunch.notice.project_policy_changed' => '⚠ The hooks.yaml of a trusted project carries entries the last launch never saw. New project hooks stay quarantined for this launch only — review that repository\'s .candy-code/hooks.yaml, then they are honoured',
     'appLaunch.notice.bypass_mode' => '⚠ Permission mode is bypass-permissions: every tool call runs without a prompt. Change it with /permissions (TUI), --permission-mode, or set a different permission mode in ~/.candy-code/config.json',
+    // C-SEC-7.a: `-p` now defaults to the ASKING mode, so an unattended scripted
+    // run that named no mode starts refusing — the launch says so once, and names
+    // the one-flag fix. No trailing period — STDERR_LINE_FORMAT adds one
+    // (LaunchNoticeOwnPeriodTest).
+    'appLaunch.notice.headless_default' => 'ℹ -p starts in permission mode default: an unattended run refuses every tool call that would ask. Pass --permission-mode (bypass-permissions runs everything) for scripted runs',
     // C-SEC-6.b: names the file, what it added, and what could not be honoured.
     // No trailing period — STDERR_LINE_FORMAT adds one (LaunchNoticeOwnPeriodTest).
     'appLaunch.notice.project_narrowing_rules' => '⚠ {file} narrowed this launch\'s permissions: {count} deny/ask rule(s) loaded first, {dropped} allow rule(s) dropped — a project file cannot grant allow',

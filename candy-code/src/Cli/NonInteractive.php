@@ -2126,7 +2126,7 @@ final class NonInteractive
      * The backend a one-shot run executes on — the ONLY route `run()` has to
      * one when the caller did not supply it.
      *
-     * Two things happen here rather than at the two call sites. The first is
+     * Three things happen here rather than at the two call sites. The first is
      * the existing strictness split: a run that named no provider gets
      * {@see Bootstrap::backend()}, which may degrade to the offline engine,
      * and a run that named one gets {@see Bootstrap::backendFor()}, which
@@ -2148,14 +2148,24 @@ final class NonInteractive
      * branch and refused when it reaches the other, which is worse than
      * either behaviour applied consistently.
      *
+     * The third is C-SEC-7.a: this path names the HEADLESS console surface to
+     * {@see Bootstrap::permissionGate()}, so a `-p` run that names no mode
+     * starts in the asking `default` (its approver is the one attached above),
+     * while a locally spawned daemon — which never routes here — keeps the
+     * permissive background default. Resolving the gate HERE rather than
+     * letting the builders' no-gate fallback answer is what carries the
+     * surface; the flag/env/config precedence runs unchanged either way.
+     *
      * @throws \SugarCraft\Code\Permissions\PermissionConfigException
      * @throws \Throwable when $providerName names a provider that cannot be built
      */
     public static function consoleBackend(?string $root, ?string $providerName): Backend
     {
+        $gate = Bootstrap::permissionGate(consoleSurface: Bootstrap::PERMISSION_SURFACE_HEADLESS);
+
         return $providerName === null
-            ? Bootstrap::backend($root, null, null, true)
-            : Bootstrap::backendFor($providerName, $root, null, null, true);
+            ? Bootstrap::backend($root, null, $gate, true)
+            : Bootstrap::backendFor($providerName, $root, null, $gate, true);
     }
 
     /**

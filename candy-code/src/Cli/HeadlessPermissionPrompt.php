@@ -25,7 +25,9 @@ use SugarCraft\Code\Tools\ToolCall;
  * never had. Without one, {@see \SugarCraft\Code\Runtime::settleAsk()} fails
  * every ASK closed — which is why a headless run under any mode that asks
  * (`default`, `accept-edits`, `auto`) refused writes instead of prompting for
- * them, and why the shipped default mode is `bypass-permissions`.
+ * them, and why the daemon's shipped default mode is `bypass-permissions`
+ * (since C-SEC-7.a `-p` starts in the asking `default` instead, and its
+ * unattended refusals carry a hint naming the one-flag fix).
  *
  * THE SHAPE IS BLOCKING BECAUSE THE PATH IS SYNCHRONOUS. `NonInteractive::run()`
  * calls `Backend::complete()` on a plain stack — no ReactPHP loop, no
@@ -517,7 +519,8 @@ final class HeadlessPermissionPrompt
             . '  args: ' . $this->renderArguments($call) . "\n"
             . '  why:  ' . $this->oneLine($ask->message) . "\n"
             . '  mode: ' . $this->mode->value . "\n"
-            . Lang::t('cli.permission.no_tty_remedy', ['tool' => $name]) . "\n";
+            . Lang::t('cli.permission.no_tty_remedy', ['tool' => $name]) . "\n"
+            . Lang::t('cli.headless.permission_hint') . "\n";
     }
 
     /**
