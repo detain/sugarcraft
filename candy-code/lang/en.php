@@ -343,10 +343,13 @@ session; acp runs turns for an editor, until the editor disconnects):
                          server's command, args and env, so a later change to
                          any of them is refused at launch until re-approved.
                          Starts nothing.
-  mcp import claude|opencode <path>
+  mcp import claude|opencode|claude-project <path> [--write user]
                          Translate a foreign MCP config and print the
                          equivalent .mcp.json block to stdout. Prints only
-                         the document and writes no file; the renames the
+                         by default; --write user appends the translated
+                         entries into the user's own ~/.candy-code/mcp.json
+                         (a name collision refuses the whole write, and the
+                         project tier is never written). The renames the
                          translation made are listed on stderr.
   self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]
                          Replace this phar install with the latest published

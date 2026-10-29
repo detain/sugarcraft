@@ -3424,7 +3424,9 @@ final class Subcommands
      * launch would start it —, since E701, `candy-code mcp auth login`,
      * the interactive OAuth flow handed off whole to {@see self::mcpAuth()}
      * at the verb gate below, and, since E710, `candy-code mcp import`,
-     * the print-only foreign-config translator handed to {@see self::mcpImport()}.
+     * the foreign-config translator that prints only by default — its sole
+     * exception is the C-MCP-4.d `--write user` door — handed to
+     * {@see self::mcpImport()}.
      *
      * READ-ONLY BY CONSTRUCTION. It goes through
      * {@see Bootstrap::mcpServerInventory()}, which shares its path,
