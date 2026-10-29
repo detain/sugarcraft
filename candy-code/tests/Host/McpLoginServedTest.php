@@ -244,6 +244,63 @@ final class McpLoginServedTest extends TestCase
     }
 
     /**
+     * BRIEF promise: a second session's login is independent. Two children on
+     * two server names are watched for two live sessions AT ONCE; every row
+     * must land in its own transcript and nowhere else. Red under a pollDue
+     * that ignored the session map (e.g. routed every row to one session).
+     */
+    public function testTwoConcurrentLoginWatchesStayInTheirOwnSessions(): void
+    {
+        $store = new EnhancedSessionStore($this->sandbox . '/sessions3.db');
+        $hub = SessionHub::new(WorkspaceContext::new(
+            root: $this->sandbox,
+            sessionStore: $store,
+            backend: new EchoBackend(),
+            commandLoader: new CommandLoader(),
+        ));
+        $hostX = $hub->create('served-two-x');
+        $hostY = $hub->create('served-two-y');
+        self::assertInstanceOf(SessionHost::class, $hostX);
+        self::assertInstanceOf(SessionHost::class, $hostY);
+        $server = ServerContext::new($hub, ServerConfig::new($this->sandbox)->withRoot($this->sandbox), 'served-two', Loop::get());
+
+        $this->stubLoginChild(0);
+        [, $armedX] = McpLoginFork::arm('w4ctx', [], $this->sandbox . '/tmp');
+        [, $armedY] = McpLoginFork::arm('w4cty', [], $this->sandbox . '/tmp');
+        self::assertTrue($armedX, 'the two arms are independent slots');
+        self::assertTrue($armedY, 'the two arms are independent slots');
+        ServedMcpLogins::register('w4ctx', 'served-two-x');
+        ServedMcpLogins::register('w4cty', 'served-two-y');
+
+        $rowsX = [];
+        $rowsY = [];
+        for ($i = 0; $i < 200 && (count($rowsX) < 2 || count($rowsY) < 2); ++$i) {
+            $server->pump();
+            $rowsX = $this->noticeRows($hostX, 'served-two-x');
+            $rowsY = $this->noticeRows($hostY, 'served-two-y');
+            usleep(20_000);
+        }
+
+        self::assertCount(2, $rowsX, 'session X received exactly its url beat and its closing beat');
+        self::assertCount(2, $rowsY, 'session Y received exactly its url beat and its closing beat');
+        self::assertStringContainsString('Open this URL to authorize `w4ctx`', $rowsX[0][0]);
+        self::assertStringContainsString('http://127.0.0.1:41239/cb/w4ctx', $rowsX[0][0], 'X got its own link, built from its own server name');
+        self::assertStringContainsString('✓ MCP login for `w4ctx` finished (exit 0)', $rowsX[1][0]);
+        self::assertStringContainsString('Open this URL to authorize `w4cty`', $rowsY[0][0]);
+        self::assertStringContainsString('http://127.0.0.1:41239/cb/w4cty', $rowsY[0][0], 'Y got its own link, built from its own server name');
+        self::assertStringContainsString('✓ MCP login for `w4cty` finished (exit 0)', $rowsY[1][0]);
+
+        foreach ($rowsX as [$content, $payload]) {
+            self::assertStringNotContainsString('w4cty', $content, 'zero cross-talk: nothing aimed at Y rides into X');
+        }
+        foreach ($rowsY as [$content, $payload]) {
+            self::assertStringNotContainsString('w4ctx', $content, 'zero cross-talk: nothing aimed at X rides into Y');
+        }
+
+        self::assertSame([], ServedMcpLogins::pollDue(), 'each watch retired on its own child exit — neither starved the other');
+    }
+
+    /**
      * The session's durable message.created notice rows.
      *
      * @return list<array{0: string, 1: array<string, mixed>}> [content, payload]
