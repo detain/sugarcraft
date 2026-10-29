@@ -1,0 +1,36 @@
+# C-CTX-3.d — REPORT (lane cc/C-CTX-3.d)
+
+VERDICT: DONE. Commit `e08dddd3e` on `cc/C-CTX-3.d` (base 237224a7a), 6 files +724/−17, author/committer detain verified, zero Co-Authored trailers, never pushed.
+
+## What shipped
+- `Memory` tool `recall` gains `source: notes|sessions|journal`; default `notes` is byte-identical behavior (miss line, `[scope: …]` suffix, MAX_RECALL=20 all unchanged), and the writer-null refusal stays byte-pinned for every path but sessions (asserted in 2 test files — `MemoryToolTest::testWithoutAWriterTheToolRefuses` substring pin and this file's exact-sentence pins; the phrase appears in 4 files' prose — all pass unmutated).
+- **sessions**: `SessionSearchIndex::openForReadOnly(dbPath)` + `searchScoped(query, cwd, excludeSessionId, limit)` — INNER-JOINs `sessions` for `owner.cwd = ?` root scoping and `anchor.session_id <> ?` current-session exclusion; fold extracted as shared `foldRanked()` (old `search()` behavior preserved, its suite green). Tool leg: `Bootstrap::sessionStore(false)` (documented read-only door), honors `needsRebuild()` — never sweeps — and names each missing piece (no root / wordless query / unbuilt index / locked store) instead of fabricating hits. Max 8 hits × 600-byte snippets, every snippet through `SecretRedactor`, framed untrusted (header line + `>` quote, BoardRead idiom).
+- **journal**: `CompactionJournal::recentView()` — newest-first budget walk, VIEW_MAX_ENTRIES=10 / VIEW_MAX_BYTES=6000 / per-text clip ≥96B else drop; dream-pass `entries()` cursor machinery untouched. Tool leg redacts again (defense-in-depth) and frames untrusted.
+- **wiring**: `MemoryTool implements AcceptsShellOwner` — the C-TOOL-3.c per-turn session-id seam `EngineBackend` already binds before every turn (the only such seam; name stretch documented in-file). `fromCatalog` binds `$context->root` (raw cwd, byte-matching the `sessions.cwd` write form); `withWriter`/`withShellOwner` carry all fields. No EngineBackend/Chat/LaunchContext/TaskTool edit was needed.
+- Docs: `docs/MEMORY.md` recall row = three sources (notes clause byte-preserved); `tools/gen-tool-docs.php --write` regenerated the README roster gloss (`--check` rc=0 in-step). No en.php keys added (tool prose is plain-English by file convention). No new `*Msg`, no timers (E646 n/a), strict_types kept.
+
+## Tests & guards (measured, cwd=candy-code, plain pipe, -c phpunit.xml)
+- NEW `tests/Tools/BuiltIn/MemoryRecallSourcesTest.php`: 11T/60A green (Deprecations 2 = baseline, MemoryToolTest alone shows the same 2). Covers: schema gains `source` without moving anything; notes default unchanged; unknown/non-string source refused; byte-pinned refusals; root-scoping + current-exclusion pair pin (unbound tool KEEPS the session → the exclusion leg is load-bearing); snippet redaction (raw `sk-…` absent, `[REDACTED]` present); journal budget exact (15×3000-char → newest e14/e15 only, ≤6000B); rebindings carry root/sessionRef.
+- Battery `--filter 'MemoryTool|MemoryRecallSources|SessionSearch|CompactionJournal|DreamPass|DreamMemoryView|TaskToolAgentMemory|HostCompactionMemoryFlush|MemoryFlushBeforeCompaction|ToolDocDrift|ReadmeRosterDrift|DocFigureProseDrift'`: **249T/4770A/1F**. The 1F is `DreamPassTest::testChatSchedulesThePassAtTurnCloseAndReportsWhatChanged` (:288) — PROVEN PRE-EXISTING: fails identically at base with my three src files reverted (cp-restore md5-verified). Foreign red, carried below.
+- Mutations (cp+md5 restore, /tmp/opencode only; never git stash — shared): M1 exclusion→null: 1F; M2 cwd-filter out: 2F; M3 redact dropped: 1F; M4 recentView unbounded: 1F. All discriminate, all restored clean.
+
+## Guard flips in-step (§1.8)
+None reddened by the src change itself: no new tool (roster/count anchors unchanged), `source` is a property add (action enum pins untouched), MEMORY.md/README rows updated in the same commit, ToolDocDrift + ReadmeRosterDrift + DocFigureProseDrift green.
+
+## Welder carries
+1. **suite-figure + durations**: +11T/+60A → ReadmeSuiteFigureDrift staleness pair expected on merged tree (not in lane filters); `MemoryRecallSourcesTest.php` durations.tsv row owed (unlisted file = zero shards).
+2. **Foreign pre-existing red** (not this lane): `DreamPassTest:288` "a backend that is not an engine schedules no pass" fails at base 237224a7a too — a no-backend Chat's `update(AssistantMsg)` returns a Closure. Needs the owning area (Chat dream-schedule leg, likely C-SES/C-CTX sibling fallout).
+3. **TaskTool.php:1461** `new MemoryTool(forAgent(...))` passes no root → delegated sessions-recall honestly answers "needs a project root"; one-line follow-up (pass `$memoryRoot`) left unedited per scope law.
+4. DreamMemoryView strips `source` (array_intersect_key) → dream recall stays notes-only by design; add `source` there only if a ruling asks.
+5. `Bootstrap::sessionStore(false)` mints a store when HOME lacks `.candy-code` (answers "not built yet"); the `openForReadOnly`-null refusal leg is pinned at index level, not tool level — disclosed.
+
+## FIX ROUND 1 (per REVIEW-1.md, MINOR step-local)
+Cap edges now pinned at the edges, tests-only (no src defect surfaced, so no STOP):
+- `testNineMatchingSessionsAnswerExactlyEightRows` — 9 zebrafish sessions of root A; data leg proves the store holds 9 through `searchScoped(..., 9)`, answer leg pins exactly 8 `- [` rows against the LITERAL 8.
+- `testAnOverlongBodyIsClippedAtTheSnippetEdge` — a 712-byte snippet: row ends `...`, snippet strlen is the literal 603 (600 + marker), and the 700-q run never rides the row.
+- `testElevenTinyEntriesAreCappedByCountNotBytes` — 11 entries of ~24 bytes (budget cannot bind, asserted `< VIEW_MAX_BYTES`): `count === 10`, survivors are the newest ten oldest-first, so **e11 in / e1 out** — the eviction the code actually performs (`entries()` keeps the newest tail, the budget walk never fires here).
+- Each pin bounds against a literal, not a re-read of the shipped constant, so widening the constant reddens the pin: M-A `MAX_SESSION_HITS 8→999` = exactly 1 red (the 8-row pin); M-B `MAX_SESSION_SNIPPET_BYTES 600→100000` = exactly 1 red (the ends-`...` pin); M-C `VIEW_MAX_ENTRIES 10→999` = exactly 1 red (the count-10 pin). cp+md5 restores verified (`MemoryTool.php 7ea3f9a1…`, `CompactionJournal.php 1531bd1a…`).
+- NIT-2 cured above: the "5 test files" claim is now the measured truth (2 asserting files, 4 files carrying the phrase in prose).
+- NIT-1 (withShellOwner docblock wording) and NIT-3 (TaskTool:1461 root) left for the welder per the review's instruction — untouched.
+- Gates after the fix: `MemoryRecallSourcesTest` **14T/81A** green (Deprecations 2 = baseline); the full battery filter is now **252T/4791A/1F** — the same `DreamPassTest:288` foreign red, +3T/+21A exactly the three new methods.
+- Standing reds OUTSIDE that battery, inherited at base and NOT introduced here (proven byte-identical with this file reverted to `e08dddd3e`): `GlobDialectDifferentialTest` (PathGlob docblock quotes 305,805 vs derived 306,912 = 556×552), `OneSidedHomeSandboxTest` (accuses `Backend/CacheReusingSummaryBackendTest.php`, `Context/InstructionWalkPastRootTest.php`), `SwallowingCatchCensusTest` (accuses `Cli/MainWorktreeTest.php:137/:178`). Welder/gate carry.

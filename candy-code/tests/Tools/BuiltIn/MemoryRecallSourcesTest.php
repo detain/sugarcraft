@@ -119,6 +119,39 @@ final class MemoryRecallSourcesTest extends TestCase
         SessionSearchIndex::create($pdo)->markBuilt();
     }
 
+    /**
+     * Nine zebrafish sessions, all of this test's root A, none of them the
+     * current session — a pile one taller than the row cap so the cap is the
+     * only thing that can answer "eight".
+     */
+    private function seedNineRootASessions(string $dbPath): void
+    {
+        $store = new EnhancedSessionStore($dbPath);
+        for ($i = 1; $i <= 9; $i++) {
+            $store->createSession('many-' . $i, 'p', 'm', null, null, $this->rootA);
+            $store->saveTranscript('many-' . $i, [['role' => 'user', 'content' => 'the zebrafish pool note number ' . $i]]);
+        }
+
+        $pdo = new \PDO('sqlite:' . $dbPath);
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $pdo->setAttribute(\PDO::ATTR_TIMEOUT, 1);
+        SessionSearchIndex::create($pdo)->markBuilt();
+    }
+
+    /**
+     * The answer's hit rows only — every line the tool prefixes with a bracketed
+     * session id. The framing header is not one, so the count is a row census.
+     *
+     * @return list<string>
+     */
+    private function hitRows(string $answer): array
+    {
+        return array_values(array_filter(
+            explode("\n", $answer),
+            static fn (string $line): bool => str_starts_with($line, '- ['),
+        ));
+    }
+
     public function testTheSchemaGainsTheSourcePropertyWithoutMovingAnything(): void
     {
         $schema = (new MemoryTool())->inputSchema();
@@ -251,6 +284,64 @@ final class MemoryRecallSourcesTest extends TestCase
         self::assertStringContainsString('has not been built yet', $answer);
     }
 
+    /**
+     * The row cap's edge: nine matching sessions of this root exist, the answer
+     * carries eight rows. The count is the LITERAL eight (`MemoryTool`'s private
+     * `MAX_SESSION_HITS`), not a re-read of the constant — a pin that derived its
+     * own bound from the shipped cap would stay green when the cap is widened.
+     */
+    public function testNineMatchingSessionsAnswerExactlyEightRows(): void
+    {
+        $home = $this->useHomeSandbox($this->dir . '/home-hits') . '/.candy-code';
+        mkdir($home, 0700);
+        $this->seedNineRootASessions($home . '/session.db');
+
+        // The data leg, proved before the cap leg: the store really holds nine
+        // distinct matches, so eight rows is the cap speaking, not thin fixture.
+        $index = SessionSearchIndex::openForReadOnly($home . '/session.db');
+        self::assertNotNull($index);
+        self::assertCount(9, $index->searchScoped('zebrafish', $this->rootA, null, 9));
+
+        $answer = $this->runTool(new MemoryTool(null, $this->rootA), [
+            'action' => 'recall', 'query' => 'zebrafish', 'source' => 'sessions',
+        ]);
+        self::assertCount(8, $this->hitRows($answer));
+    }
+
+    /**
+     * The snippet cap's edge: a body long enough that the FTS snippet passes 600
+     * bytes arrives clipped — the row ends in the ellipsis marker and its snippet
+     * is 600 bytes plus the 3-byte marker. 603 is the literal, for the same
+     * reason 8 above is: neutering `MAX_SESSION_SNIPPET_BYTES` must redden this.
+     */
+    public function testAnOverlongBodyIsClippedAtTheSnippetEdge(): void
+    {
+        $home = $this->useHomeSandbox($this->dir . '/home-wide') . '/.candy-code';
+        mkdir($home, 0700);
+        $store = new EnhancedSessionStore($home . '/session.db');
+        $store->createSession('zwide', 'p', 'm', null, null, $this->rootA);
+        $store->saveTranscript('zwide', [[
+            'role' => 'user',
+            'content' => 'zebrafish ' . str_repeat('q', 700),
+        ]]);
+        $pdo = new \PDO('sqlite:' . $home . '/session.db');
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $pdo->setAttribute(\PDO::ATTR_TIMEOUT, 1);
+        SessionSearchIndex::create($pdo)->markBuilt();
+
+        $rows = $this->hitRows($this->runTool(new MemoryTool(null, $this->rootA), [
+            'action' => 'recall', 'query' => 'zebrafish', 'source' => 'sessions',
+        ]));
+        self::assertCount(1, $rows);
+        self::assertStringEndsWith('...', $rows[0]);
+
+        $snippet = substr($rows[0], (int) strpos($rows[0], '] > ') + 4);
+        self::assertSame(603, strlen($snippet));
+        // The negative half: the body that was indexed is 712 bytes of q's and
+        // none of that surplus reaches the row. Without the clip this line fails.
+        self::assertStringNotContainsString(str_repeat('q', 700), $rows[0]);
+    }
+
     public function testTheJournalViewKeepsTheNewestEntriesInsideTheBudget(): void
     {
         $journal = CompactionJournal::at($this->dir . '/journal.jsonl', 'proj');
@@ -274,6 +365,37 @@ final class MemoryRecallSourcesTest extends TestCase
         // Oldest-first among what survived, and the survivors are the NEWEST
         // tail: 3000-byte entries fit two under a 6000-byte budget.
         self::assertSame(['e14', 'e15'], $tokens);
+    }
+
+    /**
+     * The entry-count cap on its own, with the byte budget made unable to bind:
+     * eleven entries of a few bytes each fit 6000 bytes many times over, so the
+     * only thing that can drop one is `VIEW_MAX_ENTRIES`. The eviction the code
+     * performs is the OLDEST (the view reads the newest tail, oldest-first), so
+     * e11 is present and e1 is gone.
+     */
+    public function testElevenTinyEntriesAreCappedByCountNotBytes(): void
+    {
+        $journal = CompactionJournal::at($this->dir . '/tiny.jsonl', 'proj');
+        for ($i = 1; $i <= 11; $i++) {
+            self::assertTrue($journal->append('c' . $i, ['entry' => sprintf('e%d ', $i) . str_repeat('t', 20)]));
+        }
+
+        $view = $journal->recentView();
+        self::assertCount(10, $view);
+
+        $tokens = [];
+        $bytes = 0;
+        foreach ($view as $entry) {
+            foreach ($entry['records'] as $record) {
+                $bytes += strlen($record);
+                $tokens[] = strtok($record, ' ');
+            }
+        }
+        // Every entry is tiny, so the byte budget never fires: 10 x ~24 bytes
+        // against 6000. The survivors are the newest ten, oldest-first.
+        self::assertLessThan(CompactionJournal::VIEW_MAX_BYTES, $bytes);
+        self::assertSame(['e2', 'e3', 'e4', 'e5', 'e6', 'e7', 'e8', 'e9', 'e10', 'e11'], $tokens);
     }
 
     public function testJournalRecallAnswersThroughTheBoundedViewAndFramesIt(): void
