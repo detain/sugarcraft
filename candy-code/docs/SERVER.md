@@ -50,7 +50,9 @@ refused `401` and burns a lockout strike.
 |---|---|---|
 | `--host <ip>` | `127.0.0.1` | Address to bind. `localhost` and `::1` are loopback too. Anything else is refused without `--allow-remote`. |
 | `--port <n>` | `7420` | Port to bind; `0` picks a free one. |
-| `--allow-remote` | off | Permit a non-loopback `--host`. Prints a cleartext warning: there is no built-in TLS. On a wildcard bind (`0.0.0.0`, `::`) the server also answers to this machine's own addresses and its sign-in URLs name them ([Remote access](#remote-access)). |
+| `--allow-remote` | off | Permit a non-loopback `--host`. Prints a cleartext warning unless built-in TLS is on (`--tls-cert` + `--tls-key`). On a wildcard bind (`0.0.0.0`, `::`) the server also answers to this machine's own addresses and its sign-in URLs name them ([Remote access](#remote-access)). |
+| `--tls-cert <file>` | none | Built-in TLS (C-WEB-5.a): the PEM certificate the public listener serves with, given together with `--tls-key`. The sign-in URLs then read `https://`, the session cookie carries `Secure`, and a plaintext `http://` client gets no answer at all. A bad, unreadable or half pair refuses startup (exit 2) rather than serving cleartext quietly. |
+| `--tls-key <file>` | none | The PEM private key for `--tls-cert`. It must be a readable file with no group- or world-readable mode bits, and it must match the certificate. |
 | `--allowed-host <list>` | none | Comma-separated extra host names (or `host:port`; an IPv6 address in brackets) the server answers to beside the loopback names and its own addresses — e.g. a DNS name for this machine. Repeats accumulate. |
 | `--allowed-ips <list>` | none — every address | Comma-separated client IPs or CIDR ranges (`1.2.3.4,10.0.0.0/8,2001:db8::/32`) allowed to connect. Any other client is refused `403 ip_refused` before the Host check, sign-in or any credential; loopback is always allowed. Repeats accumulate ([Remote access](#remote-access)). |
 | `--allowed-origin <list>` | none | Comma-separated extra browser origins (`http(s)://host[:port]`) accepted beside the server's own. Repeats accumulate. |
@@ -243,8 +245,8 @@ says so.
    **`HttpOnly`, `SameSite=Strict`** cookie plus the `loginSecret` body field.
    The cookie is port-scoped — `candy_code_session_<port>` — so two `serve`
    instances on one host never share ambient sign-ins (7-day sliding lifetime;
-   `Secure` when a trusted proxy reports HTTPS; behind an HTTPS front the name
-   would gain the `__Host-` prefix — TLS is out of scope for the dev server).
+   `Secure` when the browser arrives over TLS — the built-in listener with
+   `--tls-cert`/`--tls-key`, or a trusted proxy reporting HTTPS).
    Posting `{"token": "…"}` works too.
 3. Before each WebSocket connect the page asks `POST /api/ticket` (cookie +
    `X-Candy-Code-Auth` secret) for a **single-use ticket** valid 30 s, bound to
@@ -1383,8 +1385,8 @@ refusal.
 
 ## Remote access
 
-There is no built-in TLS in v1, so there are three ways to reach the server
-from another machine, safest first.
+The server can speak TLS itself (`--tls-cert` + `--tls-key`, C-WEB-5.a); beside
+that there are three ways to reach it from another machine, safest first.
 
 **An SSH tunnel** — nothing new listens on the network. Keep the default
 loopback bind and forward the port from the machine with the browser:
@@ -1401,9 +1403,18 @@ on loopback; the proxy's public name goes in `server.allowedHosts` (or
 `--allowed-host`).
 
 **A direct bind** — `--host 0.0.0.0 --allow-remote` (or `::`, or one interface
-address). Everything, the token, the sign-in code and the session cookie
-included, then crosses the network in **cleartext**, and the startup lines say
-so. Use it on a network you trust.
+address), plain or with the server's own TLS:
+
+```sh
+candy-code serve --host 0.0.0.0 --allow-remote \
+    --tls-cert /etc/ssl/candy-code.pem --tls-key /etc/ssl/candy-code.key
+```
+
+Without `--tls-cert`/`--tls-key` everything — the token, the sign-in code and
+the session cookie included — then crosses the network in **cleartext**, and
+the startup lines say so; with the pair the listener wraps itself in TLS, the
+warning is not printed, and the sign-in URLs read `https://`. A plaintext
+`http://` client against the TLS endpoint gets no answer at all.
 
 ```sh
 candy-code serve --host 0.0.0.0 --allow-remote

@@ -204,9 +204,11 @@ final class AuthMiddleware
      * session, and the login secret, origin-scoped where cookies are not,
      * carries the actual authority.
      *
-     * Behind HTTPS the name should gain the `__Host-` prefix (Secure, Path=/,
-     * no Domain — all already true here); this server does not terminate TLS,
-     * so the prefix would be silently dropped by the browsers it serves.
+     * The name should gain the `__Host-` prefix under HTTPS (Secure, Path=/,
+     * no Domain — all already true here). Since C-WEB-5.a this server can
+     * terminate TLS itself, so the prefix is reachable at last; adopting it
+     * renames the cookie and signs out every open session, so it remains a
+     * deliberate follow-up rather than a side effect of the TLS flags.
      */
     public static function cookieName(ServerRequestInterface $request): string
     {

@@ -149,7 +149,8 @@ final class ApiController
     {
         // Port-scoped name (ISS-007): see AuthMiddleware::cookieName() for
         // why the name is hygiene and the login secret is authority, and for
-        // the `__Host-` prefix owed here once this server speaks HTTPS.
+        // the `__Host-` prefix still owed here (the server speaks HTTPS
+        // since C-WEB-5.a; renaming is a separate, session-breaking step).
         return AuthMiddleware::cookieName($request) . '=' . $value
             . '; Path=/; HttpOnly; SameSite=Strict; Max-Age=' . $maxAge
             . (ClientAddress::isSecure($request, $this->config->trustedProxies) ? '; Secure' : '');
