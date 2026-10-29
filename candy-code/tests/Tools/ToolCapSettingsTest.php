@@ -33,6 +33,7 @@ use SugarCraft\Code\Tools\BuiltIn\WebSearch;
 use SugarCraft\Code\Tools\McpToolBridge;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolLimits;
+use SugarCraft\Code\Tools\Web\Search\SearchBackends;
 
 /**
  * Roadmap N-P4c: the tool bounds are settings.
@@ -98,6 +99,7 @@ final class ToolCapSettingsTest extends TestCase
             ToolLimits::WEB_SEARCH_MAX_RESULTS_KEY => WebSearch::DEFAULT_MAX_RESULTS,
             ToolLimits::WEB_SEARCH_TIMEOUT_KEY => WebSearch::DEFAULT_TIMEOUT_SECONDS,
             ToolLimits::WEB_SEARCH_ENDPOINT_KEY => null,
+            ToolLimits::WEB_SEARCH_BACKEND_KEY => SearchBackends::BACKEND_SEARXNG,
             ToolLimits::INTERACTIVE_IDLE_KEY => (new \ReflectionClassConstant(Bash::class, 'INTERACTIVE_IDLE_CEILING_SECONDS'))->getValue(),
             ToolLimits::BASH_TIMEOUT_KEY => Bash::DEFAULT_TIMEOUT_SECONDS,
             ToolLimits::BASH_MAX_TIMEOUT_KEY => Bash::MAX_TIMEOUT_SECONDS,
@@ -127,12 +129,18 @@ final class ToolCapSettingsTest extends TestCase
             ToolLimits::SPILL_WINDOW_PERCENT_KEY,
             ToolLimits::INSTRUCTION_CAP_KEY,
         ];
-        // The endpoint is Egress, pinned by WebSearchEndpointSettingTest.
+        // The endpoint and the backend choice are both Egress (the backend
+        // decides WHICH host receives every model-composed query), pinned by
+        // WebSearchEndpointSettingTest and SearchBackendsTest respectively — so
+        // they are excluded here rather than falling into the Tuning default.
         // The read-before-write switch (roadmap C-TOOL-5) is Narrowing and
         // user-tier only: which way a clone polices the machine's files is
         // the person's call, not the repository's, in either direction.
         $gates = [ToolLimits::REQUIRE_READ_BEFORE_WRITE_KEY];
-        foreach (array_diff(ToolLimits::KEYS, [ToolLimits::WEB_SEARCH_ENDPOINT_KEY]) as $key) {
+        foreach (array_diff(ToolLimits::KEYS, [
+            ToolLimits::WEB_SEARCH_ENDPOINT_KEY,
+            ToolLimits::WEB_SEARCH_BACKEND_KEY,
+        ]) as $key) {
             $definition = SettingsSchema::byKey($key);
             self::assertNotNull($definition);
             self::assertTrue($definition->layered, "{$key} is layered");
