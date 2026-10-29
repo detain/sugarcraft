@@ -1154,6 +1154,11 @@ final class ReadPathCensusTest extends TestCase
                 . 'no content is read, and only an old regular file this uid owns whose name has '
                 . 'save()\'s exact shape is unlinked',
         ],
+        'Support/PublicUrlGuard.php|fopen' => [
+            'NOT_A_FILESYSTEM_PATH — a pinned HTTPS URL through a stream context; '
+                . 'the guard above the dial validates the address and the body read '
+                . 'is bounded (C-CTX-4.d, same shape as the WebFetch row)',
+        ],
         'Support/MediaStore.php|fopen' => [
             'SELF_LOCATED — the `.partial` this call publishes, opened `xb` (exclusive) under a '
                 . '0077 umask inside the PrivateDir-verified 0700 session directory; the name is '

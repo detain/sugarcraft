@@ -8,6 +8,7 @@ use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Permissions\PermissionDecision;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
+use SugarCraft\Code\Support\PublicUrlGuard;
 use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Code\Tools\ParallelSafe;
@@ -100,68 +101,9 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
      */
     public const MAX_WIRE_BYTES = 2 * 1024 * 1024;
 
-    private const BLOCKED_HOSTNAMES = [
-        'localhost',
-        '127.0.0.1',
-        '::1',
-    ];
-
-    /**
-     * Every range a fetch must never reach. The v4 half is everything that is
-     * not ordinary public unicast; the v6 half adds the transition prefixes
-     * whose packets a gateway re-emits as IPv4 (audit F-W1, 2026-10-01 — the
-     * pre-audit list stopped at RFC 1918 + loopback + link-local, so the
-     * Alibaba metadata service, every Tailscale peer and NAT64-wrapped
-     * loopback were all dialable without a prompt).
-     */
-    private const BLOCKED_IP_RANGES = [
-        // 'this host' on Linux — absent pre-wave (audit M7's second half).
-        '0.0.0.0/8',
-        '127.0.0.0/8',
-        '10.0.0.0/8',
-        // Shared address space (RFC 6598): carrier-grade NAT, every Tailscale
-        // tailnet address, and 100.100.100.200 — Alibaba Cloud's metadata
-        // service, the one cloud credential endpoint outside 169.254/16.
-        '100.64.0.0/10',
-        '172.16.0.0/12',
-        // IETF protocol assignments (RFC 6890): DS-Lite B4/AFTR, the NAT64
-        // discovery literals 192.0.0.170/171 — host-adjacent, never a site.
-        '192.0.0.0/24',
-        '192.168.0.0/16',
-        '169.254.0.0/16',
-        // Benchmarking (RFC 2544), which internal and VPN fabrics borrow
-        // because it is guaranteed never to collide with the internet.
-        '198.18.0.0/15',
-        // Multicast, then reserved-for-future-use, which also holds the
-        // limited broadcast 255.255.255.255. Neither carries a TCP fetch, so
-        // refusing them costs nothing and keeps the list "not public unicast".
-        '224.0.0.0/4',
-        '240.0.0.0/4',
-        // The unspecified v6 address dials the local host, like 0.0.0.0.
-        '::/128',
-        '::1/128',
-        // NAT64 well-known prefix (RFC 6052) and its local-use sibling (RFC
-        // 8215). On a host with DNS64/NAT64 the gateway re-dials the embedded
-        // IPv4, so `64:ff9b::7f00:1` is loopback by another name. The whole
-        // prefix is refused (fail-closed), not only the private embeddings
-        // that canonicalAddress() unwraps: the local-use /48 places the v4
-        // bits operator-defined, and a public v4 target never NEEDS the
-        // synthesized spelling while its own A record exists.
-        '64:ff9b::/96',
-        '64:ff9b:1::/48',
-        // Teredo (RFC 4380): the server and client v4 are embedded obfuscated
-        // and a relay forwards on our behalf — no prefix-level way to vet it.
-        '2001::/32',
-        // 6to4 (RFC 3056): a relay unwraps bytes 2-5 as the v4 destination.
-        '2002::/16',
-        'fc00::/7',
-        'fe80::/10',
-        // Deprecated site-local (RFC 3879) — still routed internally by stacks
-        // that never dropped it.
-        'fec0::/10',
-        // Multicast.
-        'ff00::/8',
-    ];
+    // The refused-name list and the refused-range list moved VERBATIM to
+    // {@see PublicUrlGuard} under C-CTX-4.d — the forced-instruction URL
+    // source consults the same copy, and the hop loop below consults it here.
 
     /** @var \Closure(string): list<string> */
     private \Closure $resolveAddresses;
@@ -341,7 +283,7 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
 
             // Bracketed IPv6 literal hosts: parse_url keeps the brackets.
             $host = strtolower(trim((string) $parsed['host'], '[]'));
-            if (in_array($host, self::BLOCKED_HOSTNAMES, true)) {
+            if (in_array($host, PublicUrlGuard::BLOCKED_HOSTNAMES, true)) {
                 return $this->refusal($toolCallId, $redirected
                     ? 'Error: redirect to localhost is not allowed'
                     : 'Error: fetching from localhost is not allowed');
@@ -578,7 +520,9 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
 
     /**
      * Resolve once, refuse the name if ANY answer is blocked, and return the
-     * first validated literal to dial. The pre-wave check only validated when
+     * first validated literal to dial — the decision itself lives in
+     * {@see PublicUrlGuard::guardedDialAddress()} since C-CTX-4.d; this
+     * wrapper carries the instance's resolver and blocklist seams. The pre-wave check only validated when
      * `gethostbyname()` CHANGED the string, so literal-IP URLs (e.g. the cloud
      * metadata endpoint `http://169.254.169.254/`) bypassed validation
      * entirely — locally the connection just fails, but on cloud CI runners
@@ -588,29 +532,12 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
      */
     private function guardedDialAddress(string $host, bool $redirected): array
     {
-        $blockedMessage = $redirected
-            ? 'Error: redirect to private/link-local address is not allowed'
-            : 'Error: fetching from private/link-local addresses is not allowed';
-
-        $addresses = ($this->resolveAddresses)($host);
-
-        $dial = null;
-        foreach ($addresses as $address) {
-            // Contract: the resolver seam yields IP literals. Anything else is
-            // refused here, because this exact string becomes the URL
-            // authority on the next line of the trust chain.
-            if (!is_string($address) || filter_var($address, FILTER_VALIDATE_IP) === false) {
-                return ["Error: could not resolve host: $host", null];
-            }
-            if (($this->isBlockedAddress)($address)) {
-                return [$blockedMessage, null];
-            }
-            $dial ??= $address;
-        }
-
-        return $dial === null
-            ? ["Error: could not resolve host: $host", null]
-            : [null, $dial];
+        return PublicUrlGuard::guardedDialAddress(
+            $host,
+            $redirected,
+            $this->resolveAddresses,
+            $this->isBlockedAddress,
+        );
     }
 
     /**
@@ -850,146 +777,23 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
     }
 
     /**
-     * System DNS for both address families. `dns_get_record()` speaks raw DNS
-     * and misses /etc/hosts entries, so an empty answer falls back to the
-     * `gethostby*` resolvers (which return v4 only — the best this wrapper
-     * can do when record access is unavailable).
-     *
-     * Public, with {@see addressIsBlocked()}, so {@see WebSearch} guards its
-     * endpoint with the SAME resolver and range list rather than a second
-     * copy: the copy it used to carry answered v4 only and lacked even
-     * `0.0.0.0/8` (audit F-W3), which is the drift two lists invite.
-     *
-     * @internal shared by the built-in web tools, not a public API
+     * @internal shared with {@see WebSearch} and the hosted search backends;
+     * the rule itself lives in {@see PublicUrlGuard::resolveViaSystemDns()}
+     * since C-CTX-4.d — these one-line delegates exist so the tools' existing
+     * trust surface (five backends guard their endpoints through
+     * `WebFetch::resolveViaSystemDns` and `WebFetch::addressIsBlocked`, and
+     * tests pin the verdicts here) never had to move in one change.
      *
      * @return list<string>
      */
     public static function resolveViaSystemDns(string $host): array
     {
-        if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
-            return [$host];
-        }
-
-        $records = @dns_get_record($host, DNS_A | DNS_AAAA);
-        $addresses = [];
-        foreach (is_array($records) ? $records : [] as $record) {
-            if (isset($record['ip'])) {
-                $addresses[] = (string) $record['ip'];
-            }
-            if (isset($record['ipv6'])) {
-                $addresses[] = (string) $record['ipv6'];
-            }
-        }
-        if ($addresses !== []) {
-            return $addresses;
-        }
-
-        $v4 = gethostbynamel($host);
-        if (is_array($v4) && $v4 !== []) {
-            return $v4;
-        }
-
-        $single = gethostbyname($host);
-        return $single === $host ? [] : [$single];
+        return PublicUrlGuard::resolveViaSystemDns($host);
     }
 
-    /**
-     * The default blocklist decision. Both the address as answered and its
-     * canonical IPv4 form are compared against every CIDR, and either match
-     * refuses it: the canonical pass lets the v4 list govern every v4-in-v6
-     * spelling, while the raw pass keeps the v6 prefix entries (NAT64, 6to4)
-     * live — canonicalising alone would turn `64:ff9b::/96` into a dead entry,
-     * since no address could still be in it by the time the list is read.
-     *
-     * @internal shared with {@see WebSearch}; see {@see resolveViaSystemDns()}
-     */
     public static function addressIsBlocked(string $address): bool
     {
-        $forms = array_unique([$address, self::canonicalAddress($address)]);
-
-        foreach ($forms as $form) {
-            foreach (self::BLOCKED_IP_RANGES as $cidr) {
-                if (self::ipInCidr($form, $cidr)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Maps every IPv6 shape that carries a dialable IPv4 destination back to
-     * IPv4 text, so the v4 ranges decide what the packet actually reaches:
-     *
-     *  - `::ffff:a.b.c.d` (mapped) and the deprecated `::a.b.c.d`
-     *    (compatibility, which `::1` and `::` also fall into) — Linux dials
-     *    these as the embedded v4 itself;
-     *  - `64:ff9b::a.b.c.d` (NAT64 well-known prefix, last 4 bytes) — a
-     *    NAT64 gateway re-dials the embedded v4;
-     *  - `2002:aabb:ccdd::/48` (6to4, bytes 2-5) — a 6to4 relay delivers to
-     *    `aa.bb.cc.dd`.
-     *
-     * Without this the family-length compare in {@see ipInCidr()} wave-passes
-     * `[::ffff:127.0.0.1]` or `[64:ff9b::a9fe:a9fe]` past every v4 range.
-     * The NAT64 and 6to4 prefixes are ALSO refused whole in the range list;
-     * the unwrap keeps the v4 verdict authoritative should either prefix
-     * entry ever be narrowed. The local-use NAT64 /48 and Teredo are not
-     * unwrapped — their embedding is operator-defined or obfuscated — and
-     * are refused by prefix alone.
-     */
-    private static function canonicalAddress(string $address): string
-    {
-        $binary = @inet_pton($address);
-        if ($binary === false || strlen($binary) !== 16) {
-            return $address;
-        }
-
-        $embedded = null;
-        $head = substr($binary, 10, 2);
-        if (substr($binary, 0, 10) === str_repeat("\x00", 10)
-            && ($head === "\xff\xff" || $head === "\x00\x00")
-        ) {
-            $embedded = substr($binary, 12, 4);
-        } elseif (substr($binary, 0, 12) === "\x00\x64\xff\x9b" . str_repeat("\x00", 8)) {
-            $embedded = substr($binary, 12, 4);
-        } elseif (substr($binary, 0, 2) === "\x20\x02") {
-            $embedded = substr($binary, 2, 4);
-        }
-
-        if ($embedded !== null) {
-            $v4 = inet_ntop($embedded);
-            if ($v4 !== false) {
-                return $v4;
-            }
-        }
-
-        return $address;
-    }
-
-    private static function ipInCidr(string $ip, string $cidr): bool
-    {
-        [$subnet, $bits] = explode('/', $cidr, 2);
-        $ipBin = @inet_pton($ip);
-        $subnetBin = @inet_pton($subnet);
-        if ($ipBin === false || $subnetBin === false || strlen($ipBin) !== strlen($subnetBin)) {
-            return false; // address-family mismatch (v4 vs v6)
-        }
-
-        $bits = (int) $bits;
-        $fullBytes = intdiv($bits, 8);
-        $remainder = $bits % 8;
-
-        if ($fullBytes > 0 && substr($ipBin, 0, $fullBytes) !== substr($subnetBin, 0, $fullBytes)) {
-            return false;
-        }
-        if ($remainder === 0) {
-            return true;
-        }
-
-        $mask = ~(0xFF >> $remainder) & 0xFF;
-
-        return ((ord($ipBin[$fullBytes]) ^ ord($subnetBin[$fullBytes])) & $mask) === 0;
+        return PublicUrlGuard::addressIsBlocked($address);
     }
 
     private function refusal(string $toolCallId, string $message): ToolResult
