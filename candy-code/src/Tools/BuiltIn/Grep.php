@@ -76,6 +76,11 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         private ?RulePathNudge $ruleNudge = null,
         // Audit F-J5: LAST for the same positional-argument reason.
         private ?AgentPathJail $worktreeJail = null,
+        // C-CTX-4.f: validated read-only reference roots (list<string> of
+        // absolute directories) from the user-tier-only `references` setting;
+        // the primary jail stays the first word and this list is consulted
+        // only behind it, for searches.
+        private array $readRoots = [],
     ) {}
 
     /**
@@ -185,7 +190,7 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
 
     public static function fromCatalog(ToolBuildContext $context): self
     {
-        return new self($context->root, instructionLoader: $context->loader, skillNudge: $context->skillNudge, ruleNudge: $context->ruleNudge, rgAvailable: $context->rgAvailable);
+        return new self($context->root, instructionLoader: $context->loader, skillNudge: $context->skillNudge, ruleNudge: $context->ruleNudge, rgAvailable: $context->rgAvailable, readRoots: $context->readRoots);
     }
 
     public function name(): string
@@ -275,7 +280,11 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // Only a rooted instance is contained, so only a rooted instance says
         // so — the unrooted one (a test, an embedder) genuinely accepts any
         // readable directory.
-        $pathScope = $this->jailRoot() !== null ? ' Must be inside the workspace root.' : '';
+        $pathScope = match (true) {
+            $this->jailRoot() === null => '',
+            $this->readRoots === [] => ' Must be inside the workspace root.',
+            default => ' Must be inside the workspace root or a read-only reference listed in the environment.',
+        };
 
         return [
         'type' => 'object',
@@ -361,6 +370,7 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         }
 
         $jailRoot = $this->jailRoot();
+        $referenceAnchor = null;
         if ($jailRoot !== null) {
             // A tool result that was over its budget names a saved file outside
             // the root (roadmap 2.8); searching THAT file is the other half of
@@ -369,13 +379,23 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             // {@see ToolOutputSpill::readablePath()} for exactly which.
             $resolved = PathJail::resolveDir($jailRoot, $path) ?? ToolOutputSpill::readablePath($path);
             if ($resolved === null) {
-                return new ToolResult(
-                    toolCallId: $args['id'] ?? '',
-                    content: 'Error: path outside workspace root',
-                    isError: true,
-                );
+                // C-CTX-4.f: behind the jail sits the read-only reference
+                // list. A reference search is governed by the REFERENCE's
+                // ignore rules (its own .gitignore, its own excluded-dir
+                // story), which is why the matched root travels to rulesFor
+                // instead of the primary jail root staying the anchor.
+                $reference = $this->resolveReferenceDir($path);
+                if ($reference === null) {
+                    return new ToolResult(
+                        toolCallId: $args['id'] ?? '',
+                        content: 'Error: path outside workspace root',
+                        isError: true,
+                    );
+                }
+                [$path, $referenceAnchor] = $reference;
+            } else {
+                $path = $resolved;
             }
-            $path = $resolved;
         } elseif (!is_dir($path)) {
             return new ToolResult(
                 toolCallId: $args['id'] ?? '',
@@ -384,7 +404,7 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             );
         }
 
-        $rules = $this->rulesFor($path, self::flag($args['include_ignored'] ?? null));
+        $rules = $this->rulesFor($path, self::flag($args['include_ignored'] ?? null), $referenceAnchor);
 
         $cmd = $this->buildCommand($rules, $include, $pattern, $path);
         // See Bash::execute() -- exec() leaks the child's stderr onto the
@@ -1109,6 +1129,47 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
     }
 
     /**
+     * C-CTX-4.f: reference-root fallback for search directories. Only
+     * absolute paths qualify (relative names belong to the primary root,
+     * whose refusal must stand unanswered), and PathJail::resolveDir keeps
+     * the same "must exist" strictness the primary jail branch applies.
+     *
+     * @return array{0: string, 1: string}|null [resolved directory, matched
+     *         reference root] — the root is what the ignore-rules anchor
+     *         becomes for this search
+     */
+    private function resolveReferenceDir(string $path): ?array
+    {
+        if ($this->readRoots === [] || !self::pathLooksAbsolute($path)) {
+            return null;
+        }
+        foreach ($this->readRoots as $referenceRoot) {
+            $resolved = PathJail::resolveDir($referenceRoot, $path);
+            if ($resolved !== null) {
+                return [$resolved, $referenceRoot];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * POSIX absolute or Windows drive-letter spelling — the only shapes that
+     * can name a place under a reference root at all.
+     */
+    private static function pathLooksAbsolute(string $path): bool
+    {
+        if ($path === '') {
+            return false;
+        }
+        if ($path[0] === '/') {
+            return true;
+        }
+
+        return strlen($path) >= 2 && ctype_alpha($path[0]) && $path[1] === ':';
+    }
+
+    /**
      * The ignore ruleset governing this call.
      *
      * $searchRoot's own segments are removed from the exclude list, which is
@@ -1116,16 +1177,20 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
      * `path: "vendor/acme"` has to search vendor/acme, not report it empty.
      * The `.gitignore` layer gets the same treatment when the search base is
      * itself an ignored directory.
+     *
+     * C-CTX-4.f: $anchorRoot replaces the jail as the ruleset's home for a
+     * reference search (the reference governs itself); it is null for every
+     * in-jail search, which keeps the pre-C-CTX-4.f bytes exactly.
      */
-    private function rulesFor(string $searchRoot, bool $includeIgnored): IgnoreRules
+    private function rulesFor(string $searchRoot, bool $includeIgnored, ?string $anchorRoot = null): IgnoreRules
     {
         if ($includeIgnored) {
-            return IgnoreRules::new($this->jailRoot() ?? $searchRoot)
+            return IgnoreRules::new($anchorRoot ?? $this->jailRoot() ?? $searchRoot)
                 ->withGitignore(false)
                 ->withExcludedDirs([]);
         }
 
-        $rules = IgnoreRules::new($this->jailRoot() ?? $searchRoot)
+        $rules = IgnoreRules::new($anchorRoot ?? $this->jailRoot() ?? $searchRoot)
             ->withoutExcludedDirs(explode('/', $searchRoot));
 
         return $rules->ignores($searchRoot, true) ? $rules->withGitignore(false) : $rules;

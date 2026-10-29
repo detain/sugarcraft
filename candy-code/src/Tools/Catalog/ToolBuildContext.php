@@ -63,6 +63,20 @@ final readonly class ToolBuildContext
          * appended to the finished list by hand.
          */
         public ?\SugarCraft\Code\MCP\McpToolShape $mcpShape = null,
+        /**
+         * C-CTX-4.f: the user's `references` — extra directories the READ
+         * tools (Read, Grep, Glob, Ls) may walk beside the session root.
+         * A list of canonical absolute directory paths, already validated
+         * (exists, is a directory, not inside the session root) by
+         * {@see \SugarCraft\Code\Cli\LaunchContext::referenceReadRoots()};
+         * refusals became launch notices there, so a tool only ever sees
+         * usable roots. Empty by default, which is every pre-C-CTX-4.f
+         * build and every single-root jail. Write, Edit, Bash and the
+         * worktree jail never consult this field — it widens reads only.
+         *
+         * @var list<string>
+         */
+        public array $readRoots = [],
     ) {
     }
 }

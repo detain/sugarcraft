@@ -91,6 +91,11 @@ final readonly class Glob implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         private ?RulePathNudge $ruleNudge = null,
         // Audit F-J5: LAST for the same positional-argument reason.
         private ?AgentPathJail $worktreeJail = null,
+        // C-CTX-4.f: read-only reference roots (list<string> of absolute
+        // directories) appended after every earlier field, for the same
+        // positional-argument reason the earlier appends record. Consulted
+        // only behind the primary jail, and withinRoot widens to match.
+        private array $readRoots = [],
     ) {}
 
     /**
@@ -188,7 +193,7 @@ final readonly class Glob implements Tool, AcceptsWorktreeJail, AcceptsInstructi
 
     public static function fromCatalog(ToolBuildContext $context): self
     {
-        return new self($context->root, instructionLoader: $context->loader, skillNudge: $context->skillNudge, ruleNudge: $context->ruleNudge, fdAvailable: $context->fdAvailable);
+        return new self($context->root, instructionLoader: $context->loader, skillNudge: $context->skillNudge, ruleNudge: $context->ruleNudge, fdAvailable: $context->fdAvailable, readRoots: $context->readRoots);
     }
 
     public function name(): string
@@ -337,16 +342,26 @@ final readonly class Glob implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         }
 
         $jailRoot = $this->jailRoot();
+        $referenceAnchor = null;
         if ($jailRoot !== null) {
             $resolved = PathJail::resolveDir($jailRoot, $path);
             if ($resolved === null) {
-                return new ToolResult(
-                    toolCallId: $args['id'] ?? '',
-                    content: 'Error: path outside workspace root',
-                    isError: true,
-                );
+                // C-CTX-4.f: behind the jail sits the read-only reference
+                // list; a walk rooted in a reference is governed by that
+                // reference's own ignore rules, so the matched root travels
+                // down to the IgnoreRules anchor below.
+                $reference = $this->resolveReferenceDir($path);
+                if ($reference === null) {
+                    return new ToolResult(
+                        toolCallId: $args['id'] ?? '',
+                        content: 'Error: path outside workspace root',
+                        isError: true,
+                    );
+                }
+                [$path, $referenceAnchor] = $reference;
+            } else {
+                $path = $resolved;
             }
-            $path = $resolved;
         } elseif (!is_dir($path)) {
             return new ToolResult(
                 toolCallId: $args['id'] ?? '',
@@ -423,8 +438,9 @@ final readonly class Glob implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // .gitignore. Unjailed there is nothing above $baseDir this tool has
         // been told to trust, and silently climbing out of the directory the
         // caller named to pick up a stranger's rules is worse than missing
-        // them.
-        $rules = IgnoreRules::new($this->jailRoot() ?? $baseDir)
+        // them. C-CTX-4.f: a reference-rooted walk is governed by the
+        // reference's own rules, never the primary project's.
+        $rules = IgnoreRules::new($referenceAnchor ?? $this->jailRoot() ?? $baseDir)
             ->withGitignore(!self::flag($args['include_ignored'] ?? null));
 
         // Pointing `path` INSIDE an ignored directory is a deliberate request
@@ -965,21 +981,82 @@ final readonly class Glob implements Tool, AcceptsWorktreeJail, AcceptsInstructi
     private function withinRoot(array $files): array
     {
         $jailRoot = $this->jailRoot();
-        if ($jailRoot === null) {
+        if ($jailRoot === null && $this->readRoots === []) {
             return $files;
         }
 
-        $rootReal = realpath($jailRoot);
-        if ($rootReal === false) {
-            return [];
+        $roots = [];
+        if ($jailRoot !== null) {
+            $rootReal = realpath($jailRoot);
+            if ($rootReal === false) {
+                return [];
+            }
+            $roots[] = $rootReal;
+        }
+        // C-CTX-4.f: the reference roots are additional accepted homes for
+        // walk results — the same realpath comparison, run per root. A
+        // reference whose directory vanished mid-session contributes nothing
+        // and admits nothing (its realpath is false).
+        foreach ($this->readRoots as $referenceRoot) {
+            $real = realpath($referenceRoot);
+            if ($real !== false) {
+                $roots[] = $real;
+            }
+        }
+        if ($roots === []) {
+            return $files;
         }
 
-        return array_values(array_filter($files, static function (string $file) use ($rootReal): bool {
+        return array_values(array_filter($files, static function (string $file) use ($roots): bool {
             $real = realpath($file);
+            if ($real === false) {
+                return false;
+            }
+            foreach ($roots as $rootReal) {
+                if ($real === $rootReal || str_starts_with($real, $rootReal . '/')) {
+                    return true;
+                }
+            }
 
-            return $real !== false
-                && ($real === $rootReal || str_starts_with($real, $rootReal . '/'));
+            return false;
         }));
+    }
+
+    /**
+     * C-CTX-4.f: the reference-directory fallback (execute's jail refusal
+     * calls it; the shape is Glob's because the walk below needs a directory
+     * and PathJail::resolveDir proves exactly that).
+     */
+    private function resolveReferenceDir(string $path): ?array
+    {
+        if ($this->readRoots === [] || !self::absoluteShape($path)) {
+            return null;
+        }
+        foreach ($this->readRoots as $referenceRoot) {
+            $resolved = PathJail::resolveDir($referenceRoot, $path);
+            if ($resolved !== null) {
+                return [$resolved, $referenceRoot];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Can this spelling denote a place under a reference root? Relative
+     * names — `src/x`, `./y`, `../z` — belong to the primary jail's answer,
+     * and its refusal must stand for them.
+     */
+    private static function absoluteShape(string $path): bool
+    {
+        if ($path === '') {
+            return false;
+        }
+        if ($path[0] === '/') {
+            return true;
+        }
+
+        return strlen($path) >= 2 && ctype_alpha($path[0]) && $path[1] === ':';
     }
 
     /**

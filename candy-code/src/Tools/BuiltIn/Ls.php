@@ -87,6 +87,11 @@ final readonly class Ls implements Tool, AcceptsWorktreeJail, ParallelSafe, Buil
         // Audit F-J5 lineage: LAST, for the positional-argument reason stated
         // in Glob/Grep — cap tests construct these tools positionally.
         private ?AgentPathJail $worktreeJail = null,
+        // C-CTX-4.f: read-only reference roots (list<string> of absolute
+        // directories), appended last for the same positional reason; a
+        // listing may sit under one of them when the primary jail refuses the
+        // path, and the walk's containment then anchors on that reference.
+        private array $readRoots = [],
     ) {}
 
     /**
@@ -101,7 +106,7 @@ final readonly class Ls implements Tool, AcceptsWorktreeJail, ParallelSafe, Buil
 
     public static function fromCatalog(ToolBuildContext $context): self
     {
-        return new self($context->root);
+        return new self($context->root, readRoots: $context->readRoots);
     }
 
     public function name(): string
@@ -181,16 +186,27 @@ final readonly class Ls implements Tool, AcceptsWorktreeJail, ParallelSafe, Buil
         }
 
         $jailRoot = $this->jailRoot();
+        $walkRoot = $jailRoot;
         if ($jailRoot !== null) {
             $resolved = PathJail::resolveDir($jailRoot, $path);
             if ($resolved === null) {
-                return new ToolResult(
-                    toolCallId: $args['id'] ?? '',
-                    content: 'Error: path outside workspace root',
-                    isError: true,
-                );
+                // C-CTX-4.f: behind the jail sits the read-only reference
+                // list. The matched reference root — not the primary jail —
+                // becomes the containment anchor for the walk and its ignore
+                // rules, so entries under the reference are listed, not
+                // counted as escapes.
+                $reference = $this->resolveReferenceDir($path);
+                if ($reference === null) {
+                    return new ToolResult(
+                        toolCallId: $args['id'] ?? '',
+                        content: 'Error: path outside workspace root',
+                        isError: true,
+                    );
+                }
+                [$path, $walkRoot] = $reference;
+            } else {
+                $path = $resolved;
             }
-            $path = $resolved;
         } elseif (!is_dir($path)) {
             return new ToolResult(
                 toolCallId: $args['id'] ?? '',
@@ -229,7 +245,7 @@ final readonly class Ls implements Tool, AcceptsWorktreeJail, ParallelSafe, Buil
         }
 
         $includeHidden = self::flag($args['include_hidden'] ?? null);
-        $rules = IgnoreRules::new($jailRoot ?? $baseDir)
+        $rules = IgnoreRules::new($walkRoot ?? $baseDir)
             ->withGitignore(!self::flag($args['include_ignored'] ?? null));
 
         // Pointing `path` INSIDE an ignored directory is a deliberate request
@@ -240,7 +256,7 @@ final readonly class Ls implements Tool, AcceptsWorktreeJail, ParallelSafe, Buil
             $rules = $rules->withGitignore(false);
         }
 
-        [$entries, $total, $ignored, $escaped] = $this->collect($baseDir, $jailRoot, $includeHidden, $rules);
+        [$entries, $total, $ignored, $escaped] = $this->collect($baseDir, $walkRoot, $includeHidden, $rules);
 
         // collect() has already stopped at maxEntries, so every entry it
         // returned is printed and the not-shown remainder is a counter, not
@@ -410,5 +426,46 @@ final readonly class Ls implements Tool, AcceptsWorktreeJail, ParallelSafe, Buil
     private function jailRoot(): ?string
     {
         return $this->worktreeJail?->root() ?? $this->root;
+    }
+
+    /**
+     * C-CTX-4.f: reference-root fallback for listings. Only absolute paths
+     * qualify — a relative name asks about the primary root, and an "outside"
+     * answer there must not be re-answered against a reference.
+     *
+     * @return array{0: string, 1: string}|null [listed directory, matched
+     *         reference root]
+     */
+    private function resolveReferenceDir(string $path): ?array
+    {
+        if ($this->readRoots === [] || !self::denotesAbsolutePlace($path)) {
+            return null;
+        }
+        foreach ($this->readRoots as $referenceRoot) {
+            $resolved = PathJail::resolveDir($referenceRoot, $path);
+            if ($resolved !== null) {
+                return [$resolved, $referenceRoot];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Does the spelling name a place on the filesystem tree by absolute
+     * address (POSIX `/…` or a Windows drive)? Reference roots can only be
+     * asked about by absolute address, because they sit outside the primary
+     * root by construction.
+     */
+    private static function denotesAbsolutePlace(string $path): bool
+    {
+        if ($path === '') {
+            return false;
+        }
+        if ($path[0] === '/') {
+            return true;
+        }
+
+        return strlen($path) >= 2 && ctype_alpha($path[0]) && $path[1] === ':';
     }
 }

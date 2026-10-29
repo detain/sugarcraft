@@ -1176,6 +1176,29 @@ can be made:
 Files are written `0600`, are kept for seven days, and are swept by the first
 spill of a later process.
 
+### Read-only reference roots (`references`)
+
+The user-tier `references` setting lists extra directories that `Read`, `Grep`,
+`Glob` and `Ls` may open besides the workspace root — a sibling checkout, a
+vendored SDK, a read-only share of notes. Each entry is a `{path, name}` object
+or a bare path string; relative paths base on the session root. The roots are
+validated when tools are built: an unusable, missing or non-directory entry is
+announced as a launch notice and ignored, an entry inside the session root is
+refused as redundant, and the survivors are advertised in the `<env>` block
+with a capped repo-map each, so the model learns what it may read.
+
+This is not an exception to the jail above. The workspace jail keeps exactly
+one exception — saved tool output — and `references` works by running a second
+containment check per reference root: a path is accepted when it lies inside
+the session root or inside one reference root, and each root's own ignore rules
+govern a search of it. Every writer stays confined as before: `Write`, `Edit`
+and `ApplyPatch` never consult a reference root, and `Bash` reads where it has
+always read — the jail is not what confines it, the permission rules are. The
+setting is user-tier only for the obvious reason: a project file must not be
+able to smuggle a read root into the session, since pointing reads at `$HOME`
+from an untrusted clone is exactly the machine-wide read the auto-allow rules
+above refuse to grant.
+
 ---
 
 ## The four `trustedProject*` keys

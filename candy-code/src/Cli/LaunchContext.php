@@ -1712,6 +1712,15 @@ final class LaunchContext
                 // config yields null from fromCatalog() and neither name
                 // reaches the wire at all.
                 mcpShape: Bootstrap::mcpToolShape($root),
+                // C-CTX-4.f: the user's `references` as extra READ-ONLY roots
+                // for Read/Grep/Glob/Ls. Filled here rather than in `tools()`
+                // because this is the one build every `tools()` copy comes
+                // through — `tools()`, `toolSetUnder()` and the grant universe
+                // all delegate to this method, so a sub-agent's catalog and the
+                // shell's display copies read the same shelf the `<env>` block
+                // advertises. Validated and notice-reported once per build by
+                // {@see referenceReadRoots()}.
+                readRoots: self::referenceReadRoots($root),
             )),
             ...Bootstrap::mcpTools($root),
         ];
@@ -1723,6 +1732,78 @@ final class LaunchContext
         // Only a caller that must distinguish narrowing from absence (the
         // sub-agent grant, E639) asks for this one directly.
         return $tools;
+    }
+
+    /**
+     * C-CTX-4.f: the user's `references` setting as validated, canonical
+     * read-only roots — the shelf {@see \SugarCraft\Code\Tools\Catalog\ToolBuildContext::$readRoots}
+     * carries to Read, Grep, Glob and Ls.
+     *
+     * USER TIER ONLY, BY READER AND BY SCHEMA. The key carries no
+     * `withProjectSettable()`, so it is absent from
+     * {@see LayeredSettings::PROJECT_TIER_KEYS} and a project settings file
+     * can never supply it into the merged array read here; and `references`
+     * point OUTSIDE the project by design — a trusted checkout widening its
+     * own read jail would be a checked-out repository choosing which of the
+     * user's other directories the model may see, exactly the direction the
+     * user-tier-only law refuses.
+     *
+     * EVERY REFUSAL IS A LAUNCH NOTICE, never a silent drop: a reference
+     * that stopped being a directory is a config that lies, and the model is
+     * told (in `<env>`) about the references that DID validate, so the diff
+     * between the file the user wrote and the shelf the tools read must be
+     * loud. A reference inside the session root is refused as REDUNDANT —
+     * accepting it would advertise a second name for a directory the jail
+     * already covers, and a reference naming the root itself would smuggle
+     * WRITE-adjacent confusion into a read-only list.
+     *
+     * The notices are recorded once per build; the transcript shelf dedupes
+     * on the whole message, so a per-turn rebuild repeats nothing.
+     *
+     * @return list<string> canonical absolute directories, in config order
+     */
+    public static function referenceReadRoots(string $root): array
+    {
+        try {
+            $configured = Bootstrap::readUserConfig()['references'] ?? null;
+        } catch (\Throwable) {
+            return [];
+        }
+
+        if (!is_array($configured) || $configured === []) {
+            return [];
+        }
+
+        $rootReal = realpath($root);
+        $roots = [];
+        foreach ($configured as $entry) {
+            $path = is_array($entry) ? ($entry['path'] ?? null) : (is_string($entry) ? $entry : null);
+            if (!is_string($path) || trim($path) === '') {
+                LaunchNotices::record(Lang::t('cli.references.unusable'), Bootstrap::launchNoticeLimit());
+
+                continue;
+            }
+            $path = trim($path);
+            if ($path[0] !== '/') {
+                $path = rtrim($rootReal !== false ? $rootReal : $root, '/') . '/' . $path;
+            }
+            $dir = realpath($path);
+            if ($dir === false || !is_dir($dir)) {
+                LaunchNotices::record(Lang::t('cli.references.missing', ['path' => $path]), Bootstrap::launchNoticeLimit());
+
+                continue;
+            }
+            if ($dir === $rootReal || ($rootReal !== false && str_starts_with($dir, $rootReal . '/'))) {
+                LaunchNotices::record(Lang::t('cli.references.redundant', ['path' => $dir]), Bootstrap::launchNoticeLimit());
+
+                continue;
+            }
+            if (!in_array($dir, $roots, true)) {
+                $roots[] = $dir;
+            }
+        }
+
+        return $roots;
     }
 
     /**

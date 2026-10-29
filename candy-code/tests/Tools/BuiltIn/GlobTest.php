@@ -202,6 +202,53 @@ final class GlobTest extends TestCase
         );
     }
 
+    public function testJailedGlobAcceptsAPathUnderAReadOnlyReference(): void
+    {
+        // C-CTX-4.f: the reference root is the one jail refusal that turns
+        // into a listing - and only for absolute paths. The primary jail
+        // stays shut, and withinRoot() keeps the hits rather than filtering
+        // them out as escapes.
+        $ref = realpath(sys_get_temp_dir()) . '/crush-glob-ref-' . uniqid('', true);
+        mkdir($ref . '/src', 0o777, true);
+        file_put_contents($ref . '/src/library.php', '<?php');
+
+        try {
+            $tool = new Glob(root: $this->root . '/a', readRoots: [$ref]);
+
+            $result = $tool->execute([
+                'pattern' => '**/*.php',
+                'path' => $ref . '/src',
+                'description' => 'list the reference',
+            ]);
+
+            $this->assertFalse($result->isError(), $result->content());
+            $this->assertContains($ref . '/src/library.php', $this->linesOf($result->content()));
+
+            // Same tool, same setting: a relative operand still answers from
+            // the primary jail only - the fallback never shops for a second
+            // root to re-base it under.
+            $relative = $tool->execute([
+                'pattern' => '*.php',
+                'path' => '../glob-missing',
+                'description' => 'escape the jail',
+            ]);
+            $this->assertTrue($relative->isError());
+            $this->assertStringContainsString('outside workspace root', $relative->content());
+
+            // Without the setting the reference is as foreign as any other
+            // directory.
+            $bare = (new Glob(root: $this->root . '/a'))->execute([
+                'pattern' => '**/*.php',
+                'path' => $ref . '/src',
+                'description' => 'escape the jail',
+            ]);
+            $this->assertTrue($bare->isError());
+            $this->assertStringContainsString('outside workspace root', $bare->content());
+        } finally {
+            $this->removeTree($ref);
+        }
+    }
+
     // =========================================================================
     // MAJOR-2 — the pattern is jailed too, not only the path
     // =========================================================================

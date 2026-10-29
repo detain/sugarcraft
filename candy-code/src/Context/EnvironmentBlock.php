@@ -260,6 +260,30 @@ final readonly class EnvironmentBlock implements PromptSection
     public const MIN_DIFF_MAX_BYTES = 256;
 
     /**
+     * C-CTX-4.f: the user-tier `references` key — a list of extra read-only
+     * roots ({path, name} objects or bare path strings) that Read, Grep, Glob
+     * and Ls may search and that this block advertises. The setting itself is
+     * validated loudly by `LaunchContext::referenceReadRoots()` at tool-build
+     * time (launch notices for unusable, missing or redundant entries);
+     * {@see withSettings()} renders only what survives that same shape check
+     * here, silently, so the prompt never carries an entry the tools refuse.
+     * Each reference's RepoMapBlock summary is capped at
+     * {@see REFERENCE_SUMMARY_MAX_BYTES} before it joins the `<env>` body.
+     */
+    public const SETTING_REFERENCES = 'references';
+
+    /**
+     * C-CTX-4.f: per-reference byte cap on the collapsed repo-map summary in
+     * the references block. Sized like {@see SUMMARY_MAX_BYTES}'s family —
+     * enough for the map's framing sentence and a head full of package lines,
+     * too small for one large sibling checkout to dominate the `<env>` block.
+     */
+    public const REFERENCE_SUMMARY_MAX_BYTES = 2048;
+
+    /** C-CTX-4.f: cap on one reference's advertised name, the entry-shape peer of `RepoMapBlock::MAX_ENTRY_BYTES`. */
+    public const REFERENCE_NAME_MAX_BYTES = 120;
+
+    /**
      * Retained bytes for the `--porcelain` status and the recent-log lines, each.
      *
      * NOT part of P8.10, and here because P8.10's cap was measurably defeated by
@@ -745,6 +769,12 @@ final readonly class EnvironmentBlock implements PromptSection
         private bool $diffsAfterWrites = true,
         private int $diffMaxBytes = self::DIFF_MAX_BYTES,
         private ?string $knowledgeCutoff = null,
+        // C-CTX-4.f: the validated read-only reference roots to advertise in
+        // the `<env>` block, as list<array{name: string, path: string, summary:
+        // string}> produced by normalizeReferences(). Empty is the pre-4.f byte
+        // shape: nothing extra renders. Frozen like the rest of this half so
+        // the prompt prefix stays stable for the whole session.
+        private array $projectReferences = [],
     ) {}
 
     /**
@@ -828,7 +858,7 @@ final readonly class EnvironmentBlock implements PromptSection
      */
     public function withWriteSinceLastRender(bool $writeSinceLastRender): self
     {
-        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $writeSinceLastRender, $this->volatile, $this->diffsAfterWrites, $this->diffMaxBytes, $this->knowledgeCutoff);
+        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $writeSinceLastRender, $this->volatile, $this->diffsAfterWrites, $this->diffMaxBytes, $this->knowledgeCutoff, $this->projectReferences);
         if (isset($this->enclosingRepo)) {
             $copy->enclosingRepo = $this->enclosingRepo;
         }
@@ -864,7 +894,8 @@ final readonly class EnvironmentBlock implements PromptSection
      * PHP version, model name, current date — with a knowledge-cutoff
      * line after the model name when the session's model family is known to
      * {@see \SugarCraft\Code\Providers\ModelMetadata::knowledgeCutoff()}
-     * (C-CTX-4; the line is absent, never guessed, for unknown families).
+     * (C-CTX-4; the line is absent, never guessed, for unknown families) and
+     * an optional read-only references block after the date (C-CTX-4.f, below).
      * When the cwd is inside a git work
      * tree (its root, or since audit 15d-13 any directory below it, where the
      * first line also names the repo root — see {@see enclosingRepo()}), a git
@@ -880,10 +911,13 @@ final readonly class EnvironmentBlock implements PromptSection
      * see {@see DIFF_MAX_BYTES} and {@see SUMMARY_MAX_BYTES} for the bounds and
      * for why the branch is the one exception.
      *
-     * There is deliberately no "additional working directories" line, although
-     * crush_code.md Phase 5 item 10a asks for one. See the inline note at the
-     * OS-version line below for the full reason; the short version is that this
-     * application has no multi-root concept for such a line to describe.
+     * There is no "additional working directories" line — crush_code.md Phase 5
+     * item 10a once asked for one and the answer stayed that this application
+     * has no writable multi-root concept. C-CTX-4.f adds the thing it really
+     * describes: an optional `Project references` block after the date, listing
+     * the user-tier read-only roots from {@see withSettings()} when (and only
+     * when) any survive validation. Writes stay jailed to the workspace root;
+     * the block advertises read permission, nothing more.
      */
     public function render(): string
     {
@@ -945,7 +979,7 @@ final readonly class EnvironmentBlock implements PromptSection
      */
     public function withVolatile(bool $volatile): self
     {
-        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $this->writeSinceLastRender, $volatile, $this->diffsAfterWrites, $this->diffMaxBytes, $this->knowledgeCutoff);
+        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $this->writeSinceLastRender, $volatile, $this->diffsAfterWrites, $this->diffMaxBytes, $this->knowledgeCutoff, $this->projectReferences);
         if (isset($this->enclosingRepo)) {
             $copy->enclosingRepo = $this->enclosingRepo;
         }
@@ -954,12 +988,14 @@ final readonly class EnvironmentBlock implements PromptSection
     }
 
     /**
-     * This block under the `env.*` settings (roadmap N-P4d), over the
-     * defaults: `env.gitDiffAfterWrites` (bool) and `env.diffMaxBytes` (int,
-     * at least {@see MIN_DIFF_MAX_BYTES}). Never throws, like every per-turn
-     * settings reader: a value of the wrong shape keeps its default. Returns
-     * this same instance when nothing differs, so a held block keeps its
-     * identity.
+     * This block under the `env.*` settings (roadmap N-P4d) and the user-tier
+     * `references` list (C-CTX-4.f), over the defaults:
+     * `env.gitDiffAfterWrites` (bool) and `env.diffMaxBytes` (int, at least
+     * {@see MIN_DIFF_MAX_BYTES}), plus the read-only reference roots to
+     * advertise — see {@see normalizeReferences()} for what survives. Never
+     * throws, like every per-turn settings reader: a value of the wrong shape
+     * keeps its default. Returns this same instance when nothing differs, so a
+     * held block keeps its identity.
      *
      * @param array<string, mixed>|null $config the merged settings, already
      *        read; null reads them (`Bootstrap::readUserConfig()`), and
@@ -983,16 +1019,134 @@ final readonly class EnvironmentBlock implements PromptSection
         }
         $max = \is_int($max) && $max >= self::MIN_DIFF_MAX_BYTES ? $max : self::DIFF_MAX_BYTES;
 
-        if ($diffs === $this->diffsAfterWrites && $max === $this->diffMaxBytes) {
+        // C-CTX-4.f: the advertised reference list rides the same merged
+        // settings the rest of this layer reads. The tools' own feed
+        // (`LaunchContext::referenceReadRoots()`) is the loud validator and
+        // the security surface; this reader only mirrors what that shape
+        // check accepts, so the prompt never advertises a root the tools
+        // would refuse, and it grants nothing to any writer.
+        $references = $this->normalizeReferences($config[self::SETTING_REFERENCES] ?? null);
+
+        if ($diffs === $this->diffsAfterWrites && $max === $this->diffMaxBytes
+            && $references === $this->projectReferences) {
             return $this;
         }
 
-        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $this->writeSinceLastRender, $this->volatile, $diffs, $max, $this->knowledgeCutoff);
+        $copy = new self($this->cwd, $this->modelName, $this->now, $this->platform, $this->writeSinceLastRender, $this->volatile, $diffs, $max, $this->knowledgeCutoff, $references);
         if (isset($this->enclosingRepo)) {
             $copy->enclosingRepo = $this->enclosingRepo;
         }
 
         return $copy;
+    }
+
+    /**
+     * The `references` setting as it may be advertised: a tolerant walk of a
+     * list of `{path, name}` objects (or bare path strings), kept only when
+     * the path resolves to an existing directory. Entry names are taken from
+     * the setting when present, else the directory's basename. Relative paths
+     * are based on this block's cwd — the same base the session root uses —
+     * so an advertised line and a jail answer name one and the same place.
+     *
+     * WHY SILENT: the loud validation — launch notices for unusable, missing
+     * or redundant entries — lives in `LaunchContext::referenceReadRoots()`,
+     * the tools' security feed, which runs once at tool-build time. This
+     * reader runs per turn and must never duplicate that announcement; an
+     * entry dropped here for being gone would have announced itself there,
+     * and dropping it keeps the prompt honest about what the tools accept.
+     *
+     * @return list<array{name: string, path: string, summary: string}>
+     */
+    private function normalizeReferences(mixed $raw): array
+    {
+        if (!\is_array($raw)) {
+            return [];
+        }
+
+        $seen = [];
+        $out = [];
+
+        foreach ($raw as $entry) {
+            // Exactly the shapes `LaunchContext::referenceReadRoots()` eats:
+            // a `{path, name}` object, or a bare path string. Anything else
+            // got a launch notice there; it is not advertised here.
+            $path = null;
+            $name = null;
+            if (\is_string($entry)) {
+                $path = $entry;
+            } elseif (\is_array($entry)) {
+                if (isset($entry['path']) && \is_string($entry['path'])) {
+                    $path = $entry['path'];
+                }
+                if (isset($entry['name']) && \is_string($entry['name'])) {
+                    $name = $entry['name'];
+                }
+            }
+            if ($path === null || trim($path) === '') {
+                continue;
+            }
+            $path = trim($path);
+
+            // Same base rule as the tools' feed: a relative entry names a
+            // place the session root could reach; absolute paths pass through.
+            $candidate = ($path[0] === '/' || (strlen($path) >= 2 && ctype_alpha($path[0]) && $path[1] === ':'))
+                ? $path
+                : rtrim($this->cwd, '/\\') . DIRECTORY_SEPARATOR . $path;
+            $real = realpath($candidate);
+            if ($real === false || !is_dir($real) || isset($seen[$real])) {
+                continue;
+            }
+            $seen[$real] = true;
+
+            $out[] = [
+                'name' => $this->oneLine($name !== null && trim($name) !== '' ? $name : basename($real), self::REFERENCE_NAME_MAX_BYTES),
+                'path' => $this->oneLine($real, self::REPO_ROOT_MAX_BYTES),
+                'summary' => $this->referenceSummary($real),
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Collapse to a single prompt-safe line: every whitespace run (including
+     * control bytes an authored name or path could smuggle) becomes one space
+     * and the result is capped, so one reference can never break the `<env>`
+     * line structure or grow the block unboundedly.
+     */
+    private function oneLine(string $value, int $maxBytes): string
+    {
+        $flat = preg_replace('/\s+/u', ' ', $value) ?? trim($value);
+        $flat = trim($flat);
+
+        return \strlen($flat) > $maxBytes ? PromptFence::escape(substr($flat, 0, $maxBytes)) . '…' : PromptFence::escape($flat);
+    }
+
+    /**
+     * The capped, collapsed {@see RepoMapBlock} summary for one reference
+     * directory — empty when the directory carries no composer maps to
+     * summarise. Prompt-visible but repository-shaped, so it escapes the same
+     * fence as every other value here; captured once per settings application
+     * and frozen, which is what keeps the line byte-stable across the turns
+     * that share this block.
+     */
+    private function referenceSummary(string $dir): string
+    {
+        $map = RepoMapBlock::capture($dir)->render();
+        if ($map === '') {
+            return '';
+        }
+
+        $flat = trim(preg_replace('/\s+/u', ' ', $map) ?? $map);
+        if ($flat === '') {
+            return '';
+        }
+
+        if (\strlen($flat) > self::REFERENCE_SUMMARY_MAX_BYTES) {
+            $flat = rtrim(substr($flat, 0, self::REFERENCE_SUMMARY_MAX_BYTES)) . '…';
+        }
+
+        return PromptFence::escape($flat);
     }
 
     /** Whether a write is followed by the two diff sections (`env.gitDiffAfterWrites`). */
@@ -1082,6 +1236,23 @@ final readonly class EnvironmentBlock implements PromptSection
         }
 
         $lines[] = 'Current date: ' . ($this->now ?? new DateTimeImmutable())->format('Y-m-d');
+
+        // C-CTX-4.f: the read-only reference roots the user configured, right
+        // after the date and outside the volatile git half, so the whole
+        // block's bytes stay frozen for the session (the list is resolved and
+        // capped once, in withSettings()). Each reference gets a name/path
+        // line plus, when its directory carries composer maps, a collapsed
+        // capped repo-map line. The header states the contract in the words
+        // the tools enforce: reads may come here, writes may not.
+        if ($this->projectReferences !== []) {
+            $lines[] = 'Project references (read-only roots for Read, Grep, Glob and Ls; the workspace root stays the only write jail):';
+            foreach ($this->projectReferences as $reference) {
+                $lines[] = ' - ' . $reference['name'] . ' (' . $reference['path'] . ')';
+                if ($reference['summary'] !== '') {
+                    $lines[] = '   repo map: ' . $reference['summary'];
+                }
+            }
+        }
 
         return [$lines, $inRepo];
     }

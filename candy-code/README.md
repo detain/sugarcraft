@@ -1245,7 +1245,7 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and thirty-seven keys are layered — `provider`,
+Only these one hundred and thirty-eight keys are layered — `provider`,
 `models`, `providers`, `titleModel`, `summaryModel`, `maxOutputTokens`,
 `modelPrices`, `extraBody`, `thinkingBudget`, `reasoningEffort`, `serviceTier`,
 `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
@@ -1261,16 +1261,16 @@ Only these one hundred and thirty-seven keys are layered — `provider`,
 `env.gitDiffAfterWrites`, `env.diffMaxBytes`, `contextWindow`, `autoReview`,
 `autoReviewScope`, `autoReviewModel`, `permissions.autoStrikeLimit`,
 `permissions.autoTotalLimit`, `permissions.autoAllowReadOnly`,
-`secretEnvAllowlist`, `allowedTools`, `disabledTools`, `bashSandbox`,
-`testCommand`, `autoTest`, `toolOutputCapBytes`, `mcpResultCapBytes`,
-`readMaxBytes`, `readPageLines`, `readPageBytes`, `toolSpillWindowPercent`,
-`toolInstructionCapBytes`, `toolSpillCaptureBytes`, `toolSpillMinCapBytes`,
-`globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`,
-`webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`,
-`webSearchBackend`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`,
-`bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `grepTimeoutSeconds`,
-`requireReadBeforeWrite`, `sd.baseUrl`, `sd.apiKey`, `sd.timeoutSeconds`,
-`sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`,
+`secretEnvAllowlist`, `allowedTools`, `disabledTools`, `references`,
+`bashSandbox`, `testCommand`, `autoTest`, `toolOutputCapBytes`,
+`mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`,
+`toolSpillWindowPercent`, `toolInstructionCapBytes`, `toolSpillCaptureBytes`,
+`toolSpillMinCapBytes`, `globMaxMatches`, `webFetchMaxBytes`,
+`webFetchTimeoutSeconds`, `webSearchMaxResults`, `webSearchTimeoutSeconds`,
+`webSearchEndpoint`, `webSearchBackend`, `bashInteractiveIdleSeconds`,
+`bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`,
+`grepTimeoutSeconds`, `requireReadBeforeWrite`, `sd.baseUrl`, `sd.apiKey`,
+`sd.timeoutSeconds`, `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`,
 `ui.mediaDisplayOverrides`, `sd.savePattern`, `skills.pathNudges`,
 `instructions`, `instructions.walkToRoot`, `instructionsExclude`,
 `disabledRules`, `embeddingModel`, `disabledSkills`, `enabledSkills`,
@@ -1328,7 +1328,7 @@ in precedence only.
 > user-tier only. Details per key in
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
-Even for a trusted project, eighty keys are **never** taken from a project file:
+Even for a trusted project, eighty-one keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -1458,6 +1458,13 @@ removes one); `pluginPaths`, because it names the directories this launch import
 plugin bundles from — a bundle's skills and commands arrive as prompt prose and
 slash rows exactly like `enabledSkills`'s, so a checkout choosing those paths
 could author the operator's context from anywhere on the disk it can point at;
+`references`, because it names the extra directories the four read tools may
+open beside the session and advertises their repo maps in every prompt's
+`<env>` block — the `pluginPaths` argument applied to the read side, where a
+project-tier entry could steer the operator's context, and its token bill, at
+files outside the checkout (writes stay jailed to the session root whatever
+references admit, which is precisely why the read half is the operator's
+choice too);
 `watchFiles`, because it turns an `AI!` comment saved into the
 repository's files into a prompt the agent acts on, and a checkout must not be
 able to make its own text your next instruction; `debug.skills`, `debug.commands`, `debug.rules` and

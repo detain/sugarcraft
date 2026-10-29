@@ -547,6 +547,7 @@ final class LayeredSettings
         'secretEnvAllowlist',
         'allowedTools',
         'disabledTools',
+        'references',
         'bashSandbox',
         'testCommand',
         'autoTest',
@@ -929,7 +930,8 @@ final class LayeredSettings
      * third list that agrees with neither. Today it is `provider`, `models`,
      * `titleModel`, `summaryModel`, `maxOutputTokens`, `modelPrices`,
      * `extraBody`, `thinkingBudget`, `serviceTier`, `promptCache`, `maxToolSteps`,
-     * `contextWindow`, `secretEnvAllowlist`, `allowedTools`, `instructions`,
+     * `contextWindow`, `secretEnvAllowlist`, `allowedTools`, `references`,
+     * `instructions`,
      * `instructionsExclude`, `disabledRules`, `enabledSkills`, `attribution`,
      * `statusLine`, `layout`, `lintCommands` and `formatCommands`, in {@see LAYERED_KEYS} order — named rather than numbered
      * here, because the

@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Config\Settings\Definitions;
 
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Config\Settings\ApplyMode;
 use SugarCraft\Code\Config\Settings\OptionsSource;
 use SugarCraft\Code\Config\Settings\RiskClass;
@@ -76,6 +77,19 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withHelp(Lang::t('settings.disabledTools.help'))
                 ->withReaderSymbol(Bootstrap::class . '::filterToolSet')
                 ->withReadBy('`Bootstrap::tools()` → `filterToolSet()`'),
+            // C-CTX-4.f. User tier only: a reference root is a directory
+            // OUTSIDE the project that Read, Grep, Glob and Ls will open, so
+            // a checked-out repository must never be able to name one — the
+            // same widening direction `bashSandbox: off` has.
+            SettingDefinition::new('references', SettingType::Json, [])
+                ->withCategory(SettingCategory::Tools)
+                ->withRiskClass(RiskClass::Security)
+                ->withLayered()
+                ->withUi(UiEditability::Complex)
+                ->withLabel(Lang::t('settings.references.label'))
+                ->withHelp(Lang::t('settings.references.help'))
+                ->withReaderSymbol(LaunchContext::class . '::referenceReadRoots')
+                ->withReadBy('`LaunchContext::referenceReadRoots()` → `ToolBuildContext::$readRoots` → Read/Grep/Glob/Ls'),
             // User tier only: `off` is the direction that widens, and a
             // checked-out repository must not be able to take it.
             SettingDefinition::new('bashSandbox', SettingType::Enum, Bubblewrap::MODE_OFF)

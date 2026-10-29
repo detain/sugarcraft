@@ -152,6 +152,12 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // got — unlike Grep/Glob, whose boot factory carries the bool,
         // because ToolBuildContext is not this lane's file to widen.
         private ?bool $pdfTextAvailable = null,
+        // C-CTX-4.f: validated read-only reference roots (list<string> of
+        // absolute directories) from the user-tier-only `references` setting.
+        // The primary jail stays the first word; a path it refuses may still
+        // be a READ under a reference. Writes never consult this list — the
+        // Write/Edit tools do not take it at all.
+        private array $readRoots = [],
     ) {}
 
     /**
@@ -259,7 +265,52 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
 
     public static function fromCatalog(ToolBuildContext $context): self
     {
-        return new self($context->root, instructionLoader: $context->loader, skillNudge: $context->skillNudge, ruleNudge: $context->ruleNudge, lsp: $context->lsp, readLedger: $context->readLedger);
+        return new self($context->root, instructionLoader: $context->loader, skillNudge: $context->skillNudge, ruleNudge: $context->ruleNudge, lsp: $context->lsp, readLedger: $context->readLedger, readRoots: $context->readRoots);
+    }
+
+    /**
+     * C-CTX-4.f: the reference-root fallback behind the primary jail. Only
+     * absolute paths qualify — a relative path names a place inside the
+     * primary root, and re-basing it under a reference would answer a
+     * different question than was asked. PathJail::resolve() is the same
+     * containment predicate the primary branches use, run once per
+     * reference root, so symlink behaviour stays identical to the jailed
+     * path (resolve() returns the canonical target, which is what then gets
+     * opened). Existence strictness mirrors the calling branch.
+     *
+     * @param bool $mustExist Read's worktree branch is existence-strict; the
+     *        root branch lets absence fall through to the missing-file
+     *        handler below
+     */
+    private function resolveReferenceRead(string $path, bool $mustExist): ?string
+    {
+        if ($this->readRoots === [] || !self::isAbsolutePath($path)) {
+            return null;
+        }
+        foreach ($this->readRoots as $referenceRoot) {
+            $resolved = PathJail::resolve($referenceRoot, $path);
+            if ($resolved !== null && (!$mustExist || file_exists($resolved))) {
+                return $resolved;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * POSIX absolute or Windows drive-letter path. Relative names — including
+     * anything beginning with ./ or ../ — never reach a reference root: the
+     * primary jail owns them, and its error must stand when it refuses.
+     */
+    private static function isAbsolutePath(string $path): bool
+    {
+        if ($path === '') {
+            return false;
+        }
+        if ($path[0] === '/') {
+            return true;
+        }
+
+        return strlen($path) >= 2 && ctype_alpha($path[0]) && $path[1] === ':';
     }
 
     public function name(): string
@@ -287,7 +338,13 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         // instance has neither, and must not advertise them.
         $advantages = [];
         if ($this->worktreeJail !== null || $this->root !== null) {
-            $advantages[] = 'it is confined to the workspace root';
+            // C-CTX-4.f: the clause names the reference roots when they exist,
+            // because a reader of the description must be able to predict
+            // which absolute paths this tool will open. Nothing dynamic is
+            // interpolated — the prompt stays byte-stable per configuration.
+            $advantages[] = $this->readRoots === []
+                ? 'it is confined to the workspace root'
+                : 'it is confined to the workspace root, or to a read-only reference root listed in the environment';
         }
         if ($this->instructionLoader !== null) {
             $advantages[] = 'any CLAUDE.md/AGENTS.md governing the file\'s directory is '
@@ -424,23 +481,42 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             // open, and rejecting it here preserves this call site's error.
             $resolved = $this->worktreeJail->resolve($path);
             if ($resolved === null || !file_exists($resolved)) {
-                return new ToolResult(
-                    toolCallId: $args['id'] ?? '',
-                    content: 'Error: path outside worktree',
-                    isError: true,
-                );
+                // C-CTX-4.f: the worktree jail is still the first word; only
+                // when it refuses does the read-only reference list get its
+                // chance, and the answer must exist (the jail branch above is
+                // existence-strict, so the fallback stays no looser).
+                $reference = $this->resolveReferenceRead($path, true);
+                if ($reference === null) {
+                    return new ToolResult(
+                        toolCallId: $args['id'] ?? '',
+                        content: 'Error: path outside worktree',
+                        isError: true,
+                    );
+                }
+                $path = $reference;
+            } else {
+                $path = $resolved;
             }
-            $path = $resolved;
         } elseif ($this->root !== null) {
             $resolved = PathJail::resolve($this->root, $path);
             if ($resolved === null) {
-                return new ToolResult(
-                    toolCallId: $args['id'] ?? '',
-                    content: 'Error: path outside workspace root',
-                    isError: true,
-                );
+                // C-CTX-4.f: reference roots extend READS only. Absence
+                // stays the primary branch's shape here: resolve() accepts a
+                // not-yet-existing file whose parent is under the root and
+                // the missing-file handler below reports it, so the fallback
+                // must not be stricter than the branch it stands behind.
+                $reference = $this->resolveReferenceRead($path, false);
+                if ($reference === null) {
+                    return new ToolResult(
+                        toolCallId: $args['id'] ?? '',
+                        content: 'Error: path outside workspace root',
+                        isError: true,
+                    );
+                }
+                $path = $reference;
+            } else {
+                $path = $resolved;
             }
-            $path = $resolved;
         }
 
         // A FIFO (or socket, or device) is not a source file, and opening one
