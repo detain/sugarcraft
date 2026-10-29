@@ -783,7 +783,7 @@ final class MemoryCommand implements HostCommand
                 }
             }
             if ($blocks !== []) {
-                $sections[] = Lang::t('host.memory.export.section.' . $which, ['path' => $store->path()])
+                $sections[] = Lang::t($which === 'home' ? 'host.memory.export.section.home' : 'host.memory.export.section.repo', ['path' => $store->path()])
                     . "\n\n" . implode("\n\n", $blocks);
             }
         }

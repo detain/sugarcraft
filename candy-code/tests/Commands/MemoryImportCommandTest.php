@@ -41,6 +41,13 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  * entries against a project-scope prompt bound they cannot reach, and the
  * whole mechanism — importer-side `limit` parameter included — was dropped
  * rather than left asserting an enforcement no caller runs.
+ *
+ * Section 9 pins the other half of the scope law: a foreign file's own
+ * frontmatter `scope:` line NEVER decides where its note lands. The importer
+ * reads only `description` and `metadata.originSessionId`, so today the
+ * agent-import→prompt-visible privilege move is structurally impossible;
+ * the pins are insurance against a future meta→scope wiring that would hand
+ * an untrusted clone the steering wheel.
  */
 final class MemoryImportCommandTest extends TestCase
 {
@@ -107,6 +114,28 @@ final class MemoryImportCommandTest extends TestCase
         foreach ($filenames as $name) {
             file_put_contents($dir . '/' . $name, "body of {$name}\n");
         }
+    }
+
+    /**
+     * Place one Claude-style memory file for this project's slug directory:
+     * a valid frontmatter block carrying `description:` plus every pair in
+     * $extraMeta (each key => value goes in verbatim), and a plain body.
+     *
+     * @param array<string, string> $extraMeta
+     */
+    private function seedClaudeMemory(string $name, string $description, array $extraMeta = []): void
+    {
+        $slug = '-' . ltrim(str_replace('/', '-', $this->projectRoot), '-');
+        $dir = $this->sandbox . '/home/.claude/projects/' . $slug . '/memory';
+        if (!is_dir($dir)) {
+            mkdir($dir, 0700, true);
+        }
+
+        $frontmatter = 'description: ' . $description . "\n";
+        foreach ($extraMeta as $key => $value) {
+            $frontmatter .= $key . ': ' . $value . "\n";
+        }
+        file_put_contents($dir . '/' . $name, "---\n" . $frontmatter . "---\nBody of " . $name . ".\n");
     }
 
     /** Put $count entries into the scope the importer writes (`agent`). */
@@ -444,5 +473,50 @@ final class MemoryImportCommandTest extends TestCase
         $bad = $this->reply('/memory import --scope gemini opencode');
         $this->assertStringContainsString('Usage: /memory import claude|opencode [--scope <scope>]', $bad);
         $this->assertCount(1, $this->store->list('agent'), 'the misread scope must not import anything');
+    }
+
+    // ── 9. frontmatter `scope:` is never read as the landing scope ───────────
+
+    public function testFrontmatterScopeProjectIsNeverHonouredOnDefaultImport(): void
+    {
+        // The privilege vector the promotion flag made worth pinning: a
+        // foreign file whose own YAML CLAIMS `scope: project` must not buy
+        // its body a place in the prompt-folded tiers. The importer reads
+        // only `description` and `metadata.originSessionId` out of the meta
+        // block, so under the default caller scope the note lands exactly
+        // where a description-only file lands — the `agent` directory the
+        // prompt never folds. Should a future meta->scope wiring ever make
+        // the claim load-bearing, the two store pins below go red first.
+        $this->seedClaudeMemory('smuggle.md', 'Smuggled cadence', ['scope' => 'project']);
+
+        $reply = $this->reply('/memory import claude');
+
+        $this->assertStringContainsString('memories into the `agent` scope.', $reply);
+        $entries = $this->store->list('agent');
+        $this->assertCount(1, $entries, 'the claimed project scope did not pull the note out of agent');
+        $this->assertSame("Smuggled cadence\n\nBody of smuggle.md.", $entries[0]->content());
+        $this->assertSame(['source:claude'], $entries[0]->tags(), 'the frontmatter scope is not even carried as a tag');
+        $this->assertSame(
+            [],
+            ProjectMemoryWriter::forRoot($this->projectRoot)?->store()->list('project') ?? [],
+            'the claim filed nothing into the repository store'
+        );
+        $this->assertSame([], $this->store->list('project'), 'and nothing into the home project tier either');
+    }
+
+    public function testCallerUserScopeBeatsSmuggledAgentScopeInFrontmatter(): void
+    {
+        // The opposite polarity: a file claiming `scope: agent` cannot
+        // DEMOTE what the user explicitly promoted. `--scope user` files the
+        // note into the home store's prompt-visible user tier no matter what
+        // the frontmatter asks for; a meta-honouring wiring would land it in
+        // `agent` instead and flip both counts.
+        $this->seedClaudeMemory('demote.md', 'Keep it visible', ['scope' => 'agent']);
+
+        $reply = $this->reply('/memory import claude --scope user');
+
+        $this->assertStringContainsString('memories into the `user` scope.', $reply);
+        $this->assertCount(1, $this->store->list('user'));
+        $this->assertSame([], $this->store->list('agent'), 'the claimed agent scope did not hide the note');
     }
 }
