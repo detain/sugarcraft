@@ -197,14 +197,14 @@
    "note": "build DONE 7f+457/-2 (parent 8754885cb); r1 focus one-turn/reset, continuation-keeps, typed-row-only, fence/inline inert, clamp legality; DUR UltrathinkTurnTest 17T carry"
   },
   "C-SEC-6.e": {
-   "stage": "review",
+   "stage": "clean",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-SEC-6.e",
    "branch": "cc/C-SEC-6.e",
    "base": "de0c54646",
-   "session": "ses_e7aa92f4dffex7UB7YdUPhctyb",
+   "session": null,
    "tip": "ee4789c04",
-   "note": "build DONE 3f +438/-6, OtlpEncoder-only; r1 focus: reason_token privacy, 3-path reachability, no-verdict byte-identity; DUR OtlpSafetyEventTest 11T carry"
+   "note": "r1 CLEAN full-pass (privacy structural: reason_token=enum slice only; 3 doors fold; byte-identity). Parked batch-14: DUR OtlpSafetyEventTest 11T, +11T, \u00a74 ee4789c04"
   },
   "C-CTX-3.f": {
    "stage": "build",
@@ -322,7 +322,7 @@
  ],
  "standing_reds_b985fbe51": "ADD: ChatHostLangCatalogueTest red on chat.effort.launch_unshaped (asker LaunchContext.php:2109 outside sources()) - byte-identical at base, C-PRV-1.b (a992413b0) seam -> closeout roster",
  "status": "RUNNING",
- "tick": "326-batch13-welded (C-SEC-8.a b14427010, C-MCP-3.c 310350892, C-SEC-6.c 58e4899f1, C-CTX-4.g b84ed2118 picks; weld commit atop)",
+ "tick": "327-SEC6e clean-parked; W20 wave-loop r1 live; fleet EXACT-10; b13-welded (8.a/3.c/6.c/4.g popped, count 210)",
  "tip": "0f58a906f",
  "updated": "2026-10-28",
  "wave_loops": {
@@ -414,6 +414,12 @@
    "r1": "FINDINGS 0C/1MAJOR(pr ShellMenu+label roster carry)/1NIT(hash widen) at 045751c44; verdict lanes/W15/WAVE-REVIEW-1.md",
    "rounds": 2,
    "verdict": "CLEAN r2 (cures 8dab423f0+c6b1d0317; NIT folds c15427c61); closed"
+  },
+  "20": {
+   "round": 1,
+   "stage": "review",
+   "session": "ses_e7aa09289ffe7Ry03gcGW4cpn2",
+   "reviewed_at": "b84ed2118"
   }
  },
  "waved_loops": {
@@ -1377,5 +1383,5 @@
    "dispatched_at_master": "cac93e391"
   }
  },
- "batch13_note": "b13 welded 2026-10-28 off cac93e391: picks f23193fad+8771dc2d3->7b8d787aa+b14427010 (8.a, +7T, DUR McpOutputFenceTest 0.10/6); dbd11a501+be1d3e425+8c5db7bf8->d827a5f6b+9de3327fe+310350892 (3.c, guard cured GREEN 19T/461A, tests/MCP 864T/3222A/1S, DUR x2 0.12/5+0.13/5); 737d5dba5+4a99481f4->e9838c105+58e4899f1 (6.c, vitest 10f/69T, DUR 3.40/14, trio regen schema+81/SERVER.md forget rows/generated.ts/dist rider); cbdc0102f->b84ed2118 (CTX-4.g, file 18T/145A, filter 19T/147A, DUR 0.52/18, weld-doc erratum follow-up commit). range-diff 8/8 = vs pre-committer-fix chain; battery: Mcp 1496T/8737A/1S, Duplicated 14T/197A, guards 237T/31028A, ProtocolDrift 13T/362A all green; durations 1596 rows viol=4. inflight preserved: C-AGT-4.b,C-CTX-3.e,C-CTX-3.f,C-CTX-4.f,C-EXT-5.b,C-MCP-2.c,C-PRV-3.c,C-PRV-4.a,C-SEC-6.e"
+ "batch13_note": "b13 welded 2026-10-28 off cac93e391: picks f23193fad+8771dc2d3->7b8d787aa+b14427010 (8.a fence, +7T, DUR McpOutputFenceTest 0.10/6, REPORT <SHA> stamped, McpOutputFence|StdioMcpHttpRefusals 7T/17A, McpToolBridge 79T/217A); dbd11a501+be1d3e425+8c5db7bf8->d827a5f6b+9de3327fe+310350892 (3.c GET-channel, ReadmeJsonErrorContract 19T/461A GREEN-cured, tests/MCP 864T/3222A/1S byte-exact, Duplicated 14T/197A, DUR x2 0.12/5+0.13/5); 737d5dba5+4a99481f4->e9838c105+58e4899f1 (6.c saved-rules, 24T/101A, vitest 10f/69P, regen schema+81/SERVER.md forget rows/generated.ts/dist rider, DUR 3.40/14); cbdc0102f->b84ed2118 (CTX-4.g append-prompt, file 18T/145A filter 19T/147A, Wither band 409T/2625A green-actual, DUR 0.52/18, weld-doc erratum commit 9e4326293). Mcp band merged 1496T/8737A/1S; guards 237T/31028A; drift 13T/362A; durations 1596 rows viol=4; weld 718aa187f+erratum 9e4326293; cherry 8/8 '-' all four; worktrees+branches pruned; NEVER pushed. NOTE: lead clobbered b13 run-state write mid-commit (tick-327 edit); this is the welder re-sync; inflight preserved including C-SEC-6.e clean-parked + W20 loop added by lead."
 }
