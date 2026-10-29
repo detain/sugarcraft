@@ -2584,7 +2584,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Ruling:** R-EXT-2. May a model-written skill go live without `/skills accept` (OpenClaw's announce-and-undo), or do workshop skills stay drafts? — see §6
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ext.md` → `### C-EXT-3.e`
 
-#### C-EXT-4.d — Contextual bundle recommendations at launch
+#### ✅ eea50728c C-EXT-4.d — Contextual bundle recommendations at launch (picks 232ae55e4+41a5f0486 -> 0273a6178+eea50728c; weld-doc REPORT cures + PLUGINS.md launch-recommendation DOC-ROW + DUR row ride the batch-9 weld commit)
 - **Item:** C-EXT-4 (sources: CC-new#12 plugin recommendations) · gap · effort S
 - **What:** a new `Bootstrap::reportBundleRecommendations()` in the `chat()` launch drain block (~:1524) emits ONE aggregate row from `BundleRecommender`, for example "bundles matching this project: X@Y — candy-code bundles install X@Y". It …
 - **Files — create:** none

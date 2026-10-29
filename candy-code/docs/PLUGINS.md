@@ -190,6 +190,14 @@ the JavaScript-family keywords, a `Dockerfile` at the container family), and
 never names an entry whose bundle is already installed. Both answer to
 `--output-format json`.
 
+And a booting `candy-code` in a project whose files match an added
+marketplace's catalog prints one line — `Bundles matching this project:
+name@marketplace, …` — once per project per marketplace pin; nothing is
+installed. The once-per-pin stamp lives as the `launchRecommendations` key
+inside `~/.candy-code/marketplaces.json`; the registry loader ignores it and
+any later marketplace add/remove/repin drops it, re-arming exactly one fresh
+row. Nothing is ever fetched to build it.
+
 `marketplace remove` retires the row; its checkout directory stays on disk,
 because deleting trees is not what a remove verb is for.
 
