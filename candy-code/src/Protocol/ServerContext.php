@@ -14,6 +14,7 @@ use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Server\ErrorLog;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Session\EnhancedSessionStore;
+use SugarCraft\Code\Workspace\PrStatusCache;
 
 /**
  * What every `candy-code.v1` method reaches: the workspace's
@@ -366,6 +367,15 @@ final class ServerContext
             // C-WEB-4.f: the branch-at-session-start from the row; the row is
             // the whole truth here — nothing on this path calls git.
             'branch' => $row['git_branch'] ?? null,
+            // C-AGT-6.e (R13): the PR/CI read-out for the web's chips. This
+            // call only registers the watch and answers what the cache's last
+            // off-summary refresh stored (null until then) — the gh run never
+            // happens on this path, per the step's non-blocking law.
+            'pr' => PrStatusCache::observe(
+                $row['git_branch'] ?? null,
+                $this->hub->workspace()->root,
+                $this->loop,
+            ),
             'open' => $host !== null,
             'status' => $host === null ? 'closed' : $this->feedFor($host)->status(),
             'permissionMode' => $host?->permissionMode()?->value,

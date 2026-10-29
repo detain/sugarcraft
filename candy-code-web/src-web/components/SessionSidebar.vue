@@ -307,7 +307,7 @@ function onKey(event: KeyboardEvent): void {
           <span class="name">{{ title(summary) }}</span>
           <span v-if="approvals.countFor(summary.id) > 0" class="badge" :title="`${approvals.countFor(summary.id)} waiting for an answer`" data-testid="ask-badge">{{ approvals.countFor(summary.id) }}</span>
           <span v-if="summary.snippet" class="snippet" data-testid="session-snippet">{{ oneLine(summary.snippet, 90) }}</span>
-          <span class="meta">{{ summary.status === 'closed' ? '' : summary.status.replace('_', ' ') }}<template v-if="summary.updatedAt"> · {{ ago(summary.updatedAt) }}</template><template v-if="spendFor(summary)"> · <span data-testid="session-spend">{{ spendFor(summary) }}</span></template><template v-if="summary.branch"> · <span :title="`Branch at session start: ${summary.branch}`" data-testid="session-branch">⎇ {{ summary.branch }}</span></template><template v-if="elsewhere(summary)"> · <span :title="summary.root" data-testid="session-root">{{ elsewhere(summary) }}/</span></template><template v-if="summary.ephemeral === true"> · <span data-testid="session-incognito">incognito</span></template><template v-if="summary.archived === true"> · <span data-testid="session-archived">archived</span></template></span>
+          <span class="meta">{{ summary.status === 'closed' ? '' : summary.status.replace('_', ' ') }}<template v-if="summary.updatedAt"> · {{ ago(summary.updatedAt) }}</template><template v-if="spendFor(summary)"> · <span data-testid="session-spend">{{ spendFor(summary) }}</span></template><template v-if="summary.branch"> · <span :title="`Branch at session start: ${summary.branch}`" data-testid="session-branch">⎇ {{ summary.branch }}</span></template><template v-if="summary.pr"> · <span :title="`PR #${summary.pr.number} (${summary.pr.state}) — CI: ${summary.pr.checks}`" data-testid="session-pr">#{{ summary.pr.number }}<span class="pr-dot" :class="'is-' + summary.pr.checks" aria-hidden="true" /></span></template><template v-if="elsewhere(summary)"> · <span :title="summary.root" data-testid="session-root">{{ elsewhere(summary) }}/</span></template><template v-if="summary.ephemeral === true"> · <span data-testid="session-incognito">incognito</span></template><template v-if="summary.archived === true"> · <span data-testid="session-archived">archived</span></template></span>
         </a>
         <button
           type="button"
@@ -502,6 +502,22 @@ ul {
   grid-area: meta;
   font-size: 0.75rem;
   color: var(--muted);
+}
+.pr-dot {
+  display: inline-block;
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  margin-left: 0.2em;
+}
+.pr-dot.is-pass {
+  background: var(--ok);
+}
+.pr-dot.is-fail {
+  background: var(--error);
+}
+.pr-dot.is-pending {
+  background: var(--warn);
 }
 .empty,
 .error {

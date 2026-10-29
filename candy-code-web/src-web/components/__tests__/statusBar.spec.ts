@@ -214,6 +214,34 @@ describe('StatusBar spend bound (WEB-5 parity)', () => {
  * P-CTX.g: the context meter is a button now — it opens the Context panel —
  * and the bar carries a cache read-out computed from the live turn usage.
  */
+describe('StatusBar PR chip (C-AGT-6.e)', () => {
+  const pr = { number: 123, state: 'OPEN', url: 'https://github.example/o/r/pull/123', checks: 'pass' }
+
+  it('links the number and carries the CI dot once the cache has an answer', () => {
+    const wrapper = mountBar({ pr })
+    const chip = wrapper.find('[data-testid="pr-chip"]')
+    expect(chip.exists()).toBe(true)
+    expect(chip.attributes('href')).toBe(pr.url)
+    expect(chip.attributes('target')).toBe('_blank')
+    expect(chip.attributes('rel')).toBe('noopener noreferrer')
+    expect(chip.text()).toContain('#123')
+    expect(chip.find('[data-testid="pr-dot"]').classes()).toContain('is-pass')
+    expect(chip.attributes('title')).toContain('CI: pass')
+  })
+
+  it('colors the dot for a failed or still-running rollup', () => {
+    for (const [checks, expected] of [['fail', 'is-fail'], ['pending', 'is-pending']] as const) {
+      const wrapper = mountBar({ pr: { ...pr, checks } })
+      expect(wrapper.find('[data-testid="pr-dot"]').classes()).toContain(expected)
+    }
+  })
+
+  it('stays out of the bar while the watch has no cached answer', () => {
+    expect(mountBar().find('[data-testid="pr-chip"]').exists()).toBe(false)
+    expect(mountBar({ pr: null }).find('[data-testid="pr-chip"]').exists()).toBe(false)
+  })
+})
+
 describe('StatusBar context meter and cache (P-CTX.g)', () => {
   function mountWith(state: ReturnType<typeof createState>, contextPct: number | null) {
     return mount(StatusBar, {

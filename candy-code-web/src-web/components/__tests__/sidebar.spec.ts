@@ -15,11 +15,11 @@ async function settle(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
-async function mountSidebar(ids: string[]) {
+async function mountSidebar(ids: string[], extra: Record<string, unknown> = {}) {
   await Wire.connect()
   const sessions = useSessionsStore()
   sessions.byId = Object.fromEntries(
-    ids.map((id, index) => [id, { id, name: `session ${index}`, status: 'idle', open: true, updatedAt: `2026-10-17 00:00:0${ids.length - index}`, createdAt: '', permissionMode: 'default', root: '/repo', contextTokens: 0, contextWindow: 0 }]),
+    ids.map((id, index) => [id, { id, name: `session ${index}`, status: 'idle', open: true, updatedAt: `2026-10-17 00:00:0${ids.length - index}`, createdAt: '', permissionMode: 'default', root: '/repo', contextTokens: 0, contextWindow: 0, ...extra }]),
   )
   router = createAppRouter(createMemoryHistory())
   await router.push({ name: 'session', params: { id: ids[0] ?? 'x' } })
@@ -64,6 +64,26 @@ describe('sidebar j/k (ISS-053)', () => {
     await wrapper.find('nav').trigger('keydown', { key: 'k', altKey: true })
     await settle()
     expect(router.currentRoute.value.params.id).toBe('s1')
+  })
+})
+
+describe('sidebar PR chip (C-AGT-6.e)', () => {
+  it('paints the cached answer as a span with the CI dot — never a nested anchor', async () => {
+    const wrapper = await mountSidebar(['s1'], {
+      branch: 'feature/pr',
+      pr: { number: 123, state: 'OPEN', url: 'https://github.example/o/r/pull/123', checks: 'fail' },
+    })
+    const chip = wrapper.find('[data-testid="session-pr"]')
+    expect(chip.exists()).toBe(true)
+    expect(chip.element.tagName).toBe('SPAN')
+    expect(chip.text()).toContain('#123')
+    expect(chip.find('.pr-dot').classes()).toContain('is-fail')
+    expect(chip.attributes('title')).toContain('CI: fail')
+  })
+
+  it('stays out of the row while the watch has no cached answer', async () => {
+    const wrapper = await mountSidebar(['s1'])
+    expect(wrapper.find('[data-testid="session-pr"]').exists()).toBe(false)
   })
 })
 

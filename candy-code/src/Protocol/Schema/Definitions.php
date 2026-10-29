@@ -63,6 +63,17 @@ final class Definitions
                 // no serve loop runs git, and an agent `git checkout` after
                 // the launch does not move it.
                 'branch' => Schema::string()->nullable(),
+                // C-AGT-6.e (R13): the open pull request for that branch with
+                // the CI rollup folded into one word, served from
+                // PrStatusCache's off-summary refresh path — null until a
+                // watch-registered refresh lands, and always null when gh
+                // cannot answer. `checks` is pass|fail|pending.
+                'pr' => Schema::object([
+                    'number' => Schema::integer(0),
+                    'state' => Schema::string(),
+                    'url' => Schema::string(),
+                    'checks' => Schema::enum(['pass', 'fail', 'pending']),
+                ], ['number', 'state', 'url', 'checks'])->nullable(),
                 'open' => Schema::boolean(),
                 'status' => Schema::enum(['closed', 'idle', 'busy', 'waiting_permission']),
                 'permissionMode' => Schema::ref(self::PERMISSION_MODE)->nullable(),

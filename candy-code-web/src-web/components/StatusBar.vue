@@ -173,6 +173,18 @@ const cachePct = computed<number | null>(() => {
          tooltip says what it is: a start-state fact an agent's `git checkout`
          cannot silently outdate. Chip only when the server named one. -->
     <span v-if="summary?.branch" class="item branch" data-testid="branch-chip" :title="`Branch at session start: ${summary.branch}`">⎇ {{ summary.branch }}</span>
+    <!-- C-AGT-6.e (R13): the open PR for that branch with a CI dot, served
+         from the server's cached `gh pr view` refresh path — the chip never
+         fetches and appears only once the cache holds an answer. -->
+    <a
+      v-if="summary?.pr"
+      class="item pr"
+      data-testid="pr-chip"
+      :href="summary.pr.url"
+      target="_blank"
+      rel="noopener noreferrer"
+      :title="`PR #${summary.pr.number} (${summary.pr.state}) — CI: ${summary.pr.checks}`"
+    >#{{ summary.pr.number }}<span class="pr-dot" :class="`is-${summary.pr.checks}`" data-testid="pr-dot" aria-hidden="true" /></a>
     <button
       type="button"
       class="item action"
@@ -217,6 +229,28 @@ const cachePct = computed<number | null>(() => {
   max-width: 16rem;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+a.item.pr {
+  color: inherit;
+  text-decoration: none;
+}
+a.item.pr:hover {
+  text-decoration: underline;
+}
+.pr-dot {
+  display: inline-block;
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+}
+.pr-dot.is-pass {
+  background: var(--ok);
+}
+.pr-dot.is-fail {
+  background: var(--error);
+}
+.pr-dot.is-pending {
+  background: var(--warn);
 }
 .meter {
   display: inline-block;
