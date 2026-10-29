@@ -2608,7 +2608,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-EXT-5.a (W16)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ext.md` → `### C-EXT-5.b`
 
-#### C-EXT-5.c — Key-bindable slash commands (`command:<name>`)
+#### ✅ d69c9a430+75257027d C-EXT-5.c — Key-bindable slash commands (`command:<name>`) (picks d69c9a430->3ba0a5ce8, 75257027d->d159b2cfd on weld-18, zero-conflict — predicted KeyBindingRegistry collision vs C-EXT-5.b did NOT materialize (5.b touched Chat/PaletteAction, not the registry); merged re-gate KeyBinding|KeysReload|CommandKeybinding|Palette coexists with prefill rows; DUR rows minted App/CommandKeybindingDispatchTest 7T/0.660s + Commands/KeyBindingCommandBindingTest 11T/0.313s; r1 1-MINOR cured in-branch 75257027d, parked without r2 per test-add precedent; batch-18a)
 - **Item:** C-EXT-5 (sources: CC-new#12 key-bindable slash commands) · gap · effort M
 - **What:** **Setting.** `keybindings` accepts `"command:<name>": "<chord>"`. `KeyBindingsValidator::validate()` (:42) checks the name syntactically (colon allowed, for bundle and MCP names) and the chord with the existing parser. …
 - **Files — create:** none
@@ -2624,7 +2624,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - protocol lanes: C-AGT-4.c (weld regenerates schema → SERVER.md → generated.ts once)
 - Chat.php region claims: C-AGT-4.d (mentionPopupRows, userTurnMessage); C-PRV-3.b (READ_ONLY_COMMANDS, handleFastCommand (new))
 
-#### C-AGT-4.c — Web agent select + `SessionSummary.agent`
+#### ✅ f48f62e1f+b185db521+704e15fcf C-AGT-4.c — Web agent select + `SessionSummary.agent` (picks -> f51949469, 758c00418, b130d4dc3 on weld-18, zero-conflict; protocol trio regen + dist rode rider (schema.json -> generated.ts -> dist once, per §1.8 weld owns outputs); SymbolCitationDrift cure Chat.php C-AGT-4.b cite gains Tests\ segment in rider (foreign debt); no DUR rows — no new test files, verified --diff-filter=A empty; gates SessionSummary|StatusBar|ServerContext|AgentSwitch + vitest generated|dormantRoster 90T green; batch-18a)
 - **Item:** C-AGT-4 (sources: GAP-AGT-02w) · gap · effort M
 - **What:** Add a nullable `agent` to `SessionSummary` (`src/Protocol/Schema/Definitions.php`), filled by `ServerContext::summary()` (:320) from `SessionHost::primaryAgent()`. A switch announces `session.updated`. Add a `mode` field to …
 - **Files — create:** none
@@ -2713,7 +2713,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Ruling:** Background stdio calls hold that server's exchange lock until they finish, so later calls to the same server queue behind them. Accept, or background http/sse … — see §6
 - **Brief:** `prompt_kit/findings/comparison-1026/design-mcp.md` → `### C-MCP-3.d`
 
-#### C-PRV-3.b — `/fast` command (TUI and served)
+#### ✅ 3d49d2488+ee321219f C-PRV-3.b — `/fast` command (TUI and served) (picks 3d49d2488->0da9b5071, ee321219f->0d6280972 on weld-18, zero-conflict — Chat.php auto-merged beside 5.b/AGT-4.c hunks; em-dash claim NOT reproducible in lane diff (lead grep verified, FIX-1.md); DUR rows minted Chat/FastCommandTest 18T/0.696s + Host/Commands/FastHostCommandTest 7T/0.349s; +25T/+143A suite-figure re-pin stays §7 closeout duty (staleness pair red by design, untouched); foreign CommandFailureTranscriptTest+MenuBar base-reds stay with owners; batch-18a)
 - **Item:** C-PRV-3 (sources: GAP-MOD-N2, CC parity) · gap · effort S
 - **What:** `/fast [on|off]`: bare reports the state, and on/off toggles the live overlay. The setting persists to the user tier through `SettingsWriter`, like `persistEffort()` (`Chat.php:12332`). It refuses out loud when the provider/model …
 - **Files — create:** `candy-code/builtin-commands/0360-fast.php`, `candy-code/src/Host/Commands/FastHostCommand.php`, `candy-code/tests/Chat/FastCommandTest.php`, `candy-code/tests/Host/Commands/FastHostCommandTest.php`
