@@ -209,13 +209,6 @@
       "session": "ses_e795c96ddffeJETiJ3YufaormP",
       "tip": "b0fb53309",
       "note": "r2 fresh vs fix"
-    },
-    "C-SEC-8.f": {
-      "stage": "review",
-      "round": 2,
-      "session": "ses_e795c96ddffdutC3V1jngJklVA",
-      "tip": "69567f9dc",
-      "note": "r2 fresh vs fix"
     }
   },
   "last_lead": "fresh-lead-1029-r15",
@@ -311,7 +304,8 @@
     "tick111": "welded list += C-MCP-4.b/C-MCP-4.c (W16-era \u2705 re-offer ghosts); AGT-4.e r2 CLEAN parked b5615c9da (chain 6 commits 1431b98fc..b5615c9da); SES-7.g fix b0fb53309 + SEC-8.f fix 69567f9dc both REAL cat-file; r2 reviewers LIVE both (session ids as above; prior phantom e294b2b1d-era claims ignored)",
     "tick109": "stray junk spawn ses_e7967505dffedqB36kDNR6I01a = self-mispatch (no worktree, no brief; ignore return, retire key). pkill self-match lesson re-learned: never pattern-match own argv; do not retry kill.",
     "tick116": "10 live = 4 builders + 6 reviewers. welder-18d (AGT-4.e) + W18-CLOSE welder queued for first free slots. master 003cb1e4e (W18 cures 5406bce93+003cb1e4e on it).",
-    "batch18d_note": "batch-18d welded: C-AGT-4.e (6 picks 5a0b6862f..94ef2b0f2, zero-conflict onto 003cb1e4e; 4 DUR rows minted; protocol trio+dist byte-identical vs master, no schema touch; merged gates 865T/29361A, sole red foreign --worktree standing; meta commit 7b486678b = tip (stamped in this one-liner per self-SHA law))"
+    "batch18d_note": "batch-18d welded: C-AGT-4.e (6 picks 5a0b6862f..94ef2b0f2, zero-conflict onto 003cb1e4e; 4 DUR rows minted; protocol trio+dist byte-identical vs master, no schema touch; merged gates 865T/29361A, sole red foreign --worktree standing; meta commit 7b486678b = tip (stamped in this one-liner per self-SHA law))",
+    "batch18e_note": "batch-18e welded: C-SEC-8.f (3 picks ba842a702,f491d8187,69567f9dc -> bab853162,03a1cdbd3,1b3d314c8 onto e3ccc13bf; en.php/README/Subcommands auto-merged additive beside AGT-4.e/PRV-4.b, 7 keychain keys pure-append; trio+dist+doc-gen byte-clean; merged gates 379T/29183A, sole red foreign --worktree standing; DUR row LoginKeychainTest 0.057/25 minted; meta SHA rides follow-up one-liner per self-SHA law)"
   },
   "notes_ruling_chain": "owner ruling 15 executed: AGT-5.b welded a812ea659; W14 loop r1 running; next: AGT-5.c build (W15) on 5.b-landed base, then W15 loop after its members complete",
   "owed": [
@@ -351,8 +345,8 @@
   ],
   "status": "RUNNING",
   "tick": "331-batch17-welded (C-MCP-4.d + C-SEC-6.b popped from inflight, count 223->225; weld-17: picks 74c980368+303c87928+fecfe7b4e+6598d32c2, NIT-3/4 doc riders, meta atop 6598d32c2; chain rebased over mid-run origin vhs bot push 17e6b440e; pushed; final tip d258ea4fa + this stamp row; push at ff)",
-  "tip": "7b486678b",
-  "updated": "2026-10-29T07:17:51Z",
+  "tip": "1b3d314c8",
+  "updated": "2026-10-29T08:28:43Z",
   "wave_loops": {
     "1": "closed r2 CLEAN",
     "16": {
@@ -1159,10 +1153,6 @@
     "C-SES-7.g": {
       "tip": "b0fb53309",
       "note": "fix r1 landed (loopback regex + answer timer); r2 reviewer LIVE ses_e797c5b10ffea23LrG9dV3X4bP; carries: DUR row HandoffRemotePushTest.php, figure re-pin, Chat.php:19287 error-paint weld-carry STANDS"
-    },
-    "C-SEC-8.f": {
-      "tip": "69567f9dc",
-      "note": "fix r1 landed (census 40->41 + MAX_SECRET_BYTES 8192 + refused arm); r2 LIVE ses_e797c5b10ffe6jP3G4T5gU9iR2; carries: DUR row LoginKeychainTest 22T, standing --worktree red disclosed"
     }
   },
   "weld_queue": {
@@ -1409,9 +1399,10 @@
     "P-TABS.f",
     "P-TABS.g",
     "P-TABS.h",
-    "C-AGT-4.e"
+    "C-AGT-4.e",
+    "C-SEC-8.f"
   ],
-  "welded_count": 232,
+  "welded_count": 233,
   "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
   "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
   "welder_sessions": {

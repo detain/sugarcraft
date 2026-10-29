@@ -853,6 +853,7 @@ candy-code/tests/Cli/DoctorFts5ProbeTest.php	0.058	4
 candy-code/tests/Chat/RouteTraitParityTest.php	0.058	4
 candy-code/tests/Chat/CompactionLiveSettingsTest.php	0.057	12
 candy-code/tests/Cli/AgentManagerWiringTest.php	0.057	26
+candy-code/tests/Cli/LoginKeychainTest.php	0.057	25
 candy-code/tests/Commands/GenerateCommandTest.php	0.057	23
 candy-code/tests/Observability/OtlpEncoderTest.php	0.057	12
 candy-code/tests/Chat/AgentComposerTest.php	0.056	9

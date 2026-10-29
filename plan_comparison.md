@@ -2925,7 +2925,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-8.a`
 
-#### C-SEC-8.f — `candy-code login --keychain`
+#### ✅ 1b3d314c8 C-SEC-8.f — `candy-code login --keychain` (picks ba842a702, f491d8187, 69567f9dc -> bab853162, 03a1cdbd3, 1b3d314c8 onto e3ccc13bf — en.php/README/Subcommands auto-merged additive beside landed AGT-4.e/PRV-4.b, 7 cli.login.keychain.* keys pure-append zero '-' lines, src+tests net diff byte-identical vs lane; protocol trio+dist+three doc generators byte-clean (lane touched none); merged gates 379T/29183A, sole red foreign --worktree completion standing, batch-18d-identical; DUR row minted Cli/LoginKeychainTest 0.057/25 (single-file junit, make-shards canonical form); review loop: r1 census-41 cured in f491d8187 + MAX_SECRET_BYTES bound in 69567f9dc, r2 CLEAN 0C/0M; batch-18e)
 - **Item:** C-SEC-8 (sources: GAP-MOD-25) · gap · effort S
 - **What:** `Subcommands::loginStoreKey()` (:937) writes the key into the user config. With `--keychain`, it instead stores the key through `Keychain::store()` (`secret-tool store` / `security add-generic-password -U`, secret on stdin, never …
 - **Files — create:** `candy-code/tests/Cli/LoginKeychainTest.php`
