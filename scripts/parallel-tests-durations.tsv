@@ -9,6 +9,7 @@ candy-code/tests/LSP/LspClientDispatchPumpTest.php	20.316	2
 candy-code/tests/Backend/StreamingCommandBackendTest.php	19.380	31
 candy-code/tests/LSP/LspConnectionFrameCapTest.php	18.947	7
 candy-code/tests/LSP/LspConnectionShutdownTest.php	16.279	11
+candy-code/tests/Host/SessionHostMailDrainTest.php	16.088	17
 candy-code/tests/LSP/LspConnectionStdinWedgeTest.php	14.226	14
 candy-code/tests/Config/EnvRosterDriftTest.php	13.957	35
 candy-code/tests/TreeWideGuardRosterTest.php	13.769	17
@@ -445,6 +446,7 @@ candy-code/tests/Agents/WorktreeManagerReleaseTest.php	0.501	6
 candy-code/tests/Acp/AcpSessionLoadTest.php	0.500	6
 candy-code/tests/BaseSystemPromptTest.php	0.497	28
 candy-code/tests/Session/ContextLedgerPersistenceTest.php	0.497	7
+candy-code/tests/Tools/SendMessageCrossSessionTest.php	0.497	51
 candy-code/tests/SessionTabClickTest.php	0.496	13
 candy-code/tests/Session/ExplicitResumeCrossProjectTest.php	0.494	5
 candy-code/tests/Tools/BuiltIn/ReadBinaryScanTest.php	0.494	9
@@ -580,6 +582,7 @@ candy-code/tests/Tools/BuiltIn/UnifiedDiffEquivalenceTest.php	0.254	55
 candy-code/tests/Support/HookContextFilesTest.php	0.250	18
 candy-code/tests/Backend/MemoryRecallPrimeTest.php	0.248	6
 candy-code/tests/Chat/ChatToolCancelKillsCommandTreeTest.php	0.248	1
+candy-code/tests/Chat/SessionMailWakeTest.php	0.244	21
 candy-code/tests/Diagnostics/NoticeSinkIsolationTest.php	0.243	6
 candy-code/tests/Server/HelloMediaFlagsTest.php	0.241	4
 candy-code/tests/Tools/ShellStopTest.php	0.240	6
@@ -831,6 +834,7 @@ candy-code/tests/Tui/Settings/SettingsFilesAndProfilesTest.php	0.065	16
 candy-code/tests/Integration/ArchitectureAssemblyOrderTest.php	0.064	2
 candy-code/tests/MCP/McpServerRequestsTest.php	0.064	13
 candy-code/tests/Providers/EffortBudgetTest.php	0.064	7
+candy-code/tests/Agents/Live/SessionMailboxTest.php	0.064	48
 candy-code/tests/Tui/Settings/SettingsEditorTest.php	0.063	11
 candy-code/tests/Support/MacAltNoticeStampTest.php	0.063	5
 candy-code/tests/Server/HelloDefaultDeliveryTest.php	0.062	2

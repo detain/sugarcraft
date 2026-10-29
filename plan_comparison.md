@@ -2741,7 +2741,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - Chat.php region claims: C-AGT-4.e (pumpBackgroundSessions); C-AGT-5.f (pumpSchedules, requestPermission); C-CTX-4.e (handleOutputStyleCommand (new))
 - Bootstrap.php method claims: C-AGT-5.f (workspace)
 
-#### C-AGT-4.e — SendMessage reaches other sessions (`session:<id>`)
+#### ✅ 94ef2b0f2 C-AGT-4.e — SendMessage reaches other sessions (`session:<id>`) (picks -> 5a0b6862f, 8b96da716, 1dbb379c8, c5c3d6092, 126a557e6, 94ef2b0f2 on weld-18d, zero-conflict onto 003cb1e4e; 4 DUR rows minted (Host 16.088/17, CrossSession 0.497/51, MailWake 0.244/21, Mailbox 0.064/48); protocol trio + dist byte-identical vs master — lane touched no schema; merged-tree gates 865T/29361A, sole red = foreign --worktree standing; batch-18d)
 - **Item:** C-AGT-4 (sources: GAP-AGT-N3, GAP-TL-23) · gap · effort M
 - **What:** Turns run in a `pcntl_fork()`ed child (`src/LSP/LspExchangeLock.php:11`), so delivery must cross processes. Use a disk mailbox: a new `Agents\Live\SessionMailbox`: 0700 `~/.candy-code/session-mail/<sessionId>/`, 0600 JSON files, …
 - **Files — create:** `candy-code/src/Agents/Live/SessionMailbox.php`

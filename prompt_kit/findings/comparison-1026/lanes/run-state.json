@@ -148,45 +148,74 @@
   ],
   "extra_agents": 0,
   "inflight": {
-    "C-AGT-4.e": {
-      "base": "44ff31314",
-      "branch": "cc/C-AGT-4.e",
-      "note": "builder DONE on disk (1 commit ahead, tree clean, REPORT.md); r1 reviewer dispatching",
-      "round": 0,
-      "session": "builder-landed",
+    "C-SES-8.a": {
       "stage": "build",
-      "tip": "4b983d285",
-      "worktree": "/home/sites/cc-cmp-C-AGT-4.e"
+      "session": "ses_e79698ae6ffeE7ENbX34KZjgiT",
+      "tip": null,
+      "note": "builder LIVE /status spend+cap"
     },
-    "C-MCP-4.a": {
-      "base": "4dd8c20ce",
-      "branch": "cc/C-MCP-4.a",
-      "note": "liveness data step (context.sources memo-only liveness); worktree cut 4dd8c20ce",
-      "round": 0,
-      "session": "ses_e79820c81ffecU24A92tLj54mW",
+    "C-TOOL-2.e": {
       "stage": "build",
-      "tip": "4dd8c20ce",
-      "worktree": "/home/sites/cc-cmp-C-MCP-4.a"
+      "session": "ses_e79698ad1ffeBVrbBKSCUdh3mS",
+      "tip": null,
+      "note": "builder LIVE supportsDocuments 4 providers"
     },
-    "C-MCP-4.b": {
-      "base": "103a385aa",
-      "branch": "cc/C-MCP-4.b",
-      "note": "fresh cut; BRIEF lanes/C-MCP-4.b/BRIEF.md; prior notifications cross-contaminated \u2014 no branch/worktree existed",
-      "round": 0,
-      "session": "dispatching",
+    "C-PRV-3.d": {
       "stage": "build",
-      "tip": "103a385aa",
-      "worktree": "/home/sites/cc-cmp-C-MCP-4.b"
+      "session": "ses_e795bcb05ffeI1eJ2P6nDq0n5q",
+      "worktree": "/home/sites/cc-cmp-C-PRV-3.d",
+      "base": "003cb1e4e",
+      "note": "Advisor tool; worktree cut @003cb1e4e"
+    },
+    "C-MCP-4.c": {
+      "stage": "build",
+      "session": "ses_e795bcb04ffeM5pS6m04r4Mj7N",
+      "worktree": "/home/sites/cc-cmp-C-MCP-4.c",
+      "base": "003cb1e4e",
+      "note": "Served /mcp login + paste-back"
+    },
+    "C-AGT-4.d": {
+      "stage": "fix",
+      "round": 1,
+      "session": "AWAITING-SLOT",
+      "tip": "1b9baf4a0",
+      "worktree": "/home/sites/cc-cmp-C-AGT-4.d",
+      "note": "r1 FINDINGS 1 MAJOR (roster-thread unpinned: source-scan agentRoster both windows + sole-site count + mutation-strip-each) + 1 MINOR (vue-tsc vacuous note). FIXER dispatch at first free slot (fleet at cap 10)"
+    },
+    "C-AGT-5.f": {
+      "stage": "review",
+      "round": 1,
+      "session": "ses_e795bcb01ffeNIDsLUjq6W9uN0",
+      "tip": "4c1dbe12d",
+      "note": "r1 fresh (fixer never landed; adjudicate mount/onEvent/completedAt vs disk)"
+    },
+    "C-CTX-4.e": {
+      "stage": "review",
+      "round": 1,
+      "session": "ses_e795bcb03ffeuqZ8wR11a7sM4k",
+      "tip": "6d7072876",
+      "note": "r1 fresh"
+    },
+    "C-SEC-7.c": {
+      "stage": "review",
+      "round": 1,
+      "session": "ses_e795bcb02ffeHgG7vX0bQ2tF9d",
+      "tip": "873354b78",
+      "note": "r1 fresh"
     },
     "C-SES-7.g": {
-      "base": "0c1ad6c64",
-      "branch": "cc/C-SES-7.g",
-      "note": "/handoff --remote teleport; prior-era session dead, fresh builder dispatching after reset to master",
-      "round": 0,
-      "session": "fresh-builder-pending",
-      "stage": "build",
-      "tip": "0c1ad6c64",
-      "worktree": "/home/sites/cc-cmp-C-SES-7.g"
+      "stage": "review",
+      "round": 2,
+      "session": "ses_e795c96ddffeJETiJ3YufaormP",
+      "tip": "b0fb53309",
+      "note": "r2 fresh vs fix"
+    },
+    "C-SEC-8.f": {
+      "stage": "review",
+      "round": 2,
+      "session": "ses_e795c96ddffdutC3V1jngJklVA",
+      "tip": "69567f9dc",
+      "note": "r2 fresh vs fix"
     }
   },
   "last_lead": "fresh-lead-1029-r15",
@@ -271,7 +300,18 @@
     "tick107": "8c welder ses_e7983ecb8ffeGEinFz53UxfTgO running; AGT-4.e r2 ses_e7983ecb7ffeRa9eYId2x1I9iW; AGT-4.d fresh ses_e79820c82ffeP4O8RHbphJVaHH (salvage /tmp/opencode/agt4d-salvage/); SES-7.g fixer ses_e79820c81ffe4XmDA5QDdZBCMY; SEC-8.f REAL fixer ses_e79813f8cffeUXABiiEDxod56l; AGT-5.f builder alive 4c1dbe12d dirty2",
     "tick107b": "MCP-4.a scheduler pick cut worktree 4dd8c20ce \u2014 liveness in context.sources data step (BRIEF 29L)",
     "tick82": "master==origin==0c1ad6c64 (batch-17 pushed, non-FF resolved via rebase-over-foreign-vhs 17e6b440e). run-state welded list reconciled from branch-tips (welder-17 never appended batch-15/16/17 ids \u2014 fixed, +10). CTX-4.b/PRV-4.b builders were NEVER dispatched (sessions lost, branches at 44ff31314 zero-ahead) \u2014 fresh cuts this tick. AGT-4.e builder landed 4b983d285 (claimed 4b0258632 was phantom-adjacent misremember). Welder-18: AGT-4.c+PRV-3.b+EXT-5.c (+CTX-3.c/MCP-3.d if r2 CLEAN before dispatch).",
-    "weld_15_closed": "weld-15 ff'd to master 5ea654501 (picks AGT-4.b 5e30f5e94, SES-7.f 5d3b47f05, cure 3a044bc91, meta 72a6ad46b, W20 cure 5ea654501). Prune of cc/C-AGT-4.b cc/C-SES-7.f weld-15 + worktrees pending (do in batch-16 welder run)."
+    "weld_15_closed": "weld-15 ff'd to master 5ea654501 (picks AGT-4.b 5e30f5e94, SES-7.f 5d3b47f05, cure 3a044bc91, meta 72a6ad46b, W20 cure 5ea654501). Prune of cc/C-AGT-4.b cc/C-SES-7.f weld-15 + worktrees pending (do in batch-16 welder run).",
+    "mcp4b": "ALREADY WELDED W16-era 6beef34f4 (plan :1982 \u2705); my tick-107 worktree-add created redundant branch cc/C-MCP-4.b@4dd8c20ce + worktree \u2014 pruning; phantom notifications retired",
+    "tick108b": "master d83e4eed4 welded 231 (18c). Fleet: AGT-5.f build, SES-7.g fix, SEC-8.f fix, AGT-4.d r1 dispatching, 18c welder running. Scheduler NEW picks CTX-4.d/CTX-4.e/SEC-7.c/SES-7.b ALL held on file collisions vs live lanes (Chat.php AGT-4.d/5.f; PermissionGate AGT-4.e pending weld; README/AGENTS CTX-4.d vs AGT-4.d; Subcommands SEC-8.f).",
+    "tick110": [
+      "welded list audited vs plan \u2705 rows; added",
+      "['C-SEC-8.f']"
+    ],
+    "tick110b": "run-state C-SEC-8.f wrongly audited-in from \u2705-regex (it is IN FLIGHT r2-pending) \u2014 removed; MCP-4.a prune owed (welded W10); AGT-4.e r2 verdict REVIEW-2.md stat was @449@ era \u2014 SUPERSEDED: r2 CLEAN landed, AGT-4.e PARKED? NO \u2014 on-disk truth @491@: branch tip b5615c9da? inflight says fixer-live dirty2 5273e6b78. r2 dispatch AFTER fixer returns + FIX-1 verified.",
+    "tick111": "welded list += C-MCP-4.b/C-MCP-4.c (W16-era \u2705 re-offer ghosts); AGT-4.e r2 CLEAN parked b5615c9da (chain 6 commits 1431b98fc..b5615c9da); SES-7.g fix b0fb53309 + SEC-8.f fix 69567f9dc both REAL cat-file; r2 reviewers LIVE both (session ids as above; prior phantom e294b2b1d-era claims ignored)",
+    "tick109": "stray junk spawn ses_e7967505dffedqB36kDNR6I01a = self-mispatch (no worktree, no brief; ignore return, retire key). pkill self-match lesson re-learned: never pattern-match own argv; do not retry kill.",
+    "tick116": "10 live = 4 builders + 6 reviewers. welder-18d (AGT-4.e) + W18-CLOSE welder queued for first free slots. master 003cb1e4e (W18 cures 5406bce93+003cb1e4e on it).",
+    "batch18d_note": "batch-18d welded: C-AGT-4.e (6 picks 5a0b6862f..94ef2b0f2, zero-conflict onto 003cb1e4e; 4 DUR rows minted; protocol trio+dist byte-identical vs master, no schema touch; merged gates 865T/29361A, sole red foreign --worktree standing; run-state tip=last pick, meta SHA rides follow-up one-liner per self-SHA law)"
   },
   "notes_ruling_chain": "owner ruling 15 executed: AGT-5.b welded a812ea659; W14 loop r1 running; next: AGT-5.c build (W15) on 5.b-landed base, then W15 loop after its members complete",
   "owed": [
@@ -311,7 +351,7 @@
   ],
   "status": "RUNNING",
   "tick": "331-batch17-welded (C-MCP-4.d + C-SEC-6.b popped from inflight, count 223->225; weld-17: picks 74c980368+303c87928+fecfe7b4e+6598d32c2, NIT-3/4 doc riders, meta atop 6598d32c2; chain rebased over mid-run origin vhs bot push 17e6b440e; pushed; final tip d258ea4fa + this stamp row; push at ff)",
-  "tip": "04a964f8a",
+  "tip": "94ef2b0f2",
   "updated": "2026-10-29T07:17:51Z",
   "wave_loops": {
     "1": "closed r2 CLEAN",
@@ -1115,7 +1155,16 @@
     },
     "cure-w7": "MASTER REPAIR 2026-10-27 d3395595e (pick of 08862c003, lane base 8eab506d9; clean zero conflicts; 2 files: candy-code/src/Session/EnhancedSessionStore.php +31/-1, candy-code/tests/Session/UsageRecordsTest.php +54/0; %ae/%ce separate greps 1/1 detain@interserver.net, zero Co-Authored trailers). NOT a plan step: no \u00a74 mark, welded count unchanged (90). Gates (plain pipe cwd candy-code env -u LINES -u COLUMNS): --filter 'UsageRecords|SessionStore|Tombstone' = Tests: 130, Assertions: 477 OK (2 pre-existing deprecations) EXACT; --filter 'SessionEventsTable|TranscriptResume|EventLog|DebouncedTranscript|ShareStore' = Tests: 61, Assertions: 306 OK EXACT; gen-command-docs/gen-tool-docs/gen-settings-doc --check all up-to-date rc0 (lane touched no docs); five-guard 133T/15816A F2 = staleness pair ONLY (25,537 pinned vs live - closeout re-pin). DUR: no new *Test.php (pins ride existing UsageRecordsTest). inflight entry removed at this weld."
   },
-  "weld_pending": {},
+  "weld_pending": {
+    "C-SES-7.g": {
+      "tip": "b0fb53309",
+      "note": "fix r1 landed (loopback regex + answer timer); r2 reviewer LIVE ses_e797c5b10ffea23LrG9dV3X4bP; carries: DUR row HandoffRemotePushTest.php, figure re-pin, Chat.php:19287 error-paint weld-carry STANDS"
+    },
+    "C-SEC-8.f": {
+      "tip": "69567f9dc",
+      "note": "fix r1 landed (census 40->41 + MAX_SECRET_BYTES 8192 + refused arm); r2 LIVE ses_e797c5b10ffe6jP3G4T5gU9iR2; carries: DUR row LoginKeychainTest 22T, standing --worktree red disclosed"
+    }
+  },
   "weld_queue": {
     "_legacy_list": [
       "C-SEC-7.d",
@@ -1359,9 +1408,10 @@
     "P-TABS.e",
     "P-TABS.f",
     "P-TABS.g",
-    "P-TABS.h"
+    "P-TABS.h",
+    "C-AGT-4.e"
   ],
-  "welded_count": 231,
+  "welded_count": 232,
   "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
   "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
   "welder_sessions": {
