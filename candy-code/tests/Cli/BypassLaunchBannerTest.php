@@ -17,11 +17,13 @@ use SugarCraft\Code\Permissions\PermissionMode;
  * the channel's own once-per-process writer). No new mechanism: the banner
  * rides the exact seam E653 built for "this session can no longer DO X".
  *
- * The owner ruling that these pins keep honest: DEFAULT_PERMISSION_MODE is
- * NOT changed by this lane (row 6 pins the constant in place), and the
- * interactive default is already `Default`, so a plain TUI launch stays
- * silent (row 2) — the banner accuses, correctly, only launches that truly
- * run every tool without a prompt.
+ * The owner ruling these pins keep honest, AS AMENDED by C-SEC-7.a: rv-sec-1's
+ * permissive `-p` default was REVERSED — `-p` now resolves
+ * HEADLESS_DEFAULT_PERMISSION_MODE (`default`, asking), and only the spawned
+ * daemon keeps BACKGROUND_DEFAULT_PERMISSION_MODE (`bypass-permissions`).
+ * Row 6 pins that split in place, and the interactive default is still
+ * `Default`, so a plain TUI launch stays silent (row 2) — the banner accuses,
+ * correctly, only launches that truly run every tool without a prompt.
  */
 final class BypassLaunchBannerTest extends TestCase
 {
@@ -65,7 +67,7 @@ final class BypassLaunchBannerTest extends TestCase
         @rmdir($this->home);
     }
 
-    public function testTheHeadlessDefaultIsBypassAndItAnnouncesItself(): void
+    public function testTheBackgroundDaemonDefaultIsBypassAndItAnnouncesItself(): void
     {
         $gate = Bootstrap::permissionGate(interactive: false);
 
@@ -73,7 +75,7 @@ final class BypassLaunchBannerTest extends TestCase
         $this->assertStringContainsString(
             'bypass-permissions: every tool call runs without a prompt',
             $this->notices(),
-            'the -p/daemon default is exactly the state rv-sec says must never be silent'
+            'the daemon default is exactly the state rv-sec says must never be silent'
         );
     }
 
@@ -123,17 +125,28 @@ final class BypassLaunchBannerTest extends TestCase
         $this->assertCount(1, $hits, 'the store de-dupes by message identity; three resolutions are one notice');
     }
 
-    public function testTheShippedDefaultsThemselvesAreUntouchedByThisLane(): void
+    public function testTheShippedDefaultsAreTheSplitCSec7aPinnedThemTo(): void
     {
-        // Owner ruling: rv-sec-1's ask is SIGNAL, not policy change. If a
-        // later campaign flips the default, this pin must go red loudly and
-        // with the ruling quoted — not silently via a renamed constant.
+        // rv-sec-1 asked for SIGNAL, not policy change; C-SEC-7.a then made
+        // the policy change §6.1 rules ("-p defaults to Manual/deny like
+        // Claude Code; locally spawned /bg daemons keep bypass"). If a later
+        // campaign flips either half, this pin must go red loudly and with
+        // both rulings quoted — not silently via a renamed constant.
         $class = new \ReflectionClass(Bootstrap::class);
 
+        $this->assertFalse(
+            $class->getConstant('DEFAULT_PERMISSION_MODE') !== false,
+            'the single permissive console constant is gone; the split is the shape now'
+        );
+        $this->assertSame(
+            PermissionMode::Default,
+            $class->getConstant('HEADLESS_DEFAULT_PERMISSION_MODE'),
+            '-p starts in the asking mode (C-SEC-7.a reversal of rv-sec-1)'
+        );
         $this->assertSame(
             PermissionMode::BypassPermissions,
-            $class->getConstant('DEFAULT_PERMISSION_MODE'),
-            'the headless default was deliberately NOT changed (owner ruling, campaign 2026-10-14)'
+            $class->getConstant('BACKGROUND_DEFAULT_PERMISSION_MODE'),
+            'the spawned daemon keeps the permissive default (§6.1: bypass stays for /bg)'
         );
         $this->assertSame(
             PermissionMode::Default,

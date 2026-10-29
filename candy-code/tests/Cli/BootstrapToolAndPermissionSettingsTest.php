@@ -932,7 +932,9 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
      * THE ASSERTION IS ABOUT DISPLACEMENT, NOT ABOUT BYPASS. It would be
      * tempting to write this as "must not reach bypass-permissions", because
      * that is what the fail-open looked like from outside. But the mechanism is
-     * "an empty key falls through to {@see Bootstrap::DEFAULT_PERMISSION_MODE}",
+     * "an empty key falls through to {@see Bootstrap::permissionGate()}'s
+     * surface default — {@see Bootstrap::BACKGROUND_DEFAULT_PERMISSION_MODE} on
+     * the plain surface driven here",
      * and that default only HAPPENS to be the widest mode today — tighten it and
      * the identical bug would silently lock a user out instead, and a
      * bypass-shaped assertion would go on passing through it. So both halves are

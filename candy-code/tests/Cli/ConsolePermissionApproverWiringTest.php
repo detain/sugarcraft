@@ -316,17 +316,23 @@ final class ConsolePermissionApproverWiringTest extends TestCase
         $this->assertSame(HeadlessPermissionPrompt::class, $function->getClosureScopeClass()?->getName());
     }
 
-    // ------------------------------------------- the console default stands --
+    // -------------------------------------- the console defaults are split --
 
     /**
-     * The console paths this approver serves keep BypassPermissions as their
-     * default (decision D5): at no terminal the approver REFUSES, so an asking
-     * default would refuse an unattended run's first write. Only the TUI —
-     * whose asks reach a modal — moved to `default` (DEF-MODE).
+     * C-SEC-7.a split the console default by surface: the plain (background)
+     * surface a spawned daemon resolves through keeps BypassPermissions — at
+     * no terminal for the life of the run the approver would refuse every
+     * write — while the HEADLESS surface `-p` names starts in `default`, where
+     * the approver asks on stderr at a terminal and fails closed unattended
+     * with the one-flag fix in its refusal. Only an explicit source moves a
+     * surface off its default (DEF-MODE governs the TUI likewise).
      */
-    public function testAttachingTheApproverDidNotMoveTheDefaultMode(): void
+    public function testAttachingTheApproverKeptTheDaemonDefaultAndMovedHeadlessToAsking(): void
     {
         $this->assertSame(PermissionMode::BypassPermissions, Bootstrap::permissionGate()->mode());
+        $this->assertSame(PermissionMode::Default, Bootstrap::permissionGate(
+            consoleSurface: Bootstrap::PERMISSION_SURFACE_HEADLESS
+        )->mode(), '-p asks by default since C-SEC-7.a');
         $this->assertSame(PermissionMode::Default, Bootstrap::permissionGate(interactive: true)->mode());
     }
 

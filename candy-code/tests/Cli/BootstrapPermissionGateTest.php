@@ -105,12 +105,14 @@ final class BootstrapPermissionGateTest extends TestCase
     }
 
     /**
-     * The CONSOLE default (decision D5): `-p` and the background daemon build
-     * their gate through the no-argument {@see Bootstrap::permissionGate()},
-     * and stay on BypassPermissions. Their approver,
+     * The BACKGROUND-DAEMON default (decision D5 as split by C-SEC-7.a): a
+     * locally spawned daemon builds its gate through the no-argument
+     * {@see Bootstrap::permissionGate()} — the plain surface is the background
+     * one — and stays on BypassPermissions. Its approver,
      * {@see \SugarCraft\Code\Cli\HeadlessPermissionPrompt}, refuses whenever
-     * no terminal is attached, so an asking default would turn an unattended
-     * CI run's first write into a refusal.
+     * no terminal is attached for the life of the run, so an asking default
+     * there would refuse every write. `-p` names the HEADLESS surface instead
+     * and starts asking ({@see \SugarCraft\Code\Cli\NonInteractive::consoleBackend()}).
      */
     public function testDefaultsToBypassPermissionsWhenNothingIsConfigured(): void
     {

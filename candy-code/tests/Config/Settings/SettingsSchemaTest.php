@@ -122,14 +122,17 @@ final class SettingsSchemaTest extends TestCase
         self::assertSame(Theme::default()->name, SettingsSchema::byKey('theme')?->default);
         self::assertSame(Theme::names(), SettingsSchema::byKey('theme')?->enumValues);
 
-        $mode = (new \ReflectionClassConstant(Bootstrap::class, 'DEFAULT_PERMISSION_MODE'))->getValue();
+        // C-SEC-7.a split the console default: the SCHEMA default is what the
+        // plain (spawned-daemon) surface falls back to; `-p` names the headless
+        // surface and starts in the asking mode without a schema value of its own.
+        $mode = (new \ReflectionClassConstant(Bootstrap::class, 'BACKGROUND_DEFAULT_PERMISSION_MODE'))->getValue();
         self::assertSame($mode->value, SettingsSchema::byKey('permissionMode')?->default);
 
-        // D5: the printed default names both entry points, each by the
+        // D5 as split: the printed default names each entry point by the
         // constant its gate falls back to.
         $interactive = (new \ReflectionClassConstant(Bootstrap::class, 'INTERACTIVE_DEFAULT_PERMISSION_MODE'))->getValue();
         self::assertSame(
-            '`' . $interactive->value . '` (TUI); `' . $mode->value . '` (`-p`, daemon)',
+            '`' . $interactive->value . '` (TUI, `-p`); `' . $mode->value . '` (daemon)',
             SettingsSchema::byKey('permissionMode')?->defaultText,
         );
     }
