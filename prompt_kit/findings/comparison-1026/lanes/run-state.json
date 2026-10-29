@@ -129,15 +129,6 @@
  ],
  "extra_agents": 1,
  "inflight": {
-  "C-MCP-3.c": {
-   "stage": "clean",
-   "round": 3,
-   "worktree": "/home/sites/cc-cmp-C-MCP-3.c",
-   "branch": "cc/C-MCP-3.c",
-   "tip": "8c5db7bf8",
-   "session": "ses_e7ac66d70ffecTwLVgMeXgbLct",
-   "note": "r3 CLEAN 0C/0M; parked batch-13: picks dbd11a501+be1d3e425+8c5db7bf8, DUR x2 GetStream+ServerRequest tests, \u00a74 8c5db7bf8; no roster weld-work (in-lane)"
-  },
   "C-MCP-2.c": {
    "stage": "build",
    "round": 0,
@@ -147,56 +138,35 @@
    "session": "ses_e7b20fa5fffeoCAXQaGehz61UQ",
    "note": "W23 web composer @mcp: picker; dist by welder rider"
   },
-  "C-SEC-6.c": {
-   "stage": "clean",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-SEC-6.c",
-   "branch": "cc/C-SEC-6.c",
-   "tip": "4a99481f4",
-   "session": null,
-   "note": "r1 security CLEAN; report-truth fix landed 4a99481f4. batch-13: SERIALIZE with C-MCP-2.c (SessionView.vue) \u2014 land this first w/ trio regen+dist rider, DUR PermissionSavedRulesMethodsTest ~7s, +14T, \u00a74 737d5dba5(+4a99481f4)"
-  },
-  "C-CTX-4.g": {
-   "stage": "review",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-CTX-4.g",
-   "branch": "cc/C-CTX-4.g",
-   "tip": "cbdc0102f",
-   "session": "ses_e7ac23bafffePrxflRznMLBgk8",
-   "note": "r1 live; weld carries DUR AppendSystemPromptTest 19T, +22T, \u00a74 cbdc0102f"
-  },
-  "C-SEC-8.a": {
-   "stage": "clean",
-   "round": 2,
-   "worktree": "/home/sites/cc-cmp-C-SEC-8.a",
-   "branch": "cc/C-SEC-8.a",
-   "tip": "8771dc2d3",
-   "session": "ses_e7abf5e0dffelcC9x6Z8lzzxl7",
-   "note": "r2 CLEAN delta; parked batch-13: picks f227b2b56-parent chain build f23193fad+fix 8771dc2d3, DUR McpOutputFenceTest 6T, +7T, \u00a74 8771dc2d3, welder stamps REPORT :62 <SHA> row, MINOR-2 4-file attribution for C-MCP collision proof"
-  },
   "C-PRV-4.a": {
-   "stage": "build",
-   "round": 0,
+   "stage": "fix",
+   "round": 1,
    "worktree": "/home/sites/cc-cmp-C-PRV-4.a",
    "branch": "cc/C-PRV-4.a",
    "base": "b9a3b0fff",
-   "session": "ses_e7ad8fb77ffew8yS3s0cZrxSAg"
+   "session": "ses_e7aab73ddffeJl9uKJyOZLWw5B",
+   "tip": "958c5b939",
+   "note": "r1 FINDINGS 0C/0M/3m (docblock lie, summariser-pin missing, README exception clause); fixer live; core judgments ALL PASS incl FallbackProvider no-M2-shape + narrowing law structural"
   },
   "C-CTX-3.e": {
-   "stage": "build",
-   "round": 0,
+   "stage": "fix",
+   "round": 1,
    "worktree": "/home/sites/cc-cmp-C-CTX-3.e",
    "branch": "cc/C-CTX-3.e",
    "base": "b9a3b0fff",
-   "session": "ses_e7ad8fb76ffexN9m3sMTojVymi"
+   "session": "ses_e7aa7e4e1ffeV3Q3srHmXvnbBF",
+   "tip": "877062eab",
+   "note": "r1 1 MAJOR (Lang concat keys ChatHostLangCatalogue tree-red x2 @1087) + smuggle-pin MINOR + stamp NIT; fixer live"
   },
   "C-CTX-4.f": {
-   "stage": "build",
-   "round": 0,
+   "stage": "review",
+   "round": 1,
    "worktree": "/home/sites/cc-cmp-C-CTX-4.f",
    "branch": "cc/C-CTX-4.f",
    "base": "e306bf4fc",
-   "session": "ses_e7ad48a21ffe1t41Es0r0NW7cG"
+   "session": "ses_e7aa54859ffecI6pOfT7i57Tl0",
+   "tip": "9e47c4366",
+   "note": "build DONE 16f+1107/-95; r1 focus READ-ONLY grant probe, symlink jail walk, user-tier-only law, env-block escape; DUR ProjectReferencesTest 13T carry"
   },
   "C-EXT-5.b": {
    "stage": "build",
@@ -217,20 +187,32 @@
    "note": "regions disjoint from live EXT-5.b palette arms; KeyBindingDrift+KeyHelp roster in-step if reddened"
   },
   "C-PRV-3.c": {
-   "stage": "build",
-   "round": 0,
+   "stage": "review",
+   "round": 1,
    "worktree": "/home/sites/cc-cmp-C-PRV-3.c",
    "branch": "cc/C-PRV-3.c",
    "base": "8754885cb",
-   "session": "ses_e7ac195a3ffeEqEOJtZHZc6j7r"
+   "session": "ses_e7aa6a2cdffe6gcx8RGd3ACHXC",
+   "tip": "01c230f8c",
+   "note": "build DONE 7f+457/-2 (parent 8754885cb); r1 focus one-turn/reset, continuation-keeps, typed-row-only, fence/inline inert, clamp legality; DUR UltrathinkTurnTest 17T carry"
   },
   "C-SEC-6.e": {
-   "stage": "build",
-   "round": 0,
+   "stage": "review",
+   "round": 1,
    "worktree": "/home/sites/cc-cmp-C-SEC-6.e",
    "branch": "cc/C-SEC-6.e",
    "base": "de0c54646",
-   "session": "ses_e7abc3aeeffefvbchoMAQw21uC"
+   "session": "ses_e7aa92f4dffex7UB7YdUPhctyb",
+   "tip": "ee4789c04",
+   "note": "build DONE 3f +438/-6, OtlpEncoder-only; r1 focus: reason_token privacy, 3-path reachability, no-verdict byte-identity; DUR OtlpSafetyEventTest 11T carry"
+  },
+  "C-CTX-3.f": {
+   "stage": "build",
+   "round": 0,
+   "worktree": "/home/sites/cc-cmp-C-CTX-3.f",
+   "branch": "cc/C-CTX-3.f",
+   "base": "cac93e391",
+   "session": "ses_e7ab4692fffeGwklzMMZs5lZZW"
   }
  },
  "late_rulings": [
@@ -269,7 +251,7 @@
   "CTX-3.d-r2",
   "AGT-5.d-fix"
  ],
- "master_tip": "de0c54646",
+ "master_tip": "b84ed2118",
  "next_lead": {
   "gates": "scheduler free=0 remaining=195 late=False; blocked=['C-AGT-5.b'] owner-gated delete-cross-root ruling (options (a) root-scope guard (b) keep+document) \u2014 strings-only entries law; W14 list re-derive from plan \u00a73",
   "hazards": [
@@ -340,7 +322,7 @@
  ],
  "standing_reds_b985fbe51": "ADD: ChatHostLangCatalogueTest red on chat.effort.launch_unshaped (asker LaunchContext.php:2109 outside sources()) - byte-identical at base, C-PRV-1.b (a992413b0) seam -> closeout roster",
  "status": "RUNNING",
- "tick": "316-b12-landed-de0c54646-welded206",
+ "tick": "326-batch13-welded (C-SEC-8.a b14427010, C-MCP-3.c 310350892, C-SEC-6.c 58e4899f1, C-CTX-4.g b84ed2118 picks; weld commit atop)",
  "tip": "0f58a906f",
  "updated": "2026-10-28",
  "wave_loops": {
@@ -1338,9 +1320,13 @@
   "C-EXT-6.a",
   "C-SES-6.d",
   "C-AGT-5.d",
-  "C-CTX-3.d"
+  "C-CTX-3.d",
+  "C-SEC-8.a",
+  "C-MCP-3.c",
+  "C-SEC-6.c",
+  "C-CTX-4.g"
  ],
- "welded_count": 206,
+ "welded_count": 210,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
  "welder_sessions": {
@@ -1378,5 +1364,18 @@
  "weld_serialization": [
   "C-SEC-6.c <-> C-MCP-2.c: shared SessionView.vue \u2014 one welds first, second re-resolves hunk with content check"
  ],
- "batch12_note": "b12 welded 2026-10-28: C-AGT-5.d (44fae6291/4bbcc0f6e/18a64b8f5 -> 3596fa061/60915338b/d3d4b54f4; WEBHOOK_BODY cure, DuplicatedTestHelperDrift green 14T/197A, gate 69T/2477A, +18T carry) + C-CTX-3.d (e08dddd3e/f0f2a0922 -> ffafa16ae/8754885cb; README fused by gen-tool-docs regen, weld-cure de0c54646 NIT-1+NIT-3, 14T/81A exact, battery 252T/4817A/1F DreamPass standing, +14T carry). Base 965be930f. Foreign standing proven by file-revert probes: Server|Hooks 3F (AttachPaging x2, WorkspaceHostTest:119) + MemoryPromptWiring 6E/1F + BootstrapSkillSkips 3F. suite-figure re-pin OWED at closeout (\u00a77). Both branches+worktrees pruned after cherry-proof."
+ "batch12_note": "b12 welded 2026-10-28: C-AGT-5.d (44fae6291/4bbcc0f6e/18a64b8f5 -> 3596fa061/60915338b/d3d4b54f4; WEBHOOK_BODY cure, DuplicatedTestHelperDrift green 14T/197A, gate 69T/2477A, +18T carry) + C-CTX-3.d (e08dddd3e/f0f2a0922 -> ffafa16ae/8754885cb; README fused by gen-tool-docs regen, weld-cure de0c54646 NIT-1+NIT-3, 14T/81A exact, battery 252T/4817A/1F DreamPass standing, +14T carry). Base 965be930f. Foreign standing proven by file-revert probes: Server|Hooks 3F (AttachPaging x2, WorkspaceHostTest:119) + MemoryPromptWiring 6E/1F + BootstrapSkillSkips 3F. suite-figure re-pin OWED at closeout (\u00a77). Both branches+worktrees pruned after cherry-proof.",
+ "welders": {
+  "batch-13": {
+   "session": "ses_e7ab4083bffe17HBMGyrAhx4P5",
+   "lanes": [
+    "C-SEC-8.a",
+    "C-MCP-3.c",
+    "C-SEC-6.c",
+    "C-CTX-4.g"
+   ],
+   "dispatched_at_master": "cac93e391"
+  }
+ },
+ "batch13_note": "b13 welded 2026-10-28 off cac93e391: picks f23193fad+8771dc2d3->7b8d787aa+b14427010 (8.a, +7T, DUR McpOutputFenceTest 0.10/6); dbd11a501+be1d3e425+8c5db7bf8->d827a5f6b+9de3327fe+310350892 (3.c, guard cured GREEN 19T/461A, tests/MCP 864T/3222A/1S, DUR x2 0.12/5+0.13/5); 737d5dba5+4a99481f4->e9838c105+58e4899f1 (6.c, vitest 10f/69T, DUR 3.40/14, trio regen schema+81/SERVER.md forget rows/generated.ts/dist rider); cbdc0102f->b84ed2118 (CTX-4.g, file 18T/145A, filter 19T/147A, DUR 0.52/18, weld-doc erratum follow-up commit). range-diff 8/8 = vs pre-committer-fix chain; battery: Mcp 1496T/8737A/1S, Duplicated 14T/197A, guards 237T/31028A, ProtocolDrift 13T/362A all green; durations 1596 rows viol=4. inflight preserved: C-AGT-4.b,C-CTX-3.e,C-CTX-3.f,C-CTX-4.f,C-EXT-5.b,C-MCP-2.c,C-PRV-3.c,C-PRV-4.a,C-SEC-6.e"
 }

@@ -59,7 +59,7 @@ Risk accepted per brief: the header shows in TUI tool rows for every MCP answer.
 
 # FIX ROUND 1 (review-1) — LANDED
 
-Commit: <SHA> on cc/C-SEC-8.a (base f23193fad). One follow-up commit, never pushed.
+Commit: 8771dc2d3 on cc/C-SEC-8.a (base f23193fad). One follow-up commit, never pushed.
 Author/committer: Joe Huss <detain@interserver.net> (%ae == 1, %ce == 1 separate greps, zero Co-Authored trailers).
 
 ## MAJOR-1 (fence the stdio catch path) — FIXED

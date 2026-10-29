@@ -3197,6 +3197,60 @@
                 ]
             }
         },
+        "permission.forget": {
+            "description": "Remove one saved permission rule from the user config, addressed by its pattern or by its 1-based saved index.",
+            "scope": "approve",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "maxLength": 512
+                    },
+                    "index": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "The 1-based number the saved list shows; exactly one of pattern or index."
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                }
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "removed": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "pattern": {
+                                    "type": "string"
+                                },
+                                "action": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "pattern",
+                                "action"
+                            ]
+                        }
+                    },
+                    "path": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "removed",
+                    "path"
+                ]
+            }
+        },
         "permission.pending": {
             "description": "The questions still open, for one session or all open sessions.",
             "scope": "read",
@@ -3300,6 +3354,14 @@
                         "items": {
                             "type": "string"
                         }
+                    },
+                    "saved": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 2048,
+                        "description": "With remember \"user\" on a hosted question: the notice naming where the answer's patterns were saved (or why they were not); null when the question had nothing generalisable to persist."
                     }
                 },
                 "required": [
@@ -3310,7 +3372,7 @@
             }
         },
         "permission.rules": {
-            "description": "The effective permission mode and rules, read-only.",
+            "description": "The effective permission mode and rules, read-only; saved user-tier rows carry their tier and 1-based saved index.",
             "scope": "read",
             "idempotent": false,
             "params": {
@@ -3350,11 +3412,26 @@
                                 },
                                 "action": {
                                     "type": "string"
+                                },
+                                "tier": {
+                                    "enum": [
+                                        "user",
+                                        "config"
+                                    ],
+                                    "description": "C-SEC-6.c: `user` for a rule the user saved through `p` / `remember: \"user\"` (numbered by savedIndex, the same count permission.forget and `/permissions saved` address by); `config` for every other configured row."
+                                },
+                                "savedIndex": {
+                                    "type": [
+                                        "integer",
+                                        "null"
+                                    ],
+                                    "minimum": 1
                                 }
                             },
                             "required": [
                                 "pattern",
-                                "action"
+                                "action",
+                                "tier"
                             ]
                         }
                     },

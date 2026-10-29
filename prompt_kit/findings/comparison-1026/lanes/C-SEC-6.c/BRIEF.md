@@ -1,0 +1,28 @@
+### C-SEC-6.c — Web saved-rule management and `remember: "user"`
+- item: C-SEC-6 (sources: GAP-PER-04(a), OC-new#3)
+- kind: gap · effort M
+- approach:
+  - `PermissionMethods::respond()` refuses `remember:"user"` with `remember_user_unavailable` (`src/Protocol/Methods/PermissionMethods.php:68-70`). The fix answers Always and calls `SavedRules::append()` with the ask's patterns (`SessionPermissionMemo::patternsFor`, as the TUI `p` does).
+  - `permission.rules` rows (:213-230) gain `tier` and a `savedIndex` for user-tier rows.
+  - A new `permission.forget` method {pattern, action} (Scope::Approve) removes one saved rule through `SavedRules`.
+  - Web:
+    - `PermissionCard` gains an "Always (save)" verdict;
+    - `RulesPanel` gains a Saved section with Forget buttons and the "next launch" note;
+    - the `approvals` store sends `remember:'user'`.
+- files.create: `candy-code/tests/Protocol/PermissionSavedRulesMethodsTest.php`, `candy-code-web/src-web/components/panels/__tests__/rulesPanelSaved.spec.ts`
+- files.modify:
+  - `candy-code/src/Protocol/Methods/PermissionMethods.php` (`respond`, `rules`, new `forget`)
+  - `candy-code/src/Protocol/Schema/MethodSchemas.php` (`permission.rules` result, `permission.forget`)
+  - `candy-code/docs/protocol/candy-code.v1.schema.json`, `candy-code/docs/SERVER.md`, `candy-code-web/src-web/protocol/generated.ts`
+  - `candy-code-web/src-web/components/PermissionCard.vue`
+  - `candy-code-web/src-web/components/panels/RulesPanel.vue`
+  - `candy-code-web/src-web/stores/approvals.ts`
+  - `candy-code/docs/PERMISSIONS.md` ("`remember: user` is not offered over the wire" → offered)
+- tests: the new PHP test covers remember-user persistence, forget, project remember still Forbidden, and the `remember_user_unavailable` removal. The new web spec covers Forget. Modify `candy-code/tests/Server/PermissionFirstWinsTest.php` if it pins the old refusal.
+- docs/guards: protocol gen checks; `ServerProtocolDocumentationDriftTest`; `PermissionsIntroDriftTest`. Web dist rebuild.
+- serialized: [protocol] [hot:candy-code-web/src-web/components/PermissionCard.vue] [hot:candy-code-web/src-web/components/panels/RulesPanel.vue] [hot:candy-code-web/dist] [docs:PERMISSIONS.md]
+- deps: C-SEC-6.a
+- phase: normal
+- ruling: none
+- risks: a web approver can now write the operator's user config. Scope::Approve already gates verdicts, and the rules written are allow-only, exactly the TUI `p` set.
+

@@ -493,9 +493,10 @@ it and the two tables below are generated from the code
 | `memory.log` | read |  | — | The home store's commit history, newest first — the revisions memory.undo names. |
 | `memory.search` | read |  | `query` | Notes matching a query, best first, across every scope and both stores. |
 | `memory.undo` | write | yes | — | Restore the home store to an earlier revision (by default the state before its latest commit), recorded as a new commit. |
+| `permission.forget` | approve | yes | — | Remove one saved permission rule from the user config, addressed by its pattern or by its 1-based saved index. |
 | `permission.pending` | read |  | — | The questions still open, for one session or all open sessions. |
 | `permission.respond` | approve | yes | `sessionId`, `askId`, `reply` | Answer an open permission question; the first answer wins. |
-| `permission.rules` | read |  | — | The effective permission mode and rules, read-only. |
+| `permission.rules` | read |  | — | The effective permission mode and rules, read-only; saved user-tier rows carry their tier and 1-based saved index. |
 | `server.health` | read |  | — | Liveness and load. |
 | `server.hello` | read |  | — | The handshake: protocol version, features, limits; optionally resume subscriptions (snapshotLimit pages their reset snapshots). |
 | `server.info` | read |  | — | What this server offers: providers, agents, commands, tools, permission modes. |

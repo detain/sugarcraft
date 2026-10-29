@@ -872,6 +872,23 @@ export interface Methods {
       commit?: string | null
     }
   }
+  /** Remove one saved permission rule from the user config, addressed by its pattern or by its 1-based saved index. */
+  "permission.forget": {
+    params: {
+      pattern?: string
+      /** The 1-based number the saved list shows; exactly one of pattern or index. */
+      index?: number
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      removed: {
+        pattern: string
+        action: string
+      }[]
+      path: string
+    }
+  }
   /** The questions still open, for one session or all open sessions. */
   "permission.pending": {
     params: {
@@ -898,9 +915,11 @@ export interface Methods {
       askId: string
       reply?: "once" | "always" | "reject" | null
       cascaded: string[]
+      /** With remember "user" on a hosted question: the notice naming where the answer's patterns were saved (or why they were not); null when the question had nothing generalisable to persist. */
+      saved?: string | null
     }
   }
-  /** The effective permission mode and rules, read-only. */
+  /** The effective permission mode and rules, read-only; saved user-tier rows carry their tier and 1-based saved index. */
   "permission.rules": {
     params: {
       sessionId?: SessionId
@@ -908,10 +927,13 @@ export interface Methods {
     result: {
       mode: PermissionMode | null
       modeSource?: string | null
-      rules: {
+      rules: ({
         pattern: string
         action: string
-      }[]
+        /** C-SEC-6.c: `user` for a rule the user saved through `p` / `remember: "user"` (numbered by savedIndex, the same count permission.forget and `/permissions saved` address by); `config` for every other configured row. */
+        tier: "user" | "config"
+        savedIndex?: number | null
+      })[]
       sessionGrants: string[]
     }
   }
@@ -1637,6 +1659,7 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "memory.log": "read",
   "memory.search": "read",
   "memory.undo": "write",
+  "permission.forget": "approve",
   "permission.pending": "read",
   "permission.respond": "approve",
   "permission.rules": "read",
@@ -1698,6 +1721,7 @@ export const IDEMPOTENT_METHODS: readonly MethodName[] = [
   "memory.delete",
   "memory.edit",
   "memory.undo",
+  "permission.forget",
   "permission.respond",
   "server.shutdown",
   "session.archive",

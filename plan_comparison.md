@@ -2562,7 +2562,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-4.f`
 
-#### C-CTX-4.g — Headless `--append-system-prompt`
+#### ✅ cbdc0102f C-CTX-4.g — Headless `--append-system-prompt` (pick cbdc0102f -> b84ed2118; WELD-DOC erratum 19T->18T/+22T->+21T + battery disclosure ride lanes/C-CTX-4.g/REPORT.md; DUR row minted 18T/0.52s; batch-13)
 - **Item:** C-CTX-4 (sources: GAP-PRM-09) · gap · effort S
 - **What:** New flag `--append-system-prompt <text|@file>`, valid with `-p` only (refused on a TUI launch, like the AUT-4-P1 lesson). The text is spliced as one `<user-rules>`-fenced section at the end of the system prompt: never an …
 - **Files — create:** `candy-code/tests/Cli/AppendSystemPromptTest.php`
@@ -2690,7 +2690,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-EXT-1.a (W1)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ext.md` → `### C-EXT-6.a`
 
-#### C-MCP-3.c — HTTP/SSE server requests + streamable-HTTP GET channel
+#### ✅ 8c5db7bf8 C-MCP-3.c — HTTP/SSE server requests + streamable-HTTP GET channel (picks dbd11a501+be1d3e425+8c5db7bf8 -> d827a5f6b+9de3327fe+310350892; ReadmeJsonErrorContract 19T/461A GREEN-cured, tests/MCP 864T/3222A/1S byte-exact, Duplicated pair 14T/197A; DUR x2 minted; regen trio + dist rider rode batch-13 weld; batch-13)
 - **Item:** C-MCP-3 (sources: GAP-MCP-03, GAP-MCP-08, OC-new#1) · gap · effort M
 - **What:** `HttpMcpServer` handshakes with `capabilities: {}` (`candy-code/src/MCP/HttpMcpServer.php:518-552`), and `replyFromEventStream()` (:828-851) looks only for its own id, dropping server requests and progress that ride the POST …
 - **Files — create:** `candy-code/tests/MCP/HttpMcpServerGetStreamTest.php`, `candy-code/tests/MCP/SseMcpServerServerRequestTest.php`
@@ -2819,7 +2819,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-PRV-4.a (W19)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-PRV-4.b`
 
-#### C-SEC-6.c — Web saved-rule management and `remember: "user"`
+#### ✅ 4a99481f4 C-SEC-6.c — Web saved-rule management and `remember: "user"` (picks 737d5dba5+4a99481f4 -> e9838c105+58e4899f1; PermissionSavedRulesMethods|PermissionFirstWins 24T/101A, vitest serial 10 files 69T, trio regen + dist rider, SERVER.md carries permission.forget row, DUR minted 14T/3.40s; +14T/+50A file carry; batch-13)
 - **Item:** C-SEC-6 (sources: GAP-PER-04(a), OC-new#3) · gap · effort M
 - **What:** `PermissionMethods::respond()` refuses `remember:"user"` with `remember_user_unavailable` (`src/Protocol/Methods/PermissionMethods.php:68-70`). The fix answers Always and calls `SavedRules::append()` with the ask's patterns …
 - **Files — create:** `candy-code/tests/Protocol/PermissionSavedRulesMethodsTest.php`, `candy-code-web/src-web/components/panels/__tests__/rulesPanelSaved.spec.ts`
@@ -2914,7 +2914,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-6.d`
 
-#### C-SEC-8.a — Fence MCP tool output as untrusted
+#### ✅ 8771dc2d3 C-SEC-8.a — Fence MCP tool output as untrusted (picks f23193fad+8771dc2d3 -> 7b8d787aa+b14427010; McpOutputFence|StdioMcpHttpRefusals 7T/17A, McpToolBridge 79T/217A; REPORT <SHA> row stamped at weld; DUR minted 6T/0.10s; +7T carry; batch-13)
 - **Item:** C-SEC-8 (sources: GAP-PER-10) · gap · effort S
 - **What:** `McpToolBridge::replyResult()` (`src/Tools/McpToolBridge.php:599-607`) is the one renderer for both a bridged MCP tool and `mcp_call` (`src/Tools/BuiltIn/McpCallTool.php`). It returns third-party server text raw. New …
 - **Files — create:** `candy-code/src/Context/McpOutputFence.php`, `candy-code/tests/Context/McpOutputFenceTest.php`
