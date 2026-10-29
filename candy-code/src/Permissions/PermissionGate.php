@@ -1802,7 +1802,11 @@ final class PermissionGate
     {
         if ($call->name === SendMessageTool::NAME
             && is_string($call->arguments['to'] ?? null)
-            && str_starts_with($call->arguments['to'], SendMessageTool::SESSION_PREFIX)
+            // Trim exactly as SendMessageTool::execute() does — a model that
+            // emits `to: " session:<id>"` still lands cross-session mail, so a
+            // gate that read the raw value could be skipped by one space
+            // (C-AGT-4.e review-1, CRITICAL: consent bypass).
+            && str_starts_with(trim($call->arguments['to']), SendMessageTool::SESSION_PREFIX)
         ) {
             return false;
         }

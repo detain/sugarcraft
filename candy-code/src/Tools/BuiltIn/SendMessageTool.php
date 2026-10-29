@@ -504,11 +504,17 @@ final readonly class SendMessageTool implements Tool, BuildsFromCatalog, Delegat
         if ($this->sessionStore !== null) {
             return $this->sessionStore;
         }
-        $db = Bootstrap::trustedConfigDirPath() . '/session.db';
-        if (!is_file($db)) {
-            return null;
-        }
+        // REVIEW-1 finding 6: trustedConfigDirPath() THROWS on a launch with
+        // no owned home.  That exception must not escape a path whose every
+        // other failure answers with a refusal — inside the try, a home this
+        // process cannot trust reads exactly like "no stored session": null,
+        // and crossSession() answers `no_store`.
         try {
+            $db = Bootstrap::trustedConfigDirPath() . '/session.db';
+            if (!is_file($db)) {
+                return null;
+            }
+
             return new SessionStore($db);
         } catch (\Throwable) {
             return null;

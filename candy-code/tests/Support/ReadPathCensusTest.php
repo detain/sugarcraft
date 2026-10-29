@@ -190,6 +190,21 @@ final class ReadPathCensusTest extends TestCase
         'Agents/Live/AgentTranscriptTail.php|fopen' => [
             'CALLER_SUPPLIED — a sub-agent transcript log; AgentManager::recordChildSession() opens one only after SubAgentTranscriptLog::isLogPath() held it under the transcript root',
         ],
+        'Agents/Live/SessionMailbox.php|file_get_contents' => [
+            'OWNED_HOME — take() reads one mail file whose name already matched FILE_PATTERN inside the session\'s own '
+                . 'directory under `~/.candy-code/session-mail`, a home HomeDirectory::owned() established as this '
+                . 'user\'s; the bytes are signature-checked before anything is believed',
+            'OWNED_HOME — readKey(): the same directory\'s `inbox.key`, shape-checked against KEY_PATTERN before use',
+        ],
+        'Agents/Live/SessionMailbox.php|fopen' => [
+            'OWNED_HOME — mintKey() creates the same `inbox.key` with `x` mode under umask(0o077) so a race between '
+                . 'two processes lands on one winner; nothing is read through this handle',
+        ],
+        'Agents/Live/SessionMailbox.php|scandir' => [
+            'NAMES_ONLY — take() lists the session\'s own mailbox directory for names; each candidate must match '
+                . 'FILE_PATTERN (the payload\'s msgId must equal the stem) before its content is read, and the '
+                . 'directory path itself comes only from forSession()\'s ID_PATTERN-checked session id under the owned home',
+        ],
         'Agents/Live/SubAgentTranscriptLog.php|fopen' => [
             'SELF_LOCATED — the run\'s own log under ~/.candy-code/subagents, opened to append',
         ],

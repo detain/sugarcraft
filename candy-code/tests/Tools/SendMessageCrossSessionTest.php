@@ -156,6 +156,64 @@ final class SendMessageCrossSessionTest extends TestCase
 
         self::assertTrue($probe->invoke($gate, new ToolCall(SendMessageTool::NAME, ['to' => 'kid-1', 'text' => 'go'], 'c1')));
         self::assertFalse($probe->invoke($gate, new ToolCall(SendMessageTool::NAME, ['to' => SendMessageTool::SESSION_PREFIX . 'other', 'text' => 'go'], 'c2')));
+
+        // REVIEW-1 finding 1 (CRITICAL): execute() trims `to` before its own
+        // prefix check, so a whitespace-padded session target still delivers
+        // cross-session mail.  The gate must see the SAME trimmed shape —
+        // otherwise one leading space skips the carve-out and the delivery is
+        // allowed unasked in every mode.  Red if the gate's trim is removed.
+        self::assertFalse(
+            $probe->invoke($gate, new ToolCall(SendMessageTool::NAME, ['to' => ' ' . SendMessageTool::SESSION_PREFIX . 'other', 'text' => 'go'], 'c3')),
+            'a space before session: is still a session target — the gate must trim like execute() does',
+        );
+        self::assertFalse(
+            $probe->invoke($gate, new ToolCall(SendMessageTool::NAME, ['to' => "\t" . SendMessageTool::SESSION_PREFIX . 'other', 'text' => 'go'], 'c4')),
+            'a tab before session: is the same bypass',
+        );
+        // The trim must not turn a padded PLAIN target into a session target:
+        // messaging your own sub-agent stays the no-ask shape it has always been.
+        self::assertTrue(
+            $probe->invoke($gate, new ToolCall(SendMessageTool::NAME, ['to' => '  kid-1  ', 'text' => 'go'], 'c5')),
+            'a padded plain sub-agent target is still the no-ask shape',
+        );
+    }
+
+    /**
+     * REVIEW-1 finding 6: with no store seam given, sessionStoreHandle()
+     * resolves the launch's own config db through trustedConfigDirPath(),
+     * which THROWS on a home this process cannot establish as owned. That
+     * throw must not escape crossSession() — the whole design answers a
+     * `session:` target it cannot verify with a refusal. Pin: a world-writable
+     * HOME (HomeDirectory::owned() refuses it) yields the no-store refusal,
+     * never an exception. Red if the trustedConfigDirPath() call moves back
+     * outside the guarded region.
+     */
+    public function testAnUntrustedHomeCostsTheSessionStoreAndNotAThrow(): void
+    {
+        $unowned = $this->base . '/unowned-home';
+        self::assertNotFalse(mkdir($unowned, 0o700, true));
+        // umask would shave 0o777 at mkdir; set the bit explicitly so
+        // HomeDirectory::owned() sees a world-writable home and refuses it.
+        self::assertNotFalse(chmod($unowned, 0o777));
+        $home = getenv('HOME');
+        putenv('HOME=' . $unowned);
+        try {
+            $tool = SendMessageTool::new()
+                ->withEngine(EngineBackend::new(new ScriptedProvider([]), 'm')->withSessionId($this->main))
+                ->withRoot($this->mailRoot)
+                ->withSessionRoot($this->root, null);
+
+            $result = $tool->execute([
+                'id' => 'm1',
+                'to' => SendMessageTool::SESSION_PREFIX . $this->target,
+                'text' => 'anybody home',
+            ]);
+
+            self::assertTrue($result->isError(), 'an unverifiable store is a refusal, not an exception');
+            self::assertStringContainsString('no session store', $result->content());
+        } finally {
+            putenv(false === $home ? 'HOME' : 'HOME=' . $home);
+        }
     }
 
     private function tool(): SendMessageTool
