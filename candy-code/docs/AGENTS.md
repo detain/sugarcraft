@@ -343,6 +343,25 @@ approves nothing. `Subagents` and `InterruptAgent` stay with the session's
 agent. Messages go only between an agent and the sub-agents it launched, never
 to a sibling.
 
+### Messages to another session
+
+The same tool reaches across sessions, hub-and-spoke between the launches at
+one project root: from the session's own agent (never a sub-agent),
+`SendMessage` with a `to:` of `session:<id>` reaches another candy-code session
+stored at the same root — and that call is NOT one of the never-ask tools: it
+falls through to the mode's rules and gets asked like the delegation it is
+(a whitespace-padded `to` is trimmed exactly as delivery trims it, so one space
+cannot skip the prompt). Delivery crosses processes on disk: one JSON file per
+message under `~/.candy-code/session-mail/<session>/`, directories `0700` and
+files `0600`. The receiving session opens its inbox by draining it, and opening
+mints `inbox.key` — 64 hex chars the receiver keeps to itself; every message
+travels signed under that key, and a line that fails the check is dropped and
+reported once, never delivered as a lesser message. A drained message arrives
+as a `<session-message from="…">` followup at the next idle beat — the TUI
+pump or the served host's tick — the peer's agent speaking as an equal: task
+direction, never approval of anything, and no permission or configuration
+change.
+
 ### The shared board
 
 The members of one parallel batch — two or more foreground `Task` calls in one
