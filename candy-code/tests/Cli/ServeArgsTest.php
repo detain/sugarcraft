@@ -288,6 +288,148 @@ final class ServeArgsTest extends TestCase
         self::assertSame(NonInteractive::EXIT_CONFIG, Serve::run(self::parse(['serve', '--allow-dir-browse', '--browse-root', '/no/such/dir/anywhere'])));
     }
 
+    /**
+     * C-WEB-5.a: `--tls-cert`/`--tls-key` are value flags, flag-only — a
+     * persisted config key must not turn TLS on behind the next launch's back
+     * — and off means off: plain HTTP, https nowhere in the scheme.
+     */
+    public function testTheTlsFlagsAreValueFlagsFlagOnlyAndOffByDefault(): void
+    {
+        $flags = self::parse(['serve', '--tls-cert=/a.pem', '--tls-key', '/b.pem'])->subcommandFlags;
+        self::assertSame('/a.pem', $flags['--tls-cert']);
+        self::assertSame('/b.pem', $flags['--tls-key']);
+
+        $plain = self::config(['serve']);
+        self::assertFalse($plain->hasTls(), 'no flags, no TLS');
+        self::assertSame('http', $plain->urlScheme());
+        self::assertNull($plain->tlsCert);
+        self::assertNull($plain->tlsKey);
+
+        self::assertFalse(
+            self::config(['serve'], [], ['server.tlsCert' => '/a.pem', 'server.tlsKey' => '/b.pem'])->hasTls(),
+            'a config key cannot enable TLS: the flags are the only lever',
+        );
+    }
+
+    /**
+     * C-WEB-5.a: the refusals that must happen before anything binds — a half
+     * pair, a path that is not a readable file. Each is a startup exit 2, and
+     * a complete valid pair survives resolve with https URLs.
+     */
+    public function testTlsRefusesAHalfPairBeforeAnythingBinds(): void
+    {
+        [$cert, $key] = $this->writeServeArgsTlsPair();
+
+        $on = self::config(['serve', '--tls-cert', $cert, '--tls-key', $key]);
+        self::assertTrue($on->hasTls());
+        self::assertSame('https', $on->urlScheme());
+
+        foreach ([['--tls-cert', $cert], ['--tls-key', $key]] as $half) {
+            try {
+                self::config(['serve', $half[0], $half[1]]);
+                self::fail('a half TLS pair was accepted');
+            } catch (ServerConfigException $e) {
+                self::assertStringContainsString('belong together', $e->getMessage());
+            }
+        }
+
+        try {
+            self::config(['serve', '--tls-cert', $cert . '-missing', '--tls-key', $key]);
+            self::fail('a missing certificate file was accepted');
+        } catch (ServerConfigException $e) {
+            self::assertStringContainsString('is not a readable file', $e->getMessage());
+        }
+
+        self::assertSame(
+            NonInteractive::EXIT_CONFIG,
+            Serve::run(self::parse(['serve', '--tls-cert', '/no/such/cert.pem', '--tls-key', '/no/such/key.pem'])),
+            'the refusal is a startup exit, before any bind',
+        );
+    }
+
+    /**
+     * C-WEB-5.a: the security floor of the pair itself — a key the group or
+     * world can read, a certificate that is not a certificate, and a
+     * certificate and key that are not a pair are all startup refusals. The
+     * checks run before any first connection, because SecureServer loads its
+     * material lazily and would otherwise only fail once clients arrived.
+     */
+    public function testTlsRefusesALooseKeyABadCertAndAMismatchedPair(): void
+    {
+        [$cert, $key] = $this->writeServeArgsTlsPair();
+
+        \chmod($key, 0o644);
+        try {
+            self::config(['serve', '--tls-cert', $cert, '--tls-key', $key]);
+            self::fail('a group-readable private key was accepted');
+        } catch (ServerConfigException $e) {
+            self::assertStringContainsString('readable by group or world', $e->getMessage());
+        }
+        \chmod($key, 0o600);
+
+        $junk = $this->tlsDir . '/junk.pem';
+        \file_put_contents($junk, 'not a certificate at all');
+        try {
+            self::config(['serve', '--tls-cert', $junk, '--tls-key', $key]);
+            self::fail('a garbage certificate was accepted');
+        } catch (ServerConfigException $e) {
+            self::assertStringContainsString('not a readable PEM certificate', $e->getMessage());
+        }
+
+        [$otherCert] = $this->writeServeArgsTlsPair('second-');
+        try {
+            self::config(['serve', '--tls-cert', $otherCert, '--tls-key', $key]);
+            self::fail('a certificate from another pair was accepted');
+        } catch (ServerConfigException $e) {
+            self::assertStringContainsString('not a pair', $e->getMessage());
+        }
+    }
+
+    private string $tlsDir = '';
+
+    /**
+     * A throwaway self-signed pair for the flag-validation tests above;
+     * named apart from TlsListenerTest's helper so the duplicated-test-helper
+     * guard sees no twin. Files live under one per-test-class directory.
+     *
+     * @return array{0:string,1:string}
+     */
+    private function writeServeArgsTlsPair(string $prefix = ''): array
+    {
+        if ($this->tlsDir === '') {
+            $this->tlsDir = (string) (\sys_get_temp_dir() . '/cc-cmp-tlsargs-' . \getmypid() . '-' . \bin2hex(\random_bytes(4)));
+            \mkdir($this->tlsDir, 0o700);
+        }
+        $private = \openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => \OPENSSL_KEYTYPE_RSA]);
+        self::assertNotFalse($private, 'openssl_pkey_new');
+        \openssl_pkey_export($private, $keyPem);
+        $csr = \openssl_csr_new(['CN' => '127.0.0.1'], $private);
+        self::assertNotFalse($csr, 'openssl_csr_new');
+        $signed = \openssl_csr_sign($csr, null, $private, 30);
+        self::assertNotFalse($signed, 'openssl_csr_sign');
+        \openssl_x509_export($signed, $certPem);
+
+        $certPath = $this->tlsDir . '/' . $prefix . 'cert.pem';
+        $keyPath = $this->tlsDir . '/' . $prefix . 'key.pem';
+        \file_put_contents($certPath, $certPem);
+        \file_put_contents($keyPath, $keyPem);
+        \chmod($keyPath, 0o600);
+
+        return [$certPath, $keyPath];
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->tlsDir !== '' && \is_dir($this->tlsDir)) {
+            foreach ((array) \scandir($this->tlsDir) as $entry) {
+                if (\is_string($entry) && !\str_starts_with($entry, '.')) {
+                    @\unlink($this->tlsDir . '/' . $entry);
+                }
+            }
+            @\rmdir($this->tlsDir);
+        }
+    }
+
     public function testServeConfigResolvesTheRootAndTheDefaultStateDirectory(): void
     {
         $config = Serve::config(self::parse(['--root', '/tmp', 'serve']), [], []);

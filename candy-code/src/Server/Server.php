@@ -271,7 +271,14 @@ final class Server
         // is what refusing `http://` on a TLS endpoint means.
         $source = $this->config->hasTls()
             ? new SecureServer($this->listener, $this->loop, [
+                // PHP's stream-ssl option for a split key file is `local_pk`
+                // (docs: openssl context options); an unknown `local_key` is
+                // silently inert and PHP would look for the key inside the
+                // certificate file. Both spellings ride: local_pk is the one
+                // ext/openssl reads, local_key is what react's own examples
+                // carry for forward compatibility.
                 'local_cert' => (string) $this->config->tlsCert,
+                'local_pk' => (string) $this->config->tlsKey,
                 'local_key' => (string) $this->config->tlsKey,
             ])
             : $this->listener;
