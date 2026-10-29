@@ -305,6 +305,8 @@ final class ReadPathCensusTest extends TestCase
         ],
         'Chat.php|file_get_contents' => [
             'SELF_LOCATED — a forked child\'s result file, named by Support\ToolIpcFiles',
+            'SELF_LOCATED — takeIpcPayload(): the same ToolIpcFiles-named payload shape, read once and '
+                . 'discarded by the tool fan-out and the turn-hook fork alike',
             'USER_TYPED — pastedImagePath() sniffs 16 bytes of a path the user pasted or dropped, to '
                 . 'tell an image from text',
         ],

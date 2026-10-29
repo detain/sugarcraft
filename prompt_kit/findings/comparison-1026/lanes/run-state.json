@@ -219,7 +219,7 @@
     "CTX-3.d-r2",
     "AGT-5.d-fix"
   ],
-  "master_tip": "5d3b47f05",
+  "master_tip": "86f80fef8",
   "next_fill_queue": [
     "C-MCP-4.d (W23, design-mcp.md)"
   ],
@@ -301,7 +301,7 @@
   ],
   "status": "RUNNING",
   "tick": "330-batch15-welded (C-AGT-4.b + C-SES-7.f popped from inflight, count 215->217; weld-15: picks 5e30f5e94+5d3b47f05, cure 3a044bc91, meta atop; lead resync reconciles main-tree run-state M + stamps final tip; no push)",
-  "tip": "5ea654501",
+  "tip": "c0bb77e7c",
   "updated": "2026-10-29",
   "wave_loops": {
     "1": "closed r2 CLEAN",
@@ -327,11 +327,11 @@
     },
     "2": "closed r1 CLEAN battery green",
     "20": {
-      "note": "r1 FINDINGS 3 MAJOR (W20: MainWorktreeTest swallow-catch; CacheReusingSummaryBackendTest OneSided HOME; INHERITED InstructionDiffTracker $seen null 5E). Wave fixer must run on master AFTER welder-b14 returns (sole-master-writer). Fix files claimed by no in-flight lane (confirmed by reviewer). r2 fresh reviewer after fix. WAVE-REVIEW-1.md untracked on disk -> commit at wave close.",
-      "reviewed_at": "e91eb1d47",
-      "round": 1,
-      "session": null,
-      "stage": "findings"
+      "stage": "closed",
+      "round": 3,
+      "verdict": "CLEAN 0C/0M",
+      "report": "lanes/W20/WAVE-REVIEW-{1,2,3}.md",
+      "note": "r1 3-MAJOR + r2 findings cured in-wave; r3 CLEAN; evidence committed"
     },
     "3": "closed r3 (static proof + lead battery)",
     "4": "closed r1 FINAL CLEAN battery green",
@@ -399,6 +399,18 @@
       "r1": "FINDINGS 0C/1MAJOR(pr ShellMenu+label roster carry)/1NIT(hash widen) at 045751c44; verdict lanes/W15/WAVE-REVIEW-1.md",
       "rounds": 2,
       "verdict": "CLEAN r2 (cures 8dab423f0+c6b1d0317; NIT folds c15427c61); closed"
+    },
+    "19": {
+      "stage": "closed",
+      "round": 1,
+      "verdict": "CLEAN 0C/0M",
+      "reviewed_at": "6742a2ad3",
+      "report": "lanes/W19/WAVE-REVIEW-1.md",
+      "note": "MINOR-1 docs-cite cured at close (master pick 6c42f30ca); evidence committed"
+    },
+    "18": {
+      "stage": "closed-by-owner-directive",
+      "note": "counted in waves_closed per owner directive 2026-10-29; r1 findings were routed to wave fixer; plan S3 W18 row flip stays lead authority"
     }
   },
   "waved_loops": {
@@ -474,7 +486,10 @@
     14,
     15,
     16,
-    17
+    17,
+    18,
+    19,
+    20
   ],
   "weld_notes": {
     "C-AGT-1.b": "WELDED 2026-10-27 master 2d45b868f (pick 38f0b3790, base b24e81154-era atop 144fe7955, clean auto-merge lang/en.php, zero conflicts; %ae/%ce 1/1, zero trailers). Regen no-op (command/tool/settings all up to date - LoopCommand hint did not move COMMANDS.md row; no regen commit). Gates: Loop|ScheduleRegistry|SessionHost|ServerContext 317T/1470A OK EXACT; five-guard 133T/15632A F2 staleness pair only (pinned 25,537 - closeout re-pin). DURATIONS duty: NEW candy-code/tests/Host/SessionHostLoopFireTest.php (5T) + ScheduleRegistryTest +2T figure note - LIST ONLY. NIT carry (from r1 review): SessionHost.php:918-931 notice wording. \u00a74 mark \u2705 2d45b868f UNSTAGED. Cherry proof '-'; worktree+branch pruned.",
@@ -1124,6 +1139,7 @@
     "C-AGT-6.b",
     "C-AGT-6.c",
     "C-AGT-6.d",
+    "C-AGT-6.e",
     "C-AGT-7.a",
     "C-AGT-7.b",
     "C-AGT-7.c",
@@ -1140,6 +1156,7 @@
     "C-CTX-3.b",
     "C-CTX-3.d",
     "C-CTX-3.e",
+    "C-CTX-3.f",
     "C-CTX-4.a",
     "C-CTX-4.c",
     "C-CTX-4.f",
@@ -1157,6 +1174,7 @@
     "C-EXT-2.c",
     "C-EXT-2.d",
     "C-EXT-2.e",
+    "C-EXT-3.a",
     "C-EXT-3.b",
     "C-EXT-3.c",
     "C-EXT-3.d",
@@ -1166,6 +1184,7 @@
     "C-EXT-4.c",
     "C-EXT-4.d",
     "C-EXT-5.a",
+    "C-EXT-5.b",
     "C-EXT-6.a",
     "C-EXT-7.a",
     "C-EXT-7.b",
@@ -1173,6 +1192,7 @@
     "C-MCP-1.b",
     "C-MCP-2.a",
     "C-MCP-2.b",
+    "C-MCP-2.c",
     "C-MCP-3.a",
     "C-MCP-3.b",
     "C-MCP-3.c",
@@ -1206,6 +1226,7 @@
     "C-SEC-5.d",
     "C-SEC-6.a",
     "C-SEC-6.c",
+    "C-SEC-6.d",
     "C-SEC-6.e",
     "C-SEC-7.d",
     "C-SEC-8.a",
@@ -1288,7 +1309,6 @@
     "C-WEB-4.c",
     "C-WEB-4.d",
     "C-WEB-4.e",
-    "C-WEB-4.e",
     "C-WEB-4.f",
     "C-WEB-7.a",
     "C-WEB-7.b",
@@ -1321,7 +1341,7 @@
     "P-TABS.g",
     "P-TABS.h"
   ],
-  "welded_count": 217,
+  "welded_count": 223,
   "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
   "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
   "welder_sessions": {
@@ -1364,31 +1384,7 @@
     "this_run": "welded 100 -> 161; waves closed W10,W11,W12,W13,W14,W15 (W14 96d36db45, W15 15046565a)"
   },
   "batch15_note": "b15 welded 2026-10-29 off 6742a2ad3: c4fb3580f->5e30f5e94 (C-AGT-4.b /agent use + Alt+A primary cycle; zero-conflict, C-AGT-5.b/5.c collision auto-merged BOTH intents; gates 11T/35A + 65T/272A + 265T/3152A EXACT vs REVIEW-1; DUR mint PrimaryAgentSwitchTest 11T/0.51) + 31691640f->5d3b47f05 (C-SES-7.f attached-window server commands + foreign-turn feed; DUR mints x2 5T/2.03 + 3T/1.77; WELD-CURE 3a044bc91 ATTACH_TOKEN -> ACCEPTED_CONST_DUPLICATION, merged-tree DuplicatedTestHelperDrift catch lane+review missed, guard green 14T/198A; gates 8T/74A + 26T/201A(1F standing) + 52T/652A + family 129T/8994A/3F standing-only). Generators all --check rc0; no regen/dist (zero protocol/web-src). Foreign standings recorded not touched: MemoryPromptWiring null-$seen E, ForeignAgentPreset SchedulesCommand roster, OneSidedHomeSandbox CTX-5.a x2 rows, SwallowingCatch MainWorktreeTest x2 (fixer live in main tree). Figure pair + \u00a73 wave marks = battery/wave-loop duty. welded 217; push still owed at wave close.",
-  "weld_pending": {
-    "C-CTX-3.f": {
-      "tip": "bac64a612",
-      "carries": "DUR row StandingIntentTest; seam#1 MemoryStore when:-hunk + seam#2 /memory heading+lang key (reconcile vs 5ea654501+); re-pin +21T/+90A; foreign BootstrapSkillSkipsTest 'Memory' window disclosure"
-    },
-    "C-SEC-6.d": {
-      "tip": "bf4155efb",
-      "carries": "r1 NIT weld-carry; vitest RulesPanel re-gate; dist rider"
-    },
-    "C-MCP-2.c": {
-      "tip": "58fff9bb6",
-      "carries": "dist rebuild rider; SessionView.vue churn re-gate vitest neighbours (reviewer r1 out-of-scope MINOR); no durations (vitest law)"
-    },
-    "C-AGT-6.e": {
-      "tip": "e4cb6f6ab",
-      "carries": "protocol trio regen + dist rider; DUR row PrStatusCache tests; DescriptorInheritanceGuard NOT_A_SPAWN row already in-branch"
-    },
-    "C-EXT-3.a": {
-      "tip": "7b416e03d",
-      "carries": "DUR x2 SkillRosterDiffTrackerTest+SkillsReloadTest; +25T; NITs REPORT erratum/MAX_TOTAL_BYTES"
-    },
-    "C-EXT-5.b": {
-      "tip": "7237dafc0",
-      "carries": "DUR PalettePrefillRowsTest 6T; seams b/c owner-visible; COMMANDS.md:441 NIT"
-    }
-  },
-  "last_lead": "fresh-lead-1029-r15"
+  "weld_pending": {},
+  "last_lead": "fresh-lead-1029-r15",
+  "batch16_note": "batch-16 welded 2026-10-29 off 86f80fef8 by survivor welder-16: 12 picks zero-conflict \u2014 C-EXT-5.b 9d0750cd8->7730f0672+7237dafc0->08f72a2df; C-CTX-3.f 72a4003b1->edfc05c72+bac64a612->eef1d908d; C-EXT-3.a 7b416e03d->17560c4ae; C-MCP-2.c 58fff9bb6->2e29b87e1; C-AGT-6.e 15be076bc->eb965c0ea+e4cb6f6ab->c9afb4845; C-SEC-6.d ae2da2543->9806bb91e+bf4155efb->d97938b93. Rider c0bb77e7c = protocol trio regen + dist rebuild. Weld-cures in meta: ReadPathCensus Chat.php takeIpcPayload row; 7 DUR rows minted (PalettePrefillRows 6T/1.389, PermissionAuditMethod 6T/0.585, StandingIntent 22T/0.061, SkillsReload 5T/0.034, AuditLogReader 15T/0.033, PrStatusCache 27T/0.033, SkillRosterDiffTracker 13T/0.003; tsv 1611 rows TAB-format); CTX-3.f seams #1 (MemoryStore when: round-trip) + #2 (/memory intents heading + lang key) landed w/ 2 new pins + 1 flipped pin. Gates merged tip: Palette 229T OK, Skills 871T, Nudge|Rule 917T, PrStatus 28T, Memory|StandingIntent 831T/1F-foreign, guards+census 201T/2F staleness-pair-only, vitest serial 147/147 19 specs, 5 tools rc0. Foreign-inherited reds (ALL proven red at base 86f80fef8, not chased): PermissionsIntroDrift roster, ForeignAgentPresetWiring, ColdResumeFinishedAgent composer-bg, DreamPass chat-schedules, ChatHostLangCatalogue chat.* 6 keys. W19+W20 wave closes this commit (W18 counted per owner directive; S3 W18 row stays open - lead authority). +25T/+21T/+carries figure re-pin = closeout duty. Push at wave close per law."
 }

@@ -452,6 +452,27 @@ final class MemoryCommand implements HostCommand
             $repoStore = $scope === 'project' ? self::writer($home, $root)->repository() : null;
             $repoEntries = $repoStore?->list($scope) ?? [];
             $entries = $home->list($scope);
+            // C-CTX-3.f welder seam: armed intents are partitioned out into
+            // their own heading below, deduped repo-first like
+            // MemoryWriter::intentNotes(); with none the listing is unchanged.
+            $intents = [];
+            $split = static function (array $pool) use (&$intents): array {
+                $plain = [];
+                foreach ($pool as $entry) {
+                    if ($entry->type() === 'intent' && $entry->when() !== '') {
+                        $intents[$entry->id()] ??= $entry;
+                        continue;
+                    }
+
+                    $plain[] = $entry;
+                }
+
+                return $plain;
+            };
+
+            $repoEntries = $split($repoEntries);
+            $entries = $split($entries);
+
             if ($repoEntries === []) {
                 if ($entries === []) {
                     $response = Lang::t('host.memory.list.none', ['scope' => $scope]);
@@ -475,6 +496,16 @@ final class MemoryCommand implements HostCommand
                 }
                 $response = implode("\n", $lines);
             }
+
+            if ($intents !== []) {
+                $intentLines = [];
+                foreach ($intents as $entry) {
+                    $intentLines = [...$intentLines, ...self::entryRows($entry, withScope: false, withWhen: true)];
+                }
+
+                $response .= "\n\n" . Lang::t('host.memory.intents.heading') . "\n" . implode("\n", $intentLines);
+            }
+
             // The notes of this scope the stores could not read — the user's
             // only view of them outside the prompt (audit 15d-04 follow-up).
             $response .= self::unreadableSection([
@@ -605,16 +636,20 @@ final class MemoryCommand implements HostCommand
      *
      * @return list<string>
      */
-    private static function entryRows(MemoryEntry $entry, bool $withScope): array
+    private static function entryRows(MemoryEntry $entry, bool $withScope, bool $withWhen = false): array
     {
         $tags = empty($entry->tags()) ? '' : ' [' . implode(', ', $entry->tags()) . ']';
         $preview = mb_strlen($entry->content()) > 80
             ? mb_substr($entry->content(), 0, 80) . '…'
             : $entry->content();
         $scope = $withScope ? ' (scope: ' . $entry->scope() . ')' : '';
+        // The trigger rides the row in the intents section (C-CTX-3.f): a
+        // steer that arms later turns is auditable only where its condition
+        // is visible. Plain listings never pass the flag, so their bytes hold.
+        $when = $withWhen && $entry->when() !== '' ? ' (when: ' . $entry->when() . ')' : '';
 
         return [
-            '- **[' . $entry->type() . ']** `' . $entry->id() . '`' . $scope . $tags,
+            '- **[' . $entry->type() . ']** `' . $entry->id() . '`' . $when . $scope . $tags,
             '  ' . $preview,
         ];
     }

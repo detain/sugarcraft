@@ -355,6 +355,57 @@ final class StandingIntentTest extends TestCase
         self::assertStringStartsWith('Saved note ', $saved->content());
     }
 
+    public function testAnIntentSavedByTheToolSurvivesTheStoreRoundTripAndArmsTheTracker(): void
+    {
+        // Welder seam #1 (C-CTX-3.f): writeEntry() carries the canonical `when:`
+        // in the frontmatter and decode() restores it, so an intent armed by a
+        // tool save on one store instance still fires the nudge when a fresh
+        // store walks the SAME directory.
+        $tool = new MemoryTool(MemoryWriter::new(
+            new MemoryStore($this->dir . '/home'),
+            $this->dir . '/repo',
+        ), $this->dir . '/repo');
+
+        $saved = $tool->execute([
+            'action' => 'save',
+            'content' => 'ALWAYS lint the entry script.',
+            'type' => 'intent',
+            'scope' => 'user',
+            'when' => 'keyword:deploy',
+        ]);
+        self::assertFalse($saved->isError());
+
+        // Fresh instances over the same directories: the trigger survived the disk.
+        $writer = MemoryWriter::new(
+            new MemoryStore($this->dir . '/home'),
+            $this->dir . '/repo',
+        );
+        $notes = $writer->intentNotes();
+        self::assertCount(1, $notes, 'the round-tripped intent arms the nudge source');
+        self::assertSame('keyword:deploy', $notes[0]->when(), 'the stored trigger re-normalises to itself');
+
+        $tracker = self::trackerWithIntents($notes);
+        $out = $tracker->forPaths(['/x/deploy/y.txt']);
+        self::assertIsString($out);
+        self::assertSame(1, substr_count($out, '<system-reminder>'));
+        self::assertStringContainsString('ALWAYS lint the entry script.', $out);
+
+        // The lenient read door: a hand-edited malformed trigger DE-ARMS the
+        // intent but never unreadables the note.
+        $home = new MemoryStore($this->dir . '/home');
+        $file = $home->notePath($notes[0]->id());
+        self::assertIsString($file);
+        $edited = (string) file_get_contents($file);
+        self::assertNotFalse($edited);
+        $rewritten = preg_replace('/^when:.*$/m', 'when: tool:Bash', $edited, 1);
+        self::assertNotSame($edited, $rewritten, 'the fixture must actually move the trigger line');
+        self::assertNotFalse(file_put_contents($file, $rewritten));
+
+        $relaunched = MemoryWriter::new(new MemoryStore($this->dir . '/home'), $this->dir . '/repo')->intentNotes();
+        self::assertSame([], $relaunched, 'a malformed trigger never announces an armed intent');
+        self::assertNotNull($home->get($notes[0]->id()), 'the note itself still decodes, triggerless');
+    }
+
     // ---------------------------------------------------------------- listing legs (visibility promise)
 
     public function testIndexLineAndHeaderSpellOutTheTrigger(): void
@@ -440,13 +491,13 @@ final class StandingIntentTest extends TestCase
 
     // ---------------------------------------------------------------- index heading leg (review MINOR-2)
 
-    public function testTheIndexNeverClaimsAnArmedHeadingForTriggerlessDiskNotes(): void
+    public function testTheIndexArmsItsHeadingOnlyForRoundTrippedTriggers(): void
     {
-        // The end-to-end positive leg (an armed intent under its own heading)
-        // cannot exist until the `when:` frontmatter carrier lands — decode()
-        // drops the trigger — so what IS pinned today is the honest shape: a
-        // saved intent whose trigger did not persist is listed as a plain
-        // note, never announced as armed by the save reply or the index.
+        // Welder seam #1 landed, so the leg that was honest-under-inertness is
+        // now pinned positive: a saved intent whose trigger round-trips the
+        // store is described as standing by the save reply and listed under its
+        // own heading; strip the trigger from disk and the SAME note falls back
+        // to a plain listing — [intent] visible, heading gone.
         $tool = new MemoryTool(MemoryWriter::new(
             new MemoryStore($this->dir . '/home'),
             $this->dir . '/repo',
@@ -454,13 +505,26 @@ final class StandingIntentTest extends TestCase
 
         $saved = $tool->execute(['action' => 'save', 'content' => 'FIRE WHEN DEPLOYING.', 'type' => 'intent', 'when' => 'keyword:deploy']);
         self::assertFalse($saved->isError());
-        self::assertStringNotContainsString('standing intent', $saved->content(), 'a trigger that did not persist is never described as armed');
+        self::assertStringContainsString('standing intent', $saved->content(), 'a persisted trigger IS promised — the reply says so');
 
         $index = $tool->execute(['action' => 'view']);
         self::assertFalse($index->isError());
-        self::assertStringNotContainsString('## standing intents', $index->content());
-        self::assertStringContainsString('## project scope (this repository)', $index->content());
-        self::assertStringContainsString('[intent]', $index->content(), 'the type stays visible even unarmed');
+        self::assertStringContainsString('## standing intents', $index->content());
+        self::assertStringContainsString('keyword:deploy', $index->content(), 'the armed line spells its trigger');
+
+        // De-arm on disk (simulates a hand edit or an unmigrated note): the
+        // heading must NOT claim an intent that cannot fire.
+        $writer = MemoryWriter::new(new MemoryStore($this->dir . '/home'), $this->dir . '/repo');
+        $notes = $writer->intentNotes();
+        self::assertCount(1, $notes);
+        $file = $writer->repository()?->notePath($notes[0]->id());
+        self::assertIsString($file);
+        self::assertNotFalse(file_put_contents($file, (string) preg_replace('/^when:.*$\R/m', '', (string) file_get_contents($file), 1)));
+
+        $again = $tool->execute(['action' => 'view']);
+        self::assertFalse($again->isError());
+        self::assertStringNotContainsString('## standing intents', $again->content(), 'no heading without an armed trigger');
+        self::assertStringContainsString('[intent]', $again->content(), 'the type stays visible even unarmed');
     }
 
     public function testTheIndexHeadingBlockIsPinnedForPresenceAndTriggerGate(): void

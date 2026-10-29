@@ -1203,10 +1203,24 @@ final class MemoryStore
         $createdAt = $this->dateField($meta, 'createdAt') ?? $fallback;
         $modifiedAt = $this->dateField($meta, 'modifiedAt') ?? $createdAt;
 
+        // Read door lenient (C-CTX-3.f): a hand-edited malformed `when:` de-arms
+        // the trigger instead of unreadable-ing the whole note; the save door in
+        // MemoryTool keeps refusing loudly. A stored canonical trigger re-normalises
+        // to itself, so a round-trip never changes an armed intent.
+        $when = '';
+        if (isset($meta['when']) && is_string($meta['when']) && trim($meta['when']) !== '') {
+            try {
+                $when = MemoryEntry::normalizeWhen($meta['when']);
+            } catch (\InvalidArgumentException) {
+                $when = '';
+            }
+        }
+
         return MemoryEntry::new(
             type: $this->stringField($meta, 'type'),
             content: trim($m[2] ?? ''),
             scope: $this->stringField($meta, 'scope'),
+            when: $when,
             tags: $this->tagsField($meta),
             id: basename($file, '.md'),
         )->withCreatedAt($createdAt)
@@ -1316,6 +1330,9 @@ final class MemoryStore
             'type' => $entry->type(),
             'tags' => $entry->tags(),
             'scope' => $entry->scope(),
+            // C-CTX-3.f welder seam: a standing intent's `when:` trigger rides the
+            // frontmatter; every other note type's stored bytes stay untouched.
+            ...($entry->when() !== '' ? ['when' => $entry->when()] : []),
             'createdAt' => $entry->createdAt()->format(\DateTimeInterface::ATOM),
             'modifiedAt' => $entry->modifiedAt()->format(\DateTimeInterface::ATOM),
         ]);

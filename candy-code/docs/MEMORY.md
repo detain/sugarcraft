@@ -278,11 +278,13 @@ under their own `## standing intents` heading with the trigger spelled out, and
 `tests/Context/StandingIntentTest.php`.
 
 Status: this step lands the save-side vocabulary, the refusals, the index
-heading and the tool-time seam. The `when:` column of the note frontmatter (the
-`MemoryStore` reader/writer) is this step's declared welder seam — until it
-lands, a saved intent's trigger does not survive the write, no intent arms from
-disk, and the `save` reply says only `Saved note …` (never the standing-intent
-sentence). See `lanes/C-CTX-3.f` under `prompt_kit/findings/comparison-1026/`.
+heading and the tool-time seam, and with the weld the store round-trip is
+live: `MemoryStore` carries the `when:` column of the frontmatter, a saved
+intent's trigger survives the write and re-arms on reload, and the `save`
+reply says the standing-intent sentence. A hand-edited malformed trigger
+de-arms that note instead of unreadabling it — the read door stays lenient
+while the save door keeps refusing loudly. See `lanes/C-CTX-3.f` under
+`prompt_kit/findings/comparison-1026/`.
 
 Every write goes through `Memory\MemoryWriter`, the router `/memory add` uses
 too, so a note the model saves lands exactly where the user's would: a

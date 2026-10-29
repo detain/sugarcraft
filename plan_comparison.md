@@ -152,8 +152,8 @@ So while 2 lanes are in review, the other 8 slots build steps from the next wave
 | ✅ W16 (closed 2026-10-29, wave loop r1 CLEAN (0C/0M/3nits)) | 10 | P-TABS.g · C-CTX-2.d · C-EXT-4.b · C-EXT-5.a · C-MCP-3.b · C-MCP-4.b · C-PRV-2.b · C-SEC-6.a · C-SEC-7.d · C-SEC-8.c |
 | ✅ W17 (closed 2026-10-29, wave loop r2 CLEAN 0C/0M; r1 MAJOR cured d3536ac91) | 10 | P-AGENT.b · C-CTX-5.c · C-PRV-2.c · C-SES-4.c · C-SES-6.b · C-SES-6.c · C-SES-8.c · C-SES-8.f · C-TOOL-2.d · C-TOOL-3.e |
 | W18 | 10 | C-AGT-4.b · C-PRV-3.a · C-SEC-8.e · C-TOOL-5.a · C-TUI-2.d · C-TUI-3.c · C-TUI-3.f · C-TUI-5.d · C-WEB-4.b · C-WEB-4.c |
-| W19 | 10 | C-PRV-4.a · C-SES-4.d · C-TOOL-2.b · C-TUI-2.c · C-WEB-4.d · C-WEB-4.e · C-AGT-5.h · C-AGT-6.a · C-CTX-2.f · C-CTX-3.b |
-| W20 | 10 | C-SES-7.e · C-AGT-5.d · C-AGT-6.c · C-CTX-3.a · C-CTX-3.d · C-CTX-4.a · C-CTX-5.a · C-EXT-3.b · C-EXT-3.d · C-EXT-4.c |
+| ✅ W19 (closed 2026-10-29, wave loop r1 CLEAN 0C/0M; docs-cite NIT cured at this close) | 10 | C-PRV-4.a · C-SES-4.d · C-TOOL-2.b · C-TUI-2.c · C-WEB-4.d · C-WEB-4.e · C-AGT-5.h · C-AGT-6.a · C-CTX-2.f · C-CTX-3.b |
+| ✅ W20 (closed 2026-10-29, wave loop r3 CLEAN 0C/0M; r1/r2 findings cured in-wave) | 10 | C-SES-7.e · C-AGT-5.d · C-AGT-6.c · C-CTX-3.a · C-CTX-3.d · C-CTX-4.a · C-CTX-5.a · C-EXT-3.b · C-EXT-3.d · C-EXT-4.c |
 | W21 | 10 | C-WEB-2.b · C-WEB-4.f · C-CTX-3.c · C-CTX-3.e · C-CTX-4.f · C-CTX-4.g · C-EXT-3.e · C-EXT-4.d · C-EXT-5.b · C-EXT-5.c |
 | W22 | 10 | C-AGT-4.c · C-AGT-4.d · C-CTX-3.f · C-CTX-4.b · C-EXT-3.a · C-EXT-6.a · C-MCP-3.c · C-MCP-3.d · C-PRV-3.b · C-PRV-3.c |
 | W23 | 10 | C-AGT-4.e · C-AGT-5.f · C-CTX-4.d · C-CTX-4.e · C-MCP-2.c · C-MCP-4.d · C-PRV-4.b · C-SEC-6.c · C-SEC-6.e · C-SEC-7.c |
@@ -2326,7 +2326,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web.md` → `### C-WEB-4.d`
 
-#### ✅ 5a89b0b20+47d19563f+7a9f8de48 C-WEB-4.e — PDF upload from the browser (`session.send` `documents[]`)
+#### ✅ 5a89b0b20+47d19563f+7a9f8de48 C-WEB-4.e — PDF upload from the browser (`session.send` `documents[]`) (docs delta master pick 6c42f30ca)
 > 2026-10-28 batch-7 restamp (precedent e14c3cc74): earlier cite 76527aec1 was the pre-rebuild lane hash; the reviewed src half welded in batch-6 as master picks 5a89b0b20+47d19563f (dist re-derived at that weld), and the docs-only r4 delta 7a9f8de48 lands in batch-7.
 - **Item:** C-WEB-4 (sources: GAP-MOD-22w) · gap · M
 - **What:** **Gap.** PDFs reach the model only by `@path` of a server file. `session.send` carries `images[]` only (`candy-code/src/Protocol/Schema/MethodSchemas.php:206-222`, `TurnMethods.php:90-173`). **Wire.** Add `documents[]` with …
@@ -2597,7 +2597,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-EXT-4.a (W14), C-EXT-4.b (W16)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ext.md` → `### C-EXT-4.d`
 
-#### C-EXT-5.b — Palette shows every slash command, file command and MCP prompt
+#### ✅ 9d0750cd8+7237dafc0 C-EXT-5.b — Palette shows every slash command, file command and MCP prompt (picks -> 7730f0672+08f72a2df on master 86f80fef8, zero-conflict; DUR row minted Chat/PalettePrefillRowsTest 6T/1.389s; seams b (wide-label click zones) / c (no palette scroll) RECORDED not fixed per lead - lanes/C-EXT-5.b/WELD.md; COMMANDS.md:441 NIT skipped; batch-16)
 - **Item:** C-EXT-5 + C-EXT-7 VIS-4-P1 (sources: GAP-CMD-08, VIS-4-P1) · gap · effort M
 - **What:** **Root cause.** `Chat::paletteItemLabels()`'s default arm (:16790) lists only `PaletteAction::all()`, and `runPaletteAction()` (:10491) throws on any other label. The 15 `SLASH_ONLY_SURVIVORS` …
 - **Files — create:** none
@@ -2646,7 +2646,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-AGT-3.a (W6), C-AGT-3.b (W7)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-agt.md` → `### C-AGT-4.d`
 
-#### C-CTX-3.f — Standing intents
+#### ✅ 72a4003b1+bac64a612 C-CTX-3.f — Standing intents (picks -> edfc05c72+eef1d908d, zero-conflict; weld-cures: MemoryStore when: write/read hunk + /memory list intents heading + lang key host.memory.intents.heading + flipped index-heading pin + e2e round-trip pin (DocFigure list()-window kept 2980/3000); DUR row minted Context/StandingIntentTest 22T/0.061s re-minted post-cure; foreign BootstrapSkillSkipsTest 'Memory'-window red proven at base, not chased; batch-16)
 - **Item:** C-CTX-3 (sources: GAP-MEM-N3) · gap · effort M
 - **What:** Add an `intent` memory type with a `when:` trigger: a path glob, a tool name or a keyword. The model saves one with `Memory save type=intent when=…`. At tool time, `RulePathNudge` consults intent notes through the existing …
 - **Files — create:** `candy-code/tests/Context/StandingIntentTest.php`
@@ -2668,7 +2668,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-4.b`
 
-#### C-EXT-3.a — `/skills reload` delivered as a turn-context roster delta
+#### ✅ 7b416e03d C-EXT-3.a — `/skills reload` delivered as a turn-context roster delta (pick -> 17560c4ae, zero-conflict; DUR rows minted Skills/SkillRosterDiffTrackerTest 13T/0.003s + Host/Commands/SkillsReloadTest 5T/0.034s; +25T suite-figure re-pin = closeout duty (staleness pair red-at-tip by design); batch-16)
 - **Item:** C-EXT-3 (sources: GAP-SKL-13, OC-new#6) · gap · effort M
 - **What:** **Problem.** The roster is read once per launch, and the listing sits in the frozen system prompt. **Core.** `SkillRegistry::replaceAll()` swaps the skill set in place and keeps the disabled set. A new `SkillRosterDiffTracker` …
 - **Files — create:** `candy-code/src/Skills/SkillRosterDiffTracker.php`
@@ -2785,7 +2785,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-4.e`
 
-#### C-MCP-2.c — Web composer `@mcp:` resource picker
+#### ✅ 58fff9bb6 C-MCP-2.c — Web composer `@mcp:` resource picker (pick -> 2e29b87e1, zero-conflict; vitest-only, NO phpunit DUR rows; dist rider c0bb77e7c; merged-tree vitest serial 147/147 across 19 touched+neighbour specs incl SessionView churn re-gate per r1; dormantRoster row-drop landed in-pick; batch-16)
 - **Item:** C-MCP-2 (sources: CLAW-new#9, p1-miss "web composer `@mcp:` completion") · feature · effort S
 - **What:** The composer's `@` popup is file-only (`searchFiles` prop, `candy-code-web/src-web/components/Composer.vue:17-18, 72-110`). When the trailing partial starts with `mcp:`, the popup lists `mcp.resources` rows (fetched once per …
 - **Files — create:** `candy-code-web/src-web/components/__tests__/composerMcpMentions.spec.ts`
@@ -2858,7 +2858,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - Chat.php region claims: C-CTX-5.b (dispatchTurn (ahead-of-need block)); C-SES-7.d (resume/switch arms, submit)
 - Bootstrap.php method claims: C-PRV-3.d (advisorBackend (new)); C-SEC-6.b (permissionGate, permissionRules)
 
-#### C-AGT-6.e — PR status chips in the web
+#### ✅ 15be076bc+e4cb6f6ab C-AGT-6.e — PR status chips in the web (picks -> eb965c0ea+c9afb4845, zero-conflict; protocol trio regen + dist rode rider c0bb77e7c (schema+SERVER.md+generated.ts pr block); DescriptorInheritanceGuard NOT_A_SPAWN row in-branch e4cb6f6ab; DUR row minted Workspace/PrStatusCacheTest 27T/0.033s; batch-16)
 - **Item:** C-AGT-6 (sources: p2-miss: WEB-8 PR chips) · gap · effort M
 - **What:** For a session whose branch C-WEB-4 already exposes, the server reads `gh pr view <branch> --json number,state,url,statusCheckRollup` through `GhRunner`. It is cached per branch for 60 s and refreshed lazily on summary build, …
 - **Files — create:** `candy-code/src/Workspace/PrStatusCache.php`
@@ -2903,7 +2903,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-6.b`
 
-#### C-SEC-6.d — Web permission audit view
+#### ✅ ae2da2543+bf4155efb C-SEC-6.d — Web permission audit view (picks -> 9806bb91e+d97938b93, zero-conflict; protocol method permission.audit + AuditLogReader + RulesPanel.vue; trio/dist rider c0bb77e7c; DUR rows minted Hooks/AuditLogReaderTest 15T/0.033s + Protocol/PermissionAuditMethodTest 6T/0.585s; ReadPathCensus SELF_LOCATED row in-branch; r1 MINORs 1-2 doc-truth fixes PROVEN landed at branch tip (wording diffed against committed blobs); NIT tail-heuristic recorded no-action; batch-16)
 - **Item:** C-SEC-6 (sources: GAP-PER-14) · gap · effort M
 - **What:** `AuditHook` already writes a redacted, rotated log with three line shapes (`src/Hooks/BuiltIn/AuditHook.php` header: `=>`, `=! DENY <kind>`, `=! WITHHELD`). Nothing reads it. New `AuditLogReader`: a bounded tail of …
 - **Files — create:** `candy-code/src/Hooks/BuiltIn/AuditLogReader.php`, `candy-code/tests/Hooks/AuditLogReaderTest.php`, `candy-code/tests/Protocol/PermissionAuditMethodTest.php`, `candy-code-web/src-web/components/panels/__tests__/rulesPanelAudit.spec.ts`

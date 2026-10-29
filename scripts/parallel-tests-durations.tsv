@@ -235,6 +235,7 @@ candy-code/tests/Cli/HomebrewFormulaTest.php	1.424	7
 candy-code/tests/Server/SendImagesTest.php	1.409	6
 candy-code/tests/Support/FixtureLifetimeCensusTest.php	1.406	3
 candy-code/tests/Workflows/WorkflowToolsHandoffTest.php	1.398	11
+candy-code/tests/Chat/PalettePrefillRowsTest.php	1.389	6
 candy-code/tests/Backend/CancelSoftStopsAtBoundaryTest.php	1.386	4
 candy-code/tests/Integration/MemoryPromptWiringTest.php	1.386	17
 candy-code/tests/Providers/PromptStabilityTest.php	1.375	16
@@ -405,6 +406,7 @@ candy-code/tests/Backend/BackendContractWideningTest.php	0.595	9
 candy-code/tests/Session/DebouncedTranscriptPersistenceTest.php	0.592	8
 candy-code/tests/Tools/BuiltIn/SkillToolForkTest.php	0.589	9
 candy-code/tests/Context/InstructionDiffTurnContextTest.php	0.585	10
+candy-code/tests/Protocol/PermissionAuditMethodTest.php	0.585	6
 candy-code/tests/Session/RedoStackTest.php	0.582	6
 candy-code/tests/Backend/ScaledClockHelperSeamTest.php	0.579	6
 candy-code/tests/Workspace/ShadowRepoTest.php	0.572	6
@@ -829,6 +831,7 @@ candy-code/tests/Skills/ProposedSkillsTest.php	0.062	14
 candy-code/tests/Tools/PathJailContractParityTest.php	0.062	52
 candy-code/tests/LangParityTest.php	0.061	7
 candy-code/tests/LSP/LspLauncherAutoDetectTest.php	0.061	15
+candy-code/tests/Context/StandingIntentTest.php	0.061	22
 candy-code/tests/Bundles/BundleDiscoveryTest.php	0.060	10
 candy-code/tests/Server/CookieSessionPersistenceTest.php	0.060	9
 candy-code/tests/Tools/BuiltIn/GenerateImageTest.php	0.060	21
@@ -935,12 +938,15 @@ candy-code/tests/Chat/AgentLiveLinesTest.php	0.035	9
 candy-code/tests/Chat/BackgroundSummaryStaleFingerprintTest.php	0.035	13
 candy-code/tests/Cli/LaunchFlagsTest.php	0.034	41
 candy-code/tests/MousePaneJumpDoesNotHandOverTest.php	0.034	3
+candy-code/tests/Host/Commands/SkillsReloadTest.php	0.034	5
 candy-code/tests/App/SlashMenuTabCompletionTest.php	0.033	16
 candy-code/tests/Commands/SlashMenuCommandTextSanitizationTest.php	0.033	3
 candy-code/tests/MCP/OAuthAuthorizationCodeExchangeTest.php	0.033	10
 candy-code/tests/Providers/BedrockProviderTest.php	0.033	62
 candy-code/tests/Tui/MediaForm/ImageSectionMaskTest.php	0.033	12
 candy-code/tests/Host/Commands/PermissionsSavedRulesCommandTest.php	0.033	10
+candy-code/tests/Hooks/AuditLogReaderTest.php	0.033	15
+candy-code/tests/Workspace/PrStatusCacheTest.php	0.033	27
 candy-code/tests/Config/Settings/SettingsSchemaTest.php	0.032	46
 candy-code/tests/Memory/MemoryWriterTest.php	0.032	10
 candy-code/tests/Permissions/SavedRulesTest.php	0.032	14
@@ -1372,6 +1378,7 @@ candy-code/tests/Tui/SplitPaneRendererTest.php	0.003	30
 candy-code/tests/Util/ExporterTest.php	0.003	27
 candy-code/tests/Session/Import/TranscriptReadersTest.php	0.003	14
 candy-code/tests/Automation/WebhookSignerTest.php	0.003	20
+candy-code/tests/Skills/SkillRosterDiffTrackerTest.php	0.003	13
 candy-code/tests/Agents/AgentManagerProjectionTest.php	0.002	11
 candy-code/tests/Agents/AgentPoolConfigTest.php	0.002	20
 candy-code/tests/Agents/AgentPresetFieldCarryTest.php	0.002	15

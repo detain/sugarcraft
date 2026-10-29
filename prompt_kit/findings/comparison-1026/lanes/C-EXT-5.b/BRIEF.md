@@ -1,0 +1,21 @@
+### C-EXT-5.b — Palette shows every slash command, file command and MCP prompt
+- item: C-EXT-5 + C-EXT-7 VIS-4-P1 (sources: GAP-CMD-08, VIS-4-P1)
+- kind: gap · effort M
+- approach:
+  - **Root cause.** `Chat::paletteItemLabels()`'s default arm (:16790) lists only `PaletteAction::all()`, and `runPaletteAction()` (:10491) throws on any other label. The 15 `SLASH_ONLY_SURVIVORS` (`PaletteSupersetDispatchTest.php:57-90`), file commands and MCP prompts therefore never appear.
+  - **Fix.**
+    - The default arm uses `PaletteCatalog::rows($this->slashCommandRows())`.
+    - A Prefill entry in `runPaletteAction`/`runRootPaletteAction` (:17152) closes the palette and writes `/<name> ` into a BLANK draft, caret at the end.
+    - A non-blank draft is kept, with a one-line notice: the draft-preservation law.
+    - Prefill is allowed mid-turn, because it only edits the draft. MRU records it.
+  - **VIS-4-P1.** The `PaletteAction.php:47-54` docblock is reworded to the full-superset truth. The COMMANDS.md palette paragraph changes too.
+- files.create: none
+- files.modify: `candy-code/src/Chat.php` (`paletteItemLabels`, `runPaletteAction`, `runRootPaletteAction`), `candy-code/src/Palette/PaletteAction.php` (docblock), `candy-code/lang/en.php` (`palette.*`), `candy-code/docs/COMMANDS.md` (palette paragraph)
+- tests: create `candy-code/tests/Chat/PalettePrefillRowsTest.php` (every survivor, file command and MCP prompt is reachable; a blank draft is filled; a non-blank draft is kept; mid-turn allowed). Modify `candy-code/tests/Chat/PaletteSupersetDispatchTest.php` (a superset assertion over all slash-visible rows; the survivor reasons stay).
+- docs/guards: COMMANDS.md. COMPARISON.md CMD-08 flips at closeout, not in-lane.
+- serialized: [chat:palette — paletteItemLabels, runPaletteAction, runRootPaletteAction] [docs:COMMANDS.md] [lang:palette.]
+- deps: C-EXT-5.a
+- phase: normal
+- ruling: none
+- risks: the palette label memo (`paletteFuzzyMatches`) keys on the label list, and the list now varies per session. That is fine; it is already invalidated by list identity.
+

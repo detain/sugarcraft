@@ -1,0 +1,23 @@
+### C-EXT-3.a — `/skills reload` delivered as a turn-context roster delta
+- item: C-EXT-3 (sources: GAP-SKL-13, OC-new#6)
+- kind: gap · effort M
+- approach:
+  - **Problem.** The roster is read once per launch, and the listing sits in the frozen system prompt.
+  - **Core.**
+    - `SkillRegistry::replaceAll()` swaps the skill set in place and keeps the disabled set.
+    - A new `SkillRosterDiffTracker` copies `InstructionDiffTracker`'s contract. It captures the roster the frozen listing named, as name → description hash. `recheck()` renders a bounded delta (added, with a `SkillPromptLine` line; removed; changed).
+    - TurnContextBlock gains `withSkillRosterDiff()`.
+  - **Wiring.**
+    - `Runtime::turnContext()` (:5710) adds that section, memoised per session the way `instructionDiff()` (:5742) is. The delta rides the tail row only, so the prefix bytes never move.
+    - `/skills reload` re-runs `SkillManager::loadAll($root, Bootstrap::bundles($root))` into a fresh registry and `replaceAll()`s the live `$context->workspace->skills`. The reply counts added and removed skills. Serve gets the same per workspace.
+    - TUI forks inherit the reload from the next turn.
+- files.create: `candy-code/src/Skills/SkillRosterDiffTracker.php`
+- files.modify: `candy-code/src/Skills/SkillRegistry.php` (`replaceAll`), `candy-code/src/Context/TurnContextBlock.php` (section and `render`), `candy-code/src/Runtime.php` (`turnContext`, new `skillRosterDiff`), `candy-code/src/Host/Commands/SkillsHostCommand.php` (`reload`), `candy-code/lang/en.php` (`host.skills.reload.*`, `cmd.skills.hint`), `candy-code/docs/SKILLS.md`, `candy-code/docs/COMMANDS.md` (gen)
+- tests: create `candy-code/tests/Skills/SkillRosterDiffTrackerTest.php`, `candy-code/tests/Host/Commands/SkillsReloadTest.php`. Modify `candy-code/tests/Skills/SkillRegistryTest.php`, `candy-code/tests/Context/TurnContextBlockTest.php`, `candy-code/tests/Providers/PromptPrefixByteStabilityTest.php` (assert the prefix is unchanged after a reload).
+- docs/guards: SKILLS.md; gen-command-docs.
+- serialized: [runtime:turnContext] [docs:SKILLS.md] [docs:COMMANDS.md] [lang:host.skills.reload.] [hot:candy-code/src/Host/Commands/SkillsHostCommand.php]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: unverified that `workspace->skills` is the same object as the engine's registry (the comment at `Bootstrap.php:2373` says one registry). Thread it if not.
+

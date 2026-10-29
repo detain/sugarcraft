@@ -453,6 +453,47 @@ final class MemoryCommandTest extends TestCase
         $this->assertStringNotContainsString('In your home store', $content, 'an empty home section must not be announced');
     }
 
+    public function testListShowsStandingIntentsUnderTheirOwnHeading(): void
+    {
+        // C-CTX-3.f welder seam #2: an armed intent steers later turns, so the
+        // user-side listing answers it under its own heading with the trigger
+        // visible — the same shape the Memory tool's index gives it — and the
+        // note never appears twice.
+        $plainId = $this->memoryStore->add('plain note beside an intent', 'project');
+        $intentId = $this->memoryStore->add('always run the deploy gate', 'project');
+        $this->memoryStore->update($intentId, MemoryEntry::new(
+            type: 'intent',
+            content: 'always run the deploy gate',
+            scope: 'project',
+            tags: [],
+            id: $intentId,
+            when: 'keyword:deploy',
+        ));
+
+        [$next, ] = (new Chat(
+            history: [],
+            projectRoot: $this->tempDir,
+            inputBuf: '/memory list project',
+            backend: new EchoBackend(),
+            memoryStore: $this->memoryStore,
+        ))->update(new KeyMsg(KeyType::Enter, ''));
+
+        $content = $next->history[count($next->history) - 1]->content;
+        $this->assertStringContainsString(
+            '**Standing intents (each fires once when a tool touches its when: trigger):**',
+            $content,
+            'the intents heading must announce the armed steer where the user can delete it by id',
+        );
+        $this->assertStringContainsString("- **[intent]** `{$intentId}` (when: keyword:deploy)\n  always run the deploy gate", $content);
+        $this->assertStringContainsString("- **[pattern]** `{$plainId}`\n  plain note beside an intent", $content);
+        self::assertSame(1, substr_count($content, $intentId), 'a partitioned intent must not also ride the plain rows');
+        self::assertLessThan(
+            strpos($content, $intentId),
+            strpos($content, '**Standing intents'),
+            'the section heading must lead its rows',
+        );
+    }
+
     public function testListIsByteStableWhenTheRepoStoreContributesNothing(): void
     {
         $this->memoryStore->add('plain project note', 'project');

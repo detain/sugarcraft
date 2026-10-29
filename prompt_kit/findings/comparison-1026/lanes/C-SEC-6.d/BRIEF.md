@@ -1,0 +1,22 @@
+### C-SEC-6.d — Web permission audit view
+- item: C-SEC-6 (sources: GAP-PER-14)
+- kind: gap · effort M
+- approach:
+  - `AuditHook` already writes a redacted, rotated log with three line shapes (`src/Hooks/BuiltIn/AuditHook.php` header: `=>`, `=! DENY <kind>`, `=! WITHHELD`). Nothing reads it.
+  - New `AuditLogReader`: a bounded tail of `AuditHook::defaultLogFile()`, parsing each line into {time, session, tool, verdict, kind, reason}. It never loads the whole file.
+  - New `permission.audit` {sessionId?, limit ≤ 200} at Scope::Approve, deliberately tighter than the gap's Read because the log spans every session and root of this user.
+  - Rendered as "Recent decisions" in `RulesPanel`.
+- files.create: `candy-code/src/Hooks/BuiltIn/AuditLogReader.php`, `candy-code/tests/Hooks/AuditLogReaderTest.php`, `candy-code/tests/Protocol/PermissionAuditMethodTest.php`, `candy-code-web/src-web/components/panels/__tests__/rulesPanelAudit.spec.ts`
+- files.modify:
+  - `candy-code/src/Protocol/Methods/PermissionMethods.php` (new `audit`)
+  - `candy-code/src/Protocol/Schema/MethodSchemas.php`
+  - `candy-code/docs/protocol/candy-code.v1.schema.json`, `candy-code/docs/SERVER.md`, `candy-code-web/src-web/protocol/generated.ts`
+  - `candy-code-web/src-web/components/panels/RulesPanel.vue`
+- tests: the reader covers the three shapes, a torn last line, rotation, and the cap. The method covers the session filter and the scope refusal. The web spec renders rows.
+- docs/guards: protocol gen checks; `ServerProtocolDocumentationDriftTest`. Web dist rebuild.
+- serialized: [protocol] [hot:candy-code-web/src-web/components/panels/RulesPanel.vue] [hot:candy-code-web/dist]
+- deps: none. It shares `RulesPanel.vue` and the protocol chain with 6.c, so schedule them in different waves.
+- phase: normal
+- ruling: none
+- risks: the default log lives in a per-user temp dir. A serve process under a different `HOME`/`TMPDIR` reads an empty log, so state that in the panel.
+
