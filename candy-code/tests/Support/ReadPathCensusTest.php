@@ -749,6 +749,24 @@ final class ReadPathCensusTest extends TestCase
                 . 'project root exactly as Edit resolves it, so a refused edit cannot lint (and quote) a file '
                 . 'outside the workspace (step 3.E)',
         ],
+        'MCP/McpBackgroundCalls.php|file_get_contents' => [
+            'SELF_LOCATED — C-MCP-3.d: readFrame() reads a finished job frame whose path is '
+                . '`directory()` plus a name this process just claimed by renaming the payload out of '
+                . 'the registry, so the bytes it opens were written by this class under the private '
+                . '`~/.candy-code/mcp-background` root. No caller ever names this path',
+        ],
+        'MCP/McpBackgroundCalls.php|fopen' => [
+            'SELF_LOCATED — C-MCP-3.d: publish() writes the frame to `<job>.writing` with `xb` '
+                . '(exclusive create, chmod 0600, then rename into place) inside that same private '
+                . 'registry — the hand-off mailbox this class owns and nothing else reads',
+        ],
+        'MCP/McpBackgroundCalls.php|scandir' => [
+            'NAMES_ONLY — C-MCP-3.d: hasFinished() only peeks for a `.payload` entry, so a turn knows '
+                . 'the inbox has something to drain before the model answers; the name is dropped',
+            'NAMES_ONLY — C-MCP-3.d: takeFinished() lists the private registry to find finished '
+                . 'payloads and stale half-written entries; each name it keeps is re-opened only '
+                . 'through the two rows above, under the same private root',
+        ],
         'MCP/McpClient.php|file_get_contents' => [
             'CONTAINED_UPSTREAM:Cli/McpDecision.php — `$root/.mcp.json`, bounded against the root '
                 . 'that named it before this class is constructed. Still a constructor argument, so an '

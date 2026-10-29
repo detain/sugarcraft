@@ -737,10 +737,10 @@ own server's exchange lock: parallel calls to *other* servers keep running,
 and later calls to the asking server queue behind it, which is the whole
 point of the serialised exchange.
 
-A long call no longer holds the turn. An interactive bridged or dispatched
-MCP call still running after 120 seconds — the hand-off figure upstream uses
-for the same move — answers the model instead with "still running as
-background MCP job `<id>`; the result will arrive as a message", and the
+A long call no longer holds every turn. A bridged or dispatched MCP call still
+running after 120 seconds — the hand-off figure upstream uses for the same move
+— answers the model instead with "still running as background MCP job `<id>`;
+the result will arrive as a message", and the
 exchange keeps running in a forked child. That is possible because the
 library serialises a server's exchange behind a cross-process lock: any
 forked process may finish one, and for a `stdio` server the row above keeps
@@ -751,11 +751,24 @@ one ends first. Nothing is killed at the hand-off — the threshold releases
 the *turn*, never the call. The child's own bound stays its transport's
 `toolTimeout`, which keeps exactly the meaning it had, and an exchange that
 errors or times out publishes that error row, which travels the same route.
-Elicitations and progress ride the child's per-call desk, so a backgrounded
-call can still put a question to the human while the turn talks to the
-model. Headless (`-p`) runs never hand off at all: a non-interactive caller
-waits for the real result exactly as before, which is also why no `-p`
-dispatch can create a background job.
+
+The hand-off is a set of doors, and a closed door means the call runs inline
+exactly as it did before this feature, byte-for-byte. It needs a process that can
+fork (`pcntl`) and a private home to keep the registry in — which is the whole
+story on Windows and on a `pcntl`-less build. It needs a turn that is actually
+waiting on *this* call, the call handed the turn's liveness beat; a programmatic
+`execute()` on an MCP tool nobody is waiting on keeps the inline path. And it
+does not cover a call that has been handed the turn's ask channel or its live
+tail: a fork copies those closures, a copied approver can put no question to the
+human and a copied tail writes frames to nobody, so an elicitation-capable or
+tail-capable call keeps blocking inline and every promise the elicitations
+paragraph above makes about a server question reaching the human stays a
+one-process promise. Backgrounding a long call that asks mid-flight is the open
+seam — it would need the registry to carry the question up to the parent and the
+verdict back down — and it is reported as a seam, not papered over here.
+Headless (`-p`) runs likewise never hand off at all: the closed latch outranks a
+live threshold, a non-interactive caller waits for the real result exactly as
+before, and no `-p` dispatch can create a background job.
 
 ---
 

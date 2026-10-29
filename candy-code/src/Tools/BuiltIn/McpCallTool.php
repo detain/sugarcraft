@@ -192,7 +192,12 @@ final readonly class McpCallTool implements Tool, BuildsFromCatalog, TakesToolCa
             );
         }
 
-        if (McpBackgroundCalls::armed($this->backgroundAfterSeconds, $this->elicitationsClosed)) {
+        if (McpBackgroundCalls::armed(
+            $this->backgroundAfterSeconds,
+            $this->elicitationsClosed,
+            $heartbeat !== null,
+            $this->permissionApprover !== null || $this->toolProgressEmitter !== null,
+        )) {
             // C-MCP-3.d: the same hand-off the bridge spelling gets, armed
             // only AFTER the validation arms above — a bad-argument row costs
             // no fork — and below the threshold the child's published row is

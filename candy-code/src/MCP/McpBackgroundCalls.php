@@ -74,18 +74,53 @@ final class McpBackgroundCalls
     private static array $children = [];
 
     /**
-     * Whether an armed MCP tool may take the background path at all: a live
-     * threshold, a run that is not the closed `-p` latch, the pcntl functions
+     * Whether an armed MCP tool may take the background path at all: the call
+     * is one the TURN is waiting on (a heartbeat channel is present) and it has
+     * NOT been handed the turn's ask channel or live tail, a live threshold, a
+     * run that is not the closed `-p` latch, the pcntl functions
      * this design forks with, and a home the registry can be kept in. Every
      * failed door means the inline call — the exact behavior from before this
      * feature, byte-identical, including on Windows and every
      * pcntl-less fallback, because backgrounding is an OPT-IN of the turn
      * wiring and a machine that cannot fork simply never gets the fast path
      * replaced.
+     *
+     * WHY THE TURN DOOR IS HERE AND NOT AT THE CALL SITES: production arms the
+     * dial where a turn binds its channels to the tool list
+     * ({@see \SugarCraft\Code\Backend\EngineBackend}, the C-MCP-3.d arm of the
+     * `AcceptsToolProgress` bind), so a copy of an MCP tool that leaves that
+     * bind — a sub-agent's narrowed bridge, a workflow step, a programmatic
+     * {@see \SugarCraft\Code\Tools\McpToolBridge::execute()} on a tool that
+     * happens to be in reach — can still carry the figure. The heartbeat
+     * closure is the answer to which call the turn is actually blocking on:
+     * Runtime hands one to {@see AcceptsHeartbeat} tools only while a turn
+     * waits, which is precisely the wait the hand-off releases. A call with no
+     * beat keeps the inline path, which is also what keeps the fork count of a
+     * non-turn dispatch at zero.
+     *
+     * WHY THE CHANNEL DOOR IS A DOOR AND NOT A RELAY (round-1 ruling, option
+     * (b) of the review): a call that has been handed the turn's ASK channel or
+     * its live tail is a call whose mid-flight messages need the PARENT — an
+     * `elicitation/create` must reach the human and carry an answer back, and a
+     * `ToolProgress` frame must reach the renderer that is still drawing the
+     * row. The fork hands the child a COPY of those closures: its writes go
+     * nowhere useful and its ask can never be answered, because nothing is
+     * draining the child while the parent sits in this loop. Relaying asks and
+     * tails over the registry side-channel is the other answer and it is the
+     * heavier one (a second protocol, in a directory that is deliberately a
+     * one-shot result mailbox); the plan does not require a long call to
+     * background while it is asking, so the cheaper honest rule wins: an
+     * ask-capable or tail-capable call simply is never backgrounded, and every
+     * promise about elicitations reaching the human stays the C-MCP-3.b
+     * promise, made of one process. The cost is disclosed in docs/MCP.md: on a
+     * turn that has bound either channel, a long call keeps blocking, exactly
+     * as it did before this feature existed.
      */
-    public static function armed(float $afterSeconds, bool $latchedNonInteractive): bool
+    public static function armed(float $afterSeconds, bool $latchedNonInteractive, bool $turnDriven, bool $serverRequestChannelsBound): bool
     {
-        return $afterSeconds > 0.0
+        return $turnDriven
+            && !$serverRequestChannelsBound
+            && $afterSeconds > 0.0
             && !$latchedNonInteractive
             && \function_exists('pcntl_fork')
             && \function_exists('pcntl_waitpid')
@@ -124,11 +159,12 @@ final class McpBackgroundCalls
      * second — the same cadence the transport's wait beat carried into the
      * turn's idle ceiling before this file existed; the child runs its
      * exchange WITHOUT a beat of its own, so exactly one process writes the
-     * turn's frames for any given moment. (The child's answer desk —
-     * elicitations and progress — keeps relaying through its inherited
-     * closures, which is the house's existing multi-fork frame-write shape:
-     * every frame is a length-prefixed single write, see
-     * {@see \SugarCraft\Code\Backend\EngineBackend::writeFrame()}.)
+     * turn's frames for any given moment. (What the child does NOT have is an
+     * answer channel: a fork hands the child a COPY of the turn's approver and
+     * progress closures, so a call that was bound either one is refused by
+     * {@see armed()} and never reaches this loop. The desk-relay claim this
+     * paragraph used to make was measured false at round 1 — see the door's
+     * own note above and docs/MCP.md §Server requests.)
      *
      * @return array{kind: string, result?: ToolResult, job?: string}
      */

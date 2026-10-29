@@ -610,7 +610,12 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat, RelaysPermissionAsk
     {
         $id = is_string($args['id'] ?? null) ? $args['id'] : '';
 
-        if (McpBackgroundCalls::armed($this->backgroundAfterSeconds, $this->elicitationsClosed)) {
+        if (McpBackgroundCalls::armed(
+            $this->backgroundAfterSeconds,
+            $this->elicitationsClosed,
+            $heartbeat !== null,
+            $this->permissionApprover !== null || $this->toolProgressEmitter !== null,
+        )) {
             // C-MCP-3.d: an interactive call that outlives the hand-off keeps
             // running in a child and answers later through the turn inbox;
             // below the threshold the child's published row is returned HERE,
