@@ -19974,6 +19974,36 @@ final class Chat implements Model
     }
 
     /**
+     * The framed messages waiting in THIS session's cross-session mailbox
+     * (C-AGT-4.e), taken once — [] when there is no engine session to address,
+     * no writable home, or nothing waits.  Consumption is what releases the
+     * mail; the frame already carries the sender and its no-authority notice.
+     *
+     * @return list<string>
+     */
+    private function drainSessionMail(): array
+    {
+        $sessionId = $this->backend instanceof \SugarCraft\Code\Backend\EngineBackend
+            ? $this->backend->sessionId()
+            : null;
+        if ($sessionId === null) {
+            return [];
+        }
+        try {
+            $mailbox = \SugarCraft\Code\Agents\Live\SessionMailbox::forSession($sessionId);
+            if ($mailbox === null) {
+                return [];
+            }
+            return array_map(
+                static fn (\SugarCraft\Code\Agents\Live\AgentMessage $message): string => \SugarCraft\Code\Agents\Live\SessionMailbox::frame($message),
+                $mailbox->take(),
+            );
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
      * Run one poll of {@see \SugarCraft\Code\Background\BackgroundSupervisor}
      * and announce whatever changed since the previous poll.
      *
@@ -20108,6 +20138,19 @@ final class Chat implements Model
                 ? Lang::t('chat.background.reply.one')
                 : Lang::t('chat.background.reply.other', ['count' => count($replies)]));
             $announcements = [...$announcements, ...$replies];
+        }
+
+        // C-AGT-4.e: mail another session sent to THIS session (`SendMessage`
+        // to `session:<id>`, same root, asked not no-ask) rides the same door:
+        // while no turn runs it goes to the agent now, as a followup-shaped
+        // frame that states its own lack of authority; while a turn runs the
+        // existing announcement-queue gate below defers it to the settle.
+        $mail = $this->inFlight ? [] : $this->drainSessionMail();
+        if ($mail !== []) {
+            $notices[] = Message::notice(count($mail) === 1
+                ? Lang::t('chat.background.mail.one')
+                : Lang::t('chat.background.mail.other', ['count' => count($mail)]));
+            $announcements = [...$announcements, ...$mail];
         }
 
         // AUT-1: the clock's own rows join the same announce/queue chain, so

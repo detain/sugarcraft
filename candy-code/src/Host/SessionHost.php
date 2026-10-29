@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Host;
 use React\EventLoop\Loop;
 use React\EventLoop\TimerInterface;
 use React\Promise\PromiseInterface;
+use SugarCraft\Code\Agents\Live\SessionMailbox;
 use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
@@ -1198,16 +1199,33 @@ final class SessionHost
      * {@see QueueMode::Followup}: it becomes the next turn when the session
      * is idle and waits behind the running turn when it is not.
      *
-     * @return int how many loop prompts fired
+     * @return int how many loop prompts and cross-session messages fired (C-AGT-4.e)
      */
     public function tick(int $now): int
     {
-        $registry = $this->workspace->service(ScheduleRegistry::class);
-        if (!$registry instanceof ScheduleRegistry) {
-            return 0;
+        $fired = 0;
+
+        // C-AGT-4.e: this session's cross-session mail rides the same beat as
+        // its loops.  Draining BEFORE the schedule lookup means mail lands even
+        // on a host with no ScheduleRegistry; each message enters exactly as a
+        // due loop row does — notice row, save, transcript announcement, and a
+        // Followup submit — so an idle session turns it next and a busy one
+        // finds it waiting behind the running turn.  The frames carry no
+        // authority (SessionMailbox::frame states so in the model's own words).
+        foreach ($this->drainSessionMail() as [$label, $prompt]) {
+            $notice = Message::notice(Lang::t('host.mail.queued', ['from' => $label]));
+            $this->history[] = $notice;
+            $this->save();
+            $this->announceTranscriptRow($notice);
+            $this->submit($prompt, SubmitOptions::new()->withDelivery(QueueMode::Followup));
+            $fired++;
         }
 
-        $fired = 0;
+        $registry = $this->workspace->service(ScheduleRegistry::class);
+        if (!$registry instanceof ScheduleRegistry) {
+            return $fired;
+        }
+
         foreach ($registry->dueEphemeralFor($this->sessionId, $now) as $row) {
             $registry->noteNextDue($row->name, $row->nextDueAfter($now));
             $notice = Message::notice(Lang::t('host.loop.queued', ['name' => $row->name]));
@@ -1219,6 +1237,40 @@ final class SessionHost
         }
 
         return $fired;
+    }
+
+    /**
+     * Read this session's cross-session mail (C-AGT-4.e).  The mailbox is the
+     * same on-disk AgentInbox-signature store a sending session writes into;
+     * consuming is what releases it.  Each taken message returns as
+     * `[sender label, framed prompt]` — the frame is SessionMailbox's own
+     * `<session-message>` shape, which states in the model's own words that
+     * the mail carries no authority.  A host whose home is not writable (no
+     * default root), or whose mailbox raises anything at all, drains to
+     * nothing: a mail fault must never take the loop beat (and thus the
+     * schedules) down with it.
+     *
+     * @return list<array{string, string}>
+     */
+    private function drainSessionMail(): array
+    {
+        $drained = [];
+
+        try {
+            $mailbox = SessionMailbox::forSession($this->sessionId);
+            if ($mailbox === null) {
+                return [];
+            }
+            foreach ($mailbox->take() as $message) {
+                $drained[] = [$message->senderName(), SessionMailbox::frame($message)];
+            }
+        } catch (\Throwable) {
+            // Fail quiet beside the loop: a mailbox nobody can read stays
+            // where it is; the next beat tries again.
+            return $drained;
+        }
+
+        return $drained;
     }
 
     /**
