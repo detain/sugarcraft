@@ -18,6 +18,7 @@ use SugarCraft\Code\Events\ToolFinished;
 use SugarCraft\Code\Events\ToolProgress;
 use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Events\UsageUpdated;
+use SugarCraft\Code\Permissions\DenialKind;
 
 /**
  * Hand-rolled OTLP/HTTP-JSON encoding of the typed event DTOs.
@@ -40,16 +41,30 @@ use SugarCraft\Code\Events\UsageUpdated;
  *   dropped while several steps are open at once (parallel agents).
  * - Unrecognised objects are dropped; the return value reports the closed
  *   spans produced by a call, so a caller can never emit a span twice.
+ * - Every SAFETY VERDICT additionally rides the span as a time-stamped
+ *   span event named `candy_code.safety_event` (C-SEC-6.e): a denial on a
+ *   finished tool call (`decision=deny`, the `DenialKind` token, the tool,
+ *   the first word of the kind's reason prefix), an ask
+ *   (`decision=ask`, tool, source, mode), and a non-approval settlement
+ *   (`decision=reject` answered "no", `decision=cancel` nobody answered —
+ *   the two refusals the `PermissionResolved` contract keeps apart). An
+ *   approval or an allowed tool finish emits nothing. Attributes stay
+ *   bare keys because the event name scopes them.
  * - A batch arrives through {@see encodeMany()} as consume-time-stamped
  *   pairs (OBS-1-P1: spans are measured across the real event gap, never
  *   the export instant) and returns its closed spans RAW, so exactly one
  *   {@see exportBody()} call — one OTLP body, one POST — carries them all
- *   (OBS-1-P2).
+ *   (OBS-1-P2). The safety events ride those spans with their own observed
+ *   instants, so a batched export never blurs a verdict to the close time.
  *
  * Privacy law: identifiers, counters, durations, token totals and costs are
  * exported; payloads are NOT. No tool arguments, tool output tails, media
  * frames, prompt/reasoning text or task descriptions ever become attributes
  * (character COUNTS of deltas are fine — they size activity, not content).
+ * The same law bounds the safety events: a denial reason can quote the
+ * refused command text, so a deny event carries the enum's kind token and
+ * the first word of the enum's own prefix — never the reason body, and
+ * never any word taken from the carried content at all.
  *
  * Pricing law: a `0.0` cost for a model with no price entry exports the
  * model name under `candy_code.model.unpriced` so a dashboard can tell
@@ -61,11 +76,15 @@ final class OtlpEncoder
     public const TURN_SPAN_NAME = 'chat.turn';
 
     /**
-     * Open spans keyed by step.
+     * Open spans keyed by step. `events` carries the C-SEC-6.e safety
+     * verdicts in arrival order, each stamped with its observed instant.
      *
-     * @var array<int, array{traceId: string, spanId: string, startNano: string, lastNano: string, attrs: array<string, array{key: string, value: array<string, string|int|bool|float>}>}>
+     * @var array<int, array{traceId: string, spanId: string, startNano: string, lastNano: string, attrs: array<string, array{key: string, value: array<string, string|int|bool|float>}>, events: list<array<string, mixed>>}>
      */
     private array $openSpans = [];
+
+    /** Span-event name for every safety verdict (C-SEC-6.e). */
+    public const SAFETY_EVENT_NAME = 'candy_code.safety_event';
 
     /**
      * @param array<string, string|int|bool|float> $resourceAttributes
@@ -141,6 +160,7 @@ final class OtlpEncoder
         $span = &$this->openSpans[$step];
         $span['lastNano'] = (string) \max((int) $span['lastNano'], $nanos);
         self::addEventAttributes($span['attrs'], $event);
+        self::addSafetyEvent($span['events'], $event, $nanos);
         if (!self::closesTurn($event)) {
             unset($span);
 
@@ -224,13 +244,13 @@ final class OtlpEncoder
     }
 
     /**
-     * @param array{traceId: string, spanId: string, startNano: string, lastNano: string, attrs: array<string, array{key: string, value: array<string, string|int|bool|float>}>} $span
+     * @param array{traceId: string, spanId: string, startNano: string, lastNano: string, attrs: array<string, array{key: string, value: array<string, string|int|bool|float>}>, events: list<array<string, mixed>>} $span
      *
      * @return array<string, mixed>
      */
     private static function renderSpan(array $span): array
     {
-        return [
+        $rendered = [
             'traceId' => $span['traceId'],
             'spanId' => $span['spanId'],
             'name' => self::TURN_SPAN_NAME,
@@ -239,6 +259,15 @@ final class OtlpEncoder
             'endTimeUnixNano' => $span['lastNano'],
             'attributes' => array_values($span['attrs']),
         ];
+
+        // An empty repeated field is omitted, the proto-JSON shape's own
+        // rule: a turn without a safety verdict renders byte-identically
+        // to before C-SEC-6.e.
+        if ([] !== $span['events']) {
+            $rendered['events'] = \array_values($span['events']);
+        }
+
+        return $rendered;
     }
 
     /**
@@ -280,6 +309,7 @@ final class OtlpEncoder
             'startNano' => (string) $nanos,
             'lastNano' => (string) $nanos,
             'attrs' => $attrs,
+            'events' => [],
         ];
     }
 
@@ -407,6 +437,93 @@ final class OtlpEncoder
         if ($event instanceof TodoUpdated) {
             self::setAttribute($attrs, 'todo.updated', true);
         }
+    }
+
+    /**
+     * C-SEC-6.e: the safety verdicts of a turn — every denial, ask and
+     * non-approval settlement — additionally ride the span as ordered
+     * span events, so a collector can chart verdicts over the turn's
+     * timeline instead of reading a last-write-wins attribute.
+     *
+     * The privacy law of the class docblock BINDS HERE HARDEST: the only
+     * strings this method may ever place in an event are the enum tokens,
+     * the fixed decision words, and identifiers/shape fields that are
+     * already exported as attributes (tool name, ask source, permission
+     * mode, ask id). A denial's reason body and a rejection's note — both
+     * of which can quote refused command text or user prose — are read
+     * ONLY to test them against the enum's own prefix, never copied out;
+     * the exported `reason_token` is a word of the ENUM, not a word of
+     * the carried string.
+     *
+     * @param list<array<string, mixed>> $events
+     */
+    private static function addSafetyEvent(array &$events, object $event, int $nanos): void
+    {
+        $attrs = [];
+
+        if ($event instanceof ToolFinished) {
+            $kind = $event->result->denial();
+            if (null === $kind) {
+                // An ordinary finish (success or failure) is not a verdict.
+                return;
+            }
+
+            self::setAttribute($attrs, 'decision', 'deny');
+            self::setAttribute($attrs, 'kind', $kind->token());
+            self::setAttribute($attrs, 'tool', $event->toolName);
+            $reasonToken = self::reasonPrefixToken($kind, $event->result->content());
+            if (null !== $reasonToken) {
+                self::setAttribute($attrs, 'reason_token', $reasonToken);
+            }
+        } elseif ($event instanceof PermissionAsked) {
+            self::setAttribute($attrs, 'decision', 'ask');
+            self::setAttribute($attrs, 'tool', $event->ask->tool);
+            self::setAttribute($attrs, 'source', $event->ask->source);
+            self::setAttribute($attrs, 'mode', $event->ask->mode);
+        } elseif ($event instanceof PermissionResolved) {
+            if ($event->permits()) {
+                // An approval is not a refusal; it gets no safety event.
+                return;
+            }
+
+            // The two refusals the PermissionResolved contract keeps apart
+            // stay apart here: somebody said no, versus nobody was left to.
+            $kind = $event->cancelled ? DenialKind::Unanswered : DenialKind::Refused;
+            self::setAttribute($attrs, 'decision', $event->cancelled ? 'cancel' : 'reject');
+            self::setAttribute($attrs, 'kind', $kind->token());
+            self::setAttribute($attrs, 'ask_id', $event->askId);
+        } else {
+            return;
+        }
+
+        $events[] = [
+            'timeUnixNano' => (string) $nanos,
+            'name' => self::SAFETY_EVENT_NAME,
+            'attributes' => array_values($attrs),
+        ];
+    }
+
+    /**
+     * The first word of the kind's own prefix, and ONLY when $content
+     * genuinely opens with that prefix.
+     *
+     * The returned string is a slice of the ENUM (`Permission` for the two
+     * permission kinds, `Hook` for the hook kind), never a slice of the
+     * carried reason text — that is what makes "first reason token" safe to
+     * export even though a reason body may quote the refused command. An
+     * unprefixed carrier (a producer that broke the one-space law of
+     * {@see DenialKind::reason()}) exports nothing: a missing token is
+     * honest, a leaked command word is not.
+     */
+    private static function reasonPrefixToken(DenialKind $kind, string $content): ?string
+    {
+        if (!\str_starts_with($content, $kind->value)) {
+            return null;
+        }
+
+        $words = \explode(' ', $kind->value, 2);
+
+        return $words[0];
     }
 
     /**
