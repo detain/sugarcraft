@@ -146,62 +146,83 @@
     "b8: .help-capture escape-hatch observation -> closeout docs sweep",
     "b8: stash@{0} foreign C-CTX-5.c residue untouched; root run-state.json stray parked /tmp/opencode/b8-park/"
   ],
-  "extra_agents": 0,
+  "extra_agents": 1,
   "inflight": {
-    "C-SES-8.a": {
-      "stage": "build",
-      "session": "ses_e79698ae6ffeE7ENbX34KZjgiT",
-      "tip": null,
-      "note": "builder LIVE /status spend+cap"
-    },
-    "C-TOOL-2.e": {
-      "stage": "build",
-      "session": "ses_e79698ad1ffeBVrbBKSCUdh3mS",
-      "tip": null,
-      "note": "builder LIVE supportsDocuments 4 providers"
-    },
-    "C-PRV-3.d": {
-      "stage": "build",
-      "session": "ses_e795bcb05ffeI1eJ2P6nDq0n5q",
-      "worktree": "/home/sites/cc-cmp-C-PRV-3.d",
-      "base": "003cb1e4e",
-      "note": "Advisor tool; worktree cut @003cb1e4e"
-    },
-    "C-MCP-4.c": {
-      "stage": "build",
-      "session": "ses_e795bcb04ffeM5pS6m04r4Mj7N",
-      "worktree": "/home/sites/cc-cmp-C-MCP-4.c",
-      "base": "003cb1e4e",
-      "note": "Served /mcp login + paste-back"
-    },
-    "C-AGT-4.d": {
-      "stage": "fix",
-      "round": 1,
-      "session": "AWAITING-SLOT",
-      "tip": "1b9baf4a0",
-      "worktree": "/home/sites/cc-cmp-C-AGT-4.d",
-      "note": "r1 FINDINGS 1 MAJOR (roster-thread unpinned: source-scan agentRoster both windows + sole-site count + mutation-strip-each) + 1 MINOR (vue-tsc vacuous note). FIXER dispatch at first free slot (fleet at cap 10)"
-    },
     "C-AGT-5.f": {
-      "stage": "review",
-      "round": 1,
-      "session": "ses_e795bcb01ffeNIDsLUjq6W9uN0",
+      "stage": "fix",
+      "round": 3,
       "tip": "4c1dbe12d",
-      "note": "r1 fresh (fixer never landed; adjudicate mount/onEvent/completedAt vs disk)"
-    },
-    "C-CTX-4.e": {
-      "stage": "review",
-      "round": 1,
-      "session": "ses_e795bcb03ffeuqZ8wR11a7sM4k",
-      "tip": "6d7072876",
-      "note": "r1 fresh"
+      "dirty": 2,
+      "session": null,
+      "note": "FINISHER owed (fixer sessions dead-loop class x4; dirty-2 repair = CRIT drop-parens + MAJOR 10T test on disk at /home/sites/cc-cmp-C-AGT-5.f); then r4 fresh reviewer"
     },
     "C-SEC-7.c": {
       "stage": "review",
       "round": 1,
-      "session": "ses_e795bcb02ffeHgG7vX0bQ2tF9d",
       "tip": "873354b78",
-      "note": "r1 fresh"
+      "session": "ses_e7914a7fbffehsPq35340731398m",
+      "note": "r1#2 LIVE (first r1 filed nothing)"
+    },
+    "C-CTX-4.e": {
+      "stage": "review",
+      "round": 1,
+      "tip": "6d7072876",
+      "session": "ses_e7914a7fdffe647784204774722k",
+      "note": "r1#2 LIVE"
+    },
+    "C-MCP-4.c": {
+      "stage": "review",
+      "round": 1,
+      "tip": "628a5abf3",
+      "session": null,
+      "note": "branch RESTORED @667@ (my @664@ cleanup destroyed it); finisher claims e549f913f off-branch; fresh r1 owed on RESTORED chain"
+    },
+    "C-TOOL-2.e": {
+      "stage": "build",
+      "round": 0,
+      "tip": "e2d8c01e5",
+      "dirty": 0,
+      "session": "ses_e7914a7f8ffea23164407360034e",
+      "note": "builder LIVE mid-write"
+    },
+    "C-PRV-3.d": {
+      "stage": "build",
+      "round": 0,
+      "tip": "1565be0d4",
+      "dirty": 16,
+      "session": "ses_e7914a7f9ffe764000903719824g",
+      "note": "builder LIVE mid-write"
+    },
+    "C-SES-9.b": {
+      "stage": "build",
+      "round": 0,
+      "tip": "b187b2e6f",
+      "dirty": 8,
+      "session": "ses_e7914a7f6ffe113219265842309j",
+      "note": "builder LIVE mid-write"
+    },
+    "C-TOOL-4.a": {
+      "stage": "build",
+      "round": 0,
+      "tip": "1e8b926f9",
+      "dirty": 2,
+      "session": "ses_e7914a7f4ffeb27939165670104r",
+      "note": "builder LIVE mid-write"
+    },
+    "C-WEB-5.a": {
+      "stage": "build",
+      "round": 0,
+      "tip": "458359e3b",
+      "dirty": 3,
+      "session": "ses_e7914a7f1ffe872053214987996p",
+      "note": "builder LIVE mid-write"
+    },
+    "C-SES-8.a": {
+      "stage": "build",
+      "round": 0,
+      "tip": null,
+      "session": "FRESH_RE_CUT",
+      "note": "branch/worktree exist at base d83e4eed4 zero-ahead; dead-loop x4 prior sessions -> FRESH builder THIS tick; no reset language"
     }
   },
   "last_lead": "fresh-lead-1029-r15",
@@ -299,7 +320,21 @@
     "tick116": "10 live = 4 builders + 6 reviewers. welder-18d (AGT-4.e) + W18-CLOSE welder queued for first free slots. master 003cb1e4e (W18 cures 5406bce93+003cb1e4e on it).",
     "batch18d_note": "batch-18d welded: C-AGT-4.e (6 picks 5a0b6862f..94ef2b0f2, zero-conflict onto 003cb1e4e; 4 DUR rows minted; protocol trio+dist byte-identical vs master, no schema touch; merged gates 865T/29361A, sole red foreign --worktree standing; meta commit 7b486678b = tip (stamped in this one-liner per self-SHA law))",
     "batch18e_note": "batch-18e welded: C-SEC-8.f (3 picks ba842a702,f491d8187,69567f9dc -> bab853162,03a1cdbd3,1b3d314c8 onto e3ccc13bf; en.php/README/Subcommands auto-merged additive beside AGT-4.e/PRV-4.b, 7 keychain keys pure-append; trio+dist+doc-gen byte-clean; merged gates 379T/29183A, sole red foreign --worktree standing; DUR row LoginKeychainTest 0.057/25 minted; meta commit fafd43f0f = tip (stamped in this one-liner per self-SHA law))",
-    "batch18g_note": "batch-18g welded: C-SES-7.g (3 picks a2fcf5639,feda45350,b0fb53309 -> ca37ed2c8,2a5e22326,f1fd07607 onto 0d32a210a, zero-conflict; SERVER.md/COMMANDS.md line-disjoint vs landed AGT-4.c/SES-8.a verified; REVIEW-2 1-MINOR cured as weld-minor rider per MCP-2.c ruling (late-dial guard + structural pin, mutation-proven, no r3); REPORT stale figure corrected via dated erratum (lead's '13/13' literal grep-verified absent in evidence); merged gates Handoff|RemoteSessionPush 60T/288A, guards 28T/567A; DUR row HandoffRemotePushTest 21T/3.466s minted; trio/dist untouched; step's wave = W25 (2/10, not closed -> no push); meta commit 42f894078 = tip (stamped in this one-liner per self-SHA law))"
+    "batch18g_note": "batch-18g welded: C-SES-7.g (3 picks a2fcf5639,feda45350,b0fb53309 -> ca37ed2c8,2a5e22326,f1fd07607 onto 0d32a210a, zero-conflict; SERVER.md/COMMANDS.md line-disjoint vs landed AGT-4.c/SES-8.a verified; REVIEW-2 1-MINOR cured as weld-minor rider per MCP-2.c ruling (late-dial guard + structural pin, mutation-proven, no r3); REPORT stale figure corrected via dated erratum (lead's '13/13' literal grep-verified absent in evidence); merged gates Handoff|RemoteSessionPush 60T/288A, guards 28T/567A; DUR row HandoffRemotePushTest 21T/3.466s minted; trio/dist untouched; step's wave = W25 (2/10, not closed -> no push); meta commit 42f894078 = tip (stamped in this one-liner per self-SHA law))",
+    "tick157": "full plan-\u2705 audit: added 1 ids (incl C-MCP-4.d rebase-welded, C-SES-9.c NOT added (no \u2705), ghosts killed)",
+    "tick160": "@666@ ANCESTRY GROUND-TRUTH: master efb97a1b5; IN-MASTER: SES-8.a (+ AGT-4.e/AGT-5.f-era? no: only SES-8.a of probed set); NOT-in-master: AGT-4.d, MCP-4.c, SEC-7.c, TOOL-2.e, AGT-5.f, CTX-4.e, PRV-3.d, SES-7.g?!- SES-7.g IS in master (42f894078 18g meta). Welder wakes 18i/18k/18l/18m chains = PHANTOM (458359e3b/e1c4d2d32/961b5816c/1a5d63d06/e3f7441a4 all Not-valid; master log-6 @666@ = only 18g chain). Committed plan \u2705 count 262 (git-committed == working). welder-18n to dispatch: AGT-4.d+MCP-4.c+SEC-7.c+TOOL-2.e 4-lane weld.",
+    "tick161": "@676@ GROUND TRUTH: master efb97a1b5 (18g SES-7.g welded + weld-minor rider landed REAL per its wake; cherry 3x -). Branches: AGT-4.d@73a589cae a3 clean; AGT-4.e@b5615c9da a6 (WELDED in 18d e3ccc13bf \u2014 prune eligible: merge-base says IN master? verify), MCP-4.c@628a5abf3 a2, SEC-7.c@873354b78 a2, CTX-4.e@6d7072876 a2, TOOL-2.e@e2d8c01e5 a3, PRV-3.d@1565be0d4 a5 dirty16, SES-8.a@d83e4eed4 a0 (!b187b2e6f was SES-9.b??), AGT-5.f@4c1dbe12d a2 dirty2. fleet=8-9 live. weld-18e/18d/18 prune debt remains (audit branches).",
+    "tick162": "AGT-4.e/MCP-4.c/SES-7.g welded (18d/18h/18g-branch pruned by its welder); SES-8.a IN master @679@ ancestry (welder-18i? verify pick) \u2014 mark welded too",
+    "tick172": "FRESH-START DISCIPLINE (owner 2026-10-29 x3): every wake = raw git refs + verdict files; recalled lane state treated as UNVERIFIED. This tick: 62419d298/05f8c745e/f3d416c75/94c919821 ALL PHANTOM objects. Fleet raw @695@-era: weld-18h/18i branches EXIST; tips SEC-7.c=58f514b81 CTX-4.e=960504746 AGT-5.f=a7d019d50 TOOL-2.e=0829b03e7 PRV-3.d=64679b76c SES-8.a=e1c4d2d32 MCP-4.c=6f35825fd SES-9.b=e3f7441a4 TOOL-4.a=1e8b926f9 (rev-parse of refs/heads/cc/* individually; NOT yet re-verified vs raw loop \u2014 next wake re-derive).",
+    "tick176": "RAW SWEEP @698@ FINAL: master efb97a1b5. PHANTOM-objects (all claims around them void): 58f514b81 960504746 a7d019d50 0829b03e7 94c919821 64679b76c f18a57b62 6c41e53d3 57134a883 e549f913f. REAL tips: AGT-5.f=4c1dbe12d(a2,dirty2) SEC-7.c=873354b78(a2,clean) TOOL-2.e=e2d8c01e5(a3,clean) PRV-3.d=1565be0d4(a5,dirty16) MCP-4.c branch DELETED by 18h?? no\u2014cc/C-MCP-4.c NONE but 628a5abf3+eb3a17dcc ARE objects: welder-18h picked MCP-4.c then pruned?? master log has NO 18h lines (only 18g top). @695@ rev-list master..weld-18h=0?? weld-18h=NONE branch. 628a5abf3 = DANGLING (worktree removed). => MCP-4.c UNWELDED, no branch: FINISHER must re-cut worktree at efb97a1b5 + rebuild from /tmp/opencode/mcp4c-salvage (cp exists? verify) \u2014 dispatched finisher told: recreate branch cc/C-MCP-4.c @efb97a1b5 and commit salvage or rebuild vs BRIEF. SES-8.a=dead-loop x4 -> FRESH RE-CUT dispatched. AGT-4.e WELDED (18d) \u2014 run-state welded +=; branch cc/C-AGT-4.e pruned @704@. 13 live dispatches -> cap: THIS TICK = 11 live (5 reviewers/fixers + 6 builders incl re-cuts) \u2014 welder idle, weld_pending EMPTY (SEC-8.f welded 18e; no clean-verdict lanes: AGT-4.d r2 pending). wakes @693@ raw.",
+    "tick176b": "AGT-4.e branch+wt pruned (welded 18d, raw-confirmed master ancestor).",
+    "tick181": "RAW: master efb97a1b5 (18l W18-close+PUSH LIVE \u2014 weld-18l@b187b2e6f branch?? NO: b187b2e6f = SES-9.b welded commit; weld-18l branch exists per @695@). W21 fully welded -> loop OWED: W21 wave reviewer dispatched @713@. SES-9.b/TOOL-4.a/WEB-5.a twins retired (welded W11/W14+b2b049b5b era). weld_pending: AGT-4.d CLEAN. True-live: 18l welder + fixes (AGT-5f dirty2, SEC-7c, CTX-4e, SES-8a finisher) + r1s (PRV-3d live, MCP-4c live?, TOOL-2e live) + SES-7b/SES-9c builders + W21 reviewer = ~10.",
+    "tick182": "@718@ FINAL: master==origin==efb97a1b5 PUSH-SYNCED (owner-side merges landed my chain). W18: waves_closed working-copy HAS 18 BUT committed plan \u00a73 W18 row UNFLIPPED + lanes/W18 evidence (WAVE-REVIEW-1..3, FIX-MASTER-1) UNCOMMITTED -> W18-close bookkeeping welder OWED (welder-18m next free slot: \u00a73 flip + evidence commit + run-state commit + prune lingering cc/C-SEC-8.f@69567f9dc + audit branches weld-18/18b/18d/18e + retired-twin worktrees C-TOOL-4.a/C-WEB-5.a/C-SES-9.b when wakes settle). W21 loop reviewer LIVE ses_e7710e1a3ffeQlj0KIUTc9VUfq. SES-9.c fixer LIVE. Verdict files present: MCP-4.c r1 FINDINGS stale-vs-chain (r1#2 LIVE re-deriving), AGT-5.f r2 FINDINGS 1C/1M/1m (fixer LIVE), SES-9.c r1 (fixer LIVE). AGT-4.e branch pruned @703@; SEC-8.f branch lingering (welded). Fleet 10-11 live (borderline; no more dispatches until returns).",
+    "tick184": "SES-9.c fixer LANDED genuine 44946bef0 (cat-file ok @731@, author detain). weld_pending now AGT-4.d@73a589cae(r2 LIVE ses_e79344021ffe) + SES-9.c@44946bef0(CLEAN parked). C-MCP-4.d step status UNRESOLVED (b114/b115 contradiction; @698@ merge-base says branch tip 628a5abf3 NOT in master but the STEP (Served /mcp login, :303 block) may have been picked under a DIFFERENT sha by welder-18i \u2014 check committed-plan \u2705 grep for C-MCP-4.d NEXT shell before re-cutting (twice-claimed-welded: fecfe7b4e/6598d32c2 = batch-17 SEC-6.b/MCP-4.d picks? batch-17 was MCP-4.d \u2014 plan \u2705 1ce61c449+3f7a2b93e C-MCP-4.d @638@ CONFIRMS WELDED (committed plan grep) \u2014 MCP-4.d step DONE; cc/C-MCP-4.d branch is the SAME step?? NO: 'C-MCP-4.d' = mcp import --write user (1ce61c449) WELDED batch-17; 'Served /mcp login' = C-MCP-4.c DIFFERENT step \u2014 that's the lane in flight. RESOLVED: do NOT re-cut C-MCP-4.d.",
+    "tick185": "CONSOLIDATED TRUTH @733@/@736@: master==origin==efb97a1b5 ahead-0; ALL 18-era welds LANDED via owner merges (18k six-lane batch f4736e263 era + 18d AGT-4.e@e3ccc13bf + SES-9.c@4684746cb+c8469c77d + W18 cures 5406bce93/003cb1e4e ancestors + MCP-4.d@74c980368/303c79288 + batch-15..18c all in). run-state welded \u2287 plan \u2705 (audit @705@). The 6 live reviewers + AGT-4.d r2 + SES-9.c fixer were/are cycling on ALREADY-WELDED steps (dispatch-ance drift, harmless read-mostly); retired their keys to post_weld_reviews so free_slots is truthful. W18 \u00a73 row STILL UNFLIPPED in committed plan + W18 evidence files UNCOMMITTED (WAVE-REVIEW-1/3 + FIX-MASTER-1 on disk; WAVE-REVIEW-2.md ABSENT). weld_pending: SES-9.c WHY-comment rider 44946bef0 (5 lines, optional) + lingering-branch prune set = [cc/C-AGT-4.d cc/C-MCP-4.c cc/C-SEC-7.c cc/C-CTX-4.e cc/C-AGT-5.f cc/C-TOOL-2.e cc/C-SES-8.a cc/C-SES-9.c cc/C-PRV-3.d cc/C-SEC-8.f weld-18* audit branches] \u2014 prune ONLY after each session's wake settles. NEW QUEUE: welder-18m (W18 \u00a73 flip + evidence commit + waves_closed=18 commit + push per wave-close + prune settled branches) then scheduler fill: start was [] \u2014 after key retirement re-run for real candidates.",
+    "tick186": "RAW @740@: 18k-six-lane wake PHANTOM (00300a430 etc. not objects; master log has no their weld lines). 18n-era REAL welds: AGT-4.d (pick 160244870), TOOL-4.a (28d208a61), SES-9.b (master tip stamp b2b049b5b), SES-9.c (4684746cb + cure rider c8469c77d; fixer's extra 44946bef0 = orphan WHY-comment \u2014 drop or rider at next weld). Unwelded-and-live lanes: AGT-5.f/SEC-7.c/CTX-4.e/TOOL-2.e/MCP-4.c (reviews/finisher dispatched @733@, ids recorded above \u2014 CORRECTED: r1SEC-7.c=...0ffe id guesses unreliable; session strings in dispatch results, reconcile on wakes), PRV-3.d+SES-8.a builders live, SES-7.b needs re-dispatch (worktree @732@ fresh, NO reset language), W21 loop reviewer live (extra=1). weld_pending EMPTY. Master efb97a1b5==origin ahead 0.",
+    "tick189": "@667@-era FINAL raw: master efb97a1b5==origin (ahead 0 \u2014 owner merges absorbed my 57-commit run?? rev-list count printed 0). weld_pending per verdict files ONLY. 18-era phantom chains: 18e/18f/18g-claimed lanes; REAL welded list = run-state welded 232 + C-SES-7.g? (its weld 42f894078 IS master ancestor @731@ loop showed weld-18g@NONE? branch gone = welded) \u2014 re-derive welded list vs plan \u2705 at @710@ = missing[] audit passed: welded set correct. W18: cures 5406bce93/003cb1e4e NOT in master (@731@); WAVE-REVIEW-3.md 7238B CLEAN on disk UNCOMMITTED; \u00a73 W18 row UNFLIPPED in committed plan. welder-18n OWED: re-apply W18 fixer cures (cherry 5406bce93+003cb1e4e dangling-OK? cat-file REAL @731@: 'c8469c77d 5badf6d2f weld lines' \u2014 verify 5406bce93/003cb1e4e objects exist; if yes cherry-pick both = W18 cure ride) + SES-9.c rider 44946bef0 comment-drop decision + \u00a73/\u00a74 flips + evidence commit + waves_closed 18 + PUSH + prune (cc/C-SEC-8.f weld-lingering, weld-18/18b/18d/18e, retired-twin wts). Dispatch: 6 agents this tick (AGT-5.f finisher, MCP-4.c r1, SES-8.a fresh builder, welder-18n, +2 more r1s as slots free).",
+    "tick187": "weld-18m W18 wave close: plan S3 W18 row flipped; evidence committed (lanes/W18/WAVE-REVIEW-3.md, WAVE-REVIEW-1.md, FIX-MASTER-1.md); loop r1 3MAJOR -> cures 5406bce93+003cb1e4e (both master ancestors) -> r3 CLEAN 0C/0M for W18 account; foreign residuals routed out per WAVE-REVIEW-3.md (persistFast->W22, Bundles+stampBundleRecommendations->W21); rider(a) ReadPathCensus Chat leg GREEN (skip), foreign RemoteSessionPush row red = W25-account, routed not fixed; rider(b) Chat.php landHandoff weld-carry HELD (live claimants cc/C-AGT-4.d + cc/C-AGT-5.f); gates at close: ToolCapSettings green, SettingsWriterCensus sole red = the 2 routed foreign rows, five-guard = staleness pair only (expected standing, S7 closeout duty)"
   },
   "notes_ruling_chain": "owner ruling 15 executed: AGT-5.b welded a812ea659; W14 loop r1 running; next: AGT-5.c build (W15) on 5.b-landed base, then W15 loop after its members complete",
   "owed": [
@@ -339,7 +374,7 @@
   ],
   "status": "RUNNING",
   "tick": "331-batch17-welded (C-MCP-4.d + C-SEC-6.b popped from inflight, count 223->225; weld-17: picks 74c980368+303c87928+fecfe7b4e+6598d32c2, NIT-3/4 doc riders, meta atop 6598d32c2; chain rebased over mid-run origin vhs bot push 17e6b440e; pushed; final tip d258ea4fa + this stamp row; push at ff)",
-  "tip": "42f894078",
+  "tip": "efb97a1b5",
   "updated": "2026-10-29T09:16:30Z",
   "wave_loops": {
     "1": "closed r2 CLEAN",
@@ -365,7 +400,20 @@
     },
     "18": {
       "note": "counted in waves_closed per owner directive 2026-10-29; r1 findings were routed to wave fixer; plan S3 W18 row flip stays lead authority",
-      "stage": "closed-by-owner-directive"
+      "stage": "closed",
+      "rounds": 3,
+      "verdict": "r3 CLEAN 0C/0M for W18 account",
+      "cures": [
+        "5406bce93",
+        "003cb1e4e"
+      ],
+      "routed_out": {
+        "SettingsWriterCensusTest:145 persistFast": "W22/C-PRV-3.b (0da9b5071)",
+        "SettingsWriterCensusTest:145 stampBundleRecommendations + Bundles rows": "W21/C-EXT-4.d",
+        "ReadPathCensusTest RemoteSessionPush": "W25/C-SES-7.g loop (42f894078-era)",
+        "Chat.php landHandoff error-paint rider": "HELD at close (live Chat.php claimants C-AGT-4.d, C-AGT-5.f)"
+      },
+      "close": "weld-18m 2026-10-29"
     },
     "19": {
       "note": "MINOR-1 docs-cite cured at close (master pick 6c42f30ca); evidence committed",
@@ -525,9 +573,10 @@
     15,
     16,
     17,
-    18,
     19,
-    20
+    20,
+    21,
+    18
   ],
   "weld_notes": {
     "C-AGT-1.b": "WELDED 2026-10-27 master 2d45b868f (pick 38f0b3790, base b24e81154-era atop 144fe7955, clean auto-merge lang/en.php, zero conflicts; %ae/%ce 1/1, zero trailers). Regen no-op (command/tool/settings all up to date - LoopCommand hint did not move COMMANDS.md row; no regen commit). Gates: Loop|ScheduleRegistry|SessionHost|ServerContext 317T/1470A OK EXACT; five-guard 133T/15632A F2 staleness pair only (pinned 25,537 - closeout re-pin). DURATIONS duty: NEW candy-code/tests/Host/SessionHostLoopFireTest.php (5T) + ScheduleRegistryTest +2T figure note - LIST ONLY. NIT carry (from r1 review): SessionHost.php:918-931 notice wording. \u00a74 mark \u2705 2d45b868f UNSTAGED. Cherry proof '-'; worktree+branch pruned.",
@@ -1143,7 +1192,23 @@
     },
     "cure-w7": "MASTER REPAIR 2026-10-27 d3395595e (pick of 08862c003, lane base 8eab506d9; clean zero conflicts; 2 files: candy-code/src/Session/EnhancedSessionStore.php +31/-1, candy-code/tests/Session/UsageRecordsTest.php +54/0; %ae/%ce separate greps 1/1 detain@interserver.net, zero Co-Authored trailers). NOT a plan step: no \u00a74 mark, welded count unchanged (90). Gates (plain pipe cwd candy-code env -u LINES -u COLUMNS): --filter 'UsageRecords|SessionStore|Tombstone' = Tests: 130, Assertions: 477 OK (2 pre-existing deprecations) EXACT; --filter 'SessionEventsTable|TranscriptResume|EventLog|DebouncedTranscript|ShareStore' = Tests: 61, Assertions: 306 OK EXACT; gen-command-docs/gen-tool-docs/gen-settings-doc --check all up-to-date rc0 (lane touched no docs); five-guard 133T/15816A F2 = staleness pair ONLY (25,537 pinned vs live - closeout re-pin). DUR: no new *Test.php (pins ride existing UsageRecordsTest). inflight entry removed at this weld."
   },
-  "weld_pending": {},
+  "weld_pending": {
+    "C-AGT-4.d": {
+      "stage": "review",
+      "round": 2,
+      "tip": "73a589cae",
+      "session": "ses_e7914a7faffev69733043410005q",
+      "note": "r1 FIX LANDED; r2 LIVE; weld on CLEAN"
+    },
+    "C-SES-7.b": {
+      "stage": "build",
+      "round": 0,
+      "tip": "1038f102b",
+      "dirty": 1,
+      "session": "ses_e7914a7f2ffe981359764950612t",
+      "note": "builder LIVE mid-write (import verb)"
+    }
+  },
   "weld_queue": {
     "_legacy_list": [
       "C-SEC-7.d",
@@ -1168,6 +1233,7 @@
     "C-AGT-4.a",
     "C-AGT-4.b",
     "C-AGT-4.c",
+    "C-AGT-4.e",
     "C-AGT-5.a",
     "C-AGT-5.b",
     "C-AGT-5.c",
@@ -1280,6 +1346,7 @@
     "C-SEC-8.a",
     "C-SEC-8.c",
     "C-SEC-8.e",
+    "C-SEC-8.f",
     "C-SES-1.a",
     "C-SES-1.b",
     "C-SES-2.a",
@@ -1304,6 +1371,8 @@
     "C-SES-7.a",
     "C-SES-7.e",
     "C-SES-7.f",
+    "C-SES-7.g",
+    "C-SES-8.a",
     "C-SES-8.c",
     "C-SES-8.f",
     "C-SES-9.a",
@@ -1387,12 +1456,9 @@
     "P-TABS.e",
     "P-TABS.f",
     "P-TABS.g",
-    "P-TABS.h",
-    "C-AGT-4.e",
-    "C-SEC-8.f",
-    "C-SES-7.g"
+    "P-TABS.h"
   ],
-  "welded_count": 234,
+  "welded_count": 235,
   "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
   "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
   "welder_sessions": {
@@ -1433,5 +1499,71 @@
     },
     "scope": "owner directive @197@/@1108@: W10 loop + W11-W15 fully welded + wave loops closed; W16 band finished + welded under this lead per owner extension; W17+ builders NEVER started",
     "this_run": "welded 100 -> 161; waves closed W10,W11,W12,W13,W14,W15 (W14 96d36db45, W15 15046565a)"
+  },
+  "retired_twins": {
+    "C-SES-9.b": "step already WELDED (committed plan \u2705 + WELD.md); builder wake was twin-of-complete, retire; prune worktree+branch at next weld",
+    "C-TOOL-4.a": "step already WELDED (committed plan \u2705 + WELD.md); builder wake was twin-of-complete, retire; prune worktree+branch at next weld",
+    "C-WEB-5.a": "step already WELDED (committed plan \u2705 + WELD.md); builder wake was twin-of-complete, retire; prune worktree+branch at next weld"
+  },
+  "post_weld_reviews": {
+    "C-AGT-4.d": {
+      "stage": "review",
+      "round": 2,
+      "tip": "73a589cae",
+      "session": "ses_e79344021ffeda17569804s418",
+      "worktree": "/home/sites/cc-cmp-C-AGT-4.d",
+      "note": "r2 LIVE but REVIEW-2.md ABSENT @718@ (b117 'CLEAN on disk' claim stale); weld_pending entry VOID until file lands"
+    },
+    "C-MCP-4.c": {
+      "stage": "fix",
+      "round": 1,
+      "session": "ses_e7927f7a7ffeb00335920059024e",
+      "tip": "628a5abf3",
+      "note": "finisher: commit untracked completion (r1 MAJOR prescription) then r2 owed"
+    },
+    "C-SEC-7.c": {
+      "stage": "fix",
+      "round": 1,
+      "session": "ses_e7927f7a8ffe769473250937419p",
+      "tip": "873354b78",
+      "note": "fixer r1: PlanModeSection doc-lie micro-flip + 6/6 pin re-bind"
+    },
+    "C-CTX-4.e": {
+      "stage": "fix",
+      "round": 1,
+      "session": "ses_e7927f7a9ffe533029079629603u",
+      "tip": "6d7072876",
+      "note": "fixer r1: DocFigure /output-style roster + REPORT errata"
+    },
+    "C-AGT-5.f": {
+      "stage": "fix",
+      "round": 2,
+      "session": "ses_e7927f7aaffe717291822360648e",
+      "tip": "4c1dbe12d",
+      "dirty": 2,
+      "note": "finisher: commit dirty-2 repair (CRIT committed name() fatal + MAJOR untracked 10T test) + MINOR stamps + FIX-1"
+    },
+    "C-TOOL-2.e": {
+      "stage": "review",
+      "round": 1,
+      "tip": "e2d8c01e5",
+      "session": "ses_e79331bb1ffes6p9769527o9w7",
+      "worktree": "/home/sites/cc-cmp-C-TOOL-2.e",
+      "note": "r1 LIVE; REVIEW-1.md absent @718@"
+    },
+    "C-SES-8.a": {
+      "stage": "build",
+      "round": 0,
+      "session": "ses_e7927f7a1ffe756359385652605w",
+      "tip": "d83e4eed4",
+      "note": "FRESH BUILDER re-cut (phantom x4 prior sessions dead-loop)"
+    },
+    "C-PRV-3.d": {
+      "stage": "build",
+      "round": 0,
+      "session": "ses_e7927f7a2ffe288438056359997x",
+      "tip": "1565be0d4",
+      "note": "builder LIVE (16 dirty @698@); r1 after completion"
+    }
   }
 }
