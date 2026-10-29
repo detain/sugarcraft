@@ -107,6 +107,7 @@ candy-code/tests/Config/ReadmeJsonErrorContractDriftTest.php	3.541	19
 candy-code/tests/MCP/StdioMcpServerTest.php	3.476	19
 candy-code/tests/Sessions/BackgroundSupervisorReapTest.php	3.475	10
 candy-code/tests/Chat/CustomCommandShellAsyncTest.php	3.474	10
+candy-code/tests/Server/HandoffRemotePushTest.php	3.466	21
 candy-code/tests/SuiteChildStdinIsolationTest.php	3.427	3
 candy-code/tests/Hooks/BuiltIn/AutoTestHookTest.php	3.418	13
 candy-code/tests/Chat/UndoRedoDiffCommandsTest.php	3.417	10

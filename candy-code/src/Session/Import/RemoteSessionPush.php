@@ -170,7 +170,16 @@ final class RemoteSessionPush
         });
 
         Attach::connect($wsUrl, $token, $loop)->then(
-            static function (RemoteSessionHost $host) use ($content, &$opened): PromiseInterface {
+            static function (RemoteSessionHost $host) use ($content, &$opened, &$settled): PromiseInterface {
+                // C-SES-7.g weld-minor rider (REVIEW-2 finding 1): a dial that
+                // completes AFTER the answer window already rejected must not
+                // silently land a session the user was told failed. Close the
+                // late host and stay rejected — the deferred is already settled.
+                if ($settled) {
+                    $host->close();
+
+                    return Promise\reject(new RuntimeException('the teleport answer window expired before the dial completed'));
+                }
                 $opened = $host;
 
                 return $host->hello()->then(

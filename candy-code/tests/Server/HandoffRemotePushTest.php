@@ -335,7 +335,9 @@ final class HandoffRemotePushTest extends TestCase
      * teleport leaves no pending timer holding the loop. A late,
      * uncancelled fire is promise-invisible by construction (the $settled
      * guard keeps the deferred honest), so loop hygiene is pinned on the
-     * method body: one cancel in each arm, the success arm before resolve.
+     * method body: one cancel in each arm, the success arm before resolve,
+     * and (weld-minor rider) the connect-success arm guards on $settled
+     * before adopting a late-dial host.
      */
     public function testTheAnswerWindowIsCancelledByBothSettleArms(): void
     {
@@ -348,6 +350,21 @@ final class HandoffRemotePushTest extends TestCase
 
         self::assertSame(2, substr_count($body, '$loop->cancelTimer($timer);'), 'the resolve arm and the reject arm each cancel the window');
         self::assertLessThan((int) strpos($body, '$deferred->resolve('), (int) strpos($body, '$loop->cancelTimer($timer);'), 'the success arm cancels before it resolves');
+
+        // Weld-minor rider (REVIEW-2 finding 1): the connect-success arm must
+        // carry the $settled guard BEFORE it adopts the late host, so a dial
+        // finishing after the window rejected closes and stays rejected.
+        $connect = strpos($body, 'Attach::connect(');
+        self::assertIsInt($connect);
+        $settleArms = strpos($body, 'static function (string $id)', (int) $connect);
+        self::assertIsInt($settleArms);
+        $inner = substr($body, (int) $connect, (int) $settleArms - (int) $connect);
+        self::assertGreaterThanOrEqual(2, substr_count($inner, '$settled'), 'the inner arm both carries &$settled and guards on it');
+        self::assertStringContainsString('if ($settled)', $inner, 'the guard is present');
+        $guard = (int) strpos($inner, 'if ($settled)');
+        self::assertGreaterThan(0, $guard);
+        self::assertLessThan((int) strpos($inner, '$opened = $host;'), $guard, 'the guard runs before the late host is adopted');
+        self::assertStringContainsString('the teleport answer window expired before the dial completed', $inner, 'the late-dial rejection names the window, per REVIEW-2');
     }
 
     /** @return list<string> */
