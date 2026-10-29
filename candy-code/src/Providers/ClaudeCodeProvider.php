@@ -4,17 +4,21 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Providers;
 
+use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchNotices;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Messages\AssistantMessage;
 use SugarCraft\Code\Messages\Message;
 use SugarCraft\Code\Messages\SystemMessage;
 use SugarCraft\Code\Messages\ToolResultMessage;
 use SugarCraft\Code\Messages\UserMessage;
+use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Usage;
 
-final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsModel, ShapesReasoningEffort
+final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsModel, ShapesReasoningEffort, HonoursHostPermissionMode
 {
     /**
      * How much of a failing child's stderr is kept for the exception message.
@@ -35,7 +39,34 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
         // operator deliberately chooses subscription login over isolation;
         // see options() for the trade-off note.
         private bool $bare = true,
-    ) {}
+        // C-PRV-4.a: the subscription route's narrowed isolation. Default
+        // ON, because an operator turning `bare` off chose the login, not
+        // the foreign settings — with `isolate` the child still loses the
+        // user's `~/.claude` setting sources, its ambient MCP servers and
+        // its slash-commands/skills channel. `isolate: false` in the block
+        // restores all of it (a deliberate second opt-in, e.g. to run the
+        // repo's own project MCP servers through the child). Ignored when
+        // `bare` is true — bare already skips everything these flags do.
+        private bool $isolate = true,
+        // C-PRV-4.a: the host gate's mode for THIS turn, installed per-turn
+        // by EngineBackend through {@see withHostPermissionMode()}. Null is
+        // "no verdict from the host" and sends no `--permission-mode` —
+        // exactly the pre-C-PRV-4.a argv.
+        private ?PermissionMode $hostMode = null,
+    ) {
+        // C-PRV-4.a honest disclosure (brief item 5): the probe at
+        // ClaudeCodeInvocation::PROBED_CLAUDE_VERSION found NO non-bare
+        // switch that skips CLAUDE.md auto-discovery or auto-memory, so
+        // `isolate` cannot claim full isolation and this launch notice says
+        // what still leaks. Once per message via the notice shelf — the
+        // Keychain::announce() shape, same seam, not a direct stderr write.
+        if (!$this->bare && $this->isolate) {
+            LaunchNotices::record(
+                Lang::t('provider.claude_code.isolation_notice'),
+                Bootstrap::launchNoticeLimit(),
+            );
+        }
+    }
 
     public function name(): string
     {
@@ -56,6 +87,53 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
     public function bare(): bool
     {
         return $this->bare;
+    }
+
+    /**
+     * Whether the subscription route carries C-PRV-4.a's isolation trio.
+     * Only meaningful when {@see bare()} is false — a bare spawn isolates
+     * wholesale and this flag changes nothing on that path.
+     */
+    public function isolate(): bool
+    {
+        return $this->isolate;
+    }
+
+    /**
+     * C-PRV-4.a: a clone bound to the host gate's current mode. The engine
+     * calls this at the head of every turn ({@see
+     * \SugarCraft\Code\Backend\EngineBackend::withHostPermissionMode()}),
+     * which is what makes Shift+Tab reach the child.
+     */
+    public function withHostPermissionMode(?PermissionMode $mode): static
+    {
+        return new self(...array_merge(get_object_vars($this), ['hostMode' => $mode]));
+    }
+
+    /**
+     * The child's `--permission-mode` spelling for a host mode, or null to
+     * send no flag.
+     *
+     * NARROWING, per the interface law: every row mirrors what the host
+     * gate ALREADY holds — `bypassPermissions` appears if and only if the
+     * operator put this process in bypass, and nothing here infers a looser
+     * mode because the child "would otherwise stall". The spellings are the
+     * choices `claude --help` lists at PROBED_CLAUDE_VERSION (acceptEdits,
+     * auto, bypassPermissions, manual, dontAsk, plan); the host's Default
+     * is the child's `manual`, and the enum's kebab-case values are NOT the
+     * wire words, which is why this is a translation table and not
+     * `$mode->value`.
+     */
+    private static function permissionModeWord(PermissionMode $mode): string
+    {
+        return match ($mode) {
+            PermissionMode::Default => 'manual',
+            PermissionMode::AcceptEdits => 'acceptEdits',
+            PermissionMode::Plan => 'plan',
+            PermissionMode::Auto => 'auto',
+            PermissionMode::DontAsk => 'dontAsk',
+            PermissionMode::BypassPermissions => 'bypassPermissions',
+        };
     }
 
     public function supportsStreaming(): bool
@@ -163,9 +241,25 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
         $options = [
             'format' => $format,
             'bare' => $this->bare,
+            // C-PRV-4.a: the trio is the subscription route's compromise —
+            // it is moot (and stays off the argv) when `--bare` already
+            // skips hooks, plugins, MCP and user settings wholesale.
+            'isolate' => $this->isolate && !$this->bare,
             'systemPrompt' => $request->systemPrompt,
             'systemPromptFile' => $systemPromptFile,
         ];
+
+        // C-PRV-4.a: the host gate's mode, translated to the child's own
+        // spelling. Null hostMode (no gate bound this turn) sends nothing —
+        // the flag had no producer before this step, and an absent verdict
+        // from the host must not quietly become a default grant in the
+        // child. What the trio does NOT cover — CLAUDE.md auto-discovery
+        // and auto-memory — has no non-bare switch at PROBED_CLAUDE_VERSION;
+        // the launch notice in the constructor says so instead of the flag
+        // list overclaiming.
+        if ($this->hostMode !== null) {
+            $options['permissionMode'] = self::permissionModeWord($this->hostMode);
+        }
 
         if ($request->tools !== null) {
             $toolNames = array_map(fn($t) => $t->name(), $request->tools);

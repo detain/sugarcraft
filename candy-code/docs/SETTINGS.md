@@ -599,6 +599,21 @@ try, in order, when a request fails transiently or overflows the context window
 project cannot set it. The [README](../README.md#providers) says when a switch
 happens and what it reports.
 
+The `claude-code` block carries a second key the same way: `isolate`, default
+**true**, block-only like `bare`. It only bites when `bare: false` (subscription
+login): the `claude` child is then launched with `--setting-sources
+project,local`, `--strict-mcp-config` and `--disable-slash-commands`, so foreign
+hooks, permission rules, plugins and MCP servers from `~/.claude` do not ride
+into the child and act outside candy-code's engine. `isolate: false` is the
+documented escape, restoring all three sources when the CLI's own settings are
+part of the subscribed workflow. What isolation honestly cannot cover: the
+CLI's CLAUDE.md auto-discovery and auto-memory answer no switch but `--bare`
+itself (probed: `claude --help`, 2.1.312), so a `bare: false` launch says so
+once at startup. Subscription login itself stays on the CLI's keychain/OAuth
+store, which the narrowing does not touch — the lane's probe could not exercise
+a live login, so if one ever fails in your environment, `isolate: false` is the
+first lever.
+
 Where a row names two methods, the first is the public entry point and the
 second is the method that does the read — cited because that is the one to
 grep for. The second name is a private method on `Bootstrap` in every row but

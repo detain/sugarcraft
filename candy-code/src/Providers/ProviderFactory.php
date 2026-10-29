@@ -139,7 +139,7 @@ final readonly class ProviderFactory
         ],
         'claude-code' => [
             'required' => ['claudePath'],
-            'optional' => ['model', 'bare', 'fallbackModels'],
+            'optional' => ['model', 'bare', 'isolate', 'fallbackModels'],
         ],
         // PRV-4: `codexPath` mirrors `claudePath` (the binary to spawn); no
         // apiKey key exists on purpose — subscription auth rides `codex login`
@@ -1429,7 +1429,16 @@ final readonly class ProviderFactory
         // ISS-078: `bare` defaults to true. Turning it off is the operator's
         // deliberate choice to let the CLI keep its normal setting sources
         // (subscription login reachable) at the cost of the --bare isolation.
-        return new ClaudeCodeProvider($invocation, $model, self::configuredBare($config['bare'] ?? null));
+        // C-PRV-4.a: `isolate` defaults to true and only bites when `bare` is
+        // off — it narrows the un-bare child back down (project/local setting
+        // sources, own MCP config, no slash-commands/skills) without taking
+        // subscription auth off the table.
+        return new ClaudeCodeProvider(
+            $invocation,
+            $model,
+            self::configuredBare($config['bare'] ?? null),
+            self::configuredIsolate($config['isolate'] ?? null),
+        );
     }
 
     /**
@@ -1484,6 +1493,37 @@ final readonly class ProviderFactory
 
         throw new \InvalidArgumentException(sprintf(
             'bare must be true or false, got %s',
+            is_scalar($value) ? var_export($value, true) : get_debug_type($value),
+        ));
+    }
+
+    /**
+     * C-PRV-4.a: normalises the optional claude-code `isolate` flag exactly
+     * as {@see configuredBare()} normalises its own — absent or empty means
+     * the default (true here, isolation ON), real booleans ride through,
+     * boolean-ish strings parse, anything else fails loudly. An isolation
+     * decision that silently picked a side on a typo is how surprise
+     * loads of ~/.claude hooks start happening.
+     */
+    private static function configuredIsolate(mixed $value): bool
+    {
+        if ($value === null || $value === '') {
+            return true;
+        }
+
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_string($value) || is_int($value)) {
+            $parsed = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($parsed !== null) {
+                return $parsed;
+            }
+        }
+
+        throw new \InvalidArgumentException(sprintf(
+            'isolate must be true or false, got %s',
             is_scalar($value) ? var_export($value, true) : get_debug_type($value),
         ));
     }

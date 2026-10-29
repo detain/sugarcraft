@@ -3765,4 +3765,12 @@ TXT,
     'tui.wizard.key_empty' => 'Nothing typed yet — enter stores nothing.',
     'tui.wizard.key_chars' => 'The typed text contains control characters; the key was not accepted.',
     // --- end tui.wizard ---
+    // --- provider.claude_code (C-PRV-4.a: CLI-provider isolation) ---
+    // One launch notice per process, recorded from ClaudeCodeProvider's
+    // constructor when the operator chose `bare: false` and isolation is on.
+    // It names what the flag trio covers and what it honestly cannot: the
+    // CLI's own CLAUDE.md auto-discovery and auto-memory ride no switch
+    // outside --bare (probe: claude --help, 2.1.312).
+    'provider.claude_code.isolation_notice' => 'claude-code `bare: false`: the CLI child is isolated to project/local settings sources, its own MCP config and no slash-commands or skills — but CLAUDE.md auto-discovery and auto-memory still load; only `bare: true` skips them, and `isolate: false` restores the full user state.',
+    // --- end provider.claude_code ---
 ];

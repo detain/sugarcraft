@@ -167,6 +167,14 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
                 static fn(EngineBackend $b): EngineBackend => $b->withServiceTier('fast'),
                 ['serviceTier'],
             ],
+            // C-PRV-4.a: the host gate's mode, threaded into the provider when
+            // it honours one. The sweep's provider is a plain
+            // ProviderInterface, so the stand-down leg copies the engine with
+            // the SAME provider object in hand — preserved, not owned.
+            'withHostPermissionMode' => [
+                static fn(EngineBackend $b): EngineBackend => $b->withHostPermissionMode(PermissionMode::Plan),
+                [],
+            ],
             // C-AGT-4.a: the applied primary agent's body section (null = slot shut).
             'withAgentInstructions' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withAgentInstructions('You review.'),

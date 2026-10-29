@@ -44,6 +44,8 @@ use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Usage;
 use SugarCraft\Code\Permissions\DenialKind;
 use SugarCraft\Code\Permissions\PermissionGate;
+use SugarCraft\Code\Permissions\PermissionMode;
+use SugarCraft\Code\Providers\HonoursHostPermissionMode;
 use SugarCraft\Code\Providers\MarksPromptCache;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Providers\RebindsModel;
@@ -963,6 +965,38 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     }
 
     /**
+     * The same engine with its provider bound to the host gate's current
+     * mode (C-PRV-4.a). A provider that carries no permission dial of its
+     * own rides the copy EXACTLY as it is — the object is shared, never
+     * touched — so this seam can stand at every turn entry without ever
+     * disturbing an HTTP provider's bytes.
+     */
+    public function withHostPermissionMode(?PermissionMode $mode): self
+    {
+        // A new engine on every call, like every wither on this class
+        // (the B5 sweep enforces it); the provider field itself only
+        // changes along the honouring leg.
+        $provider = $this->provider instanceof HonoursHostPermissionMode
+            ? $this->provider->withHostPermissionMode($mode)
+            : $this->provider;
+
+        return $this->mutate(['provider' => $provider]);
+    }
+
+    /**
+     * This turn's provider copy, honouring the gate this backend shares
+     * with the host's permission surfaces (C-PRV-4.a). The mode is READ
+     * HERE, at the head of the turn, not at launch: Shift+Tab mutates the
+     * very PermissionGate object this field points at, so a per-turn read
+     * is what keeps the child's `--permission-mode` from being frozen at
+     * whatever the launch happened to pick.
+     */
+    private function honouringHostGate(): self
+    {
+        return $this->withHostPermissionMode($this->permissionGate?->mode());
+    }
+
+    /**
      * The same engine, asking every request for `$effort` (roadmap 4.1-1) —
      * see {@see $reasoningEffort}. Null asks nothing.
      */
@@ -1651,7 +1685,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         // ({@see runCompleteInChild()}'s `attachmentNotice` key).
         // Roadmap 3.B-2: the turn starts from the session ledger with the
         // turn-start strategies applied — on this path as on the forked one.
-        $engine = $this->contextLedger === null ? $this : $this->withContextLedger($this->turnStartLedger($typed));
+        // C-PRV-4.a: the turn also starts from a provider rebound to the
+        // gate's mode as it stands NOW (see honouringHostGate()).
+        $engine = $this->honouringHostGate();
+        $engine = $engine->contextLedger === null ? $engine : $engine->withContextLedger($engine->turnStartLedger($typed));
 
         return $engine->runTurn($typed, $onToken, $onEvent, $onReasoning, $onHeartbeat, $transcript, inbox: $this->turnInbox)
             ->withAttachmentNotice($attachmentNotice);
@@ -1697,7 +1734,10 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     public function completeTranscript(array $messages, ?callable $onEvent = null, ?callable $onReasoning = null, ?callable $onHeartbeat = null, ?callable $onToken = null, ?callable $onStep = null): TranscriptTurn
     {
         $transcript = $messages;
-        $engine = $this->wrapUpAtPercent === null ? $this->withWrapUpAt(self::SUB_AGENT_WRAP_UP_PERCENT) : $this;
+        // C-PRV-4.a: same per-turn rebind as complete()'s entry (a resumed
+        // delegated turn runs its provider steps right here).
+        $engine = $this->honouringHostGate();
+        $engine = $engine->wrapUpAtPercent === null ? $engine->withWrapUpAt(self::SUB_AGENT_WRAP_UP_PERCENT) : $engine;
 
         try {
             // P-D1: a delegated run's mailbox, when TaskTool bound one.
@@ -5162,7 +5202,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     private function runCompleteInChild($childSocket, array $history, bool $interactive = false): never
     {
         try {
-            $engine = $this;
+            // C-PRV-4.a: the child's provider copy carries the gate's mode
+            // for THIS turn (the fork inherited the same PermissionGate
+            // object the parent had at fork time — the ChildChannel below
+            // reads that same gate for its approver).
+            $engine = $this->honouringHostGate();
             $this->primeMemoryRecallForTurn($history);
             $channel = ChildChannel::new(
                 $childSocket,

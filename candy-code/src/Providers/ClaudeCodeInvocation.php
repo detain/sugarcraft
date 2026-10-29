@@ -17,9 +17,35 @@ use SugarCraft\Code\Support\ProcessContainment;
  * included), so an argv prompt made `exec` fail with E2BIG the turn the history
  * crossed 128 KiB — and every later turn too, since history only grows. Stdin
  * has no such ceiling and keeps the transcript out of `ps` as a side benefit.
+ *
+ * PROBED VERSION: claude-cli 2.1.312 (2026-10-28, installed `claude --help`).
+ * Every flag this file emits was read out of that help text — see
+ * {@see self::PROBED_CLAUDE_VERSION} for the constant the suite pins.
  */
 final readonly class ClaudeCodeInvocation
 {
+    /**
+     * The CLI version whose `--help` settled every switch this file sends
+     * (house doctrine: a probed version is RECORDED, not remembered —
+     * mirrors {@see CodexInvocation::PROBED_CODEX_VERSION}). When the
+     * binary is upgraded past it, the isolation flags and the
+     * `--permission-mode` choices are the things to re-verify first.
+     */
+    public const PROBED_CLAUDE_VERSION = '2.1.312';
+
+    /**
+     * The `--setting-sources` value C-PRV-4.a isolation sends.
+     *
+     * The CLI's own list is `user, project, local`; dropping `user` is the
+     * whole point — `user` is the `~/.claude` settings source, the one
+     * carrying FOREIGN hooks, permission rules, plugins and MCP servers
+     * that would enforce inside the child outside this engine's gate.
+     * `project` and `local` stay because the repo the operator chose to
+     * open is their own statement, the same tier logic the host's settings
+     * layering applies (and `isolate: false` restores all three sources).
+     */
+    public const ISOLATION_SETTING_SOURCES = 'project,local';
+
     /**
      * The largest system prompt still passed inline as `--system-prompt`.
      *
@@ -106,6 +132,15 @@ final readonly class ClaudeCodeInvocation
      * the decision ({@see ClaudeCodeProvider::options()}); this method just
      * translates the flag.
      *
+     * `isolate` (C-PRV-4.a) appends the narrowed isolation trio —
+     * `--setting-sources`, `--strict-mcp-config`, `--disable-slash-commands`
+     * — and lives only alongside `bare: false`; here, too, the provider
+     * owns the decision and this method only translates. `permissionMode`
+     * (C-PRV-4.a) is already the CLI's own spelling, translated from the
+     * host gate's {@see \SugarCraft\Code\Permissions\PermissionMode} by
+     * {@see ClaudeCodeProvider::options()} — a key that arrived is a mode
+     * the host holds.
+     *
      * @param array<string, mixed> $options
      * @return array<string>
      */
@@ -122,6 +157,25 @@ final readonly class ClaudeCodeInvocation
 
         if ($options['bare'] ?? false) {
             $args[] = '--bare';
+        }
+
+        // C-PRV-4.a: narrowed isolation for the subscription route. The
+        // provider sends this key only when `isolate` is on AND `bare` is
+        // off — a bare spawn already skips hooks, plugins, MCP and user
+        // settings wholesale, and `--setting-sources`/`--strict-mcp-config`/
+        // `--disable-slash-commands` are the per-channel switches measured
+        // in `claude --help` at PROBED_CLAUDE_VERSION ("Comma-separated list
+        // of setting sources to load (user, project, local)", "Only use MCP
+        // servers from --mcp-config, ignoring all other MCP configurations",
+        // "Disable all skills and commands"). What they do NOT reach is
+        // CLAUDE.md auto-discovery and auto-memory — no non-bare switch
+        // covers those, and ClaudeCodeProvider::options() says so on the
+        // argv's behalf rather than letting the flag list overclaim.
+        if ($options['isolate'] ?? false) {
+            $args[] = '--setting-sources';
+            $args[] = self::ISOLATION_SETTING_SOURCES;
+            $args[] = '--strict-mcp-config';
+            $args[] = '--disable-slash-commands';
         }
 
         if ($options['continue'] ?? false) {
