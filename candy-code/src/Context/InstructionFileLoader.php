@@ -193,6 +193,20 @@ final class InstructionFileLoader
     public const PERSONAL_FILENAME = 'AGENTS.md';
 
     /**
+     * The personal-tier persona files (C-CTX-4.b, OpenClaw names), relative to
+     * {@see personalDir()}: `SOUL.md` carries the operator's voice/standing
+     * behavior directives and `USER.md` carries facts about the operator and
+     * their preferences. They ride {@see loadPersonal()} — the SAME anchors,
+     * containment gates, size ceilings, UTF-8 scrub, `@import` expansion and
+     * shared dedup set as {@see PERSONAL_FILENAME} — so each is fenced like the
+     * personal AGENTS.md and priced as its own personal-tier row, and an absent
+     * file costs one stat. Unlike the AGENTS.md slot, they are never the
+     * quick-add target and never have a `~/.claude` stand-in: the stand-in
+     * answers for the operator's instructions document as a whole.
+     */
+    public const PERSONA_FILENAMES = ['SOUL.md', 'USER.md'];
+
+    /**
      * C-CTX-2.f round 1 (lead-accepted in-step carry): the fifth key of the
      * Read/Grep/Glob session-state envelope — the tracker's
      * already-announced "Instructions updated" ledger (path => fingerprint),

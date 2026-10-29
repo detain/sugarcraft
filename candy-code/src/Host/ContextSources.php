@@ -99,6 +99,12 @@ final class ContextSources
      * leaves the figure null — the unknown-honesty rule every other part of
      * the panel follows.
      *
+     * C-CTX-4.b truth: the personal loop below prices EVERY entry
+     * {@see \SugarCraft\Code\Context\InstructionFileLoader::loadPersonal()}
+     * returns — the `~/.candy-code/AGENTS.md` head and its `SOUL.md` and
+     * `USER.md` persona rows — each as its own `personal: true` entry in
+     * loader order; no per-file special case lives here.
+     *
      * @return array{files: list<array{path: string, bytes: int, personal: bool}>, refused: list<array{path: string, reason: string}>}|null
      */
     public static function priceInstructionFiles(?string $root): ?array
