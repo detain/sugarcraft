@@ -127,4 +127,34 @@ final class TurnControllerMcpSeamTest extends TestCase
         $controller = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Host/TurnController.php');
         self::assertSame(1, substr_count($controller, '->withMcpReader('), 'the controller arms exactly one reader for every host');
     }
+
+    /**
+     * GAP-AGT-20 (C-AGT-4.d): the roster thread, pinned beside the MCP thread
+     * it shares a call window with — same drift class, same shape of answer.
+     *
+     * Chat hands `agentRoster: $manager` and SessionHost::admitPrompt hands
+     * `agentRoster: $agentManager`; if either call stops passing it, the TUI
+     * and the served surface silently degrade every `@agent:` send to a
+     * "no agent roster is open" notice right beside popups that still offer
+     * the rows — the exact popup-vs-scanner agreement the submit docblock
+     * promises — while every behavioural test stays green, because the
+     * controller itself still answers correctly for the two headless routes
+     * that feed it directly. The window is widened to 800 chars past the mcp
+     * pin's 400 so a new argument inserted before the roster line cannot
+     * silently push it out of the slice.
+     */
+    public function testBothHostsFeedTheOneControllerRosterArmingSite(): void
+    {
+        $chat = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Chat.php');
+        $host = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Host/SessionHost.php');
+
+        $chatCall = substr($chat, (int) strpos($chat, '$this->turnController()->userTurnMessage('), 800);
+        self::assertStringContainsString('agentRoster: $manager', $chatCall, 'Chat must keep feeding the controller the agent roster');
+
+        $hostCall = substr($host, (int) strpos($host, '$turns->userTurnMessage('), 800);
+        self::assertStringContainsString('agentRoster: $agentManager', $hostCall, 'the served host must keep feeding its own roster');
+
+        $controller = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Host/TurnController.php');
+        self::assertSame(1, substr_count($controller, '->withAgentRoster('), 'the controller arms exactly one roster for every host');
+    }
 }
