@@ -1192,8 +1192,9 @@ final class ReadPathCensusTest extends TestCase
         'Tools/BuiltIn/WebFetch.php|fopen' => [
             'NOT_A_FILESYSTEM_PATH — a pinned HTTP(S) URL through a stream context',
         ],
-        'Tools/BuiltIn/WebSearch.php|fopen' => [
-            'NOT_A_FILESYSTEM_PATH — the search endpoint, same shape: a pinned HTTP(S) URL through '
+        'Tools/Web/Search/SearchBackends.php|fopen' => [
+            'NOT_A_FILESYSTEM_PATH — the search endpoint (sink moved out of WebSearch.php when the '
+                . 'backends were extracted), same shape: a pinned HTTP(S) URL through '
                 . 'a stream context, redirects refused and the body read bounded (F-W3)',
         ],
         'Tools/BuiltIn/Write.php|file_get_contents' => [
