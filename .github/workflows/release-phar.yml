@@ -17,6 +17,18 @@
 # `phar.readonly=0` is passed with `-d` to the BUILD command only. It is
 # never a runtime requirement: the produced archive executes under a normal
 # `php candy-code.phar` with the default readonly=On.
+#
+# C-SES-6.d — the release now ships six assets from ONE plain build plus a
+# companion `--gz` build of the same tree: the plain candy-code.phar stays the
+# ONLY self-update target (SelfUpdate::PHAR_ASSET matches the exact name; the
+# gz/manifest/formula/installer additions ride beside it undisturbed), the gz
+# twin is the slim transfer with its own .sha256 and signature trio,
+# candy-code.phar.packages.json is the plain build's --manifest-out
+# disclosure, and candy-code.rb / install.sh are the C-SES-6.c packaging
+# files. Per the plan section 6.3 owner ruling the Homebrew tap push is
+# DECLINED: the formula ships as a release asset only, there is no push leg
+# and no new secret. RUNTIME CAVEAT, repeated in the release notes: the gz
+# twin needs ext-zlib loaded to open at all.
 name: Release PHAR
 
 on:
@@ -94,9 +106,32 @@ jobs:
           # date so rebuilds of one tag agree on the stamp (DST-1 reproducibility
           # note); the byte-level guarantee still stops at the moving dev-master
           # dependency window disclosed in this file's header.
+          # C-SES-6.d: the same epoch line governs the gz twin below, so both
+          # artifacts of one run carry the identical stamp. --manifest-out
+          # (C-SES-6.b) writes the plain build's packages map for publication.
           export SOURCE_DATE_EPOCH="$(git log -1 --format=%cT "$TAG")"
           php -d phar.readonly=0 candy-code/tools/build-phar.php \
             --out=dist/candy-code.phar \
+            --manifest-out=dist/candy-code.phar.packages.json \
+            --version="$TAG"
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+
+      - name: Build the gz twin (slim transfer asset)
+        # C-SES-6.d: a second --gz build of the SAME tree (dev deps are not
+        # installed until much later, so both builds share the --no-dev vendor).
+        # Self-update keeps selecting the plain asset: the runtime downloads a
+        # ~117 MiB archive today and the gz twin trades that transfer for a
+        # runtime ext-zlib requirement, so the PLAIN copy stays the default and
+        # the gz twin ships as the opt-in slim alternative named in the notes.
+        # build-phar's --gz replaces --out with the compressed bytes, so the
+        # asset lands at exactly dist/candy-code-gz.phar.
+        run: |
+          set -euo pipefail
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%cT "$TAG")"
+          php -d phar.readonly=0 candy-code/tools/build-phar.php \
+            --out=dist/candy-code-gz.phar \
+            --gz \
             --version="$TAG"
         env:
           TAG: ${{ steps.tag.outputs.tag }}
@@ -106,10 +141,25 @@ jobs:
         # signing step's headline artifact is a signature over THIS sidecar's
         # body, so the sidecar has to exist first. The .sha256 names the bytes
         # this job built (integrity); the trust leg is the signature below.
+        # C-SES-6.d widens the same discipline to the gz twin (its own
+        # sidecar, signed by its own detached leg), and renders the C-SES-6.c
+        # packaging files here because the formula's SHA256 slot is exactly
+        # the plain sidecar's first field — the formula and the sidecar can
+        # never disagree, they are read from one file. install.sh is copied
+        # into dist/ unchanged; the asset list below publishes it verbatim.
         run: |
           set -euo pipefail
           (cd dist && sha256sum candy-code.phar > candy-code.phar.sha256)
+          (cd dist && sha256sum candy-code-gz.phar > candy-code-gz.phar.sha256)
+          test -s dist/candy-code.phar.packages.json
+          phar_sha="$(cut -d ' ' -f 1 dist/candy-code.phar.sha256)"
+          php candy-code/tools/gen-homebrew-formula.php \
+            --version="$TAG" --sha256="$phar_sha" --out=dist/candy-code.rb
+          cp candy-code/tools/install.sh dist/install.sh
           cat dist/candy-code.phar.sha256
+          cat dist/candy-code-gz.phar.sha256
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
 
       - name: Sign the archive (pinned-key mode)
         # OPTIONAL step by design: without the SUGARCRAFT_SIGNING_KEY secret it
@@ -129,7 +179,10 @@ jobs:
         #   - candy-code.phar.minisig.sha256: the legacy sidecar-of-the-
         #     sidecar, computed here rather than in the (now earlier) checksum
         #     step, since it can only exist after the file it names does.
-        # In keyless state all three are skipped together: they share this one
+        # C-SES-6.d adds the identical trio for the gz twin (over
+        # candy-code-gz.phar and its own sidecar), so the slim asset carries
+        # the same trust chain as the plain one, key-skipped together with it.
+        # In keyless state all six are skipped together: they share this one
         # early-exit step, so the publish gate below sees no signature files.
         run: |
           set -euo pipefail
@@ -143,14 +196,19 @@ jobs:
               fwrite(STDERR, "SUGARCRAFT_SIGNING_KEY must be the base64 of the 64-byte sodium secret key\n");
               exit(1);
             }
-            $sig = sodium_crypto_sign_detached(file_get_contents("dist/candy-code.phar"), $key);
-            file_put_contents("dist/candy-code.phar.minisig", base64_encode($sig) . "\n");
-            $sidecar_sig = sodium_crypto_sign_detached(file_get_contents("dist/candy-code.phar.sha256"), $key);
-            file_put_contents("dist/candy-code.phar.sha256.sig", base64_encode($sidecar_sig) . "\n");
+            foreach (["candy-code.phar", "candy-code-gz.phar"] as $artifact) {
+              $sig = sodium_crypto_sign_detached(file_get_contents("dist/" . $artifact), $key);
+              file_put_contents("dist/" . $artifact . ".minisig", base64_encode($sig) . "\n");
+              $sidecar_sig = sodium_crypto_sign_detached(file_get_contents("dist/" . $artifact . ".sha256"), $key);
+              file_put_contents("dist/" . $artifact . ".sha256.sig", base64_encode($sidecar_sig) . "\n");
+            }
           '
           (cd dist && sha256sum candy-code.phar.minisig > candy-code.phar.minisig.sha256)
+          (cd dist && sha256sum candy-code-gz.phar.minisig > candy-code-gz.phar.minisig.sha256)
           cat dist/candy-code.phar.minisig
           cat dist/candy-code.phar.sha256.sig
+          cat dist/candy-code-gz.phar.minisig
+          cat dist/candy-code-gz.phar.sha256.sig
         env:
           SUGARCRAFT_SIGNING_KEY: ${{ secrets.SUGARCRAFT_SIGNING_KEY }}
 
@@ -227,14 +285,31 @@ jobs:
       # future job ever needs the archive, add a sanitized name here
       # (steps.tag output stripped of the `candy-code/` prefix), never the raw tag.
       - name: Publish GitHub release
+        # C-SES-6.d: the asset set grows to the gz twin, the manifest, the
+        # rendered formula and the installer. The self-update selector matches
+        # asset names exactly (SelfUpdate::PHAR_ASSET), so none of the new
+        # names disturb the plain leg. The plan section 6.3 owner ruling
+        # DECLINED the Homebrew tap: candy-code.rb ships as a release asset
+        # ONLY — no tap push leg, no new secret. Consumers add it with
+        # `brew install --formula <download-url>` or vendor it themselves.
         run: |
           set -euo pipefail
           tag="$TAG"
-          assets=(dist/candy-code.phar dist/candy-code.phar.sha256)
+          assets=(
+            dist/candy-code.phar dist/candy-code.phar.sha256
+            dist/candy-code-gz.phar dist/candy-code-gz.phar.sha256
+            dist/candy-code.phar.packages.json
+            dist/candy-code.rb dist/install.sh
+          )
           if [ -f dist/candy-code.phar.minisig ]; then
-            assets+=(dist/candy-code.phar.minisig dist/candy-code.phar.minisig.sha256 dist/candy-code.phar.sha256.sig)
+            assets+=(
+              dist/candy-code.phar.minisig dist/candy-code.phar.minisig.sha256 dist/candy-code.phar.sha256.sig
+              dist/candy-code-gz.phar.minisig dist/candy-code-gz.phar.minisig.sha256 dist/candy-code-gz.phar.sha256.sig
+            )
           fi
-          notes="Self-contained candy-code PHAR built by .github/workflows/release-phar.yml at commit ${GITHUB_SHA}.\n\nVerify: sha256sum -c candy-code.phar.sha256\n\nRun: php candy-code.phar --version"
+          # The ext-zlib caveat is the plan's named risk for the gz asset and
+          # belongs in the notes a downloader reads, not only in this file.
+          notes="Self-contained candy-code PHAR built by .github/workflows/release-phar.yml at commit ${GITHUB_SHA}.\n\nPlain (self-update target): candy-code.phar — Verify: sha256sum -c candy-code.phar.sha256 — Run: php candy-code.phar --version\n\nSlim twin: candy-code-gz.phar (own .sha256/signatures) — REQUIRES the ext-zlib PHP extension at RUNTIME to open; php -m | grep -i zlib before choosing it.\n\nAlso attached: candy-code.phar.packages.json (build manifest), install.sh (fetch-and-verify installer), candy-code.rb (Homebrew formula, release asset only — no tap is published)."
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" "${assets[@]}" --clobber
           else
