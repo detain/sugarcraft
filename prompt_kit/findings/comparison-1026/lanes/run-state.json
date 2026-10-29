@@ -291,7 +291,7 @@
   ],
   "status": "RUNNING",
   "tick": "331-batch17-welded (C-MCP-4.d + C-SEC-6.b popped from inflight, count 223->225; weld-17: picks 74c980368+303c87928+fecfe7b4e+6598d32c2, NIT-3/4 doc riders, meta atop 6598d32c2; chain rebased over mid-run origin vhs bot push 17e6b440e; pushed; final tip d258ea4fa + this stamp row; push at ff)",
-  "tip": "ed5e7aa83",
+  "tip": "04a964f8a",
   "updated": "2026-10-29T07:15:25Z",
   "wave_loops": {
     "1": "closed r2 CLEAN",
