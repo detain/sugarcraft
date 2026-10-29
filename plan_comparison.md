@@ -2657,7 +2657,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-prv-ctx.md` → `### C-CTX-3.f`
 
-#### C-CTX-4.b — `SOUL.md` and `USER.md` persona files
+#### ✅ 0d530fd56+532bb044a C-CTX-4.b — `SOUL.md` and `USER.md` persona files (picks -> 12edbee57, 0ddb27ef5 on weld-18c, zero-conflict — MEMORY.md/InstructionFileLoader/ContextSources hunks auto-merged beside landed 18a/18b work; merged re-gate PersonalInstructionFile|MemoryDocumentationDrift|DocFigureProseDrift|ContextSources 138T/4370A green + ReadmeRoster/EnvRoster/TrustKey/ConfigWriteProducer/SettingsTier adjacency 80T green; no new *Test.php file — PersonalInstructionFileTest is MODIFY, no DUR row; foreign NOT-charged: ContainedPathInventory x2 (AGT-family rows only, diff-verified zero CTX-4.b rows — C-AGT-4.a owner debt), SymbolCitation Chat.php:13712 debt arm measured GREEN at merged tip; batch-18c)
 - **Item:** C-CTX-4 (sources: GAP-PA-04) · gap · effort S
 - **What:** `InstructionFileLoader::loadPersonal()` (:524) also reads `~/.candy-code/SOUL.md` and `~/.candy-code/USER.md`, OpenClaw's names. Each is fenced like the personal AGENTS.md, contained to the personal dir, and budgeted. …
 - **Files — create:** none
@@ -2808,7 +2808,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Ruling:** Relax the "import never writes" law for an explicit `--write user` (user tier only, collisions refused)? — see §6
 - **Brief:** `prompt_kit/findings/comparison-1026/design-mcp.md` → `### C-MCP-4.d`
 
-#### C-PRV-4.b — Codex isolation, mode → `-s`, `--output-schema`
+#### ✅ a455af32c+51a84224c+4f96ea5fe+2bed7ad84 C-PRV-4.b — Codex isolation, mode → `-s`, `--output-schema` (picks -> d611a4582, 21e3fce6c, a04f7656c, a938fe4bb on weld-18c, zero-conflict — README/SETTINGS hunks auto-merged beside landed 18a/18b drift, disjoint vs in-flight C-SEC-8.f; merged re-gate Codex|ProviderFactory|CliProviderIsolation|LoginKeychain 224T green; ReadPathCensus delta is the single pre-existing Chat.php fgc row only, no Codex sink rows (diff-verified); DUR row minted Providers/CodexIsolationTest 12T/0.660s (single-file measured green run; 11 brief-pinned + skeleton anchor = 12); SettingsWriterCensus stampBundleRecommendations = standing W21/closeout red, not charged; batch-18c)
 - **Item:** C-PRV-4 (sources: PRV-4-P3, p1-miss: Codex parity (mode → `-s`, `--output-schema`)) · competitor-feature · effort M
 - **What:** Root cause: `CodexInvocation::execArgs()` passes `-s` only when configured (`CodexInvocation.php:80-96`). Plan mode with a `workspace-write` config still edits files (`CodexProvider.php:27-31, 56-61`). Implement …
 - **Files — create:** `candy-code/tests/Providers/CodexIsolationTest.php`

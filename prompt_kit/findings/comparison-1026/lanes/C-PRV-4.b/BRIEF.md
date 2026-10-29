@@ -1,0 +1,23 @@
+### C-PRV-4.b — Codex isolation, mode → `-s`, `--output-schema`
+- item: C-PRV-4 (sources: PRV-4-P3, p1-miss: Codex parity (mode → `-s`, `--output-schema`))
+- kind: competitor-feature · effort M
+- approach:
+  - Root cause: `CodexInvocation::execArgs()` passes `-s` only when configured (`CodexInvocation.php:80-96`). Plan mode with a `workspace-write` config still edits files (`CodexProvider.php:27-31, 56-61`).
+  - Implement `HonoursHostPermissionMode` on `CodexProvider`. Always pass an explicit `-s`: the configured `sandbox`, else `workspace-write`, narrowed to `read-only` in plan and read-only modes. `danger-full-access` only when configured, and never widened.
+  - Under `isolate` (default true), add `--ignore-user-config` (verified in `codex exec --help`: auth still uses `CODEX_HOME`), which drops foreign config.toml MCP servers and profiles.
+  - `--output-schema <file>`: write `CompleteRequest::$jsonSchema` to a 0600 temp file, removed in `finally`. Flip `supportsJsonSchema()` to true only with a recorded live probe, and bump `PROBED_CODEX_VERSION`.
+- files.create: `candy-code/tests/Providers/CodexIsolationTest.php`
+- files.modify:
+  - `candy-code/src/Providers/CodexProvider.php` (`options()`, `supportsJsonSchema()`, interface)
+  - `candy-code/src/Providers/CodexInvocation.php` (`execArgs()`)
+  - `candy-code/src/Providers/ProviderFactory.php` (`TYPE_SCHEMAS['codex']` `isolate`)
+  - `candy-code/README.md` (codex row and L176 claim)
+  - `candy-code/docs/SETTINGS.md` (codex posture)
+- tests: CodexIsolationTest: plan → `-s read-only` over a `workspace-write` config; an explicit `-s` always present; `--ignore-user-config` under isolate; the schema temp file is created and removed; modify `candy-code/tests/Providers/CodexProviderTest.php`
+- docs/guards: README and SETTINGS posture prose (PRV-4-P3's "undocumented" half)
+- serialized: [docs:README.md] [docs:SETTINGS.md] [hot:candy-code/src/Providers/Codex*.php] [hot:candy-code/src/Providers/ProviderFactory.php]
+- deps: C-PRV-4.a (the interface and the EngineBackend rebinding)
+- phase: normal
+- ruling: none
+- risks: `--ignore-user-config` changes behaviour for anyone relying on config.toml defaults. `isolate:false` restores it, and the changelog line says so.
+
