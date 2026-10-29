@@ -47,7 +47,7 @@
   "batch17_note": "batch-17 (WELD-16 survivor): cc/C-MCP-4.d (1ce61c449+3f7a2b93e -> picks 74c980368+303c87928) + cc/C-SEC-6.b (cbe7d05df+403742811 -> picks fecfe7b4e+6598d32c2) welded onto batch-16 meta 44ff31314 then REBASED over mid-run origin vhs bot push 17e6b440e (GIFs only, disjoint from all 39 touched files), wave order W23-then-W24, zero conflicts. Weld rider: Subcommands.php importUsage docblock four->five doors (comment-only). DUR rows minted: SubcommandsMcpImportWriteTest 0.010/10, ProjectNarrowingRulesTest 0.035/5, BootstrapProjectNarrowingRulesTest 0.035/9 (tsv 1614 rows). \u00a74 marks flipped for both steps; \u00a73 W23/W24 rows stay open. Gates: new-file filter 24T/155A OK; Permission band 2298T/2F = ForeignAgentPresetWiring:472 + PermissionsIntroDrift foreign standings only; guard band 527T/8F = standing set (staleness pair + Help/KeyHelp 6F, all foreign). No trio/dist rider needed. welded_count 223->225; both lanes cleared from inflight. Push at wave close: master FF to final weld-16 tip, then origin. NIT riders in meta: en.php permissionRules help discloses trusted-project deny/ask read (NIT-4); PERMISSIONS.md tier-column signature-match sentence (NIT-3); gen-settings-doc rider (notices.transcriptLimit row 49->50 staleness). Evidence collected: lanes/C-SEC-6.b/{BRIEF,FIX-1,REPORT,REVIEW-1,REVIEW-2} + lanes/C-MCP-4.d/{BRIEF,FIX-1,REVIEW-1,REVIEW-2} (pick-committed REPORT deduped). Disclosed: WebFetch.php:635 redirect-veto consults user-tier rules only (reviewer ruling: report, no edit).",
   "batch18a_note": "welded C-AGT-4.c (3 picks; protocol trio+dist rider 4f827ed71 + SymbolCitationDrift Chat.php Tests\\ cure; no DUR), C-PRV-3.b (2 picks; DUR x2), C-EXT-5.c (2 picks; DUR x2; 5.b collision not materialized). tsv 1614->1618. Gates: php 588T/37412A OK (incl protocol+doc drift guards); vitest 90T green (generated+dormantRoster); dist determinism re-build clean. C-MCP-4.a stale REPORT.md/REVIEW-1.md deletions staged (held lane, BRIEF.md kept). suite-figure staleness pair left red by design (25T/143A re-pin = 7 closeout).",
   "batch18b_note": "weld-18b closed C-CTX-3.c + C-MCP-3.d (picks 0b7cac1c4/5ad8f8572 + ab4d3bcb5/2678de8a9/51340c0c3/5aeb66912 on base 103a385aa); protocol trio+dist rider a82e19a4e; DUR rows x2 in 678ff50a0 (McpBackgroundCallTest 15, ContextInstructionWriteTest 11); ReadmeSuiteFigureDrift staleness pair + foreign base-reds (ContainedPathInventory 2 arms, ReadPathCensus Chat.php fgc hunk = W18 fixer domain, ForkedChildReaperAdoptionTest = C-TOOL-3.c debt) carried per disclosures; no \u00a73 flip (W21/W22 partial); NO push (no wave close).",
-  "batch18c_note": "welder-18c: C-CTX-4.b (picks 12edbee57/0ddb27ef5) + C-PRV-4.b (picks d611a4582/21e3fce6c/a04f7656c/a938fe4bb) on weld-18c off 4dd8c20ce; zero conflicts; regen NO-OP (no Protocol/generator touches); merged gates 138T+224T+80T green; 9 standing reds all foreign/expected (ReadPathCensus delta = Chat.php fgc row only, ContainedPathInventory delta = AGT-family rows only); DUR row Providers/CodexIsolationTest 12T/0.660s (commit dafcf260d); NO push (no wave closes); SymbolCitation debt arm measured GREEN at tip",
+  "batch18c_note": "welder-18c: C-CTX-4.b (picks 12edbee57/0ddb27ef5) + C-PRV-4.b (picks d611a4582/21e3fce6c/a04f7656c/a938fe4bb) on weld-18c off 4dd8c20ce; zero conflicts; regen NO-OP (no Protocol/generator touches); merged gates 138T+224T+80T green; 9 standing reds all foreign/expected (ReadPathCensus delta = Chat.php fgc row only, ContainedPathInventory delta = AGT-family rows only); DUR row Providers/CodexIsolationTest 12T/0.660s (commit dafcf260d); NO push (no wave closes); SymbolCitation debt arm measured GREEN at tip; reconciled run-state folds lead concurrent inflight (C-MCP-4.a/b builders, AGT-4.e/SES-7.g re-baselined)",
   "batch3_close_note": "batch-3 welder DONE 2026-10-29: welded 5 of 6 (P-AGENT.b f77460186, C-SES-8.c ebbb14984, C-TUI-3.f 7bcd40016 cure-at-weld, C-WEB-4.c 72c9aaa36 dist-swap, C-TOOL-5.a 7cae5cc33 gated on stage==clean unlock). C-WEB-4.d STOPPED-WITH-RECORD 81c47175f (NEW lane-attributable TS2554 statusBarTimer.spec.ts:191; r1 vue-tsc rc=0 claim vacuous; cure wording in STOP-1.md; branch+worktree HELD, now restacked 4935cce08). tsv 1550->1557. Close sanity battery 150T/25861A ALL GREEN at final tip. suite-figure carry +59T (14+15+4+0+20... web lanes 0) = P-AGENT.b +14, C-SES-8.c +15, C-TUI-3.f +4, C-TOOL-5.a +20 -> re-pin owed at closeout. Standing surface: vue-tsc 20-error base-residual (proven identical at e14c3cc7c, NOT lane). Vitest full re-run at 72c9aaa36 gate (76F/593T) stands; brief close-condition (web 4+5 both) unmet by lane-5 stop.",
   "batch6": "COMPLETE e6188662a: TUI-5.d/WEB-4.e-src/CTX-4.a/EXT-3.b welded, W17 CLOSED, PathGlob cure 2ee1c62b4 (305,805=555x551), ARCHITECTURE 59\u219260 cure a2d5d0e3f, vitest full 618/618, durations 1568 asc-viol 4, suite-figure carry ~+56T",
   "batch9_note": "close battery: sanity 5-family 149T/26359A OK after weld-cure b42032405 PathGlob 309,132(558x554); asc-violations 4 held (1581 rows); NEVER pushed",
@@ -151,12 +151,32 @@
     "C-AGT-4.e": {
       "base": "44ff31314",
       "branch": "cc/C-AGT-4.e",
-      "note": "fixer r1 COMPLETED 6/6 cures; lead disk-verified tip+clean+FIX-1.md 4566B; r2 fresh reviewer owed",
-      "round": 2,
-      "session": "r2-pending",
-      "stage": "review",
-      "tip": "b5615c9da",
+      "note": "builder DONE on disk (1 commit ahead, tree clean, REPORT.md); r1 reviewer dispatching",
+      "round": 0,
+      "session": "builder-landed",
+      "stage": "build",
+      "tip": "4b983d285",
       "worktree": "/home/sites/cc-cmp-C-AGT-4.e"
+    },
+    "C-MCP-4.a": {
+      "base": "4dd8c20ce",
+      "branch": "cc/C-MCP-4.a",
+      "note": "liveness data step (context.sources memo-only liveness); worktree cut 4dd8c20ce",
+      "round": 0,
+      "session": "ses_e79820c81ffecU24A92tLj54mW",
+      "stage": "build",
+      "tip": "4dd8c20ce",
+      "worktree": "/home/sites/cc-cmp-C-MCP-4.a"
+    },
+    "C-MCP-4.b": {
+      "base": "103a385aa",
+      "branch": "cc/C-MCP-4.b",
+      "note": "fresh cut; BRIEF lanes/C-MCP-4.b/BRIEF.md; prior notifications cross-contaminated \u2014 no branch/worktree existed",
+      "round": 0,
+      "session": "dispatching",
+      "stage": "build",
+      "tip": "103a385aa",
+      "worktree": "/home/sites/cc-cmp-C-MCP-4.b"
     },
     "C-SES-7.g": {
       "base": "0c1ad6c64",
@@ -247,9 +267,9 @@
     "batch6_closeout_1029": "CLOSE battery at final master 041cf425a+2ee1c62b4: phpunit 6-family 187T/65303A OK after PathGlob corpus cure 2ee1c62b4 (304,700->305,805, batch-6 corpus growth, live-derivation law); durations full-tree file_exists sweep ZERO phantoms (1568 rows); vitest full serial 79 files/618 tests passed rc0; vue-tsc delta EMPTY. Pruned: cc/C-TUI-5.d (en.php-union content-equivalence proven), cc/C-CTX-4.a, cc/C-EXT-3.b (cherry -/-). HELD: cc/C-WEB-4.e (restacked, unreviewed r4 delta 7a9f8de48), cc/C-CTX-3.b (STOP, unreviewed b4245ba44). Batch-6 net: 4 lanes welded, W17 closed, welded_count 186, +2 master weld-cures (54730fdcd, a2d5d0e3f, 2ee1c62b4). suite-figure carry ~+56T (TUI-5d 28 + WEB-4e 8 + CTX-4a 7+5adj + EXT-3b 16) \u2014 re-pin OWED at program closeout per lead law.",
     "batch6_weld_1029": "batch-6 weld 2026-10-29: TUI-5.d aa0e46158+cure 54730fdcd; WEB-4.e 5a89b0b20+47d19563f (dist rider, trio rederive zero-diff); CTX-4.a 42939645a+603d2f167; EXT-3.b a42d85304+93e301ef2 cite f5b8a273b; CTX-3.b STOPPED-WITH-RECORD (branch moved to b4245ba44, unreviewed fixer delta; pick reverted, inflight kept); W17 wave closed (r2 CLEAN @d3536ac91); weld-cure a2d5d0e3f ARCHITECTURE slash counter 59->60 = batch-5 C-AGT-6.a carry red cured (base-proven zero-delta); tsv 1563->1568 asc-viol 4 held; phantom hashes confirmed non-existent: f14d0f983 (WEB-4.e STOP2 note), 87075738d (CTX-4.a note), c17a3fd24 (EXT-3.b brief) \u2014 canonical disk files governed",
     "evidence_sweep": "many prior-era lane evidence dirs remain UNTRACKED in main tree (C-AGT-6.c C-CTX-2.f C-CTX-4.a C-SES-7.e C-SES-8.c C-TOOL-2.a C-TOOL-2.g C-TOOL-7.b C-TUI-2.f C-WEB-4.b P-AGENT.b P-TABS.g W16 W20). Welders commit their own; assign sweep to \u00a77 closeout welder.",
-    "tick105": "AGT-4.e fix verified b5615c9da; AGT-5.f builder alive 4c1dbe12d dirty2; AGT-4.d salvage reset done 0-dirty + fresh builder ses_e79820c82ffeP4O8RHbphJVaHH; SES-7.g fixer ses_e79820c81ffe4XmDA5QDdZBCMY; SEC-8.f fixer owed per r1 REVIEW-1.md 4014B StderrEmitter 40->41 + MAX_SECRET_BYTES (e294b2b1d notification = PHANTOM, cat-file failed); welder-18c ses_e7983ecb8ffeGEinFz53UxfTgO live; AGT-4.e r2 ses_e7983ecb7ffeRa9eYId2x1I9iW live; MCP-4.b already-welded W16-era, worktree pruned.",
-    "tick105b": "C-MCP-4.b was ALREADY WELDED W16-era (6beef34f4 on master, plan :1982 \u2705, W16 closed line :152) \u2014 b67-era 'never dispatched' claim WRONG; stale worktree+branch removed. welder-18c (ses_e7983ecb8ffeGEinFz53UxfTgO) + AGT-4.e r2 (ses_e7983ecb7ffeRa9eYId2x1I9iW) LIVE; AGT-4.d salvage copied /tmp/opencode/agt4d-salvage/ + worktree reset 4dd8c20ce clean; SES-7.g+SEC-8.f fixers + AGT-4.d builder dispatching now.",
     "tick105c": "batch-18c welded",
+    "tick107": "8c welder ses_e7983ecb8ffeGEinFz53UxfTgO running; AGT-4.e r2 ses_e7983ecb7ffeRa9eYId2x1I9iW; AGT-4.d fresh ses_e79820c82ffeP4O8RHbphJVaHH (salvage /tmp/opencode/agt4d-salvage/); SES-7.g fixer ses_e79820c81ffe4XmDA5QDdZBCMY; SEC-8.f REAL fixer ses_e79813f8cffeUXABiiEDxod56l; AGT-5.f builder alive 4c1dbe12d dirty2",
+    "tick107b": "MCP-4.a scheduler pick cut worktree 4dd8c20ce \u2014 liveness in context.sources data step (BRIEF 29L)",
     "tick82": "master==origin==0c1ad6c64 (batch-17 pushed, non-FF resolved via rebase-over-foreign-vhs 17e6b440e). run-state welded list reconciled from branch-tips (welder-17 never appended batch-15/16/17 ids \u2014 fixed, +10). CTX-4.b/PRV-4.b builders were NEVER dispatched (sessions lost, branches at 44ff31314 zero-ahead) \u2014 fresh cuts this tick. AGT-4.e builder landed 4b983d285 (claimed 4b0258632 was phantom-adjacent misremember). Welder-18: AGT-4.c+PRV-3.b+EXT-5.c (+CTX-3.c/MCP-3.d if r2 CLEAN before dispatch).",
     "weld_15_closed": "weld-15 ff'd to master 5ea654501 (picks AGT-4.b 5e30f5e94, SES-7.f 5d3b47f05, cure 3a044bc91, meta 72a6ad46b, W20 cure 5ea654501). Prune of cc/C-AGT-4.b cc/C-SES-7.f weld-15 + worktrees pending (do in batch-16 welder run)."
   },
@@ -292,7 +312,7 @@
   "status": "RUNNING",
   "tick": "331-batch17-welded (C-MCP-4.d + C-SEC-6.b popped from inflight, count 223->225; weld-17: picks 74c980368+303c87928+fecfe7b4e+6598d32c2, NIT-3/4 doc riders, meta atop 6598d32c2; chain rebased over mid-run origin vhs bot push 17e6b440e; pushed; final tip d258ea4fa + this stamp row; push at ff)",
   "tip": "04a964f8a",
-  "updated": "2026-10-29T07:15:25Z",
+  "updated": "2026-10-29T07:17:51Z",
   "wave_loops": {
     "1": "closed r2 CLEAN",
     "16": {
