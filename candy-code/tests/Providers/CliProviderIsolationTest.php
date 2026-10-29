@@ -12,9 +12,8 @@ use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Providers\ClaudeCodeInvocation;
 use SugarCraft\Code\Providers\ClaudeCodeProvider;
-use SugarCraft\Code\Providers\CodexInvocation;
-use SugarCraft\Code\Providers\CodexProvider;
 use SugarCraft\Code\Providers\CompleteRequest;
+use SugarCraft\Code\Providers\EchoProvider;
 use SugarCraft\Code\Providers\HonoursHostPermissionMode;
 use SugarCraft\Code\Providers\ProviderFactory;
 
@@ -181,10 +180,13 @@ final class CliProviderIsolationTest extends TestCase
 
     public function testEngineBackendLeavesANonHonouringProviderAlone(): void
     {
-        // Codex is deliberately outside this step's contract; the seam
-        // copies the engine but shares the provider object untouched —
-        // identity is the proof no method was ever called on it.
-        $provider = new CodexProvider(new CodexInvocation());
+        // Echo is the non-honouring exemplar: it is a pure in-process fake
+        // with no child to narrow. (C-PRV-4.b folded codex INTO the
+        // contract — its pins live in CodexIsolationTest now — so the
+        // 4.a-era stand-alone example has to be someone who genuinely
+        // declines the interface. Identity is the proof: the seam copies
+        // the engine but shares this provider object untouched.)
+        $provider = new EchoProvider();
         $backend = new EngineBackend($provider, 'gpt-5');
 
         $this->assertNotInstanceOf(HonoursHostPermissionMode::class, $provider);

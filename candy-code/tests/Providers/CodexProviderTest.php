@@ -182,8 +182,12 @@ final class CodexProviderTest extends TestCase
         $optionsOf->setAccessible(true);
 
         $tiered = new CompleteRequest(model: 'probe-model', messages: [], reasoningEffort: 'high');
+        // C-PRV-4.b made `sandbox` and `ignoreUserConfig` structural: every
+        // options() set carries an explicit -s and the isolation flag at its
+        // defaults. The mode-narrowing and isolate-off halves are pinned in
+        // CodexIsolationTest; this pin keeps the effort filter honest.
         $this->assertSame(
-            ['model' => CodexProvider::DEFAULT_MODEL, 'reasoningEffort' => 'high'],
+            ['model' => CodexProvider::DEFAULT_MODEL, 'sandbox' => 'workspace-write', 'ignoreUserConfig' => true, 'reasoningEffort' => 'high'],
             $optionsOf->invoke($this->codexProvider(), $tiered),
         );
 
