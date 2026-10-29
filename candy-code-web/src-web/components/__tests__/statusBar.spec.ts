@@ -143,6 +143,94 @@ describe('StatusBar (WEB-2)', { retry: 0 }, () => {
   })
 })
 
+/**
+ * C-AGT-4.c: the status bar gains a primary-agent select beside the model
+ * one. The roster comes from `agents.list` (the `mode` field C-AGT-4.c adds
+ * server-side), the pick rides `command.exec` through the existing
+ * runCommand emit — `/agent use <name>` — and, exactly like the model
+ * select, a pick is only a REQUEST: the element stays on the summary's
+ * entry until (and unless) session.updated moves `summary.agent`.
+ */
+describe('StatusBar primary-agent select (C-AGT-4.c)', { retry: 0 }, () => {
+  const rosterResult = {
+    items: [
+      { name: 'worker', description: '', model: '', provider: '', permissionMode: 'default', active: true, mode: 'all' },
+      { name: 'scout', description: '', model: '', provider: '', permissionMode: 'default', active: false, mode: 'subagent' },
+    ],
+  }
+
+  async function mountWithRoster(items: Record<string, unknown>[] = rosterResult.items) {
+    const wrapper = await mountConnected()
+    wire.answer('agents.list', { items })
+    await flushPromises()
+    return wrapper
+  }
+
+  it('feeds the select from agents.list and commands the switch', async () => {
+    const wrapper = await mountWithRoster()
+    expect(wire.sent('agents.list')).toHaveLength(1)
+
+    const select = wrapper.find('[data-testid="agent-select"]')
+    expect(select.exists()).toBe(true)
+    // `scout` declares mode: subagent — it never presents as a primary.
+    expect(select.findAll('option').map((option) => option.text())).toEqual(['default agent', 'worker'])
+    expect((select.element as HTMLSelectElement).value).toBe('')
+
+    await select.setValue('worker')
+    expect(wrapper.emitted('runCommand')).toEqual([['/agent use worker']])
+  })
+
+  it('a pending pick parks until the summary moves, then repainting follows', async () => {
+    const wrapper = await mountWithRoster()
+    const select = wrapper.find('[data-testid="agent-select"]')
+    await select.setValue('worker')
+    expect(wrapper.emitted('runCommand')).toEqual([['/agent use worker']])
+    expect((select.element as HTMLSelectElement).value).toBe('')
+
+    await wrapper.setProps({
+      summary: sessionSummary('s1', { provider: 'openai', model: 'gpt-5', agent: 'worker' }) as unknown as SessionSummary,
+    })
+    expect((select.element as HTMLSelectElement).value).toBe('worker')
+    // The default-agent placeholder only exists while nothing is chosen.
+    expect(select.findAll('option').map((option) => option.text())).toEqual(['worker'])
+  })
+
+  it('re-picking the current agent sends nothing', async () => {
+    const wrapper = await mountWithRoster()
+    await wrapper.setProps({
+      summary: sessionSummary('s1', { provider: 'openai', model: 'gpt-5', agent: 'worker' }) as unknown as SessionSummary,
+    })
+    await wrapper.find('[data-testid="agent-select"]').setValue('worker')
+    expect(wrapper.emitted('runCommand')).toBeUndefined()
+  })
+
+  it('a current agent missing from the roster stays selectable', async () => {
+    const wrapper = await mountConnected()
+    await wrapper.setProps({
+      summary: sessionSummary('s1', { provider: 'openai', model: 'gpt-5', agent: 'ghost' }) as unknown as SessionSummary,
+    })
+    wire.answer('agents.list', { items: rosterResult.items })
+    await flushPromises()
+    const select = wrapper.find('[data-testid="agent-select"]')
+    expect(select.findAll('option').map((option) => option.text())).toEqual(['ghost', 'worker'])
+    expect((select.element as HTMLSelectElement).value).toBe('ghost')
+  })
+
+  it('a row without the mode key defaults to all', async () => {
+    const wrapper = await mountConnected()
+    // An older server's rows carry no `mode`; leniency keeps them primaries.
+    wire.answer('agents.list', { items: [{ name: 'old', description: '', model: '', provider: '', permissionMode: 'default', active: true }] })
+    await flushPromises()
+    const select = wrapper.find('[data-testid="agent-select"]')
+    expect(select.findAll('option').map((option) => option.text())).toEqual(['default agent', 'old'])
+  })
+
+  it('an unanswered roster request keeps the select off the bar', async () => {
+    const wrapper = await mountConnected()
+    expect(wrapper.find('[data-testid="agent-select"]').exists()).toBe(false)
+  })
+})
+
 describe('StatusBar spend bound (WEB-5 parity)', () => {
   function mountState(unpriced: boolean, spentUsd: number) {
     const state = createState('s1')

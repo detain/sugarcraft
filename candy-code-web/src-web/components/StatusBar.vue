@@ -5,6 +5,7 @@ import type { MethodResult, PermissionMode, SessionSummary } from '../protocol/g
 import { useConnectionStore } from '../stores/connection'
 import { useContextSourcesStore } from '../stores/contextSources'
 import { usePanelsStore } from '../stores/agents/panels'
+import { useAgentsStore } from '../stores/agents/agents'
 import type { SessionState } from '../stores/reducer'
 
 const MODES: PermissionMode[] = ['default', 'accept-edits', 'plan', 'auto', 'dont-ask', 'bypass-permissions']
@@ -69,6 +70,35 @@ function pickModel(event: Event): void {
   // and the select would advertise a model that is not in use. Pull the DOM
   // back to the summary's entry; the select repaints when the summary moves.
   select.value = modelOptionValue(currentProvider.value)
+}
+
+/**
+ * C-AGT-4.c: the same three laws for the session's primary agent. The choice
+ * is summary state (`agent`, announced by the switch itself), the offer is
+ * the server's own roster filtered by declaring mode — exactly what the TUI's
+ * `/agent` cycle presents — and the pick sends `/agent use <name>` through
+ * the command lane, never a second source of truth. No roster and no choice:
+ * the control is hidden, the default agent the session already runs staying
+ * nameless; unlike the model, it has no pair to label.
+ */
+const agents = useAgentsStore()
+onMounted(() => {
+  void agents.refreshCatalogue()
+})
+const currentAgent = computed(() => props.summary?.agent ?? '')
+const selectableAgents = computed(() => {
+  const names = [...agents.primaryRoster]
+  if (currentAgent.value !== '' && !names.includes(currentAgent.value)) names.push(currentAgent.value)
+  return names.sort()
+})
+const agentLabel = computed(() => (currentAgent.value === '' ? 'default agent' : `primary agent: ${currentAgent.value}`))
+function pickAgent(event: Event): void {
+  const select = event.target as HTMLSelectElement
+  const value = select.value
+  if (value !== '' && value !== currentAgent.value) emit('runCommand', `/agent use ${value}`)
+  // The C-WEB-1.b pending-pick law: the element repaints only when the
+  // summary actually moves.
+  select.value = currentAgent.value
 }
 
 /**
@@ -168,6 +198,13 @@ const cachePct = computed<number | null>(() => {
       </select>
     </label>
     <span v-else class="item model" :title="model">{{ model }}</span>
+    <label v-if="selectableAgents.length > 0" class="item" :title="agentLabel">
+      <span class="sr-only">Primary agent</span>
+      <select :value="currentAgent" data-testid="agent-select" @change="pickAgent">
+        <option v-if="currentAgent === ''" value="">default agent</option>
+        <option v-for="name in selectableAgents" :key="name" :value="name">{{ name }}</option>
+      </select>
+    </label>
     <!-- C-WEB-4.f (GAP-GIT-01): the branch the session was OPENED on — the
          summary field is read off the row, never off a live `git`, so the
          tooltip says what it is: a start-state fact an agent's `git checkout`

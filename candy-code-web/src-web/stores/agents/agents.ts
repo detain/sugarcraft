@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { MethodResult } from '../../protocol/generated'
 import { describe } from '../session'
 import { useConnectionStore } from '../connection'
@@ -69,9 +69,31 @@ export const useAgentsStore = defineStore('agents', () => {
    * which stays pure) so any run row can look one up by name.
    */
   const catalogue = ref<Record<string, string>>({})
+  /**
+   * C-AGT-4.c: each catalogue name's presenting `mode:` as the server read it
+   * off the preset's frontmatter — `primary`, `subagent` or `all` (the
+   * leniency answer for a built-in or an unreadable declaration; rows from a
+   * server older than the field default to `all` too, never hiding an agent).
+   * Kept beside {@see catalogue} for the same reason: the roster is launch
+   * state of the server, not of any one run.
+   */
+  const roster = ref<Record<string, string>>({})
   /** Each seed's own `color` hex, keyed by run id — the live preset colour. */
   const runColours = ref<Record<string, string>>({})
   let catalogueLoaded = false
+
+  /**
+   * C-AGT-4.c: the agents a browser may offer as the session's primary —
+   * exactly what the TUI's /agent cycle presents: every roster name whose
+   * declared mode is not `subagent`, sorted the way Chat's
+   * presentedPrimaryAgents() sorts it.
+   */
+  const primaryRoster = computed(() =>
+    Object.entries(roster.value)
+      .filter(([, mode]) => mode !== 'subagent')
+      .map(([name]) => name)
+      .sort(),
+  )
 
   function seed(sessionId: string): Record<string, unknown>[] {
     return seeds.value[sessionId] ?? []
@@ -99,7 +121,17 @@ export const useAgentsStore = defineStore('agents', () => {
     if (catalogueLoaded) return
     try {
       const result = await connection.request('agents.list', {})
-      indexColours(result.items as Record<string, unknown>[], true)
+      const items = result.items as Record<string, unknown>[]
+      indexColours(items, true)
+      // C-AGT-4.c: index the same rows' modes beside their colours, one read
+      // serving the Agents panel, the picker and the strip alike.
+      const modes: Record<string, string> = { ...roster.value }
+      for (const item of items) {
+        const name = typeof item.name === 'string' ? item.name : ''
+        if (name === '') continue
+        modes[name] = typeof item.mode === 'string' ? item.mode : 'all'
+      }
+      roster.value = modes
       catalogueLoaded = true
     } catch {
       // The dots keep their status colours; the next refresh tries again.
@@ -191,5 +223,5 @@ export const useAgentsStore = defineStore('agents', () => {
     setPending(sessionId, agentId, (pending) => pending.filter((_, i) => i !== index))
   }
 
-  return { seeds, errors, transcripts, catalogue, runColours, seed, colourFor, refresh, transcript, loadTranscript, message, control, dismissPending }
+  return { seeds, errors, transcripts, catalogue, roster, primaryRoster, runColours, seed, colourFor, refresh, refreshCatalogue, transcript, loadTranscript, message, control, dismissPending }
 })
