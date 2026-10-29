@@ -82,4 +82,16 @@ enum CommandEffectKind: string
      * rendered onto a headless session.
      */
     case SubmitPrompt = 'submit-prompt';
+
+    /**
+     * Make one roster preset the session's primary agent — or, with a null
+     * name, hand the session back to its launch default
+     * ({@see \SugarCraft\Code\Agents\PrimaryAgent::apply()}). `/agent use`
+     * carries it (C-AGT-4.b) and the Alt+A cycle rides the same effect, so
+     * the TUI and the host apply through one channel. The choice is
+     * SESSION-scoped: no driver persists it, and a restart launches on the
+     * plain session default again — the same contract the mode switch of
+     * `set-permission-mode` keeps.
+     */
+    case SetPrimaryAgent = 'set-primary-agent';
 }

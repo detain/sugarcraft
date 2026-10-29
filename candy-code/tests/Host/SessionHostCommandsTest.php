@@ -163,6 +163,52 @@ final class SessionHostCommandsTest extends TestCase
         self::assertSame([], $host->history());
     }
 
+    // C-AGT-4.b: a served `/agents use <preset>` records the choice on the
+    // session — the host answers the roster, the override carries the name,
+    // and like every session-scoped setting it never reaches the config file.
+    public function testAServedUseVerbStoresThePrimaryAgentOverride(): void
+    {
+        $host = $this->host(agentManager: $this->managerWithWorker());
+        self::assertNull($host->primaryAgentOverride(), 'a plain session runs the launch default');
+
+        $result = $host->runCommand('agents', 'use worker');
+        self::assertFalse($result->isRefused());
+        self::assertSame('worker', $host->primaryAgentOverride());
+
+        $unknown = $host->runCommand('agents', 'use ghost');
+        // A name the roster does not carry answers through
+        // `CommandResult::failure` — a System notice row, no effect — and a
+        // refusal never overwrites the record the earlier accept landed.
+        self::assertStringContainsString('ghost', $unknown->rows[\count($unknown->rows) - 1]->content);
+        self::assertSame('worker', $host->primaryAgentOverride(), 'a refused name cannot overwrite the record');
+
+        $reset = $host->runCommand('agents', 'use default');
+        self::assertFalse($reset->isRefused());
+        self::assertNull($host->primaryAgentOverride(), '`default` clears the record');
+    }
+
+    private function managerWithWorker(): \SugarCraft\Code\Agents\AgentManager
+    {
+        $manager = (new \ReflectionClass(\SugarCraft\Code\Agents\AgentManager::class))->newInstanceWithoutConstructor();
+        $property = new \ReflectionProperty(\SugarCraft\Code\Agents\AgentManager::class, 'agents');
+        $property->setAccessible(true);
+        $property->setValue($manager, [
+            'worker' => new \SugarCraft\Code\Agents\Agent(
+                name: 'worker',
+                description: 'Runs as the primary for one session',
+                prompt: 'You are a worker.',
+                model: 'claude-sonnet-4-6',
+                provider: 'anthropic',
+                tools: [],
+                skillNames: [],
+                hooks: [],
+                isActive: true,
+            ),
+        ]);
+
+        return $manager;
+    }
+
     public function testAWordNoBuiltInAnswersToIsAPrompt(): void
     {
         $host = $this->host();
@@ -497,6 +543,7 @@ final class SessionHostCommandsTest extends TestCase
         ?string $root = null,
         ?\SugarCraft\Code\Backend $backend = null,
         array $commands = [],
+        ?\SugarCraft\Code\Agents\AgentManager $agentManager = null,
     ): SessionHost {
         return SessionHost::new(
             's',
@@ -505,6 +552,7 @@ final class SessionHostCommandsTest extends TestCase
                 sessionStore: $this->store,
                 permissionGate: $gate,
                 backend: $backend ?? new EchoBackend(),
+                agentManager: $agentManager,
             ),
             history: $history,
             customCommands: $commands,

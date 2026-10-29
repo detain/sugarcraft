@@ -297,6 +297,7 @@ all one component tree — not two parallel UIs.
 | `Ctrl+R` | Session picker — resume, rename, delete, pin, fork and archive from keyboard or mouse — see the fine print below. |
 | `Ctrl+D` | Open the image generation form — see the fine print below. |
 | `Ctrl+A` | Same dispatch as typing `/agents` |
+| `Alt+A` | Cycle the **primary agent** this session runs as: the plain default, then each preset that presents as primary, between turns only — the switch narrows tools, model and permission floor until you cycle back or `/agent use default`; it never persists across restarts. See [`docs/AGENTS.md`](docs/AGENTS.md). |
 | `Alt+↓` | Focus the **live agents strip**, the row of delegated runs above the input box — see the fine print below. |
 | `Alt+M` | Toggle **plan mode** between turns: read and explore, changes refused — see the fine print below. |
 | `Esc` / `Alt+↑` (Agent View) | Back to the main transcript; the `Esc` that leaves the view is never the first half of an `Esc` `Esc` cancel. `Alt+N` / `Alt+P` open the next / previous agent of the same `Task` batch |

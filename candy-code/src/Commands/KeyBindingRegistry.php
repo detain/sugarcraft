@@ -965,6 +965,10 @@ final class KeyBindingRegistry
                     . 'first instance of.',
             ),
             KeyBinding::new('chat.agents', 'Ctrl+A', Lang::t('keys.chat.agents'), $c),
+            // C-AGT-4.b: the PRIMARY-agent cycle, beside the roster command
+            // it complements — Ctrl+A lists the agents, Alt+A picks one to
+            // run the session as, between turns.
+            KeyBinding::new('chat.agent-cycle', 'Alt+A', Lang::t('keys.chat.agent-cycle'), $c),
             KeyBinding::new('chat.session-cycle', 'Ctrl+Tab', Lang::t('keys.chat.session-cycle'), $c),
             KeyBinding::new('chat.session-cycle-prev', 'Ctrl+Shift+Tab', Lang::t('keys.chat.session-cycle-prev'), $c),
             // The reference's OWN keys (Esc/Enter/q to close, ↑↓/PgUp/PgDn to

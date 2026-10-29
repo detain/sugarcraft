@@ -9,6 +9,11 @@ use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\AgentsCommand;
+use SugarCraft\Code\Host\Commands\AgentsHostCommand;
+use SugarCraft\Code\Host\Commands\CommandContext;
+use SugarCraft\Code\Host\Commands\CommandEffectKind;
+use SugarCraft\Code\Lang;
+use SugarCraft\Code\Role;
 
 /**
  * @internal
@@ -361,6 +366,109 @@ final class AgentsCommandTest extends TestCase
      *
      * @param Agent[] $agents
      */
+    // =========================================================================
+    // C-AGT-4.b: the `use` verb — this session's primary agent
+    // =========================================================================
+
+    public function testTheUseVerbHandsWithTheSwitchedRowAndTheEffect(): void
+    {
+        $result = $this->runAgents('use worker');
+
+        $this->assertFalse($result->isRefused());
+        $this->assertCount(1, $result->effects, 'the switch travels as exactly one effect');
+        $this->assertSame(CommandEffectKind::SetPrimaryAgent, $result->effects[0]->kind);
+        $this->assertSame('worker', $result->effects[0]->primaryAgentName());
+        $this->assertSame(
+            Lang::t('host.agents.use_switched', ['name' => 'worker']),
+            $result->rows[\count($result->rows) - 1]->content,
+            'the row promises the session-scoped narrowing; the applying driver says the same words',
+        );
+    }
+
+    public function testUseDefaultHandsWithANullNameAndTheDefaultRow(): void
+    {
+        $result = $this->runAgents('use default');
+
+        $this->assertFalse($result->isRefused());
+        $this->assertSame(CommandEffectKind::SetPrimaryAgent, $result->effects[0]->kind);
+        $this->assertNull($result->effects[0]->primaryAgentName(), 'the null name IS the revert');
+        $this->assertSame(
+            Lang::t('host.agents.use_default'),
+            $result->rows[\count($result->rows) - 1]->content,
+        );
+    }
+
+    public function testUseOfAnUnknownNameRefusesWithNoEffect(): void
+    {
+        $result = $this->runAgents('use ghost');
+
+        // `CommandResult::failure`: the echo, then the reason as a
+        // `Role::System` notice — the `isRefused()` shape belongs to a
+        // command that never ran (a busy session, an unknown name).
+        $last = $result->rows[\count($result->rows) - 1];
+        $this->assertSame(Role::System, $last->role);
+        $this->assertSame([], $result->effects, 'nothing reaches a driver for a name the roster does not carry');
+        $this->assertStringContainsString('ghost', $last->content);
+    }
+
+    public function testTheUseVerbReadsTheRosterCaseSensitivelyLikeEveryOtherName(): void
+    {
+        // `AgentManager::get()` is exact-case; a fuzzy second door beside it
+        // would resolve names the operator never typed into the roster.
+        $result = $this->runAgents('use WORKER');
+
+        $this->assertSame([], $result->effects, 'the near-miss name lands the same failure, with no effect');
+        $this->assertStringContainsString('WORKER', $result->rows[\count($result->rows) - 1]->content);
+    }
+
+    public function testBareUseAndOverloadedUsePrintTheUsageLine(): void
+    {
+        foreach (['use', 'use alpha beta'] as $text) {
+            $result = $this->runAgents($text);
+            $this->assertSame([], $result->effects, "`/{$text}` names no single preset");
+            $this->assertSame(Role::System, $result->rows[\count($result->rows) - 1]->role);
+            $this->assertStringContainsString(
+                'use <preset|default>',
+                $result->rows[\count($result->rows) - 1]->content,
+                'the usage line now teaches the verb it refuses',
+            );
+        }
+    }
+
+    public function testTheUseVerbWaitsForTheManagerGateLikeTheRosterItReads(): void
+    {
+        // No manager, no roster: the `use` arm is unreachable and the command
+        // falls to the same not-configured refusal every other arm answers.
+        $result = (new AgentsHostCommand())->run(CommandContext::new(), '/agents use worker');
+
+        $this->assertStringContainsString(
+            Lang::t('host.agents.not_configured'),
+            $result->rows[\count($result->rows) - 1]->content,
+        );
+    }
+
+    private function runAgents(string $text): \SugarCraft\Code\Host\Commands\CommandResult
+    {
+        $agentManager = $this->createAgentManagerWithAgents([
+            new Agent(
+                name: 'worker',
+                description: 'Runs as the primary for one session',
+                prompt: 'You are a worker.',
+                model: 'claude-sonnet-4-6',
+                provider: 'anthropic',
+                tools: [],
+                skillNames: [],
+                hooks: [],
+                isActive: true,
+            ),
+        ]);
+
+        return (new AgentsHostCommand())->run(
+            CommandContext::new(agentManager: $agentManager),
+            '/agents ' . $text,
+        );
+    }
+
     private function createAgentManagerWithAgents(array $agents): AgentManager
     {
         // Use reflection to create AgentManager without calling its constructor

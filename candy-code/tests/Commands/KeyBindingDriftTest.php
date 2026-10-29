@@ -1132,6 +1132,53 @@ final class KeyBindingDriftTest extends TestCase
                 [$back] = $planning->update($k[0]);
                 $this->assertSame(\SugarCraft\Code\Permissions\PermissionMode::Default, $back->currentPermissionMode());
             },
+            // C-AGT-4.b: Alt+A walks the primary agent — the plain default
+            // first, then the roster name-sorted, then home. The fixture
+            // registers two agents, because with one the chord's wrap and
+            // its stop at the default are the same observation.
+            'chat.agent-cycle' => function (array $k): void {
+                // The REAL constructor: the chord ends inside
+                // `PrimaryAgent::apply` → `toolsForPrimary`, which reads the
+                // typed `toolRegistry` a reflection-built manager never set.
+                $manager = new AgentManager(
+                    new \SugarCraft\Code\Tests\Support\ScriptedProvider([]),
+                    new \SugarCraft\Code\Skills\SkillRegistry(),
+                    toolRegistry: [],
+                    toolUniverse: [],
+                );
+                $manager->register(new Agent(
+                    name: 'bravo',
+                    description: 'the bravo preset',
+                    prompt: 'You are bravo.',
+                    model: 'inherit',
+                    provider: 'anthropic',
+                    tools: [],
+                    skillNames: [],
+                    hooks: [],
+                    isActive: true,
+                ));
+                $manager->register(new Agent(
+                    name: 'alpha',
+                    description: 'the alpha preset',
+                    prompt: 'You are alpha.',
+                    model: 'inherit',
+                    provider: 'anthropic',
+                    tools: [],
+                    skillNames: [],
+                    hooks: [],
+                    isActive: true,
+                ));
+                $chat = (new Chat(
+                    backend: \SugarCraft\Code\Backend\EngineBackend::new(new \SugarCraft\Code\Tests\Support\ScriptedProvider([]), 'm'),
+                    agentManager: $manager,
+                ))->withSize(100, 30);
+                [$first] = $chat->update($k[0]);
+                $this->assertSame('alpha', $first->primaryAgentName(), 'the walk sorts the roster, not the registration order');
+                [$second] = $first->update($k[0]);
+                $this->assertSame('bravo', $second->primaryAgentName());
+                [$home] = $second->update($k[0]);
+                $this->assertNull($home->primaryAgentName(), 'and returns to the plain session default');
+            },
             'chat.quit' => function (array $k): void {
                 [, $cmd] = $this->chat()->update($k[0]);
                 $this->assertNotNull($cmd, 'Ctrl+C must return a quit Cmd');

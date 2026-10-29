@@ -234,6 +234,16 @@ final class SessionHost
     private ?array $modelOverride = null;
 
     /**
+     * C-AGT-4.b: the primary agent this session was switched to by
+     * `/agent use` through a host surface. The NAME lives here, not a
+     * narrowed backend — the host records the choice beside the model
+     * override and leaves applying it to the dispatch that reads the
+     * roster. Like {@see self::$modelOverride} it dies with the host:
+     * the choice is session-scoped and never written to config.
+     */
+    private ?string $primaryAgentOverride = null;
+
+    /**
      * C-WEB-1.a: hears "this session's summary just changed" from the lanes
      * that change it without a status transition — a served `/model` or
      * `/rename`. The server's feed binds it while a session is followed and
@@ -584,6 +594,18 @@ final class SessionHost
     public function modelOverride(): ?array
     {
         return $this->modelOverride;
+    }
+
+    /**
+     * C-AGT-4.b: the preset name this session's `/agent use` switched the
+     * primary agent to, or null while it runs the plain session default
+     * (`use default` stores null exactly like the terminal's revert). The
+     * same host-lifetime law as {@see self::$modelOverride}: a restart
+     * resolves the launch roster afresh and finds no override.
+     */
+    public function primaryAgentOverride(): ?string
+    {
+        return $this->primaryAgentOverride;
     }
 
     /**
@@ -1874,6 +1896,15 @@ final class SessionHost
                         $this->modelOverride = ['provider' => $effect->modelProvider(), 'model' => $named];
                         $summaryChanged = true;
                     }
+                    break;
+
+                case CommandEffectKind::SetPrimaryAgent:
+                    // C-AGT-4.b: the host records the session's choice the
+                    // way the SetModel arm records the pair — name only, no
+                    // config write, host-lifetime. `default` (and a plain
+                    // `/agent use default`) stores null, which is the same
+                    // state a fresh host starts in.
+                    $this->primaryAgentOverride = $effect->primaryAgentName();
                     break;
 
                 case CommandEffectKind::CompactTranscript:

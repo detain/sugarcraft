@@ -197,6 +197,31 @@ final class CommandEffect
     }
 
     /**
+     * Make the roster preset named $name the session's primary agent, or —
+     * with null — hand it back to the launch default
+     * ({@see CommandEffectKind::SetPrimaryAgent}). The NAME travels, never an
+     * Agent object: each driver resolves it against its own roster, so a
+     * preset the launch never trusted cannot ride the effect into a session
+     * (C-AGT-4.b). Session-scoped, like the mode switch; never persisted.
+     */
+    public static function setPrimaryAgent(?string $name): self
+    {
+        return new self(CommandEffectKind::SetPrimaryAgent, ['name' => $name]);
+    }
+
+    /**
+     * The preset to make primary, or null for "back to the launch default".
+     * Only meaningful on a `SetPrimaryAgent` effect; the kind's presence is
+     * the switch, the name only says which way.
+     */
+    public function primaryAgentName(): ?string
+    {
+        $name = $this->data['name'] ?? null;
+
+        return is_string($name) ? $name : null;
+    }
+
+    /**
      * Fold the transcript now ({@see CommandEffectKind::CompactTranscript}).
      * $text is the typed draft; the driver hands it to the shared
      * compaction engine, which writes the command's echo and report rows

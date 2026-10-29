@@ -970,6 +970,14 @@ trait HandlesKeys
             // Shift+Tab stays the shell's backward pane cycle.
             $msg->type === KeyType::Char && $msg->alt && !$msg->ctrl && strtolower($msg->rune) === 'm'
                 => $this->togglePermissionMode(new PermissionModeToggledMsg()),
+            // C-AGT-4.b (`chat.agent-cycle`): `Alt+A` cycles the session's
+            // PRIMARY agent — default, then each roster preset that presents
+            // as primary, then back to default. It lands between turns like
+            // the switch above: `switchPrimaryAgent()` refuses with a notice
+            // row while a turn is in flight, and a roster with nothing to
+            // offer stays a silent no-op.
+            $msg->type === KeyType::Char && $msg->alt && !$msg->ctrl && strtolower($msg->rune) === 'a'
+                => $this->cyclePrimaryAgent(),
             // R20: Ctrl+Tab / Ctrl+Shift+Tab cycle the active session
             // through the OPEN TABS — see cycleSessionTab()'s docblock for
             // the decode/routing chain a real keypress takes and how this

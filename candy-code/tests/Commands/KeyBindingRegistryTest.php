@@ -385,12 +385,14 @@ final class KeyBindingRegistryTest extends TestCase
      * 153 -> 154 live (154 all), 15 groups, with P-AGENT.b's interrupt send:
      * `agentview.interrupt` — the `Ctrl+X i` chord of the Agent transcript,
      * the same draft Enter carries but delivered as `MessageMode::Interrupt`,
-     * skipping the step's unstarted calls.
+     * skipping the step's unstarted calls. C-AGT-4.b carries it on:
+     * 154 -> 155 live (155 all) with `chat.agent-cycle`, the Alt+A primary
+     * agent chord.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(154, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(154, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(155, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(155, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(0, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(15, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }

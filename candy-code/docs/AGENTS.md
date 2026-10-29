@@ -37,6 +37,27 @@ reasoning effort, tool grant, permission mode, step cap, skills, MCP servers,
 and whether it runs in the background or in a worktree of its own — see
 [`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md#frontmatter).
 
+### Running as a preset: the primary agent
+
+`/agent use <preset>` switches THIS session's primary agent — the one the
+main conversation runs as — to a roster entry: its tool grant narrows the
+session's tool list, its model and reasoning effort ride the requests, and
+its permission mode can only raise the session's floor, never lower it. The
+switch is refused while a turn runs, like a permission-mode switch, and the
+status bar names the chosen preset beside the mode badge (`agent: reviewer`).
+
+`/agent use default` switches back — the recorded undo restores exactly the
+tools, model, effort and gate the switch changed, so nothing narrows by
+accident and nothing stays narrowed by accident. `Alt+A` cycles the same
+choice: default, then each roster preset that presents as a primary (presets
+declaring `mode: subagent` stay delegation-only and are skipped), by name.
+
+The choice is session-scoped. It is never written to config, a restart runs
+the plain session default, and switching sessions reverts it with the
+session, same as the "always" grants. On served sessions the host records
+the name (`SessionHost::primaryAgentOverride()`); the terminal is the surface
+that narrows its live backend.
+
 ## The `Task` tool
 
 The model delegates by calling `Task`:

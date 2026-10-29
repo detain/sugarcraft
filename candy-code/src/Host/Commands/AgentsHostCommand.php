@@ -41,6 +41,16 @@ use SugarCraft\Code\Support\FrontmatterKeyAudit;
  *    is still acceptable — the accept step IS the consent — but it rides the
  *    loud `host.agents.accept.self_grant` line so what was just agreed to is
  *    in the transcript above the move.
+ *
+ * C-AGT-4.b adds `use <preset>` and `use default`, which sit AFTER the
+ * manager gate because the name must resolve against this launch's roster —
+ * exactly the roster whose agents the agent tools already may delegate to.
+ * The reply only CONFIRMS; the switch travels as a
+ * {@see CommandEffect::setPrimaryAgent()} the way `/model`'s built backend
+ * travels, and each driver applies it its own way: the TUI narrows its
+ * session through {@see \SugarCraft\Code\Agents\PrimaryAgent}, the host
+ * stores the session's override. The choice is SESSION-scoped — it is never
+ * written to config, and the next launch runs the plain session default.
  */
 final class AgentsHostCommand implements HostCommand
 {
@@ -78,6 +88,13 @@ final class AgentsHostCommand implements HostCommand
             return CommandResult::errorReply($text, Lang::t('host.agents.not_configured'));
         }
 
+        // C-AGT-4.b: `use` rides after the manager gate — it resolves a
+        // roster name, and a build without a manager has no roster to pick
+        // from. `default` needs no lookup; it only ever reverts.
+        if ($sub === 'use') {
+            return self::usePreset($context, $text, \array_slice($words, 1));
+        }
+
         ob_start();
         $exitCode = (new AgentsCommand($context->agentManager))->execute($context, $words);
         $output = (string) ob_get_clean();
@@ -85,6 +102,42 @@ final class AgentsHostCommand implements HostCommand
         return $exitCode === 0
             ? CommandResult::reply($text, $output)
             : CommandResult::failure($text, $output, $exitCode);
+    }
+
+    /**
+     * `/agents use <preset>|default` — choose this session's primary agent
+     * (see the class doc-block). The effect carries the NAME, not the Agent:
+     * the applying driver resolves it against its own live roster, so a
+     * preset this launch never trusted cannot reach a session by way of the
+     * effect channel. Success echoes here; a mid-turn refusal, if the TUI is
+     * busy, is answered by `Chat`'s own arm in its transcript — the command
+     * cannot see the turn.
+     *
+     * @param list<string> $args the words after the verb
+     */
+    private static function usePreset(CommandContext $context, string $text, array $args): CommandResult
+    {
+        $name = $args[0] ?? '';
+        if ($name === '' || \count($args) > 1) {
+            return CommandResult::failure($text, Lang::t('host.agents.usage'), 2);
+        }
+
+        if (strtolower($name) === 'default') {
+            return CommandResult::reply($text, Lang::t('host.agents.use_default'))
+                ->withEffect(CommandEffect::setPrimaryAgent(null));
+        }
+
+        $agent = $context->agentManager?->get($name);
+        if ($agent === null) {
+            return CommandResult::failure(
+                $text,
+                Lang::t('host.agents.use_unknown', ['name' => PermissionsCommand::reportField($name)]),
+                1,
+            );
+        }
+
+        return CommandResult::reply($text, Lang::t('host.agents.use_switched', ['name' => $agent->name]))
+            ->withEffect(CommandEffect::setPrimaryAgent($agent->name));
     }
 
     /**

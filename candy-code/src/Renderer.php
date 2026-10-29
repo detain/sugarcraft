@@ -2357,6 +2357,11 @@ final class Renderer
         // switch scrolls away. Absent in `default` mode and without a gate,
         // so every bar width the sweeps pin is unchanged there.
         $marker .= self::modeBadge($chat, $chat->cols() - Width::of($marker));
+        // C-AGT-4.b: the chosen primary agent rides beside the mode badge —
+        // a session running narrowed by a preset says so on the same line
+        // the mode switch says what it refused. With no agent chosen (the
+        // default, and every serve session) the bar is byte-unchanged.
+        $marker .= self::agentBadge($chat, $chat->cols() - Width::of($marker));
         $cols = $chat->cols() - Width::of($marker);
 
         // The "Ctrl+P menu" hint is the live path's only affordance for
@@ -2588,6 +2593,35 @@ final class Renderer
             + Width::of(self::stripZoneMarkers(self::fitProcessingHint($chat, 0)));
 
         return self::firstFitting(self::modeBadgeForms($mode), $room - $restFloor);
+    }
+
+    /**
+     * C-AGT-4.b: the primary-agent badge, beside the mode badge's slot. A
+     * session switched with `/agent use` or the `chat.agent-cycle` chord
+     * names the preset it is running as — the tools, model and permission
+     * floor that preset narrowed in are otherwise invisible until a refusal
+     * explains them. Absent a choice the row is empty: the plain session
+     * default keeps the bar byte-for-byte what it was.
+     *
+     * The forms mirror {@see modeBadge()}'s discipline — the widest of
+     * `agent: NAME · ` and the bare `NAME · ` that still leaves the rest of
+     * the bar its floor, the narrowest taken when none does.
+     */
+    private static function agentBadge(Chat $chat, int $room): string
+    {
+        $name = $chat->primaryAgentName();
+        if ($name === null) {
+            return '';
+        }
+
+        $restFloor = Width::of(' · ')
+            + Width::of(self::contextIndicator($chat, 0))
+            + Width::of(self::stripZoneMarkers(self::fitProcessingHint($chat, 0)));
+
+        return self::firstFitting([
+            Lang::t('tui.status.agent', ['name' => $name]) . ' · ',
+            $name . ' · ',
+        ], $room - $restFloor);
     }
 
     /**

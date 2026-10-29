@@ -1800,6 +1800,17 @@ final class Chat implements Model
          * historic byte of the in-place switch and its mid-turn refusals.
          */
         private readonly bool $tabHosted = false,
+        /**
+         * C-AGT-4.b — the live PRIMARY-AGENT record (`/agent use`, Alt+A), or
+         * null for the plain launch default. The record owns the undo: it
+         * captured the backend slice it narrowed, so reverting is `revert()`
+         * against whatever the current backend is. The narrowed backend
+         * itself rides the ordinary `backend` change; this slot only says the
+         * session is narrowed and by whom. Session-scoped like the permission
+         * mode — never written to config, cleared when the window switches
+         * sessions (mutate()'s one session-identity choke).
+         */
+        private readonly ?\SugarCraft\Code\Agents\PrimaryAgent $primaryAgent = null,
     ) {
         $this->transcriptWriter = $transcriptWriter ?? new DebouncedTranscriptWriter();
         $this->inputHistory = $inputHistory ?? ($promptHistory?->entries() ?? []);
@@ -9102,6 +9113,12 @@ final class Chat implements Model
             // per-keystroke state — dropped here, the second typed character
             // would silently fall the open routes back to in-place switches.
             'tabHosted' => $this->tabHosted,
+            // C-AGT-4.b: the record is carried by value. The backend it
+            // narrowed rides the ordinary `backend` slot — every route that
+            // replaces the backend replaces both together (withBackend /
+            // mutate callers pass the narrowed engine), and the session-
+            // identity choke below is where a hand-over undoes it.
+            'primaryAgent' => $this->primaryAgent,
         ];
 
         // P-A4: who named the session, and a half-typed title, both belong to
@@ -9124,6 +9141,19 @@ final class Chat implements Model
                     ? $this->transcripts()->loadPermissionGrants($changes['currentSessionId'])
                     : []
             );
+            // C-AGT-4.b: a picked primary agent belongs to the session that
+            // picked it — carrying the record into the next tab would leave
+            // its narrowed tools, model and permission floor running where
+            // nobody chose them. The hand-over reverts the recorded slice
+            // first, and the route naming its own backend still wins.
+            if ($this->primaryAgent !== null) {
+                $constructorProps['primaryAgent'] = null;
+                if (!\array_key_exists('backend', $changes) && $this->backend instanceof Backend\EngineBackend) {
+                    $reverted = $this->primaryAgent->revert($this->backend);
+                    $constructorProps['backend'] = $reverted;
+                    $constructorProps['summaryBackend'] = $this->summaryBackendFollowing($reverted);
+                }
+            }
         }
 
         // The two write routes into the draft, kept from fighting.
@@ -11926,6 +11956,11 @@ final class Chat implements Model
         $cursor = null;
         $openTitleEditor = false;
         $mode = null;
+        // C-AGT-4.b: the last SetPrimaryAgent effect in the batch wins. The
+        // name `null` is a REAL choice (back to the launch default), so the
+        // "was one carried at all" flag rides separately from the name.
+        $primaryRequested = false;
+        $primaryName = null;
         $summaryRegather = false;
 
         foreach ($result->effects as $effect) {
@@ -12037,6 +12072,15 @@ final class Chat implements Model
                 case \SugarCraft\Code\Host\Commands\CommandEffectKind::SetPermissionMode:
                     $mode = $effect->permissionMode();
                     break;
+
+                case \SugarCraft\Code\Host\Commands\CommandEffectKind::SetPrimaryAgent:
+                    // C-AGT-4.b: applied AFTER the mutate, through the same
+                    // single switch the Alt+A chord drives —
+                    // {@see switchPrimaryAgent()} — so the mid-turn refusal
+                    // reads from one place exactly like the mode switch above.
+                    $primaryRequested = true;
+                    $primaryName = $effect->primaryAgentName();
+                    break;
             }
         }
 
@@ -12046,6 +12090,14 @@ final class Chat implements Model
             // Through the one switch Alt+M uses, so the gate is replaced in
             // both places a turn reads it and the model is told.
             [$next] = $next->togglePermissionMode(new PermissionModeToggledMsg($mode, self::MODE_COMMAND_SOURCE));
+        }
+        if ($primaryRequested) {
+            // Through the one switch the Alt+A chord uses, for the same
+            // reason: the narrowing, the revert and the mid-turn refusal all
+            // read from a single place (C-AGT-4.b). The command's own reply
+            // rows already confirmed the switch; this route only adds a
+            // notice when the turn refused it.
+            [$next] = $next->switchPrimaryAgent($primaryName);
         }
         // AFTER the mutate: naming `inputBuf` rebuilds the draft with the caret
         // at the end, so a captured offset is re-applied to the rebuilt draft.
@@ -13402,6 +13454,17 @@ final class Chat implements Model
     private function handleAgentsCommand(string $inputBuf): array
     {
         $words = \SugarCraft\Code\Host\Commands\CommandText::words($inputBuf);
+
+        // C-AGT-4.b: `use` is a VERB, not an agent. A roster entry named
+        // "use" could otherwise open its live Agent View through the run
+        // lookup below and the switch would never run — reserve the word
+        // BEFORE the lookup so `/agent use <preset>` always reaches
+        // AgentsHostCommand's arm. (`default` needs no reservation: it is not
+        // a name a run can hold.)
+        if (strtolower($words[0] ?? '') === 'use') {
+            return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\AgentsHostCommand(), $inputBuf);
+        }
+
         $runId = $this->liveAgentRunFor($words[0] ?? '');
         if ($runId !== null) {
             // The echo row, as CommandResult's own echo builds it.
@@ -13422,6 +13485,199 @@ final class Chat implements Model
         }
 
         return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\AgentsHostCommand(), $inputBuf);
+    }
+
+    /**
+     * The roster preset this session runs as its PRIMARY agent, or null when
+     * it runs the plain launch default (C-AGT-4.b). The status line's agent
+     * badge reads this; so does the Alt+A cycle, to know where it stands.
+     */
+    public function primaryAgentName(): ?string
+    {
+        return $this->primaryAgent?->agent->name;
+    }
+
+    /**
+     * The one switch every primary-agent change travels — `/agent use`'s
+     * effect arm in {@see applyCommandResult()} and the Alt+A chord — so the
+     * mid-turn refusal, like `Alt+M`'s mode door, reads from a single place
+     * (C-AGT-4.b).
+     *
+     * `null` hands the session back to the launch default by replaying the
+     * record's captured slice onto the current backend
+     * ({@see \SugarCraft\Code\Agents\PrimaryAgent::revert()}); a name
+     * resolves against THIS launch's roster — {@see AgentManager::get()},
+     * the same map the agent tools delegate through — and narrows through
+     * {@see \SugarCraft\Code\Agents\PrimaryAgent::apply()}, which can only
+     * tighten. A switch already in place is reverted first, so preset
+     * A→preset B never narrows twice over.
+     *
+     * $echo adds the confirmation row for key-driven calls; the command
+     * route's confirmation already rode `CommandResult`'s rows and must not
+     * print twice. Refusal rows (turn running, unknown name, plain-echo
+     * backend) land regardless — silence would make the press a no-op.
+     *
+     * The choice is SESSION-scoped: nothing here writes config, and
+     * {@see mutate()}'s session-identity choke clears the record (and undoes
+     * the narrowing) when the window moves to another session.
+     *
+     * @return array{0:Chat,1:?\SugarCraft\Core\Cmd}
+     */
+    private function switchPrimaryAgent(?string $name, bool $echo = false): array
+    {
+        if ($this->inFlight) {
+            // The mode-switch door's shape exactly: a notice, and nothing
+            // else — the running turn keeps the session it started with.
+            return [$this->primaryAgentNotice('host.agents.use_turn_running'), null];
+        }
+
+        if ($name === null) {
+            if ($this->primaryAgent === null) {
+                // Already the default: the command route's own row says so,
+                // and the cycle never lands here (default is where it
+                // stands). Nothing to undo.
+                return [$this, null];
+            }
+            $next = $this->revertPrimaryAgent();
+
+            return [$echo ? $next->appendNotice(Lang::t('host.agents.use_default')) : $next, null];
+        }
+
+        $agent = $this->agentManager?->get($name);
+        if ($agent === null) {
+            return [$this->primaryAgentNotice('host.agents.use_unknown', ['name' => $name]), null];
+        }
+        if (!$this->backend instanceof Backend\EngineBackend) {
+            // A non-engine backend (echo, an embedder's double) carries no
+            // tool roster, model or gate to narrow — the switch has nothing
+            // to act on.
+            return [$this->primaryAgentNotice('host.agents.use_unavailable'), null];
+        }
+
+        $base = $this->primaryAgent === null
+            ? $this->backend
+            : $this->primaryAgent->revert($this->backend);
+        [$record, $narrowed] = \SugarCraft\Code\Agents\PrimaryAgent::apply($base, $this->agentManager, $agent);
+        $next = $this->mutate([
+            'backend' => $narrowed,
+            'summaryBackend' => $this->summaryBackendFollowing($narrowed),
+            'primaryAgent' => $record,
+        ]);
+
+        return [$echo ? $next->appendNotice(Lang::t('host.agents.use_switched', ['name' => $agent->name])) : $next, null];
+    }
+
+    /**
+     * Undo the narrowing the record captured, against the CURRENT backend —
+     * derived swaps (reasoning effort, the permission gate) rebuild it by
+     * value from the narrowed one, so replaying the launch slice onto the
+     * current object undoes exactly the agent's part and keeps the rest.
+     * A backend that is no longer an engine at all has nothing to restore;
+     * the record simply goes.
+     */
+    private function revertPrimaryAgent(): self
+    {
+        if ($this->primaryAgent === null) {
+            return $this;
+        }
+        if (!$this->backend instanceof Backend\EngineBackend) {
+            return $this->mutate(['primaryAgent' => null]);
+        }
+
+        $reverted = $this->primaryAgent->revert($this->backend);
+
+        return $this->mutate([
+            'backend' => $reverted,
+            'summaryBackend' => $this->summaryBackendFollowing($reverted),
+            'primaryAgent' => null,
+        ]);
+    }
+
+    /** A refusal row: appended in place, the `chat.mode.turn_running` idiom. */
+    private function primaryAgentNotice(string $key, array $params = []): self
+    {
+        return $this->appendNotice(Lang::t($key, $params));
+    }
+
+    /** One notice row onto the current history. */
+    private function appendNotice(string $text): self
+    {
+        return $this->mutate(['history' => [...$this->history, Message::notice($text)]]);
+    }
+
+    /**
+     * Alt+A — cycle this session's primary agent: launch default, then the
+     * presets the roster presents for the slot, back to default (C-AGT-4.b).
+     * An empty offer (no manager, or every preset subagent-only) leaves the
+     * session default and the press is silent; every real move lands a
+     * confirmation row so the chord is never a mystery no-op.
+     *
+     * @return array{0:Chat,1:?\SugarCraft\Core\Cmd}
+     */
+    private function cyclePrimaryAgent(): array
+    {
+        $offered = array_merge(['default'], $this->presentedPrimaryAgents());
+        $current = $this->primaryAgentName() ?? 'default';
+        $at = array_search($current, $offered, true);
+        // A name off the current offer (a preset the file lost since launch)
+        // restarts the cycle from the default rather than stalling.
+        $next = $offered[(($at === false ? 0 : $at) + 1) % \count($offered)];
+
+        return $this->switchPrimaryAgent($next === 'default' ? null : $next, echo: true);
+    }
+
+    /**
+     * The roster names the primary-agent cycle may present (C-AGT-4.b).
+     *
+     * Preset MODE is a presenting property that never rides the loaded Agent
+     * (`mode: subagent` in the preset's own frontmatter is its only home —
+     * see {@see \SugarCraft\Code\Agents\AgentPresetFieldCarryTest}), so the
+     * cycle re-reads that one key from the file the preset came from,
+     * identified through {@see \SugarCraft\Code\Agents\Agent::$sourcePath}.
+     * A launch-trusted file: the roster arm that registered it already
+     * walked the anchored tiers, and reading one more key from an
+     * already-trusted path grants nothing — the SWITCH still resolves
+     * through {@see AgentManager::get()}, the same map delegation uses.
+     * Absence means `all` (the registry's own default), an unreadable file
+     * stays presented (a disk hiccup must not silently reshape the roster),
+     * and a roster entry with no source path at all is a built-in
+     * definition — no preset, no subagent-only claim, presented.
+     *
+     * @return list<string>
+     */
+    private function presentedPrimaryAgents(): array
+    {
+        $manager = $this->agentManager;
+        if ($manager === null) {
+            return [];
+        }
+
+        $names = [];
+        foreach ($manager->all() as $agent) {
+            if (self::presentsAsPrimary($agent)) {
+                $names[$agent->name] = true;
+            }
+        }
+        $list = array_keys($names);
+        sort($list, SORT_STRING);
+
+        return $list;
+    }
+
+    /** The per-agent presenting judgment of {@see presentedPrimaryAgents()}. */
+    private static function presentsAsPrimary(\SugarCraft\Code\Agents\Agent $agent): bool
+    {
+        $path = $agent->sourcePath;
+        if ($path === null || $path === '') {
+            return true;
+        }
+        $contents = @file_get_contents($path);
+        if (!is_string($contents)) {
+            return true;
+        }
+        $mode = \SugarCraft\Code\Support\FrontmatterKeyAudit::metaOf($contents)['mode'] ?? null;
+
+        return !(is_string($mode) && strtolower(trim($mode)) === 'subagent');
     }
 
     /**
