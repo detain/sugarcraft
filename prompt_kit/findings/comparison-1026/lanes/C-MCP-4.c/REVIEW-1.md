@@ -1,0 +1,18 @@
+# C-MCP-4.c — REVIEW-1 (round 1, 2026-10-29, reviewer worktree /home/sites/cc-cmp-C-MCP-4.c)
+
+VERDICT: FINDINGS (1 MAJOR / 2 MINOR) — the shipped code is sound and gate-green; the LANE STATE is not: completion uncommitted, claimed SHAs ghost, report stale.
+
+## Findings
+1. MAJOR — phantom chain, completion uncommitted. Claimed tip e549f913f and skeleton d9b0f171 do not exist (`git cat-file` fails); `master..HEAD` carries only skeleton eb3a17dcc (McpAuthHostCommand+ServedMcpLogins, author/committer detain, zero trailers). ALL other contract work (SessionHost::appendNotice, ServerContext::pump, McpLoginFork paste-back+2 consts, lang cmd.mcp-auth.login-code-*/served-armed, docs/MCP.md +22, tests) sits UNCOMMITTED in the worktree, and on-disk REPORT.md describes the OLD-generation lane (2ad862baf OAuth redirectUri — already welded to master), never this build. Fix: commit the completion (explicit paths, author-law, plain -m), rewrite REPORT.md with true figures (McpLoginServedTest 9T/51A; +6 methods in McpLoginForkTest 17T/1343A), re-issue tip SHA.
+2. MINOR step-local — builder claims fabricated: "19T/121A, ServeMcpLoginWiringTest 4T" — no such file tree-wide; actual 9T/51A + 6 fork methods. Subsumed by 1's report rewrite.
+3. MINOR step-local — contract test "a second session's login is independent" unmet: McpLoginServedTest never registers two sessions/two servers to prove per-session routing. Add one pin (arm+register ×2, assert rows' session ids interleave correctly).
+
+## Verified clean
+- Registry flow real: register(server→session) → pump pollDue → hub->get()?->appendNotice → durable message.created kind=notice (pinned in pump test); one-shot consume on done/gone; token store path untouched (child keeps user-tier McpAuthStore; nothing project-tier).
+- Paste-back: dials ONLY literal 'tcp://127.0.0.1:'.$expected (structural substr_count(1) pin); http/loopback-host/port checks via hash_equals before any socket; refusal never echoes code (canary) and never dials (stream_select(0) canary); judged BEFORE busy arm; redirectPort accessor = C-MCP-6.a landed shape (?int, survives retire). No SSRF widening.
+- E646: PASTEBACK_TIMEOUT_SECONDS 2.0 is a connect bound on the loopback delivery; human-wait stays event-driven (pump poll; child self-bound unchanged). Dead-listener test asserts <3.0s.
+- MCP.md: seven-command fence + login-fork row already at base (deps landed); new §Authorization-code login paragraph matches code; Write-scope risk sentence landed (brief risks). DocFigure verb-gate/wait-budget guards green UNMODIFIED (92T/4128A — occurrence counts unbroken by the lang/MCP.md rows).
+- Section-disjointness: live co-tenants (C-SES-7.g en.php :1368; C-SES-8.a, C-PRV-3.d zero hunks) vs lane hunks (en.php :1449+, SessionHost :2095, ServerContext pump :536) — disjoint.
+- In-step §1.8: no generated/protocol surfaces moved; GlobDialect law honored (chr(63) respell); DescriptorInheritanceGuard arm-row holds. OWED at weld (not lane): durations.tsv row for tests/Host/McpLoginServedTest.php + suite-figure re-pin (staleness pair expected).
+- Gates (cwd=candy-code worktree, plain pipe, env -u LINES -u COLUMNS): McpLoginServed 9T/51A OK; McpLoginFork 17T/1343A OK; McpAuthStore 34T/168A OK; OAuth pair 65T/211A OK; SessionHost/ServerContext 13T/62A OK; SessionHub|ServedRuntimeNoticeDrain|EventLog|SessionHostCommands 52T/270A OK; DocFigureProseDrift 92T/4128A OK; ReadPathCensus|StderrEmitterCensus|TreeWideGuardRoster|DescriptorInheritanceGuard|GlobDialect 160T/32322A OK (2 base deprecations throughout).
+- Note: branch base is 003cb1e4e (both deps ancestors — verified), not e3ccc13bf as the spawn digest said; cherry-pick-safe, no action beyond rebase-or-pick at weld.
