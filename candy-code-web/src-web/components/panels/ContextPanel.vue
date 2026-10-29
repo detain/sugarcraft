@@ -57,6 +57,63 @@ async function answer(askId: string, decision: 'grant' | 'reject', remember: 'se
   }
 }
 
+/**
+ * C-CTX-3.c: the write side of the panel. Each listed row answers to Edit;
+ * the save spells `context.instructionWrite` with the byte count THIS listing
+ * measured, so a file someone else changed since is refused
+ * (`instruction_changed`) instead of clobbered. The textarea starts empty on
+ * purpose: the protocol never sends file content to the browser, and the
+ * modal says so — saving replaces the file with what you type. A landed write
+ * announces `context.changed` (reason "instructions") and the store's
+ * debounced reload re-measures; on a conflict the panel reloads at once so
+ * the next Edit carries fresh bytes. The personal row writes through the
+ * `personal` sentinel, which the server resolves even before the file exists.
+ */
+const canWrite = computed(() => connection.scopes.includes('write'))
+type InstructionRow = NonNullable<ContextSourcesResult['instructionFiles']>[number]
+const editing = ref<InstructionRow | null>(null)
+const editText = ref('')
+const editError = ref<string | null>(null)
+const saving = ref(false)
+
+function openEdit(file: InstructionRow): void {
+  editing.value = file
+  editText.value = ''
+  editError.value = null
+}
+
+function cancelEdit(): void {
+  editing.value = null
+  editError.value = null
+}
+
+async function saveEdit(): Promise<void> {
+  const file = editing.value
+  if (file === null || saving.value) return
+  saving.value = true
+  editError.value = null
+  try {
+    await connection.request('context.instructionWrite', {
+      sessionId: props.sessionId,
+      path: file.tier === 'personal' ? 'personal' : file.path,
+      content: editText.value,
+      expectBytes: file.bytes,
+    })
+    editing.value = null
+  } catch (failure) {
+    if (failure instanceof ProtocolError && failure.kind === 'instruction_changed') {
+      // Re-measure now: the fresh listing is the latch the retry needs, and
+      // no server announcement follows a refusal the session itself caused.
+      void context.load(props.sessionId)
+      editError.value = 'The file on disk no longer holds the bytes this listing measured — reopen Edit to save against the current file.'
+    } else {
+      editError.value = failure instanceof Error ? failure.message : String(failure)
+    }
+  } finally {
+    saving.value = false
+  }
+}
+
 const bytes = ref(0)
 watch(
   () => context.sources,
@@ -230,6 +287,7 @@ onMounted(() => void context.load(props.sessionId))
             <span class="bytes">{{ file.bytes.toLocaleString() }} B</span>
             <span v-if="file.tier === 'personal'" class="badge">personal</span>
             <span class="badge">{{ file.tier }}</span>
+            <button v-if="canWrite" type="button" class="link edit" :data-testid="`context-edit-${file.path}`" @click="openEdit(file)">Edit</button>
           </li>
         </ul>
         <p v-if="context.sources.instructionFiles && bytes > 0" class="meta">{{ bytes.toLocaleString() }} B spliced total</p>
@@ -320,6 +378,18 @@ onMounted(() => void context.load(props.sessionId))
         </div>
       </section>
     </template>
+
+    <div v-if="editing !== null" class="edit-modal" role="dialog" aria-label="Edit instruction file" data-testid="instruction-edit-modal">
+      <h3>{{ editing.tier === 'personal' ? 'Personal file' : 'Edit instruction file' }}</h3>
+      <p class="meta path">{{ editing.path }}</p>
+      <p class="meta">The protocol never sends the file's current content to the browser — saving replaces the file with what you type here. The save carries the {{ editing.bytes.toLocaleString() }} B this listing measured and is refused rather than clobber a file someone else changed.</p>
+      <textarea v-model="editText" rows="10" aria-label="New content for the instruction file" data-testid="instruction-edit-text"></textarea>
+      <p v-if="editError" class="error" role="alert" data-testid="instruction-edit-error">{{ editError }}</p>
+      <div class="actions">
+        <button type="button" class="link" data-testid="instruction-edit-save" :disabled="saving" @click="saveEdit">Save</button>
+        <button type="button" class="link" data-testid="instruction-edit-cancel" @click="cancelEdit">Cancel</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -493,5 +563,22 @@ li.cat {
   display: flex;
   gap: 0.4rem;
   flex-wrap: wrap;
+}
+.edit-modal {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.6rem;
+  display: grid;
+  gap: 0.4rem;
+}
+.edit-modal textarea {
+  width: 100%;
+  font: inherit;
+  background: var(--bg);
+  color: inherit;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0.4rem;
+  box-sizing: border-box;
 }
 </style>

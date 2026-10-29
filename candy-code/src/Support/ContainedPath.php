@@ -94,7 +94,7 @@ namespace SugarCraft\Code\Support;
  * way that made the file read as audited while its two PRIMARY read paths had no
  * compare at all (see below). Per-file, executable lines only:
  *
- *   - SIXTY-FOUR call sites in THIRTY-TWO files ask this class. THIS SENTENCE
+ *   - SIXTY-FIVE call sites in THIRTY-THREE files ask this class. THIS SENTENCE
  *     WAS FIVE SITES AND THREE FILES STALE when a reviewer measured it — it
  *     read "TWENTY-SEVEN in ELEVEN" while
  *     {@see \SugarCraft\Code\Tests\Support\ContainedPathInventoryTest}'s
@@ -146,7 +146,11 @@ namespace SugarCraft\Code\Support;
  *     before its WRITE), and {@see \SugarCraft\Code\MCP\GitCommandHandlers}
  *     (2 — audit GIT-1: the model-supplied per-call `path` against the
  *     configured repository root, and a new worktree's parent directory
- *     against the directory holding that root).
+ *     against the directory holding that root), and
+ *     {@see \SugarCraft\Code\Protocol\Methods\ContextMethods} (1 — C-CTX-3.c:
+ *     the routed compare inside the one helper bounding both write tiers of
+ *     `context.instructionWrite` — a listed path against the workspace root
+ *     and the owned home, the personal directory against the owned home).
  *   - ELEVEN spellings remain by hand, in SIX files, and they are a DIFFERENT
  *     CONTRACT rather than copies waiting to be swept up:
  *

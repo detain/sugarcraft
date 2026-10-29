@@ -4,6 +4,7 @@ import { useRoute } from "vue-router";
 import HistorySearch from "./HistorySearch.vue";
 import type { CommandInfo, Delivery } from "../stores/session";
 import { useSessionStore } from "../stores/session";
+import { useConnectionStore } from "../stores/connection";
 import {
     loadPromptHistory,
     onPromptHistoryCleared,
@@ -426,6 +427,8 @@ onBeforeUnmount(stopHistoryCleared);
 function submit(): void {
     const text = props.modelValue.trim();
     if (text === "" || props.disabled || blockedReason.value !== "") return;
+    // C-CTX-3.c: a `#` draft is answered by the quick-add offer, not sent.
+    if (answerQuickAdd()) return;
     // C-WEB-4.a: the wire and the ring carry the expanded text — the model
     // never sees a placeholder, same reader law as the TUI's submit arm.
     const sent = expandPasteChips(text, textChips);
@@ -677,6 +680,13 @@ function onKeydown(event: KeyboardEvent): void {
         return;
     }
     if (event.key === "Escape") {
+        if (quickAdd.value !== null) {
+            // C-CTX-3.c: the offer answers Escape first — the draft never
+            // left the textarea, so retiring the chip is the restore.
+            event.preventDefault();
+            cancelQuickAdd();
+            return;
+        }
         // Esc Esc stops the running turn, as in the TUI.
         const now = Date.now();
         if (props.busy && now - lastEscape < 600) {
@@ -686,6 +696,71 @@ function onKeydown(event: KeyboardEvent): void {
             lastEscape = now;
         }
     }
+}
+
+/**
+ * C-CTX-3.c: the web twin of the TUI's `#` quick-add. A single-line draft
+ * starting with `#` (not `##`, not bare) raises a confirm chip instead of a
+ * turn — confirming appends `- text\n` to the personal file through the
+ * served `context.instructionWrite`, the same write the Context panel's Edit
+ * uses, so the note reaches the model as an instruction, never as prompt
+ * text. Escape or Cancel retires the chip and the draft is untouched (it
+ * never left the textarea — the TUI's Escape-restore in web shape); a send
+ * with an edited draft re-evaluates the shape. While a turn runs the offer
+ * is never raised, and attachments never ride one: busy text belongs to the
+ * queue and a note is prose, exactly as in the TUI.
+ */
+const quickAdd = ref<{ line: string } | null>(null);
+const quickAddBusy = ref(false);
+const quickAddError = ref<string | null>(null);
+
+function quickAddLine(value: string): string | null {
+    const text = value.trim();
+    if (!text.startsWith("#") || text.startsWith("##") || text.includes("\n")) return null;
+    const body = text.slice(1).trim();
+    if (body === "") return null;
+    return `- ${body}\n`;
+}
+
+/** Returns true when the send was consumed as (or answered by) the offer. */
+function answerQuickAdd(): boolean {
+    if (quickAddBusy.value) return true;
+    if (quickAdd.value !== null) {
+        void confirmQuickAdd();
+        return true;
+    }
+    if (props.busy || sessionId.value === "") return false;
+    if (images.value.length > 0 || documents.value.length > 0) return false;
+    const line = quickAddLine(props.modelValue);
+    if (line === null) return false;
+    quickAdd.value = { line };
+    quickAddError.value = null;
+    return true;
+}
+
+async function confirmQuickAdd(): Promise<void> {
+    const offer = quickAdd.value;
+    if (offer === null || quickAddBusy.value || sessionId.value === "") return;
+    quickAddBusy.value = true;
+    quickAddError.value = null;
+    try {
+        await useConnectionStore().request("context.instructionWrite", {
+            sessionId: sessionId.value,
+            path: "personal",
+            append: offer.line,
+        });
+        quickAdd.value = null;
+        emit("update:modelValue", "");
+    } catch (failure) {
+        quickAddError.value = failure instanceof Error ? failure.message : String(failure);
+    } finally {
+        quickAddBusy.value = false;
+    }
+}
+
+function cancelQuickAdd(): void {
+    quickAdd.value = null;
+    quickAddError.value = null;
 }
 
 defineExpose({ focus: () => input.value?.focus() });
@@ -834,6 +909,39 @@ defineExpose({ focus: () => input.value?.focus() });
                 data-testid="composer-dictation-notice"
             >
                 {{ dictationNotice }}
+            </div>
+            <div
+                v-if="quickAdd !== null"
+                class="quick-add"
+                aria-live="polite"
+                data-testid="composer-quick-add"
+            >
+                <span class="quick-add-note"
+                    >Add to your personal instructions:
+                    {{ quickAdd.line.trim() }}</span
+                >
+                <button
+                    type="button"
+                    data-testid="composer-quick-add-confirm"
+                    :disabled="quickAddBusy"
+                    @click="confirmQuickAdd"
+                >
+                    Add (Enter)
+                </button>
+                <button
+                    type="button"
+                    data-testid="composer-quick-add-cancel"
+                    @click="cancelQuickAdd"
+                >
+                    Cancel (Esc)
+                </button>
+                <span
+                    v-if="quickAddError"
+                    class="quick-add-error"
+                    role="alert"
+                    data-testid="composer-quick-add-error"
+                    >{{ quickAddError }}</span
+                >
             </div>
         </div>
         <div class="controls">
@@ -1049,6 +1157,22 @@ textarea:focus {
     overflow-wrap: anywhere;
 }
 .dictation-notice {
+    color: var(--error);
+}
+.quick-add {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: baseline;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 0.3rem 0.5rem;
+}
+.quick-add-note {
+    flex: 1 1 auto;
+    overflow-wrap: anywhere;
+}
+.quick-add-error {
     color: var(--error);
 }
 @media (max-width: 600px) {

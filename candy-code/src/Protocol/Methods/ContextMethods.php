@@ -6,14 +6,22 @@ namespace SugarCraft\Code\Protocol\Methods;
 
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Config\Settings\SettingsWriter;
+use SugarCraft\Code\Context\InstructionFileLoader;
+use SugarCraft\Code\Host\SessionEvent;
 use SugarCraft\Code\Protocol\CallContext;
+use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\EventEnvelope;
 use SugarCraft\Code\Protocol\EventType;
 use SugarCraft\Code\Protocol\MethodRegistry;
 use SugarCraft\Code\Protocol\MethodSpec;
 use SugarCraft\Code\Protocol\Params;
+use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Protocol\Scope;
 use SugarCraft\Code\Protocol\TrustAsks;
+use SugarCraft\Code\Support\AtomicFileWriter;
+use SugarCraft\Code\Support\ContainedPath;
+use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Support\PrivateDir;
 
 /**
  * `context.sources` (WEB-3a): the `/context` panel's data as structure —
@@ -53,6 +61,7 @@ final class ContextMethods
     {
         $registry->add(MethodSpec::new('context.sources', Scope::Read, 'What the session\'s context is built from: instruction files, memory notes, skills, declared MCP servers, refused paths, the token breakdown, and this root\'s pending project-trust prompts.', self::sources(...)));
         $registry->add(MethodSpec::new('context.trust', Scope::Approve, 'Answer one project-trust prompt (permission.asked with kind "trust") by its askId: grant or reject; a user-tier remember writes the answering prompt\'s target list (trustedProjectMcp for an mcp or mcp-pin row, the matching trustedProject* key for the others) in your own config, a project-tier one is refused.', self::trust(...)));
+        $registry->add(MethodSpec::new('context.instructionWrite', Scope::Write, 'Write one instruction document the session already reads — replace it by spelling content, or append raw bytes by spelling append (exactly one). The jail is the listing itself: path must equal a context.sources instructionFiles row, or "personal" for your own ~/.candy-code/AGENTS.md. A replace whose expectBytes no longer matches the file on disk refuses instruction_changed; a document past the loader\'s size cap refuses instruction_too_large; a path that now resolves through a symlink outside its jail refuses instruction_symlink. A landed write announces context.changed (reason "instructions") so the panel re-measures.', self::instructionWrite(...), true));
     }
 
     /** @return array<string, mixed> */
@@ -103,5 +112,173 @@ final class ContextMethods
             'status' => $record['status'],
             'persisted' => $record['persisted'],
         ];
+    }
+
+    /**
+     * `context.instructionWrite` (C-CTX-3.c): the write half of the panel.
+     * The jail is the read answer — a spelled path must equal an
+     * `instructionFiles` row the loader itself listed (equality, not a prefix
+     * walk, because the listing already carries the loader's containment), and
+     * the personal file is spelled through the sentinel the browser can
+     * resolve even when it does not exist yet, mirroring the TUI's
+     * `/instructions`-open laws ({@see \SugarCraft\Code\Cli\Chat}). Containment
+     * is re-checked at write time through the one routed compare
+     * ({@see ContainedPath}) so a listing that raced into a symlink cannot
+     * write outside its tier's boundary. The size cap is the loader's own
+     * constant — writing bytes it would later refuse to read back would only
+     * teach the session a silent truncation.
+     *
+     * @return array{path: string, bytes: int, mode: string}
+     */
+    private static function instructionWrite(CallContext $call, Params $params): array
+    {
+        $sessionId = SessionMethods::sessionId($params);
+        $host = $call->host($sessionId);
+
+        $hasContent = $params->has('content');
+        $hasAppend = $params->has('append');
+        if ($hasContent === $hasAppend) {
+            throw RpcError::invalidParams('spell exactly one of content or append', 'instruction_mode');
+        }
+        $payload = $params->string($hasContent ? 'content' : 'append', InstructionFileLoader::MAX_DOCUMENT_BYTES);
+
+        $root = $host->workspace()->root;
+        $home = HomeDirectory::owned();
+        $spelled = $params->string('path', 4096);
+        $boundaries = $home === null ? [$root] : [$root, $home];
+
+        if ($spelled === self::PERSONAL_PATH) {
+            $target = self::personalWriteTarget($home);
+            $isPersonal = true;
+        } else {
+            $target = $spelled;
+            $isPersonal = false;
+            if (is_link($target)) {
+                // Checked before the listing: the brief names this refusal,
+                // and a loader re-scan would otherwise re-classify it as the
+                // row vanishing from the list.
+                throw RpcError::of(ErrorCode::Forbidden, 'that instruction path resolves through a symlink and will not be written through', 'instruction_symlink');
+            }
+            $listed = $host->contextSources()['instructionFiles'] ?? [];
+            $known = false;
+            foreach ($listed as $row) {
+                if (($row['path'] ?? null) === $spelled) {
+                    $known = true;
+                    break;
+                }
+            }
+            if (!$known) {
+                throw RpcError::of(
+                    ErrorCode::NotFound,
+                    'instruction documents this session may write are the ones context.sources lists (or "personal")',
+                    'instruction_not_listed'
+                );
+            }
+            if (!is_file($target)) {
+                throw RpcError::of(ErrorCode::NotFound, 'that instruction document is no longer a listed read — spell a path from a fresh context.sources answer (or "personal")', 'instruction_not_listed');
+            }
+            if (!self::held($target, $boundaries)) {
+                // The listing was true when read; a path whose realpath has
+                // since escaped (a swapped directory symlink) is no longer in
+                // the jail the read answer described.
+                throw RpcError::of(ErrorCode::Forbidden, 'that instruction path no longer resolves inside its jail', 'instruction_symlink');
+            }
+        }
+
+        $currentBytes = is_file($target) ? (int) filesize($target) : 0;
+        if ($params->has('expectBytes') && $params->int('expectBytes', 0, 0) !== $currentBytes) {
+            throw RpcError::of(ErrorCode::Conflict, 'the file on disk now holds a different byte count than the panel measured', 'instruction_changed');
+        }
+        $resulting = $hasAppend ? $currentBytes + strlen($payload) : strlen($payload);
+        if ($resulting > InstructionFileLoader::MAX_DOCUMENT_BYTES) {
+            throw RpcError::invalidParams('an instruction document may not grow past ' . InstructionFileLoader::MAX_DOCUMENT_BYTES . ' bytes', 'instruction_too_large');
+        }
+
+        try {
+            if ($hasAppend && $currentBytes > 0) {
+                // Mode-preserving append under a lock — the Chat.php twin's shape.
+                if (file_put_contents($target, $payload, FILE_APPEND | LOCK_EX) === false) {
+                    throw new \RuntimeException('append failed');
+                }
+            } else {
+                $mode = $currentBytes > 0
+                    ? ((int) (fileperms($target) & 0o777))
+                    : ($isPersonal ? 0o600 : null);
+                AtomicFileWriter::write($target, $payload, $mode);
+            }
+        } catch (\Throwable) {
+            throw RpcError::of(ErrorCode::Conflict, 'the instruction document could not be written', 'instruction_write_failed');
+        }
+
+        // The pre-write filesize() above primed PHP's stat cache and the
+        // append branch (file_put_contents) does not clear it; without this
+        // the reply would promise the old byte count.
+        \clearstatcache(true, $target);
+        $bytes = is_file($target) ? (int) filesize($target) : 0;
+        $host->announce(SessionEvent::new(SessionEvent::CONTEXT_CHANGED, ['reason' => 'instructions'], $sessionId));
+
+        return ['path' => $target, 'bytes' => $bytes, 'mode' => $hasAppend ? 'append' : 'replace'];
+    }
+
+    /**
+     * The personal file the sentinel writes, resolved under the same laws as
+     * the TUI's open-arm: owned home, private directory, no symlink, and the
+     * empty 0600 file created on demand so a first quick-add cannot fail on
+     * absence.
+     */
+    private static function personalWriteTarget(?string $home): string
+    {
+        if ($home === null) {
+            throw RpcError::of(ErrorCode::Forbidden, 'no owned home directory is available for the personal instruction file', 'instruction_home_unavailable');
+        }
+        $dir = rtrim($home, '/') . '/.candy-code';
+        $unavailable = static fn (): RpcError => RpcError::of(ErrorCode::Forbidden, 'the personal instruction directory could not be settled inside the owned home', 'instruction_home_unavailable');
+
+        if (is_link($dir)) {
+            throw $unavailable();
+        }
+        if (!is_dir($dir)) {
+            try {
+                PrivateDir::ensure($dir, 'personal instruction directory');
+            } catch (\Throwable) {
+                throw $unavailable();
+            }
+        }
+        $resolvedDir = realpath($dir);
+        if ($resolvedDir === false || !self::held($resolvedDir, [$home])) {
+            throw $unavailable();
+        }
+        $target = $resolvedDir . '/' . InstructionFileLoader::PERSONAL_FILENAME;
+        if (is_link($target)) {
+            throw RpcError::of(ErrorCode::Forbidden, 'the personal instruction file is a symlink and will not be written through', 'instruction_symlink');
+        }
+        if (!is_file($target)) {
+            try {
+                AtomicFileWriter::write($target, '', 0o600);
+            } catch (\Throwable) {
+                throw RpcError::of(ErrorCode::Conflict, 'the personal instruction file could not be created', 'instruction_write_failed');
+            }
+        }
+        return $target;
+    }
+
+    /** The sentinel spelling of the personal file (its absolute path may not exist yet). */
+    public const PERSONAL_PATH = 'personal';
+
+    /**
+     * Whether $path resolves inside ANY boundary — the one routed
+     * {@see ContainedPath::within} compare this class carries (C-CTX-3.c).
+     *
+     * @param list<string> $boundaries
+     */
+    private static function held(string $path, array $boundaries): bool
+    {
+        foreach ($boundaries as $boundary) {
+            if (ContainedPath::within($path, $boundary)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

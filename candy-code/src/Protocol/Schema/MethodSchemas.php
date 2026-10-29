@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Protocol\Schema;
 
+use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Hooks\BuiltIn\AuditLogReader;
 use SugarCraft\Code\Host\SessionSnapshot;
 use SugarCraft\Code\Memory\MemoryHistory;
@@ -529,6 +530,21 @@ final class MethodSchemas
                     'status' => Schema::enum(['granted', 'rejected']),
                     'persisted' => Schema::boolean()->describe('True only when the user-tier write landed.'),
                 ], ['askId', 'status', 'persisted']),
+            ],
+
+            'context.instructionWrite' => [
+                Schema::object([
+                    ...$sid,
+                    'path' => Schema::string(4096)->describe('A path context.sources listed for this session (an instructionFiles row, spelled exactly), or the sentinel `personal` for your own ~/.candy-code/AGENTS.md — the jail is the listing, and `personal` resolves server-side so a first quick-add works before the file exists.'),
+                    'content' => Schema::string(61440)->describe('The full replacement text (the loader\'s per-document size cap; an instruction document larger than the prompt would ever read back is refused `instruction_too_large`). Exactly one of `content` / `append` must be spelled (`instruction_mode`).'),
+                    'append' => Schema::string(61440)->describe('Raw bytes appended under a lock instead of replacing — the web Composer spells the TUI quick-add line (`- note\\n`) through this. The result must still fit the cap.'),
+                    'expectBytes' => Schema::integer(0)->describe('Conflict latch: the byte count the editor measured. A different count on disk now refuses `instruction_changed` — the same law the memory note save follows — so two surfaces cannot silently overwrite each other.'),
+                ], ['sessionId', 'path']),
+                Schema::object([
+                    'path' => Schema::string(4096)->describe('The resolved file actually written.'),
+                    'bytes' => Schema::integer(0)->describe('The file\'s byte count after the write.'),
+                    'mode' => Schema::enum(['replace', 'append']),
+                ], ['path', 'bytes', 'mode']),
             ],
 
             'agents.list' => [$empty, $items(Schema::object([

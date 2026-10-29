@@ -225,6 +225,7 @@ final class ContainedPathInventoryTest extends TestCase
         'Host/Commands/MemoryCommand.php' => 1,
         'MCP/GitCommandHandlers.php' => 2,
         'Memory/ForeignMemoryImporter.php' => 2,
+        'Protocol/Methods/ContextMethods.php' => 1,
         'Providers/ProviderFactory.php' => 2,
         'Server/Http/StaticFiles.php' => 1,
         'Skills/ProposedSkills.php' => 1,
@@ -392,7 +393,7 @@ final class ContainedPathInventoryTest extends TestCase
             'THIRTY-SIX' => 36, 'THIRTY-SEVEN' => 37, 'THIRTY-EIGHT' => 38, 'THIRTY-NINE' => 39,
             'FORTY' => 40, 'FORTY-ONE' => 41, 'FORTY-TWO' => 42, 'FORTY-THREE' => 43,
             'FORTY-FOUR' => 44, 'FORTY-FIVE' => 45, 'FORTY-SIX' => 46, 'FORTY-SEVEN' => 47, 'FORTY-EIGHT' => 48, 'FORTY-NINE' => 49, 'FIFTY' => 50, 'FIFTY-ONE' => 51, 'FIFTY-THREE' => 53, 'FIFTY-FOUR' => 54, 'FIFTY-FIVE' => 55, 'FIFTY-SIX' => 56,
-            'SIXTY' => 60, 'SIXTY-ONE' => 61, 'SIXTY-FOUR' => 64,
+            'SIXTY' => 60, 'SIXTY-ONE' => 61, 'SIXTY-FOUR' => 64, 'SIXTY-FIVE' => 65,
             'TWENTY-ONE' => 21, 'TWENTY-TWO' => 22, 'TWENTY-THREE' => 23, 'TWENTY-FOUR' => 24, 'TWENTY-FIVE' => 25,
         ];
 

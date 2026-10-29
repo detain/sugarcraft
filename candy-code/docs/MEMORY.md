@@ -1010,7 +1010,10 @@ lock — and the note reaches the model through the instruction diff described
 above, never as prompt text. Escape restores the draft exactly; any other
 keystroke cancels the offer and lands in the restored draft. A multi-line
 draft, a `##` markdown heading, a bare `#`, and anything typed while a turn
-runs are never captured: they behave exactly as they did before.
+runs are never captured: they behave exactly as they did before. The web
+Composer mirrors the offer: the same one-line `#` draft raises the same confirm
+chip there, and confirming lands the same locked append through the served
+write method, `context.instructionWrite`.
 
 ### Opening files from the chat
 
@@ -1024,6 +1027,12 @@ yet — never through a link, under the same owned-home containment as every
 other write to it. A serve/headless launch has no terminal to hand over, so
 there `open` answers with that row instead. What you save travels to the
 model through the instruction diff above; the command adds no second channel.
+`context.instructionWrite` is that channel's write side and the same jail for
+every writer: the served Context panel's Edit affordance saves a row's whole
+content through it — carrying the byte count the listing showed, so a write
+that would land on bytes someone else changed is refused instead of clobbering
+it — and the personal file answers under the reserved `personal` path exactly
+as it does to `open`.
 
 ## On-disk layout summary
 
