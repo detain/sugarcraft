@@ -2963,7 +2963,7 @@ final class Chat implements Model
         // dispatch() returns before the loop runs a byte; no Cmd is needed.
         $this->dispatchOutboundWebhook(WebhookEvent::permissionAsked(
             $this->currentSessionId ?? '',
-            $msg->toolCall->name(),
+            $msg->toolCall->name,
         ));
 
         return [$next, $notify === null ? $wait : Cmd::batch($wait, $notify)];
