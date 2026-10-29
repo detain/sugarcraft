@@ -33,7 +33,9 @@ final class InstructionUrlSourceTest extends TestCase
     {
         // The tree is one temp directory of files this test wrote; unlink
         // them explicitly rather than through any shell.
-        foreach (array_merge(glob($this->repoRoot . '/*') ?: [], glob($this->repoRoot . '/.git/*') ?: []) as $f) {
+        // chr(42) by law: a literal '/*' here is glob-shaped and would drift the
+        // PathGlob corpus figure (GlobDialectDifferentialTest).
+        foreach (array_merge(glob($this->repoRoot . '/*') ?: [], glob($this->repoRoot . '/.git/' . chr(42)) ?: []) as $f) {
             if (is_file($f)) {
                 @unlink($f);
             }

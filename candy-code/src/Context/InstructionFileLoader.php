@@ -1315,7 +1315,8 @@ final class InstructionFileLoader
                 // on the operator's behalf and land the bytes in the prompt,
                 // so a project-tier URL keeps the same loud, keyed-as-spelled
                 // refusal the absolute/`~` spellings already carry.
-                if (preg_match('#^https?://#i', $pattern) === 1) {
+                $spelling = strtolower($pattern);
+                if (str_starts_with($spelling, 'https://') || str_starts_with($spelling, 'http://')) {
                     if (!$userTier) {
                         $this->refusedPaths[$pattern] = 'a URL forced-instruction pattern; remote documents '
                             . 'are a user-tier source (a checked-out repository must never dial out on the '

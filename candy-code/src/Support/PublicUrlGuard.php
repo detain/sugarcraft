@@ -247,7 +247,8 @@ final class PublicUrlGuard
                 if ($location === null) {
                     return $failure("Error: redirect not followed: no usable Location header (HTTP $code)");
                 }
-                if (preg_match('#^https?://#i', $location) !== 1) {
+                $spelling = strtolower($location);
+                if (!str_starts_with($spelling, 'https://') && !str_starts_with($spelling, 'http://')) {
                     return $failure('Error: redirect to a relative reference is not followed for instruction sources');
                 }
                 $current = $location;
