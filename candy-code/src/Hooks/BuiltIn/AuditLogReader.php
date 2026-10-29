@@ -41,9 +41,10 @@ namespace SugarCraft\Code\Hooks\BuiltIn;
  * line, say) is indistinguishable from the verdict marker that follows it.
  * The parser takes the FIRST such marker after the tool name as the split,
  * which is what the producer's own construction order guarantees for every
- * line it writes; a hand-edged line can disagree, and no reader could do
- * better against an unescaped format. Tool names and timestamps are read as
- * whitespace-free tokens for the same reason.
+ * line whose tool input contains no marker of its own; a hand-edged line can
+ * disagree, and no reader could do better against an unescaped format. Tool
+ * names and timestamps are read as whitespace-free tokens for the same
+ * reason.
  *
  * UNREADABLE IS EMPTY, NEVER AN ERROR. A missing log, a locked log, a serve
  * process under another `HOME`/`TMPDIR` whose audit directory this server

@@ -91,10 +91,13 @@ async function load(): Promise<void> {
 
 /**
  * C-SEC-6.d: the decisions trail rides its own settle on the SAME generation
- * stamp — a session switch invalidates both in-flight reads together, but a
- * failed `rules` read must not blind the audit one (and vice versa). An
- * answer failure here is NOT an error: it is an older server that has no
- * `permission.audit`, and the policy view above stays exactly as honest.
+ * stamp — a session switch invalidates both in-flight reads together. The
+ * reads fail independently: a failed `rules` read still leaves this one to
+ * fetch and store its rows, and an audit failure never disturbs the policy
+ * view; under a rules failure the template simply keeps the decisions block
+ * hidden until the policy state loads. An answer failure here is NOT an
+ * error: it is an older server that has no `permission.audit`, and the
+ * policy view above stays exactly as honest.
  */
 async function loadAudit(mine: number): Promise<void> {
   try {
