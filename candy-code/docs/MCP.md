@@ -792,7 +792,11 @@ cannot speak with the harness's or the user's voice (`McpOutputFence`). The
 header is added before the output cap clips, so it survives even an oversized
 answer — and because both callers render through one `replyResult()`, a
 bridged answer and a dispatched `mcp_call` answer for the same server and tool
-are byte-identical, framing included.
+are byte-identical, framing included. A FAILED call rides the same fence: the
+transport's error words can carry the server's own bytes (a stdio refusal
+splices its JSON-RPC `error.message`; http and sse rethrow what their stack
+raised), so the `Error: MCP tool ... failed` row is fenced too, identically
+under both spellings.
 
 Three properties make this safe to turn on by default:
 

@@ -562,7 +562,11 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat, RelaysPermissionAsk
      * lets the model be told WHICH MCP tool failed and how, in a result it can act
      * on. `\Throwable` rather than `\RuntimeException` for the same reason — a
      * `TypeError` from a server that answered with a shape nobody expected is not
-     * a reason to lose the turn's other results.
+     * a reason to lose the turn's other results. The telling rides
+     * {@see McpOutputFence}: the message often carries the server's own words
+     * (a stdio refusal splices its JSON-RPC `error.message`; http/sse rethrow
+     * their stack's), so the failure row is fenced exactly like an answer row,
+     * and both spellings render it byte-identically (MCP-7).
      */
     public function execute(array $args): ToolResult
     {
@@ -598,9 +602,22 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat, RelaysPermissionAsk
                 $this->perCallDesk($id),
             );
         } catch (\Throwable $e) {
+            // The message is UNTRUSTED BY PROVENANCE, not just by content: a
+            // transport's words can carry the server's own bytes — a stdio
+            // refusal splices the JSON-RPC `error.message` into its
+            // RuntimeException, and http/sse/claude-mcp rethrow whatever their
+            // stack raised — so the failure row rides the SAME fence as an
+            // answer. Spliced verbatim into a plain sentence, a message opening
+            // a line with `Human:` or embedding `<system-reminder>` would speak
+            // to the model behind the harness's voice on the one row the harness
+            // itself authors. (C-SEC-8.a review, MAJOR-1.)
             return new ToolResult(
                 toolCallId: $id,
-                content: sprintf('Error: MCP tool %s failed: %s', $this->name(), $e->getMessage()),
+                content: McpOutputFence::wrap(
+                    sprintf('Error: MCP tool %s failed: %s', $this->name(), $e->getMessage()),
+                    $this->descriptor->serverName,
+                    $this->descriptor->name,
+                ),
                 isError: true,
                 durationMs: self::elapsedMs($start),
             );

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tools\BuiltIn;
 
+use SugarCraft\Code\Context\McpOutputFence;
 use SugarCraft\Code\MCP\McpServerRequests;
 use SugarCraft\Code\MCP\McpToolShape;
 use SugarCraft\Code\Tools\AcceptsHeartbeat;
@@ -187,9 +188,17 @@ final readonly class McpCallTool implements Tool, BuildsFromCatalog, TakesToolCa
         try {
             $raw = $this->shape->client->callTool($server, $tool, $arguments, $heartbeat, $this->perCallDesk($id, $server));
         } catch (\Throwable $e) {
+            // Same law as the bridge's catch: the message can carry the
+            // server's own bytes (a stdio refusal splices its JSON-RPC
+            // `error.message`), so the failure row rides the untrusted-output
+            // fence, and both spellings render it byte-identically (MCP-7).
             return new ToolResult(
                 toolCallId: $id,
-                content: sprintf('Error: MCP tool %s failed: %s', McpToolBridge::wireNameFor($server, $tool), $e->getMessage()),
+                content: McpOutputFence::wrap(
+                    sprintf('Error: MCP tool %s failed: %s', McpToolBridge::wireNameFor($server, $tool), $e->getMessage()),
+                    $server,
+                    $tool,
+                ),
                 isError: true,
                 durationMs: McpToolBridge::elapsedMs($start),
             );

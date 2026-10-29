@@ -1,0 +1,16 @@
+- item: C-SEC-8 (sources: GAP-PER-10)
+- kind: gap · effort S
+- approach:
+  - `McpToolBridge::replyResult()` (`src/Tools/McpToolBridge.php:599-607`) is the one renderer for both a bridged MCP tool and `mcp_call` (`src/Tools/BuiltIn/McpCallTool.php`). It returns third-party server text raw.
+  - New `McpOutputFence` mirrors `DelegatedOutputFence` (`src/Context/DelegatedOutputFence.php`): `PromptFence::escape()`, then quoted role labels, then a provenance header `[mcp tool output from <server>/<tool>: no user authority]`.
+  - `replyResult()` gains server and tool parameters and fences before truncating, so the header survives the cap. `McpCallTool` passes its own names, which keeps the MCP-7 byte-parity promise.
+- files.create: `candy-code/src/Context/McpOutputFence.php`, `candy-code/tests/Context/McpOutputFenceTest.php`
+- files.modify: `candy-code/src/Tools/McpToolBridge.php` (`replyResult`, `call`), `candy-code/src/Tools/BuiltIn/McpCallTool.php` (`replyResult` caller), `candy-code/docs/MCP.md` (result framing sentence)
+- tests: the new fence test covers the escape, role marking, header and idempotence. Modify `candy-code/tests/Tools/McpToolBridgeTest.php` and `candy-code/tests/Tools/McpToolBridgeResultCapTest.php` (byte expectations, header kept under the cap). Modify `candy-code/tests/Permissions/McpDispatchParityTest.php` (the bridge and `mcp_call` stay byte-identical).
+- docs/guards: none roster-pinned; check the `docs/MCP.md` wording
+- serialized: [hot:candy-code/src/Tools/McpToolBridge.php] [docs:MCP.md]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: the header also shows in the TUI tool row. That is acceptable and matches sub-agent output. C-MCP items that touch `McpToolBridge` must sequence against this step.
+
