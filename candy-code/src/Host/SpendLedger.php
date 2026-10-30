@@ -131,8 +131,14 @@ final class SpendLedger
      * construction. Sinks that ignore the second parameter still work: PHP
      * user-defined functions accept extra arguments, so widening this seam
      * never breaks a mirror that has not caught up yet.
+     *
+     * THE SOURCE RIDES THE THIRD SLOT (C-SES-8.b). `$source` names the
+     * settle arm that billed the call — the WORK the money bought, not the
+     * engine that ran — and the sink forwards it to the row so `/usage
+     * sources` can fold the ledger by attribution. Same extra-arg tolerance
+     * as the model seam: a mirror that ignores it still works.
      */
-    public function account(TokenTracker $tracker, ?Usage $usage, ?\Closure $record = null, ?string $model = null): void
+    public function account(TokenTracker $tracker, ?Usage $usage, ?\Closure $record = null, ?string $model = null, ?string $source = null): void
     {
         if ($usage === null) {
             return;
@@ -145,7 +151,7 @@ final class SpendLedger
         }
 
         if ($record !== null) {
-            $record($usage, $model);
+            $record($usage, $model, $source);
         }
     }
 

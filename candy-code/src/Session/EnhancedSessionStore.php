@@ -749,9 +749,26 @@ final class EnhancedSessionStore
                 reasoning_tokens INTEGER,
                 cost_usd REAL NOT NULL,
                 unpriced INTEGER NOT NULL DEFAULT 0,
+                delegated_tokens INTEGER,
+                source TEXT,
                 FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
             )
         ');
+        // C-SES-8.b: the settle-arm attribution `/usage sources` folds over,
+        // and the delegated prompt tokens that already ride every Usage and
+        // were, until here, recorded nowhere. Both NULL on rows written
+        // before this migration — the fold groups them honestly under NULL
+        // exactly as a null model groups under the (unrecorded) row.
+        $usageColumns = array_column(
+            $this->pdo->query('PRAGMA table_info(usage_records)')->fetchAll(PDO::FETCH_ASSOC),
+            'name',
+        );
+        if (!\in_array('delegated_tokens', $usageColumns, true)) {
+            $this->pdo->exec('ALTER TABLE usage_records ADD COLUMN delegated_tokens INTEGER');
+        }
+        if (!\in_array('source', $usageColumns, true)) {
+            $this->pdo->exec('ALTER TABLE usage_records ADD COLUMN source TEXT');
+        }
         // usageTotals() and the single-session folds read one session's rows
         // by id; the WINDOWED `/usage` folds (OBS-3) filter `ts >= ?` across
         // every session, so the ledger is scanned by two keys and both carry
@@ -2505,15 +2522,24 @@ final class EnhancedSessionStore
      * database must never cost the user their turn. `$model` is the model
      * the call was billed against, recorded for the OBS-3 rollups; null is
      * honest for paths that cannot name one.
+     *
+     * THE SOURCE RIDES THE SAME SEAM (C-SES-8.b). `$source` is the settle
+     * arm that billed the call — `turn`, `aux`, `compact`, `title`, `goal`,
+     * `superseded` — threaded from the site that knows it, so `/usage
+     * sources` can answer where the money went by WORK, not just by model.
+     * Null is honest for a caller that cannot name one and for every row
+     * written before the column existed. `$usage`'s `delegatedTokens` is
+     * stamped alongside, the sub-agent prompt tokens the total already
+     * carries but the ledger never kept.
      */
-    public function appendUsageRecord(string $sessionId, Usage $usage, ?string $model = null): bool
+    public function appendUsageRecord(string $sessionId, Usage $usage, ?string $model = null, ?string $source = null): bool
     {
         if ($sessionId === '') {
             return false;
         }
 
         try {
-            $appended = $this->writeTransaction(function () use ($sessionId, $usage, $model): bool {
+            $appended = $this->writeTransaction(function () use ($sessionId, $usage, $model, $source): bool {
                 if ($this->sessionStore->session($sessionId) === null) {
                     // SES-1-P5: destroyed on purpose, not yet minted. The
                     // late settle of a deleted session writes nothing — no
@@ -2531,8 +2557,9 @@ final class EnhancedSessionStore
                 $this->pdo->prepare('
                     INSERT INTO usage_records
                         (session_id, ts, model, total_tokens, input_tokens, output_tokens,
-                         cache_read_tokens, cache_creation_tokens, reasoning_tokens, cost_usd, unpriced)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         cache_read_tokens, cache_creation_tokens, reasoning_tokens, cost_usd, unpriced,
+                         delegated_tokens, source)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ')->execute([
                     $sessionId,
                     time(),
@@ -2545,6 +2572,8 @@ final class EnhancedSessionStore
                     $usage->reasoningTokens,
                     $usage->costUsd,
                     $usage->unpricedModel !== null ? 1 : 0,
+                    $usage->delegatedTokens,
+                    $source,
                 ]);
 
                 $this->sessionStore->addSessionSpend($sessionId, $usage->costUsd, $usage->unpricedModel !== null);
@@ -2706,6 +2735,43 @@ final class EnhancedSessionStore
     }
 
     /**
+     * The same ledger folded by SOURCE alone — the per-work attribution
+     * `/usage sources` answers from (C-SES-8.b). `$windowDays` trims exactly
+     * as {@see usageDayModelRollups()} does. Rows carry the delegated prompt
+     * tokens the model folds never show, and a source of NULL — every row
+     * written before attribution existed — groups together under it rather
+     * than being invented a name.
+     *
+     * @return list<array{source: ?string, calls: int, totalTokens: int, delegatedTokens: int, costUsd: float, unpriced: bool}>
+     */
+    public function usageSourceRollups(?string $sessionId = null, ?int $windowDays = null): array
+    {
+        $clause = self::usageWindowClause($sessionId, $windowDays);
+        $stmt = $this->pdo->prepare('
+            SELECT source, COUNT(*), COALESCE(SUM(total_tokens), 0), COALESCE(SUM(delegated_tokens), 0), COALESCE(SUM(cost_usd), 0.0), COALESCE(MAX(unpriced), 0)
+              FROM usage_records' . $clause['where'] . '
+             GROUP BY source
+             ORDER BY MAX(ts) DESC
+        ');
+        $stmt->execute($clause['params']);
+
+        $rows = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_NUM) as $row) {
+            $rows[] = [
+                'source' => $row[0] === null ? null : (string) $row[0],
+                'calls' => (int) $row[1],
+                'totalTokens' => (int) $row[2],
+                'delegatedTokens' => (int) $row[3],
+                'costUsd' => (float) $row[4],
+                'unpriced' => (int) $row[5] !== 0,
+            ];
+        }
+        $stmt->closeCursor();
+
+        return $rows;
+    }
+
+    /**
      * Both `/usage` folds answered from ONE read snapshot (OBS-3-P2).
      *
      * Run loose, the grid fold and the model fold were two autocommit reads,
@@ -2718,7 +2784,7 @@ final class EnhancedSessionStore
      * behind a writer). A transaction the caller already holds on this
      * connection is the snapshot the caller meant; ride it, never nest.
      *
-     * @return array{days: list<array{day: string, model: ?string, calls: int, totalTokens: int, costUsd: float, unpriced: bool}>, models: list<array{model: ?string, calls: int, totalTokens: int, costUsd: float, unpriced: bool}>}
+     * @return array{days: list<array{day: string, model: ?string, calls: int, totalTokens: int, costUsd: float, unpriced: bool}>, models: list<array{model: ?string, calls: int, totalTokens: int, costUsd: float, unpriced: bool}>, sources: list<array{source: ?string, calls: int, totalTokens: int, delegatedTokens: int, costUsd: float, unpriced: bool}>}
      */
     public function usageRollups(?string $sessionId = null, ?int $days = null): array
     {
@@ -2739,6 +2805,11 @@ final class EnhancedSessionStore
             $rollups = [
                 'days' => $this->usageDayModelRollups($sessionId, $days),
                 'models' => $this->usageModelRollups($sessionId, $days),
+                // C-SES-8.b: the attribution fold joins the frame rather
+                // than reading loose beside it — one window, one snapshot,
+                // three tables that can never disagree about a settle that
+                // landed mid-page.
+                'sources' => $this->usageSourceRollups($sessionId, $days),
             ];
         } catch (\Throwable $e) {
             if ($ownTransaction) {

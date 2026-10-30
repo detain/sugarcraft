@@ -26,6 +26,13 @@ use SugarCraft\Code\Util\TokenTracker;
  *
  * @see SpendLedger::account()
  * @see EnhancedSessionStore::usageDayModelRollups()
+ *
+ * C-SES-8.b widens the same seam a third time: `$source` — the settle ARM
+ * that billed the call (turn/aux/compact/title/goal/superseded) — rides a
+ * fifth parameter to the sink and a new row column, and the delegated
+ * prompt share already carried by every Usage is finally kept. The fold
+ * that reads it back is {@see EnhancedSessionStore::usageSourceRollups()},
+ * wrapped into the same one-snapshot frame as the pair above.
  */
 final class UsageModelThreadingTest extends TestCase
 {
@@ -126,6 +133,56 @@ final class UsageModelThreadingTest extends TestCase
 
         $rollup = $store->usageModelRollups('threaded-session');
         self::assertSame('summarizer-9', $rollup[0]['model']);
+    }
+
+    // ---- C-SES-8.b: the source seam rides the same widening ----
+
+    public function testTheLedgerForwardsTheThreadedSourceToTheSink(): void
+    {
+        $seen = [];
+        $sink = static function (Usage $usage, ?string $model = null, ?string $source = null) use (&$seen): void {
+            $seen[] = [$model, $source];
+        };
+
+        SpendLedger::new()->account(new TokenTracker(), Usage::new(10, 0.5), $sink, 'summarizer-9', 'compact');
+
+        self::assertSame([['summarizer-9', 'compact']], $seen, 'the arm that billed the call reaches the row sink beside the model');
+    }
+
+    public function testATwoParameterSinkStillRidesTheSourceWidening(): void
+    {
+        // Same arity-tolerance law the model seam was widened under: every
+        // mirror written before C-SES-8.b takes two parameters at most, and
+        // the third extra argument must slide past it harmlessly.
+        $seen = null;
+        $sink = static function (Usage $usage, ?string $model = null) use (&$seen): void {
+            $seen = [$usage->totalTokens, $model];
+        };
+
+        SpendLedger::new()->account(new TokenTracker(), Usage::new(7, 0.25), $sink, 'chat-model', 'turn');
+
+        self::assertSame([7, 'chat-model'], $seen, 'widening the seam broke no mirror');
+    }
+
+    public function testTheThreadedSourceLandsInTheRowAndTheSourceRollupSeesIt(): void
+    {
+        $store = new EnhancedSessionStore($this->dbPath);
+        $tracker = new TokenTracker();
+        $sink = static function (Usage $usage, ?string $model = null, ?string $source = null) use ($store): void {
+            $store->appendUsageRecord('threaded-session', $usage, $model, $source);
+        };
+
+        SpendLedger::new()->account($tracker, Usage::new(100, 1.0, delegatedTokens: 40), $sink, 'chat-model', 'turn');
+
+        $pdo = new PDO('sqlite:' . $this->dbPath);
+        $stored = $pdo->query("SELECT source, delegated_tokens FROM usage_records WHERE session_id = 'threaded-session'")->fetch(PDO::FETCH_ASSOC);
+        self::assertIsArray($stored);
+        self::assertSame('turn', $stored['source'], 'the attribution travels the whole seam into the durable row');
+        self::assertSame(40, (int) $stored['delegated_tokens'], 'the delegated share is kept, not just summed into the total');
+
+        $fold = $store->usageSourceRollups('threaded-session');
+        self::assertSame('turn', $fold[0]['source']);
+        self::assertSame(40, $fold[0]['delegatedTokens']);
     }
 
     // ---- day×model rollups ----

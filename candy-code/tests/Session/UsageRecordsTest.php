@@ -535,13 +535,15 @@ final class UsageRecordsTest extends TestCase
         $begin = strpos($slice, "'BEGIN DEFERRED'");
         $days = strpos($slice, 'usageDayModelRollups(');
         $models = strpos($slice, 'usageModelRollups($sessionId');
+        $sources = strpos($slice, 'usageSourceRollups($sessionId');
         $commit = strpos($slice, "'COMMIT'");
-        foreach (['begin' => $begin, 'days fold' => $days, 'models fold' => $models, 'commit' => $commit] as $what => $at) {
+        foreach (['begin' => $begin, 'days fold' => $days, 'models fold' => $models, 'sources fold' => $sources, 'commit' => $commit] as $what => $at) {
             self::assertIsInt($at, 'usageRollups must still carry its ' . $what);
         }
         self::assertLessThan($days, $begin);
         self::assertLessThan($models, $days, 'both folds read inside the frame');
-        self::assertLessThan($commit, $models, 'and only then does the frame close');
+        self::assertLessThan($sources, $models, 'the attribution fold rides the same snapshot, never loose beside it');
+        self::assertLessThan($commit, $sources, 'and only then does the frame close');
         self::assertSame(0, substr_count($slice, 'BEGIN IMMEDIATE'), 'reads take no write lock — /usage must not queue behind a writer');
     }
 
@@ -571,8 +573,17 @@ final class UsageRecordsTest extends TestCase
         );
 
         $bootstrap = file_get_contents(dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php');
+        // The reseed reads its store through the incognito hoist — the
+        // WELD-1030L wire renamed the local and stale-pin drift was
+        // invisible until this lane re-derived it: the hoist AND the read
+        // are both pinned now, so dropping either half goes red.
         self::assertMatchesRegularExpression(
-            '/tokenTracker: \$sessionStore instanceof EnhancedSessionStore\s*\?\s*\$sessionStore->resumedTokenTracker\(\$sessionId\)/',
+            '/\$keptStore = self::incognito\(\) \? null : \$sessionStore;/',
+            $bootstrap,
+            'incognito launches hold no store at all',
+        );
+        self::assertMatchesRegularExpression(
+            '/tokenTracker: \$keptStore instanceof EnhancedSessionStore\s*\?\s*\$keptStore->resumedTokenTracker\(\$sessionId\)/',
             $bootstrap,
         );
 
@@ -615,6 +626,88 @@ final class UsageRecordsTest extends TestCase
                 $file . ": {$identityRead} must be read INSIDE the closure — at call time",
             );
         }
+    }
+
+    /**
+     * C-SES-8.b: the attribution columns ride the fresh CREATE, so a brand
+     * new database needs no migration pass to answer `/usage sources`.
+     */
+    public function testAFreshLedgerCarriesTheAttributionAndDelegatedColumns(): void
+    {
+        new EnhancedSessionStore($this->dbPath);
+
+        $pdo = new PDO('sqlite:' . $this->dbPath);
+        $columns = array_column($pdo->query('PRAGMA table_info(usage_records)')->fetchAll(PDO::FETCH_ASSOC), 'name');
+        self::assertContains('source', $columns, 'the settle-arm attribution the sources fold groups by');
+        self::assertContains('delegated_tokens', $columns, 'the delegated prompt share every Usage already carries');
+    }
+
+    /**
+     * C-SES-8.b MIGRATED_COLUMNS law, the usage_records shape: a file whose
+     * ledger predates attribution gains both columns on the next open, the
+     * old rows survive with honest NULLs (never an invented source), and the
+     * fold groups them under that NULL beside the labelled rows.
+     */
+    public function testAnOldLedgerGainsTheAttributionColumnsWithoutRewritingItsHistory(): void
+    {
+        $store = new EnhancedSessionStore($this->dbPath);
+        $store->appendUsageRecord('s1', Usage::new(100, 0.01), 'm');
+
+        // The only faithful pre-column row: the columns the store just
+        // created are dropped out from under it, leaving the old 11-column
+        // shape and its row untouched.
+        $pdo = new PDO('sqlite:' . $this->dbPath);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo->exec('ALTER TABLE usage_records DROP COLUMN delegated_tokens');
+        $pdo->exec('ALTER TABLE usage_records DROP COLUMN source');
+        unset($store);
+
+        $store = new EnhancedSessionStore($this->dbPath);
+        $columns = array_column($pdo->query('PRAGMA table_info(usage_records)')->fetchAll(PDO::FETCH_ASSOC), 'name');
+        self::assertContains('source', $columns, 'the guarded ALTER lands the column on the old file');
+        self::assertContains('delegated_tokens', $columns);
+
+        $old = $pdo->query('SELECT source, delegated_tokens FROM usage_records LIMIT 1')->fetch(PDO::FETCH_ASSOC);
+        self::assertIsArray($old);
+        self::assertNull($old['source'], 'history is not retroactively attributed');
+        self::assertNull($old['delegated_tokens']);
+
+        $store->appendUsageRecord('s1', Usage::new(100, 0.01), 'm');
+        $fold = $store->usageSourceRollups('s1');
+        self::assertCount(1, $fold, 'an unlabelled append folds under NULL exactly once, old row and new');
+        self::assertNull($fold[0]['source']);
+        self::assertSame(2, $fold[0]['calls']);
+    }
+
+    /**
+     * C-SES-8.b: the fold by SOURCE — groups, sums, the delegated column
+     * (COALESCEd — NULL rows contribute nothing), the sticky unpriced bit,
+     * and newest-activity ordering, mirroring the model fold's laws.
+     */
+    public function testTheSourceFoldGroupsAttributesAndSumsTheDelegatedShare(): void
+    {
+        $store = new EnhancedSessionStore($this->dbPath);
+        $store->appendUsageRecord('s1', Usage::new(1000, 0.01, delegatedTokens: 600), 'm', 'turn');
+        $store->appendUsageRecord('s1', Usage::new(500, 0.02, delegatedTokens: 500), 'm', 'turn');
+        $store->appendUsageRecord('s1', Usage::new(200, 0.005, unpricedModel: 'mystery'), 'm', 'compact');
+        $store->appendUsageRecord('s2', Usage::new(50, 0.001), 'm', 'title');
+
+        $one = $store->usageSourceRollups('s1');
+        self::assertSame(['turn', 'compact'], array_column($one, 'source'), 'newest activity first, as the model fold orders');
+        self::assertSame(2, $one[0]['calls']);
+        self::assertSame(1500, $one[0]['totalTokens']);
+        self::assertSame(1100, $one[0]['delegatedTokens'], 'the delegated share the total already carried, now kept');
+        self::assertFalse($one[0]['unpriced']);
+        self::assertTrue($one[1]['unpriced'], 'one blind row makes its whole group a bound');
+        self::assertEqualsWithDelta(0.005, $one[1]['costUsd'], 1e-9);
+        self::assertSame(0, $one[1]['delegatedTokens'], 'a NULL column COALESCEs to nothing, never to a missing figure');
+
+        $all = $store->usageSourceRollups();
+        $found = array_column($all, 'source');
+        sort($found);
+        $expected = ['compact', 'title', 'turn'];
+        sort($expected);
+        self::assertEqualsCanonicalizing($expected, $found, 'the unscoped fold spans every session the table holds');
     }
 
     /**
