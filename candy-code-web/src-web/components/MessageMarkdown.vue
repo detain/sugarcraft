@@ -36,15 +36,24 @@ async function colour(): Promise<void> {
  * is read from the code element at click time: a tokenised block's
  * textContent is unchanged by the colouring pass, and an edit that lands
  * between paint and click copies what is on screen.
+ *
+ * The walk keys on each `pre`, not on the `.code-block` wrapper: sanitising
+ * a fragment whose first element is the wrapper drops the wrapper but keeps
+ * its children under some DOM implementations (happy-dom under vitest,
+ * reproducibly), so a wrapper-keyed pass would silently decorate nothing in
+ * those tests. In a browser the wrapper survives and `closest()` returns it,
+ * which keeps the absolutely-positioned button anchored to the block box
+ * rather than the (horizontally scrollable) `pre`.
  */
 function decorate(): void {
   const element = root.value
   if (element === null) return
   if (typeof window !== 'undefined' && window.isSecureContext === false) return
-  for (const block of Array.from(element.querySelectorAll<HTMLElement>('.code-block'))) {
-    if (block.querySelector('.code-copy') !== null) continue
-    const code = block.querySelector('pre > code')
+  for (const pre of Array.from(element.querySelectorAll<HTMLElement>('pre'))) {
+    const code = pre.querySelector('code')
     if (code === null) continue
+    const block = pre.closest<HTMLElement>('.code-block') ?? pre
+    if (block.querySelector('.code-copy') !== null) continue
     const button = document.createElement('button')
     button.type = 'button'
     button.className = 'code-copy'
