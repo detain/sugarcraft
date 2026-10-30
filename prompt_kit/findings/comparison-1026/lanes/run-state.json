@@ -296,7 +296,7 @@
    "session": "ses_e73adab38ffeAhXW1fKK3NYcqu"
   }
  },
- "master_tip": "cac762990",
+ "master_tip": "e3a52e590",
  "master_tip_observed": "ca1e0b51f",
  "next_fill_queue": [],
  "next_lead": {
@@ -1692,5 +1692,5 @@
   "scope": "owner directive @197@/@1108@: W10 loop + W11-W15 fully welded + wave loops closed; W16 band finished + welded under this lead per owner extension; W17+ builders NEVER started",
   "this_run": "welded 100 -> 161; waves closed W10,W11,W12,W13,W14,W15 (W14 96d36db45, W15 15046565a)"
  },
- "batch1030N_note_lane3": "WELD-1030N lane 3 C-CTX-5.b welded: picks 50800af96/cac762990, zero conflicts off a 13-commit-stale base; ARCHITECTURE:155 blob 65 == live slashCommands() 65; gates 9T/129A + family 93T/529A + SessionHost 84T + union 226T/69,431A (F1 rostered SkillTool, F2 DuplicatedTestHelperDrift — 3 of its 4 rows come from lane 2 C-TUI-3.a NEW test files, FINDING for a fixer lane: consolidate OPEN/CLOSE/STUB_CANDIDATE or roster them; r2-clean gates omitted the drift guard); durations MINTED AheadOfNeedSkipRulesTest 1.883/9 + stale fix SessionHostAheadOfNeedTest 0.364/3->1.147/4; 7carry +9T/+129A no re-pin."
+ "batch1030N_note_lane3": "WELD-1030N lane 3 C-CTX-5.b welded: picks 50800af96/cac762990, zero conflicts off a 13-commit-stale base; ARCHITECTURE:155 blob 65 == live slashCommands() 65; gates 9T/129A + family 93T/529A + SessionHost 84T + union 226T/69,431A (F1 rostered SkillTool, F2 DuplicatedTestHelperDrift — 3 of its 4 rows come from lane 2 C-TUI-3.a NEW test files, FINDING for a fixer lane: consolidate OPEN/CLOSE/STUB_CANDIDATE or roster them; r2-clean gates omitted the drift guard); durations MINTED AheadOfNeedSkipRulesTest 1.883/9 (tsv line 191) + stale fix SessionHostAheadOfNeedTest 0.364/3->1.147/4 (line 294) CARRIED BY A RIDER COMMIT, NOT by weld commit e3a52e590 — the first pass never wrote the tsv (self-caught via git show --name-only; disclosed in the C-CTX-5.b mark and the WELD-1030N report); 7carry +9T/+129A no re-pin."
 }

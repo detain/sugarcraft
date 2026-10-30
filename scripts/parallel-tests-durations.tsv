@@ -188,6 +188,7 @@ candy-code/tests/Backend/DocumentAggregateBudgetTest.php	1.986	11
 candy-code/tests/Server/AgentsWorkflowMethodsTest.php	1.985	7
 candy-code/tests/MouseModalGuardTest.php	1.938	22
 candy-code/tests/Server/StateDirTest.php	1.921	11
+candy-code/tests/Host/AheadOfNeedSkipRulesTest.php	1.883	9
 candy-code/tests/Workflows/WorkflowResumeReportingTest.php	1.876	4
 candy-code/tests/Commands/MemoryImportCommandTest.php	1.874	16
 candy-code/tests/MCP/McpResourceProviderTest.php	1.869	17
@@ -290,6 +291,7 @@ candy-code/tests/Backend/EngineBackendStepBudgetTest.php	1.157	8
 candy-code/tests/Cli/NonInteractiveSessionPersistenceTest.php	1.157	9
 candy-code/tests/Tools/BuiltIn/GrepInstructionWiringTest.php	1.155	19
 candy-code/tests/Cli/UsageSubcommandTest.php	1.155	9
+candy-code/tests/Host/SessionHostAheadOfNeedTest.php	1.147	4
 candy-code/tests/Chat/RewindCommandTest.php	1.142	15
 candy-code/tests/Host/SessionHostIdleAutoTest.php	1.139	10
 candy-code/tests/Sessions/ScheduleRegistryTest.php	1.131	14
@@ -518,7 +520,6 @@ candy-code/tests/Memory/DreamPassTest.php	0.370	11
 candy-code/tests/VhsTapeContractTest.php	0.370	125
 candy-code/tests/Chat/MutateCarryCensusTest.php	0.367	4
 candy-code/tests/App/AgentWindowViewportTest.php	0.366	5
-candy-code/tests/Host/SessionHostAheadOfNeedTest.php	0.364	3
 candy-code/tests/Commands/SlashDispatchTest.php	0.358	21
 candy-code/tests/Context/ContextCompactorTest.php	0.355	96
 candy-code/tests/Workspace/CheckpointDiffTest.php	0.349	3

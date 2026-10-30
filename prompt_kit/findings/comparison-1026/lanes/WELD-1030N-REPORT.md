@@ -55,3 +55,7 @@ CONCURRENCY NOTE: run-state.json was written by the lead BETWEEN my two fold pas
 - Durations: MINTED AheadOfNeedSkipRulesTest 1.883/9 (live 9T/129A, median of 3) + STALE-ROW FIX SessionHostAheadOfNeedTest 0.364/3 -> 1.147/4 (pick added a 4th test; median 1.146669, spread 0.655-3.268 disclosed). 1646->1647 rows.
 - §7 CARRY +9T/+129A (supersedes +7T/+76A); no suite-figure re-pin. In-step legit band bumps 41_500->46_000 x3 files (both reviewers). Drop-arm model-only-by-design note recorded in mark.
 - Evidence committed: REVIEW-1 (7,085 B) + REVIEW-2 (5,184 B) + BRIEF.md + REPORT.md (lane never committed REPORT itself); FIX-1 rode pick 2. Worktree clean, nothing to collect.
+
+## RIDER (lane 3 durations, self-caught phantom claim)
+- The lane-3 §4 mark first asserted the two durations edits while they were only in my notes: weld commit e3a52e590 contains NO scripts/parallel-tests-durations.tsv (name-only proof) and the file was still 1646 rows with the stale count 3. Caught by verifying the commit's own file list before declaring the lane closed.
+- Rider applies them for real: line 191 AheadOfNeedSkipRulesTest 1.883/9 (median of 3 live runs) + line 294 SessionHostAheadOfNeedTest 0.364/3 -> 1.147/4 (pick added a 4th test). File 1647 rows. Disclosure recorded in the mark; no battery ran inside the window so no shipped artifact was affected.
