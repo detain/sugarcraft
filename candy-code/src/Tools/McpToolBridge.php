@@ -1162,20 +1162,31 @@ final class McpToolBridge implements Tool, AcceptsHeartbeat, RelaysPermissionAsk
     /**
      * One base64 payload decoded for carriage, or null when it must stay text.
      *
-     * Strict base64, non-empty result, within $maxBytes, and the bytes must
-     * SNIFF as the family the channel carries — images for the image channel,
-     * `%PDF-` for the document channel. The mime string is never consulted:
+     * Strict base64, non-empty result, within $maxBytes — refused on the TEXT
+     * length BEFORE decoding — and the bytes must SNIFF as the family the
+     * channel carries: images for the image channel, `%PDF-` for the document
+     * channel. The mime string is never consulted:
      * the same distrust that makes the wire re-sniff applies at the source, so
      * `data:` holding a PDF with `mimeType: image/png` reaches neither channel
      * as the wrong thing (it sniffs as a document, and the document walk only
      * reads `resource.blob` — an image-typed part holding PDF bytes carries
      * nothing, which is the honest outcome for a lying server).
      *
+     * THE TEXT-LENGTH DOOR RUNS FIRST, BEFORE `base64_decode` materializes
+     * anything: every 3 decoded bytes occupy 4 text bytes, so a payload past
+     * `4 * intdiv($maxBytes, 3) + 4` (the +4 covers padding) can never fit the
+     * budget, and a server inside the transport's frame cap could otherwise
+     * force a full ~48 MB transient decode per failing candidate.
+     *
      * @param mixed $payload the `data`/`blob` string the server sent
      */
     private static function decodeSniffed(mixed $payload, int $maxBytes, bool $wantImage): ?string
     {
         if (!is_string($payload) || $payload === '') {
+            return null;
+        }
+
+        if (strlen($payload) > 4 * intdiv($maxBytes, 3) + 4) {
             return null;
         }
 

@@ -102,6 +102,51 @@ final class McpToolBridgeImageChannelTest extends TestCase
         self::assertNull($result->imageBytes(), 'over the tool-side image budget means it was never going to ride anywhere');
     }
 
+    /**
+     * The text-length door inside `decodeSniffed` (REVIEW-1 MINOR): a payload
+     * that cannot fit the budget is refused on its base64 TEXT length, BEFORE
+     * `base64_decode` materialises it, so a hostile-but-framing-legal server
+     * inside the transport's 64 MiB frame cap cannot force a ~48 MB transient
+     * decode per failing candidate.
+     *
+     * THE DOOR IS OBSERVABLY EQUIVALENT, WHICH IS WHY THE PIN IS STRUCTURAL.
+     * Every 3 decoded bytes occupy 4 text bytes, so the set of candidates the
+     * text door refuses is exactly the set the legacy decoded-length check
+     * refuses — no $payload can make the two disagree, and no behavioural
+     * assertion can discriminate the guard. What DOES discriminate is ORDER:
+     * remove the guard and the source scan reddens, because there is no longer
+     * a refusal between the string gate and the decode. The end-to-end leg
+     * keeps the user-visible promise honest at the real image budget: the
+     * oversized candidate still says its size and carries nothing.
+     */
+    public function testAPayloadPastTheTextLengthDoorIsRefusedWithoutDecoding(): void
+    {
+        $method = new \ReflectionMethod(McpToolBridge::class, 'decodeSniffed');
+        $lines = (array) file((string) $method->getFileName());
+        $source = implode('', array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
+
+        $decodeAt = strpos($source, 'base64_decode($payload');
+        $doorAt = strpos($source, 'strlen($payload) > 4 * intdiv($maxBytes, 3) + 4');
+        self::assertIsInt($doorAt, 'the pre-decode text-length door is gone: an oversize candidate would decode in full before any refusal');
+        self::assertIsInt($decodeAt);
+        self::assertLessThan($decodeAt, $doorAt, 'the door must run BEFORE base64_decode — after it, the transient materialisation the door exists to avoid still happens');
+
+        $pngOverDoor = base64_encode("\x89PNG\r\n\x1a\n" . str_repeat('x', FileMentions::IMAGE_MAX_BYTES + 1));
+        self::assertGreaterThan(4 * intdiv(FileMentions::IMAGE_MAX_BYTES, 3) + 4, strlen($pngOverDoor), 'a real oversize PNG candidate sits past the door for the real image budget');
+
+        $result = $this->bridgeOver($this->serving([
+            ['type' => 'image', 'mimeType' => 'image/png', 'data' => $pngOverDoor],
+        ]))->execute([]);
+
+        self::assertStringContainsString(
+            '[image: image/png, ' . strlen($pngOverDoor) . ' base64 bytes not shown]',
+            $result->content(),
+            'the size line is stated whether the door or the decode refused it',
+        );
+        self::assertStringNotContainsString('carried as an image', $result->content());
+        self::assertNull($result->imageBytes());
+    }
+
     public function testAForgedImageSniffsNowhereAndReachesNeitherChannel(): void
     {
         $junk = base64_encode('this is plainly not an image');
