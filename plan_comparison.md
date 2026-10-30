@@ -3045,6 +3045,9 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SES-9.a (W7)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-8.a`
 
+#### ✅ c6e5e2ecc C-SES-8.d — `/insights` command wiring
+- **Weld 2026-10-30 (batch-19a):** picks 38f097f4b, 1c5b34628 → 3311bba69, c6e5e2ecc on 26896e349 + weld-cure rider dc9eea92d (ARCHITECTURE slash-command counter 63→64 — the lane's 62→63 hunk cherry-absorbed against master's identical b2943d1cb transition; live registry is 64 with /insights, DocFigureProseDriftTest live-counts it, a2d5d0e3f precedent); REVIEW-2 CLEAN 0C/0M/0min/0nit. README roster conflict resolved by REGENERATION — union keeps BOTH `/output-style` and `/insights`, gen-command-docs --check up to date; COMMANDS.md rows disjoint (:388/:399). Guard set at tip 183T/6648A with ONLY the 2 pre-existing foreign C-CTX-4.e output-style roster reds (PaletteSupersetDispatchTest:210, MenuBarLabelDerivationTest:102 — base-proven: registry byte-unchanged 410f5ac58..c6e5e2ecc over src/Commands, roster arrays lacked output-style already at 26896e349; reported to lead as new standing-roster findings); Insights/DocFigure-at-64/CommandDocs/ReadmeRoster/BuiltInCommands/SlashDispatch/RegistryTranslation all green. Evidence + FIX-1 (collected from worktree) landed at 402418b18. No durations row owed; §7 carry: suite-figure +1T in run-state weld_notes. NO PUSH (W25 open, SEC-7.a/TOOL-2.c in flight).
+
 #### C-SES-8.d — `/insights` command wiring
 - **Item:** C-SES-8 (sources: GAP-OBS-06) · gap · effort S
 - **What:** Add a NEW spec file, `builtin-commands/2215-insights.php` (category App, `withHandler('handleInsightsCommand')`, `withHostCommand(InsightsHostCommand::class)`). It is per-command-disjoint, not serialized. Add …
