@@ -2675,6 +2675,10 @@ final class DuplicatedTestHelperDriftTest extends TestCase
             'The two shutdown suites drive the same stubborn child stub verbatim; the fixture belongs behind a provider, and the row says so until it moves.',
         'VERTEX_MODEL' =>
             'The tool-result wire siblings (the image-leg suite and the C-TOOL-2 document-leg suite) send the same Vertex Anthropic model id; it is the request label the rawPredict arm forwards, not a fixture either suite asserts on — the MODEL shape at a different dialect. The differing CAPTION pair lives on the drift map.',
+        'OPEN' => 'The /copy pair (C-TUI-3.a: the slash-command suite and the command suite) fence their captured-region fixtures with the same markdown opener; the token is one statement about how /copy wraps a block, so a re-roll of the fence moves the pair together (adjudicated 2026-10-30, batch-16 weld-cure after the merged-tree guard censused the pair the two lanes each shipped as their own copy).',
+        'CLOSE' => 'The closing fence of the same /copy pair as OPEN; the command suite also pins a fence line riding INSIDE a selection, so the closer is asserted as a shape, not just a terminator — one statement, two entry points, moves together (adjudicated 2026-10-30, batch-16 weld-cure, OPEN family).',
+        'STUB_CANDIDATE' => 'The copy-flow pair (C-TUI-3.a: the slash-command suite and the mouse-selection suite) feed the same stubbed tmux argv through SystemClipboard::useCandidatesForTesting; the argv is pinned as-passed, never executed, so it is one statement about the discovery-to-spawn transport both suites exercise — a different stub shape moves the pair together (adjudicated 2026-10-30, batch-16 weld-cure, OPEN family).',
+        'HEAVY_CHARS' => 'The resume-cost family pins one heavy-transcript size (the design example 336_000 chars ~ 84k tokens) across the Chat guard suite and the Host estimate suite; the figure is the class of history both doors judge, so a re-roll of the design example moves the pair together (adjudicated 2026-10-30, batch-16 weld-cure, foreign pick f4e747cf0 half).',
     ];
 
     /**
