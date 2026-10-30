@@ -558,6 +558,7 @@ final class LayeredSettings
         'permissions.autoStrikeLimit',
         'permissions.autoTotalLimit',
         'permissions.autoAllowReadOnly',
+        'redactToolOutput',
         'secretEnvAllowlist',
         'allowedTools',
         'disabledTools',

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Config\Settings\Definitions;
 
+use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Config\Settings\ApplyMode;
 use SugarCraft\Code\Config\Settings\OptionsSource;
@@ -138,6 +139,32 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withHelp(Lang::t('settings.permissions.autoAllowReadOnly.help'))
                 ->withReaderSymbol(ReadOnlyCommands::class . '::autoAllowEnabled')
                 ->withReadBy('`PermissionGate::evaluateDefault()` / `evaluateAcceptEdits()` → `readOnlyAutoAllow()` → `ReadOnlyCommands::autoAllowEnabled()`'),
+            // C-SEC-8.b: opt-IN secret redaction of settled tool output.
+            // Off by default: results land in history, sessions.db and the
+            // event log raw, exactly as they always have, and nothing here
+            // alters what the tool itself executed. On, Runtime folds every
+            // result through SecretRedactor once it has settled — after the
+            // UTF-8 and tag scrubs, before the ToolFinished event — so the
+            // bytes persisted and replayed to the model carry [REDACTED]
+            // where a credential sat. User tier only, like the auto-review
+            // knobs: a setting that changes what a transcript keeps must not
+            // be flipped by a checked-out project (and turning it ON is the
+            // safe direction — a project file that could set it would be an
+            // argument for hiding output, not a user choice to protect their
+            // own secrets). /export stays raw on either setting; the export
+            // promise is about the LOCAL copy, and redaction never rewrites
+            // persisted history. No env var and no CLI flag: a launch-time
+            // escape hatch would let one shell line silently change what
+            // later turns persist. Read per turn (NextTurn) by
+            // EngineBackend::newRuntime.
+            SettingDefinition::new('redactToolOutput', SettingType::Bool, false)
+                ->withCategory(SettingCategory::Permissions)
+                ->withRiskClass(RiskClass::Security)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::NextTurn)
+                ->withLabel(Lang::t('settings.redactToolOutput.label'))
+                ->withHelp(Lang::t('settings.redactToolOutput.help'))
+                ->withReaderSymbol(EngineBackend::class . '::newRuntime'),
             SettingDefinition::new('secretEnvAllowlist', SettingType::StringList, [])
                 ->withCategory(SettingCategory::Permissions)
                 ->withRiskClass(RiskClass::Security)

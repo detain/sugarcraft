@@ -1271,7 +1271,7 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and forty keys are layered — `provider`, `models`,
+Only these one hundred and forty-one keys are layered — `provider`, `models`,
 `providers`, `titleModel`, `summaryModel`, `advisorModel`, `maxOutputTokens`,
 `modelPrices`, `extraBody`, `thinkingBudget`, `reasoningEffort`, `serviceTier`,
 `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
@@ -1287,8 +1287,8 @@ Only these one hundred and forty keys are layered — `provider`, `models`,
 `env.gitDiffAfterWrites`, `env.diffMaxBytes`, `contextWindow`, `autoReview`,
 `autoReviewScope`, `autoReviewModel`, `permissions.autoStrikeLimit`,
 `permissions.autoTotalLimit`, `permissions.autoAllowReadOnly`,
-`secretEnvAllowlist`, `allowedTools`, `disabledTools`, `references`,
-`bashSandbox`, `testCommand`, `autoTest`, `toolOutputCapBytes`,
+`redactToolOutput`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`,
+`references`, `bashSandbox`, `testCommand`, `autoTest`, `toolOutputCapBytes`,
 `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`,
 `toolSpillWindowPercent`, `toolInstructionCapBytes`, `toolSpillCaptureBytes`,
 `toolSpillMinCapBytes`, `globMaxMatches`, `webFetchMaxBytes`,
@@ -1360,7 +1360,7 @@ in precedence only.
 > user-tier only. Details per key in
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
-Even for a trusted project, eighty-two keys are **never** taken from a project file:
+Even for a trusted project, eighty-three keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -1502,7 +1502,10 @@ repository's files into a prompt the agent acts on, and a checkout must not be
 able to make its own text your next instruction; `debug.skills`, `debug.commands`, `debug.rules` and
 `debug.stream`, because they are the operator's own diagnostic switches — each
 puts what a loader refused (or a failing token observer) on stderr, and a checkout has no business deciding what is
-printed under the operator's screen; and
+printed under the operator's screen; `redactToolOutput`, because it decides
+whether the operator's own saved history hides credentials that land in tool
+output — switching it off from a checkout would leave the operator's keys
+visible in sessions.db and in every later prompt replayed from them; and
 `allowedTools`, for a reason worth spelling
 out because on capability alone it looks harmless. A whitelist is an intersection — it
 cannot add a tool that `Bootstrap::tools()` did not build — but its effect is
