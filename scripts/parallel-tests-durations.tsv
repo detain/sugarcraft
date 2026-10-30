@@ -499,7 +499,7 @@ candy-code/tests/Workflows/WorkflowRetriesTest.php	0.413	10
 candy-code/tests/Cli/BinSignalExitCodeTest.php	0.408	3
 candy-code/tests/Host/TurnRunnerEventLogTest.php	0.406	5
 candy-code/tests/Support/TimedFileLockTest.php	0.406	4
-candy-code/tests/Support/StartupSummaryTest.php	0.405	11
+candy-code/tests/Support/StartupSummaryTest.php	0.565	18
 candy-code/tests/Chat/ComposerVimModeTest.php	0.404	17
 candy-code/tests/Tools/WebSearchTransportTest.php	0.403	13
 candy-code/tests/Agents/MailboxTest.php	0.395	23
@@ -1645,3 +1645,11 @@ candy-code/tests/Session/ThinkingBlocksTranscriptRoundTripTest.php	0.40	4
 candy-code/tests/Sessions/ScheduleCrossHostFireTest.php	0.59	7
 candy-code/tests/Protocol/FilesDiffCheckpointTest.php	1.919	9
 candy-code/tests/Cli/HeadlessDefaultPermissionModeTest.php	0.058	10
+candy-code/tests/Cli/UpdateCheckTest.php	0.035	18
+candy-code/tests/Config/McpBrowserPresetDocTest.php	0.009	4
+candy-code/tests/Cli/NonInteractiveSkillSlashTest.php	0.347	9
+candy-code/tests/Commands/EffortDialTest.php	0.015	13
+candy-code/tests/Host/Commands/EffortHostCommandTest.php	0.039	10
+candy-code/tests/Protocol/CommandListSkillRowsTest.php	0.873	9
+candy-code/tests/Host/Commands/ReviewHostCommandTest.php	0.975	10
+candy-code/tests/Chat/VerboseToggleKeyTest.php	0.05	5

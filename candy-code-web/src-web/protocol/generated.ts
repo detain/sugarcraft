@@ -583,7 +583,7 @@ export interface Methods {
         name: string
         description?: string
         argumentHint?: string | null
-        source: "builtin" | "file" | "mcp"
+        source: "builtin" | "file" | "mcp" | "skill"
         runsIn: "server" | "client"
       })[]
     }
