@@ -34,3 +34,13 @@ Master drift since b503bb054 = 38 commits (CI-1030 x2 touched HandlesRunControl 
 - NEW row candy-code/tests/Host/KeepWarmTest.php 8.947 17 (runs 8.947/9.053/8.825, 17 cases each; inserted at descending-duration band after ServeStatusStopTest 8.974)
 - RETIMED candy-code/tests/Backend/CacheHealthWatchTest.php 0.004/16 -> 0.06/20 (runs 0.060/0.059/0.066, 20 cases; row previously did NOT reflect lane's +4 cases)
 - diff proof: 2 insertions 1 deletion, no other rows touched. §7 suite-figure stays stale-by-design (+~18T) — closeout duty, mark carries it.
+
+## STEP 2 — C-CTX-6.e closeout
+- git cherry master cc/C-CTX-6.e: 98c87ce96 + 32123c5c0 BOTH '-' (patch-id == landed picks 9c59bc8d1/a7627584b era). Worktree + branch pruned (stale untracked plan_comparison.md copy saved /tmp/opencode/weld1030z/CTX-6e-plan-copy.md). /tmp/opencode/weld1030L/base-check pruned. cc-cmp-CI-1030 verified absent. cc-cmp-C-TOOL-6.a FOREIGN KEPT untouched (1 in worktree list).
+
+## STEP 3 — run-state fold (b64393e1a)
+- FRESH pre-fold read: welded 278==count, weld_pending 3, inflight {C-CTX-5.d}. Fold: welded += C-CTX-5.d assert 279==len; inflight -= C-CTX-5.d -> {}; weld_pending cleared all 3 (C-CTX-5.d welded; C-CTX-6.e prune DONE; CI-1030 provenance VERIFIED already present as closeout_ledger tail — NOT duplicated). closeout_ledger += C-TUI-5.c 5109B lost-to-prune note (was absent). batch1030z_note written. Lead-side concurrent anomalies_ledger deltas (C-CTX-5.d-MAJOR2-CONFAB edit + LEAD-TWIN-DISPATCH-t572) preserved via disk-freshest read, carried in fold commit. tmp+os.replace per t549 law. Backup /tmp/opencode/weld1030z/run-state.backup-b73bc2228.
+
+## STEP 4 — absorption + prune
+- git cherry master cc/C-CTX-5.d: eb5108c9c/7179a0f58/35ba713a8/a235ea37f ALL '-' (4/4). Key-file blob parity: KeepWarmPolicy.php 0b58691730, KeepWarmTest.php 183ab0c37d, KeepWarmPingedMsg.php 9d127024d9 — branch == master identical. Evidence 5/5 on-branch. Worktree porcelain: only stale untracked plan-copy (saved CTX-5d-plan-copy.md) -> force-removed; branch -D. Final cc/* roster: cc/C-TOOL-6.a only (FOREIGN KEPT).
+- Commits this weld: 839331749/80fd89337/4f2a9b224/37f4ef6e7 (picks) -> b73bc2228 (weld: mark+DUR+report) -> b64393e1a (fold). NOT pushed (lead owns push).
