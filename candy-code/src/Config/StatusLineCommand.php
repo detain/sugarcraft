@@ -307,6 +307,18 @@ final class StatusLineCommand
      */
     private static bool $inFlight = false;
 
+    /**
+     * The LAST session snapshot any {@see cmd()} call was offered — armed or
+     * gated, the newest one wins — so the synchronous {@see refresh()} entry
+     * can hand the child the same stdin the async path would have. Null until
+     * a caller passes one, and null means the legacy closed-stdin shape:
+     * {@see run()} with no payload is exactly what it was before the payload
+     * existed. Cleared by {@see configure()} with the rest of the cache — a
+     * snapshot gathered for the replaced command describes a session the new
+     * command never agreed to report.
+     */
+    private static ?string $lastStdin = null;
+
     private function __construct(
         /**
          * The shell command, exactly as the settings file spelled it. Passed to
@@ -386,6 +398,7 @@ final class StatusLineCommand
         self::$line = '';
         self::$refreshedAt = 0.0;
         self::$inFlight = false;
+        self::$lastStdin = null;
     }
 
     /**
@@ -421,6 +434,19 @@ final class StatusLineCommand
     public static function active(): ?self
     {
         return self::$active;
+    }
+
+    /**
+     * The project root {@see configure()} installed — the directory
+     * {@see run()} will start the command in. Exposed because the caller
+     * that gathers a {@see StatusLineSession} must put the SAME directory in
+     * its `cwd` field as the child will actually be stood in; reading a
+     * private through a named accessor keeps that pairing one line to audit
+     * instead of a guess at what the launch passed.
+     */
+    public static function workingDirectory(): ?string
+    {
+        return self::$cwd;
     }
 
     /**
@@ -469,7 +495,7 @@ final class StatusLineCommand
             return;
         }
 
-        self::$line = $command->run(self::$cwd);
+        self::$line = $command->run(self::$cwd, self::$lastStdin);
         self::$refreshedAt = microtime(true);
     }
 
@@ -488,9 +514,24 @@ final class StatusLineCommand
      * loop and resolves the {@see StatusLineResultMsg} whose fold calls
      * {@see settle()}. Without pcntl, or when the fork fails, the promise
      * resolves synchronously in-process: never wrong, just blocking there.
+     *
+     * THE `$stdin` ARGUMENT IS THE SESSION SNAPSHOT the child's command gets
+     * on its stdin — a {@see StatusLineSession::toJson()} document from the
+     * caller that owns the live figures, gathered at the tick, because a
+     * snapshot built when the run arms describes the session as it starts.
+     * Every call records it as {@see $lastStdin} — even one that gates to
+     * null — so the synchronous {@see refresh()} fallback never runs a
+     * command with a stale or missing picture the async path would have had.
+     * Null here means "this caller has nothing to say": the command then
+     * gets the legacy immediate-EOF stdin, unchanged from before the
+     * payload existed.
      */
-    public static function cmd(): ?\Closure
+    public static function cmd(?string $stdin = null): ?\Closure
     {
+        if ($stdin !== null) {
+            self::$lastStdin = $stdin;
+        }
+
         $command = self::$active;
         if ($command === null || self::$inFlight) {
             return null;
@@ -504,11 +545,11 @@ final class StatusLineCommand
         self::$inFlight = true;
         $cwd = self::$cwd;
 
-        return Cmd::promise(static function () use ($command, $cwd): PromiseInterface {
+        return Cmd::promise(static function () use ($command, $cwd, $stdin): PromiseInterface {
             $deferred = new Deferred();
 
             if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
-                $deferred->resolve(new StatusLineResultMsg($command->run($cwd)));
+                $deferred->resolve(new StatusLineResultMsg($command->run($cwd, $stdin)));
 
                 return $deferred->promise();
             }
@@ -518,14 +559,14 @@ final class StatusLineCommand
 
             if ($pid === -1) {
                 ToolIpcFiles::discard($file);
-                $deferred->resolve(new StatusLineResultMsg($command->run($cwd)));
+                $deferred->resolve(new StatusLineResultMsg($command->run($cwd, $stdin)));
 
                 return $deferred->promise();
             }
 
             if ($pid === 0) {
                 ForkedChild::closeInheritedServerFds();
-                ToolIpcFiles::write($file, json_encode(['line' => $command->run($cwd)], JSON_INVALID_UTF8_SUBSTITUTE) ?: '{}');
+                ToolIpcFiles::write($file, json_encode(['line' => $command->run($cwd, $stdin)], JSON_INVALID_UTF8_SUBSTITUTE) ?: '{}');
                 ForkedChild::exitNow(0);
             }
 
@@ -587,11 +628,35 @@ final class StatusLineCommand
      * payload to stage, so none of ScriptHook's `MAX_ENV_ENTRY_BYTES` /
      * `proc_open()`-refused machinery applies here.
      *
-     * STDIN IS CLOSED IMMEDIATELY. A command that reads stdin would otherwise
-     * block until the timeout killed it, once per tick, which is the same
-     * freeze the timeout exists to bound and is avoidable outright.
+     * STDIN CARRIES THE SESSION SNAPSHOT, THEN EOF. When `$stdin` holds a
+     * document it is written before the pipe is closed, so a script that
+     * reads stdin to EOF — the Claude Code statusline contract — gets the
+     * {@see StatusLineSession} JSON and a clean end. With no document, the
+     * pipe is closed UNWRITTEN, exactly as it always was: a command that
+     * reads stdin then sees immediate EOF rather than blocking until the
+     * budget kills it, once per tick, which is the same freeze the timeout
+     * exists to bound and is avoidable outright.
+     *
+     * WHY THE WRITE CANNOT STALL THE TICK. `fwrite()` to a pipe blocks only
+     * once the kernel buffer (~64 KiB) is full, and the snapshot is a fixed
+     * set of short scalar keys — pinned far under the buffer even with
+     * absurd-length fields by StatusLineSessionTest. A partial write is not
+     * attempted for the same reason: one call, the whole document, or the
+     * legacy closed pipe.
+     *
+     * WHY `@` ON THE PAYLOAD PATH — THE EARLY-EXIT CONTRACT, borrowed from
+     * {@see \SugarCraft\Code\Hooks\ScriptHook}'s stdin pump: the ordinary
+     * status command (`git branch --show-current`) never reads stdin and is
+     * gone before the bytes are consumed. PHP ignores SIGPIPE, so the dead
+     * reader answers the write (or the close's flush of still-buffered
+     * bytes) with EPIPE — `fwrite()` returning false, `fclose()` failing —
+     * and BOTH are expected outcomes of offering, not defects of the run.
+     * Un-suppressed they would emit warnings mid-paint and trip
+     * `failOnWarning="true"`; the command's real answer still arrives on
+     * stdout, and a run that dies for any other reason already blanks
+     * through the non-zero-exit rule below.
      */
-    public function run(?string $cwd = null): string
+    public function run(?string $cwd = null, ?string $stdin = null): string
     {
         $descriptors = [
             0 => ['pipe', 'r'],
@@ -620,7 +685,12 @@ final class StatusLineCommand
             return '';
         }
 
-        fclose($pipes[0]);
+        if ($stdin !== null && $stdin !== '') {
+            @fwrite($pipes[0], $stdin);
+            @fclose($pipes[0]);
+        } else {
+            fclose($pipes[0]);
+        }
 
         // ONE DEADLINE FOR THE WHOLE RUN, armed before the drain and still in
         // force after it — ScriptHook's doctrine, and for the measurement it

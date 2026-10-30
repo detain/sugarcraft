@@ -373,8 +373,12 @@ final class StatusLineCommandTest extends TestCase
     }
 
     /**
-     * STDIN IS CLOSED BEFORE THE DRAIN, so a command that reads it gets EOF
-     * instead of blocking until the budget kills it once per tick.
+     * THE LEGACY NO-PAYLOAD PATH: STDIN IS CLOSED BEFORE THE DRAIN, so a
+     * command run without a snapshot gets EOF instead of blocking until the
+     * budget kills it once per tick. With GAP-UI-23 the tick caller passes a
+     * payload — but the null-payload shape is the recorded contract of every
+     * internal legacy caller and stays byte-identical; the payload arms are
+     * the tests below.
      *
      * `cat` is the whole discriminator: with the write end closed it returns
      * immediately and the `echo` after it runs, so the run answers `done` in
@@ -394,6 +398,172 @@ final class StatusLineCommandTest extends TestCase
             $elapsed,
             'it waited out the budget, so stdin was still open',
         );
+    }
+
+    // =====================================================================
+    // THE SESSION DOCUMENT ON STDIN — GAP-UI-23, declared risk in both
+    // directions: the reader gets the bytes, the non-reader still finishes
+    // =====================================================================
+
+    public function testACommandThatReadsStdinFindsThePayloadFirstAndThenEof(): void
+    {
+        $payload = '{"session_id":"ses_pin","cwd":"/tmp"}';
+
+        $started = microtime(true);
+        $line = self::command('cat; echo done')->run(null, $payload);
+        $elapsed = microtime(true) - $started;
+
+        // `cat` printed the whole document and returned — both halves live:
+        // bytes that arrived (a payload written AFTER a missed close would
+        // hang this exact command to the budget) and EOF at the close (a
+        // never-closed pipe strands cat and blanks the run).
+        self::assertSame($payload . 'done', $line);
+        self::assertLessThan(StatusLineCommand::TIMEOUT_SECONDS, $elapsed);
+    }
+
+    public function testThePayloadReachesAReaderByteIdentical(): void
+    {
+        // Compact JSON has no whitespace, so oneLine() is the identity on it
+        // and `cat`'s echo is comparable as-is: the document StatusLineSession
+        // builds is the document the child sees, not a sanitized cousin.
+        $payload = '{"session_id":"ses_1","model":{"id":"m","display_name":"m"}}';
+
+        self::assertSame($payload, self::command('cat')->run(null, $payload));
+    }
+
+    public function testACommandThatNeverReadsStdinStillFinishesInsideItsBudget(): void
+    {
+        // THE EARLY-EXIT CONTRACT — the heart of this step. `git branch
+        // --show-current` style commands read nothing and are gone before the
+        // bytes are consumed; PHP ignores SIGPIPE, so the write/close meet a
+        // dead reader as EPIPE — FALSE, not an exception, and suppressed, not
+        // a warning. Every pre-existing blanking rule still applies (silent
+        // success → ''), and the run must answer fast rather than waiting
+        // out TIMEOUT_SECONDS — the shape that would strand one budget's
+        // worth of hang per tick if the write ever blocked or the drain lost
+        // its nerve.
+        $payload = '{"session_id":"ses_pin","cwd":"/tmp"}';
+
+        foreach (['true', 'printf hi'] as $command) {
+            $started = microtime(true);
+            $line = self::command($command)->run(null, $payload);
+            $elapsed = microtime(true) - $started;
+
+            self::assertSame($command === 'true' ? '' : 'hi', $line);
+            self::assertLessThan(
+                self::budgetCeiling(),
+                $elapsed,
+                $command . ' with an unread payload outlasted its budget',
+            );
+        }
+    }
+
+    public function testThePayloadOfferAgainstADeadReaderRaisesNoDiagnostic(): void
+    {
+        // A warning emitted while painting the status bar is a defect IN the
+        // frame, whatever PHPUnit's failOnWarning later says about the suite:
+        // the handler below catches exactly the class of diagnostic the `@`
+        // legs exist to swallow.
+        $caught = [];
+        set_error_handler(static function (int $errno, string $message) use (&$caught): bool {
+            if ($errno !== E_DEPRECATED && $errno !== E_USER_DEPRECATED) {
+                $caught[] = $message;
+            }
+
+            return true;
+        });
+
+        try {
+            self::command('printf hi; exit 0')->run(null, '{"session_id":"ses_pin"}');
+            self::command('exit 9')->run(null, '{"session_id":"ses_pin"}');
+            self::command('cat')->run(null, '{"session_id":"ses_pin"}');
+        } finally {
+            restore_error_handler();
+        }
+
+        self::assertSame([], $caught, 'the stdin offer raised a diagnostic: ' . implode(' | ', $caught));
+    }
+
+    public function testAnEmptyPayloadKeepsTheLegacyImmediateEof(): void
+    {
+        // '' is the documented "nothing to say" of the optional argument,
+        // not a zero-byte offer: the child sees the pre-GAP-UI-23 pipe.
+        self::assertSame('done', self::command('cat; echo done')->run(null, ''));
+    }
+
+    public function testThePayloadIsWrittenBeforeStdinClosesAndTheDeadlineStillArmsAfter(): void
+    {
+        // STRUCTURAL pin — the ordering this step turns on. The write must
+        // precede the close (a close-first child reads EOF with nothing
+        // there), and the deadline must still be armed from AFTER the close
+        // (E646: the budget semantics are byte-preserved; an early-armed or
+        // lengthened budget would move the kill point under a real payload).
+        $source = (string) file_get_contents(
+            \dirname(__DIR__, 2) . '/src/Config/StatusLineCommand.php',
+        );
+
+        $body = (string) substr(
+            $source,
+            (int) strpos($source, 'public function run(?string $cwd = null'),
+            (int) strpos($source, 'self::drain($pipes[1]', (int) strpos($source, 'public function run(?string $cwd = null')),
+        );
+
+        $write = strpos($body, '@fwrite($pipes[0], $stdin)');
+        $close = strpos($body, '@fclose($pipes[0])');
+        // strrpos, not strpos: the @-armed close also CONTAINS this needle,
+        // and it comes first — the last occurrence is the legacy branch's.
+        $legacyClose = strrpos($body, 'fclose($pipes[0]);');
+        $deadline = strpos($body, '$deadline = microtime(true) + self::TIMEOUT_SECONDS;');
+
+        self::assertIsInt($write, 'the payload write vanished from run()');
+        self::assertIsInt($close, 'the payload close vanished from run()');
+        self::assertIsInt($legacyClose, 'the legacy immediate close vanished from run()');
+        self::assertIsInt($deadline, 'the deadline changed spelling — re-derive this pin and the budget claim');
+        self::assertLessThan($close, $write, 'stdin was closed before the payload was written');
+        self::assertLessThan($deadline, $close, 'the deadline no longer arms after stdin is shut');
+
+        // The suppression legs themselves, pinned as COUNTS: a dead reader
+        // meets the payload with EPIPE, whether the write lands before the
+        // child is gone is a scheduling race this file cannot command, so
+        // the runtime shape cannot pin the `@` — these byte counts can, and
+        // they hold that the payload pair is @-suppressed exactly once each
+        // while the legacy close stays un-suppressed (an un-suppressed
+        // legacy close failing is a real defect worth a warning; a
+        // suppressed one would hide it).
+        self::assertSame(1, substr_count($body, '@fwrite($pipes[0], $stdin);'), 'the payload write lost (or duplicated) its @');
+        self::assertSame(1, substr_count($body, '@fclose($pipes[0]);'), 'the payload close lost (or duplicated) its @');
+        self::assertSame(2, substr_count($body, 'fclose($pipes[0]);'), 'the stdin close pair changed shape');
+    }
+
+    public function testCmdRecordsTheSnapshotForTheSynchronousRefresh(): void
+    {
+        // refresh() is the documented no-fork fallback (and what a
+        // settings-view re-run takes): it must replay the LAST snapshot any
+        // cmd() call saw — including a gated one — rather than running the
+        // command blind.
+        $payload = '{"session_id":"ses_sync","cwd":"/tmp"}';
+        StatusLineCommand::configure(self::settings(['type' => 'command', 'command' => 'cat; echo done']));
+
+        $armed = StatusLineCommand::cmd($payload);
+        self::assertIsCallable($armed);
+
+        // The armed call is deliberately NOT invoked; refresh() replays the
+        // recorded snapshot exactly as the forked child would have received
+        // it.
+        StatusLineCommand::refresh();
+        self::assertSame($payload . 'done', StatusLineCommand::line());
+
+        // The in-flight flag the armed call set now gates the next cmd() —
+        // and a GATED call must still record, the docblock promise.
+        $reflector = new \ReflectionClass(StatusLineCommand::class);
+        $property = $reflector->getProperty('lastStdin');
+
+        self::assertNull(StatusLineCommand::cmd('{"second":true}'), 'the in-flight gate fell open');
+        self::assertSame('{"second":true}', $property->getValue(), 'a gated cmd() stopped recording its snapshot');
+
+        StatusLineCommand::configure(self::settings(['type' => 'command', 'command' => 'true']));
+
+        self::assertNull($property->getValue(), 'configure() must forget the previous command\'s picture');
     }
 
     // =====================================================================

@@ -30,6 +30,9 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\ItemList\LoadMoreMsg;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Config\StatusLineCommand;
+use SugarCraft\Code\Config\StatusLineSession;
+use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Cli\Help;
 use SugarCraft\Code\Skills\SkillMentions;
 use SugarCraft\Code\Host\SessionTabState;
 use SugarCraft\Code\Host\SessionSwitch;
@@ -275,7 +278,13 @@ trait HandlesRunControl
             // there is nothing to fold into a new Chat. The repaint comes
             // from Program re-rendering after the update, which it does for
             // every Msg — this arm does not have to ask for one.
-            return [$this, StatusLineCommand::cmd()];
+            //
+            // The snapshot handed to cmd() is what the command finds on its
+            // stdin (GAP-UI-23), gathered by the helper below on the update
+            // path. The gather costs one small HEAD-file read and some
+            // arithmetic, on a tick that only exists when a status line is
+            // configured.
+            return [$this, StatusLineCommand::cmd($this->statusLineStdin())];
         }
         if ($msg instanceof StatusLineResultMsg) {
             StatusLineCommand::settle($msg->line);
@@ -313,6 +322,50 @@ trait HandlesRunControl
         }
 
         return null;
+    }
+
+    /**
+     * The JSON document the configured `statusLine` command finds on its
+     * stdin (GAP-UI-23), built from the accessors the status bar itself
+     * paints — see {@see StatusLineSession} for the shape and its purity
+     * argument. The command's working directory is the one the runner
+     * already launches it in ({@see StatusLineCommand::workingDirectory()});
+     * getcwd() only answers for the shape PHP would run it under otherwise.
+     *
+     * WHY THE VERSION IS MEMOIZED: {@see Help::versionString()} shells out
+     * to git on a dev checkout (ISS-082) and carries no memo of its own, so
+     * calling it per tick would put a child spawn on the paint path every
+     * two seconds. Measured, it also crossed the refresh TTL inside the
+     * StatusLineSegmentTest pin that proves ticks do NOT re-arm a Cmd
+     * mid-burst — the gather's own cost defeated the cadence it serves.
+     * A build that self-updates restarts the process, so a per-process
+     * memo is the same answer the next launch would compute; a function
+     * -local static rather than a property, because the value is not model
+     * state and must not ride Chat clones or session persistence.
+     */
+    private function statusLineStdin(): string
+    {
+        static $version = null;
+
+        $version ??= Help::versionString();
+
+        $backend = $this->backend();
+        $engine = $backend instanceof EngineBackend ? $backend : null;
+        $turnUsage = $this->liveUsage()?->turnUsage;
+
+        return (new StatusLineSession(
+            sessionId: $this->currentSessionId(),
+            cwd: StatusLineCommand::workingDirectory() ?: (getcwd() !== false ? getcwd() : null),
+            modelId: $engine === null ? null : ($engine->servedModel() ?? $engine->model()),
+            projectDir: $this->projectRoot(),
+            version: $version,
+            totalCostUsd: $this->spentUsd() + ($turnUsage?->costUsd ?? 0.0),
+            provider: $engine?->provider()->name(),
+            permissionMode: $this->currentPermissionMode()?->value,
+            contextTokens: $this->contextTokens(),
+            contextPercent: (int) round($this->contextUsagePercent() * 100),
+            branch: SessionStore::gitBranchAt($this->projectRoot()),
+        ))->toJson();
     }
 
     /**

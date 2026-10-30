@@ -807,6 +807,30 @@ would be arbitrary code execution on clone-and-launch, on a timer, with no tool
 call and no permission gate in the path. It is the strongest case of the
 argument `provider` and `instructions` already rest on.
 
+What the command gets on stdin: one JSON document — the session as it stands
+when the run is armed — read to EOF, which is the shape Claude Code's own
+status-line scripts expect:
+
+```json
+{"session_id": "…", "cwd": "…", "model": {"id": "…", "display_name": "…"},
+ "workspace": {"current_dir": "…", "project_dir": "…"}, "version": "…",
+ "cost": {"total_cost_usd": 0.0},
+ "candy_code": {"provider": "…", "permission_mode": "…",
+  "context_tokens": 0, "context_percent": 0, "branch": "…"}}
+```
+
+Every key is always present; a value this build cannot measure stays `null`
+(no session id before the first save, no branch outside a repository), so a
+script can read the keys without probing for them. `display_name` is the same
+string as `id` until a display label exists. The `candy_code` block is the
+superset this build adds; a script written for Claude Code never has to look
+at it. The payload is small enough to be written in one non-blocking step, and
+a command that never reads stdin still runs normally — the offer is simply
+declined and the bytes discarded, with no hang and no warning. Only the
+command itself ever sees it, and only because the user configured it: the
+payload carries absolute paths of the working directory and project root, the
+same paths the command already runs beside with the inherited environment.
+
 What it costs — stated for a command that runs off the TUI thread, in a
 forked child of its own (ISS-095), so a slow configured command can never stall
 the frame or the Ctrl+C read; the result lands as a `StatusLineResultMsg` when
