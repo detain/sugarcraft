@@ -51,7 +51,7 @@ final class SubmitInvisibleUnicodeTest extends TestCase
         return $chat;
     }
 
-    /** Copy of `InFlightInputQueueTest::withDraft` byte-for-byte: the drift
+    /** Copy of `InFlightInputQueueTest::withDraft()` byte-for-byte: the drift
      *  guard licenses exact twins and accuses near-misses (lane-fj lesson). */
     private function withDraft(Chat $chat, string $draft): Chat
     {
