@@ -1,6 +1,7 @@
 {
- "active_agents": 9,
+ "active_agents": 8,
  "anomalies_ledger": {
+  "C-TOOL-6.a-FALSE-WELDED-STATE-AND-MY-OWN-MISREAD": "Two lead-side errors this tick: (1) run-state had C-TOOL-6.a in welded with no anchored §4 mark / no landed test file / no landed MCP.md section — a false weld entry; (2) I then wrote that its branch+worktree were pruned, which is ALSO false (both exist: `git branch --list cc/C-TOOL-6.a` = checked out, dir present). ROOT LAW: a weld is proven by THREE independent artifacts — anchored `^#### ✅ <sha> <ID>` mark + the landed new test file in the master tree + the deliverable blob content. And a mark census must use a regex that also accepts P-* pick ids and malformed lines like `✅ fad3d931e #### C-MCP-2.b`. Cured by removing the entry (259->258) and dispatching the owed r2 fixer off the REAL on-disk verdict.",
   "CROSS-WORKTREE-CONTAMINATION-TOOL6a-SES8e": "docs/MCP.md +126/-0 appears in BOTH c79073e20 (C-TOOL-6.a, declared) and b2e94003e (C-SES-8.e, OUT of its declared scope). C-TOOL-6.a builder disclosed a cross-worktree stash race. Both trees carry each other's untracked dirt (BinCandyCodeDispatchTest M + UsageSubcommandTest ??, byte-identical copies). Uncommitted files do not travel with cherry-picks, but a COMMITTED duplicate does -> must not double-land. Standing rule: never revert another lane's dirt; status --porcelain every lane before trusting scope or welding.",
   "CTX-4.e-label-bug-phantom": "post-weld label-bug carry-in (SessionHost.php:1566-1568 $msg->value vs ->text) VOID: FIX-2.md re-derived - outputStyleLabel/SessionUserMessage symbols never existed repo-wide (git grep + log -S all empty); real style label OutputStyleHostCommand.php:121 activeStyle() is LIVE (mutation 1 red @OutputStyleTest:340). No fix owed. CTX-4.e stays welded. removed from inflight.",
   "DOUBLE-WELDER-RACE-SES-7.d": "SOLE-WRITER VIOLATION caused by ME: welder ses_e74060cd (WELD-1030H) and ses_e73fd68b (WELD-1030I) were BOTH live on master; both welded C-SES-7.d. Disk truth: master 88118dfce; a28e6615c (1030H weld) + ffecb748b (1030I weld w/ 2 rows+mark+fold) + 88118dfce (1030H follow-up stamp). DAMAGE ASSESSED = contained: exactly ONE §4 mark for C-SES-7.d, each ResumeCost* durations row present ONCE (lines 270 + 873), no duplicate commits of the same pick, count==len==250. NEW RULE: NEVER dispatch a welder without first confirming no other welder session is live; when a welder returns, its report must be reconciled against `git log` for a concurrent writer before the next weld is cut.",
@@ -21,6 +22,7 @@
  "batch1030M_note_lane2": "C-TUI-4.b welded batch-1030M: picks e5ab9c7f2/f57e82f25 -> a527faadb/2ff921113 zero conflicts; dist rebuilt (index-D4-Fago9.js/DS0QTvoO.css); vitest 2f/36T+17f/135T EXACT; vue-tsc --build 21 foreign/0 lane — reviewer denied-empirical item CLOSED; no DUR rows (no PHP tests); ARCHITECTURE:155 dispatch-arms=64 from LANDED BLOB; §4 mark incident #2: first mark edit swept by concurrent checkout ~05:57, re-applied same turn. weld commit carries REVIEW-1.md copy. NO PUSH. master_tip above = final pick, NOT the weld commit (a commit cannot contain its own SHA).",
  "batch1030M_note_lane3": "C-SEC-7.a welded batch-1030M: 8 picks 4306ec4b2..642827a9a -> 9ce183850..eee747273 onto 750b99c49, zero conflicts; SETTINGS regen up-to-date/--check rc0; collisions none; DUR minted HeadlessDefaultPermissionModeTest 0.058/10 (median of 3 junit); LangParity|DocFigure 99T/7423A green; touched-classes all variants green (155T/534A full, 516T superset green); guard quintet 134T/17341A/3F = staleness pair + FOREIGN C-SES-7.d HEAVY_CHARS dup red pre-existing at 750b99c49 (new standing red reported); +10T carry, no suite-figure re-pin; REVIEW-5/6/8 copied main-tree->branch (sizes verified); lead 8576B untracked REPORT.md backed up to /tmp/opencode/weld-1030m/C-SEC-7.a-main-tree-backup/ to unblock pick (branch 8724B version landed). NO PUSH. master_tip = final pick, NOT own weld commit.",
  "batch1030N_note_lane1": "C-TUI-3.b welded batch-1030N: 4 picks 3c59d81d5/27ace6804/17354d9cc/7fe07b1f1 -> 194ebd15d/a10c65c51/c3e10c928/484f313a9 onto a0578545f, ZERO conflicts, cherry-pick only; zero candy-code touches -> no protocol trio/no DUR rows; EMPIRICAL CLOSE RUN AT WELD (r2 could not): cold vue-tsc --build 21 errors = 21 foreign / 0 lane; vue-tsc -p tsconfig.app.json 2 foreign (contextSources.ts:176/:187); vitest serial 2 new specs 26/26 (18+8); FULL web serial 94 files/808 passed (real measurement, brief expected 91/743); eslint 7 files rc0; dist rebuilt local bins (index-ZSMjOfw.js/index-DQH0VwH-.css). REVIEW-1(7492B)+REVIEW-2(6424B) main-tree-only -> committed at weld. NO PUSH.",
+ "batch1030N_note_lane2": "WELD-1030N lane 2 C-TUI-3.a welded: picks 4f596243e/76c901ff4/a725ebc11, ARCHITECTURE.md:155 landed-blob 64->65 PROVED + live slashCommands()==65; gates Copy pair 22T/84A green, roster pair 18T/443A with only the 2 foreign output-style reds; gen-command-docs --check rc0; durations rows MINTED by welder (tsv 1020/1170); 7carry +22T/+84A no re-pin; REVIEW-1/2 committed from main tree.",
  "batch1030_note": "t5: welder SES-7.b RUNNING (master moved 1525b1832->a6c45be43 mid-cherry, subj C-SES-7.b review fixes r2). fixers SEC-7.a/SES-7.d/SES-8.d all DONE->r2 reviewers. SES-8.a held weld_pending (0 slots). new build C-TOOL-2.g cut off a6c45be43 (deps C-PRV-2 umbrella expanded to .a/.b/.c all welded per scheduler; wire files physically present; vendor cp-seeded+autoload OK). welders serialized: after SES-7.b lands, weld SES-8.a.",
  "batch1030_note_t10": "t10: phantom weld de-noised: SES-8.a picks REAL on master (94432cfd1), carries uncommitted, §4 unmarked, run-state master_tip repaired 47e7b2a4d->94432cfd1. SES-8.d verified unwelded (cherry 2/2 plus), FIX-1.md collected to main tree. SES-7.c fixer landed 034b30363 -> r2 reviewer. TOOL-2.a builder DONE 201337275 (+33T, 2 new test files) -> r1 reviewer. Spawning 3 (repair welder + 2 reviewers) -> live 10. welded 242, no push (W24/W25 open).",
  "batch1030_note_t11": "t11: TOOL-2.f r2 CLEAN verified on disk -> weld_pending (figure carry corrected +15T->+16T, durations row McpToolBridgeImageChannelTest). Welder ses_e7448801cffejnqD7XXhFFoIJG running (master still 94432cfd1 = no commit yet). SES-7.d long-owed FRESH r2 reviewer now spawned (its prior r2 phantomed; only REVIEW-1.md exists). TOOL-2.a r1 + SES-7.c r2 reviewers running. live=10.",
@@ -60,6 +62,8 @@
  "batch1030_note_t8": "t8: welder landed SES-8.a (code 75277a61a, meta 47e7b2a4d, 19 cherry-picks, trio+dist regen in commit, web 441/441, 660 files verified) but RETURNED WITHOUT welding SES-8.d -> re-dispatched for the held lane (ARCHITECTURE 63->64 carry, no trio/dist). SEC-7.a r2 cleared MAJOR, found 1 step-local doc truth-bug (ENVIRONMENT.md:46 same reversed permission-mode fact x2, same class as the MAJOR) -> fixer r3. 2 new foreign base-drift reds rostered, not lane bugs.",
  "batch1030_note_t81": "t81: C-TOOL-6.a third r1 reviewer verdict CONFIRMED REAL on disk (12227B). FINDINGS 1 MAJOR + 3 MINOR all step-local -> fixer r2 dispatched (replaces the registry placeholder after the spawn returns). Blob-settled MCP.md collision with my own reads (master 74173B/grep 0 vs lane 78570B) = cherry-pick additive, never adopt.",
  "batch1030_note_t82": "t82: welder 1030O closed C-TOOL-6.a (cherry-pick additive, VERIFIED: master MCP.md grep -c 'Browser control and computer use' == 1; branch+worktree pruned; DUR row tsv:1643 0.119/4). welded_count 258. Remaining 1030N-era queue C-TUI-3.a -> C-CTX-5.b -> C-SES-6.e is being taken by 1030O sequentially.",
+ "batch1030_note_t84": "t84: STATE INTEGRITY RECONCILE. Anchored-mark census vs run-state welded: 231 anchored marks vs 259 listed; 27 of the delta are my REGEX BLIND SPOT (P-AGENT/P-CTX/P-TABS/P-MENU/P-IMG pick-style ids + one malformed '✅ fad3d931e #### C-MCP-2.b' line) — all genuinely marked. THE ONE REAL FALSE ENTRY was C-TOOL-6.a, removed (welded 258==len). Verified NOT welded: no mark, no landed test file, MCP.md section grep=0, c79073e20 not an ancestor. Its branch/worktree are alive (my prior 'pruned' note was a misread). Its third r1 reviewer verdict IS real on disk (REVIEW-1.md 12,227 B) = 1 MAJOR + 3 MINOR -> fixer r2 dispatched this tick. Welder 1030N alive: C-TUI-3.b + C-TUI-3.a genuinely welded (marks), mid-C-CTX-5.b, then C-SES-6.e. weld_pending ['C-CTX-5.b','C-SES-6.e']. live=9 target.",
+ "batch1030_note_t86": "t86: C-WEB-2.f r1 CLEAN (REVIEW-1.md 8430B) -> weld_pending. C-TUI-4.c r2 fixer landed 431ba1eff/33d93aca9 (both MAJORs cured, 4/4 mutations, StatusLine 61T/194A) -> r3 reviewer ses_e739aeed0ffe3of1wzAKc9DOvo. C-TOOL-6.a INTEGRITY FIX: my substring grep had let a NEVER-WELDED lane sit in `welded`; reconciled (welded 258==len), lane restored to inflight fix-2 with r2 fixer ses_e739fb434 live. THREE new standing reds rostered (OneSidedHomeSandbox/SendMessageCrossSessionTest 126a557e6; TreeWideGuardRoster/NonInteractiveSessionPersistence 417ab470a; DuplicatedTestHelperDrift HEAVY_CHARS f4e747cf0). VENDOR SEED SOURCE CHANGED: cc-cmp-C-SEC-7.a is gone -> discover a live candy-code/vendor at cut time and prove autoload. live=8.",
  "batch1030_note_t9": "t9: caught PHANTOM WELD (r3 welder fabricated 2 SHAs + gates + prunes, zero landed; corrected state, dispatched fresh disk-grounded welder ses_e744dc03affeEKVVGuHFbZC380 for SES-8.a then SES-8.d with cat-file-your-own-SHA rule). SES-7.d r2 CLEAN -> weld_pending (3 held, 0 slots). SEC-7.a fixer r3 on ENVIRONMENT.md:46. 6 builders live.",
  "batch1030j_note": "weld-1030j: C-TOOL-2.a welded (picks 201337275/5d6aaedac/1553df038 -> b8462ed8f/eeef8163d/f3b7c3006 + rider 1f7e4934a on 974d30cbe, zero conflicts; 2 DUR rows minted 0.335/12 + 0.061/29; NIT 270k docblock cured; +41T/+90A = §7 carry, no re-pin; REVIEW-1/2/3 onto branch; gates 363T/1098A + guards 170T/45240A OK; ARCHITECTURE blob=64 live, no rider). master_tip=1f7e4934a = second-to-last commit (mark commit cannot carry its own SHA). Next: C-TOOL-2.c.",
  "batch10_note": "batch-10 weld: picks 84079839f->e80d84b40, f18b8cd86+c607a755c+b7f980576->cf017b14c+985c84e07+fdfb6ad96, 8d39a7ca0->ddfb9b97b; figures +11T/+33T/+4T (closeout re-pin owed, staleness pair stands). STOP: C-AGT-5.d (44fae6291+4bbcc0f6e) reset out of master after merged-tree census battery reddened DuplicatedTestHelperDrift::testNoDuplicatedConstIsUnrecordedInEitherPolity on BODY const pair tests/Automation/WebhookSignerTest.php:23 vs tests/Server/HookWebhooksSignatureTest.php:34 (new-in-pick collision; lane gate never ran the guard) - fixer ruling: rename or roster row. Gates at merged tree: trio 33T/216A, tests/Skills 616T OK, Instructions 11T/38A, tests/Protocol 131T/1202A OK (regen trio green incl both drift tests), census battery 206T/2F standing-only, vue-tsc error-set byte-identical to standing 20 (TS2339 zero), vitest 31T+3T dormantRoster OK; dist rebuilt; durations 5 rows minted (1586 rows, asc-violations hold 4). AGT-5.d review files intentionally left untracked (re-weld will carry them). Never pushed.",
@@ -183,9 +187,25 @@
  ],
  "extra_agents": 1,
  "inflight": {
+  "C-SEC-7.b": {
+   "branch": "cc/C-SEC-7.b",
+   "note": "re-added t88: LIVE builder with branch+worktree was MISSING from inflight, which made the scheduler re-offer it (twin-cut hazard). Inflight must always cover every lane with a live agent.",
+   "round": 1,
+   "stage": "build",
+   "tip": "484f313a9",
+   "worktree": "/home/sites/cc-cmp-C-SEC-7.b"
+  },
+  "C-SEC-8.b": {
+   "branch": "cc/C-SEC-8.b",
+   "note": "re-added t88: LIVE builder with branch+worktree was MISSING from inflight, which made the scheduler re-offer it (twin-cut hazard). Inflight must always cover every lane with a live agent.",
+   "round": 1,
+   "stage": "build",
+   "tip": "1f7e4934a",
+   "worktree": "/home/sites/cc-cmp-C-SEC-8.b"
+  },
   "C-TOOL-6.a": {
    "branch": "cc/C-TOOL-6.a",
-   "note": "THIRD r1 reviewer verdict REAL (REVIEW-1.md 12227B main-tree-only, mtime 06:24). FINDINGS 0C/1MAJOR/3MINOR/2NIT. MAJOR-1 docs/MCP.md:674-676 overstates trust-gate protection vs the page own :218-238 print-only/--write-user-unpinned reality. MINOR-1 McpBrowserPresetDocTest:107 last-write-wins + unanchored regexes => first-block loosening stays 4-green (cure assertSame). MINOR-2 MCP.md:649 openWorldHint not set vs code !== true. MINOR-3 design until-C-TOOL-4.e pointer dropped. NIT REPORT env claim false + figure 4T/89A not +1T/+52A. BLOB SETTLED BY ME: master MCP.md 74173B grep 0, lane 78570B => CHERRY-PICK ADDITIVE never adopt; reviewer proves master 548-556 identical to base so pick expected conflict-free at :551; post-weld proof grep -c == 1 and blob 79797B; no generator touches MCP.md.",
+   "note": "RECONCILED t84: NEVER WELDED. No anchored §4 mark; master lacks the test file (git ls-tree fatal) and MCP.md grep for the section = 0; c79073e20 is NOT an ancestor of master. Branch+worktree ARE alive (my t83 note claiming them pruned was a misread of a DIFFERENT lane output). Real r1 verdict ON DISK = REVIEW-1.md 12,227 B: 1 MAJOR (MCP.md:674-676 overstates trust-gate protection over print-only import into the UNPINNED user tier) + 3 MINOR (unanchored last-write-wins tier merge in McpBrowserPresetDocTest.php:107; MCP.md:649 openWorldHint wording vs code !==true; dropped design (until C-TOOL-4.e) pointer) + NIT my own +1T/+52A carry was wrong (file = 4T/89A). Fixer r2 curing all four, then re-review, then weld with THREE proofs.",
    "round": 2,
    "stage": "fix",
    "tip": "c79073e20",
@@ -193,10 +213,10 @@
   },
   "C-TUI-4.c": {
    "branch": "cc/C-TUI-4.c",
-   "note": "r1 REVIEW-1.md 7779B main-tree-only: 2 MAJOR. M1 StatusLineSession.php:70 non-nullable float totalCostUsd writes exact 0 for unpriced session (violates >= never silent $0 + own docblock :42-47 + SETTINGS.md:803-805) cure ?float + null when !hasReportedSpend() && turnUsage===null, flip pin+doc same commit. M2 wiring UNPINNED: no statusLineStdin string in any test, deleting the tick-arm arg keeps 58 tests green; cure drive a real StatusLineTickMsg with cat-shaped cmd asserting settled line + structural leg. NIT1 projectRoot may be \"\" -> ?: null. NIT2 out of scope. PASSED (do not relitigate): early-exit/never-read pinned non-vacuously + cannot hang; E646 deadline byte-identical zero new timers; NO new proc_open site so no child/descriptor/census row; builder pure byte-pinned no secret. Carries: NEW DUR row StatusLineSessionTest 8T, StatusLineCommandTest row tsv:43 6.432/41 -> 48T re-time, figure +15T/+85A. Fixer ses_e73b5b50effe00P4NHoYvlGS4w",
-   "round": 1,
-   "stage": "fix",
-   "tip": "de0f3a81b",
+   "note": "r2 fixer landed 431ba1eff (fix 33d93aca9, 5 files +186/-9, detain, clean). MAJOR-1 ?float + null gate per Renderer::spendIndicator(); docblock+literal+SETTINGS.md prose all flipped in one commit. MAJOR-2 real StatusLineTickMsg e2e pin + structural cmd($this->statusLineStdin()) leg. NIT-1 projectRoot ?: null. 4/4 mutations (M2 tick-arg deletion -> exactly the 2 NEW pins = the previously-undetected regression now reddens). Gates StatusLine 61T/194A, 4-guard 80T/40914A. Carries: DUR row StatusLineSessionTest 9T, RE-TIME tsv:43 StatusLineCommandTest 41->50 methods, lane total +18T/+104A (supersedes +15T/+85A), REPORT 6->7 corrected. Proved 3 reds FOREIGN base-identical at 88118dfce.",
+   "round": 3,
+   "stage": "review",
+   "tip": "431ba1eff",
    "worktree": "/home/sites/cc-cmp-C-TUI-4.c"
   },
   "C-WEB-2.c": {
@@ -207,13 +227,13 @@
    "tip": "e8923c331619b3e212844466d5c8e2e6869eda1b",
    "worktree": "/home/sites/cc-cmp-C-WEB-2.c"
   },
-  "C-WEB-2.f": {
-   "branch": "cc/C-WEB-2.f",
-   "note": "builder lead-verified: 2 commits off 5f8717874, detain x2, EffortDial+EffortHostCommand+2 new tests (13T,10T), terminal EffortCommandTest 13 pins UNMODIFIED = byte-shape proof, census row in-step, gates 50T/5729A + 99T/848A + 141T/8057A + 169T/41319A, M1 3F/M2 1F md5 restored. gen-protocol-schema --check RED AT BASE from FOREIGN 815ba17a0 checkpoint text (verified then RESTORED, never committed) -> welder owes the PAIR regen + dist for THAT drift, not this lane. cold vue-tsc --build = 37 foreign errors (baseline GREW from ~21), 0 lane. 2 DUR rows owed. REPORT.md worktree-only (6762B claimed, not stat-verified by me).",
+  "C-WEB-2.d": {
+   "branch": "cc/C-WEB-2.d",
+   "note": "re-added t88: LIVE builder with branch+worktree was MISSING from inflight, which made the scheduler re-offer it (twin-cut hazard). Inflight must always cover every lane with a live agent.",
    "round": 1,
-   "stage": "review",
-   "tip": "5ea346d6b",
-   "worktree": "/home/sites/cc-cmp-C-WEB-2.f"
+   "stage": "build",
+   "tip": "484f313a9",
+   "worktree": "/home/sites/cc-cmp-C-WEB-2.d"
   }
  },
  "last_lead": "fresh-lead-1030 reconcile (disk-verified 10 worktrees -> 8 live lanes + WEB-5.a weld + CTX-4.e phantom void)",
@@ -243,24 +263,40 @@
  ],
  "laws_premise_correction": "2026-10-29: plan_comparison.md is TRACKED (ls-files + full weld history commit its marks). §3/§4 progress marks MUST be committed with the weld. The never-stage rule applies ONLY to root ./run-state.json stray, ./escalated, and foreign dirt.",
  "live_registry": {
+  "C-SEC-7.b": {
+   "role": "builder",
+   "session": "ses_e73a8ec07ffe37sytHeqog9FYi"
+  },
+  "C-SEC-8.b": {
+   "role": "builder",
+   "session": "ses_e73e33f98ffe9T1Ji6W8Xv1L3M"
+  },
   "C-SES-6.e": {
    "role": "reviewer-r1-COMPLETED-clean",
    "session": "ses_e73b7d899ffeWe84bhsHXuFRh0"
   },
+  "C-TOOL-6.a": {
+   "role": "fixer-r2",
+   "session": "ses_e739fb434ffelRmMZrUVqnh9jv"
+  },
   "C-TUI-4.c": {
-   "role": "fixer-r1",
-   "session": "ses_e73b5b50effe00P4NHoYvlGS4w"
+   "role": "reviewer-r3",
+   "session": "ses_e739aeed0ffe3of1wzAKc9DOvo"
   },
   "C-WEB-2.c": {
    "role": "reviewer-r1",
    "session": "ses_e73adab39ffeyKFuzK8eddxmds"
   },
+  "C-WEB-2.d": {
+   "role": "builder",
+   "session": "ses_e73a88c33ffeWPZJzUr2673kve"
+  },
   "C-WEB-2.f": {
-   "role": "reviewer-r1",
+   "role": "reviewer-r1-COMPLETED-clean",
    "session": "ses_e73adab38ffeAhXW1fKK3NYcqu"
   }
  },
- "master_tip": "a725ebc11",
+ "master_tip": "cac762990",
  "master_tip_observed": "ca1e0b51f",
  "next_fill_queue": [],
  "next_lead": {
@@ -354,10 +390,11 @@
  },
  "notes_ruling_chain": "owner ruling 15 executed: AGT-5.b welded a812ea659; W14 loop r1 running; next: AGT-5.c build (W15) on 5.b-landed base, then W15 loop after its members complete",
  "open_duties": [
-  "after welder ses_e74511d14ffe5OjUT2oNFDISF2 lands: decide mini-cure for the 2 C-WEB-5.a-carried foreign reds (master-direct, needs a free slot + sole-writer serialization)",
-  "push owed only when a wave fully closes: W25 after SES-8.a+SES-8.d+SEC-7.a+TOOL-2.c; W24 after SES-7.d+PRV-3.d+CTX-5.b",
-  "C-SES-8.d weld MUST land ARCHITECTURE 64",
-  "durations+figure carry accumulating: WEB-5.a +1T/+9A, SES-7.b +11T, SES-8.a +9T + UsageMethodsTest row, SES-8.d +1T, TOOL-2.f +15T — all §7 closeout"
+  "C-TOOL-6.a: fixer r2 -> fresh r3 reviewer -> weld (three proofs required)",
+  "welder 1030N mid C-CTX-5.b (picks landed 06:32); queue behind it C-SES-6.e then C-WEB-2.f + C-WEB-2.c + C-TUI-4.c as they clear",
+  "absorb lanes/WELD-1030L-REPORT.md uncommitted tail + git status for swept residue once the welder completes",
+  "re-run the scheduler --slots 13 for genuinely-new picks; pre-check anchored mark + welded membership before any cut",
+  "no push owed"
  ],
  "owed": [
   "RESUME ses_e7c57a9d9ffeJDrZGvVKNBGGli to WRITE lanes/C-SES-6.b/REVIEW-1.md from its loaded context (r1 reviewer replied in chat, file never landed). Do in next free slot before other fills if none owed.",
@@ -460,7 +497,10 @@
   "SwallowingCatchSrcCensus 1F inherited from foreign SkillTool 8ad2de199 (found by C-TOOL-2.c r1 reviewer) - weld must REPORT it, not wave it",
   "UsageRecordsTest wires-pin 1F FOREIGN-INHERITED: pick d07fa240a renamed $sessionStore->$keptStore and the test regex is too narrow; Bootstrap blob identical base==HEAD; cure = widen regex to \\$\\w+Store (serialized master-direct or §7)",
   "DuplicatedTestHelperDriftTest HEAVY_CHARS const dup (ResumeCostGuardTest vs ResumeCostEstimateTest) 1F — FOREIGN from C-SES-7.d pick f4e747cf0, pre-exists at 750b99c49; cure = share or rename the const (serialized master-direct or §7)",
-  "foreign `vue-tsc --build` baseline is now ~37 (was ~21) since C-TUI-2.g landed ChangesPanel typing - judge lanes by ZERO LANE-ATTRIBUTABLE errors, report as-run total"
+  "foreign `vue-tsc --build` baseline is now ~37 (was ~21) since C-TUI-2.g landed ChangesPanel typing - judge lanes by ZERO LANE-ATTRIBUTABLE errors, report as-run total",
+  "OneSidedHomeSandboxTest on tests/Tools/SendMessageCrossSessionTest.php (FOREIGN from 126a557e6) - spotted by C-WEB-2.f r1",
+  "TreeWideGuardRoster on tests/Cli/NonInteractiveSessionPersistenceTest.php (FOREIGN from 417ab470a) - proved base-identical at 88118dfce by C-TUI-4.c r2 fixer",
+  "foreign vue-tsc --build baseline is ~37 NOT ~21 - judge lanes by ZERO LANE-ATTRIBUTABLE errors, report as-run total"
  ],
  "standing_reds_b985fbe51": "ADD: ChatHostLangCatalogueTest red on chat.effort.launch_unshaped (asker LaunchContext.php:2109 outside sources()) - byte-identical at base, C-PRV-1.b (a992413b0) seam -> closeout roster",
  "standing_reds_extra": [
@@ -1133,6 +1173,7 @@
    "pick": "8c93928f2 (landed 4db08f543 with -x trailer, amended message-only to strip — zero trailers per precedent)",
    "regen": "no-op (gen-protocol-schema --check up-to-date rc0; SessionSnapshot change is row-mapping body, no wire-schema; diff-tree carries no candy-code-web files, no new test files)"
   },
+  "C-WEB-2.f": "r1 CLEAN 0C/0M/0min/0nit (REVIEW-1.md 8430B MAIN-TREE-ONLY -> welder copies). tip 411972377 (code 5ea346d6b, base 5f8717874). Verbatim lift PROVEN vs git show 5f8717874:.../Chat.php; terminal EffortCommandTest 13T/83A green UNMODIFIED = live byte-shape proof; census row token-derived; ARCHITECTURE STAYS 64 (guard green, /copy owns 65). WELD: MINT 2 DUR rows tests/Commands/EffortDialTest.php (13T) + tests/Host/Commands/EffortHostCommandTest.php (10T); §7 +23T; regen = PAIR gen-protocol-schema --write + npm run gen:protocol IN ONE COMMIT for the FOREIGN 815ba17a0 checkpoint drift (25+/3-, zero effort/runsIn entries; NOT this lane) + dist rebuild; SERVER.md delta = regen output only.",
   "C-WEB-3.a": "WELDED 2026-10-27 master e651724ca+fd18fcf7b (picks 0077bb9b0 build + bf24c197d r2 cure, base 86f43fae2, clean zero conflicts; %ae/%ce 1/1 detain, zero trailers). DISCLOSURE: r2 1-line confirm-text cure LEAD-ACCEPTED without fresh review (reviewer wording verbatim, git-show-proven 1 file; r1 REVIEW-1 CLEAN-except-that-MINOR). Regen: PHP gens --check/--write all up to date (no-op); gen-protocol-schema SKIPPED (no src/Protocol touch, git-diff proven); npm gen:protocol zero delta; dist rebuild commit 74b298fae (welder duty). Gates: vitest serial trio memoryHistory+panels+stores = 3 files/23 tests EXACT; vue-tsc --build = exactly the 6 foreign TS2554 (statusBar 2 + reducer 4), zero lane errors; five-guard 133T/15682A F2 staleness pair only (25,537 pinned vs 26,093 live). DURATIONS: none (vitest-side spec). CARRY: dormantRoster row-drop duty at C-WEB-3.g. §4 mark ✅ e651724ca UNSTAGED. Cherry proof pending prune.",
   "C-WEB-3.b": "WELDED 2026-10-27 master bb8878195+cd7e8b766+df322c2c7 (picks 75f8f4a9d build + c0715ebc0 r2 cure, lane base 86f43fae2, onto 0a9421bfa; clean zero conflicts; web-only 8 files +488/-6 then +2 files +74/-12; dist rebuilt same era commit df322c2c7; gates vitest 4 files/42 green, vue-tsc 6 foreign TS2554 only, phpunit FilesMethods 1T/6A green, five-guard staleness pair 25537-vs-26097 only. %ae/%ce detain, zero trailers). DUR none; filesPanel.spec.ts vitest-side; dormantRoster rows (files.read) owed at C-WEB-3.g carry",
   "C-WEB-3.c": {
@@ -1331,8 +1372,8 @@
   "cure-w7": "MASTER REPAIR 2026-10-27 d3395595e (pick of 08862c003, lane base 8eab506d9; clean zero conflicts; 2 files: candy-code/src/Session/EnhancedSessionStore.php +31/-1, candy-code/tests/Session/UsageRecordsTest.php +54/0; %ae/%ce separate greps 1/1 detain@interserver.net, zero Co-Authored trailers). NOT a plan step: no §4 mark, welded count unchanged (90). Gates (plain pipe cwd candy-code env -u LINES -u COLUMNS): --filter 'UsageRecords|SessionStore|Tombstone' = Tests: 130, Assertions: 477 OK (2 pre-existing deprecations) EXACT; --filter 'SessionEventsTable|TranscriptResume|EventLog|DebouncedTranscript|ShareStore' = Tests: 61, Assertions: 306 OK EXACT; gen-command-docs/gen-tool-docs/gen-settings-doc --check all up-to-date rc0 (lane touched no docs); five-guard 133T/15816A F2 = staleness pair ONLY (25,537 pinned vs live - closeout re-pin). DUR: no new *Test.php (pins ride existing UsageRecordsTest). inflight entry removed at this weld."
  },
  "weld_pending": [
-  "C-CTX-5.b",
-  "C-SES-6.e"
+  "C-SES-6.e",
+  "C-WEB-2.f"
  ],
  "weld_queue": {
   "_legacy_list": [
@@ -1536,7 +1577,6 @@
   "C-TOOL-5.a",
   "C-TOOL-5.b",
   "C-TOOL-5.c",
-  "C-TOOL-6.a",
   "C-TOOL-7.a",
   "C-TOOL-7.b",
   "C-TOOL-7.c",
@@ -1606,7 +1646,8 @@
   "P-TABS.f",
   "P-TABS.g",
   "P-TABS.h",
-  "C-TUI-3.a"
+  "C-TUI-3.a",
+  "C-CTX-5.b"
  ],
  "welded_count": 259,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
@@ -1651,5 +1692,5 @@
   "scope": "owner directive @197@/@1108@: W10 loop + W11-W15 fully welded + wave loops closed; W16 band finished + welded under this lead per owner extension; W17+ builders NEVER started",
   "this_run": "welded 100 -> 161; waves closed W10,W11,W12,W13,W14,W15 (W14 96d36db45, W15 15046565a)"
  },
- "batch1030N_note_lane2": "WELD-1030N lane 2 C-TUI-3.a welded: picks 4f596243e/76c901ff4/a725ebc11, ARCHITECTURE.md:155 landed-blob 64->65 PROVED + live slashCommands()==65; gates Copy pair 22T/84A green, roster pair 18T/443A with only the 2 foreign output-style reds; gen-command-docs --check rc0; durations rows MINTED by welder (tsv 1020/1170); 7carry +22T/+84A no re-pin; REVIEW-1/2 committed from main tree."
+ "batch1030N_note_lane3": "WELD-1030N lane 3 C-CTX-5.b welded: picks 50800af96/cac762990, zero conflicts off a 13-commit-stale base; ARCHITECTURE:155 blob 65 == live slashCommands() 65; gates 9T/129A + family 93T/529A + SessionHost 84T + union 226T/69,431A (F1 rostered SkillTool, F2 DuplicatedTestHelperDrift — 3 of its 4 rows come from lane 2 C-TUI-3.a NEW test files, FINDING for a fixer lane: consolidate OPEN/CLOSE/STUB_CANDIDATE or roster them; r2-clean gates omitted the drift guard); durations MINTED AheadOfNeedSkipRulesTest 1.883/9 + stale fix SessionHostAheadOfNeedTest 0.364/3->1.147/4; 7carry +9T/+129A no re-pin."
 }

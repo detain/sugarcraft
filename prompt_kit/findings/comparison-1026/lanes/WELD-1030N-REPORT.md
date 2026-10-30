@@ -44,3 +44,14 @@ CONCURRENCY NOTE: run-state.json was written by the lead BETWEEN my two fold pas
 - DURATIONS MINTED: tsv line 1020 Chat/CopySlashCommandTest 0.024/7; line 1170 Commands/CopyCommandTest 0.011/15. Counts == live per-file runs; times = median of 3 --log-junit runs; 1644->1646 rows.
 - §7 CARRY +22T/+84A recorded in mark; suite-figure.json NOT re-pinned.
 - REVIEW-1.md 12,446 B + REVIEW-2.md 9,130 B main-tree-only -> committed in weld. Lane worktree clean; nothing worktree-only to collect.
+- Absorption: git cherry master cc/C-TUI-3.a = '-' ALL 3 (patch-ids identical). 4 lane-authored new files blob-identical ca3896ad7 vs master; ARCHITECTURE:155 master blob = 65. Worktree removed + branch deleted (was ca3896ad7).
+
+## LANE 3 C-CTX-5.b (W24) — CLOSED at weld commit (this session)
+- 2 picks ZERO conflicts, cherry-pick only: 240f0f425->50800af96, b09090f5c->cac762990 (onto post-lane-2 tip a5c0caa88). Base a6c45be43 was ~13+ commits stale; shared Chat.php/docs/CONTEXT.md regions auto-merged, nothing hand-fused.
+- ARCHITECTURE:155 landed blob = 65 (brief expected 64 — lane 2 moved it legitimately mid-session); live slashCommands()=65; DocFigure arms green inside the union. CONTEXT.md:156 64,000 == AHEAD_OF_NEED_TOKEN_FLOOR 64_000 (CompactionService:908) proved.
+- Generators --check all rc0 (gen-command/tool/settings-doc "up to date"); zero protocol/web touches -> no trio, no dist rebuild, no regen needed.
+- Gates AS-RUN: file 9T/129A OK; family 93T/529A OK; SessionHost 84T/413A OK; guard union 226T/69,431A/2F = F1 rostered foreign SwallowingCatch(SkillTool) + F2 DuplicatedTestHelperDrift with 4 open rows (3 introduced by LANE 2's Copy test files — OPEN/CLOSE/STUB_CANDIDATE — + 1 rostered foreign HEAVY_CHARS). Zero rows name a lane-3 file.
+- FINDING FOR LEAD: C-TUI-3.a shipped 3 unrostered byte-identical consts its r2 review never guard-checked -> fixer-lane cure (consolidate or roster). Errata recorded under lane 2's §4 mark.
+- Durations: MINTED AheadOfNeedSkipRulesTest 1.883/9 (live 9T/129A, median of 3) + STALE-ROW FIX SessionHostAheadOfNeedTest 0.364/3 -> 1.147/4 (pick added a 4th test; median 1.146669, spread 0.655-3.268 disclosed). 1646->1647 rows.
+- §7 CARRY +9T/+129A (supersedes +7T/+76A); no suite-figure re-pin. In-step legit band bumps 41_500->46_000 x3 files (both reviewers). Drop-arm model-only-by-design note recorded in mark.
+- Evidence committed: REVIEW-1 (7,085 B) + REVIEW-2 (5,184 B) + BRIEF.md + REPORT.md (lane never committed REPORT itself); FIX-1 rode pick 2. Worktree clean, nothing to collect.
