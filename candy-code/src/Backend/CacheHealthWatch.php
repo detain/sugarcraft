@@ -261,4 +261,113 @@ final class CacheHealthWatch
         $this->lastBreak = $break === null ? $this->lastBreak : ['from' => $break['from'], 'to' => $break['to']];
         $this->breakNoticed = $this->breakNoticed || $reuse['breakNoticed'];
     }
+
+    /**
+     * The keep-warm tally (C-CTX-5.d, `promptCache.keepWarm`) — per session,
+     * process-wide, deliberately not per-instance.
+     *
+     * WHY IT IS STATIC AND KEYED BY SESSION: the warm ping is issued by
+     * whichever host holds the session (the Chat's tick handler, the served
+     * host's idle alarm), and the watch instance that will observe the
+     * ping's usage lives inside the engine the host only reaches through
+     * interfaces that carry no accessor for it. The count that answers
+     * "how many warm hits has THIS session recorded" is a session fact, not
+     * an object fact, so it is keyed by the asking session's id — the same
+     * shape the reuse tracker uses inside one process (keying by
+     * conversation identity rather than object identity).
+     *
+     * @var array<string, array{stretch: int, since: ?int, at: ?int, inFlight: bool, total: int}>
+     */
+    private static array $warm = [];
+
+    /**
+     * Latch a ping the caller is about to send: one in flight per session,
+     * and the per-stretch counter advances with it (a new idle stretch —
+     * named by a different anchor — restarts the stretch count and its
+     * clock). Returns false when a ping already hangs on this session, true
+     * when the caller owes the engine one; the caller then settles it with
+     * {@see settleWarmPing()} on the landing either way.
+     */
+    public static function noteWarmPing(string $sessionKey, int $anchorTs): bool
+    {
+        $state = self::$warm[$sessionKey] ?? ['stretch' => 0, 'since' => null, 'at' => null, 'inFlight' => false, 'total' => 0];
+        if ($state['inFlight']) {
+            return false;
+        }
+        if ($state['since'] !== $anchorTs) {
+            $state['stretch'] = 0;
+            $state['since'] = $anchorTs;
+            $state['at'] = null;
+        }
+        $state['stretch']++;
+        $state['at'] = \time();
+        $state['inFlight'] = true;
+        self::$warm[$sessionKey] = $state;
+
+        return true;
+    }
+
+    /**
+     * Settle a latched ping. `$billed` says the call answered and its usage
+     * went to the ledger — only such a landing is a recorded warm hit; a
+     * failed call clears the latch and warms nothing it could be counted for.
+     */
+    public static function settleWarmPing(string $sessionKey, bool $billed): void
+    {
+        $state = self::$warm[$sessionKey] ?? null;
+        if ($state === null) {
+            return;
+        }
+        $state['inFlight'] = false;
+        if ($billed) {
+            $state['total']++;
+        }
+        self::$warm[$sessionKey] = $state;
+    }
+
+    /** Warm hits this session has recorded — calls that answered and billed. */
+    public static function warmPings(?string $sessionKey = null): int
+    {
+        if ($sessionKey !== null) {
+            return self::$warm[$sessionKey]['total'] ?? 0;
+        }
+
+        $sum = 0;
+        foreach (self::$warm as $state) {
+            $sum += $state['total'];
+        }
+
+        return $sum;
+    }
+
+    /** Pings issued against the stretch named by `$anchorTs`; others read 0. */
+    public static function warmStretchPings(string $sessionKey, int $anchorTs): int
+    {
+        $state = self::$warm[$sessionKey] ?? null;
+        if ($state === null || $state['since'] !== $anchorTs) {
+            return 0;
+        }
+
+        return $state['stretch'];
+    }
+
+    /** Whether a ping on this session is still out. */
+    public static function warmPingInFlight(string $sessionKey): bool
+    {
+        return self::$warm[$sessionKey]['inFlight'] ?? false;
+    }
+
+    /** When this stretch's last ping went out — its spacing clock. */
+    public static function lastWarmPingAt(string $sessionKey): ?int
+    {
+        $state = self::$warm[$sessionKey] ?? null;
+
+        return $state === null || $state['at'] === null ? null : $state['at'];
+    }
+
+    /** Test seam: forget every session's warm tally. */
+    public static function resetWarmStateForTesting(): void
+    {
+        self::$warm = [];
+    }
 }

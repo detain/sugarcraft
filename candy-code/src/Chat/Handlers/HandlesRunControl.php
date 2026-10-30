@@ -96,6 +96,7 @@ use SugarCraft\Code\Context\ContextCompactor;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Context\ContextWindow;
 use SugarCraft\Code\Context\IdleCompactionPolicy;
+use SugarCraft\Code\Context\KeepWarmPolicy;
 use SugarCraft\Code\Context\RuleLoader;
 use SugarCraft\Code\Context\RulesState;
 use SugarCraft\Code\Memory\MemoryStore;
@@ -127,6 +128,11 @@ use SugarCraft\Code\App\SessionLockRetryMsg;
 use SugarCraft\Code\App\StatusLineResultMsg;
 use SugarCraft\Code\App\BangShellResultMsg;
 use SugarCraft\Code\App\IdleCompactTickMsg;
+use SugarCraft\Code\App\KeepWarmPingedMsg;
+use SugarCraft\Code\Backend\CacheHealthWatch;
+use SugarCraft\Code\Backend\CacheReusingSummaryBackend;
+use SugarCraft\Code\Backend\SummarisesWithCache;
+use SugarCraft\Code\Message;
 use SugarCraft\Code\App\PermissionReplyMsg;
 use SugarCraft\Code\App\TranscriptFlushMsg;
 use SugarCraft\Code\App\BackgroundTickMsg;
@@ -315,10 +321,22 @@ trait HandlesRunControl
             // C-CTX-5.c: `cacheTtl` re-times the fold to the provider's
             // prompt-cache expiry; the hour mode's path below is byte-unchanged.
             if ($this->compactor->config()->idleAutoMode === CompactorConfig::IDLE_AUTO_CACHE_TTL) {
-                return $this->handleCacheTtlIdleCompactTick();
+                // C-CTX-5.d: keep-warm speaks only where the fold declined.
+                // "Declined" is structural here — the same model instance and
+                // no command out — so a tick the fold took (fold mutation,
+                // parked fold, heuristic fallback) can never also buy a ping.
+                [$folded, $foldCmd] = $this->handleCacheTtlIdleCompactTick();
+                if ($folded !== $this || $foldCmd !== null) {
+                    return [$folded, $foldCmd];
+                }
+
+                return $this->handleKeepWarmTick();
             }
 
             return $this->handleIdleCompactTick();
+        }
+        if ($msg instanceof KeepWarmPingedMsg) {
+            return $this->handleKeepWarmPingedMsg($msg);
         }
 
         return null;
@@ -450,5 +468,149 @@ trait HandlesRunControl
             'fingerprint' => $request['fingerprint'],
             'sessionId' => $this->currentSessionId,
         ]]), $request['cmd']];
+    }
+
+    /**
+     * The keep-warm verdict for one tick (C-CTX-5.d) — reached only from the
+     * `cacheTtl` arm after {@see handleCacheTtlIdleCompactTick()} declined
+     * the tick, which is exactly the "the fold did not take it" the policy
+     * is named for. The transient-silence list below is the fold handler's
+     * own, duplicated on purpose: a session with someone typing, a prompt
+     * queued, or any overlay up is not unattended, and a ping billed to an
+     * attended session is the harm this whole opt-in exists to bound. The
+     * fold handlers stay byte-untouched so the structural pin between them
+     * still compares what it always compared.
+     *
+     * @return array{Model, ?Cmd}
+     */
+    private function handleKeepWarmTick(): array
+    {
+        if (!$this->shouldWatchIdleCompaction()) {
+            return [$this, null];
+        }
+
+        if ($this->inFlight
+            || $this->inputBuf !== ''
+            || $this->queuedPrompts !== []
+            || $this->keyHelp !== null
+            || $this->flow->pendingPermission !== null
+            || $this->palette !== null
+            || $this->sessionPicker !== null
+            || $this->dirPicker !== null
+            || $this->historySearch !== null
+        ) {
+            return [$this, null];
+        }
+
+        // A warm ping is booked against the session it warms. A chat that has
+        // not been saved under an id yet has nothing to book against, so an
+        // id-less tick simply declines — the fold handlers do not need the id
+        // until their own landings, but the keep-warm counters do, from the
+        // first gate.
+        $sessionKey = $this->currentSessionId;
+        if ($sessionKey === null) {
+            return [$this, null];
+        }
+
+        $backend = $this->backendForKeepWarm();
+        if (!KeepWarmPolicy::shouldPing(
+            $this->workspace?->userConfig ?? [],
+            $sessionKey,
+            $backend,
+            \SugarCraft\Code\Host\CompactionService::tierTokenCount($this->estimateTokenCount($this->history), $this->history),
+            $this->contextTokenLimit(),
+            foldDue: false, // the fold arm above just answered this tick; a second fold cannot be due
+            turnInFlight: false, // $this->inFlight above IS this gate
+            idleAnchorTs: $this->lastActivityAt?->getTimestamp(),
+        )) {
+            return [$this, null];
+        }
+
+        $cmd = $this->sendKeepWarmPing($backend, $sessionKey);
+
+        return [$this, $cmd];
+    }
+
+    /**
+     * The engine a warm ping reuses: the session's own main engine, reached
+     * through the summary backend exactly as the cache-reusing fold reaches
+     * it ({@see CacheReusingSummaryBackend::engine()} — the conversation as
+     * a turn would send it, plus one instruction row, tools advertised and
+     * never dispatched). Null when neither half speaks that interface: a
+     * ping is worth sending only on the frozen-prefix route.
+     */
+    private function backendForKeepWarm(): ?\SugarCraft\Code\Backend
+    {
+        $summary = $this->summaryBackend;
+        if ($summary instanceof CacheReusingSummaryBackend) {
+            return $summary->engine();
+        }
+        if ($summary instanceof SummarisesWithCache) {
+            return $summary;
+        }
+        if ($this->backend instanceof SummarisesWithCache) {
+            return $this->backend;
+        }
+
+        return null;
+    }
+
+    /**
+     * Issue one warm ping: latch it on the watch (a second call cannot
+     * overlap), and hand the engine the frozen-prefix ask — the landing is
+     * routed to {@see handleKeepWarmPingedMsg()}. No timeout arms here
+     * (E646): the call rides the engine's existing per-progress ceiling like
+     * the fold's own request does, and a stalled ping simply holds its latch
+     * until the landing or rejection settles it — which is also what stops
+     * any retry storm without adding a timer. The rejection half of the map
+     * turns a failed ping into an unbilled landing rather than letting
+     * {@see Cmd::promise()} surface it as an ExceptionMsg: a keep-warm call
+     * nobody waited for has no business raising an error on the screen.
+     */
+    private function sendKeepWarmPing(?\SugarCraft\Code\Backend $backend, string $key): ?\Closure
+    {
+        if (!$backend instanceof SummarisesWithCache) {
+            return null;
+        }
+
+        $anchorTs = $this->lastActivityAt?->getTimestamp() ?? \time();
+        if (!CacheHealthWatch::noteWarmPing($key, $anchorTs)) {
+            return null;
+        }
+
+        $history = $this->history;
+
+        return Cmd::promise(static fn(): PromiseInterface => $backend
+            ->summariseAsync($history, KeepWarmPolicy::PING_INSTRUCTION)
+            ->then(
+                static fn(Message $reply): Msg => new KeepWarmPingedMsg($key, $reply->usage),
+                static fn(\Throwable $failure): Msg => new KeepWarmPingedMsg($key, null),
+            ));
+    }
+
+    /**
+     * Book one landed warm ping: release the latch, and bill a call that
+     * answered like any other under its own `warm` source label — which is
+     * also where the person sees the count (/usage groups it with `turn`,
+     * `aux`, `compact`, `title`). A ping that failed is released unbilled:
+     * nothing answered, nothing warmed, nothing to record.
+     */
+    private function handleKeepWarmPingedMsg(KeepWarmPingedMsg $msg): array
+    {
+        if ($msg->sessionId !== $this->currentSessionId) {
+            // The session was switched (or deleted) out from under the ask.
+            // The latch belongs to the key that sent it, so release THAT
+            // session's, not the one now loaded.
+            CacheHealthWatch::settleWarmPing($msg->sessionId, false);
+
+            return [$this, null];
+        }
+
+        CacheHealthWatch::settleWarmPing($msg->sessionId, $msg->usage !== null);
+        if ($msg->usage !== null) {
+            $this->accountUsage($msg->usage, null, 'warm');
+        }
+
+        return [$this, null];
     }
 }

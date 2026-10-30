@@ -10,11 +10,13 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Code\Agents\Live\SessionMailbox;
 use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend;
+use SugarCraft\Code\Backend\CacheHealthWatch;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Backend\InteractiveTurn;
 use SugarCraft\Code\Backend\PendingAsk;
 use SugarCraft\Code\Backend\QueueMode;
+use SugarCraft\Code\Backend\SummarisesWithCache;
 use SugarCraft\Code\Background\ScheduleRegistry;
 use SugarCraft\Code\App\BackendToolEventsMsg;
 use SugarCraft\Code\App\BangShellResultMsg;
@@ -30,6 +32,7 @@ use SugarCraft\Code\Context\Compaction\HistoryFingerprint;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Context\ContextCompactor;
 use SugarCraft\Code\Context\IdleCompactionPolicy;
+use SugarCraft\Code\Context\KeepWarmPolicy;
 use SugarCraft\Code\Diagnostics\NoticeSink;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Events\PermissionAsked;
@@ -1037,6 +1040,11 @@ final class SessionHost
             );
 
         if (!$foldDue) {
+            // C-CTX-5.d: the fold declined this alarm. Where keep-warm is on,
+            // the silence may instead buy a cached-read refresh — one ping,
+            // capped per stretch by the same policy the TUI's tick consults.
+            $this->keepWarmServed($tierTokens, $windowLimit, $idleAnchor);
+
             return;
         }
 
@@ -1062,6 +1070,67 @@ final class SessionHost
             $this->save();
             $this->announceTranscriptRow($row);
         }
+    }
+
+    /**
+     * Served keep-warm (C-CTX-5.d) — the alarm-side twin of the TUI's
+     * `Chat::handleKeepWarmTick()`, consulted at exactly the point where the
+     * fold declined this fire. A ping goes out over the session engine's own
+     * frozen-prefix route (the conversation as a turn would send it plus one
+     * instruction row asking for a one-character reply), lands billed under
+     * the `warm` source label like any other call the ledger has ever seen,
+     * and — because this host carries a one-shot alarm where the TUI has a
+     * 60-second tick — re-arms the very same idle watch so the stretch stays
+     * watched and its cap keeps counting down. A fire that meets a ping
+     * still out finds the latch and decides nothing; no timeout is armed on
+     * the ask (E646), so a stalled ping is a held latch and nothing louder.
+     *
+     * C-CTX-6.a's rule holds throughout: the fold, when it IS due, still
+     * owns this alarm untouched — this method is reached only from the
+     * `!$foldDue` branch above it.
+     */
+    private function keepWarmServed(int $tierTokens, int $windowLimit, ?\DateTimeImmutable $idleAnchor): void
+    {
+        $backend = $this->workspace->backend;
+        if (!KeepWarmPolicy::shouldPing(
+            $this->workspace->userConfig,
+            $this->sessionId,
+            $backend,
+            $tierTokens,
+            $windowLimit,
+            foldDue: false, // reached only where the fold just declined
+            turnInFlight: $this->isBusy(),
+            idleAnchorTs: $idleAnchor?->getTimestamp(),
+        )) {
+            return;
+        }
+
+        if (!$backend instanceof SummarisesWithCache) {
+            return;
+        }
+
+        $anchorTs = $idleAnchor?->getTimestamp() ?? \time();
+        if (!CacheHealthWatch::noteWarmPing($this->sessionId, $anchorTs)) {
+            return;
+        }
+
+        $history = $this->history;
+        $sessionId = $this->sessionId;
+        $backend->summariseAsync($history, KeepWarmPolicy::PING_INSTRUCTION)->then(
+            function (Message $reply) use ($sessionId): void {
+                CacheHealthWatch::settleWarmPing($sessionId, $reply->usage !== null);
+                if ($reply->usage !== null) {
+                    $this->ledger()->account($this->spend, $reply->usage, $this->usageRecordSink(), null, 'warm');
+                }
+            },
+            static function (\Throwable $failure) use ($sessionId): void {
+                // A ping that never answered warmed nothing and billed
+                // nothing; only the latch comes down.
+                CacheHealthWatch::settleWarmPing($sessionId, false);
+            },
+        );
+
+        $this->armIdleAutoCompaction();
     }
 
     /**

@@ -16,6 +16,7 @@ use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Context\EnvironmentBlock;
 use SugarCraft\Code\Context\IdleCompactionPolicy;
+use SugarCraft\Code\Context\KeepWarmPolicy;
 use SugarCraft\Code\Context\Pruning\PruningMode;
 use SugarCraft\Code\Context\RepoMapBlock;
 use SugarCraft\Code\Context\SymbolMapBlock;
@@ -181,6 +182,25 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withHelp(Lang::t('settings.compaction.idleAuto.help'))
                 ->withReaderSymbol(IdleCompactionPolicy::class . '::shouldAutoCompact')
                 ->withReadBy($readBy . ' → `IdleCompactionPolicy::shouldAutoCompact()` / `shouldAutoCompactAtCacheTtl()`'),
+            // C-CTX-5.d: the opt-in that keeps a declining fold's cache warm.
+            // The fold above says no below its floor or before its hour; this
+            // cap says how often the silence may then buy a cached-read
+            // refresh instead of letting the prefix lapse. Spend-tier and
+            // user-tier — every ping is a billed call to a session nobody is
+            // watching — so a project file cannot turn it on at all, and the
+            // default is 0 (off) for the same money reason the fold's own
+            // paragraph names. Both hosts read it at their existing idle
+            // decision; it rides C-CTX-5.c's tick and alarm, minting no clock.
+            SettingDefinition::new(KeepWarmPolicy::SETTING, SettingType::Int, 0)
+                ->withCategory(SettingCategory::Context)
+                ->withRiskClass(RiskClass::Spend)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::Live)
+                ->withRange(0, KeepWarmPolicy::MAX_PINGS)
+                ->withLabel(Lang::t('settings.promptCache.keepWarm.label'))
+                ->withHelp(Lang::t('settings.promptCache.keepWarm.help'))
+                ->withReaderSymbol(KeepWarmPolicy::class . '::shouldPing')
+                ->withReadBy('`Chat::handleKeepWarmTick()`, `SessionHost::onIdleAutoCompaction()` → `KeepWarmPolicy::shouldPing()`'),
             // Roadmap 3.B-4 / N-P4b: the model's context reminders. Read with
             // the compaction keys and handed to the engine's step loop through
             // `CompactorConfig::nudgePolicy()`; a min above the max is ignored

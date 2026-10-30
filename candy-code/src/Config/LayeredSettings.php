@@ -543,6 +543,7 @@ final class LayeredSettings
         'compaction.mode',
         'compaction.refillLimit',
         'compaction.idleAuto',
+        'promptCache.keepWarm',
         'contextPruning.minContextTokens',
         'contextPruning.maxContextTokens',
         'contextPruning.nudgeFrequency',

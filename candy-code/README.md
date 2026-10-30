@@ -1283,7 +1283,7 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and forty-one keys are layered — `provider`, `models`,
+Only these one hundred and forty-two keys are layered — `provider`, `models`,
 `providers`, `titleModel`, `summaryModel`, `advisorModel`, `maxOutputTokens`,
 `modelPrices`, `extraBody`, `thinkingBudget`, `reasoningEffort`, `serviceTier`,
 `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
@@ -1293,22 +1293,23 @@ Only these one hundred and forty-one keys are layered — `provider`, `models`,
 `compaction.toolOutputChars`, `compaction.reminderTokens`,
 `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`,
 `compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`,
-`compaction.idleAuto`, `contextPruning.minContextTokens`,
-`contextPruning.maxContextTokens`, `contextPruning.nudgeFrequency`,
-`contextPruning.iterationNudgeThreshold`, `repoMap.enabled`, `repoMap.maxBytes`,
-`env.gitDiffAfterWrites`, `env.diffMaxBytes`, `contextWindow`, `autoReview`,
-`autoReviewScope`, `autoReviewModel`, `permissions.autoStrikeLimit`,
-`permissions.autoTotalLimit`, `permissions.autoAllowReadOnly`,
-`redactToolOutput`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`,
-`references`, `bashSandbox`, `testCommand`, `autoTest`, `toolOutputCapBytes`,
-`mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`,
-`toolSpillWindowPercent`, `toolInstructionCapBytes`, `toolSpillCaptureBytes`,
-`toolSpillMinCapBytes`, `globMaxMatches`, `webFetchMaxBytes`,
-`webFetchTimeoutSeconds`, `webSearchMaxResults`, `webSearchTimeoutSeconds`,
-`webSearchEndpoint`, `webSearchBackend`, `bashInteractiveIdleSeconds`,
-`bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`,
-`grepTimeoutSeconds`, `requireReadBeforeWrite`, `sd.baseUrl`, `sd.apiKey`,
-`sd.timeoutSeconds`, `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`,
+`compaction.idleAuto`, `promptCache.keepWarm`,
+`contextPruning.minContextTokens`, `contextPruning.maxContextTokens`,
+`contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`,
+`repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`,
+`env.diffMaxBytes`, `contextWindow`, `autoReview`, `autoReviewScope`,
+`autoReviewModel`, `permissions.autoStrikeLimit`, `permissions.autoTotalLimit`,
+`permissions.autoAllowReadOnly`, `redactToolOutput`, `secretEnvAllowlist`,
+`allowedTools`, `disabledTools`, `references`, `bashSandbox`, `testCommand`,
+`autoTest`, `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`,
+`readPageLines`, `readPageBytes`, `toolSpillWindowPercent`,
+`toolInstructionCapBytes`, `toolSpillCaptureBytes`, `toolSpillMinCapBytes`,
+`globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`,
+`webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`,
+`webSearchBackend`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`,
+`bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `grepTimeoutSeconds`,
+`requireReadBeforeWrite`, `sd.baseUrl`, `sd.apiKey`, `sd.timeoutSeconds`,
+`sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`,
 `ui.mediaDisplayOverrides`, `sd.savePattern`, `skills.pathNudges`,
 `instructions`, `instructions.walkToRoot`, `instructionsExclude`,
 `disabledRules`, `embeddingModel`, `disabledSkills`, `enabledSkills`,
@@ -1372,7 +1373,7 @@ in precedence only.
 > user-tier only. Details per key in
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
-Even for a trusted project, eighty-three keys are **never** taken from a project file:
+Even for a trusted project, eighty-four keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -1439,7 +1440,11 @@ same money axis; `compaction.refillLimit`, because it is how many automatic comp
 bought nothing the thrash breaker lets a session pay for in a row — the same
 argument counted in summarisation calls; `compaction.idleAuto`, because it decides
 whether the session may pay for a summarisation round-trip NOBODY is watching —
-the same money axis, counted as the decision to spend it unattended; `toolOutputCapBytes`,
+the same money axis, counted as the decision to spend it unattended;
+`promptCache.keepWarm`, for the same axis one step past that decision — it is
+the fold the key above declined handing the silence to a billed cached-read
+ping instead, warm probes NOBODY is watching paying for, so the count per
+idle stretch stays the operator's alone; `toolOutputCapBytes`,
 `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`,
 `toolSpillWindowPercent` and `toolInstructionCapBytes`, the seven caps on what
 one tool result may hand the model,

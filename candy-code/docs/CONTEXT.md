@@ -127,7 +127,15 @@ folds before the next prompt would prefill the whole conversation uncached (an
 hour when the provider marks cache breakpoints, about 5 minutes for the
 server-side kind, never where nothing is cached; the 60-second tick means a
 5-minute cache folds at roughly 4 minutes idle). Both hosts — the TUI's tick
-and a served session's single alarm — read the same policy table.
+and a served session's single alarm — read the same policy table. When that
+fold declines, `promptCache.keepWarm` (default `0`, off) lets the silence buy
+a cached-read refresh instead of letting the prefix lapse: up to the given
+number of times per idle stretch, one ping re-sends the frozen prefix with
+one instruction row asking for a one-character reply, never mid-turn and
+never while a previous ping is still out. These are billed calls to a session
+nobody is watching — the spend cap binds and the count lands in `/usage`
+under `warm` — which is why the default is off and only the operator's own
+config file can raise it.
 
 ### How the summaries are written
 

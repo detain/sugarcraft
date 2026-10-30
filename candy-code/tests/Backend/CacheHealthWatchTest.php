@@ -24,6 +24,7 @@ final class CacheHealthWatchTest extends TestCase
     {
         parent::setUp();
         RuntimeNoticeSink::reset();
+        CacheHealthWatch::resetWarmStateForTesting();
         // The in-process backend: a transport would put the rows on a socket
         // this test cannot drain. Unarmed, every assertion on drain() below
         // would pass vacuously.
@@ -34,6 +35,7 @@ final class CacheHealthWatchTest extends TestCase
     protected function tearDown(): void
     {
         RuntimeNoticeSink::reset();
+        CacheHealthWatch::resetWarmStateForTesting();
         parent::tearDown();
     }
 
@@ -244,6 +246,60 @@ final class CacheHealthWatchTest extends TestCase
             $parent->observeReuse(self::split(100, 7000), 12.0, 'next');
         });
         $this->assertSame([], RuntimeNoticeSink::drain(), 'the child already said it');
+    }
+
+    // ── C-CTX-5.d: the keep-warm tally ───────────────────────────────────────
+
+    public function testTheWarmLatchHoldsOnePingPerSession(): void
+    {
+        $this->assertTrue(CacheHealthWatch::noteWarmPing('s', 100), 'a free session takes a ping');
+        $this->assertTrue(CacheHealthWatch::warmPingInFlight('s'));
+        $this->assertFalse(CacheHealthWatch::noteWarmPing('s', 100), 'a second ask meets the latch');
+
+        CacheHealthWatch::settleWarmPing('s', true);
+        $this->assertFalse(CacheHealthWatch::warmPingInFlight('s'), 'the landing takes the latch down');
+        $this->assertTrue(CacheHealthWatch::noteWarmPing('s', 100), 'and the session can be asked again');
+    }
+
+    public function testTheWarmStretchCountRollsWithItsAnchor(): void
+    {
+        CacheHealthWatch::noteWarmPing('s', 100);
+        CacheHealthWatch::settleWarmPing('s', true);
+        $this->assertSame(1, CacheHealthWatch::warmStretchPings('s', 100));
+
+        CacheHealthWatch::noteWarmPing('s', 100);
+        CacheHealthWatch::settleWarmPing('s', true);
+        $this->assertSame(2, CacheHealthWatch::warmStretchPings('s', 100), 'the same idle stretch keeps counting');
+        $this->assertSame(0, CacheHealthWatch::warmStretchPings('s', 200), 'an uncounted anchor reports none');
+
+        CacheHealthWatch::noteWarmPing('s', 200);
+        CacheHealthWatch::settleWarmPing('s', true);
+        $this->assertSame(0, CacheHealthWatch::warmStretchPings('s', 100), 'the user returned: the old stretch is history');
+        $this->assertSame(1, CacheHealthWatch::warmStretchPings('s', 200));
+    }
+
+    public function testOnlyBilledLandingsAreWarmHits(): void
+    {
+        CacheHealthWatch::noteWarmPing('s', 100);
+        CacheHealthWatch::settleWarmPing('s', false);
+        $this->assertSame(0, CacheHealthWatch::warmPings('s'), 'a call that never answered warmed nothing');
+
+        CacheHealthWatch::noteWarmPing('s', 100);
+        CacheHealthWatch::settleWarmPing('s', true);
+        $this->assertSame(1, CacheHealthWatch::warmPings('s'));
+        $this->assertSame(1, CacheHealthWatch::warmPings(), 'the process-wide read sums sessions');
+
+        CacheHealthWatch::noteWarmPing('other', 50);
+        CacheHealthWatch::settleWarmPing('other', true);
+        $this->assertSame(1, CacheHealthWatch::warmPings('s'), 'one session does not spend another\'s count');
+        $this->assertSame(2, CacheHealthWatch::warmPings());
+    }
+
+    public function testAnUnlandedSessionSettlesQuietly(): void
+    {
+        CacheHealthWatch::settleWarmPing('nobody', true);
+        $this->assertSame(0, CacheHealthWatch::warmPings('nobody'), 'a settle for an unknown session fabricates no hit');
+        $this->assertNull(CacheHealthWatch::lastWarmPingAt('nobody'));
     }
 
     private static function split(int $read, int $prompt): Usage
