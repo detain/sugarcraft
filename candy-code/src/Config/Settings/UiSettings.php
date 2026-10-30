@@ -55,6 +55,7 @@ final class UiSettings
         'toolOutputPreviewLines',
         'expandToolOutput',
         'sessions.autoTitle',
+        'sessions.awayRecap',
         'promptSuggestions',
         'promptSuggestionHistory',
         'maxCheckpoints',

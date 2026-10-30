@@ -21,6 +21,8 @@ use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Core\Msg\PasteMsg;
+use SugarCraft\Core\Msg\FocusGainedMsg;
+use SugarCraft\Core\Msg\FocusLostMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\RawMsg;
 use SugarCraft\Core\TickRequest;
@@ -168,6 +170,20 @@ trait HandlesRunControl
         // is a first press again, never the second half of a turn cancel.
         if ($msg instanceof CloseAgentViewMsg) {
             return [$this->lastEscapeAt === null ? $this : $this->mutate(['lastEscapeAt' => null]), null];
+        }
+
+        // C-TUI-3.g (GAP-UI-N4): the terminal's own "the user left / came
+        // back", enabled by `reportFocus` in `Chat::programOptions()`. The
+        // loss only stamps time; the regain decides whether the absence was
+        // long enough to deserve the recap Claude Code prints on return.
+        if ($msg instanceof FocusLostMsg) {
+            \SugarCraft\Code\Tui\AwayTracker::focusLost();
+
+            return [$this, null];
+        }
+
+        if ($msg instanceof FocusGainedMsg) {
+            return $this->awayRecapOnFocusBack();
         }
 
         // crush-media W3.1: the media form's collected Generate action, handed
@@ -574,6 +590,61 @@ trait HandlesRunControl
         }
 
         return null;
+    }
+
+    /**
+     * C-TUI-3.g (GAP-UI-N4): a regain after a long absence recaps the
+     * session the way Claude Code does on return — the SAME host call the
+     * typed `/recap` runs, minus its echo row (a recap nobody typed should
+     * not also print the command word at them). The stamp is consumed
+     * FIRST, so one absence can never offer the recap twice however the
+     * regain messages arrive. Every gate below stands down by silence: a
+     * mid-turn or drafted-at window would land the row inside the user's
+     * own work, and at the spend cap the automatic path asks nothing on the
+     * user's key — the refusal voice belongs to the typed door alone. The
+     * landing is the ordinary `SideQuestionAnsweredMsg` fold the recap
+     * command already shares (billed `aux`, one row per absence).
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function awayRecapOnFocusBack(): array
+    {
+        if (\SugarCraft\Code\Tui\AwayTracker::focusGained() === null) {
+            return [$this, null];
+        }
+
+        if (
+            $this->inFlight
+            || $this->inputBuf !== ''
+            || !\SugarCraft\Code\Tui\AwayTracker::recapEnabled()
+        ) {
+            return [$this, null];
+        }
+
+        $titleBackend = $this->titleBackend;
+        if ($titleBackend === null || $this->spendCapReached()) {
+            return [$this, null];
+        }
+
+        $asked = 0;
+        foreach (Message::agentVisible($this->history) as $message) {
+            if ($message->role === \SugarCraft\Code\Role::User) {
+                $asked++;
+            }
+        }
+
+        if ($asked < \SugarCraft\Code\Tui\AwayTracker::MIN_USER_TURNS) {
+            return [$this, null];
+        }
+
+        return [$this, Cmd::promise(\SugarCraft\Code\Host\Commands\BtwHostCommand::call(
+            $titleBackend,
+            \SugarCraft\Code\Host\Commands\RecapHostCommand::PROMPT,
+            $this->history,
+            $this->currentSessionId,
+            framing: \SugarCraft\Code\Host\Commands\RecapHostCommand::FRAMING,
+            failureKey: 'host.recap.failed',
+        ))];
     }
 
     /**

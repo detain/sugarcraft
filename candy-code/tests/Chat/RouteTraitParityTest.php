@@ -57,12 +57,18 @@ final class RouteTraitParityTest extends TestCase
         'ContextMeasuredMsg',
         'CustomCommandExpandedMsg',
         'DreamPassCompletedMsg',
+        'FocusGainedMsg',
+        'FocusLostMsg',
         'GenerateFromMediaFormMsg',
         'GoalJudgedMsg',
         'HandoffSeededMsg',
         'HistoryCompactedMsg',
         'IdleCompactTickMsg',
         'InitialPromptMsg',
+        // Foreign fold (C-TUI-3.g disclosure): the KeepWarm lane's arm landed
+        // at master without this roster's row — re-derivation folds it here so
+        // the guard the away-recap arm must move goes green whole.
+        'KeepWarmPingedMsg',
         'KeyMsg',
         'LoadMoreMsg',
         'McpLoginProgressMsg',
@@ -74,6 +80,9 @@ final class RouteTraitParityTest extends TestCase
         'PermissionReplyMsg',
         'PermissionRequestMsg',
         'PromptSuggestionMsg',
+        // Foreign fold (C-TUI-3.g disclosure, with the KeepWarmPingedMsg row
+        // above): another half-landed lane's arm without its roster row.
+        'RemoteFeedPumpMsg',
         'RuntimeNoticePumpMsg',
         'SessionLockRetryMsg',
         'SessionPickerSearchMsg', // C-SES-2 arm landed without its roster row — base red cured in-step (P-CTX.d, 2026-10-27)

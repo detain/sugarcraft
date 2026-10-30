@@ -28,6 +28,7 @@ use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Share\JsonlTranscriptWriter;
 use SugarCraft\Code\Support\AiCommentWatcher;
 use SugarCraft\Code\Theme;
+use SugarCraft\Code\Tui\AwayTracker;
 use SugarCraft\Code\Tui\TerminalBackground;
 use SugarCraft\Code\Tui\TerminalNotifier;
 
@@ -278,6 +279,21 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withHelp(Lang::t('settings.promptSuggestionHistory.help'))
                 ->withReaderSymbol(TitleService::class . '::promptSuggestionHistory')
                 ->withReadBy('`TitleService::suggestionCall()` → `promptSuggestionHistory()`'),
+            // C-TUI-3.g (GAP-UI-N4): the away recap's third title-model
+            // side-call. Switching it off only saves calls, so a project
+            // may (Narrowing) — and unlike the two above it defaults ON for
+            // the Claude Code parity the design names, because the return
+            // row is a feature, not a cost the user expects to opt into.
+            SettingDefinition::new(AwayTracker::SETTING_KEY, SettingType::Bool, true)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Narrowing)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withLabel(Lang::t('settings.sessions.awayRecap.label'))
+                ->withHelp(Lang::t('settings.sessions.awayRecap.help'))
+                ->withReaderSymbol(AwayTracker::class . '::recapEnabled')
+                ->withReadBy('`Chat` focus regain → `HandlesRunControl::awayRecapOnFocusBack()` gate → `AwayTracker::recapEnabled()`'),
             SettingDefinition::new('expandToolOutput', SettingType::Bool, false)
                 ->withCategory(SettingCategory::Interface)
                 ->withRiskClass(RiskClass::Cosmetic)

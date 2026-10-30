@@ -2842,6 +2842,31 @@ final class Chat implements Model
     }
 
     /**
+     * `/recap` (C-TUI-3.g, GAP-UI-N4) —
+     * {@see \SugarCraft\Code\Host\Commands\RecapHostCommand}: where the
+     * session left off and what is next, answered by the title model from a
+     * transcript snapshot as UI-only rows the agent never reads. The typed
+     * door is also the one that spends knowingly at the cap: the automatic
+     * focus-back arm ({@see \SugarCraft\Code\Chat\Handlers\HandlesRunControl})
+     * stands down silently there, and refuses nothing — a user who asks
+     * types the ask. Takes no argument by design; the recap is of the
+     * session as it stands.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleRecapCommand(string $text): array
+    {
+        if ($this->spendCapReached()) {
+            return $this->applyCommandResult(\SugarCraft\Code\Host\Commands\CommandResult::reply(
+                $text,
+                Lang::t('chat.recap.spend_cap'),
+            )->holdingTurn());
+        }
+
+        return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\RecapHostCommand(), $text);
+    }
+
+    /**
      * Start judging the turn that just settled against $goal (roadmap 3.D-3),
      * or end the goal when it can no longer be judged.
      *
@@ -7741,7 +7766,13 @@ final class Chat implements Model
             mouseMode: self::mouseMode(),
             bracketedPaste: true,
             openTty: true,
-
+            // C-TUI-3.g (GAP-UI-N4): ask the terminal to report focus, so a
+            // regain after a long absence can recap the session the way
+            // Claude Code does. `Program::setupTerminal()` writes the
+            // `CSI ?1004h` enable only when this is set; terminals that
+            // never answer simply never send the pair, and the away stamp
+            // in {@see \SugarCraft\Code\Tui\AwayTracker} stays unarmed.
+            reportFocus: true,
         );
     }
 
@@ -10923,7 +10954,7 @@ final class Chat implements Model
         'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share', 'export', 'copy',
         'agent', 'agents', 'memory', 'bg', 'background', 'fork', 'branch', 'sessions', 'theme',
         'mcp', 'websearch', 'pane', 'layout', 'model', 'editor', 'settings', 'config', 'diff',
-        'context', 'instructions', 'tokens', 'btw', 'play', 'hooks', 'effort', 'status', 'usage', 'fast',
+        'context', 'instructions', 'tokens', 'btw', 'recap', 'play', 'hooks', 'effort', 'status', 'usage', 'fast',
         'insights',
         // C-TUI-5.a: every `/doctor` row comes from DoctorChecks, which reads
         // stores and never writes one — the diagnosis an operator wants most
