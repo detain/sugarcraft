@@ -1,6 +1,6 @@
 # C-SES-6.e — Update-available notice: DONE (tip in `tip` row below; branch cc/C-SES-6.e off 093cd25e1)
 
-tip: (filled by the stamp commit that follows the code commit — `git rev-parse cc/C-SES-6.e` is authoritative)
+tip: bd54894faf003d0cf5c4591252d7e0982ad4fa19 (code commit; this stamp commit follows)
 
 ## What shipped
 Phar-only, once-per-24h, async release-list check that paints an update notice on the STARTUP summary from the PREVIOUS check's cache — `view()` never waits on the network. Opt-out `CANDY_CODE_NO_UPDATE_CHECK=1`.
