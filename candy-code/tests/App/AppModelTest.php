@@ -25,6 +25,7 @@ use SugarCraft\Code\App\StatusMsg;
 use SugarCraft\Code\App\ToolResultMsg;
 use SugarCraft\Code\App\UserInputMsg;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Renderer;
@@ -128,6 +129,39 @@ final class AppModelTest extends TestCase
         [$second] = $first->update(new WindowSizeMsg(90, 24));
         $this->assertNull($second->deck);
         $this->assertSame(90, $second->cols);
+    }
+
+    /**
+     * CI-1030 regression pin for the armDeck() session-name cure: the deck's
+     * FIRST tab must be seeded with the launch chat's active tab `sessionName`.
+     * Before the cure the read was `activeTab()?->name` — a property
+     * SessionTab never declares — so the dynamic read warned to null and the
+     * `?? Lang::t('tabs.name_new')` fallback fired on EVERY armed launch: the
+     * real per-session name was silently lost on the deck (and in the window
+     * labels it feeds). Reverting the one-liner reddens exactly this test.
+     */
+    public function testArmDeckSeedsTheActiveTabSessionNameNotTheDefault(): void
+    {
+        $chat = new Chat(
+            currentSessionId: 'deck-pin-session',
+            currentSessionName: 'The Deck Pin Session Name',
+        );
+        $this->assertSame('The Deck Pin Session Name', $chat->openTabs()->activeTab()?->sessionName,
+            'fixture leg: the launch chat really does carry a named active tab');
+
+        [$armed] = $this->app()
+            ->withChat($chat)
+            ->withTabFactory(static fn (?string $sessionId): Chat => new Chat())
+            ->update(new WindowSizeMsg(100, 30));
+
+        $deck = $armed->deck;
+        $this->assertNotNull($deck, 'a factory-carrying launch arms its deck');
+        $tab = $deck->tabs()->activeTab();
+        $this->assertNotNull($tab);
+        $this->assertSame('The Deck Pin Session Name', $tab->sessionName,
+            'armDeck must carry the active tab sessionName into the deck seed');
+        $this->assertNotSame(Lang::t('tabs.name_new'), $tab->sessionName,
+            '...and never the default label when a real name exists');
     }
 
     public function testChatDefaultsToNullAndIsThreadedThroughMutate(): void
