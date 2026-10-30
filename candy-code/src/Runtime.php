@@ -58,6 +58,7 @@ use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Hooks\HookResult;
+use SugarCraft\Code\Memory\SecretRedactor;
 use SugarCraft\Code\Usage;
 
 final class Runtime
@@ -916,6 +917,26 @@ final class Runtime
          * (the plan §6 ruling PROMPT_ENGINEERING.md rule 5 records).
          */
         private ?string $appendedSystemPrompt = null,
+        /**
+         * C-SEC-8.b: opt-in secret redaction of settled tool output, read
+         * per turn from the `redactToolOutput` user-tier setting at the one
+         * construction site ({@see \SugarCraft\Code\Backend\EngineBackend::newRuntime()}).
+         * False — the default and every path that never asked — settles
+         * byte-identically to the tree before this slot existed. True runs
+         * every settled result through {@see SecretRedactor} once, after the
+         * UTF-8 and Unicode-tag scrubs and BEFORE the {@see ToolFinished}
+         * emit, so the bytes that persist (transcript rows, sessions.db, the
+         * event log, the TUI's rendered result and the ToolResultMessage
+         * replayed to the model) all carry the redaction, and none of them
+         * can re-leak it from a store this call wrote. WHAT THE TOOL
+         * EXECUTED IS NEVER ALTERED: the redactor sees the result after the
+         * tool returned; the process, its files and its own stdout already
+         * hold the raw bytes. `/export` reads the persisted history and so
+         * exports the redacted bytes verbatim — the export promise is that
+         * no SECOND redaction is applied, and history saved before the
+         * setting was turned on stays raw.
+         */
+        private bool $redactToolOutput = false,
     ) {}
 
     /**
@@ -3729,6 +3750,15 @@ final class Runtime
             );
         }
 
+        // C-SEC-8.b: the opt-in redaction sits AFTER every note, scrub and tag
+        // strip (the announced removals are ours, not secret material) and
+        // BEFORE the emit, because the ToolFinished payload is what persists:
+        // the serve projector's transcript rows, the EventLog content and the
+        // TUI's history line all fold from THIS event's result, and the
+        // folded message below replays it to the model. Redacting at either
+        // consumer would leave the other one raw.
+        $result = $this->redactResult($result);
+
         // A listener that throws is a UI bug. It must not take the turn's
         // other tool results down with it, and the model still needs this
         // result regardless of whether anything managed to render it.
@@ -3753,12 +3783,41 @@ final class Runtime
     }
 
     /**
+     * C-SEC-8.b: the one place this class consults the redactor. Off does
+     * nothing at all — the SAME {@see ToolResult} object comes back, so every
+     * untouched path is byte-identical to the tree before this existed (no
+     * `withContent` rebuild, no re-stamp). On runs
+     * {@see SecretRedactor::redact()} over the content alone: the image,
+     * document and usage payloads ride through via
+     * {@see ToolResult::withContent()}'s copy-through, because a rendered
+     * swatch or a sub-agent's spend is not text a credential can hide inside,
+     * and dropping either would break the Doctor swatch and audit B4's Task
+     * billing for a feature neither asked for.
+     */
+    private function redactResult(ToolResult $result): ToolResult
+    {
+        if (!$this->redactToolOutput) {
+            return $result;
+        }
+
+        $redacted = SecretRedactor::new()->redact($result->content());
+
+        return $redacted === $result->content() ? $result : $result->withContent($redacted);
+    }
+
+    /**
      * The ONE place this class builds a {@see ToolResultMessage} — {@see settle()}
      * and {@see failure()} both end here — so no tool result reaches a provider
      * without passing {@see utf8Safe()} and the Unicode-tag strip. The scrub is idempotent (a valid
      * string returns untouched), so re-running it over a result settle()
      * already repaired costs one `mb_check_encoding()` and catches the one note
      * appended after that repair: a throwing ToolFinished listener's message.
+     * Under {@see $redactToolOutput} the content arriving here is already the
+     * redacted one ({@see redactResult()} runs upstream of both callers, before
+     * their emits); this builder adds no redaction of its own — a second pass
+     * over settled bytes would be the idempotent no-op it is, but the single
+     * upstream choke is what keeps the EVENT payload redacted too, and that is
+     * the half that persists.
      */
     private static function resultMessage(ToolCall $toolCall, ToolResult $result): ToolResultMessage
     {
@@ -4479,6 +4538,11 @@ final class Runtime
             isError: true,
             denial: $denial,
         ));
+
+        // C-SEC-8.b: the same single choke as settle() — a refusal can quote
+        // the very output that carried the credential (classifier echoes,
+        // hook reasons), and this emit is what persists.
+        $result = $this->redactResult($result);
 
         $this->emit($onEvent, ToolFinished::fromResult($toolCall, $result));
 

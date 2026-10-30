@@ -247,6 +247,17 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     private const MAX_OUTPUT_TOKENS_CONFIG_KEY = 'maxOutputTokens';
 
     /**
+     * C-SEC-8.b: the `redactToolOutput` config key — the user's opt-in to run
+     * settled tool output through {@see \SugarCraft\Code\Memory\SecretRedactor}
+     * before it persists. Config-only like `maxOutputTokens`: no env var and no
+     * CLI flag, because a launch-time escape hatch would let one shell line
+     * silently change what later turns store. Read per turn
+     * (ApplyMode::NextTurn) at the four config-reading call sites of this class
+     * and threaded through {@see newRuntime()}.
+     */
+    private const REDACT_TOOL_OUTPUT_CONFIG_KEY = 'redactToolOutput';
+
+    /**
      * C-SEC-7.c: the tools `plan` mode advertises whatever the declaration
      * verdict says — the three names the mode's own contract promises.
      * `Write` is how the plan file itself is written (`.candy-code/plans/`),
@@ -1873,6 +1884,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             self::parallelToolCallsEnabled($userConfig),
             self::parallelToolDeadlineSeconds($userConfig),
             self::maxOutputTokens($userConfig),
+            self::redactToolOutput($userConfig),
         )->withTurnContextPersisted();
         if ($inbox !== null) {
             $runtime = $runtime->withTurnInbox($inbox);
@@ -2362,6 +2374,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                                             self::parallelToolCallsEnabled($userConfig),
                                             self::parallelToolDeadlineSeconds($userConfig),
                                             self::maxOutputTokens($userConfig),
+                                            self::redactToolOutput($userConfig),
                                         )->withTurnContextPersisted(),
                                         $app,
                                         $billSummary,
@@ -2980,6 +2993,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         bool $parallelToolCalls = true,
         int $parallelToolDeadlineSeconds = Runtime::PARALLEL_TOOL_DEADLINE_SECONDS,
         ?int $maxOutputTokens = null,
+        bool $redactToolOutput = false,
     ): Runtime {
         return (new Runtime(
             $this->provider,
@@ -3000,6 +3014,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // rules reach every turn of this backend and no other Runtime
             // construction is touched. Null everywhere the flag was not given.
             appendedSystemPrompt: $this->appendedSystemPrompt,
+            // C-SEC-8.b: the per-turn redaction opt-in, handed in as a
+            // parameter like the money ceiling above it — the four
+            // config-reading call sites pass what their once-per-turn
+            // userConfig() read; every other newRuntime() caller keeps the
+            // false default, so those paths settle byte-identically.
+            redactToolOutput: $redactToolOutput,
         ))->withSessionPromptMemo($this->sessionPromptMemo);
     }
 
@@ -4021,6 +4041,35 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     }
 
     /**
+     * C-SEC-8.b: the opt-in `redactToolOutput` reader — true only when the
+     * setting actually says yes. A default-false security switch must not be
+     * raised by anything that "isn't false" (the {@see
+     * parallelToolCallsEnabled()} polarity exists because that key defaults ON
+     * and only a literal false may stop it; here the direction is inverted and
+     * only an affirmative answers). Strings are accepted because the settings
+     * file is hand-editable JSON and `${VAR}` placeholders arrive as text;
+     * anything else — `0`, `"maybe"`, an array — reads as off, the same
+     * fail-toward-the-default the maxOutputTokens resolver above shows for nonsense.
+     *
+     * @param ?array<string, mixed> $config the already-read user config;
+     *                                      null reads it
+     */
+    private static function redactToolOutput(?array $config = null): bool
+    {
+        $config ??= self::userConfig();
+        $value = $config[self::REDACT_TOOL_OUTPUT_CONFIG_KEY] ?? false;
+
+        if (is_string($value)) {
+            $value = strtolower(trim($value));
+        }
+
+        return match ($value) {
+            true, 1, 'true', '1', 'yes', 'on' => true,
+            default => false,
+        };
+    }
+
+    /**
      * Runs {@see complete()} - one or more real, blocking provider HTTP calls
      * plus any tool execution the agentic loop drives - in a forked child so
      * the caller's event loop (the TUI's render/input loop) never blocks on
@@ -5018,6 +5067,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             self::parallelToolCallsEnabled($userConfig),
             self::parallelToolDeadlineSeconds($userConfig),
             self::maxOutputTokens($userConfig),
+            self::redactToolOutput($userConfig),
         )->withTurnContextPersisted();
 
         $app = $this->sessionApp()
@@ -5036,6 +5086,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                         self::parallelToolCallsEnabled($userConfig),
                         self::parallelToolDeadlineSeconds($userConfig),
                         self::maxOutputTokens($userConfig),
+                        self::redactToolOutput($userConfig),
                     )->withTurnContextPersisted(),
                     $app,
                     function (AssistantMessage $assistant) use (&$flushUsages): void {

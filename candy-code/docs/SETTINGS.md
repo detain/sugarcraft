@@ -1602,9 +1602,9 @@ again each time.
 
 **Re-read is not the same as re-applied**, but what the per-turn read feeds is
 the entire `next turn` roster in the table above, not three keys: every key
-badged there resolves its value afresh at turn start — three of them inside
-`EngineBackend` itself (`parallelToolCalls`, `parallelToolDeadlineSeconds` and
-`maxOutputTokens`) and the rest at the site that uses them — so editing your
+badged there resolves its value afresh at turn start — four of them inside
+`EngineBackend` itself (`parallelToolCalls`, `parallelToolDeadlineSeconds`,
+`maxOutputTokens` and `redactToolOutput`) and the rest at the site that uses them — so editing your
 own `~/.candy-code/config.json` or `~/.candy-code/settings.json` mid-session
 changes all of them from the next turn. A trusted project's
 `.candy-code/settings.local.json` reaches only the `P`-tier subset of that
