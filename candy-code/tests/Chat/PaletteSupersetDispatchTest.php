@@ -82,6 +82,16 @@ final class PaletteSupersetDispatchTest extends TestCase
         // /status is a destination, not a mode, and the palette has no status
         // pane to pre-open. Bare form IS the whole read-only restatement.
         'status' => 'bare /status is the whole read surface; no palette pane exists to open',
+        // C-CTX-4.e (weld-18q): the spec file (builtin-commands/1405-output-style.php)
+        // records its own no-paletteAction judgement — a style switch names a
+        // file, which is a typed act, on the 0350-effort.php precedent this row
+        // sits beside in registry order. The judgement landed at that weld
+        // without this roster row, reddening the census; the row is the cure the
+        // spec file's own recorded reason calls for (W29 wave-review finding 2),
+        // NOT a minted PaletteAction — this lib's enum is not in that step's
+        // declared files and the bare form already reaches the palette as its
+        // `/<name>` prefill row under C-EXT-5.b (coverage arm below).
+        'output-style' => 'bare /output-style lists the styles; selecting one names a file — the /effort sibling judgement',
         'pane' => 'bare /pane prints usage; the palette actions are the dock-left/dock-right rows',
         // C-TUI-3.a: the spec file (builtin-commands/1910-copy.php) records
         // its own no-paletteAction judgement — a picker row could not carry
