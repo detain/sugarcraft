@@ -685,7 +685,7 @@ A built-in slash command whose body lives on the host (`Host\Commands` —
 server: `command.list` lists it with `runsIn: "server"`, and `command.exec`
 answers the `rows` it appended to the transcript and the `effects` it applied.
 It is refused `-32009` (`command_refused`, with the reason) while a turn holds
-the session, `/workflow pause|status` inside its own run excepted. The
+the session, `/workflow pause|status` inside its own run and `/btw` excepted. The
 screen-only ones (`/theme`, `/pane`, the pickers) and those whose logic is
 still the TUI's are listed `runsIn: "client"` and refused `-32030`
 (`ui_only`). A project's or your own command files (`.candy-code/commands/`)

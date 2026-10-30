@@ -1196,17 +1196,29 @@ final class SessionHost
      * started lands later as a row.
      *
      * Refused while a turn holds the session — a command would rewrite the
-     * history that turn is about to append to — except `/workflow pause|status`
-     * inside the workflow run they control. A name that is no built-in is
-     * refused too: unlike {@see submit()}, this never sends text to the model.
+     * history that turn is about to append to — except the built-ins the
+     * keyboard itself admits mid-turn: `/workflow pause|status` inside the
+     * workflow run they control, and `/btw` answered beside the run
+     * (C-WEB-2.a). One decision table, two doors: this consults the same
+     * {@see TurnController::midTurnRoute()} {@see admitWhileBusy()} applies.
+     * A name that is no built-in is refused too: unlike {@see submit()},
+     * this never sends text to the model.
      */
     public function runCommand(string $name, string $args = ''): CommandResult
     {
         $name = ltrim(trim($name), '/');
         $text = trim('/' . $name . ' ' . trim($args));
 
-        if ($this->isBusy() && !$this->isWorkflowControl($text)) {
-            return CommandResult::refused($this->turns()->hostCommandNotice($text));
+        if ($this->isBusy()) {
+            // `$options` is never consulted for a '/'-prefixed name before
+            // the table refuses it, so the default here cannot change the
+            // verdict — the table is what it is for the keyboard's door.
+            $route = $this->turns()->midTurnRoute($text, $this->isWorkflowControl($text), SubmitOptions::new());
+            if ($route !== TurnController::ROUTE_WORKFLOW_CONTROL
+                && $route !== TurnController::ROUTE_SIDE_QUESTION
+            ) {
+                return CommandResult::refused($this->turns()->hostCommandNotice($text));
+            }
         }
 
         $result = $this->dispatchCommand($text)
