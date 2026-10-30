@@ -284,12 +284,16 @@ final class SelfUpdateTest extends TestCase
         return self::SERVER_ORIGIN . '/' . $name;
     }
 
-    public function testTheRosterCarriesTwelveVerbsWithSelfUpdateInAlphaOrder(): void
+    public function testTheRosterCarriesThirteenVerbsWithSelfUpdateInAlphaOrder(): void
     {
+        // Thirteen as of the merged tree: C-TOOL-5.d landed the `lsp` verb
+        // (index 6 in alpha order) above this lane's base, and master's own
+        // copy still pinned eleven — a standing red at 616d27864 that this
+        // roster cures when welded. Re-derive from ParsedArgs::SUBCOMMANDS.
         $accepted = ParsedArgs::SUBCOMMANDS;
         sort($accepted);
         self::assertSame(
-            ['acp', 'attach', 'bundles', 'completion', 'doctor', 'login', 'mcp', 'models', 'self-update', 'serve', 'session', 'usage'],
+            ['acp', 'attach', 'bundles', 'completion', 'doctor', 'login', 'lsp', 'mcp', 'models', 'self-update', 'serve', 'session', 'usage'],
             $accepted,
         );
         self::assertTrue(class_exists(ArgvParser::class));
