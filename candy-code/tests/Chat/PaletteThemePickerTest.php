@@ -109,6 +109,36 @@ final class PaletteThemePickerTest extends TestCase
     }
 
     /**
+     * C-TUI-4.a: a file under the user themes directory joins Theme::names()
+     * with no Chat change — the picker list, the seeded cursor, and the ●
+     * active marker all flow from names() plus the theme's own carried name.
+     */
+    public function testACustomThemeIsListedAndSeedsItsRow(): void
+    {
+        $themesDirectory = $this->homeSandbox . '/.candy-code/themes';
+        mkdir($themesDirectory, 0700, true);
+        file_put_contents($themesDirectory . '/midnight.json', '{"extends": "tokyoNight", "tokens": {"success": "#ff00ff"}}');
+        Theme::resetForTesting();
+
+        $names = Theme::names();
+        $index = array_search('midnight', $names, true);
+        self::assertIsInt($index, 'fixture: a user theme file must appear in Theme::names()');
+        self::assertGreaterThan(0, $index, 'fixture: custom names follow the built-ins');
+
+        try {
+            $picker = $this->openThemePicker('midnight');
+
+            self::assertSame($index, $picker->palette()->selectedIndex, 'the picker opens on the custom theme row');
+            self::assertSame('midnight', $picker->activeThemeName());
+        } finally {
+            Theme::resetForTesting();
+            @unlink($themesDirectory . '/midnight.json');
+            @rmdir($themesDirectory);
+            @rmdir($this->homeSandbox . '/.candy-code');
+        }
+    }
+
+    /**
      * The themes overlay as {@see Renderer::renderPalette()} paints it, SGR runs
      * stripped so the assertion talks about cells rather than colour-run offsets.
      */

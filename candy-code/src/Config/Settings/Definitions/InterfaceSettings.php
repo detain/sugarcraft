@@ -17,6 +17,7 @@ use SugarCraft\Code\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Code\Config\Settings\SettingType;
 use SugarCraft\Code\Config\Settings\UiEditability;
 use SugarCraft\Code\Config\Settings\Validator\KeyBindingsValidator;
+use SugarCraft\Code\Config\Settings\Validator\ThemeNameValidator;
 use SugarCraft\Code\Config\StatusLineCommand;
 use SugarCraft\Code\Host\ResumeCostEstimate;
 use SugarCraft\Code\Host\TitleService;
@@ -60,7 +61,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::Live)
-                ->withEnumValues(Theme::names())
+                ->withValidators(ThemeNameValidator::new())
                 ->withOptionsSource(OptionsSource::Themes)
                 ->withLabel(Lang::t('settings.theme.label'))
                 ->withHelp(Lang::t('settings.theme.help'))

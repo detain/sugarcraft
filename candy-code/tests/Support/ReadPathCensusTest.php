@@ -541,6 +541,17 @@ final class ReadPathCensusTest extends TestCase
                 . 'Support\\ToolIpcFiles::reserve() created for this run, read once after the '
                 . 'child exits and immediately discarded; decoded as JSON, never executed',
         ],
+        'Config/ThemeFile.php|file_get_contents' => [
+            'OWNED_HOME — load() reads one theme file whose stem already matched NAME_PATTERN and '
+                . 'whose realpath equals the stem file inside `~/.candy-code/themes`, a home '
+                . 'HomeDirectory::owned() established as this user\'s — the project never '
+                . 'contributes bytes here; the body is JSON-decoded into colours, never executed',
+        ],
+        'Config/ThemeFile.php|scandir' => [
+            'NAMES_ONLY — names() lists the same owned-home directory for `*.json` stems; an entry '
+                . 'becomes a name only through NAME_PATTERN (no slash, no leading dot), and content '
+                . 'is read later only through the realpath-exact load() gate above',
+        ],
         'Context/Compaction/ReinjectionPlan.php|file_get_contents' => [
             'CONTAINED — renderFiles() (roadmap 2.6): a file the conversation\'s Read/Edit/Write calls '
                 . 'touched, re-read after a compaction only when ContainedPath::below() holds it under the '

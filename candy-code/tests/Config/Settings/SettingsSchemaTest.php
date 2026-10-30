@@ -111,6 +111,18 @@ final class SettingsSchemaTest extends TestCase
                 continue;
             }
 
+            // C-TUI-4.a: the theme vocabulary is discovered from the user's
+            // themes directory at read time, so it carries a validator instead
+            // of a baked-in enum list. It must never fall back to the empty
+            // EnumValidator — that would refuse every custom name.
+            if ($definition->key === 'theme') {
+                self::assertSame([], $definition->enumValues, 'theme keeps its vocabulary out of the schema');
+                self::assertNotEmpty($definition->validators, 'theme must carry a live theme-name validator');
+                self::assertNull($definition->validate('dark'));
+
+                continue;
+            }
+
             self::assertNotEmpty($definition->enumValues, "{$definition->key} is an enum with no values");
             self::assertContains($definition->default, $definition->enumValues, "{$definition->key}'s default is not in its vocabulary");
         }
@@ -120,7 +132,11 @@ final class SettingsSchemaTest extends TestCase
     public function testDefaultsAgreeWithTheConstantsTheReadersFallBackTo(): void
     {
         self::assertSame(Theme::default()->name, SettingsSchema::byKey('theme')?->default);
-        self::assertSame(Theme::names(), SettingsSchema::byKey('theme')?->enumValues);
+        // C-TUI-4.a: enumValues is deliberately empty for `theme` — the live
+        // name list (built-ins plus this machine's files) comes from
+        // Theme::names()/ThemeFile and must not be baked into the schema, so
+        // docs and the wire payload never show one machine's themes.
+        self::assertSame([], SettingsSchema::byKey('theme')?->enumValues);
 
         // C-SEC-7.a split the console default: the SCHEMA default is what the
         // plain (spawned-daemon) surface falls back to; `-p` names the headless

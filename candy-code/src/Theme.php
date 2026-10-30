@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Code;
 
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Code\Config\ThemeFile;
+use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Tui\TerminalBackground;
 use SugarCraft\Markdown\Theme as MarkdownTheme;
 use SugarCraft\Style\Theme as StyleTheme;
@@ -40,7 +43,14 @@ use SugarCraft\Style\Theme as StyleTheme;
  * `oneDark`/`githubDark`/`solarizedDark`/`solarizedLight` and MarkdownTheme also
  * has `pink`/`plain`/`notty`/`ascii`, but offering a name only one side
  * recognizes would silently mismatch chrome and markdown colors, so those
- * extras are left out of the picker for now.
+ * extras are left out of the picker for now. On top of those built-ins the
+ * list carries the custom themes discovered under
+ * `~/.candy-code/themes/` ({@see ThemeFile}); the intersection rule is what
+ * the BUILT-IN half of the list keeps, and a custom file gets its markdown
+ * half from its `extends` base, so the chrome/markdown pairing survives the
+ * extension. {@see builtInNames()} is the machine-independent half — what
+ * documentation and validators quote, so no page ever lists one machine's
+ * theme files.
  *
  * `adaptive` is the one name neither class resolves on its own: it is paired
  * here, from `dark`/`light` on BOTH sides at once, against
@@ -58,6 +68,15 @@ use SugarCraft\Style\Theme as StyleTheme;
 final class Theme
 {
     private const NAMES = ['dark', 'light', 'dracula', 'tokyoNight', 'ansi', 'adaptive'];
+
+    /**
+     * Names that have already earned their launch notice this process. A bad
+     * theme file re-resolves on every frame ({@see \SugarCraft\Code\Chat}
+     * resolves per paint); the transcript row belongs once.
+     *
+     * @var array<string, true>
+     */
+    private static array $warned = [];
 
     /**
      * The one contrast ratio every colour the shell paints must reach against
@@ -153,30 +172,87 @@ final class Theme
     }
 
     /**
-     * @throws \InvalidArgumentException When $name isn't one of {@see names()}
+     * Resolve a theme name — a built-in ({@see builtInNames()}, matched
+     * case-insensitively), a discovered file under `~/.candy-code/themes/`
+     * ({@see ThemeFile}), or neither.
+     *
+     * There is no failure path, and that is the point: the launch feeds this
+     * method the RAW layered `theme` value — a project settings file can name
+     * one machine's custom theme and reach this call on another, and
+     * {@see \SugarCraft\Code\Chat} re-resolves it per paint, so a throw here
+     * is a crash on the first frame with nothing the person chose to fix.
+     * An unknown name warns ONCE through {@see RuntimeNoticeSink} (carrying a
+     * did-you-mean when one of the advertised names is close) and paints the
+     * default; a present-but-bad file warns once and paints its `extends`
+     * base with whatever valid tokens survived.
      */
     public static function byName(string $name): self
     {
         $canonical = self::canonicalize($name);
         if ($canonical === null) {
-            throw new \InvalidArgumentException(
-                "Unknown theme '{$name}'. Available themes: " . implode(', ', self::NAMES) . '.'
-            );
+            return self::fromFileOrFallback($name);
         }
 
         if ($canonical === 'adaptive') {
             return self::adaptive();
         }
 
-        $sprinkles = match ($canonical) {
+        return self::pair($canonical, self::palette($canonical), MarkdownTheme::byName($canonical) ?? MarkdownTheme::ansi());
+    }
+
+    /**
+     * The non-built-in half of {@see byName()}: one custom file if the name
+     * lists one, otherwise the loud degrade to the default.
+     */
+    private static function fromFileOrFallback(string $name): self
+    {
+        $stem = ThemeFile::resolve($name);
+        $file = $stem === null ? null : ThemeFile::load($stem);
+
+        if ($file === null) {
+            if (!isset(self::$warned['missing|' . strtolower($name)])) {
+                self::$warned['missing|' . strtolower($name)] = true;
+                $hint = self::suggest($name);
+                RuntimeNoticeSink::warn(
+                    Lang::t('chat.theme.file_missing', [
+                        'theme' => $name,
+                        'directory' => ThemeFile::SUBDIRECTORY,
+                        'available' => implode(', ', self::names()),
+                    ]) . ($hint === null ? '' : sprintf(' (did you mean `%s`?)', $hint))
+                );
+            }
+
+            return self::default();
+        }
+
+        if (!isset(self::$warned['file|' . $file->name])) {
+            self::$warned['file|' . $file->name] = true;
+            if ($file->error !== null) {
+                RuntimeNoticeSink::warn(Lang::t('chat.theme.file_malformed', ['file' => $file->name, 'reason' => $file->error, 'base' => $file->extends]));
+            }
+
+            if ($file->notes !== []) {
+                RuntimeNoticeSink::warn(Lang::t('chat.theme.file_notes', ['file' => $file->name, 'notes' => implode('; ', $file->notes)]));
+            }
+        }
+
+        return self::pair(
+            $file->name,
+            ThemeFile::project(self::palette($file->extends), $file->tokens),
+            MarkdownTheme::byName($file->extends) ?? MarkdownTheme::ansi(),
+        );
+    }
+
+    /** The chrome palette a built-in name stands for. `adaptive` has none — it resolves dark or light. */
+    private static function palette(string $canonical): StyleTheme
+    {
+        return match ($canonical) {
             'dark' => StyleTheme::dark(),
             'light' => StyleTheme::light(),
             'dracula' => StyleTheme::dracula(),
             'tokyoNight' => StyleTheme::tokyoNight(),
             'ansi' => StyleTheme::ansi(),
         };
-
-        return self::pair($canonical, $sprinkles, MarkdownTheme::byName($canonical) ?? MarkdownTheme::ansi());
     }
 
     /**
@@ -600,11 +676,115 @@ final class Theme
     }
 
     /**
+     * Everything {@see byName()} answers: the six built-ins in their fixed
+     * order, then the custom theme files discovered under
+     * `~/.candy-code/themes/`, sorted. A custom file whose stem collides with
+     * a built-in name keeps the built-in — the person's palette file never
+     * shadows a name the docs and validators promise.
+     *
      * @return list<string>
      */
     public static function names(): array
     {
+        return array_values(array_unique([...self::NAMES, ...ThemeFile::names()], SORT_REGULAR));
+    }
+
+    /**
+     * The machine-independent half: exactly the shipped palettes, in the
+     * fixed order, no directory scan behind them. Documentation, the settings
+     * validator's advertised list, and any test that must mean "everywhere
+     * this runs" quote THIS, so a machine's private theme files never leak
+     * into a page another machine reads.
+     *
+     * @return list<string>
+     */
+    public static function builtInNames(): array
+    {
         return self::NAMES;
+    }
+
+    /** Whether a name is one of the shipped palettes, matched case-insensitively like {@see byName()}. */
+    public static function isBuiltInName(string $name): bool
+    {
+        return self::canonicalize($name) !== null;
+    }
+
+    /**
+     * Built-ins that name a fixed palette — the legal `extends` targets.
+     * `adaptive` resolves dark-or-light at read time and so cannot be a base.
+     *
+     * @return list<string>
+     */
+    public static function baseNames(): array
+    {
+        return ['dark', 'light', 'dracula', 'tokyoNight', 'ansi'];
+    }
+
+    /** Whether a claimed `extends` names a built-in palette, matched case-insensitively like {@see byName()}. */
+    public static function isBaseName(string $name): bool
+    {
+        return self::canonicalBaseName($name) !== null;
+    }
+
+    /** The canonical spelling of a base theme name, or null when it is not one. */
+    public static function canonicalBaseName(string $name): ?string
+    {
+        $canonical = self::canonicalize($name);
+
+        return $canonical === null || $canonical === 'adaptive' ? null : $canonical;
+    }
+
+    /**
+     * The advertised name closest to a misspelling, or null when nothing is
+     * close. Folded (case, `-` and `_` dropped) equality wins outright, else
+     * one edit for short names and two for longer ones — the
+     * {@see \SugarCraft\Code\Config\LayeredSettings::suggestKey()} budget, so
+     * both places that guess a name guess with the same tolerance.
+     */
+    public static function suggest(string $name): ?string
+    {
+        $needle = self::foldName($name);
+        $limit = \strlen($needle) <= 4 ? 1 : 2;
+
+        $best = null;
+        $bestDistance = PHP_INT_MAX;
+        foreach (self::names() as $candidate) {
+            $target = self::foldName($candidate);
+            if ($target === $needle) {
+                // A fold-equal name still worth showing differs in spelling
+                // (`tokyo-night` -> `tokyoNight`); one that only differs in
+                // case was already tried, and a listed file that refused to
+                // load is never its own suggestion.
+                if (strcasecmp($candidate, $name) !== 0) {
+                    return $candidate;
+                }
+
+                continue;
+            }
+
+            $distance = levenshtein($needle, $target);
+            if ($distance <= $limit && $distance < $bestDistance) {
+                $best = $candidate;
+                $bestDistance = $distance;
+            }
+        }
+
+        return $best;
+    }
+
+    /**
+     * Forget the discovered files, the parses, and which names have warned —
+     * tests move HOME between cases, and each home is its own theme world.
+     */
+    public static function resetForTesting(): void
+    {
+        self::$warned = [];
+        ThemeFile::resetForTesting();
+    }
+
+    private static function foldName(string $name): string
+    {
+        return strtolower(str_replace(['-', '_'], '', $name));
     }
 
     private static function canonicalize(string $name): ?string

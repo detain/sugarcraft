@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests;
 
 use SugarCraft\Core\Msg\BackgroundColorMsg;
+use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Theme;
 use SugarCraft\Code\Tui\TerminalBackground;
 use PHPUnit\Framework\TestCase;
@@ -14,6 +15,7 @@ final class ThemeTest extends TestCase
     protected function tearDown(): void
     {
         TerminalBackground::forget();
+        Theme::resetForTesting();
     }
 
     public function testByNameResolvesEveryAdvertisedName(): void
@@ -30,11 +32,51 @@ final class ThemeTest extends TestCase
         $this->assertSame('dark', Theme::byName('DARK')->name);
     }
 
-    public function testByNameThrowsOnUnknownName(): void
+    /**
+     * C-TUI-4.a replaced the old throw: the launch feeds Chat::themeName the raw
+     * merged config and resolves lazily per frame, so an unknown name must
+     * degrade to the default with one notice — never blow up the first frame
+     * over a theme a project named that this machine does not have.
+     */
+    public function testByNameDegradesUnknownNamesToTheDefaultWithOneNotice(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessageMatches('/Unknown theme/');
+        Theme::resetForTesting();
+        RuntimeNoticeSink::arm(false);
+
+        $theme = Theme::byName('nonexistent');
+        $this->assertSame('dark', $theme->name);
+
+        $rows = array_values(array_filter(
+            RuntimeNoticeSink::drain(),
+            static fn (string $row): bool => str_contains($row, 'nonexistent'),
+        ));
+        $this->assertCount(1, $rows);
+        $this->assertStringContainsString('is not a built-in theme', $rows[0]);
+
         Theme::byName('nonexistent');
+        $this->assertSame([], array_values(array_filter(
+            RuntimeNoticeSink::drain(),
+            static fn (string $row): bool => str_contains($row, 'nonexistent'),
+        )), 'the notice is once per process, never per frame');
+
+        RuntimeNoticeSink::reset();
+        Theme::resetForTesting();
+    }
+
+    public function testBuiltInNamesAreTheSixAndStable(): void
+    {
+        $this->assertSame(
+            ['dark', 'light', 'dracula', 'tokyoNight', 'ansi', 'adaptive'],
+            Theme::builtInNames(),
+            'docs and validators quote builtInNames() — never names(), which grows with one machine\'s files',
+        );
+    }
+
+    public function testSuggestFindsNearMissesAndStaysSilentOnNoise(): void
+    {
+        $this->assertSame('dracula', Theme::suggest('dracual'));
+        $this->assertSame('tokyoNight', Theme::suggest('tokyo-night'));
+        $this->assertNull(Theme::suggest('qqqq'));
     }
 
     public function testDefaultIsDark(): void

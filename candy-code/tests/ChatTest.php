@@ -36,6 +36,8 @@ use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\ToolResult;
+use SugarCraft\Code\Theme;
+use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\BatchMsg;
 use SugarCraft\Code\Backend;
@@ -1473,13 +1475,28 @@ final class ChatTest extends TestCase
         $this->assertSame([['theme', 'dark']], $observed);
     }
 
-    public function testThemeCommandWithUnknownNameLeavesThemeUnchanged(): void
+    public function testThemeCommandWithUnknownNameFallsBackToTheDefault(): void
     {
+        Theme::resetForTesting();
+        RuntimeNoticeSink::arm(false);
+
         $chat = new Chat(inputBuf: '/theme nonexistent');
         [$next] = $chat->update(new KeyMsg(KeyType::Enter, ''));
 
+        // C-TUI-4.a: an unknown name no longer throws at resolve time — the
+        // launch feeds Chat::themeName raw from the merged config, so throwing
+        // here would crash the first frame instead. The name is accepted into
+        // the buffer, the paint degrades to the default, and the reason surfaces
+        // as a runtime notice.
         $this->assertSame('dark', $next->theme()->name);
-        $this->assertStringContainsString('Unknown theme', $next->history[1]->content);
+        $this->assertStringContainsString("Theme set to 'nonexistent'", $next->history[1]->content);
+
+        $rows = array_values(array_filter(RuntimeNoticeSink::drain(), static fn (string $r): bool => str_contains($r, 'nonexistent')));
+        $this->assertCount(1, $rows);
+        $this->assertStringContainsString('is not a built-in theme', $rows[0]);
+
+        RuntimeNoticeSink::reset();
+        Theme::resetForTesting();
     }
 
     public function testCtrlPOpensPaletteAndEscapeCloses(): void
