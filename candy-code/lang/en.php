@@ -73,7 +73,6 @@ return [
     'cli.argv.config.no_such_file' => '--config {path}: no such file',
     'cli.argv.config.not_readable' => '--config {path}: not readable',
     'cli.argv.continue_with_resume' => '--continue and --resume both pick the session to open; use one of them',
-    'cli.argv.incognito_with_session' => '--incognito keeps nothing, so there is no stored session to reopen; it cannot be combined with --continue or --resume',
     'cli.argv.hint.append_system_prompt' => 'Expected the operator rules to append, written inline or as @path to a file containing them.',
     'cli.argv.hint.append_system_prompt_needs_prompt' => 'Use --append-system-prompt with -p "<prompt>" or `candy-code run "<prompt>"`; the interactive TUI takes no append.',
     'cli.argv.hint.config_value' => 'Write it as --config=<file> if the path begins with "-"; it may not be omitted.',
@@ -96,6 +95,7 @@ return [
     'cli.argv.hint.valid_modes' => 'Valid modes are: {modes}.',
     'cli.argv.hint.words_open_tui' => 'Words after the options open the TUI with them as the first prompt; to run a one-shot prompt, use -p "<prompt>". A subcommand takes no prompt, and an empty argument is not one.',
     'cli.argv.hint.worktree_subcommand' => 'Run the subcommand without --worktree, or start `candy-code --worktree <name>` for a main session in another terminal.',
+    'cli.argv.incognito_with_session' => '--incognito keeps nothing, so there is no stored session to reopen; it cannot be combined with --continue or --resume',
     'cli.argv.json_schema.empty' => '--json-schema expects a schema, but the value is empty',
     'cli.argv.json_schema.flag' => '--json-schema expects a schema, but the next argument is the option {option}',
     'cli.argv.json_schema.missing' => '--json-schema expects a schema, but the argument list ended',
@@ -202,6 +202,7 @@ return [
     'cli.completion.option.config' => 'Read settings and permissions from <file>',
     'cli.completion.option.continue' => 'Continue the most recent session',
     'cli.completion.option.help' => 'Show the help screen',
+    'cli.completion.option.incognito' => 'Launch keeping nothing: no session row, no transcript, no memory writes',
     'cli.completion.option.json_schema' => 'Constrain the one-shot answer to a JSON Schema (inline or file path)',
     'cli.completion.option.max_cost' => 'Spend ceiling for the launch, in US dollars',
     'cli.completion.option.max_turns' => 'Tool-loop step ceiling for the launch',
@@ -210,7 +211,6 @@ return [
     'cli.completion.option.output_format' => 'Output format: text, json or stream-json',
     'cli.completion.option.prompt' => 'Run a single prompt and exit (one-shot mode)',
     'cli.completion.option.resume' => 'Resume a stored session by id or name',
-    'cli.completion.option.incognito' => 'Launch keeping nothing: no session row, no transcript, no memory writes',
     'cli.completion.option.root' => 'Use <dir> as the project root',
     'cli.completion.option.version' => 'Show the installed version',
     'cli.completion.unsupported_shell' => 'completion {shell}: unsupported shell',
@@ -564,7 +564,7 @@ Options:
                          commits and no edits is removed again; one with
                          work stays and announces its path. Refused
                          outside a git work tree and beside `serve`.
-      --incognito            Launch that keeps nothing: no session row, no
+      --incognito        Launch that keeps nothing: no session row, no
                          transcript, no automatic memory writes at turn end.
                          What the run produced lives in the process only;
                          sessions and notes stored EARLIER stay readable.

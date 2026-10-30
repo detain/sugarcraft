@@ -73,14 +73,17 @@ final class NonInteractiveSessionPersistenceTest extends TestCase
         }
         $this->useHomeSandbox($this->tempDir . '/home');
 
-        // The launch mode is a process-wide static read by the funnel.
+        // The launch mode and the keep-nothing switch are process-wide
+        // statics read by the funnel; pin both polarities we may encounter.
         Bootstrap::useSessionLaunch(false);
+        Bootstrap::useIncognito(false);
         Bootstrap::useMaxTurns(null);
     }
 
     protected function tearDown(): void
     {
         Bootstrap::useSessionLaunch(false);
+        Bootstrap::useIncognito(false);
         Bootstrap::useMaxTurns(null);
 
         foreach ($this->savedEnv as $key => $value) {
@@ -139,6 +142,40 @@ final class NonInteractiveSessionPersistenceTest extends TestCase
         $stdout = (string) ob_get_clean();
 
         return [$code, $stdout, $args];
+    }
+
+    /**
+     * C-SES-7.c: the same one-shot with `--incognito` keeps nothing. The
+     * funnel's session-open gate stands down, so the AUT-2 persist closure —
+     * row mint, transcript sidecar, and the C-SES-1.a spend-ledger append
+     * that rides inside it — never runs at all. The JSON envelope answers
+     * without a `session_id` key, the pre-AUT-2 shape, because a run that
+     * stored nothing has no session to name.
+     */
+    public function testAnIncognitoOneShotKeepsNoRowNoSidecarAndNoSessionId(): void
+    {
+        [$code, $stdout] = $this->oneShot(['--incognito', '-p', 'quiet question']);
+
+        self::assertSame(NonInteractive::EXIT_OK, $code);
+        self::assertStringContainsString('quiet question', $stdout, 'the answer itself is unaffected');
+        self::assertSame([], $this->store()->listSessions(10), 'no row was minted or saved');
+
+        [$jsonCode, $jsonOut] = $this->oneShot(['--incognito', '--output-format', 'json', '-p', 'envelope question']);
+        self::assertSame(NonInteractive::EXIT_OK, $jsonCode);
+        $envelope = json_decode($jsonOut, true);
+        self::assertIsArray($envelope, 'the json mode still answers');
+        self::assertArrayNotHasKey('session_id', $envelope, 'an incognito run reports no session to reopen');
+
+        $sidecars = [];
+        $walk = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($this->tempDir . '/home', \FilesystemIterator::SKIP_DOTS),
+        );
+        foreach ($walk as $file) {
+            if (str_ends_with($file->getFilename(), '.jsonl')) {
+                $sidecars[] = $file->getFilename();
+            }
+        }
+        self::assertSame([], $sidecars, 'no transcript sidecar reached disk under the sandbox home');
     }
 
     public function testAPlainOneShotMintsItsRowAndSavesTheExchange(): void

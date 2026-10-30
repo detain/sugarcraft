@@ -506,7 +506,7 @@ final class StderrEmitterCensusTest extends TestCase
         // C-AGT-7.b took it to thirty-six: the --json-schema-without-a-prompt
         // hint carries its own `candy-code: ` envelope, the same pre-launch
         // exit-2 usage decision as the family above it.
-        'src/Cli/ArgvParser.php' => 41, // +3 AUT-4 --json-schema refusal family; +1 INFO-4 duplicate-prompt notice (1021); +1 C-AGT-7.b requires_prompt hint; +1 C-AGT-6.c serve-refusal message; +4 C-CTX-4.g --append-system-prompt refusal family
+        'src/Cli/ArgvParser.php' => 42, // +1 C-SES-7.c --incognito combination refusal (stderr-only: the usage error exits 2 before any session exists, so there is no transcript to name it in) | +3 AUT-4 --json-schema refusal family; +1 INFO-4 duplicate-prompt notice (1021); +1 C-AGT-7.b requires_prompt hint; +1 C-AGT-6.c serve-refusal message; +4 C-CTX-4.g --append-system-prompt refusal family
         // +1 in ISS-026: SESSION_RESUME_CROSS_PROJECT_FORMAT carries its own
         // `candy-code: ` envelope, like the retention detail line.
         // +1 in ISS-026 residual (rv6): the --resume pick twin carries its own

@@ -854,7 +854,9 @@ final class LaunchFlagsTest extends TestCase
         $this->assertMatchesRegularExpression('/^ +--max-cost(?:[ =,]|$)/m', $screen);
         $this->assertMatchesRegularExpression('/^ +--max-turns(?:[ =,]|$)/m', $screen);
         $this->assertMatchesRegularExpression('/^ +--json-schema(?:[ =,]|$)/m', $screen);
+        $this->assertMatchesRegularExpression('/^ +--incognito(?:[ =,]|$)/m', $screen);
         $this->assertStringContainsString('Constrain the answer to a JSON Schema', $screen);
+        $this->assertStringContainsString('Launch that keeps nothing', $screen);
         $this->assertStringContainsString('it beats $CANDY_CODE_MAX_COST', $screen);
         $this->assertStringContainsString('it beats the maxToolSteps setting key', $screen);
         $this->assertStringContainsString('not a provider', $screen);
@@ -878,11 +880,13 @@ final class LaunchFlagsTest extends TestCase
             $needleMode = $shell === 'fish' ? '-l permission-mode' : '--permission-mode';
             $needleTurns = $shell === 'fish' ? '-l max-turns' : '--max-turns';
             $needleSchema = $shell === 'fish' ? '-l json-schema' : '--json-schema';
+            $needleIncognito = $shell === 'fish' ? '-l incognito' : '--incognito';
 
             $this->assertStringContainsString($needleModel, $script, "{$shell} omits --model");
             $this->assertStringContainsString($needleMode, $script, "{$shell} omits --permission-mode");
             $this->assertStringContainsString($needleTurns, $script, "{$shell} omits --max-turns");
             $this->assertStringContainsString($needleSchema, $script, "{$shell} omits --json-schema");
+            $this->assertStringContainsString($needleIncognito, $script, "{$shell} omits --incognito");
 
             foreach (PermissionMode::cases() as $mode) {
                 $this->assertStringContainsString(

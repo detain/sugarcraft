@@ -1374,4 +1374,52 @@ final class ArgvParserTest extends TestCase
             );
         }
     }
+
+    /**
+     * C-SES-7.c: `--incognito` is a bare switch — no value form, and absent
+     * it keeps the saving default byte-identically. The flag rides its own
+     * field so every consumer reads one decision, not a sniffed store.
+     */
+    public function testIncognitoIsABareSwitchCarriedOnTheParsedArgs(): void
+    {
+        $result = ArgvParser::parse(['candy-code', '--incognito']);
+
+        $this->assertNull($result->usageError);
+        $this->assertTrue($result->incognito);
+        $this->assertSame([], $result->unknownFlags);
+
+        $plain = ArgvParser::parse(['candy-code']);
+        $this->assertFalse($plain->incognito, 'without the flag the launch saves, as always');
+    }
+
+    /**
+     * `--continue`/`--resume` reopen KEPT sessions; `--incognito` promises
+     * nothing is kept. The contradiction is refused at parse time — every
+     * reopen spelling, each with the hint that names the flag it tells you
+     * to drop (a hint that does not fit the error is the bug this file's
+     * prompt/format pair exists to red).
+     */
+    public function testIncognitoRefusesEveryReopenSpellingWithItsOwnHint(): void
+    {
+        foreach ([['-c'], ['--continue'], ['--resume', 'abc123'], ['--resume=abc123'], ['--resume']] as $extra) {
+            $result = ArgvParser::parse(array_merge(['candy-code', '--incognito'], $extra));
+
+            $this->assertNotNull($result->usageError, implode(' ', $extra) . ' beside --incognito must be refused');
+            $this->assertStringContainsString('--incognito', (string) $result->usageError);
+            $this->assertStringContainsString('--incognito', (string) $result->usageHint);
+        }
+    }
+
+    /**
+     * The attached-value form is NOT the switch: like every bare flag that
+     * never claimed a value slot, `--incognito=x` reaches the unknown-flag
+     * list untouched rather than silently meaning "on".
+     */
+    public function testIncognitoTakesNoAttachedValue(): void
+    {
+        $result = ArgvParser::parse(['candy-code', '--incognito=now']);
+
+        $this->assertFalse($result->incognito);
+        $this->assertContains('--incognito=now', $result->unknownFlags);
+    }
 }
