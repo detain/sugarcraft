@@ -33,4 +33,29 @@ Base anchor: master = d07d55956 (STEP 0 VERIFIED). Single master writer. No push
 - Gates: ToolOutputRedactionTest 24T/47A exact; TrustKey|ReadmeRoster 22T/646A OK; LangParity|SettingsSchemaDocDrift 26T/3512A (brief shape 3485A, +27A live-tree re-derive disclosed); DocFigure 92T/4175A (brief shape 4169A, +6A disclosed); gen-settings-doc --check rc=0 (no regen pair needed).
 - SEC-8.b adds ZERO new stderr emitters (src/ diff grep 0) — census 3F provenance stays C-TOOL-5.d.
 - DUR MINT @432: ToolOutputRedactionTest 0.561/24 (median-of-3 0.534570/0.560817/0.583169; tsv 1662->1663).
-- §4 mark ✅ 0f583ef81 + §7 +24T. STEP 3 payload commit: pending.
+- §4 mark ✅ 0f583ef81 + §7 +24T. STEP 3 payload commit: b503bb054 (mark `#### ✅ 0f583ef81 C-SEC-8.b` + DUR row + this report; path-scoped 3 files).
+
+## STEP 3.5 — StderrEmitterCensus cure (LEAD-INSERTED, master-direct serialized)
+Found post-step-1, reported to lead; lead ruled cure here (landed blob is
+truth, guard is wrong). Census at b503bb054: 95T/3F —
+(1) direct fwrite roster `src/Cli/Subcommands.php` said 7, scan 8;
+(2) shape roster said 46, scan 51;
+(3) BinCandyCodeAutoloadGuardTest prose THIRTY-SIX vs scan 37.
+Landed-blob proof (git show d7a2efbf1 -- candy-code/src/Cli/Subcommands.php):
+C-TOOL-5.d added 5 `'candy-code: '` literals — ternary pair
+cli.lsp.no_action/cli.lsp.unknown_action, cli.lsp.install.no_language,
+cli.lsp.install.unexpected_operand, plus 1 `\fwrite(\STDERR, 'candy-code: ' .
+$result['message'] ...)` install-result writer — the writer is the +1 direct
+site (36->37). NUMBER_WORDS already holds thirty-seven => no map widening.
+Cure (2 files): StderrEmitterCensusTest — header thirty-six->thirty-seven with
+C-TOOL-5.d clause prepended to the history chain; fwrite roster 7->8 +
+decision comment (stderr-alone: separate process, no live transcript — sibling
+writers' precedent); shape roster 46->51 + 5-door comment.
+BinCandyCodeAutoloadGuardTest — THIRTY-SIX->THIRTY-SEVEN; Subcommands bullet
+seven->eight + lsp install-result clause.
+Gates post-cure: StderrEmitterCensusTest 95T/22,698A ALL GREEN;
+DocFigureProseDriftTest 92T/4175A green; GlobDialectDifferentialTest
+13T/366A green (no corpus drift); BootstrapLaunchFormatConstantsTest NOT
+needed (no Bootstrap format numerals touched — verified pre-cure).
+Erratum bullet appended to the §4 C-TOOL-5.d mark in a follow-up commit.
+STEP 3.5 commit: pending.

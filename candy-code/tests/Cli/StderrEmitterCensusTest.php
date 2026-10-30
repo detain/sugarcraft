@@ -57,7 +57,10 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — thirty-six sites (C-SES-7.b 2026-10-29: +1 in
+ *  1. `fwrite(STDERR, …)` — thirty-seven sites (C-TOOL-5.d 2026-10-30: +1 in
+ *     `Subcommands::lsp()` for the install-result line, stderr-alone by the
+ *     sibling-subcommand decision: a separate process, no live transcript;
+ *     C-SES-7.b 2026-10-29: +1 in
  *     `Subcommands::sessionImport()` for the import-refused line — the source file
  *     was refused, the session and store are intact, and the same refusal rides
  *     the JSON document under `--output-format json`; C-AGT-6.c 2026-10-28: +1 in
@@ -379,7 +382,11 @@ final class StderrEmitterCensusTest extends TestCase
         // stderr-alone by the same decision: the source file (not the session)
         // was refused, and under `--output-format json` the refusal rides the
         // document as `import-refused`.
-        'src/Cli/Subcommands.php' => 7,
+        // C-TOOL-5.d 2026-10-30: +1 — `lsp install`'s result line (the
+        // announce or refusal `LspInstaller` returns), stderr-alone: a
+        // subcommand is a separate process with no live transcript,
+        // the same decision as every sibling writer.
+        'src/Cli/Subcommands.php' => 8,
         // `/new` into another directory: SessionRelaunch::tell(), the one
         // line saying why candy-code could not restart there (no
         // pcntl_exec, an unenterable directory, a failed exec) and the
@@ -595,7 +602,11 @@ final class StderrEmitterCensusTest extends TestCase
         // extra-operand refusal and the bad-window refusal); its store/ledger
         // and --session doors print through renderUsage()/resolveSessionTarget
         // and add no new envelope literal.
-        'src/Cli/Subcommands.php' => 46,
+        // C-TOOL-5.d 2026-10-30: +5 — the lsp doors: the no-action and
+        // unknown-action refusals (a ternary pair), install's missing-language
+        // and unexpected-operand refusals, and the install-result writer's
+        // own envelope literal beside its fwrite.
+        'src/Cli/Subcommands.php' => 51,
         'src/Permissions/PermissionPrompt.php' => 1,
         // Not a message: the protocol schema's `$id` URN
         // (`urn:sugarcraft:candy-code:protocol:v1`, roadmap O-3c) spells the
