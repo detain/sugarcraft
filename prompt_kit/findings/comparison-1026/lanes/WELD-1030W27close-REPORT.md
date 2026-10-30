@@ -23,3 +23,8 @@ Welder: cc-cmp-welder (this session, sole master writer per lead). Base anchor v
 - Pre-fold: live run-state sha256 7ff6ec79cb8fccb3d73d611b284a409e68b9128125b77a7b7a22c12fbc8c8d7c == backup taken at weld start (lead did not mutate mid-weld; fold-on-live-copy honored, no checkout --).
 - waves_closed -> 29 entries [1..27,29,32]; wave_loops BOTH keys ('27' numeric + 'W27' string, lead's dual-write) flipped stage=closed preserving r2 verdict text, close_sha f04e7d4f7 + nit1_rider_sha 0c9584d72 recorded; master_tip f56cd4ee0 -> f04e7d4f7; assert welded_count==len(welded)==284 held BEFORE write; os.replace/tmp write; post-write reload re-asserted all four conditions.
 - batch1030w27close_note added.
+
+## Final (stamp commit — a commit cannot carry its own SHA)
+- Commits: rider 0c9584d72 -> close (plan §3, path-scoped) f04e7d4f7 -> fold+evidence babae5238. All three %ae+%ce detain@interserver.net (separate greps), zero Co-Authored-By.
+- PUSH milestone (sanctioned): pre-push ls-remote == a5591612f (brief expectation EXACT), fetch confirmed ancestor-of-local (17 ahead), pull --ff-only no-op, push origin master a5591612f..babae5238 — both ends verified refs/remotes == local == babae5238. run-state origin_tip -> babae5238 + push_log appended in this same stamp commit.
+- W27 CLOSED. waves_closed now W1–W27, W29, W32 (29 of 32; open: W28, W30, W31 + LATE W33–W42).

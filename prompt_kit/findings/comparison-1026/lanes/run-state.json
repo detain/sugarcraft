@@ -291,7 +291,7 @@
   "BUILDERS": "none (owner t423 freeze)",
   "FIXERS": "none"
  },
- "master_tip": "f04e7d4f7",
+ "master_tip": "babae5238",
  "master_tip_at_dispatch": "9fb981c5c",
  "master_tip_observed": "ca1e0b51f",
  "next_fill_queue": [],
@@ -531,7 +531,7 @@
  "status": "RUNNING",
  "tick": "lead-rotated 1030Z+; cherry-sequencer cleared (blob-equal proof); C-SEC-7.c evidence restored; 2 fresh cuts + C-CTX-6.e mark-fix welder + W29/W32 r1 wave reviewers live",
  "tip": "4f1bdab31",
- "updated": "2026-10-30T22:45:34Z",
+ "updated": "2026-10-30T22:46:48Z",
  "wave_loops": {
   "1": "closed r2 CLEAN",
   "16": {
@@ -1819,7 +1819,8 @@
  "push_log": [
   "t303: pushed 6fb38eef4 (milestone: 1030S C-TUI-2.e weld batch, verified per ruling t159)",
   "t414: master ad60f7a3f pushed (1030V batch milestone per owner ruling t159; ls-remote verified == ad60f7a3f; origin in sync)",
-  "t580: pushed master d61475373 -> origin (was 3568d3397); ahead 17 FF, ls-remote re-proved. Milestone: 1030Z batch (C-TUI-5.c weld+fold 278, CI-1030 13-pick ad-hoc weld+fold 277, C-CTX-6.e closeout, C-CTX-5.d weld+fold 279, KeyBindingRegistryTest base-red cure, StderrEmitterCensus lsp cure)"
+  "t580: pushed master d61475373 -> origin (was 3568d3397); ahead 17 FF, ls-remote re-proved. Milestone: 1030Z batch (C-TUI-5.c weld+fold 278, CI-1030 13-pick ad-hoc weld+fold 277, C-CTX-6.e closeout, C-CTX-5.d weld+fold 279, KeyBindingRegistryTest base-red cure, StderrEmitterCensus lsp cure)",
+  "W27-close: pushed master babae5238 -> origin (was a5591612f, == brief expectation, FF, 17 ahead); ls-remote re-proved both ends babae5238. Milestone: rider 0c9584d72 + W27 close f04e7d4f7 + fold/evidence babae5238 (weld-1030W27close)."
  ],
  "batch1030t_note": "welded C-SEC-7.e (owner ruling t212 option-3 implicit-ON autoReview + once-per-session notice). REVIEW-1 r1 CLEAN 0C/0M/0m collected. DUR re-time: BootstrapPermissionGateTest 0.547@65->0.803@68, AutoReviewScopeTest 0.050@12->0.068@15 (median-of-3 junit testcase-sums). weld_pending KEPT C-SEC-8.b/C-SES-8.b (lead concurrent). §7 carry +6T. No web/protocol chain this batch.",
  "fix_queue": [
@@ -1852,7 +1853,7 @@
  ],
  "batch1030u_note": "1030U fold-by-welder: welded += C-TUI-5.c (277->278, count==len asserted against FRESH pre-fold read, concurrent CI-1030 delta at 277 preserved). inflight: removed C-TUI-5.c (welded) + stale C-CTX-6.e (brief instruction; key carried tip 491863e9e superseded by disk 6b8fee691 3-commit truth; closure disposition stays with lead). C-CTX-5.d untouched. KEEPER law honored: lead may have further deltas — this fold read the live file at fold time, wrote via full-json rewrite preserving all other keys byte-structurally.",
  "batch1030z_note": null,
- "origin_tip": "028f78a80",
+ "origin_tip": "babae5238",
  "run_end": "LEAD RUN WINDING DOWN t580: stop-budget over (279 vs start 240); owner t423 final order. Orchestral duties owed next: W25/W26 wave-loop re-reviews (steps all welded now; loops r1 FINDINGS closed except C-CTX-5.d/6.e late welds), scheduler waves_fully_welded re-read, §3 flips on clean loops, then cc-cmp-gate closeout for remaining ~49 steps.",
  "fleet_roster": {
   "C-SES-8.g|builder": "ses_e71ac801effeCrZlK5lPBHWEy7",
