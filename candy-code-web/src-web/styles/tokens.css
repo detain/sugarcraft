@@ -56,6 +56,44 @@
   --diff-del: rgb(198 67 67 / 0.14);
 }
 
+/* C-TUI-4.b: the two named TUI palettes, mirroring candy-code's own themes —
+   Dracula from SugarCraft\Core\Util\Palettes::DRACULA as bound by
+   SugarCraft\Style\Theme::dracula(), Tokyo Night from Theme::tokyoNight().
+   Written after the light blocks, they outrank a prefers-color-scheme: light
+   OS at equal specificity (source order), the same way [data-theme='light']
+   already does. --muted is the one deliberate deviation in each set: the raw
+   comment colours reach only 2.40 (dracula, on panel) and 2.35 (tokyoNight)
+   and are nudged to clear 4.5:1, per the ISS-107 precedent above. */
+:root[data-theme='dracula'] {
+  color-scheme: dark;
+  --bg: #282a36;       /* DRACULA['background'] */
+  --panel: #383a46;    /* DRACULA['separator'] */
+  --line: #44475a;     /* DRACULA['currentLine'] — the TUI's border slot */
+  --text: #f8f8f2;     /* DRACULA['foreground'] */
+  --muted: #9ea8c3;    /* DRACULA['comment'] #6272a4, ISS-107 lightened to 4.75 on panel */
+  --accent: #ff79c6;   /* DRACULA['pink'] — the TUI's accent slot */
+  --ok: #50fa7b;       /* DRACULA['green'] */
+  --warn: #ffb86c;     /* DRACULA['orange'] */
+  --error: #ff5555;    /* DRACULA['red'] */
+  --diff-add: rgb(80 250 123 / 0.16);
+  --diff-del: rgb(255 85 85 / 0.16);
+}
+
+:root[data-theme='tokyoNight'] {
+  color-scheme: dark;
+  --bg: #1a1b26;       /* tokyoNight() background */
+  --panel: #24283b;    /* the web dark surface — see report disclosure */
+  --line: #292e42;     /* tokyoNight() border */
+  --text: #c0caf5;     /* tokyoNight() foreground */
+  --muted: #8b93bb;    /* ISS-107-adjusted from tokyoNight() muted #565f89 — same value the dark set uses */
+  --accent: #bb9af7;   /* tokyoNight() accent (purple; the dark set binds its primary blue) */
+  --ok: #9ece6a;       /* tokyoNight() success */
+  --warn: #e0af68;     /* tokyoNight() warning */
+  --error: #f7768e;    /* tokyoNight() error */
+  --diff-add: rgb(158 206 106 / 0.16);
+  --diff-del: rgb(247 118 142 / 0.16);
+}
+
 *,
 *::before,
 *::after {

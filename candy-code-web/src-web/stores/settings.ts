@@ -2,7 +2,16 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { readJson, writeJson } from './storage'
 
-export type ThemeChoice = 'auto' | 'dark' | 'light'
+export type ThemeChoice = 'auto' | 'dark' | 'light' | 'dracula' | 'tokyoNight'
+
+/**
+ * Cycle order for `cycleTheme()` (C-TUI-4.b). The four named entries each have
+ * a token block in `styles/tokens.css` mirroring the TUI palette of the same
+ * name (`Palettes::DRACULA`, `Style\Theme::tokyoNight()`); `dark` rides the
+ * `:root` default block and its attribute only stands off the light media
+ * query. `auto` deletes the attribute and hands control back to the OS.
+ */
+const THEME_CYCLE: readonly ThemeChoice[] = ['auto', 'dark', 'light', 'dracula', 'tokyoNight']
 
 /**
  * Diff layout preference (C-TUI-2.f, GAP-UI-05): `auto` splits side-by-side
@@ -54,7 +63,11 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   function cycleTheme(): void {
-    theme.value = theme.value === 'auto' ? 'dark' : theme.value === 'dark' ? 'light' : 'auto'
+    // An unrecognised restored value (a legacy or hand-edited store, indexOf
+    // -1) takes the first step back to the default — same contract as
+    // cycleDiffStyle above, and it keeps the button never wedging the app.
+    const at = THEME_CYCLE.indexOf(theme.value)
+    theme.value = THEME_CYCLE[(at + 1) % THEME_CYCLE.length] ?? 'auto'
   }
 
   const notifyProblem = ref<NotificationProblem | null>(null)

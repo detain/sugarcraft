@@ -25,6 +25,9 @@ function block(pattern: RegExp): Record<string, string> {
 const themes: Record<string, Record<string, string>> = {
   dark: block(/:root \{([^}]*)\}/),
   light: block(/:root\[data-theme='light'\] \{([^}]*)\}/),
+  // C-TUI-4.b: the two named TUI palettes the viewer can cycle to.
+  dracula: block(/:root\[data-theme='dracula'\] \{([^}]*)\}/),
+  tokyoNight: block(/:root\[data-theme='tokyoNight'\] \{([^}]*)\}/),
 }
 
 /** WCAG 2 relative luminance (sRGB). */
