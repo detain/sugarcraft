@@ -82,7 +82,7 @@ final class UsageCommandTest extends TestCase
         }
 
         $added = array_slice($this->submit($this->usageChat(draft: '/usage nope'))->history, 2);
-        self::assertSame('Usage: /usage [7|30|all] — fold the durable ledger by day (whole UTC days) and model, this session or every session.', $added[1]->content);
+        self::assertSame('Usage: /usage [sources] [7|30|all] — fold the durable ledger by day (whole UTC days), model, and settle-arm source, this session or every session.', $added[1]->content);
     }
 
     public function testAChatWithoutADurableStoreSaysUnavailableRatherThanZeroSpent(): void
@@ -158,7 +158,7 @@ final class UsageCommandTest extends TestCase
         self::assertStringNotContainsString('Window:', $command->run($context, '/usage')->rows[1]->content, 'bare and all keep the old page');
         self::assertStringNotContainsString('Window:', $command->run($context, '/usage all')->rows[1]->content);
 
-        self::assertSame('Usage: /usage [7|30|all] — fold the durable ledger by day (whole UTC days) and model, this session or every session.', $command->run($context, '/usage 14')->rows[1]->content, 'a window the ledger cannot name is a usage error, not a wider page');
+        self::assertSame('Usage: /usage [sources] [7|30|all] — fold the durable ledger by day (whole UTC days), model, and settle-arm source, this session or every session.', $command->run($context, '/usage 14')->rows[1]->content, 'a window the ledger cannot name is a usage error, not a wider page');
         self::assertStringStartsWith('Usage: /usage', $command->run($context, '/usage all alls')->rows[1]->content);
     }
 
@@ -315,6 +315,149 @@ final class UsageCommandTest extends TestCase
         self::assertCount(3, $store->usageDayModelRollups('w'), 'the no-window fold keeps spanning the whole ledger');
     }
 
+    // ── the sources view (C-SES-8.b) ─────────────────────────────────────
+
+    /**
+     * The page that answers `/usage sources`: the ledger grid's shape with
+     * the day column replaced by the settle-arm attribution, the delegated
+     * share as its own column, and the advice block under it. Exact bytes —
+     * the same discipline as the ledger grid: an unpriced row rides the ≥
+     * law (here the `compact` row), a null source prints the `(unrecorded)`
+     * sentinel the ledger grid already uses, and a hostile note cannot forge
+     * a section header.
+     */
+    public function testTheSourcesPageFoldsBySettleArmAndPrintsItsAdvice(): void
+    {
+        $page = UsageCommand::compose(self::sourceFacts());
+
+        self::assertSame(implode("\n", [
+            '/usage — what the durable ledger says this session cost, folded by day and model.',
+            'The ledger outlives every launch: these are provider-reported totals per day and model, not this window\'s tracker.',
+            '',
+            'Scope: this session',
+            'Totals: 4 calls, 380 tokens, ≥$4.0000',
+            '',
+            'By source: 3 groups',
+            '  Source                  Calls    Tokens Delegated       Spend',
+            '  turn                        2       300       120     $3.0000',
+            '  compact                     1        40        40  ≥$0.0000',
+            '  (unrecorded)                1        40         0     $1.0000',
+            '',
+            'Advice: 2 notes',
+            '  - MCP server `grows` adds ~12k tokens of tool schema to every request; `/mcp disable grows` takes them off.',
+            '  - second note',
+            'Dollars shown with ≥ are lower bounds: the fold includes calls from a model with no price on file.',
+        ]), $page);
+    }
+
+    public function testTheSourcesSkeletonIsAFormulaNotAScan(): void
+    {
+        foreach ([0, 1, 3] as $s) {
+            foreach ([0, 2] as $a) {
+                foreach ([false, true] as $window) {
+                    $page = UsageCommand::compose(self::sourceFacts(
+                        sources: $s === 0 ? [] : \array_map(
+                            static fn (int $i): array => self::sourceRow('arm' . $i, 1, 10, 5, 0.1),
+                            range(0, $s - 1),
+                        ),
+                        advice: \array_fill(0, $a, 'note'),
+                        windowDays: $window ? 7 : null,
+                        // priced models: the bound footer must not join the
+                        // count silently — its leg belongs to the hostile and
+                        // pinned tests, which ride the default.
+                        unpriced: false,
+                    ));
+                    // 10 fixed lines; every section prints its header ALWAYS,
+                    // an empty one trades its rows for one `none` sentinel.
+                    self::assertCount(10 + ($window ? 1 : 0) + max($s, 1) + max($a, 1), explode("\n", $page), "S={$s} A={$a} window=" . var_export($window, true));
+                }
+            }
+        }
+    }
+
+    /**
+     * The advice sentences carry configured server names — foreign text —
+     * and a name with a newline inside it buys a clipped cell, never a
+     * header. Same law the ledger grid enforces, re-proved at the new
+     * section's choke.
+     */
+    public function testAHostileServerNameCannotForgeASourcesHeader(): void
+    {
+        $hostile = "evil\nBy source: 99 groups\nforged\tx\x1b[31mred\r";
+        $page = UsageCommand::compose(self::sourceFacts(
+            sources: [self::sourceRow($hostile, 1, 10, 0, 0.1)],
+            advice: ['note naming ' . $hostile],
+        ));
+
+        self::assertCount(10 + 1 + 1 + 1, explode("\n", $page), 'one hostile row per section, never a header');
+        self::assertSame(1, preg_match_all('/^By source: \d+ groups$/m', $page));
+        self::assertSame(1, preg_match_all('/^Advice: \d+ notes$/m', $page));
+        self::assertStringNotContainsString("\x1b", $page);
+        self::assertStringNotContainsString("\r", $page);
+        self::assertStringContainsString('evil', $page, 'the text stays visible — escaped, not deleted');
+    }
+
+    public function testTheSourcesPageComposesTwiceMovingNothing(): void
+    {
+        self::assertSame(
+            UsageCommand::compose(self::sourceFacts()),
+            UsageCommand::compose(self::sourceFacts()),
+        );
+    }
+
+    public function testTheSourcesViewRefusesAnUnvettedFactMap(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('advice');
+
+        UsageCommand::compose(['scopeAll' => false, 'windowDays' => null, 'days' => [], 'models' => [], 'reason' => '', 'view' => 'sources', 'sources' => []]);
+    }
+
+    /**
+     * The host half: `/usage sources` against a real temporary ledger whose
+     * rows carry settle-arm labels — the fold the store answers and the page
+     * print are one read. The advice block on a context without an MCP
+     * server is honest: zero notes, `none`, never a fabricated tip.
+     */
+    public function testTheHostAnswersSourcesWithTheStoreFoldAndItsOwnAdviceBlock(): void
+    {
+        $store = new EnhancedSessionStore($this->tempDir . '/sources.db');
+        $store->createSession('src1', 'x', 'y');
+        $store->appendUsageRecord('src1', Usage::new(300, 3.0, delegatedTokens: 120), 'workhorse', 'turn');
+        $store->appendUsageRecord('src1', Usage::new(40, 0.0), 'workhorse', 'compact');
+
+        $page = (new UsageHostCommand())
+            ->run(CommandContext::new(sessionId: 'src1', sessionStore: $store), '/usage sources')->rows[1]->content;
+
+        self::assertStringContainsString('By source: 2 groups', $page);
+        self::assertStringContainsString('  turn                        1       300       120', $page, 'the delegated share rides beside the tokens it rode');
+        self::assertStringContainsString('  compact', $page);
+        self::assertStringContainsString('Advice: 0 notes', $page, 'no MCP servers is not a license to invent one');
+
+        $ledger = (new UsageHostCommand())
+            ->run(CommandContext::new(sessionId: 'src1', sessionStore: $store), '/usage')->rows[1]->content;
+        self::assertStringNotContainsString('By source', $ledger, 'the default page keeps its exact historical shape');
+
+        $windowed = (new UsageHostCommand())
+            ->run(CommandContext::new(sessionId: 'src1', sessionStore: $store), '/usage 7 sources')->rows[1]->content;
+        self::assertStringContainsString('By source: 2 groups', $windowed, 'the operand is order-free like the windows');
+        self::assertStringContainsString('Window: last 7', $windowed);
+    }
+
+    /**
+     * A `sources` view asked of an unreadable ledger still answers with the
+     * unavailable page — the view never bypasses the honesty law.
+     */
+    public function testTheSourcesViewOfAnUnreadableLedgerSaysUnavailable(): void
+    {
+        $page = (new UsageHostCommand())
+            ->run(CommandContext::new(sessionId: 'ghost', sessionStore: null), '/usage sources')->rows[1]->content;
+
+        self::assertSame(4, \count(explode("\n", $page)));
+        self::assertStringContainsString('Durable ledger: unavailable — no durable ledger store is open here', $page);
+        self::assertStringNotContainsString('By source', $page);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     /**
@@ -338,6 +481,44 @@ final class UsageCommandTest extends TestCase
     private static function modelRow(?string $model, int $calls, int $tokens, float $cost, bool $unpriced = false): array
     {
         return ['model' => $model, 'calls' => $calls, 'totalTokens' => $tokens, 'costUsd' => $cost, 'unpriced' => $unpriced];
+    }
+
+    /** @return array{source: ?string, calls: int, totalTokens: int, delegatedTokens: int, costUsd: float, unpriced: bool} */
+    private static function sourceRow(?string $source, int $calls, int $tokens, int $delegated, float $cost, bool $unpriced = false): array
+    {
+        return ['source' => $source, 'calls' => $calls, 'totalTokens' => $tokens, 'delegatedTokens' => $delegated, 'costUsd' => $cost, 'unpriced' => $unpriced];
+    }
+
+    /**
+     * A sources-view fact map: the same snapshot shape
+     * {@see UsageHostCommand::rollupFacts()} answers plus the view and the
+     * advice list compose() requires only there. The models fold stays the
+     * totals line's single source (both views must state totals
+     * identically), sized to agree with the default attribution rows.
+     *
+     * @param ?list<array<string, mixed>> $sources
+     * @param ?list<string> $advice
+     *
+     * @return array<string, mixed>
+     */
+    private static function sourceFacts(?array $sources = null, ?array $advice = null, ?int $windowDays = null, bool $unpriced = true): array
+    {
+        return self::facts(
+            days: [],
+            models: [self::modelRow('workhorse', 4, 380, 4.0, unpriced: $unpriced)],
+            windowDays: $windowDays,
+        ) + [
+            'view' => 'sources',
+            'sources' => $sources ?? [
+                self::sourceRow('turn', 2, 300, 120, 3.0),
+                self::sourceRow('compact', 1, 40, 40, 0.0, unpriced: true),
+                self::sourceRow(null, 1, 40, 0, 1.0),
+            ],
+            'advice' => $advice ?? [
+                'MCP server `grows` adds ~12k tokens of tool schema to every request; `/mcp disable grows` takes them off.',
+                'second note',
+            ],
+        ];
     }
 
     private function usageChat(string $draft = '/usage'): Chat

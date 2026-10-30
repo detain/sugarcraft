@@ -147,7 +147,7 @@ final class UsageSubcommandTest extends TestCase
 
         $facts = $decoded['result']['usage'] ?? null;
         self::assertIsArray($facts, $out);
-        self::assertSame(['scopeAll', 'windowDays', 'days', 'models', 'reason'], array_keys($facts));
+        self::assertSame(['scopeAll', 'windowDays', 'days', 'models', 'reason', 'sources'], array_keys($facts), 'C-SES-8.b: the shared read gains the third fold of the same snapshot — the CLI JSON grows a wider document, never a different one');
         self::assertTrue($facts['scopeAll']);
         self::assertSame(7, $facts['windowDays']);
         self::assertSame('', $facts['reason']);

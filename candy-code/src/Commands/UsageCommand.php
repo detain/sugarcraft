@@ -9,7 +9,7 @@ use SugarCraft\Code\Lang;
 
 /**
  * Implements the `/usage` command — the durable spend ledger folded by day
- * and model.
+ * and model, or (C-SES-8.b) by settle-arm source with its advice block.
  *
  * Usage:
  *   /usage       — this session's rows
@@ -17,6 +17,11 @@ use SugarCraft\Code\Lang;
  *   /usage 7     — the last seven whole UTC days, this session
  *   /usage 30 all — the same window across every session (order-free:
  *                  `/usage all 30` is the same page; OBS-3)
+ *   /usage sources — the same ledger folded by settle-arm SOURCE instead of
+ *                    by day (C-SES-8.b): which arm of the loop spent what,
+ *                    with the delegated-share column the per-model fold has
+ *                    no room for, plus an advice block naming what the
+ *                    session's own context costs per request.
  *
  * OBS-3: the windows land because 7-of-30-day produce-errors with NO written
  * judgment was the audit's finding — an argument the ledger could answer was
@@ -57,6 +62,15 @@ final class UsageCommand
     private const ROW_FORMAT = '  %-11s %-22s %6s %9s %11s';
 
     /**
+     * The `/usage sources` grid (C-SES-8.b): the day column's 11 cells make
+     * room for a 22-cell source name and a fifth numeric column, because a
+     * fold that attributes spend to settle arms must show the delegated
+     * share beside the tokens it rode — the per-model grid has no column for
+     * it and must not grow one (its byte shape is pinned history).
+     */
+    private const SOURCES_ROW_FORMAT = '  %-22s %6s %9s %9s %11s';
+
+    /**
      * The page built from GIVEN folds rather than live stores — pure, so the
      * line-budget formula and the `≥` law can be pinned against exactly the
      * shapes the rollups produce.
@@ -68,6 +82,11 @@ final class UsageCommand
      *                                    - days: ?list<array{day: string, model: ?string, calls: int, totalTokens: int, costUsd: float, unpriced: bool}>
      *                                    - models: ?list<array{model: ?string, calls: int, totalTokens: int, costUsd: float, unpriced: bool}>
      *                                    - reason: string — the stated cause when days is null
+     *                                    - view: string — optional (C-SES-8.b): 'ledger'
+     *                                      (default — the day and model grids keep their
+     *                                      exact historical bytes) or 'sources'
+     *                                    - sources: list<array{source: ?string, calls: int, totalTokens: int, delegatedTokens: int, costUsd: float, unpriced: bool}> — REQUIRED only by the 'sources' view: the same snapshot's fold by settle-arm attribution, null source being a legacy or headless row the ledger never labelled
+     *                                    - advice: list<string> — REQUIRED only by the 'sources' view: the pre-wrapped sentences naming what the session's own context costs per request (the host derives them from {@see ContextSources}'s public API; compose only prints them)
      */
     public static function compose(array $facts): string
     {
@@ -84,6 +103,21 @@ final class UsageCommand
                 '',
                 Lang::t('cmd.usage.unavailable', ['reason' => Chat::reportField((string) $facts['reason'])]),
             ]);
+        }
+
+        // C-SES-8.b: the sources view reads the SAME snapshot's third fold;
+        // the ledger page never touches the new keys, so its bytes (and their
+        // pins) ride on untouched. An unreadable ledger answers with the
+        // unavailable page for either view — "the ledger could not be read"
+        // is the answer before any fold is printed.
+        if ((string) ($facts['view'] ?? 'ledger') === 'sources') {
+            foreach (['sources', 'advice'] as $key) {
+                if (!\array_key_exists($key, $facts)) {
+                    throw new \LogicException('UsageCommand::compose() is missing the ' . $key . ' fact — the sources view prints every section always, so every fact must be passed.');
+                }
+            }
+
+            return self::composeSources($facts);
         }
 
         $days = $facts['days'];
@@ -125,6 +159,101 @@ final class UsageCommand
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * The `/usage sources` page (C-SES-8.b): the same header, scope, window
+     * and totals lines the ledger page prints — the totals are the scope's,
+     * not a fold's, so both views must state them identically — then the
+     * attribution grid and the advice block. The completeness law rides
+     * unchanged: both headers print ALWAYS, so the line budget stays a
+     * formula: 10 fixed lines (title, subtitle, blank, scope, totals, blank,
+     * source header, source columns, blank, advice header) plus a window
+     * line, plus max(rows, none) per section, plus the bound footer.
+     *
+     * @param array<string, mixed> $facts the ledger branch has already vetted
+     */
+    private static function composeSources(array $facts): string
+    {
+        $sources = $facts['sources'];
+        $advice = $facts['advice'];
+        $models = $facts['models'];
+        // A blind row anywhere in the scope blinds the page's dollars, in
+        // either grid — the same law, now with the source fold as a third
+        // witness beside day and model.
+        $anyUnpriced = self::anyUnpriced($models) || self::anyUnpriced($sources);
+
+        $lines = [
+            Lang::t('cmd.usage.title'),
+            Lang::t('cmd.usage.subtitle'),
+            '',
+            Lang::t('cmd.usage.scope', ['scope' => Lang::t($facts['scopeAll'] ? 'cmd.usage.scope.all' : 'cmd.usage.scope.session')]),
+            ...(null === $facts['windowDays'] ? [] : [Lang::t('cmd.usage.window', ['days' => (string) $facts['windowDays']])]),
+            self::totalsLine($models),
+            '',
+            Lang::t('cmd.usage.source', ['count' => (string) count($sources)]),
+            self::sourceColumns(),
+        ];
+        if ($sources === []) {
+            $lines[] = '  ' . Lang::t('cmd.usage.none');
+        }
+        foreach ($sources as $row) {
+            $lines[] = self::sourcesRow($row);
+        }
+
+        $lines[] = '';
+        $lines[] = Lang::t('cmd.usage.advice.header', ['count' => (string) count($advice)]);
+        if ($advice === []) {
+            $lines[] = '  ' . Lang::t('cmd.usage.none');
+        }
+        foreach ($advice as $note) {
+            // The advice sentences name configured servers — foreign text
+            // like every other string here, so each rides reportField()'s
+            // choke on its way to the transcript: an MCP server renamed with
+            // a newline cannot forge a section header either.
+            $lines[] = '  - ' . Chat::reportField((string) $note);
+        }
+
+        if ($anyUnpriced) {
+            $lines[] = Lang::t('cmd.usage.bound');
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * One attribution line. A null source prints the same `(unrecorded)`
+     * sentinel an old model-less row uses — the ledger's own history predates
+     * attribution, and inventing a label for it would be a fabrication.
+     *
+     * @param array<string, mixed> $row
+     */
+    private static function sourcesRow(array $row): string
+    {
+        $source = $row['source'] ?? null;
+
+        return \sprintf(
+            self::SOURCES_ROW_FORMAT,
+            Chat::reportField($source === null || $source === ''
+                ? Lang::t('cmd.usage.unrecorded')
+                : mb_strimwidth((string) $source, 0, 22, '…')),
+            number_format((int) $row['calls']),
+            number_format((int) $row['totalTokens']),
+            number_format((int) $row['delegatedTokens']),
+            self::amount((float) $row['costUsd'], (bool) $row['unpriced']),
+        );
+    }
+
+    private static function sourceColumns(): string
+    {
+        return \sprintf(
+            self::SOURCES_ROW_FORMAT,
+            Lang::t('cmd.usage.col.source'),
+            Lang::t('cmd.usage.col.calls'),
+            Lang::t('cmd.usage.col.tokens'),
+            Lang::t('cmd.usage.col.delegated'),
+            Lang::t('cmd.usage.col.spend'),
+        );
     }
 
     /**

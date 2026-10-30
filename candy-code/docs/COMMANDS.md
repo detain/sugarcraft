@@ -396,7 +396,7 @@ edit it by hand.
 | `/compact` | ✓ | | `[--self] [focus]` | Manually compact chat history to save context |
 | `/clear` | ✓ | ✓ | — | Clear the transcript, keeping this session |
 | `/budget` | ✓ | ✓ | `[amount\|off]` | Show this session's reported spend, or cap it |
-| `/usage` | ✓ | | `[7\|30\|all]` | Show the durable spend ledger folded by day and model |
+| `/usage` | ✓ | | `[sources\|7\|30\|all]` | Show the durable spend ledger folded by day, model and source |
 | `/insights` | ✓ | | `[days]` | Show insights on session activity and spend across the durable store |
 | `/workflow` | ✓ | | — | Run, pause, resume, or inspect a workflow |
 | `/memory` | ✓ | | — | Add, list, search, edit, import, clear, or restore memory entries, and show their history |
