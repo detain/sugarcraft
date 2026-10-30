@@ -3018,7 +3018,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Ruling:** rv-sec-1 (`Bootstrap.php:6834`, "owner ruling: the default stands") kept the `-p` bypass default, and this pick reverses it. Confirm the flip for `-p` only, … — see §6
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-7.a`
 
-#### C-SEC-7.b — `--restricted` and `--safe-mode`
+#### ✅ b927d39b8 C-SEC-7.b — `--restricted` and `--safe-mode`
 - **Item:** C-SEC-7 (sources: GAP-PER-N2) · gap · effort M
 - **What:** `--restricted` drops the code-running tools from the launch tool set through `Bootstrap::filterToolSet()` (:8671): `ShellSubjectTools::NAMES`, plus `Task`, `Workflow`, `ShellStop` and `mcp_call`. File tools stay under the …
 - **Files — create:** `candy-code/tests/Cli/RestrictedSafeModeFlagsTest.php`
@@ -3139,7 +3139,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Ruling:** Turn `autoReview` on by default whenever a title backend (or `autoReviewModel`) exists? Each review is a paid model call. — see §6
 - **Brief:** `prompt_kit/findings/comparison-1026/design-sec.md` → `### C-SEC-7.e`
 
-#### C-SES-6.e — Update-available notice
+#### ✅ 7240c63f3 C-SES-6.e — Update-available notice
 - **Item:** C-SES-6 (sources: GAP-PLAT-05) · gap · effort M
 - **What:** **`UpdateCheck`.** It runs on phar installs only (`Phar::running` identity), and does two things: `refreshIfStale(LoopInterface)`: at most once per 24 h, an async `React\Http\Browser` GET of the release list ON the TUI loop, with …
 - **Files — create:** `candy-code/src/Cli/UpdateCheck.php`, `candy-code/tests/Cli/UpdateCheckTest.php`
@@ -3188,7 +3188,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-PRV-2.a (W14), C-PRV-2.b (W16), C-PRV-2.c (W17), C-TOOL-2.d (W17)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tool.md` → `### C-TOOL-2.g`
 
-#### C-TOOL-6.a — Browser-control and computer-use MCP presets (docs)
+#### ✅ 9c887f03b C-TOOL-6.a — Browser-control and computer-use MCP presets (docs)
 - **Item:** C-TOOL-6 (sources: GAP-TL-21, GAP-TL-25) · gap · effort S
 - **What:** **Why this is `phase: normal`.** The brief allows a cheap sliver of a LATE item to run early. This one qualifies: it is S effort, doc-only (plus one test that pins the doc), and needs no ruling. It depends on no LATE step, and no …
 - **Files — create:** `candy-code/tests/Config/McpBrowserPresetDocTest.php`
@@ -3305,7 +3305,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tui.md` → `### C-TUI-3.b`
 
-#### C-TUI-3.e — One-key verbose toggle (TUI)
+#### ✅ fd2224b4a C-TUI-3.e — One-key verbose toggle (TUI)
 - **Item:** C-TUI-3 (sources: GAP-UI-32 TUI half) · gap · effort S
 - **What:** `expandToolOutput` is Live (`Renderer.php:702-709` reads `UiSettings`), but flipping it takes the settings view. A new `chat.verbose-toggle` binding (proposed `Alt+O`, free in the registry) flips it in the **session tier**. The …
 - **Files — create:** none
@@ -3338,7 +3338,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** none
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tui.md` → `### C-TUI-4.c`
 
-#### C-WEB-2.c — Typed `/skill-name` and `$name` in `-p`
+#### ✅ 204c793b9 C-WEB-2.c — Typed `/skill-name` and `$name` in `-p`
 - **Item:** C-WEB-2 (sources: p1-miss: VIS-5 parity (`-p`), GAP-SKL-06) · gap · M
 - **What:** **Gap.** `NonInteractive::historyFrom()` (`candy-code/src/Cli/NonInteractive.php`, ~:1375-1410) resolves only `@file` and `@keyword` mentions. `-p` has no `$name` skill channel at all, and no `/name` rewrite. **Fix.** Apply …
 - **Files — create:** `candy-code/tests/Cli/NonInteractiveSkillSlashTest.php`
@@ -3349,7 +3349,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-WEB-2.b (W21)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web.md` → `### C-WEB-2.c`
 
-#### C-WEB-2.f — `/effort` host body over a shared effort dial
+#### ✅ 88d09cb3b C-WEB-2.f — `/effort` host body over a shared effort dial
 - **Item:** C-WEB-2 (sources: GAP-MOD-15w (`/effort` half), GAP-CMD-01) · gap · M
 - **What:** **Gap.** `/effort` (`candy-code/builtin-commands/0350-effort.php`) has no host body. Its logic (`Chat::handleEffortCommand`, `src/Chat.php:12234`) is the ShapesReasoningEffort judgement C-PRV-1 makes honest. **Lift.** Move the …
 - **Files — create:** `candy-code/src/Commands/EffortDial.php`, `candy-code/src/Host/Commands/EffortHostCommand.php`, `candy-code/tests/Commands/EffortDialTest.php`, `candy-code/tests/Host/Commands/EffortHostCommandTest.php`
@@ -3365,7 +3365,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - protocol lanes: C-WEB-2.d (weld regenerates schema → SERVER.md → generated.ts once)
 - Chat.php region claims: C-SEC-8.d (submit); C-TUI-2.e (handleDiffCommand); C-TUI-3.g (READ_ONLY_COMMANDS, handleRecapCommand (new), programOptions)
 
-#### C-SEC-8.d — Strip invisible Unicode at submit (TUI and serve)
+#### ✅ 86ad79b52 C-SEC-8.d — Strip invisible Unicode at submit (TUI and serve)
 - **Item:** C-SEC-8 (sources: GAP-UI-N5) · gap · effort S
 - **What:** Invisible formatting is only marked on display today. One rule applies at both submit chokes: TUI: `Chat::submit()` (`src/Chat.php:9389`); served: `SessionHost::submit()` (`src/Host/SessionHost.php:524`), which `session.send` …
 - **Files — create:** `candy-code/tests/Host/SubmitInvisibleUnicodeTest.php`, `candy-code/tests/Chat/SubmitInvisibleUnicodeTest.php`
@@ -3410,7 +3410,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-TUI-3.f (W18)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tui.md` → `### C-TUI-3.g`
 
-#### C-WEB-2.d — Skills in the web `/` menu (`command.list` `source:"skill"`)
+#### ✅ 6def5138e C-WEB-2.d — Skills in the web `/` menu (`command.list` `source:"skill"`)
 - **Item:** C-WEB-2 (sources: GAP-SKL-06 (menu half)) · gap · S
 - **What:** **Server.** `CommandMethods::list()` (`candy-code/src/Protocol/Methods/CommandMethods.php:48-62`) adds one row per user-invocable skill: `source:"skill"`, `runsIn:"server"`. Built-in and file names win a clash, as they do at …
 - **Files — create:** `candy-code/tests/Protocol/CommandListSkillRowsTest.php`
@@ -3421,7 +3421,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-WEB-2.b (W21)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-web.md` → `### C-WEB-2.d`
 
-#### C-WEB-2.g — `/review` and `/security-review` host body
+#### ✅ cca69b2a1 C-WEB-2.g — `/review` and `/security-review` host body
 - **Item:** C-WEB-2 (sources: GAP-GIT-10, GAP-CMD-01, p2-miss: `/review` on serve/web/headless) · gap · S
 - **What:** **Gap.** Both specs (`candy-code/builtin-commands/2840-review.php`, `2845-security-review.php`) are Chat-only (`Chat::reviewTurn()`, `src/Chat.php:11760-11800`). **ReviewHostCommand.** One class serves both spellings. It …
 - **Files — create:** `candy-code/src/Host/Commands/ReviewHostCommand.php`, `candy-code/tests/Host/Commands/ReviewHostCommandTest.php`
