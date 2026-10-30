@@ -163,6 +163,15 @@ final class ThemeFileTest extends TestCase
 
         $theme = Theme::byName('linked');
         $this->assertSame('dark', $theme->name, 'a file whose real path leaves the owned directory is refused');
+
+        $rows = RuntimeNoticeSink::drain();
+        $this->assertCount(1, $rows);
+        $this->assertStringContainsString('refused', $rows[0], 'the notice names the containment refusal');
+        $this->assertStringContainsString('real path', $rows[0]);
+        $this->assertStringNotContainsString('no file under', $rows[0], 'the notice must not claim the file is absent while the listing offers its name');
+
+        Theme::byName('linked');
+        $this->assertSame([], RuntimeNoticeSink::drain(), 'the refusal notice is once per process too');
     }
 
     public function testAnUnknownExtendsFallsBackToDarkWithANote(): void

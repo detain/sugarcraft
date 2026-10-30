@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tui\Settings;
 
+use SugarCraft\Code\Config\Settings\OptionsProvider;
 use SugarCraft\Code\Config\Settings\SettingDefinition;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 
@@ -18,7 +19,10 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
  *     "compaction", and the best hits rank first;
  *  2. then a plain case-insensitive SUBSTRING pass, for the keys whose name
  *     does not say what they do: over the label, the key, the help sentence,
- *     the enum values, the category, and the environment variable and flag
+ *     the option list (the declared enum values, else the live choices the
+ *     picker offers through {@see OptionsProvider} — `dracula` finds `theme`
+ *     even though the theme definition validates instead of enumerating),
+ *     the category, and the environment variable and flag
  *     that override the key (N-P5) — so `CANDY_CODE_MODEL` or `--model` finds
  *     the setting it locks. A query of several words matches a key holding
  *     EVERY word, in any order and in any of those fields: `tool timeout`
@@ -38,17 +42,21 @@ final class SettingsSearch
 
     /**
      * The definitions matching `$query`, best first. An empty query matches
-     * nothing — the caller shows the category instead.
+     * nothing — the caller shows the category instead. `$options` is the
+     * launch's picker provider, consulted for keys whose choices are live
+     * lists rather than declared enums; null means the built-in lists.
      *
      * @param list<SettingDefinition> $definitions
      * @return list<SettingDefinition>
      */
-    public static function matches(string $query, array $definitions): array
+    public static function matches(string $query, array $definitions, ?OptionsProvider $options = null): array
     {
         $query = trim($query);
         if ($query === '') {
             return [];
         }
+
+        $options ??= OptionsProvider::new();
 
         /** @var array<string, list<SettingDefinition>> $byField */
         $byField = [];
@@ -71,7 +79,7 @@ final class SettingsSearch
                 continue;
             }
 
-            if (self::holdsEveryTerm(self::haystack($definition), $query)) {
+            if (self::holdsEveryTerm(self::haystack($definition, $options), $query)) {
                 $found[$definition->key] = $definition;
             }
         }
@@ -80,13 +88,13 @@ final class SettingsSearch
     }
 
     /** Everything the substring pass looks in, as one string. */
-    private static function haystack(SettingDefinition $definition): string
+    private static function haystack(SettingDefinition $definition, OptionsProvider $options): string
     {
         return implode(' ', [
             $definition->label,
             $definition->key,
             $definition->help,
-            ...array_map('strval', $definition->enumValues),
+            ...$options->for($definition),
             $definition->category->label(),
             (string) $definition->envVar,
             (string) $definition->cliFlag,

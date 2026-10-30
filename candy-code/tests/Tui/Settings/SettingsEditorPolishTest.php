@@ -8,6 +8,8 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Code\Config\Settings\OptionsProvider;
+use SugarCraft\Code\Config\Settings\OptionsSource;
 use SugarCraft\Code\Config\Settings\SettingDefinition;
 use SugarCraft\Code\Config\Settings\SettingsSchema;
 use SugarCraft\Code\Config\Settings\SettingsTier;
@@ -157,6 +159,36 @@ final class SettingsEditorPolishTest extends TestCase
         self::assertNotContains('webSearchMaxResults', $both, 'web alone is not enough');
 
         self::assertSame($keys('timeout web'), $both, 'in any order');
+    }
+
+    public function testTheSearchFindsAKeyByItsLiveOptionsWithoutDeclaredEnums(): void
+    {
+        $keys = static fn (string $q, ?OptionsProvider $options = null): array => array_map(
+            static fn (SettingDefinition $d): string => $d->key,
+            SettingsSearch::matches($q, SettingsSchema::all(), $options),
+        );
+
+        // C-TUI-4.a m1: `theme` validates instead of carrying a declared enum
+        // list, so its searchable vocabulary comes from the picker's live
+        // options — the names a person actually types.
+        self::assertContains('theme', $keys('dracula'), 'a theme name surfaces the theme key');
+        self::assertContains('theme', $keys('tokyoNight'));
+        self::assertNotContains('theme', $keys('zzqxjh'), 'control: a word no field holds finds nothing');
+
+        // The passed list IS the haystack leg: what the launch offers wins.
+        $mine = OptionsProvider::new()->withList(OptionsSource::Themes, ['zzcustomtheme']);
+        self::assertContains('theme', $keys('zzcustomtheme', $mine));
+        self::assertNotContains('theme', $keys('dracula', $mine), 'the supplied list replaces the built-in one');
+
+        // And the editor threads ITS launch provider, not a rebuilt default.
+        $editor = SettingsEditor::open(
+            SettingsSources::fromLaunch('/nonexistent-root', null, null, null, ['CANDY_CODE_PROVIDER' => 'dev-sglang'], [], $mine),
+            'zzcustomtheme',
+        );
+        self::assertContains('theme', array_map(
+            static fn (SettingDefinition $d): string => $d->key,
+            array_values(array_filter($editor->rows(), static fn ($r): bool => $r instanceof SettingDefinition)),
+        ), 'rows() searches with the launch options');
     }
 
     public function testAnEmptySearchSaysHowToGetOut(): void

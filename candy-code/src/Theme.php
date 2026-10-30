@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code;
 
-use SugarCraft\Core\Util\Color;
 use SugarCraft\Code\Config\ThemeFile;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Tui\TerminalBackground;
+use SugarCraft\Core\Util\Color;
 use SugarCraft\Markdown\Theme as MarkdownTheme;
 use SugarCraft\Style\Theme as StyleTheme;
 
@@ -183,7 +183,9 @@ final class Theme
      * is a crash on the first frame with nothing the person chose to fix.
      * An unknown name warns ONCE through {@see RuntimeNoticeSink} (carrying a
      * did-you-mean when one of the advertised names is close) and paints the
-     * default; a present-but-bad file warns once and paints its `extends`
+     * default; a name whose listed file refuses to load (its real path outside
+     * the themes directory) warns once and paints the default too; a
+     * present-but-bad file warns once and paints its `extends`
      * base with whatever valid tokens survived.
      */
     public static function byName(string $name): self
@@ -207,9 +209,8 @@ final class Theme
     private static function fromFileOrFallback(string $name): self
     {
         $stem = ThemeFile::resolve($name);
-        $file = $stem === null ? null : ThemeFile::load($stem);
 
-        if ($file === null) {
+        if ($stem === null) {
             if (!isset(self::$warned['missing|' . strtolower($name)])) {
                 self::$warned['missing|' . strtolower($name)] = true;
                 $hint = self::suggest($name);
@@ -220,6 +221,25 @@ final class Theme
                         'available' => implode(', ', self::names()),
                     ]) . ($hint === null ? '' : sprintf(' (did you mean `%s`?)', $hint))
                 );
+            }
+
+            return self::default();
+        }
+
+        $file = ThemeFile::load($stem);
+        if ($file === null) {
+            // The scan listed the stem but the read refused it — the real path
+            // is not inside the themes directory (a symlink that walks out, or
+            // a file that vanished mid-session). Saying "no file" here would
+            // contradict the very listing that offered the name, so this
+            // shape gets its own notice; the name stays in `available:`
+            // because it IS here, only not readable.
+            if (!isset(self::$warned['refused|' . strtolower($name)])) {
+                self::$warned['refused|' . strtolower($name)] = true;
+                RuntimeNoticeSink::warn(Lang::t('chat.theme.file_refused', [
+                    'theme' => $name,
+                    'directory' => ThemeFile::SUBDIRECTORY,
+                ]));
             }
 
             return self::default();
@@ -707,23 +727,6 @@ final class Theme
     public static function isBuiltInName(string $name): bool
     {
         return self::canonicalize($name) !== null;
-    }
-
-    /**
-     * Built-ins that name a fixed palette — the legal `extends` targets.
-     * `adaptive` resolves dark-or-light at read time and so cannot be a base.
-     *
-     * @return list<string>
-     */
-    public static function baseNames(): array
-    {
-        return ['dark', 'light', 'dracula', 'tokyoNight', 'ansi'];
-    }
-
-    /** Whether a claimed `extends` names a built-in palette, matched case-insensitively like {@see byName()}. */
-    public static function isBaseName(string $name): bool
-    {
-        return self::canonicalBaseName($name) !== null;
     }
 
     /** The canonical spelling of a base theme name, or null when it is not one. */

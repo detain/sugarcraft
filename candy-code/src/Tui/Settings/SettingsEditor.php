@@ -595,7 +595,7 @@ final class SettingsEditor
     public function rows(): array
     {
         if ($this->query !== '') {
-            return SettingsSearch::matches($this->query, self::listed());
+            return SettingsSearch::matches($this->query, self::listed(), $this->sources->options);
         }
 
         if ($this->onFilesTab()) {
