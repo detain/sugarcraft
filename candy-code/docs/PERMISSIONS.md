@@ -818,7 +818,8 @@ The tool names a pattern can start with are the tool catalog's names —
 `RepoMap`, `Prune`, `Todo`, `Compress`, `Recall`, `AskUser`, `PlanExit`,
 `SendMessage`, `Subagents`, `InterruptAgent`, `Ls`, `ShellOutput`, `ShellStop`,
 `GenerateImage`,
-`GenerateVideo`, `BoardPost`, `BoardRead`,
+`GenerateVideo`, `BoardPost`, `BoardRead`, `Advisor`, `Schedule`,
+`SkillWorkshop`, `skills_search`,
 `mcp_list`, `mcp_call` — and
 `mcp__<server>__<tool>` for bridges (`mcp__git__*`). What differs per tool is
 the argument's *grammar*: shell segments for `Bash` and `PtyRun`, path
