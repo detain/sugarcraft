@@ -29,6 +29,13 @@ Session: welder. Predecessor 1030Q (ses_e72d380e1ffe) died after its cures; cure
 
 ## STEP 4 — C-CTX-4.e hygiene — DONE (git cherry plus=0 / 3 '-'; wt porcelain 0 lines; worktree remove + branch -D executed. CORRECTION: W23-row draft first cited "98470d6de→6d11e134f" — phantom transcription; true absorption is batch-18q weld 1c67ca96e picks f7d312948/b515d2e2c/b2943d1cb (git show-verified), row corrected pre-commit. /tmp/opencode/weld1030L/base-check exists (empty) — FOREIGN lead scratch, LEAVE + disclose.)
 
-## STEP 5 — run-state fold + prunes — pending
-## STEP 4 — C-CTX-4.e hygiene — pending
-## STEP 5 — run-state fold + prunes — pending
+## STEP 5 — run-state fold + prunes — DONE
+- Proofs: C-TUI-4.c cherry '-' 3/3 porcelain-clean; C-TUI-4.a cherry '-' 3/4 with the ONE '+' = pick4 30fde46c0 whose patch-id legitimately differs by the StderrEmitterCensusTest UNION conflict resolution (content-verified: lane Theme.php roster rows + master C-SEC-7.b FORTY-SEVEN prose/roster both live).
+- Pruned cc-cmp-C-TUI-4.{a,c} + branches (wt plan-snapshot backed up to /tmp/opencode/weld1030R/ first). C-TOOL-6.a never touched (foreign-contaminated). C-CTX-4.e pruned at STEP 4 after '-' 3/3 (absorption = batch-18q weld 1c67ca96e; phantom cite 6d11e134f corrected pre-commit).
+- Fold: welded += C-TUI-4.a/C -> welded_count 270 == len (asserted); inflight -= both (lead's C-SEC-8.b/C-TUI-2.e/C-TOOL-5.d/C-SES-8.b/C-SEC-7.e keys preserved verbatim); waves_closed -> [1..24] (W23 closed per lead r2 CLEAN addendum — supersedes spawn-brief "W23 stays open"); master_tip=c94dfcb0d; batch1030r_note rider.
+
+## FINAL ledger (verdict-first)
+- Verdict: CLEAN. C-TUI-4.a + C-TUI-4.c welded; W23 + W24 closed; C-CTX-4.e hygiene done; run-state folded 268->270. NO PUSH.
+- Master chain this session: 83353667a -> f911db824 -> e385af7c2 -> 30fde46c0 (picks A) -> 51bdf5d13 (evidence A+DUR) -> 2b7d85edb -> 867ec581f -> 9da0cc4ed (picks C) -> a71410fab (evidence C+DUR x3) -> c94dfcb0d (§4 mark C + §3 W23/W24 + wave evidence x3) -> run-state fold (rides atop).
+- STEP 0: trio 104T/7476A OK. Gates: theme 36T/215A, census 95T/22680A 0F, gens x3 rc=0, statusline 59T/182A, quartet 80T/41170A 0F. All authors %ae/%ce detain, zero trailers.
+- §7 carries: +14T (theme incl m3 rider Chat.php ~:7937 flip + unreachable catches :7939/:21848) + 18T/+104A (statusline) + DUR corrections; suite-figure NOT re-pinned (program law).
