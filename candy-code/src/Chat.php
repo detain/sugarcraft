@@ -12596,7 +12596,7 @@ final class Chat implements Model
      * clipboard without a mouse drag. Which text answers is the pure
      * {@see \SugarCraft\Code\Commands\CopyCommand::select()}; this method
      * only runs it and reports, on the two copy legs the drag-release at
-     * {@see handlePointer()} already rides: the OSC 52 write relayed through
+     * {@see trackTextSelection()} already rides: the OSC 52 write relayed through
      * {@see relayWidgetCmd()} (so the frame's clip policy holds for typed
      * copies too), batched with {@see SystemClipboard::copy()} for the hosts
      * where OSC 52 is dropped (tmux default, write-off terminals).
@@ -12631,7 +12631,16 @@ final class Chat implements Model
             ]), null];
         }
 
-        $text = $selection['text'];
+        // The transcript is untrusted-by-origin content (model and tool
+        // output both land in it) and the clipboard is an external sink:
+        // forged U+E000/U+E001 zone sentinels, OSC-8 links, or bare C0 bytes
+        // must not escape to the next application the user pastes into.
+        // This is the SAME sweep pair `/export` runs before writing outside
+        // the trust boundary (ExportCommand::run — the .txt body hygiene)
+        // and it is byte-parity with the drag leg, whose text comes from
+        // the renderer's already-sanitized selectable lines. Once, here,
+        // before BOTH copy legs — neither leg sanitizes on its own.
+        $text = Sanitize::untrustedForDisplay(Sanitize::stripPrivateUse($selection['text']));
 
         return [
             $this->mutate([

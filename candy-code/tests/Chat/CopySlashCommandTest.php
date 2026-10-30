@@ -124,6 +124,42 @@ final class CopySlashCommandTest extends TestCase
         self::assertTrue($added[0]->uiOnly, 'the copy notice must not be shown to the model');
     }
 
+    /**
+     * The clipboard is an external sink and the transcript is
+     * untrusted-by-origin, so `/copy` runs the SAME sweep pair `/export`
+     * uses (stripPrivateUse + untrustedForDisplay) once before BOTH legs
+     * (C-TUI-3.a review MAJOR). A reply carrying a forged OSC-8 link and
+     * the U+E000/U+E001 zone sentinels must reach the terminal write and
+     * the clipboard tool's argv as ONLY the stripped bytes — deleting the
+     * sanitizer reddens both byte-exact legs here.
+     */
+    public function testHostileBytesAreStrippedBeforeBothClipboardLegs(): void
+    {
+        // \x1b]8;;..\x07 is a whole OSC-8 hyperlink; \xEE\x80\x80 /
+        // \xEE\x80\x81 are U+E000/U+E001, the Mark::zone sentinels.
+        $hostile = "intro line\n\x1b]8;;http://evil.example\x07LINKED\x1b]8;;\x07 tail\n\xEE\x80\x80marker\xEE\x80\x81 end\noutro";
+        $clean = "intro line\nLINKED tail\nmarker end\noutro";
+        [$next, $cmd] = $this->submit($hostile, '/copy');
+
+        self::assertSame([Ansi::setClipboard($clean)], $this->rawWrites($cmd), 'the OSC 52 leg carries only the stripped bytes');
+        self::assertSame([[self::STUB_CANDIDATE, $clean]], $this->nativeCopies, 'the SystemClipboard leg carries only the stripped bytes');
+        $this->assertNotice($next, [$hostile], Lang::t('chat.copy.copied', ['chars' => mb_strlen($clean, 'UTF-8')]));
+    }
+
+    /**
+     * The fence-block path shares the one sanitizer: an OSC-8 link forged
+     * INSIDE a code block cannot ride `/copy 1` out either.
+     */
+    public function testAHostileFenceBlockIsStrippedToo(): void
+    {
+        $reply = "prose\n" . self::OPEN . "\nfirst \xEE\x80\x80inside\xEE\x80\x81\n" . self::CLOSE;
+        [$next, $cmd] = $this->submit($reply, '/copy 1');
+
+        self::assertSame([Ansi::setClipboard('first inside')], $this->rawWrites($cmd));
+        self::assertSame([[self::STUB_CANDIDATE, 'first inside']], $this->nativeCopies);
+        $this->assertNotice($next, [$reply], Lang::t('chat.copy.copied', ['chars' => 12]));
+    }
+
     // ---- harness --------------------------------------------------------------
 
     /**
