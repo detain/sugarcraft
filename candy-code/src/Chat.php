@@ -12607,17 +12607,36 @@ final class Chat implements Model
     }
 
     /**
-     * `/settings [search]` (`/config`) — roadmap N-P1. The settings view is
+     * `/settings [search|reload]` (`/config`) — roadmap N-P1. The settings view is
      * SHELL state ({@see \SugarCraft\Code\App\App::$settingsEditor}), so
      * this clears the box and asks the host for it over the Cmd channel, the
      * `/layout` technique; the argument pre-fills the view's search. Nothing is
      * written to the transcript: the view is the answer, and a row here would
      * be sent to the model.
      *
+     * The one argument that does NOT open the view is `reload` (C-TUI-5.c):
+     * it forces the settings-file pickup {@see \SugarCraft\Code\Config\SettingsFileWatch}
+     * otherwise runs at the turn boundary, and answers with the same summary
+     * toast a save through the view gets — or "nothing changed" when the
+     * merged settings still match what the session holds.
+     *
      * @return array{0: self, 1: ?\Closure}
      */
     private function handleSettingsCommand(string $text): array
     {
+        if (\strtolower(\trim(self::commandArgument($text))) === 'reload') {
+            $cleared = $this->withInputBuf('');
+            $changed = \SugarCraft\Code\Config\SettingsFileWatch::changedKeys(force: true);
+            if ($changed === []) {
+                return $cleared->withSettingsToast(
+                    Lang::t('chat.settings.reload.unchanged'),
+                    \SugarCraft\Toast\ToastType::Success,
+                );
+            }
+
+            return $cleared->applySettings($changed, Lang::t('chat.settings.reload.disk'));
+        }
+
         return $this->withInputBuf('')->openSettingsView(self::commandArgument($text));
     }
 

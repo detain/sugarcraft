@@ -536,6 +536,18 @@ final class ReadPathCensusTest extends TestCase
                 . 'the slot settled before any success is promised (writeUserConfig() can bail '
                 . 'unwritten); the never-fabricate law lifted from Subcommands::loginStoreKey',
         ],
+        'Config/SettingsFileWatch.php|file_get_contents' => [
+            'CALLER_SUPPLIED — hashOf() fingerprints one settings path so a hand edit reaches '
+                . 'the running session at the turn boundary (C-TUI-5.c); every path is chosen '
+                . 'by watchedFiles() from accessors that each hold their own boundary: '
+                . 'Bootstrap::userConfigPath() (the home-owned config file), '
+                . 'Bootstrap::userSettingsDirOrNull() + LayeredSettings::USER_FILE (the '
+                . 'home-OWNED ~/.candy-code, deliberately not relocatable by --config), and '
+                . 'LayeredSettings::projectFiles(), which hands back only paths already '
+                . 'gated by ContainedPath::below()/within() on a root with a trust grant. '
+                . 'The bytes are hashed for comparison and dropped — never decoded or merged '
+                . 'here; the merge re-derives through Bootstrap::readUserConfig()',
+        ],
         'Config/StatusLineCommand.php|file_get_contents' => [
             'SELF_LOCATED — collect(): the status-line child\'s result payload, the name '
                 . 'Support\\ToolIpcFiles::reserve() created for this run, read once after the '
@@ -944,10 +956,26 @@ final class ReadPathCensusTest extends TestCase
         'Server/Http/StaticFiles.php|file_get_contents' => [
             'CONTAINED — a static asset, read only for a path ContainedPath::within() keeps under the web root',
         ],
+        'Server/ServerConfig.php|file_get_contents' => [
+            'CALLER_SUPPLIED — withTls() (C-WEB-5.a) reads the certificate the operator named '
+                . 'with serve --tls-cert: is_file()/is_readable() gate first, and the bytes are '
+                . 'parsed by openssl_x509_read for the pair check — never executed here',
+            'CALLER_SUPPLIED — the key half of the same pair: the named --tls-key path is '
+                . 'additionally refused when group- or world-readable (mode bits 0o077) before '
+                . 'this read, and the PEM only travels to the TLS socket context',
+        ],
         'Server/StateDir.php|fopen' => [
             'SELF_LOCATED — server.lock in the verified state dir, opened `c` under umask 077 '
                 . 'only to hold flock(); lstat refuses anything but a regular file and no byte '
                 . 'of it is read',
+        ],
+        'Session/Import/RemoteSessionPush.php|file_get_contents' => [
+            'SELF_LOCATED — resolveToken() (C-SES-7.g) reads the owner-token file the '
+                . '`serve` store minted in the state dir PrivateRetainedDir::verified() '
+                . 'created 0700 and checked is ours — exactly the file the TokenStore row '
+                . 'above credits as its writer, read as a second tolerant reader: lstat '
+                . 'refuses anything but a regular file and only a 64-hex token passes; '
+                . 'read, never minted, never logged',
         ],
         'Session/Import/SessionImporter.php|file_get_contents' => [
             'USER_TYPED — importFile() reads the transcript file the person at the terminal named for '

@@ -294,6 +294,25 @@ trait HandlesTurnCompletion
                 'inFlightCancellation' => null,
             ]), null]);
 
+            // C-TUI-5.c (sources: GAP-CFG-05): the settings files on disk are
+            // re-read for keys the launch picks up per turn already; the LIVE
+            // keys were the restart-and-reopen story until here. A cheap
+            // fingerprint of exactly the files the merged settings read from
+            // runs at this boundary — stat unless a stat moved, hash unless a
+            // hash moved, merge-diff only then — and a change flows through
+            // the same `applySettings()` the settings view drives, with a
+            // source word naming the disk as its origin. Because it runs
+            // AFTER the queued-prompt release above, the park rule is exact:
+            // a turn a queued prompt carried on (`$done->inFlight`) parks
+            // engine keys on the existing `pendingSettingsApply` shelf, and a
+            // restart-roster key keeps answering "needs a restart" here
+            // exactly as it did in the view.
+            $reloadedKeys = \SugarCraft\Code\Config\SettingsFileWatch::changedKeys();
+            $reloadCmd = null;
+            if ($reloadedKeys !== []) {
+                [$done, $reloadCmd] = $done->applySettings($reloadedKeys, Lang::t('chat.settings.reload.disk'));
+            }
+
             // Step 3.D-3: a session with a live `/goal` is not done yet — the
             // title model judges this turn (below, once the per-turn side
             // calls are scheduled) and the agent goes back to work until the
@@ -384,6 +403,7 @@ trait HandlesTurnCompletion
             $measure = $done->inFlight ? null : $done->measureContextCmd();
             $cmds = array_values(array_filter([
                 $doneCmd,
+                $reloadCmd,
                 $suggest,
                 $consolidate === null ? null : Cmd::promise($consolidate),
                 $autoCommit,
