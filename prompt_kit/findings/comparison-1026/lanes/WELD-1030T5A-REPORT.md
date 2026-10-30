@@ -33,3 +33,9 @@ Format round-trip proven (indent=1 ensure_ascii + newline) before writing. welde
 
 ## §4 mark + commit
 plan_comparison.md:3487 flipped to '#### ✅ e5e884135 C-TUI-5.a — ... (Weld 1030T5A 2026-10-30: ...)'. Weld commit carries: mark, run-state fold, 2 DUR rows, DoctorChecksTest cure, lanes/C-TUI-5.a/REVIEW-2.md (swept), this report. Absorption proof + prune: see next section (rider).
+
+## Absorption proof + prune (post-commit rider)
+- git cherry master cc/C-TUI-5.a (pre-prune, master at e5e884135): b129f1754 '-', cf9f9e634 '-', 31ebd16fa '+' — the '+' IS the union conflict-resolution: content proof = git diff 31ebd16fa:<test> HEAD:<test> shows ONLY master's 1b5192f42 output-style block as the delta (lane's doctor row + comment live verbatim); the commit's other file (DoctorHostCommandTest.php) byte-identical. Absorbed-with-union, not dropped work.
+- Weld commit 85deffeaf proven via git show --name-only: exactly the 6 intended paths (mark, run-state, DUR rows, DoctorChecksTest cure, REVIEW-2.md, this report). %ae+%ce detain separate greps, zero Co-Authored.
+- Pruned: git worktree remove /tmp/opencode/weld1030T5A/base (my scratch) + ../cc-cmp-C-TUI-5.a (lane) + git branch -D cc/C-TUI-5.a. Final worktree list = main + cc-cmp-C-TOOL-6.a + cc-cmp-C-TUI-5.e + foreign weld1030L/base-check (left untouched).
+- NO PUSH. Chain: faf2c1d03 -> 3b7acfe1c -> 4dd5ffc10 -> e5e884135 -> 85deffeaf -> (rider). master_tip bookkeeping stays e5e884135 (last CODE commit; mark/rider are bookkeeping per bef506abc precedent).
