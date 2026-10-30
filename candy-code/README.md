@@ -637,10 +637,10 @@ context: it is listed with the others but sends nothing on its own. `#`, `//`,
 `/fork` `/generate` `/goal` `/grind` `/handoff` `/help` `/hooks` `/init`
 `/insights` `/instructions` `/keys` `/layout` `/loop` `/mcp` `/memory` `/model`
 `/new` `/newrule` `/notices` `/output-style` `/pane` `/permissions` `/play`
-`/pr` `/pruning` `/recompress` `/redo` `/rename` `/rendermode` `/review`
-`/rewind` `/rules` `/schedules` (`/schedule`) `/security-review` `/sendto`
-`/sessions` `/settings` (`/config`) `/share` `/shells` `/skills` `/status`
-`/sweep` `/theme` `/undo` `/usage` `/websearch` `/workflow`.
+`/pr` `/pruning` `/recap` `/recompress` `/redo` `/rename` `/rendermode`
+`/review` `/rewind` `/rules` `/schedules` (`/schedule`) `/security-review`
+`/sendto` `/sessions` `/settings` (`/config`) `/share` `/shells` `/skills`
+`/status` `/sweep` `/theme` `/undo` `/usage` `/websearch` `/workflow`.
 <!-- commands:roster:end -->
 
 The parenthesised spellings are aliases: they dispatch, but they have no
@@ -1292,13 +1292,12 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and forty-three keys are layered — `provider`,
-`models`, `providers`, `titleModel`, `summaryModel`, `advisorModel`,
-`maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
-`reasoningEffort`, `serviceTier`, `promptCache`, `parallelToolCalls`,
-`parallelToolDeadlineSeconds`, `maxToolSteps`, `maxCostUsd`,
-`compaction.reminderPercent`, `compaction.autoPercent`,
-`compaction.blockPercent`, `compaction.keepRecent`,
+Only these one hundred and forty-four keys are layered — `provider`, `models`,
+`providers`, `titleModel`, `summaryModel`, `advisorModel`, `maxOutputTokens`,
+`modelPrices`, `extraBody`, `thinkingBudget`, `reasoningEffort`, `serviceTier`,
+`promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
+`maxToolSteps`, `maxCostUsd`, `compaction.reminderPercent`,
+`compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`,
 `compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
 `compaction.toolOutputChars`, `compaction.reminderTokens`,
 `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`,
@@ -1330,11 +1329,12 @@ Only these one hundred and forty-three keys are layered — `provider`,
 `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `resumeCostWarnUsd`,
 `paletteMru`, `diffPreviewRows`, `diffStyle`, `toolOutputPreviewLines`,
 `sessionRetentionDays`, `sessions.autoTitle`, `promptSuggestions`,
-`promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints`, `keybindings`,
-`vimMode`, `transcriptJsonl`, `lintCommands`, `formatCommands`, `formatAuto`,
-`disabledMcpServers`, `mcp.enabled`, `mcp.lazySchemaTokens`,
-`connectTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`,
-`debug.skills`, `debug.commands`, `debug.rules`, `debug.stream`.
+`promptSuggestionHistory`, `sessions.awayRecap`, `expandToolOutput`,
+`maxCheckpoints`, `keybindings`, `vimMode`, `transcriptJsonl`, `lintCommands`,
+`formatCommands`, `formatAuto`, `disabledMcpServers`, `mcp.enabled`,
+`mcp.lazySchemaTokens`, `connectTimeoutSeconds`, `providerRetryAttempts`,
+`providerRetryBaseBackoffMs`, `debug.skills`, `debug.commands`, `debug.rules`,
+`debug.stream`.
 <!-- settings:layered:end -->
 
 That roster (and its count) is generated from `SettingsSchema` by

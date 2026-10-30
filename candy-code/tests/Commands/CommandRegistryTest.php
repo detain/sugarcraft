@@ -227,9 +227,11 @@ final class CommandRegistryTest extends TestCase
         // 'rules' joins both lists because the matcher is fuzzy, not a prefix
         // test: r@0 then e@3 is a strictly increasing run that covers every
         // needle character from position 0, so `/rul`-typo popup widening is the
-        // intended behaviour, not an accident of the new P6.S3 row.
-        $this->assertSame(['recompress', 'redo', 'rename', 'rendermode', 'review', 'rewind', 'rules'], self::names(CommandRegistry::filter('RE')));
-        $this->assertSame(['recompress', 'redo', 'rename', 'rendermode', 'review', 'rewind', 'rules'], self::names(CommandRegistry::filter('re')));
+        // intended behaviour, not an accident of the new P6.S3 row. C-TUI-3.g's
+        // 'recap' rides both lists for the same reason — r@0, e@1 is strictly
+        // increasing — and sorts first, so it is listed first here.
+        $this->assertSame(['recap', 'recompress', 'redo', 'rename', 'rendermode', 'review', 'rewind', 'rules'], self::names(CommandRegistry::filter('RE')));
+        $this->assertSame(['recap', 'recompress', 'redo', 'rename', 'rendermode', 'review', 'rewind', 'rules'], self::names(CommandRegistry::filter('re')));
     }
 
     public function testFilterDropsCandidatesThatOnlyPartiallyMatch(): void

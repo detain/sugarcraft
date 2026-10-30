@@ -423,6 +423,7 @@ edit it by hand.
 | `/goal` | ✓ | | `[<condition>\|clear]` | Work until a condition is met, judged by the title model after every turn |
 | `/grind` | ✓ | | `[<condition>\|clear]` | Like /goal, with a much longer budget of follow-up rounds |
 | `/btw` | ✓ | | `<question>` | Ask the title model a side question about this conversation, kept out of it |
+| `/recap` | ✓ | | — | Recap where this session left off and what is next (the away-recap, asked now) |
 | `/handoff` | ✓ | | `[--remote <url>\|focus]` | Continue in a new session that starts from a state summary of this one |
 | `/generate` | ✓ | | `<prompt> [--steps N] [--size WxH] [--seed N] [--save]` | Generate an image on the configured SD server |
 | `/generate-form` | | | — | Open the interactive generation form (image and video tabs) |
