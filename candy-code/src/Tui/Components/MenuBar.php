@@ -295,7 +295,7 @@ final class MenuBar
             // fit beside the tab strip, paint no titles at all (the old
             // `break` behaviour): the frame's width law outranks the door,
             // which stays fully keyboard-openable on the structural tree.
-            while ($keep >= 0 && 1 + $moreCost > $budget) {
+            while (1 + $moreCost > $budget) {
                 if ($keep === 0) {
                     return [[], false];
                 }
@@ -628,7 +628,7 @@ final class MenuBar
      */
     public static function activeMenu(): int
     {
-        return self::$cursor?->menu ?? 0;
+        return self::$cursor === null ? 0 : self::$cursor->menu;
     }
 
     /**

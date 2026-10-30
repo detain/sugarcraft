@@ -403,7 +403,7 @@ final class ClaudeSettingsHooks
                             // candy-code recognises at all — that stays loud.
                             throw new \InvalidArgumentException(
                                 "{$source}: a hook under `hooks.{$event}` has type "
-                                . (\is_string($type) ? "'{$type}'" : get_debug_type($type))
+                                . get_debug_type($type)
                                 . "; candy-code runs Claude Code hooks of type 'command' only, and running "
                                 . 'the others anyway — or skipping them quietly — would not be the guard you wrote.',
                             );

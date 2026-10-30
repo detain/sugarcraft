@@ -1161,7 +1161,7 @@ final class BackgroundShellRegistry
         }
         $combined = \is_int($cursor)
             ? \max(0, $cursor)
-            : (\is_string($cursor) && \preg_match('/^\s*\d+\s*$/', $cursor) === 1 ? (int) \trim($cursor) : 0);
+            : (\preg_match('/^\s*\d+\s*$/', $cursor) === 1 ? (int) \trim($cursor) : 0);
 
         return [\min($combined, $stdoutSize), \max(0, \min($combined - $stdoutSize, $stderrSize)), $combined === 0];
     }

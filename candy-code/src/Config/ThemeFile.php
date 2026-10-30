@@ -110,7 +110,7 @@ final class ThemeFile
 
         $stems = [];
         foreach (scandir($directory) ?: [] as $entry) {
-            if (!\is_string($entry) || !str_ends_with($entry, '.json')) {
+            if (!str_ends_with($entry, '.json')) {
                 continue;
             }
 

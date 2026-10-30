@@ -356,7 +356,7 @@ final readonly class MemoryTool implements Tool, BuildsFromCatalog, AcceptsShell
         // lands with this same wave; a note whose trigger did not persist
         // must never be described as armed).
         $armed = $when !== null
-            && (($this->writer?->locate($result->id)[0] ?? null)?->when() ?? '') !== '';
+            && (($this->writer->locate($result->id)[0] ?? null)?->when() ?? '') !== '';
         if ($armed) {
             $text .= ' It is a standing intent: it rides later tool results once per turn, tagged as'
                 . ' a system reminder, when a tool touches a path matching its `when:` trigger, and'

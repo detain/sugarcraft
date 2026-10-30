@@ -224,10 +224,10 @@ final class SessionMailbox
             // keeps a valid older message first even if a drop arrived before
             // it on disk.
             $waiting[] = [
-                'ts' => $message?->ts ?? PHP_INT_MAX,
+                'ts' => $message === null ? PHP_INT_MAX : $message->ts,
                 'name' => $name,
                 'message' => $message,
-                'from' => $message?->from ?? $claimedFrom,
+                'from' => $message === null ? $claimedFrom : $message->from,
                 'reason' => $message === null ? $reason : null,
             ];
         }

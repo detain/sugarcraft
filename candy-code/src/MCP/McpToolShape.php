@@ -153,7 +153,7 @@ final class McpToolShape
             }
         }
 
-        return new self($client, $this->lazy, $this->eagerDescriptors, array_values($dispatched));
+        return new self($client, $this->lazy, $this->eagerDescriptors, $dispatched);
     }
 
     /**

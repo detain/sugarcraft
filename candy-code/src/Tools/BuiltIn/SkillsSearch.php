@@ -95,7 +95,7 @@ final readonly class SkillsSearch implements Tool, BuildsFromCatalog, ParallelSa
 
     public function __construct(private SkillRegistry $registry) {}
 
-    public static function fromCatalog(ToolBuildContext $context): ?Tool
+    public static function fromCatalog(ToolBuildContext $context): Tool
     {
         return new self($context->skills);
     }

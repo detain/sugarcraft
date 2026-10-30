@@ -164,7 +164,7 @@ final class AuditLogReader
         }
 
         if (\preg_match('/^WITHHELD(?: "([^"]*)")?: (.*)$/s', $tail, $w) === 1) {
-            $hook = ($w[1] ?? '') === '' ? null : $w[1];
+            $hook = $w[1] === '' ? null : $w[1];
 
             return [...$base, 'verdict' => 'withheld', 'kind' => $hook, 'reason' => $w[2]];
         }

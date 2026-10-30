@@ -320,7 +320,7 @@ final class UpdateCheck
             if (\preg_match('/(?:^|\s)rel\s*=\s*("([^"]*)"|[^;,\s]+)/i', $m[2], $r) !== 1) {
                 continue;
             }
-            $rel = \strtolower(\trim($r[2] ?? $r[1] ?? '', " \t\""));
+            $rel = \strtolower(\trim($r[2] ?? $r[1], " \t\""));
             if ($rel === 'next') {
                 return $m[1];
             }

@@ -508,7 +508,7 @@ final class SseLineParser
                 // Extensions (`;name=value`) ride after the hex size; the
                 // size terminates at the first ';' or whitespace.
                 $hex = strtolower(rtrim(strstr($sizeLine . ';', ';', true), " \t\r\n"));
-                if (ctype_xdigit($hex) === false || $hex === '') {
+                if (ctype_xdigit($hex) === false) { // ctype_xdigit('') is false
                     throw new \RuntimeException(
                         'MCP server ' . $this->name . ': malformed chunk size line in the event stream',
                     );

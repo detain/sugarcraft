@@ -297,6 +297,6 @@ final class Bundle
             return \array_filter($value, 'is_string') !== $value;
         }
 
-        return !\is_string($value) && $value !== null && $value !== '' && $value !== false;
+        return !\is_string($value) && $value !== null && $value !== false;
     }
 }

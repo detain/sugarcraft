@@ -949,7 +949,7 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
      * @param array<string, int>|false $stat
      * @param resource $handle
      */
-    private function pdfAnswer(string $path, string $head, $handle, array|false $stat, string $shown, string $callId, ?int $offset, ?int $limit): ?ToolResult
+    private function pdfAnswer(string $path, string $head, $handle, array|false $stat, string $shown, string $callId, ?int $offset, ?int $limit): ToolResult
     {
         if ($this->pdfTextCapable()) {
             $run = $this->runCaptured(

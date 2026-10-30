@@ -317,7 +317,7 @@ final class ContextPane
             window: $chat?->contextTokenLimit() ?? 0,
             expanded: $a->contextPaneExpanded,
             drill: $a->contextDrill,
-            stale: $chat?->inFlight ?? false,
+            stale: $chat === null ? false : $chat->inFlight,
             cachePercent: self::cachePercent($chat),
             // Zero freed means nothing has been pruned — the model reads
             // null as "no pruning measured", the same honesty the class

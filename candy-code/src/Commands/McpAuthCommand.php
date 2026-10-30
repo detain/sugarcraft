@@ -396,7 +396,7 @@ final class McpAuthCommand
      * path: the report shows the servers that DID come back plus the failure
      * line, which is more than an exception's stack does for the user.
      *
-     * @return array{0: array<string, array{transport: string, up: ?bool, tools: int}>, 1: array<string, array{transport: string, up: ?bool, tools: int}>, 2: list<string>, 3: list<string>, 4: array<string, array{url: string, status: string}>, 5: ?string}
+     * @return array{0: array<string, array{transport: string, up: ?bool, tools: int, resources?: int, disabled?: bool}>, 1: array<string, array{transport: string, up: ?bool, tools: int, resources?: int, disabled?: bool}>, 2: list<string>, 3: list<string>, 4: array<string, array{url: string, status: int}>, 5: ?string}
      */
     private static function reconnectPair(McpClient $client): array
     {

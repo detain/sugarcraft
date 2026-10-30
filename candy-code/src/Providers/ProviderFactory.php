@@ -973,9 +973,6 @@ final readonly class ProviderFactory
         // would silently route to neither arm's door check — the value is
         // compared against constants below).
         $api = $config['api'] ?? OpenAIProvider::API_CHAT;
-        if ($api === null) {
-            $api = OpenAIProvider::API_CHAT;
-        }
         if (!is_string($api) || !in_array($api, OpenAIProvider::validApis(), true)) {
             throw new \InvalidArgumentException(sprintf(
                 'api must be "chat" or "responses", got %s',
@@ -1072,9 +1069,6 @@ final readonly class ProviderFactory
         $model = $config['model'] ?? 'gpt-4o';
 
         $api = $config['api'] ?? OpenAIProvider::API_CHAT;
-        if ($api === null) {
-            $api = OpenAIProvider::API_CHAT;
-        }
         if (!is_string($api) || !in_array($api, OpenAIProvider::validApis(), true)) {
             throw new \InvalidArgumentException(sprintf(
                 'api must be "chat" or "responses", got %s',

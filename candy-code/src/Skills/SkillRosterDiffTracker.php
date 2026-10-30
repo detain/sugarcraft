@@ -94,7 +94,7 @@ final class SkillRosterDiffTracker
      * The frozen generation: name => description hash, auto-invocable enabled
      * roster only, insertion order kept so rendering is stable.
      *
-     * @var array<string, string>
+     * @param array<string, string> $frozen the roster this instance diffs against
      */
     private function __construct(
         private readonly SkillRegistry $registry,

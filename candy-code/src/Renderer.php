@@ -5795,7 +5795,7 @@ final class Renderer
                     $seen[spl_object_id($line)] = true;
                 }
             }
-            $highest = max($highest, $pair->left?->oldNumber ?? 0, $pair->right?->newNumber ?? 0);
+            $highest = max($highest, $pair->left === null ? 0 : $pair->left->oldNumber, $pair->right === null ? 0 : $pair->right->newNumber);
         }
 
         if (count($seen) !== count($body)) {

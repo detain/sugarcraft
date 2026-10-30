@@ -749,16 +749,14 @@ final class NonInteractive
                 // never invents a zero-dollar call. A store that fails HERE rides
                 // this try exactly like recordTurn/save do: one stderr line, exit
                 // status unchanged — the answer is already out.
-                if ($sessionStore instanceof \SugarCraft\Code\Session\EnhancedSessionStore) {
-                    \SugarCraft\Code\Host\SpendLedger::new()->account(
-                        new \SugarCraft\Code\Util\TokenTracker(),
-                        \SugarCraft\Code\Usage::sum($sessionUsages),
-                        static function (\SugarCraft\Code\Usage $usage, ?string $model = null) use ($sessionStore, $opened): void {
-                            $sessionStore->appendUsageRecord($opened['id'], $usage, $model);
-                        },
-                        $backend instanceof \SugarCraft\Code\Backend\EngineBackend ? $backend->model() : null,
-                    );
-                }
+                \SugarCraft\Code\Host\SpendLedger::new()->account(
+                    new \SugarCraft\Code\Util\TokenTracker(),
+                    \SugarCraft\Code\Usage::sum($sessionUsages),
+                    static function (\SugarCraft\Code\Usage $usage, ?string $model = null) use ($sessionStore, $opened): void {
+                        $sessionStore->appendUsageRecord($opened['id'], $usage, $model);
+                    },
+                    $backend instanceof \SugarCraft\Code\Backend\EngineBackend ? $backend->model() : null,
+                );
 
                 return (string) $opened['id'];
             } catch (\Throwable $e) {

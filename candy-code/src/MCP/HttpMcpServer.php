@@ -476,7 +476,7 @@ final class HttpMcpServer implements McpServer, McpResourceProvider, McpPromptPr
      * already covers the walk it happens inside.
      *
      * @param array<string,mixed> $args
-     * @param (\Closure(): void)|null $onWait
+     * @param (\Closure(array<string,mixed>): void)|null $onWait
      */
     public function callToolAnsweringRequests(
         string $toolName,

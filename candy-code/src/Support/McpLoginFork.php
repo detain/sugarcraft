@@ -142,7 +142,7 @@ final class McpLoginFork
      * to re-arm the next look. A `gone` beat when the slot is absent is
      * Chat's cue to stop re-arming without printing anything.
      */
-    public static function poll(string $server): ?Msg
+    public static function poll(string $server): ?McpLoginProgressMsg
     {
         if (!isset(self::$slots[$server])) {
             return new McpLoginProgressMsg($server, McpLoginProgressMsg::PHASE_GONE);

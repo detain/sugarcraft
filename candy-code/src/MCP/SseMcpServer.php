@@ -962,6 +962,9 @@ final class SseMcpServer implements McpServer, McpResourceProvider, McpPromptPro
         return $this->activeHandler !== null || $this->defaultHandler !== null;
     }
 
+    /**
+     * @param (\Closure(array<string,mixed>): void)|null $onWait progress-notification sink — receives the raw params map
+     */
     public function callToolAnsweringRequests(
         string $toolName,
         array $args,

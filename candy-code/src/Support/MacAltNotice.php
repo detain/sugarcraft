@@ -80,7 +80,7 @@ final class MacAltNotice
      * The `$env` seam exists for the pins: production always calls it with no
      * argument and reads the process environment.
      *
-     * @param array<string, string>|null $overridden ambient env, null to read getenv()
+     * @param array<string, string>|null $env ambient env, null to read getenv()
      */
     public static function terminalSpeaksKittyKeyboard(?array $env = null): bool
     {

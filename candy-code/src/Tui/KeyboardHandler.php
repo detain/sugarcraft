@@ -546,7 +546,7 @@ final class KeyboardHandler
      * path speaks {@see KeyMsg}; {@see handleKeyMsg()} is the bridge, and is
      * what decides whether a key reaches here at all.
      *
-     * @return array{0: App, 1: ?KeyCmd} [newApp, command]
+     * @return array{0: App, 1: ?object} [newApp, command] — the arm owns the shape: KeyCmd, SelectSkillMsg or a plain App->App closure
      */
     public function handle(string $key, App $app): array
     {

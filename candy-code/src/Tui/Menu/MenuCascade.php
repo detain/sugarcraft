@@ -233,6 +233,8 @@ final class MenuCascade
     ): array {
         $total = count($nodeRows);
 
+        $topEllipsis = false;
+        $bottomEllipsis = false;
         if ($total <= $interior) {
             $start = 0;
             $visible = $total;

@@ -174,8 +174,7 @@ final class PublicUrlGuard
      * @param int                                     $maxBytes        hard wire bound; a body that grows past it abandons the stream mid-read
      * @param (callable(string): list<string>)|null   $resolveAddresses resolver seam
      * @param (callable(string): bool)|null           $isBlockedAddress blocklist seam
-     * @param (callable(string, string, array<string,mixed>, string, int, int): ?array{0: string, 1: list<string>, 2: bool})|null
-     *                                                   transfer seam — ({@see transferPinned()} by default): scheme, host, parse of the hop URL, validated dial address, budget, wire bound; returns body + response headers + completeness, null on dial failure
+     * @param (callable(string, string, array<string,mixed>, string, int, int): ?array{0: string, 1: list<string>, 2: bool})|null $transfer transfer seam — ({@see transferPinned()} by default): scheme, host, parse of the hop URL, validated dial address, budget, wire bound; returns body + response headers + completeness, null on dial failure
      *
      * @return array{ok: bool, error: ?string, body: ?string}
      */
@@ -471,7 +470,7 @@ final class PublicUrlGuard
         }
 
         // fopen() populates the magic response-header variable in this scope.
-        $headers = $http_response_header ?? [];
+        $headers = $http_response_header;
 
         $body = '';
         while (!feof($stream) && strlen($body) <= $maxBytes) {
@@ -484,7 +483,7 @@ final class PublicUrlGuard
         $complete = strlen($body) <= $maxBytes || feof($stream);
         fclose($stream);
 
-        return [$body, array_values(is_array($headers) ? $headers : []), $complete];
+        return [$body, array_values($headers), $complete];
     }
 
     /**

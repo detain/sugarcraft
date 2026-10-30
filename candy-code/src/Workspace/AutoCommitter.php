@@ -496,7 +496,7 @@ final class AutoCommitter
      * The empty tree is refused rather than committed: git would answer with
      * its own "nothing to commit" exit code; this says it before spawning.
      *
-     * @return array{ok: bool, sha: ?string, subject: string, paths: list<string>, snapshot?: null, reason: string}
+     * @return array{ok: bool, sha: ?string, subject: string, paths: list<string>, snapshot?: string|null, reason: string}
      */
     public function commitAll(string $subject): array
     {

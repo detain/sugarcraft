@@ -68,7 +68,7 @@ final readonly class SkillWorkshop implements Tool, BuildsFromCatalog, TakesTool
 
     public function __construct(private LearnedSkills $store) {}
 
-    public static function fromCatalog(ToolBuildContext $context): ?Tool
+    public static function fromCatalog(ToolBuildContext $context): Tool
     {
         // The store resolves its own home the way the draft store does
         // (HomeDirectory::owned()); nothing in the launch context decides it.

@@ -87,9 +87,9 @@ final readonly class AdvisorTool implements Tool, BuildsFromCatalog, DelegatesTo
 
     private function __construct(
         private ?Backend $advisorBackend = null,
-        /** @var (Closure(string): array<int, \SugarCraft\Code\Message>)|null */
+        /** @var (\Closure(string): array<int, \SugarCraft\Code\Message>)|null */
         private ?\Closure $transcript = null,
-        /** @var (Closure(string): array{calls: int, totalTokens: int, costUsd: float, unpriced: bool}|null)|null */
+        /** @var (\Closure(string): array{calls: int, totalTokens: int, costUsd: float, unpriced: bool}|null)|null */
         private ?\Closure $sessionSpend = null,
         private ?EngineBackend $engine = null,
         /**
@@ -269,7 +269,7 @@ final readonly class AdvisorTool implements Tool, BuildsFromCatalog, DelegatesTo
             return new ToolResult($callId, sprintf('the advisor call failed: %s', $e->getMessage()), true);
         }
 
-        $answer = trim($reply->content ?? '');
+        $answer = trim($reply->content);
         // Audit B4, the TaskTool channel: the completion billed, so the cost
         // rides the result even when the answer came back empty — and into the
         // box, so this turn's NEXT call sees it against the session cap.

@@ -366,7 +366,7 @@ trait HandlesRunControl
             modelId: $engine === null ? null : ($engine->servedModel() ?? $engine->model()),
             projectDir: $this->projectRoot() ?: null,
             version: $version,
-            totalCostUsd: $reported ? $this->spentUsd() + ($turnUsage?->costUsd ?? 0.0) : null,
+            totalCostUsd: $reported ? $this->spentUsd() + ($turnUsage === null ? 0.0 : $turnUsage->costUsd) : null,
             provider: $engine?->provider()->name(),
             permissionMode: $this->currentPermissionMode()?->value,
             contextTokens: $this->contextTokens(),

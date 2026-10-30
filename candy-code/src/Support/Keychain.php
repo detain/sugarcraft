@@ -75,10 +75,10 @@ final class Keychain
     /** @var array<string,string|null> memoised hits and misses by entry name */
     private static array $memo = [];
 
-    /** @var (Closure(list<string>):array{status:string,stdout:string,exitCode:int})|null */
+    /** @var (\Closure(list<string>):array{status:string,stdout:string,exitCode:int})|null */
     private static ?\Closure $spawnSeam = null;
 
-    /** @var (Closure(list<string>,string):array{status:string,stdout:string,exitCode:int})|null */
+    /** @var (\Closure(list<string>,string):array{status:string,stdout:string,exitCode:int})|null */
     private static ?\Closure $storeSeam = null;
 
     /** Test-only OS family override; null reads the live {@see PHP_OS_FAMILY}. */
@@ -227,7 +227,7 @@ final class Keychain
      * The seam receives the exact argv the real path would have spawned and
      * returns the normalized {@see spawn()} shape; null restores the real one.
      *
-     * @param (Closure(list<string>):array{status:string,stdout:string,exitCode:int})|null $seam
+     * @param (\Closure(list<string>):array{status:string,stdout:string,exitCode:int})|null $seam
      */
     public static function armSpawnSeamForTesting(?\Closure $seam): void
     {
@@ -241,7 +241,7 @@ final class Keychain
      * the secret that belongs on stdin, and returns the normalized
      * {@see spawn()} shape; null restores the real one.
      *
-     * @param (Closure(list<string>,string):array{status:string,stdout:string,exitCode:int})|null $seam
+     * @param (\Closure(list<string>,string):array{status:string,stdout:string,exitCode:int})|null $seam
      */
     public static function armStoreSeamForTesting(?\Closure $seam): void
     {
@@ -440,7 +440,7 @@ final class Keychain
             while (true) {
                 $status = \proc_get_status($process);
                 if (!$status['running']) {
-                    $exitCode = (int) ($status['exitcode'] ?? -1);
+                    $exitCode = (int) $status['exitcode'];
                     break;
                 }
                 if (\microtime(true) >= $deadline) {

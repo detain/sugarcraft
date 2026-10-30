@@ -461,7 +461,7 @@ final class TurnRunner
                         $named = $named->primary();
                     }
                     $notices?->record(Lang::t('chat.effort.ultrathink_none', [
-                        'provider' => $named instanceof ProviderInterface ? $named->name() : 'this backend',
+                        'provider' => $named->name(),
                         'model' => $backend->model(),
                     ]));
                 }

@@ -319,11 +319,9 @@ final class LspInstaller
         try {
             // http_errors is off, so any status reaches the check below as a
             // plain response — the mirror of the phar downloader's fetchOk.
-            $response = $http->get($entry['url'], self::downloadOptions($temp));
-            if (!$response instanceof ResponseInterface || $response->getStatusCode() >= 400) {
-                $status = $response instanceof ResponseInterface ? $response->getStatusCode() : 0;
-
-                return self::failure(sprintf('lsp install: %s answered HTTP %d', $entry['asset'], $status));
+            $response = $http->request('GET', $entry['url'], self::downloadOptions($temp));
+            if ($response->getStatusCode() >= 400) {
+                return self::failure(sprintf('lsp install: %s answered HTTP %d', $entry['asset'], $response->getStatusCode()));
             }
 
             // Checksum FIRST: nothing decompresses or executes until the

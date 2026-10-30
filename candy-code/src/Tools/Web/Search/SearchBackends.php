@@ -239,7 +239,7 @@ final class SearchBackends
             return [false, []];
         }
 
-        $headers = $http_response_header ?? [];
+        $headers = $http_response_header;
 
         $body = '';
         while (!feof($stream) && strlen($body) <= self::MAX_RESPONSE_SIZE) {
@@ -251,7 +251,7 @@ final class SearchBackends
         }
         fclose($stream);
 
-        return [$body, array_values(is_array($headers) ? $headers : [])];
+        return [$body, array_values($headers)];
     }
 
     /**

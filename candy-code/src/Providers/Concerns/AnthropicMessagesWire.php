@@ -1219,10 +1219,6 @@ trait AnthropicMessagesWire
             $assistantTurns[] = ['role' => 'assistant', 'content' => $this->normalizedEchoBlocks($leg['blocks'])];
             $next = $this->anthropicServerWebSearchResume($requestBody, $assistantTurns, $model);
 
-            if ($next === null) {
-                break;
-            }
-
             if (isset($next['error'])) {
                 // The legs before this one were really answered and really
                 // billed: their usage rides the error frame instead of being
@@ -1294,8 +1290,8 @@ trait AnthropicMessagesWire
 
         return new CompleteResponse(
             content: '',
-            tokensUsed: $carried?->totalTokens ?? 0,
-            costUsd: $carried?->costUsd ?? 0.0,
+            tokensUsed: $carried === null ? 0 : $carried->totalTokens,
+            costUsd: $carried === null ? 0.0 : $carried->costUsd,
             usage: $carried,
             isError: true,
             // 2.7-1a: an overflow is named in the text, the only verdict
@@ -2125,10 +2121,6 @@ trait AnthropicMessagesWire
             $assistantTurns[] = ['role' => 'assistant', 'content' => array_values($blocks)];
             $next = $this->anthropicServerWebSearchResume($body, $assistantTurns, $model);
 
-            if ($next === null) {
-                break;
-            }
-
             if (isset($next['error'])) {
                 return $this->anthropicErrorFrame($next, $usage);
             }
@@ -2172,8 +2164,8 @@ trait AnthropicMessagesWire
             content: $text,
             reasoning: $reasoning !== '' ? $reasoning : null,
             toolCalls: $toolCalls === [] ? null : $toolCalls,
-            tokensUsed: $usage?->totalTokens ?? 0,
-            costUsd: $usage?->costUsd ?? 0.0,
+            tokensUsed: $usage === null ? 0 : $usage->totalTokens,
+            costUsd: $usage === null ? 0.0 : $usage->costUsd,
             usage: $usage,
             truncated: in_array($stopReason, self::TRUNCATED_STOP_REASONS, true),
             thinkingBlocks: $thinkingBlocks,

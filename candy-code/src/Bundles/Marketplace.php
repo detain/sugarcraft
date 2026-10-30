@@ -291,7 +291,7 @@ final class Marketplace
 
         $rest = substr($url, strlen('https://'));
 
-        if ($rest === false || $rest === '') {
+        if ($rest === '') {
             return false;
         }
 

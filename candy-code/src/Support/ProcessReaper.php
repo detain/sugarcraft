@@ -161,7 +161,9 @@ final class ProcessReaper
      *
      * Returns whether the child is gone by the end of the budgets.
      *
-     * @param callable(int):void $signal delivers one rung signal (15 or 9)
+     * @param callable(int):mixed $signal delivers one rung signal (15 or 9);
+     *        its return value is ignored — rung helpers that report success
+     *        (terminatePid's bool) are the callers' business, not the ladder's
      * @param callable():bool $isGone a cheap, non-blocking exited?-poll
      * @param callable():void|null $onEscalate fired once BETWEEN the rungs,
      *        when SIGTERM did not land — for families that log the escalation

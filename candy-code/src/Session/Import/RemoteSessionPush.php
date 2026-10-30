@@ -163,6 +163,7 @@ final class RemoteSessionPush
                 return;
             }
             $settled = true;
+            /** @var \SugarCraft\Code\Host\RemoteSessionHost|null $opened ref-shared: the resolve path may have minted it */
             if ($opened instanceof RemoteSessionHost) {
                 $opened->close();
             }

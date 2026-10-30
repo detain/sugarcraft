@@ -346,9 +346,9 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
      *
      * @param array<string, mixed>                 $body
      * @param list<array<string, mixed>>           $assistantTurns
-     * @return array<string, mixed>|null
+     * @return array<string, mixed>
      */
-    protected function anthropicServerWebSearchResume(array $body, array $assistantTurns, string $model): ?array
+    protected function anthropicServerWebSearchResume(array $body, array $assistantTurns, string $model): array
     {
         $resume = $body;
         $resume['messages'] = array_merge(
