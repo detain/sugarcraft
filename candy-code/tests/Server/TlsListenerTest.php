@@ -159,7 +159,7 @@ final class TlsListenerTest extends TestCase
 
         self::assertStringStartsWith('HTTP/1.1 200', $answer, 'a fresh code signs in over TLS');
         self::assertStringContainsString('Set-Cookie: candy_code_session_', $answer);
-        self::assertStringContainsString('; Secure', $answer, 'the direct-TLS connection sets the Secure flag (C-WEB-5.a: ClientAddress::isSecure reads the listener’s own TLS)');
+        self::assertStringContainsString('; Secure', $answer, 'the direct-TLS connection sets the Secure flag (C-WEB-5.a: ClientAddress::isSecure reads the TLS state of the listener itself)');
 
         $plainCode = \substr((string) \parse_url($this->plain->loginUrls()[0], \PHP_URL_FRAGMENT), \strlen('code='));
         $plainSocket = $this->plainConnect($this->plainPort);

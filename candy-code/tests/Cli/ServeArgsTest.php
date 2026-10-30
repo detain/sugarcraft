@@ -385,7 +385,95 @@ final class ServeArgsTest extends TestCase
         }
     }
 
+    /**
+     * C-WEB-5.a review MINOR-4: the cleartext-warning gate in `Serve::announce()`
+     * — the `cli.serve.announce.remote` row rides the startup output only when
+     * the bind is beyond loopback AND no TLS pair was supplied. Dropping the
+     * TLS half of the gate would keep warning over an encrypted listener;
+     * dropping the loopback half would warn on localhost. announce writes
+     * through `fwrite(STDERR, ...)`, which cannot be redirected in-process, so
+     * the reflected call runs in a throwaway child — the house shape for
+     * stderr routing, as in the launch-notice tests.
+     */
+    public function testTheCleartextRemoteWarningIsAnnouncedOnlyForPlainRemoteBinds(): void
+    {
+        $plain = $this->announceStderr(['--host', '192.0.2.1', '--allow-remote']);
+        self::assertStringContainsString('candy-code serve: listening on', $plain, 'the child reached its announce lines at all');
+        self::assertSame(1, \substr_count($plain, '!! Plain HTTP on 192.0.2.1'), 'cleartext beyond loopback is what the warning exists for');
+
+        [$cert, $key] = $this->writeServeArgsTlsPair('announce-');
+        $tls = $this->announceStderr(['--host', '192.0.2.1', '--allow-remote', '--tls-cert', $cert, '--tls-key', $key]);
+        self::assertStringContainsString('candy-code serve: listening on', $tls, 'the TLS launch announced too');
+        self::assertStringNotContainsString('!! Plain HTTP on', $tls, 'a TLS listener does not carry the token, code and cookie in cleartext');
+
+        $local = $this->announceStderr([]);
+        self::assertStringContainsString('candy-code serve: listening on', $local, 'the loopback launch announced too');
+        self::assertStringNotContainsString('!! Plain HTTP on', $local, 'loopback was never the warning target');
+    }
+
+    /**
+     * Reflection-invoke `Serve::announce()` in a child php process and return
+     * its stderr. Script and capture live in the per-class scratch dir, so a
+     * dead child's residue is still swept by tearDown. The child carries only
+     * the announce call; a startup refusal would leave the listening row
+     * absent and the caller's pin fails loud rather than vacuously.
+     *
+     * @param list<string> $argv serve flags, positioned after the verb
+     */
+    private function announceStderr(array $argv): string
+    {
+        $dir = $this->tlsScratchDir();
+        $script = $dir . '/announce-' . \bin2hex(\random_bytes(4)) . '.php';
+        $errFile = $script . '-stderr.txt';
+
+        $body = \str_replace(
+            ['@@AUTOLOAD@@', '@@ARGV@@'],
+            [\var_export(\dirname(__DIR__, 2) . '/vendor/autoload.php', true), \var_export(['candy-code', 'serve', ...$argv], true)],
+            <<<'PHP'
+                <?php
+                require @@AUTOLOAD@@;
+                $args = \SugarCraft\Code\Cli\ArgvParser::parse(@@ARGV@@);
+                $config = \SugarCraft\Code\Cli\Serve::config($args, [], []);
+                $report = ['url' => 'http://192.0.2.1:7420/', 'loginUrl' => 'http://192.0.2.1:7420/login?code=ONETIME01', 'pid' => 4242];
+                $announce = new \ReflectionMethod(\SugarCraft\Code\Cli\Serve::class, 'announce');
+                $announce->setAccessible(true);
+                $announce->invoke(null, $args, $config, $report, \SugarCraft\Code\Server\Http\StaticFiles::new(null), false);
+
+                PHP,
+        );
+        \file_put_contents($script, $body);
+
+        // HOME points at the scratch dir so defaultStateDir() resolves in the
+        // child no matter what the runner's environment happens to carry.
+        \exec(\sprintf(
+            'HOME=%s timeout -s KILL 20 %s %s 2>%s >/dev/null',
+            \escapeshellarg($dir),
+            \escapeshellarg(\PHP_BINARY),
+            \escapeshellarg($script),
+            \escapeshellarg($errFile),
+        ));
+        $stderr = \is_file($errFile) ? (string) \file_get_contents($errFile) : '';
+        @\unlink($script);
+        @\unlink($errFile);
+
+        return $stderr;
+    }
+
     private string $tlsDir = '';
+
+    /**
+     * The one scratch directory this class writes TLS pairs, announce scripts
+     * and stderr captures into; tearDown sweeps it whole.
+     */
+    private function tlsScratchDir(): string
+    {
+        if ($this->tlsDir === '') {
+            $this->tlsDir = (string) (\sys_get_temp_dir() . '/cc-cmp-tlsargs-' . \getmypid() . '-' . \bin2hex(\random_bytes(4)));
+            \mkdir($this->tlsDir, 0o700);
+        }
+
+        return $this->tlsDir;
+    }
 
     /**
      * A throwaway self-signed pair for the flag-validation tests above;
@@ -396,10 +484,7 @@ final class ServeArgsTest extends TestCase
      */
     private function writeServeArgsTlsPair(string $prefix = ''): array
     {
-        if ($this->tlsDir === '') {
-            $this->tlsDir = (string) (\sys_get_temp_dir() . '/cc-cmp-tlsargs-' . \getmypid() . '-' . \bin2hex(\random_bytes(4)));
-            \mkdir($this->tlsDir, 0o700);
-        }
+        $dir = $this->tlsScratchDir();
         $private = \openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => \OPENSSL_KEYTYPE_RSA]);
         self::assertNotFalse($private, 'openssl_pkey_new');
         \openssl_pkey_export($private, $keyPem);
@@ -409,8 +494,8 @@ final class ServeArgsTest extends TestCase
         self::assertNotFalse($signed, 'openssl_csr_sign');
         \openssl_x509_export($signed, $certPem);
 
-        $certPath = $this->tlsDir . '/' . $prefix . 'cert.pem';
-        $keyPath = $this->tlsDir . '/' . $prefix . 'key.pem';
+        $certPath = $dir . '/' . $prefix . 'cert.pem';
+        $keyPath = $dir . '/' . $prefix . 'key.pem';
         \file_put_contents($certPath, $certPem);
         \file_put_contents($keyPath, $keyPem);
         \chmod($keyPath, 0o600);
