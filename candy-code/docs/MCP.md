@@ -641,12 +641,12 @@ Caveats, stated because a browser server makes every rule above load-bearing:
   argv, started at the tier's directory ("Where a `stdio` server runs"
   above). A browser server reaches any URL its page is pointed at and any
   profile it is given, even while your Bash calls run sandboxed. Until a
-  server-side jail exists, deciding to start the server *is* the security
-  decision, which is exactly why the pins above are exact.
+  server-side jail exists (C-TOOL-4.e), deciding to start the server *is*
+  the security decision, which is exactly why the pins above are exact.
 - **Every bridged tool counts as a write.** The permission gate classifies an
   `mcp__<server>__<tool>` call as a write unless the server declared the tool
   read-only (`PermissionGate::isWriteTool()` — the hint is the server's own
-  assertion: `annotations.readOnlyHint` set and `openWorldHint` not set, and
+  assertion: `annotations.readOnlyHint` set and `openWorldHint` not `true`, and
   nothing here can verify either against what the tool actually does). A
   browser tool acts on a live page, so plan on being asked. To run the
   read-flavoured ones without a prompt, name them in `permissionRules` in
@@ -672,8 +672,12 @@ Caveats, stated because a browser server makes every rule above load-bearing:
   apply to the deferred calls.
 - **Already configured in Claude?** Nothing above has to be retyped: the
   import route under "Foreign spellings that are read" translates a Claude
-  config in place — `candy-code mcp import claude <file>` — and the trust
-  gate then applies to what lands, entry by entry.
+  config — `candy-code mcp import claude <file>` — but note the verb only
+  PRINTS unless `--write user` appends the entries, and the user tier it
+  writes is the one the trust gate does NOT pin (the importer's own note
+  above says so). If you want the fingerprint check to cover imported
+  servers, paste them into a project `.mcp.json`, the tier `mcp trust`
+  records.
 
 ---
 

@@ -104,6 +104,13 @@ final class McpBrowserPresetDocTest extends TestCase
             foreach ($servers as $name => $entry) {
                 self::assertIsString($name);
                 self::assertIsArray($entry);
+                // The section shows the same entry once per tier; merging
+                // last-write-wins would let a loosening in the FIRST block
+                // hide behind the second. Assert agreement per name so a
+                // regression in either block reddens.
+                self::assertSame($entries[$name] ?? $entry, $entry,
+                    'the tier blocks of the browser section disagree about "'
+                    . $name . '"; each preset must be shown identically once per tier');
                 $entries[$name] = $entry;
             }
         }
