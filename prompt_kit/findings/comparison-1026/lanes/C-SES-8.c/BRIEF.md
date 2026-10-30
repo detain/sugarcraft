@@ -1,0 +1,25 @@
+### C-SES-8.c — Insights report core
+- item: C-SES-8 (sources: GAP-OBS-06, p2-miss: OBS-06 insights)
+- kind: gap · effort M
+- approach:
+  - **Report contents.** `InsightsCommand::compose(facts)` builds a text summary plus a self-contained HTML report over a window (default 30 days):
+    - spend by model and by day (`≥` law);
+    - sessions and turns per day;
+    - busiest projects (session `cwd`);
+    - kinds (main, branch, background, sub-agent);
+    - unpriced share;
+    - imported sessions.
+  - **Facts.** `InsightsHostCommand` gathers them through existing public store reads (`rollupFacts()` from C-SES-9.a, `listSessionsWithMeta`), so `EnhancedSessionStore` is not edited.
+  - **Output.** It writes `~/.candy-code/exports/insights-<date>.html` (0600, beside `/export`'s files) and replies with the summary plus the path.
+- files.create: `candy-code/src/Commands/InsightsCommand.php`, `candy-code/src/Host/Commands/InsightsHostCommand.php`, `candy-code/tests/Commands/InsightsCommandTest.php`, `candy-code/tests/Host/Commands/InsightsHostCommandTest.php`
+- files.modify: `candy-code/lang/en.php` (`cmd.insights.*`)
+- tests: create:
+  - `candy-code/tests/Commands/InsightsCommandTest.php`: the figures; `≥`; an empty ledger; HTML escaping;
+  - `candy-code/tests/Host/Commands/InsightsHostCommandTest.php`: the file is 0600; the reply names the path.
+- docs/guards: none (wiring is in C-SES-8.d)
+- serialized: [lang:cmd.insights.]
+- deps: C-SES-9.a
+- phase: normal
+- ruling: none
+- risks: Scope stays on store data. CC's "friction / suggestions" needs a model call; leave it out (no billed side call).
+

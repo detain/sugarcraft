@@ -1,0 +1,27 @@
+### C-SEC-7.a — `-p` starts in `default` mode (asks, denies unattended)
+- item: C-SEC-7 (sources: CC-new#1)
+- kind: gap · effort M
+- approach:
+  - `Bootstrap::DEFAULT_PERMISSION_MODE = BypassPermissions` (`src/Cli/Bootstrap.php:194`) is the fallback for both `-p` and the background daemon (:6827).
+  - Split it into `HEADLESS_DEFAULT_PERMISSION_MODE = Default` for `-p` and `BACKGROUND_DEFAULT_PERMISSION_MODE = BypassPermissions` for locally spawned `/bg` daemons. `permissionGate()` gains a surface parameter.
+  - `NonInteractive` (~:1830, where `backendFor(..., null, true)` lets the gate default) passes an explicit headless gate.
+  - `HeadlessPermissionPrompt` already asks at a terminal and refuses with no terminal. Its unattended refusal names `--permission-mode` as the way out.
+  - The rv-sec-1 bypass notice stays for an explicit bypass.
+- files.create: `candy-code/tests/Cli/HeadlessDefaultPermissionModeTest.php`
+- files.modify:
+  - `candy-code/src/Cli/Bootstrap.php` (consts :189-197, `permissionGate` :6769-6871)
+  - `candy-code/src/Cli/NonInteractive.php` (headless backend gate ~:1820-1830)
+  - `candy-code/src/Cli/HeadlessPermissionPrompt.php` (unattended refusal hint)
+  - `candy-code/lang/en.php` (`cli.headless.permission_hint`, `appLaunch.notice.`)
+  - `candy-code/README.md` (mode table :1453, prose :1747-1751)
+  - `candy-code/docs/PERMISSIONS.md`
+- tests:
+  - The new test: `-p` with no mode resolves to `default`; an unattended ask is denied with the hint; `--permission-mode bypass-permissions` still bypasses; a `/bg` daemon still bypasses.
+  - Flip the existing pins of the old default. Grep candidates: `tests/Cli/BootstrapPermissionGateTest.php`, `HeadlessPermissionPromptUnattendedAskTest.php`, `LaunchFlagsTest.php`, `DoctorBypassNoticeProbeTest.php`, `BypassLaunchBannerTest.php`.
+- docs/guards: `ReadmeRosterDriftTest`; `PermissionsIntroDriftTest`; `DocFigureProseDriftTest` (mode matrix)
+- serialized: [bootstrap:permissionGate + DEFAULT_PERMISSION_MODE consts] [headless] [lang:appLaunch.notice.] [lang:cli.headless.] [docs:README.md] [docs:PERMISSIONS.md]
+- deps: none
+- phase: normal
+- ruling: rv-sec-1 (`Bootstrap.php:6834`, "owner ruling: the default stands") kept the `-p` bypass default, and this pick reverses it. Confirm the flip for `-p` only, with locally spawned `/bg` daemons keeping bypass?
+- risks: existing CI scripts that rely on `-p` editing files unprompted start failing closed. The hint line and README must make the one-flag fix obvious.
+

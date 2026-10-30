@@ -1,0 +1,13 @@
+- item: C-TOOL-2 (sources: GAP-TL-12)
+- kind: gap · effort M
+- approach: `WebFetch` returns 2xx bodies verbatim (`candy-code/src/Tools/BuiltIn/WebFetch.php:268` description, :415 body path). Add `HtmlToMarkdown`, which uses ext-dom `DOMDocument` + libxml (no network, no entity loading). It drops script/style/nav/svg/iframe/noscript and keeps headings, links (absolute-resolved against the final URL), lists, code/pre, blockquote and simple tables. It applies when Content-Type is text/html or xhtml. New arg `format: "markdown"|"raw"` (default markdown); the 64 KiB model cap applies after conversion. The untrusted-content framing is unchanged. If ext-dom is absent (it is not in `composer.json` require), the tool falls back to raw with a one-line note, and `ext-dom` joins `suggest`.
+- files.create: `candy-code/src/Tools/Web/HtmlToMarkdown.php`, `candy-code/tests/Tools/Web/HtmlToMarkdownTest.php`, `candy-code/tests/Tools/WebFetchMarkdownTest.php`
+- files.modify: `candy-code/src/Tools/BuiltIn/WebFetch.php` (description, inputSchema, execute body path), `candy-code/composer.json` (`suggest.ext-dom`)
+- tests: create the two above (converter fixtures: nested lists, relative links, a script-injection fixture stays inert text; a WebFetch loopback fixture with format markdown/raw); modify `candy-code/tests/Tools/BuiltInToolTest.php` (`testWebFetchToolHasCorrectNameAndDescription` description pin)
+- docs/guards: none (gloss unchanged); new test files are listed for the weld
+- serialized: none
+- deps: none
+- phase: normal
+- ruling: none
+- risks: hostile HTML is a libxml parser input; use `LIBXML_NONET | LIBXML_NOERROR` and a size cap before parse.
+

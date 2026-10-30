@@ -1,0 +1,10 @@
+# C-WEB-4.b review r3 — VERDICT: CLEAN (0C/0M/0 minor; 1 observation)
+
+Scope: r2 fix delta 36c52f1f6..2e32c90bf only. Commit verified: parent 36c52f1f6, %ae/%ce detain/detain, 0 Co-authored trailers, tree clean, exactly 2 files (helpOverlay.spec.ts +22, REPORT.md +112 tracked-in-branch per brief). Nothing else moved.
+
+1. Pins non-vacuous. App.vue:85 chain is `closest('input, textarea, select, [contenteditable="true"]')`; each new pin dispatches HELP_CHORD with the element as event.target. Drop `select` → select matches no remaining token → field null → handler reaches preventDefault+helpOpen → ONLY the select pin reddens (both legs: overlayOpen, defaultPrevented). Symmetric for contenteditable. No other HELP_CHORD test targets these elements (others use null/textarea/input, tokens intact); keymap/tabChord/SettingsViewKeymap never drive the App listener. Direct /tmp mutation replay blocked by reviewer shell map; per-token reasoning + fixer's mut2/App.vue.orig backup + on-disk chain intact + clean tree confirm restores end-state.
+2. REPORT claims match disk. Opt-OUT closest() contract quoted verbatim-true; explicit "No closestInput() helper and no .help-capture selector exist" — repo grep zero hits both. 31 decomposition exact (helpOverlay 10 / keymap 15 / tabChord 4 / SettingsViewKeymap 2, counted). NIT-1 sweep sentence one-word-corrected to SOUND-keymap premise with broken-tabs contrast; phantom 5804035d1/0a45c3292 and stale 31/31-at-r1 claims now narrated honestly.
+3. Gates at tip re-run: `npx vitest run --no-file-parallelism keymap helpOverlay tabChord SettingsViewKeymap` → Test Files 4 passed (4), Tests 31 passed (31). tsc-r2-tip.txt present; error multiset vs tsc-tip.txt identical (22 lines/file, 20 unique standing sites, contextSources pair double-emitted) → EMPTY delta true.
+4. §18 (plan §1.8): no generated/protocol/suite-figure/durations/dist files touched; web-only.
+
+Observation (no action): report cites "vs base capture (tsc-tip.txt)" — tsc-tip vs tsc-r2-tip is the compared pair; base-⊆ proof was r2 reviewer's separate capture. Wording is accurate as written; noting only for the weld ledger.

@@ -1,0 +1,66 @@
+# C-MCP-4.a — context.sources reports user-tier MCP rows and liveness
+
+- Commit: `ab5d60359bc7beb96116bab9c22d32878240cbe9` on `cc/C-MCP-4.a` (base master `33d015d4a`), author+committer `detain@interserver.net` (separate %ae/%ce greps), zero Co-Authored trailers, tree clean, NOT pushed.
+- Files: `candy-code/src/Host/ContextSources.php`, `candy-code/src/Protocol/Schema/Definitions.php`, `candy-code/tests/Protocol/ContextSourcesTest.php`, NEW `candy-code/tests/Protocol/ContextSourcesMcpUserTierTest.php`, `candy-code-web/src-web/components/panels/ContextPanel.vue`, `candy-code-web/src-web/components/panels/__tests__/contextPanel.spec.ts`. 6 files, +374/−30.
+
+## What shipped
+- mcp census now nine-key: rows gained `tier` ("project"|"user") and nullable `liveness` `{up, tools}`; mcp object gained `userStatus`/`userError`/`userSkipped`. User rows append after project rows; shadowed names never appear (mirrors McpDecision MCP-3 precedence — rows come from the real `McpDecision::mcpServerInventory`).
+- `ContextSources::answer()` takes injectable `?array $mcpLiveness`; default reads `Bootstrap::mcpLivenessSnapshot($root)` — memo-only, launches nothing; null (no client held) answers null liveness on every row.
+- Definitions.php mcp schema updated in-place (required key lists widened); web `ContextPanel.vue` MCP section lists user rows under a `User scope` heading with a liveness dot (up/down/unknown/cold) — one section, minimal markup for P-CTX-BREAKDOWN.
+
+## Regen chain (§1.8 — trio + generated.ts RESTORED before commit)
+1. Modified Definitions.php → drift RED pre-regen: `--filter 'ProtocolSchemaDrift|ServerProtocolDocumentationDrift'` → `Tests: 12, Assertions: 331, Failures: 1` (ProtocolSchemaDriftTest:39 quoting missing userStatus/userError/userSkipped/tier/liveness).
+2. `php scripts/gen-protocol-schema.php --write` → same filter GREEN: `Tests: 12, Assertions: 332` (2 deprecations pre-existing process-level).
+3. `node scripts/gen-protocol.mjs` → regenerated `generated.ts` (ContextSources.mcp block carries new keys; types fed ContextPanel.vue).
+4. `git checkout -- candy-code/docs/protocol/candy-code.v1.schema.json candy-code-web/src-web/protocol/generated.ts` — welder regenerates and commits trio (+dist) at weld. SERVER.md was not touched by the generator this time.
+
+## Gates (targeted only; plain pipe, cwd worktree candy-code, env -u LINES -u COLUMNS)
+- `--filter 'ContextSources|ProtocolSchemaDrift|ServerProtocolDocumentationDrift'` at commit state WITH regenerated types present: `Tests: 26, Assertions: 459, OK (+2 pre-existing deprecations)`.
+- New file alone: `Tests: 4, Assertions: 12` green (4 behaviours: user tier rows+order, shadowing, userError on undecodable user file, liveness cold-null/warm-filled incl. declared-but-unstarted row staying null).
+- web vitest serial: `npx vitest run --no-file-parallelism contextPanel.spec.ts generated.spec.ts` → `Test Files 2 passed (2) / Tests 21 passed (21)`.
+- `npx vue-tsc --build` → exactly the 6 foreign TS2554s (statusBar.spec.ts x2, reducer.spec.ts x4), zero new.
+- five-guard filter: `Tests: 133, Assertions: 15788, Failures: 2` — the staleness pair only (README/artifact 25537 vs live 26236; base master itself pinned-stale, +4 are this lane's file — closeout re-pin owns it).
+- `php -l` clean on all modified PHP files.
+
+## DUR row for the new test file (welder/gate adds to scripts/parallel-tests-durations.tsv — lane never touched the TSV)
+```
+candy-code/tests/Protocol/ContextSourcesMcpUserTierTest.php	4.416	12
+```
+
+## Notes / not done
+- Nothing outside declared files; suite-figure.json, durations.tsv, dist/, COMPARISON.md, plan_comparison.md untouched. Bootstrap/McpDecision read-only (mcpLivenessSnapshot already existed at Bootstrap.php:8202 — no fallback implementation needed).
+- Post-restore, the drift arm is RED in the committed tree BY DESIGN (§1.8 regen-verify-restore; welder flips it green with the trio regeneration).
+
+---
+
+## RE-DISPATCH VERIFICATION (2026-10-29, fresh builder lane)
+
+The lead re-cut `/home/sites/cc-cmp-C-MCP-4.a` (branch cc/C-MCP-4.a from master 44ff31314) for a step that
+was already built, reviewed CLEAN and welded — this section records the disk re-derivation; it REPLACES no
+history above.
+
+**Verdict: ALREADY-LANDED — zero-diff lane, no new commit (fabricating one would poison the weld).**
+
+- `git cat-file -t a6fa47900` → `commit`; subject `C-MCP-4.a: context.sources reports user-tier MCP rows and
+  liveness`; author+committer `Joe Huss <detain@interserver.net>`; parent 8eab506d9; `git merge-base
+  --is-ancestor a6fa47900 HEAD` → TRUE (lane base carries it). `git show --stat`: 6 files, +374/−30 — exactly
+  the brief's file set incl. NEW `tests/Protocol/ContextSourcesMcpUserTierTest.php` (152 lines, its 4 test
+  methods match the brief's 4 DoD pins by name-and-substance).
+- Regen weld `9f02221a0` ("weld: C-MCP-4.a regen — protocol schema + generated.ts + dist rebuild") is a real
+  commit with parent a6fa47900. §4 line 1309 carries `✅ a6fa47900 C-MCP-4.a`; §3 W10 closed 2026-10-28.
+- Live-tree DoD walk (all present at the worktree base): `ContextSources::answer()` maps both tiers through
+  one row builder (`tier`, appended user rows, shadowed names excluded by the census), nullable `liveness
+  {up,tools}` from `Bootstrap::mcpLivenessSnapshot($root)` (McpDecision.php:438-462 docblock: memo-only,
+  NEVER launches), injectable `?array $mcpLiveness`; `Definitions.php` mcp object carries userStatus/
+  userError/userSkipped + tier enum [project,user] + liveness (required lists widened); schema.json :279/:310
+  carry userSkipped/liveness; `gen-protocol-schema.php --check` → "protocol schema: up to date"; generated.ts
+  :85/:94 carry the keys; ContextPanel.vue :105-120 mcpProjectRows/mcpUserRows/livenessDot with
+  `context-mcp-user-row` + dot classes up/down/unknown/cold.
+- Gates run in this worktree: phpunit `--filter 'ContextSources|McpDecision|Pulse|ProtocolSchemaDrift|
+  ServerProtocolDocumentationDrift'` → **OK, Tests: 28, Assertions: 495** (2 pre-existing deprecations);
+  vitest `--no-file-parallelism` contextPanel.spec.ts + generated.spec.ts → **2 files, 22 tests passed**.
+- Worktree after all runs: `git status --porcelain` empty; `git log master..HEAD` = 0 commits.
+
+**For the lead:** retire this dispatch; nothing to weld. If the scheduler minted it, its step-status input is
+stale for C-MCP-4.a (the ✅ mark at :1309 + W10 closure are the authority). No DUR carries, no new test files,
+no seams.

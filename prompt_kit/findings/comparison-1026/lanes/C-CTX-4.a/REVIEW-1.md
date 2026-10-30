@@ -1,0 +1,17 @@
+# REVIEW-1 — cc/C-CTX-4.a (tip c91e3f185, parent ccf94cd63)
+
+VERDICT: FINDINGS (1 MINOR step-local, 3 NIT) — functionally sound, one wrong table value.
+
+## Gates re-derived at tip
+- Filter `Context|ModelMetadata|PromptPrefixByteStability|PromptSnapshot|DocFigure|ReadmeRoster|SymbolCitation|BaseSystemPrompt`: **2133T/31188A 0F exit-OK** (claim 2132T/31186A — +1T/+2A filter-count drift, green either way; welder note, builder likely measured pre-final-commit). The constant "PHPUnit Deprecations: 2" is config-global (appears in every run incl. TurnContextDateTest alone) — not lane-introduced.
+- PromptPrefixByteStabilityTest alone: 7T/69A green, incl. new rolled-date test (frozen-2000 env → two buildSystemPrompt calls assertSame on message 0; date row in tail only; ambient date absent from message 0).
+- TurnContextDateTest: 7T/28A exact.
+
+## Task findings
+1. **Prefix law**: turn-context IS the post-fence tail; the PromptSnapshot mask touches ONLY `turnContext()->render()` (never message 0), so it cannot mask a real prefix change; fail-closed `substr_count(...)<1 → fail` + second date line leaks unmasked → day-stable (golden frozen 2026-08-26 ⇒ row always present). Fixture regen = +2 lines, shape-only. **Legit §1.8 adaptation.**
+2. **Cutoff values vs public record**: gpt-4o=Oct 2023 ✓, o1-preview/o1-mini=Oct 2023 ✓ (developers.openai.com "Oct 01, 2023"). **gemini-1.5=October 2023 is WRONG — November 2023** (Google 1.5 tech report, epoch.ai, temso). MINOR (step-local): fix `KNOWLEDGE_CUTOFFS['gemini-1.5'] = 'November 2023'` (ModelMetadata.php), the two gemini-bearing pins EnvironmentBlockTest.php:293/294 (the :266/:310 October pins are gpt-4o/injected-marker and stay), and the docblock "reviewed 2026-10-28 vs … Google docs" sentence. No ModelMetadataTest cutoff pins exist (file untouched by lane). Error direction conservative; family is deprecated — hence MINOR not MAJOR.
+3. **Substring hazard**: raw `str_contains` in declaration order; 'gpt-4o'⊂'gpt-4o-mini' resolves Oct 2023 — coincidentally CORRECT per OpenAI docs for 4o-mini; '-mini siblings' resolution explicitly embraced. MATCH ORDER law documented (contained token declared first; no current pair contains another). No imposter risk beyond docblock's accepted namespace-spelling trade. **Judged safe as documented.** Unknown/empty/misspelled → null → zero row; pin exists (5-value unknown set asserts zero).
+4. **withCurrentDate**: same-day → no row (pin), rolled → row (pin), malformed → fail-quiet (pin). TZ basis = host-local `new DateTimeImmutable()` in Runtime:5977; midnight-flip comments exist but **NIT: host-TZ is never stated** — add half-sentence to docblock/PROMPT_ENGINEERING.md (row flips at local midnight; acceptable, tail-only).
+5. **NIT (doc-truth)**: TurnContextBlock.php:286 @param line "equal strings carry the row, different ones clear it" is INVERTED vs code (equal→cleared). Swap the two words.
+6. **Freeze/derive**: cutoff resolved once in capture(); all 4 `new self(` sites carry it; with*-clone pin + double-render byte-identical (test:293/294). No per-call getenv. en.php untouched ✓ (prompt-facing, not user strings). Goldens untouched ✓. No fixture carries Model:/cutoff strings.
+7. **Collisions**: C-CTX-4.c (InstructionFileLoader/Bootstrap/LayeredSettings/SETTINGS.md/MEMORY.md) file-disjoint from this lane ✓; **no C-CTX-4.b brief exists** (lanes dir has 4.a+4.c only) — welder confirm 4.b disposition. Serialized [runtime:turnContext] respected. Durations row TurnContextDateTest + +12T carry: merge/closeout duty (not lane files) ✓.

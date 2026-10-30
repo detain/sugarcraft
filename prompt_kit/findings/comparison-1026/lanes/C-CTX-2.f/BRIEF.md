@@ -1,0 +1,24 @@
+### C-CTX-2.f — "Loaded" and "updated" instruction rows
+- item: C-CTX-2 (sources: GAP-INS-08w (notice half), INS-12 web)
+- kind: gap · effort S
+- approach:
+  - Neither surface tells the user when a nested instruction file is loaded on touch, or when a root file changes mid-session (OpenCode shows "↳ Loaded", OC2 "Instructions updated").
+  - Both producers record one uiOnly row through `RuntimeNoticeSink::record()`:
+    - `InstructionFileLoader::loadForPath()` on the first hit for a path;
+    - `InstructionDiffTracker::recheck()` once per newly detected change.
+  - Both run in the turn child, so the rows ride the transport to whichever host drains it: Chat in the TUI, `SessionHost` after C-CTX-2.a.
+  - One row per path per session, counted against E199's per-turn budget.
+- files.create: `candy-code/tests/Context/InstructionVisibilityNoticeTest.php`
+- files.modify: `candy-code/src/Context/InstructionFileLoader.php` (`loadForPath()`), `candy-code/src/Context/InstructionDiffTracker.php` (`recheck()`)
+- tests:
+  - create InstructionVisibilityNoticeTest:
+    - a first touch records one row and a second records none;
+    - an edit records one "updated" row, and re-rendering the same state records none;
+  - modify `candy-code/tests/Context/InstructionFileLoaderMidSessionNoticeTest.php` only if its counts move.
+- docs/guards: `candy-code/docs/MEMORY.md` (instruction files: what you see); lang keys `chat.instructions.loaded`, `chat.instructions.updated`
+- serialized: [lang:chat.instructions.*] [docs:MEMORY.md] [hot:candy-code/src/Context/InstructionFileLoader.php] [hot:candy-code/src/Context/InstructionDiffTracker.php]
+- deps: C-CTX-2.a (served visibility), C-CTX-1.a (the "updated" row fires on the fork path only once the tracker is primed)
+- phase: normal
+- ruling: none
+- risks: `-p` leaves the sink unarmed, so these rows are dropped there. That is the documented `-p` behaviour.
+

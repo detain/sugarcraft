@@ -1,0 +1,28 @@
+### P-AGENT.b — Agent windows: own viewport, rows/chips in the window list, `Ctrl+X i` interrupt-send
+- item: P-AGENT-ATTACH (sources: owner pick; CLAW-new#7 note; CC-new#9 parity note only)
+- kind: feature · effort M
+- approach:
+  - **Gap 1: shared viewport.** The Agent View shares the main chat's scroll and draft. `App::openAgentView`/`closeAgentView` (`src/App/App.php:710,810`) never save `Chat::scrollOffset()` or the input, so the main draft becomes the agent composer and the scroll position leaks across.
+    - Stash and restore through `WindowViewports` (keys `s:<tab>` / `a:<runId>`) on open, close and Alt+N/P.
+    - Chat gains public `draft()`/`withDraft(text, cursor)`; `withInputBuf` is private (:15672). `withScrollOffset` exists (:7158).
+    - The open agent view is remembered per tab, so switching tabs and back restores it.
+  - **Gap 2: no session-level list of agents.** `App::windowList()` adds each session's live runs (`forSession`) as child entries:
+    - the SessionsPane agent rows and the strip chip (`▸ ⠋ @explore` in preset colour);
+    - ⏳ when the run waits on you (`AskOrigin`);
+    - a click switches tab if needed, then `openAgentView`.
+  - **Gap 3: delivery is steer-only.** User messages reach a running child only at its next step boundary (`AgentInbox::send` → mailbox → `MailboxTurnInbox` drained at the child's step boundary, `src/Tools/BuiltIn/TaskTool.php:1544`).
+    - Add `Ctrl+X i`: send the draft as `MessageMode::Interrupt`, which skips the step's unstarted calls and reads the message first (`src/Agents/Live/MessageMode.php`).
+    - Wiring: a new `AgentControlMsg::INTERRUPT` verb → `Chat::submitToAgents` (~:9142) passes the mode. The sent row reads `⚡ interrupt` vs `⧗ queued`.
+- files.create: none
+- files.modify: `candy-code/src/App/App.php` (`openAgentView()`, `closeAgentView()`, sibling nav, `windowList()` agent entries, `win:a:*` and side-row arms), `candy-code/src/Chat.php` (`submitToAgents()` mode; new `draft()`/`withDraft()`), `candy-code/src/App/AgentControlMsg.php` (`INTERRUPT`), `candy-code/src/Tui/KeyboardHandler.php` (leader map :948-975, `'i'`), `candy-code/src/Commands/KeyBindingRegistry.php` (`agent-transcript` row `Ctrl+X i`), `candy-code/lang/en.php` (`tui.agent_view.sent.interrupt`, `keys.agent-transcript.interrupt`), `candy-code/docs/AGENTS.md` (Agent View key table + "Messaging an agent")
+- tests:
+  - create `candy-code/tests/App/AgentWindowViewportTest.php` (the main draft and scroll survive an open→close round-trip; each agent keeps its own; per-tab memory);
+  - create `candy-code/tests/Chat/AgentInterruptSendTest.php` (the mailbox line carries mode `interrupt`; a finished run still follows up);
+  - modify `candy-code/tests/Chat/AgentViewTest.php` and `candy-code/tests/Commands/KeyBindingDriftTest.php`.
+- docs/guards: `docs/AGENTS.md`; `tests/Commands/KeyBindingDriftTest.php` moved in-step
+- serialized: [chat:submitToAgents + new draft()/withDraft()] [lang] (prefix `tui.agent_view.sent.`, `keys.agent-transcript.`) [docs:AGENTS.md] [hot:candy-code/src/App/App.php] [hot:candy-code/src/Tui/KeyboardHandler.php] [hot:candy-code/src/Commands/KeyBindingRegistry.php]
+- deps: P-AGENT.a, P-TABS.g
+- phase: normal
+- ruling: none
+- risks: the history cap (`AGENT_VIEW_MAX_ITEMS` 4000, `AGENT_VIEW_OPEN_READS` 64×64 KiB, App.php:157-160) still bounds the scroll-back of a huge live run. A finished run reads its full child session.
+
