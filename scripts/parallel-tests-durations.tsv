@@ -531,6 +531,7 @@ candy-code/tests/Cli/BootstrapStatusLineWiringTest.php	0.340	4
 candy-code/tests/Cli/NonInteractiveOtelExportTest.php	0.339	2
 candy-code/tests/Chat/SessionChangeResetsTest.php	0.335	4
 candy-code/tests/Skills/SkillLoaderTest.php	0.335	61
+candy-code/tests/Tools/WebFetchMarkdownTest.php	0.335	12
 candy-code/tests/Context/SortedWalkCapTest.php	0.334	9
 candy-code/tests/Support/ForkedChildTest.php	0.334	2
 candy-code/tests/Backend/ForkChannelReplyAfterCancelTest.php	0.330	1
@@ -852,6 +853,7 @@ candy-code/tests/Tools/PathJailContractParityTest.php	0.062	52
 candy-code/tests/LangParityTest.php	0.061	7
 candy-code/tests/LSP/LspLauncherAutoDetectTest.php	0.061	15
 candy-code/tests/Context/StandingIntentTest.php	0.061	22
+candy-code/tests/Tools/Web/HtmlToMarkdownTest.php	0.061	29
 candy-code/tests/Bundles/BundleDiscoveryTest.php	0.060	10
 candy-code/tests/Server/CookieSessionPersistenceTest.php	0.060	9
 candy-code/tests/Tools/BuiltIn/GenerateImageTest.php	0.060	21

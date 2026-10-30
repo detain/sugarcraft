@@ -234,7 +234,7 @@ final class WebFetchMarkdownTest extends TestCase
      * result must say the PAGE was truncated. The forced "complete" was
      * true only of the conversion, never of the fetch. saveOverflow:false
      * with a 64 KiB maxWireBytes is the same shape the two settings take
-     * together; the 260,000-byte body leaves the read stopped at ~131 KiB,
+     * together; the 270,000-byte body leaves the read stopped at ~131 KiB,
      * inside the parse cap, with the stream still open.
      */
     public function testAWireTruncatedConvertedBodyDisclosesTheTruncation(): void
