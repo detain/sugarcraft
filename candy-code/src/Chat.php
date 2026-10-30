@@ -408,6 +408,20 @@ final class Chat implements Model
     private readonly ?\Closure $sessionMint;
 
     /**
+     * C-SES-7.d: armed while the NEXT real prompt through submit() must be
+     * cost-checked as a resume re-send — true when this Chat was constructed
+     * over a stored transcript (`--continue`, `--resume`, a deck tab opened
+     * on a session) or switched onto one ({@see switchToSession()}). The
+     * check holds that prompt ONCE with a notice when the numbers say the
+     * prompt cache is cold and the re-send is worth at least
+     * `resumeCostWarnUsd` (see {@see \SugarCraft\Code\Host\ResumeCostEstimate});
+     * disarms on the hold itself and on the first {@see dispatchTurn()}, so
+     * a command (a `/compact` taken on the notice's own advice) neither
+     * consumes nor escapes the guard.
+     */
+    private readonly bool $resumeCostGuardArmed;
+
+    /**
      * Columns the `/help` listing gives up so it does not sit flush against
      * the pane edge: 4 of pure slack. It used to be 10 = that slack plus the
      * 6 the {@see Renderer} shell's border + padding(1, 2) consumed; CL-3
@@ -793,6 +807,15 @@ final class Chat implements Model
          * server-minted session).
          */
         ?\Closure $sessionMint = null,
+    /**
+         * C-SES-7.d: the resume cost guard's arm (see the field docblock).
+         * Null — the launch shape — means "derive it": a Chat constructed
+         * over stored history with no lazy minter under a real session id
+         * IS a launch-time resume. A clone names the flag, so the derived
+         * answer is computed exactly once per session, never re-decided
+         * mid-keystroke.
+         */
+        ?bool $resumeCostGuardArmed = null,
         private readonly ?\DateTimeImmutable $lastActivityAt = null,
     /** Highlighted row in the "/" popup (see {@see slashMenuMatches()}). */
         private readonly int $slashMenuIndex = 0,
@@ -1914,6 +1937,16 @@ final class Chat implements Model
         $this->currentSessionId = $currentSessionId;
         $this->tabState = $tabState ?? SessionTabState::forLaunch($currentSessionId, $currentSessionName);
         $this->sessionMint = $sessionMint;
+        // C-SES-7.d: null answers for the launch shape — "constructed over
+        // stored history, no lazy minter, under a real session id" is
+        // exactly what `--continue`/`--resume` hand the constructor (a deck
+        // tab opened on a stored session routes through switchToSession(),
+        // which names the flag itself); a fresh launch has empty history,
+        // and ISS-102 gives a new session its minter instead. The store
+        // timestamp is NOT read here: the guard re-reads it at submit, so a
+        // Chat held open across the cache's five minutes answers for the
+        // moment the user actually presses Enter.
+        $this->resumeCostGuardArmed = $resumeCostGuardArmed ?? ($history !== [] && $currentSessionId !== null && $sessionMint === null);
     }
 
     /**
@@ -2468,7 +2501,13 @@ final class Chat implements Model
         $transcripts->flush();
         $history = $transcripts->load($sessionId);
 
-        return $this->mutate(SessionSwitch::resumed($history, $this->tabState, $this->sessionStore, $sessionId, $name));
+        return $this->mutate([
+            ...SessionSwitch::resumed($history, $this->tabState, $this->sessionStore, $sessionId, $name),
+            // C-SES-7.d: switching onto a stored session is a resume in
+            // every sense the guard cares about — the next prompt re-sends
+            // the transcript loaded above.
+            'resumeCostGuardArmed' => true,
+        ]);
     }
 
     /**
@@ -8970,6 +9009,16 @@ final class Chat implements Model
     }
 
     /**
+     * C-SES-7.d: whether the next real prompt will be cost-checked as a
+     * resume re-send (see the field docblock). Read by the guard in
+     * submit() and pinned by the guard's tests.
+     */
+    public function resumeCostGuardArmed(): bool
+    {
+        return $this->resumeCostGuardArmed;
+    }
+
+    /**
      * The step the turn on screen last reported (roadmap 1.C-4), or null
      * when no turn is running or the running one reports no steps (a
      * command backend, a workflow, the echo default).
@@ -9151,6 +9200,10 @@ final class Chat implements Model
             // (v4 split-plan S3); this row carries the whole state object.
             'tabState' => $this->tabState,
             'sessionMint' => $this->sessionMint,
+            // C-SES-7.d: the guard rides like every other field — a clone
+            // missing this row would silently un-arm a resume mid-keystroke
+            // (MutateCarryCensusTest polices the parity).
+            'resumeCostGuardArmed' => $this->resumeCostGuardArmed,
             'pendingSettingsApply' => $this->pendingSettingsApply,
             'settingsToast' => $this->settingsToast,
             'settingsToastGeneration' => $this->settingsToastGeneration,
@@ -9188,6 +9241,12 @@ final class Chat implements Model
             $constructorProps['currentSessionTitleSource'] = $changes['currentSessionTitleSource'] ?? null;
             $constructorProps['titleEditor'] = null;
             $constructorProps['pendingQuickAdd'] = null;
+            // C-SES-7.d: the resume arm belongs to the session that earned
+            // it. A route naming a fresh id (a `/new`, a landed handoff)
+            // without naming the flag re-derives it from the new session's
+            // own constructor shape instead of carrying the old session's
+            // answer; a route that does name it (switchToSession) still wins.
+            $constructorProps['resumeCostGuardArmed'] = $changes['resumeCostGuardArmed'] ?? null;
             // The "always" grants are the session's too: they were carried
             // into whatever session came next, so a grant given in one tab
             // answered questions in another, and a resumed session asked
@@ -10082,6 +10141,17 @@ final class Chat implements Model
         $refusal = $this->spendCapRefusal();
         if ($refusal !== null) {
             return $refusal;
+        }
+
+        // C-SES-7.d: the resume cost guard, placed on the spend cap's side of
+        // dispatchCommand() for the same ordering reason — every control the
+        // notice names (`/compact`) must stay reachable while it holds. Only
+        // a real prompt reaches this line; slash commands exited above.
+        if ($this->resumeCostGuardArmed) {
+            $hold = $this->resumeCostHold();
+            if ($hold !== null) {
+                return $hold;
+            }
         }
 
         // Idle-compaction check, once per turn, before dispatching a real
@@ -11528,6 +11598,11 @@ final class Chat implements Model
             'backgroundSummary' => $backgroundSummary,
             // ISS-102: the row exists from this turn on; the minter is spent.
             'sessionMint' => null,
+            // C-SES-7.d: a turn going out IS the resume's first real prompt,
+            // held or not — dispatchTurn() is every real send's funnel (the
+            // queued-release path arrives here after submit()'s guard already
+            // ran), so this is where the guard is consumed.
+            'resumeCostGuardArmed' => false,
         ]);
 
         $turns = $this->turnController();
@@ -20631,6 +20706,61 @@ final class Chat implements Model
     private function estimateTokenCount(array $history): int
     {
         return $this->contextMeter()->estimate($history, $this->tokenEstimateCalibration);
+    }
+
+    /**
+     * C-SES-7.d: the resume cost guard's hold, or null to let the prompt
+     * through. Pure assembly over {@see \SugarCraft\Code\Host\ResumeCostEstimate}
+     * — every input is read fresh HERE (the store's last-activity, the
+     * engine's model price, the live `resumeCostWarnUsd`), so the answer
+     * belongs to the second the user pressed Enter, not to the launch or
+     * the switch. A hold disarms the guard and appends the notice as a
+     * UI-only row (never reaches the model wire); the draft stays in the
+     * box, so the next Enter sends it — that is what "held ONCE" means.
+     *
+     * @return array{0: self, 1: null}|null
+     */
+    private function resumeCostHold(): ?array
+    {
+        // Warm cache cannot be PROVEN, but the store's own last-activity is
+        // the best clock there is: inside the TTL window the re-send is a
+        // cache read, not fresh input. No row (legacy store, attach) answers
+        // null, which the estimator treats as cold — fail toward the notice.
+        $lastActivity = $this->sessionStore instanceof EnhancedSessionStore && $this->currentSessionId !== null
+            ? $this->sessionStore->sessionMeta($this->currentSessionId)?->lastActivity
+            : null;
+        // Price per 1k input tokens only an engine-backed Chat can name;
+        // a command/echo backend has no billable model at all.
+        $costPer1k = $this->backend instanceof Backend\EngineBackend
+            ? \SugarCraft\Code\Providers\ModelMetadata::new()->costPer1kTokens($this->backend->model(), 'input')
+            : null;
+        $estimate = Host\ResumeCostEstimate::of(
+            $this->contextMeter(),
+            $this->history,
+            $costPer1k,
+            $lastActivity,
+            \SugarCraft\Code\Config\Settings\UiSettings::float('resumeCostWarnUsd'),
+            $this->tokenEstimateCalibration,
+        );
+        if ($estimate === null) {
+            return null;
+        }
+        // Priced: the real number with `≈`. Unpriced: NO dollar is
+        // invented — the threshold itself rides with `≥`, which is the
+        // only true statement available ("at least worth a warning").
+        $cost = $estimate->isPriced()
+            ? Lang::t('chat.resume_cost.priced', ['cost' => \number_format((float) $estimate->costUsd, 2)])
+            : Lang::t('chat.resume_cost.unpriced', ['cost' => \number_format($estimate->warnUsd, 2)]);
+
+        return [$this->mutate([
+            'resumeCostGuardArmed' => false,
+            'history' => [...$this->history, Message::notice(
+                Lang::t('chat.resume_cost.notice', [
+                    'tokens' => $estimate->formatTokens(),
+                    'cost' => $cost,
+                ]),
+            )],
+        ]), null];
     }
 
     /**

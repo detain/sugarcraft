@@ -18,6 +18,7 @@ use SugarCraft\Code\Config\Settings\SettingType;
 use SugarCraft\Code\Config\Settings\UiEditability;
 use SugarCraft\Code\Config\Settings\Validator\KeyBindingsValidator;
 use SugarCraft\Code\Config\StatusLineCommand;
+use SugarCraft\Code\Host\ResumeCostEstimate;
 use SugarCraft\Code\Host\TitleService;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Renderer;
@@ -173,6 +174,20 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.doubleEscSeconds.label'))
                 ->withHelp(Lang::t('settings.doubleEscSeconds.help'))
                 ->withReaderSymbol(Chat::class . '::doubleEscapeWindowSeconds'),
+            // C-SES-7.d: the resume cost guard's line. 0 disables the notice
+            // entirely; the default is a quarter of a dollar, chosen because
+            // that is roughly what re-sending a long uncached afternoon costs
+            // on a mid-tier priced model — a number worth a second Enter.
+            SettingDefinition::new('resumeCostWarnUsd', SettingType::Float, ResumeCostEstimate::DEFAULT_WARN_USD)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withLayered()
+                ->withProjectSettable()
+                ->withApplyMode(ApplyMode::Live)
+                ->withRange(0.0, 100.0)
+                ->withLabel(Lang::t('settings.resumeCostWarnUsd.label'))
+                ->withHelp(Lang::t('settings.resumeCostWarnUsd.help'))
+                ->withReaderSymbol(Chat::class . '::resumeCostHold'),
             SettingDefinition::new('paletteMru', SettingType::Int, Chat::PALETTE_MRU_LIMIT)
                 ->withCategory(SettingCategory::Interface)
                 ->withRiskClass(RiskClass::Cosmetic)
