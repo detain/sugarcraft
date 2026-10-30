@@ -1017,6 +1017,7 @@ candy-code/tests/Permissions/PermissionModeDescriptionTest.php	0.025	120
 candy-code/tests/Prompt/PromptSnapshotDriftTest.php	0.025	3
 candy-code/tests/Server/SettingsSharedTierTest.php	0.025	3
 candy-code/tests/Tui/TuiComponentTest.php	0.025	25
+candy-code/tests/Chat/CopySlashCommandTest.php	0.024	7
 candy-code/tests/Cli/SessionEndHookTest.php	0.024	4
 candy-code/tests/Config/ReadmeRosterDriftTest.php	0.024	10
 candy-code/tests/Permissions/PermissionGateTest.php	0.024	165
@@ -1166,6 +1167,7 @@ candy-code/tests/ThemeTest.php	0.011	8
 candy-code/tests/Tools/BuiltIn/GenerateImagePreviewEmitTest.php	0.011	4
 candy-code/tests/Tools/McpToolBridgeTest.php	0.011	62
 candy-code/tests/Tui/TerminalBackgroundSprinklesAgreementTest.php	0.011	16
+candy-code/tests/Commands/CopyCommandTest.php	0.011	15
 candy-code/tests/Agents/AgentPresetDirContainmentTest.php	0.010	11
 candy-code/tests/Backend/CommandBackendInvalidUtf8HistoryTest.php	0.010	4
 candy-code/tests/Cli/LaunchContextDelegatesTest.php	0.010	60

@@ -35,3 +35,12 @@ CONCURRENCY NOTE: run-state.json was written by the lead BETWEEN my two fold pas
 ## LANE 2: C-TUI-3.a (W26) — `/copy [n]` in the TUI — PENDING
 
 ## LANE 3: C-CTX-5.b (W24) — Ahead-of-need skip rules — PENDING
+
+## LANE 2 C-TUI-3.a (W26) — CLOSED at weld commit (this session)
+- 3 picks ZERO conflicts, cherry-pick only: eb4bbbfc1->4f596243e, 33c15af11->76c901ff4, ca3896ad7->a725ebc11 (onto post-lane-1 tip b82aa73c6).
+- RIDER LANDED-BLOB PROVED: ARCHITECTURE.md:155 = "dispatch arms for 65" in HEAD blob (master was 64); live CommandRegistry::slashCommands() count = 65 (DocFigureProseDriftTest:712-718 authority). No rider commit needed; re-proved after pick 3.
+- Sanitizer ONCE at landed Chat.php:12643 untrustedForDisplay(stripPrivateUse(...)) before both egresses :12653/:12655 (brief's :12563 drifted). r2 MINOR (order-swap output-identical, unpinable) accepted as closeout note only.
+- Gates AS-RUN: Copy pair 22T/84A/0F OK (15T/48A + 7T/36A); roster pair 18T/443A/2F = EXACTLY the 2 foreign output-style standing reds (MenuBarLabelDerivationTest:106 + PaletteSuperset counterpart), not chased; gen-command-docs --write zero diff, --check RC=0. PtyRun excluded structurally (name filters).
+- DURATIONS MINTED: tsv line 1020 Chat/CopySlashCommandTest 0.024/7; line 1170 Commands/CopyCommandTest 0.011/15. Counts == live per-file runs; times = median of 3 --log-junit runs; 1644->1646 rows.
+- §7 CARRY +22T/+84A recorded in mark; suite-figure.json NOT re-pinned.
+- REVIEW-1.md 12,446 B + REVIEW-2.md 9,130 B main-tree-only -> committed in weld. Lane worktree clean; nothing worktree-only to collect.

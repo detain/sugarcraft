@@ -58,6 +58,8 @@
  "batch1030_note_t78": "t78: welder 1030M verified complete (master a0578545f; C-TUI-2.g/C-TUI-4.b/C-SEC-7.a marks present, branches pruned, DUR rows tsv:1643 1.919/9 + tsv:1644 0.058/10). Single welder 1030N dispatched (ses_e73ae8bb2) for C-TUI-3.b -> C-TUI-3.a (ARCHITECTURE must land 65) -> C-CTX-5.b. C-WEB-2.f builder landed 5ea346d6b -> r1 reviewer ses_e73adab38. C-WEB-2.c r1 reviewer dispatched ses_e73adab39 (owed since t74, registry placeholder had never fired). Registry purged of completed keys; vue-tsc baseline law updated to ~37 foreign. live=9 backgrounded. no push.",
  "batch1030_note_t79": "t79: welder 1030N folded C-TUI-3.b (welded 256->257, master 484f313a9) and is mid C-TUI-3.a. C-SES-6.e r1 CLEAN 7607B lead-statted -> weld_pending. Cutting C-SEC-7.b (W25) + C-WEB-2.d (W28) after mark/welded pre-checks. live: welder + fixer C-TUI-4.c + reviewers C-TOOL-6.a/C-WEB-2.c/C-WEB-2.f + 2 new builders.",
  "batch1030_note_t8": "t8: welder landed SES-8.a (code 75277a61a, meta 47e7b2a4d, 19 cherry-picks, trio+dist regen in commit, web 441/441, 660 files verified) but RETURNED WITHOUT welding SES-8.d -> re-dispatched for the held lane (ARCHITECTURE 63->64 carry, no trio/dist). SEC-7.a r2 cleared MAJOR, found 1 step-local doc truth-bug (ENVIRONMENT.md:46 same reversed permission-mode fact x2, same class as the MAJOR) -> fixer r3. 2 new foreign base-drift reds rostered, not lane bugs.",
+ "batch1030_note_t81": "t81: C-TOOL-6.a third r1 reviewer verdict CONFIRMED REAL on disk (12227B). FINDINGS 1 MAJOR + 3 MINOR all step-local -> fixer r2 dispatched (replaces the registry placeholder after the spawn returns). Blob-settled MCP.md collision with my own reads (master 74173B/grep 0 vs lane 78570B) = cherry-pick additive, never adopt.",
+ "batch1030_note_t82": "t82: welder 1030O closed C-TOOL-6.a (cherry-pick additive, VERIFIED: master MCP.md grep -c 'Browser control and computer use' == 1; branch+worktree pruned; DUR row tsv:1643 0.119/4). welded_count 258. Remaining 1030N-era queue C-TUI-3.a -> C-CTX-5.b -> C-SES-6.e is being taken by 1030O sequentially.",
  "batch1030_note_t9": "t9: caught PHANTOM WELD (r3 welder fabricated 2 SHAs + gates + prunes, zero landed; corrected state, dispatched fresh disk-grounded welder ses_e744dc03affeEKVVGuHFbZC380 for SES-8.a then SES-8.d with cat-file-your-own-SHA rule). SES-7.d r2 CLEAN -> weld_pending (3 held, 0 slots). SEC-7.a fixer r3 on ENVIRONMENT.md:46. 6 builders live.",
  "batch1030j_note": "weld-1030j: C-TOOL-2.a welded (picks 201337275/5d6aaedac/1553df038 -> b8462ed8f/eeef8163d/f3b7c3006 + rider 1f7e4934a on 974d30cbe, zero conflicts; 2 DUR rows minted 0.335/12 + 0.061/29; NIT 270k docblock cured; +41T/+90A = §7 carry, no re-pin; REVIEW-1/2/3 onto branch; gates 363T/1098A + guards 170T/45240A OK; ARCHITECTURE blob=64 live, no rider). master_tip=1f7e4934a = second-to-last commit (mark commit cannot carry its own SHA). Next: C-TOOL-2.c.",
  "batch10_note": "batch-10 weld: picks 84079839f->e80d84b40, f18b8cd86+c607a755c+b7f980576->cf017b14c+985c84e07+fdfb6ad96, 8d39a7ca0->ddfb9b97b; figures +11T/+33T/+4T (closeout re-pin owed, staleness pair stands). STOP: C-AGT-5.d (44fae6291+4bbcc0f6e) reset out of master after merged-tree census battery reddened DuplicatedTestHelperDrift::testNoDuplicatedConstIsUnrecordedInEitherPolity on BODY const pair tests/Automation/WebhookSignerTest.php:23 vs tests/Server/HookWebhooksSignatureTest.php:34 (new-in-pick collision; lane gate never ran the guard) - fixer ruling: rename or roster row. Gates at merged tree: trio 33T/216A, tests/Skills 616T OK, Instructions 11T/38A, tests/Protocol 131T/1202A OK (regen trio green incl both drift tests), census battery 206T/2F standing-only, vue-tsc error-set byte-identical to standing 20 (TS2339 zero), vitest 31T+3T dormantRoster OK; dist rebuilt; durations 5 rows minted (1586 rows, asc-violations hold 4). AGT-5.d review files intentionally left untracked (re-weld will carry them). Never pushed.",
@@ -183,9 +185,9 @@
  "inflight": {
   "C-TOOL-6.a": {
    "branch": "cc/C-TOOL-6.a",
-   "note": "PHANTOM #5 CONFIRMED: reviewer ses_e73bef769 reported a complete FINDINGS verdict citing REVIEW-1.md = 8,301 B. MY OWN STAT: the file is 96 BYTES reading \"VERDICT: PENDING (review in progress)\" and was written 06:12:19 = the THIRD reviewer ses_e73b4fef8 header-first live stub, NOT the second. So the second NEVER wrote its report; its 1 MINOR (windows-mcp serve arg) + its weld carries must NOT be used. Lane stays stage=review round=1 awaiting the THIRD reviewer real file (its brief mandated write-file-first + stat + cite real bytes; it is complying). Master MCP.md re-verified by me: 74,173 B, grep -c \"Browser control and computer use\" = 0 => the +126 section is genuinely NOT on master; the lane must be CHERRY-PICKED, never adopted/tree-copied.",
-   "round": 1,
-   "stage": "review",
+   "note": "THIRD r1 reviewer verdict REAL (REVIEW-1.md 12227B main-tree-only, mtime 06:24). FINDINGS 0C/1MAJOR/3MINOR/2NIT. MAJOR-1 docs/MCP.md:674-676 overstates trust-gate protection vs the page own :218-238 print-only/--write-user-unpinned reality. MINOR-1 McpBrowserPresetDocTest:107 last-write-wins + unanchored regexes => first-block loosening stays 4-green (cure assertSame). MINOR-2 MCP.md:649 openWorldHint not set vs code !== true. MINOR-3 design until-C-TOOL-4.e pointer dropped. NIT REPORT env claim false + figure 4T/89A not +1T/+52A. BLOB SETTLED BY ME: master MCP.md 74173B grep 0, lane 78570B => CHERRY-PICK ADDITIVE never adopt; reviewer proves master 548-556 identical to base so pick expected conflict-free at :551; post-weld proof grep -c == 1 and blob 79797B; no generator touches MCP.md.",
+   "round": 2,
+   "stage": "fix",
    "tip": "c79073e20",
    "worktree": "/home/sites/cc-cmp-C-TOOL-6.a"
   },
@@ -245,10 +247,6 @@
    "role": "reviewer-r1-COMPLETED-clean",
    "session": "ses_e73b7d899ffeWe84bhsHXuFRh0"
   },
-  "C-TOOL-6.a": {
-   "role": "reviewer-r1-THIRD-attempt",
-   "session": "ses_e73b4fef8ffeDRHdQ4LjfClp56"
-  },
   "C-TUI-4.c": {
    "role": "fixer-r1",
    "session": "ses_e73b5b50effe00P4NHoYvlGS4w"
@@ -262,7 +260,7 @@
    "session": "ses_e73adab38ffeAhXW1fKK3NYcqu"
   }
  },
- "master_tip": "484f313a92e34a08a9d30e76852c4832763bcbcf",
+ "master_tip": "a725ebc11",
  "master_tip_observed": "ca1e0b51f",
  "next_fill_queue": [],
  "next_lead": {
@@ -1077,7 +1075,7 @@
   "C-TOOL-5.a": "batch-3 weld ca69cb333/86f95e191/weld: gates EXACT pair 20T/91A quartet 206T(0F) drift47T DocFigure92T gen --check rc0; builder base-inherited 1F cured at merged tree; r1 verdict via run-state unlock (REVIEW-1.md absent on disk); tsv 1555->1557 asc-viol 4; +20T carry; cherry - PATCHID_SAME; pruned",
   "C-TOOL-5.b": "WELD ROSTER W12: arbiter r4 CLEAN (5-finding list was phantom-channel only; real REVIEW-2 CLEAN tree-identical). tip 2fecd5f26. durations FormatAutoTableTest 6T ONLY. weld one-liner NIT: PostEditFormatHookTest.php:24-25 docblock falsified by auto-arm (REVIEW-4 has wording). WELD.md note: phantom-review-chain anomaly + FIX-2 counter-claim false. en-only lang strict-parity carry.",
   "C-TOOL-5.c": "r2 CLEAN @ abdc611d3; durations LspInstallerTest 20T (not 19); lsp-install doc rows ride C-TOOL-5.d; no regen",
-  "C-TOOL-6.a": "r1 CLEAN 0C/0M/0MINOR (REVIEW-1.md 4522B main-tree-only -> copy onto branch). Adopt the LANDED 126-line section, do NOT re-add it. Carries: MINT 1 DUR row tests/Config/McpBrowserPresetDocTest.php (5 methods); §7 figure +1T/+52A; SERVER.md already lists the 3 stdio servers (lane diff zero SERVER.md); no dist/npm. NOTE docs/MCP.md collision: C-SES-8.e weld landed its numerals; if this weld conflicts, resolve additively with landed-blob proof. §6.2 rulings consulted: browser/computer-use preset rows + stdio argv fingerprint + no-jail honest (C-TOOL-4.e pointer) + deferred schemas/import/rules pointers.",
+  "C-TOOL-6.a": "AFTER the r2 fix + clean review: CHERRY-PICK c79073e20 (never tree-copy/adopt). MINT DUR row candy-code/tests/Config/McpBrowserPresetDocTest.php (4 methods, 4T/89A). docs/MCP.md hand-authored: NO gen-docs regen. Collides with landed C-SES-8.e -> additive. Proof after weld: git show <weld>:candy-code/docs/MCP.md grep -c Browser control and computer use == 1 and byte size 79797. Copy REVIEW-1.md 12227B main-tree-only onto branch; collect worktree-only REPORT.md 9756B + FIX files before pruning.",
   "C-TOOL-7.a": {
    "FINDING": "READPATH CENSUS RED (see carries + lanes/C-TOOL-7.a/FINDING-readpath-census.md): chain adds 2 scandir sinks (:548/:568) with no ReadPathCensusTest re-arm -> testTheCensusIsDerivedFromSrcAndFullyClassified RED on master (expected 2 vs live 4)",
    "base_era": "8d9814130",
@@ -1333,7 +1331,6 @@
   "cure-w7": "MASTER REPAIR 2026-10-27 d3395595e (pick of 08862c003, lane base 8eab506d9; clean zero conflicts; 2 files: candy-code/src/Session/EnhancedSessionStore.php +31/-1, candy-code/tests/Session/UsageRecordsTest.php +54/0; %ae/%ce separate greps 1/1 detain@interserver.net, zero Co-Authored trailers). NOT a plan step: no §4 mark, welded count unchanged (90). Gates (plain pipe cwd candy-code env -u LINES -u COLUMNS): --filter 'UsageRecords|SessionStore|Tombstone' = Tests: 130, Assertions: 477 OK (2 pre-existing deprecations) EXACT; --filter 'SessionEventsTable|TranscriptResume|EventLog|DebouncedTranscript|ShareStore' = Tests: 61, Assertions: 306 OK EXACT; gen-command-docs/gen-tool-docs/gen-settings-doc --check all up-to-date rc0 (lane touched no docs); five-guard 133T/15816A F2 = staleness pair ONLY (25,537 pinned vs live - closeout re-pin). DUR: no new *Test.php (pins ride existing UsageRecordsTest). inflight entry removed at this weld."
  },
  "weld_pending": [
-  "C-TUI-3.a",
   "C-CTX-5.b",
   "C-SES-6.e"
  ],
@@ -1453,6 +1450,7 @@
   "C-PRV-3.a",
   "C-PRV-3.b",
   "C-PRV-3.c",
+  "C-PRV-3.d",
   "C-PRV-4.a",
   "C-PRV-4.b",
   "C-PRV-5.a",
@@ -1475,6 +1473,7 @@
   "C-SEC-6.c",
   "C-SEC-6.d",
   "C-SEC-6.e",
+  "C-SEC-7.a",
   "C-SEC-7.c",
   "C-SEC-7.d",
   "C-SEC-8.a",
@@ -1505,12 +1504,14 @@
   "C-SES-7.a",
   "C-SES-7.b",
   "C-SES-7.c",
+  "C-SES-7.d",
   "C-SES-7.e",
   "C-SES-7.f",
   "C-SES-7.g",
   "C-SES-8.a",
   "C-SES-8.c",
   "C-SES-8.d",
+  "C-SES-8.e",
   "C-SES-8.f",
   "C-SES-9.a",
   "C-SES-9.b",
@@ -1519,7 +1520,9 @@
   "C-TOOL-1.a",
   "C-TOOL-1.b",
   "C-TOOL-1.c",
+  "C-TOOL-2.a",
   "C-TOOL-2.b",
+  "C-TOOL-2.c",
   "C-TOOL-2.d",
   "C-TOOL-2.e",
   "C-TOOL-2.f",
@@ -1533,6 +1536,7 @@
   "C-TOOL-5.a",
   "C-TOOL-5.b",
   "C-TOOL-5.c",
+  "C-TOOL-6.a",
   "C-TOOL-7.a",
   "C-TOOL-7.b",
   "C-TOOL-7.c",
@@ -1543,8 +1547,12 @@
   "C-TUI-2.b",
   "C-TUI-2.c",
   "C-TUI-2.d",
+  "C-TUI-2.f",
+  "C-TUI-2.g",
+  "C-TUI-3.b",
   "C-TUI-3.c",
   "C-TUI-3.f",
+  "C-TUI-4.b",
   "C-TUI-5.d",
   "C-TUI-6.k",
   "C-TUI-7.a",
@@ -1598,18 +1606,9 @@
   "P-TABS.f",
   "P-TABS.g",
   "P-TABS.h",
-  "C-PRV-3.d",
-  "C-TUI-2.f",
-  "C-SES-7.d",
-  "C-SES-8.e",
-  "C-TOOL-2.a",
-  "C-TOOL-2.c",
-  "C-TUI-2.g",
-  "C-TUI-4.b",
-  "C-SEC-7.a",
-  "C-TUI-3.b"
+  "C-TUI-3.a"
  ],
- "welded_count": 257,
+ "welded_count": 259,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "welder_inflight_note": "WELDER ses_e7448801cffejnqD7XXhFFoIJG RUNNING: its welded_count=243 + the §4 ✅ 94432cfd1 C-SES-8.a line are UNCOMMITTED working-tree writes (a commit cannot contain its own SHA) -> do NOT read as landed; do NOT write run-state concurrently except minimal fresh-read targeted patches; RE-VERIFY my TOOL-2.f weld_pending + TOOL-2.g entries survive its fold.",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
@@ -1651,5 +1650,6 @@
   },
   "scope": "owner directive @197@/@1108@: W10 loop + W11-W15 fully welded + wave loops closed; W16 band finished + welded under this lead per owner extension; W17+ builders NEVER started",
   "this_run": "welded 100 -> 161; waves closed W10,W11,W12,W13,W14,W15 (W14 96d36db45, W15 15046565a)"
- }
+ },
+ "batch1030N_note_lane2": "WELD-1030N lane 2 C-TUI-3.a welded: picks 4f596243e/76c901ff4/a725ebc11, ARCHITECTURE.md:155 landed-blob 64->65 PROVED + live slashCommands()==65; gates Copy pair 22T/84A green, roster pair 18T/443A with only the 2 foreign output-style reds; gen-command-docs --check rc0; durations rows MINTED by welder (tsv 1020/1170); 7carry +22T/+84A no re-pin; REVIEW-1/2 committed from main tree."
 }
