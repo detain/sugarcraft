@@ -13,9 +13,13 @@ use SugarCraft\Code\Lang;
 // Chat::handleSecurityReviewCommand(). Coded under Tools like /init files
 // under Memory: a canned prompt's category is its domain, not the Session
 // transcript menu it happens to post into.
+//
+// C-WEB-2: served by the same ReviewHostCommand body as `/review` — the
+// class reads the spelling off the draft's command word.
 return BuiltInCommand::new(CommandSpec::new(
     'security-review',
     Lang::t('cmd.security-review.description'),
     Lang::t('cmd.category.tools'),
     argumentHint: Lang::t('cmd.security-review.hint'),
-))->withHandler('handleSecurityReviewCommand');
+))->withHandler('handleSecurityReviewCommand')
+    ->withHostCommand(\SugarCraft\Code\Host\Commands\ReviewHostCommand::class);

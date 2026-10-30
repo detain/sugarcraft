@@ -13,9 +13,15 @@ use SugarCraft\Code\Lang;
 // STARTS A TURN (as `/init` does) — see Chat::handleReviewCommand(). Coded
 // under Tools like /init files under Memory: a canned prompt's category is
 // its domain, not the Session transcript menu it happens to post into.
+//
+// C-WEB-2: ReviewHostCommand serves it (and its security-shaped sibling)
+// headless as the same canned prompt, ref-validated before the turn is
+// billed, sent through the host's submit route so the scanner attaches the
+// diff exactly as it does for typed prose.
 return BuiltInCommand::new(CommandSpec::new(
     'review',
     Lang::t('cmd.review.description'),
     Lang::t('cmd.category.tools'),
     argumentHint: Lang::t('cmd.review.hint'),
-))->withHandler('handleReviewCommand');
+))->withHandler('handleReviewCommand')
+    ->withHostCommand(\SugarCraft\Code\Host\Commands\ReviewHostCommand::class);
