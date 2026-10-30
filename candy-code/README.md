@@ -1266,12 +1266,13 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and thirty-eight keys are layered — `provider`,
-`models`, `providers`, `titleModel`, `summaryModel`, `maxOutputTokens`,
-`modelPrices`, `extraBody`, `thinkingBudget`, `reasoningEffort`, `serviceTier`,
-`promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
-`maxToolSteps`, `maxCostUsd`, `compaction.reminderPercent`,
-`compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`,
+Only these one hundred and thirty-nine keys are layered — `provider`,
+`models`, `providers`, `titleModel`, `summaryModel`, `advisorModel`,
+`maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
+`reasoningEffort`, `serviceTier`, `promptCache`, `parallelToolCalls`,
+`parallelToolDeadlineSeconds`, `maxToolSteps`, `maxCostUsd`,
+`compaction.reminderPercent`, `compaction.autoPercent`,
+`compaction.blockPercent`, `compaction.keepRecent`,
 `compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
 `compaction.toolOutputChars`, `compaction.reminderTokens`,
 `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`,
@@ -1355,7 +1356,7 @@ in precedence only.
 > user-tier only. Details per key in
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
-Even for a trusted project, eighty-one keys are **never** taken from a project file:
+Even for a trusted project, eighty-two keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -1399,9 +1400,9 @@ clone can run up; `modelPrices`, because it sets the rate every billed token
 converts at — the mirrored direction on the same money axis, where a
 project-supplied map could zero a rate and silently blind the spend cap and the
 `/budget` totals, the exact failure the unpriced-model notice exists to make
-loud; `models`, `titleModel`, `summaryModel`, `subagentModel` and
-`embeddingModel`, because they choose the model the session itself and every
-title, prompt suggestion, `/compact` summary, delegated sub-agent run and
+loud; `models`, `titleModel`, `summaryModel`, `advisorModel`, `subagentModel`
+and `embeddingModel`, because they choose the model the session itself and every
+title, prompt suggestion, `/compact` summary, `Advisor` consult, delegated sub-agent run and
 memory-recall embedding run on with the operator's key — within one provider the price spread is over 100×, and a model with no
 price on file bills as $0, so a project-chosen one blinds the spend cap the same
 way a zeroed rate would; `layout`, because it records where the operator chose to put
@@ -1501,7 +1502,7 @@ printed under the operator's screen; and
 `allowedTools`, for a reason worth spelling
 out because on capability alone it looks harmless. A whitelist is an intersection — it
 cannot add a tool that `Bootstrap::tools()` did not build — but its effect is
-defined by what it *omits*, so `allowedTools: ["Bash"]` deletes <!-- tools:others:begin -->all thirty-five of the others — `Read`, `Edit`, `Glob`, `Grep`, `Write`, `WebFetch`, `WebSearch`, `doctor`, `Skill`, `Lsp`, `Memory`, `RepoMap`, `Prune`, `Todo`, `Compress`, `Workflow`, `Recall`, `Team`, `ApplyPatch`, `AskUser`, `PlanExit`, `SendMessage`, `Subagents`, `InterruptAgent`, `GenerateImage`, `GenerateVideo`, `PtyRun`, `Ls`, `ShellOutput`, `ShellStop`, `mcp_list`, `mcp_call`, `Schedule`, `skills_search` and `SkillWorkshop` —<!-- tools:others:end --> in one line, and what the model does next is the
+defined by what it *omits*, so `allowedTools: ["Bash"]` deletes <!-- tools:others:begin -->all thirty-six of the others — `Read`, `Edit`, `Glob`, `Grep`, `Write`, `WebFetch`, `WebSearch`, `doctor`, `Skill`, `Lsp`, `Memory`, `RepoMap`, `Prune`, `Todo`, `Compress`, `Workflow`, `Recall`, `Team`, `ApplyPatch`, `AskUser`, `PlanExit`, `SendMessage`, `Subagents`, `InterruptAgent`, `GenerateImage`, `GenerateVideo`, `PtyRun`, `Ls`, `ShellOutput`, `ShellStop`, `mcp_list`, `mcp_call`, `Schedule`, `skills_search`, `SkillWorkshop` and `Advisor` —<!-- tools:others:end --> in one line, and what the model does next is the
 same work through `Bash`, which reaches the permission gate as opaque shell text
 instead of as a reviewable path. Strictly fewer tools, strictly coarser review.
 

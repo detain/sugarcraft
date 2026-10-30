@@ -161,7 +161,7 @@ Three name classes drive the evaluators. Each built-in tool declares its class i
 
 - **read-only**: `Read`, `Glob`, `Grep`, `Skill`, `Lsp`, `RepoMap`, `Ls`, `ShellOutput`, `mcp_list`, `skills_search`, `BoardRead`
 - **write-capable**: `Bash`, `Edit`, `Write`, `Workflow`, `ApplyPatch`, `PtyRun`, `ShellStop`, `mcp_call`, `SkillWorkshop`, `Task`, and anything starting `mcp__`
-- **no-ask** (allowed in every mode; they write only harness-owned state): `Memory`, `Prune`, `Todo`, `Compress`, `Recall`, `Team`, `AskUser`, `PlanExit`, `SendMessage`, `Subagents`, `InterruptAgent`, `BoardPost`
+- **no-ask** (allowed in every mode; they write only harness-owned state): `Memory`, `Prune`, `Todo`, `Compress`, `Recall`, `Team`, `AskUser`, `PlanExit`, `SendMessage`, `Subagents`, `InterruptAgent`, `Advisor`, `BoardPost`
 
 Note what is in *none* of these lists: `WebFetch`, `WebSearch`, `doctor`, `GenerateImage`, `GenerateVideo` and `Schedule`.
 <!-- tools:classes:end -->

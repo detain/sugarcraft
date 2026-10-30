@@ -77,6 +77,34 @@ final readonly class ToolBuildContext
          * @var list<string>
          */
         public array $readRoots = [],
+        /**
+         * C-PRV-3.d: this launch's advisor backend — the tool-less engine on
+         * the `advisorModel` / `$CANDY_CODE_ADVISOR_MODEL` model — or null
+         * when the user named no advisor model. Null is the COMMON case and
+         * it is load-bearing: unlike the titler's fallback ladder, an unset
+         * advisor model means the Advisor tool is not offered at all, so the
+         * `Advisor` catalog entry builds from nothing here
+         * ({@see \SugarCraft\Code\Tools\Catalog\ToolCatalog::CONDITIONAL_BUILDS}).
+         */
+        public ?\SugarCraft\Code\Backend $advisorBackend = null,
+        /**
+         * C-PRV-3.d: loads the session's persisted transcript for the advisor
+         * digest — `fn(string $sessionId): array<int, \SugarCraft\Code\Message>`
+         * — wired through the same door the auto-approval reviewer reads
+         * ({@see \SugarCraft\Code\Cli\Bootstrap::sessionStore()} with pruning
+         * off). Null leaves the advisor answering from the question alone; the
+         * envelope already says "(empty)" rather than lying about a digest.
+         */
+        public ?\Closure $advisorTranscript = null,
+        /**
+         * C-PRV-3.d: the session's durable spend totals —
+         * `fn(string $sessionId): ?array` in
+         * {@see \SugarCraft\Code\Host\EnhancedSessionStore::usageTotals()}'s
+         * shape — the lower-bound source the Advisor checks its call against
+         * before dialing. Null skips the durable check; the per-turn counter
+         * still stands.
+         */
+        public ?\Closure $advisorSpend = null,
     ) {
     }
 }

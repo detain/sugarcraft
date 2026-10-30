@@ -1935,6 +1935,7 @@ TXT,
     'keys.strip.dismiss' => 'Dismiss if finished, else stop it',
     'keys.strip.move' => 'Move along the strip (or ↑ / ↓)',
     'keys.strip.open' => 'Open the focused agent\'s transcript',
+    'settings.advisorModel.label' => 'Advisor model',
     'settings.allowedTools.label' => 'Allowed tools',
     'settings.attribution.label' => 'Attribution',
     'settings.autoCommit.label' => 'Auto-commit',
@@ -3664,6 +3665,7 @@ TXT,
 
 
     // --- settings help (W3-B i18n migration) ---
+    'settings.advisorModel.help' => 'Model the `Advisor` tool consults for a second opinion; unset — the default — does not offer the tool at all (there is no cheap-model fallback: the point is a model you picked).',
     'settings.allowedTools.help' => 'Whitelist of tool names or globs; unset offers every tool.',
     'settings.attribution.help' => '{"commit": "…", "pr": "…"}: the trailer and PR line the git guidance asks for.',
     'settings.autoCommit.help' => 'off, turn (one commit per turn, message from the title model) or edit (one per Write/Edit); /undo reverts it.',

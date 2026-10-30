@@ -516,6 +516,7 @@ final class LayeredSettings
         'providers',
         'titleModel',
         'summaryModel',
+        'advisorModel',
         'maxOutputTokens',
         'modelPrices',
         'extraBody',

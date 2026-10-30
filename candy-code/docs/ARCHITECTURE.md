@@ -28,7 +28,7 @@ bin/candy-code                argv → pre-flight → dispatch
                                   │
                                   └─ Runtime        the agentic loop
                                          ├─ Providers\*          the model call
-                                         ├─ Tools\*              39 built-ins + MCP bridges
+                                         ├─ Tools\*              40 built-ins + MCP bridges
                                          ├─ Hooks\*              the PreToolUse chain
                                          └─ Permissions\*        the gate, last in that chain
 ```
@@ -829,16 +829,16 @@ behind it. See [`PERMISSIONS.md`](PERMISSIONS.md) and [`HOOKS.md`](HOOKS.md).
 
 ## Tools
 
-`src/Tools/BuiltIn/` holds **thirty-nine** concrete `Tool` classes: <!-- tools:class-list:begin -->`ApplyPatch`, `AskUserTool`, `Bash`, `BoardPostTool`, `BoardReadTool`, `Compress`, `Doctor`, `Edit`, `GenerateImage`, `GenerateVideo`, `Glob`, `Grep`, `InterruptAgentTool`, `Ls`, `LspTool`, `McpCallTool`, `McpListTool`, `MemoryTool`, `PlanExitTool`, `Prune`, `PtyRun`, `Read`, `Recall`, `RepoMapTool`, `ScheduleTool`, `SendMessageTool`, `ShellOutput`, `ShellStop`, `SkillTool`, `SkillWorkshop`, `SkillsSearch`, `SubagentsTool`, `TaskTool`, `TeamTool`, `Todo`, `WebFetch`, `WebSearch`, `WorkflowTool`, `Write`<!-- tools:class-list:end -->. `Bootstrap::tools()` ships thirty-seven of them —
+`src/Tools/BuiltIn/` holds **forty** concrete `Tool` classes: <!-- tools:class-list:begin -->`AdvisorTool`, `ApplyPatch`, `AskUserTool`, `Bash`, `BoardPostTool`, `BoardReadTool`, `Compress`, `Doctor`, `Edit`, `GenerateImage`, `GenerateVideo`, `Glob`, `Grep`, `InterruptAgentTool`, `Ls`, `LspTool`, `McpCallTool`, `McpListTool`, `MemoryTool`, `PlanExitTool`, `Prune`, `PtyRun`, `Read`, `Recall`, `RepoMapTool`, `ScheduleTool`, `SendMessageTool`, `ShellOutput`, `ShellStop`, `SkillTool`, `SkillWorkshop`, `SkillsSearch`, `SubagentsTool`, `TaskTool`, `TeamTool`, `Todo`, `WebFetch`, `WebSearch`, `WorkflowTool`, `Write`<!-- tools:class-list:end -->. `Bootstrap::tools()` ships thirty-eight of them —
 `Task` last, gated on the launch holding an `AgentManager` — plus one
 `McpToolBridge` per advertised MCP tool. The other two, `BoardReadTool` and
 `BoardPostTool`, are on no launch: `TaskTool` hands them, bound to the batch's
 shared board, to the runs of a parallel `Task` batch's members.
 
-Domain matters here: **thirty-nine is the count of *wired* tools, not of *usable*
+Domain matters here: **forty is the count of *wired* tools, not of *usable*
 ones.** `LspTool` is reachable on every launch but answers every call with a "no
 language server configured" error until the user lists a server under the `lsp`
-setting. A figure saying "thirty-nine working tools" would be the wrong claim.
+setting. A figure saying "forty working tools" would be the wrong claim.
 `GenerateImage` follows the same door for a different service: it is reachable
 on every launch and useful only once `sd.baseUrl` (or its
 `CANDY_CODE_SD_BASE_URL` env binding) names a server — with none configured it
@@ -1349,7 +1349,7 @@ Four patterns worth recognising, because they explain otherwise-odd code:
    `Bootstrap::mcpConfigDecision()` for the MCP verdict. Two implementations of
    one rule is how the two answers drift apart, and each of those classes exists
    because they had.
-4. **A count carries its domain.** "Thirty-nine tools" means wired built-ins.
+4. **A count carries its domain.** "Forty tools" means wired built-ins.
    "Eight skills" means directories under `src/Skills/BuiltIn/` that load.
    "Nine probes" means `doctor`. Numbers in this codebase's comments are
    written next to the thing they were measured on, and several of them are

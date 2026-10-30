@@ -95,6 +95,20 @@ final class ModelProviderSettings implements SettingDefinitionSet
                 ->withHelp(Lang::t('settings.summaryModel.help'))
                 ->withReaderSymbol(Bootstrap::class . '::summaryModel')
                 ->withReadBy('`Bootstrap::summaryModel()`, `summaryBackend()`'),
+            // C-PRV-3.d: the Advisor tool's model. RISK AND ABSENCE BOTH
+            // MATTER — Spend like its siblings, but unlike the titler this key
+            // IS the feature's switch: unset, the tool is not offered at all
+            // (Bootstrap::advisorBackend() answers null with no fallback
+            // ladder, and the catalog lists Advisor among
+            // ToolCatalog::CONDITIONAL_BUILDS).
+            SettingDefinition::new('advisorModel', SettingType::String)
+                ->withCategory(SettingCategory::ModelProvider)
+                ->withRiskClass(RiskClass::Spend)
+                ->withLayered()
+                ->withEnvVar('CANDY_CODE_ADVISOR_MODEL')
+                ->withLabel(Lang::t('settings.advisorModel.label'))
+                ->withHelp(Lang::t('settings.advisorModel.help'))
+                ->withReaderSymbol(Bootstrap::class . '::advisorBackend'),
             SettingDefinition::new('maxOutputTokens', SettingType::Int)
                 ->withCategory(SettingCategory::ModelProvider)
                 ->withRiskClass(RiskClass::Spend)

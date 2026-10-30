@@ -10295,6 +10295,44 @@ public static function useMaxCost(?string $maxCost): void
     }
 
     /**
+     * The advisor backend (C-PRV-3.d, roadmap W24), or null — and null is the
+     * DEFAULT answer, deliberately, unlike its two siblings.
+     *
+     * {@see titleBackend()} falls back down a ladder (cheap auxiliary default,
+     * then the provider's own) because an unnamed session and an un-consulted
+     * advisor are both non-events and titling still wants to happen. The
+     * Advisor TOOL is not a non-event: offering it under a model the user never
+     * picked spends money on a guess, and its whole point is a deliberately
+     * different second opinion. So the rule is the presence of a choice:
+     * `$CANDY_CODE_ADVISOR_MODEL` or a non-empty `advisorModel` key in
+     * ~/.candy-code/config.json, else null and the tool is absent from the
+     * wire ({@see \SugarCraft\Code\Tools\Catalog\ToolCatalog::CONDITIONAL_BUILDS}
+     * names it for exactly this reason).
+     *
+     * With a named model it is {@see toollessBackend()}'s construction whole —
+     * no tools, no hooks, no instruction preamble, thinking budget switched off
+     * (a side consultation is a few paragraphs, not permanent context, so the
+     * C-PRV-5.b rule that keeps it for summaries does not apply here) — and the
+     * advisor's own turn cap and session spend-cap refusal live tool-side
+     * ({@see \SugarCraft\Code\Tools\BuiltIn\AdvisorTool}), where the dialing
+     * happens. E646 holds as everywhere: no blanket wall-clock timeout on the
+     * completion; the provider's per-read timeouts stand.
+     */
+    public static function advisorBackend(): ?Backend
+    {
+        $model = getenv('CANDY_CODE_ADVISOR_MODEL');
+        if ($model !== false && trim($model) !== '') {
+            return self::toollessBackend('CANDY_CODE_ADVISOR_MODEL', 'advisorModel');
+        }
+        $configured = self::readUserConfig()['advisorModel'] ?? null;
+        if (!\is_string($configured) || trim($configured) === '') {
+            return null;
+        }
+
+        return self::toollessBackend('CANDY_CODE_ADVISOR_MODEL', 'advisorModel');
+    }
+
+    /**
      * The construction {@see titleBackend()} and {@see summaryBackend()} share:
      * this run's selected provider with NOTHING attached — no tools, no hooks,
      * no skill registry, no instruction loader — under whichever model

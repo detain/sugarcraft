@@ -88,14 +88,17 @@ final class ToolCatalog
      * name exists in the catalog (classified, rosters, docs) but the tool is
      * built only when the context carries what it needs. MCP-7's dispatcher
      * pair is the first resident — it builds only from a frozen shape that
-     * actually deferred a server. Pins that equate "a plain launch's built-in
-     * set" to the catalog read {@see builtUnconditionally()}, not built(),
+     * actually deferred a server. C-PRV-3.d's `Advisor` joins it the same way:
+     * it builds only when the launch resolved an `advisorModel`, so the plain
+     * set no-MCP, no-advisor launch ships is still what the pins below read.
+     * Pins that equate "a plain launch's built-in set" to the catalog read
+     * {@see builtUnconditionally()}, not built(),
      * or the pair's mere DECLARATION would silently demand its presence in
      * every no-MCP launch.
      *
      * @var list<string>
      */
-    public const CONDITIONAL_BUILDS = ['mcp_list', 'mcp_call'];
+    public const CONDITIONAL_BUILDS = ['mcp_list', 'mcp_call', 'Advisor'];
 
     /**
      * The entries every launch carries, whatever its context: built() minus

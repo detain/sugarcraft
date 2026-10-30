@@ -1747,6 +1747,15 @@ final class LaunchContext
                 // advertises. Validated and notice-reported once per build by
                 // {@see referenceReadRoots()}.
                 readRoots: self::referenceReadRoots($root),
+                // C-PRV-3.d: the Advisor trio — backend only when the user
+                // named an `advisorModel` (null means the tool is not offered
+                // at all, the MCP pair's shape-carrying the same law); the
+                // transcript door is the auto-approval reviewer's, and the
+                // spend door is `/status`'s, both keyed by the session id the
+                // engine hands the tool at call time.
+                advisorBackend: Bootstrap::advisorBackend(),
+                advisorTranscript: static fn (string $sessionId): array => \SugarCraft\Code\Host\TranscriptStore::new(Bootstrap::sessionStore(prune: false))->load($sessionId),
+                advisorSpend: static fn (string $sessionId): ?array => Bootstrap::sessionStore(prune: false)->usageTotals($sessionId),
             )),
             ...Bootstrap::mcpTools($root),
         ];
