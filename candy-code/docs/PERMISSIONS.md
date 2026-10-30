@@ -1344,6 +1344,38 @@ rest of the launch without repeating the ask. This dialog exists only on the
 interactive TUI surface; `-p` and serve never open it — they keep refusing the
 same rows through their existing paths.
 
+## Launch narrowing that cannot be switched
+
+Everything above this section decides what a launch asks about; two launch
+flags decide what it can even hold, and neither can be reopened from inside
+the session:
+
+`--restricted` removes the code-running tools — `Bash`, `PtyRun`, `Task`,
+`Workflow`, `ShellStop` and `mcp_call` — from the tool set at
+`Bootstrap::filterToolSet()`, after the config's allow/deny lists have had
+their say, so every backend build (main chat, sub-agents, `-p`) answers on the
+shrunken set. File tools stay, confined by the existing `WritePathScope`.
+`/permissions` switches modes, and a mode only ever gates calls to tools that
+survived the drop — there is nothing in the modal that puts a removed tool
+back.
+
+`--safe-mode` runs the process as if no trust had ever been granted: the
+trusted-roots funnel in `Bootstrap` answers empty before reading the config,
+so every predicate built on those lists reports its root untrusted; bundles
+resolve to none; and the foreign skills, commands and agent-preset discovery
+call sites skip their walks entirely. Native settings, native skills and
+native commands keep working — the flag refuses the imports, not the install.
+The interactive trust dialog above stays closed on its own because nothing
+stands trusted to be confirmed; the quarantine snapshot rides the same gate.
+
+Both flags are launch latches, not modes, and that distinction is the point:
+a mode can flip mid-session, and these refusals would otherwise be memos
+frozen under one answer and judged under another. Both print one launch
+notice naming what they take away (stderr and the transcript), and both are
+carried verbatim across a `/new` relaunch by `SessionRelaunch` — including
+their `=false` forms, so a wrapper can outvote an alias and the restart
+re-judges exactly what was typed.
+
 ## Sandbox
 
 The gate decides *whether* a `Bash` call runs; it cannot bound what the shell

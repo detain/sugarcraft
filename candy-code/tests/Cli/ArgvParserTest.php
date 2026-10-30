@@ -1422,4 +1422,37 @@ final class ArgvParserTest extends TestCase
         $this->assertFalse($result->incognito);
         $this->assertContains('--incognito=now', $result->unknownFlags);
     }
+
+    /**
+     * C-SEC-7.b: the two launch-narrowing switches take the attached-value
+     * form where --incognito refuses it — deliberately, because a wrapper
+     * that carries `--restricted` in an ALIAS needs an in-band way back out
+     * (`--restricted=false`), while session latching has no such second
+     * reader to outvote. A value outside the two bool families is reported
+     * as the unrecognized whole token: the usage error names the typo rather
+     * than guessing, because these flags are the NARROWING direction and a
+     * silently dropped narrowing is exactly the illusion of safety the pair
+     * exists to avoid. (Behavioral pins at the chokes they arm:
+     * {@see RestrictedSafeModeFlagsTest}; this test owns the parse shape.)
+     */
+    public function testTheNarrowingSwitchesCarryExplicitValuesAndRefuseNonsense(): void
+    {
+        $on = ArgvParser::parse(['candy-code', '--restricted=yes', '--safe-mode=1']);
+        $this->assertTrue($on->restricted);
+        $this->assertTrue($on->safeMode);
+        $this->assertSame([], $on->unknownFlags);
+
+        $off = ArgvParser::parse(['candy-code', '--restricted=FALSE', '--safe-mode=0']);
+        $this->assertFalse($off->restricted);
+        $this->assertFalse($off->safeMode);
+        $this->assertSame([], $off->unknownFlags, 'the falsy family is spelled, not guessed around');
+
+        $bare = ArgvParser::parse(['candy-code', '--restricted', '--safe-mode']);
+        $this->assertTrue($bare->restricted);
+        $this->assertTrue($bare->safeMode);
+
+        $typo = ArgvParser::parse(['candy-code', '--restricted=always']);
+        $this->assertFalse($typo->restricted);
+        $this->assertContains('--restricted=always', $typo->unknownFlags);
+    }
 }

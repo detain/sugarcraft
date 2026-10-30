@@ -1040,7 +1040,7 @@ final class Bootstrap
      * a private const; nothing in `src/` branches on it, and nothing should —
      * see {@see warnPermissionConfigInTranscript()} for the seam itself.
      */
-    public const TRANSCRIPT_SEAM_CALL_SITES = 33;
+    public const TRANSCRIPT_SEAM_CALL_SITES = 35;
 
     /**
      * Every directory this launch refused to read, keyed by the path as
@@ -1747,7 +1747,7 @@ final class Bootstrap
 
         // LAST, so every warning the build raised is in hand — including
         // reportProjectTierRefusals() immediately above, which is one of the
-        // THIRTY-THREE call sites now routed onto the transcript seam. This said
+        // THIRTY-FIVE call sites now routed onto the transcript seam. This said
         // SIXTEEN, counting reportPrunedSessions()'s retention summary (E78,
         // round 42) as the last one until E86 (round 43) added the sixteenth,
         // in mcpClient()'s start-then-throw catch, and P7.S3 added the
@@ -5698,7 +5698,7 @@ public static function useMaxCost(?string $maxCost): void
             // user meets that as `/skill` not offering something they wrote. ONE
             // ROW, whatever the count: this message is already an aggregate, which
             // is what makes it safe to put in a transcript that also has to carry
-            // thirty-two other sources. THIS SAID ELEVEN. Round 44 could not correct
+            // thirty-four other sources. THIS SAID ELEVEN. Round 44 could not correct
         // it — this file was outside that lane's ownership, which is the whole
         // reason, and not how long the sentence had been wrong — so it asserted
         // the gap instead, with a test whose failure message was the
@@ -9156,7 +9156,7 @@ public static function useMaxCost(?string $maxCost): void
             ));
 
             // REACHABILITY AT THIS SITE IS DRIVEN, not inherited from the other
-            // thirty-two call sites: {@see chat()} holds no `self::tools(` call of
+            // thirty-four call sites: {@see chat()} holds no `self::tools(` call of
             // its own and gets here transitively through `backend()` ->
             // `tools()` -> {@see mcpTools()} -> this method, then reads
             // {@see launchNotices()} on its last line — so a row recorded now is

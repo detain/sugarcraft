@@ -233,13 +233,13 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * application does not write one. `Bootstrap`'s warnings are handed to
  * {@see \SugarCraft\Code\Cli\Bootstrap::STDERR_LINE_FORMAT}, which adds the
  * prefix on the way out, so the message literals are invisible to a scan for
- * it — FORTY-FIVE call sites in `src/Cli/Bootstrap.php` (f-app-launch 2026-10-14
+ * it — FORTY-SEVEN call sites in `src/Cli/Bootstrap.php` (f-app-launch 2026-10-14
  * added three: the rv-sec-1 bypass banner, the rv-sec-3 policy-freshness notice
  * and the rv-enduser-1 unselectable-override row; PLG-1 added three more: the
  * bundles() warning drain and the two declined-surface notices, and C-SEC-7.d
  * three more still: autoReviewModel's not-a-string, bad-shape and unusable
  * warnings, and C-SEC-6.b one more: the project-narrowing notice, and C-SEC-7.a one more:
- * the headless-default banner that now names `-p`'s new asking default), each producing a
+ * the headless-default banner that now names `-p`'s new asking default; and C-SEC-7.b two more still: useRestricted()'s and useSafeMode()'s one-launch notices each), each producing a
  * distinct `candy-code: ` line, against a channel-4 credit of eight for that
  * file (ISS-026's envelope-carrying resume notice joined the six as a raw
  * fwrite line, and its rv6 `--resume` pick twin joined the seven). Off by
@@ -646,7 +646,11 @@ final class StderrEmitterCensusTest extends TestCase
         // +1 in C-SEC-7.a: the headless-default notice rides the transcript
         // seam from permissionGate() — the same routing, and the same sibling,
         // as the bypass-mode banner it replaced for the `-p` surface.
-        'src/Cli/Bootstrap.php' => 45,
+        // +2 in C-SEC-7.b: the two launch-narrowing notices ride the transcript
+        // seam from useRestricted()/useSafeMode() — the same routing as the
+        // bypass-mode banner: stderr stays the complete record, the shelf
+        // carries each switch's one row.
+        'src/Cli/Bootstrap.php' => 47,
     ];
 
     /**
@@ -1035,7 +1039,7 @@ final class StderrEmitterCensusTest extends TestCase
         'twenty-nine' => 29, 'thirty' => 30, 'thirty-one' => 31, 'thirty-two' => 32,
         'thirty-three' => 33, 'thirty-four' => 34, 'thirty-five' => 35, 'thirty-six' => 36,
         'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39, 'forty' => 40,
-        'forty-one' => 41, 'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44, 'forty-five' => 45,
+        'forty-one' => 41, 'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44, 'forty-five' => 45, 'forty-six' => 46, 'forty-seven' => 47,
     ];
 
     public function testTheDirectFwriteStderrRosterIsUnchanged(): void

@@ -1862,6 +1862,8 @@ candy-code --json-schema answer.json -p "extract fields" # constrain the answer 
 candy-code --append-system-prompt @rules.md -p "audit this" # append operator rules to this one prompt's system prompt
 candy-code --worktree fix-bug        # run this session in its own git worktree
 candy-code --incognito                            # launch keeping nothing: no row, no transcript, no memory write
+candy-code --restricted -p "audit this"          # launch with no code-running tools (Bash, Task and friends are absent)
+candy-code --safe-mode                           # launch that ignores every trust grant: roots, bundles, foreign imports
 candy-code --help                               # prints and exits (never opens the TUI)
 candy-code --version                            # prints the installed version and exits
 candy-code -- --not-a-flag                      # `--` ends options; everything after is positional
@@ -1943,6 +1945,31 @@ ANY subcommand verb — bin exits at the verb's own dispatch before the
 worktree is entered, so the flag could only be silently ignored there;
 `serve` has the deeper reason that its host opens its own root per client
 session.
+
+`--restricted` (also `--restricted=true|false`) drops the code-running tools
+from every model-facing set for the whole launch: `Bash`, `PtyRun`, `Task`,
+`Workflow`, `ShellStop` and `mcp_call` are removed at the one tool-set funnel
+(`Bootstrap::filterToolSet()`) after the config's allow/deny lists have had
+their say. File tools stay, confined by the existing `WritePathScope`;
+`/permissions` cannot put the dropped tools back, because the drop is
+launch-latched, not a mode — the same reason a `false` value is carried as the
+raw `--restricted=false` token across a `/new` relaunch, so a wrapper or alias
+can outvote a bare one and the restart re-judges exactly what was typed. A
+value outside `true/1/yes` and `false/0/no` is refused as an unrecognized
+option (exit `2`) rather than guessed: a narrowing silently dropped by a typo
+is the failure mode the flag exists to prevent.
+
+`--safe-mode` (also `--safe-mode=true|false`) runs the process as if NOTHING
+had ever been trusted: every trusted-roots list answers empty (so a trusted
+project's hooks, project MCP servers and project command shells all stay
+untrusted), no bundles load, and no foreign skills, commands or agent presets
+are discovered at all. Native settings, native skills and native commands keep
+working — the flag refuses the imports, not the install. Like `--restricted`
+it is launch-latched rather than a permission mode: a mode can be switched
+mid-session, and trust memos frozen at first read would outlive the switch, so
+the safe way to open an old transcript through a locked-down process is to
+relaunch with the flag (which `/new` carries for you). Both flags print one
+launch notice naming what they took away, on stderr and in the transcript.
 
 `--config <file>` (also `--config=<file>`) replaces the per-user
 `~/.candy-code/config.json` for this run: the theme, the persisted provider,

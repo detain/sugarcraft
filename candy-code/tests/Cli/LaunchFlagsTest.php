@@ -856,8 +856,12 @@ final class LaunchFlagsTest extends TestCase
         $this->assertMatchesRegularExpression('/^ +--max-turns(?:[ =,]|$)/m', $screen);
         $this->assertMatchesRegularExpression('/^ +--json-schema(?:[ =,]|$)/m', $screen);
         $this->assertMatchesRegularExpression('/^ +--incognito(?:[ =,]|$)/m', $screen);
+        $this->assertMatchesRegularExpression('/^ +--restricted(?:[ =,]|$)/m', $screen);
+        $this->assertMatchesRegularExpression('/^ +--safe-mode(?:[ =,]|$)/m', $screen);
         $this->assertStringContainsString('Constrain the answer to a JSON Schema', $screen);
         $this->assertStringContainsString('Launch that keeps nothing', $screen);
+        $this->assertStringContainsString('Launch that cannot run code', $screen);
+        $this->assertStringContainsString('Launch that ignores all trust', $screen);
         $this->assertStringContainsString('it beats $CANDY_CODE_MAX_COST', $screen);
         $this->assertStringContainsString('it beats the maxToolSteps setting key', $screen);
         $this->assertStringContainsString('not a provider', $screen);
@@ -882,12 +886,16 @@ final class LaunchFlagsTest extends TestCase
             $needleTurns = $shell === 'fish' ? '-l max-turns' : '--max-turns';
             $needleSchema = $shell === 'fish' ? '-l json-schema' : '--json-schema';
             $needleIncognito = $shell === 'fish' ? '-l incognito' : '--incognito';
+            $needleRestricted = $shell === 'fish' ? '-l restricted' : '--restricted';
+            $needleSafeMode = $shell === 'fish' ? '-l safe-mode' : '--safe-mode';
 
             $this->assertStringContainsString($needleModel, $script, "{$shell} omits --model");
             $this->assertStringContainsString($needleMode, $script, "{$shell} omits --permission-mode");
             $this->assertStringContainsString($needleTurns, $script, "{$shell} omits --max-turns");
             $this->assertStringContainsString($needleSchema, $script, "{$shell} omits --json-schema");
             $this->assertStringContainsString($needleIncognito, $script, "{$shell} omits --incognito");
+            $this->assertStringContainsString($needleRestricted, $script, "{$shell} omits --restricted");
+            $this->assertStringContainsString($needleSafeMode, $script, "{$shell} omits --safe-mode");
 
             foreach (PermissionMode::cases() as $mode) {
                 $this->assertStringContainsString(
