@@ -154,8 +154,8 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Code\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — FORTY-FIVE
- *     of them, in NINETEEN files. THE SECOND EMITTER-SIDE FUNNEL, and the same
+ *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — FORTY-NINE
+ *     of them, in TWENTY files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
  *     with the ONE site in `src/Diagnostics/RuntimeNoticeSink.php` and cannot
@@ -812,6 +812,15 @@ final class StderrEmitterCensusTest extends TestCase
         // the fallback-provider and audit-hook notices. Latched once per
         // process, so one row per session.
         'src/Skills/SkillMatcher.php' => 1,
+        // C-TUI-4.a: the custom-theme-file notices, routed through this seam
+        // BY DESIGN. The routing decision: a theme name that silently degrades
+        // to the default is something the user must see in the transcript, not
+        // only on stderr — the session keeps running, but it is not running
+        // the theme the user asked for, and no other surface says so. Four
+        // sites (name missing, file refused, file malformed, file carries
+        // notes), each behind Theme's own once-per-name `$warned` latches, so
+        // at most one row per shape per session.
+        'src/Theme.php' => 4,
     ];
 
     /**
@@ -1040,7 +1049,8 @@ final class StderrEmitterCensusTest extends TestCase
         'twenty-nine' => 29, 'thirty' => 30, 'thirty-one' => 31, 'thirty-two' => 32,
         'thirty-three' => 33, 'thirty-four' => 34, 'thirty-five' => 35, 'thirty-six' => 36,
         'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39, 'forty' => 40,
-        'forty-one' => 41, 'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44, 'forty-five' => 45, 'forty-six' => 46, 'forty-seven' => 47,
+        'forty-one' => 41, 'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44, 'forty-five' => 45,
+        'forty-six' => 46, 'forty-seven' => 47, 'forty-eight' => 48, 'forty-nine' => 49,
     ];
 
     public function testTheDirectFwriteStderrRosterIsUnchanged(): void
