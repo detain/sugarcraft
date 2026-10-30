@@ -83,6 +83,11 @@ final class PaletteSupersetDispatchTest extends TestCase
         // pane to pre-open. Bare form IS the whole read-only restatement.
         'status' => 'bare /status is the whole read surface; no palette pane exists to open',
         'pane' => 'bare /pane prints usage; the palette actions are the dock-left/dock-right rows',
+        // C-TUI-3.a: the spec file (builtin-commands/1910-copy.php) records
+        // its own no-paletteAction judgement — a picker row could not carry
+        // the [n] block number, and the copy target is the terminal the verb
+        // was typed in, which a serve palette does not own.
+        'copy' => 'bare /copy takes no argument the palette could supply; the [n] verb needs typing',
         // OBS-3 (w5): same shape as /status by its spec's own judgement — a
         // typed readout of the durable ledger, not a panel the palette can
         // pre-open; the cross-launch /budget pairing rides the argument hint.

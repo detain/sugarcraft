@@ -49,6 +49,10 @@ final class MenuBarLabelDerivationTest extends TestCase
         'newrule' => 'Have the agent draft',
         'pane' => 'Dock a pane to a side',
         'editor' => 'Compose the prompt',
+        // C-TUI-3.a (1910 spec): the spec file records its own no-paletteAction
+        // judgement — like the /usage and /insights rows below it, a typed
+        // readout verb, and a palette row could not carry the [n] argument.
+        'copy' => 'Copy the last',
         'compact' => 'Manually compact chat',
         'clear' => 'Clear the transcript',
         'budget' => 'Show reported spend',

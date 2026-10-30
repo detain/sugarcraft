@@ -622,13 +622,13 @@ context: it is listed with the others but sends nothing on its own. `#`, `//`,
 
 <!-- commands:roster:begin -->
 `/agents` (`/agent`) `/bg` (`/background`) `/branch` `/btw` `/budget` `/clear`
-`/commit` `/compact` `/compress` `/context` (`/tokens`) `/decompress` `/diff`
-`/editor` `/effort` `/exit` (`/quit`) `/export` `/fast` `/fork` `/generate`
-`/goal` `/grind` `/handoff` `/help` `/hooks` `/init` `/insights` `/instructions`
-`/keys` `/layout` `/loop` `/mcp` `/memory` `/model` `/new` `/newrule` `/notices`
-`/output-style` `/pane` `/permissions` `/play` `/pr` `/pruning` `/recompress`
-`/redo` `/rename` `/rendermode` `/review` `/rewind` `/rules`
-`/schedules` (`/schedule`) `/security-review` `/sendto` `/sessions`
+`/commit` `/compact` `/compress` `/context` (`/tokens`) `/copy` `/decompress`
+`/diff` `/editor` `/effort` `/exit` (`/quit`) `/export` `/fast` `/fork`
+`/generate` `/goal` `/grind` `/handoff` `/help` `/hooks` `/init` `/insights`
+`/instructions` `/keys` `/layout` `/loop` `/mcp` `/memory` `/model` `/new`
+`/newrule` `/notices` `/output-style` `/pane` `/permissions` `/play` `/pr`
+`/pruning` `/recompress` `/redo` `/rename` `/rendermode` `/review` `/rewind`
+`/rules` `/schedules` (`/schedule`) `/security-review` `/sendto` `/sessions`
 `/settings` (`/config`) `/share` `/shells` `/skills` `/status` `/sweep` `/theme`
 `/undo` `/usage` `/websearch` `/workflow`.
 <!-- commands:roster:end -->

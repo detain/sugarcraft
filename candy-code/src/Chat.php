@@ -10829,7 +10829,7 @@ final class Chat implements Model
      * only its 0600 shelf file, never the session under lock.
      */
     private const READ_ONLY_COMMANDS = [
-        'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share', 'export',
+        'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share', 'export', 'copy',
         'agent', 'agents', 'memory', 'bg', 'background', 'fork', 'branch', 'sessions', 'theme',
         'mcp', 'websearch', 'pane', 'layout', 'model', 'editor', 'settings', 'config', 'diff',
         'context', 'instructions', 'tokens', 'btw', 'play', 'hooks', 'effort', 'status', 'usage', 'fast',
@@ -12587,6 +12587,67 @@ final class Chat implements Model
         return [
             $this->withInputBuf(''),
             \SugarCraft\Code\Commands\EditorCommand::new()->cmd(self::commandArgument($text)),
+        ];
+    }
+
+    /**
+     * `/copy [n]` (C-TUI-3.a, GAP-UI-16): put the last assistant reply — or,
+     * with a number, its nth fenced code block counted from the end — on the
+     * clipboard without a mouse drag. Which text answers is the pure
+     * {@see \SugarCraft\Code\Commands\CopyCommand::select()}; this method
+     * only runs it and reports, on the two copy legs the drag-release at
+     * {@see handlePointer()} already rides: the OSC 52 write relayed through
+     * {@see relayWidgetCmd()} (so the frame's clip policy holds for typed
+     * copies too), batched with {@see SystemClipboard::copy()} for the hosts
+     * where OSC 52 is dropped (tmux default, write-off terminals).
+     *
+     * The answer is a {@see Message::notice()} — uiOnly, so the model is
+     * shown neither the copy nor its refusal. A copy is a clipboard write
+     * with no session effect either way, which is why the row sits in
+     * {@see READ_ONLY_COMMANDS}: a branch window you cannot type into is
+     * exactly when keyboard copy matters most.
+     *
+     * Client-only: the spec carries no host command, so serve reports
+     * `clientOnly` — the copy belongs to the terminal that typed it.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleCopyCommand(string $inputText): array
+    {
+        $argument = self::commandArgument($inputText);
+        $selection = \SugarCraft\Code\Commands\CopyCommand::select($this->history, $argument);
+
+        if ($selection['status'] !== \SugarCraft\Code\Commands\CopyCommand::STATUS_OK) {
+            $refusal = match ($selection['status']) {
+                \SugarCraft\Code\Commands\CopyCommand::STATUS_NO_REPLY => Lang::t('chat.copy.no_reply'),
+                \SugarCraft\Code\Commands\CopyCommand::STATUS_BAD_ARG => Lang::t('chat.copy.bad_arg', ['arg' => $argument]),
+                \SugarCraft\Code\Commands\CopyCommand::STATUS_NO_BLOCK => Lang::t('chat.copy.no_block'),
+                default => Lang::t('chat.copy.out_of_range', ['blocks' => $selection['blocks'], 'n' => $argument]),
+            };
+
+            return [$this->mutate([
+                'history' => [...$this->history, Message::notice($refusal)],
+                'inputBuf' => '',
+            ]), null];
+        }
+
+        $text = $selection['text'];
+
+        return [
+            $this->mutate([
+                'history' => [...$this->history, Message::notice(
+                    Lang::t('chat.copy.copied', ['chars' => mb_strlen($text, 'UTF-8')]),
+                )],
+                'inputBuf' => '',
+            ]),
+            Cmd::batch(
+                $this->relayWidgetCmd(Cmd::setClipboard($text)),
+                static function () use ($text): ?Msg {
+                    SystemClipboard::copy($text);
+
+                    return null;
+                },
+            ),
         ];
     }
 
