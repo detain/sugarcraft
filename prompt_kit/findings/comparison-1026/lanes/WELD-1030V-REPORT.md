@@ -58,4 +58,13 @@ DocFigureProseDriftTest 92T/4175A green; GlobDialectDifferentialTest
 13T/366A green (no corpus drift); BootstrapLaunchFormatConstantsTest NOT
 needed (no Bootstrap format numerals touched — verified pre-cure).
 Erratum bullet appended to the §4 C-TOOL-5.d mark in a follow-up commit.
-STEP 3.5 commit: pending.
+STEP 3.5 commit: 2d44af1b5 (2 test files + this report) + follow-up erratum commit daacc55bb (§4 C-TOOL-5.d mark bullet).
+
+## STEP 4 — protocol trio
+`php scripts/gen-protocol-schema.php --check` rc=0 "protocol schema: up to date" at daacc55bb. All three lanes carried zero protocol schema bytes as declared — no regen pair needed; web generated.ts/dist untouched.
+
+## STEP 5 — fold + absorption + prune
+- Fold commit 2da4913d5 (path-scoped run-state.json): welded 272->275 (assert count==len), weld_pending emptied, inflight minus the three (five foreign entries preserved), master_tip set with full pick/cure/DUR/gate map. FOLD LAW honored: folded from FRESHEST live disk copy — lead's uncommitted concurrent additions (anomalies_ledger LEAD-CONFAB-t372, closeout/fix/wave keys) preserved semantically via dict round-trip; disclosed reformat: ensure_ascii=False converted \\uXXXX escapes to raw UTF-8 (parse-identical values; welded_count grep-able). push_log untouched.
+- git cherry absorption: TOOL-5.d 3/3 '-', SES-8.b 4/4 '-', SEC-8.b 4/4 '-' (all 10 branch commits incl evidence picks, zero '+' so no conflict-resolution content to re-verify). Branch SHAs non-ancestors by design (cherry-pick weld; git-cherry patch-id is the house proof).
+- Pruned: worktrees /home/sites/cc-cmp-C-{TOOL-5.d,SES-8.b,SEC-8.b} (force — untracked lane-residue plan_comparison.md copies per never-stage law) + branches cc/C-{TOOL-5.d,SES-8.b,SEC-8.b}. Frozen 4 (C-TUI-5.c, C-TUI-3.d, CI-1030, C-TOOL-6.a) + C-CTX-5.d/C-CTX-6.e untouched. NEVER pushed.
+- FINAL master tip: 2da4913d5.
