@@ -443,6 +443,7 @@ candy-code/tests/Session/SessionEventsTableTest.php	0.520	7
 candy-code/tests/Cli/AppendSystemPromptTest.php	0.52	18
 candy-code/tests/Share/ShareStoreTest.php	0.519	14
 candy-code/tests/Providers/DocumentAttachmentWireTest.php	0.517	15
+candy-code/tests/Chat/IncognitoLaunchTest.php	0.469	5
 candy-code/tests/Chat/PrimaryAgentSwitchTest.php	0.51	11
 candy-code/tests/Server/WsUpgradeTest.php	0.505	7
 candy-code/tests/Agents/WorktreeManagerReleaseTest.php	0.501	6

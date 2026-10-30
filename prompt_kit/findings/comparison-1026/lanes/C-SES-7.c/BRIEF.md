@@ -1,0 +1,23 @@
+### C-SES-7.c — Incognito launches (`--incognito`)
+- item: C-SES-7 (sources: GAP-SES-N1)
+- kind: gap · effort M
+- approach:
+  - **The flag.** `--incognito` is parsed in `ArgvParser`/`ParsedArgs`, set through `LaunchContext::useIncognito()` from `bin/candy-code`, and refused together with `--continue` or `--resume`.
+  - **TUI launch.** `Bootstrap::openSession()`/`chat()` mint no row and pass `sessionStore: null` plus `incognito: true` to Chat.
+    - Chat skips the turn-end auto-memory, dream and flush passes (`Chat/Handlers/HandlesTurnCompletion.php`).
+    - `Renderer::renderStatusBar()` paints an "incognito" segment.
+  - **`-p` launch.** `-p --incognito` skips the AUT-2 persist block and the C-SES-1.a ledger append.
+  - **Serve.** Covered by C-SES-7.e (`session.create {ephemeral}`).
+- files.create: `candy-code/tests/Chat/IncognitoLaunchTest.php`
+- files.modify: `candy-code/src/Cli/ArgvParser.php` (flag), `candy-code/src/Cli/ParsedArgs.php` (field), `candy-code/bin/candy-code` (LaunchContext call), `candy-code/src/Cli/LaunchContext.php` (useIncognito()/incognito()), `candy-code/src/Cli/NonInteractive.php` (persist gate), `candy-code/src/Cli/Subcommands.php` (completion OPTIONS), `candy-code/src/Cli/Bootstrap.php` (openSession(), chat()), `candy-code/src/Chat.php` (ctor flag; the persistence/memory guards), `candy-code/src/Chat/Handlers/HandlesTurnCompletion.php` (memory passes), `candy-code/src/Renderer.php` (renderStatusBar()), `candy-code/lang/en.php` (`chat.incognito.*`, `cli.flag.incognito`), `candy-code/README.md` (the flags table and the Sessions section)
+- tests: create `candy-code/tests/Chat/IncognitoLaunchTest.php`: no session row, no transcript, no memory write after a turn; the status segment is present. Modify:
+  - `candy-code/tests/Cli/ArgvParserTest.php`: the flag, plus refusal with `--resume`;
+  - `candy-code/tests/Cli/LaunchFlagsTest.php`: the completion/help roster;
+  - `candy-code/tests/Cli/NonInteractiveSessionPersistenceTest.php`: incognito persists nothing.
+- docs/guards: README flags table; `LaunchFlagsTest`
+- serialized: [headless] [bootstrap:openSession,chat] [chat:ctor,persistence/memory guards] [renderer:renderStatusBar] [hot:candy-code/src/Chat/Handlers/HandlesTurnCompletion.php] [lang:chat.incognito] [docs:README.md]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: This is the widest wiring footprint in the area. Schedule it in a quiet wave for Chat, Bootstrap and Renderer. Memory reads stay on; only writes are off.
+
