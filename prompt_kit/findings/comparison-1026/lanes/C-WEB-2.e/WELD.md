@@ -23,3 +23,8 @@
 - §4 mark: `✅ c829e0954 C-WEB-2.e` at plan_comparison.md heading (proved from landed blob after commit).
 - Record commit stages ONLY: plan_comparison.md (path-scoped -o), lanes/C-WEB-2.e/{REPORT,REVIEW-1,WELD}.md, lanes/run-state.json (lead's bytes verbatim, never edited).
 - DUR rows carried to §7 GATE: tests/Host/Commands/HelpHostCommandTest.php (9T), tests/Host/Commands/BudgetHostCommandTest.php (8T); suite-figure +17T/+115A re-pin stays §7.
+
+## Steps 5-7 — record, proofs, prune
+- Mark proved from LANDED BLOB (git show 7eea48e5c:plan_comparison.md :3533). §3 W31 left OPEN (C-TUI-5.b in flight); NO push; ancestry master 2 ahead of origin (364a52876 -> c829e0954 -> 7eea48e5c), fast-forward clean.
+- Record commit 7eea48e5c name-only = exactly 5 paths (mark + REPORT/REVIEW-1/WELD + run-state verbatim: tree-diff 0 lines, lead's note_t612 + STRAY-NOTIFICATION-C-WEB-2f-t616 markers present in landed blob, 3 grep hits). Forbidden files untouched.
+- Absorption: git cherry master cc/C-WEB-2.e = `- 1ad91f2...` (patch-id absorbed); rev-list --count master..cc/C-WEB-2.e == 0. Then worktree remove + branch -d cc/C-WEB-2.e. C-TUI-3.g / C-TUI-5.b / FOREIGN-KEPT C-TOOL-6.a untouched.
