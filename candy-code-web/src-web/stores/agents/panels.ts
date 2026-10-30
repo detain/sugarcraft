@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { readJson, writeJson } from '../storage'
 
-export const PANELS = ['agents', 'todo', 'background', 'workflows', 'memory', 'rules', 'catalog', 'changes', 'files', 'context', 'generate'] as const
+export const PANELS = ['agents', 'todo', 'background', 'workflows', 'memory', 'rules', 'catalog', 'changes', 'files', 'context', 'generate', 'usage'] as const
 export type PanelName = (typeof PANELS)[number]
 
 export const PANEL_LABELS: Record<PanelName, string> = {
@@ -17,6 +17,7 @@ export const PANEL_LABELS: Record<PanelName, string> = {
   files: 'Files',
   context: 'Context',
   generate: 'Generate',
+  usage: 'Usage',
 }
 
 /**

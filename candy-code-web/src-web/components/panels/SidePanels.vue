@@ -15,6 +15,7 @@ import GeneratePanel from './GeneratePanel.vue'
 import MemoryPanel from './MemoryPanel.vue'
 import RulesPanel from './RulesPanel.vue'
 import TodoPanel from './TodoPanel.vue'
+import UsagePanel from './UsagePanel.vue'
 import WorkflowPanel from './WorkflowPanel.vue'
 
 /**
@@ -103,6 +104,7 @@ function onKey(event: KeyboardEvent): void {
       <FilesPanel v-else-if="panels.active === 'files' && sessionId" :session-id="sessionId" />
       <ContextPanel v-else-if="panels.active === 'context' && sessionId" :session-id="sessionId" />
       <GeneratePanel v-else-if="panels.active === 'generate' && sessionId" :session-id="sessionId" />
+      <UsagePanel v-else-if="panels.active === 'usage' && sessionId" :session-id="sessionId" />
     </div>
   </aside>
 </template>
