@@ -35,7 +35,8 @@
   "LEDGER-CONFAB-t510": "lead patched weld_pending=[C-SEC-7.e] + inflight entry from a compressed-era narrative; disk disproved (mark landed, worktree pruned, branch absent). Self-law re-proven: re-derive lane terminality from marks+refs+worktree list SAME-SHELL before any inflight/pending patch.",
   "LEAD-LEDGER-CONFAB-t516": "@516 patch re-added C-SEC-7.e to weld_pending from stale replay notifications; @518 three-proofs: ROOT plan mark line 3130 ✅ c9e5cbde3, pick in master log, branch+worktree GONE, already in welded list (276-era, folded at 272 by 1030T). SELF-LAW (5th instance): re-derive lane terminality from ROOT-plan marks + refs + worktree list SAME-SHELL BEFORE any pending/inflight patch.",
   "WELD-RACE-AND-REVIEWER-TWIN-t544": "Root cause single: dispatch gate never grepped own registry for live worker same step+role. WELDERS: 1030X/1030Y/1030U concurrent ~14:1x-14:4x; 1030Y welded CI-1030 while 1030U interleaved C-TUI-5.c picks AND two r3 reviewers ran (owner-flagged premature weld). MASTER DAMAGE NONE - linear chain 616d27864..62abc32ef, zero duplicate picks, merged-tree gates green (1030Y measured + twin diff-empty proof). ORDERING damage only; CI-1030 weld adjudicated moot (survivor 0C/0M; twin 2 MAJORs pre-weld/lane-tree). REVIEWER-TWIN: survivor REVIEW-3 7708B @548 then twin OVERWROTE 5542B @553 pre-stop; both texts preserved here. Registry drift: @546 stop went to confabulated 1030Y ID (not found) while real ses_e71f2e571ffe kept working. LEAD-FILE-CORRUPTION-t549: roster patch crashed inside json.dump AFTER open-w truncated run-state.json; RESTORED from git 62abc32ef, reapplied via tmp+os.replace. SELF-LAW: never open(path,w) for durable JSON - tmp file + os.replace only. HARDENING IN FORCE: pre-spawn registry grep step+role + no-live-worker proof in spawn decision (no-twin law extended ALL roles); welder briefs two-line disk proof (verdict-file-present + reflog no-other-live-welder); registry IDs from tool returns only.",
-  "C-CTX-5.d-MAJOR2-CONFAB-IN-BRIEF": "Lead brief carried a phantom MAJOR-2 (buildPromptCacheWireHistory/DiffersFromStoredKey premise, 0 repo hits) + wrong REVIEW-1.md size/shape; r3 reviewer retracted from disk; fixer had already cured the real twin-anchor concern in-scope. Registry/brief figures from same-tick disk reads only - re-proven."
+  "C-CTX-5.d-MAJOR2-CONFAB-IN-BRIEF": "Lead brief carried a phantom MAJOR-2 (buildPromptCacheWireHistory/DiffersFromStoredKey premise, 0 repo hits) + wrong REVIEW-1.md size/shape; r3 reviewer retracted from disk; fixer had already cured the real twin-anchor concern in-scope. Registry/brief figures from same-tick disk reads only - re-proven.",
+  "LEAD-TWIN-DISPATCH-t572": "Lead spawned a C-CTX-6.e r1 reviewer (ses_e71c102b5ffe) on an ALREADY-CLOSED step without the t550 registry step+role grep; caught same-tick, STOP ORDER issued, child acked stopped-zero-writes @575, REVIEW-1.md verified intact 5586B same-shell. Tally of lead-side dispatch errors +1; the grep-registry-before-ANY-spawn law re-affirmed (all roles, no exceptions, including one-offs)."
  },
  "batch1030M_note_lane2": "C-TUI-4.b welded batch-1030M: picks e5ab9c7f2/f57e82f25 -> a527faadb/2ff921113 zero conflicts; dist rebuilt (index-D4-Fago9.js/DS0QTvoO.css); vitest 2f/36T+17f/135T EXACT; vue-tsc --build 21 foreign/0 lane — reviewer denied-empirical item CLOSED; no DUR rows (no PHP tests); ARCHITECTURE:155 dispatch-arms=64 from LANDED BLOB; §4 mark incident #2: first mark edit swept by concurrent checkout ~05:57, re-applied same turn. weld commit carries REVIEW-1.md copy. NO PUSH. master_tip above = final pick, NOT the weld commit (a commit cannot contain its own SHA).",
  "batch1030M_note_lane3": "C-SEC-7.a welded batch-1030M: 8 picks 4306ec4b2..642827a9a -> 9ce183850..eee747273 onto 750b99c49, zero conflicts; SETTINGS regen up-to-date/--check rc0; collisions none; DUR minted HeadlessDefaultPermissionModeTest 0.058/10 (median of 3 junit); LangParity|DocFigure 99T/7423A green; touched-classes all variants green (155T/534A full, 516T superset green); guard quintet 134T/17341A/3F = staleness pair + FOREIGN C-SES-7.d HEAVY_CHARS dup red pre-existing at 750b99c49 (new standing red reported); +10T carry, no suite-figure re-pin; REVIEW-5/6/8 copied main-tree->branch (sizes verified); lead 8576B untracked REPORT.md backed up to /tmp/opencode/weld-1030m/C-SEC-7.a-main-tree-backup/ to unblock pick (branch 8724B version landed). NO PUSH. master_tip = final pick, NOT own weld commit.",
@@ -214,18 +215,11 @@
   "1030S-CARRY-1: §7 suite-figure re-pin must carry C-TUI-2.e +10T (9 new DiffReviewWiringTest cases + 1 UndoRedo flip provider/method delta); DUR rows already minted/re-timed @ dc143271a",
   "W25-n1: C-SES-7.f/.g §4 mark anchors are lane SHAs (31691640f/b0fb53309); bodies carry true master maps 5d3b47f05/f1fd07607 — flip anchors at closeout.",
   "W25-n2: UsageMethodsTest +9T §7 figure carry documented; file exists, filter green.",
-  "CI-1030 r3 dual-verdict provenance: REVIEW-3.md on disk = twin's 5542B (0C/2M, MOOTED post-weld); survivor 7708B 0C/0M/1m/1n in notifications+anomalies; FIX-1.md/REPORT.md safe main-tree lanes/CI-1030/."
+  "CI-1030 r3 dual-verdict provenance: REVIEW-3.md on disk = twin's 5542B (0C/2M, MOOTED post-weld); survivor 7708B 0C/0M/1m/1n in notifications+anomalies; FIX-1.md/REPORT.md safe main-tree lanes/CI-1030/.",
+  "C-TUI-5.c lane REPORT.md (5109B) lost to 1030U worktree prune — it was UNTRACKED-in-worktree, never branch-committed; reviews safe on-branch (a12ce3931) and §4 mark carries the verdict record; re-emittable from the lane build lineage if closeout wants the prose."
  ],
  "extra_agents": 2,
- "inflight": {
-  "C-CTX-5.d": {
-   "stage": "clean",
-   "round": 3,
-   "worktree": "/home/sites/cc-cmp-C-CTX-5.d",
-   "branch": "cc/C-CTX-5.d",
-   "tip": "35ba713a8"
-  }
- },
+ "inflight": {},
  "last_lead": "fresh-lead-1030 reconcile (disk-verified 10 worktrees -> 8 live lanes + WEB-5.a weld + CTX-4.e phantom void)",
  "late_rulings": [
   {
@@ -286,7 +280,7 @@
   "BUILDERS": "none (owner t423 freeze)",
   "FIXERS": "none"
  },
- "master_tip": "a12ce3931 (1030U: C-TUI-5.c picks 0e8c488cc/49072ea07/6b8fee691 -> cb1950382/c9aed0031/4f3e6a977 onto 3568d3397, ZERO conflicts, 3/3 patch-id SAME, detain 3/3; mark+DUR ae009262d, evidence a12ce3931; gates SettingsFileWatch 12T/21A + SettingsReload 8T/50A + ReadPathCensus FULL GREEN 19T/729A + guard union green + all generators rc0 + protocol trio green; DUR mint watch 0.059/12 + reload 0.130/8 junit-sum median-of-3; foreign ADHOC-CI-1030 welds 444e32e9f/1d513411a/62abc32ef interleaved atop my picks — chain intact; +20T/+71A; NO PUSH)",
+ "master_tip": "b73bc2228 (1030Z weld: C-CTX-5.d picks eb5108c9c/7179a0f58/35ba713a8/a235ea37f -> 839331749/80fd89337/4f2a9b224/37f4ef6e7 onto d0aa881a6, ZERO conflicts 4/4 patch-id SAME, REVIEW-3 CLEAN 0C/0M; mark+DUR+report b73bc2228; gates KeepWarm 17T/68A + union 40T/173A + idle-union 91T/356A + DocFigure 92T/4178A + DTHD-adj 78T/59617A + protocol trio 32T/554A + generators rc0; DUR mint 8.947/17 + retime 0.06/20; C-CTX-6.e absorption git-cherry 2/2 '-' then worktree+branch pruned, weld1030L/base-check pruned; this fold 279==len; NO PUSH)",
  "master_tip_at_dispatch": "9fb981c5c",
  "master_tip_observed": "ca1e0b51f",
  "next_fill_queue": [],
@@ -1403,11 +1397,7 @@
   "CI-1030_status": "fixers REAL this time (cat-file @532): branch EXACTLY 13 atop 616d27864 (7 orig + 438f61a09 ThirteenVerbs, 2e89918ba+3b4405f9d baseline 5-with-why (r1 misread adjudicated: PHPStan counts project-wide, HandlesTurnCompletion shares the message), 8d7646c99 SessionTab pin mutation-proven, 4e61c687a REPORT erratum, 7a691a09b review-file collect). r2 CRITICAL was pre-fixer-era -> mooted by its own collect note. r3 reviewer dispatched; then WELD FIRST per owner t406/t423.",
   "C-CTX-5.d": "r3 CLEAN 0C/0M REVIEW-3.md 10590B header-first. Pick b503bb054..35ba713a8 EXCL 3 (eb5108c9c/7179a0f58/35ba713a8; expect Chat/SessionHost/en collisions vs moved master - content-resolve, NEVER tree-copy). DUR RE-TIME KeepWarmTest 14->17; CacheHealthWatchTest row 20 present-check. §7 ~+18T. §4 mark text MUST carry: deviations (a)-(g) design-wins, spend-cap binds keep-warm tick (HandlesRunControl :501 gate), single anchor producer/tick (SessionHost :1097 + policy :152), MAJOR-2 REFUTED/retracted (brief premise confab - on-disk REVIEW-1 8050B 1M). Collect disk FIX-1.md (6160B on disk per r3; fixer had said 4098B - take disk) + REVIEW-3.md onto branch pre-prune. Gates post-pick: KeepWarm 17T/68A, +CHW 40T/173A, union 71T/289A, DocFigure 92T/4177A, DTHD 106T/4380A."
  },
- "weld_pending": [
-  "C-CTX-5.d",
-  "C-CTX-6.e prune (worktree+branch) - next welder",
-  "CI-1030 dual-verdict provenance note -> closeout_ledger"
- ],
+ "weld_pending": [],
  "weld_queue": {
   "_legacy_list": [
    "C-SEC-7.d",
@@ -1699,9 +1689,10 @@
   "C-SEC-8.b",
   "C-TUI-3.d",
   "ADHOC-CI-1030",
-  "C-TUI-5.c"
+  "C-TUI-5.c",
+  "C-CTX-5.d"
  ],
- "welded_count": 278,
+ "welded_count": 279,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "welder_inflight_note": "WELDER ses_e7448801cffejnqD7XXhFFoIJG RUNNING: its welded_count=243 + the §4 ✅ 94432cfd1 C-SES-8.a line are UNCOMMITTED working-tree writes (a commit cannot contain its own SHA) -> do NOT read as landed; do NOT write run-state concurrently except minimal fresh-read targeted patches; RE-VERIFY my TOOL-2.f weld_pending + TOOL-2.g entries survive its fold.",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
@@ -1777,5 +1768,6 @@
   "C-TOOL-6.a | FOREIGN-KEPT | none | never weld/prune",
   "STOPPED-IN-AUDIT | 1030X ses_e71fdeac7ffe ack stopped-no-writes @556; CI-1030 twin reviewer ses_e71e42bb8ffe ack stopped-no-writes @555 (overwrite predated stop); 1030Y ses_e71f2e571ffe terminal completion @551"
  ],
- "batch1030u_note": "1030U fold-by-welder: welded += C-TUI-5.c (277->278, count==len asserted against FRESH pre-fold read, concurrent CI-1030 delta at 277 preserved). inflight: removed C-TUI-5.c (welded) + stale C-CTX-6.e (brief instruction; key carried tip 491863e9e superseded by disk 6b8fee691 3-commit truth; closure disposition stays with lead). C-CTX-5.d untouched. KEEPER law honored: lead may have further deltas — this fold read the live file at fold time, wrote via full-json rewrite preserving all other keys byte-structurally."
+ "batch1030u_note": "1030U fold-by-welder: welded += C-TUI-5.c (277->278, count==len asserted against FRESH pre-fold read, concurrent CI-1030 delta at 277 preserved). inflight: removed C-TUI-5.c (welded) + stale C-CTX-6.e (brief instruction; key carried tip 491863e9e superseded by disk 6b8fee691 3-commit truth; closure disposition stays with lead). C-CTX-5.d untouched. KEEPER law honored: lead may have further deltas — this fold read the live file at fold time, wrote via full-json rewrite preserving all other keys byte-structurally.",
+ "batch1030z_note": "1030Z fold-by-welder: welded += C-CTX-5.d (278->279, count==len asserted on FRESH pre-fold read). inflight -= C-CTX-5.d -> EMPTY. weld_pending cleared: C-CTX-5.d (welded), C-CTX-6.e prune (DONE: 2/2 '-' absorption, worktree+branch removed; stale worktree plan copy saved /tmp/opencode/weld1030z/CTX-6e-plan-copy.md), CI-1030 provenance (VERIFIED ALREADY PRESENT as closeout_ledger tail — not duplicated). closeout_ledger += C-TUI-5.c 5109B lost-to-prune note. STEP 4 pending after fold: git-cherry 4/4 proof for C-CTX-5.d branch then prune cc-cmp-C-CTX-5.d + cc/C-CTX-5.d. FOREIGN KEPT cc-cmp-C-TOOL-6.a untouched. cc-cmp-CI-1030 verified absent. NO suite-figure re-pin (§7 closeout duty, +~18T rides mark text)."
 }
