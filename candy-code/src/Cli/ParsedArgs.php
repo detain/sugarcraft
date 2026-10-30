@@ -137,7 +137,12 @@ final readonly class ParsedArgs
             '--archived' => false,
             '--children' => false,
             '--force' => false,
+            // C-SES-7.b: value flags of `session import`. Which action a flag
+            // means something to is decided by Subcommands::SESSION_ACTION_FLAGS,
+            // not here — the parser only admits them after the verb.
+            '--format' => true,
             '--limit' => true,
+            '--name' => true,
             '--with-children' => false,
         ],
     ];

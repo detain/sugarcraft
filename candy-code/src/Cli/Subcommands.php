@@ -22,6 +22,10 @@ use SugarCraft\Code\Support\Keychain;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Tools\BuiltIn\Bash;
 use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
+use SugarCraft\Code\Session\Import\ImportFormat;
+use SugarCraft\Code\Session\Import\ImportRefusedException;
+use SugarCraft\Code\Session\Import\SessionImportLedger;
+use SugarCraft\Code\Session\Import\SessionImporter;
 use SugarCraft\Code\Session\SessionQuery;
 use SugarCraft\Code\Session\SessionResolver;
 use SugarCraft\Code\Session\SessionRow;
@@ -1449,6 +1453,7 @@ final class Subcommands
         return match ($verb) {
             'list' => self::sessionList($args),
             'show' => self::sessionShow($args),
+            'import' => self::sessionImport($args),
             'rename' => self::sessionRename($args),
             'delete' => self::sessionDelete($args),
             default => self::sessionFlag($args, $verb),
@@ -1474,6 +1479,12 @@ final class Subcommands
     private const SESSION_ACTION_FLAGS = [
         'list' => ['--all', '--archived', '--children', '--limit'],
         'show' => [],
+        // C-SES-7.b: `--format` picks the reader (default `auto`, which probes
+        // the bytes), `--name` titles the minted row, and `--force` is the
+        // same ISS-079 live-lock crossing every mutating sibling below speaks
+        // — import mutates whenever the file has been imported before, so it
+        // carries the flag even for a first run that only ever creates.
+        'import' => ['--format', '--name', '--force'],
         // --force (ISS-079): act on the row even while another candy-code
         // window has it open. The gate is live-flock, not the stale-prone
         // pid file, so refusing without --force is never a false alarm about
@@ -1746,6 +1757,115 @@ final class Subcommands
                 'unarchive' => $changed ? Lang::t('cli.session.flag.unarchived', $id) : Lang::t('cli.session.flag.already_unarchived', $id),
             } . "\n";
         }
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * `session import <file> [--format auto|…] [--name <title>] [--force]`.
+     *
+     * C-SES-7.b wraps {@see \SugarCraft\Code\Session\Import\SessionImporter}
+     * (C-SES-7.a) with the verb-side doors this class owns. A missing operand
+     * or a `--format` word no reader knows rides the usage channel (exit 2:
+     * nothing was attempted, the same grammar every sibling door uses). A
+     * transcript the importer itself refuses — unreadable bytes, a shape it
+     * cannot parse, a source that shrank under its own ledger — rides exit 1
+     * with an `import-refused` JSON type, because the store WAS opened and
+     * the import attempted and refused: the not-found channel's distinction,
+     * applied to the source file instead of a target row. The live lock of a
+     * session this file already feeds is asked through the same
+     * {@see refuseLiveLockedSession()} the mutating siblings use, so
+     * `--force` means one thing across the whole verb; the ask runs BEFORE
+     * the import because a delta appended under a live window is exactly the
+     * silent undo ISS-079 refuses elsewhere.
+     */
+    private static function sessionImport(ParsedArgs $args): int
+    {
+        $path = $args->subcommandArgs[1] ?? null;
+        if ($path === null || $path === '') {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.session.import.no_file'),
+                $args->outputFormat,
+                Lang::t('cli.session.import.usage'),
+            );
+        }
+        if (\count($args->subcommandArgs) > 2) {
+            return self::rejectSessionOperand('import', $args->subcommandArgs[2], $args);
+        }
+
+        $format = null;
+        if (isset($args->subcommandFlags['--format'])) {
+            $spelled = (string) $args->subcommandFlags['--format'];
+            if ($spelled !== 'auto') {
+                $format = ImportFormat::tryFrom($spelled);
+                if ($format === null) {
+                    return NonInteractive::failUsage(
+                        'candy-code: ' . Lang::t('cli.session.import.bad_format', ['format' => $spelled]),
+                        $args->outputFormat,
+                        Lang::t('cli.session.import.formats', ['formats' => 'auto, ' . \implode(
+                            ', ',
+                            \array_map(static fn(ImportFormat $f): string => $f->value, ImportFormat::cases()),
+                        )]),
+                    );
+                }
+            }
+        }
+
+        $store = Bootstrap::sessionStore();
+
+        // The ledger is the only way this verb knows a file has a session
+        // already — a first import creates, and creation cannot cross a lock
+        // that does not exist yet. The lookup key is the importer's own law
+        // (`realpath ?: path`), so verb and ledger read the same identity.
+        $known = SessionImportLedger::atPath($store->path())->lookup(\realpath($path) ?: $path);
+        if ($known !== null) {
+            $rows = SessionResolver::matches($store, $known['session_id']);
+            if ($rows !== []) {
+                $refusal = self::refuseLiveLockedSession($rows[0], $store, $args);
+                if ($refusal !== null) {
+                    return $refusal;
+                }
+            }
+        }
+
+        $name = isset($args->subcommandFlags['--name'])
+            ? ((string) $args->subcommandFlags['--name'] ?: null)
+            : null;
+
+        try {
+            $imported = SessionImporter::new()->importFile($store, $path, $format, $name);
+        } catch (ImportRefusedException $e) {
+            \fwrite(\STDERR, 'candy-code: ' . $e->getMessage() . "\n");
+            if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
+                self::emitDocument([
+                    'result' => null,
+                    'error' => ['type' => 'import-refused', 'message' => $e->getMessage()],
+                ]);
+            }
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
+            self::emitDocument(['result' => [
+                'imported' => $imported->sessionId,
+                'format' => $imported->format->value,
+                'items' => $imported->items,
+                'appended' => $imported->appended,
+                'digest' => $imported->digest,
+                'name' => $imported->title,
+            ]]);
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        echo Lang::t('cli.session.import.done', [
+            'items' => $imported->items,
+            'format' => $imported->format->label(),
+            'id' => $imported->sessionId,
+            'appended' => $imported->appended,
+        ]) . "\n";
+        echo Lang::t('cli.session.import.resume_hint', ['id' => $imported->sessionId]) . "\n";
 
         return NonInteractive::EXIT_OK;
     }
@@ -4309,7 +4429,9 @@ final class Subcommands
      * @var array<string, list<string>>
      */
     private const SUBCOMMAND_ACTIONS = [
-        'session' => ['list', 'show', 'rename', 'delete', 'pin', 'unpin', 'archive', 'unarchive'],
+        // C-SES-7.b: 'import' sits with the verbs that CREATE rows — it never
+        // needs a <target>, its operand is a transcript file.
+        'session' => ['list', 'show', 'import', 'rename', 'delete', 'pin', 'unpin', 'archive', 'unarchive'],
         'bundles' => ['list', 'install', 'marketplace', 'update', 'search', 'recommend'],
         'mcp' => ['list', 'auth', 'import', 'trust'],
         'serve' => Serve::ACTIONS,
