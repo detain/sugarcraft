@@ -225,11 +225,11 @@
  "extra_agents": 2,
  "inflight": {
   "C-SES-8.g": {
-   "stage": "review",
-   "round": 0,
+   "stage": "clean",
+   "round": 2,
    "worktree": "/home/sites/cc-cmp-C-SES-8.g",
    "branch": "cc/C-SES-8.g",
-   "tip": "4202b510e"
+   "tip": "55d425d31"
   },
   "C-TUI-5.a": {
    "stage": "fix",
@@ -309,7 +309,7 @@
   "BUILDERS": "none (owner t423 freeze)",
   "FIXERS": "none"
  },
- "master_tip": "c013d930d",
+ "master_tip": "2dd2cc74c",
  "master_tip_at_dispatch": "9fb981c5c",
  "master_tip_observed": "ca1e0b51f",
  "next_fill_queue": [],
@@ -681,8 +681,9 @@
   },
   "W26": {
    "round": 3,
-   "verdict": "CLEAN",
-   "next": "weld-close QUEUED for welder-2 (after ses_e715d37a3ffe lands): \u00a73 flip \u2705W26 + waves_closed += 26 + fold + push-if-behind"
+   "verdict": "r3-CLEAN (0C/0M/0m/1NIT; lanes/W26/WAVE-REVIEW-3.md)",
+   "next": "CLOSED by W26 wave-close weld 2026-10-30: sec.3 flip 2dd2cc74c; gates re-verified at cf1078d45 (RuntimeNoticeSink 69T/6523A OK +2A wobble vs 6521A, PaletteSupersetDispatchTest 7T/272A OK, DTHD|GlobDialect 27T/569A OK, doc-drift guards 154T/45432A OK, plain-pipe cwd=candy-code)",
+   "closed": true
   },
   "26": {
    "round": 2,
@@ -803,6 +804,7 @@
   23,
   24,
   25,
+  26,
   29,
   32
  ],
@@ -1801,7 +1803,9 @@
    "w17_w20": "scheduler --next --slots 10 is sole pick authority; W17 members listed plan \u00a73 line 153; nothing blocked (blocked=[]; C-AGT-5.b/5.c chain resolved via \u00a76.3 (a) ROOT-SCOPE ruling stamped 8fd05587a, welded 934488495 + ff23948e7)"
   },
   "scope": "owner directive @197@/@1108@: W10 loop + W11-W15 fully welded + wave loops closed; W16 band finished + welded under this lead per owner extension; W17+ builders NEVER started",
-  "this_run": "welded 100 -> 161; waves closed W10,W11,W12,W13,W14,W15 (W14 96d36db45, W15 15046565a)"
+  "this_run": "welded 100 -> 161; waves closed W10,W11,W12,W13,W14,W15 (W14 96d36db45, W15 15046565a)",
+  "layered_settings_legs_erratum": "C-SES-8.g r2 LEAD ERRATUM: foreign LayeredSettingsTest 1F is TWO legs - keepWarm AND redactToolOutput (both LAYERED_KEYS at base :546/:562, master :546/:562; absent from test literal at base/4202b510e/tip). FIX-1.md \"ONLY keepWarm\" incomplete; s7 closeout must cure BOTH or test stays red.",
+  "worktree_completion_red": "CONFIRMED live on master cf1078d45: testEveryVerbTheParserAcceptsIsOfferedByAllThreeCompletions - --worktree parser-accepted, completion-unoffered (bin/candy-code:220). Predates lanes; welds disclosed passing it. Cure route: seed into W27 wave-loop r1 findings (after C-SES-8.g weld) as master-direct fix."
  },
  "push_log": [
   "t303: pushed 6fb38eef4 (milestone: 1030S C-TUI-2.e weld batch, verified per ruling t159)",
@@ -1847,7 +1851,7 @@
   "C-CTX-6.e|welder": "ses_e71ac801cffeFgizEbgkozwy8B",
   "W29|wave-reviewer-r1": "ses_e71ac801bffeKxFIDWbDVhtcxQ",
   "C-TUI-5.e|builder": "ses_e71a75e5cfferAp78mklerT5pV",
-  "C-WEB-2.a|builder": "ses_e71a75e5bffei3hWuz97qnXAAp",
+  "C-WEB-2.a|builder": "DONE ses_e71a75e5bffei3hWuz97qnXAAp tip 48ee2233a -> weld 3c17c7c23, branch+worktree pruned (cherry -)",
   "W26|wave-reviewer-r2": "ses_e71a75e5affd0o0QnJtznGrIKR",
   "W29-m1": "fixer | DONE | ses_e71a04b3fffe3LbMP5btexG3Im | c013d930d master (live-red MAJOR cured 2->3 + comment flip) | FOREGROUND-LAW-LAPSE noted",
   "W25-r2": "wave-reviewer | DONE | ses_e71a04b3effe6WeqAJbpyBVCiw | FINDINGS 0C/0M/1m/1n both \u00a77-carries (UsageMethodsTest DUR row absent-verified; NIT figures) | close W25 with carries",
@@ -1868,7 +1872,8 @@
   "C-SES-8.g-fixer": "live ses_e715e394fffeux7q6TAMUwfrV9 (lane worktree, round1)",
   "welder-1": "live ses_e715d37a3ffeBhyA2t20qAVrSs (C-WEB-2.a lane weld + W25/29/32 close + evidence sweep + PUSH)",
   "C-TUI-5.a": "r1 FINDINGS 0C/0M/1m/1n; fixer dispatching; r1 reviewer ses_e716ee5c1ffeflxQwuQsvYT4in DONE",
-  "C-SES-8.g": "r1 fix DONE 55d425d31; r2 reviewer live ses_e71573162ffeTc6oraJaEi5Gc4"
+  "C-SES-8.g": "r1 fix DONE 55d425d31; r2 reviewer live ses_e71573162ffeTc6oraJaEi5Gc4",
+  "welder-1|C-WEB-2.a+W25/29/32": "DONE ses_e715d37a3ffeBhyA2t20qAVrSs master==origin==cf1078d45"
  },
  "note_t588": "W29 r2 CLEAN disk-verified (WAVE-REVIEW-2.md 5841B). Main-tree M PaletteSupersetDispatchTest.php = W26-m2 fixer live work-in-progress (expected, master-direct).",
  "note_t589": "C-WEB-2.a r1 CLEAN (REVIEW-1.md 5576B disk-verified). parked-clean, zero slots. live: C-TUI-5.e builder(resume2), C-SES-8.g reviewer, C-TUI-5.a reviewer, W26-m2 fixer.",
