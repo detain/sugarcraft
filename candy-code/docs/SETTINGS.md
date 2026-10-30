@@ -1611,16 +1611,25 @@ changes all of them from the next turn. A trusted project's
 roster — `maxOutputTokens`, for one, is a key no project file may set. The
 `live` badge describes a save through the settings view — a save drops the
 values the session holds in memory, where a hand edit rewrites only the file.
-For everything outside the `next turn` roster the hand edit waits for the next
-launch: the values are consumed once while `Bootstrap` builds the session —
-`disabledSkills` is read
-by `Bootstrap::skillRegistry()` at launch (and again on a Ctrl+P skill
-switch), `theme` and `provider` when the `Chat` is constructed, `models` whenever a backend is built for a provider (at launch and on a `/model` switch), `disabledRules` when the launch seeds the session's `RulesState`
+The hand edit is not left behind: a settings-file watch fingerprints the very
+files the session reads — `config.json`, `settings.json` and the trusted
+project files — at the end of every turn, and feeds any key whose merged value
+moved through the same `Chat::applySettings()` a save uses. A hand edit to a
+`live` key — `theme` and `provider` among them — takes effect by the next turn;
+a key that rebuilds the engine waits for the running turn to end, exactly as on
+a save, and "`/settings reload`" runs the same check on the spot instead of
+waiting for the boundary, saying so when nothing moved. Still waiting for the
+next launch is the `restart` roster: the values consumed once while `Bootstrap`
+builds the session — `disabledSkills` is read by `Bootstrap::skillRegistry()`
+at launch (and again on a Ctrl+P skill switch), `models` whenever a backend is
+built for a provider (at launch and on a `/model` switch), `disabledRules` when
+the launch seeds the session's `RulesState`
 — a mid-session edit to that file waits for a restart like the rest, though a
 `/rules` toggle flips the seeded set live, from the next turn onward — and
-`allowedTools`/`disabledTools` when the tool set is assembled.
-Changing any of those means restarting — with one exception, `keybindings`,
-which carries its own word: see "`/keys reload`" below.
+`allowedTools`/`disabledTools` when the tool set is assembled. The watch
+notices those keys too; its toast counts them among the settings that need a
+restart instead of applying them. And one key keeps its own word: `keybindings`
+carries the `reload` badge and waits for "`/keys reload`" below.
 
 The **trust list is not**: it is frozen for the life of the process, so a
 project cannot become trusted mid-session. The asymmetry is deliberate — you

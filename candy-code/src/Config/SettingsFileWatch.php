@@ -19,17 +19,21 @@ use SugarCraft\Code\Cli\LaunchContext;
  * This class answers one question cheaply at each settle: "did anything the
  * merged settings would now read differently actually change on disk?"
  *
- * The check is a ladder. Every watched path is stat-compared (mtime + size +
- * existence); when nothing moved — the overwhelmingly common case — that is
- * all it costs. A path whose stat moved is re-read and hashed; when every
- * hash matches its recorded fingerprint the stat is refreshed and the answer
- * is still none (an editor that touches a file without changing it, a
- * `git checkout` that rewrites identical bytes). Only a changed HASH triggers
- * the expensive step: re-derive the merged view exactly as the launch does
- * ({@see Bootstrap::readUserConfig()}) and diff it key by key against the
- * previously observed merge. File churn that does not move the merge — a
- * non-layered key edited, a project file the trust gate refuses — is caught
- * here and still answers none.
+ * The check is a ladder, and the cheap rung is the file's CONTENT hash: every
+ * watched path is small JSON that the launch machinery reads every turn
+ * anyway, so hashing them at a settle costs what a next-turn read already
+ * costs, and no stat shortcut is honest enough to keep. A stat (mtime + size)
+ * gate can sail straight over a same-second, same-size rewrite — `4` edited
+ * to `5` within the recorded second leaves both fields untouched, and the
+ * fingerprint would stay blind to that edit forever, not just until the next
+ * touch. Existence is a hash too: a file that is not there hashes as ''.
+ * Only a moved hash triggers the expensive rung: re-derive the merged view
+ * exactly as the launch does ({@see Bootstrap::readUserConfig()}) and diff it
+ * key by key against the previously observed merge. Churn that does not move
+ * the merge — an editor that touches a file without changing it, a `git
+ * checkout` that rewrites identical bytes, a non-layered key edited, a
+ * project file the trust gate refuses — is caught at the hash rung and still
+ * answers none.
  *
  * Two deliberate behaviours protect the running session:
  *
@@ -53,9 +57,9 @@ use SugarCraft\Code\Cli\LaunchContext;
 final class SettingsFileWatch
 {
     /**
-     * Fingerprint per watched path: existence, mtime, size, content hash.
+     * Content fingerprint per watched path ('' for a file that is not there).
      *
-     * @var array<string, array{exists: bool, mtime: int, size: int, hash: string}>
+     * @var array<string, string>
      */
     private static array $fingerprint = [];
 
@@ -69,8 +73,8 @@ final class SettingsFileWatch
     /**
      * The settings keys whose merged value changed since the last observation.
      *
-     * With `$force` the stat and hash gates are skipped and the merge is
-     * always recomputed — the `/settings reload` command's shape of the same
+     * With `$force` the hash gate is skipped and the merge is always
+     * recomputed — the `/settings reload` command's shape of the same
      * question. An unchanged merge still answers `[]` under force: the force
      * buys "look now", never "report noise".
      *
@@ -79,7 +83,6 @@ final class SettingsFileWatch
     public static function changedKeys(bool $force = false): array
     {
         $files = self::watchedFiles();
-        \clearstatcache();
 
         $seen = \array_keys($files);
         \sort($seen);
@@ -91,25 +94,13 @@ final class SettingsFileWatch
             return [];
         }
 
-        $statMoved = $force;
-        foreach ($files as $path) {
-            if (!self::statMatches($path)) {
-                $statMoved = true;
-                break;
-            }
-        }
-        if (!$statMoved) {
-            return [];
-        }
-
-        $hashMoved = false;
-        foreach ($files as $path) {
-            $fingerprint = self::$fingerprint[$path];
+        $hashMoved = $force;
+        foreach ($seen as $path) {
             $hash = self::hashOf($path);
-            if ($hash !== $fingerprint['hash']) {
+            if ($hash !== self::$fingerprint[$path]) {
                 $hashMoved = true;
             }
-            self::$fingerprint[$path] = self::statOf($path, $hash);
+            self::$fingerprint[$path] = $hash;
         }
         if (!$hashMoved) {
             return [];
@@ -186,52 +177,19 @@ final class SettingsFileWatch
      */
     private static function seed(array $files): void
     {
-        \clearstatcache();
         $fingerprint = [];
         foreach (\array_keys($files) as $path) {
-            $fingerprint[$path] = self::statOf($path, self::hashOf($path));
+            $fingerprint[$path] = self::hashOf($path);
         }
         self::$fingerprint = $fingerprint;
         self::$mergedSnapshot = Bootstrap::readUserConfig();
     }
 
-    /** Whether a path's current stat still matches its recorded fingerprint. */
-    private static function statMatches(string $path): bool
-    {
-        $recorded = self::$fingerprint[$path];
-        $mtime = @\filemtime($path);
-        $size = $mtime === false ? false : @\filesize($path);
-
-        if ($recorded['exists'] !== ($mtime !== false)) {
-            return false;
-        }
-        if (!$recorded['exists']) {
-            return true;
-        }
-
-        return $recorded['mtime'] === $mtime && $recorded['size'] === $size;
-    }
-
     /**
-     * The current stat triple for a path, paired with a content hash already
-     * taken ({@see self::hashOf()} reads through the gazed sink vocabulary,
-     * the census row for this file names the shape).
-     *
-     * @return array{exists: bool, mtime: int, size: int, hash: string}
+     * The content fingerprint of a path: '' for a file that is not there.
+     * Reads through the gazed sink vocabulary (file_get_contents), the census
+     * row for this file names the shape.
      */
-    private static function statOf(string $path, string $hash): array
-    {
-        $mtime = @\filemtime($path);
-
-        return [
-            'exists' => $mtime !== false,
-            'mtime' => $mtime === false ? -1 : (int) $mtime,
-            'size' => $mtime === false ? -1 : (int) @\filesize($path),
-            'hash' => $hash,
-        ];
-    }
-
-    /** The content fingerprint of a path: '' for a file that is not there. */
     private static function hashOf(string $path): string
     {
         $contents = @\file_get_contents($path);

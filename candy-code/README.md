@@ -649,7 +649,7 @@ By task (every command, with its arguments, is in
 | Context | `/context`, `/compact [--self] [focus]`, `/sweep [n]`, `/pruning [mode]`, `/compress [focus]`, `/decompress [bN]`, `/recompress [bN]` |
 | Working | `/goal <condition>`, `/grind <condition>`, `/btw <question>`, `/init [focus]`, `/editor [text]`, `/websearch <query>`, `/workflow …` |
 | Agents | `/agents [name\|run id]` |
-| Configuration | `/settings [search]`, `/model [provider [model]]`, `/theme`, `/permissions [mode <name> \| revoke <n\|all>]`, `/rules [name]`, `/newrule [focus]`, `/memory …`, `/mcp …`, `/budget [amount\|off]` |
+| Configuration | `/settings [search|reload]`, `/model [provider [model]]`, `/theme`, `/permissions [mode <name> \| revoke <n\|all>]`, `/rules [name]`, `/newrule [focus]`, `/memory …`, `/mcp …`, `/budget [amount\|off]` |
 | Interface | `/pane …`, `/layout reset`, `/keys`, `/help`, `/notices`, `/exit` |
 
 `/permissions` answers, in the transcript, what this session is actually gated
@@ -1260,6 +1260,12 @@ The settings view (`/settings`, `t` to pick the tier) writes either project
 file only for a project you already trust, and only the keys a project file may
 set; the save preview names the file and, for the shared one, warns that it is
 committed.
+
+A hand edit to those files is also picked up: a settings-file watch compares
+them at the end of every turn and routes any key whose merged value moved
+through the same `Chat::applySettings()` a save uses, so `live` keys are in
+force by the next turn while `restart` keys keep waiting for the next launch.
+`/settings reload` runs that check on the spot.
 
 **Above all four sits the session tier.** The settings view can save a change
 **for this session only**: nothing is written to disk, the value outranks every
