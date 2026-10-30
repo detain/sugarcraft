@@ -122,7 +122,9 @@ describe('languageForPath: extension to language (C-TUI-2.f twin of RegexHighlig
   })
 
   it('explicit-language callers are byte-unchanged by the twin', () => {
-    expect(highlight('const a = 1', 'ts')).toBe(highlight('const a = 1', 'ts'))
+    // Golden bytes, not a self-compare: highlight(x) === highlight(x) holds
+    // under ANY mutation of the function, so the old leg asserted nothing.
+    expect(highlight('const a = 1', 'ts')).toBe('<span class="hl-keyword">const</span> a = <span class="hl-number">1</span>')
     expect(highlight('const a = 1', 'TS')).toContain('hl-keyword')
   })
 })

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -178,5 +180,25 @@ describe('DiffView highlights diff bodies by file extension (C-TUI-2.f, GAP-UI-0
     const wrapper = mount(DiffView, { props: { diff: TXT_DIFF } })
     expect(wrapper.find('[data-testid="diff"]').classes()).toContain('split')
     setActivePinia(createPinia())
+  })
+
+  it('ships a scoped tint rule for every token class it emits', () => {
+    // The mounted spec above cannot falsify this: jsdom injects no component
+    // CSS, so "highlighted spans render colourless" passed green before the
+    // palette landed (C-TUI-2.f review MAJOR). jsdom cannot observe styling,
+    // so the law is pinned at the source instead: for every token kind the
+    // shared highlighter can emit, DiffView.vue's own text must carry the
+    // matching :deep rule — plain .hl-* selectors would match nothing because
+    // v-html-injected spans get no data-v attribute.
+    const component = readFileSync(resolve(process.cwd(), 'src-web/components/DiffView.vue'), 'utf8')
+    const highlighter = readFileSync(resolve(process.cwd(), 'src-web/lib/highlight.ts'), 'utf8')
+    const kinds = new Set<string>()
+    for (const hit of highlighter.matchAll(/kind: '([a-z]+)'/g)) {
+      if (hit[1] !== undefined) kinds.add(hit[1])
+    }
+    expect(kinds.size, 'token kinds derived from highlight.ts').toBeGreaterThanOrEqual(12)
+    for (const kind of [...kinds].sort()) {
+      expect(component, `DiffView.vue palette rule for .hl-${kind}`).toContain(`:deep(.hl-${kind})`)
+    }
   })
 })

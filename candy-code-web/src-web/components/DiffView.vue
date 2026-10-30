@@ -100,6 +100,41 @@ function rowClasses(row: DiffSplitRow): string[] {
   border-radius: 6px;
   background: var(--panel);
 }
+/* Token tints for the spans cellHtml() injects via v-html. These nodes carry
+   no data-v attribute (v-html is opaque to scoped CSS), so :deep() is
+   mandatory — plain .hl-* selectors here would match nothing. The groups and
+   variables mirror MessageMarkdown.vue's `.markdown :deep(.hl-*)` palette
+   token-for-token; the two surfaces share the same tokens.css variables and a
+   source-scan pin (diffView.spec.ts) fails if they ever drift apart. */
+.diff :deep(.hl-comment) {
+  color: var(--muted);
+  font-style: italic;
+}
+.diff :deep(.hl-string) {
+  color: var(--ok);
+}
+.diff :deep(.hl-number),
+.diff :deep(.hl-literal) {
+  color: var(--warn);
+}
+.diff :deep(.hl-keyword),
+.diff :deep(.hl-tag) {
+  color: var(--accent);
+}
+.diff :deep(.hl-variable),
+.diff :deep(.hl-attr),
+.diff :deep(.hl-key) {
+  color: var(--error);
+}
+.diff :deep(.hl-meta) {
+  color: var(--muted);
+}
+.diff :deep(.hl-add) {
+  background: var(--diff-add);
+}
+.diff :deep(.hl-del) {
+  background: var(--diff-del);
+}
 .row {
   display: grid;
   grid-template-columns: 3.5ch 3.5ch 2ch auto;
