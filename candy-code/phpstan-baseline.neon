@@ -678,10 +678,14 @@ parameters:
 			count: 4
 			path: src/Chat.php
 
+		# PHPStan 2.1 counts this message project-wide: 4 sites live in Chat.php and a
+		# fifth shares src/Chat/Handlers/HandlesTurnCompletion.php:328 (identical wording,
+		# message-keyed counting), so the entry must carry 5. A grep of Chat.php alone
+		# shows 4 — lowering this count reddens ignore.count + that site in CI.
 		-
 			message: '#^Using nullsafe property access "\?\-\>userConfig" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 4
+			count: 5
 			path: src/Chat.php
 
 		-
