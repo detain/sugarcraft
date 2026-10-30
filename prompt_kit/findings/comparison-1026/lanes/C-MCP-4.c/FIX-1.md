@@ -16,3 +16,45 @@ Gates (lane tree cwd=candy-code, -c phpunit.xml, env -u LINES -u COLUMNS, plain 
 - New test alone: 1T/43A, deterministic across runs.
 
 Harness note (not a lane finding): `scripts/refresh-deps.php --mode=linked` cannot run in this session — the box's composer 2.10.1 segfaults at "Loading composer repositories" even on an empty project in /tmp (strace: SIGSEGV NULL after heap growth, reproducible; pcre.jit/opcache/pcov-off all still crash). Workaround: copied the main tree's linked `candy-code/vendor/` into the lane worktree — composer path-repo symlinks are relative (`vendor/sugarcraft/x -> ../../../x`), so they re-resolve to the lane's own sibling checkouts; the autoloader is `__DIR__`-based. candy-code/composer.json is byte-identical between base 003cb1e4e and master, so the vendor matches the manifest. `vendor/` is gitignored; tree shows only the intended test-file change.
+
+## round-1 findings re-pass (dispatched against REVIEW-1; ran AFTER r2/r3) — 2026-10-29
+
+Spawn digest cited tip `eb3a17dcc` with the completion uncommitted; disk had
+already moved on (tip `68d6b28fa`, tree clean, REVIEW-3 CLEAN). Disposition
+of each REVIEW-1 finding, disk-verified this pass:
+
+- MAJOR (completion uncommitted; re-issue tip SHA): ALREADY CURED.
+  `628a5abf3` carries the full contract surface; diff base→tip = 9 files
+  +807/−2 == exactly the BRIEF-declared set; all three commits
+  `%ae`/`%ce`=detain, trailers=[]. `68d6b28fa` cat-file-verified (full SHA
+  68d6b28fa1e122ff34b314d8d2dba318ab48cb11). NOTE the spawn brief's uncommitted
+  file list (Chat.php dispatchMcpLoginFork / NonInteractive.php / PermissionFsm.php
+  answerWithMessage / host.mcp_login.* keys / src/MCP/McpLoginFork.php new /
+  tests/Tools/) matches NO generation of this step — BRIEF.md names
+  `McpAuthHostCommand`/`ServedMcpLogins`/`cmd.mcp-auth.login-*`/
+  `tests/Chat/McpLoginForkTest.php`; the brief's list is a stale/foreign
+  digest artifact, recorded here so the loop does not chase it.
+- MINOR-1 (per-session pin): ALREADY CURED by `68d6b28fa` —
+  `McpLoginServedTest::testTwoConcurrentLoginWatchesStayInTheirOwnSessions`
+  (REVIEW-3 verified mutation-discriminating). My spawn text said "McpLoginForkTest
+  (or McpLoginServed if exists)" — McpLoginServedTest existed and holds it.
+- MINOR-2 (rewrite REPORT.md for this generation): DONE THIS PASS. REPORT.md
+  still carried the 2ad862baf-era OAuth-redirectUri text (REVIEW-2 had judged
+  the finding closed via REPORT-r3.md, but the canonical file was never
+  rewritten). Rewritten with this build's surface, true commit chain, review
+  history, and fresh gate figures; generation note added so history stays honest.
+
+Fresh gate re-run this pass (lane tree, linked vendor, plain pipe):
+'McpLogin' 29T/1449A OK · 'McpLoginServedTest' 10T/95A · 'McpLoginForkTest'
+16T/1337A · 'McpLoginFork' 17T/1343A · 'McpAuthStore' 34T/168A · census
+five-guard 160T/32322A OK · DocFigureProseDrift 92T/4128A OK · SessionHost|
+ServerContext 82T/402A OK · 2 deprecations baseline throughout. Decomposition
+finding: the historical "fork 17T" = class(16) + the DescriptorInheritanceGuard
+`Support/McpLoginFork.php` arm-row dataset case — no test was lost; r1/r2/r3
+figures all reconcile. No Chat/PermissionFsm suites needed (no hunks). Full
+suite never run; PtyRunToolTest never touched; forbidden files
+(suite-figure.json, durations.tsv, dist) untouched.
+
+No new code commit minted (nothing to commit — chain complete, tree clean);
+evidence edits (this file + REPORT.md) are main-tree working-copy, uncommitted,
+for the welder/lead to collect with the step.

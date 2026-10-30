@@ -33,3 +33,10 @@ a28e6615c (WELD-1030H, 05:03:09) landed the same C-SES-7.d weld set 44s before m
 - Landed-blob proofs: ARCHITECTURE :18+:46 twelve, :155 dispatch arms 64; StderrEmitterCensus :595 => 46; BinCandyCodeDispatch :1099 usage row; lang cli.usage.* :1181-1182. Live SUBCOMMANDS 12, slashCommands 64. gen x3 --check rc=0.
 - Gates: 317T/68198A, sole red CliLangCatalogue :196 (rostered foreign). DUR row 1.155/9 @ tsv:292.
 - §4 mark :3146. run-state fold: welded_count 251==len, pending C-TOOL-2.a/C-TOOL-2.c, tip=88118dfce full sha, weld_notes added.
+
+## PRUNE + CLOSE (2026-10-30)
+- WELD-2 weld commit: 974d30cbeffcc838190046e0801363e80938e4dc (cat-file'd; %ae/%ce 1/1 detain, 0 Co-Authored). 7 files: plan mark :3146, tsv row :292, run-state fold (251==len, note CLOSED, tip 88118dfce full), lanes/C-SES-8.e/{BRIEF,REPORT,REVIEW-1} (REVIEW-1.md 7362 B now on branch-of-master), this report.
+- git cherry master cc/C-SES-8.e = 2x'-' (clean picks, patch-id identical) -> prune authorized.
+- C-TOOL-6.a CONTAMINATION: the 8.e worktree was the ONLY holder of docs/MCP.md +126/-0 (6.a's own worktree shows no MCP.md dirt). Byte-copied to /tmp/opencode/weld1030i/C-TOOL-6.a-MCP.md.dirt-copy BEFORE force-remove; 6.a welder must re-apply from there. worktree removed + branch cc/C-SES-8.e deleted; cc-cmp-C-SES* worktrees count above == 0.
+- WELD-1 (C-SES-7.d): twin 1030H stacked prune+stamp commits a28e6615c + 88118dfce; my content commit ffecb748b (report). Branch/worktree already pruned by twin (verified absent).
+- FINAL: master 974d30cbe (or later if twins move it — re-derive from git). NO PUSH. suite-figure re-pin + MCP.md additive duty recorded for C-TOOL-6.a next welder.

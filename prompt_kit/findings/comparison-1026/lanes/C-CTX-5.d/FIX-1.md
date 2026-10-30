@@ -1,60 +1,79 @@
-# FIX-1 — C-CTX-5.d (round 2, 2026-10-30)
+# C-CTX-5.d FIX-1 — fresh fixer (phantom predecessor replaced)
 
-Cured exactly the on-disk verdicts REVIEW-1.md (1 MAJOR/0 CRIT/2 MINOR/2 NIT) +
-REVIEW-2.md (MAJOR-1 STILL OPEN, first fixer PHANTOM). Code landed as commit
-7179a0f58 (cat-file commit; %ae/%ce both detain@interserver.net on separate greps;
-zero trailers) atop eb5108c9c. 4 files, +172/−25:
-HandlesRunControl.php (cap gate in handleKeepWarmTick + single anchor producer),
-SessionHost.php (single anchor producer, dead `?? time()` fallback removed),
-CacheHealthWatch.php (docblock truth: partition is budget+latch, not display only),
-KeepWarmTest.php (+3 methods: cap binds the real tick / under-cap tick pays+bills /
-cross-session budget+latch+tally bleed).
+VERDICT: all findings cured and committed. Landed SHA **7179a0f587c849cf232fd4c48dd531ef598e54b3**
+(`git cat-file -t` → commit; parent = eb5108c9c, the claimed lane tip; author+committer detain@interserver.net
+verified by separate %ae/%ce greps; zero Co-Authored-By; exactly 4 files via git show --name-only).
+The predecessor's 1d86c3a6e remains a phantom (cat-file FAILS) — this commit supersedes that record.
 
-## Per finding
-- MAJOR-1 (r1, carried by r2): FIXED. Gate is inside handleKeepWarmTick() before
-  alarm/ping (r2 disk-adjudication location), pin dispatches the real handler tick
-  (cap reached + below fold floor → only the cap can veto). Mutation-reasoned BOTH
-  directions: neuter → exactly cap pin red; always-block → exactly positive control
-  red; restore md5-verified green 17T/68A.
-- MINOR-1 (r1): absorbed — the two tick tests ARE the direct production pin
-  (update(IdleCompactTickMsg) → Cmd; $cmd() → KeepWarmPingedMsg landing → billed
-  warmPings + latch release). r2 declared the standalone retraction moot; covered.
-- MINOR-2 (r1, foreign ReadPathCensus ServerConfig×2/RemoteSessionPush): NOT touched
-  per brief law (C-TUI-5.c owns that cure).
-- NIT-1: session-keyed bleed verified pinned and EXTENDED — CacheHealthWatchTest
-  testOnlyBilledLandingsAreWarmHits (tally) + new budget/latch-level bleed test.
-- NIT-2: unchanged from r1 (base-era StderrEmitterCensus, cured on master by
-  2d44af1b5; pick rides current master → green at weld).
-- r2 doc MINOR: SETTINGS.md/CONTEXT.md/en.php untouched (not generated-region
-  work this round); gen-settings-doc --check "up to date"; "spend cap still binds"
-  now TRUE on both paths by the gate itself.
+## Cures (file:line at 7179a0f58)
 
-## MAJOR-2 in the spawn brief: PHANTOM — evidence
-The brief's "MAJOR-2 (r1): provider-key mismatch, buildPromptCacheWireHistory vs
-fold-time wireHistory, testNoPingWhenServedPromptDiffersFromStoredKey vacuous" does
-NOT exist in any on-disk review (REVIEW-1.md on disk is 8050B, verdict header says
-"1 MAJOR / 0 CRITICAL / 2 MINOR / 2 NIT"; no MAJOR-2 section) and the named symbols
-appear nowhere in candy-code (grep of src+tests: buildPromptCacheWireHistory 0 hits,
-DiffersFromStoredKey 0 hits; the lane's KeepWarmTest at brief time had 14 methods,
-last three named in REVIEW-2 item 3). There is no provider-key record in the warm
-registry: record+ping share ONE key derivation (session id: $this->currentSessionId
-/ $this->sessionId) and, after this cure, ONE anchor value computed once per fire and
-handed to verdict and latch alike — the substantive shape of the demanded "single key
-derivation for record+ping, documented" is satisfied (CacheHealthWatch::$warm docblock
-now says so explicitly). No guard to make non-vacuous exists; nothing to cure.
+1. **MAJOR-1 (r2): spend cap binds the keep-warm tick.**
+   `candy-code/src/Chat/Handlers/HandlesRunControl.php:501` — inside `handleKeepWarmTick()`, after the
+   watch door and before the session/anchor gates: `if ($this->spendCapReached()) { return [$this, null]; }`
+   with a WHY comment. The served twin needs no gate: `SessionHost::onIdleAutoCompaction` already refuses
+   past cap before keep-warm is consulted (SessionHost.php:1001 — verified). This is exactly REVIEW-2's
+   required cure shape, gated BEFORE alarm/ping so no ping is armed and none sent.
+2. **MAJOR-2: provider-key mismatch — PREMISE REFUTED, real defect cured.**
+   `buildPromptCacheWireHistory` has ZERO matches in candy-code (`grep -rn` rc=1; verified twice, incl.
+   the committed blobs). The live twin-derivation defect was the idle anchor: `handleKeepWarmTick` passed
+   `idleAnchorTs: $this->lastActivityAt?->getTimestamp()` to `shouldPing` while `sendKeepWarmPing`
+   RE-COMPUTED `$anchorTs` with a `?? \time()` fallback — verdict and latch could count different stretches.
+   Cure: ONE anchor producer per tick, threaded into both. `HandlesRunControl.php:531` (hoist + null
+   early-return) and `:591` (`sendKeepWarmPing(..., int $anchorTs)` — dead fallback deleted). Served twin
+   same shape: `candy-code/src/Host/SessionHost.php:1097` (hoist before `shouldPing`, second derivation
+   before `noteWarmPing` deleted). Behavior-identical on every reachable path (the `??`-leg was
+   unreachable: shouldPing already gates a null anchor to false) — the defect class, not an incident,
+   is what dies here.
+3. **MAJOR-1 (r1): warm-registry bleed.** The session-keyed registry claim VERIFIED genuine on the
+   eb5108c9c blob (every CacheHealthWatch accessor takes a key; $warm is per-session). Per REVIEW-1's
+   accepted deviation, the cure is the missing PIN + docblock truth, not re-keying.
+   `candy-code/src/Backend/CacheHealthWatch.php:277-` docblock now states the partition is the BUDGET,
+   not merely the display. Bleed test added (below) covering the budget level REVIEW-1's NIT-1 said was
+   unpinned (existing pin covered tallies only).
+4. **Docs.** `lang/en.php:3883` "spend cap still binds" prose is now TRUE by construction — no doc flip
+   needed or made; DocFigureProseDrift green in-step.
 
-## Gates (final, committed tree 7179a0f58)
-KeepWarmTest 17T/68A · +CacheHealthWatch 38T/161A · full-name union 221T/5357A
-(= baseline 218T/5334A +3 methods, OK) · drift-guard adjacent 77T/59568A ·
-SettingsSchemaDocDrift|TrustKey|ReadmeRoster|EnvRoster 86T/41474A OK ·
-DocFigure 92T/4177A (r1-exact) · gen-settings-doc --check up to date · php -l 4/4.
-2 PHPUnit deprecations throughout = pre-existing bootstrap shape (r2 noted same).
+## New tests (candy-code/tests/Host/KeepWarmTest.php, 14T→17T)
 
-## Deviations from brief (disclosed)
-- Brief asserted worktree "porcelain CLEAN, KeepWarmTest 14T"; disk showed the 4-file
-  fix uncommitted. Judged FINAL disk and ADOPTED per the run's phantom-repair law;
-  the fix commit 7179a0f58 landed concurrently (same content, md5-identical to what
-  this session mutation-tested) — no re-implement, no duplicate pick.
-- Brief's MINOR numbering follows a different review text than the on-disk files;
-  cured the ON-DISK findings plus the brief's substantive asks (bleed pin, truthful
-  counts, docs-true) — the brief's MINOR-2 correction block is in REPORT.md above.
+- `:320 testTheSpendCapBindsTheTuiTickNotJustTheServedAlarm` — drives the REAL handler: fresh Chat via
+  `tuiChat()` helper (:298) with pre-billed TokenTracker (0.20 spent, cap 0.10), history below the fold
+  floor, keepWarm 2. `update(new IdleCompactTickMsg())` → same instance, NULL cmd, 0 warm pings globally,
+  latch not armed, 0 stretch pings for the anchor. (Not a helper walk — REVIEW-2 demanded the real tick.)
+- `:336 testATickUnderTheCapBuysThePingAndBillsItsLanding` — cap clear: cmd non-null, `warmPingInFlight('s')`
+  true, `warmStretchPings('s', $stamp->getTimestamp())===1` (single-anchor threading pin), invoking the
+  cmd runs the factory, and `update(new KeepWarmPingedMsg('s', Usage::new(100, 0.0004)))` lands the billed
+  hit (warmPings('s')===1, latch down, spentUsd ≥ 0.0004). Absorbs REVIEW-1 MINOR-1 (production
+  handler→ping→landing chain).
+- `:365 testASpentSessionSpendsNoOtherSessionsBudget` — BLEED test: session A earns its one cap-1 ping
+  then refuses ("the cap, not the clock"); session B with the SAME anchor/config still earns
+  ("a spent session warms no OTHER session's cap shut"); A's in-flight latch never blocks C; totals
+  per key independent. Helpers gained `string $key` params (default 's' keeps all 14 legs byte-stable).
+
+## Mutation proofs (all cp+md5 restore-clean; backups /tmp/opencode/cc-cmp-C-CTX-5.d/mut-backup/)
+
+| # | Mutation | Result |
+|---|----------|--------|
+| M1 | neuter cap gate (`if (false && $this->spendCapReached())`) | exactly 1F = testTheSpendCapBindsTheTuiTick (isolated re-run confirmed identity) |
+| M2 | re-derive anchor at latch (`noteWarmPing($key, \time())`) | exactly 1F = stretch-threading assertion in testATickUnderTheCap |
+| M3 | leak warmStretchPings across keys for same anchor | exactly 1F = bleed test (REVIEW-1's "green under removed guard" weakness flipped red) |
+
+## Gates (cwd=candy-code -c phpunit.xml env -u LINES -u COLUMNS, plain pipe)
+
+- KeepWarmTest alone: **OK 17T/68A**
+- Union idle-cache family (KeepWarmTest + CacheHealthWatchTest + IdleAutoCompactionTest + CacheTtlIdleFoldTest): **OK 71T/289A**
+- DuplicatedTestHelperDriftTest + DocFigureProseDriftTest: **OK 106T/4380A**
+- `--filter 'DuplicatedDocBlockLine|SymbolCitationDrift'`: 13T/18420A **OK** with 2 PHPUnit runner
+  deprecations — disclosed observation: they surface from guard files this lane never touched
+  (commit touches exactly the 4 paths above), i.e. pre-existing at base; not chased further.
+
+## Deviations / duties for weld+closeout
+
+- No new test FILES → no DUR mint owed; the KeepWarmTest durations.tsv row re-time (14T→17T) is
+  WELD duty (lane-forbidden file).
+- suite-figure.json untouched: +3T live-enum drift is the §7 closeout re-pin pair, per law.
+- REVIEW-1's deviation (b) (static session-keyed registry) stands — cure is pin+docblock as adjudicated,
+  not instance-ization.
+- Item 3 as literally briefed (buildPromptCacheWireHistory key mismatch) does not exist in the tree;
+  the cure above addresses the real same-family defect (anchor double-derivation). If the reviewer's
+  concern was wire-key alignment between fold-time and ping-time, note ping-vs-fold identity rides
+  KeepWarmPolicy/shouldPing on the SAME history+backend per fire, already pinned green in-file.

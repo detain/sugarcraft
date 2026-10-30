@@ -32,3 +32,16 @@
 - STANDING RED disclosed (not chased, base-proven foreign): MediaSettingsTest::testTheProviderSchemaCarriesTheMediaOptionals — openrouter mediaKinds. Pristine /home/sites/weld-base-e924 worktree at e924d3525 (cp -a vendor) reproduced EXACT 17T/196A/1F same line; worktree removed.
 - DUR row MINTED: candy-code/tests/Providers/ResponsesToolResultMediaTest.php 0.040 10 (median 0.040/0.032/0.042). tsv 1634->1635.
 - run-state: welded_count 246->247 ASSERT ok; weld_pending now EMPTY; master_tip 62f412d9e.
+
+## Lane 2 weld commit + prune
+- weld: C-TOOL-2.g = 7646af980 (cat-file commit). %ae=1 detain, %ce=1 detain, Co-Authored-By grep count 0 (grep -c exits 1 = zero matches).
+- git cherry master cc/C-TOOL-2.g: '-' 25a6d642c (absorbed). Worktree removed (list 12->11); branch deleted (was 25a6d642c); branch --list 0.
+- Final master: 7646af980. run-state welded_count 247, weld_pending [].
+
+## Final verification (all git-show blob-level, fresh-checkout discipline)
+- git show 7646af980:plan_comparison.md contains BOTH §4 marks (grep -c = 2: ✅ 2ae48be8d C-SES-7.c, ✅ 06d7a9858 C-TOOL-2.g).
+- git show 7646af980:scripts/parallel-tests-durations.tsv: both DUR rows present (grep -c = 2), file 1635 lines (1633 -> +2).
+- git show 7646af980 run-state: welded_count==len(welded)==247 ASSERT held, weld_pending [], master_tip stamped 62f412d9e (lanes/WELD-1030E-REPORT.md records final tip 7646af980; one-liner stamp left to lead to avoid self-SHA churn).
+- scheduler waves_fully_welded = 1..23 (NO new closure; W24 needs SES-7.d+PRV-3.d+CTX-5.b, W25 needs SEC-7.a+TOOL-2.c, W26 needs CTX-5.* leg) -> NO wave loop, NO push (correct per brief).
+- Worktrees: 13 -> 11 (both lane worktrees removed; weld-base-e924 probe worktree removed too). Branches cc/C-SES-7.c + cc/C-TOOL-2.g deleted post-cherry-proof. Stray node_modules.pre-weld-bak sits at /tmp/pre-weld-bak-1030e.
+- Weld log stays uncommitted by design (self-append would churn the final blob); this file is the honest incremental record.
