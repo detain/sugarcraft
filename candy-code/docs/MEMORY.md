@@ -491,10 +491,20 @@ mid-turn message that changed the latest user row, `-p`, a sub-agent — ranks
 keyword-only on first use instead. The row is re-sent only when its bytes change,
 so a turn whose recall matches the previous one adds nothing.
 
-**The user sees it too.** A non-empty ranking records one count-only
-row — `💭 Recalled N notes for this turn` — through the runtime notice sink
-(`Runtime::primeMemoryRecall()` → `RuntimeNoticeSink::record()`). The interactive
-drain is `Chat::pumpRuntimeNotices()`; a served session has no `Chat`, so
+**The user sees it too.** A non-empty ranking records one structured row
+(`Runtime::primeMemoryRecall()` → `RuntimeNoticeSink::recordStructured()`,
+kind `memory.recall`, carrying `{count, titles[]}`). The transcript paints
+it as the count sentence — `💭 Recalled N notes for this turn` — collapsed,
+and clicking the row expands it into the recalled notes' titles through the
+transcript's existing tool-row click affordance (`Message::recallNotice()`,
+`Renderer::renderRecallRow()`; no new key binding, and it deliberately does
+not join the Ctrl+O newest-thought chord). Titles are a note's first line,
+never its body, and a frame over `MAX_CHARS` sheds its tail titles while the
+true count survives. The visible sentence is rebuilt at the pumps by
+`RuntimeNoticeSink::recallRowText()`, so the web transcript and a session
+resumed from before the column see exactly the bytes this row spoke before:
+the expansion is gained, nothing is lost. The interactive drain is
+`Chat::pumpRuntimeNotices()`; a served session has no `Chat`, so
 `SessionHost::pumpRuntimeNotices()` drains its own per-session sink instead —
 recorded inside the turn's fork, folded on the server's tick, at settle, and on
 the sink's one-shot loop wake. The row is uiOnly, so it lands in the transcript

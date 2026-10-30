@@ -246,17 +246,20 @@ final class MemoryRecallBlockTest extends TestCase
     // ── VIS-6: the per-turn recall row ────────────────────────────────
 
     /**
-     * The priming door announces: one count-only row per NEW non-empty
-     * ranking, and nothing else — not the ids, not the bodies, because the
-     * row is a transcript cue (uiOnly at the pump), not a second copy of the
-     * prompt payload. Re-priming the same set stays silent even under a
-     * different query, an empty recall records no row at all, and the same
-     * set returning after an empty turn speaks again.
+     * The priming door announces: one structured row per NEW non-empty
+     * ranking, and nothing else. Since C-CTX-6.e the row is a frame
+     * carrying the count plus the notes' TITLES — titles are first lines,
+     * and note BODIES never travel (the row remains a transcript cue, not
+     * a second copy of the prompt payload); ids stay out too. The visible
+     * sentence is rebuilt at the pumps, so the frame itself holds none.
+     * Re-priming the same set stays silent even under a different query,
+     * an empty recall records no row at all, and the same set returning
+     * after an empty turn speaks again.
      */
-    public function testThePrimingDoorRecordsOneCountOnlyRowPerNewRanking(): void
+    public function testThePrimingDoorRecordsOneStructuredRowPerNewRanking(): void
     {
         $first = $this->store->add('Deploys go through staging.', MemoryScope::Project);
-        $second = $this->store->add('Deploys happen on Tuesdays.', MemoryScope::Project);
+        $second = $this->store->add("Deploys happen on Tuesdays.\nThe on-call freeze lifts Fridays.", MemoryScope::Project);
         $runtime = $this->runtime()->withSessionPromptMemo(SessionPromptMemo::new());
 
         RuntimeNoticeSink::arm(false);
@@ -266,9 +269,14 @@ final class MemoryRecallBlockTest extends TestCase
             $runtime->primeMemoryRecall($this->app([Message::user('deploy it')]), 'deploy it', null);
             $rows = RuntimeNoticeSink::drain();
             self::assertCount(1, $rows, 'a non-empty ranking records exactly one row');
-            self::assertStringStartsWith("\u{1F4AD} ", $rows[0], 'the recall glyph is the house prefix for the row');
-            self::assertStringContainsString('Recalled 2 notes for this turn', $rows[0]);
-            self::assertStringNotContainsString('staging', $rows[0], 'count only: the row never copies note text');
+            self::assertTrue(RuntimeNoticeSink::isStructuredFrame($rows[0]), 'the row is a structured frame (C-CTX-6.e)');
+            $frame = RuntimeNoticeSink::decodeStructured($rows[0]);
+            self::assertNotNull($frame);
+            self::assertSame(2, $frame['count']);
+            self::assertContains('Deploys go through staging.', $frame['titles'], 'titles (first lines) travel — the row expands to them');
+            self::assertContains('Deploys happen on Tuesdays.', $frame['titles'], 'a note title is its FIRST line');
+            self::assertStringNotContainsString('freeze', $rows[0], 'bodies never travel: the second line stays in the fence');
+            self::assertStringNotContainsString('Recalled', $rows[0], 'the sentence is built at the pump, not smuggled in the frame');
             self::assertStringNotContainsString($first, $rows[0]);
             self::assertStringNotContainsString($second, $rows[0]);
 
@@ -281,7 +289,7 @@ final class MemoryRecallBlockTest extends TestCase
             $runtime->primeMemoryRecall($this->app([Message::user('deploy it')]), 'deploy it', null);
             $again = RuntimeNoticeSink::drain();
             self::assertCount(1, $again, 'the set returning after an empty turn speaks again');
-            self::assertStringContainsString('Recalled 2 notes for this turn', $again[0]);
+            self::assertSame(2, RuntimeNoticeSink::decodeStructured($again[0])['count']);
         } finally {
             RuntimeNoticeSink::reset();
         }
@@ -298,7 +306,10 @@ final class MemoryRecallBlockTest extends TestCase
             $runtime->primeMemoryRecall($this->app([Message::user('deploy it')]), 'deploy it', null);
             $rows = RuntimeNoticeSink::drain();
             self::assertCount(1, $rows);
-            self::assertStringContainsString('Recalled 1 note for this turn', $rows[0]);
+            $frame = RuntimeNoticeSink::decodeStructured($rows[0]);
+            self::assertNotNull($frame);
+            self::assertSame(1, $frame['count']);
+            self::assertStringContainsString('Recalled 1 note for this turn', RuntimeNoticeSink::recallRowText($frame['count']), 'the pump-side sentence keeps the .one grammar');
         } finally {
             RuntimeNoticeSink::reset();
         }

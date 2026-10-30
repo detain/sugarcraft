@@ -792,4 +792,106 @@ final class RuntimeNoticeSinkTest extends TestCase
             ini_set('error_log', $previous === false ? '' : $previous);
         }
     }
+
+    /**
+     * C-CTX-6.e: the structured frame head is 0x01 rather than the more obvious
+     * NUL because `record()` trims its input, and PHP's default trim charlist is
+     * " \t\n\r\0\x0B" — a NUL-head prefix would be shaved off before the
+     * queue ever saw it. The 0x01 head survives that trim and still cannot be
+     * produced by any plain runtime row.
+     */
+    public function testAStructuredFrameSurvivesTheRecordTrimWhole(): void
+    {
+        RuntimeNoticeSink::arm(false);
+
+        self::assertTrue(RuntimeNoticeSink::recordStructured(
+            RuntimeNoticeSink::KIND_MEMORY_RECALL,
+            ['count' => 2, 'titles' => ['alpha note', 'beta note']],
+        ));
+
+        $rows = RuntimeNoticeSink::drain();
+        self::assertCount(1, $rows);
+        self::assertTrue(RuntimeNoticeSink::isStructuredFrame($rows[0]), 'the 0x01 head did not survive record()\'s trim');
+
+        $frame = RuntimeNoticeSink::decodeStructured($rows[0]);
+        self::assertIsArray($frame);
+        self::assertSame(RuntimeNoticeSink::KIND_MEMORY_RECALL, $frame['kind']);
+        self::assertSame(2, $frame['count']);
+        self::assertSame(['alpha note', 'beta note'], $frame['titles']);
+    }
+
+    /** C-CTX-6.e: the MAX_CHARS bound sheds TAIL titles and keeps the count. */
+    public function testAStructuredFrameShedsTailTitlesRatherThanTheCount(): void
+    {
+        RuntimeNoticeSink::arm(false);
+
+        $titles = [];
+        for ($index = 0; $index < 200; $index++) {
+            $titles[] = str_repeat("\u{5B57}", 90) . ' ' . $index;
+        }
+
+        self::assertTrue(RuntimeNoticeSink::recordStructured(
+            RuntimeNoticeSink::KIND_MEMORY_RECALL,
+            ['count' => 200, 'titles' => $titles],
+        ));
+
+        $rows = RuntimeNoticeSink::drain();
+        self::assertCount(1, $rows);
+        self::assertLessThanOrEqual(
+            RuntimeNoticeSink::MAX_CHARS,
+            mb_strlen($rows[0], 'UTF-8'),
+            'a structured frame outran the datagram bound the plain rows are clipped to',
+        );
+
+        $frame = RuntimeNoticeSink::decodeStructured($rows[0]);
+        self::assertIsArray($frame);
+        self::assertSame(200, $frame['count'], 'the bound must never cost the row its count');
+        self::assertNotSame([], $frame['titles'], 'the best-ranked head titles must survive');
+        self::assertLessThan(200, count($frame['titles']), 'the tail should have been shed');
+        self::assertSame(str_repeat("\u{5B57}", 80), $frame['titles'][0], 'the first surviving title should be the head, title-clipped');
+    }
+
+    /** C-CTX-6.e: memory.recall is the only kind the wire accepts. */
+    public function testAnUnknownStructuredKindIsRefused(): void
+    {
+        RuntimeNoticeSink::arm(false);
+
+        self::assertFalse(RuntimeNoticeSink::recordStructured('memory.forget', ['count' => 1, 'titles' => ['nope']]));
+        self::assertFalse(RuntimeNoticeSink::hasPending());
+        self::assertSame([], RuntimeNoticeSink::drain());
+    }
+
+    /** C-CTX-6.e: a frame the decoder did not write reads as nothing, never garbage. */
+    public function testTheStructuredDecoderRefusesFramesItDidNotWrite(): void
+    {
+        self::assertNull(RuntimeNoticeSink::decodeStructured('an ordinary runtime row'));
+        self::assertNull(RuntimeNoticeSink::decodeStructured(RuntimeNoticeSink::STRUCTURED_PREFIX . '{broken'));
+        self::assertNull(RuntimeNoticeSink::decodeStructured(
+            RuntimeNoticeSink::STRUCTURED_PREFIX . json_encode(['kind' => 'memory.other', 'count' => 1, 'titles' => []]),
+        ));
+        self::assertNull(RuntimeNoticeSink::decodeStructured(
+            RuntimeNoticeSink::STRUCTURED_PREFIX . json_encode(['kind' => RuntimeNoticeSink::KIND_MEMORY_RECALL, 'count' => -2, 'titles' => []]),
+        ));
+        self::assertNull(RuntimeNoticeSink::decodeStructured(
+            RuntimeNoticeSink::STRUCTURED_PREFIX . json_encode(['kind' => RuntimeNoticeSink::KIND_MEMORY_RECALL, 'count' => 'two', 'titles' => []]),
+        ));
+    }
+
+    /** C-CTX-6.e: the socket backend carries the frame byte-whole, 0x01 head included. */
+    public function testTheTransportBackendCarriesAStructuredFrameWhole(): void
+    {
+        self::assertTrue(RuntimeNoticeSink::arm(), 'this host could not create the transport');
+
+        self::assertTrue(RuntimeNoticeSink::recordStructured(
+            RuntimeNoticeSink::KIND_MEMORY_RECALL,
+            ['count' => 3, 'titles' => ['staging notes freeze', 'the ship ledger']],
+        ));
+
+        $rows = RuntimeNoticeSink::drain();
+        self::assertCount(1, $rows);
+        $frame = RuntimeNoticeSink::decodeStructured($rows[0]);
+        self::assertIsArray($frame);
+        self::assertSame(3, $frame['count']);
+        self::assertSame(['staging notes freeze', 'the ship ledger'], $frame['titles']);
+    }
 }

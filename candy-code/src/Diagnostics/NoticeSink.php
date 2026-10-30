@@ -193,6 +193,11 @@ final class NoticeSink
         if (mb_strlen($frame, 'UTF-8') > RuntimeNoticeSink::MAX_CHARS) {
             // Even the skeleton (no titles) does not fit — loud refusal
             // through the return, never a corrupt half-frame on the wire.
+            // DEFENSIVE RATHER THAN LIVE: at MAX_CHARS=400 the skeleton
+            // (prefix + kind + an int count) cannot reach the bound today;
+            // this arm earns its place only against a future shrink of the
+            // bound, and pins the refusal so a shrunk bound fails loud here
+            // rather than silently shipping clipped JSON.
             return false;
         }
 
