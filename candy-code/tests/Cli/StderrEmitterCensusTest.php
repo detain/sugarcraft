@@ -58,9 +58,9 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
  *  1. `fwrite(STDERR, …)` — thirty-six sites (C-SES-7.b 2026-10-29: +1 in
-*     `Subcommands::sessionImport()` for the import-refused line — the source file
-*     was refused, the session and store are intact, and the same refusal rides
-*     the JSON document under `--output-format json`; C-AGT-6.c 2026-10-28: +1 in
+ *     `Subcommands::sessionImport()` for the import-refused line — the source file
+ *     was refused, the session and store are intact, and the same refusal rides
+ *     the JSON document under `--output-format json`; C-AGT-6.c 2026-10-28: +1 in
  *     `MainWorktree` for the kept-tree announce, stderr-alone like every other
  *     end-of-process line; C-AGT-7.b 2026-10-28: +1 in
  *     `NonInteractive` for the `json_schema_unapplied` report line, stderr-alone
