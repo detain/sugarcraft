@@ -1,0 +1,21 @@
+### C-SES-8.d — `/insights` command wiring
+- item: C-SES-8 (sources: GAP-OBS-06)
+- kind: gap · effort S
+- approach:
+  - Add a NEW spec file, `builtin-commands/2215-insights.php` (category App, `withHandler('handleInsightsCommand')`, `withHostCommand(InsightsHostCommand::class)`). It is per-command-disjoint, not serialized.
+  - Add `Chat::handleInsightsCommand()` (`runHostCommand`).
+  - Add `insights` to `READ_ONLY_COMMANDS` (`src/Chat.php:10266`), the way `/export` is.
+  - Update the README slash roster and regenerate COMMANDS.md.
+- files.create: `candy-code/builtin-commands/2215-insights.php`
+- files.modify: `candy-code/src/Chat.php` (new handleInsightsCommand(); the READ_ONLY_COMMANDS row), `candy-code/README.md` (the Slash commands roster), `candy-code/docs/COMMANDS.md` (regen), `candy-code/tests/Commands/MenuBarLabelDerivationTest.php` (the DERIVED_LABELS row)
+- tests: modify:
+  - `candy-code/tests/Commands/MenuBarLabelDerivationTest.php`;
+  - `candy-code/tests/Chat/PaletteSupersetDispatchTest.php` (if it enumerates slash-only rows; verify in-step);
+  - `candy-code/tests/Commands/RegistryTranslationTest.php` (if it counts rows).
+- docs/guards: README slash roster → `ReadmeRosterDriftTest::testTheSlashCommandRosterIsExactlyWhatTheRegistryAdvertises`; the COMMANDS.md regen → `CommandDocsDriftTest`
+- serialized: [chat:handleInsightsCommand] [commands:READ_ONLY_COMMANDS] [docs:README.md] [docs:COMMANDS.md]
+- deps: C-SES-8.c
+- phase: normal
+- ruling: none
+- risks: none notable
+
