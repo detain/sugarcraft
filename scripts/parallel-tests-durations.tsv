@@ -289,6 +289,7 @@ candy-code/tests/Acp/AcpPermissionBridgeTest.php	1.157	6
 candy-code/tests/Backend/EngineBackendStepBudgetTest.php	1.157	8
 candy-code/tests/Cli/NonInteractiveSessionPersistenceTest.php	1.157	9
 candy-code/tests/Tools/BuiltIn/GrepInstructionWiringTest.php	1.155	19
+candy-code/tests/Cli/UsageSubcommandTest.php	1.155	9
 candy-code/tests/Chat/RewindCommandTest.php	1.142	15
 candy-code/tests/Host/SessionHostIdleAutoTest.php	1.139	10
 candy-code/tests/Sessions/ScheduleRegistryTest.php	1.131	14

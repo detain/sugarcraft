@@ -23,3 +23,13 @@ Branch current: master
 - durations.tsv rows verified (line 270 ResumeCostGuardTest 1.257/8 == live 8 methods; line 872 Host/ResumeCostEstimateTest 0.056/13 == live 13). README+SETTINGS regen: gen-*-doc --write then --check all rc=0 — canonical generated output, committed here (pick 9386a83d3 had omitted it — closes predecessor gap).
 - run-state: lead's freshest copy already folded C-SES-7.d (welded_count 250 == len 250, master_tip ca1e0b51f, weld_notes entry covers +21T carry + 64-numeral duty). Committed as-is.
 - §4 mark: plan_comparison.md line 2963.
+
+## TWIN-WELD EVENT (recorded)
+a28e6615c (WELD-1030H, 05:03:09) landed the same C-SES-7.d weld set 44s before my ffecb748b (05:03:53). No collision: my -o staging found those paths already clean; only my report diff rode my commit. WELD-1 obligations satisfied: a28e6615c = regen+mark+rows+evidence+fold; ffecb748b = this report. Cat-file'd: ffecb748b961821939493885e3d2f90423f79b49.
+
+## WELD-2 C-SES-8.e — picks landed + fold (2026-10-30)
+- cherry-pick b2e94003e 5133afba9 onto ffecb748b: BOTH zero-conflict (auto-merge README/ARCHITECTURE/MCP/lang/ParsedArgs/Subcommands/2 tests). Cat-file'd: 1b48926b7, 2f701f308.
+- Twin WELD-1030H stacked 88118dfce (prune-stamp for 7.d) atop my picks — absorbed as ancestry.
+- Landed-blob proofs: ARCHITECTURE :18+:46 twelve, :155 dispatch arms 64; StderrEmitterCensus :595 => 46; BinCandyCodeDispatch :1099 usage row; lang cli.usage.* :1181-1182. Live SUBCOMMANDS 12, slashCommands 64. gen x3 --check rc=0.
+- Gates: 317T/68198A, sole red CliLangCatalogue :196 (rostered foreign). DUR row 1.155/9 @ tsv:292.
+- §4 mark :3146. run-state fold: welded_count 251==len, pending C-TOOL-2.a/C-TOOL-2.c, tip=88118dfce full sha, weld_notes added.
