@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Protocol\Methods;
 
+use SugarCraft\Code\Host\Commands\Checkpoints;
 use SugarCraft\Code\Protocol\CallContext;
 use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\MethodRegistry;
@@ -11,8 +12,11 @@ use SugarCraft\Code\Protocol\MethodSpec;
 use SugarCraft\Code\Protocol\Params;
 use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Protocol\Scope;
+use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Tools\PathJail;
+use SugarCraft\Code\Workspace\CheckpointDiff;
 use SugarCraft\Code\Workspace\GitRunner;
+use SugarCraft\Code\Workspace\WorkspaceCheckpointer;
 
 /**
  * `files.*` (Appendix O §6.3): what changed in the workspace, and a file's
@@ -29,6 +33,13 @@ final class FilesMethods
 
     private const REF_PATTERN = '/^[A-Za-z0-9._\/@{}~^-]{1,128}$/';
 
+    /**
+     * How far back `files.diff` looks for checkpoint bases — the same scan
+     * width the TUI's own diff-review loop uses, so the web selector never
+     * sees more bases than the terminal can walk.
+     */
+    private const CHECKPOINT_SCAN = 1000;
+
     private function __construct()
     {
     }
@@ -40,9 +51,27 @@ final class FilesMethods
         $registry->add(MethodSpec::new('files.read', Scope::Read, 'A file under the project root, read-only and size-capped.', self::read(...)));
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * `files.diff`: the workspace's uncommitted changes as a unified diff,
+     * either against HEAD (the plain `git diff` path) or against an earlier
+     * checkpoint's captured workspace (`checkpoint: N`, counted the same way
+     * `/diff n` counts on the terminal — 1 is the most recent base). Either
+     * way the answer reports how many checkpoint bases exist for the session,
+     * so a client can offer the choice without a second round-trip.
+     *
+     * @return array<string, mixed>
+     */
     private static function diff(CallContext $call, Params $params): array
     {
+        $checkpoint = $params->optionalInt('checkpoint', 1);
+        if ($checkpoint !== null) {
+            if ($params->has('ref')) {
+                throw RpcError::invalidParams('ref and checkpoint are mutually exclusive', 'ref_with_checkpoint');
+            }
+
+            return self::diffAgainstCheckpoint($call, $params, $checkpoint);
+        }
+
         $ref = $params->optionalString('ref', 128) ?? 'HEAD';
         if (\preg_match(self::REF_PATTERN, $ref) !== 1 || \str_starts_with($ref, '-')) {
             throw RpcError::invalidParams('ref is not a git revision');
@@ -54,7 +83,81 @@ final class FilesMethods
             'ref' => $ref,
             'diff' => $captured['stdout'],
             'truncated' => $captured['stdoutDropped'] > 0,
+            'checkpoints' => self::checkpointBaseCount($call, $params),
+            'omittedLines' => 0,
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function diffAgainstCheckpoint(CallContext $call, Params $params, int $checkpoint): array
+    {
+        if (!$params->has('sessionId')) {
+            throw RpcError::invalidParams('checkpoint needs a sessionId', 'checkpoint_without_session');
+        }
+        $store = $call->server->store();
+        if ($store === null) {
+            throw RpcError::of(ErrorCode::UnsupportedInServer, 'this server has no session store', 'no_store');
+        }
+        $bases = self::checkpointBases($store, SessionMethods::sessionId($params));
+        if ($bases === []) {
+            throw RpcError::of(ErrorCode::Conflict, 'this session has no workspace checkpoints', 'no_checkpoints');
+        }
+
+        // Clamped like DiffReviewSource::load(): asking for more bases than
+        // exist settles on the oldest one rather than refusing twice.
+        $target = $bases[\min($checkpoint, \count($bases)) - 1];
+        $diff = CheckpointDiff::of($store->workspaceCheckpointer(self::root($call)), $target['workspace']);
+        if (\is_string($diff)) {
+            throw RpcError::of(ErrorCode::Conflict, 'the checkpoint diff is unavailable: ' . $diff, 'checkpoint_diff_failed');
+        }
+
+        return [
+            'ref' => 'checkpoint:' . $target['index'],
+            'diff' => $diff->patch,
+            'truncated' => $diff->omittedLines > 0,
+            'checkpoints' => \count($bases),
+            'omittedLines' => $diff->omittedLines,
+        ];
+    }
+
+    /**
+     * The session's checkpoint positions that actually carry a captured
+     * workspace, newest first — the same `isCaptured` filter the TUI review
+     * loop applies, so the RPC and the terminal agree on what a base is.
+     *
+     * @return list<array{index: int, workspace: array<array-key, mixed>}>
+     */
+    private static function checkpointBases(EnhancedSessionStore $store, string $sessionId): array
+    {
+        $bases = [];
+        foreach (Checkpoints::fileCheckpointPositions($store, $sessionId, self::CHECKPOINT_SCAN) as $position) {
+            $workspace = $position['workspace'];
+            if (\is_array($workspace) && WorkspaceCheckpointer::isCaptured($workspace)) {
+                $bases[] = ['index' => (int) $position['index'], 'workspace' => $workspace];
+            }
+        }
+
+        return $bases;
+    }
+
+    /**
+     * How many bases the HEAD-path answer should report: zero whenever a
+     * count is impossible (no session named, no store) — the HEAD diff itself
+     * stands regardless, so counting is best-effort, never a refusal.
+     */
+    private static function checkpointBaseCount(CallContext $call, Params $params): int
+    {
+        if (!$params->has('sessionId')) {
+            return 0;
+        }
+        $store = $call->server->store();
+        if ($store === null) {
+            return 0;
+        }
+
+        return \count(self::checkpointBases($store, SessionMethods::sessionId($params)));
     }
 
     /** @return array<string, mixed> */

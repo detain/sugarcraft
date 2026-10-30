@@ -729,8 +729,18 @@ final class MethodSchemas
                 ], ['root', 'matches', 'truncated'], false),
             ],
             'files.diff' => [
-                Schema::object(['ref' => Schema::string(128)]),
-                Schema::object(['ref' => Schema::string(), 'diff' => Schema::string(), 'truncated' => Schema::boolean()], ['ref', 'diff', 'truncated']),
+                Schema::object([
+                    ...$sid,
+                    'ref' => Schema::string(128)->describe('Git revision to diff against; defaults to HEAD. Rejected together with `checkpoint`.'),
+                    'checkpoint' => Schema::integer(1)->describe('Which checkpoint base to diff against, counted the way `/diff n` counts: 1 is the most recent captured base. Needs `sessionId`; values beyond the last base settle on the oldest.'),
+                ]),
+                Schema::object([
+                    'ref' => Schema::string()->describe('The base actually used: a git revision, or `checkpoint:<index>` for a checkpoint diff.'),
+                    'diff' => Schema::string(),
+                    'truncated' => Schema::boolean(),
+                    'checkpoints' => Schema::integer(0)->describe('How many checkpoint bases exist for the session; 0 when no `sessionId` was named or the server has no session store.'),
+                    'omittedLines' => Schema::integer(0)->describe('Patch lines dropped by the checkpoint diff bound; always 0 on the git path.'),
+                ], ['ref', 'diff', 'truncated', 'checkpoints', 'omittedLines']),
             ],
             'files.changed' => [$empty, Schema::object([
                 'items' => Schema::arrayOf(Schema::object(['path' => Schema::string(), 'status' => Schema::string(), 'from' => Schema::string()->nullable()], ['path', 'status'])),

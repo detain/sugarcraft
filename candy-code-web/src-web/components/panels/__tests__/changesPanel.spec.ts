@@ -1,7 +1,9 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { nextTick } from 'vue'
 import { Wire } from '../../../stores/agents/__tests__/harness'
+import { usePanelsStore } from '../../../stores/agents/panels'
 import SidePanels from '../SidePanels.vue'
 import ChangesPanel from '../ChangesPanel.vue'
 
@@ -9,6 +11,11 @@ import ChangesPanel from '../ChangesPanel.vue'
  * WEB-1b: the Changes tab — `files.changed` for the list and `files.diff`
  * for the text, with the per-file view carved out of the whole-workspace
  * diff on the client (the wire takes a revision, not a path).
+ *
+ * C-TUI-2.g adds the base selector: with a session in view the panel names
+ * it to `files.diff`, and the answer's `checkpoints` count fills the same
+ * newest-first choice `/diff n` offers on the terminal. Without a session
+ * the panel asks exactly what it always did — `{}` — and shows no selector.
  */
 
 let wire: Wire
@@ -40,11 +47,26 @@ const DIFF = [
   '+p2',
 ].join('\n')
 
+/** The C-TUI-2.g result shape: every `files.diff` answer carries the base count and the bound. */
+function headDiff(over: Record<string, unknown> = {}) {
+  return { ref: 'HEAD', diff: DIFF, truncated: false, checkpoints: 0, omittedLines: 0, ...over }
+}
+
+const CHECKPOINT_DIFF = [
+  'diff --git a/file.txt b/file.txt',
+  'index 1111111..2222222 100644',
+  '--- a/file.txt',
+  '+++ b/file.txt',
+  '@@ -1 +1 @@',
+  '-two',
+  '+three',
+].join('\n')
+
 async function openPanel(): Promise<ReturnType<typeof mount>> {
   const wrapper = mount(ChangesPanel)
   await flushPromises()
   await wire.answer('files.changed', CHANGED)
-  await wire.answer('files.diff', { ref: 'HEAD', diff: DIFF, truncated: false })
+  await wire.answer('files.diff', headDiff())
   await flushPromises()
   return wrapper
 }
@@ -97,7 +119,7 @@ describe('ChangesPanel (WEB-1b)', () => {
     const wrapper = mount(ChangesPanel)
     await flushPromises()
     await wire.answer('files.changed', { items: [{ path: 'b/new.ts', status: 'R', from: 'b/old.ts' }], truncated: false })
-    await wire.answer('files.diff', { ref: 'HEAD', diff: DIFF, truncated: false })
+    await wire.answer('files.diff', headDiff())
     await flushPromises()
     expect(wrapper.find('[data-testid="changed-row-b/new.ts"]').text()).toContain('b/old.ts')
   })
@@ -107,7 +129,7 @@ describe('ChangesPanel (WEB-1b)', () => {
     const wrapper = mount(ChangesPanel)
     await flushPromises()
     await wire.answer('files.changed', { ...CHANGED, truncated: true })
-    await wire.answer('files.diff', { ref: 'HEAD', diff: DIFF, truncated: true })
+    await wire.answer('files.diff', headDiff({ truncated: true }))
     await flushPromises()
     expect(wrapper.find('[data-testid="changes-truncated"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="diff-truncated"]').exists()).toBe(true)
@@ -152,14 +174,14 @@ describe('ChangesPanel (WEB-1b)', () => {
     await wrapper.find('[data-testid="changes-reload"]').trigger('click')
     await flushPromises()
     await wire.answer('files.changed', CHANGED)
-    await wire.answer('files.diff', { ref: 'HEAD', diff: DIFF, truncated: false })
+    await wire.answer('files.diff', headDiff())
     await flushPromises()
     expect(wrapper.find('[data-testid="changes-selected"]').text()).toBe('src/a.ts')
 
     await wrapper.find('[data-testid="changes-reload"]').trigger('click')
     await flushPromises()
     await wire.answer('files.changed', { items: [{ path: 'only.ts', status: 'M' }], truncated: false })
-    await wire.answer('files.diff', { ref: 'HEAD', diff: DIFF, truncated: false })
+    await wire.answer('files.diff', headDiff())
     await flushPromises()
     expect(wrapper.find('[data-testid="changes-selected"]').text()).toBe('all files')
   })
@@ -185,8 +207,111 @@ describe('ChangesPanel (WEB-1b)', () => {
     await flushPromises()
     expect(wrapper.find('[data-testid="changes-panel"]').exists()).toBe(true)
     await wire.answer('files.changed', CHANGED)
-    await wire.answer('files.diff', { ref: 'HEAD', diff: DIFF, truncated: false })
+    await wire.answer('files.diff', headDiff())
     await flushPromises()
     expect(wrapper.findAll('[data-testid^="changed-row-"]')).toHaveLength(3)
+  })
+})
+
+describe('ChangesPanel base selector (C-TUI-2.g)', () => {
+  function viewing(sessionId: string) {
+    usePanelsStore().sessionId = sessionId
+  }
+
+  it('names the session to files.diff and offers the bases the answer counts', async () => {
+    await wire.connect()
+    viewing('s-1')
+    const wrapper = mount(ChangesPanel)
+    await flushPromises()
+    expect(wire.sent('files.diff').at(-1)?.params).toEqual({ sessionId: 's-1' })
+    expect(wire.sent('files.changed').at(-1)?.params).toEqual({}, 'the changed-list never takes a base')
+    await wire.answer('files.changed', CHANGED)
+    await wire.answer('files.diff', headDiff({ checkpoints: 2 }))
+    await flushPromises()
+    const select = wrapper.find('[data-testid="changes-base"]')
+    expect(select.exists()).toBe(true)
+    const options = select.findAll('option').map((option) => option.text())
+    expect(options).toEqual(['HEAD', '1 turn ago', '2 turns ago'])
+    expect(select.element.value).toBe('0')
+  })
+
+  it('choosing a base re-fetches against it and shows which ref answered', async () => {
+    await wire.connect()
+    viewing('s-1')
+    const wrapper = mount(ChangesPanel)
+    await flushPromises()
+    await wire.answer('files.changed', CHANGED)
+    await wire.answer('files.diff', headDiff({ checkpoints: 2 }))
+    await flushPromises()
+
+    await wrapper.find('[data-testid="changes-base"]').setValue('2')
+    await flushPromises()
+    expect(wire.sent('files.diff').at(-1)?.params).toEqual({ sessionId: 's-1', checkpoint: 2 })
+    await wire.answer('files.changed', CHANGED)
+    await wire.answer('files.diff', { ref: 'checkpoint:11', diff: CHECKPOINT_DIFF, truncated: false, checkpoints: 2, omittedLines: 0 })
+    await flushPromises()
+
+    const diff = wrapper.find('[data-testid="diff"]').text()
+    expect(diff).toContain('three')
+    expect(diff).not.toContain('keep', 'the checkpoint diff replaced the HEAD text — no mixing of bases')
+    expect(wrapper.find('[data-testid="changes-diff-ref"]').text()).toBe('against checkpoint:11')
+  })
+
+  it('degrades to HEAD alone when the session has no bases', async () => {
+    await wire.connect()
+    viewing('s-1')
+    const wrapper = mount(ChangesPanel)
+    await flushPromises()
+    await wire.answer('files.changed', CHANGED)
+    await wire.answer('files.diff', headDiff({ checkpoints: 0 }))
+    await flushPromises()
+    const select = wrapper.find('[data-testid="changes-base"]')
+    expect(select.findAll('option').map((option) => option.text())).toEqual(['HEAD'])
+  })
+
+  it('shows no selector and sends the old bare request without a session', async () => {
+    await wire.connect()
+    const wrapper = await openPanel()
+    expect(wrapper.find('[data-testid="changes-base"]').exists()).toBe(false)
+    expect(wire.sent('files.diff').at(-1)?.params).toEqual({})
+  })
+
+  it('a refused checkpoint is a stub in the panel, never a silent HEAD diff', async () => {
+    await wire.connect()
+    viewing('s-1')
+    const wrapper = mount(ChangesPanel)
+    await flushPromises()
+    await wire.answer('files.changed', CHANGED)
+    await wire.answer('files.diff', headDiff({ checkpoints: 2 }))
+    await flushPromises()
+
+    await wrapper.find('[data-testid="changes-base"]').setValue('1')
+    await flushPromises()
+    await wire.answer('files.changed', CHANGED)
+    await wire.fail('files.diff', -32009, 'no_checkpoints', 'this session has no workspace checkpoints')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="changes-diff-error"]').text()).toContain('no workspace checkpoints')
+    expect(wrapper.find('[data-testid="diff"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="changes-count"]').text()).toBe('3 changed', 'the list survives its sibling refusal')
+  })
+
+  it('switching sessions drops back to HEAD and re-asks', async () => {
+    await wire.connect()
+    viewing('s-1')
+    const wrapper = mount(ChangesPanel)
+    await flushPromises()
+    await wire.answer('files.changed', CHANGED)
+    await wire.answer('files.diff', headDiff({ checkpoints: 2 }))
+    await flushPromises()
+    await wrapper.find('[data-testid="changes-base"]').setValue('2')
+    await flushPromises()
+    await wire.answer('files.diff', { ref: 'checkpoint:11', diff: CHECKPOINT_DIFF, truncated: false, checkpoints: 2, omittedLines: 0 })
+    await flushPromises()
+
+    usePanelsStore().sessionId = 's-2'
+    await nextTick()
+    await flushPromises()
+    expect(wire.sent('files.diff').at(-1)?.params).toEqual({ sessionId: 's-2' }, 'a new session starts on HEAD, not the old base')
+    expect(wrapper.find('[data-testid="changes-base"]').element.value).toBe('0')
   })
 })

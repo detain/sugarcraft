@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import type { MethodResult } from '../../protocol/generated'
+import { computed, onMounted, ref, watch } from 'vue'
+import type { MethodParams, MethodResult } from '../../protocol/generated'
 import { diffSectionForPath } from '../../lib/diff'
 import { useConnectionStore } from '../../stores/connection'
+import { usePanelsStore } from '../../stores/agents/panels'
 import { describe } from '../../stores/session'
 import DiffView from '../DiffView.vue'
 import FileViewer from '../FileViewer.vue'
@@ -15,8 +16,16 @@ import FileViewer from '../FileViewer.vue'
  * Fail-soft per side (w4j: Promise.allSettled, the AboutModal shape): a
  * refused diff is a stub inside the panel, never a discarded changed-list;
  * a refused list is an error line. The panel stays mounted for a reload.
+ *
+ * C-TUI-2.g: the diff can be taken against an earlier CHECKPOINT instead of
+ * only HEAD. The wire's answer carries `checkpoints` — how many bases exist
+ * for the session being viewed — and a `<select>` turns that count into the
+ * same newest-first choice `/diff n` offers on the terminal. With no session
+ * (or no bases) the selector degrades to HEAD alone; a refused checkpoint
+ * lands in the diff stub, never as a silent HEAD fallback.
  */
 const connection = useConnectionStore()
+const panels = usePanelsStore()
 
 type ChangedItem = MethodResult<'files.changed'>['items'][number]
 
@@ -25,6 +34,10 @@ const changedTruncated = ref(false)
 const diffText = ref('')
 const diffTruncated = ref(false)
 const diffError = ref<string | null>(null)
+const diffRef = ref('')
+/** C-TUI-2.g: 0 is HEAD; N>0 is the Nth checkpoint base, newest first. */
+const base = ref(0)
+const bases = ref(0)
 const selected = ref<string | null>(null)
 const loading = ref(false)
 const loaded = ref(false)
@@ -32,12 +45,19 @@ const error = ref<string | null>(null)
 /** C-WEB-3.b: a row's "view" opens the shared read-only {@see FileViewer}. */
 const viewerPath = ref<string | null>(null)
 
+/** The `files.diff` arguments the current selection implies (C-TUI-2.g). */
+function diffParams(): MethodParams<'files.diff'> {
+  const session = panels.sessionId
+  if (session === null) return {}
+  return base.value > 0 ? { sessionId: session, checkpoint: base.value } : { sessionId: session }
+}
+
 async function load(): Promise<void> {
   loading.value = true
   error.value = null
   const [changed, diff] = await Promise.allSettled([
     connection.request('files.changed', {}),
-    connection.request('files.diff', {}),
+    connection.request('files.diff', diffParams()),
   ])
   if (changed.status === 'fulfilled') {
     items.value = changed.value.items
@@ -51,14 +71,34 @@ async function load(): Promise<void> {
     diffError.value = null
     diffText.value = diff.value.diff
     diffTruncated.value = diff.value.truncated
+    diffRef.value = diff.value.ref
+    bases.value = diff.value.checkpoints
+    if (base.value > diff.value.checkpoints) base.value = diff.value.checkpoints
   } else {
     // A refused diff clears any stale text: an error stub, never last run's hunks.
     diffError.value = describe(diff.reason)
     diffText.value = ''
     diffTruncated.value = false
+    diffRef.value = ''
   }
   loading.value = false
 }
+
+/** Choosing a base re-fetches the diff against it; the changed-list is unaffected. */
+function chooseBase(event: Event): void {
+  const value = Number((event.target as HTMLSelectElement).value)
+  base.value = Number.isNaN(value) ? 0 : value
+  void load()
+}
+
+watch(
+  () => panels.sessionId,
+  () => {
+    base.value = 0
+    bases.value = 0
+    void load()
+  },
+)
 
 /** Clicking a row narrows the diff to that file; clicking it again widens back out. */
 function pick(item: ChangedItem): void {
@@ -80,6 +120,20 @@ onMounted(() => void load())
 <template>
   <div class="changes-panel" data-testid="changes-panel">
     <div class="head">
+      <!-- C-TUI-2.g: the base selector only exists once a session is being viewed;
+           with no session, or no bases, HEAD is the only honest option. -->
+      <select
+        v-if="panels.sessionId !== null"
+        class="base"
+        :value="base"
+        data-testid="changes-base"
+        aria-label="Diff base"
+        :disabled="loading"
+        @change="chooseBase"
+      >
+        <option :value="0">HEAD</option>
+        <option v-for="k in bases" :key="k" :value="k">{{ k }} turn{{ k === 1 ? '' : 's' }} ago</option>
+      </select>
       <span v-if="loaded" class="count" data-testid="changes-count">{{ items.length }} changed</span>
       <button type="button" class="link" data-testid="changes-reload" :disabled="loading" @click="load">reload</button>
     </div>
@@ -114,7 +168,8 @@ onMounted(() => void load())
         <div class="diff-head">
           <span v-if="selection" class="sel" data-testid="changes-selected">{{ selection.path }}</span>
           <span v-else class="sel" data-testid="changes-selected">all files</span>
-          <span v-if="selection" class="hint">click the row again for the whole diff</span>
+          <span v-if="base > 0" class="hint" data-testid="changes-diff-ref">against {{ diffRef }}</span>
+          <span v-else-if="selection" class="hint">click the row again for the whole diff</span>
         </div>
         <DiffView :diff="shownDiff" />
       </template>
@@ -134,6 +189,10 @@ onMounted(() => void load())
 }
 .head button {
   margin-left: auto;
+}
+.base {
+  font-size: 0.75rem;
+  padding: 0.05rem 0.2rem;
 }
 .list {
   list-style: none;
