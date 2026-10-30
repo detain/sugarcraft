@@ -617,6 +617,12 @@ Environment variables:
                           is not a number at all, does not count as set — it
                           falls through to the next source rather than
                           discarding it.
+   CANDY_CODE_ADVISOR_MODEL
+                          The model the `Advisor` tool consults for a second
+                          opinion: a tool-less completion, billed like any
+                          other call. Unlike CANDY_CODE_TITLE_MODEL there
+                          is no cheap fallback — unset means the tool is
+                          not offered at all. Read at launch.
    CANDY_CODE_TITLE_MODEL The cheap model used to auto-name a session after
                           its first exchange; defaults to the provider's.
    CANDY_CODE_SUMMARY_MODEL

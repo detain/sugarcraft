@@ -99,7 +99,7 @@ final readonly class ToolBuildContext
         /**
          * C-PRV-3.d: the session's durable spend totals —
          * `fn(string $sessionId): ?array` in
-         * {@see \SugarCraft\Code\Host\EnhancedSessionStore::usageTotals()}'s
+         * {@see \SugarCraft\Code\Session\EnhancedSessionStore::usageTotals()}'s
          * shape — the lower-bound source the Advisor checks its call against
          * before dialing. Null skips the durable check; the per-turn counter
          * still stands.

@@ -89,7 +89,7 @@ final readonly class AdvisorTool implements Tool, BuildsFromCatalog, DelegatesTo
         private ?Backend $advisorBackend = null,
         /** @var (Closure(string): array<int, \SugarCraft\Code\Message>)|null */
         private ?\Closure $transcript = null,
-        /** @var (Closure(string): array{calls: int, totalTokens: int, costUsd: float, unpriced: int}|null)|null */
+        /** @var (Closure(string): array{calls: int, totalTokens: int, costUsd: float, unpriced: bool}|null)|null */
         private ?\Closure $sessionSpend = null,
         private ?EngineBackend $engine = null,
         /**
