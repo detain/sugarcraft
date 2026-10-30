@@ -2948,7 +2948,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Ruling:** Create a Homebrew tap repo plus a push secret? (Without it the step ships the formula only as a release asset, and the push leg stays off.) — see §6
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-6.d`
 
-#### C-SES-7.b — `candy-code session import` verb
+#### ✅ a6c45be43 C-SES-7.b — `candy-code session import` verb (picks 864c90c59, a36d8f367, d4c60d561, d46c6ecbf -> 2c665769e, 84b248f45, 0f4806572, a6c45be43 on master 1525b1832 (all four patch-id SAME; zero conflicts — README/en.php/ParsedArgs auto-merged additive beside landed C-WEB-5.a hunks: SUBCOMMAND_FLAGS['serve'] intact beside session region :135, TLS help block intact beside import keys en.php :1088-1093, cli.session.usage :1120 carries the import verb — r2 F-1 cure d46c6ecbf landed; REVIEW-3 CLEAN 0C/0M/0stepMINOR). F-4 history: lane commit d4c60d561's subject restates a36d8f367's content though it carries only the two census files (StderrEmitterCensus 35->36 sites + BinCandyCodeAutoloadGuard THIRTY-SIX); picks ride as-is. Merged gates: SessionImport|SessionSubcommands 48T/313A OK; ReadmeRosterDrift|GlobDialect 24T/447A OK; staleness pair 4T/2F standing (NOT re-pinned). 283T census/lang filter: 3 FOREIGN C-WEB-5.a-carried standing reds — CliLangCatalogue cli.serve.tls.missing-vs-mismatch sort (en.php :1055-1056 at 1525b1832) + TreeWideGuardRoster ServeArgsTest.php:509 scandir($this->tlsDir) x2 (zero ServeArgs roster rows at that sha) — all three statically proven at base, reported to lead, not chased (assertion delta +29 vs lane = C-WEB-5.a lang-key growth). Generators gen-command-docs/gen-tool-docs/gen-settings-doc --write ZERO drift; no src/Protocol, no candy-code-web -> no schema trio, no npm/dist. DUR carry: new test FILE candy-code/tests/Cli/SessionImportSubcommandTest.php (11T) unlisted in scripts/parallel-tests-durations.tsv — DUR row + suite-figure/README re-pin = §7 closeout battery regen carry (WEB-5.a precedent: lane-forbidden files untouched at weld). §4 ParsedArgs erratum on the dated line below; §3 W24 stays open; batch-1030)
 - **Item:** C-SES-7 (sources: GAP-SES-10, p2-miss: session import) · gap · effort S
 - **What:** Add `candy-code session import <file> [--format auto|candy-code|claude-code|codex|opencode] [--name <n>] [--output-format json]`. It runs the C-SES-7.a importer and prints the new id plus a `--resume` hint. …
 - **Files — create:** `candy-code/tests/Cli/SessionImportSubcommandTest.php`
@@ -2958,6 +2958,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Serialized:** [headless] [lang:cli.session.import] [docs:README.md]
 - **Deps:** C-SES-7.a (W14)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-7.b`
+- **2026-10-30 weld erratum (dated, history preserved):** the declared file set above omits `candy-code/src/Cli/ParsedArgs.php` (`SUBCOMMAND_FLAGS['session']` region) — the landed edit is a structural necessity of this step (ArgvParser reads scoped value flags only from that table; reverting it makes the import verb's `--format`/`--name` unparseable) and the region has zero W24 co-tenant claims. Landed in pick 2c665769e.
 
 #### C-SES-7.d — Resume-cost guard
 - **Item:** C-SES-7 (sources: CC-new#10) · feature · effort M
