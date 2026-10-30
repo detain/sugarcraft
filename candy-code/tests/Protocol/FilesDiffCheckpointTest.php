@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Host\Commands\Checkpoints;
 use SugarCraft\Code\Host\SessionHub;
 use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Protocol\Dispatcher;
@@ -49,6 +50,9 @@ final class FilesDiffCheckpointTest extends TestCase
     private ServerContext $diffContext;
 
     private Dispatcher $diffDispatcher;
+
+    /** Every line the served context's log sink received — ISS-057's channel. */
+    private array $diffLogLines = [];
 
     protected function setUp(): void
     {
@@ -142,6 +146,68 @@ final class FilesDiffCheckpointTest extends TestCase
         self::assertSame('ref_with_checkpoint', $response['error']['data']['kind'] ?? null);
     }
 
+    /**
+     * MINOR-2: `no_store` is its own named refusal, pinned — without it a
+     * store-less server would answer with a TypeError-rendered internal
+     * error (guard removal reddens exactly this test).
+     */
+    public function testARequestAgainstAStorelessServerRefusesNoStoreByItsOwnName(): void
+    {
+        $workspace = WorkspaceContext::new(
+            root: $this->repo,
+            sessionStore: null,
+            backend: new ScriptedTurnBackend(),
+            backendFactory: static fn (string $provider): Backend => EngineBackend::new(new ScriptedProvider([]), 'stale-' . $provider),
+        );
+        $config = ServerConfig::new($this->tmp);
+        $hub = SessionHub::new($workspace, $config->maxOpenSessions);
+        $dispatcher = Dispatcher::new(ServerContext::new($hub, $config->withRoot($this->repo), 'test', Loop::get()));
+        try {
+            $client = WireClient::open($dispatcher, 'storeless-client');
+            $client->hello();
+
+            $response = $client->request('files.diff', ['sessionId' => 'undo-session', 'checkpoint' => 1]);
+        } finally {
+            $dispatcher->stop('test over');
+            $hub->closeAll();
+        }
+
+        self::assertSame('no_store', $response['error']['data']['kind'] ?? null, 'a bare `checkpoint` against a server with no store refuses by name, not by crash');
+        self::assertArrayNotHasKey('result', $response);
+    }
+
+    /**
+     * MINOR-2 + MINOR-1: a checkpoint whose repository is gone refuses under
+     * the `checkpoint_diff_failed` kind, the refusal carries a FIXED literal
+     * (the reason can name server absolute paths, and the kind already
+     * carries the machine meaning), and that reason reaches the server's log
+     * sink instead of staying silent (the ISS-057 law the bg.spawn refusal
+     * set).
+     */
+    public function testADiffThatCannotBeTakenRefusesByNameAndKeepsServerPathsInTheLog(): void
+    {
+        $this->checkpointAfterEdit("one\n", 'first prompt');
+
+        // Corrupt the captured shape after capture: it still passes the
+        // isCaptured gate (status, ref prefix, hex sha untouched), but its
+        // repository no longer exists — the state an old session meets when
+        // the checkout that snapshotted it is gone.
+        $position = Checkpoints::fileCheckpointPositions($this->store, 'undo-session', 1000)[0];
+        $workspace = $position['workspace'];
+        $vanished = $this->tmp . '/gone/.git';
+        $workspace['gitDir'] = $vanished;
+        self::assertTrue($this->store->attachWorkspaceRef('undo-session', (int) $position['index'], $workspace));
+
+        $response = $this->diffClient()->request('files.diff', ['sessionId' => 'undo-session', 'checkpoint' => 1]);
+
+        self::assertSame('checkpoint_diff_failed', $response['error']['data']['kind'] ?? null);
+        self::assertSame('the checkpoint diff is unavailable', $response['error']['message'] ?? null, 'a literal sentence, never the reason concatenated onto it');
+        self::assertStringNotContainsString($this->tmp, (string) json_encode($response), 'no server absolute path rides the wire');
+        $logged = implode("\n", $this->diffLogLines);
+        self::assertStringContainsString('files.diff checkpoint diff failed', $logged, 'the refusal that hides a cause owes it to the server log');
+        self::assertStringContainsString($vanished, $logged, 'the log line carries the path the wire must not');
+    }
+
     public function testTheMethodIsStillAReadOnTheRoster(): void
     {
         $spec = Dispatcher::methods()->get('files.diff');
@@ -174,7 +240,15 @@ final class FilesDiffCheckpointTest extends TestCase
 
         $config = ServerConfig::new($this->tmp);
         $this->diffHub = SessionHub::new($workspace, $config->maxOpenSessions);
-        $this->diffContext = ServerContext::new($this->diffHub, $config->withRoot($this->repo), 'test', Loop::get());
+        $this->diffContext = ServerContext::new(
+            $this->diffHub,
+            $config->withRoot($this->repo),
+            'test',
+            Loop::get(),
+            log: function (string $line): void {
+                $this->diffLogLines[] = $line;
+            },
+        );
         $this->diffDispatcher = Dispatcher::new($this->diffContext);
     }
 

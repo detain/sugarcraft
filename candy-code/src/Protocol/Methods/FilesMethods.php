@@ -110,7 +110,15 @@ final class FilesMethods
         $target = $bases[\min($checkpoint, \count($bases)) - 1];
         $diff = CheckpointDiff::of($store->workspaceCheckpointer(self::root($call)), $target['workspace']);
         if (\is_string($diff)) {
-            throw RpcError::of(ErrorCode::Conflict, 'the checkpoint diff is unavailable: ' . $diff, 'checkpoint_diff_failed');
+            // The reason can name server absolute paths (a gitDir that is
+            // gone, a project directory that does not exist), and the machine
+            // meaning already rides the `kind` — so nothing but a fixed
+            // literal goes on the wire. The cause is not swallowed either
+            // (ISS-057): the caller that hides it owes it to the server's
+            // log sink, the same line the bg.spawn refusal writes.
+            $call->server->logError(new \RuntimeException($diff), 'files.diff checkpoint diff failed');
+
+            throw RpcError::of(ErrorCode::Conflict, 'the checkpoint diff is unavailable', 'checkpoint_diff_failed');
         }
 
         return [
