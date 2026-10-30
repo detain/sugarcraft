@@ -134,6 +134,7 @@ candy-code/tests/SwallowingCatchCensusTest.php	2.784	2
 candy-code/tests/Support/ChildStderrCaptureTest.php	2.782	6
 candy-code/tests/Agents/AgentWorkerPoolRetryTest.php	2.776	14
 candy-code/tests/Cli/BootstrapSkillSkipsTest.php	2.763	32
+candy-code/tests/Commands/UsageCommandTest.php	2.745	21
 candy-code/tests/Server/MultiSessionAttentionTest.php	2.719	8
 candy-code/tests/Sessions/BackgroundSupervisorTest.php	2.712	29
 candy-code/tests/Tools/ToolOutputBudgetTest.php	2.690	35
@@ -553,7 +554,6 @@ candy-code/tests/Support/RequirementDirectiveProvenanceTest.php	0.309	18
 candy-code/tests/Workspace/ShadowGarbageCollectorTest.php	0.309	3
 candy-code/tests/RepoMap/TagCacheTest.php	0.308	16
 candy-code/tests/Commands/McpAuthCommandDiscoveryTest.php	0.306	6
-candy-code/tests/Commands/UsageCommandTest.php	0.306	11
 candy-code/tests/Renderer/ClipToWidthCellDisciplineTest.php	0.304	7
 candy-code/tests/Cli/BootstrapTrustGateSelfGrantTest.php	0.303	8
 candy-code/tests/Cli/BootstrapTerminalGuidanceNoticeTest.php	0.302	15

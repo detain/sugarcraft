@@ -16,7 +16,13 @@ Base anchor: master = d07d55956 (STEP 0 VERIFIED). Single master writer. No push
 - WELD 1 gates: LspSubcommandTest 13T/118A OK (brief figure; builder 12T/108A pre-fix, tip truth 13/118 per r1 WELD NOTE). DocFigureProseDrift 92T/4167A OK. ReadmeRosterDrift|CommandDocsDrift 16T/89A OK. gen-command-docs --check rc=0 WITHOUT COMMANDS.md touch (builder omission correct per r1 — NOT regenerated). 2 PHPUnit deprecations = environmental standing pair.
 - WELD 1 DUR: MINT LspSubcommandTest 0.145/13 @ tsv row 677 (median-of-3 junit testcase-sums 0.144873/0.144113/0.150820), tsv 1661→1662.
 - WELD 1 §4 mark bcb64cf06 (last CONTENT pick per house precedent 1030S/T; evidence commit excluded) + weld bullet w/ 2 REVIEW-1 NITs recorded NOT-taken.
-- STEP 1 payload commit: pending (this commit = mark + DUR + this report).
+- STEP 1 payload commit: 1ea8bb797 (name-only verified: plan_comparison.md, tsv, report).
 
-## STEP 2 C-SES-8.b
-(pending)
+## STEP 2 C-SES-8.b (DONE)
+- r1 erratum rider applied to main-tree REPORT.md line 11 BEFORE collect: dropped 'title' from 'description/usage/title prose' (r1 blob-proof cmd.usage.title byte-identical base->tip); disclosed in evidence commit message.
+- Evidence commit 359b9fc99 on cc/C-SES-8.b; picks all clean patch-id SAME: 7bd95ba29->9c784d441, 6ea7c64b4->e9852993a, b433d9858->4e896dd88, evidence->c9cee706c. Drift since old base only COMMANDS.md/en.php/Chat.php, auto-merged.
+- Gates: UsageCommandTest 21T/103A exact; UsageSubcommandTest exact-class 9T/71A (substring sweeps BinCandyCodeWiring dataset -> 10T/77A, benign); LangParity 7T/3319A; CommandDocsDrift green; gen-command-docs --check rc=0 post-p3; KeyHelpTest = 5F foreign standing shape exactly.
+- DUR: UsageCommandTest cases 11->21 => RE-TIME row 0.306/11 -> 2.745/21 (median-of-3 2.744611/2.281960/3.763056), row relocated to line 137 (descending sort kept, 1662 lines). UsageSubcommandTest row untouched (9 cases unchanged).
+- FINDING CARRIED (from STEP 1, re-confirmed post-STEP-2): StderrEmitterCensusTest 3F — Subcommands.php fwrite roster 7 vs scan 8; shape roster 46 vs scan 51; BinCandyCodeAutoloadGuardTest prose 'thirty-six' vs scan 37. Introduced by C-TOOL-5.d lsp pick d7a2efbf1 (lane never touched the guard; lane gate list omitted it; r2 missed it). NOT on frozen standing-red list. Lead INSERTED STEP 3.5: master-direct cure AFTER STEP 3, roster rows + decision comment + PROSE_SITES/NUMBER_WORDS trio, numerals proven from landed blobs at cure time (SEC-8.b may move them further — re-measure on live tree).
+- §4 mark ✅ 4e896dd88 written (last CONTENT pick; evidence anchor c9cee706c named in bullet). §7: +730/-50, +14T (measured, brief said +7 — disclosed).
+- STEP 2 payload commit: pending (mark + DUR + report).
