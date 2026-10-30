@@ -239,7 +239,8 @@ On the wire the carried bytes reach Anthropic-family models as a real
 magic before emission and spelled by the one shared `anthropicDocument()`
 encoder, so a PDF entering through either door presents identically. The
 OpenAI-style chat `role: tool` string stays the documented decline, the
-Responses-API sibling owns that leg, and Gemini/Bedrock carry no tool calls
+Responses-API sibling carries the same bytes as an `input_file` part on its
+tool row (C-TOOL-2.g), and Gemini/Bedrock carry no tool calls
 to attach to at all.
 
 ## Security posture

@@ -364,8 +364,10 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
     /**
      * C-TOOL-2.e: PDFs ride the chat/completions `file` part (a
      * `data:application/pdf` `file_data`), which the official API accepts on
-     * its vision models. Only the chat arm builds that part — the Responses
-     * arm's `input_file` is a file-ID construct, not this shape — and the
+     * its vision models. The flag stays chat-only — the Responses arm's USER
+     * rows keep declining the block (its tool rows carry a native
+     * `input_file` part since C-TOOL-2.g; an earlier note here calling that
+     * part a file-ID-only construct was corrected by the same step) — and the
      * model gate is the vision TABLE answer, deliberately not the provider
      * block's `supportsVision` override: an override buys images (an
      * `image_url` part any chat model tolerates structurally), it does not
@@ -424,6 +426,28 @@ final readonly class OpenAIProvider implements ProviderInterface, RebindsModel, 
     protected function responsesToolResultImageBudget(): int
     {
         return AnthropicProvider::TOOL_RESULT_IMAGE_MAX_BYTES;
+    }
+
+    /**
+     * C-TOOL-2.g ({@see OpenAiResponsesWire}): the tool-document ceiling is
+     * ANTHROPIC's constant for the same trait-constant reason as
+     * {@see responsesToolResultImageBudget()} — one budget, both wires.
+     */
+    protected function responsesToolResultDocumentBudget(): int
+    {
+        return AnthropicProvider::TOOL_RESULT_DOCUMENT_MAX_BYTES;
+    }
+
+    /**
+     * C-TOOL-2.g ({@see OpenAiResponsesWire}): the tool-row document gate is
+     * the vision TABLE answer, exactly the leg {@see supportsDocuments()}
+     * applies on the chat arm — the provider block's `supportsVision`
+     * override buys images, it does not teach a non-vision deployment to
+     * read PDFs (the C-TOOL-2.e law, restated for the Responses wire).
+     */
+    protected function responsesDocumentModelGate(): bool
+    {
+        return self::visionTable($this->defaultModel);
     }
 
     public function supportsJsonSchema(): bool

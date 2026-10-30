@@ -38,8 +38,10 @@ use SugarCraft\Code\Messages\UserMessage;
  * shaved to the Converse charset), Gemini — and Vertex's Gemini arm through
  * the same shared encoders — carries it as `application/pdf` `inlineData`,
  * and the OpenAI chat arm carries it as a `file` part with a
- * `data:application/pdf` URL (opt-in by caller, so the Responses arm and the
- * SGLang/Custom-compatible servers that share these encoders keep declining).
+ * `data:application/pdf` URL (opt-in by caller, so the SGLang/Custom-compatible
+ * servers that share these encoders, and the Responses arm's USER rows, keep
+ * declining — the Responses tool-row leg carries a native `input_file` part
+ * since C-TOOL-2.g, through {@see responsesInputFile()}).
  * On the native legs a document is carried only when its bytes are a real
  * `%PDF-` head within the inbound capture ceiling; what the wire cannot carry
  * — a forged or oversized PDF, and every document on a still-declining
@@ -56,9 +58,13 @@ final class AttachmentEncoding
      * chat/completions `file` part (`file_data` rides a `data:application/pdf`
      * URL, the documented pasting form). The flag names the CALLER's wire, not
      * the model — only {@see \SugarCraft\Code\Providers\OpenAIProvider}'s
-     * chat arm passes it. SGLang/Custom and the OpenAI Responses arm (where
-     * `input_file` is a Responses-API file-ID construct, not this shape) stay
-     * on the default and keep naming declined documents in the text instead.
+     * chat arm passes it, so SGLang/Custom and the OpenAI Responses USER rows
+     * stay on the default and keep naming declined documents in the text.
+     * (C-TOOL-2.g corrected an earlier note here claiming `input_file` was a
+     * file-ID-only construct: it is this API's pasted-PDF part shape too, and
+     * the Responses TOOL-ROW leg builds it natively through
+     * {@see responsesInputFile()} — a different door than this user-attachment
+     * encoder, which is why the flag law stands while the premise fell.)
      * A well-formedness check guards the native leg either way: a forged or
      * oversized PDF is named, never inlined.
      *
@@ -86,7 +92,7 @@ final class AttachmentEncoding
         foreach ($images as $image) {
             $parts[] = [
                 'type' => 'image_url',
-                'image_url' => ['url' => 'data:' . $image->mimeType . ';base64,' . base64_encode((string) $image->data)],
+                'image_url' => ['url' => self::dataUrl((string) $image->mimeType, (string) $image->data)],
             ];
         }
         foreach ($carried as $document) {
@@ -94,12 +100,25 @@ final class AttachmentEncoding
                 'type' => 'file',
                 'file' => [
                     'filename' => self::filePartName($document->name()),
-                    'file_data' => 'data:application/pdf;base64,' . base64_encode((string) $document->data),
+                    'file_data' => self::dataUrl('application/pdf', (string) $document->data),
                 ],
             ];
         }
 
         return $parts;
+    }
+
+    /**
+     * The one `data:` URL spelling shared by every leg that pastes base64
+     * bytes into a URL string: the chat image and chat `file` legs of
+     * {@see openAiContent()} above, and both media parts of the Responses
+     * tool row in {@see \SugarCraft\Code\Providers\Concerns\OpenAiResponsesWire}
+     * (C-PRV-2.b folded the image return through it, C-TOOL-2.g the file
+     * part) — one format for pasted bytes no matter which wire emits them.
+     */
+    public static function dataUrl(string $mediaType, string $bytes): string
+    {
+        return 'data:' . $mediaType . ';base64,' . base64_encode($bytes);
     }
 
     /**
@@ -172,6 +191,27 @@ final class AttachmentEncoding
                 'media_type' => $mediaType,
                 'data' => base64_encode($bytes),
             ],
+        ];
+    }
+
+    /**
+     * C-TOOL-2.g: the Responses `function_call_output` parts list's document
+     * member, in exactly one spelling — the tool-result leg in {@see
+     * \SugarCraft\Code\Providers\Concerns\OpenAiResponsesWire} is its only
+     * builder, mirroring how {@see anthropicDocument()} is the single Anthropic
+     * spelling shared by that wire's two doors. Unlike the Anthropic block (and
+     * the chat `file` part, which nests), the Responses part carries its keys
+     * flat, and the filename passes the same control-byte hygiene as
+     * {@see filePartName()} — the JSON-string hazard is wire-independent.
+     *
+     * @return array{type: string, filename: string, file_data: string}
+     */
+    public static function responsesInputFile(string $mediaType, string $bytes, string $name): array
+    {
+        return [
+            'type' => 'input_file',
+            'filename' => self::filePartName($name),
+            'file_data' => self::dataUrl($mediaType, $bytes),
         ];
     }
 

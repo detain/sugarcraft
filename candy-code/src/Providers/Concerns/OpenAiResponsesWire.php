@@ -159,16 +159,28 @@ trait OpenAiResponsesWire
                 // C-PRV-2.b: this wire's `output` is a parts list, so the
                 // pixels ride the tool row itself — the chat arm's string
                 // restriction (and its follow-up-turn workaround) does not
-                // apply here. No image keeps the plain-string spelling
-                // byte-identical to the pre-C-PRV-2.b arm.
+                // apply here. C-TOOL-2.g: the PDF leg joins them the same
+                // way — `input_file` IS this API's pasted-document part, so
+                // the Read-tool's carried bytes reach the model on a
+                // document-capable turn. Media order matches the Anthropic
+                // arm's blocks leg (caption, then image, then document);
+                // no media keeps the plain-string spelling byte-identical
+                // to the pre-C-PRV-2.b arm.
                 $image = $this->responsesToolResultImage($msg);
-                if ($image !== null) {
+                $document = $this->responsesToolResultDocument($msg);
+                if ($image !== null || $document !== null) {
                     $output = [];
                     if ($msg->content() !== '') {
                         $output[] = ['type' => 'input_text', 'text' => $msg->content()];
                     }
 
-                    $output[] = ['type' => 'input_image', 'image_url' => $image];
+                    if ($image !== null) {
+                        $output[] = ['type' => 'input_image', 'image_url' => $image];
+                    }
+
+                    if ($document !== null) {
+                        $output[] = $document;
+                    }
                 }
 
                 $items[] = [
@@ -415,6 +427,30 @@ trait OpenAiResponsesWire
     abstract protected function responsesToolResultImageBudget(): int;
 
     /**
+     * Byte budget for a tool-row document, named through the host for the same
+     * trait-constant reason as {@see responsesToolResultImageBudget()}: one
+     * ceiling covers documents on both wires — {@see
+     * \SugarCraft\Code\Providers\Concerns\AnthropicMessagesWire::TOOL_RESULT_DOCUMENT_MAX_BYTES}
+     * is the source of truth (C-TOOL-2 shipped it first), and a PDF that fit
+     * on one row fits on the other.
+     */
+    abstract protected function responsesToolResultDocumentBudget(): int;
+
+    /**
+     * C-TOOL-2.g: whether the configured model reads a pasted PDF on its own
+     * tool row, named through the host. This is deliberately NOT
+     * {@see supportsVision()}: the C-TOOL-2.e document gate law says a
+     * provider block's vision override buys images (an `image_url` part any
+     * chat model tolerates structurally), it does not teach a non-vision
+     * deployment to read PDFs — the same refusal this host's
+     * supportsDocuments() applies to the chat `file` part, and the reason
+     * that method cannot be consulted here: it is arm-gated to the chat
+     * spelling of user attachments, and this leg lives on the other arm. The
+     * host answers with the vision TABLE for the configured model.
+     */
+    abstract protected function responsesDocumentModelGate(): bool;
+
+    /**
      * C-PRV-2.b: the pixels a tool carried, as a data URL for this row's
      * `input_image` part. The gate ladder mirrors the Anthropic arm's
      * toolResultImage by DECISION, not by copy-paste habit: every rung is
@@ -440,10 +476,46 @@ trait OpenAiResponsesWire
             return null;
         }
 
-        // The data-URL spelling {@see AttachmentEncoding::openAiContent()}
-        // uses for user images — one format for image bytes on this wire,
-        // no matter which turn they entered the transcript from.
-        return 'data:' . $mediaType . ';base64,' . base64_encode($bytes);
+        // The one shared data-URL spelling ({@see AttachmentEncoding::dataUrl()})
+        // — same format image bytes wear on this wire no matter which turn
+        // they entered the transcript from.
+        return AttachmentEncoding::dataUrl($mediaType, $bytes);
+    }
+
+    /**
+     * C-TOOL-2.g: the PDF a tool carried, as this row's `input_file` part.
+     * The gate ladder mirrors the Anthropic arm's toolResultDocument rung for
+     * rung by DECISION — error rows stay text, the model must be able to read
+     * the bytes, the shared budget must hold, and the `%PDF-` head is
+     * re-sniffed so forged payload stays caption text instead of a 400.
+     *
+     * Two disclosed shape differences. The capability rung asks
+     * {@see responsesDocumentModelGate()}, the host's document-gate law
+     * restated for this arm, not the image leg's supportsVision() and not the
+     * provider's supportsDocuments() (arm-gated to the chat user-attachment
+     * spelling — consulting it here would leave this leg permanently dark,
+     * and flipping it would silently reroute the user flow the C-TOOL-2.e
+     * ruling keeps declining). And the builder returns the finished part —
+     * name hygiene lives in the shared encoder — where the image ladder
+     * returns the bare data URL.
+     */
+    private function responsesToolResultDocument(ToolResultMessage $msg): ?array
+    {
+        if ($msg->isError() || !$msg->hasDocument() || !$this->responsesDocumentModelGate()) {
+            return null;
+        }
+
+        $bytes = (string) $msg->documentBytes();
+        if ($bytes === '' || strlen($bytes) > $this->responsesToolResultDocumentBudget()) {
+            return null;
+        }
+
+        $mediaType = FileMentions::sniffDocument($bytes);
+        if ($mediaType === null) {
+            return null;
+        }
+
+        return AttachmentEncoding::responsesInputFile($mediaType, $bytes, (string) $msg->documentName());
     }
 
     /**
