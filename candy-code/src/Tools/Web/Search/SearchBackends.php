@@ -37,12 +37,22 @@ final class SearchBackends
 
     public const BACKEND_EXA = 'exa';
 
+    /**
+     * C-TOOL-2.c: the server-side choice. It is NOT an HTTP backend — the
+     * search runs provider-side inside one Anthropic Messages reply (see
+     * {@see \SugarCraft\Code\Providers\AnthropicProvider}), so this factory
+     * builds a refusal sentinel for it: a client-side WebSearch call under
+     * this spelling has nothing to dial, and says so by name.
+     */
+    public const BACKEND_ANTHROPIC = 'anthropic';
+
     /** The accepted `webSearchBackend` spellings, in menu order. */
     public const NAMES = [
         self::BACKEND_SEARXNG,
         self::BACKEND_BRAVE,
         self::BACKEND_TAVILY,
         self::BACKEND_EXA,
+        self::BACKEND_ANTHROPIC,
     ];
 
     /** Bytes one search response may carry before the read is abandoned. */
@@ -89,6 +99,38 @@ final class SearchBackends
             self::BACKEND_BRAVE => new BraveBackend($timeout, transport: $send, resolveAddresses: $resolve, isBlockedAddress: $blocked),
             self::BACKEND_TAVILY => new TavilyBackend($timeout, transport: $send, resolveAddresses: $resolve, isBlockedAddress: $blocked),
             self::BACKEND_EXA => new ExaBackend($timeout, transport: $send, resolveAddresses: $resolve, isBlockedAddress: $blocked),
+            // C-TOOL-2.c: the server-side choice has no client dial at all —
+            // an anonymous SearchBackend (no new PSR-4 type for a typeless
+            // role) that refuses by name. The Anthropic arm never reaches
+            // this object for searching: its request body swaps the local
+            // WebSearch definition for the provider's `web_search` server
+            // tool, so the model here has no client call to make; every
+            // OTHER provider's call lands on this refusal, which is the
+            // named reason the design asks for.
+            self::BACKEND_ANTHROPIC => new class implements SearchBackend {
+                public function name(): string
+                {
+                    return SearchBackends::BACKEND_ANTHROPIC;
+                }
+
+                public function isConfigured(): bool
+                {
+                    return false;
+                }
+
+                public function configurationRefusal(): string
+                {
+                    return 'Error: the `anthropic` web search backend runs server-side inside the '
+                        . 'direct Anthropic Messages provider\'s own reply, not as a client search — '
+                        . 'pick an HTTP backend (set webSearchBackend to searxng, brave, tavily or exa) '
+                        . 'for any other provider.';
+                }
+
+                public function search(string $query, ?int $safesearch, ?string $timeRange, int $maxResults): SearchResponse
+                {
+                    return SearchResponse::failed($this->configurationRefusal());
+                }
+            },
             default => throw new \InvalidArgumentException(
                 'unknown web search backend ' . $name . '; expected one of: ' . implode(', ', self::NAMES)
             ),

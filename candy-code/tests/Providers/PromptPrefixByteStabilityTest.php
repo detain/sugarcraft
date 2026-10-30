@@ -7,12 +7,16 @@ namespace SugarCraft\Code\Tests\Providers;
 use GuzzleHttp\Client;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Context\InstructionDiffTracker;
 use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Context\TurnContextBlock;
 use SugarCraft\Code\Message as RootMessage;
+use SugarCraft\Code\Messages\AssistantMessage;
+use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
+use SugarCraft\Code\Providers\AnthropicProvider;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Providers\CustomProvider;
@@ -22,9 +26,12 @@ use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Skills\SkillRosterDiffTracker;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Tests\Support\ScriptedProvider;
+use SugarCraft\Code\Tools\BuiltIn\WebSearch;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolCall;
+use SugarCraft\Code\Tools\ToolLimits;
 use SugarCraft\Code\Tools\ToolResult;
+use SugarCraft\Code\Tools\Web\Search\SearchBackends;
 
 /**
  * Steps 1.A-1/1.A-2's regression pin: two consecutive steps of one agentic
@@ -748,5 +755,69 @@ final class PromptPrefixByteStabilityTest extends TestCase
                 return new ToolResult(toolCallId: (string) ($args['toolCallId'] ?? ''), content: ($this->run)());
             }
         };
+    }
+
+    /**
+     * C-TOOL-2.c's anthropic leg of the byte-stability law: the
+     * server-side web search swap replaces the local `WebSearch` tool
+     * declaration with Anthropic's `web_search` server tool, and the prompt
+     * cache keys on the tools DOCUMENT bytes — so the swapped list must be a
+     * pure function of (static settings, tool list): byte-identical on every
+     * step of a turn, never wobbling as the history grows. Pinned here
+     * across two steps of one conversation, plus the sanity legs that the
+     * swap is real (the searxng-shaped list differs) and selective (the
+     * HTTP-backend default ships the client definition untouched).
+     */
+    public function testTheAnthropicToolListStaysByteIdenticalAcrossStepsUnderTheSwap(): void
+    {
+        $home = $this->tempDir();
+        mkdir($home . '/.candy-code', 0o700, true);
+        $this->useHomeSandbox($home);
+
+        Bootstrap::writeUserConfig([
+            ToolLimits::WEB_SEARCH_BACKEND_KEY => SearchBackends::BACKEND_ANTHROPIC,
+            ToolLimits::WEB_SEARCH_MAX_RESULTS_KEY => 5,
+        ]);
+
+        $bodies = [];
+        $seam = static function (string $endpoint, array $body) use (&$bodies): array {
+            $bodies[] = $body;
+
+            return ['content' => [], 'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 1, 'output_tokens' => 1]];
+        };
+        $provider = new AnthropicProvider('sk-test', 'https://api.anthropic.com', 'claude-sonnet-4-6', $seam);
+
+        $tools = [self::tool('Alpha', static fn (): string => 'a'), new WebSearch()];
+        $provider->complete(new CompleteRequest(model: 'claude-sonnet-4-6', messages: [new UserMessage('go')], tools: $tools));
+        $provider->complete(new CompleteRequest(
+            model: 'claude-sonnet-4-6',
+            messages: [new UserMessage('go'), new AssistantMessage('step one'), new UserMessage('again')],
+            tools: $tools,
+        ));
+
+        self::assertCount(2, $bodies);
+        $first = json_encode($bodies[0]['tools']);
+        $second = json_encode($bodies[1]['tools']);
+
+        self::assertSame($first, $second, 'the swapped tool list is frozen across steps — the cache breakpoint never moves');
+        self::assertStringContainsString('web_search_20250305', $first, 'the server tool is on the wire');
+        self::assertStringNotContainsString('"WebSearch"', $first, 'the client definition is fully replaced, not shadowed');
+
+        // The swap must be deterministic BY SETTING, not a coincidence of
+        // these fixtures: the same request against the HTTP-backend default
+        // keeps the client declaration, and the two documents differ.
+        Bootstrap::writeUserConfig([ToolLimits::WEB_SEARCH_BACKEND_KEY => SearchBackends::BACKEND_SEARXNG]);
+        $plain = [];
+        $plainSeam = static function (string $endpoint, array $body) use (&$plain): array {
+            $plain[] = $body;
+
+            return ['content' => [], 'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 1, 'output_tokens' => 1]];
+        };
+        $plainProvider = new AnthropicProvider('sk-test', 'https://api.anthropic.com', 'claude-sonnet-4-6', $plainSeam);
+        $plainProvider->complete(new CompleteRequest(model: 'claude-sonnet-4-6', messages: [new UserMessage('go')], tools: $tools));
+
+        self::assertStringContainsString('"WebSearch"', json_encode($plain[0]['tools']), 'with an HTTP backend the local definition ships');
+        self::assertStringNotContainsString('web_search_20250305', json_encode($plain[0]['tools']));
+        self::assertNotSame(json_encode($plain[0]['tools']), $first, 'the anthropic document is a real swap, not the same bytes both ways');
     }
 }

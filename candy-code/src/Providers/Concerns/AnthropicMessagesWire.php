@@ -145,6 +145,36 @@ trait AnthropicMessagesWire
      * @var list<string>
      */
     private const TRUNCATED_STOP_REASONS = ['max_tokens', 'MAX_TOKENS'];
+
+    // ---- C-TOOL-2.c: server-side web search (Anthropic's `web_search`) ----
+
+    /** Versioned type string of Anthropic's server-side web search tool. */
+    public const SERVER_WEB_SEARCH_TOOL_TYPE = 'web_search_20250305';
+
+    /** The name the server tool answers to on the wire. */
+    public const SERVER_WEB_SEARCH_TOOL_NAME = 'web_search';
+
+    /** The LOCAL client tool the server declaration replaces, in place. */
+    public const WEB_SEARCH_CLIENT_TOOL_NAME = 'WebSearch';
+
+    /**
+     * The stop reason that asks the CALLER to resend the same request with
+     * the partial assistant reply appended verbatim: the server paused
+     * mid-search and the turn is unfinished. Deliberately NOT in
+     * {@see TRUNCATED_STOP_REASONS} - a pause is a continuation, not a
+     * ceiling - and never a failure.
+     */
+    public const PAUSE_STOP_REASON = 'pause_turn';
+
+    /**
+     * How many continuation requests ONE paused turn may raise - a COUNT of
+     * legs, not a duration: the standing E646 ban is on wall-clock kills of
+     * LLM calls, and bounding the loop by requests is the sanctioned shape.
+     * A turn still pausing when the budget runs out is disclosed in the
+     * reply's Sources notice rather than retried forever.
+     */
+    public const MAX_PAUSED_TURN_CONTINUATIONS = 8;
+
     /**
      * Built-in USD-per-1K list rates, keyed by normalised model FAMILY
      * ({@see pricingFamily()}) => [input, output] (audit A15).
@@ -1065,8 +1095,47 @@ trait AnthropicMessagesWire
         ];
     }
     /**
+     * C-TOOL-2.c: the server-side web search declaration this arm would swap
+     * INTO the tools list, or null when it must not swap. The default is
+     * null on purpose: the swap means the provider itself runs the search
+     * inside the reply, and only the direct Anthropic Messages wire has that
+     * server tool — every other arm (Vertex `rawPredict`, Gemini) keeps the
+     * ordinary client-side `WebSearch` declaration untouched.
+     * {@see AnthropicProvider::anthropicServerWebSearchTool()} overrides.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function anthropicServerWebSearchTool(): ?array
+    {
+        return null;
+    }
+
+    /**
+     * C-TOOL-2.c: resend a PAUSED turn — the same body with the partial
+     * assistant reply appended verbatim — and return the next response
+     * document, or null to stop continuing. Default null: an arm whose trait
+     * never sets this hook never pauses, and an arm without the unary
+     * transport seam cannot redial. Overridden by
+     * {@see AnthropicProvider::anthropicServerWebSearchResume()}.
+     *
+     * @param array<string, mixed> $body the ORIGINAL request body
+     * @param list<array<string, mixed>> $assistantTurns partial replies, in order
+     * @return array<string, mixed>|null
+     */
+    protected function anthropicServerWebSearchResume(array $body, array $assistantTurns, string $model): ?array
+    {
+        return null;
+    }
+
+    /**
      * Anthropic declares tools flat (`name`/`description`/`input_schema`),
      * not inside OpenAI's `{type: function, function: {...}}` wrapper.
+     *
+     * Under C-TOOL-2.c the local `WebSearch` declaration is SWAPPED for the
+     * server tool IN PLACE — same slot, same order — when the native arm
+     * runs searches. Position is load-bearing: the prompt cache keys on
+     * these bytes and `withCacheBreakpoints()` marks the LAST tool, so a
+     * swap that moved entries would re-prefill the tools block every step.
      *
      * @param array<mixed> $tools
      * @return array<int, array<string, mixed>>
@@ -1074,9 +1143,16 @@ trait AnthropicMessagesWire
     private function formatAnthropicTools(array $tools): array
     {
         $formatted = [];
+        $serverTool = $this->anthropicServerWebSearchTool();
 
         foreach ($tools as $tool) {
             if ($tool instanceof Tool) {
+                if ($serverTool !== null && $tool->name() === self::WEB_SEARCH_CLIENT_TOOL_NAME) {
+                    $formatted[] = $serverTool;
+
+                    continue;
+                }
+
                 $formatted[] = [
                     'name' => $tool->name(),
                     'description' => $tool->description(),
@@ -1099,35 +1175,160 @@ trait AnthropicMessagesWire
     // -------------------------------------------------------------------------
     /**
      * @param array<string, mixed> $data
+     * @param array<string, mixed>|null $requestBody the body that produced
+     *                     $data — the pause_turn continuation (C-TOOL-2.c)
+     *                     needs it to resend; only the native unary arm
+     *                     passes it, every other caller (and the whole
+     *                     pre-C-TOOL-2.c shape) reads the identical reply
+     *                     through the identical walk.
      */
-    private function parseAnthropicResponse(array $data, string $model): CompleteResponse
+    private function parseAnthropicResponse(array $data, string $model, ?array $requestBody = null): CompleteResponse
     {
         if (isset($data['error'])) {
-            $message = $data['error']['message'] ?? sprintf('%s returned an error', $this->anthropicWireUnaryLabel());
-
-            $message = is_string($message) ? $message : sprintf('%s returned an error', $this->anthropicWireUnaryLabel());
-
-            return new CompleteResponse(
-                content: '',
-                isError: true,
-                // 2.7-1a: an overflow is named in the text, the only verdict
-                // channel an error response has (see ContextOverflow::describe()).
-                errorMessage: ContextOverflow::errorObjectOverflows($data['error'])
-                    ? ContextOverflow::describe($message)
-                    : $message,
-                // A rawPredict error arrives as a 200 carrying an error object,
-                // not as an HTTP status, so this is the only place its
-                // transience is visible. See
-                // TransientFailure::TRANSIENT_ANTHROPIC_ERROR_TYPES.
-                errorTransient: TransientFailure::anthropicErrorIsTransient($data['error']),
-                errorContextOverflow: ContextOverflow::errorObjectOverflows($data['error']),
-            );
+            return $this->anthropicErrorFrame($data);
         }
 
+        $leg = $this->anthropicMessageLeg($data, $model);
+
+        $text = $leg['text'];
+        $reasoning = $leg['reasoning'];
+        $toolCalls = $leg['toolCalls'];
+        $thinkingBlocks = $leg['thinkingBlocks'];
+        $usage = $leg['usage'];
+        $sources = $leg['sources'];
+        $stopReason = $leg['stopReason'];
+
+        // C-TOOL-2.c, the `pause_turn` continuation: the server paused the
+        // turn mid-search and asks the CALLER to resend with the partial
+        // assistant reply — server blocks included, they are the receipt of
+        // what it searched — appended VERBATIM. Bounded by leg count, never
+        // by a clock (E646): a provider that keeps pausing stops at
+        // MAX_PAUSED_TURN_CONTINUATIONS and the shortfall is disclosed in
+        // the Sources notice below.
+        $assistantTurns = [];
+        $continuations = 0;
+
+        while ($stopReason === self::PAUSE_STOP_REASON
+            && $requestBody !== null
+            && $leg['blocks'] !== []
+            && $continuations < self::MAX_PAUSED_TURN_CONTINUATIONS
+        ) {
+            $assistantTurns[] = ['role' => 'assistant', 'content' => $leg['blocks']];
+            $next = $this->anthropicServerWebSearchResume($requestBody, $assistantTurns, $model);
+
+            if ($next === null) {
+                break;
+            }
+
+            if (isset($next['error'])) {
+                // The legs before this one were really answered and really
+                // billed: their usage rides the error frame instead of being
+                // lost. The merged text has no channel on an error frame —
+                // disclosed loss, the refusal text is the user-visible verdict.
+                return $this->anthropicErrorFrame($next, $usage);
+            }
+
+            $leg = $this->anthropicMessageLeg($next, $model);
+            // The resumed text CONTINUES the same answer — no separator.
+            $text .= $leg['text'];
+            $reasoning .= $leg['reasoning'];
+            $toolCalls = array_merge($toolCalls, $leg['toolCalls']);
+            $thinkingBlocks = array_merge($thinkingBlocks, $leg['thinkingBlocks']);
+            $usage = $usage->plus($leg['usage']);
+            foreach (array_keys($leg['sources']) as $url) {
+                $sources[$url] = true;
+            }
+            $stopReason = $leg['stopReason'];
+            $continuations++;
+        }
+
+        // The UI-only "Sources" line (C-TOOL-2.c): folded into `reasoning`,
+        // the human ticker — never `content`, which replays to the model and
+        // persists as the answer — and names the unpriced-search lower
+        // bound exactly as the plan requires.
+        $notice = $this->anthropicSourcesNotice(
+            array_keys($sources),
+            $usage->webSearchRequests,
+            $stopReason === self::PAUSE_STOP_REASON,
+        );
+
+        if ($notice !== null) {
+            $reasoning = $reasoning === '' ? $notice : $reasoning . "\n" . $notice;
+        }
+
+        // P4.S2: one parsed Usage is the source of every usage number leaving
+        // this method; tokensUsed/costUsd keep their exact prior expressions
+        // for legitimate wire values (a negative count clamps to 0 per
+        // Usage's doctrine, as in SglangProvider::parseResponse()).
+        // E17: the whole parsed document also leaves on `usage:` — the unary
+        // reply's input/output/cache buckets now cross into Runtime.
+        // E707 (round 81): the unary Anthropic answer states its own ending.
+        return new CompleteResponse(
+            content: $text,
+            reasoning: $reasoning !== '' ? $reasoning : null,
+            toolCalls: $toolCalls === [] ? null : $toolCalls,
+            tokensUsed: $usage->totalTokens,
+            costUsd: $usage->costUsd,
+            usage: $usage,
+            truncated: in_array($stopReason, self::TRUNCATED_STOP_REASONS, true),
+            thinkingBlocks: $thinkingBlocks,
+        );
+    }
+
+    /**
+     * The error frame this method has always built for a 200-with-error
+     * document, lifted so the pause continuation can carry the ALREADY-PAID
+     * usage of earlier legs onto it (C-TOOL-2.c). With no carried Usage the
+     * frame is byte-identical to the pre-extraction shape.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function anthropicErrorFrame(array $data, ?Usage $carried = null): CompleteResponse
+    {
+        $message = $data['error']['message'] ?? sprintf('%s returned an error', $this->anthropicWireUnaryLabel());
+
+        $message = is_string($message) ? $message : sprintf('%s returned an error', $this->anthropicWireUnaryLabel());
+
+        return new CompleteResponse(
+            content: '',
+            tokensUsed: $carried?->totalTokens ?? 0,
+            costUsd: $carried?->costUsd ?? 0.0,
+            usage: $carried,
+            isError: true,
+            // 2.7-1a: an overflow is named in the text, the only verdict
+            // channel an error response has (see ContextOverflow::describe()).
+            errorMessage: ContextOverflow::errorObjectOverflows($data['error'])
+                ? ContextOverflow::describe($message)
+                : $message,
+            // A rawPredict error arrives as a 200 carrying an error object,
+            // not as an HTTP status, so this is the only place its
+            // transience is visible. See
+            // TransientFailure::TRANSIENT_ANTHROPIC_ERROR_TYPES.
+            errorTransient: TransientFailure::anthropicErrorIsTransient($data['error']),
+            errorContextOverflow: ContextOverflow::errorObjectOverflows($data['error']),
+        );
+    }
+
+    /**
+     * ONE assistant message document parsed into its parts — the walk
+     * {@see parseAnthropicResponse()} has always done, lifted so a paused
+     * turn's continuation legs parse through identical code (C-TOOL-2.c).
+     *
+     * C-TOOL-2.c additions in the walk: a `web_search_tool_result` block
+     * contributes its result URLs to `sources`; `server_tool_use` carries no
+     * arm at all — the block rides `blocks` verbatim for the resume turn and
+     * NEVER surfaces as a client ToolCall.
+     *
+     * @param array<string, mixed> $data
+     * @return array{text:string, reasoning:string, toolCalls:list<ToolCall>, thinkingBlocks:list<array<string, mixed>>, usage:Usage, blocks:list<array<string, mixed>>, stopReason:?string, sources:array<string, true>}
+     */
+    private function anthropicMessageLeg(array $data, string $model): array
+    {
         $text = '';
         $reasoning = '';
         $toolCalls = [];
         $thinkingBlocks = [];
+        $sources = [];
 
         // An Anthropic reply is a LIST of content blocks, not one text field:
         // a thinking-enabled model puts a `thinking` block first, and a
@@ -1144,7 +1345,9 @@ trait AnthropicMessagesWire
         // collected; a `redacted_thinking` block carries opaque `data` and no
         // text at all - it never folded into `reasoning` before CTX-1 and
         // still does not, it only earns its place in the replay list.
-        foreach ($this->contentBlocks($data) as $block) {
+        $blocks = $this->contentBlocks($data);
+
+        foreach ($blocks as $block) {
             $type = $block['type'] ?? null;
 
             if ($type === 'text' && is_string($block['text'] ?? null)) {
@@ -1166,31 +1369,101 @@ trait AnthropicMessagesWire
                     'name' => is_string($block['name'] ?? null) ? $block['name'] : '',
                     'arguments' => is_array($block['input'] ?? null) ? $block['input'] : [],
                 ]);
+            } elseif ($type === 'web_search_tool_result') {
+                foreach ($this->webSearchResultUrls($block) as $url) {
+                    $sources[$url] = true;
+                }
             }
         }
 
-        // P4.S2: one parsed Usage is the source of every usage number leaving
-        // this method; tokensUsed/costUsd keep their exact prior expressions
-        // for legitimate wire values (a negative count clamps to 0 per
-        // Usage's doctrine, as in SglangProvider::parseResponse()).
-        // E17: the whole parsed document also leaves on `usage:` — the unary
-        // reply's input/output/cache buckets now cross into Runtime.
         $usage = $this->parseAnthropicUsage(
             is_array($data['usage'] ?? null) ? $data['usage'] : [],
             $model,
         );
 
-        // E707 (round 81): the unary Anthropic answer states its own ending.
-        return new CompleteResponse(
-            content: $text,
-            reasoning: $reasoning !== '' ? $reasoning : null,
-            toolCalls: $toolCalls === [] ? null : $toolCalls,
-            tokensUsed: $usage->totalTokens,
-            costUsd: $usage->costUsd,
-            usage: $usage,
-            truncated: in_array($data['stop_reason'] ?? null, self::TRUNCATED_STOP_REASONS, true),
-            thinkingBlocks: $thinkingBlocks,
-        );
+        return [
+            'text' => $text,
+            'reasoning' => $reasoning,
+            'toolCalls' => $toolCalls,
+            'thinkingBlocks' => $thinkingBlocks,
+            'usage' => $usage,
+            'blocks' => $blocks,
+            'stopReason' => is_string($data['stop_reason'] ?? null) ? $data['stop_reason'] : null,
+            'sources' => $sources,
+        ];
+    }
+
+    /**
+     * The `url` of every `web_search_result` item inside a
+     * `web_search_tool_result` block (C-TOOL-2.c). Non-string urls and
+     * foreign item shapes carry nothing — the harvest never has to succeed
+     * for the reply itself to stand.
+     *
+     * @param array<string, mixed> $block
+     * @return list<string>
+     */
+    private function webSearchResultUrls(array $block): array
+    {
+        $urls = [];
+        $content = $block['content'] ?? null;
+
+        if (!is_array($content)) {
+            return $urls;
+        }
+
+        foreach ($content as $result) {
+            if (is_array($result)
+                && ($result['type'] ?? null) === 'web_search_result'
+                && is_string($result['url'] ?? null)
+                && $result['url'] !== ''
+            ) {
+                $urls[] = $result['url'];
+            }
+        }
+
+        return $urls;
+    }
+
+    /**
+     * The UI-only Sources line for a server-searched reply. English verbatim
+     * like every other wire-parse prose on this trait (the streamed-argument
+     * refusal above sets the precedent) — a Lang::t key would need all
+     * sixteen locale files, which this step does not own; disclosed in the
+     * lane report. The billing sentence is required by the plan: the
+     * provider bills each server search OUTSIDE the price table on file
+     * here, so a turn that searched reads as a lower bound (`>=`).
+     *
+     * @param list<string> $sources
+     */
+    private function anthropicSourcesNotice(array $sources, int $searches, bool $capped): ?string
+    {
+        if ($sources === [] && $searches === 0 && !$capped) {
+            return null;
+        }
+
+        $notice = '';
+
+        if ($sources !== []) {
+            $notice .= 'Sources: ' . implode(', ', $sources);
+        }
+
+        if ($searches > 0) {
+            $notice .= ($notice === '' ? '' : ' — ')
+                . $searches . ' provider-side web search' . ($searches === 1 ? '' : 'es');
+        }
+
+        if ($notice !== '') {
+            $notice .= '. The searches are billed by the provider outside the price table on file here, '
+                . 'so the recorded session spend is a lower bound (>=).';
+        }
+
+        if ($capped) {
+            $notice .= ($notice === '' ? '' : ' ')
+                . 'The provider kept pausing the turn for more searches and the continuation limit of '
+                . self::MAX_PAUSED_TURN_CONTINUATIONS . ' was reached; this answer may be incomplete.';
+        }
+
+        return $notice === '' ? null : $notice;
     }
     /**
      * Parses a native Anthropic Messages-API `usage` object into the
@@ -1244,6 +1517,14 @@ trait AnthropicMessagesWire
         // disclosure can tell "unpriced" from "free".
         $cost = $this->cost($model, $inputTokens, $outputTokens, $cacheRead ?? 0, $cacheCreation ?? 0);
 
+        // C-TOOL-2.c: `usage.server_tool_use.web_search_requests` — the count
+        // of searches the provider ran SERVER-SIDE on this call. An UNPRICED
+        // extra: it never enters totalTokens or costUsd (no per-search rate
+        // is on file here), so a searched turn's spend reads as a lower
+        // bound; Absent/non-numeric counts 0, the honest measured-not-there.
+        $serverUse = is_array($usage['server_tool_use'] ?? null) ? $usage['server_tool_use'] : [];
+        $webSearchRequests = self::usageInt($serverUse['web_search_requests'] ?? null) ?? 0;
+
         return Usage::new(
             // The exact expression this replaces: the sum of the two sides
             // each defaulted to 0 (see the tokensUsed paragraph above).
@@ -1254,6 +1535,7 @@ trait AnthropicMessagesWire
             $cacheRead,
             $cacheCreation,
             unpricedModel: $cost === null ? $model : null,
+            webSearchRequests: $webSearchRequests,
         );
     }
     /**
@@ -1290,8 +1572,17 @@ trait AnthropicMessagesWire
      *
      * @param array<string, mixed> $event
      * @param array<int, array{id?: string, name?: string, json?: string}> $toolCallBuffer
+     * @param array<string, mixed> $pauseState C-TOOL-2.c per-stream-leg
+     *                     accumulator: `blocks` (index => partial assistant
+     *                     block, the VERBATIM resume payload), `sources`
+     *                     (url => true), `searches` (the leg's cumulative
+     *                     server-search count), `paused` (the terminal
+     *                     `pause_turn` verdict), `server` (open
+     *                     `server_tool_use` buffers). Optional by design:
+     *                     the arms that never swap in the server tool call
+     *                     this 4-argument and read nothing.
      */
-    private function parseAnthropicChunk(array $event, string $model, array &$toolCallBuffer, array &$thinkingBuffer): ?CompleteResponse
+    private function parseAnthropicChunk(array $event, string $model, array &$toolCallBuffer, array &$thinkingBuffer, array &$pauseState = []): ?CompleteResponse
     {
         $type = $event['type'] ?? null;
 
@@ -1311,6 +1602,38 @@ trait AnthropicMessagesWire
                     'name' => is_string($block['name'] ?? null) ? $block['name'] : '',
                     'json' => '',
                 ];
+
+                return null;
+            }
+
+            // C-TOOL-2.c: a `server_tool_use` block announces like a tool_use
+            // and streams its input the same way — but it is the PROVIDER's
+            // own call, never a client one. It gets its own buffer, under
+            // $pauseState, so the tool loop below can never pick it up; the
+            // closed block rides the verbatim resume payload.
+            if (is_array($block) && ($block['type'] ?? null) === 'server_tool_use') {
+                $index = (int) ($event['index'] ?? 0);
+                $pauseState['server'][$index] = [
+                    'id' => is_string($block['id'] ?? null) ? $block['id'] : '',
+                    'name' => is_string($block['name'] ?? null) ? $block['name'] : '',
+                    'json' => '',
+                ];
+
+                return null;
+            }
+
+            // C-TOOL-2.c: a `web_search_tool_result` block arrives WHOLE in
+            // its start event (the results list is complete, no deltas follow)
+            // — capture the block verbatim for the resume turn and harvest
+            // the result URLs for the Sources notice. Nothing here becomes a
+            // ToolCall, and the URLs feed display text only.
+            if (is_array($block) && ($block['type'] ?? null) === 'web_search_tool_result') {
+                $index = (int) ($event['index'] ?? 0);
+                $pauseState['blocks'][$index] = $block;
+
+                foreach ($this->webSearchResultUrls($block) as $url) {
+                    $pauseState['sources'][$url] = true;
+                }
 
                 return null;
             }
@@ -1343,6 +1666,11 @@ trait AnthropicMessagesWire
                 $index = (int) ($event['index'] ?? 0);
                 if (isset($toolCallBuffer[$index])) {
                     $toolCallBuffer[$index]['json'] .= (string) ($delta['partial_json'] ?? '');
+                } elseif (isset($pauseState['server'][$index])) {
+                    // C-TOOL-2.c: the provider's own call streams its input
+                    // through the same delta type — same buffer discipline,
+                    // separate buffer, resume payload only.
+                    $pauseState['server'][$index]['json'] .= (string) ($delta['partial_json'] ?? '');
                 }
 
                 return null;
@@ -1362,6 +1690,22 @@ trait AnthropicMessagesWire
 
             $text = is_string($delta['text'] ?? null) ? $delta['text'] : '';
             $thought = is_string($delta['thinking'] ?? null) ? $delta['thinking'] : '';
+
+            if ($text !== '') {
+                // C-TOOL-2.c: a resumed turn must echo the partial TEXT
+                // verbatim too — accumulate the open text block, but only
+                // where this index is a text block (or still unopened; the
+                // start arm leaves text blocks unbuffered, so first-write
+                // opens it). A foreign type at this index is left alone.
+                $index = (int) ($event['index'] ?? 0);
+                if (!isset($pauseState['blocks'][$index])) {
+                    $pauseState['blocks'][$index] = ['type' => 'text', 'text' => ''];
+                }
+
+                if (($pauseState['blocks'][$index]['type'] ?? null) === 'text') {
+                    $pauseState['blocks'][$index]['text'] .= $text;
+                }
+            }
 
             if ($thought !== '') {
                 // Accumulate for the replay while the SAME text still folds
@@ -1386,16 +1730,40 @@ trait AnthropicMessagesWire
         if ($type === 'content_block_stop') {
             $index = (int) ($event['index'] ?? 0);
 
+            // C-TOOL-2.c: a closing server_tool_use buffer becomes RESUME
+            // PAYLOAD only — never a ToolCall. Its input decodes the same
+            // way a client call's would; a truncated server document is not
+            // a call this client could run or refuse, so an undecodable
+            // input rides the echo as `[]` and the API judges it, not us.
+            $serverUse = $pauseState['server'][$index] ?? null;
+            if ($serverUse !== null) {
+                unset($pauseState['server'][$index]);
+
+                $decoded = $serverUse['json'] === '' ? [] : json_decode($serverUse['json'], true);
+
+                $pauseState['blocks'][$index] = [
+                    'type' => 'server_tool_use',
+                    'id' => $serverUse['id'],
+                    'name' => $serverUse['name'],
+                    'input' => is_array($decoded) ? $decoded : [],
+                ];
+
+                return null;
+            }
+
             // CTX-1: a closing thinking block leaves the stream as its own
             // frame carrying exactly the replayable shape - a `thinking`
             // block without text or without its signature cannot be sent
             // back, and an uncollected block simply never replays (the same
-            // fail-safe the unary parse applies).
+            // fail-safe the unary parse applies). C-TOOL-2.c: the replayable
+            // shape ALSO rides the pause-turn echo verbatim.
             $thoughtBlock = $thinkingBuffer[$index] ?? null;
             if ($thoughtBlock !== null) {
                 unset($thinkingBuffer[$index]);
 
                 if ($thoughtBlock['type'] === 'redacted_thinking' && $thoughtBlock['data'] !== '') {
+                    $pauseState['blocks'][$index] = ['type' => 'redacted_thinking', 'data' => $thoughtBlock['data']];
+
                     return new CompleteResponse(
                         content: '',
                         thinkingBlocks: [['type' => 'redacted_thinking', 'data' => $thoughtBlock['data']]],
@@ -1404,6 +1772,12 @@ trait AnthropicMessagesWire
 
                 if ($thoughtBlock['type'] === 'thinking'
                     && $thoughtBlock['thinking'] !== '' && $thoughtBlock['signature'] !== '') {
+                    $pauseState['blocks'][$index] = [
+                        'type' => 'thinking',
+                        'thinking' => $thoughtBlock['thinking'],
+                        'signature' => $thoughtBlock['signature'],
+                    ];
+
                     return new CompleteResponse(
                         content: '',
                         thinkingBlocks: [[
@@ -1479,6 +1853,15 @@ trait AnthropicMessagesWire
                 );
             }
 
+            // C-TOOL-2.c: a completed client call inside a turn that then
+            // pauses must ride the echo too, or the resume would lose it.
+            $pauseState['blocks'][$index] = [
+                'type' => 'tool_use',
+                'id' => $buffered['id'],
+                'name' => $buffered['name'],
+                'input' => $arguments === [] ? new \stdClass() : $arguments,
+            ];
+
             return new CompleteResponse(
                 content: '',
                 toolCalls: [ToolCall::fromArray([
@@ -1531,6 +1914,11 @@ trait AnthropicMessagesWire
         // only the input-side buckets, the delta carrier only the output
         // side, whatever extra fields a stray document may have carried.
         if ($type === 'message_start') {
+            // C-TOOL-2.c: one message document per stream leg — the resume
+            // payload, the URL set, the search count and the pause verdict
+            // all start fresh here, never carrying a previous leg's state.
+            $pauseState = ['blocks' => [], 'sources' => [], 'searches' => 0, 'paused' => false, 'server' => []];
+
             $usage = $this->parseAnthropicUsage(
                 is_array($event['message']['usage'] ?? null) ? $event['message']['usage'] : [],
                 $model,
@@ -1579,6 +1967,18 @@ trait AnthropicMessagesWire
                 $model,
             );
 
+            // C-TOOL-2.c: the terminal delta carries the leg's stop reason
+            // and its CUMULATIVE server-search count. `pause_turn` is a
+            // continuation request, not an end — recorded, never truncated
+            // (pause is deliberately absent from TRUNCATED_STOP_REASONS);
+            // the count keeps the max, as summing cumulative documents
+            // would double-bill the leg.
+            $pauseState['paused'] = $stopReason === self::PAUSE_STOP_REASON;
+
+            if ($usage->webSearchRequests > (int) ($pauseState['searches'] ?? 0)) {
+                $pauseState['searches'] = $usage->webSearchRequests;
+            }
+
             if ($usage->outputTokens === null || $usage->outputTokens === 0) {
                 return $truncated ? new CompleteResponse(content: '', truncated: true) : null;
             }
@@ -1595,6 +1995,10 @@ trait AnthropicMessagesWire
                     null,
                     $usage->outputTokens,
                     unpricedModel: $deltaCost === null ? $model : null,
+                    // The search count is an OUTPUT-side event count — it
+                    // rides the terminal carrier so summed frames see it
+                    // exactly once per leg.
+                    webSearchRequests: $usage->webSearchRequests,
                 ),
                 truncated: $truncated,
             );
@@ -1624,6 +2028,117 @@ trait AnthropicMessagesWire
 
         return null;
     }
+    /**
+     * The frame a streamed server-search turn ends with (C-TOOL-2.c).
+     *
+     *  - Turn ended normally WITH results: a reasoning-only frame carrying
+     *    the Sources notice. The search count already rode the terminal
+     *    `message_delta` carrier, so this frame carries NO usage — summing
+     *    the turn's frames stays exact.
+     *  - Turn ended on `pause_turn`: the continuation legs are fetched
+     *    UNARY through the resume hook and delivered as ONE terminal frame.
+     *    Already-streamed pre-pause deltas are never re-sent; this frame
+     *    carries only the CONTINUATION legs' own usage (their tokens and
+     *    search counts, added to the pre-pause leg's already-billed frames),
+     *    the merged continuation text, and the full Sources notice over
+     *    every URL the turn surfaced. Bounded by leg count, never a clock
+     *    (E646) — the same shape as the unary pause loop.
+     *
+     * @param array<string, mixed> $body the streamed request body
+     * @param array<string, mixed> $pauseState the accumulator from {@see parseAnthropicChunk()}
+     */
+    private function anthropicStreamWebSearchFrame(array $body, array $pauseState, string $model): ?CompleteResponse
+    {
+        $paused = ($pauseState['paused'] ?? false) === true;
+        $searches = (int) ($pauseState['searches'] ?? 0);
+        $sourceSeen = is_array($pauseState['sources'] ?? null) ? $pauseState['sources'] : [];
+
+        if (!$paused) {
+            $notice = $this->anthropicSourcesNotice(array_keys($sourceSeen), $searches, false);
+
+            return $notice === null ? null : new CompleteResponse(content: '', reasoning: $notice);
+        }
+
+        if ($this->anthropicServerWebSearchTool() === null) {
+            // An arm that can SEE a pause but cannot serve it: say so in the
+            // notice rather than end the turn silent on a half answer.
+            return new CompleteResponse(
+                content: '',
+                reasoning: $this->anthropicSourcesNotice(array_keys($sourceSeen), $searches, true),
+            );
+        }
+
+        $blocks = is_array($pauseState['blocks'] ?? null) ? $pauseState['blocks'] : [];
+        ksort($blocks);
+
+        $text = '';
+        $reasoning = '';
+        $toolCalls = [];
+        $thinkingBlocks = [];
+        $usage = null;
+        $assistantTurns = [];
+        $continuations = 0;
+        $stopReason = self::PAUSE_STOP_REASON;
+
+        while ($stopReason === self::PAUSE_STOP_REASON
+            && $blocks !== []
+            && $continuations < self::MAX_PAUSED_TURN_CONTINUATIONS
+        ) {
+            $assistantTurns[] = ['role' => 'assistant', 'content' => array_values($blocks)];
+            $next = $this->anthropicServerWebSearchResume($body, $assistantTurns, $model);
+
+            if ($next === null) {
+                break;
+            }
+
+            if (isset($next['error'])) {
+                return $this->anthropicErrorFrame($next, $usage);
+            }
+
+            $leg = $this->anthropicMessageLeg($next, $model);
+            $text .= $leg['text'];
+            $reasoning .= $leg['reasoning'];
+            $toolCalls = array_merge($toolCalls, $leg['toolCalls']);
+            $thinkingBlocks = array_merge($thinkingBlocks, $leg['thinkingBlocks']);
+            $usage = $usage === null ? $leg['usage'] : $usage->plus($leg['usage']);
+
+            foreach (array_keys($leg['sources']) as $url) {
+                $sourceSeen[$url] = true;
+            }
+
+            $searches += $leg['usage']->webSearchRequests;
+            $stopReason = $leg['stopReason'];
+            $blocks = $leg['blocks'];
+            $continuations++;
+        }
+
+        $notice = $this->anthropicSourcesNotice(
+            array_keys($sourceSeen),
+            $searches,
+            $stopReason === self::PAUSE_STOP_REASON,
+        );
+
+        if ($notice !== null) {
+            $reasoning = $reasoning === '' ? $notice : $reasoning . "\n" . $notice;
+        }
+
+        if ($usage === null && $text === '' && $toolCalls === [] && $thinkingBlocks === []) {
+            // Nothing answered after the pause; the notice still stands.
+            return $notice === null ? null : new CompleteResponse(content: '', reasoning: $notice);
+        }
+
+        return new CompleteResponse(
+            content: $text,
+            reasoning: $reasoning !== '' ? $reasoning : null,
+            toolCalls: $toolCalls === [] ? null : $toolCalls,
+            tokensUsed: $usage?->totalTokens ?? 0,
+            costUsd: $usage?->costUsd ?? 0.0,
+            usage: $usage,
+            truncated: in_array($stopReason, self::TRUNCATED_STOP_REASONS, true),
+            thinkingBlocks: $thinkingBlocks,
+        );
+    }
+
     /**
      * The isError chunk both stream arms yield for a stream that ended before
      * its terminal signal (audit 15a A3) - this class's convention for a

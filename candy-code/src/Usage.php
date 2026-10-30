@@ -216,6 +216,21 @@ final readonly class Usage
          * exactly how much it folded, so 0 is a measurement, not a default.
          */
         public int $delegatedTokens = 0,
+        /**
+         * Server-side web searches the provider ran for this call —
+         * Anthropic's `usage.server_tool_use.web_search_requests`
+         * (C-TOOL-2.c). An UNPRICED EXTRA by design: it enters neither
+         * {@see $totalTokens} nor {@see $costUsd}, because the per-search
+         * rate is not in this build's price table, so the dollars a turn
+         * records beside a positive count are a LOWER BOUND — the reply's
+         * Sources notice says exactly that. Like {@see $delegatedTokens},
+         * 0 is a measurement, not a hidden default: providers that do not
+         * report the key never raise it, and it keeps a frame out of
+         * {@see reported()}'s emptiness test for the same reason the
+         * unpriced signal does — a count with no tokens or cost behind it
+         * is not an accounting event on this wire.
+         */
+        public int $webSearchRequests = 0,
     ) {}
 
     public static function new(
@@ -228,6 +243,7 @@ final readonly class Usage
         ?int $reasoningTokens = null,
         ?string $unpricedModel = null,
         int $delegatedTokens = 0,
+        int $webSearchRequests = 0,
     ): self {
         $totalTokens = max(0, $totalTokens);
 
@@ -242,6 +258,9 @@ final readonly class Usage
             $unpricedModel,
             // A share cannot be negative or exceed what it is a share of.
             min(max(0, $delegatedTokens), $totalTokens),
+            // A search count is NOT a token share — nothing to bound it by
+            // but its own sign: negative is a provider bug accounted zero.
+            max(0, $webSearchRequests),
         );
     }
 
@@ -272,6 +291,7 @@ final readonly class Usage
         ?int $reasoningTokens = null,
         ?string $unpricedModel = null,
         int $delegatedTokens = 0,
+        int $webSearchRequests = 0,
     ): ?self {
         if (
             $totalTokens <= 0
@@ -288,7 +308,10 @@ final readonly class Usage
             // cost stays null here even when a name rides it - the name only
             // earns its carry on frames that DID count tokens, which is every
             // real unpriced turn (the usage document arrived; only the rate
-            // did not).
+            // did not). The web-search count keeps the same posture: a count
+            // of provider-side searches is not a measurement of tokens or
+            // dollars, and no provider reports one without the usage document
+            // that carries those anyway.
             return null;
         }
 
@@ -302,6 +325,7 @@ final readonly class Usage
             $reasoningTokens,
             $unpricedModel,
             $delegatedTokens,
+            $webSearchRequests,
         );
     }
 
@@ -332,6 +356,11 @@ final readonly class Usage
             // is the finding, not the spelling.
             $this->unpricedModel ?? $other->unpricedModel,
             $this->delegatedTokens + $other->delegatedTokens,
+            // Server searches are events, not token shares: a turn whose two
+            // steps each ran a provider-side search ran two searches, so the
+            // merged figure adds them. Nothing bounds it by the token total —
+            // it lives on its own axis (C-TOOL-2.c).
+            $this->webSearchRequests + $other->webSearchRequests,
         );
     }
 
@@ -476,6 +505,7 @@ final readonly class Usage
             // measure away. It ride-alongs every bucket mutate, always.
             $this->unpricedModel,
             $this->delegatedTokens,
+            $this->webSearchRequests,
         );
     }
 
@@ -516,7 +546,7 @@ final readonly class Usage
      * UNREPORTED, not as zero, or the fork path silently rewrites the one
      * distinction this class exists to keep.
      *
-     * @return array{totalTokens:int,costUsd:float,inputTokens:?int,outputTokens:?int,cacheReadTokens:?int,cacheCreationTokens:?int,reasoningTokens:?int,unpricedModel:?string,delegatedTokens:int}
+     * @return array{totalTokens:int,costUsd:float,inputTokens:?int,outputTokens:?int,cacheReadTokens:?int,cacheCreationTokens:?int,reasoningTokens:?int,unpricedModel:?string,delegatedTokens:int,webSearchRequests:int}
      */
     public function toArray(): array
     {
@@ -536,6 +566,10 @@ final readonly class Usage
             // reads 0 parent-side and the calibration it exists for inflates
             // again on the async path only.
             'delegatedTokens' => $this->delegatedTokens,
+            // And again for the server-search count (C-TOOL-2.c): dropped
+            // here, a forked turn's provider-side searches vanish from the
+            // parent's spend floor.
+            'webSearchRequests' => $this->webSearchRequests,
         ];
     }
 
@@ -599,6 +633,15 @@ final readonly class Usage
             return null;
         }
 
+        // The C-TOOL-2.c twin of the rule above: absent decodes to 0 (a
+        // frame from before the count existed ran no searches as far as it
+        // knew), and anything that is not an int is a frame this method did
+        // not write.
+        $searches = $raw['webSearchRequests'] ?? 0;
+        if (!is_int($searches)) {
+            return null;
+        }
+
         return self::reported(
             $tokens,
             (float) $cost,
@@ -609,6 +652,7 @@ final readonly class Usage
             $buckets['reasoningTokens'],
             is_string($unpriced) && $unpriced !== '' ? $unpriced : null,
             $delegated,
+            $searches,
         );
     }
 }

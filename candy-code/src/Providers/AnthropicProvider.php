@@ -8,6 +8,9 @@ use GuzzleHttp\Client;
 use SugarCraft\Code\Providers\Concerns\AnthropicMessagesWire;
 use SugarCraft\Code\Providers\Concerns\HttpClientDefaults;
 use SugarCraft\Code\Providers\Concerns\ToolSchema;
+use SugarCraft\Code\Tools\BuiltIn\WebSearch;
+use SugarCraft\Code\Tools\ToolLimits;
+use SugarCraft\Code\Tools\Web\Search\SearchBackends;
 
 /**
  * The native `api.anthropic.com/v1/messages` arm (ISS-023).
@@ -295,6 +298,70 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
         return false;
     }
 
+    /**
+     * C-TOOL-2.c: this IS the direct Messages wire — the only arm on which
+     * `webSearchBackend=anthropic` means anything. The search runs
+     * provider-side inside the same reply (Anthropic's `web_search_20250305`
+     * server tool), so no client `WebSearch` call ever needs an endpoint;
+     * every other provider gets the refusal sentinel from
+     * {@see SearchBackends} instead. The setting is read at call-shape time,
+     * not built into the constructor, so a mid-session flip lands on the
+     * next request — the same law the tool constructor follows.
+     */
+    public function supportsServerWebSearch(): bool
+    {
+        return ToolLimits::current()->string(ToolLimits::WEB_SEARCH_BACKEND_KEY) === SearchBackends::BACKEND_ANTHROPIC;
+    }
+
+    /**
+     * The server-tool declaration that {@see AnthropicMessagesWire} swaps
+     * into the local `WebSearch` slot. `max_uses` reuses
+     * `webSearchMaxResults` — the same knob that caps the HTTP backends'
+     * result pages, here capping how many searches the provider may run
+     * inside one reply.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function anthropicServerWebSearchTool(): ?array
+    {
+        if (!$this->supportsServerWebSearch()) {
+            return null;
+        }
+
+        return [
+            'type' => self::SERVER_WEB_SEARCH_TOOL_TYPE,
+            'name' => self::SERVER_WEB_SEARCH_TOOL_NAME,
+            'max_uses' => ToolLimits::current()->int(ToolLimits::WEB_SEARCH_MAX_RESULTS_KEY) ?? WebSearch::DEFAULT_MAX_RESULTS,
+        ];
+    }
+
+    /**
+     * Continue a `pause_turn`: the same body, the partial assistant reply
+     * appended VERBATIM (its server blocks included — they are the receipt
+     * of what the provider searched). The continuation is fetched unary and
+     * never carries `stream`; `speed` re-rides through the same leg the
+     * first dial applied it with. Bounded at the caller by
+     * {@see AnthropicMessagesWire::MAX_PAUSED_TURN_CONTINUATIONS} — a leg
+     * count, not a clock (E646).
+     *
+     * @param array<string, mixed>                 $body
+     * @param list<array<string, mixed>>           $assistantTurns
+     * @return array<string, mixed>|null
+     */
+    protected function anthropicServerWebSearchResume(array $body, array $assistantTurns, string $model): ?array
+    {
+        $resume = $body;
+        $resume['messages'] = array_merge(
+            is_array($resume['messages'] ?? null) ? $resume['messages'] : [],
+            $assistantTurns,
+        );
+        unset($resume['stream']);
+
+        $data = ($this->http)($this->messagesEndpoint(), $this->withFastMode($resume, $model));
+
+        return is_array($data) ? $data : null;
+    }
+
     public function contextWindow(): int
     {
         // ISS-073: the operator's override wins; otherwise the family table
@@ -320,7 +387,11 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
             $body = $this->withFastMode($body, $model);
             $data = ($this->http)($this->messagesEndpoint(), $body);
 
-            return $this->parseAnthropicResponse($data, $model);
+            // C-TOOL-2.c: the body travels with the document so a
+            // `pause_turn` stop can be continued verbatim by the wire's
+            // bounded loop; the arms that pass it nowhere (Vertex's
+            // rawPredict) never see a second dial.
+            return $this->parseAnthropicResponse($data, $model, $body);
         } catch (\Throwable $e) {
             return new CompleteResponse(
                 content: '',
@@ -361,6 +432,10 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
         // than a property because this class is `final readonly`.
         $toolCallBuffer = [];
         $thinkingBuffer = [];
+        // C-TOOL-2.c: the resume accumulator for server-side web search —
+        // verbatim partial blocks, source URLs, the leg's search count and
+        // whether the leg ended on `pause_turn`. Reset per `message_start`.
+        $pauseState = [];
 
         try {
             // The endpoint and body are inside the try because both can
@@ -384,7 +459,7 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
             // injected two-parameter seam simply ignores the third argument.
             foreach (($this->httpStream)($this->messagesEndpoint(), $body, $request->onHeartbeat) as $event) {
                 $event = is_array($event) ? $event : [];
-                $chunk = $this->parseAnthropicChunk($event, $model, $toolCallBuffer, $thinkingBuffer);
+                $chunk = $this->parseAnthropicChunk($event, $model, $toolCallBuffer, $thinkingBuffer, $pauseState);
 
                 $type = $event['type'] ?? null;
                 $sawTerminal = $sawTerminal
@@ -395,6 +470,16 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
                 if ($chunk !== null) {
                     yield $chunk;
                 }
+            }
+
+            // C-TOOL-2.c: a turn whose server search ended (or paused) gets
+            // one closing frame — the Sources notice, and on a pause the
+            // continuation legs run through the unary transport and arrive
+            // whole. A non-swap arm (or a stream that never touched the
+            // server tool) yields nothing here.
+            $serverFrame = $this->anthropicStreamWebSearchFrame($body, $pauseState, $model);
+            if ($serverFrame !== null) {
+                yield $serverFrame;
             }
 
             if (!$sawTerminal) {

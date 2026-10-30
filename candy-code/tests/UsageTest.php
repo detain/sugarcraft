@@ -167,6 +167,10 @@ final class UsageTest extends TestCase
             // Audit B4-rem: the delegated share joined the pair so a forked
             // turn's sub-agent tokens still read as delegated parent-side.
             'delegatedTokens' => 0,
+            // C-TOOL-2.c: the server-search count joined the pair for the
+            // same reason — a forked turn whose provider ran searches must
+            // not arrive parent-side with the count erased.
+            'webSearchRequests' => 0,
         ], $wire);
 
         $back = Usage::fromArray($wire);
@@ -635,6 +639,39 @@ final class UsageTest extends TestCase
         $this->assertSame(0, $old?->delegatedTokens);
         $this->assertSame(50, $old?->ownTokens());
         $this->assertNull(Usage::fromArray(['totalTokens' => 50, 'costUsd' => 0.5, 'delegatedTokens' => '9']), 'a share that is not an int is not a frame toArray() wrote');
+    }
+
+    /**
+     * C-TOOL-2.c: the unpriced server-search count. It SUMS across a turn's
+     * steps, CROSSES THE FORK WIRE BY VALUE (pair law), keeps a negative to
+     * zero — and, unlike a token bucket, is NOT bounded by the total, because
+     * searches live on their own axis. It also keeps a frame OUT of
+     * `reported()`'s emptiness test: a bare count is not a measurement of
+     * tokens or dollars, exactly the posture the unpriced name holds.
+     */
+    public function testTheServerSearchCountSumsCrossesTheWireAndStandsAlone(): void
+    {
+        $leg = Usage::new(100, 0.01, webSearchRequests: 2);
+        $this->assertSame(2, $leg->webSearchRequests);
+        $this->assertSame(100, $leg->totalTokens, 'a search is not a token');
+        $this->assertSame(0.01, $leg->costUsd, 'a search is not a dollar');
+
+        $this->assertSame(5, Usage::sum([
+            Usage::new(10, 0.0, webSearchRequests: 2),
+            Usage::new(20, 0.0, webSearchRequests: 3),
+        ])?->webSearchRequests);
+
+        $this->assertEquals($leg, Usage::fromArray($leg->toArray()), 'the value crosses the fork wire intact');
+
+        $this->assertSame(0, Usage::new(10, 0.0, webSearchRequests: -5)->webSearchRequests, 'never negative');
+        $this->assertSame(7, Usage::new(1, 0.0, webSearchRequests: 7)->webSearchRequests, 'a search needs no token behind it');
+        $this->assertSame(2, $leg->withInputTokens(5)->webSearchRequests, 'a bucket wither carries the count');
+
+        $old = Usage::fromArray(['totalTokens' => 50, 'costUsd' => 0.5]);
+        $this->assertSame(0, $old?->webSearchRequests, 'a pre-C-TOOL-2.c frame reads zero searches');
+        $this->assertNull(Usage::fromArray(['totalTokens' => 50, 'costUsd' => 0.5, 'webSearchRequests' => '9']), 'a count that is not an int is not a frame toArray() wrote');
+
+        $this->assertNull(Usage::reported(0, 0.0, webSearchRequests: 4), 'a bare count reports nothing');
     }
 
     /**
