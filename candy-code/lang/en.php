@@ -513,9 +513,9 @@ Options:
                          precedence: it beats $CANDY_CODE_PERMISSION_MODE and
                          the permissionMode config key. One of: default,
                          accept-edits, plan, auto, dont-ask,
-                         bypass-permissions. With none set, the TUI starts
-                         in default (it asks before writes and shell
-                         commands); -p and background sessions start in
+                         bypass-permissions. With none set, the TUI and -p
+                         start in default (it asks before writes and shell
+                         commands); only a locally spawned daemon starts in
                          bypass-permissions.
       --max-cost <usd>   Cap this launch at <usd> US dollars of reported
                          spend: the turn that would cross the ceiling is

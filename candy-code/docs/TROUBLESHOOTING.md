@@ -265,8 +265,10 @@ interactive session shows them after the alt screen has opened.
 `default`, which asks before every write and every shell command that is not
 made only of read-only commands — so either a mode
 was configured (`candy-code doctor` names it on its `permission policy` line,
-and `/permissions` shows which source set it) or this is a `-p` or background
-run, whose default is `bypass-permissions`. With no rules configured, that is
+and `/permissions` shows which source set it) or this is a locally spawned
+background-daemon run, whose default is `bypass-permissions` (a `-p` run starts
+in the asking `default` and refuses its unattended asks). With no rules
+configured, that is
 identical to having no gate at all except for `ProtectFilesHook`,
 `ConfirmRemoveHook` and the `rm -rf /` breaker. Set `permissionMode` in
 `config.json`, or pass `--permission-mode default`.

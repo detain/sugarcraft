@@ -72,9 +72,12 @@ instead of prompting. A `Task` sub-agent run in a parallel batch asks too: its
 question is relayed through the turn and lands in the same modal (see
 [`Ask` needs somewhere to ask](#ask-needs-somewhere-to-ask)).
 
-The console paths keep the permissive default on purpose. Their approver asks
-on stderr at a terminal and **refuses** without one, so an asking default would
-make an unattended `-p` run in CI refuse its first edit. With no
+The `-p` console path is on the asking side too: its approver asks on stderr at
+a terminal and **refuses** without one, so an unattended `-p` run in CI refuses
+the first tool call that would ask rather than silently allowing it (name
+`--permission-mode` to change that). The path that keeps the permissive default
+is a locally spawned `/bg` daemon: it has no terminal for the whole life of the
+run, so an asking default there would refuse every edit. With no
 `permissionRules` configured `bypass-permissions` now decides *less* than
 having no gate (2026-10-06 ruling): the built-in guard hooks stand down before
 it — `ConfirmRemoveHook` stops refusing, the secret and file-class rows of
@@ -85,8 +88,9 @@ policy-self-grant writes (`.candy-code/hooks.yaml`, `config.json`, `agents/`,
 `.git/hooks/`, `.git/info/`) that keep the mode switch itself out of the
 model's reach. What the gate buys is that this is all reachable and
 configurable. `candy-code doctor` names both defaults when
-nothing is configured. (The doctor roster itself reflects this: `-p` and
-background there means the local console paths.)
+nothing is configured. (The doctor roster itself reflects this: the asking
+`default` for the TUI and `-p`, and `bypass-permissions` for a locally spawned
+daemon only.)
 
 One hook promise survives the blanket grant: a hook rostered via
 `HeadlessPermissionPrompt::requireUnattendedAnswer()` keeps its exit-3 ASK out
