@@ -148,11 +148,25 @@ final class UsageMethodsTest extends TestCase
     public function testTheWindowIsSevenOrThirtyAndAnythingElseIsRefused(): void
     {
         $this->seed('s1', 120, 0.5, 'claude-sonnet-4-5');
+        // REVIEW-2 MINOR-1: the window legs must carry a row OUTSIDE the
+        // window. Seeded with only today's rows, forwarding null instead of
+        // $windowDays answers identically to 7 and 30 and the `days` leg of
+        // rollup() is untested. Seed a second row and backdate it past the
+        // 30-day edge (the InsightsHostCommandTest idiom — append stamps
+        // time() with no public knob); the no-window leg below pins that
+        // the row exists, so a windowed answer of 1 is the filter at work,
+        // and an always-forwarded window reddens THAT leg instead.
+        $this->seed('s1', 400, 1.5, 'older-model');
+        $this->backdateUsage('s1', 'older-model', 40);
+
         $client = $this->client();
+
+        $whole = $client->call('usage.rollup', ['sessionId' => 's1', 'scope' => 'session']);
+        self::assertSame(['calls' => 2, 'totalTokens' => 520, 'costUsd' => 2.0], $whole['totals'], 'no days means the whole ledger — the backdated row is IN this answer');
 
         foreach ([7, 30] as $window) {
             $answer = $client->call('usage.rollup', ['sessionId' => 's1', 'scope' => 'session', 'days' => $window]);
-            self::assertSame(1, $answer['totals']['calls'], 'a whole-UTC-day window still counts today');
+            self::assertSame(['calls' => 1, 'totalTokens' => 120, 'costUsd' => 0.5], $answer['totals'], 'a whole-UTC-day window still counts today — and drops the forty-day-old row');
         }
 
         $offWindow = $client->request('usage.rollup', ['sessionId' => 's1', 'scope' => 'session', 'days' => 15]);
@@ -198,6 +212,22 @@ final class UsageMethodsTest extends TestCase
         $store = $this->store;
         self::assertInstanceOf(EnhancedSessionStore::class, $store);
         self::assertTrue($store->appendUsageRecord($sessionId, Usage::new(totalTokens: $tokens, costUsd: $cost), $model));
+    }
+
+    /**
+     * Raw-PDO backdate of exactly one ledger row (the
+     * {@see \SugarCraft\Code\Tests\Host\Commands\InsightsHostCommandTest}
+     * idiom): `appendUsageRecord` stamps `time()` and offers no past-write,
+     * so an outside-the-window row can only arrive by direct UPDATE. The
+     * single-row match is asserted — a zero-hit UPDATE would silently
+     * re-vacuate the window legs this exists to discriminate.
+     */
+    private function backdateUsage(string $sessionId, string $model, int $daysAgo): void
+    {
+        $pdo = new \PDO('sqlite:' . $this->dir . '/session.db');
+        $statement = $pdo->prepare('UPDATE usage_records SET ts = ? WHERE session_id = ? AND model = ?');
+        self::assertTrue($statement->execute([\time() - $daysAgo * 86400, $sessionId, $model]), 'the backdate UPDATE lands');
+        self::assertSame(1, $statement->rowCount(), 'the backdate hits exactly the row the window must drop');
     }
 
     /** @param EnhancedSessionStore|null $store null is the "host without a durable ledger" shape */
