@@ -527,10 +527,10 @@ try {
 // unusable-policy path produces.
 //
 // It does NOT cost `doctor` its answer, which was the reason the dispatch was
-// outside to begin with: every probe in Subcommands::doctorProbes() catches its
-// own throws, so `doctor` still prints its report and exits 1 on an install
-// this catch would otherwise turn into a bare exit 2. Both are asserted in
-// Tests\Integration\BinCandyCodeDispatchTest.
+// outside to begin with: DoctorChecks::run() wraps every probe in its own
+// try and catches its throws, so `doctor` still prints its report and exits 1
+// on an install this catch would otherwise turn into a bare exit 2. Both are
+// asserted in Tests\Integration\BinCandyCodeDispatchTest.
 if ($args->subcommand !== null) {
     exit(Subcommands::dispatch($args));
 }

@@ -10126,7 +10126,7 @@ public static function useMaxCost(?string $maxCost): void
      * `prune: false` is for the READ-ONLY callers. Retention is a property of
      * a LAUNCH, not of the store: it is safe here because this is the one
      * point where no session is open. A diagnostic that merely COUNTS rows —
-     * {@see \SugarCraft\Code\Cli\Subcommands::doctorProbes()}'s `session
+     * {@see \SugarCraft\Code\Cli\DoctorChecks::probes()}'s `session
      * store` check — must not delete conversations on the way to the count,
      * and MEASURED it did: two rows aged to 2020 with
      * CANDY_CODE_SESSION_RETENTION_DAYS=7 became one, with the removal
@@ -10238,7 +10238,7 @@ public static function useMaxCost(?string $maxCost): void
      *
      *  - {@see chat()} — the production path, and the only one that reads
      *    {@see launchNotices()} back.
-     *  - {@see \SugarCraft\Code\Cli\Subcommands::doctorProbes()} — passes
+     *  - {@see \SugarCraft\Code\Cli\DoctorChecks::probes()} — passes
      *    `prune: false`, so it never reaches this method at all.
      *  - {@see \SugarCraft\Code\Cli\Subcommands::sessionList()} and
      *    {@see \SugarCraft\Code\Cli\Subcommands::sessionDelete()} — both take
