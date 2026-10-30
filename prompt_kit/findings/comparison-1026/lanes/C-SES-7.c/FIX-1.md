@@ -98,4 +98,4 @@ durations.tsv row for IncognitoLaunchTest.php (file is new to the branch);
 suite-figure/README re-pin is now +9T (was +8T: this round adds one test
 method). Foreign standing reds as REVIEW-1 recorded.
 
-SHA: (fix commit recorded in the follow-up stamp below)
+SHA: fix commit 230b07bc0c22d9ad2c7625203aa0a533c43a9091 (branch cc/C-SES-7.c, parent 00a07c290; %ae/%ce detain 1/1, no Co-Authored-By). This stamp is the follow-up one-liner (a commit cannot contain its own SHA).
