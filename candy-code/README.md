@@ -1283,12 +1283,13 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and forty-two keys are layered — `provider`, `models`,
-`providers`, `titleModel`, `summaryModel`, `advisorModel`, `maxOutputTokens`,
-`modelPrices`, `extraBody`, `thinkingBudget`, `reasoningEffort`, `serviceTier`,
-`promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
-`maxToolSteps`, `maxCostUsd`, `compaction.reminderPercent`,
-`compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`,
+Only these one hundred and forty-three keys are layered — `provider`,
+`models`, `providers`, `titleModel`, `summaryModel`, `advisorModel`,
+`maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
+`reasoningEffort`, `serviceTier`, `promptCache`, `parallelToolCalls`,
+`parallelToolDeadlineSeconds`, `maxToolSteps`, `maxCostUsd`,
+`compaction.reminderPercent`, `compaction.autoPercent`,
+`compaction.blockPercent`, `compaction.keepRecent`,
 `compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
 `compaction.toolOutputChars`, `compaction.reminderTokens`,
 `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`,
@@ -1321,10 +1322,10 @@ Only these one hundred and forty-two keys are layered — `provider`, `models`,
 `paletteMru`, `diffPreviewRows`, `diffStyle`, `toolOutputPreviewLines`,
 `sessionRetentionDays`, `sessions.autoTitle`, `promptSuggestions`,
 `promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints`, `keybindings`,
-`vimMode`, `lintCommands`, `formatCommands`, `formatAuto`, `disabledMcpServers`,
-`mcp.enabled`, `mcp.lazySchemaTokens`, `connectTimeoutSeconds`,
-`providerRetryAttempts`, `providerRetryBaseBackoffMs`, `debug.skills`,
-`debug.commands`, `debug.rules`, `debug.stream`.
+`vimMode`, `transcriptJsonl`, `lintCommands`, `formatCommands`, `formatAuto`,
+`disabledMcpServers`, `mcp.enabled`, `mcp.lazySchemaTokens`,
+`connectTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`,
+`debug.skills`, `debug.commands`, `debug.rules`, `debug.stream`.
 <!-- settings:layered:end -->
 
 That roster (and its count) is generated from `SettingsSchema` by
@@ -1373,7 +1374,7 @@ in precedence only.
 > user-tier only. Details per key in
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
-Even for a trusted project, eighty-four keys are **never** taken from a project file:
+Even for a trusted project, eighty-five keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -1516,7 +1517,7 @@ references admit, which is precisely why the read half is the operator's
 choice too);
 `watchFiles`, because it turns an `AI!` comment saved into the
 repository's files into a prompt the agent acts on, and a checkout must not be
-able to make its own text your next instruction; `debug.skills`, `debug.commands`, `debug.rules` and
+able to make its own text your next instruction; `transcriptJsonl`, because the `transcript_path` its journal hands hook scripts is raw conversation text and hooks themselves are project-definable — a checkout that could flip the mirror would be choosing to expose the operator's stored words to scripts the checkout names, the `watchFiles` argument applied to the record rather than the prompt, so the switch is the operator's alone; `debug.skills`, `debug.commands`, `debug.rules` and
 `debug.stream`, because they are the operator's own diagnostic switches — each
 puts what a loader refused (or a failing token observer) on stderr, and a checkout has no business deciding what is
 printed under the operator's screen; `redactToolOutput`, because it decides

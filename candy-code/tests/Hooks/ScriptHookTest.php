@@ -1859,7 +1859,7 @@ final class ScriptHookTest extends TestCase
     // =========================================================================
 
     /**
-     * The six keys Claude Code's hook contract names, in order, on every
+     * The seven keys Claude Code's hook contract names, in order, on every
      * event: a script that runs `jq -r .tool_response` must not care whether
      * the event is Pre or Post.
      */
@@ -1877,9 +1877,59 @@ final class ScriptHookTest extends TestCase
 
         $this->assertTrue($result->isAllowed(), $result->message);
         $this->assertSame(
-            'session_id,cwd,hook_event_name,tool_name,tool_input,tool_response|PreToolUse|TestTool|test_session_123',
+            'session_id,cwd,hook_event_name,tool_name,tool_input,tool_response,transcript_path|PreToolUse|TestTool|test_session_123',
             $result->additionalContext,
         );
+    }
+
+    /**
+     * C-SES-8.g: the seventh key is present-always and its VALUE answers the
+     * `transcriptJsonl` flag — a present null while the mirror is off, the
+     * journal path the store mirror writes when it is on. The path is keyed
+     * to the launch's SETTINGS root (what `Bootstrap::sessionStore()` builds
+     * the writer against), not to the context cwd: a settings root and a
+     * context root that differ must produce the SETTINGS root's slug, or
+     * hooks and store would name two different files. And naming the journal
+     * never creates it — `pathFor` is non-constructing by contract.
+     */
+    public function testTranscriptPathIsAPresentNullOffAndTheJournalPathOn(): void
+    {
+        $hook = new ScriptHook(
+            name: 'stdin_transcript_path',
+            event: HookEvent::PreToolUse,
+            matcher: '.*',
+            command: 'true',
+            description: '',
+        );
+        $context = $this->createContext();
+        $read = static fn (): array => (array) \json_decode(
+            (new \ReflectionMethod($hook, 'stdinPayload'))->invoke($hook, $context),
+            true,
+        );
+
+        $previousRoot = \SugarCraft\Code\Cli\LaunchContext::projectRootForSettings();
+        try {
+            \SugarCraft\Code\Share\JsonlTranscriptWriter::setEnabled(false);
+            $off = $read();
+            $this->assertArrayHasKey('transcript_path', $off, 'the fixed seven-key shape keeps the key when the mirror is off');
+            $this->assertNull($off['transcript_path'], 'off answers null, never a path to a journal nobody writes');
+
+            $journalBase = sys_get_temp_dir() . '/ccmp8g-journal-' . getmypid();
+            \SugarCraft\Code\Cli\LaunchContext::rememberProjectRootForSettings('/tmp/proj-alpha');
+            \SugarCraft\Code\Share\JsonlTranscriptWriter::pinDefaultRoot($journalBase);
+            \SugarCraft\Code\Share\JsonlTranscriptWriter::setEnabled(true);
+            $on = $read();
+            $this->assertSame(
+                $journalBase . '/proj-alpha/test_session_123.jsonl',
+                $on['transcript_path'],
+                'the key names the settings-root journal, not the /tmp context root',
+            );
+            $this->assertFileDoesNotExist($on['transcript_path'], 'a payload must not mint the journal it names');
+        } finally {
+            \SugarCraft\Code\Share\JsonlTranscriptWriter::setEnabled(false);
+            \SugarCraft\Code\Share\JsonlTranscriptWriter::pinDefaultRoot(null);
+            \SugarCraft\Code\Cli\LaunchContext::rememberProjectRootForSettings($previousRoot);
+        }
     }
 
     /**

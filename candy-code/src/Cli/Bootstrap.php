@@ -10172,6 +10172,25 @@ public static function useMaxCost(?string $maxCost): void
             }
         }
 
+        // C-SES-8.g: the JSONL transcript mirror, when the operator asked
+        // for it. One reading of one setting decides BOTH surfaces — the
+        // store gets a mirror writer whose save() rides every committed
+        // transcript (EnhancedSessionStore::saveTranscript, post-commit,
+        // never-fail), and the process flag names the same file to hook
+        // children as `transcript_path`. The root is the launch's SETTINGS
+        // root — the same static `projectRootForSettings()` the tiered
+        // settings resolve against and every entry point remembers — so the
+        // journal's directory and the path a hook is handed cannot drift
+        // apart by one being the launch cwd and the other the repo root.
+        // Setting off (the default) leaves both writer-state untouched: no
+        // flag, no mirror, and `transcript_path` is a present null.
+        if (\SugarCraft\Code\Config\Settings\UiSettings::bool(self::TRANSCRIPT_JSONL_SETTING)) {
+            \SugarCraft\Code\Share\JsonlTranscriptWriter::setEnabled(true);
+            $store->withJsonlMirror(new \SugarCraft\Code\Share\JsonlTranscriptWriter(
+                projectRoot: LaunchContext::projectRootForSettings(),
+            ));
+        }
+
         return $store;
     }
 
@@ -10269,6 +10288,16 @@ public static function useMaxCost(?string $maxCost): void
 
     /** The settings key {@see sessionRetentionDays()} falls back to. */
     public const SESSION_RETENTION_DAYS_SETTING = 'sessionRetentionDays';
+
+    /**
+     * C-SES-8.g (plan_comparison.md §3): the settings key that turns the
+     * JSONL transcript mirror on — the store side in
+     * {@see self::sessionStore()} below, the hook side read as
+     * {@see \SugarCraft\Code\Share\JsonlTranscriptWriter::enabled()} by
+     * `ScriptHook::stdinPayload()`'s `transcript_path` key. One flag, set in
+     * one place, answers both.
+     */
+    public const TRANSCRIPT_JSONL_SETTING = 'transcriptJsonl';
 
     /**
      * How many days an unnamed session survives without being touched, from

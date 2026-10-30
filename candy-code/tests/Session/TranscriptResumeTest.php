@@ -14,6 +14,7 @@ use SugarCraft\Code\App\TranscriptFlushMsg;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Session\EnhancedSessionStore;
+use SugarCraft\Code\Share\JsonlTranscriptWriter;
 use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\ToolResult;
 use SugarCraft\Code\Usage;
@@ -258,5 +259,114 @@ final class TranscriptResumeTest extends TestCase
         $store = $this->store();
         $store->createSession('x', 'p', 'm');
         $this->assertSame([], Chat::loadTranscript($store, 'x'));
+    }
+
+    // =========================================================================
+    // C-SES-8.g: the JSONL mirror. It rides a COMMITTED save — never the
+    // tombstone skip, never a rolled-back one, and never as a way to fail a
+    // save that already happened.
+    // =========================================================================
+
+    public function testTheJsonlMirrorFeedsAfterACommittedSaveAndGrowsAppendOnly(): void
+    {
+        $journal = $this->dir . '/journal';
+        $store = $this->store();
+        $this->assertSame(
+            $store,
+            $store->withJsonlMirror(new JsonlTranscriptWriter($journal, '/tmp/proj-mirror')),
+            'the setter answers the SAME live store — one PDO handle, one identity map, one launch',
+        );
+
+        $store->saveTranscript('mirror-s', [Message::user('hello')]);
+        $path = $journal . '/proj-mirror/mirror-s.jsonl';
+        $this->assertFileExists($path, 'a committed save extends the journal beside writing the row');
+        $this->assertSame('600', substr(sprintf('%o', (int) fileperms($path)), -3), 'the journal is raw conversation: owner-only, like the store beside it');
+        $this->assertSame(1, $this->journalLines($path));
+
+        $store->saveTranscript('mirror-s', [Message::user('hello'), Message::assistant('back')]);
+        $this->assertSame(2, $this->journalLines($path), 'the second save appends the new row, it does not rewrite the old one');
+        $this->assertStringStartsWith('{"role":"user","content":"hello"', rtrim((string) file_get_contents($path)), 'the first line is byte-untouched by the append');
+
+        // The tombstone skip: the save the store refuses to write is a save
+        // the mirror must not write either, or a deleted conversation comes
+        // back on the filesystem after leaving the database.
+        $store->deleteSession('mirror-s');
+        $store->saveTranscript('mirror-s', [Message::user('still talking')]);
+        $this->assertSame(2, $this->journalLines($path), 'a tombstoned session adds nothing to its journal');
+        $this->assertNull($store->getSession('mirror-s'), 'and still no row — the door is the store-side one, unchanged');
+    }
+
+    public function testARolledBackSaveLeavesTheMirrorUntouched(): void
+    {
+        $journal = $this->dir . '/journal';
+        $store = $this->store()->withJsonlMirror(new JsonlTranscriptWriter($journal, '/tmp/proj-mirror'));
+
+        $handle = fopen('php://memory', 'r');
+        try {
+            $store->saveTranscript('fail-s', [
+                Message::user('fine'),
+                ['role' => 'user', 'content' => $handle],
+            ]);
+            $this->fail('an unencodable message must still raise, as the saveTranscript docblock says');
+        } catch (\JsonException) {
+            $this->assertFileDoesNotExist(
+                $journal . '/proj-mirror/fail-s.jsonl',
+                'the mirror sits after the commit; a save that never committed never mirrored',
+            );
+            $this->assertNull($store->getSession('fail-s'), 'and the transaction rolled the lazy-minted row back too');
+        } finally {
+            fclose($handle);
+        }
+    }
+
+    /**
+     * The writer is final and refuses to throw today, so no double can prove
+     * the catch arm functionally — this pins the SHAPE that makes tomorrow's
+     * swap-in safe: the call sits inside a try that swallows Throwable, and
+     * it sits after the writeTransaction return (same structural discipline
+     * the MediaStore publish-order pin uses).
+     */
+    public function testTheMirrorCallIsStructurallyBehindTheCommitAndBehindACatch(): void
+    {
+        $saveSlice = (string) implode(
+            "\n",
+            array_slice(
+                file((new \ReflectionMethod(EnhancedSessionStore::class, 'saveTranscript'))->getFileName()) ?: [],
+                (new \ReflectionMethod(EnhancedSessionStore::class, 'saveTranscript'))->getStartLine() - 1,
+                (new \ReflectionMethod(EnhancedSessionStore::class, 'saveTranscript'))->getEndLine()
+                    - (new \ReflectionMethod(EnhancedSessionStore::class, 'saveTranscript'))->getStartLine() + 1,
+            ),
+        );
+        $commit = mb_strpos($saveSlice, 'writeTransaction(');
+        $mirror = mb_strpos($saveSlice, '$this->mirrorTranscript(');
+        $this->assertIsInt($commit);
+        $this->assertIsInt($mirror);
+        $this->assertGreaterThan($commit, $mirror, 'the mirror call must follow the transaction call, not sit inside it');
+
+        $mirrorReflection = new \ReflectionMethod(EnhancedSessionStore::class, 'mirrorTranscript');
+        $mirrorSlice = (string) implode(
+            "\n",
+            array_slice(
+                file((string) $mirrorReflection->getFileName()) ?: [],
+                $mirrorReflection->getStartLine() - 1,
+                $mirrorReflection->getEndLine() - $mirrorReflection->getStartLine() + 1,
+            ),
+        );
+        $try = mb_strpos($mirrorSlice, 'try {');
+        $call = mb_strpos($mirrorSlice, '->save(');
+        $catch = mb_strpos($mirrorSlice, 'catch (\\Throwable');
+        $this->assertIsInt($try);
+        $this->assertIsInt($call);
+        $this->assertIsInt($catch);
+        $this->assertLessThan($call, $try, 'the save call must sit inside the try');
+        $this->assertLessThan($catch, $call, 'and the catch must follow it');
+    }
+
+    /** @return positive-int count of JSONL lines the journal file holds. */
+    private function journalLines(string $path): int
+    {
+        $contents = (string) file_get_contents($path);
+
+        return count(array_filter(explode("\n", $contents), static fn (string $line): bool => $line !== ''));
     }
 }

@@ -640,6 +640,7 @@ final class LayeredSettings
         'maxCheckpoints',
         'keybindings',
         'vimMode',
+        'transcriptJsonl',
         'lintCommands',
         'formatCommands',
         'formatAuto',

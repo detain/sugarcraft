@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Session;
 use PDO;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Share\JsonlTranscriptWriter;
 use SugarCraft\Code\Usage;
 use SugarCraft\Code\Util\TokenTracker;
 use SugarCraft\Code\Workspace\ShadowGarbageCollector;
@@ -35,6 +36,15 @@ final class EnhancedSessionStore
      * SQLite has no FTS5 (never a reason the store itself cannot open).
      */
     private SessionSearchIndex $searchIndex;
+
+    /**
+     * C-SES-8.g: the JSONL mirror this store was told to feed after each
+     * committed transcript save — null unless {@see withJsonlMirror()} was
+     * called, which only the launch wiring does, and only when the
+     * `transcriptJsonl` setting is on. Null is the whole story when it is
+     * off: no journal, no extra work on the save path.
+     */
+    private ?JsonlTranscriptWriter $jsonlMirror = null;
 
     public function __construct(private readonly string $dbPath, string $ftsModule = 'fts5')
     {
@@ -2008,16 +2018,18 @@ final class EnhancedSessionStore
         // TUI for seconds inside update(): 5.5 s for 800 messages (audit
         // 15b-21). It also makes the save atomic: a failure part-way leaves
         // the previous transcript and no stray blobs.
-        $this->writeTransaction(function () use ($sessionId, $messages): void {
+        $wrote = $this->writeTransaction(function () use ($sessionId, $messages): bool {
             if ($this->sessionStore->session($sessionId) === null) {
                 // SES-1-P5 (cure-W7): destroyed on purpose, not yet minted.
                 // The save of a deleted session writes nothing — no
                 // resurrected `candy-code/unknown` row, and no transcript
                 // orphaned behind the foreign key that needs one. Silence is
                 // honest here: the conversation the user deleted is gone,
-                // which is precisely what they asked for.
+                // which is precisely what they asked for. The `false` answers
+                // the C-SES-8.g mirror too: a deleted session's journal stays
+                // exactly as deleted as its row.
                 if ($this->sessionTombstoned($sessionId)) {
-                    return;
+                    return false;
                 }
 
                 $this->sessionStore->createSession($sessionId, 'candy-code', 'unknown');
@@ -2072,7 +2084,62 @@ final class EnhancedSessionStore
 
             $this->sessionStore->updateSession($sessionId);
             $this->syncSearchIndex($sessionId, $messages, $identities);
+
+            return true;
         });
+
+        // C-SES-8.g: the journal rides OUTSIDE the transaction, after the
+        // commit — a mirror that wrote inside it would put raw filesystem
+        // state on the rollback path, and a half-written JSONL line is the
+        // exact artifact that breaks `jq` readers forever. `$wrote === true`
+        // is both conditions at once: the transaction committed, and this
+        // save was not the tombstone skip. {@see mirrorTranscript()} never
+        // throws, so a journal that cannot be written costs a journal entry
+        // and nothing else — the save the user asked for already happened.
+        if ($wrote === true) {
+            $this->mirrorTranscript($sessionId, $messages);
+        }
+    }
+
+    /**
+     * C-SES-8.g: accept the JSONL mirror this store feeds after each
+     * committed transcript save. A service-side setter, not a value-object
+     * wither: {@see EnhancedSessionStore} owns a live PDO connection and the
+     * identity {@see \WeakMap}s, and the object Chat, the hooks and the
+     * picker all hold is exactly one per launch — a `clone` here would fork
+     * a second live store whose saves the launch never sees. So it sets and
+     * returns $this, and the name carries the house `with*` spelling the
+     * design block asked for.
+     */
+    public function withJsonlMirror(JsonlTranscriptWriter $mirror): self
+    {
+        $this->jsonlMirror = $mirror;
+
+        return $this;
+    }
+
+    /**
+     * Feed {@see $jsonlMirror} without ever failing the save it follows.
+     *
+     * The writer itself refuses to throw (C-SES-8.f: every I/O failure
+     * answers `false`), but the call is fenced anyway — a mirror swapped in
+     * by future code, or a PHP-level surprise on the way in, must not be
+     * able to turn a committed transcript into an exception the caller
+     * reads as a failed save. Same doctrine as the prune calls beside it in
+     * `Bootstrap::sessionStore()`: best effort, silent, whole.
+     */
+    private function mirrorTranscript(string $sessionId, array $messages): void
+    {
+        if ($this->jsonlMirror === null) {
+            return;
+        }
+
+        try {
+            $this->jsonlMirror->save($sessionId, $messages);
+        } catch (\Throwable) {
+            // The database row committed; the journal missing one save is
+            // strictly better than the save failing over the journal.
+        }
     }
 
     /**

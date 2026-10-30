@@ -25,6 +25,7 @@ use SugarCraft\Code\Lang;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionStore;
+use SugarCraft\Code\Share\JsonlTranscriptWriter;
 use SugarCraft\Code\Support\AiCommentWatcher;
 use SugarCraft\Code\Theme;
 use SugarCraft\Code\Tui\TerminalBackground;
@@ -331,6 +332,26 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withHelp(Lang::t('settings.vimMode.help'))
                 ->withReaderSymbol(Chat::class . '::vimModeEnabled')
                 ->withReadBy('`Chat::update()` key dispatch (arm re-sync + operator resolution, TUI-3A) → `ComposerVim` over the sugar-forms `TextArea` Vim layer (w5f)'),
+            // C-SES-8.g (plan_comparison.md §3): the JSONL mirror switch. USER
+            // tier on purpose — no withProjectSettable(): `transcript_path`
+            // rides into hook STDIN and hooks are project-definable, so a
+            // checkout that could flip this would be pointing operator-written
+            // scripts at a journal it can then read; the same reasoning keeps
+            // `watchFiles` and the spend cap user-only. RESTART apply mode:
+            // the store and its mirror are built once at launch
+            // ({@see Bootstrap::sessionStore()}), and the process flag behind
+            // the hook key is set there, not re-read per event. The journal
+            // itself is {@see JsonlTranscriptWriter} (C-SES-8.f); this lane
+            // only decides WHEN it runs.
+            SettingDefinition::new('transcriptJsonl', SettingType::Bool, false)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::Restart)
+                ->withLabel(Lang::t('settings.transcriptJsonl.label'))
+                ->withHelp(Lang::t('settings.transcriptJsonl.help'))
+                ->withReaderSymbol(Bootstrap::class . '::sessionStore')
+                ->withReadBy('`Bootstrap::sessionStore()` → `EnhancedSessionStore::withJsonlMirror()` (the store mirror) and the `JsonlTranscriptWriter::enabled()` flag read by `ScriptHook::stdinPayload()` (`transcript_path`)'),
         ];
     }
 }

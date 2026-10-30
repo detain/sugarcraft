@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Hooks;
 
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Share\JsonlTranscriptWriter;
 use SugarCraft\Code\Support\HookContextFiles;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
@@ -1267,22 +1268,35 @@ final readonly class ScriptHook implements BoundedHookInterface
      * The JSON this hook's child receives on STDIN (ISS-038).
      *
      * THE CLAUDE-CODE-SHAPED CONTRACT, made literal: `session_id`, `cwd`,
-     * `hook_event_name`, `tool_name`, `tool_input`, `tool_response`. Hook
-     * scripts in the wild are written against these six keys — this class
-     * already speaks Claude Code's exit-code dialect (0/1/2, plus ASK/MODIFY),
-     * and a script pointed at sugar-crush that found its stdin a closed pipe // @rename-keep
+     * `hook_event_name`, `tool_name`, `tool_input`, `tool_response`,
+     * `transcript_path`. Hook scripts in the wild are written against these
+     * seven keys — this class already speaks Claude Code's exit-code dialect
+     * (0/1/2, plus ASK/MODIFY), and a script pointed at sugar-crush that
+     * found its stdin a closed pipe // @rename-keep
      * and an empty object in `$CRUSH_TOOL_INPUT_FILE` had ONE honest reading:
      * the guard saw nothing. The `CRUSH_*` environment variables all stay —
      * this adds the portable channel, it does not subtract the native one.
      *
      * `tool_input` rides {@see HookContext::$toolArgs} rather than re-decoding
-     * the `toolInput` text because $toolArgs is what the gates themselves read:
-     * after a MODIFY the rewritten arguments ARE the call, and the two fields
-     * were built to move together ({@see HookContext::withRewrittenArgs()}).
+     * the `toolInput` text because $toolArgs is what the gates themselves
+     * read: after a MODIFY the rewritten arguments ARE the call, and the two
+     * fields were built to move together ({@see HookContext::withRewrittenArgs()}).
      * A pre-event context has run nothing, so `tool_response` is its empty
-     * string, and the KEY IS STILL THERE — a fixed six-key shape is what makes
-     * `jq -r .tool_response` safe on every event instead of an exercise in
-     * null-guessing per event.
+     * string, and the KEY IS STILL THERE — a fixed seven-key shape is what
+     * makes `jq -r .tool_response` safe on every event instead of an exercise
+     * in null-guessing per event.
+     *
+     * `transcript_path` (C-SES-8.g) is the SAME doctrine one level up: the
+     * key is ALWAYS there and the VALUE answers the `transcriptJsonl`
+     * setting — null while the mirror is off, the session's journal path
+     * when it is on. The path is the store's own file — derived from the
+     * launch's settings root exactly as {@see \SugarCraft\Code\Cli\Bootstrap::sessionStore()}
+     * builds the mirror's writer, never from the context cwd, and reading a
+     * path does not create it ({@see JsonlTranscriptWriter::pathFor()} is
+     * non-creating; the mirror's save after the next commit puts bytes down).
+     * A script can `jq` the transcript the same way on every event as on
+     * every launch; when the operator kept no journal, it gets an honest
+     * null instead of a key that vanished.
      *
      * INVALID UTF-8 in a tool output becomes U+FFFD rather than a `false`
      * encode: a payload that silently stops existing is the fail-open this
@@ -1297,6 +1311,17 @@ final readonly class ScriptHook implements BoundedHookInterface
             'tool_name' => $context->toolName,
             'tool_input' => $context->toolArgs === [] ? new \stdClass() : $context->toolArgs,
             'tool_response' => $context->toolOutput,
+            // The launch's settings root, not $context->projectRoot: this is
+            // the file the store's mirror writes, and the store was wired
+            // against the root the settings tiers resolved against. Task-list
+            // and host contexts carry a cwd that can differ from it; the
+            // journal's location is decided once at launch, not per context.
+            'transcript_path' => JsonlTranscriptWriter::enabled()
+                ? JsonlTranscriptWriter::pathFor(
+                    $context->sessionId,
+                    \SugarCraft\Code\Cli\LaunchContext::projectRootForSettings(),
+                )
+                : null,
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
 
         return $payload === false ? '{}' : $payload;

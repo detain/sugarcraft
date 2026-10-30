@@ -730,7 +730,12 @@ CRUSH_TOOL_INPUT_FILE  CRUSH_TOOL_OUTPUT_FILE
 
 The child also receives the Claude-Code-shaped JSON payload on **stdin**:
 `{"session_id", "cwd", "hook_event_name", "tool_name", "tool_input",
-"tool_response"}`. The `CRUSH_*` environment stays as above, and a
+"tool_response", "transcript_path"}`. The shape is fixed at these seven keys on
+every event: `transcript_path` is always present, and its value answers the
+`transcriptJsonl` setting — `null` while the mirror is off (the default), the
+session's append-only JSONL journal path when it is on, the same file
+`EnhancedSessionStore` mirrors each committed transcript into. Reading the key
+never creates the file. The `CRUSH_*` environment stays as above, and a
 child that never reads stdin still verdicts on its exit code.
 
 `CRUSH_TOOL_INPUT` (and the file behind `CRUSH_TOOL_INPUT_FILE`) is the tool's
