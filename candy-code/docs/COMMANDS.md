@@ -377,6 +377,7 @@ edit it by hand.
 | `/permissions` | ✓ | ✓ | `[mode <name> \| revoke <n\|all> \| saved \| forget <n\|pattern>]` | Show this session's permission mode, its rules and its grants; switch the mode or revoke a grant |
 | `/notices` | ✓ | | — | Show every warning this launch raised, un-capped and un-aggregated |
 | `/status` | ✓ | | — | Show where this session stands: version, model, context, spend, config, MCP, hooks, serve |
+| `/doctor` | ✓ | | — | Run the install checks and report every row |
 | `/context` | ✓ | | `--raw [path]` | Show what fills the context window: prompt layers, tools, history, cache |
 | `/sweep` | ✓ | | `[n]` | Prune the tool outputs since your last prompt (or the last n) from what the model sees |
 | `/pruning` | ✓ | | `[auto\|manual\|off\|default]` | Show or set how this session prunes its context: auto, manual or off |
@@ -472,7 +473,7 @@ In a **read-only** window — a session another candy-code already has open
 run: `/exit`, `/keys`, `/help`, `/permissions`, `/notices`, `/rules`, `/budget`,
 `/share`, `/agents`, `/memory`, `/bg`, `/fork`, `/branch`, `/sessions`, `/theme`,
 `/mcp`, `/websearch`, `/pane`, `/layout`, `/model`, `/editor`, `/settings`, `/diff`,
-`/context`, `/btw` and `/workflow list|status`.
+`/context`, `/btw`, `/doctor` and `/workflow list|status`.
 Everything else, a custom command included, is refused; the box is cleared so
 `/branch` can be typed at once, and the refused draft comes back once `/branch`
 has forked the session into one this window owns.

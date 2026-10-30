@@ -5,8 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Code\Cli\ArgvParser;
-use SugarCraft\Code\Cli\Subcommands;
+use SugarCraft\Code\Cli\DoctorChecks;
 
 /**
  * rv-enduser-6 / rv-devops-6 (fix 9): the doctor used to report a box green
@@ -33,11 +32,11 @@ final class DoctorExtensionProbesTest extends TestCase
     /** @return array<string, \Closure(): array{status: string, detail: string}> */
     private function probes(): array
     {
-        $method = new \ReflectionMethod(Subcommands::class, 'doctorProbes');
+        $method = new \ReflectionMethod(DoctorChecks::class, 'probes');
         $method->setAccessible(true);
 
         /** @var array<string, \Closure> $probes */
-        $probes = $method->invoke(null, ArgvParser::parse(['candy-code', 'doctor']));
+        $probes = $method->invoke(null, null);
 
         return $probes;
     }
@@ -71,7 +70,7 @@ final class DoctorExtensionProbesTest extends TestCase
 
     public function testTheProbesExerciseTheCallRatherThanNameTheExtension(): void
     {
-        $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/Subcommands.php');
+        $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/DoctorChecks.php');
         $start = (int) strpos($src, "'ext-mbstring' =>");
         $end = (int) strpos($src, "'server mode' =>");
         $this->assertGreaterThan($start, $end, 'both probe entries live in one slice of the map');
@@ -120,10 +119,10 @@ final class DoctorExtensionProbesTest extends TestCase
         $probes = $this->probes();
         $this->assertArrayHasKey('pdo_sqlite', $probes);
 
-        $dsn = (new \ReflectionClass(Subcommands::class))->getConstant('SESSION_STORE_PROBE_DSN');
+        $dsn = (new \ReflectionClass(DoctorChecks::class))->getConstant('SESSION_STORE_PROBE_DSN');
         $this->assertSame('sqlite::memory:', $dsn, 'the probe must open the driver SessionStore actually uses');
 
-        $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/Subcommands.php');
+        $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/DoctorChecks.php');
         $pdoSlice = substr($src, (int) strpos($src, 'private static function pdoDriverProbe'));
         $pdoSlice = substr($pdoSlice, 0, (int) strpos($pdoSlice, "\n    }"));
         $this->assertStringContainsString('new \\PDO($dsn)', $pdoSlice);

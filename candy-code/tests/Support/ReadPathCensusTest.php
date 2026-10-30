@@ -757,9 +757,9 @@ final class ReadPathCensusTest extends TestCase
         // through ContainedPath::within() before constructing the client. A row
         // whose rationale is "nobody calls this" expires the moment somebody does,
         // which is the transition this ledger exists to make visible.
+        // C-TUI-5.a: the doctor roster left this file and became Cli\DoctorChecks,
+        // so its config read is censused where it now lives.
         'Cli/Subcommands.php|file_get_contents' => [
-            'CALLER_SUPPLIED — `doctor`\'s config-file check: Bootstrap::userConfigPath(), the operator\'s '
-                . '`--config` path or `~/.candy-code/config.json`, read only to be JSON-validated and reported',
             'CALLER_SUPPLIED — `mcp import`\'s operand: the operator\'s own argv names the file, '
                 . 'the verb reads one document, translates it through the shared McpForeignTranslate '
                 . 'table, and PRINTS by default (the print-only law; `--write user` is the one '
@@ -769,7 +769,7 @@ final class ReadPathCensusTest extends TestCase
                 . 'HomeDirectory::owned() vouched for the home; decoded to collide-check and append, '
                 . 'refused-not-repaired when unreadable, never executed (C-MCP-4.d)',
             // W4 (PRV-4): `candy-code login` merges its new key onto the file's EXISTING
-            // providers map — same operator-named path as the `doctor` row above.
+            // providers map — same operator-named path as the `doctor` check below.
             'CALLER_SUPPLIED — `login`\'s merge-read (Subcommands::loginStoreKey): Bootstrap::userConfigPath(), '
                 . 'decoded to keep the other providers\' entries when the map is rewritten through '
                 . 'Bootstrap::writeUserConfig(); the corrupt-config branch refuses, never repairs',
@@ -787,6 +787,12 @@ final class ReadPathCensusTest extends TestCase
                 . 'names, inside the same checkout; a `..` traversal in the ref line is refused first',
             'SELF_LOCATED — `bundlesGitSha()`\'s packed-refs scan when the loose ref file is '
                 . 'unreadable, the same checkout\'s own `.git/packed-refs` index',
+        ],
+        'Cli/DoctorChecks.php|file_get_contents' => [
+            'CALLER_SUPPLIED — the `doctor` config-file check (the CLI verb and the in-session '
+                . '`/doctor` alike — one roster): Bootstrap::userConfigPath(), the operator\'s '
+                . '`--config` path or `~/.candy-code/config.json`, read only to be JSON-validated '
+                . 'and reported (C-TUI-5.a)',
         ],
         'Lint/LintRunner.php|file_get_contents' => [
             'PATH_JAIL — the file a Write/Edit call named, resolved through PathJail against the hook\'s '

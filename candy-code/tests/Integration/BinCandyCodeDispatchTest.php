@@ -9,6 +9,7 @@ use SugarCraft\Code\Cli\ArgvParser;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\Help;
 use SugarCraft\Code\Cli\ParsedArgs;
+use SugarCraft\Code\Cli\DoctorChecks;
 use SugarCraft\Code\Cli\Subcommands;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
@@ -1440,7 +1441,7 @@ final class BinCandyCodeDispatchTest extends TestCase
      * catch is exactly what could cost `doctor` its report — it must still
      * print, name the failure and exit 1 rather than being swallowed into a
      * bare exit 2. That it does not is a property of the per-probe catches in
-     * Subcommands::doctorProbes(), and this is what holds them there.
+     * DoctorChecks::probes(), and this is what holds them there.
      */
     public function testAThrowInsideASubcommandIsAReportedExitTwoAndNeverAFatal(): void
     {
@@ -1931,9 +1932,9 @@ final class BinCandyCodeDispatchTest extends TestCase
      */
     public function testThePdoProbeExercisesTheDriverTheSessionStoreOpens(): void
     {
-        $probe = new \ReflectionMethod(Subcommands::class, 'pdoDriverProbe');
+        $probe = new \ReflectionMethod(DoctorChecks::class, 'pdoDriverProbe');
         $probe->setAccessible(true);
-        $dsn = (string) (new \ReflectionClass(Subcommands::class))->getConstant('SESSION_STORE_PROBE_DSN');
+        $dsn = (string) (new \ReflectionClass(DoctorChecks::class))->getConstant('SESSION_STORE_PROBE_DSN');
 
         $good = $probe->invoke(null, $dsn);
         $this->assertSame('OK', $good['status'], (string) $good['detail']);

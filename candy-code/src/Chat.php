@@ -10925,6 +10925,10 @@ final class Chat implements Model
         'mcp', 'websearch', 'pane', 'layout', 'model', 'editor', 'settings', 'config', 'diff',
         'context', 'instructions', 'tokens', 'btw', 'play', 'hooks', 'effort', 'status', 'usage', 'fast',
         'insights',
+        // C-TUI-5.a: every `/doctor` row comes from DoctorChecks, which reads
+        // stores and never writes one — the diagnosis an operator wants most
+        // from a window they cannot write from.
+        'doctor',
     ];
 
     /**
@@ -13026,6 +13030,20 @@ final class Chat implements Model
             new \SugarCraft\Code\Host\Commands\StatusHostCommand($this->tokenTracker, $this->maxCostUsd),
             $inputText,
         );
+    }
+
+    /**
+     * `/doctor` (C-TUI-5.a): the install checks inside the session
+     * ({@see \SugarCraft\Code\Host\Commands\DoctorHostCommand}). Read-only,
+     * which is what earns it a place in the read-only window — the command the
+     * operator needs MOST there is the one that explains why this box is
+     * misbehaving, and every row it prints reads state, never writes it.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleDoctorCommand(string $inputText): array
+    {
+        return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\DoctorHostCommand(), $inputText);
     }
 
     /**

@@ -2854,14 +2854,14 @@ final class DocFigureProseDriftTest extends TestCase
             }
         }
         self::assertSame(
-            ['src/Agents/TaskList.php', 'src/Cli/Subcommands.php'],
+            ['src/Agents/TaskList.php', 'src/Cli/DoctorChecks.php'],
             array_keys($users),
             'code-level `new \\SQLite3` moved beyond TaskList + doctor\'s ISS-083 probe — the sentence\'s "two places" counts this roster',
         );
 
         $composer = json_decode((string) file_get_contents(\dirname(__DIR__, 2) . '/composer.json'), true, 512, \JSON_THROW_ON_ERROR);
         self::assertArrayHasKey('ext-sqlite3', $composer['require'], 'the page still says ext-sqlite3 is declared — composer stopped declaring it');
-        self::assertStringContainsString("'pdo_sqlite'", self::sourceOf('Cli/Subcommands.php'), 'doctor no longer probes pdo_sqlite — the page\'s rationale sentence is a lie');
+        self::assertStringContainsString("'pdo_sqlite'", self::sourceOf('Cli/DoctorChecks.php'), 'doctor no longer probes pdo_sqlite — the page\'s rationale sentence is a lie');
         self::assertSame('PDO', (new \ReflectionProperty(EnhancedSessionStore::class, 'pdo'))->getType()->getName(), 'the session store no longer reaches SQLite through PDO — which is what makes the doctor probe the right one');
 
         $tableStart = strpos($arch, '## Sessions and state');
@@ -3688,13 +3688,13 @@ final class DocFigureProseDriftTest extends TestCase
         );
 
         $probes = null;
-        foreach (self::functionSpans(self::sourceOf('Cli/Subcommands.php')) as $span) {
-            if ('doctorProbes' === $span['name']) {
+        foreach (self::functionSpans(self::sourceOf('Cli/DoctorChecks.php')) as $span) {
+            if ('probes' === $span['name']) {
                 $probes = $span;
             }
         }
-        self::assertIsArray($probes, 'doctorProbes() vanished — the doctor verdict row lost its closure');
-        $probeText = (string) substr(self::sourceOf('Cli/Subcommands.php'), $probes['begin'], $probes['end'] - $probes['begin']);
+        self::assertIsArray($probes, 'DoctorChecks::probes() vanished — the doctor verdict row lost its closure');
+        $probeText = (string) substr(self::sourceOf('Cli/DoctorChecks.php'), $probes['begin'], $probes['end'] - $probes['begin']);
         self::assertSame(
             4,
             preg_match_all('/Bootstrap::(MCP_[A-Z_]+)\s*\n\s*=> \[.status. => .(OK|WARN|FAIL)./', $probeText, $verdicts),
@@ -3724,24 +3724,24 @@ final class DocFigureProseDriftTest extends TestCase
         // docs-fix-1023 m3: docs/TROUBLESHOOTING.md headlines the doctor's
         // total ("fifteen checks; exits 1 if any FAILs") and nothing pinned
         // the count. The probe labels are the top-level keys of the array
-        // doctorProbes() returns; the word for the count and the page's
+        // DoctorChecks::probes() returns; the word for the count and the page's
         // numeral flip together.
         preg_match_all("/^            '(.+?)' => static/m", $probeText, $probeLabels);
         $doctorWords = [
             'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14,
             'fifteen' => 15, 'sixteen' => 16, 'seventeen' => 17,
         ];
-        self::assertGreaterThan(0, \count($probeLabels[1]), 'the probe-label scrape sees none of doctorProbes()\'s rows — the pin below measures nothing');
+        self::assertGreaterThan(0, \count($probeLabels[1]), 'the probe-label scrape sees none of DoctorChecks::probes()\'s rows — the pin below measures nothing');
         $doctorWord = array_search(\count($probeLabels[1]), $doctorWords, true);
         self::assertIsString(
             $doctorWord,
-            'doctorProbes() changed size to a number with no word in $doctorWords — add the word and flip the page numeral in docs/TROUBLESHOOTING.md with it',
+            'DoctorChecks::probes() changed size to a number with no word in $doctorWords — add the word and flip the page numeral in docs/TROUBLESHOOTING.md with it',
         );
         $troubleshooting = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/TROUBLESHOOTING.md');
         self::assertSame(
             1,
             preg_match('/#' . preg_quote(' ' . $doctorWord . ' checks; exits 1 if any FAILs', '/') . '/', $troubleshooting),
-            'docs/TROUBLESHOOTING.md no longer headlines the doctor with its live check count — flip the numeral with doctorProbes()',
+            'docs/TROUBLESHOOTING.md no longer headlines the doctor with its live check count — flip the numeral with DoctorChecks::probes()',
         );
 
         $permissions = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/PERMISSIONS.md');

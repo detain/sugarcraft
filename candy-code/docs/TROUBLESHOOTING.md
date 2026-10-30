@@ -11,6 +11,11 @@ candy-code doctor                       # sixteen checks; exits 1 if any FAILs
 candy-code doctor --output-format json  # the same, machine-readable
 ```
 
+Typing `/doctor` in a session prints the same rows as a table: the roster lives
+in one place, `Cli/DoctorChecks.php`, and the two readers cannot drift from each
+other. It is read-only, so it answers in a read-only window too — the box where
+most other commands are refused.
+
 ---
 
 ## Exit codes
@@ -581,7 +586,8 @@ not Linux, or a kernel policy that blocks unprivileged user namespaces (Ubuntu
 `Bash` call is refused with the reason rather than run unsandboxed. Install
 bubblewrap, allow its user namespaces, or set `bashSandbox` back to `off`. See
 [`PERMISSIONS.md`](PERMISSIONS.md#sandbox). Before typing a first command,
-`candy-code doctor`'s `sandbox` row answers the same question: it prints the
+`candy-code doctor`'s `sandbox` row — and the `/doctor` row beside it — answers
+the same question: it prints the
 configured mode, where `bwrap` resolves, and whether the jail actually starts —
 run through the Bash tool's own probe, so a `bwrap` the kernel will not let run
 (Ubuntu 24.04's `apparmor_restrict_unprivileged_userns` sysctl) is reported as

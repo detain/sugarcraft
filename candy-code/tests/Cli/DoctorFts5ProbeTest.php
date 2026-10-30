@@ -5,8 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Code\Cli\ArgvParser;
-use SugarCraft\Code\Cli\Subcommands;
+use SugarCraft\Code\Cli\DoctorChecks;
 
 /**
  * SES-2: the doctor carries an fts5 row that ASKS THE DATABASE the question
@@ -31,11 +30,11 @@ final class DoctorFts5ProbeTest extends TestCase
     /** @return array<string, \Closure(): array{status: string, detail: string}> */
     private function doctorRows(): array
     {
-        $method = new \ReflectionMethod(Subcommands::class, 'doctorProbes');
+        $method = new \ReflectionMethod(DoctorChecks::class, 'probes');
         $method->setAccessible(true);
 
         /** @var array<string, \Closure> $rows */
-        $rows = $method->invoke(null, ArgvParser::parse(['candy-code', 'doctor']));
+        $rows = $method->invoke(null, null);
 
         return $rows;
     }
@@ -43,7 +42,7 @@ final class DoctorFts5ProbeTest extends TestCase
     /** @return array{status: string, detail: string} */
     private function probeWithModule(string $module): array
     {
-        $method = new \ReflectionMethod(Subcommands::class, 'fts5Probe');
+        $method = new \ReflectionMethod(DoctorChecks::class, 'fts5Probe');
         $method->setAccessible(true);
 
         /** @var array{status: string, detail: string} $row */
@@ -86,7 +85,7 @@ final class DoctorFts5ProbeTest extends TestCase
 
     public function testTheProbeBuildsAndReadsTheTableInsteadOfNamingTheExtension(): void
     {
-        $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/Subcommands.php');
+        $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/DoctorChecks.php');
         $start = (int) strpos($src, 'private static function fts5Probe');
         $this->assertGreaterThan(0, $start, 'the probe body must be findable by name');
         $rest = substr($src, $start);

@@ -5,9 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Code\Cli\ArgvParser;
 use SugarCraft\Code\Cli\Bootstrap;
-use SugarCraft\Code\Cli\Subcommands;
+use SugarCraft\Code\Cli\DoctorChecks;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
 
@@ -94,7 +93,7 @@ final class DoctorSandboxProbeTest extends TestCase
      */
     private function sandboxProbeRow(?\Closure $jail = null, ?string $sysctlPath = null, string $osFamily = 'Linux'): array
     {
-        $method = new \ReflectionMethod(Subcommands::class, 'sandboxProbe');
+        $method = new \ReflectionMethod(DoctorChecks::class, 'sandboxProbe');
         $method->setAccessible(true);
 
         /** @var array{status: string, detail: string} $row */
@@ -106,11 +105,11 @@ final class DoctorSandboxProbeTest extends TestCase
     /** @return array<string, \Closure(): array{status: string, detail: string}> */
     private function probeRows(): array
     {
-        $method = new \ReflectionMethod(Subcommands::class, 'doctorProbes');
+        $method = new \ReflectionMethod(DoctorChecks::class, 'probes');
         $method->setAccessible(true);
 
         /** @var array<string, \Closure> $rows */
-        $rows = $method->invoke(null, ArgvParser::parse(['candy-code', 'doctor']));
+        $rows = $method->invoke(null, null);
 
         return $rows;
     }
@@ -243,7 +242,7 @@ final class DoctorSandboxProbeTest extends TestCase
 
     public function testTheRowAsksBashInsteadOfReimplementingTheProbe(): void
     {
-        $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/Subcommands.php');
+        $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/DoctorChecks.php');
 
         $start = (int) strpos($src, 'private static function sandboxProbe');
         $this->assertGreaterThan(0, $start, 'the probe body must be findable by name');

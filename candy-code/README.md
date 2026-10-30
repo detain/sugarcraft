@@ -624,14 +624,14 @@ context: it is listed with the others but sends nothing on its own. `#`, `//`,
 <!-- commands:roster:begin -->
 `/agents` (`/agent`) `/bg` (`/background`) `/branch` `/btw` `/budget` `/clear`
 `/commit` `/compact` `/compress` `/context` (`/tokens`) `/copy` `/decompress`
-`/diff` `/editor` `/effort` `/exit` (`/quit`) `/export` `/fast` `/fork`
-`/generate` `/goal` `/grind` `/handoff` `/help` `/hooks` `/init` `/insights`
-`/instructions` `/keys` `/layout` `/loop` `/mcp` `/memory` `/model` `/new`
-`/newrule` `/notices` `/output-style` `/pane` `/permissions` `/play` `/pr`
-`/pruning` `/recompress` `/redo` `/rename` `/rendermode` `/review` `/rewind`
-`/rules` `/schedules` (`/schedule`) `/security-review` `/sendto` `/sessions`
-`/settings` (`/config`) `/share` `/shells` `/skills` `/status` `/sweep` `/theme`
-`/undo` `/usage` `/websearch` `/workflow`.
+`/diff` `/doctor` `/editor` `/effort` `/exit` (`/quit`) `/export` `/fast`
+`/fork` `/generate` `/goal` `/grind` `/handoff` `/help` `/hooks` `/init`
+`/insights` `/instructions` `/keys` `/layout` `/loop` `/mcp` `/memory` `/model`
+`/new` `/newrule` `/notices` `/output-style` `/pane` `/permissions` `/play`
+`/pr` `/pruning` `/recompress` `/redo` `/rename` `/rendermode` `/review`
+`/rewind` `/rules` `/schedules` (`/schedule`) `/security-review` `/sendto`
+`/sessions` `/settings` (`/config`) `/share` `/shells` `/skills` `/status`
+`/sweep` `/theme` `/undo` `/usage` `/websearch` `/workflow`.
 <!-- commands:roster:end -->
 
 The parenthesised spellings are aliases: they dispatch, but they have no
@@ -2441,7 +2441,11 @@ keeps its transcript.
 `Bootstrap::sessionStore(prune: false)` rather than the plain accessor, so the
 opt-in `CANDY_CODE_SESSION_RETENTION_DAYS` sweep that a *launch* applies cannot
 delete conversations on the way to a health check. `doctor` and `models` take
-no operands and reject one at exit `2` rather than ignoring it.
+no operands and reject one at exit `2` rather than ignoring it. The roster of
+checks and each row's individual catch live in `Cli\DoctorChecks`; the
+subcommand only formats them and turns a `FAIL` into exit `1`, and the in-session
+`/doctor` prints the same rows as a table, which is why the two can never
+drift apart.
 
 `candy-code doctor` is **not** the model-callable `doctor` tool. That one is
 registered in `Bootstrap::tools()`, advertised to the LLM, and answers a
@@ -2449,7 +2453,9 @@ completely different question — which image protocol this terminal speaks, wit
 a PNG capability swatch attached. The CLI subcommand reports PHP, the
 extensions the session store and `serve` need, the config file, the permission policy, the
 selected provider, the session database and the project MCP config, takes no
-model, and cannot be reached by a tool call.
+model, and cannot be reached by a tool call. Typing `/doctor` in a session is the
+third shape of that same CLI probe — one roster, `DoctorChecks::run()`, read two
+ways — not a name for the tool.
 
 `mcp list` **reads and never runs**. `Bootstrap::mcpClient()` starts every
 configured server as a side effect of being asked for the client, so routing a
@@ -2720,7 +2726,7 @@ Things that are genuinely not finished, stated plainly rather than left for you 
   - **Double-Escape stops the run.** It releases the turn at once and cancels the run's `CancellationToken`, which `WorkflowEngine` answers by calling `AgentWorkerPool::cancelAll()` on the stage's live pool — the stage's forked agents are killed (asynchronously, with a grace) — and by starting no further stage. The partial report still lands, headed **cancelled**, with the stages that ran and what they spent; it is only appended to the transcript, so a turn you started after the cancel is not disturbed. An engine double that ignores the token simply finishes. A second `/workflow run` is refused while one is live (including while a cancelled one winds down) rather than started alongside it.
   - **Only forked workers publish live output.** The pane is fed by `AgentWorkerPool::pumpProgress()`, which mirrors what a forked child writes to its progress file. An engine-run stage (the bullet above) streams while it works: its prose as it arrives and a `▸ Tool(args)` line per tool call, coalesced to at most one append per 250ms, so a long stage's tile fills in live. Because the progress file is append-only it reads as an activity log ("said this, then called that"); the stage's result, and what `{{stage.output}}` interpolates, is the final answer alone. The three paths that do NOT fork — an injected `ExecutorInterface` (see the bullet above), a build without `pcntl`, and a failed `fork()` — run `execute()` synchronously in the parent, which blocks the loop for its duration: no progress, and the fiber cannot help because nothing yields. Injecting your own executor to reach a real model therefore costs you the live pane.
 - **`pcntl` is required for real parallelism.** Without it `AgentWorkerPool` falls back to sequential execution and logs a one-time visible warning rather than pretending to fan out.
-- **Providers are unit-tested against mocked transports.** No test in this suite makes a live API call, so wire-format drift at a real endpoint is caught by the `doctor` tool (model-invocable; there is no `/doctor` slash command) and by using it, not by CI.
+- **Providers are unit-tested against mocked transports.** No test in this suite makes a live API call, so wire-format drift at a real endpoint is caught by the `doctor` tool (model-invocable; the `/doctor` command is the *install* roster, a different probe answering a different question — see above) and by using it, not by CI.
 - **The `doctor` tool reports capabilities, it does not repair them.**
 - **A background session is re-adopted only by a launch of the same project.** Its result is announced into the conversation that adopts it, so a relaunch elsewhere leaves it for the project it was started for. The index lives in the system temp directory, so a reboot (which ends the daemons anyway) or a temp cleaner forgets it.
 
