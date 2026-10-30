@@ -1327,27 +1327,43 @@ final class CompactionService
 
     /**
      * The ahead-of-need skip rules (C-CTX-5.b, mirroring OpenCode's): both
-     * hosts' dispatch blocks ask their request arm through this one gate, and
-     * the held-slot validity check consults the model half of it. A session
-     * under {@see AHEAD_OF_NEED_TOKEN_FLOOR} never asks — the prefetch is
-     * pointless on histories a compaction handles quickly anyway. And a
-     * summary held under a different model than the session now runs is not
-     * the next model's work: the request stamped its model into the held
+     * hosts' dispatch blocks ask their request arm through this one gate. A
+     * session under {@see AHEAD_OF_NEED_TOKEN_FLOOR} never asks — the
+     * prefetch is pointless on histories a compaction handles quickly
+     * anyway. And a summary held under a different model than the session
+     * now runs is not the next model's work: every request — the dispatch
+     * arm's and the idle watch's alike — stamps its model into the held
      * slot's identity exactly like the session id, so a switch discards the
      * old records instead of splicing another head's writing into this
-     * model's context.
+     * model's context. The drop arm consults only
+     * {@see aheadOfNeedModelMatches()}: the floor is a REQUEST rule, and
+     * applying it on the way out would discard already-paid summaries of a
+     * small-window session that was never expected to clear it (MINOR-2,
+     * round-1 review).
      *
-     * $heldModel is the stamped model of a slot already held (null for a slot
-     * predating the stamp — the idle-watch request — which the model rule
-     * leaves alone); pass null from a request arm that holds nothing.
+     * $heldModel is the stamped model of a slot already held (null only for
+     * a slot predating the stamp, which the model rule leaves alone); pass
+     * null from a request arm that holds nothing.
      */
     public static function aheadOfNeedAllowed(int $tierTokens, ?string $heldModel = null, string $currentModel = ''): bool
     {
-        if ($heldModel !== null && $heldModel !== $currentModel) {
+        if (!self::aheadOfNeedModelMatches($heldModel, $currentModel)) {
             return false;
         }
 
         return $tierTokens >= self::AHEAD_OF_NEED_TOKEN_FLOOR;
+    }
+
+    /**
+     * The model half of the skip rules on its own — the whole drop-arm test
+     * once a slot is held. A slot stamped under another model is not this
+     * model's work and goes; an unstamped legacy slot is left alone, and a
+     * matching stamp keeps the paid records in hand however small the
+     * session is.
+     */
+    public static function aheadOfNeedModelMatches(?string $heldModel, string $currentModel): bool
+    {
+        return $heldModel === null || $heldModel === $currentModel;
     }
 
     /**

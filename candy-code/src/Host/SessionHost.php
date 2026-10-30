@@ -1014,6 +1014,14 @@ final class SessionHost
         }
 
         if ($this->requestAheadOfNeed($this->history, $this->history)) {
+            // MINOR-1, round-1 review: stamp the model this ask went out
+            // under, exactly like the dispatch arm below does. Without it a
+            // model-A idle prefetch survived a SetModel and spliced its
+            // records into the model-B session — the very harm the switch
+            // rule exists to prevent.
+            $idleEngine = $this->backend();
+            $idleModel = $idleEngine instanceof EngineBackend ? $idleEngine->model() : '';
+            $this->aheadOfNeed = [...$this->aheadOfNeed, 'model' => $idleModel];
             // The human learns what the machine did while nobody was
             // watching, in the transcript, like the advisory above it.
             // Message::notice() is uiOnly by construction, and
@@ -2408,9 +2416,12 @@ final class SessionHost
         // dropped once the tier stops firing because nothing will need it.
         $dispatched = [...$baseHistory, ...$newTurnMessages];
         // C-CTX-5.b: the same skip rules the TUI's dispatchTurn block applies,
-        // owned by CompactionService::aheadOfNeedAllowed() — the 64,000-token
-        // floor, and the model a held slot was asked under, folded into its
-        // identity beside the request id. Same tier arithmetic as the
+        // owned by CompactionService: the REQUEST arm goes through
+        // aheadOfNeedAllowed() — the 64,000-token floor plus the model — and
+        // the DROP arm consults only aheadOfNeedModelMatches(), because the
+        // floor is a request rule and re-applying it on the way out would
+        // discard an idle-minted small-window slot that was never expected
+        // to clear it (MINOR-2, round-1 review). Same tier arithmetic as the
         // reminder above, over the dispatched history.
         $aheadEngine = $this->backend();
         $currentModel = $aheadEngine instanceof EngineBackend ? $aheadEngine->model() : '';
@@ -2418,7 +2429,7 @@ final class SessionHost
             ? CompactionService::tierTokenCount($this->estimate($dispatched), $dispatched)
             : 0;
         if ($this->aheadOfNeed !== null && (
-            !CompactionService::aheadOfNeedAllowed($aheadTokens, $this->aheadOfNeed['model'] ?? null, $currentModel)
+            !CompactionService::aheadOfNeedModelMatches($this->aheadOfNeed['model'] ?? null, $currentModel)
             || ($this->aheadOfNeed['summaries'] !== null && (
                 !$dueForReminder
                 || !$this->aheadOfNeed['fingerprint']->matches(
@@ -2434,9 +2445,10 @@ final class SessionHost
             && CompactionService::aheadOfNeedAllowed($aheadTokens, null, $currentModel)
         ) {
             if ($this->requestAheadOfNeed($dispatched, $baseHistory)) {
-                // The latch itself is shared with the CTX-5 idle watch, which
-                // asks outside the reminder tier's decision; the stamp rides
-                // only on the slot this block asked for.
+                // Every minting site stamps its model now — the CTX-5 idle
+                // watch stamps its own slot at request time (MINOR-1,
+                // round-1 review) — so a switch discards whichever kind it
+                // held. This stamp rides on the slot this block asked for.
                 $this->aheadOfNeed = [...$this->aheadOfNeed, 'model' => $currentModel];
             }
         }

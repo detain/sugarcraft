@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Host;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\Loop;
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\App\HistoryCompactedMsg;
 use SugarCraft\Core\AsyncCmd;
@@ -52,12 +53,19 @@ use SugarCraft\Code\Usage;
  * both. The small-window fixture uses a 60,000-token window — tiers at 42,000
  * and 51,000 — with an estimated ~46,400 band: on the reminder tier, under
  * both the blocking tier and the floor.
+ *
+ * Round-1 review cures pinned below: the drop arm's rule is model-only
+ * (the floor governs the request alone), and the idle watch stamps its
+ * model exactly like the dispatch arm, so a switch discards idle slots too.
  */
 final class AheadOfNeedSkipRulesTest extends TestCase
 {
     private string $dir;
 
     private EnhancedSessionStore $store;
+
+    /** @var list<SessionHost> hosts opted into the idle fold — their alarm must not outlive the test */
+    private array $idleOptedHosts = [];
 
     protected function setUp(): void
     {
@@ -69,6 +77,13 @@ final class AheadOfNeedSkipRulesTest extends TestCase
 
     protected function tearDown(): void
     {
+        foreach ($this->idleOptedHosts as $host) {
+            $timer = (new \ReflectionProperty(SessionHost::class, 'idleAutoTimer'))->getValue($host);
+            if ($timer !== null) {
+                Loop::cancelTimer($timer);
+            }
+        }
+        $this->idleOptedHosts = [];
         foreach (glob($this->dir . '/' . chr(42)) ?: [] as $path) {
             @unlink($path);
         }
@@ -91,6 +106,11 @@ final class AheadOfNeedSkipRulesTest extends TestCase
         $this->assertFalse(CompactionService::aheadOfNeedAllowed(100_000, 'm-a', 'm-b'), 'a slot held for another model is not, however large');
         $this->assertTrue(CompactionService::aheadOfNeedAllowed(100_000, null, 'm-b'), 'an un-stamped slot predates the rule: the model half leaves it alone');
         $this->assertFalse(CompactionService::aheadOfNeedAllowed(10_000, 'm-a', 'm-a'), 'the floor still governs a same-model held slot');
+
+        $this->assertTrue(CompactionService::aheadOfNeedModelMatches(null, 'm-b'), 'a slot that carries no model at all is left alone');
+        $this->assertTrue(CompactionService::aheadOfNeedModelMatches('m-a', 'm-a'), 'the drop rule keeps a same-model slot however small the session');
+        $this->assertTrue(CompactionService::aheadOfNeedModelMatches('', ''), 'an idle slot asked under the workspace default matches it');
+        $this->assertFalse(CompactionService::aheadOfNeedModelMatches('m-a', 'm-b'), 'the drop rule discards a slot held for another model');
     }
 
     // ---------------------------------------------------------------- host side
@@ -235,6 +255,79 @@ final class AheadOfNeedSkipRulesTest extends TestCase
         $this->assertNotNull($cmd, 'and there is a Cmd carrying it');
     }
 
+    public function testThePaidInFlightIdleSlotSurvivesTheSubFloorDrop(): void
+    {
+        // MINOR-2, round-1 review: the floor is a REQUEST rule. This slot was
+        // minted by the idle watch under the 64,000-token floor of a
+        // small-window session and its summarisation call is already out and
+        // paid for — only the return is still pending. A landed slot is
+        // spliced by the blocking fold itself before any drop arm runs; the
+        // arm's decision is about the IN-FLIGHT one. The old drop half
+        // re-applied the floor on the way out and threw the bought request
+        // away: the return then found no slot to land in, and the request arm
+        // refused to re-ask under the same floor.
+        $backend = new PendingAheadBackend(60_000, 'ok');
+        $host = $this->autoOnHost($backend);
+        self::setHistory($host, self::floorlessBandPairs());
+        $stamp = new \DateTimeImmutable('-2 hours');
+        self::stampClock($host, $stamp);
+
+        self::ringAlarm($host, $stamp);
+
+        $held = self::hostHeld($host);
+        $this->assertNotNull($held, 'the idle watch asked under the floor, as its tier rules allow');
+        $this->assertNull($held['summaries'], 'the paid request is still in flight at the mint');
+        $this->assertSame(1, $backend->summaryCalls, 'and it was dialed once');
+
+        $ticket = $host->submit('first question', SubmitOptions::new()->withIdempotencyKey('k'));
+
+        $this->assertSame(TurnTicket::STARTED, $ticket->admitted, 'the turn ran');
+        $this->assertSame(1, $backend->summaryCalls, 'the dispatch neither re-asked nor orphaned the paid request');
+        $survivor = self::hostHeld($host);
+        $this->assertNotNull($survivor, 'the in-flight slot survived the drop arm — the floor governs the ask, not the discard');
+        $this->assertSame($held['id'], $survivor['id'], 'the same paid request, still held');
+
+        $backend->release();
+
+        $landed = self::hostHeld($host);
+        $this->assertNotNull($landed['summaries'] ?? null, 'the paid return found its slot intact');
+    }
+
+    public function testTheIdleWatchStampsItsModelForTheSwitchRule(): void
+    {
+        // MINOR-1, round-1 review: the idle watch's slot must carry the model
+        // its ask went out under, exactly like the dispatch arm's — otherwise
+        // a model-A idle prefetch rides a session that has moved to model-B
+        // and splices another model's writing into the new context. The band
+        // clears the floor on an 88k window, so only the stamp half can
+        // explain what the dispatch below does with the slot.
+        $backend = new SkipAheadBackend(88_000, 'ok', self::summaryReply());
+        $host = $this->autoOnHost($backend);
+        self::setHistory($host, self::heavyBand(41_500, 4));
+        self::setSessionBackend($host, new EngineBackend(new SkipProvider(88_000, 'ok-a'), 'model-a'));
+        $stamp = new \DateTimeImmutable('-2 hours');
+        self::stampClock($host, $stamp);
+
+        self::ringAlarm($host, $stamp);
+
+        $held = self::hostHeld($host);
+        $this->assertNotNull($held, 'the over-tier idle watch asked');
+        $this->assertSame('model-a', $held['model'] ?? 'ABSENT', 'the idle slot names the model the ask went out under');
+
+        self::setSessionBackend($host, new EngineBackend(new SkipProvider(88_000, 'ok-b'), 'model-b'));
+        $ticket = $host->submit('first question', SubmitOptions::new()->withIdempotencyKey('k'));
+
+        $this->assertSame(TurnTicket::STARTED, $ticket->admitted, 'the model-B turn ran');
+        $after = self::hostHeld($host);
+        $this->assertTrue(
+            $after === null || ($after['model'] ?? null) === 'model-b',
+            'the stamped idle slot left the latch at the switch — carried over under model-B is the failure mode',
+        );
+        foreach ($host->history() as $row) {
+            $this->assertStringNotContainsString('asked: ahead-of-need record 1', $row->content, 'the model-A idle records were discarded, never spliced');
+        }
+    }
+
     public function testTheSmallWindowModelNeverPrefetchesButStillFoldsOnTheHost(): void
     {
         $backend = new SkipAheadBackend(60_000, str_repeat('z', 60_000), self::summaryReply());
@@ -369,6 +462,32 @@ final class AheadOfNeedSkipRulesTest extends TestCase
             WorkspaceContext::new(sessionStore: $this->store, backend: $backend, hooks: null),
             customCommands: [],
         );
+    }
+
+    /** A host that opted into the idle fold — the watch only runs for this config. */
+    private function autoOnHost(Backend $backend): SessionHost
+    {
+        $host = SessionHost::new(
+            's',
+            WorkspaceContext::new(sessionStore: $this->store, backend: $backend, hooks: null),
+            customCommands: [],
+            compactorConfig: CompactorConfig::new()->withIdleAuto(),
+        );
+        $this->idleOptedHosts[] = $host;
+
+        return $host;
+    }
+
+    /** Set the accepted-prompt clock the one-shot re-derives its idle anchor from. */
+    private static function stampClock(SessionHost $host, \DateTimeImmutable $at): void
+    {
+        (new \ReflectionProperty(SessionHost::class, 'lastPromptAt'))->setValue($host, $at);
+    }
+
+    /** Run the idle watch body at once — the suite never sleeps for real. */
+    private static function ringAlarm(SessionHost $host, \DateTimeImmutable $markedAt): void
+    {
+        (new \ReflectionMethod(SessionHost::class, 'onIdleAutoCompaction'))->invoke($host, $markedAt);
     }
 
     /** @param list<Message> $history */
@@ -575,6 +694,72 @@ final class SkipAheadBackend implements Backend, ReportsContextWindow, Summarise
         $this->summaryCalls++;
 
         return \React\Promise\resolve(Message::assistant($this->summaryReply)->withUsage(Usage::new(100, 0.0)));
+    }
+}
+
+/**
+ * A host backend whose turn answers at once but whose summarisation hands
+ * back a promise that only settles when the test rings it — so an already
+ * billed ahead-of-need request can be caught in flight by the drop arm.
+ */
+final class PendingAheadBackend implements Backend, ReportsContextWindow, SummarisesWithCache
+{
+    public int $turnCalls = 0;
+
+    public int $summaryCalls = 0;
+
+    /** @var (callable(Message): void)|null */
+    private $summaryResolver = null;
+
+    public function __construct(
+        private readonly int $window,
+        private readonly string $reply,
+    ) {
+    }
+
+    /** Deliver the paid-for summarisation — nothing lands until this is rung. */
+    public function release(): void
+    {
+        $resolve = $this->summaryResolver;
+        $this->summaryResolver = null;
+        if ($resolve !== null) {
+            $resolve(Message::assistant(
+                "1.\nasked: the in-flight record that must land"
+                    . "\n<session-state>\n## Goal\nkeep the router fast\n</session-state>",
+            )->withUsage(Usage::new(100, 0.0)));
+        }
+    }
+
+    public function contextWindow(): int
+    {
+        return $this->window;
+    }
+
+    public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null): Message
+    {
+        $this->turnCalls++;
+
+        return Message::assistant($this->reply);
+    }
+
+    public function completeAsync(
+        array $history,
+        ?callable $onToken = null,
+        ?CancellationToken $cancellation = null,
+        ?callable $onEvent = null,
+    ): PromiseInterface {
+        $this->turnCalls++;
+
+        return \React\Promise\resolve(Message::assistant($this->reply));
+    }
+
+    public function summariseAsync(array $history, string $instruction, ?CancellationToken $cancellation = null): PromiseInterface
+    {
+        $this->summaryCalls++;
+
+        return new \React\Promise\Promise(function (callable $resolve): void {
+            $this->summaryResolver = $resolve;
+        });
     }
 }
 
