@@ -274,6 +274,7 @@ return [
     'cli.doctor.sessions' => '{count} session(s) stored',
     'cli.doctor.settings_clean' => 'every settings file carries only keys candy-code reads',
     'cli.doctor.unknown' => 'unknown',
+    'cli.headless.permission_hint' => '  hint: a `-p` run with no named mode starts in the asking `default` mode; unattended asks have nobody to answer, so they fail closed. Scripted runs can name --permission-mode bypass-permissions (or accept-edits) to keep going.',
     'cli.help.screen' => <<<'TXT'
 CandyCode — AI coding assistant for the terminal.
 
@@ -932,7 +933,6 @@ TXT,
     'cli.noninteractive.json_schema_invalid' => '--json-schema is not valid JSON: {error}',
     'cli.noninteractive.json_schema_no_backend' => 'the supplied backend cannot honour --json-schema: it is not the engine, so there is no provider to constrain the answer with',
     'cli.noninteractive.json_schema_not_object' => '--json-schema must be a JSON object (a schema); a list or a scalar is not one',
-    'cli.headless.permission_hint' => '  hint: a `-p` run with no named mode starts in the asking `default` mode (C-SEC-7.a); unattended asks have nobody to answer, so they fail closed. Scripted runs can name --permission-mode bypass-permissions (or accept-edits) to keep going.',
     'cli.noninteractive.json_schema_unapplied' => 'the schema you asked for with --json-schema could not constrain the settled answer: the turn ran tools, and the schema rides only the first request (see README.md)',
     'cli.noninteractive.json_schema_unreadable' => '--json-schema names no readable file: {path}',
     'cli.noninteractive.json_schema_unsupported' => 'the {name} provider does not honour --json-schema: the answer would be billed as structured and arrive unconstrained',

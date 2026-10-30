@@ -181,11 +181,13 @@ level:
   events this program has no case for; every other part of those files
   loaded. Nothing is broken — remove the foreign file to silence the row.
 - **The bypass banner.** The `⚠ Permission mode is bypass-permissions` row
-  prints on every launch that runs without an approver, TUI and `-p` alike,
-  naming the three ways to change the mode. `-p` and `/bg` runs start in
-  bypass precisely because nothing can answer a prompt; a server-spawned
-  run instead inherits the server's admitted mode. Pick the mode
-  explicitly with `--permission-mode` (see
+  prints only for a launch that resolves to that mode — a locally spawned
+  `/bg` daemon, or any run that named the mode explicitly — and it names the
+  three ways to change it. The TUI and `-p` start in the asking `default`
+  mode and print no such row; an unattended `-p` ask is refused, so a
+  scripted run that must not stop names `--permission-mode` itself. A
+  server-spawned run instead inherits the server's admitted mode. Pick the
+  mode explicitly with `--permission-mode` (see
   [PERMISSIONS.md](PERMISSIONS.md)).
 
 ## Long-lived containers and `/tmp`

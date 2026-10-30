@@ -856,7 +856,7 @@ refused `bg_not_settled`.
 
 **A spawned daemon runs in the server's mode.** A `bg.spawn` — and the
 host-side `/bg` it mirrors — starts its daemon in this server's admitted
-permission mode rather than the headless `bypass-permissions` default: the
+permission mode rather than the background `bypass-permissions` default: the
 mode is named in the spawn config, and the daemon resolves its gate from it.
 Nobody sits at a daemon's keyboard, so what the mode would ask about is
 relayed to the server's clients (falling back to the no-terminal approver's
@@ -1352,12 +1352,13 @@ report what it returned:
   open/close — never a query string (a ticket rides there), a header, a body or
   a prompt.
 - **Permission modes.** Server sessions start in `default` (they ask), as the
-  TUI does — not in the `bypass-permissions` that `-p` keeps. A background
+  TUI does — not in the `bypass-permissions` that `/bg` daemons keep. A background
   (`/bg`) daemon a client or the host path spawns from this server inherits
-  the server's admitted mode rather than the headless default: its asks reach
-  no keyboard, so the no-terminal approver refuses them (read-only tools stay
-  auto-allowed); a local TUI's `/bg` is not a server spawn and keeps the
-  documented headless default. `bypass-permissions`
+  the server's admitted mode rather than the background-surface default: its
+  asks reach no keyboard, so the no-terminal approver refuses them (read-only
+  tools stay auto-allowed); a local TUI's `/bg` is not a server spawn and
+  keeps the documented background (`bypass-permissions`) default.
+  `bypass-permissions`
   and `dont-ask` are refused — at startup and over the wire (`-32020`) —
   unless `--allow-bypass` / `server.allowBypass`.
 - **Process hardening.** Refuses root without `--allow-root`; runs under

@@ -689,9 +689,9 @@ final class BackgroundSessionRunner
      * follows the result — a refused or failed run settles the session
      * Failed with the first line of the reason.
      *
-     * NEVER WIDER THAN THE SESSION THAT ASKED. A daemon's gate is the
-     * launch's headless one (`-p`'s, `bypass-permissions` unless configured
-     * otherwise), and the delegating session may have been stricter: the
+     * NEVER WIDER THAN THE SESSION THAT ASKED. A daemon's gate is the launch's
+     * background-surface one (`/bg`'s, `bypass-permissions` unless
+     * configured otherwise), and the delegating session may have been stricter: the
      * stricter of the two governs. With no one at a terminal an ASK is
      * refused ({@see self::backend()}'s console approver), and the run reads
      * that refusal like any other.

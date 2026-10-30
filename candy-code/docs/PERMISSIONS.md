@@ -1176,8 +1176,8 @@ decision is changed by *writing* it — so reads are allowed (opening
 never made unprompted. `hooks.yaml`, `config.json` and `agents/` stay
 **denied** in every mode: each is a self-grant you cannot see in a diff (the
 trust list, the hooks it admits, a preset's own `permissionMode:`), and that
-is not theoretical — under `bypass-permissions` (then the TUI's default, still
-the console paths'), an unprompted write to `trustedProjectHooks` followed by a
+is not theoretical — under `bypass-permissions` (then the TUI's default, then
+the console paths' too), an unprompted write to `trustedProjectHooks` followed by a
 provider switch was measured end-to-end as the model granting itself the trust
 the gate exists to withhold. The rest of the policy rows are **always asked**:
 the prompt names the call, and a project skill or command can be edited by the
