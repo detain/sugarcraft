@@ -877,9 +877,12 @@ final class Chat implements Model
          */
         private readonly ?CancellationToken $inFlightCancellation = null,
     /**
-         * Wall-clock timestamp (microtime(true)) of the most recent
-         * un-paired Escape press; null once consumed/expired. Drives the
-         * double-Escape-to-abort window in update().
+         * Timestamp (microtime(true)) of the most recent un-paired Escape
+         * press; null once consumed. The SIGN records which state armed it
+         * (C-TUI-3.d): positive is an in-flight first press driving the
+         * double-Escape-to-abort window in update(), negative is an idle
+         * first press arming the idle twin that opens the message picker —
+         * a press straddling a turn boundary can never pair across the two.
          */
         private readonly ?float $lastEscapeAt = null,
     /**
@@ -16897,6 +16900,21 @@ final class Chat implements Model
     private function handleRewindCommand(string $inputText): array
     {
         return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\RewindCommand(), $inputText);
+    }
+
+    /**
+     * Rewind the conversation to the checkpoint N prompts back — the message
+     * picker's Accept chord (C-TUI-3.d). One row is one step back, the same
+     * newest-first counting {@see \SugarCraft\Code\Tui\MessagePicker\MessagePicker::open()}
+     * gives its rows, and the restore seeds the checkpoint's prompt into the
+     * composer exactly as the typed `/rewind N --chat` does
+     * ({@see handleRewindCommand()}, {@see applyCommandResult()}).
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    public function rewindToCheckpoint(int $stepsBack): array
+    {
+        return $this->handleRewindCommand('/rewind ' . $stepsBack . ' --chat');
     }
 
     /**

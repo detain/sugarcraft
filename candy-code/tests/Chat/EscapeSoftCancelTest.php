@@ -17,6 +17,7 @@ use SugarCraft\Code\Events\UsageUpdated;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\App\ToolEventPumpMsg;
+use SugarCraft\Code\Tui\MessagePicker\OpenMessagePickerMsg;
 use SugarCraft\Code\Usage;
 
 /**
@@ -204,7 +205,7 @@ final class EscapeSoftCancelTest extends TestCase
         return [$chat, $inbox];
     }
 
-    private static function steppingChat(CancellationToken $token, int $stepGeneration = 4, bool $overBudget = false): Chat
+    private static function steppingChat(CancellationToken $token, int $stepGeneration = 4, bool $overBudget = false, ?float $stamp = null): Chat
     {
         $pressure = new ContextPressure($overBudget ? 85_000 : 10_000, 9_000, 1_000, 10_500, 2_000, 500, 80_000, 100_000);
 
@@ -217,6 +218,7 @@ final class EscapeSoftCancelTest extends TestCase
             liveStep: new StepStarted(2, 1000, $pressure),
             liveUsage: new UsageUpdated(2, Usage::new(100, 0.02), Usage::new(150, 0.03)),
             liveStepGeneration: $stepGeneration,
+            lastEscapeAt: $stamp,
         ))->withSize(160, 20);
     }
 
@@ -225,5 +227,99 @@ final class EscapeSoftCancelTest extends TestCase
         $rows = explode("\n", Renderer::render($chat));
 
         return (string) end($rows);
+    }
+
+    /**
+     * The Escape arm's stamp, read straight off the Chat — the sign IS the
+     * state that armed it (C-TUI-3.d) and every pin below needs the sign.
+     */
+    private static function escapeStamp(Chat $chat): ?float
+    {
+        $property = new \ReflectionProperty(Chat::class, 'lastEscapeAt');
+        $property->setAccessible(true);
+
+        return $property->getValue($chat);
+    }
+
+    /** An idle Chat with an empty draft, ready for the picker's two-beat. */
+    private static function idleChat(?float $stamp = null, string $inputBuf = ''): Chat
+    {
+        return (new Chat(
+            history: [Message::user('go')],
+            backend: new EchoBackend(),
+            inputBuf: $inputBuf,
+            lastEscapeAt: $stamp,
+        ))->withSize(120, 20);
+    }
+
+    public function testAnIdleEscapeStampsTheArmingPressAndSendsNothing(): void
+    {
+        [$armed, $cmd] = self::idleChat()->update(new KeyMsg(KeyType::Escape));
+
+        $this->assertNull($cmd, 'one idle press arms a window, it opens nothing');
+        $stamp = self::escapeStamp($armed);
+        $this->assertNotNull($stamp);
+        $this->assertLessThan(0.0, $stamp, 'the idle stamp is stored NEGATIVE');
+    }
+
+    public function testASecondIdleEscapeOpensTheMessagePicker(): void
+    {
+        $chat = self::idleChat(-(microtime(true) - 0.1));
+
+        [$opened, $cmd] = $chat->update(new KeyMsg(KeyType::Escape));
+
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        $this->assertInstanceOf(OpenMessagePickerMsg::class, $cmd(), 'the message carries no rows — the shell dials the store');
+        $this->assertNull(self::escapeStamp($opened), 'the pair is consumed, not left armed');
+    }
+
+    public function testADoubleTapStraddlingATurnEndNeverOpens(): void
+    {
+        // First press armed IN FLIGHT (positive stamp); the turn then settled.
+        // The idle press below is the straddling second half — it must only
+        // re-arm as a fresh idle first press, never open the picker.
+        $chat = self::idleChat(microtime(true) - 0.1);
+
+        [$rearmed, $cmd] = $chat->update(new KeyMsg(KeyType::Escape));
+
+        $this->assertNull($cmd, 'both presses must be idle to open');
+        $this->assertLessThan(0.0, (float) self::escapeStamp($rearmed), 'the stamp re-arms idle');
+    }
+
+    public function testADoubleTapWithATypedDraftDoesNotOpen(): void
+    {
+        $chat = self::idleChat(-(microtime(true) - 0.1), 'half-typed');
+
+        [$rearmed, $cmd] = $chat->update(new KeyMsg(KeyType::Escape));
+
+        $this->assertNull($cmd, 'the picker never fires over an unempty composer');
+        $this->assertLessThan(0.0, (float) self::escapeStamp($rearmed), 'and the window re-arms for the next pair');
+    }
+
+    public function testAStaleIdleStampOnlyReArms(): void
+    {
+        $chat = self::idleChat(-(microtime(true) - Chat::DOUBLE_ESCAPE_WINDOW_SECONDS - 30.0));
+
+        [$rearmed, $cmd] = $chat->update(new KeyMsg(KeyType::Escape));
+
+        $this->assertNull($cmd);
+        $this->assertLessThan(0.0, (float) self::escapeStamp($rearmed));
+    }
+
+    public function testAnIdleStampNeverArmsTheInFlightCancelWindow(): void
+    {
+        // The other half of the sign law: a negative stamp is invisible to
+        // the in-flight pair check, so the Escape below is a FIRST press —
+        // the soft stop, not the hard cancel.
+        $token = new CancellationToken();
+        $chat = self::steppingChat($token, stamp: -(microtime(true) - 0.1));
+
+        [$after, $cmd] = $chat->update(new KeyMsg(KeyType::Escape));
+
+        $this->assertNull($cmd);
+        $this->assertTrue($token->isSoftCancelled(), 'the idle stamp re-armed softly, it did not pair');
+        $this->assertFalse($token->isCancelled());
+        $this->assertTrue($after->inFlight);
+        $this->assertGreaterThan(0.0, (float) self::escapeStamp($after), 'and the stamp overwrote positive');
     }
 }

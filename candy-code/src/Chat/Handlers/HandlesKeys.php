@@ -34,6 +34,7 @@ use SugarCraft\Code\Skills\SkillMentions;
 use SugarCraft\Code\Host\SessionTabState;
 use SugarCraft\Code\Host\SessionSwitch;
 use SugarCraft\Code\Tui\ComposerVim;
+use SugarCraft\Code\Tui\MessagePicker\OpenMessagePickerMsg;
 use SugarCraft\Code\Tui\Renderer as TuiRenderer;
 use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Tui\SessionPicker;
@@ -398,7 +399,22 @@ trait HandlesKeys
 
         if ($msg->type === KeyType::Escape && $this->palette === null && $this->sessionPicker === null && $this->dirPicker === null && $this->historySearch === null) {
             if (!$this->inFlight) {
-                return [$this->mutate(['lastEscapeAt' => null]), null];
+                // C-TUI-3.d (GAP-UI-15): the IDLE twin of the double-Escape.
+                // The stamp is stored NEGATIVE while idle — the sign records
+                // which state armed it — so a press that straddles a turn
+                // boundary can never pair with an in-flight stamp, and the
+                // in-flight window check below reads positive stamps only (a
+                // negative one re-arms the soft cancel). Both presses idle,
+                // inside the same window, with an empty draft, and the
+                // message picker opens over the shell.
+                $now = microtime(true);
+                if ($this->lastEscapeAt !== null && $this->lastEscapeAt < 0
+                    && ($now + $this->lastEscapeAt) <= self::doubleEscapeWindowSeconds()
+                    && trim($this->inputBuf) === '') {
+                    return [$this->mutate(['lastEscapeAt' => null]), Cmd::send(new OpenMessagePickerMsg())];
+                }
+
+                return [$this->mutate(['lastEscapeAt' => -$now]), null];
             }
 
             $now = microtime(true);
