@@ -58,3 +58,10 @@ Preflight (cat-file'd disk state at session start):
 - Gates: quintet-family 134T/17341A/3F (staleness x2 + HEAVY_CHARS foreign-C-SES-7.d pre-existing at 750b99c49 = NEW STANDING RED); doc-drift quintet alt 299T/42780A green; LangParity|DocFigure 99T/7423A green (tests exact); touched classes green in all filter variants (155T/534A; superset 516T green). DUR minted 0.058/10 (median of 3 junit 0.0579/0.0627/0.0548).
 - Evidence: REVIEW-5/6/8 (6564/8779/12185 B, as-briefed) copied in; FIX-1..5+REPORT rode picks; lead's untracked 8576B REPORT.md variant backed up /tmp then displaced by branch 8724B version.
 - run-state fold 255->256 (asserted count==len), master_tip=eee747273... (final pick, not own SHA).
+
+## SESSION COMPLETE (WELD-1030M)
+- Lane 3 cherry proof: 8/8 '-' at weld 023e1c22e; worktree + branch cc/C-SEC-7.a pruned (clean residue check first; branch was 642827a9a).
+- Marks: grep ✅ counts — C-TUI-2.g 85463f3fd=1, C-TUI-4.b 2ff921113=1, C-SEC-7.a eee747273=1 (all IN-COMMIT verified).
+- Final master = weld-3 commit (this file's append rides one SHA-less follow-up, per law). run-state welded_count = 256 == len(welded) asserted; weld_pending (lead-live) = C-TUI-3.b, C-TUI-3.a, C-CTX-5.b.
+- NEW STANDING RED (not mine, reported): DuplicatedTestHelperDriftTest HEAVY_CHARS unrecorded const duplication Chat/ResumeCostGuardTest vs Host/ResumeCostEstimateTest — foreign-inherited from C-SES-7.d f4e747cf0, pre-existing at 750b99c49.
+- NO PUSH performed; origin/master untouched.
