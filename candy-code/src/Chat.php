@@ -2898,7 +2898,7 @@ final class Chat implements Model
      */
     private function landGoalVerdict(GoalJudgedMsg $msg): array
     {
-        $this->accountUsage($msg->usage, self::modelOf($this->titleBackend)); // OBS-3: the judge is a title-engine call
+        $this->accountUsage($msg->usage, self::modelOf($this->titleBackend), 'goal'); // OBS-3: the judge is a title-engine call
         if ($msg->generation !== $this->generation || !$this->inFlight || $msg->sessionId !== $this->currentSessionId) {
             return [$this, null];
         }
@@ -3881,7 +3881,7 @@ final class Chat implements Model
             // superseded tool turn's usage went entirely unbilled while a
             // superseded plain turn's was recorded. Reached at most once per
             // turn, for the same reason: the chain stops here.
-            $this->accountUsage($msg->message->usage);
+            $this->accountUsage($msg->message->usage, null, 'superseded');
             // And the turn's durable record closes here for the same reason
             // (roadmap O-2f): nothing after this point will.
             $this->turnRunner()->completeParked($msg->turn);
@@ -19752,7 +19752,7 @@ final class Chat implements Model
     private function landHandoff(\SugarCraft\Code\Host\Commands\HandoffSeededMsg $msg): array
     {
         // Accounted first: the summary ran on the user's key whatever follows.
-        $this->accountUsage($msg->usage, self::modelOf($this->summaryBackend)); // OBS-3: the handoff block came from the summary engine
+        $this->accountUsage($msg->usage, self::modelOf($this->summaryBackend), 'compact'); // OBS-3: the handoff block came from the summary engine
         if ($msg->fromSessionId !== $this->currentSessionId) {
             return [$this, null];
         }
@@ -21054,6 +21054,12 @@ final class Chat implements Model
      * streamed-turn answer and must not become a zero-dollar call — see
      * {@see Usage} for why zero and unknown are different claims.
      *
+     * `$source` (C-SES-8.b) names the settle ARM the call is billed from —
+     * turn, superseded, compact, title, aux, goal — threaded by every site
+     * that knows what it is. Null stays reserved for a caller that cannot
+     * honestly name one; the fold shows such rows as (unrecorded) rather
+     * than inventing an attribution.
+     *
      * `addTotalUsage()`, not `addUsage()`: the figure crossing every one of
      * those seams is a TOTAL with no input/output split, and
      * {@see Util\TokenTracker} keeps those in their own bucket rather than
@@ -21064,9 +21070,9 @@ final class Chat implements Model
      * what lets a Cmd's resolved Msg account against the session the user is
      * still in.
      */
-    private function accountUsage(?Usage $usage, ?string $model = null): void
+    private function accountUsage(?Usage $usage, ?string $model = null, ?string $source = null): void
     {
-        $this->spendLedger()->account($this->tokenTracker, $usage, $this->usageRecordSink(), $model);
+        $this->spendLedger()->account($this->tokenTracker, $usage, $this->usageRecordSink(), $model, $source);
     }
 
     /**
@@ -21106,7 +21112,7 @@ final class Chat implements Model
             return null;
         }
 
-        return function (Usage $usage, ?string $model = null) use ($store): void {
+        return function (Usage $usage, ?string $model = null, ?string $source = null) use ($store): void {
             $sessionId = $this->currentSessionId;
             if ($sessionId === null) {
                 return;
@@ -21119,6 +21125,10 @@ final class Chat implements Model
                 // knows which engine ran; fall back to the chat backend's
                 // name for the main path, which is exactly the old answer.
                 $model ?? self::modelOf($this->backend),
+                // C-SES-8.b: the arm travels the same seam; unlike the model
+                // there is no honest fallback to invent, so null means the
+                // caller could not name one and the row stays unattributed.
+                $source,
             );
         };
     }

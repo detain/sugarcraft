@@ -881,7 +881,7 @@ final class SessionHost
             // Billed before the latch check, as the TUI bills it: a
             // paid-for provider call is never unbilled, even when the
             // summaries it carried are superseded on arrival.
-            $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink());
+            $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), null, 'compact');
             if ($this->aheadOfNeed === null || $this->aheadOfNeed['id'] !== $request['id']) {
                 return;
             }
@@ -2571,7 +2571,7 @@ final class SessionHost
                 return;
             }
 
-            $this->ledger()->account($this->spend, $reply->usage, $this->usageRecordSink());
+            $this->ledger()->account($this->spend, $reply->usage, $this->usageRecordSink(), null, 'turn');
             if ($generation !== $this->generation) {
                 // A cancelled turn's reply: billed, never shown.
                 return;
@@ -2720,7 +2720,7 @@ final class SessionHost
         }
 
         $title = $this->workspace->titleBackend;
-        $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), $title instanceof EngineBackend ? $title->model() : null);
+        $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), $title instanceof EngineBackend ? $title->model() : null, 'aux');
         if ($this->released) {
             return;
         }
@@ -2758,7 +2758,7 @@ final class SessionHost
         }
 
         $summary = $this->workspace->summaryBackend;
-        $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), $summary instanceof EngineBackend ? $summary->model() : null);
+        $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), $summary instanceof EngineBackend ? $summary->model() : null, 'compact');
         if ($this->released) {
             return;
         }
@@ -2786,7 +2786,7 @@ final class SessionHost
         }
 
         $title = $this->workspace->titleBackend;
-        $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), $title instanceof EngineBackend ? $title->model() : null);
+        $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), $title instanceof EngineBackend ? $title->model() : null, 'aux');
         if ($this->released) {
             return;
         }
@@ -2808,7 +2808,7 @@ final class SessionHost
             return;
         }
 
-        $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), $engine instanceof EngineBackend ? $engine->model() : null);
+        $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), $engine instanceof EngineBackend ? $engine->model() : null, 'aux');
         if ($this->released) {
             return;
         }
@@ -2877,7 +2877,7 @@ final class SessionHost
         }
 
         $judge = $this->workspace->titleBackend;
-        $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), $judge instanceof EngineBackend ? $judge->model() : null);
+        $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), $judge instanceof EngineBackend ? $judge->model() : null, 'goal');
         if ($msg->generation !== $this->generation || $this->turn === null || $msg->sessionId !== $this->sessionId) {
             // A verdict that raced a cancel or a newer turn: billed, never
             // acted on — the live turn owns the decision now.
@@ -3293,12 +3293,13 @@ final class SessionHost
             return null;
         }
 
-        return function (Usage $usage, ?string $model = null) use ($store): void {
+        return function (Usage $usage, ?string $model = null, ?string $source = null) use ($store): void {
             $backend = $this->backend();
             $store->appendUsageRecord(
                 $this->sessionId,
                 $usage,
                 $model ?? ($backend instanceof EngineBackend ? $backend->model() : null),
+                $source,
             );
         };
     }

@@ -3627,7 +3627,9 @@ final class KeyHelpTest extends TestCase
             . 'breaks the re-dispatch chain. If that accounting is gone, the money is going missing again',
         );
         $this->assertStringContainsString(
-            'accountUsage($msg->message->usage)',
+            // C-SES-8.b labeled the arm at the call site: the superseded
+            // settle now names its source, so the pin carries the label.
+            "accountUsage(\$msg->message->usage, null, 'superseded')",
             implode("\n", array_slice($chatLines, $site['applyBackendToolEvent'][1], 12)),
             'and it must be the accounting that makes it different, not incidental drift',
         );

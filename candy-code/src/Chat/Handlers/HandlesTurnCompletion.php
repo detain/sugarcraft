@@ -188,7 +188,7 @@ trait HandlesTurnCompletion
             // crossing this seam is a TOTAL with no input/output split, and
             // TokenTracker keeps those in their own bucket rather than pretending
             // the whole turn was input.
-            $this->accountUsage($msg->message->usage);
+            $this->accountUsage($msg->message->usage, null, 'turn');
 
             // A reply for a turn that was aborted (double-Escape) or
             // otherwise superseded arrives after inFlight/generation have
@@ -406,7 +406,7 @@ trait HandlesTurnCompletion
             // Roadmap 5.14b: accounted first (the call ran on the user's key),
             // then one UI-only row — shown, never sent — unless the session
             // it was asked in is no longer the one on screen.
-            $this->accountUsage($msg->usage, self::modelOf($this->titleBackend)); // OBS-3: the btw call ran on the title engine
+            $this->accountUsage($msg->usage, self::modelOf($this->titleBackend), 'aux'); // OBS-3: the btw call ran on the title engine
             if ($msg->sessionId !== $this->currentSessionId) {
                 return [$this, null];
             }
@@ -426,7 +426,7 @@ trait HandlesTurnCompletion
             // key — then one display-only notice when a note was saved,
             // changed or removed, or a skill draft was proposed (`/skills`
             // reviews it); a pass that did neither says nothing.
-            $this->accountUsage($msg->usage);
+            $this->accountUsage($msg->usage, null, 'aux');
             $notice = \SugarCraft\Code\Memory\DreamPass::notice($msg);
             if ($notice === null) {
                 return [$this, null];
@@ -438,7 +438,7 @@ trait HandlesTurnCompletion
             // Step 3.G: the commit is already made (or refused). Accounted
             // first — the subject came from a model call on the user's key —
             // then one display-only line saying what was committed, or why not.
-            $this->accountUsage($msg->usage, self::modelOf($this->titleBackend)); // OBS-3: the subject came from the title engine
+            $this->accountUsage($msg->usage, self::modelOf($this->titleBackend), 'aux'); // OBS-3: the subject came from the title engine
 
             return [$this->mutate(['history' => [...$this->history, Message::notice($msg->notice())]]), null];
         }
@@ -449,7 +449,7 @@ trait HandlesTurnCompletion
             // note was saved, changed or removed; a run that saved nothing
             // says nothing. Shown even after a session switch: the notes are
             // the project's, not the session's, and a write is never silent.
-            $this->accountUsage($msg->usage, self::modelOf($this->summaryBackend)); // OBS-3: consolidation ran on the summary engine
+            $this->accountUsage($msg->usage, self::modelOf($this->summaryBackend), 'compact'); // OBS-3: consolidation ran on the summary engine
             $notice = \SugarCraft\Code\Memory\AutoMemoryConsolidator::notice($msg);
             if ($notice === null) {
                 return [$this, null];
@@ -469,7 +469,7 @@ trait HandlesTurnCompletion
             // summarization call went out on the user's key and was billed
             // whether or not its answer is still wanted. Dropping the summaries
             // is right; forgetting the money is not.
-            $this->accountUsage($msg->usage, self::modelOf($this->summaryBackend)); // OBS-3: the compaction summary ran on the summary engine
+            $this->accountUsage($msg->usage, self::modelOf($this->summaryBackend), 'compact'); // OBS-3: the compaction summary ran on the summary engine
 
             // Roadmap 2.10: an ahead-of-need summary condenses nothing when it
             // lands - it is held for the 85% tier in submit(), under its own
@@ -526,7 +526,7 @@ trait HandlesTurnCompletion
         if ($msg instanceof PromptSuggestionMsg) {
             // Accounted first, on the rule every provider-call arm follows:
             // the call was made on the user's key whatever becomes of it.
-            $this->accountUsage($msg->usage, self::modelOf($this->titleBackend)); // OBS-3: the suggestion ran on the title engine
+            $this->accountUsage($msg->usage, self::modelOf($this->titleBackend), 'aux'); // OBS-3: the suggestion ran on the title engine
 
             $text = self::sanitizePromptSuggestion($msg->suggestion);
             $stale = $msg->generation !== $this->generation
@@ -548,7 +548,7 @@ trait HandlesTurnCompletion
             // three provider-call arms follow: the titler is a real call on the
             // user's key, and a session that was switched away from or a title
             // that came back unusable cost exactly as much as one that did not.
-            $this->accountUsage($msg->usage, self::modelOf($this->titleBackend)); // OBS-3: the title ran on the title engine
+            $this->accountUsage($msg->usage, self::modelOf($this->titleBackend), 'title'); // OBS-3: the title ran on the title engine
 
             // The title call is fire-and-forget: by the time it lands the
             // user may have switched sessions, and a title belonging to a

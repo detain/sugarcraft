@@ -568,7 +568,7 @@ final class UsageRecordsTest extends TestCase
         // shape, the house pin for wiring that only fires on a live settle.
         $chat = file_get_contents(dirname(__DIR__, 2) . '/src/Chat.php');
         self::assertStringContainsString(
-            '$this->spendLedger()->account($this->tokenTracker, $usage, $this->usageRecordSink(), $model);',
+            '$this->spendLedger()->account($this->tokenTracker, $usage, $this->usageRecordSink(), $model, $source);',
             $chat,
         );
 
@@ -590,14 +590,63 @@ final class UsageRecordsTest extends TestCase
         // SES-1, rev-w4g MAJOR-1: the host's OWN accounting sites carry the
         // sink too — serve is SessionHost, not Chat, and an unwired site
         // persists nothing. Both shapes are pinned verbatim: one string per
-        // live call into the choke.
+        // live call into the choke. C-SES-8.b widened both with the source
+        // label: the idle fold is a context call and the reply is the turn.
         $host = file_get_contents(dirname(__DIR__, 2) . '/src/Host/SessionHost.php');
         foreach ([
-            '$this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink());',
-            '$this->ledger()->account($this->spend, $reply->usage, $this->usageRecordSink());',
+            "\$this->ledger()->account(\$this->spend, \$msg->usage, \$this->usageRecordSink(), null, 'compact');",
+            "\$this->ledger()->account(\$this->spend, \$reply->usage, \$this->usageRecordSink(), null, 'turn');",
         ] as $wire) {
             self::assertStringContainsString($wire, $host, 'serve accounts through the choke WITH the ledger sink');
         }
+    }
+
+    public function testEverySettleArmCarriesItsSourceLabelAtTheCallSite(): void
+    {
+        // C-SES-8.b: the attribution lives at the CALL SITE — an unlabeled
+        // arm would land NULL and fold into the unrecorded row silently.
+        // Every live accountUsage()/account() call in the settle family is
+        // pinned verbatim with its label, one string per arm, so dropping a
+        // label (or mislabeling an arm) goes red on the source shape.
+        $chat = file_get_contents(dirname(__DIR__, 2) . '/src/Chat.php');
+        $trait = file_get_contents(dirname(__DIR__, 2) . '/src/Chat/Handlers/HandlesTurnCompletion.php');
+        foreach ([
+            [$chat, "\$this->accountUsage(\$msg->usage, self::modelOf(\$this->titleBackend), 'goal');"],
+            [$chat, "\$this->accountUsage(\$msg->message->usage, null, 'superseded');"],
+            [$chat, "\$this->accountUsage(\$msg->usage, self::modelOf(\$this->summaryBackend), 'compact');"],
+            [$trait, "\$this->accountUsage(\$msg->message->usage, null, 'turn');"],
+            [$trait, "\$this->accountUsage(\$msg->usage, self::modelOf(\$this->titleBackend), 'aux'); // OBS-3: the btw call ran on the title engine"],
+            [$trait, "\$this->accountUsage(\$msg->usage, null, 'aux');"],
+            [$trait, "\$this->accountUsage(\$msg->usage, self::modelOf(\$this->summaryBackend), 'compact');"],
+            [$trait, "\$this->accountUsage(\$msg->usage, self::modelOf(\$this->titleBackend), 'title');"],
+        ] as $pin) {
+            self::assertStringContainsString($pin[1], $pin[0]);
+        }
+
+        // The auxiliary arms share a call shape, so count them per label:
+        // three 'aux' arms live in the trait (btw, auto-commit, suggestion)
+        // beside the dream arm's bare-model form, and the title arm is one.
+        self::assertSame(4, substr_count($trait, "'aux')"), 'four auxiliary settle arms in the trait');
+        self::assertSame(1, substr_count($trait, "'title')"), 'one titler settle arm in the trait');
+        $host = file_get_contents(dirname(__DIR__, 2) . '/src/Host/SessionHost.php');
+        foreach ([
+            ['count' => 2, "usageRecordSink(), null, '"], // the two bare sink sites: compact, turn
+            ['count' => 3, ": null, 'aux')"],            // suggestion + auto-commit + dream (engine fallback)
+            ['count' => 1, ": null, 'compact')"],        // consolidation (summary engine)
+            ['count' => 1, ": null, 'goal')"],           // the judge (title engine)
+        ] as $arm) {
+            self::assertSame(
+                $arm['count'],
+                substr_count($host, $arm[0]),
+                'serve settle arms carry their labels: ' . $arm[0],
+            );
+        }
+        // Among those three, the dream arm runs on the engine the table was
+        // handed — not a workspace backend — so its subject is pinned whole.
+        self::assertStringContainsString(
+            "\$engine instanceof EngineBackend ? \$engine->model() : null, 'aux'",
+            $host,
+        );
     }
 
     public function testTheLedgerSinksReadTheirSessionIdentityInsideTheClosure(): void

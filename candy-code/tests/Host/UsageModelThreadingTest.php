@@ -308,9 +308,9 @@ final class UsageModelThreadingTest extends TestCase
         }
 
         self::assertStringContainsString(
-            '$this->spendLedger()->account($this->tokenTracker, $usage, $this->usageRecordSink(), $model);',
+            '$this->spendLedger()->account($this->tokenTracker, $usage, $this->usageRecordSink(), $model, $source);',
             $chat,
-            'Chat accounts through the choke WITH the threaded model',
+            'Chat accounts through the choke WITH the threaded model AND the threaded source (C-SES-8.b)',
         );
         self::assertStringContainsString(
             '$model ?? self::modelOf($this->backend),',
