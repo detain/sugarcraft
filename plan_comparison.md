@@ -3033,7 +3033,8 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SES-7.e (W20)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-7.g`
 
-#### C-SES-8.a — `usage.rollup` RPC + web Usage panel with retention
+#### ✅ 94432cfd1 C-SES-8.a — `usage.rollup` RPC + web Usage panel with retention
+- **Weld 2026-10-30 (batch-19a):** picks b95a0e181, 06352783a, 4a1f4643d, 2d1463e80 → e3cb19622, 6ae5c4b4e, 5368f7e8f, 94432cfd1 on d79502693, zero conflicts (Protocol + web files had no master drift since lane cut 574e69f1d); REVIEW-3 CLEAN 0C/0M/0m. Trio regen + dist rebuild + generated.spec.ts scope pin (deferred MINOR-2) landed in the weld commit: schema +165/SERVER.md +1/generated.ts +44; merged gates UsageMethods 9T/54A, ProtocolSchemaDrift|ServerProtocolDocumentationDrift 13T/362A (staleness pair green post-regen), vitest serial 24/24, vue-tsc 21 errors == pristine-base set (38 UsagePanel staleness gone), Glob|Duplicated 28T/568A; §7 carries recorded in run-state weld_notes: DUR row UsageMethodsTest 9T/~11.5s + suite-figure +9T (staleness pair standing, live 28,499 vs pinned 25,537). NO PUSH (W25 open).
 - **Item:** C-SES-8 (sources: GAP-SES-15w/17w, GAP-OBS-03) · gap · effort M
 - **What:** **The method.** `usage.rollup {sessionId?, scope: 'session'|'all', days?: 7|30}` (Read) returns: `{days[], models[], totals, unpriced, retentionDays, reason}`; built from `UsageHostCommand::rollupFacts()` (C-SES-9.a), one …
 - **Files — create:** `candy-code/src/Protocol/Methods/UsageMethods.php`, `candy-code/tests/Protocol/UsageMethodsTest.php`, `candy-code-web/src-web/components/panels/UsagePanel.vue`, `candy-code-web/src-web/components/panels/__tests__/usagePanel.spec.ts`

@@ -47,6 +47,9 @@ describe('gen:protocol', () => {
     expect(IDEMPOTENT_METHODS).toContain('session.import')
     expect(IDEMPOTENT_METHODS).toContain('session.archive')
     expect(IDEMPOTENT_METHODS).toContain('session.unarchive')
+    // C-SES-8.a: usage.rollup rides the same tables — a read, with no write
+    // path on the wire (the Usage panel renders the fold and links Settings).
+    expect(METHOD_SCOPES['usage.rollup']).toBe('read')
     expect(EVENT_KINDS['assistant.delta']).toEqual({ durable: false, scope: 'session' })
     expect(EVENT_KINDS['tool.finished']).toEqual({ durable: true, scope: 'session' })
   })

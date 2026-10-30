@@ -550,6 +550,7 @@ it and the two tables below are generated from the code
 | `shells.stop` | write | yes | `sessionId`, `shellId` | Stop a background shell through the launch's kill ladder; a settled or foreign id is a no-op answer. |
 | `todo.get` | read |  | `sessionId` | A session's todo list, as its Todo tool last wrote it. |
 | `tool.output` | read |  | `sessionId`, `toolCallId` | A finished tool call's full output, from an offset. |
+| `usage.rollup` | read |  | `scope` | The durable usage ledger folded by day and model — one snapshot of the same read `/usage` prints, with derived totals, the unpriced lower-bound flag, and this launch's session-retention setting (read-only). scope "session" narrows to sessionId; scope "all" spans every session the ledger holds; days trims to the last 7 or 30 whole UTC days. |
 | `workflow.list` | read |  | — | The workflows /workflow run can start. |
 | `workflow.pause` | write | yes | `workflowId` | Pause a workflow run before its next stage. |
 | `workflow.resume` | write | yes | `sessionId`, `workflowId` | Resume a paused workflow run in a session. |

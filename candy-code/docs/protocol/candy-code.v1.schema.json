@@ -5605,6 +5605,171 @@
                 ]
             }
         },
+        "usage.rollup": {
+            "description": "The durable usage ledger folded by day and model — one snapshot of the same read `/usage` prints, with derived totals, the unpriced lower-bound flag, and this launch's session-retention setting (read-only). scope \"session\" narrows to sessionId; scope \"all\" spans every session the ledger holds; days trims to the last 7 or 30 whole UTC days.",
+            "scope": "read",
+            "idempotent": false,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId",
+                        "description": "Required when scope is \"session\" (the ledger half of the answer is that session's rows); ignored for scope \"all\"."
+                    },
+                    "scope": {
+                        "enum": [
+                            "session",
+                            "all"
+                        ],
+                        "description": "\"session\" folds one session's rows; \"all\" spans every session the durable ledger holds — the same pair `/usage` and `/usage all` answer."
+                    },
+                    "days": {
+                        "enum": [
+                            7,
+                            30
+                        ],
+                        "description": "OBS-3: trim to the last N whole UTC days inclusive of today; omitted spans the whole ledger. Anything but 7 or 30 is refused, never folded into the whole history."
+                    }
+                },
+                "required": [
+                    "scope"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "days": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "day": {
+                                    "type": "string",
+                                    "maxLength": 16,
+                                    "description": "UTC day, \"YYYY-MM-DD\" — the store's own date() fold."
+                                },
+                                "model": {
+                                    "type": [
+                                        "string",
+                                        "null"
+                                    ],
+                                    "maxLength": 256,
+                                    "description": "Null for rows written before the model was recorded, exactly as the ledger holds them."
+                                },
+                                "calls": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                },
+                                "totalTokens": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                },
+                                "costUsd": {
+                                    "type": "number",
+                                    "minimum": 0
+                                },
+                                "unpriced": {
+                                    "type": "boolean",
+                                    "description": "The group's rows include an unpriced call — its costUsd is a lower bound (the SES-1 `≥` law)."
+                                }
+                            },
+                            "required": [
+                                "day",
+                                "model",
+                                "calls",
+                                "totalTokens",
+                                "costUsd",
+                                "unpriced"
+                            ],
+                            "additionalProperties": false
+                        }
+                    },
+                    "models": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "model": {
+                                    "type": [
+                                        "string",
+                                        "null"
+                                    ],
+                                    "maxLength": 256
+                                },
+                                "calls": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                },
+                                "totalTokens": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                },
+                                "costUsd": {
+                                    "type": "number",
+                                    "minimum": 0
+                                },
+                                "unpriced": {
+                                    "type": "boolean"
+                                }
+                            },
+                            "required": [
+                                "model",
+                                "calls",
+                                "totalTokens",
+                                "costUsd",
+                                "unpriced"
+                            ],
+                            "additionalProperties": false
+                        }
+                    },
+                    "totals": {
+                        "type": "object",
+                        "properties": {
+                            "calls": {
+                                "type": "integer",
+                                "minimum": 0
+                            },
+                            "totalTokens": {
+                                "type": "integer",
+                                "minimum": 0
+                            },
+                            "costUsd": {
+                                "type": "number",
+                                "minimum": 0
+                            }
+                        },
+                        "required": [
+                            "calls",
+                            "totalTokens",
+                            "costUsd"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Derived from the per-model fold — one source, so totals and rows cannot disagree."
+                    },
+                    "unpriced": {
+                        "type": "boolean",
+                        "description": "True when ANY folded row was unpriced: every dollar figure in the answer is then a LOWER BOUND and a surface must say so (the `≥` law)."
+                    },
+                    "retentionDays": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "This launch's effective sessionRetentionDays setting, read-only — the panel links to Settings, it never writes (no write path opens here)."
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Empty when the folds were read; otherwise the stated cause of the empty folds — \"nothing was spent\" and \"nothing can be seen\" are different answers."
+                    }
+                },
+                "required": [
+                    "days",
+                    "models",
+                    "totals",
+                    "unpriced",
+                    "retentionDays",
+                    "reason"
+                ]
+            }
+        },
         "workflow.list": {
             "description": "The workflows /workflow run can start.",
             "scope": "read",

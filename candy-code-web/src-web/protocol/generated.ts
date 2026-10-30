@@ -1546,6 +1546,49 @@ export interface Methods {
       more: boolean
     }
   }
+  /** The durable usage ledger folded by day and model — one snapshot of the same read `/usage` prints, with derived totals, the unpriced lower-bound flag, and this launch's session-retention setting (read-only). scope "session" narrows to sessionId; scope "all" spans every session the ledger holds; days trims to the last 7 or 30 whole UTC days. */
+  "usage.rollup": {
+    params: {
+      /** Required when scope is "session" (the ledger half of the answer is that session's rows); ignored for scope "all". */
+      sessionId?: SessionId
+      /** "session" folds one session's rows; "all" spans every session the durable ledger holds — the same pair `/usage` and `/usage all` answer. */
+      scope: "session" | "all"
+      /** OBS-3: trim to the last N whole UTC days inclusive of today; omitted spans the whole ledger. Anything but 7 or 30 is refused, never folded into the whole history. */
+      days?: 7 | 30
+    }
+    result: {
+      days: ({
+        /** UTC day, "YYYY-MM-DD" — the store's own date() fold. */
+        day: string
+        /** Null for rows written before the model was recorded, exactly as the ledger holds them. */
+        model: string | null
+        calls: number
+        totalTokens: number
+        costUsd: number
+        /** The group's rows include an unpriced call — its costUsd is a lower bound (the SES-1 `≥` law). */
+        unpriced: boolean
+      })[]
+      models: ({
+        model: string | null
+        calls: number
+        totalTokens: number
+        costUsd: number
+        unpriced: boolean
+      })[]
+      /** Derived from the per-model fold — one source, so totals and rows cannot disagree. */
+      totals: {
+        calls: number
+        totalTokens: number
+        costUsd: number
+      }
+      /** True when ANY folded row was unpriced: every dollar figure in the answer is then a LOWER BOUND and a surface must say so (the `≥` law). */
+      unpriced: boolean
+      /** This launch's effective sessionRetentionDays setting, read-only — the panel links to Settings, it never writes (no write path opens here). */
+      retentionDays: number
+      /** Empty when the folds were read; otherwise the stated cause of the empty folds — "nothing was spent" and "nothing can be seen" are different answers. */
+      reason: string
+    }
+  }
   /** The workflows /workflow run can start. */
   "workflow.list": {
     params: Record<string, unknown>
@@ -1750,6 +1793,7 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "shells.stop": "write",
   "todo.get": "read",
   "tool.output": "read",
+  "usage.rollup": "read",
   "workflow.list": "read",
   "workflow.pause": "write",
   "workflow.resume": "write",
