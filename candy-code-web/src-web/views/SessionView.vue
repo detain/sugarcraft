@@ -223,7 +223,18 @@ function rewindSteps(item: UserItem): number | null {
  * runs the server refuses commands — the client says so on the spot instead
  * of exec'ing into a refused row.
  */
+/**
+ * Review F2: single-flight guard for the rewind path. Without it, two rapid
+ * confirms (double dialog-ok, or a second row's button pressed while the
+ * first exec is still in flight) fire TWO `command.exec rewind` calls whose
+ * step counts were computed from the SAME pre-refetch `items` snapshot —
+ * the second over-rewinds past what the user confirmed. Recoverable via
+ * /redo, but silent; a destructive affordance must not interleave.
+ */
+let rewinding = false
+
 async function rewindRow(item: UserItem, seedComposer: boolean): Promise<void> {
+  if (rewinding) return
   error.value = null
   if (session.value.busy) {
     error.value = 'Rewind waits for the running turn to finish.'
@@ -239,11 +250,17 @@ async function rewindRow(item: UserItem, seedComposer: boolean): Promise<void> {
   const question = `Rewind the conversation to just before "${preview}"? The prompt and everything after it drop off the transcript.`
     + (replacesDraft ? ' Your unsent draft in the composer will be replaced.' : '')
   if (typeof window !== 'undefined' && !window.confirm(question)) return
+  // Everything from the exec to its full settle (the rows-answer refetch)
+  // is the protected window; nothing between confirm() and this assignment
+  // yields to the event loop, so no second confirm can slip inside it.
+  rewinding = true
   try {
     await session.value.rewindTo(steps)
     if (seedComposer) draft.value = item.content
   } catch (failure) {
     error.value = describe(failure)
+  } finally {
+    rewinding = false
   }
 }
 

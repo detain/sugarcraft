@@ -48,8 +48,11 @@ describe('code-block copy buttons', () => {
     const view = mount(MessageMarkdown, { props: { text: ONE } })
     const buttons = view.findAll('[data-testid="copy-code-block"]')
     expect(buttons).toHaveLength(1)
-    expect(buttons[0].classes()).toContain('code-copy')
-    expect(buttons[0].text()).toBe('copy')
+    // `?.` under noUncheckedIndexedAccess: an absent button answers
+    // undefined, and every assertion below still fails on undefined —
+    // identical failure power, no type error.
+    expect(buttons[0]?.classes()).toContain('code-copy')
+    expect(buttons[0]?.text()).toBe('copy')
   })
 
   it('two blocks get one button each, and each copies exactly its own code', async () => {
@@ -62,18 +65,18 @@ describe('code-block copy buttons', () => {
     const buttons = view.findAll('[data-testid="copy-code-block"]')
     expect(buttons).toHaveLength(2)
 
-    await buttons[1].trigger('click')
+    await buttons[1]?.trigger('click')
     await flushMicrotasks()
     expect(clip).toHaveBeenCalledTimes(1)
     expect(clip).toHaveBeenCalledWith('bare block')
 
-    await buttons[0].trigger('click')
+    await buttons[0]?.trigger('click')
     await flushMicrotasks()
     expect(clip).toHaveBeenCalledTimes(2)
     expect(clip).toHaveBeenLastCalledWith('const a = 1;')
     // Each button remembers only its own success: labels move one at a time.
-    expect(buttons[0].text()).toBe('copied')
-    expect(buttons[1].text()).toBe('copied')
+    expect(buttons[0]?.text()).toBe('copied')
+    expect(buttons[1]?.text()).toBe('copied')
   })
 
   it('a re-render re-decorates without duplicating buttons', async () => {

@@ -150,11 +150,11 @@ describe('SessionView rewind wiring', () => {
     wrapper.findComponent(Transcript).vm.$emit('rewind', user('r1', 'first prompt'))
     await flushPromises()
     expect(confirm).toHaveBeenCalledTimes(1)
-    expect(confirm.mock.calls[0][0]).toContain('"first prompt"')
+    expect(confirm.mock.calls[0]?.[0]).toContain('"first prompt"')
     const frames = wire.sent('command.exec')
     expect(frames).toHaveLength(1)
     // The wire layer stamps idempotencyKey on command.exec — match the rest.
-    expect(frames[0].params).toMatchObject({ sessionId: 's1', name: 'rewind', args: '3 --chat' })
+    expect(frames[0]?.params).toMatchObject({ sessionId: 's1', name: 'rewind', args: '3 --chat' })
     // A command rewrites rows without an event — the store refetches.
     wire.answer('command.exec', { rows: [], effects: [] })
     await flushPromises()
@@ -179,7 +179,7 @@ describe('SessionView rewind wiring', () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
     wrapper.findComponent(Transcript).vm.$emit('rewind', user('r5', 'third prompt'))
     await flushPromises()
-    expect(wire.sent('command.exec')[0].params).toMatchObject({ args: '1 --chat' })
+    expect(wire.sent('command.exec')[0]?.params).toMatchObject({ args: '1 --chat' })
     expect(kinds.filter((kind) => kind === 'user')).toHaveLength(3)
     void confirm
   })
@@ -199,7 +199,7 @@ describe('SessionView rewind wiring', () => {
     wrapper.findComponent(Transcript).vm.$emit('editResend', user('r3', 'second prompt'))
     await flushPromises()
     expect(wire.sent('command.exec')).toHaveLength(1)
-    expect(wire.sent('command.exec')[0].params).toMatchObject({ name: 'rewind', args: '2 --chat' })
+    expect(wire.sent('command.exec')[0]?.params).toMatchObject({ name: 'rewind', args: '2 --chat' })
     expect(wire.sent('session.send')).toHaveLength(0)
     wire.answer('command.exec', { rows: [], effects: [] })
     await flushPromises()
@@ -220,17 +220,26 @@ describe('SessionView rewind wiring', () => {
     const wrapper = await openSeededSession(seededRows())
     wrapper.findComponent(Transcript).vm.$emit('rewind', user('r1', 'first prompt'))
     await flushPromises()
-    expect(confirm.mock.calls[0][0]).not.toContain('draft')
+    expect(confirm.mock.calls[0]?.[0]).not.toContain('draft')
     expect(useLayoutStore().draft('s1')).toBe('unsent typing')
+    // Settle the plain rewind so the single-flight guard (review F2)
+    // releases before the next row action. A rows-less answer skips the
+    // refetch, keeping the seeded counts below exact.
+    wire.answer('command.exec', { effects: [] })
+    await flushPromises()
     // Edit & resend over a held draft: the confirm names the loss first.
     wrapper.findComponent(Transcript).vm.$emit('editResend', user('r3', 'second prompt'))
     await flushPromises()
-    expect(confirm.mock.calls[1][0]).toContain('unsent draft in the composer will be replaced')
+    expect(confirm.mock.calls[1]?.[0]).toContain('unsent draft in the composer will be replaced')
     confirm.mockReturnValue(false)
     wrapper.findComponent(Transcript).vm.$emit('editResend', user('r5', 'third prompt'))
     await flushPromises()
-    // Declined: draft untouched, no third exec (the two above are the pair
-    // from the successful rewind + the successful edit & resend).
+    // No third exec, draft untouched. Note this leg lands while the r3
+    // exec is still unsettled on purpose — settling it would seed the
+    // draft and lose the no-seed-before-settle posture this assertion
+    // also guards — so here the single-flight guard returns before the
+    // confirm dialog is even reached. The declined-confirm path proper is
+    // pinned by the two dedicated tests around this one.
     expect(wire.sent('command.exec')).toHaveLength(2)
     expect(useLayoutStore().draft('s1')).toBe('unsent typing')
   })
@@ -276,6 +285,49 @@ describe('SessionView rewind wiring', () => {
     expect(useLayoutStore().draft('s1')).toBe('')
     expect(wrapper.find('[data-testid="session-error"]').text()).toContain('checkpoint that far back')
   })
+
+  it('a second rewind while one is in flight execs exactly once, and the guard releases after settle', async () => {
+    // Review F2: two rapid row actions must not stack into two execs whose
+    // step counts come from the same stale snapshot (the second would
+    // silently over-rewind). Emit r1 then r3 with no flush between: the r1
+    // call is parked inside its await when the r3 emit runs.
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const wrapper = await openSeededSession(seededRows())
+    wrapper.findComponent(Transcript).vm.$emit('rewind', user('r1', 'first prompt'))
+    wrapper.findComponent(Transcript).vm.$emit('rewind', user('r3', 'second prompt'))
+    await flushPromises()
+    expect(confirm).toHaveBeenCalledTimes(1)
+    const frames = wire.sent('command.exec')
+    expect(frames).toHaveLength(1)
+    expect(frames[0]?.params).toMatchObject({ name: 'rewind', args: '3 --chat' })
+    // Settle the in-flight rewind fully (exec answer + its refetch) …
+    wire.answer('command.exec', { rows: [], effects: [] })
+    await flushPromises()
+    wire.answer('session.subscribe', {
+      reset: true,
+      throughSeq: 2,
+      pendingAsks: [],
+      snapshot: { sessionId: 's1', status: 'idle', lastSeq: 2, pendingAsks: [], queue: [], messages: seededRows() },
+    })
+    await flushPromises()
+    // … and a later rewind is NOT swallowed: the guard is single-flight,
+    // not a one-shot. r3 is now two checkpoints back (echo row still a notice).
+    wrapper.findComponent(Transcript).vm.$emit('rewind', user('r3', 'second prompt'))
+    await flushPromises()
+    expect(confirm).toHaveBeenCalledTimes(2)
+    const execs = wire.sent('command.exec')
+    expect(execs).toHaveLength(2)
+    expect(execs[1]?.params).toMatchObject({ name: 'rewind', args: '2 --chat' })
+    wire.answer('command.exec', { rows: [], effects: [] })
+    await flushPromises()
+    wire.answer('session.subscribe', {
+      reset: true,
+      throughSeq: 3,
+      pendingAsks: [],
+      snapshot: { sessionId: 's1', status: 'idle', lastSeq: 3, pendingAsks: [], queue: [], messages: seededRows() },
+    })
+    await flushPromises()
+  })
 })
 
 describe('session store rewindTo', () => {
@@ -290,7 +342,7 @@ describe('session store rewindTo', () => {
     await subscribed
     const rewound = session.rewindTo(3)
     await flushPromises()
-    expect(wire.sent('command.exec')[0].params).toMatchObject({ sessionId: 's1', name: 'rewind', args: '3 --chat' })
+    expect(wire.sent('command.exec')[0]?.params).toMatchObject({ sessionId: 's1', name: 'rewind', args: '3 --chat' })
     wire.answer('command.exec', { rows: [{ id: 'x', role: 'notice', content: 'rewound' }], effects: [] })
     // The rows-answer trips a refetch; rewindTo only settles after that
     // subscribe lands, so answer it before awaiting the call.
