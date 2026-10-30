@@ -94,6 +94,10 @@ use SugarCraft\Code\Tui\DiffReview\OpenDiffReviewMsg;
 use SugarCraft\Code\Tui\MessagePicker\MessagePicker;
 use SugarCraft\Code\Tui\MessagePicker\MessagePickerAction;
 use SugarCraft\Code\Tui\MessagePicker\OpenMessagePickerMsg;
+use SugarCraft\Code\Tui\FirstRunWizard\FirstRunWizard;
+use SugarCraft\Code\Tui\FirstRunWizard\FirstRunWizardAction;
+use SugarCraft\Code\Tui\FirstRunWizard\FirstRunWizardActionKind;
+use SugarCraft\Code\Tui\FirstRunWizard\OpenFirstRunWizardMsg;
 use SugarCraft\Code\Tui\MediaForm\ChoiceFeed;
 use SugarCraft\Code\Tui\MediaForm\GenerateFromMediaFormMsg;
 use SugarCraft\Code\Tui\MediaForm\ImportPng;
@@ -111,6 +115,7 @@ use SugarCraft\Video\Player as VideoPlayer;
 use SugarCraft\Video\Render\Mode as VideoMode;
 use SugarCraft\Video\Render\RendererFactory as VideoRendererFactory;
 use SugarCraft\Code\Config\Trust\TrustTarget;
+use SugarCraft\Code\Config\ProviderKeyStore;
 use SugarCraft\Code\Tui\Settings\OpenSettingsMsg;
 use SugarCraft\Code\Tui\Settings\SettingsEditor;
 use SugarCraft\Code\Tui\Settings\SettingsFileEditedMsg;
@@ -684,6 +689,16 @@ final class App implements Model
          * checkpoint and seeds its prompt. Null = no picker open.
          */
         public readonly ?MessagePicker $messagePicker = null,
+        /**
+         * The first-run provider wizard while it is open (C-TUI-5.e), null
+         * otherwise. A launch modal on the trust-dialog law: it covers the
+         * band before the chat does, answers only keys, and what it decides
+         * leaves as a FirstRunWizardAction the shell folds through the
+         * {@see ProviderKeyStore} and Chat's public /model twin. Offered
+         * once per install — the no-key exits stamp
+         * {@see FirstRunWizard::markDismissed()} so a later launch stays quiet.
+         */
+        public readonly ?FirstRunWizard $firstRunWizard = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -1658,6 +1673,12 @@ final class App implements Model
         return $this->mutate(diffReview: $v);
     }
 
+    /** Replace the open first-run wizard's state (null closes it; C-TUI-5.e). */
+    public function withFirstRunWizard(?FirstRunWizard $v): self
+    {
+        return $this->mutate(firstRunWizard: $v);
+    }
+
     /**
      * Build the open settings view's save preview from what its tier's file
      * holds now (N-P2). One small read, on an explicit request — the same
@@ -1962,6 +1983,145 @@ final class App implements Model
     public function closeDiffReview(): self
     {
         return $this->diffReview === null ? $this : $this->mutate(diffReview: null);
+    }
+
+    /**
+     * Raise the first-run wizard (C-TUI-5.e) — the shell-slot twin of
+     * {@see openDiffReview()}: the launch command asks
+     * {@see FirstRunWizard::shouldOffer()} and answers an
+     * {@see OpenFirstRunWizardMsg}; this only closes the menu and takes the
+     * slot with a fresh model. Already open → unchanged, so a doubled msg
+     * never re-seeds the form under the user's keys.
+     */
+    public function openFirstRunWizard(): self
+    {
+        if ($this->firstRunWizard !== null) {
+            return $this;
+        }
+
+        MenuBar::closeMenu();
+
+        return $this->mutate(firstRunWizard: FirstRunWizard::open());
+    }
+
+    /** Drop the first-run wizard if one stands (C-TUI-5.e); idempotent. */
+    public function closeFirstRunWizard(): self
+    {
+        return $this->firstRunWizard === null ? $this : $this->mutate(firstRunWizard: null);
+    }
+
+    /**
+     * The launch's wizard offer (C-TUI-5.e), as a Cmd like every other
+     * {@see init()} member — the opener decides, the shell owns the slot.
+     * All three inputs are caller state, never model state
+     * ({@see FirstRunWizard::shouldOffer()}): no provider was SELECTED for
+     * this launch (env tier, `--provider`, or a persisted `provider` key —
+     * the same reads {@see \SugarCraft\Code\Cli\Bootstrap} makes to build
+     * the backend), no provider carries a usable API key in the user
+     * config, and the terminal is a live interactive tty. Both seams are
+     * injectable for pins: the tty probe answers false on a piped stdout
+     * (every test run), so the default would never fire here, and the
+     * stamp path reads the real cache corner by default.
+     */
+    public function firstRunWizardOfferCmd(?bool $isInteractiveTty = null, ?string $stampPath = null): ?\Closure
+    {
+        $config = \SugarCraft\Code\Cli\Bootstrap::readUserConfig();
+        $providers = $config['providers'] ?? null;
+        $hasConfigured = false;
+        if (is_array($providers)) {
+            foreach ($providers as $block) {
+                if (is_array($block) && is_string($block['apiKey'] ?? null) && $block['apiKey'] !== '') {
+                    $hasConfigured = true;
+                    break;
+                }
+            }
+        }
+
+        if (!FirstRunWizard::shouldOffer(
+            \SugarCraft\Code\Cli\Bootstrap::selectedProviderName() !== null
+                || \SugarCraft\Code\Cli\Bootstrap::backendCommandTierIsSelected(),
+            $hasConfigured,
+            $isInteractiveTty ?? (stream_isatty(STDIN) || stream_isatty(STDOUT)),
+            $stampPath,
+        )) {
+            return null;
+        }
+
+        return static fn (): CoreMsg => new OpenFirstRunWizardMsg();
+    }
+
+    /**
+     * Land what the first-run wizard decided (C-TUI-5.e), the
+     * {@see applyMediaFormAction()} twin for the wizard's three doors.
+     * Finish stores the key through {@see ProviderKeyStore::store()} and
+     * then folds the live chat through {@see \SugarCraft\Code\Chat::switchProvider()}
+     * — the exact `/model <provider>` path — so the band closes on a working
+     * provider without a restart; a store refusal closes the band too and
+     * rides the status footer verbatim (the `login` door says the same
+     * sentence and the typed key is not lost from the file's reach — the
+     * user re-runs it with the fix the refusal names). Skip and Cancel both
+     * close WITHOUT a key, the stamp's exact contract
+     * ({@see FirstRunWizard::markDismissed()}): the wizard never re-offers
+     * after either, and the 5.d model documents the dismissal as the
+     * shared fate of both no-key exits, so the design's "Skip writes the
+     * dismissal stamp" reads as the general no-key law here. Skip carries
+     * the provider it was deferring and the status echoes the login command
+     * for it; Cancel decided nothing at all.
+     *
+     * @return array{0: self, 1: (callable(): \SugarCraft\Core\Msg)|null}
+     */
+    private function applyFirstRunWizardAction(FirstRunWizardAction $action): array
+    {
+        return match ($action->kind) {
+            FirstRunWizardActionKind::Cancel => $this->dismissFirstRunWizard(status: null),
+            FirstRunWizardActionKind::Skip => $this->dismissFirstRunWizard(
+                status: Lang::t('keys.wizard.skip_note', ['command' => 'candy-code login' . ($action->provider !== null ? ' ' . $action->provider : '')]),
+            ),
+            FirstRunWizardActionKind::Finish => $this->finishFirstRunWizard($action),
+        };
+    }
+
+    /**
+     * The no-key exits: stamp the dismissal (the one write, best-effort
+     * inside the model), drop the slot, optionally leave a status note.
+     *
+     * @return array{0: self, 1: (callable(): \SugarCraft\Core\Msg)|null}
+     */
+    private function dismissFirstRunWizard(?string $status): array
+    {
+        FirstRunWizard::markDismissed();
+
+        $closed = $this->closeFirstRunWizard();
+
+        return [$status === null ? $closed : $closed->withStatus($status), null];
+    }
+
+    /**
+     * The Finish door: store, then switch. Order matters — a refusal
+     * before the store never touches the live backend, so a bad key can
+     * not strand the chat on a provider whose credential was refused.
+     *
+     * @return array{0: self, 1: (callable(): \SugarCraft\Core\Msg)|null}
+     */
+    private function finishFirstRunWizard(FirstRunWizardAction $action): array
+    {
+        $provider = (string) $action->provider;
+        $closed = $this->closeFirstRunWizard();
+
+        $refusal = ProviderKeyStore::store($provider, (string) $action->key);
+        if ($refusal !== null) {
+            return [$closed->withStatus($refusal), null];
+        }
+
+        if ($this->chat === null) {
+            // No hosted chat to switch (a bare shell): the key is stored
+            // and the next launch picks it up — say exactly that.
+            return [$closed->withStatus(Lang::t('keys.wizard.stored', ['provider' => $provider])), null];
+        }
+
+        [$nextChat, $cmd] = $this->chat->switchProvider($provider);
+
+        return [$closed->mutate(chat: $nextChat), $cmd];
     }
 
     /**
@@ -3194,6 +3354,13 @@ final class App implements Model
             CoreCmd::pushKittyKeyboard(KeyboardEnhancementsMsg::DISAMBIGUATE),
             $this->chat?->init(),
             $this->pruneAgentArtifacts(),
+            // C-TUI-5.e: the first-run wizard rides the same batch — a Cmd,
+            // so nothing here blocks, and a null when the launch already
+            // knows a provider. The trust dialog keeps FIRST refusal among
+            // the modals (its own law at dispatchKey); the wizard opening
+            // under an unresolved trust prompt answers trust first, exactly
+            // like a launch with both stacked would.
+            $this->firstRunWizardOfferCmd(),
         );
     }
 
@@ -3297,6 +3464,9 @@ final class App implements Model
             $msg instanceof SettingsFileEditedMsg => $this->settingsFileEdited($msg),
             $msg instanceof SettingsProfileMsg => [$this->settingsProfileDone($msg), null],
             $msg instanceof OpenMediaFormMsg => [$this->openMediaForm($msg->request), null],
+            // C-TUI-5.e: the wizard opens like the form — command decides,
+            // shell owns the slot — but with no payload to carry.
+            $msg instanceof OpenFirstRunWizardMsg => [$this->openFirstRunWizard(), null],
             // crush-media W5.4: the player opens like the form — command
             // decides, shell owns the slot — and the Player's own tick /
             // rebuild messages are the shell's to route while it is up.
@@ -3646,7 +3816,12 @@ final class App implements Model
         $click = self::chromeClickTracker()->track($event, $zone);
 
         if ($click === null) {
-            return $zone === null && $this->settingsEditor === null && $this->mediaForm === null ? $this->delegateToChat($msg) : [$this, null];
+            // C-TUI-5.e: with the wizard up, a stray click falls inert — the
+            // band it covers is not the chat's while it is asked of the user
+            // (the settings/media stand-down law; the wizard has no zones).
+            return $zone === null && $this->settingsEditor === null && $this->mediaForm === null && $this->firstRunWizard === null
+                ? $this->delegateToChat($msg)
+                : [$this, null];
         }
 
         return $this->dispatchChromeClick($click->zone->id);
@@ -4424,6 +4599,21 @@ final class App implements Model
             return $this->resolveTrustDialog($next);
         }
 
+        // The first-run wizard (C-TUI-5.e) is MODAL on the same launch law
+        // as the trust dialog, seated right behind it: it covers the band
+        // at launch and every key except the gate exceptions is its own.
+        // What it decides leaves as a FirstRunWizardAction — the store door
+        // and the /model twin are the shell's, never the model's.
+        if ($this->firstRunWizard !== null && !self::firstRunWizardYields($msg)) {
+            [$next, $action] = $this->firstRunWizard->update($msg);
+
+            if ($action !== null) {
+                return $this->applyFirstRunWizardAction($action);
+            }
+
+            return [$next === null ? $this->closeFirstRunWizard() : $this->mutate(firstRunWizard: $next), null];
+        }
+
         // The settings view is MODAL while it is open: every key is its own,
         // so nothing types into a chat it covers. Three exceptions keep the
         // app drivable — Ctrl+C still quits (Chat's binding), and F10 and an
@@ -4938,6 +5128,12 @@ final class App implements Model
 
     /** The picker yields the same chords the other shell slots do (C-TUI-3.d). */
     private static function messagePickerYields(KeyMsg $msg): bool
+    {
+        return self::settingsEditorYields($msg);
+    }
+
+    /** The wizard yields the same chords the other shell slots do (C-TUI-5.e). */
+    private static function firstRunWizardYields(KeyMsg $msg): bool
     {
         return self::settingsEditorYields($msg);
     }
@@ -6701,6 +6897,7 @@ final class App implements Model
             agentViewByTab: array_key_exists('agentViewByTab', $changes) ? $changes['agentViewByTab'] : $this->agentViewByTab,
             diffReview: array_key_exists('diffReview', $changes) ? $changes['diffReview'] : $this->diffReview,
             messagePicker: array_key_exists('messagePicker', $changes) ? $changes['messagePicker'] : $this->messagePicker,
+            firstRunWizard: array_key_exists('firstRunWizard', $changes) ? $changes['firstRunWizard'] : $this->firstRunWizard,
         );
     }
 }

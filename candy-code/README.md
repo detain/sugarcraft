@@ -239,6 +239,14 @@ Be honest with yourself about what that is: a demo box (`skynet2.interserver.net
 service — your prompts leave your machine and are read by a server you do not control, and
 there is no uptime guarantee. Try it; do not bring private code to it.
 
+And if you would rather not read any of that before your first run: launch interactively on
+a machine with nothing chosen or configured and a **first-run wizard** opens once. Pick a
+provider with the arrows, type the API key into the masked field, press `Enter` — the key is
+stored in `~/.candy-code/config.json` and the live session switches to that provider on the
+spot, the same path `/model` takes. Leaving it without storing a key — `s`, `Tab` or `Esc` —
+stamps the wizard away for good; the door stays open from the CLI as `candy-code login`
+whenever you want it.
+
 ### Starting in a project, with a first prompt
 
 The project root can also be given as a bare argument: a **first** argument
@@ -318,6 +326,7 @@ all one component tree — not two parallel UIs.
 | `Ctrl+L` | Repaint the whole frame - clears and redraws chat, transcript and every pane from current state (registry row `chat.repaint`) |
 | `F10` | Open the menu bar |
 | `y` / `n` / `a` / `p` / `e` / `r` / `x` | Answer a permission prompt: allow once, refuse, allow for the session, save a rule, edit the scope first, refuse with a note, refuse and stop — see the fine print below. |
+| First-run wizard (`←` / `→`, `Enter`, `Tab`, `s`, `Esc`) | On a launch with no provider chosen or configured, `Enter` the highlighted provider, type the key (masked), `Enter` stores it and switches the live session to it (the same path as `/model`); `Tab` defers to `candy-code login <provider>`, `s` skips, `Esc` cancels — any way you leave without storing a key stamps the wizard away for good |
 
 #### The fine print
 

@@ -214,7 +214,10 @@ final class CommandKeybindingDispatchTest extends TestCase
      */
     private function keyHelpOverlay(): array
     {
-        $chat = (new Chat())->withSize(100, 200)->withKeyHelp(0);
+        // C-TUI-5.e grew the reference by the six `wizard.*` rows and a
+        // group heading; 200 rows no longer clears it, so the fixture
+        // paints on a 240-row frame and keeps its no-scroll promise.
+        $chat = (new Chat())->withSize(100, 240)->withKeyHelp(0);
 
         $rendered = (new \ReflectionMethod(Renderer::class, 'renderKeyHelp'))
             ->invoke(null, $chat, $chat->theme(), Renderer::publishedFrame());

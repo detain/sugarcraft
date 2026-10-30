@@ -99,6 +99,11 @@ final class KeyBindingRegistry
      * holds the band. A ROUTING key like every CONTEXT_* value.
      */
     public const CONTEXT_MSG_PICKER = 'Message picker';
+    /**
+     * Keys the first-run provider wizard (C-TUI-5.e) answers while it holds
+     * the band at launch. A ROUTING key like every CONTEXT_* value.
+     */
+    public const CONTEXT_WIZARD = 'First-run wizard';
     /** Keys the F10 menu bar answers while it is open. */
     public const CONTEXT_MENU = 'Menu bar';
     /** Mouse gestures, when the terminal reports them. */
@@ -128,6 +133,7 @@ final class KeyBindingRegistry
             ...self::media(),
             ...self::diffReview(),
             ...self::messagePicker(),
+            ...self::wizard(),
             ...self::menu(),
             ...self::mouse(),
         ];
@@ -198,6 +204,7 @@ final class KeyBindingRegistry
             self::CONTEXT_MEDIA => Lang::t('keys.context.media'),
             self::CONTEXT_DIFF_REVIEW => Lang::t('keys.context.diffreview'),
             self::CONTEXT_MSG_PICKER => Lang::t('keys.context.msgpicker'),
+            self::CONTEXT_WIZARD => Lang::t('keys.context.wizard'),
             self::CONTEXT_MENU => Lang::t('keys.context.menu'),
             self::CONTEXT_MOUSE => Lang::t('keys.context.mouse'),
             default => $context,
@@ -1517,6 +1524,27 @@ final class KeyBindingRegistry
             KeyBinding::new('msgpicker.accept', 'Enter', Lang::t('keys.msgpicker.accept'), $c),
             KeyBinding::new('msgpicker.close', 'Esc', Lang::t('keys.msgpicker.close'), $c),
             KeyBinding::new('msgpicker.erase', 'Backspace', Lang::t('keys.msgpicker.erase'), $c),
+        ];
+    }
+
+    /**
+     * The keys the first-run provider wizard (C-TUI-5.e) answers while it
+     * holds the band at launch. The two steps share Enter and Esc, so the
+     * ids name what each one decides; other typing belongs to the key
+     * field's own editing, and `h`/`l` move the provider pills beside the
+     * arrows — plain runes earn no separate rows (the picker's law).
+     */
+    private static function wizard(): array
+    {
+        $c = self::CONTEXT_WIZARD;
+
+        return [
+            KeyBinding::new('wizard.provider-move', '← / →', Lang::t('keys.wizard.provider-move'), $c),
+            KeyBinding::new('wizard.provider-pick', 'Enter', Lang::t('keys.wizard.provider-pick'), $c),
+            KeyBinding::new('wizard.skip', 's', Lang::t('keys.wizard.skip'), $c),
+            KeyBinding::new('wizard.store-key', 'Enter', Lang::t('keys.wizard.store-key'), $c),
+            KeyBinding::new('wizard.login-later', 'Tab', Lang::t('keys.wizard.login-later'), $c),
+            KeyBinding::new('wizard.cancel', 'Esc', Lang::t('keys.wizard.cancel'), $c),
         ];
     }
 

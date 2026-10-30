@@ -13170,6 +13170,20 @@ final class Chat implements Model
     }
 
     /**
+     * The public twin of the `/model <provider>` command for the shell
+     * (C-TUI-5.e): the first-run wizard's Finish hands the provider it
+     * chose through this door, so the wizard and the slash command are one
+     * path and cannot drift — the workspace rebuild, the persistence hook
+     * and the model-catalog priming all live in the command and ride here.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    public function switchProvider(string $provider): array
+    {
+        return $this->handleModelCommand([$provider]);
+    }
+
+    /**
      * `/effort [level|auto]` (PRV-2 §6.5) - the one reasoning dial, answered
      * by the only authority on what a dial does: the provider.
      *

@@ -52,6 +52,7 @@ use SugarCraft\Code\Tui\Components\MenuSelectedMsg;
 use SugarCraft\Code\Tui\DiffReview\DiffReview;
 use SugarCraft\Code\Tui\KeyboardHandler;
 use SugarCraft\Code\Tui\MediaForm\OpenMediaFormMsg;
+use SugarCraft\Code\Tui\FirstRunWizard\FirstRunWizard;
 use SugarCraft\Code\Tui\MessagePicker\OpenMessagePickerMsg;
 use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Tui\Settings\SettingsSources;
@@ -294,7 +295,7 @@ final class KeyBindingDriftTest extends TestCase
      * The word forms of the arrow keys (`Up`/`Down`/`Left`/`Right`) were a
      * third undocumented hole and are now closed — they mattered most of the
      * near-misses probed, because nine `*.move` rows describe arrow movement
-     * (twenty-five rows carry an arrow GLYPH in their label; both counts are asserted
+     * (twenty-six rows carry an arrow GLYPH in their label; both counts are asserted
      * by {@see testTheArrowRowCountsThisFileQuotesAreStillRight()}, because they
      * were quoted as "four" here and nothing read them back), so
      * "Down moves the highlight" is the likeliest next prose regression. The
@@ -530,15 +531,16 @@ final class KeyBindingDriftTest extends TestCase
             . implode(', ', $move),
         );
         $this->assertCount(
-            25,
+            26,
             $arrowLabelled,
-            'KEYISH\'s docblock says twenty-five rows carry an arrow glyph in their label; it found: '
+            'KEYISH\'s docblock says twenty-six rows carry an arrow glyph in their label; it found: '
             . implode(', ', $arrowLabelled),
         );
         // Every `*.move` row is arrow-labelled, which is what makes the first
         // count the interesting one — the extra rows include `chat.slash-menu`,
         // `chat.recall`, `chat.cursor`, `chat.word-motion`, `chat.draft-rows`,
-        // `chat.agents-strip`, `menu.switch` and `settings.category`.
+        // `chat.agents-strip`, `menu.switch`, `settings.category` and
+        // `wizard.provider-move`.
         $this->assertSame([], array_diff($move, $arrowLabelled));
     }
 
@@ -2506,6 +2508,65 @@ final class KeyBindingDriftTest extends TestCase
                 $this->assertSame('', $back->messagePicker->query(), 'the chord erases the character again');
             },
 
+            // ── First-run wizard (C-TUI-5.e) ─────────────────────────────
+            // The shell routes these to the wizard model while it holds the
+            // band. The fixture seeds three provider names so both move
+            // directions land on different rows from the middle, and the
+            // store-key observation rides the REAL ProviderKeyStore +
+            // Bootstrap::backendFor pair under the HOME sandbox — the same
+            // door the live Finish walks. The offer predicate itself is
+            // pinned in tests/App/FirstRunWizardWiringTest.php.
+            'wizard.provider-move' => function (array $k): void {
+                $open = $this->firstRunWizardApp();
+                $this->assertSame('openai', $open->firstRunWizard->selectedProvider(), 'fixture: the first pill starts highlighted');
+                [$middle] = $open->update($k[1]);
+                $this->assertSame('anthropic', $middle->firstRunWizard->selectedProvider(), 'the second chord steps right onto the middle provider');
+
+                [$left] = $middle->update($k[0]);
+                $this->assertSame('openai', $left->firstRunWizard->selectedProvider(), 'the first chord moves back left');
+                [$right] = $middle->update($k[1]);
+                $this->assertSame('gemini', $right->firstRunWizard->selectedProvider(), 'and the second moves on right');
+            },
+            'wizard.provider-pick' => function (array $k): void {
+                [$after] = $this->firstRunWizardApp()->update($k[0]);
+                $this->assertNotNull($after->firstRunWizard, 'the band stays held while the wizard changes steps');
+                $this->assertSame(2, $after->firstRunWizard->step(), 'the chord opens the key step from the provider step');
+            },
+            'wizard.skip' => function (array $k): void {
+                [$after] = $this->firstRunWizardApp()->update($k[0]);
+                $this->assertNull($after->firstRunWizard, 'the skip chord hands the band back');
+                $this->assertTrue(FirstRunWizard::isDismissed(), 'skipping without a key writes the dismissal stamp');
+                $this->assertStringContainsString('candy-code login', (string) $after->status, 'the footer echoes the login door');
+            },
+            'wizard.store-key' => function (array $k): void {
+                $open = $this->firstRunWizardApp('sk-wizard-probe');
+                [$atKey] = $open->update(new KeyMsg(KeyType::Enter));
+                $this->assertSame(2, $atKey->firstRunWizard->step(), 'fixture: the provider step answers Enter with the key step');
+
+                [$after] = $atKey->update($k[0]);
+                $this->assertNull($after->firstRunWizard, 'storing the key closes the band');
+                $this->assertFalse(FirstRunWizard::isDismissed(), 'finishing is not a dismissal — the stamp stays unwritten');
+
+                $config = \SugarCraft\Code\Cli\Bootstrap::readUserConfig();
+                $this->assertSame('sk-wizard-probe', $config['providers']['openai']['apiKey'] ?? null, 'the key landed in the sandboxed user config');
+                $this->assertInstanceOf(\SugarCraft\Code\Backend\EngineBackend::class, $after->chat?->backend(), 'the live provider switched to the stored one');
+            },
+            'wizard.login-later' => function (array $k): void {
+                [$atKey] = $this->firstRunWizardApp()->update(new KeyMsg(KeyType::Enter));
+                $this->assertSame(2, $atKey->firstRunWizard->step(), 'fixture: the wizard is on the key step');
+
+                [$after] = $atKey->update($k[0]);
+                $this->assertNull($after->firstRunWizard, 'the deferral closes the band');
+                $this->assertTrue(FirstRunWizard::isDismissed(), 'deferring is leaving without a key — the stamp writes the same');
+                $this->assertStringContainsString('candy-code login openai', (string) $after->status, 'the footer names the exact login command for the picked provider');
+            },
+            'wizard.cancel' => function (array $k): void {
+                [$after] = $this->firstRunWizardApp()->update($k[0]);
+                $this->assertNull($after->firstRunWizard, 'the closing chord hands the band back');
+                $this->assertTrue(FirstRunWizard::isDismissed(), 'cancelling is a dismissal too — the stamp writes the same');
+                $this->assertNull($after->status, 'cancelling announces nothing');
+            },
+
             // ── Menu bar ─────────────────────────────────────────────────
             // Both directions, from a menu in the MIDDLE of the strip. The
             // strip wraps, so from menu 1 every move lands on a different,
@@ -3138,6 +3199,19 @@ final class KeyBindingDriftTest extends TestCase
         return $this->app()
             ->withChat($this->chat())
             ->openMessagePicker(['alpha', 'beta', 'gamma']);
+    }
+
+    /**
+     * An App holding the first-run wizard (C-TUI-5.e) over three synthetic
+     * provider names, so the observations exercise the shell's routing and
+     * the model's steps rather than the offer predicate. A seed key puts the
+     * key step one Enter from finishing for the store-key row.
+     */
+    private function firstRunWizardApp(?string $seedKey = null): App
+    {
+        return $this->app()
+            ->withChat($this->chat())
+            ->withFirstRunWizard(FirstRunWizard::open(['openai', 'anthropic', 'gemini'], $seedKey ?? ''));
     }
 
     /**

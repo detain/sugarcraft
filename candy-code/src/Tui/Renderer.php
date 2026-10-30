@@ -681,6 +681,14 @@ final class Renderer
             return self::renderTrustDialog($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
         }
 
+        // The first-run wizard (C-TUI-5.e) sits right behind the trust
+        // dialog on the launch-modal law: both may stand at the very first
+        // frame, and trust answers first. Like trust it is keyboard-only,
+        // so it takes the band ahead of the settings view and every pane.
+        if ($a->firstRunWizard !== null) {
+            return self::renderFirstRunWizard($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
+        }
+
         // The settings view (N-P1) takes the band the same way, ahead of any
         // pane focus: it is modal while open, Agents included.
         if ($a->settingsEditor !== null) {
@@ -1232,6 +1240,75 @@ final class Renderer
 
         $middle = Veil::new()->withBackdrop(50)->composite(
             $dialog->view($cols, $boxRows, $theme),
+            $backdrop,
+            OverlayPosition::CENTER,
+            OverlayPosition::CENTER,
+        );
+
+        $parts = [$menuBar];
+        if ($notice !== '') {
+            $parts[] = $notice;
+        }
+        $parts[] = $middle;
+        if ($bottom !== '') {
+            $parts[] = $bottom;
+        }
+
+        $joined = implode("\n", $parts);
+        $frame = self::clipWidth(self::clipTail($joined, $rows), $cols);
+        $frame = self::overlayMenu($a, $frame, $cols, self::lineCount($menuBar));
+        $dropped = self::lineCount($joined) - self::lineCount($frame);
+
+        LiveRenderer::clearZones();
+        self::$lastDockFrame = null;
+        self::$scrollRegions = [];
+
+        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), self::lineCount($menuBar), []);
+
+        return new View($frame);
+    }
+
+    /**
+     * C-TUI-5.e: the first-run provider wizard, a keyboard-only full-band
+     * modal on the trust dialog's law. The model's view() chases no width —
+     * the host fits each line to the band here: clip over-wide fields at
+     * the frame width, pad every line to the box's own widest row so Veil
+     * centers a rectangle and not a ragged column, and keep the box inside
+     * the pane rows the way the trust dialog keeps its target list. No
+     * zones: the wizard answers keys only, so the frame carries none.
+     */
+    private static function renderFirstRunWizard(
+        App $a,
+        int $cols,
+        int $rows,
+        string $menuBar,
+        string $notice,
+        string $bottom,
+        int $paneRows,
+    ): View {
+        $wizard = $a->firstRunWizard;
+        \assert($wizard !== null);
+
+        $band = self::composeBand($a, $cols, $paneRows);
+        $backdrop = self::padBand($band['middle'], $cols, $paneRows);
+
+        $lines = [];
+        $boxCols = 0;
+        foreach (explode("\n", $wizard->view()) as $line) {
+            $line = self::clipWidth($line, $cols);
+            $boxCols = max($boxCols, Width::of($line));
+            $lines[] = $line;
+        }
+
+        $boxRows = min($paneRows, count($lines));
+        $lines = array_slice($lines, 0, $boxRows);
+        $canvas = implode("\n", array_map(
+            static fn (string $line): string => $line . str_repeat(' ', max(0, $boxCols - Width::of($line))),
+            $lines,
+        ));
+
+        $middle = Veil::new()->withBackdrop(50)->composite(
+            $canvas,
             $backdrop,
             OverlayPosition::CENTER,
             OverlayPosition::CENTER,
