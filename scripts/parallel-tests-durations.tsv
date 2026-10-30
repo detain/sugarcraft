@@ -1653,3 +1653,6 @@ candy-code/tests/Host/Commands/EffortHostCommandTest.php	0.039	10
 candy-code/tests/Protocol/CommandListSkillRowsTest.php	0.873	9
 candy-code/tests/Host/Commands/ReviewHostCommandTest.php	0.975	10
 candy-code/tests/Chat/VerboseToggleKeyTest.php	0.05	5
+candy-code/tests/Cli/RestrictedSafeModeFlagsTest.php	0.051	14
+candy-code/tests/Chat/SubmitInvisibleUnicodeTest.php	0.013	7
+candy-code/tests/Host/SubmitInvisibleUnicodeTest.php	1.170	5
