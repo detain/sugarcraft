@@ -76,6 +76,7 @@
     },
     "suggest": {
         "ext-curl": "Used by the HTTP-based providers (OpenAI, Anthropic, SGLang, Custom).",
+        "ext-dom": "Required by WebFetch's HTML-to-Markdown conversion (the default format); without it HTML bodies come back raw with a one-line note.",
         "ext-pcntl": "Required by `candy-code serve`: every turn runs in a forked child, and the blocking fallback would stall every session on the server.",
         "ext-posix": "Required by `candy-code serve` (process identity and signals for the forked turn children).",
         "ext-ffi": "Required by `candy-code serve`: a forked turn child closes the server's inherited sockets through libc close(2).",
