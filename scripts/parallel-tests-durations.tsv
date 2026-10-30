@@ -433,7 +433,7 @@ candy-code/tests/Tools/BuiltIn/RepoMapToolTest.php	0.556	11
 candy-code/tests/Acp/AcpHandshakeTest.php	0.555	9
 candy-code/tests/Tools/PtyShimAutoloadResolutionTest.php	0.550	8
 candy-code/tests/Tui/TrustDialogTest.php	0.550	12
-candy-code/tests/Cli/BootstrapPermissionGateTest.php	0.547	65
+candy-code/tests/Cli/BootstrapPermissionGateTest.php	0.803	68
 candy-code/tests/Host/ModelHostPersistenceTest.php	0.546	6
 candy-code/tests/Tools/BuiltIn/GrepEngineDifferentialTest.php	0.537	25
 candy-code/tests/Cli/NonInteractiveErrorLabelTest.php	0.534	5
@@ -903,7 +903,7 @@ candy-code/tests/Host/Commands/SkillsEnableDisableTest.php	0.051	7
 candy-code/tests/Bundles/BundleRecommenderTest.php	0.051	10
 candy-code/tests/Skills/BuiltInSkillsTest.php	0.050	116
 candy-code/tests/Automation/OutboundWebhookConfigTest.php	0.05	59
-candy-code/tests/Permissions/AutoReviewScopeTest.php	0.050	12
+candy-code/tests/Permissions/AutoReviewScopeTest.php	0.068	15
 candy-code/tests/Context/Compaction/SummarySafeguardTest.php	0.049	11
 candy-code/tests/MCP/McpElicitationTest.php	0.049	14
 candy-code/tests/Sessions/ScheduleTest.php	0.049	20
