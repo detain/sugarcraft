@@ -34,3 +34,9 @@ BATCH: single step C-CTX-4.d (W23 member). NO PUSH (no wave closes).
   * gens x4 --check: all "up to date" rc0. check-path-repos rc0; check-child-lifetimes rc0 (33 sites/9 findings/9 accounted/0 problems).
 - DUR x2 MINTED: descending-insert sorted; tsv 1630->1632 rows (PublicUrlGuardTest 0.059/178, InstructionUrlSourceTest 0.014/27). Pre-existing tail non-monotonicity at 1622-1630 proven untouched.
 - NEXT: scripts commit (tsv+journal) -> plan §4 mark + run-state fold -> meta -> backup lead run-state -> ff main tree (NO PUSH) -> cherry proof 4/4 + prune cc/C-CTX-4.d -> stale-registration glance (C-SES-7.c worktree; cc/C-SES-7.c-tmp branch).
+
+## Meta stage (this commit)
+- §4 mark ✅ eb431e67c C-CTX-4.d (full pick map + gate figures inline).
+- run-state fold validated (json parses; welded 240 sorted/set/len==count; weld_pending {}; tip:=4f1bdab31, meta=+1 self-hash law; inflight 10 keys verbatim; batch18s_note added). Lead pre-fold backup: /tmp/opencode/lead-1029/run-state-pre-ff18s.json md5 0e0afabadb11a4a2f0575ab75fff14db.
+- Meta carries: plan_comparison.md + lanes/C-CTX-4.d/{BRIEF,REPORT,REVIEW-1,REVIEW-2,BATCH-WELD-18S}.md + lanes/run-state.json.
+- NEXT after meta: re-check lead md5 pre-ff (fold law) -> checkout master -> merge --ff-only weld-18s -> NO PUSH -> git-cherry 4/4 '-' -> prune cc/C-CTX-4.d worktree+branch -> stale-registration glance (/home/sites/cc-cmp-C-SES-7.c, cc/C-SES-7.c-tmp) -> report.
