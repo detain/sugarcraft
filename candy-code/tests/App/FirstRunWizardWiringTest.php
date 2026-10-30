@@ -160,6 +160,41 @@ final class FirstRunWizardWiringTest extends TestCase
         );
     }
 
+    /**
+     * Wiring pin (C-TUI-5.e review r1, MAJOR-1): the offer's decision table
+     * is tested through the injectable seam above, but that seam must
+     * actually be dialled at launch. This is a source scan of init()'s
+     * batch — the house shape for the one link a piped test run cannot
+     * execute (precedent: the bin pop pin in
+     * tests/App/KittyKeyboardNegotiationTest.php). Deleting the batch
+     * member keeps every seam test green while shipping a wizard nobody
+     * ever sees, so the call site itself is the pin.
+     */
+    public function testTheLaunchBatchDialsTheOfferExactlyOnce(): void
+    {
+        $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/App/App.php');
+
+        $start = strpos($source, 'public function init(): ?\\Closure');
+        $this->assertIsInt($start, 'fixture: App::init() moved or changed signature');
+        $end = strpos($source, "\n    }", $start);
+        $this->assertIsInt($end, 'fixture: unterminated init() body');
+        // Comment-strip the window first (same regex as the modifyOtherKeys
+        // sweep in tests/App/KittyKeyboardNegotiationTest.php): commenting
+        // the member out must count as removing it, not as keeping it.
+        $body = (string) preg_replace(
+            '~(/\*.*?\*/|//[^\n]*|#[^\n]*)~s',
+            '',
+            substr($source, $start, $end - $start),
+        );
+
+        $this->assertSame(
+            1,
+            substr_count($body, '$this->firstRunWizardOfferCmd(),'),
+            'C-TUI-5.e: the launch batch must carry the wizard offer — a Cmd, so nothing here '
+            . 'blocks, and a null (dropped by the batch) when the launch already knows a provider',
+        );
+    }
+
     public function testTheOpenMessageSlidesTheWizardIntoTheSlot(): void
     {
         [$opened] = $this->app()->update(new OpenFirstRunWizardMsg());

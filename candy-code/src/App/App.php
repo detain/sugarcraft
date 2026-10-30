@@ -2019,8 +2019,12 @@ final class App implements Model
      * the same reads {@see \SugarCraft\Code\Cli\Bootstrap} makes to build
      * the backend), no provider carries a usable API key in the user
      * config, and the terminal is a live interactive tty. Both seams are
-     * injectable for pins: the tty probe answers false on a piped stdout
-     * (every test run), so the default would never fire here, and the
+     * injectable for pins: the tty probe is guarded by is_resource on each
+     * stream because tests/bootstrap.php frees the PHP-level \STDIN
+     * resource during its fd-0 repair — an unguarded stream_isatty(STDIN)
+     * THROWS on that invalid resource under strict_types rather than
+     * answering false — and with the guard the freed STDIN plus a piped
+     * stdout answer false, so the default never fires in a test run; the
      * stamp path reads the real cache corner by default.
      */
     public function firstRunWizardOfferCmd(?bool $isInteractiveTty = null, ?string $stampPath = null): ?\Closure
@@ -2041,7 +2045,12 @@ final class App implements Model
             \SugarCraft\Code\Cli\Bootstrap::selectedProviderName() !== null
                 || \SugarCraft\Code\Cli\Bootstrap::backendCommandTierIsSelected(),
             $hasConfigured,
-            $isInteractiveTty ?? (stream_isatty(STDIN) || stream_isatty(STDOUT)),
+            // House pattern (HeadlessPermissionPrompt::isInteractive): the
+            // probe must not touch a freed stream — tests/bootstrap.php
+            // frees \STDIN during its fd-0 repair, and stream_isatty on the
+            // invalid resource throws instead of answering false.
+            $isInteractiveTty ?? ((\is_resource(STDIN) && stream_isatty(STDIN))
+                || (\is_resource(STDOUT) && stream_isatty(STDOUT))),
             $stampPath,
         )) {
             return null;
