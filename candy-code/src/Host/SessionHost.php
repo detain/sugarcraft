@@ -1195,6 +1195,23 @@ final class SessionHost
     private function pumpRuntimeNotices(): void
     {
         foreach ($this->notices->drain() as $notice) {
+            // C-CTX-6.e: same mapping as Chat::pumpRuntimeNotices() — a
+            // structured frame becomes its typed recall row (whose
+            // content stays the plain count sentence, so the web
+            // reducer keeps painting exactly what it painted before);
+            // an undecodable frame is dropped, never shown raw.
+            if (RuntimeNoticeSink::isStructuredFrame($notice)) {
+                $frame = RuntimeNoticeSink::decodeStructured($notice);
+                if ($frame === null) {
+                    continue;
+                }
+                $this->appendMessageRow(Message::recallNotice(
+                    $frame['count'],
+                    RuntimeNoticeSink::recallRowText($frame['count']),
+                    $frame['titles'],
+                ));
+                continue;
+            }
             $this->appendMessageRow(Message::notice($notice));
         }
 

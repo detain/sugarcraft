@@ -126,6 +126,120 @@ final class NoticeSink
         return true;
     }
 
+    /**
+     * Record a STRUCTURED notice frame (C-CTX-6.e): $kind names a reader
+     * contract and $payload carries its fields, framed as
+     * {@see RuntimeNoticeSink::STRUCTURED_PREFIX} + a JSON object. The
+     * prefix head is 0x01, a byte no plain runtime row can begin with —
+     * chosen deliberately because the default {@see record()} trim eats
+     * NUL (its charlist contains "\0"), so a \x00-head frame would arrive
+     * mangled. Only {@see RuntimeNoticeSink::KIND_MEMORY_RECALL} is
+     * defined; an unknown kind is refused, because a producer inventing
+     * kinds without a reader mapping would park datagrams in drains that
+     * can only ever drop them.
+     *
+     * The bound is settled HERE rather than left to {@see record()}'s
+     * clip: a clipped frame would arrive as broken JSON and be dropped
+     * whole, silently losing the row. So an over-budget frame sheds its
+     * TAIL titles — the head titles are the best-ranked notes, and the
+     * count keeps its true value — and only a skeleton that cannot fit
+     * on its own (an absurd count's digits) is refused.
+     *
+     * @param array<string, mixed> $payload
+     */
+    public function recordStructured(string $kind, array $payload): bool
+    {
+        if ($kind !== RuntimeNoticeSink::KIND_MEMORY_RECALL) {
+            return false;
+        }
+
+        $count = isset($payload['count']) && is_int($payload['count'])
+            ? max(0, $payload['count'])
+            : 0;
+
+        $titles = [];
+        foreach (isset($payload['titles']) && is_array($payload['titles']) ? $payload['titles'] : [] as $title) {
+            if (!is_string($title)) {
+                continue;
+            }
+            // Control bytes would forge framing inside the JSON string,
+            // and a newline inside a title would split the one-line
+            // expanded row: every whitespace run folds to a single space
+            // and stray controls are stripped (producers already send a
+            // first line — this is defense against the frame forger).
+            $clean = trim((string) preg_replace(
+                '/\s+/u',
+                ' ',
+                (string) preg_replace('/[\x00-\x08\x0B-\x1F\x7F]/u', '', $title),
+            ));
+            $clean = mb_substr($clean, 0, RuntimeNoticeSink::STRUCTURED_TITLE_MAX_CHARS, 'UTF-8');
+            if ($clean !== '') {
+                $titles[] = $clean;
+            }
+        }
+
+        $build = static function (array $titles) use ($kind, $count): string {
+            return RuntimeNoticeSink::STRUCTURED_PREFIX . json_encode(
+                ['kind' => $kind, 'count' => $count, 'titles' => array_values($titles)],
+                JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR,
+            );
+        };
+
+        $frame = $build($titles);
+        while (mb_strlen($frame, 'UTF-8') > RuntimeNoticeSink::MAX_CHARS && $titles !== []) {
+            array_pop($titles);
+            $frame = $build($titles);
+        }
+        if (mb_strlen($frame, 'UTF-8') > RuntimeNoticeSink::MAX_CHARS) {
+            // Even the skeleton (no titles) does not fit — loud refusal
+            // through the return, never a corrupt half-frame on the wire.
+            return false;
+        }
+
+        return $this->record($frame);
+    }
+
+    /**
+     * Parse a drained line back into its structured fields, or null when
+     * it is a plain row, a malformed frame, or a frame whose payload
+     * shape fails the $kind's contract. Readers branch on this BEFORE
+     * minting a row so a dropped frame parks nothing: the worst case is
+     * the notice row's own silence, never a half-parsed row.
+     *
+     * @return ?array{kind: string, count: int, titles: list<string>}
+     */
+    public static function decodeStructuredFrame(string $line): ?array
+    {
+        if (!str_starts_with($line, RuntimeNoticeSink::STRUCTURED_PREFIX)) {
+            return null;
+        }
+
+        $json = substr($line, strlen(RuntimeNoticeSink::STRUCTURED_PREFIX));
+        if (!json_validate($json)) {
+            return null;
+        }
+        try {
+            $decoded = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return null;
+        }
+        if (!is_array($decoded)
+            || ($decoded['kind'] ?? null) !== RuntimeNoticeSink::KIND_MEMORY_RECALL
+            || !isset($decoded['count']) || !is_int($decoded['count']) || $decoded['count'] < 0
+        ) {
+            return null;
+        }
+
+        $titles = [];
+        foreach (isset($decoded['titles']) && is_array($decoded['titles']) ? $decoded['titles'] : [] as $title) {
+            if (is_string($title)) {
+                $titles[] = $title;
+            }
+        }
+
+        return ['kind' => RuntimeNoticeSink::KIND_MEMORY_RECALL, 'count' => $decoded['count'], 'titles' => $titles];
+    }
+
     /** See {@see RuntimeNoticeSink::hasPending()}. */
     public function hasPending(): bool
     {

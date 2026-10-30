@@ -297,6 +297,28 @@ final class Message implements \JsonSerializable
          */
         public readonly array $thinkingBlocks = [],
         /**
+         * C-CTX-6.e: the TITLES of the notes behind a structured memory
+         * recall row — first lines only, never bodies (VIS-6 keeps note
+         * bodies out of UI rows), each already clipped at the source.
+         * Non-empty only on a `uiOnly` {@see Role::System} row minted by
+         * {@see recallNotice()}: it tells the transcript renderer to draw
+         * the count sentence as an EXPANDABLE row (collapsed "💭 Recalled
+         * 3 notes ▸" opens to one title per line through the transcript's
+         * existing tool-row click affordance — no new key binding). The
+         * row's {@see $content} stays the plain count sentence, so every
+         * reader this column predates — the web transcript, a resumed
+         * pre-column session, a user who never clicks — still says
+         * exactly what it said before. Like every additive column here
+         * it persists through {@see jsonSerialize()} only-when-set, so a
+         * row without titles serialises byte-for-byte as before and old
+         * checkpoint blobs keep their hashes; never part of
+         * {@see toWire()}; a legacy row that predates the column reads
+         * back `[]`.
+         *
+         * @var list<string>
+         */
+        public readonly array $recallTitles = [],
+        /**
          * The row-identity token {@see rowKey()} returns. Never pass one:
          * null mints a fresh token, which is what a new row is, and
          * {@see mutate()} passes the original's on so a wither's copy stays
@@ -331,6 +353,31 @@ final class Message implements \JsonSerializable
     public static function notice(string $content, ?int $now = null): self
     {
         return new self(Role::System, $content, $now ?? time(), uiOnly: true);
+    }
+
+    /**
+     * The structured memory-recall row (C-CTX-6.e): a {@see notice()}
+     * whose {@see $recallTitles} let the transcript expand the count
+     * sentence into the recalled notes' titles. $text is the count
+     * sentence itself — built by
+     * {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::recallRowText()}
+     * at every pump so the TUI row, the served session's payload and a
+     * legacy reader all speak one prose — and $titles are note TITLES
+     * (first lines), never bodies. Stays off the model wire by the same
+     * uiOnly law as every notice row: the recall fence already showed the
+     * model what it recalled.
+     *
+     * @param list<string> $titles
+     */
+    public static function recallNotice(int $count, string $text, array $titles = [], ?int $now = null): self
+    {
+        return new self(
+            Role::System,
+            $text,
+            $now ?? time(),
+            uiOnly: true,
+            recallTitles: array_values(array_filter($titles, is_string(...))),
+        );
     }
 
     /**
@@ -1038,6 +1085,7 @@ final class Message implements \JsonSerializable
             'contextLedger' => $this->contextLedger,
             'error' => $this->error,
             'thinkingBlocks' => $this->thinkingBlocks,
+            'recallTitles' => $this->recallTitles,
             'rowKey' => $this->rowKey,
         ], $changes));
     }
@@ -1173,6 +1221,7 @@ final class Message implements \JsonSerializable
             ...($this->uiOnly ? ['uiOnly' => true] : []),
             ...($this->error ? ['error' => true] : []),
             ...($this->thinkingBlocks !== [] ? ['thinkingBlocks' => $this->thinkingBlocks] : []),
+            ...($this->recallTitles !== [] ? ['recallTitles' => $this->recallTitles] : []),
             ...($this->pendingToolName !== null ? ['pendingToolName' => $this->pendingToolName] : []),
             // Identity (1.B-1) on the same only-when-set rule: an id-less row
             // encodes exactly as it did before, so the checkpoint blobs it
@@ -1294,6 +1343,13 @@ final class Message implements \JsonSerializable
             thinkingBlocks: array_values(array_filter(
                 \is_array($row['thinkingBlocks'] ?? null) ? $row['thinkingBlocks'] : [],
                 static fn(mixed $block): bool => \is_array($block),
+            )),
+            // C-CTX-6.e: a row saved before the column, or a hostile blob
+            // whose value is not a list of strings, reads back the
+            // no-titles default — the plain notice row it always was.
+            recallTitles: array_values(array_filter(
+                \is_array($row['recallTitles'] ?? null) ? $row['recallTitles'] : [],
+                static fn(mixed $title): bool => \is_string($title),
             )),
             loopGuardStoppedBy: $string($row['loopGuardStoppedBy'] ?? null),
             id: ($string($row['id'] ?? null) ?? '') === '' ? null : $row['id'],

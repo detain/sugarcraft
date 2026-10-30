@@ -4446,7 +4446,13 @@ final class Renderer
                     default => self::renderAssistantTurn($msg, $theme, $md, $width, $condensed ? $condensedAssistantLabel : $assistantLabel, $expanded, $frame),
                 },
                 Role::System    => $msg->uiOnly
-                    ? self::notice($theme)->render(Lang::t(self::NOTICE_ROW_LABEL) . ' ' . self::untrusted($msg->content))
+                    ? ($msg->recallTitles !== []
+                        // C-CTX-6.e: a structured recall row expands; the
+                        // empty-titles shape (every plain notice, and a
+                        // recall frame whose titles all shed at the bound)
+                        // keeps the pre-change arm byte-identical.
+                        ? self::renderRecallRow($msg, $theme, $expanded, $frame)
+                        : self::notice($theme)->render(Lang::t(self::NOTICE_ROW_LABEL) . ' ' . self::untrusted($msg->content)))
                     : self::dim($theme)->render(Lang::t('tui.chat.system_label') . ' ' . self::untrusted($msg->content)),
             };
         }
@@ -4779,6 +4785,18 @@ final class Renderer
     }
 
     /**
+     * The {@see Chat::expanded()} key of a structured memory-recall row
+     * (C-CTX-6.e): derived from the row's sentence and titles, so the same
+     * recall of the same notes keeps its open/closed state across repaints
+     * and the row rides the transcript's existing tool-row click
+     * affordance — same registry, same key space, no new key binding.
+     */
+    public static function recallKey(Message $msg): string
+    {
+        return 'recall.' . substr(sha1($msg->content . '|' . implode('|', $msg->recallTitles)), 0, 16);
+    }
+
+    /**
      * A model's thinking as ONE collapsible row (crush_feat.md §12 D3's
      * "dimmed/collapsed"): `💭 Thought ▸ 42 lines · click to expand` until
      * the user opens it, then the same row flipped to `▾` with the whole
@@ -4827,6 +4845,55 @@ final class Renderer
         return $row . "\n" . implode("\n", array_map(
             static fn(string $line): string => $faint->render($line),
             $lines,
+        ));
+    }
+
+    /**
+     * A structured memory-recall row (C-CTX-6.e): the count sentence —
+     * today's `💭 Recalled 3 notes for this turn`, byte-identical to the
+     * plain notice every reader saw before — drawn as ONE collapsible
+     * row. Collapsed it is that sentence with a `▸`; the user opens it
+     * and the recalled notes' TITLES appear beneath, one per dim line.
+     * Bodies never travel in the frame (VIS-6), so there is nothing
+     * more to show and nothing to leak.
+     *
+     * The row is a click zone on the SAME registry and key space
+     * tool-row and thought rows use ({@see recordToolCallZone()},
+     * {@see Chat::toggleToolOutput()}), so no second expansion mechanism
+     * can disagree with the first; it does NOT join the Ctrl+O newest-
+     * thought chord, whose target is set from {@see Chat::latestThoughtKey()}.
+     *
+     * @param array<string, bool> $expanded {@see Chat::expanded()}
+     */
+    private static function renderRecallRow(Message $msg, Theme $theme, array $expanded, RenderFrame $frame): string
+    {
+        $key = self::recallKey($msg);
+        $isExpanded = ($expanded[$key] ?? false) === true;
+        $faint = self::dim($theme);
+
+        // untrusted() on the sentence even though every producer builds
+        // it from the catalog: this arm's content was scrubbed through
+        // untrusted() as a plain notice row before C-CTX-6.e, and a row
+        // revived from an old checkpoint keeps the same defense today.
+        $head = self::toolRowStyle($theme, self::isFocusedToolRow($key, $frame))
+            ->italic()
+            ->render(self::untrusted($msg->content));
+        $frame->recordToolRowHead($head);
+        self::recordToolCallZone($key, $head, $frame);
+
+        $clicks = Chat::mouseClicksEnabled();
+        $hint = $isExpanded
+            ? ($clicks ? ' · ' . Lang::t('tui.chat.click_collapse') : '')
+            : ($clicks ? ' · ' . Lang::t('tui.chat.click_expand') : '');
+        $row = $head . $faint->render(($isExpanded ? ' ▾ ' : ' ▸ ') . $hint);
+
+        if (!$isExpanded) {
+            return $row;
+        }
+
+        return $row . "\n" . implode("\n", array_map(
+            static fn(string $title): string => $faint->render(' · ' . self::untrusted($title)),
+            $msg->recallTitles,
         ));
     }
 

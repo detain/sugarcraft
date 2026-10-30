@@ -8702,11 +8702,15 @@ final class Chat implements Model
 
     /**
      * What `$id` shows with no entry in the expanded map: a thought is
-     * collapsed, a tool call follows `expandToolOutput` (roadmap N-P4g).
+     * collapsed, a tool call follows `expandToolOutput` (roadmap N-P4g),
+     * and so is a memory-recall row (C-CTX-6.e) — its collapsed shape is
+     * today's count sentence, and a user who turns `expandToolOutput` on
+     * for the tool rows must not have every recall row pre-opened by
+     * accident: the first click on one has to close it, like a thought.
      */
     private static function expandedByDefault(string $id): bool
     {
-        return !str_starts_with($id, 'thought.') && Renderer::toolOutputExpandedByDefault();
+        return !str_starts_with($id, 'thought.') && !str_starts_with($id, 'recall.') && Renderer::toolOutputExpandedByDefault();
     }
 
     /**
@@ -20711,6 +20715,24 @@ final class Chat implements Model
         // tool names from parser warnings, and are addressed to the user.
         $messages = [];
         foreach ($notices as $notice) {
+            // C-CTX-6.e: a structured frame becomes its typed row — the
+            // count sentence for content (identical bytes to what the
+            // plain notice carried before, so web and legacy readers are
+            // unchanged) plus the titles that make the row expandable.
+            // A frame that fails to decode is DROPPED, never rendered as
+            // raw JSON on the user's transcript.
+            if (RuntimeNoticeSink::isStructuredFrame($notice)) {
+                $frame = RuntimeNoticeSink::decodeStructured($notice);
+                if ($frame === null) {
+                    continue;
+                }
+                $messages[] = Message::recallNotice(
+                    $frame['count'],
+                    RuntimeNoticeSink::recallRowText($frame['count']),
+                    $frame['titles'],
+                );
+                continue;
+            }
             $messages[] = Message::notice($notice);
         }
 

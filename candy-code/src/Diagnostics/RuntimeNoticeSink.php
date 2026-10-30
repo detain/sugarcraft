@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Diagnostics;
 
 use React\EventLoop\Loop;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\Log;
 
 /**
@@ -326,6 +327,30 @@ final class RuntimeNoticeSink
     public const DATAGRAM_BYTES = 8192;
 
     /**
+     * Head byte plus label every structured notice frame starts with
+     * (C-CTX-6.e). The head is 0x01, chosen over the obvious NUL because
+     * {@see NoticeSink::record()} trims its input and PHP's default trim
+     * charlist contains "\0" — a NUL-headed frame would arrive stripped
+     * and be indistinguishable from a JSON-only row. 0x01 is not in the
+     * charlist and no plain runtime row begins with it, so the prefix is
+     * unforgeable by prose. Followed by the frame's JSON object.
+     */
+    public const STRUCTURED_PREFIX = "\x01notice.v1 ";
+
+    /**
+     * The only structured kind defined so far (C-CTX-6.e): a memory
+     * recall row carrying `{count, titles[]}` — the count today's row
+     * spoke, plus the recalled notes' TITLES so the row can expand. Note
+     * BODIES never travel: the recall fence already showed the model its
+     * bytes, and the transcript's contract is that a note's body stays
+     * out of every UI row (VIS-6).
+     */
+    public const KIND_MEMORY_RECALL = 'memory.recall';
+
+    /** Per-title budget inside a structured frame, clipped at the source. */
+    public const STRUCTURED_TITLE_MAX_CHARS = 80;
+
+    /**
      * The process's own sink — the one a TUI launch arms and every emitter
      * reaches when nothing more specific is current. Created on first use and
      * never replaced: {@see reset()} empties it in place, so a
@@ -434,6 +459,54 @@ final class RuntimeNoticeSink
     }
 
     /**
+     * Put a STRUCTURED notice frame in the inbox without touching stderr
+     * (C-CTX-6.e). Same armed-drops law as {@see record()}; the framing,
+     * kind whitelist and MAX_CHARS bound (tail-title shed, count kept)
+     * are {@see NoticeSink::recordStructured()}'s, documented there.
+     *
+     * @param array<string, mixed> $payload
+     */
+    public static function recordStructured(string $kind, array $payload): bool
+    {
+        return self::current()->recordStructured($kind, $payload);
+    }
+
+    /**
+     * Whether a drained line is a structured frame at all (before any
+     * decode) — the branch pumps take to route a row to its typed
+     * constructor instead of a plain notice.
+     */
+    public static function isStructuredFrame(string $line): bool
+    {
+        return str_starts_with($line, self::STRUCTURED_PREFIX);
+    }
+
+    /**
+     * Parse a drained line back into its frame fields, or null for a
+     * plain row, a malformed frame, or a failed kind contract.
+     *
+     * @return ?array{kind: string, count: int, titles: list<string>}
+     */
+    public static function decodeStructured(string $line): ?array
+    {
+        return NoticeSink::decodeStructuredFrame($line);
+    }
+
+    /**
+     * The one prose source of the recall row's sentence (C-CTX-6.e): the
+     * frame carries only numbers and titles, and every reader — the TUI
+     * row's content, the served session's web payload — spells the same
+     * catalog line, so legacy readers keep seeing today's byte-shape.
+     */
+    public static function recallRowText(int $count): string
+    {
+        return '💭 ' . Lang::t(
+            $count === 1 ? 'chat.memory.recalled_notice.one' : 'chat.memory.recalled_notice.many',
+            ['count' => $count],
+        );
+    }
+
+    /**
      * Whether a poll would find anything, WITHOUT consuming it.
      *
      * Exists so {@see \SugarCraft\Code\Chat::subscriptions()} can decide
@@ -486,6 +559,10 @@ final class RuntimeNoticeSink
      * IDEMPOTENT WITHIN A CALL, and re-calling it per turn is the intended
      * rhythm: each call re-opens the budget and re-allows the single overflow
      * row.
+     *
+     * Structured frames (C-CTX-6.e) are rows of this same budget: they
+     * enter through {@see recordStructured()} but queue and drain on the
+     * plain queue, so a turn that overflows counts them like any notice.
      */
     public static function beginTurn(): void
     {

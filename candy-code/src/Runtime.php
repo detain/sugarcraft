@@ -6452,14 +6452,20 @@ final class Runtime
      * the no-fork blocking fallback, where one process accumulates memo
      * turns. The behavior as shipped stands; this paragraph scopes the claim.
      *
-     * `record()` and not `warn()`: this is ordinary information, not a
-     * degraded path — it belongs in the transcript the pump drains, not the
-     * error log. The pump turns each row into a uiOnly notice
-     * (`Chat::pumpRuntimeNotices()`), so the row reaches the user's frame
-     * and never the model's history or the prompt cache
-     * (`RuntimeNoticeSink`'s uiOnly law). An unarmed sink drops, which is
-     * what keeps library-level callers (and this suite's harnesses) from
-     * accumulating rows no one drains.
+     * `recordStructured()` and not `warn()`: this is ordinary information,
+     * not a degraded path — it belongs in the transcript the pump drains,
+     * not the error log. C-CTX-6.e made the row STRUCTURED: the frame
+     * carries the count plus the recalled notes' TITLES (first lines —
+     * bodies never travel, per VIS-6), and the pumps
+     * (`Chat::pumpRuntimeNotices()`, `SessionHost::pumpRuntimeNotices()`)
+     * turn the frame into a uiOnly expandable row whose visible sentence
+     * is rebuilt at the pump by `RuntimeNoticeSink::recallRowText()`, so
+     * every legacy reader sees exactly the byte-shape the old plain row
+     * spoke. Either way the row reaches the user's frame and never the
+     * model's history or the prompt cache (`RuntimeNoticeSink`'s uiOnly
+     * law). An unarmed sink drops, which is what keeps library-level
+     * callers (and this suite's harnesses) from accumulating rows no one
+     * drains.
      */
     private function announceMemoryRecall(\ArrayObject $holder, Context\MemoryRecallBlock $block): void
     {
@@ -6479,11 +6485,21 @@ final class Runtime
 
         // VIS-6-P1: the number-grammar is chosen at the call site through
         // the key (the house `.one`/`.many` shape), never as an English
-        // word injected into the translated sentence as a parameter.
-        RuntimeNoticeSink::record('💭 ' . Lang::t(
-            $count === 1 ? 'chat.memory.recalled_notice.one' : 'chat.memory.recalled_notice.many',
-            ['count' => $count],
-        ));
+        // word injected into the translated sentence as a parameter — the
+        // pump applies that rule through recallRowText(); this emitter
+        // sends only the number.
+        // C-CTX-6.e: TITLES not bodies — the note's first line is the
+        // title convention (MemoryBlock renders entries that way), and
+        // the frame's own bound sheds tail titles past MAX_CHARS while
+        // keeping the true count.
+        $titles = \array_map(
+            static fn (Memory\MemoryEntry $entry): string => trim((string) strtok($entry->content() . "\n", "\n")),
+            $entries,
+        );
+        RuntimeNoticeSink::recordStructured(RuntimeNoticeSink::KIND_MEMORY_RECALL, [
+            'count' => $count,
+            'titles' => $titles,
+        ]);
     }
 
     /**
