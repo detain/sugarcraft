@@ -68,6 +68,8 @@ final class KeyBindingRegistryTest extends TestCase
             KeyBindingRegistry::CONTEXT_MEDIA,
             KeyBindingRegistry::CONTEXT_MENU,
             KeyBindingRegistry::CONTEXT_MOUSE,
+            KeyBindingRegistry::CONTEXT_DIFF_REVIEW,
+            KeyBindingRegistry::CONTEXT_MSG_PICKER,
         ];
 
         foreach (KeyBindingRegistry::all() as $binding) {
@@ -388,14 +390,21 @@ final class KeyBindingRegistryTest extends TestCase
      * skipping the step's unstarted calls. C-AGT-4.b carries it on:
      * 154 -> 155 live (155 all) with `chat.agent-cycle`, the Alt+A primary
      * agent chord. C-TUI-3.e carries it on: 155 -> 156 live (156 all) with
-     * `chat.verbose-toggle`, the Alt+O session-tier verbose dial.
+     * `chat.verbose-toggle`, the Alt+O session-tier verbose dial. The chain
+     * went un-carried there: C-TUI-2.e welded the seven `diffreview.*` rows
+     * and the "Diff review" group without a note here, so this file rode red
+     * from that weld (156 vs 163, 15 vs 16 — measured at 6fb38eef4).
+     * C-TUI-3.d restores the chain and carries it on: 163 -> 168 live
+     * (168 all), 17 groups, with `chat.message-picker` — the idle twin of
+     * `chat.cancel` — and the four `msgpicker.*` rows of the "Message
+     * picker" group.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(156, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(156, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(168, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(168, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(0, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
-        $this->assertCount(15, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
+        $this->assertCount(17, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }
 
     /**

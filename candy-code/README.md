@@ -286,7 +286,7 @@ all one component tree — not two parallel UIs.
 | `Enter` (docked pane focused, empty draft) | Open the command palette — the door from a read-only pane to the commands that change things; on the **Settings** pane it opens the settings view instead (see `Ctrl+,`). A non-empty draft sends exactly as before, from any pane |
 | `Ctrl+,` | Focus the Settings pane, and open the **settings view** from there or via `/settings` — see the fine print below. |
 | `Esc` | On a turn that reports its steps, stop it — the running tool first, then the turn after the current step — see the fine print below. |
-| `Esc` `Esc` | Cancel an in-flight turn — press **twice** within 0.6 s (`doubleEscSeconds`); see the fine print below. |
+| `Esc` `Esc` | Cancel an in-flight turn — press **twice** within 0.6 s (`doubleEscSeconds`); the same two presses while **idle** with an empty draft open the **message picker** instead — see the fine print below. |
 | `Esc` | Close the palette or the session picker (a filter typed into the picker is cleared first) |
 | `/new` | New session, through a **folder picker** that opens on this project — see the fine print below. |
 | `Ctrl+C` | Quit — unless the draft has a selection: then the first press copies it (OSC 52, clipped to 64 KiB with a notice) and the next press quits |
@@ -335,7 +335,7 @@ The long claims the table above compresses, in full:
 
 **`Esc` against a running turn.** On an engine turn that reports its steps: stop the running tool, then the turn after the current step. The running call is cancelled, not waited for: a parallel member's process is killed, and a lone `Task` stops at its sub-agent's next tool or step and stays resumable. A sequential tool such as `Bash` still runs to its end. The cancelled call reads `Cancelled by the user (Esc) while it was running.` and the turn's other results are kept. The status bar then reads `stopping after step N · Esc to cancel now`, and any later `Esc` cancels hard
 
-**The double-`Esc` window.** Cancel the in-flight turn — press **twice** within 0.6s (the `doubleEscSeconds` setting). On a turn that reports no steps a single `Esc` only arms the cancel, which is why the status bar reads `Esc Esc to cancel` while thinking
+**The double-`Esc` window.** Cancel the in-flight turn — press **twice** within 0.6s (the `doubleEscSeconds` setting). On a turn that reports no steps a single `Esc` only arms the cancel, which is why the status bar reads `Esc Esc to cancel` while thinking. The same two presses, quickly, while **idle** — no turn in flight, an empty composer, no modal up — answer the other way: they open the **message picker** over the transcript, one row per turn you can rewind to (see [Checkpoints](#checkpoints-undo-redo-rewind-and-diff)). A press during the turn and a press after it ends pair with nothing: both presses must be idle
 
 **The `/new` folder picker.** **Folder picker** for a new session, opened on this project with **▶ Start session here** highlighted (so `/new` `Enter` is a plain new session). `↑`/`↓` move, `Enter` or `→` opens the highlighted directory, `Backspace` or `←` goes to the parent (the directory you left stays highlighted; there is no upper limit — it is your machine), `.` shows hidden directories, `/` types or pastes a path (`Enter` goes, `Esc` stops typing), `s` (or `Enter` on **▶ Start session here**) chooses the directory on screen, `Esc` cancels. Directories only, with a `[project]` badge on those holding `.git`, `composer.json`, `package.json` or `.candy-code`; one you cannot read is refused rather than entered. Another directory asks first — *This restarts CandyCode there* — because one process serves one project: `y`/`Enter` restarts in it with your `--config`/`--model`/`--permission-mode` and a new session, `n`/`Esc` stays. `/new <dir>` skips the browsing. The palette has both **New session** (here, at once) and **New session…** (the picker), and so does the **Session** menu
 
@@ -1203,7 +1203,11 @@ one before your last prompt, by default): `↑`/`↓` picks the file, `PgUp`/`Pg
 scrolls its patch, `-`/`+` moves the checkpoint further back, `t` narrows the
 base to the turn you picked, and `Esc` closes it. `/diff [n] --print` prints
 the same list and patch as transcript rows instead — the shape serve always
-takes. A file restore is refused once HEAD has moved since
+takes. The idle double-`Esc` opens the same history as a **message picker**:
+saved prompts newest first, `↑`/`↓` picks one, typing filters, `Enter` rewinds
+the conversation to that checkpoint and puts its prompt back in the box — the
+picker's `Enter` is `Chat::rewindToCheckpoint()`, exactly `/rewind n --chat`.
+A file restore is refused once HEAD has moved since
 the checkpoint (it would undo those commits): `--both` and `/undo` then change
 nothing, and `--chat` still works. Files a snapshot leaves out are never
 touched by a restore. `/redo` moves the files only when they still match the

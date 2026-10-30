@@ -25,6 +25,7 @@ use SugarCraft\Code\Renderer as LiveRenderer;
 use SugarCraft\Code\Theme;
 use SugarCraft\Code\Tui\Components\ChatPane;
 use SugarCraft\Code\Tui\DiffReview\DiffReview;
+use SugarCraft\Code\Tui\MessagePicker\MessagePicker;
 use SugarCraft\Code\Tui\Components\ContextPane;
 use SugarCraft\Code\Tui\Components\InputPane;
 use SugarCraft\Code\Tui\Components\SkillsPane;
@@ -699,6 +700,13 @@ final class Renderer
             return self::renderDiffReview($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
         }
 
+        // C-TUI-3.d: the message picker takes the band right behind the
+        // review it is dialled beside — the idle double-Escape's rewind
+        // list, a keyboard-only box on the same centre-overlay law.
+        if ($a->messagePicker !== null) {
+            return self::renderMessagePicker($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
+        }
+
         // The video player (crush-media W5.4) takes the band on the same
         // modal law, right beside the form it plays the form's artifacts
         // from — and like the form, ahead of any pane focus.
@@ -1353,6 +1361,62 @@ final class Renderer
 
         $middle = Veil::new()->withBackdrop(50)->composite(
             implode("\n", $box),
+            $backdrop,
+            OverlayPosition::CENTER,
+            OverlayPosition::CENTER,
+        );
+
+        $parts = [$menuBar];
+        if ($notice !== '') {
+            $parts[] = $notice;
+        }
+        $parts[] = $middle;
+        if ($bottom !== '') {
+            $parts[] = $bottom;
+        }
+
+        $joined = implode("\n", $parts);
+        $frame = self::clipWidth(self::clipTail($joined, $rows), $cols);
+        $frame = self::overlayMenu($a, $frame, $cols, self::lineCount($menuBar));
+        $dropped = self::lineCount($joined) - self::lineCount($frame);
+
+        LiveRenderer::clearZones();
+        self::$lastDockFrame = null;
+        self::$scrollRegions = [];
+
+        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), self::lineCount($menuBar), []);
+
+        return new View($frame);
+    }
+
+    /**
+     * The message picker (C-TUI-3.d): a keyboard-only centre overlay on the
+     * review's and media form's band law. {@see MessagePicker::view()} paints
+     * the whole box — title, live query line, windowed prompt rows, hint
+     * footer — and the shell centres it over the dimmed band. No zones are
+     * registered (the picker carries no click ids), so the last scanChrome
+     * list is empty exactly as the review's.
+     */
+    private static function renderMessagePicker(
+        App $a,
+        int $cols,
+        int $rows,
+        string $menuBar,
+        string $notice,
+        string $bottom,
+        int $paneRows,
+    ): View {
+        $picker = $a->messagePicker;
+        \assert($picker !== null);
+        $theme = $a->theme();
+
+        $band = self::composeBand($a, $cols, $paneRows);
+        $backdrop = self::padBand($band['middle'], $cols, $paneRows);
+
+        // The picker stands alone at the shell (its own docblock's rule): it
+        // spends no Chat-side chrome, so 0 keeps its box within the band.
+        $middle = Veil::new()->withBackdrop(50)->composite(
+            $picker->view($cols, $paneRows, $theme, 0),
             $backdrop,
             OverlayPosition::CENTER,
             OverlayPosition::CENTER,

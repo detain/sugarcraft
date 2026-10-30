@@ -52,6 +52,7 @@ use SugarCraft\Code\Tui\Components\MenuSelectedMsg;
 use SugarCraft\Code\Tui\DiffReview\DiffReview;
 use SugarCraft\Code\Tui\KeyboardHandler;
 use SugarCraft\Code\Tui\MediaForm\OpenMediaFormMsg;
+use SugarCraft\Code\Tui\MessagePicker\OpenMessagePickerMsg;
 use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Tui\Settings\SettingsSources;
 use SugarCraft\Mouse\Zone;
@@ -292,8 +293,8 @@ final class KeyBindingDriftTest extends TestCase
      *
      * The word forms of the arrow keys (`Up`/`Down`/`Left`/`Right`) were a
      * third undocumented hole and are now closed — they mattered most of the
-     * near-misses probed, because eight `*.move` rows describe arrow movement
-     * (twenty-four rows carry an arrow GLYPH in their label; both counts are asserted
+     * near-misses probed, because nine `*.move` rows describe arrow movement
+     * (twenty-five rows carry an arrow GLYPH in their label; both counts are asserted
      * by {@see testTheArrowRowCountsThisFileQuotesAreStillRight()}, because they
      * were quoted as "four" here and nothing read them back), so
      * "Down moves the highlight" is the likeliest next prose regression. The
@@ -523,15 +524,15 @@ final class KeyBindingDriftTest extends TestCase
         }
 
         $this->assertCount(
-            8,
+            9,
             $move,
-            'KEYISH\'s docblock says eight `*.move` rows describe arrow movement; it found: '
+            'KEYISH\'s docblock says nine `*.move` rows describe arrow movement; it found: '
             . implode(', ', $move),
         );
         $this->assertCount(
-            24,
+            25,
             $arrowLabelled,
-            'KEYISH\'s docblock says twenty-four rows carry an arrow glyph in their label; it found: '
+            'KEYISH\'s docblock says twenty-five rows carry an arrow glyph in their label; it found: '
             . implode(', ', $arrowLabelled),
         );
         // Every `*.move` row is arrow-labelled, which is what makes the first
@@ -548,7 +549,9 @@ final class KeyBindingDriftTest extends TestCase
      *
      * `chat.cancel` is that row: "Esc Esc … twice, quickly" is two presses one
      * after the other, and rewriting the label as `Esc / Esc` would read as two
-     * ways to do it while its observation kept passing unchanged. The Agent
+     * ways to do it while its observation kept passing unchanged. Its idle twin
+     * `chat.message-picker` (C-TUI-3.d) is the same chord and the same shape.
+     * The Agent
      * View's six `Ctrl+X <letter>` chords (P-D3, P-E3, P-AGENT.b) are the same
      * shape: a leader, then the letter — and each observation presses the two
      * keys in that order and asserts the leader went down first.
@@ -567,7 +570,7 @@ final class KeyBindingDriftTest extends TestCase
         }
 
         $this->assertSame(
-            ['chat.cancel', 'agentview.cancel', 'agentview.pause', 'agentview.stop-all', 'agentview.open-session', 'agentview.background', 'agentview.interrupt'],
+            ['chat.cancel', 'chat.message-picker', 'agentview.cancel', 'agentview.pause', 'agentview.stop-all', 'agentview.open-session', 'agentview.background', 'agentview.interrupt'],
             $sequences,
             'chord() cannot tell a sequence from a choice, so the set of rows written as a sequence is '
             . 'held here explicitly',
@@ -1119,6 +1122,17 @@ final class KeyBindingDriftTest extends TestCase
                 $this->assertTrue($armed->inFlight, 'one press only arms the cancel');
                 [$cancelled] = $armed->update($k[1]);
                 $this->assertFalse($cancelled->inFlight);
+            },
+            // C-TUI-3.d: the same two presses, answered the other way — both
+            // while idle and empty, they open the message picker instead.
+            'chat.message-picker' => function (array $k): void {
+                $chat = $this->chat([Message::user('q')], '');
+                $this->assertCount(2, $k, 'the label must still name two presses');
+                [$armed, $first] = $chat->update($k[0]);
+                $this->assertNull($first, 'the idle arming press sends nothing');
+                [, $second] = $armed->update($k[1]);
+                $this->assertInstanceof(\Closure::class, $second);
+                $this->assertInstanceof(OpenMessagePickerMsg::class, $second(), 'the pairing press answers the picker');
             },
             // Roadmap 5.7-1: Alt+M puts the session's gate into plan mode and
             // a second press brings it back to the mode it left.
@@ -2463,6 +2477,35 @@ final class KeyBindingDriftTest extends TestCase
                 $this->assertNull($app->diffReview, 'the closing chord hands the band back');
             },
 
+            // ── Message picker (C-TUI-3.d) ───────────────────────────────
+            // The shell routes these to the picker model while it holds the
+            // band; the fixture carries no store, so the rows prove the
+            // headless shape. Dialing a real store and the rewind's draft
+            // seeding are pinned in tests/App/MessagePickerWiringTest.php.
+            'msgpicker.move' => function (array $k): void {
+                $open = $this->messagePickerApp();
+                $this->assertSame(3, count($open->messagePicker->rows()), 'fixture: three prompts to move between');
+
+                [$down] = $open->update($k[1]);
+                $this->assertSame(1, $down->messagePicker->selectedIndex(), 'the second chord lands on the second row');
+                [$up] = $down->update($k[0]);
+                $this->assertSame(0, $up->messagePicker->selectedIndex(), 'the first chord comes back');
+            },
+            'msgpicker.accept' => function (array $k): void {
+                [$app] = $this->messagePickerApp()->update($k[0]);
+                $this->assertNull($app->messagePicker, 'the accept closes the slot either way');
+            },
+            'msgpicker.close' => function (array $k): void {
+                [$app] = $this->messagePickerApp()->update($k[0]);
+                $this->assertNull($app->messagePicker, 'the closing chord hands the band back');
+            },
+            'msgpicker.erase' => function (array $k): void {
+                [$typed] = $this->messagePickerApp()->update(new KeyMsg(KeyType::Char, 'x'));
+                $this->assertSame('x', $typed->messagePicker->query(), 'typing filters');
+                [$back] = $typed->update($k[0]);
+                $this->assertSame('', $back->messagePicker->query(), 'the chord erases the character again');
+            },
+
             // ── Menu bar ─────────────────────────────────────────────────
             // Both directions, from a menu in the MIDDLE of the strip. The
             // strip wraps, so from menu 1 every move lands on a different,
@@ -3082,6 +3125,19 @@ final class KeyBindingDriftTest extends TestCase
         return $this->app()
             ->withChat($this->chat())
             ->openDiffReview(DiffReview::open(self::diffReviewFiles(), 1, 3, false, 0));
+    }
+
+    /**
+     * An App holding the message picker (C-TUI-3.d) with three synthetic
+     * prompts, so the observations exercise the shell's routing and the
+     * model's clamps rather than a store. The chat carries no store on
+     * purpose — the accept then rides the host command's refusal path.
+     */
+    private function messagePickerApp(): App
+    {
+        return $this->app()
+            ->withChat($this->chat())
+            ->openMessagePicker(['alpha', 'beta', 'gamma']);
     }
 
     /**

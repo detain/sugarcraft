@@ -91,6 +91,9 @@ use SugarCraft\Code\Tui\DiffReview\DiffReviewAction;
 use SugarCraft\Code\Tui\DiffReview\DiffReviewActionKind;
 use SugarCraft\Code\Tui\DiffReview\DiffReviewSource;
 use SugarCraft\Code\Tui\DiffReview\OpenDiffReviewMsg;
+use SugarCraft\Code\Tui\MessagePicker\MessagePicker;
+use SugarCraft\Code\Tui\MessagePicker\MessagePickerAction;
+use SugarCraft\Code\Tui\MessagePicker\OpenMessagePickerMsg;
 use SugarCraft\Code\Tui\MediaForm\ChoiceFeed;
 use SugarCraft\Code\Tui\MediaForm\GenerateFromMediaFormMsg;
 use SugarCraft\Code\Tui\MediaForm\ImportPng;
@@ -673,6 +676,14 @@ final class App implements Model
          * finds nothing to show) closes it. Null = no review open.
          */
         public readonly ?DiffReview $diffReview = null,
+        /**
+         * C-TUI-3.d: the open message picker (the idle double-Escape's
+         * rewind-to-a-prompt list). A shell slot on the settings/media/
+         * player/review law: while it stands it owns the keys and the band;
+         * `Esc` closes it, `Enter` rewinds the hosted chat to the selected
+         * checkpoint and seeds its prompt. Null = no picker open.
+         */
+        public readonly ?MessagePicker $messagePicker = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -2023,6 +2034,120 @@ final class App implements Model
     }
 
     /**
+     * Open the message picker over these prompts, newest first (C-TUI-3.d).
+     * Public for the shell's own dial below and for the wiring observation
+     * in the key-binding drift guard; on the review's open law — close the
+     * menu bar and take the slot, the rows being plain strings already read
+     * from the store by the caller.
+     *
+     * @param list<string> $promptsNewestFirst
+     */
+    public function openMessagePicker(array $promptsNewestFirst): self
+    {
+        MenuBar::closeMenu();
+
+        return $this->mutate(messagePicker: MessagePicker::open($promptsNewestFirst));
+    }
+
+    /** Drop the message picker if one stands (C-TUI-3.d); idempotent. */
+    public function closeMessagePicker(): self
+    {
+        return $this->messagePicker === null ? $this : $this->mutate(messagePicker: null);
+    }
+
+    /**
+     * Hand one key to the open picker and land what it decides (C-TUI-3.d)
+     * — the review's drive law, one step down: the picker answers with a
+     * close or an accept, never with a redial (its rows are frozen at the
+     * press pair — see {@see OpenMessagePickerMsg}).
+     *
+     * @return array{0: self, 1: (callable(): \SugarCraft\Core\Msg)|null}
+     */
+    private function driveMessagePicker(KeyMsg $msg): array
+    {
+        $picker = $this->messagePicker;
+        \assert($picker !== null);
+
+        [$next, $action] = $picker->update($msg);
+
+        if ($action !== null) {
+            return $this->applyMessagePickerAction($action, $next);
+        }
+
+        return [$this->mutate(messagePicker: $next), null];
+    }
+
+    /**
+     * Land a picker decision (C-TUI-3.d). Close drops the slot. Accept
+     * rewinds the hosted chat through its public
+     * {@see Chat::rewindToCheckpoint()} — the very `/rewind N --chat` host
+     * command, so the restore seeds the checkpoint's prompt and caret into
+     * the composer on the command's own effect path — and the chat's Cmd
+     * (if any) leaves the shell exactly as it does on the delegation tail:
+     * swapped into the App, panes re-armed, deck re-keyed, scoped.
+     *
+     * @return array{0: self, 1: (callable(): \SugarCraft\Core\Msg)|null}
+     */
+    private function applyMessagePickerAction(MessagePickerAction $action, MessagePicker $next): array
+    {
+        if ($action->kind === MessagePickerAction::CLOSE) {
+            return [$this->closeMessagePicker(), null];
+        }
+
+        $chat = $this->chat;
+        if ($chat === null) {
+            return [$this->closeMessagePicker(), null];
+        }
+
+        [$settled, $chatCmd] = $chat->rewindToCheckpoint($action->stepsBack);
+        $app = $settled instanceof Chat && $settled !== $chat
+            ? $this->withChat($settled)->autoEnablePanes()->rekeyDeck()
+            : $this;
+        $app = $app->mutate(messagePicker: null);
+
+        return [$app, $app->scopeForegroundCmd($chatCmd)];
+    }
+
+    /**
+     * Answer the picker message with rows fresh from the hosted chat's
+     * store (C-TUI-3.d): one row per conversation checkpoint, newest first,
+     * labelled with the prompt that checkpoint restores. A window with no
+     * checkpoints still opens — the picker's empty box is the honest answer
+     * — while a bare preview App with no store at all keeps the door shut.
+     */
+    private function dialMessagePicker(): array
+    {
+        $store = $this->chat?->sessionStore();
+        $sessionId = $this->chat?->currentSessionId();
+        if (!$store instanceof \SugarCraft\Code\Session\EnhancedSessionStore || $sessionId === null || $sessionId === '') {
+            return [$this, null];
+        }
+
+        return [$this->openMessagePicker(self::checkpointPromptRows($store->listCheckpoints($sessionId))), null];
+    }
+
+    /**
+     * The picker's row labels: the draft each checkpoint re-seeds
+     * ({@see \SugarCraft\Code\Host\Checkpoints}), read off the store's
+     * newest-first rows in the order that makes position k mean "k steps
+     * back" — the same counting a `/rewind k` takes.
+     *
+     * @param list<array<string, mixed>> $checkpoints
+     *
+     * @return list<string>
+     */
+    private static function checkpointPromptRows(array $checkpoints): array
+    {
+        $rows = [];
+        foreach ($checkpoints as $checkpoint) {
+            $state = $checkpoint['state_data'] ?? null;
+            $rows[] = is_array($state) ? (string) ($state['inputBuf'] ?? '') : '';
+        }
+
+        return $rows;
+    }
+
+    /**
      * The render mode the player opens in (plan §W5.4 ruling): a crush
      * `ui.imageRenderMode` naming one of sugar-video's modes is honoured,
      * every other answer (the `auto` default and the `half`/`quarter`/
@@ -3190,6 +3315,7 @@ final class App implements Model
             $msg instanceof OpenDiffReviewMsg => $msg->review !== null
                 ? [$this->openDiffReview($msg->review), null]
                 : ($msg->reason === '' ? [$this, null] : [$this->withStatus($msg->reason), null]),
+            $msg instanceof OpenMessagePickerMsg => $this->dialMessagePicker(),
             $msg instanceof UserInputMsg,
             $msg instanceof SelectPaneMsg,
             $msg instanceof LayoutResetMsg,
@@ -3450,6 +3576,13 @@ final class App implements Model
             };
 
             return $key === null ? [$this, null] : $this->driveDiffReview($key);
+        }
+
+        // C-TUI-3.d: the picker is a keyboard-only box — the whole rest of
+        // the band, wheel included, is inert over it (its rows answer keys
+        // alone; there is no surface a gesture could move).
+        if ($this->messagePicker !== null) {
+            return [$this, null];
         }
 
         // The player covers the band too (W5.4) — but it has no scrollable
@@ -4361,6 +4494,14 @@ final class App implements Model
             return [$this->mutate(diffReview: $next), null];
         }
 
+        // C-TUI-3.d: the picker owns the keys on the review's yield law
+        // (the same quit/menu chords that pass through every shell slot
+        // pass through it too); its own Esc/Enter/↑/↓/filter keys are
+        // consumed, and Close/Accept land via applyMessagePickerAction().
+        if ($this->messagePicker !== null && !self::messagePickerYields($msg)) {
+            return $this->driveMessagePicker($msg);
+        }
+
         // P-TABS.e: the deck answers its two chords before anyone else —
         // placed AFTER every modal gate above (a modal owns the keyboard,
         // deck included) and BEFORE dispatchKey, because the shell routes
@@ -4791,6 +4932,12 @@ final class App implements Model
      * escape hatch.
      */
     private static function diffReviewYields(KeyMsg $msg): bool
+    {
+        return self::settingsEditorYields($msg);
+    }
+
+    /** The picker yields the same chords the other shell slots do (C-TUI-3.d). */
+    private static function messagePickerYields(KeyMsg $msg): bool
     {
         return self::settingsEditorYields($msg);
     }
@@ -5323,7 +5470,7 @@ final class App implements Model
         // cursor then toggles exactly THAT row instead of the newest.
         if ($msg instanceof KeyMsg && (self::isToolWalkChord($msg) || self::isToolRowChord($msg))
             && $this->settingsEditor === null && $this->mediaForm === null
-            && $this->videoPlayer === null && $this->diffReview === null && $this->agentViewTarget === null
+            && $this->videoPlayer === null && $this->diffReview === null && $this->messagePicker === null && $this->agentViewTarget === null
             && $this->chat?->palette() === null && $this->chat?->sessionPicker() === null
             && $this->chat?->dirPicker() === null
         ) {
@@ -6550,6 +6697,7 @@ final class App implements Model
             windowViewports: array_key_exists('windowViewports', $changes) ? $changes['windowViewports'] : $this->windowViewports,
             agentViewByTab: array_key_exists('agentViewByTab', $changes) ? $changes['agentViewByTab'] : $this->agentViewByTab,
             diffReview: array_key_exists('diffReview', $changes) ? $changes['diffReview'] : $this->diffReview,
+            messagePicker: array_key_exists('messagePicker', $changes) ? $changes['messagePicker'] : $this->messagePicker,
         );
     }
 }

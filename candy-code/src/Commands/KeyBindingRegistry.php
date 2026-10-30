@@ -94,6 +94,11 @@ final class KeyBindingRegistry
      * holds the band. A ROUTING key like every CONTEXT_* value.
      */
     public const CONTEXT_DIFF_REVIEW = 'Diff review';
+    /**
+     * Keys the message picker (idle `Esc Esc`, C-TUI-3.d) answers while it
+     * holds the band. A ROUTING key like every CONTEXT_* value.
+     */
+    public const CONTEXT_MSG_PICKER = 'Message picker';
     /** Keys the F10 menu bar answers while it is open. */
     public const CONTEXT_MENU = 'Menu bar';
     /** Mouse gestures, when the terminal reports them. */
@@ -122,6 +127,7 @@ final class KeyBindingRegistry
             ...self::settings(),
             ...self::media(),
             ...self::diffReview(),
+            ...self::messagePicker(),
             ...self::menu(),
             ...self::mouse(),
         ];
@@ -191,6 +197,7 @@ final class KeyBindingRegistry
             self::CONTEXT_CONTEXT_PANE => Lang::t('keys.context.context-pane'),
             self::CONTEXT_MEDIA => Lang::t('keys.context.media'),
             self::CONTEXT_DIFF_REVIEW => Lang::t('keys.context.diffreview'),
+            self::CONTEXT_MSG_PICKER => Lang::t('keys.context.msgpicker'),
             self::CONTEXT_MENU => Lang::t('keys.context.menu'),
             self::CONTEXT_MOUSE => Lang::t('keys.context.mouse'),
             default => $context,
@@ -1095,6 +1102,9 @@ final class KeyBindingRegistry
             // (`cancel_tool`) instead of waiting for it to finish.
             KeyBinding::new('chat.stop', 'Esc', Lang::t('keys.chat.stop'), $c),
             KeyBinding::new('chat.cancel', 'Esc Esc', Lang::t('keys.chat.cancel'), $c),
+            // C-TUI-3.d: the same two-beat, answered the OTHER way — both
+            // presses while idle, empty draft, opens the message picker.
+            KeyBinding::new('chat.message-picker', 'Esc Esc', Lang::t('keys.chat.message-picker'), $c),
             // Roadmap P-B3: the one-row live agents strip above the input
             // takes the keyboard; its own keys are the `Agents strip` rows.
             KeyBinding::new('chat.agents-strip', 'Alt+↓', Lang::t('keys.chat.agents-strip'), $c),
@@ -1490,6 +1500,23 @@ final class KeyBindingRegistry
             KeyBinding::new('diffreview.base-forward', '+', Lang::t('keys.diffreview.base-forward'), $c),
             KeyBinding::new('diffreview.turn', 't', Lang::t('keys.diffreview.turn'), $c),
             KeyBinding::new('diffreview.close', 'Esc', Lang::t('keys.diffreview.close'), $c),
+        ];
+    }
+
+    /**
+     * The keys the message picker (`Esc Esc` while idle, C-TUI-3.d) answers
+     * while it holds the band. Every typed character also narrows the filter
+     * — plain typing is not a chord, so it earns no row here.
+     */
+    private static function messagePicker(): array
+    {
+        $c = self::CONTEXT_MSG_PICKER;
+
+        return [
+            KeyBinding::new('msgpicker.move', '↑ / ↓', Lang::t('keys.msgpicker.move'), $c),
+            KeyBinding::new('msgpicker.accept', 'Enter', Lang::t('keys.msgpicker.accept'), $c),
+            KeyBinding::new('msgpicker.close', 'Esc', Lang::t('keys.msgpicker.close'), $c),
+            KeyBinding::new('msgpicker.erase', 'Backspace', Lang::t('keys.msgpicker.erase'), $c),
         ];
     }
 
