@@ -2429,7 +2429,8 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString('$hookDispatcher', $argText, 'Team no longer hands its TaskList the dispatcher — the team events would be raised through nothing');
 
         // Turn events: one dispatcher, reached from exactly the two methods the page
-        // names — submit()'s tail and the parked 85% route (audit 15b-01) — one call each.
+        // names — submitDraft()'s tail (C-SEC-8.d split it from submit()) and the
+        // parked 85% route (audit 15b-01) — one call each.
         self::assertSame(1, preg_match('/`Chat::dispatchTurnHooks\(\)` is the only production dispatcher for both, reached\s+from `(\w+)\(\)` on every prompt, or from `(\w+)\(\)` instead/', $hooksRaw, $turn), 'the sole-dispatcher sentence no longer names its two reaching methods');
         $turnHits = self::srcOccurrences('->dispatchTurnHooks(');
         self::assertCount(2, $turnHits, 'dispatchTurnHooks() gained or lost a production call site — the page names exactly two');

@@ -9882,6 +9882,56 @@ final class Chat implements Model
             return [$this, null];
         }
 
+        // C-SEC-8.d: invisible bidi and zero-width format characters are
+        // neutralised HERE, at the one TUI choke a draft becomes sent text,
+        // and not only marked as on display. The strip is the same
+        // joiner-tier rule the display path uses (`Sanitize`, audit 15b-28),
+        // so a ZWJ emoji family and a Persian or Indic ZWNJ survive exactly
+        // where they survive on screen, and a spoofing joiner — `pay\u{200D}pal`,
+        // a trailing RLO — goes. The CLEANED text re-enters the funnel below
+        // as one pass, so every route the draft can take — dispatch, queue,
+        // steer, command — carries stripped bytes, and the command
+        // classifier cannot be dodged by an invisible inside `/exi\u{200B}t`.
+        // One notice says how many characters were removed; there is no
+        // opt-out key on purpose (plan C-SEC-8.d: staying off the settings
+        // rosters), and a user who means those bytes can attach the text as
+        // a file, which this never touches.
+        $stripped = Sanitize::stripInvisibleFormatting($text, $invisibleRemoved);
+        if ($invisibleRemoved === 0) {
+            return $this->submitDraft($text);
+        }
+
+        if ($stripped === '') {
+            // The whole draft was invisible. There is no prompt to send and
+            // nothing to queue; the draft is consumed and the notice is the
+            // whole answer, so Enter visibly DOES something.
+            return [$this->mutate([
+                'history' => [...$this->history, Message::notice(Lang::t('chat.notice.invisible_stripped', ['count' => $invisibleRemoved]))],
+                'inputBuf' => '',
+            ]), null];
+        }
+
+        // The draft becomes the stripped text BEFORE the funnel runs, so
+        // every `'inputBuf' => ''` write below and the rewind checkpoint
+        // inside `dispatchTurn()` see the same bytes the model is sent, and
+        // the notice leads the rows this pass appends.
+        return $this->mutate([
+            'history' => [...$this->history, Message::notice(Lang::t('chat.notice.invisible_stripped', ['count' => $invisibleRemoved]))],
+            'inputBuf' => $stripped,
+        ])->submitDraft($stripped);
+    }
+
+    /**
+     * The body of Enter on a draft, run by {@see submit()} with the text
+     * already expanded, trimmed and (since C-SEC-8.d) stripped of invisible
+     * formatting. Splitting the strip into the caller is the point: this
+     * method's classification arms each return their own history writes, so
+     * a strip performed HERE — after a `/`-name or `!`-bang had already been
+     * decided on marked bytes — could rewrite what the model sees without
+     * rewriting what was judged.
+     */
+    private function submitDraft(string $text): array
+    {
         // MID-TURN, Enter QUEUES instead of dispatching. This is the arm the
         // user's report asked for ("new messages should be typable and sendable
         // (well really queued for processing if its mid processing the previous

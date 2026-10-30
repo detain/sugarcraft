@@ -72,6 +72,7 @@ use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\Usage;
 use SugarCraft\Code\Util\TokenTracker;
 use SugarCraft\Code\Workspace\AutoCommittedMsg;
+use SugarCraft\Core\Util\Sanitize;
 
 /**
  * One open session, driven without a screen (roadmap O-2g, Appendix O §4.3).
@@ -769,6 +770,32 @@ final class SessionHost
         $text = trim($text);
         if ($text === '') {
             return TurnTicket::refused($this->turns()->emptyPromptNotice())->withIdempotencyKey($options->idempotencyKey);
+        }
+
+        // C-SEC-8.d: the served twin of the TUI's submit choke. `session.send`
+        // reaches this method through `TurnMethods`, so a client cannot route
+        // around the strip, and every admission route below — admit,
+        // admitWhileBusy, the queue and the steering — carries the cleaned
+        // bytes. The joiner-tier rule is the display path's own
+        // (`Sanitize::stripInvisibleFormatting`, audit 15b-28), so ZWJ emoji
+        // and legitimate script joiners survive here as they do on screen.
+        // Attachments ride SubmitOptions and are never touched, which is how
+        // a client keeps bytes it MEANT: send them as a file. The notice is
+        // announced like the idle advisory beside it — written to history,
+        // saved, and pushed at clients before the turn's own rows.
+        $stripped = Sanitize::stripInvisibleFormatting($text, $invisibleRemoved);
+        if ($invisibleRemoved > 0) {
+            $notice = Message::notice(Lang::t('chat.notice.invisible_stripped', ['count' => $invisibleRemoved]));
+            $this->history[] = $notice;
+            $this->save();
+            $this->announceTranscriptRow($notice);
+            $text = $stripped;
+            if ($text === '') {
+                // The whole prompt was invisible formatting: refuse it as the
+                // empty prompt it now is, with the notice above as the
+                // account of why bytes the client saw as non-empty went away.
+                return TurnTicket::refused($this->turns()->emptyPromptNotice())->withIdempotencyKey($options->idempotencyKey);
+            }
         }
 
         // ISS-064: the idle-compaction advisory. The policy existed and this

@@ -343,7 +343,7 @@ sequential interleave.
 ### The two turn events
 
 In the TUI, `Chat::dispatchTurnHooks()` is the only production dispatcher for both, reached
-from `submit()` on every prompt, or from `scheduleParkedCompaction()` instead
+from `submitDraft()` on every prompt, or from `scheduleParkedCompaction()` instead
 when the automatic 85% compaction tier parks the prompt behind a model-written
 summary. A session driven without a screen (`Host\SessionHost`) fires the same
 two events from `SessionHost::fireTurnHooks()`, through the same
