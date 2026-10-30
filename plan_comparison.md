@@ -3506,7 +3506,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-TUI-5.d (W18)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tui.md` → `### C-TUI-5.e`
 
-#### C-WEB-2.a — `/btw` over `command.exec` while a turn runs
+#### ✅ 3c17c7c23 C-WEB-2.a — `/btw` over `command.exec` while a turn runs (welded 2026-10-30: lane cut 671105299 per REVIEW-1 handoff — spawn brief said 740c29868, consequence weld-side only; cherry-pick 48ee2233a onto 37fc4cee0-era master, zero conflicts. Merged-tree gates EXACT: BtwMidTurnTest 2T/19A; wire set CommandMethodsMcpPrompts|AttachRemoteCommands|Conformance|ServedProjectCommandTrust 38T/256A; ServerProtocolDocumentationDriftTest 6T/59A; guard union per-exact-class 135T/4836A; gen-command/tool/settings-doc --write ZERO drift; no src/Protocol + no web src → no schema trio, no npm/dist rebuild. DUR row minted for BtwMidTurnTest (10.400/2) in this weld commit; +2T/+19A suite-figure re-pin stays §7. REVIEW-1 CLEAN 0C/0M/0 step-local minors — lanes/C-WEB-2.a/REVIEW-1.md)
 - **Item:** C-WEB-2 (sources: GAP-CTX-11w, k1-sum (c)) · gap · S
 - **What:** **Root cause.** `SessionHost::runCommand()` (`candy-code/src/Host/SessionHost.php:792-793`) refuses every built-in while busy, except workflow control. It bypasses `TurnController::midTurnRoute()` …
 - **Files — create:** `candy-code/tests/Host/BtwMidTurnTest.php`
