@@ -23,7 +23,12 @@ Session: welder. Predecessor 1030Q (ses_e72d380e1ffe) died after its cures; cure
 - r3 verdict CLEAN 0C/0M (REVIEW-3.md 6939B, byte-exact as briefed). REVIEW-1.md 7779B collected. REVIEW-2.md NOT FOUND anywhere on disk (worktree, main tree, /tmp/opencode, full commit history) — brief listed it but the lane's round-2 record appears never to have been written (REVIEW-3 is the confirming round; FIX-1.md rode the picks as the round-1 cure record). Disclosed; weld not blocked (CLEAN verdict + builder/fix/evidence chain complete).
 - REPORT figure correction 6→7: main-tree REPORT.md is byte-identical to the picked blob (git diff HEAD clean) — nothing owed.
 
-## STEP 3 — W24 §3 close — pending
-## STEP 3b — W23 §3 close (ADDENDUM) — pending: flip :159 W23 row per lead r2 CLEAN (lanes/W23/WAVE-REVIEW-2.md 5933B evidence)
+## STEP 3 — W24 §3 close — DONE (row flipped ✅ in same commit as §4 mark; WAVE-REVIEW-1.md 6,682 B committed as evidence — brief cited 6,335 B, as-found recorded; ledger notes SES-7.d HEAVY_CHARS erratum + SessionImportSubcommandTest DUR row already live in run-state closeout_ledger = §7 duties)
+
+## STEP 3b — W23 §3 close — DONE (row flipped ✅; WAVE-REVIEW-1.md 5,580 B + WAVE-REVIEW-2.md 5,933 B committed as evidence; r2 CLEAN closes the wave; carries recorded in row text)
+
+## STEP 4 — C-CTX-4.e hygiene — DONE (git cherry plus=0 / 3 '-'; wt porcelain 0 lines; worktree remove + branch -D executed. CORRECTION: W23-row draft first cited "98470d6de→6d11e134f" — phantom transcription; true absorption is batch-18q weld 1c67ca96e picks f7d312948/b515d2e2c/b2943d1cb (git show-verified), row corrected pre-commit. /tmp/opencode/weld1030L/base-check exists (empty) — FOREIGN lead scratch, LEAVE + disclose.)
+
+## STEP 5 — run-state fold + prunes — pending
 ## STEP 4 — C-CTX-4.e hygiene — pending
 ## STEP 5 — run-state fold + prunes — pending
