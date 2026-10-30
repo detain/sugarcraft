@@ -69,3 +69,12 @@ DISCLOSES:
    a scripts/parallel-tests-durations.tsv row; suite-figure re-pin carries
    +7T (TlsListener 4 + ServeArgs 3) and +100A target delta (204+47+... vs
    base 179A ServeArgs; welder re-pins from green K=24 run).
+
+## FIXER (round 1) — commit 44c9f2bc401e6eec19cea7ae56b0a07a2f5122dd
+
+MINOR-4 cured (+ N1): announce remote-warning gate now pinned by
+ServeArgsTest::testTheCleartextRemoteWarningIsAnnouncedOnlyForPlainRemoteBinds
+(reflected announce in child, both polarities + loopback; M1/M2 mutations each
+exactly 1F). Gates: ServeArgsTest 42T/213A; guard set 55T/4002A; staleness pair
+only-red. Welder carry: +1T/+9A on top of the standing +7T/+125A DUR/re-pin note.
+Details: FIX-1.md.
