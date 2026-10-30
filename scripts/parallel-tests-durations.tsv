@@ -850,6 +850,7 @@ candy-code/tests/Context/StandingIntentTest.php	0.061	22
 candy-code/tests/Bundles/BundleDiscoveryTest.php	0.060	10
 candy-code/tests/Server/CookieSessionPersistenceTest.php	0.060	9
 candy-code/tests/Tools/BuiltIn/GenerateImageTest.php	0.060	21
+candy-code/tests/Support/PublicUrlGuardTest.php	0.059	178
 candy-code/tests/Backend/InTurnPruneTest.php	0.059	4
 candy-code/tests/Context/MemoryRecallBlockTest.php	0.059	14
 candy-code/tests/Cli/BootstrapContextWindowTest.php	0.058	5
@@ -1100,6 +1101,7 @@ candy-code/tests/Renderer/InputWrapTest.php	0.015	6
 candy-code/tests/Skills/ProjectSkillsDirContainmentTest.php	0.015	10
 candy-code/tests/Support/AiCommentWatcherTest.php	0.015	16
 candy-code/tests/Support/FrontmatterCallSitesTest.php	0.015	8
+candy-code/tests/Context/InstructionUrlSourceTest.php	0.014	27
 candy-code/tests/Agents/ForeignAgentPresetNoticeTest.php	0.014	8
 candy-code/tests/App/DockGeometryPlumbingTest.php	0.014	7
 candy-code/tests/Backend/EngineBackendWitherPreservesStateTest.php	0.014	31
