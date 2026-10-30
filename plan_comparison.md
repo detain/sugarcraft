@@ -3116,7 +3116,8 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - Chat.php region claims: C-CTX-6.e (pumpRuntimeNotices); C-TUI-3.a (READ_ONLY_COMMANDS, handleCopyCommand (new method))
 - Bootstrap.php method claims: C-SEC-7.e (permissionGate); C-SES-6.e (chat)
 
-#### C-CTX-6.e — Structured, expandable recall row
+#### ✅ a7627584b C-CTX-6.e — Structured, expandable recall row
+- **Weld 1030BOOKKEEP (2026-10-30):** content already on master — slices 9c59bc8d1 (wire+pump+render) + a7627584b (tests/docs/report), both ancestors of tip; this mark is a bookkeeping correction of a prior phantom claim (mark asserted, never applied). Gates at master: RecallNoticeRowTest 9T/37A; step filter (RecallNotice|RuntimeNoticeSink|MemoryRecallBlock) 62T/270A OK; guard trio DocFigureProseDrift|DuplicatedTestHelperDrift|GlobDialectDifferential 119T/4747A OK (2 deprecations = foreign standing). DUR rows already committed (RecallNoticeRowTest 0.059/9 — count verified live; RuntimeNoticeSinkTest 0.128/35; MemoryRecallBlockTest 0.059/14). §7 figure carry rides closeout duty; batch-1030BOOKKEEP)
 - **Item:** C-CTX-6 (sources: p2-miss: TUI-6 `Message::recallNotice()` row) · gap · effort M
 - **What:** Today the "💭 Recalled N notes" row is a count-only string. Add `RuntimeNoticeSink::recordStructured(kind, payload)`: a JSON datagram with a reserved prefix, bounded by `MAX_CHARS`. Only `memory.recall` with `{count, titles[]}` …
 - **Files — create:** `candy-code/tests/Chat/RecallNoticeRowTest.php`
