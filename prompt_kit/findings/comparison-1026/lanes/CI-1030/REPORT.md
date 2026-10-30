@@ -52,3 +52,17 @@ testItStaysWithinTheTerminalWhileScrolledToTheEnd passes in ISOLATION with a fak
 4. TreeWideGuardRosterTest: 3 WALKS_A_DIRECTORY_THE_TEST_MADE rows added (NonInteractiveSessionPersistence incognito sidecar walk, RestrictedSafeModeFlags removeTree, ServeArgs tls tearDown).
 5. RemoteBackendTest::testAnExistingSessionOpensFromItsSnapshotByUniquePrefix — re-attach by prefix after close() gets host.remote.no_session; server-side list handler is SessionHost.php/EnhancedSessionStore = C-SES-8.b IN-FLIGHT. REFERRED to that cycle, not fixed.
 - MediaSettingsTest also has no durations row (older red hidden; §7 duty).
+
+## ERRATUM (2026-10-30, round-2 fixer) — durations-row claims above were FALSE-TO-TREE
+The sentences "MediaSettingsTest ... has NO durations row → runs in zero shards" (Batch list item 2)
+and "MenuBarLabelDerivationTest ... has NO durations.tsv row → runs in ZERO shards" (Batch 5 item 3),
+plus the trailing "MediaSettingsTest also has no durations row" line, are WRONG and are kept verbatim
+above only as history. Disk truth (git show on scripts/parallel-tests-durations.tsv): both rows EXIST
+at the lane base 59ea47407 (lines 1135 MediaSettingsTest.php / 1256 MenuBarLabelDerivationTest.php) and
+on master 616d27864 (lines 1140 / 1260), pointing at existing files. So CI DID run the stale-openrouter
+MediaSettingsTest red — it is a genuine class-(a) hidden-red-at-the-shard-level item, NOT a zero-shard
+invisible item. The REAL stale rows are the two candy-code/tests/Skills/*.php paths (SkillsHistoryUndoTest
++ SkillWorkshopTest) at master lines 937/966 (base 932/961) — they point at files that moved to
+tests/Host/Commands/ + tests/Tools/BuiltIn/, so they kill 2/4 CI shards (rc=2). Those two are §7
+closeout/weld duty (file lane-forbidden), NOT fixed in this lane. The report's earlier "rows 933/962"
+line numbers matched no tree and are corrected to base 932/961 / master 937/966 here.
