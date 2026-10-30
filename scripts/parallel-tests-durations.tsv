@@ -616,6 +616,7 @@ candy-code/tests/Server/SharePageTest.php	0.216	9
 candy-code/tests/Commands/ContextCommandTest.php	0.213	10
 candy-code/tests/Attachments/MentionIndexTest.php	0.210	10
 candy-code/tests/Commands/KeysReloadTest.php	0.210	9
+candy-code/tests/Tools/McpToolBridgeImageChannelTest.php	0.208	15
 candy-code/tests/Commands/HooksCommandTest.php	0.205	8
 candy-code/tests/Tools/ToolPromptGuidanceTest.php	0.201	6
 candy-code/tests/Tools/BashBackgroundTest.php	0.200	5

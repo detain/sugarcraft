@@ -16,6 +16,7 @@
  "batch1030_note_t10": "t10: phantom weld de-noised: SES-8.a picks REAL on master (94432cfd1), carries uncommitted, §4 unmarked, run-state master_tip repaired 47e7b2a4d->94432cfd1. SES-8.d verified unwelded (cherry 2/2 plus), FIX-1.md collected to main tree. SES-7.c fixer landed 034b30363 -> r2 reviewer. TOOL-2.a builder DONE 201337275 (+33T, 2 new test files) -> r1 reviewer. Spawning 3 (repair welder + 2 reviewers) -> live 10. welded 242, no push (W24/W25 open).",
  "batch1030_note_t11": "t11: TOOL-2.f r2 CLEAN verified on disk -> weld_pending (figure carry corrected +15T->+16T, durations row McpToolBridgeImageChannelTest). Welder ses_e7448801cffejnqD7XXhFFoIJG running (master still 94432cfd1 = no commit yet). SES-7.d long-owed FRESH r2 reviewer now spawned (its prior r2 phantomed; only REVIEW-1.md exists). TOOL-2.a r1 + SES-7.c r2 reviewers running. live=10.",
  "batch1030_note_t12": "t12: welder still running SES-8.a carries then SES-8.d then C-TOOL-2.f. TOOL-2.g builder DONE (25a6d642c verified) -> r1 review. SEC-7.a r3 FINDINGS 3 step-local MINOR (all lead-verified: en.php:500/503, PERMISSIONS.md:29/73/76, TROUBLESHOOTING.md:269 all still teach -p=bypass) -> r4 fixer (one commit, all three). SES-7.d r2 FINDINGS 1 MAJOR lead-verified (roster skip) -> fixer queued behind the duplicate reviewer.",
+ "batch1030_note_t14": "t14: welder landed ARCHITECTURE 63->64 cure dc9eea92d (C-SES-8.d carry closed). TOOL-2.a r1 FINDINGS 1 MAJOR (HtmlToMarkdown textContent reads dropped-element descendants -> script payload leaks via pre/inline-code/label = prompt-injection; sites :243/:389/:417, lead-verified) + 2 MINOR -> fixer ses_e743cac5a. PRV-3.d builder LANDED 4a2739152 (Advisor tool, billing via ToolResult::withUsage audit-B4 channel, position 44 live re-derived, 7T/44A) -> r1 reviewer OWED. TOOL-2.g r1 CLEAN 7031B -> weld_pending. NEW BUILD cut: C-TOOL-6.a (W26 docs-only MCP presets, worktree off dc9eea92d vendor seeded autoload true). SES-7.d r2 reviewer returned MID-FRAGMENT -> resume same session. NOTE: C-TOOL-2.f is already r2-CLEAN and in weld_pending — do NOT re-spawn its reviewer (I nearly did).",
  "batch1030_note_t5": "t5b: SES-8.d r2 REVIEW-2 CLEAN on disk (5994B) -> weld_pending held (0 slots). Scheduler --slots 13: C-SES-8.a re-offer is PARKED (not twin-spawned); took first genuinely-new C-CTX-5.b W24 (deps none, regions disjoint from SES-7.d's resumeCostHold on shared Chat.php). worktree off a6c45be43, vendor cp-seeded, autoload+3 target classes verified. BRIEF.md created. Welder SES-7.b still running mid-cherry (master tip IS its pick a6c45be43).",
  "batch1030_note_t6": "t6: welder completed+pruned SES-7.b (master d79502693, cherry 4/4 '-', welded 242). TOOL-2.f fixer MINOR landed 81cdd8b29 -> r2 reviewer. Welder dispatched for BOTH held CLEAN lanes sequentially (SES-8.a trio+dist regen, then SES-8.d ARCHITECTURE->64). New build C-SES-8.e W26 off d79502693 (dep C-SES-9.a verified welded 98b862e9f). Welder disclosed 2 foreign C-WEB-5.a-carried standing reds -> rostered, cure serialized. live=10 all backgrounded.",
  "batch1030_note_t8": "t8: welder landed SES-8.a (code 75277a61a, meta 47e7b2a4d, 19 cherry-picks, trio+dist regen in commit, web 441/441, 660 files verified) but RETURNED WITHOUT welding SES-8.d -> re-dispatched for the held lane (ARCHITECTURE 63->64 carry, no trio/dist). SEC-7.a r2 cleared MAJOR, found 1 step-local doc truth-bug (ENVIRONMENT.md:46 same reversed permission-mode fact x2, same class as the MAJOR) -> fixer r3. 2 new foreign base-drift reds rostered, not lane bugs.",
@@ -147,9 +148,9 @@
   "C-PRV-3.d": {
    "branch": "cc/C-PRV-3.d",
    "note": "RE-CUT fresh builder off master 07e49e872 (prior builder died mid-write on base 003cb1e4e=64 behind, 16 dirty uncommitted, no report; discarded). Advisor tool per BRIEF.",
-   "round": 0,
-   "stage": "build",
-   "tip": "07e49e872",
+   "round": 1,
+   "stage": "review",
+   "tip": "4a2739152",
    "worktree": "/home/sites/cc-cmp-C-PRV-3.d"
   },
   "C-SEC-7.a": {
@@ -188,13 +189,6 @@
    "stage": "build",
    "tip": "1525b1832",
    "worktree": "/home/sites/cc-cmp-C-TOOL-2.c"
-  },
-  "C-TOOL-2.g": {
-   "branch": "cc/C-TOOL-2.g",
-   "round": 1,
-   "stage": "review",
-   "tip": "25a6d642c",
-   "worktree": "/home/sites/cc-cmp-C-TOOL-2.g"
   },
   "C-TOOL-6.a": {
    "branch": "cc/C-TOOL-6.a",
@@ -236,8 +230,8 @@
    "session": "ses_e7452d99fffeg4Fsob3MQRouAz"
   },
   "C-PRV-3.d": {
-   "role": "builder",
-   "session": "ses_e746c3ae9ffdIfiFjnzwNmicts"
+   "role": "reviewer-r1",
+   "session": "SPAWN_R1_REVIEWER_AFTER_COMPRESS"
   },
   "C-SEC-7.a": {
    "role": "fixer-r3-DONE",
@@ -248,8 +242,8 @@
    "session": "ses_e7448801bffeHK5BJElIHRNRvm"
   },
   "C-SES-7.d": {
-   "role": "reviewer-r2-fresh",
-   "session": "TO_SPAWN"
+   "role": "reviewer-r2-MIDFRAGMENT-resume",
+   "session": "ses_e7445deccffeA8XlFcc9wvZrFE"
   },
   "C-SES-8.a": {
    "role": "welder-repair(SES-8.a carries then SES-8.d)",
@@ -265,7 +259,7 @@
   },
   "C-TOOL-2.a": {
    "role": "fixer-r1",
-   "session": "SPAWN_PENDING_FIXER"
+   "session": "ses_e743cac5affeldat4axeenz0no"
   },
   "C-TOOL-2.c": {
    "role": "builder",
@@ -276,15 +270,15 @@
    "session": null
   },
   "C-TOOL-2.g": {
-   "role": "reviewer-r1",
-   "session": "ses_e74403d64ffefGmM0R0FVQ2bTj"
+   "role": "reviewer-r1-COMPLETED-clean",
+   "session": "ses_e7443ad3bffeSBajeVT2LHHrhH"
   },
   "C-TOOL-6.a": {
    "role": "builder",
-   "session": "SPAWN_PENDING"
+   "session": "ses_e743cac59ffeLgnsnD1dgW3uIY"
   }
  },
- "master_tip": "402418b18",
+ "master_tip": "5419a4f80",
  "next_fill_queue": [],
  "next_lead": {
   "gates": "scheduler free=0 remaining=195 late=False; blocked=['C-AGT-5.b'] owner-gated delete-cross-root ruling (options (a) root-scope guard (b) keep+document) — strings-only entries law; W14 list re-derive from plan §3",
@@ -498,7 +492,7 @@
  "status": "RUNNING",
  "tick": "batch18q-welded (11 zero-conflict picks off 410f5ac58: C-MCP-4.c eb3a17dcc/628a5abf3/68d6b28fa -> 71d977594/827f20e5c/eea5615e3 (r3 CLEAN); C-CTX-4.e 39073913e/6d7072876/98470d6de -> f7d312948/b515d2e2c/b2943d1cb (r2 CLEAN); C-TOOL-2.e 1a0d724b3/fe49217ac/e2d8c01e5/056298ca7/9a20c6632 -> c47ab4133/b4156cc76/8d421ca15/3ab554a64/618c093da (r3 CLEAN 0C/0M/1nit); DUR rows x3 minted tsv 1627->1630; protocol ServerContext touched by 827f20e5c but gen-protocol-schema --check 'up to date' = zero drift, no web/dist rider; gen-command/tool/settings-docs --check up to date; W21 wave-closed here; welded_count HELD 240 per batch18q_note; inflight kept lead's 7 keys verbatim; meta atop)",
  "tip": "4f1bdab31",
- "updated": "2026-10-30T03:33:30-04:00",
+ "updated": "2026-10-30T03:44:00-04:00",
  "wave_loops": {
   "1": "closed r2 CLEAN",
   "16": {
@@ -1051,7 +1045,8 @@
   },
   "C-SES-9.d": "WELDED 2026-10-27 master fc5523777 (pick of 06a599a96, lane base 86f43fae2, onto fd13b3480; clean zero conflicts; file-set git-show-proven = 3 .github/workflows ymls + NEW tools/tests/WorkflowRunInterpolationTest.php, %ae/%ce 1/1 detain, zero trailers; review r1 CLEAN 0C/0M). Regen SKIPPED: lane touches no candy-code src/docs/web (diff-tree proven); gen-command-docs/gen-tool-docs/gen-settings-doc --check all 'up to date' rc0; gen-protocol-schema + npm/web build SKIPPED per brief. Gates: tools battery 489T/2578A OK EXACT (WorkflowRunInterpolationTest 3T EXECUTING, not skipped); filter 'WorkflowRunInterpolation' 3T/134A green; five-guard 133T/15682A F2 = staleness pair only (25,537 pinned vs 26,093 live, closeout re-pin duty). DUR: new file is tools/tests = NO candy-code durations.tsv row (precedent CandyCodeImageCacheBustTest, C-AGT-2.c); tools-guards job scans tools/tests/ dynamically; grep confirms 0 rows for the class. §4 mark ✅ fc5523777 UNSTAGED.",
   "C-TOOL-2.b": "WELDED 2026-10-28 batch-9 master 8e3376717 (picks eaae19bdc/243ddbb07 -> 7f70255c4/5cdc6f440; stale untracked REPORT rm'd, tracked superset rode; README+SETTINGS conflicts gen --write riding pick; gate 323T/47095A 0F; DUR HostedBackendShapes 5.447/19 + SearchBackends 4.902/9 — brief's WebSearchBackend/Factory names phantom; lane defect: ReadPathCensus fopen row orphaned by sink move, cured batch-9 bff8919ca; SettingsEditorTest red foreign e36d86d84 recorded)",
-  "C-TOOL-2.f": "r2 CLEAN (REVIEW-2.md 6269B on disk). Carry: durations row McpToolBridgeImageChannelTest.php + figure +16T (corrected: 15 ImageChannelTest + 1 ResultCap leg; FIX-1.md:71 restated +15T stale). No trio/dist. NIT-1 soften docblock absolute; NIT-2 docs/MCP.md campaign jargon -> closeout flatten.",
+  "C-TOOL-2.f": "r2 CLEAN (REVIEW-2.md 6269B on disk). Carry: durations row McpToolBridgeImageChannelTest.php + figure +16T (corrected: 15 ImageChannelTest + 1 ResultCap leg; FIX-1.md:71 restated +15T stale). No trio/dist. NIT-1 soften docblock absolute; NIT-2 docs/MCP.md campaign jargon -> closeout flatten. | WELD LANDED (batch-19a-2): picks eaa8aaa8b,81cdd8b29->f8c9995a4,5419a4f80 on c18dffaed zero-conflict; DUR row ImageChannelTest 0.208/15 @619 descending-sorted (measured green run); +16T verified (15+ResultCap leg 4->5); gate McpToolBridge|DocFigure|ReadmeRoster|StderrCensus|DescriptorInh 307T/32117A OK; no trio/dist; NIT-1/2 closeout. suite-figure +16T §7 carry. §4 mark ✅ 5419a4f80.",
+  "C-TOOL-2.g": "r1 CLEAN 0C/0M/0m/0n (REVIEW-1.md 7031B main tree). Carries: durations row tests/Providers/ResponsesToolResultMediaTest.php; figure +10T/+18A; ledger the accepted OpenAIProvider.php deviation (host-mediation methods, trait-const law) for future wire traits. Owner nit non-lane: AccessorDeprecationTest private providers deprecate at suite-build under every filter. NO trio/dist.",
   "C-TOOL-3.a": {
    "carries": "DUR rows owed at gate: candy-code/tests/Tui/ToolTailSlotsTest.php + candy-code/tests/Tools/PtyRunToolProgressTest.php (files welded; durations.tsv untouched per §1.5)",
    "gates": "ToolTailSlots|PtyRunToolProgress 11T/48A 0F EXACT; PtyDriverRetain|PtyRunBashPermissionParity|ShellSubjectToolsCompleteness|ToolCatalog|ToolDocDrift 112T/339A 0F EXACT (PtyRunToolTest NOT matched, kept out per owner hazard carry); five-guard 133T/15866A F2 = staleness pair ONLY (25,537 pinned vs live 26,3xx - closeout re-pin); 2 pre-existing AccessorDeprecationTest deprecations throughout",
@@ -1329,8 +1324,8 @@
   "cure-w7": "MASTER REPAIR 2026-10-27 d3395595e (pick of 08862c003, lane base 8eab506d9; clean zero conflicts; 2 files: candy-code/src/Session/EnhancedSessionStore.php +31/-1, candy-code/tests/Session/UsageRecordsTest.php +54/0; %ae/%ce separate greps 1/1 detain@interserver.net, zero Co-Authored trailers). NOT a plan step: no §4 mark, welded count unchanged (90). Gates (plain pipe cwd candy-code env -u LINES -u COLUMNS): --filter 'UsageRecords|SessionStore|Tombstone' = Tests: 130, Assertions: 477 OK (2 pre-existing deprecations) EXACT; --filter 'SessionEventsTable|TranscriptResume|EventLog|DebouncedTranscript|ShareStore' = Tests: 61, Assertions: 306 OK EXACT; gen-command-docs/gen-tool-docs/gen-settings-doc --check all up-to-date rc0 (lane touched no docs); five-guard 133T/15816A F2 = staleness pair ONLY (25,537 pinned vs live - closeout re-pin). DUR: no new *Test.php (pins ride existing UsageRecordsTest). inflight entry removed at this weld."
  },
  "weld_pending": [
-  "C-TOOL-2.f",
-  "C-SES-7.c"
+  "C-SES-7.c",
+  "C-TOOL-2.g"
  ],
  "weld_queue": {
   "_legacy_list": [
@@ -1516,6 +1511,7 @@
   "C-TOOL-2.b",
   "C-TOOL-2.d",
   "C-TOOL-2.e",
+  "C-TOOL-2.f",
   "C-TOOL-3.a",
   "C-TOOL-3.b",
   "C-TOOL-3.c",
@@ -1591,7 +1587,7 @@
   "P-TABS.g",
   "P-TABS.h"
  ],
- "welded_count": 244,
+ "welded_count": 245,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "welder_inflight_note": "WELDER ses_e7448801cffejnqD7XXhFFoIJG RUNNING: its welded_count=243 + the §4 ✅ 94432cfd1 C-SES-8.a line are UNCOMMITTED working-tree writes (a commit cannot contain its own SHA) -> do NOT read as landed; do NOT write run-state concurrently except minimal fresh-read targeted patches; RE-VERIFY my TOOL-2.f weld_pending + TOOL-2.g entries survive its fold.",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",

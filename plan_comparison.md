@@ -3143,6 +3143,9 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-SES-9.a (W7)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-ses.md` → `### C-SES-8.e`
 
+#### ✅ 5419a4f80 C-TOOL-2.f — MCP images/PDF resources into the tool-result channel
+- **Weld 2026-10-30 (batch-19a-2):** picks eaa8aaa8b, 81cdd8b29 → f8c9995a4, 5419a4f80 on c18dffaed, zero conflicts (master's MCP.md drift at :1037+ vs lane hunk at :878+ disjoint; McpToolBridge.php untouched by master since lane base — ab58c2dbc hit only the doc). r2 CLEAN (REVIEW-2.md). No protocol trio, no web/dist (lane touches no src/Protocol, no candy-code-web). DUR row minted: `candy-code/tests/Tools/McpToolBridgeImageChannelTest.php 0.208 15` inserted descending-sorted at line 619 (measured green single run); figure carry **+16T** = 15 ImageChannel + 1 ResultCap leg (ResultCap 4→5 verified; FIX-1.md:71 '+15T' stale, lead-corrected in weld_notes). Merged gates: `McpToolBridge|DocFigureProseDrift|ReadmeRosterDrift|StderrEmitterCensus|DescriptorInheritance` 307T/32117A OK (2 pre-existing deprecations); zero stderr/env additions (censuses unexposed). NIT-1 docblock-softening + NIT-2 MCP.md jargon flatten stay queued for closeout per lead. suite-figure.json NOT re-pinned (staleness pair standing; +16T recorded here + run-state). NO PUSH (W26 open).
+
 #### C-TOOL-2.f — MCP images/PDF resources into the tool-result channel
 - **Item:** C-TOOL-2 (sources: GAP-MCP-14, k2-sum MCP-14) · gap · effort S
 - **What:** `McpToolBridge::replyResult()` (`candy-code/src/Tools/McpToolBridge.php:600`) renders image/audio parts as size text (`renderInlineBytes` :839). Change: decode the FIRST in-cap image part whose bytes sniff …
