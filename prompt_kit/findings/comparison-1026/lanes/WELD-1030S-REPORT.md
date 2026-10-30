@@ -28,3 +28,19 @@ Master at start: b77a18838 (== origin/master, in sync). Branch cut at 80fe2275b.
 ## Step 4 — DUR rows + evidence collect ✅
 - scripts/parallel-tests-durations.tsv: MINT candy-code/tests/App/DiffReviewWiringTest.php 2.881/9 (median of 3 junit testcase-sums: 2.912/2.687/2.881 — TESTCASE-SUM instrument, not filter wall-clock, per 1030R ThemeFileTest lesson); RE-TIME candy-code/tests/Chat/UndoRedoDiffCommandsTest.php 3.417@10 -> 4.498@10 (junit sums 4.498/4.602/4.438; row already carried 10 cases). Both inserted at descending-sort positions.
 - Evidence sizes verified: REVIEW-1.md 10,152 B / REVIEW-2.md 3,963 B / FIX-1.md 1,142 B (main tree) + builder REPORT.md 1,890 B (worktree, md5-copied; sibling dirs carry REPORT.md).
+
+## Step 5 — §4 mark ✅
+- Heading flipped @ plan_comparison.md:3392 to `#### ✅ 59ea47407 C-TUI-2.e — Diff-review band wired to bare /diff (App shell slot)` + Weld-1030S bullet (sibling 3330 shape), path-scoped commit feddc1217 (1 file, 2+/1-).
+- Loose anchor grep post-commit: `✅.*C-TUI-2\.e` = exactly 1. Wave W28 stays open (C-SEC-8.d/C-TOOL-5.d/C-TUI-3.g/C-WEB-2.d/C-WEB-2.g still in flight).
+
+## Step 6 — run-state fold ✅
+- Folded from FRESHEST live disk copy (lead's uncommitted +37/-24 deltas incl. new inflight C-TUI-5.c ride the commit verbatim). welded 270->271 == len ASSERTED; inflight -= C-TUI-2.e (->5); weld_pending remove (-> empty); master_tip=feddc1217; batch1030s_note added; anomalies_ledger (phantom-claims correction ledger) UNTOUCHED; §7 carry +10T recorded as closeout_ledger 1030S-CARRY-1. Fold commit ea161aa9d; final report bundled by AMEND (own unpushed commit, 1030R shape) — disclosed because the first fold message already named the report while only run-state rode it (welder self-phantom law: prove commits with git show --name-only, then cure as rider).
+
+## Step 7 — Absorption proof + prune ✅
+- `git cherry master cc/C-TUI-2.e` (final master): 3/3 '-' — byte-identical patch-ids, no '+'-by-union case.
+- Evidence collected check: all 4 lane files + REPORT.md committed (dc143271a); worktree dirt was untracked-only -> nothing lost.
+- porcelain-clean (tracked): worktree showed only the two untracked paths (lanes dir now committed, seeded plan copy) -> `git worktree remove` + `git branch -D` — see below. C-TOOL-6.a worktree NOT touched (foreign-contaminated, lead-owned).
+- NOT pushed (next push is a wave-close event, lead-owned). No suite-figure re-pin, no battery (§7 closeout duty).
+
+## Chain (new master tip after weld)
+b77a18838 -> a0e40cded -> 77fb4fc1a -> 59ea47407 -> dc143271a -> feddc1217 -> <fold+report>
