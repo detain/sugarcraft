@@ -1,0 +1,24 @@
+# C-SEC-7.e — autoReview implicit-ON default (owner ruling t212, option 3)
+
+LANDED: 2c8a0865e on cc/C-SEC-7.e (base master 9fb981c5c, 12 files +329/−29; report commit follows).
+
+## Shipped shape
+- `Bootstrap::permissionGate()` (Bootstrap.php autoReview arm): `$autoReviewImplicit = $autoReview === null;`; engage condition `true || implicit`; reviewer built by the SAME code path as explicit true (design line honoured — no implicit-only construction). The no-provider warning is gated `&& !$autoReviewImplicit` (silenced for the default, still said for an explicit true); the override-model warnings (not_string / bad_shape / unusable) stay SHARED — the design silences only the no-provider case, and a typed companion key still earns its honest warning under the default.
+- Notice: when the reviewer is built under the implicit default, ONE line rides `warnPermissionConfigInTranscript()` — new lang key `appLaunch.notice.auto_review_default` (⚠-prefixed, names the opt-out, discloses that every review is a paid model call). Once-per-session is structural: that seam dedups by message identity via `LaunchNotices::reported` (same mechanism as the bypass banner). No new env var (EnvRoster untouched); en.php-only key (candy-code ships a single locale file; LangParity/SettingsSchema green).
+- `PermissionSettings.php`: stored default literal stays `false` per design lines 5-6; docblock records the t212 ruling (shipped default decided in the gate; explicit false = the real opt-out).
+- Docs: SETTINGS.md prose seam-count flipped thirty-five→thirty-six (generated region unchanged — `gen-settings-doc.php --check` "up to date"); PERMISSIONS.md exec-reviewer paragraph + :591 state implicit-ON-when-a-model-resolves, once-per-session announce, false opt-out, silent no-model default, and "each review is a paid call — including under the default".
+
+## Seam-census cascade (§1.8, all IN-STEP)
+Adding one seam call site moved TRANSCRIPT_SEAM_CALL_SITES 35→36 plus every quoted count: src/Chat.php docblock, Bootstrap :1750/:5701/:9178, BootstrapLaunchNoticeRoutingTest (4 sites), McpToolWiringTest :1675, SETTINGS.md :983, seam-census NUMBER_WORDS += thirty-six. StderrEmitterCensusTest: PREFIXED_WRITER_SITES Bootstrap 47→48, docblock FORTY-SEVEN→FORTY-EIGHT with the C-SEC-7.e clause, own NUMBER_WORDS += forty-eight; direct==1/once==11 decomposition unchanged (new site is a seam call).
+
+## Tests (measured, this tree)
+- AutoReviewScopeTest: 15T/52A OK. Reworked the old absent-key-off pin into explicit-false (semantics moved); new: implicit engages+announces once (second `permissionGate()` leaves the notice store size unchanged — the once-per-session pin), implicit+no-provider fully silent and off, implicit+broken override warns-but-never-announces-engagement.
+- BootstrapPermissionGateTest: 68T/154A OK (65 base + 3 new). New pins: implicit reviewer shape IDENTICAL to explicit-true reviewer shape via reflection (same EngineBackend model `probe-model-7d`, same toolless `[]` tools) + explicit spelling announces NO default notice + notice-once there too; no-provider warning said for explicit true / silenced for the default (store size 0 on the silent path); explicit false never engages even with a buildable title backend. Helpers uniquely named and body-restructured; DuplicatedTestHelperDriftTest green 14T/203A.
+- Guards run green: StderrEmitterCensus 95T/22639A; seam census + LaunchNoticeOwnPeriod 25T; BootstrapLaunchNoticeRouting 22T/148A; combined DocFigure|PermissionsIntro|TrustKey|EnvRoster|SettingsSchema|LangParity|GlobDialect 227T with the single PRE-EXISTING PermissionsIntroDriftTest::testThePatternToolRosterIsTheWholeCatalog red (proven at HEAD via git-show replay: Advisor/Schedule/SkillWorkshop/skills_search missing from the PERMISSIONS.md roster paragraph — foreign, disclosed not chased; sibling of the known SkillWorkshop red family). UnflaggedShellReview|ExecReviewer|LayeredSettings 130T green. 2 PHPUnit deprecations in every run = AccessorDeprecationTest private data providers (pre-existing, metadata-time).
+
+## Deviations (disclosed)
+1. Brief named only StderrEmitterCensus; the seam route forces the full count cascade above (mandated by §1.8, precedented by C-SEC-7.a/7.b which did the same cascade from this same region).
+2. AutoReviewScopeTest's old `testWithAutoReviewOffNeitherCompanionIsEvenRead` became explicit-false: under the ruling, absent-key is no longer "off", so the old name/intent belongs to the explicit spelling only.
+3. Notice routed through the transcript seam (transcript+stderr) instead of bare stderr: the TUI alt-screen paints over raw stderr; house law — "a warning that arrives after the session is not the warning".
+4. StderrEmitterCensusTest NUMBER_WORDS needed `forty-eight` (the widened docblock numeral is censused).
+5. PermissionsIntroDriftTest pre-existing roster red left untouched (not this lane's file region; foreign standing red per lead).
