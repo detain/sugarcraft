@@ -13060,76 +13060,26 @@ final class Chat implements Model
      * `auto` DELETES the key rather than writing an empty one, so a lower
      * layer still speaks, and clears the live overlay to match.
      *
+     * C-WEB-2.f: the judgement itself now lives in {@see Commands\EffortDial},
+     * shared with the served `/effort` host body; Chat supplies only the save
+     * door and the row shape, so the two surfaces cannot drift.
+     *
      * @param list<string> $args
      * @return array{0: self, 1: ?\Closure}
      */
     private function handleEffortCommand(array $args): array
     {
         $engine = $this->backend instanceof Backend\EngineBackend ? $this->backend : null;
-        $provider = $engine?->provider();
-        if ($provider instanceof \SugarCraft\Code\Providers\FallbackProvider) {
-            $provider = $provider->primary();
-        }
-        $names = $provider instanceof \SugarCraft\Code\Providers\ProviderInterface ? $provider->name() : 'this backend';
-        $shapes = \SugarCraft\Code\Providers\EffortGate::verdict($provider, $engine?->model() ?? '');
 
-        if ($args === []) {
-            if ($engine === null) {
-                return $this->effortRow(Lang::t('chat.effort.status_no_backend'));
-            }
+        [$row, $next] = \SugarCraft\Code\Commands\EffortDial::decide(
+            $args,
+            $engine,
+            fn (?string $level): string => $this->persistEffort($level),
+        );
 
-            $raw = $engine->reasoningEffort();
-            $level = $raw === null ? null : (string) $raw;
+        [$chat, $cmd] = $this->effortRow($row);
 
-            $shape = \SugarCraft\Code\Providers\EffortGate::shape($provider, $level, $engine->model());
-
-            return $this->effortRow(Lang::t('chat.effort.status', ['level' => $level ?? 'unset', 'provider' => $names, 'shape' => $shape]));
-        }
-
-        $levels = implode('|', \SugarCraft\Code\Providers\EffortBudget::levels());
-
-        if (count($args) > 1) {
-            return $this->effortRow(Lang::t('chat.effort.usage', ['levels' => $levels]));
-        }
-
-        $token = strtolower(trim($args[0]));
-
-        if ($token === 'auto' || $token === 'clear') {
-            [$next, $cmd] = $this->effortRow(Lang::t('chat.effort.cleared', [
-                'provider' => $names,
-                'note' => $this->persistEffort(null),
-            ]));
-
-            return [$engine === null ? $next : $next->withBackend($engine->withReasoningEffort(null)), $cmd];
-        }
-
-        $level = \SugarCraft\Code\Agents\Effort::tryFrom($token)?->value;
-
-        if ($level === null) {
-            return $this->effortRow(Lang::t('chat.effort.usage', ['levels' => $levels]));
-        }
-
-        if (!$shapes) {
-            // C-PRV-1.b: refuse the pair the user actually named. An off-roster
-            // class (echo, custom) has no dial at all; a roster member whose
-            // wire has no field for THIS model id (OpenAI on `gpt-4o`) does
-            // have the dial and simply does not read it for this pair —
-            // claiming the provider lacks the control would trade one false
-            // sentence for another.
-            return $this->effortRow($provider instanceof \SugarCraft\Code\Providers\ShapesReasoningEffort
-                ? Lang::t('chat.effort.unsupported_model', ['provider' => $names, 'model' => (string) $engine?->model()])
-                : Lang::t('chat.effort.unsupported', ['provider' => $names]));
-        }
-
-        [$next, $cmd] = $this->effortRow(Lang::t('chat.effort.set', [
-            'level' => $level,
-            'provider' => $names,
-            'note' => $this->persistEffort($level),
-        ]));
-
-        // $shapes can only have been answered through a live engine, so the
-        // overlay below never dereferences null - the roster is read off it.
-        return [$next->withBackend($engine->withReasoningEffort($level)), $cmd];
+        return [$next === null ? $chat : $chat->withBackend($next), $cmd];
     }
 
     /**
