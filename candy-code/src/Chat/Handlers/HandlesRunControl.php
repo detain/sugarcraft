@@ -479,13 +479,26 @@ trait HandlesRunControl
      * queued, or any overlay up is not unattended, and a ping billed to an
      * attended session is the harm this whole opt-in exists to bound. The
      * fold handlers stay byte-untouched so the structural pin between them
-     * still compares what it always compared.
+     * still compares what it always compared. The spend cap binds this tick
+     * like every other unattended writer — see the gate below — and the idle
+     * anchor is computed ONCE here and handed to both the verdict and the
+     * latch, so the count the policy checked and the count the ping books are
+     * the same count.
      *
      * @return array{Model, ?Cmd}
      */
     private function handleKeepWarmTick(): array
     {
         if (!$this->shouldWatchIdleCompaction()) {
+            return [$this, null];
+        }
+
+        // A warm ping is a billed call, and a session that has spent its cap
+        // is not to buy one — not even a max-cheap read of its own cache. The
+        // served twin gets this gate for free (onIdleAutoCompaction refuses
+        // past the cap before keep-warm is consulted); the TUI tick reaches
+        // here directly from the fold's decline, so the cap binds HERE.
+        if ($this->spendCapReached()) {
             return [$this, null];
         }
 
@@ -512,6 +525,14 @@ trait HandlesRunControl
             return [$this, null];
         }
 
+        // One anchor per tick, computed here: the verdict below and the latch
+        // in sendKeepWarmPing() must count against the SAME idle stretch, and
+        // a second read of the stamp could only ever disagree with the first.
+        $idleAnchorTs = $this->lastActivityAt?->getTimestamp();
+        if ($idleAnchorTs === null) {
+            return [$this, null];
+        }
+
         $backend = $this->backendForKeepWarm();
         if (!KeepWarmPolicy::shouldPing(
             $this->workspace?->userConfig ?? [],
@@ -521,12 +542,12 @@ trait HandlesRunControl
             $this->contextTokenLimit(),
             foldDue: false, // the fold arm above just answered this tick; a second fold cannot be due
             turnInFlight: false, // $this->inFlight above IS this gate
-            idleAnchorTs: $this->lastActivityAt?->getTimestamp(),
+            idleAnchorTs: $idleAnchorTs,
         )) {
             return [$this, null];
         }
 
-        $cmd = $this->sendKeepWarmPing($backend, $sessionKey);
+        $cmd = $this->sendKeepWarmPing($backend, $sessionKey, $idleAnchorTs);
 
         return [$this, $cmd];
     }
@@ -567,13 +588,12 @@ trait HandlesRunControl
      * {@see Cmd::promise()} surface it as an ExceptionMsg: a keep-warm call
      * nobody waited for has no business raising an error on the screen.
      */
-    private function sendKeepWarmPing(?\SugarCraft\Code\Backend $backend, string $key): ?\Closure
+    private function sendKeepWarmPing(?\SugarCraft\Code\Backend $backend, string $key, int $anchorTs): ?\Closure
     {
         if (!$backend instanceof SummarisesWithCache) {
             return null;
         }
 
-        $anchorTs = $this->lastActivityAt?->getTimestamp() ?? \time();
         if (!CacheHealthWatch::noteWarmPing($key, $anchorTs)) {
             return null;
         }

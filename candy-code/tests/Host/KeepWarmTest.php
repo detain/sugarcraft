@@ -7,11 +7,14 @@ namespace SugarCraft\Code\Tests\Host;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use React\Promise\PromiseInterface;
+use SugarCraft\Code\App\IdleCompactTickMsg;
+use SugarCraft\Code\App\KeepWarmPingedMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CacheHealthWatch;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\ReportsContextWindow;
 use SugarCraft\Code\Backend\SummarisesWithCache;
+use SugarCraft\Code\Chat;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Context\IdleCompactionPolicy;
 use SugarCraft\Code\Context\KeepWarmPolicy;
@@ -20,6 +23,7 @@ use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Usage;
+use SugarCraft\Code\Util\TokenTracker;
 
 /**
  * C-CTX-5.d: keep-warm — the ping an idle session may buy where the cacheTtl
@@ -28,20 +32,25 @@ use SugarCraft\Code\Usage;
  *
  * The decision table lives in {@see KeepWarmPolicy}; the count lives on
  * {@see CacheHealthWatch}. The TUI's tick and the served host's alarm consult
- * the SAME table (that is the point of the split), so the end-to-end half of
- * this file drives the served alarm — the shape with fewer moving parts to
- * stand in for both — and pins: a fold-declining fire that earns a ping pays
- * exactly one, bills it (`warm`), and re-arms its own watch; a fire with the
- * key off, the cap reached, or the spacing unmet pays none; and a fire the
- * FOLD took never also buys a ping. The money-side defaults (off,
- * nonsense-clamped-to-off, runaway-clamped) are the first tests here because
- * a key that bills unattended must fail closed.
+ * the SAME table (that is the point of the split), so this file pays for
+ * both end to end: the served alarm, where a fold-declining fire that earns
+ * a ping pays exactly one, bills it (`warm`), and re-arms its own watch — a
+ * fire with the key off, the cap reached, or the spacing unmet pays none; and
+ * a fire the FOLD took never also buys a ping. Plus the real-Chat tick, where
+ * the session's spend cap binds the TICK itself (the alarm side inherits its
+ * cap gate upstream), and the warm budget proves itself partitioned by
+ * session — a spent or latched session warms nobody else's counts shut. The
+ * money-side defaults (off, nonsense-clamped-to-off, runaway-clamped) are the
+ * first tests here because a key that bills unattended must fail closed.
  *
  * The table legs run on a fixed epoch the policy is handed as `$now`; the
  * served legs use stamps relative to the real clock, because the served
- * host calls the policy without a hand-fed now (as does everything that
- * lives in a timer callback) — mixing the two would make the spacing gate
- * read a future as the past.
+ * host calls the policy without a hand-fed now (as does the real TUI tick —
+ * everything that lives in a timer callback) — mixing the two would make the
+ * spacing gate read a future as the past. The TUI end-to-end legs drive a
+ * real Chat tick, because the tick's OWN gates (the spend cap, and the
+ * ping-out latch arming only after it) exist nowhere on the alarm side to
+ * stand in for them.
  */
 final class KeepWarmTest extends TestCase
 {
@@ -277,6 +286,112 @@ final class KeepWarmTest extends TestCase
         $this->assertSame(0, $backend->summaryCalls, 'the user returned — this stamp speaks for no stretch');
     }
 
+    // ── the TUI tick end to end ──────────────────────────────────────────────
+
+    /**
+     * A real Chat under the cacheTtl watch, stopped below the fold floor so
+     * the fold declines and the tick reaches keep-warm — the exact shape the
+     * reviews demanded for the spend-cap gate: a tick that WOULD ping if the
+     * cap did not bind. `$tracker` carries the session's spend; `$cap` is the
+     * per-session ceiling.
+     */
+    private function tuiChat(TokenTracker $tracker, ?float $cap, int $capPings = 2, ?\DateTimeImmutable $stamp = null): Chat
+    {
+        $backend = new WarmHostBackend(88_000, '.');
+
+        return new Chat(
+            history: self::belowFloorPairs(),
+            backend: $backend,
+            compactorConfig: CompactorConfig::new()->withIdleAutoMode(CompactorConfig::IDLE_AUTO_CACHE_TTL),
+            lastActivityAt: $stamp ?? new \DateTimeImmutable('-5 minutes'),
+            tokenTracker: $tracker,
+            maxCostUsd: $cap,
+            summaryBackend: $backend,
+            currentSessionId: 's',
+            workspace: WorkspaceContext::new(
+                sessionStore: $this->store,
+                backend: $backend,
+                hooks: null,
+                userConfig: [KeepWarmPolicy::SETTING => $capPings],
+            ),
+        );
+    }
+
+    public function testTheSpendCapBindsTheTuiTickNotJustTheServedAlarm(): void
+    {
+        $billed = new TokenTracker();
+        $billed->addTotalUsage(1000, 0.20);
+        $stamp = new \DateTimeImmutable('-5 minutes');
+        $chat = $this->tuiChat($billed, cap: 0.10, stamp: $stamp);
+
+        [$after, $cmd] = $chat->update(new IdleCompactTickMsg());
+
+        $this->assertSame($chat, $after, 'a capped tick changes nothing about the session');
+        $this->assertNull($cmd, 'the cap refuses the ping before it is built, not after it lands');
+        $this->assertSame(0, CacheHealthWatch::warmPings(), 'nothing was booked against any session');
+        $this->assertFalse(CacheHealthWatch::warmPingInFlight('s'), 'the gate sits BEFORE the latch, so the tick arms nothing to release');
+        $this->assertSame(0, CacheHealthWatch::warmStretchPings('s', $stamp->getTimestamp()), 'not even the stretch counter moved — under the anchor this tick would have used');
+    }
+
+    public function testATickUnderTheCapBuysThePingAndBillsItsLanding(): void
+    {
+        $tracker = new TokenTracker();
+        $stamp = new \DateTimeImmutable('-5 minutes');
+        $chat = $this->tuiChat($tracker, cap: 0.10, stamp: $stamp);
+
+        [$next, $cmd] = $chat->update(new IdleCompactTickMsg());
+
+        $this->assertNotNull($cmd, 'a session under its cap, over the cacheability floor, in silence, earns the ping');
+        $this->assertTrue(CacheHealthWatch::warmPingInFlight('s'), 'building the ping latches its session, the dispatch rule');
+        $this->assertSame(1, CacheHealthWatch::warmStretchPings('s', $stamp->getTimestamp()), 'the latch books against the SAME anchor the verdict read — one producer per tick');
+
+        // The tick only BUILDS the ask (the runner executes Cmds); invoking it
+        // is the runner's leg, and the fresh-resolving promise makes the
+        // engine call there and then.
+        $cmd();
+
+        // The program routes the resolved message back through update(); the
+        // test hand-delivers what the loop would.
+        [$settled, $landingCmd] = $next->update(new KeepWarmPingedMsg('s', Usage::new(100, 0.0004)));
+
+        $this->assertNull($landingCmd, 'a landing books, it does not dispatch');
+        $this->assertSame(1, CacheHealthWatch::warmPings('s'), 'the billed landing is the recorded warm hit');
+        $this->assertFalse(CacheHealthWatch::warmPingInFlight('s'), 'and it takes the latch down');
+        $this->assertGreaterThanOrEqual(0.0004, $settled->spentUsd(), 'the ping rides the ledger like any other call — under its 0.10 cap');
+    }
+
+    // ── the tally partitions by session, at both levels ──────────────────────
+
+    public function testASpentSessionSpendsNoOtherSessionsBudget(): void
+    {
+        $anchor = self::anchorPast(300);
+        $onePerStretch = [KeepWarmPolicy::SETTING => 1];
+
+        $this->assertTrue($this->ask($onePerStretch, $anchor, key: 'A'));
+        self::sendAndLand($anchor, 'A');
+
+        // A's stretch is spent and its spacing clock parked away from any
+        // spacing excuse: the refusal below can only be the BUDGET.
+        self::parkLastPingAt(self::NOW - 241, 'A');
+        $this->assertFalse($this->ask($onePerStretch, $anchor, key: 'A'), 'the cap, not the clock, says stop for A');
+
+        // The very same stretch, the very same config, a different session:
+        // B inherits nobody's budget and earns its own first ping.
+        $this->assertTrue($this->ask($onePerStretch, $anchor, key: 'B'), 'a spent session warms no OTHER session’s cap shut');
+
+        // And a held latch is likewise no other session's latch: B now has one
+        // out, C must not feel it.
+        $this->assertTrue(CacheHealthWatch::noteWarmPing('B', $anchor), 'latch B');
+        $this->assertFalse($this->ask($onePerStretch, $anchor, key: 'B'), 'B meets its own ping-out');
+        $this->assertTrue($this->ask($onePerStretch, $anchor, key: 'C'), 'C meets A’s spent budget and B’s held latch and is neither of them');
+
+        // The counts themselves stay in their own columns.
+        $this->assertSame(1, CacheHealthWatch::warmPings('A'));
+        $this->assertSame(0, CacheHealthWatch::warmPings('B'));
+        $this->assertSame(0, CacheHealthWatch::warmPings('C'));
+        $this->assertSame(1, CacheHealthWatch::warmPings(), 'the process-wide total sums the columns; it is not a shared purse');
+    }
+
     // ── the policy table's plumbing ──────────────────────────────────────────
 
     /**
@@ -293,12 +408,13 @@ final class KeepWarmTest extends TestCase
         bool $turnInFlight = false,
         int $tokens = 20_000,
         bool $noEngine = false,
+        string $key = 's',
     ): bool {
         $subject = $noEngine ? null : $this->createMock(Backend::class);
 
         return KeepWarmPolicy::shouldPing(
             $config,
-            's',
+            $key,
             $subject,
             $tokens,
             88_000,
@@ -319,10 +435,10 @@ final class KeepWarmTest extends TestCase
     }
 
     /** Complete the latch dance a real send+landing perform. */
-    private static function sendAndLand(int $anchorTs): void
+    private static function sendAndLand(int $anchorTs, string $key = 's'): void
     {
-        CacheHealthWatch::noteWarmPing('s', $anchorTs);
-        CacheHealthWatch::settleWarmPing('s', true);
+        CacheHealthWatch::noteWarmPing($key, $anchorTs);
+        CacheHealthWatch::settleWarmPing($key, true);
     }
 
     /**
@@ -330,10 +446,10 @@ final class KeepWarmTest extends TestCase
      * Park the stretch's ping instant wherever the leg is testing, so the
      * ONLY thing the next ask can trip on is the gate under test.
      */
-    private static function parkLastPingAt(int $at): void
+    private static function parkLastPingAt(int $at, string $key = 's'): void
     {
         $state = (new \ReflectionProperty(CacheHealthWatch::class, 'warm'))->getValue();
-        $state['s']['at'] = $at;
+        $state[$key]['at'] = $at;
         (new \ReflectionProperty(CacheHealthWatch::class, 'warm'))->setValue(null, $state);
     }
 

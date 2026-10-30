@@ -274,7 +274,11 @@ final class CacheHealthWatch
      * "how many warm hits has THIS session recorded" is a session fact, not
      * an object fact, so it is keyed by the asking session's id — the same
      * shape the reuse tracker uses inside one process (keying by
-     * conversation identity rather than object identity).
+     * conversation identity rather than object identity). The partition is
+     * the budget, not merely the display: a session's stretch cap, spacing
+     * clock and latch are read under its own key alone, so a spent or
+     * latched session never spends or holds another's (pinned at both the
+     * tally and the budget level in KeepWarmTest's bleed legs).
      *
      * @var array<string, array{stretch: int, since: ?int, at: ?int, inFlight: bool, total: int}>
      */

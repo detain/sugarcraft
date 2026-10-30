@@ -1091,6 +1091,14 @@ final class SessionHost
      */
     private function keepWarmServed(int $tierTokens, int $windowLimit, ?\DateTimeImmutable $idleAnchor): void
     {
+        // One anchor per fire, computed here like the TUI twin: the verdict
+        // and the latch must count against the SAME idle stretch, and a
+        // second read of the stamp could only ever disagree with the first.
+        $anchorTs = $idleAnchor?->getTimestamp();
+        if ($anchorTs === null) {
+            return; // no stretch to speak of: nothing's cache is going cold
+        }
+
         $backend = $this->workspace->backend;
         if (!KeepWarmPolicy::shouldPing(
             $this->workspace->userConfig,
@@ -1100,7 +1108,7 @@ final class SessionHost
             $windowLimit,
             foldDue: false, // reached only where the fold just declined
             turnInFlight: $this->isBusy(),
-            idleAnchorTs: $idleAnchor?->getTimestamp(),
+            idleAnchorTs: $anchorTs,
         )) {
             return;
         }
@@ -1109,7 +1117,6 @@ final class SessionHost
             return;
         }
 
-        $anchorTs = $idleAnchor?->getTimestamp() ?? \time();
         if (!CacheHealthWatch::noteWarmPing($this->sessionId, $anchorTs)) {
             return;
         }
