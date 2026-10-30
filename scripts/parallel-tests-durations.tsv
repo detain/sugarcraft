@@ -1669,3 +1669,4 @@ candy-code/tests/Chat/SubmitInvisibleUnicodeTest.php	0.013	7
 candy-code/tests/Host/SubmitInvisibleUnicodeTest.php	1.170	5
 candy-code/tests/Cli/DoctorChecksTest.php	0.379	6
 candy-code/tests/Host/Commands/DoctorHostCommandTest.php	2.462	6
+candy-code/tests/App/FirstRunWizardWiringTest.php	0.377	14
