@@ -89,6 +89,11 @@ final class KeyBindingRegistry
     public const CONTEXT_CONTEXT_PANE = 'Context pane';
     /** Keys of the image-generation form frame — its launch chord and its own keys. */
     public const CONTEXT_MEDIA = 'Media form';
+    /**
+     * Keys the checkpoint-diff review (`/diff`, C-TUI-2.e) answers while it
+     * holds the band. A ROUTING key like every CONTEXT_* value.
+     */
+    public const CONTEXT_DIFF_REVIEW = 'Diff review';
     /** Keys the F10 menu bar answers while it is open. */
     public const CONTEXT_MENU = 'Menu bar';
     /** Mouse gestures, when the terminal reports them. */
@@ -116,6 +121,7 @@ final class KeyBindingRegistry
             ...self::contextPane(),
             ...self::settings(),
             ...self::media(),
+            ...self::diffReview(),
             ...self::menu(),
             ...self::mouse(),
         ];
@@ -184,6 +190,7 @@ final class KeyBindingRegistry
             self::CONTEXT_SETTINGS => Lang::t('keys.context.settings'),
             self::CONTEXT_CONTEXT_PANE => Lang::t('keys.context.context-pane'),
             self::CONTEXT_MEDIA => Lang::t('keys.context.media'),
+            self::CONTEXT_DIFF_REVIEW => Lang::t('keys.context.diffreview'),
             self::CONTEXT_MENU => Lang::t('keys.context.menu'),
             self::CONTEXT_MOUSE => Lang::t('keys.context.mouse'),
             default => $context,
@@ -1462,6 +1469,27 @@ final class KeyBindingRegistry
 
         return [
             KeyBinding::new('media.open_form', 'Ctrl+D', Lang::t('keys.media.open_form'), $c),
+        ];
+    }
+
+    /**
+     * C-TUI-2.e: the checkpoint-diff review's own keys, answered by
+     * {@see \SugarCraft\Code\Tui\DiffReview\DiffReview::update()} while the
+     * review holds the band. The base keys (`-`/`+`) reload the model from
+     * the store through the shell — see {@see \SugarCraft\Code\App\App::applyDiffReviewAction()}.
+     */
+    private static function diffReview(): array
+    {
+        $c = self::CONTEXT_DIFF_REVIEW;
+
+        return [
+            KeyBinding::new('diffreview.file-move', '↑ / ↓', Lang::t('keys.diffreview.file-move'), $c),
+            KeyBinding::new('diffreview.body-page', 'PgDn / PgUp', Lang::t('keys.diffreview.body-page'), $c),
+            KeyBinding::new('diffreview.body-ends', 'Home / End', Lang::t('keys.diffreview.body-ends'), $c),
+            KeyBinding::new('diffreview.base-back', '-', Lang::t('keys.diffreview.base-back'), $c),
+            KeyBinding::new('diffreview.base-forward', '+', Lang::t('keys.diffreview.base-forward'), $c),
+            KeyBinding::new('diffreview.turn', 't', Lang::t('keys.diffreview.turn'), $c),
+            KeyBinding::new('diffreview.close', 'Esc', Lang::t('keys.diffreview.close'), $c),
         ];
     }
 

@@ -16968,13 +16968,51 @@ final class Chat implements Model
     }
 
     /**
-     * `/diff [n]` (item 3.A-2) — what changed in the files since checkpoint n
-     * — {@see \SugarCraft\Code\Host\Commands\DiffCommand}. Read-only; the rows are UI-only.
+     * `/diff [n]` (item 3.A-2) — what changed in the files since checkpoint n.
+     * The bare TUI form opens the review as a shell slot (C-TUI-2.e): the
+     * command dials {@see \SugarCraft\Code\Tui\DiffReview\DiffReviewSource::load()}
+     * over this window's store, session and root, and answers the shell with
+     * an {@see \SugarCraft\Code\Tui\DiffReview\OpenDiffReviewMsg} — exactly
+     * the {@see openSettingsView()} technique. Everything else keeps today's
+     * fenced rows: `--print`, a malformed argument, a plain store, or a load
+     * that refused — the host rows are the same words serve already prints.
+     * Read-only either way; the rows are UI-only.
      *
      * @return array{0:Chat,1:?\Closure}
      */
     private function handleDiffCommand(string $inputText): array
     {
+        $words = \SugarCraft\Code\Host\Commands\CommandText::words($inputText);
+        $args = array_values(array_filter($words, static fn (string $word): bool => $word !== '--print'));
+
+        // The overlay door: no --print, and either no argument or one whole
+        // number ≥ 1. Anything else — usage noise included — belongs to the
+        // host rows, which explain themselves.
+        $steps = null;
+        if (!in_array('--print', $words, true)) {
+            if ($args === []) {
+                $steps = 1;
+            } elseif (count($args) === 1 && ctype_digit($args[0]) && (int) $args[0] >= 1) {
+                $steps = (int) $args[0];
+            }
+        }
+
+        if ($steps !== null) {
+            $store = $this->sessionStore();
+            $sessionId = $this->currentSessionId();
+            if ($store instanceof EnhancedSessionStore && $sessionId !== null && $sessionId !== '') {
+                $review = \SugarCraft\Code\Tui\DiffReview\DiffReviewSource::load(
+                    $store,
+                    $sessionId,
+                    $this->projectRoot(),
+                    $steps,
+                );
+                if ($review instanceof \SugarCraft\Code\Tui\DiffReview\DiffReview) {
+                    return [$this->withInputBuf(''), Cmd::send(new \SugarCraft\Code\Tui\DiffReview\OpenDiffReviewMsg($review))];
+                }
+            }
+        }
+
         return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\DiffCommand(), $inputText);
     }
 

@@ -86,6 +86,11 @@ use SugarCraft\Code\Tui\Window\WindowStrip;
 use SugarCraft\Code\Tui\Window\WindowViewport;
 use SugarCraft\Code\Tui\Window\WindowViewports;
 use SugarCraft\Code\Media\MediaRequest;
+use SugarCraft\Code\Tui\DiffReview\DiffReview;
+use SugarCraft\Code\Tui\DiffReview\DiffReviewAction;
+use SugarCraft\Code\Tui\DiffReview\DiffReviewActionKind;
+use SugarCraft\Code\Tui\DiffReview\DiffReviewSource;
+use SugarCraft\Code\Tui\DiffReview\OpenDiffReviewMsg;
 use SugarCraft\Code\Tui\MediaForm\ChoiceFeed;
 use SugarCraft\Code\Tui\MediaForm\GenerateFromMediaFormMsg;
 use SugarCraft\Code\Tui\MediaForm\ImportPng;
@@ -661,6 +666,13 @@ final class App implements Model
          * @var array<string, string>
          */
         public readonly array $agentViewByTab = [],
+        /**
+         * C-TUI-2.e: the open checkpoint-diff review (a bare `/diff [n]`).
+         * A shell slot on the settings/media/player law: while it stands it
+         * owns the band, the keys and the wheel; `Esc` (or a reload that
+         * finds nothing to show) closes it. Null = no review open.
+         */
+        public readonly ?DiffReview $diffReview = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -1629,6 +1641,12 @@ final class App implements Model
         return $this->mutate(trustDialog: $v);
     }
 
+    /** Replace the open diff review's state (null closes it). */
+    public function withDiffReview(?DiffReview $v): self
+    {
+        return $this->mutate(diffReview: $v);
+    }
+
     /**
      * Build the open settings view's save preview from what its tier's file
      * holds now (N-P2). One small read, on an explicit request — the same
@@ -1913,6 +1931,95 @@ final class App implements Model
         $this->videoPlayer->stop();
 
         return $this->mutate(videoPlayer: null);
+    }
+
+    /**
+     * Raise the checkpoint-diff review (C-TUI-2.e) on an already-loaded
+     * model — the shell-slot twin of {@see openMediaForm()}: the command
+     * dials {@see DiffReviewSource::load()} and hands the finished review
+     * over as an {@see OpenDiffReviewMsg}; this only closes the menu and
+     * takes the slot. Pure state: the patches are already in the model.
+     */
+    public function openDiffReview(DiffReview $review): self
+    {
+        MenuBar::closeMenu();
+
+        return $this->mutate(diffReview: $review);
+    }
+
+    /** Drop the diff review if one stands (C-TUI-2.e); idempotent. */
+    public function closeDiffReview(): self
+    {
+        return $this->diffReview === null ? $this : $this->mutate(diffReview: null);
+    }
+
+    /**
+     * Hand one key to the open review and land what it decides
+     * (C-TUI-2.e). The model never answers with a null next state — close
+     * travels as the Close action — but the shell keeps the mutate honest
+     * by routing through {@see applyDiffReviewAction()} either way.
+     *
+     * @return array{0: self, 1: (callable(): \SugarCraft\Core\Msg)|null}
+     */
+    private function driveDiffReview(KeyMsg $msg): array
+    {
+        $review = $this->diffReview;
+        \assert($review !== null);
+
+        [$next, $action] = $review->update($msg);
+
+        if ($action !== null) {
+            return $this->applyDiffReviewAction($action, $next);
+        }
+
+        return [$this->mutate(diffReview: $next), null];
+    }
+
+    /**
+     * Land a review decision (C-TUI-2.e). Close drops the slot; a reload
+     * (the `-`/`+`/`t` keys moved the base or the turn-only door) redials
+     * {@see DiffReviewSource} against the hosted chat's store — the model
+     * carries no store of its own. When the checkpoints moved on under the
+     * open review, the reason rides the status footer and the band closes;
+     * with no store behind the window (a bare preview App) the head-moved
+     * model stays as-is, the honest no-redial shape.
+     *
+     * @return array{0: self, 1: (callable(): \SugarCraft\Core\Msg)|null}
+     */
+    private function applyDiffReviewAction(DiffReviewAction $action, DiffReview $next): array
+    {
+        if ($action->kind === DiffReviewActionKind::Close) {
+            return [$this->closeDiffReview(), null];
+        }
+
+        $dialled = $this->dialDiffReview($action->stepsBack, $action->turnOnly);
+        if ($dialled instanceof DiffReview) {
+            return [$this->mutate(diffReview: $dialled), null];
+        }
+
+        if (is_string($dialled)) {
+            return [$this->closeDiffReview(), static fn (): CoreMsg => new StatusMsg($dialled)];
+        }
+
+        return [$this->mutate(diffReview: $next), null];
+    }
+
+    /**
+     * The shell-side reload dial (C-TUI-2.e): re-load the review at a new
+     * base from the hosted chat's store, session and root — the exact
+     * triple the command used at open. Null when the window has no
+     * checkpointed store to ask (a bare preview App); a string is the
+     * plain-English reason the load answered with.
+     */
+    private function dialDiffReview(int $stepsBack, bool $turnOnly): DiffReview|string|null
+    {
+        $store = $this->chat?->sessionStore();
+        $sessionId = $this->chat?->currentSessionId();
+        if (!$store instanceof \SugarCraft\Code\Session\EnhancedSessionStore || $sessionId === null || $sessionId === '') {
+            return null;
+        }
+
+        return DiffReviewSource::load($store, $sessionId, $this->chat->projectRoot(), $stepsBack, $turnOnly);
     }
 
     /**
@@ -3075,6 +3182,14 @@ final class App implements Model
             // the img2img slot, not in the input box. Form down → the msg
             // rides on to Chat's @mention arm untouched.
             $msg instanceof ClipboardImagePastedMsg && $this->mediaForm !== null => $this->pasteIntoMediaForm($msg),
+            // C-TUI-2.e: the review opens like the form and the player — the
+            // command dials DiffReviewSource and answers this msg, the shell
+            // owns the slot. A null review with a reason is the load failing
+            // on a live store (a Reload after the checkpoints moved on): the
+            // reason rides the status footer, the band closes.
+            $msg instanceof OpenDiffReviewMsg => $msg->review !== null
+                ? [$this->openDiffReview($msg->review), null]
+                : ($msg->reason === '' ? [$this, null] : [$this->withStatus($msg->reason), null]),
             $msg instanceof UserInputMsg,
             $msg instanceof SelectPaneMsg,
             $msg instanceof LayoutResetMsg,
@@ -3316,6 +3431,25 @@ final class App implements Model
             };
 
             return [$notch === 0 ? $this : $this->mutate(mediaForm: $this->mediaForm->wheel($notch)), null];
+        }
+
+        // C-TUI-2.e: the review covers the band too — the wheel pages its
+        // body, translated to the model's own paging keys (the review owns
+        // no wheel surface of its own; ↑/↓, the keys, are its), and a click
+        // lands on no zone: the whole rest of the gesture is inert over the
+        // patch, on the player's law one step below.
+        if ($this->diffReview !== null) {
+            if (!$msg instanceof MouseWheelMsg) {
+                return [$this, null];
+            }
+
+            $key = match ($msg->button) {
+                MouseButton::WheelDown => new KeyMsg(KeyType::PageDown),
+                MouseButton::WheelUp => new KeyMsg(KeyType::PageUp),
+                default => null,
+            };
+
+            return $key === null ? [$this, null] : $this->driveDiffReview($key);
         }
 
         // The player covers the band too (W5.4) — but it has no scrollable
@@ -4212,6 +4346,21 @@ final class App implements Model
             return $this->driveVideoPlayer($msg);
         }
 
+        // C-TUI-2.e: the review is MODAL on the same law: while the patch
+        // owns the band, every key except the gate exceptions below is the
+        // screen's. What the model decides leaves as a DiffReviewAction —
+        // `Esc` closes, the base/turn keys come back as a reload the shell
+        // dials against the store it holds.
+        if ($this->diffReview !== null && !self::diffReviewYields($msg)) {
+            [$next, $action] = $this->diffReview->update($msg);
+
+            if ($action !== null) {
+                return $this->applyDiffReviewAction($action, $next);
+            }
+
+            return [$this->mutate(diffReview: $next), null];
+        }
+
         // P-TABS.e: the deck answers its two chords before anyone else —
         // placed AFTER every modal gate above (a modal owns the keyboard,
         // deck included) and BEFORE dispatchKey, because the shell routes
@@ -4631,6 +4780,17 @@ final class App implements Model
      * escape hatch.
      */
     private static function videoPlayerYields(KeyMsg $msg): bool
+    {
+        return self::settingsEditorYields($msg);
+    }
+
+    /**
+     * Whether a key goes past the open diff review (C-TUI-2.e): the exact
+     * settings-view exception list (quit chord, menu key, live menu) —
+     * one law for every full-band modal, so no shell ever invents its own
+     * escape hatch.
+     */
+    private static function diffReviewYields(KeyMsg $msg): bool
     {
         return self::settingsEditorYields($msg);
     }
@@ -5153,8 +5313,8 @@ final class App implements Model
         // stand-down guards have already run, and every surface that would
         // answer Ctrl+O before the transcript expansion arm — an open palette,
         // session picker or directory picker inside Chat, or a settings,
-        // media-form, video-player or agent-view overlay above it — disarms
-        // the walk, so that keystroke reaches the modal exactly as before.
+        // media-form, video-player, diff-review or agent-view overlay above it
+        // — disarms the walk, so that keystroke reaches the modal exactly as before.
         //
         // v2:a11y-F1 (fix1021): `Ctrl+F` shares this gate — and its refusals —
         // because it is the same conversation with the transcript: it moves
@@ -5163,7 +5323,7 @@ final class App implements Model
         // cursor then toggles exactly THAT row instead of the newest.
         if ($msg instanceof KeyMsg && (self::isToolWalkChord($msg) || self::isToolRowChord($msg))
             && $this->settingsEditor === null && $this->mediaForm === null
-            && $this->videoPlayer === null && $this->agentViewTarget === null
+            && $this->videoPlayer === null && $this->diffReview === null && $this->agentViewTarget === null
             && $this->chat?->palette() === null && $this->chat?->sessionPicker() === null
             && $this->chat?->dirPicker() === null
         ) {
@@ -6389,6 +6549,7 @@ final class App implements Model
             tabNotified: array_key_exists('tabNotified', $changes) ? $changes['tabNotified'] : $this->tabNotified,
             windowViewports: array_key_exists('windowViewports', $changes) ? $changes['windowViewports'] : $this->windowViewports,
             agentViewByTab: array_key_exists('agentViewByTab', $changes) ? $changes['agentViewByTab'] : $this->agentViewByTab,
+            diffReview: array_key_exists('diffReview', $changes) ? $changes['diffReview'] : $this->diffReview,
         );
     }
 }

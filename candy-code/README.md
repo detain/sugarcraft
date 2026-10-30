@@ -645,7 +645,7 @@ By task (every command, with its arguments, is in
 | Task | Commands |
 |---|---|
 | Sessions | `/new [dir]`, `/sessions [query]`, `/rename [name\|--auto]`, `/branch`, `/handoff [focus]`, `/fork <prompt>`, `/bg <task>`, `/share [md\|html\|json] [path]`, `/export [md\|html\|json\|jsonl\|text] [path]`, `/clear` |
-| Checkpoints | `/undo`, `/redo`, `/rewind [n] [--chat\|--files\|--both]`, `/diff [n]` |
+| Checkpoints | `/undo`, `/redo`, `/rewind [n] [--chat\|--files\|--both]`, `/diff [n] [--print]` |
 | Context | `/context`, `/compact [--self] [focus]`, `/sweep [n]`, `/pruning [mode]`, `/compress [focus]`, `/decompress [bN]`, `/recompress [bN]` |
 | Working | `/goal <condition>`, `/grind <condition>`, `/btw <question>`, `/init [focus]`, `/editor [text]`, `/websearch <query>`, `/workflow …` |
 | Agents | `/agents [name\|run id]` |
@@ -1197,9 +1197,13 @@ at a time, until you send another prompt. `/rewind [n]` steps back `n`
 checkpoints and restores the conversation only (`--chat`, the default); it
 tells you when the files differ from that checkpoint, and `/rewind --files`
 then puts them back too. `--files` alone restores the files and leaves the
-conversation, `--both` does both. `/diff [n]` shows what changed in the files
-since checkpoint `n` (`1`, the one before your last prompt, by default), as the
-list of files and the patch. A file restore is refused once HEAD has moved since
+conversation, `--both` does both. A bare `/diff [n]` opens the diff review —
+a full-band screen of what changed in the files since checkpoint `n` (`1`, the
+one before your last prompt, by default): `↑`/`↓` picks the file, `PgUp`/`PgDn`
+scrolls its patch, `-`/`+` moves the checkpoint further back, `t` narrows the
+base to the turn you picked, and `Esc` closes it. `/diff [n] --print` prints
+the same list and patch as transcript rows instead — the shape serve always
+takes. A file restore is refused once HEAD has moved since
 the checkpoint (it would undo those commits): `--both` and `/undo` then change
 nothing, and `--chat` still works. Files a snapshot leaves out are never
 touched by a restore. `/redo` moves the files only when they still match the

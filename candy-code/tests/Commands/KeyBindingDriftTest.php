@@ -49,6 +49,7 @@ use SugarCraft\Code\Tui\Commands\QuitAgentViewCmd;
 use SugarCraft\Code\Tui\Commands\SourceSkillCmd;
 use SugarCraft\Code\Tui\Components\MenuBar;
 use SugarCraft\Code\Tui\Components\MenuSelectedMsg;
+use SugarCraft\Code\Tui\DiffReview\DiffReview;
 use SugarCraft\Code\Tui\KeyboardHandler;
 use SugarCraft\Code\Tui\MediaForm\OpenMediaFormMsg;
 use SugarCraft\Code\Tui\Pane;
@@ -292,7 +293,7 @@ final class KeyBindingDriftTest extends TestCase
      * The word forms of the arrow keys (`Up`/`Down`/`Left`/`Right`) were a
      * third undocumented hole and are now closed — they mattered most of the
      * near-misses probed, because eight `*.move` rows describe arrow movement
-     * (twenty-three rows carry an arrow GLYPH in their label; both counts are asserted
+     * (twenty-four rows carry an arrow GLYPH in their label; both counts are asserted
      * by {@see testTheArrowRowCountsThisFileQuotesAreStillRight()}, because they
      * were quoted as "four" here and nothing read them back), so
      * "Down moves the highlight" is the likeliest next prose regression. The
@@ -528,9 +529,9 @@ final class KeyBindingDriftTest extends TestCase
             . implode(', ', $move),
         );
         $this->assertCount(
-            23,
+            24,
             $arrowLabelled,
-            'KEYISH\'s docblock says twenty-three rows carry an arrow glyph in their label; it found: '
+            'KEYISH\'s docblock says twenty-four rows carry an arrow glyph in their label; it found: '
             . implode(', ', $arrowLabelled),
         );
         // Every `*.move` row is arrow-labelled, which is what makes the first
@@ -2414,6 +2415,54 @@ final class KeyBindingDriftTest extends TestCase
                 $this->assertInstanceOf(OpenMediaFormMsg::class, $cmd(), 'the Cmd carries OpenMediaFormMsg');
             },
 
+            // ── Checkpoint-diff review (C-TUI-2.e) ───────────────────────
+            // The shell routes these to the review model while it holds the
+            // band; the fixture carries no store, so the base rows prove the
+            // headless shape (the model moved, the band stayed). Loading a
+            // real diff is pinned in tests/App/DiffReviewWiringTest.php.
+            'diffreview.file-move' => function (array $k): void {
+                $open = $this->diffReviewApp();
+                $this->assertSame(2, $open->diffReview->fileCount(), 'fixture: two files to move between');
+
+                [$down] = $open->update($k[1]);
+                $this->assertSame(1, $down->diffReview->selectedIndex(), 'the second chord lands on the second file');
+                [$up] = $down->update($k[0]);
+                $this->assertSame(0, $up->diffReview->selectedIndex(), 'the first chord comes back');
+            },
+            'diffreview.body-page' => function (array $k): void {
+                [$down] = $this->diffReviewApp()->update($k[0]);
+                $this->assertSame(DiffReview::PAGE_LINES, $down->diffReview->scroll(), 'the first chord pages the patch down');
+                [$up] = $down->update($k[1]);
+                $this->assertSame(0, $up->diffReview->scroll(), 'the second pages it back');
+            },
+            'diffreview.body-ends' => function (array $k): void {
+                $open = $this->diffReviewApp();
+                $last = count($open->diffReview->bodyLines()) - 1;
+
+                [$end] = $open->update($k[1]);
+                $this->assertSame($last, $end->diffReview->scroll(), 'the second chord jumps to the last row');
+                [$top] = $end->update($k[0]);
+                $this->assertSame(0, $top->diffReview->scroll(), 'the first jumps back to the top');
+            },
+            'diffreview.base-back' => function (array $k): void {
+                [$app] = $this->diffReviewApp()->update($k[0]);
+                $this->assertNotNull($app->diffReview, 'the band stays held while the base walks');
+                $this->assertSame(2, $app->diffReview->stepsBack(), 'the base moved one checkpoint further back');
+            },
+            'diffreview.base-forward' => function (array $k): void {
+                [$back] = $this->diffReviewApp()->update(new KeyMsg(KeyType::Char, '-'));
+                [$app] = $back->update($k[0]);
+                $this->assertSame(1, $app->diffReview->stepsBack(), 'the base came back toward HEAD');
+            },
+            'diffreview.turn' => function (array $k): void {
+                [$app] = $this->diffReviewApp()->update($k[0]);
+                $this->assertTrue($app->diffReview->turnOnly(), 'the flip lands the this-turn-only view');
+            },
+            'diffreview.close' => function (array $k): void {
+                [$app] = $this->diffReviewApp()->update($k[0]);
+                $this->assertNull($app->diffReview, 'the closing chord hands the band back');
+            },
+
             // ── Menu bar ─────────────────────────────────────────────────
             // Both directions, from a menu in the MIDDLE of the strip. The
             // strip wraps, so from menu 1 every move lands on a different,
@@ -3021,6 +3070,64 @@ final class KeyBindingDriftTest extends TestCase
         }
 
         return $app;
+    }
+
+    /**
+     * An App holding the diff review (C-TUI-2.e) with a synthetic two-file
+     * diff, so the observations exercise the shell's routing and the model's
+     * clamps rather than a store. The chat carries no store on purpose.
+     */
+    private function diffReviewApp(): App
+    {
+        return $this->app()
+            ->withChat($this->chat())
+            ->openDiffReview(DiffReview::open(self::diffReviewFiles(), 1, 3, false, 0));
+    }
+
+    /**
+     * The synthetic rows: file one is longer than a page so paging and the
+     * end-jump have somewhere to land, file two shorter so the move is
+     * observable in the body too.
+     *
+     * @return list<array{status: string, path: string, added: int, removed: int, patch: string}>
+     */
+    private static function diffReviewFiles(): array
+    {
+        $rows = [
+            'diff --git a/file.txt b/file.txt',
+            '--- a/file.txt',
+            '+++ b/file.txt',
+            '@@ -1,2 +1,41 @@',
+            ' kept',
+            '-gone one',
+        ];
+        for ($i = 1; $i <= 38; $i++) {
+            $rows[] = '+added line ' . (string) $i;
+        }
+
+        return [
+            [
+                'status' => 'M',
+                'path' => 'file.txt',
+                'added' => 38,
+                'removed' => 1,
+                'patch' => implode("\n", $rows),
+            ],
+            [
+                'status' => 'A',
+                'path' => 'other.txt',
+                'added' => 2,
+                'removed' => 0,
+                'patch' => implode("\n", [
+                    'diff --git a/other.txt b/other.txt',
+                    '--- /dev/null',
+                    '+++ b/other.txt',
+                    '@@ -0,0 +1,2 @@',
+                    '+first',
+                    '+second',
+                ]),
+            ],
+        ];
     }
 
     private function agentApp(int $agents): App

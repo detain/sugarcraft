@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tui;
 
+use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Tty;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Core\Syntax\RegexHighlighter;
+use SugarCraft\Core\Syntax\TokenKind;
 use SugarCraft\Core\View;
 use SugarCraft\Code\Lang;
 use SugarCraft\Style\Bar\Segment;
@@ -20,6 +24,7 @@ use SugarCraft\Code\Providers\ReportsServedModel;
 use SugarCraft\Code\Renderer as LiveRenderer;
 use SugarCraft\Code\Theme;
 use SugarCraft\Code\Tui\Components\ChatPane;
+use SugarCraft\Code\Tui\DiffReview\DiffReview;
 use SugarCraft\Code\Tui\Components\ContextPane;
 use SugarCraft\Code\Tui\Components\InputPane;
 use SugarCraft\Code\Tui\Components\SkillsPane;
@@ -687,6 +692,13 @@ final class Renderer
             return self::renderMediaForm($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
         }
 
+        // The checkpoint-diff review (C-TUI-2.e) takes the band on the same
+        // modal law — ahead of the player, so a review opened while a clip
+        // is parked still paints, and of any pane focus.
+        if ($a->diffReview !== null) {
+            return self::renderDiffReview($a, $cols, $rows, $menuBar, $notice, $bottom, $paneRows);
+        }
+
         // The video player (crush-media W5.4) takes the band on the same
         // modal law, right beside the form it plays the form's artifacts
         // from — and like the form, ahead of any pane focus.
@@ -1238,6 +1250,259 @@ final class Renderer
         self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), self::lineCount($menuBar), []);
 
         return new View($frame);
+    }
+
+    /**
+     * C-TUI-2.e: the checkpoint-diff review (`/diff`), a keyboard-only
+     * full-band modal on the trust dialog's law. Title row, rule, a file
+     * list column with the selection marked, the selected file's patch to
+     * its right, then the omitted-lines notice when one exists and the
+     * hints row — composited over the covered chat band at 50 backdrop like
+     * every other full-band modal.
+     *
+     * The review model carries no view(): the painting lives here. The row
+     * vocabulary is C-TUI-2.c's — the same marker-column colours and the
+     * per-token highlight — but copied, not called: {@see LiveRenderer}'s
+     * diff helpers are private to `src/Renderer.php`, which is another
+     * step's file. The side-by-side split path is deliberately not mirrored:
+     * the review shows ONE file's patch at a time, so a single unified
+     * column IS its shape.
+     */
+    private static function renderDiffReview(
+        App $a,
+        int $cols,
+        int $rows,
+        string $menuBar,
+        string $notice,
+        string $bottom,
+        int $paneRows,
+    ): View {
+        $review = $a->diffReview;
+        \assert($review !== null);
+        $theme = $a->theme();
+
+        $band = self::composeBand($a, $cols, $paneRows);
+        $backdrop = self::padBand($band['middle'], $cols, $paneRows);
+
+        $omitted = $review->omittedLines() > 0;
+        $chrome = 3 + ($omitted ? 1 : 0);
+        $bodyRows = max(1, $paneRows - $chrome);
+
+        // File-derived text rides the canonical untrusted policy before it
+        // is measured, clipped or styled.
+        $labels = array_map(self::reviewText(...), $review->fileLabels());
+        $lines = array_map(self::reviewText(...), $review->bodyLines());
+        $headers = DiffGutter::fileHeaders($lines);
+        $languages = self::reviewRowLanguages($lines, $headers);
+
+        $listWidth = 0;
+        foreach ($labels as $label) {
+            $listWidth = max($listWidth, Width::of($label));
+        }
+        $listWidth = $labels === [] ? 0 : min(max($listWidth, 10) + 2, max(10, intdiv($cols, 3)));
+        $bodyWidth = max(8, $cols - ($listWidth > 0 ? $listWidth + 1 : 0));
+
+        $scroll = $review->scroll();
+        $window = array_slice($lines, $scroll, $bodyRows);
+        $listScroll = count($labels) <= $bodyRows ? 0 : max(0, min($review->selectedIndex(), count($labels) - $bodyRows));
+
+        $box = [];
+        $box[] = Style::new()->foreground($theme->systemLabel)->bold()->render(self::reviewText($review->title()));
+        $box[] = self::reviewDim($theme)->render(str_repeat('─', $cols));
+
+        $highlighter = new RegexHighlighter();
+        for ($i = 0; $i < $bodyRows; $i++) {
+            if ($listWidth > 0) {
+                $entry = $labels[$listScroll + $i] ?? null;
+                $selected = $entry !== null && $listScroll + $i === $review->selectedIndex();
+                $left = $entry === null
+                    ? str_repeat(' ', $listWidth)
+                    : (($selected ? '▸ ' : '  ') . $entry);
+                $leftStyle = $selected
+                    ? Style::new()->foreground($theme->shellPrimary)->bold()
+                    : Style::new()->foreground($theme->shellMuted);
+                $leftCell = $leftStyle->render(Width::truncate($left, max(1, $listWidth)));
+                $leftCell = Width::padRight($leftCell, $listWidth) . ' ';
+            } else {
+                $leftCell = '';
+            }
+
+            if ($window === []) {
+                $rightCell = $i === 0
+                    ? self::reviewDim($theme)->render(self::reviewText($review->emptyNotice()))
+                    : '';
+            } else {
+                $index = $scroll + $i;
+                $rightCell = isset($window[$i])
+                    ? self::reviewDiffRow(
+                        $window[$i],
+                        $headers[$index] ?? false,
+                        $languages[$index] ?? null,
+                        $theme,
+                        $highlighter,
+                    )
+                    : '';
+            }
+            $box[] = $leftCell . Width::padRight(Width::truncateAnsi($rightCell, $bodyWidth), $bodyWidth);
+        }
+
+        if ($omitted) {
+            $box[] = self::reviewDim($theme)->render(self::reviewText($review->omittedNotice()));
+        }
+        $box[] = self::reviewDim($theme)->faint()->render(self::reviewText($review->hints()));
+
+        $middle = Veil::new()->withBackdrop(50)->composite(
+            implode("\n", $box),
+            $backdrop,
+            OverlayPosition::CENTER,
+            OverlayPosition::CENTER,
+        );
+
+        $parts = [$menuBar];
+        if ($notice !== '') {
+            $parts[] = $notice;
+        }
+        $parts[] = $middle;
+        if ($bottom !== '') {
+            $parts[] = $bottom;
+        }
+
+        $joined = implode("\n", $parts);
+        $frame = self::clipWidth(self::clipTail($joined, $rows), $cols);
+        $frame = self::overlayMenu($a, $frame, $cols, self::lineCount($menuBar));
+        $dropped = self::lineCount($joined) - self::lineCount($frame);
+
+        LiveRenderer::clearZones();
+        self::$lastDockFrame = null;
+        self::$scrollRegions = [];
+
+        self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), self::lineCount($menuBar), []);
+
+        return new View($frame);
+    }
+
+    /**
+     * The review's file-derived-text policy — the same strip {@see
+     * LiveRenderer} runs over untrusted transcript text, kept local because
+     * that file's helper is private and belongs to another step.
+     */
+    private static function reviewText(string $text): string
+    {
+        return Sanitize::stripZoneSentinels(Sanitize::untrustedForDisplay($text));
+    }
+
+    /**
+     * The subdued chrome style — {@see LiveRenderer::dim()}'s vocabulary
+     * (systemLabel WITHOUT faint, for the contrast reason that docblock
+     * gives), copied for the same file-ownership reason as the diff styles.
+     */
+    private static function reviewDim(Theme $theme): Style
+    {
+        return Style::new()->foreground($theme->systemLabel);
+    }
+
+    /**
+     * One patch row, painted: C-TUI-2.c's marker-column vocabulary —
+     * headers bold systemLabel, `@@` blue, `+` green, `-` red, context
+     * dim — then the token highlight over the row's body for a known
+     * language. Byte-identical to the plain whole-row paint when nothing
+     * tints (the same no-op law {@see LiveRenderer::renderDiffBody} gives).
+     */
+    private static function reviewDiffRow(
+        string $row,
+        bool $isHeader,
+        ?string $language,
+        Theme $theme,
+        RegexHighlighter $highlighter,
+    ): string {
+        if ($isHeader) {
+            return Style::new()->foreground($theme->systemLabel)->bold()->render($row);
+        }
+
+        $style = match (true) {
+            str_starts_with($row, '@@') => Style::new()->foreground(Color::ansi(6)),
+            str_starts_with($row, '+') => Style::new()->foreground(Color::ansi(2)),
+            str_starts_with($row, '-') => Style::new()->foreground(Color::ansi(1)),
+            default => self::reviewDim($theme),
+        };
+
+        if ($language === null) {
+            return $style->render($row);
+        }
+
+        $marker = $row === '' ? ' ' : substr($row, 0, 1);
+        if ($marker !== ' ' && $marker !== '+' && $marker !== '-') {
+            return $style->render($row);
+        }
+
+        $spans = $highlighter->tokenize($row === '' ? '' : substr($row, 1), $language);
+        if ($spans === [] || (count($spans) === 1 && $spans[0]->kind === TokenKind::Plain)) {
+            return $style->render($row);
+        }
+
+        $painted = $style->render($marker);
+        foreach ($spans as $span) {
+            $spanStyle = match ($span->kind) {
+                TokenKind::Comment => $theme->markdown->comment,
+                TokenKind::StringToken => $theme->markdown->string,
+                TokenKind::Keyword => $theme->markdown->keyword,
+                TokenKind::Number => $theme->markdown->number,
+                default => null,
+            } ?? $style;
+            $painted .= $spanStyle->render($span->text);
+        }
+
+        return $painted;
+    }
+
+    /**
+     * The language each body row's tint uses, travelling with the file
+     * headers exactly like {@see DiffGutter}'s verdicts — a copy of
+     * LiveRenderer's private walk, same ownership note as
+     * {@see reviewDiffRow()}.
+     *
+     * @param list<string> $rows
+     * @param list<bool> $headers
+     * @return list<?string>
+     */
+    private static function reviewRowLanguages(array $rows, array $headers): array
+    {
+        $languages = [];
+        $current = null;
+        foreach ($rows as $i => $row) {
+            if ($headers[$i]) {
+                $found = self::reviewPathLanguage($row);
+                $current = str_starts_with($row, 'diff --git ') ? $found : ($found ?? $current);
+            }
+            $languages[$i] = $current;
+        }
+
+        return $languages;
+    }
+
+    /** A file-header row's path, mapped to a language (null for unknown). */
+    private static function reviewPathLanguage(string $row): ?string
+    {
+        if (str_starts_with($row, '+++ ') || str_starts_with($row, '--- ')) {
+            $path = substr($row, 4);
+        } elseif (str_starts_with($row, 'diff --git ')) {
+            $tokens = preg_split('/\s+/', trim(substr($row, 11))) ?: [];
+            $path = '';
+            foreach ($tokens as $token) {
+                if (str_starts_with($token, 'b/')) {
+                    $path = $token;
+                }
+            }
+        } else {
+            return null;
+        }
+
+        $path = preg_split('/\s+/', trim($path))[0] ?? '';
+        if (str_starts_with($path, 'a/') || str_starts_with($path, 'b/')) {
+            $path = substr($path, 2);
+        }
+
+        return RegexHighlighter::languageForPath($path);
     }
 
     /**
