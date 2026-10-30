@@ -477,7 +477,7 @@ parameters:
 		-
 			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
 			identifier: function.alreadyNarrowedType
-			count: 1
+			count: 2
 			path: src/Background/BackgroundShellRegistry.php
 
 		-
@@ -591,7 +591,7 @@ parameters:
 		-
 			message: '#^Expression on left side of \?\? is not nullable\.$#'
 			identifier: nullCoalesce.expr
-			count: 1
+			count: 2
 			path: src/Chat.php
 
 		-
@@ -681,7 +681,7 @@ parameters:
 		-
 			message: '#^Using nullsafe property access "\?\-\>userConfig" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 3
+			count: 5
 			path: src/Chat.php
 
 		-
@@ -865,12 +865,6 @@ parameters:
 			path: src/Cli/Subcommands.php
 
 		-
-			message: '#^Parameter \#1 \$signal of static method SugarCraft\\Code\\Support\\ProcessReaper\:\:escalate\(\) expects callable\(int\)\: void, Closure\(int\)\: bool given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Commands/BangShell.php
-
-		-
 			message: '#^Offset ''pid'' on array\{command\: string, pid\: int, running\: bool, signaled\: bool, stopped\: bool, exitcode\: int, termsig\: int, stopsig\: int\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -881,12 +875,6 @@ parameters:
 			identifier: nullCoalesce.offset
 			count: 1
 			path: src/Commands/CommandSpec.php
-
-		-
-			message: '#^Method SugarCraft\\Code\\Commands\\McpAuthCommand\:\:reconnectPair\(\) should return array\{array\<string, array\{transport\: string, up\: bool\|null, tools\: int\}\>, array\<string, array\{transport\: string, up\: bool\|null, tools\: int\}\>, list\<string\>, list\<string\>, array\<string, array\{url\: string, status\: string\}\>, string\|null\} but returns array\{array\<string, array\{transport\: string, up\: bool\|null, tools\: int, resources\?\: int\}\>, array\<string, array\{transport\: string, up\: bool\|null, tools\: int, resources\?\: int\}\>, list\<string\>, list\<string\>, array\<string, array\{url\: string, status\: int\}\>, string\|null\}\.$#'
-			identifier: return.type
-			count: 1
-			path: src/Commands/McpAuthCommand.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>args" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
@@ -1009,12 +997,6 @@ parameters:
 			path: src/Context/Triggers/KeywordTrigger.php
 
 		-
-			message: '#^Parameter \#1 \$signal of static method SugarCraft\\Code\\Support\\ProcessReaper\:\:escalate\(\) expects callable\(int\)\: void, Closure\(int\)\: bool given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Format/FormatRunner.php
-
-		-
 			message: '#^PHPDoc tag @param for parameter \$modeReader with type \(callable\)\|null is not subtype of native type Closure\|null\.$#'
 			identifier: parameter.phpDocType
 			count: 1
@@ -1061,12 +1043,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: src/Host/Commands/GenerateHostCommand.php
-
-		-
-			message: '#^Variable \$reason in isset\(\) always exists and is not nullable\.$#'
-			identifier: isset.variable
-			count: 1
-			path: src/Host/Commands/HooksHostCommand.php
 
 		-
 			message: '#^Anonymous function never returns null so it can be removed from the return type\.$#'
@@ -1243,18 +1219,6 @@ parameters:
 			path: src/Lang.php
 
 		-
-			message: '#^Parameter \#1 \$signal of static method SugarCraft\\Code\\Support\\ProcessReaper\:\:escalate\(\) expects callable\(int\)\: void, Closure\(int\)\: bool given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Lint/LintRunner.php
-
-		-
-			message: '#^Parameter \#1 \$signal of static method SugarCraft\\Code\\Support\\ProcessReaper\:\:escalate\(\) expects callable\(int\)\: void, Closure\(int\)\: bool given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Lint/TestRunner.php
-
-		-
 			message: '#^Anonymous function has an unused use \$path\.$#'
 			identifier: closure.unusedUse
 			count: 1
@@ -1299,12 +1263,6 @@ parameters:
 		-
 			message: '#^PHPDoc tag @return with type array\<string, mixed\> is incompatible with native type Psr\\Http\\Message\\ResponseInterface\.$#'
 			identifier: return.phpDocType
-			count: 1
-			path: src/MCP/SseMcpServer.php
-
-		-
-			message: '#^Strict comparison using \=\=\= between lowercase\-string&non\-empty\-string and '''' will always evaluate to false\.$#'
-			identifier: identical.alwaysFalse
 			count: 1
 			path: src/MCP/SseMcpServer.php
 
@@ -1687,12 +1645,6 @@ parameters:
 			path: src/Renderer.php
 
 		-
-			message: '#^Parameter \#1 \$signal of static method SugarCraft\\Code\\Support\\ProcessReaper\:\:escalate\(\) expects callable\(int\)\: void, Closure\(int\)\: bool given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/RepoMap/CtagsSymbolExtractor.php
-
-		-
 			message: '#^Strict comparison using \!\=\= between array and null will always evaluate to true\.$#'
 			identifier: notIdentical.alwaysTrue
 			count: 1
@@ -1969,20 +1921,8 @@ parameters:
 			path: src/Support/ProcessContainment.php
 
 		-
-			message: '#^Parameter \#1 \$signal of static method SugarCraft\\Code\\Support\\ProcessReaper\:\:escalate\(\) expects callable\(int\)\: void, Closure\(int\)\: bool given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Support/ProjectRoot.php
-
-		-
 			message: '#^Negated boolean expression is always true\.$#'
 			identifier: booleanNot.alwaysTrue
-			count: 1
-			path: src/Support/PtyDriver.php
-
-		-
-			message: '#^Parameter \#1 \$signal of static method SugarCraft\\Code\\Support\\ProcessReaper\:\:escalate\(\) expects callable\(int\)\: void, Closure\(int\)\: bool given\.$#'
-			identifier: argument.type
 			count: 1
 			path: src/Support/PtyDriver.php
 
@@ -2017,12 +1957,6 @@ parameters:
 			path: src/Theme.php
 
 		-
-			message: '#^Parameter \#1 \$signal of static method SugarCraft\\Code\\Support\\ProcessReaper\:\:escalate\(\) expects callable\(int\)\: void, Closure\(int\)\: bool given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Tools/BuiltIn/Bash.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>tokens" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -2045,12 +1979,6 @@ parameters:
 			identifier: arrayValues.list
 			count: 1
 			path: src/Tools/BuiltIn/Glob.php
-
-		-
-			message: '#^Parameter \#1 \$signal of static method SugarCraft\\Code\\Support\\ProcessReaper\:\:escalate\(\) expects callable\(int\)\: void, Closure\(int\)\: bool given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Tools/BuiltIn/Grep.php
 
 		-
 			message: '#^Anonymous function has an unused use \$record\.$#'
@@ -2147,18 +2075,6 @@ parameters:
 			identifier: nullCoalesce.variable
 			count: 1
 			path: src/Tools/BuiltIn/WebFetch.php
-
-		-
-			message: '#^Call to function is_array\(\) with array\<int, string\> will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 1
-			path: src/Tools/BuiltIn/WebSearch.php
-
-		-
-			message: '#^Variable \$http_response_header on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.variable
-			count: 1
-			path: src/Tools/BuiltIn/WebSearch.php
 
 		-
 			message: '#^Strict comparison using \!\=\= between string and null will always evaluate to true\.$#'
@@ -2269,24 +2185,6 @@ parameters:
 			path: src/Tui/Components/ToolsPane.php
 
 		-
-			message: '#^Access to an undefined property SugarCraft\\Core\\Model\:\:\$col\.$#'
-			identifier: property.notFound
-			count: 2
-			path: src/Tui/ComposerVim.php
-
-		-
-			message: '#^Access to an undefined property SugarCraft\\Core\\Model\:\:\$row\.$#'
-			identifier: property.notFound
-			count: 2
-			path: src/Tui/ComposerVim.php
-
-		-
-			message: '#^Method SugarCraft\\Code\\Tui\\ComposerVim\:\:openLine\(\) should return SugarCraft\\Forms\\TextArea\\TextArea but returns SugarCraft\\Core\\Model\.$#'
-			identifier: return.type
-			count: 1
-			path: src/Tui/ComposerVim.php
-
-		-
 			message: '#^Method SugarCraft\\Code\\Tui\\ComposerVim\:\:with\(\) should return \$this\(SugarCraft\\Code\\Tui\\ComposerVim\) but returns SugarCraft\\Code\\Tui\\ComposerVim\.$#'
 			identifier: return.type
 			count: 1
@@ -2297,18 +2195,6 @@ parameters:
 			identifier: notIdentical.alwaysFalse
 			count: 1
 			path: src/Tui/DirectoryPicker/DirectoryPicker.php
-
-		-
-			message: '#^Method SugarCraft\\Code\\Tui\\KeyboardHandler\:\:handle\(\) should return array\{SugarCraft\\Code\\App\\App, SugarCraft\\Code\\Tui\\Commands\\KeyCmd\|null\} but returns array\{SugarCraft\\Code\\App\\App, SugarCraft\\Code\\App\\SelectSkillMsg\|null\}\.$#'
-			identifier: return.type
-			count: 1
-			path: src/Tui/KeyboardHandler.php
-
-		-
-			message: '#^Method SugarCraft\\Code\\Tui\\KeyboardHandler\:\:handle\(\) should return array\{SugarCraft\\Code\\App\\App, SugarCraft\\Code\\Tui\\Commands\\KeyCmd\|null\} but returns array\{SugarCraft\\Code\\App\\App, SugarCraft\\Code\\Tui\\Components\\MenuSelectedMsg\}\.$#'
-			identifier: return.type
-			count: 1
-			path: src/Tui/KeyboardHandler.php
 
 		-
 			message: '#^Method SugarCraft\\Code\\Tui\\KeyboardHandler\:\:handleAgentAttachKey\(\) should return array\{SugarCraft\\Code\\App\\App, SugarCraft\\Code\\Tui\\Commands\\KeyCmd\|null\} but returns array\{SugarCraft\\Code\\App\\App, SugarCraft\\Code\\App\\CloseAgentViewMsg\|null\}\.$#'
@@ -2526,8 +2412,96 @@ parameters:
 			count: 1
 			path: src/Workflows/WorkflowEngine.php
 
+		# CI-1030: value is written through the &$mirrorQueue reference at :492; reference writes are invisible to static analysis
 		-
-			message: '#^Parameter \#1 \$signal of static method SugarCraft\\Code\\Support\\ProcessReaper\:\:escalate\(\) expects callable\(int\)\: void, Closure\(int\)\: bool given\.$#'
-			identifier: argument.type
+			message: '#^Property SugarCraft\\Code\\Backend\\RemoteBackend\:\:\$feedOwnQueueId \(string\|null\) is never assigned string so it can be removed from the property type\.$#'
+			identifier: property.unusedType
 			count: 1
-			path: src/Workspace/GitRunner.php
+			path: src/Backend/RemoteBackend.php
+		# CI-1030: streams retained solely to pin GC lifetime while handlers are attached (C-WEB-2.g design)
+		-
+			message: '#^Property SugarCraft\\Code\\MCP\\HttpMcpServer\:\:\$retainedStreams is never read\, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/MCP/HttpMcpServer.php
+		# CI-1030: sockets retained solely to pin GC lifetime while handlers are attached (C-WEB-2.g design)
+		-
+			message: '#^Property SugarCraft\\Code\\MCP\\SseMcpServer\:\:\$retainedSockets is never read\, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/MCP/SseMcpServer.php
+		# CI-1030: deadline-plumbing seam pinned via reflection by tests/MCP/SseMcpServerTest\:\:… (@internal)
+		-
+			message: '#^Method SugarCraft\\Code\\MCP\\SseMcpServer\:\:readStreamChunk\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: src/MCP/SseMcpServer.php
+		# CI-1030: $opened is filled through a use(\&$opened) reference capture; the close-on-timeout guard is pinned by the timeout tests
+		-
+			message: '#^Instanceof between null and SugarCraft\\Code\\Host\\RemoteSessionHost will always evaluate to false\.$#'
+			identifier: instanceof.alwaysFalse
+			count: 1
+			path: src/Session/Import/RemoteSessionPush.php
+		# CI-1030: deliberate TOCTOU: lstat re-check immediately before fopen cannot be narrowed away
+		-
+			message: '#^Left side of \|\| is always false\.$#'
+			identifier: booleanOr.leftAlwaysFalse
+			count: 1
+			path: src/Share/JsonlTranscriptWriter.php
+		# CI-1030: deliberate TOCTOU: lstat re-check immediately before fopen cannot be narrowed away
+		-
+			message: '#^Right side of \|\| is always false\.$#'
+			identifier: booleanOr.rightAlwaysFalse
+			count: 1
+			path: src/Share/JsonlTranscriptWriter.php
+		# CI-1030: every INERT row currently lists an empty no-op value set; the leg stays wired for future entries
+		-
+			message: '#^Call to function in_array\(\) with arguments string\, array\{\} and true will always evaluate to false\.$#'
+			identifier: function.impossibleType
+			count: 1
+			path: src/Support/FrontmatterKeyAudit.php
+		# CI-1030: every INERT row currently lists an empty no-op value set; the leg stays wired for future entries
+		-
+			message: '#^Result of \&\& is always false\.$#'
+			identifier: booleanAnd.alwaysFalse
+			count: 1
+			path: src/Support/FrontmatterKeyAudit.php
+		# CI-1030: every INERT row currently lists an empty no-op value set; the leg stays wired for future entries
+		-
+			message: '#^Strict comparison using \!\=\= between array\{\} and array\{\} will always evaluate to false\.$#'
+			identifier: notIdentical.alwaysFalse
+			count: 1
+			path: src/Support/FrontmatterKeyAudit.php
+		# CI-1030: libdom stubs exclude DOMCdataSection from the DOMNode union; runtime nodes ARE DOMCdataSection
+		-
+			message: '#^Instanceof between DOMNameSpaceNode\|DOMNode and DOMCdataSection will always evaluate to false\.$#'
+			identifier: instanceof.alwaysFalse
+			count: 1
+			path: src/Tools/Web/HtmlToMarkdown.php
+		# CI-1030: reflection seam read by tests/Commands/KeyBindingDriftTest\:\:… (keybinding census)
+		-
+			message: '#^Static method SugarCraft\\Code\\Tui\\Components\\MenuBar\:\:itemsOf\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: src/Tui/Components/MenuBar.php
+		# CI-1030: sugar-forms TextArea::update() declares array{0:Core\Model,..} via the generic contract; runtime value is TextArea (narrowing the lib docblock cascades 4 new errors inside sugar-forms)
+		-
+			message: '#^Access to an undefined property SugarCraft\\Core\\Model\:\:\$col\.$#'
+			identifier: property.notFound
+			count: 2
+			path: src/Tui/ComposerVim.php
+		-
+			message: '#^Access to an undefined property SugarCraft\\Core\\Model\:\:\$row\.$#'
+			identifier: property.notFound
+			count: 2
+			path: src/Tui/ComposerVim.php
+		-
+			message: '#^Method SugarCraft\\Code\\Tui\\ComposerVim\:\:resolveCountedMotion\(\) should return array\{SugarCraft\\Forms\\TextArea\\TextArea, SugarCraft\\Code\\Tui\\ComposerVim, bool\} but returns array\{SugarCraft\\Core\\Model, SugarCraft\\Code\\Tui\\ComposerVim, true\}\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Tui/ComposerVim.php
+		-
+			message: '#^Method SugarCraft\\Code\\Tui\\ComposerVim\:\:enterInsert\(\) should return SugarCraft\\Forms\\TextArea\\TextArea but returns SugarCraft\\Core\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Tui/ComposerVim.php
