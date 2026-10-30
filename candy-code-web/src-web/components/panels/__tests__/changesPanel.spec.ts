@@ -224,11 +224,11 @@ describe('ChangesPanel base selector (C-TUI-2.g)', () => {
     const wrapper = mount(ChangesPanel)
     await flushPromises()
     expect(wire.sent('files.diff').at(-1)?.params).toEqual({ sessionId: 's-1' })
-    expect(wire.sent('files.changed').at(-1)?.params).toEqual({}, 'the changed-list never takes a base')
+    expect(wire.sent('files.changed').at(-1)?.params).toEqual({}) // the changed-list never takes a base
     await wire.answer('files.changed', CHANGED)
     await wire.answer('files.diff', headDiff({ checkpoints: 2 }))
     await flushPromises()
-    const select = wrapper.find('[data-testid="changes-base"]')
+    const select = wrapper.find<HTMLSelectElement>('[data-testid="changes-base"]')
     expect(select.exists()).toBe(true)
     const options = select.findAll('option').map((option) => option.text())
     expect(options).toEqual(['HEAD', '1 turn ago', '2 turns ago'])
@@ -253,7 +253,7 @@ describe('ChangesPanel base selector (C-TUI-2.g)', () => {
 
     const diff = wrapper.find('[data-testid="diff"]').text()
     expect(diff).toContain('three')
-    expect(diff).not.toContain('keep', 'the checkpoint diff replaced the HEAD text — no mixing of bases')
+    expect(diff).not.toContain('keep') // the checkpoint diff replaced the HEAD text — no mixing of bases
     expect(wrapper.find('[data-testid="changes-diff-ref"]').text()).toBe('against checkpoint:11')
   })
 
@@ -292,7 +292,7 @@ describe('ChangesPanel base selector (C-TUI-2.g)', () => {
     await flushPromises()
     expect(wrapper.find('[data-testid="changes-diff-error"]').text()).toContain('no workspace checkpoints')
     expect(wrapper.find('[data-testid="diff"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="changes-count"]').text()).toBe('3 changed', 'the list survives its sibling refusal')
+    expect(wrapper.find('[data-testid="changes-count"]').text()).toBe('3 changed') // the list survives its sibling refusal
   })
 
   it('switching sessions drops back to HEAD and re-asks', async () => {
@@ -311,7 +311,7 @@ describe('ChangesPanel base selector (C-TUI-2.g)', () => {
     usePanelsStore().sessionId = 's-2'
     await nextTick()
     await flushPromises()
-    expect(wire.sent('files.diff').at(-1)?.params).toEqual({ sessionId: 's-2' }, 'a new session starts on HEAD, not the old base')
-    expect(wrapper.find('[data-testid="changes-base"]').element.value).toBe('0')
+    expect(wire.sent('files.diff').at(-1)?.params).toEqual({ sessionId: 's-2' }) // a new session starts on HEAD, not the old base
+    expect(wrapper.find<HTMLSelectElement>('[data-testid="changes-base"]').element.value).toBe('0')
   })
 })

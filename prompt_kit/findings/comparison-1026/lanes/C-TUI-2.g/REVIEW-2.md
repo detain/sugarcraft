@@ -1,0 +1,33 @@
+# C-TUI-2.g REVIEW-2 — round-1 cures (tip 0d66f3720, stacked on r1-reviewd 98f6b0f4a, base 7646af980)
+
+VERDICT: CLEAN — 0 CRITICAL / 0 MAJOR / 0 MINOR step-local. All three r1 minors genuinely cured. WELD-READY. This file is MAIN-TREE ONLY (my write map refused the worktree evidence dir) — the welder must copy it onto the branch alongside REVIEW-1.md (also main-tree-only) and FIX-1.md/REPORT.md (on the worktree disk but UNTRACKED — `git ls-files` on the evidence dir is empty).
+
+## M1 — path leak shut, both halves verified
+FilesMethods.php:119-121 (worktree): the wire refusal is the FIXED literal `'the checkpoint diff is unavailable'` + kind `checkpoint_diff_failed` — no variable part remains. The real reason goes to `$call->server->logError(new \RuntimeException($diff), 'files.diff checkpoint diff failed')`. Read `ServerContext::logError` (:140-146): writes ONLY into the injected one-way `$log` closure (Serve.php:629; docblock :87 states the ISS-057 contract "internal failures reach the client as codes only, the cause comes here") — cannot echo back to any client. Leak is real: `prepare()` returns `'the repository that held this snapshot is gone: ' . $gitDir` (WorkspaceCheckpointer.php:733) and `'this checkpoint has no workspace snapshot: …'`/refusalFor paths. Precedent claim VERIFIED at BgMethods.php:110-112 — identical logError-then-fixed-literal shape. Pin asserts BOTH halves: byte-exact literal message, `$this->tmp` absent from the FULL response JSON, AND the log sink contains the prefix line and the vanished gitDir (fixture threads a `log:` closure into ServerContext::new). Not a half-cure.
+
+## M2 — both new pins non-vacuous (guard-removal reddens each)
+- `no_store` (FilesMethods.php:103-105): fires BEFORE `SessionMethods::sessionId()` at :106 — ordering claim verified; `sessionId()` is pure param-validation anyway, and `store()` reads `hub->workspace()->sessionStore` (null in the pin's second WorkspaceContext). Guard removal → `checkpointBases(null, …)` TypeError → Dispatcher.php:373-379 catch-all answers `RpcError::of(Internal, 'internal error')` with NO data.kind → the pin's `assertSame('no_store', …)` reddens. No earlier refusal can fire first: `checkpoint_without_session` needs missing sessionId (pin sends one), `ref_with_checkpoint` needs ref (absent).
+- `checkpoint_diff_failed`: `isCaptured` (WorkspaceCheckpointer.php:436-443) checks gitDir is a STRING but never `is_dir` — so the `attachWorkspaceRef` rewrite to `<tmp>/gone/.git` passes the shape gate (status/ref/sha untouched), `checkpointBases` keeps it, and the string escapes inside `CheckpointDiff::of`→`prepare()` at :733. Guard removal → string used as `$diff->patch` → TypeError → internal error, kind gone → red. Literal-revert → message + JSON-path-absence legs red; logError deletion → log legs red.
+- Reproduced: `FilesDiffCheckpointTest` **9T/64A green** (12.0 s, real git + live ServerContext).
+
+## M3 — claim truth; my verification is BY CONSTRUCTION (disclosed)
+My shell permission map denies ALL node invocations (`node --version` rejected), so I could not re-run vue-tsc/vitest myself. The argument stands anyway: `git diff --name-only 98f6b0f4a 0d66f3720` = exactly the two PHP files — the web tree at the new tip is BYTE-IDENTICAL to what r1 measured at 98f6b0f4a (7 errors: 5 ChangesPanel.vue + 2 contextSources.ts; vitest 16+3=19). I verified the mechanism statically: ChangesPanel.vue :52 sends `{sessionId}`/`{sessionId, checkpoint}` and :75/:76 read `diff.value.checkpoints` (×2) against the STALE committed `src-web/protocol/generated.ts` :651 files.diff entry (zero `checkpoints`/`omittedLines`/`checkpoint` hits in it — regen supplies them); contextSources.ts :176/:187 fall in the mergeTrustRow/C-SEC-5.b trust-ask region — foreign to files.diff, matching the claimed 2 remainders. The REPORT.md truth-fix (solution tsconfig `files: []` vacuity) is honest and matches r1's own finding. The regen PAIR + post-regen vue-tsc/vitest remain WELD duties (§below) — the welder's run IS the empirical close.
+
+## Nothing PASed moved
+Fix commit = `FilesMethods.php +9/−1`, `FilesDiffCheckpointTest.php +75/−1` only (numstat verified). Still on disk byte-unchanged: CHECKPOINT_SCAN=1000 (:42) + bounded `fileCheckpointPositions`; `isCaptured` REF_PREFIX+40–64-hex gate in checkpointBases (:146); clamp `$bases[min($checkpoint,count($bases))-1]` mirroring DiffReview/DiffReviewSource.php:86; BOTH paths emit the 5 schema-required keys (:87-92 git, :121-127 checkpoint; MethodSchemas :743 requires exactly them); E646-clean (no new timers; git work rides the pre-existing RESTORE_BUDGET_SECONDS). Whole lane vs master = exactly the 5 named files — NO schema.json, NO generated.ts, NO dist, NO suite-figure/durations committed; regen PAIR RESTORED (worktree clean except untracked evidence dir).
+
+## Gates reproduced (cwd candy-code, env -u LINES -u COLUMNS plain pipe)
+- FilesDiffCheckpointTest: **9T/64A** green ✓ (claim exact).
+- ReadmeRosterDrift|EnvRosterDrift|TrustKeyDocumentationDrift: **59T/40837A** green ✓ exact.
+- DocFigureProseDrift|ReadmeJsonErrorContractDrift: **111T/4F** ✓ — all 4 inside ReadmeJsonErrorContractDriftTest (standing roster).
+- ProtocolSchemaDriftTest|ServerProtocolDocumentationDriftTest: **13T/361A/1F** ✓ — sole red is ProtocolSchemaDriftTest:39 "schema is stale — run gen-protocol-schema --write", diff EXACTLY the files.diff entries (regen-cleared staleness, not a schema bug; MethodSchemas declares what the diff wants).
+- php -l clean (both files); durations.tsv has NO FilesDiffCheckpointTest row yet (grep 0) = weld-owed, as claimed.
+- PtyRunToolTest exclusion never in scope of any filter used.
+
+## WELD CARRIES (authoritative, restated)
+1. Regen is a PAIR: `php candy-code/tools/gen-protocol-schema.php --write` AND `npm run gen:protocol` (fixer wrote `scripts/` inside the lib; either spelling, one weld commit). Regenerating ONE breaks generated.spec.
+2. Post-regen: dist rebuild (weld duty), vitest `--no-file-parallelism` (changesPanel 16 + generated.spec 3 + protocol family), ProtocolSchemaDrift green, project-scoped `node_modules/.bin/vue-tsc --noEmit -p tsconfig.app.json` — expect ONLY the 2 foreign contextSources.ts errors (document what remains).
+3. durations.tsv row OWED: `candy-code/tests/Protocol/FilesDiffCheckpointTest.php` ~11.5–12 s.
+4. §7 carry: **+9T/+64A** (new test file, all-additions: 9/64 measured green at tip; arithmetic = r1's +7T/+49A +2 methods/+15A).
+5. docs/SERVER.md owes NOTHING (ServerProtocolDocumentationDriftTest arms green pre-regen).
+6. Evidence copies onto branch: REVIEW-1.md (main-tree-only), REVIEW-2.md (this file, main-tree-only), FIX-1.md + REPORT.md (worktree-disk, untracked).

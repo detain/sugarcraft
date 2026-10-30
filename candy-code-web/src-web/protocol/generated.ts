@@ -650,12 +650,21 @@ export interface Methods {
   /** The workspace's uncommitted changes to tracked files, as a unified diff. */
   "files.diff": {
     params: {
+      sessionId?: SessionId
+      /** Git revision to diff against; defaults to HEAD. Rejected together with `checkpoint`. */
       ref?: string
+      /** Which checkpoint base to diff against, counted the way `/diff n` counts: 1 is the most recent captured base. Needs `sessionId`; values beyond the last base settle on the oldest. */
+      checkpoint?: number
     }
     result: {
+      /** The base actually used: a git revision, or `checkpoint:<index>` for a checkpoint diff. */
       ref: string
       diff: string
       truncated: boolean
+      /** How many checkpoint bases exist for the session; 0 when no `sessionId` was named or the server has no session store. */
+      checkpoints: number
+      /** Patch lines dropped by the checkpoint diff bound; always 0 on the git path. */
+      omittedLines: number
     }
   }
   /** A file under the project root, read-only and size-capped. */

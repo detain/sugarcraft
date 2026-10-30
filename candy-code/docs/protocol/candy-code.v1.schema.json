@@ -2467,9 +2467,18 @@
             "params": {
                 "type": "object",
                 "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
                     "ref": {
                         "type": "string",
-                        "maxLength": 128
+                        "maxLength": 128,
+                        "description": "Git revision to diff against; defaults to HEAD. Rejected together with `checkpoint`."
+                    },
+                    "checkpoint": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Which checkpoint base to diff against, counted the way `/diff n` counts: 1 is the most recent captured base. Needs `sessionId`; values beyond the last base settle on the oldest."
                     }
                 }
             },
@@ -2477,19 +2486,32 @@
                 "type": "object",
                 "properties": {
                     "ref": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "The base actually used: a git revision, or `checkpoint:<index>` for a checkpoint diff."
                     },
                     "diff": {
                         "type": "string"
                     },
                     "truncated": {
                         "type": "boolean"
+                    },
+                    "checkpoints": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "How many checkpoint bases exist for the session; 0 when no `sessionId` was named or the server has no session store."
+                    },
+                    "omittedLines": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Patch lines dropped by the checkpoint diff bound; always 0 on the git path."
                     }
                 },
                 "required": [
                     "ref",
                     "diff",
-                    "truncated"
+                    "truncated",
+                    "checkpoints",
+                    "omittedLines"
                 ]
             }
         },
