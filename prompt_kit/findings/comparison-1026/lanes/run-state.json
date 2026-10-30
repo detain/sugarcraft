@@ -291,7 +291,7 @@
   "BUILDERS": "none (owner t423 freeze)",
   "FIXERS": "none"
  },
- "master_tip": "babae5238",
+ "master_tip": "ad43e45a1",
  "master_tip_at_dispatch": "9fb981c5c",
  "master_tip_observed": "ca1e0b51f",
  "next_fill_queue": [],
@@ -721,6 +721,16 @@
    "close_sha": "f04e7d4f7",
    "nit1_rider_sha": "0c9584d72",
    "weld": "WELD-1030W27close: NIT-1 rider 0c9584d72 + plan f04e7d4f7 (path-scoped) + run-state fold + evidence sweep + PUSH milestone"
+  },
+  "30": {
+   "round": 1,
+   "verdict": "CLEAN 0C/0M/0m (WAVE-REVIEW-1.md, lead-stat-verified)",
+   "reviewed_at": "e4b3308ab",
+   "next": "W30-close welder: §3 flip ✅W30 + waves_closed+=30 + evidence sweep + PUSH milestone",
+   "stage": "closed",
+   "closed_at": "2026-10-30",
+   "close_sha": "ad43e45a1",
+   "weld": "WELD-1030W30close: plan §3 flip ad43e45a1 (path-scoped) + run-state fold + evidence sweep + PUSH milestone"
   }
  },
  "waved_loops": {
@@ -808,6 +818,7 @@
   26,
   27,
   29,
+  30,
   32
  ],
  "weld_notes": {
@@ -1853,7 +1864,7 @@
  ],
  "batch1030u_note": "1030U fold-by-welder: welded += C-TUI-5.c (277->278, count==len asserted against FRESH pre-fold read, concurrent CI-1030 delta at 277 preserved). inflight: removed C-TUI-5.c (welded) + stale C-CTX-6.e (brief instruction; key carried tip 491863e9e superseded by disk 6b8fee691 3-commit truth; closure disposition stays with lead). C-CTX-5.d untouched. KEEPER law honored: lead may have further deltas — this fold read the live file at fold time, wrote via full-json rewrite preserving all other keys byte-structurally.",
  "batch1030z_note": null,
- "origin_tip": "babae5238",
+ "origin_tip": "ea388ec18",
  "run_end": "LEAD RUN WINDING DOWN t580: stop-budget over (279 vs start 240); owner t423 final order. Orchestral duties owed next: W25/W26 wave-loop re-reviews (steps all welded now; loops r1 FINDINGS closed except C-CTX-5.d/6.e late welds), scheduler waves_fully_welded re-read, §3 flips on clean loops, then cc-cmp-gate closeout for remaining ~49 steps.",
  "fleet_roster": {
   "C-SES-8.g|builder": "ses_e71ac801effeCrZlK5lPBHWEy7",
@@ -1945,5 +1956,7 @@
  "note_t606": "stale C-SES-8.f notification misread -> phantom W28-m1 dispatch -> STOP ORDERed; awaiting ABORT-CONFIRMED before anything else on master. welder-5 + W27-r2 unaffected (read-only/lane-tree until their commits).",
  "batch1030t5e_note": "Weld 1030T5E (welder-5): C-TUI-5.e picks 996ba8c0d/73bb33e2a/de6aeb15e -> 4e1af46a7/55e540f07/f56cd4ee0 on 52315bef8, zero conflicts; DUR row 0.377/14 (true 14T; brief 39T = +25 sibling C-TUI-5.d sweep, decomposed); dist rebuilt deterministic + vitest 4/4; trio zero-drift; gates 453/8099 union, 68/1788 App+Kitty, 135/4840 guard EXACT, palette 7/274, BinCandyCode standing 1F :1890, LayeredSettings 99/405; OneSidedHomeSandbox red base-inherited (0-diff guard+offenders vs 671105299); KeyHelp +7 rider NOT fired (5F+1r foreign family, zero wizard rows) -> cure-owner carry; staleness pair + figure re-pin = §7; weld commit rides this folded copy (its own sha unrecordable by law; master_tip=pre-commit pick tip f56cd4ee0); NO push.",
  "note_t611": "LEAD SELF-CORRECTION: first t611 fold carried PHANTOM sha 41ac6358f (does not exist — cat-file fatal) in note_t611; erased. Disk truth: master tip e4b3308ab (welder-5 C-TUI-5.e weld, lead-verified chain e4b3308ab<-f56cd4ee0<-55e540f07<-4e1af46a7<-52315bef8<-1ff9f5013), welded 284==len, origin last-synced a5591612f. C-TUI-5.a was ALREADY welded t601 (welder-4, e5e884135 + rider a7dddaa64 — that chain is UNDER 1ff9f5013? NO: a7dddaa64 was master before 1ff9f5013; verify order: 1ff9f5013 (W27-m1) rode ON TOP of a7dddaa64-era. Consistent. No welder-4 in flight at t611; live agents = W27-close welder + W30-r1 reviewer only.",
- "batch1030w27close_note": "welder cc-cmp-welder-1030W27close: sole master writer; adopted lead live run-state (sha256 7ff6ec79.. pre-fold, unmutated during weld); NIT-1 rider gate 3T/9A/0F + guards 135T/4840A EXACT; waves_closed+=27 (29 closed: W1-W27,W29,W32); welded 284 (no lane weld in close); PUSH sanctioned wave-close milestone (origin a5591612f == expected, FF)."
+ "batch1030w27close_note": "welder cc-cmp-welder-1030W27close: sole master writer; adopted lead live run-state (sha256 7ff6ec79.. pre-fold, unmutated during weld); NIT-1 rider gate 3T/9A/0F + guards 135T/4840A EXACT; waves_closed+=27 (29 closed: W1-W27,W29,W32); welded 284 (no lane weld in close); PUSH sanctioned wave-close milestone (origin a5591612f == expected, FF).",
+ "note_t612": "W27 CLOSED+PUSHED t612 (welder ses_e7106ee31ffe, lead disk-verified): master==origin==ea388ec18; chain e4b3308ab<-0c9584d72<-f04e7d4f7<-babae5238<-ea388ec18; §3 ✅W27 line 163; waves_closed 29 [1..27,29,32]; welded 284==len; inflight {}; push log a5591612f..ea388ec18 both-ends ls-remote matched. W30-r1 reviewer (ses_e7106ee30ffeSvHsLi6YB2uwWi) still live. Pick-freeze holds (C-TUI-3.g W28 + C-TUI-5.b/C-WEB-2.e W31 not cut; late_unlocked False). Remaining normal: 3 steps; 42 LATE. Queue: W30-r1 verdict -> fix or W30-close welder (push milestone).",
+ "batch1030w30close_note": "W30 wave-close weld 2026-10-30: loop r1 CLEAN 0C/0M/0m (WAVE-REVIEW-1.md 4153B at e4b3308ab); steps C-WEB-2.a (3c17c7c23/f6523fdb5) + C-TUI-5.a (e5e884135/85deffeaf+a7dddaa64) + C-TUI-5.e (f56cd4ee0/e4b3308ab); welded 284 unchanged; §3 flip ad43e45a1; carries standing (§7/--worktree:1890)."
 }
