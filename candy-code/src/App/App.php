@@ -5248,7 +5248,7 @@ final class App implements Model
      * this is exactly as reachable as the arms were before they moved here,
      * neither more nor less. Wiring a driver onto it is a later step.
      *
-     * @return array{0: self, 1: ?Cmd}
+     * @return array{0: self, 1: ?\Closure}
      */
     public function dispatch(Msg $msg): array
     {
@@ -5270,7 +5270,7 @@ final class App implements Model
      * Drop a {@see dispatch()} result's engine Cmd so the tuple satisfies the
      * {@see Model} contract. @see dispatch() for why it cannot be forwarded.
      *
-     * @param array{0: self, 1: ?Cmd} $handled
+     * @param array{0: self, 1: ?\Closure} $handled
      * @return array{0: self, 1: null}
      */
     private static function withoutEngineCmd(array $handled): array
@@ -5290,7 +5290,7 @@ final class App implements Model
      * ignored, because the user just asked for something about a pane and
      * the shell knows which pane it meant.
      *
-     * @return array{0: self, 1: ?Cmd}
+     * @return array{0: self, 1: ?\Closure}
      */
     public function applyDockCommand(DockPaneMsg $msg): array
     {
@@ -5331,7 +5331,7 @@ final class App implements Model
      * half (releasing centre cancels), so this is the only keyboard way to
      * free a single docked pane short of `/layout reset`.
      *
-     * @return array{0: self, 1: ?Cmd}
+     * @return array{0: self, 1: ?\Closure}
      */
     private function applyPaneToggle(DockPaneMsg $msg): array
     {
@@ -5860,7 +5860,7 @@ final class App implements Model
      * $skillPickerOptions with the user-invocable skill list. Mirrors
      * charmbracelet/crush SourceSkillCmd.
      *
-     * @return array{0: self, 1: ?Cmd}
+     * @return array{0: self, 1: ?\Closure}
      */
     private function handleOpenSkillPicker(): array
     {
@@ -5890,7 +5890,7 @@ final class App implements Model
      * user invocation can never be enabled through this path even if the
      * picker's own options were bypassed.
      *
-     * @return array{0: self, 1: ?Cmd}
+     * @return array{0: self, 1: ?\Closure}
      */
     private function handleSelectSkill(SelectSkillMsg $msg): array
     {
@@ -6031,7 +6031,7 @@ final class App implements Model
     /**
      * Handle tool result message.
      *
-     * @return array{0: self, 1: ?Cmd}
+     * @return array{0: self, 1: ?\Closure}
      */
     private function handleToolResult(ToolResultMsg $msg): array
     {
@@ -6060,12 +6060,14 @@ final class App implements Model
         // (withTabHosted is a no-op under a factory-less launch, which never
         // reaches this line). Without it, a picker resume on tab-1 would keep
         // switching in place under the deck key armDeck is about to write.
+        $activeTab = $this->chat->openTabs()->activeTab();
+
         return $this->mutate(
             chat: $this->chat->withTabHosted(true),
             deck: SessionDeck::forLaunch(
                 'tab-1',
                 $this->chat->currentSessionId() ?? '',
-                $this->chat->openTabs()->activeTab()?->name ?? Lang::t('tabs.name_new'),
+                $activeTab === null ? Lang::t('tabs.name_new') : $activeTab->sessionName,
             ),
         );
     }
@@ -6162,8 +6164,8 @@ final class App implements Model
             }
 
             $list = $list->add(WindowEntry::session(
-                WindowRef::session($key, $tab?->sessionName ?? $key),
-                WindowAttention::tryFrom($tab?->attention ?? SessionDeck::ATTENTION_IDLE) ?? WindowAttention::Idle,
+                WindowRef::session($key, $tab === null ? $key : $tab->sessionName),
+                WindowAttention::tryFrom($tab === null ? SessionDeck::ATTENTION_IDLE : $tab->attention) ?? WindowAttention::Idle,
                 count($agents),
                 $agents,
             ));
@@ -6249,7 +6251,8 @@ final class App implements Model
                 continue;
             }
 
-            $notice = TerminalNotifier::fromConfig($app->chat?->workspace()?->userConfig ?? [])
+            $appWorkspace = $app->chat?->workspace();
+            $notice = TerminalNotifier::fromConfig($appWorkspace === null ? [] : $appWorkspace->userConfig)
                 ->cmd($state === WindowAttention::Unseen->value
                     // Both spellings are whole literals: the TuiLang drift
                     // census reads quoted keys from source, and a

@@ -396,7 +396,7 @@ trait HandlesRunControl
      * equality — so an edit to one copy cannot silently let the other answer
      * "quiet" to a session with a dialog open.
      *
-     * @return array{0:Chat,1:?\Closure}
+     * @return array{0:\SugarCraft\Code\Chat,1:?\Closure}
      */
     private function handleCacheTtlIdleCompactTick(): array
     {
