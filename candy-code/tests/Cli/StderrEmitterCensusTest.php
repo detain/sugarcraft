@@ -57,7 +57,10 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — thirty-five sites (C-AGT-6.c 2026-10-28: +1 in
+ *  1. `fwrite(STDERR, …)` — thirty-six sites (C-SES-7.b 2026-10-29: +1 in
+*     `Subcommands::sessionImport()` for the import-refused line — the source file
+*     was refused, the session and store are intact, and the same refusal rides
+*     the JSON document under `--output-format json`; C-AGT-6.c 2026-10-28: +1 in
  *     `MainWorktree` for the kept-tree announce, stderr-alone like every other
  *     end-of-process line; C-AGT-7.b 2026-10-28: +1 in
  *     `NonInteractive` for the `json_schema_unapplied` report line, stderr-alone
@@ -369,7 +372,11 @@ final class StderrEmitterCensusTest extends TestCase
         // PLG-1 2026-10-19: +1 — the `bundles` verb's one shared stderr
         // writer (`bundlesLine`): a subcommand is a separate process with no
         // live transcript to name, the same decision as every sibling.
-        'src/Cli/Subcommands.php' => 6,
+        // C-SES-7.b 2026-10-29: +1 — `session import`'s import-refused line,
+        // stderr-alone by the same decision: the source file (not the session)
+        // was refused, and under `--output-format json` the refusal rides the
+        // document as `import-refused`.
+        'src/Cli/Subcommands.php' => 7,
         // `/new` into another directory: SessionRelaunch::tell(), the one
         // line saying why candy-code could not restart there (no
         // pcntl_exec, an unenterable directory, a failed exec) and the
@@ -578,7 +585,10 @@ final class StderrEmitterCensusTest extends TestCase
         // prompt or spawn. Same stderr-only decision as every sibling here:
         // a separate CLI process, no live session transcript to name,
         // nothing was opened or changed.
-        'src/Cli/Subcommands.php' => 41,
+        // C-SES-7.b 2026-10-29: +3 — the `session import` arm's own
+        // `candy-code: ` envelopes: the missing-operand usage door, the
+        // unknown --format usage door, and the import-refused line.
+        'src/Cli/Subcommands.php' => 44,
         'src/Permissions/PermissionPrompt.php' => 1,
         // Not a message: the protocol schema's `$id` URN
         // (`urn:sugarcraft:candy-code:protocol:v1`, roadmap O-3c) spells the

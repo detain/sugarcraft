@@ -32,7 +32,7 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  * was re-examined against `Bootstrap::warnPermissionConfigInTranscript()`".
  * WHAT IS TRUE NOW, and what round 42's review measured: that was false. Only
  * `Bootstrap`'s writes and this one had been looked at. The real census of raw
- * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is THIRTY-FIVE:
+ * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is THIRTY-SIX:
  *
  *  - {@see \SugarCraft\Code\Cli\NonInteractive}, fifteen —
  *    `run()` four times (a thrown backend error, an answer that would not encode
@@ -59,14 +59,18 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  *    `noticePromptOverride()`, the once-per-parse line saying a second
  *    `-p`/`--prompt` value replaced the first. The parser's only write, and
  *    the last-wins precedence it announces is deliberately unchanged.
- *  - {@see \SugarCraft\Code\Cli\Subcommands}, six — `sessionDelete()`'s "no
+ *  - {@see \SugarCraft\Code\Cli\Subcommands}, seven — `sessionDelete()`'s "no
  *    such session", `mcp()`'s inventory error, — added by E710 —
  *    `mcpImportLine()`, the single funnel for the import verb's notes, —
  *    added by audit MCP-5 — `mcpTrust()`'s one failure line (the config
  *    unreadable, or the grant or trust record not written), — added by
  *    N-2 — `warnSkippedMcpEntries()`, one line naming each `.mcp.json` entry
- *    the inventory skipped, and — added by PLG-1 — `bundlesLine()`, the one
- *    writer every `bundles` warning, refusal, and clone failure shares.
+ *    the inventory skipped, — added by PLG-1 — `bundlesLine()`, the one
+ *    writer every `bundles` warning, refusal, and clone failure shares, and —
+ *    added by C-SES-7.b — `sessionImport()`'s one `import-refused` line (the
+ *    source unreadable, unparseable, past a bound, or shrunken under its own
+ *    ledger), stderr-alone like the sibling refusals and typed into the JSON
+ *    document when one is asked for.
  *  - {@see \SugarCraft\Code\Cli\Serve}, one — `stderr()`, the `serve` verb's
  *    single funnel for its startup lines, request log and stop notice (O-3a).
  *  - {@see \SugarCraft\Code\Cli\Attach}, one — `fail()`, the line saying why
