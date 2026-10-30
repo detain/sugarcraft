@@ -1,10 +1,11 @@
 /**
- * Syntax colouring for fenced code blocks, loaded on demand (a dynamic
- * `import()` from MessageMarkdown — its own chunk, fetched the first time a
- * reply holds a fenced block with a language). Deliberately small and
- * dependency-free: a handful of language families, each a list of token
- * rules tried in order, enough to tell comments, strings, numbers, keywords
- * and tags apart. Never a parser.
+ * Syntax colouring for fenced code blocks and diff bodies. MessageMarkdown
+ * loads it on demand (a dynamic `import()` — its own chunk, fetched the first
+ * time a reply holds a fenced block with a language); DiffView imports it
+ * eagerly because every tool diff carries a file path to read a language from
+ * (C-TUI-2.f). Deliberately small and dependency-free: a handful of language
+ * families, each a list of token rules tried in order, enough to tell
+ * comments, strings, numbers, keywords and tags apart. Never a parser.
  *
  * SAFE BY CONSTRUCTION: it reads the block's text (never its HTML) and writes
  * escaped text inside `<span class="hl-…">` — no markup from the source can
@@ -158,6 +159,47 @@ for (const [language, names] of [
   [DIFF, 'diff patch'],
 ] as const) {
   for (const name of names.split(' ')) ALIASES[name] = language
+}
+
+/**
+ * Final dot extension (lower-cased) → one of this file's own alias names.
+ * The web twin of sugar-core's `RegexHighlighter::languageForPath()`
+ * (C-TUI-2.a) — both maps kept in step so the TUI and the web highlight the
+ * same file in the same language family (C-TUI-2.f, GAP-UI-04). Values are
+ * `supports()`-true by construction; a test pins that invariant so a future
+ * rename cannot silently strand an entry.
+ */
+const LANGUAGE_BY_EXTENSION: Record<string, string> = {
+  php: 'php',
+  js: 'js', mjs: 'js', cjs: 'js', jsx: 'js',
+  ts: 'ts', tsx: 'ts',
+  json: 'json', jsonc: 'json',
+  py: 'py', pyw: 'py',
+  go: 'go',
+  sh: 'sh', bash: 'sh', zsh: 'sh',
+  sql: 'sql',
+  rs: 'rs',
+  java: 'java',
+  c: 'c', h: 'c',
+  cpp: 'cpp', cc: 'cpp', cxx: 'cpp', hpp: 'cpp', hh: 'cpp', hxx: 'cpp',
+  rb: 'rb',
+  yaml: 'yaml', yml: 'yaml',
+  html: 'html', htm: 'html',
+  css: 'css',
+}
+
+/**
+ * The language id to colour a file's body with, from its path — or null when
+ * the path carries no known extension. Pure and total like the PHP twin:
+ * absolute, relative, dotfile or extensionless paths all answer; nothing
+ * throws. Existing callers pass an explicit language to {@link highlight} and
+ * are untouched by this function.
+ */
+export function languageForPath(path: string): string | null {
+  const basename = path.slice(path.lastIndexOf('/') + 1)
+  const dot = basename.lastIndexOf('.')
+  if (dot <= 0) return null
+  return LANGUAGE_BY_EXTENSION[basename.slice(dot + 1).toLowerCase()] ?? null
 }
 
 /** Whether $lang has a colouring here. */

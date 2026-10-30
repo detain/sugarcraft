@@ -4,6 +4,16 @@ import { readJson, writeJson } from './storage'
 
 export type ThemeChoice = 'auto' | 'dark' | 'light'
 
+/**
+ * Diff layout preference (C-TUI-2.f, GAP-UI-05): `auto` splits side-by-side
+ * once the viewport is wide enough (the threshold is `lib/diff.ts`'s
+ * `DIFF_SPLIT_MIN_PX`), `unified` always shows the interleaved stream, `split`
+ * always shows two columns. Same vocabulary as the server's own `diffStyle`
+ * setting — but this one is the *viewer's*: a client localStorage pref beside
+ * the theme, never a settings-schema key.
+ */
+export type DiffStyleChoice = 'auto' | 'unified' | 'split'
+
 /** Why the last notify attempt failed (ISS-111), so the UI can say so. */
 export type NotificationProblem = 'insecure' | 'denied' | 'unsupported'
 
@@ -22,6 +32,7 @@ export const NOTIFICATION_PROBLEM_TEXT: Record<NotificationProblem, string> = {
 export const useSettingsStore = defineStore('settings', () => {
   const theme = ref<ThemeChoice>(readJson<ThemeChoice>('theme', 'auto'))
   const notify = ref<boolean>(readJson<boolean>('notify', false))
+  const diffStyle = ref<DiffStyleChoice>(readJson<DiffStyleChoice>('diffStyle', 'auto'))
 
   function applyTheme(choice: ThemeChoice): void {
     if (typeof document === 'undefined') return
@@ -35,6 +46,12 @@ export const useSettingsStore = defineStore('settings', () => {
   }, { immediate: true })
 
   watch(notify, (on) => writeJson('notify', on))
+  watch(diffStyle, (style) => writeJson('diffStyle', style))
+
+  function cycleDiffStyle(): void {
+    // An unrecognised restored value takes the first step back to the default.
+    diffStyle.value = diffStyle.value === 'auto' ? 'unified' : diffStyle.value === 'unified' ? 'split' : 'auto'
+  }
 
   function cycleTheme(): void {
     theme.value = theme.value === 'auto' ? 'dark' : theme.value === 'dark' ? 'light' : 'auto'
@@ -62,5 +79,5 @@ export const useSettingsStore = defineStore('settings', () => {
     return notify.value
   }
 
-  return { theme, notify, notifyProblem, cycleTheme, enableNotifications }
+  return { theme, notify, notifyProblem, cycleTheme, enableNotifications, diffStyle, cycleDiffStyle }
 })
