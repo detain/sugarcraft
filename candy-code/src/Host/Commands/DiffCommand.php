@@ -24,11 +24,17 @@ final class DiffCommand implements HostCommand
             return $refusal;
         }
 
-        $argument = CommandText::argument($text);
-        if ($argument !== '' && (!ctype_digit($argument) || (int) $argument < 1)) {
+        $words = CommandText::words($text);
+        // C-TUI-2.e: the TUI's bare `/diff` now opens the review slot, and the
+        // shared hint `[n] [--print]` rides to serve too — where the fenced
+        // rows ARE the only answer. So the flag is accepted and ignored here:
+        // this command has always printed, and `/diff 3 --print` means
+        // exactly what `/diff 3` always meant.
+        $words = array_values(array_filter($words, static fn(string $w): bool => $w !== '--print'));
+        if (\count($words) > 1 || (\count($words) === 1 && (!ctype_digit($words[0]) || (int) $words[0] < 1))) {
             return CommandResult::reply($text, Lang::t('host.diff.usage'));
         }
-        $stepsBack = $argument === '' ? 1 : (int) $argument;
+        $stepsBack = \count($words) === 1 ? (int) $words[0] : 1;
 
         $store = Checkpoints::store($context);
         try {

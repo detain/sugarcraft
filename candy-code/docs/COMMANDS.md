@@ -408,7 +408,7 @@ edit it by hand.
 | `/rewind` | ✓ | | `[n] [--chat\|--files\|--both]` | Restore an earlier checkpoint: the conversation, the files, or both |
 | `/undo` | ✓ | | — | Take back the last turn, or revert the last auto-commit |
 | `/redo` | ✓ | | — | Step forward again over what /rewind or /undo took back |
-| `/diff` | ✓ | | `[n]` | Show what changed in the files since a checkpoint |
+| `/diff` | ✓ | | `[n] [--print]` | Show what changed in the files since a checkpoint |
 | `/review` | ✓ | | `[<tree-ish\|A..B\|A...B>\|--pr <n>]` | Review the diff against a revision and report findings without editing |
 | `/security-review` | ✓ | | `[<ref>]` | Security-review the diff against a revision and report findings without editing |
 | `/commit` | ✓ | | `<message>` | Commit all changed files, drafting the message when you give none |
