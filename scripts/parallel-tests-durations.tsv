@@ -267,6 +267,7 @@ candy-code/tests/Tools/WorkflowToolTest.php	1.283	14
 candy-code/tests/RepoMap/CtagsSymbolExtractorTest.php	1.273	12
 candy-code/tests/Support/ProcessTreeKillAsyncTest.php	1.266	5
 candy-code/tests/Chat/EngineAskModalTest.php	1.263	12
+candy-code/tests/Chat/ResumeCostGuardTest.php	1.257	8
 candy-code/tests/MCP/McpPromptProviderTest.php	1.255	13
 candy-code/tests/Tools/TaskToolBackgroundTest.php	1.244	5
 candy-code/tests/Tools/ToolCapSettingsTest.php	1.242	31
@@ -868,6 +869,7 @@ candy-code/tests/Chat/AgentComposerTest.php	0.056	9
 candy-code/tests/Context/AbsoluteThresholdTest.php	0.056	23
 candy-code/tests/Tui/ComposerVimCountTest.php	0.056	18
 candy-code/tests/Tui/ComposerVimTest.php	0.056	27
+candy-code/tests/Host/ResumeCostEstimateTest.php	0.056	13
 candy-code/tests/Backend/StepSummaryCompactHooksTest.php	0.055	3
 candy-code/tests/Cli/StreamJsonEmitterTest.php	0.055	7
 candy-code/tests/Commands/MacAltNoticeTest.php	0.055	4

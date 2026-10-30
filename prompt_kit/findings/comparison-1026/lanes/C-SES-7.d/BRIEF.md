@@ -1,0 +1,24 @@
+### C-SES-7.d — Resume-cost guard
+- item: C-SES-7 (sources: CC-new#10)
+- kind: feature · effort M
+- approach:
+  - **When it fires.** After a stale resume (`--resume`, `--continue`, or a picker or tab switch onto a stored session), the FIRST submit is held once.
+  - **The estimate.** `ResumeCostEstimate` is a pure function of:
+    - the history token estimate, via `ContextMeter`;
+    - the input price, via `ModelMetadata::costPer1kTokens($model, 'input')`;
+    - the session's `last_activity` against a 5-minute prompt-cache TTL;
+    - the `resumeCostWarnUsd` threshold (default 0.25; 0 disables).
+  - **The hold.** When the estimate fires, Chat appends a UI-only notice ("Resuming re-sends ~84k tokens uncached (≈$0.42). Press Enter again to send, or run /compact first."). The second Enter sends, so no overlay is needed and `Renderer` stays untouched.
+  - **Unpriced models.** The notice uses `≥`.
+- files.create: `candy-code/src/Host/ResumeCostEstimate.php`, `candy-code/tests/Host/ResumeCostEstimateTest.php`, `candy-code/tests/Chat/ResumeCostGuardTest.php`
+- files.modify: `candy-code/src/Chat.php` (submit() at `:9389`; the resume/switch arms that arm the guard), `candy-code/src/Config/Settings/Definitions/InterfaceSettings.php` (`resumeCostWarnUsd`), `candy-code/lang/en.php` (`chat.resume_cost.*`, `settings.resumeCostWarnUsd.*`), `candy-code/docs/SETTINGS.md` (regen via `candy-code/tools/gen-settings-doc.php`)
+- tests: create:
+  - `candy-code/tests/Host/ResumeCostEstimateTest.php`: TTL edge, threshold 0, unpriced `≥`;
+  - `candy-code/tests/Chat/ResumeCostGuardTest.php`: fresh resume → no hold; stale resume → hold once, then a second Enter sends; `/compact` clears the hold.
+- docs/guards: the SETTINGS.md regen; `SettingsSchemaDocDriftTest`; `DocFigureProseDriftTest` (the settings count word-number); the README Interface settings roster if it lists keys (verify in-step)
+- serialized: [chat:submit,resume/switch arms] [lang:chat.resume_cost] [docs:SETTINGS.md] [hot:candy-code/src/Config/Settings/Definitions/InterfaceSettings.php]
+- deps: none
+- phase: normal
+- ruling: none
+- risks: P-SESSION-TABS reworks the tab-switch and resume path. Land this before it, or have the tabs lane carry the guard hook (see Notes).
+

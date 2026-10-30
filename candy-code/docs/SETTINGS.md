@@ -304,6 +304,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `mouseClicks` | `Chat::mouseClicksEnabled()` | yes |
 | `scrollWheelLines` | `Chat::scrollWheelLines()` | yes |
 | `doubleEscSeconds` | `Chat::doubleEscapeWindowSeconds()` | yes |
+| `resumeCostWarnUsd` | `Chat::resumeCostHold()` | yes |
 | `paletteMru` | `Chat::paletteMruLimit()` | yes |
 | `diffPreviewRows` | `Renderer::diffPreviewRows()` | yes |
 | `diffStyle` | `Renderer::diffStyle()` | yes |
@@ -332,7 +333,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 <!-- settings:layered:end -->
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these one hundred and thirty-nine, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these one hundred and forty, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. The table and that count are
@@ -1323,6 +1324,7 @@ project-settable.
 | `mouseClicks` | Interface | bool | `true` | P U C | `CANDY_CODE_DISABLE_MOUSE_CLICKS` | live | cosmetic |
 | `scrollWheelLines` | Interface | int | `3` | P U C | — | live | cosmetic |
 | `doubleEscSeconds` | Interface | number | `0.6` | P U C | — | live | cosmetic |
+| `resumeCostWarnUsd` | Interface | number | `0.25` | P U C | — | live | tuning |
 | `paletteMru` | Interface | int | `8` | P U C | — | live | cosmetic |
 | `diffPreviewRows` | Interface | int | `24` | P U C | — | live | cosmetic |
 | `diffStyle` | Interface | enum | `auto` | P U C | — | live | cosmetic |
@@ -1490,13 +1492,13 @@ Saved is not applied: see the next section for when each key takes effect.
 <!-- settings:apply:begin -->
 | Applies | When a saved change takes effect | Keys |
 |---|---|---|
-| live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `reasoningEffort`, `maxToolSteps`, `maxCostUsd`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`, `compaction.idleAuto`, `autoReviewScope`, `memory.projectNoteMaxBytes`, `theme`, `statusLine`, `layout`, `queueMode`, `terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `diffStyle`, `toolOutputPreviewLines`, `sessions.autoTitle`, `promptSuggestions`, `promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints`, `vimMode` |
+| live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `reasoningEffort`, `maxToolSteps`, `maxCostUsd`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`, `compaction.idleAuto`, `autoReviewScope`, `memory.projectNoteMaxBytes`, `theme`, `statusLine`, `layout`, `queueMode`, `terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `resumeCostWarnUsd`, `paletteMru`, `diffPreviewRows`, `diffStyle`, `toolOutputPreviewLines`, `sessions.autoTitle`, `promptSuggestions`, `promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints`, `vimMode` |
 | next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`, `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`, `contextPruning.compress`, `repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`, `env.diffMaxBytes`, `contextPruning.mode`, `permissions.autoStrikeLimit`, `permissions.autoTotalLimit`, `permissions.autoAllowReadOnly`, `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`, `toolSpillWindowPercent`, `toolInstructionCapBytes`, `toolSpillCaptureBytes`, `toolSpillMinCapBytes`, `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `grepTimeoutSeconds`, `requireReadBeforeWrite`, `sd.timeoutSeconds`, `rules.standingMaxBytes`, `skills.pathNudges`, `memory.promptMaxEntries`, `memory.promptMaxBytes`, `memory.entryMaxBytes`, `memory.userMaxEntries`, `memory.userMaxBytes`, `memory.autoConsolidate`, `memory.dreamIntervalSeconds`, `memory.dreamProposeSkills`, `embeddingModel`, `skills.listingMaxBytes`, `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `streamHeaderTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
 | reload | On `/keys reload`, or at the next launch: the saved file is re-read and re-applied when you say the word (plan_comparison TUI-4a) | `keybindings` |
 | restart | At the next launch: read once while the session is built | `models`, `providers`, `titleModel`, `summaryModel`, `advisorModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `serviceTier`, `promptCache`, `symbolMap.enabled`, `notices.transcriptLimit`, `contextWindow`, `permissionMode`, `permissionRules`, `autoReview`, `autoReviewModel`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `references`, `bashSandbox`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `webSearchBackend`, `sd.baseUrl`, `sd.apiKey`, `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`, `sd.savePattern`, `instructions`, `instructions.walkToRoot`, `instructionsExclude`, `disabledRules`, `disabledSkills`, `enabledSkills`, `pluginPaths`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `notify`, `watchFiles`, `sessionRetentionDays`, `lintCommands`, `formatCommands`, `formatAuto`, `hooksDefaultTimeoutSeconds`, `disabledMcpServers`, `mcp.enabled`, `mcp.lazySchemaTokens`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.allowedIps`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `server.dirBrowse`, `server.browseRoot`, `webhooks`, `webhooksOut`, `connectTimeoutSeconds`, `debug.skills`, `debug.commands`, `debug.rules`, `debug.stream` |
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
 
-**In numbers:** forty live, fifty-six next turn, one reload, seventy-nine
+**In numbers:** forty-one live, fifty-six next turn, one reload, seventy-nine
 restart and seven next launch.
 
 **This session only** accepts `maxOutputTokens`, `reasoningEffort`,
@@ -1521,10 +1523,11 @@ restart and seven next launch.
 `sd.timeoutSeconds`, `skills.pathNudges`, `embeddingModel`, `subagentMaxTurns`,
 `subagentMaxDepth`, `subagentMaxActive`, `theme`, `statusLine`, `queueMode`,
 `terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`,
-`doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `diffStyle`,
-`toolOutputPreviewLines`, `sessions.autoTitle`, `promptSuggestions`,
-`promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints`, `vimMode`,
-`providerRetryAttempts` and `providerRetryBaseBackoffMs`.
+`doubleEscSeconds`, `resumeCostWarnUsd`, `paletteMru`, `diffPreviewRows`,
+`diffStyle`, `toolOutputPreviewLines`, `sessions.autoTitle`,
+`promptSuggestions`, `promptSuggestionHistory`, `expandToolOutput`,
+`maxCheckpoints`, `vimMode`, `providerRetryAttempts` and
+`providerRetryBaseBackoffMs`.
 <!-- settings:apply:end -->
 
 `provider` and `layout` are live through their own doors — `/model` and the
@@ -1777,15 +1780,15 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
   this stack.
   <!-- settings:env-split:begin -->
-  They do not cover it: only twenty-four of the one hundred and thirty-nine
-  layered keys have an env override (`provider`, `models`, `titleModel`,
-  `summaryModel`, `advisorModel`, `serviceTier`, `promptCache`,
-  `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxCostUsd`,
-  `webSearchEndpoint`, `sd.baseUrl`, `ui.imageRenderMode`, `terminalBackground`,
-  `mouse`, `mouseClicks`, `sessionRetentionDays`, `promptSuggestions`,
-  `mcp.enabled`, `connectTimeoutSeconds`, `debug.skills`, `debug.commands`,
-  `debug.rules`, `debug.stream`). `providers`, `maxOutputTokens`, `modelPrices`,
-  `extraBody`, `thinkingBudget`, `reasoningEffort`, `maxToolSteps`,
+  They do not cover it: only twenty-four of the one hundred and forty layered keys
+  have an env override (`provider`, `models`, `titleModel`, `summaryModel`,
+  `advisorModel`, `serviceTier`, `promptCache`, `parallelToolCalls`,
+  `parallelToolDeadlineSeconds`, `maxCostUsd`, `webSearchEndpoint`, `sd.baseUrl`,
+  `ui.imageRenderMode`, `terminalBackground`, `mouse`, `mouseClicks`,
+  `sessionRetentionDays`, `promptSuggestions`, `mcp.enabled`,
+  `connectTimeoutSeconds`, `debug.skills`, `debug.commands`, `debug.rules`,
+  `debug.stream`). `providers`, `maxOutputTokens`, `modelPrices`, `extraBody`,
+  `thinkingBudget`, `reasoningEffort`, `maxToolSteps`,
   `compaction.reminderPercent`, `compaction.autoPercent`,
   `compaction.blockPercent`, `compaction.keepRecent`,
   `compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
@@ -1814,11 +1817,12 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   `subagentMaxDepth`, `subagentMaxActive`, `includeGitInstructions`,
   `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `theme`, `statusLine`,
   `layout`, `notify`, `watchFiles`, `queueMode`, `scrollWheelLines`,
-  `doubleEscSeconds`, `paletteMru`, `diffPreviewRows`, `diffStyle`,
-  `toolOutputPreviewLines`, `sessions.autoTitle`, `promptSuggestionHistory`,
-  `expandToolOutput`, `maxCheckpoints`, `keybindings`, `vimMode`, `lintCommands`,
-  `formatCommands`, `formatAuto`, `disabledMcpServers`, `mcp.lazySchemaTokens`,
-  `providerRetryAttempts` and `providerRetryBaseBackoffMs` have none.
+  `doubleEscSeconds`, `resumeCostWarnUsd`, `paletteMru`, `diffPreviewRows`,
+  `diffStyle`, `toolOutputPreviewLines`, `sessions.autoTitle`,
+  `promptSuggestionHistory`, `expandToolOutput`, `maxCheckpoints`, `keybindings`,
+  `vimMode`, `lintCommands`, `formatCommands`, `formatAuto`, `disabledMcpServers`,
+  `mcp.lazySchemaTokens`, `providerRetryAttempts` and `providerRetryBaseBackoffMs`
+  have none.
   <!-- settings:env-split:end -->
   (`statusLine` was missing from this list when it joined the stack — P6.S4
   counted the keys rather than copying the sentence, which is what found it.

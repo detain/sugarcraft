@@ -1,17 +1,44 @@
-# WELD-1030H — C-TUI-2.f + C-SES-7.d (sequential, this order)
+# WELD-1030H — C-TUI-2.f + C-SES-7.d (sole master writer, NO PUSH)
 
-## PLANNED (written before any mutation)
-- Anchor: master == 1af0cc89012fe296caeb00fab10b2545cc432db8 (verified by git rev-parse, this session).
-- Weld 1: cc/C-TUI-2.f (tip e8b17987070fe927e9fffed41c118b6381ffc406, base dc9eea92d) — cherry-pick all master..branch commits; dist rebuild via `cd candy-code-web && npm run build` (local node_modules/.bin, no npm ci/composer); NO durations rows; NO protocol trio regen (verify via git show --name-only); gate = vitest --no-file-parallelism + local vue-tsc; §4 mark with figure line +38 vitest (14/19/11); DOC-ROW (README.md:241 lazy->eager DiffView) + cycleDiffStyle caller-less recorded as closeout, NOT edited now.
-- Weld 2: cc/C-SES-7.d (tip 04741cb7dbc5b60bbfc1da0789819d6d80e0dbd0, picks 9195b8bcc/719b80e34/3a7b8c511/db117a763/04741cb7d) — cherry-pick 5; r1 CRITICAL cure at src/Chat.php ~:20693 EngineBackend gate + ctor-TAIL param must land intact; mint 2 durations.tsv rows (ResumeCostEstimateTest + ResumeCostGuardTest, median of 3 per-file junit runs each); +21T figure = §7 carry, DO NOT re-pin; MANDATORY ARCHITECTURE.md dispatch-arms numeral re-derivation with landed-blob proof `git show HEAD:candy-code/docs/ARCHITECTURE.md | sed -n '150,160p'`; gates = ResumeCostEstimate|ResumeCostGuard + 6-file casualty cluster, always exclude PtyRunToolTest expect-miss arm; gen-*-doc --check zero-drift.
-- Env-var check both lanes (Help.php roster law).
-- §4 marks committed with each weld's carry files. Run-state re-read FRESH after each weld, welded_count 248->249->250, assert == len(welded), master_tip = second-to-last commit.
-- Prune only after git cherry '-' proofs + landed-blob cure checks; collect worktree-only evidence before pruning.
-- NO PUSH. NO pull/merge/force.
+## VERDICT: BOTH WELDS LANDED. welded_count 250. No push (W24/W25/W26/W27 open).
 
-## STATUS LOG (append-only, SHAs cat-filed)
-- [x] anchor verified 1af0cc89012fe296caeb00fab10b2545cc432db8 (git rev-parse master)
-- [x] name-only audit: C-TUI-2.f touches ONLY candy-code-web/src-web/** + lanes/C-TUI-2.f/FIX-1.md (rides pick e8b179870) — NO src/Protocol, NO MethodSchemas -> protocol-trio regen NOT needed (verified, as required). No phpunit files -> no durations rows (verified). No getenv/process.env in web diff (Help-roster law: N/A).
-- [x] C-SES-7.d name-only audit: README/SETTINGS.md/lang/en.php/Chat/LayeredSettings/InterfaceSettings/UiSettings/ApplySettingsTest/2 new test files. New phpunit FILES: tests/Host/ResumeCostEstimateTest.php (branch path — brief said Chat/, actual Host/) + tests/Chat/ResumeCostGuardTest.php -> 2 durations rows owed. No getenv/Help.php touches (law N/A). lang/en.php + README region collision risk = append-keep-both; SETTINGS.md = regen if drifted, no hand-merge.
-- [x] weld 1 cherry-picks landed, ZERO conflicts (no candy-code-web commits on master since base dc9eea92d): a34b878e4 -> 0ec7baa10da24390babf4106aba83906fba585f9; e8b179870 -> 093cd25e1ddbbb589a32c2edeaa033518a4815d4 (both cat-file -t commit).
-- [ ] dist rebuild (npm run build, local .bin only)
+## Anchor
+- `git rev-parse master` at start = 1af0cc89012fe296caeb00fab10b2545cc432db8 (task anchor matched).
+
+## Weld 1 — C-TUI-2.f (W26: web split + highlighted DiffView) — DONE
+- Picks (cherry-picked in listed order, ZERO conflicts — no candy-code-web commits on master since base dc9eea92d):
+  - a34b878e4 → 0ec7baa10da24390babf4106aba83906fba585f9 (cat-file ok)
+  - e8b17987070fe927e9fffed41c118b6381ffc406 → 093cd25e1ddbbb589a32c2edeaa033518a4815d4 (cat-file ok)
+- `git show --name-only` audit: only candy-code-web/src-web/** + lanes/C-TUI-2.f/FIX-1.md (rode pick 2). NO src/Protocol/ nor MethodSchemas touch → protocol trio + web gen:protocol SKIPPED BY DESIGN (as briefed). No phpunit test files → NO durations rows (all new tests are vitest specs).
+- dist rebuild IN the weld commit: `npm run build` with PATH=candy-code-web/node_modules/.bin (no npm ci, no composer). New assets index-CnMoKBo8.js + index-s2Nq5yHE.css; old lazy highlight-BtINwOZG.js + index-AI_UWYxu.js + index-DJcRbGDm.css deleted; highlight now eager-bundled; dist/index.html + manifest.json updated.
+- Gates: vitest --no-file-parallelism 3 files 44/44 (per-file split 14/19/11 = +38 new tests); local vue-tsc --noEmit 0 errors rc=0; tools/gen-command-doc.php/gen-tool-docs.php/gen-settings-doc.php --check ALL rc=0 zero drift. No getenv/process.env in the web diff → Help.php lang-roster law N/A (checked).
+- Weld commit: 8ca8956aa24723f64d014bf25b5fd37d1fbbd9d2 (cat-file ok) — 13 files; §4 mark plan_comparison.md line 3182 (heading flipped `#### ✅ 093cd25e1 C-TUI-2.f …`); run-state folded 249==len(welded).
+- Absorption proof: `git cherry master cc/C-TUI-2.f` → BOTH `-`. Worktree ../cc-cmp-C-TUI-2.f removed; branch cc/C-TUI-2.f deleted (was e8b179870…).
+- Closeout items recorded (§4 + weld_notes): DOC-ROW candy-code-web/README.md:241 still says highlight "lazy" — DiffView half now EAGER (NOT edited at weld); cycleDiffStyle remains caller-less (queued UI wiring twin).
+
+## Weld 2 — C-SES-7.d (W24: resume-cost guard) — DONE
+- 5 picks in order onto 8ca8956aa (all cat-file'd):
+  - 9195b8bcc → c5b492b216ce1a6bdf5992630eae9bcd5a3b9527 (clean)
+  - 719b80e34 → 9386a83d3ef6084aabbc0b6e408755fca81f5f91 (UU candy-code/README.md + docs/SETTINGS.md INSIDE generated <!-- settings:layered --> regions → `git checkout --ours` + REGENERATED by tools/gen-settings-doc.php --write at weld; gen --check rc=0 after — never hand-merged)
+  - 3a7b8c511 → f4e747cf0f6f3da9fa9416636a12253767aaa0f4 (clean; new phpunit files tests/Chat/ResumeCostGuardTest.php + tests/Host/ResumeCostEstimateTest.php — actual paths; estimate test lives in Host/)
+  - db117a763 → e3fe44b65a7a35d8feacee8f5f9583a6d97ccd29 (1 conflict src/Chat.php ctor tail ~:1858 → KEEP BOTH: HEAD $incognito + lane tail param `?bool $resumeCostGuardArmed = null,`; branch-tip 04741cb7d blob has SAME shape — property :422 + non-promoted param :1846 + ctor-body assign :1943; php -l OK)
+  - 04741cb7dbc5b60bbfc1da0789819d6d80e0dbd0 → ca1e0b51f3324c1946e6837ba7962fe3c37c87ac (clean; UiSettings KEYS :51, ApplySettingsTest sessionKeys :346, en.php chat.resume_cost.* additive :2274-2276 right after chat.request.cancelled :2273, +5 lines 0 deletions — docs/MCP.md/docs/README.md/lang regions verified ADDITIVE per `git show --name-only` each pick)
+- CURE PROOFS (landed blob): r1-CRITICAL EngineBackend gate LIVE inside resumeCostHold(): `if (!$this->backend instanceof Backend\EngineBackend) return null;` ~:20770; ctor-TAIL param :1858 + assignment :1955 with derive `?? ($history !== [] && $currentSessionId !== null && $sessionMint === null)`; LayeredSettings :628/:926 + InterfaceSettings :181-189 carry resumeCostWarnUsd.
+- NUMERAL re-derivation: DocFigureProseDriftTest:712-718 live-counts CommandRegistry::slashCommands() == **64** at this weld (php -r on landed code, linked vendor, cwd candy-code) — ARCHITECTURE.md :155 "dispatch arms for 64" ALREADY TRUE, no edit needed. /copy (C-TUI-3.a) and /usage (C-SES-8.e) are NOT landed and will move the numeral at THEIR welds (recorded). Landed-blob proof (post-commit, clean tree): `git show HEAD:candy-code/docs/ARCHITECTURE.md | sed -n '150,160p'` → :155 line below.
+- No new getenv/env var in the lane (checked; Help.php lang-roster law N/A).
+- Gates cwd=candy-code plain-pipe -c phpunit.xml: `ResumeCostEstimate|ResumeCostGuard` = 13/37A + 8/34A per-file = +21T exact green (filter run 22 OK incl 1 collection overlap; 2 PHPUnit Deprecations = PRE-EXISTING foreign AccessorDeprecationTest private providers, disclosed not chased). Casualty cluster `ApplySettingsTest|LayeredSettings|ReadmeRosterDrift|DocFigureProseDrift|SettingsSchema|EnvRosterDrift` = Tests 326, Assertions 47841, Failures 2 — the 2 F are EXACTLY the listed foreign ApplySettingsTest arms (testEveryLiveKeyTheViewCanSaveHasAnApplyArm + testTheSessionTierRefusesWhatItCouldNeverApply, autoReviewScope/requireReadBeforeWrite/diffStyle position shift) and were **REPRODUCED IDENTICALLY at pre-weld 1af0cc890** in throwaway worktree /home/sites/cc-cmp-repro-1030h (vendor-copied; removed after proof). PtyRun expect-miss test excluded from every run (SIGHUP). No full/serial suite.
+- DURATIONS rows minted (welder-only; medians of 3 per-file testsuite-time junit runs):
+  - line 270: candy-code/tests/Chat/ResumeCostGuardTest.php  1.257  8   (runs 1.265199/1.257257/1.249280; neighbor band 1.266/1.263/…/1.255)
+  - line 872: candy-code/tests/Host/ResumeCostEstimateTest.php  0.056  13  (runs 0.066850/0.056298/0.056137; 0.056 band)
+  - tsv 1636 → 1638 rows.
+- §7 CARRY (recorded, NOT re-pinned by design): suite-figure/README +21T; ReadmeSuiteFigureDrift staleness pair is a standing §7 closeout duty. AutomaticCompactionModelSummaryTest::testClearingTheTranscriptUnarmsTheBreaker standing red not attributed to lane.
+- §4 mark: plan_comparison.md line 2963 heading flipped `#### ✅ ca1e0b51f C-SES-7.d — Resume-cost guard (…)` with picks/conflicts/cure proofs/gates/durations/numeral proof/carries.
+- run-state (fresh re-read before fold; lead had added C-TOOL-2.a mid-session, preserved): welded_count 250 == len(welded) ASSERTED; C-SES-7.d moved weld_pending→welded; pending now ['C-SES-8.e','C-TOOL-2.a']; master_tip = ca1e0b51f3324c1946e6837ba7962fe3c37c87ac (second-to-last — a commit cannot carry its own SHA; weld_notes says so).
+- Absorption: `git cherry master cc/C-SES-7.d` → 9195b8bcc `-`, 3a7b8c511 `-`, 04741cb7d `-`; the two conflict-resolved picks show `+` BY DESIGN — content proofs: (pick 2) 9386a83d3's src hunks are byte-identical (only the generated README/SETTINGS doc hunks were ours-resolved and then RE-EMITTED by gen-settings-doc --write — proof: `git show HEAD:candy-code/docs/SETTINGS.md` + README carry the resumeCostWarnUsd rows AND the foreign advisorModel rows, and gen --check rc=0 in the post-commit clean tree); (pick 4) e3fe44b65 Chat.php landed blob contains the lane's full guard region + the r1 cure verbatim (instanceof EngineBackend gate + tail param + derive) alongside HEAD's $incognito. Blob checks below.
+- Evidence collection (pre-prune): main-tree lanes/C-SES-7.d/ held BRIEF/REPORT/REVIEW-1/REVIEW-2/REVIEW-2-R2A-VERIFIED/REVIEW-2-R2B/FIX-1/REVIEW-3.md (REVIEW-3.md 6323 B). The WORKTREE held a worktree-only FIX-3.md (3891 B, round-3 verdict note) → COPIED INTO the evidence dir and committed. FIX-4 does not exist (no such file in worktree or branch tip; `git show 04741cb7d:…/lanes/C-SES-7.d/` empty). DISCLOSURE: the worktree ALSO had a root-level scratch FIX-1.md (untracked, same title/header as the lead-collected dir/FIX-1.md 3769 B); I removed it as a suspected duplicate BEFORE diffing byte-for-byte against the main-tree copy — the main-tree dir/FIX-1.md is what is committed; if the root scratch had diverged it is unrecoverable (untracked). No other worktree-only evidence files (diff -rq re-check before removal: only the FIX-3.md copy side, dirs otherwise consistent).
+- Prune: worktree ../cc-cmp-C-SES-7.d removed AFTER proofs; branch cc/C-SES-7.d deleted (was 04741cb7d…).
+
+## STATUS LOG (cat-file'd only)
+- t0 master = 1af0cc89012fe296caeb00fab10b2545cc432db8 ✅
+- weld1: 0ec7baa10 → 093cd25e1 → weld commit 8ca8956aa ✅ (cherry -/-; pruned)
+- weld2: c5b492b21 → 9386a83d3 → f4e747cf0 → e3fe44b65 → ca1e0b51f (landed); weld commit = see `git rev-parse master` immediately after commit; worktree/branch pruned after cherry+blob proofs; welded_count 248→249→250.
