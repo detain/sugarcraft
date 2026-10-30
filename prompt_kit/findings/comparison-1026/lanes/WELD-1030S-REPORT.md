@@ -43,4 +43,11 @@ Master at start: b77a18838 (== origin/master, in sync). Branch cut at 80fe2275b.
 - NOT pushed (next push is a wave-close event, lead-owned). No suite-figure re-pin, no battery (§7 closeout duty).
 
 ## Chain (new master tip after weld)
-b77a18838 -> a0e40cded -> 77fb4fc1a -> 59ea47407 -> dc143271a -> feddc1217 -> <fold+report>
+b77a18838 -> a0e40cded -> 77fb4fc1a -> 59ea47407 (picks) -> dc143271a (evidence+DUR) -> feddc1217 (mark) -> 5afb14893 (run-state fold + final weld report, both files proven by git show --name-only). Final master tip: see RIDER below.
+
+## Step 8 — Rider + disclosures
+- Final master tip = 0c5a07971 (this report's rider commit rides atop 5afb14893).
+- Absorption proof vs FINAL master re-confirmed: git cherry 3/3 '-' (all '-' above was already vs 5afb14893; a report-only rider cannot change patch-ids).
+- Worktree plan seed DISCLOSED-REMOVED: /home/sites/.../prompt_kit/findings/comparison-1026/plan_comparison.md differed from master's — adjudicated a stale copy seeded at the 80fe2275b cut (master's plan gained the 1030O-P-Q-R marks after it), i.e. pure base-age drift, no builder-authored content; builder record = REPORT.md, md5-proven identical to the committed blob before force-remove. Worktree + branch cc/C-TUI-2.e gone; C-TOOL-6.a worktree untouched (foreign-contaminated, lead-owned).
+- welded_count 271 == len asserted at fold; run-state reload-clean.
+- NOT pushed: 7 commits ahead of origin (master_tip key cites feddc1217 per law that a commit cannot contain its own SHA; fold/final-record shas are in git log).
