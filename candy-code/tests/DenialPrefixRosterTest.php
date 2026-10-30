@@ -58,7 +58,7 @@ use SugarCraft\Code\Tools\ToolResult;
  * {@see self::testEveryDenialPrefixRuntimeProducesIsOnChatsRoster()} is NOT a
  * tautology. MEASURED on PHP 8.3.6 at round 49: substituting
  * `public const DENIAL_HOOK = 'Nope:';` leaves
- * {@see self::testTheOnlyDenialShapedLiteralsInSrcAreTheLeafsAndOneEarnedException()}
+ * {@see self::testTheOnlyDenialShapedLiteralsInSrcAreTheLeafsAndEarnedExceptions()}
  * GREEN — the walk matches a denial-shaped literal and `Nope:` carries no
  * denial term, so the widest guard in this file cannot see it — while the
  * membership test KILLS it. The two guards cover different holes: the walk
@@ -118,7 +118,7 @@ final class DenialPrefixRosterTest extends TestCase
      * very producer E236 removed. A leading space did the same. The lookbehind
      * costs nothing that was being caught: re-run over the whole of `src/`,
      * both alphabets name the SAME three files
-     * ({@see self::testTheOnlyDenialShapedLiteralsInSrcAreTheLeafsAndOneEarnedException()}
+     * ({@see self::testTheOnlyDenialShapedLiteralsInSrcAreTheLeafsAndEarnedExceptions()}
      * names the two that are left after E246 took the third), and no row moved.
      *
      * `(?<![A-Za-z])` and not a bare unanchored match: without it `Refused:`
@@ -143,7 +143,7 @@ final class DenialPrefixRosterTest extends TestCase
      * `private const` in `src/Permissions/ToolRefusal.php`, every one SURVIVED
      * the whole of this file. Adding them cost nothing measurable: re-scanned
      * over `src/` with the wider list, the whole-tree map
-     * ({@see self::testTheOnlyDenialShapedLiteralsInSrcAreTheLeafsAndOneEarnedException()})
+     * ({@see self::testTheOnlyDenialShapedLiteralsInSrcAreTheLeafsAndEarnedExceptions()})
      * names the same two files and the same four literals. The list is still
      * a list, so this paragraph is an admission as much as a fix — the next
      * invented verb that is not on it is invisible in exactly this way, and
@@ -861,8 +861,9 @@ final class DenialPrefixRosterTest extends TestCase
     ];
 
     /**
-     * EVERY DENIAL PREFIX IN `src/` IS SPELLED IN `DenialKind`, WITH ONE
-     * EARNED EXCEPTION (E239, E246, E247).
+     * EVERY DENIAL PREFIX IN `src/` IS SPELLED IN `DenialKind`, WITH TWO
+     * EARNED EXCEPTIONS (E239, E246, E247; and C-TUI-2.e's SkillWorkshop,
+     * row reasoned below).
      *
      * IT USED TO BE FIVE NAMED FILES AND THAT WAS THE WRONG SHAPE OF GUARD.
      * WHAT IT SAID: a `FAMILY_SPELLINGS` map of five paths with an expected
@@ -886,15 +887,23 @@ final class DenialPrefixRosterTest extends TestCase
      * THE ASSERTION IS THE WHOLE MAP, not a per-file count, and it carries its
      * own known-positive (rules 15 and 25). Four of the five old rows expected
      * ZERO and a zero is also what a dead scanner returns; a map whose
-     * expected value names two files and four exact strings cannot be
+     * expected value names its exact files and their exact strings cannot be
      * satisfied by an instrument that has stopped matching, stopped resolving
      * paths or stopped reading a token kind.
      */
-    public function testTheOnlyDenialShapedLiteralsInSrcAreTheLeafsAndOneEarnedException(): void
+    public function testTheOnlyDenialShapedLiteralsInSrcAreTheLeafsAndEarnedExceptions(): void
     {
         $expected = [
             'src/Agents/TaskBlockedException.php' => ['Task creation blocked: '],
             'src/Permissions/DenialKind.php' => DenialKind::prefixes(),
+            // C-TUI-2.e: the workshop hands the MODEL the skill store's own
+            // doctrine sentence (shadow name, over-cap field, unlearned patch
+            // target, no owned home) prefixed with the tool name so a retry
+            // knows who answered. It is not a permission denial: giving it a
+            // DenialKind opener would let the tool forge a refusal into the
+            // refusals ledger — `DenialKind::forErrorText()`'s own doc-block
+            // says classifying tool-printed error text is the wrong instrument.
+            'src/Tools/BuiltIn/SkillWorkshop.php' => ['SkillWorkshop refused: '],
         ];
 
         $actual = self::denialLiteralsAcrossSrc();
@@ -902,7 +911,7 @@ final class DenialPrefixRosterTest extends TestCase
         self::assertSame(
             $expected,
             $actual,
-            'src/ spells a denial-shaped literal somewhere other than the two files that have earned one. '
+            'src/ spells a denial-shaped literal somewhere other than the files that have earned rows here. '
             . 'Every tool-result prefix belongs to a DenialKind case; a second spelling is a second '
             . 'definition, and the one that drifts renders a BLOCKED call as an ordinary tool ERROR on '
             . 'both surfaces. If the new hit is not a tool-result prefix at all, it needs one of the two '

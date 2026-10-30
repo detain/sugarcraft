@@ -4241,6 +4241,58 @@ final class ChatTest extends TestCase
         return $resolved;
     }
 
+    /**
+     * Run a settle-turn Cmd — a single Cmd::promise closure or a Cmd::batch
+     * fan-out (since P-CTX.d the context measure rides beside every other
+     * settle schedulable) — and collect every Msg its members land.
+     *
+     * @return list<mixed>
+     */
+    private function landedMsgsForSettleCmd(\Closure $cmd): array
+    {
+        $scheduled = $cmd();
+        $members = $scheduled instanceof BatchMsg ? $scheduled->cmds : [$scheduled];
+
+        $landed = [];
+        foreach ($members as $member) {
+            if ($member instanceof \Closure) {
+                $member = $member();
+            }
+            if ($member instanceof BatchMsg) {
+                foreach ($this->landedMsgsForSettleCmd(static fn () => $member) as $nested) {
+                    $landed[] = $nested;
+                }
+                continue;
+            }
+            if ($member instanceof AsyncCmd) {
+                $resolved = null;
+                $member->promise->then(static function ($msg) use (&$resolved): void {
+                    $resolved = $msg;
+                });
+                $landed[] = $resolved;
+            } else {
+                $landed[] = $member;
+            }
+        }
+        return $landed;
+    }
+
+    /**
+     * The PromptSuggestionMsgs among landed settle msgs — the settle batch
+     * carries other schedulables, so membership is what the suggestion
+     * contract asserts, never a batch position.
+     *
+     * @param list<mixed> $landed
+     * @return list<\SugarCraft\Code\App\PromptSuggestionMsg>
+     */
+    private function suggestionMsgsFrom(array $landed): array
+    {
+        return array_values(array_filter(
+            $landed,
+            static fn(mixed $msg): bool => $msg instanceof \SugarCraft\Code\App\PromptSuggestionMsg,
+        ));
+    }
+
     // ---------------------------------------------------------------
     // Prompt suggestions: the grayed "you might say next" in the empty box
     // ---------------------------------------------------------------
@@ -4282,9 +4334,9 @@ final class ChatTest extends TestCase
         $this->assertInstanceOf(\Closure::class, $cmd, 'a settled turn must schedule the suggestion call');
         $this->assertNull($settled->promptSuggestion(), 'nothing is shown before the answer lands');
 
-        $landed = $this->resolveAsyncCmd($cmd);
-        $this->assertInstanceOf(\SugarCraft\Code\App\PromptSuggestionMsg::class, $landed);
-        [$shown] = $settled->update($landed);
+        $landed = $this->suggestionMsgsFrom($this->landedMsgsForSettleCmd($cmd));
+        $this->assertCount(1, $landed, 'exactly one suggestion answer must land');
+        [$shown] = $settled->update($landed[0]);
 
         $this->assertSame('run the tests', $shown->promptSuggestion());
         $this->assertEqualsWithDelta(0.001, $shown->spentUsd(), 1e-9, 'the suggestion call is on the user\'s key and must be accounted');
@@ -4299,7 +4351,7 @@ final class ChatTest extends TestCase
         $backend = $this->suggestionBackend('ok');
         $chat = new Chat(history: [Message::user('fix the bug'), Message::system('_notice_')], inFlight: true, titleBackend: $backend);
         [, $cmd] = $this->settleTurn($chat);
-        $this->resolveAsyncCmd($cmd);
+        $this->assertCount(1, $this->suggestionMsgsFrom($this->landedMsgsForSettleCmd($cmd)));
 
         $asked = $backend->asked[0];
         $this->assertSame(Role::System, $asked[0]->role);
@@ -4317,29 +4369,37 @@ final class ChatTest extends TestCase
      */
     public function testNoTitleBackendMeansNoSuggestionCall(): void
     {
-        [, $cmd] = $this->settleTurn(new Chat(history: [Message::user('hi')], inFlight: true, backend: new EchoBackend()));
+        [$settled, $cmd] = $this->settleTurn(new Chat(history: [Message::user('hi')], inFlight: true, backend: new EchoBackend()));
 
-        $this->assertNull($cmd);
+        $landed = $cmd instanceof \Closure ? $this->landedMsgsForSettleCmd($cmd) : [];
+        $this->assertSame([], $this->suggestionMsgsFrom($landed), 'without a title engine nothing may suggest');
+        $this->assertNull($settled->promptSuggestion());
     }
 
     public function testTheEnvironmentSwitchTurnsSuggestionsOff(): void
     {
+        $backend = $this->suggestionBackend('x');
         putenv('CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS=1');
         try {
-            [, $cmd] = $this->settleTurn(new Chat(history: [Message::user('hi')], inFlight: true, titleBackend: $this->suggestionBackend('x')));
+            [, $cmd] = $this->settleTurn(new Chat(history: [Message::user('hi')], inFlight: true, titleBackend: $backend));
+            $landed = $cmd instanceof \Closure ? $this->landedMsgsForSettleCmd($cmd) : [];
         } finally {
             putenv('CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS');
         }
 
-        $this->assertNull($cmd);
+        $this->assertSame([], $this->suggestionMsgsFrom($landed), 'the switch must keep the cheap model untouched');
+        $this->assertSame([], $backend->asked);
     }
 
     public function testNoSuggestionIsAskedForOnceTheSpendCapIsReached(): void
     {
-        $chat = new Chat(history: [Message::user('hi')], inFlight: true, titleBackend: $this->suggestionBackend('x'), maxCostUsd: 0.5);
+        $backend = $this->suggestionBackend('x');
+        $chat = new Chat(history: [Message::user('hi')], inFlight: true, titleBackend: $backend, maxCostUsd: 0.5);
         [, $cmd] = $chat->update(new AssistantMsg(Message::assistant('Done.')->withUsage(Usage::new(100, 1.0))));
+        $landed = $cmd instanceof \Closure ? $this->landedMsgsForSettleCmd($cmd) : [];
 
-        $this->assertNull($cmd);
+        $this->assertSame([], $this->suggestionMsgsFrom($landed), 'a capped session must not spend on guessing');
+        $this->assertSame([], $backend->asked);
     }
 
     public function testRightOnAnEmptyBoxTakesTheSuggestionAsTheDraft(): void
