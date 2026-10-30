@@ -169,7 +169,7 @@ final class CommandListSkillRowsTest extends TestCase
 
     public function testABuiltInSpellingKeepsItsRowAgainstAShadowingSkill(): void
     {
-        $items = $this->listedItems($this->diskRegistry(['keys' => 'x']));
+        $items = $this->listedItems($this->diskRegistry(['keys' => 'x', 'Keys' => 'y']));
         $rows = $this->keyed($items);
 
         self::assertSame('builtin', $rows['keys']['source'] ?? null, 'the built-in owns the name; no second row');
@@ -178,6 +178,14 @@ final class CommandListSkillRowsTest extends TestCase
             static fn (string $n): bool => $n === 'keys',
         ));
         self::assertCount(1, $spellings, 'exactly one /keys row — the skill never adds a second');
+        // The case-variant shadow is removed by the gate's OWN re-check, not
+        // by the exact-case isset clash: `isset($items['Keys'])` misses the
+        // builtin `keys` row (the map is exact-case, like the dispatch-side
+        // lookup), so the veto is draft() walking `forSpelling(strtolower())`
+        // over every built-in spelling — the same reason `/Keys` stays prose
+        // when typed. A row the typed spelling could never dispatch is not
+        // listed (the listing==admission law above).
+        self::assertArrayNotHasKey('Keys', $rows, 'the case-variant skill shadows nothing and is itself not listed');
     }
 
     public function testAFileCommandNameKeepsItsRowAgainstAShadowingSkill(): void
