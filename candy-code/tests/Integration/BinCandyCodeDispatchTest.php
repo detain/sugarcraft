@@ -1096,6 +1096,7 @@ final class BinCandyCodeDispatchTest extends TestCase
             'doctor'          => [['doctor']],
             'models'          => [['models']],
             'session list'    => [['session', 'list']],
+            'usage'           => [['usage']],
             'mcp list'        => [['mcp', 'list']],
             'completion bash' => [['completion', 'bash']],
             'completion zsh'  => [['completion', 'zsh']],
