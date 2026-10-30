@@ -813,6 +813,43 @@ final class MethodSchemas
                     'mime' => Schema::string(128),
                 ], ['artifactId', 'offset', 'bytes', 'totalBytes', 'eof']),
             ],
+
+            // C-SES-8.a: one snapshot of the same fold `/usage` prints; the
+            // rows are the store's own folds, totals derive from the per-model
+            // fold inside the method, and `reason` states why the folds are
+            // empty when the ledger could not be read at all.
+            'usage.rollup' => [
+                Schema::object([
+                    'sessionId' => Schema::ref(D::SESSION_ID)->describe('Required when scope is "session" (the ledger half of the answer is that session\'s rows); ignored for scope "all".'),
+                    'scope' => Schema::enum(['session', 'all'])->describe('"session" folds one session\'s rows; "all" spans every session the durable ledger holds — the same pair `/usage` and `/usage all` answer.'),
+                    'days' => Schema::enum([7, 30])->describe('OBS-3: trim to the last N whole UTC days inclusive of today; omitted spans the whole ledger. Anything but 7 or 30 is refused, never folded into the whole history.'),
+                ], ['scope']),
+                Schema::object([
+                    'days' => Schema::arrayOf(Schema::object([
+                        'day' => Schema::string(16)->describe('UTC day, "YYYY-MM-DD" — the store\'s own date() fold.'),
+                        'model' => Schema::string(256)->nullable()->describe('Null for rows written before the model was recorded, exactly as the ledger holds them.'),
+                        'calls' => Schema::integer(0),
+                        'totalTokens' => Schema::integer(0),
+                        'costUsd' => Schema::number(0),
+                        'unpriced' => Schema::boolean()->describe('The group\'s rows include an unpriced call — its costUsd is a lower bound (the SES-1 `≥` law).'),
+                    ], ['day', 'model', 'calls', 'totalTokens', 'costUsd', 'unpriced'], open: false)),
+                    'models' => Schema::arrayOf(Schema::object([
+                        'model' => Schema::string(256)->nullable(),
+                        'calls' => Schema::integer(0),
+                        'totalTokens' => Schema::integer(0),
+                        'costUsd' => Schema::number(0),
+                        'unpriced' => Schema::boolean(),
+                    ], ['model', 'calls', 'totalTokens', 'costUsd', 'unpriced'], open: false)),
+                    'totals' => Schema::object([
+                        'calls' => Schema::integer(0),
+                        'totalTokens' => Schema::integer(0),
+                        'costUsd' => Schema::number(0),
+                    ], ['calls', 'totalTokens', 'costUsd'], open: false)->describe('Derived from the per-model fold — one source, so totals and rows cannot disagree.'),
+                    'unpriced' => Schema::boolean()->describe('True when ANY folded row was unpriced: every dollar figure in the answer is then a LOWER BOUND and a surface must say so (the `≥` law).'),
+                    'retentionDays' => Schema::integer(0)->describe('This launch\'s effective sessionRetentionDays setting, read-only — the panel links to Settings, it never writes (no write path opens here).'),
+                    'reason' => Schema::string()->describe('Empty when the folds were read; otherwise the stated cause of the empty folds — "nothing was spent" and "nothing can be seen" are different answers.'),
+                ], ['days', 'models', 'totals', 'unpriced', 'retentionDays', 'reason']),
+            ],
         ];
         \ksort($schemas);
 

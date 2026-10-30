@@ -26,6 +26,7 @@ use SugarCraft\Code\Protocol\Methods\WorkspaceMethods;
 use SugarCraft\Code\Protocol\Methods\MediaMethods;
 use SugarCraft\Code\Protocol\Methods\ToolMethods;
 use SugarCraft\Code\Protocol\Methods\TurnMethods;
+use SugarCraft\Code\Protocol\Methods\UsageMethods;
 use SugarCraft\Code\Protocol\Schema\ProtocolSchema;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\Ws\Connection;
@@ -147,6 +148,7 @@ final class Dispatcher implements MessageHandler
         TodoMethods::register($registry);
         WorkspaceMethods::register($registry);
         WorkflowMethods::register($registry);
+        UsageMethods::register($registry);
 
         return $registry;
     }
