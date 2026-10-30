@@ -49,4 +49,4 @@ No edits under components/, protocol/, PHP, or generated files. Sibling C-TUI-3.
 - No `suite-figure.json` change, no `parallel-tests-durations.tsv` row (vitest specs don't take one), no new `*Test.php`, no protocol/PHP/schema change.
 
 ## Commit
-One commit `C-TUI-4.b: Web dracula + tokyoNight theme sets` on `cc/C-TUI-4.b`; %ae and %ce each grep-detain 1/1, zero Co-Authored-By. SHA: (written after cat-file below).
+One commit `C-TUI-4.b: Web dracula + tokyoNight theme sets` on `cc/C-TUI-4.b`: **e5ab9c7f25a713e58c55b64b9f8c826b13065ec2** (cat-file'd); %ae and %ce each grep-detain 1/1, zero Co-Authored-By. (This stamp is the follow-up one-liner.)
