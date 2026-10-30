@@ -1234,7 +1234,7 @@ project-settable.
 | `notices.transcriptLimit` | Context & Compaction | int | `50` | C | — | restart | tuning |
 | `contextWindow` | Context & Compaction | JSON | unset | U C | — | restart | tuning |
 | `contextPruning.mode` | Context & Compaction | enum | `auto` | C | `CANDY_CODE_CONTEXT_PRUNING` | next turn | tuning |
-| `permissionMode` | Permissions | enum | `default` (TUI); `bypass-permissions` (`-p`, daemon) | U C | `CANDY_CODE_PERMISSION_MODE`, `--permission-mode` | restart | security |
+| `permissionMode` | Permissions | enum | `default` (TUI, `-p`); `bypass-permissions` (daemon) | U C | `CANDY_CODE_PERMISSION_MODE`, `--permission-mode` | restart | security |
 | `permissionRules` | Permissions | JSON | `[]` | U C | — | restart | security |
 | `autoReview` | Permissions | bool | `false` | U C | — | restart | spend |
 | `autoReviewScope` | Permissions | enum | `shell` | U C | — | live | spend |
