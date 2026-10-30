@@ -151,9 +151,12 @@ final class PermissionSettings implements SettingDefinitionSet
             // be flipped by a checked-out project (and turning it ON is the
             // safe direction — a project file that could set it would be an
             // argument for hiding output, not a user choice to protect their
-            // own secrets). /export stays raw on either setting; the export
-            // promise is about the LOCAL copy, and redaction never rewrites
-            // persisted history. No env var and no CLI flag: a launch-time
+            // own secrets). /export adds no redaction of its own: it prints
+            // exactly what was stored, so anything saved before turning this
+            // on stays raw and a turn saved after it exports redacted; the
+            // export promise is about the LOCAL copy, and redaction never
+            // rewrites persisted history. No env var and no CLI flag: a
+            // launch-time
             // escape hatch would let one shell line silently change what
             // later turns persist. Read per turn (NextTurn) by
             // EngineBackend::newRuntime.
