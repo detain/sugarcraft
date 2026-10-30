@@ -3459,7 +3459,8 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Ruling:** Chord: open the message picker on idle Esc Esc (empty draft, no turn), as in Claude Code? If unanswered, idle Esc Esc. — see §6
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tui.md` → `### C-TUI-3.d`
 
-#### C-TUI-4.a — Custom TUI themes from `~/.candy-code/themes/`
+#### ✅ 30fde46c0 C-TUI-4.a — Custom TUI themes from `~/.candy-code/themes/`
+- **Weld 1030R:** picks 833fff772/8bc69dcfa/3243d8e53/e50ce81be -> 83353667a/f911db824/e385af7c2/30fde46c0 onto 547c9b1e0 (r3 CLEAN 0C/0M; single conflict StderrEmitterCensusTest NUMBER_WORDS resolved UNION 41-49 superset; authors 4/4 detain %ae/%ce; theme gates green ThemeTest 10T/28A + ThemeFileTest 9T/40A + PaletteThemePicker 5T/49A + SettingsEditorPolish 12T/98A, StderrEmitterCensus 95T/22680A 0F, gen-settings/command/tool-doc --check rc=0, protocol untouched so web leg skipped; DUR minted `tests/Config/ThemeFileTest.php 9.903 9` (real path Config, brief's Cli misanchor); evidence commit 51bdf5d13; m3 RIDER OWED at §7: Chat.php ~:7937 comment flip + unreachable InvalidArgumentException catches :7939/:21848 (run-state weld_notes.C-TUI-4.a_m3); §7 +14T; NO PUSH)
 - **Item:** C-TUI-4 (sources: GAP-UI-02) · gap · effort M
 - **What:** `Theme::byName()` throws for anything outside the six names (`src/Theme.php:60,158-214`). `ThemeFile` loads `~/.candy-code/themes/<name>.json` from the user directory only, never the project: `{"extends": "dark|light|…", …
 - **Files — create:** `candy-code/src/Config/ThemeFile.php`, `candy-code/src/Config/Settings/Validator/ThemeNameValidator.php`
