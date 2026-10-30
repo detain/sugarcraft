@@ -41,3 +41,13 @@ Preflight (cat-file'd disk state at session start):
 - DUR row: candy-code/tests/Protocol/FilesDiffCheckpointTest.php 1.919/9 (median of 3 junit 1.620084/1.923892/1.918737; brief's 11.5-12s estimate refuted, measured ~1.9s).
 - Evidence committed: REVIEW-1 6084B / REVIEW-2 6779B (brief said 7843B — as-found recorded) / FIX-1 6862B / REPORT 8999B (last two collected from worktree pre-prune).
 - §4 mark at plan:3195 ✅ 85463f3fd. run-state fold 253->254 asserted, master_tip=85463f3fd4a9...
+
+## LANE 2 C-TUI-4.b — DONE (this session)
+- Picks cat-file'd: a527faadba2647947611f0c1f5a3d5e5c063e807 (e5ab9c7f2 code), 2ff921113268252f40740ddf5d159a1aff43fe3e (f57e82f25 stamp). Zero conflicts; 2 files+report as briefed; no *Test.php (no DUR rows); no protocol/PHP touch (no regen).
+- dist rebuilt: index-D4-Fago9.js + index-DS0QTvoO.css new, lane-1 pair deleted, index.html+manifest.json modified.
+- vitest serial: 2 files/36T + 17 files/135T — EXACT lane claims, green.
+- vue-tsc --build: 21 errors ALL foreign (same standing set as lane-1 post-cure), 0 lane — reviewer's denied empirical item CLOSED CLEAN.
+- ARCHITECTURE.md:155 dispatch-arms numeral = 64 read from LANDED BLOB at 2ff921113 (not dirty tree).
+- REVIEW-1.md (5,552 B, matches brief) copied main-tree -> commit; REPORT.md rode the pick.
+- INCIDENT #2 (concurrent writer): first §4 mark edit (~05:57) was swept by someone's checkout of plan_comparison.md; disk verified byte-identical to HEAD, mark re-applied against current bytes and committed same turn. Same mechanism as lane-1's 5f8717874 episode.
+- run-state: 254->255 (count==len asserted), weld_pending -= C-TUI-4.b (lead's live list also gained C-CTX-5.b/C-TOOL-6.a — preserved), master_tip=2ff921113268252f40740ddf5d159a1aff43fe3e (final pick, NOT own weld SHA).
