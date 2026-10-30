@@ -230,6 +230,7 @@ candy-code/tests/Server/BgPermissionAskRelayTest.php	1.539	12
 candy-code/tests/Protocol/ContextInstructionWriteTest.php	1.536	11
 candy-code/tests/Backend/StopHookContinuesTurnTest.php	1.534	8
 candy-code/tests/Tui/KeyboardHandlerTest.php	1.522	84
+candy-code/tests/Tools/BuiltIn/AdvisorToolTest.php	1.508	7
 candy-code/tests/Chat/ReadOnlySessionTest.php	1.494	21
 candy-code/tests/Chat/MemoryCommandTest.php	1.485	31
 candy-code/tests/Tools/TaskToolPresetPermissionModeTest.php	1.483	6
