@@ -551,6 +551,132 @@ under "Authorization-code login" completes the browser dance.
 
 ---
 
+### Browser control and computer use
+
+Browser and desktop servers are ordinary `stdio` entries — but they are the
+entries most often pasted from an upstream README that says `@latest`, and a
+floating tag quietly defeats the pin record: the gate compares the entry's
+recorded command line with its current one, so an argv that always reads
+`@latest` never looks "changed" no matter which build the package behind it
+resolves to. An exact version says otherwise — every upstream bump arrives
+as a named change you approve again, which is the whole trust mechanism of
+this page doing its job.
+
+The versions and flags below were read from the package registries on
+2026-10-30; each needs a re-date when it is re-read. `McpBrowserPresetDocTest`
+extracts the fenced blocks under this heading, feeds every server entry
+through the loader's own `McpForeignTranslate::normalizeEntry()`, and refuses
+a package argument that lost its exact version — so a stale or looser edit
+here fails a test rather than a session.
+
+In the project's `.mcp.json` — which runs these only once the root is trusted,
+per `trustedProjectMcp` in the trust gate at the top of this page:
+
+```json
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@0.0.83", "--isolated"]
+    },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@1.12.0", "--isolated"]
+    },
+    "windows-computer-use": {
+      "command": "uvx",
+      "args": ["windows-mcp==0.8.8"]
+    }
+  }
+}
+```
+
+The same three entries in your own `~/.candy-code/mcp.json`, admitted on the
+home-ownership gate alone (see "Two tiers, one precedence" above):
+
+```json
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@0.0.83", "--isolated"]
+    },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@1.12.0", "--isolated"]
+    },
+    "windows-computer-use": {
+      "command": "uvx",
+      "args": ["windows-mcp==0.8.8"]
+    }
+  }
+}
+```
+
+What each one is, and what its isolation flag actually buys:
+
+- **Playwright MCP** (`@playwright/mcp`, Microsoft's Playwright project):
+  navigation, snapshots, form-filling and scripted page control. `--isolated`
+  keeps the browser profile in memory and never saves it to disk; without it
+  the server persists a profile between launches, and everything typed into
+  a page lives in it.
+- **Chrome DevTools MCP** (`chrome-devtools-mcp`, the ChromeDevTools project):
+  the same shape of control through real DevTools, with the debugging tools
+  that implies. `--isolated` opens Chrome in a temporary user-data directory
+  that is cleaned up when the browser closes; the default reuses a persistent
+  profile under the user cache directory.
+- **Windows-MCP** (`windows-mcp`, on PyPI): desktop control outside a browser —
+  app automation, clicks, keystrokes. It is Windows-only (its package pulls
+  the Win32 bridges and claims Windows 10/11; it needs Python 3.14+, which
+  `uv` provisions for the spawn), and that platform scope is stated because
+  a Linux or macOS machine simply will not start it. No Linux/macOS
+  computer-use server is pinned here — the maintained options are
+  OS-fractional, so add one to a block above only with its own exact pin and
+  a re-dated section.
+
+Caveats, stated because a browser server makes every rule above load-bearing:
+
+- **There is no jail around these children.** `bashSandbox` wraps `Bash`
+  calls, and nothing else: a `stdio` server is a plain spawn of the pinned
+  argv, started at the tier's directory ("Where a `stdio` server runs"
+  above). A browser server reaches any URL its page is pointed at and any
+  profile it is given, even while your Bash calls run sandboxed. Until a
+  server-side jail exists, deciding to start the server *is* the security
+  decision, which is exactly why the pins above are exact.
+- **Every bridged tool counts as a write.** The permission gate classifies an
+  `mcp__<server>__<tool>` call as a write unless the server declared the tool
+  read-only (`PermissionGate::isWriteTool()` — the hint is the server's own
+  assertion: `annotations.readOnlyHint` set and `openWorldHint` not set, and
+  nothing here can verify either against what the tool actually does). A
+  browser tool acts on a live page, so plan on being asked. To run the
+  read-flavoured ones without a prompt, name them in `permissionRules` in
+  `~/.candy-code/config.json` — rules are first-match-wins, so these must
+  sit ahead of any broader `mcp__` rule you write. The names are the server's
+  own (`browser_snapshot`, `browser_take_screenshot` for Playwright):
+
+```json
+{
+  "permissionRules": [
+    { "pattern": "mcp__playwright__browser_snapshot", "action": "allow" },
+    { "pattern": "mcp__playwright__browser_take_screenshot", "action": "allow" }
+  ]
+}
+```
+
+- **The schemas are heavy, and may defer.** A browser server advertises a
+  long roster of richly-described tools; when one server's advertised schema
+  total reaches `mcp.lazySchemaTokens` (user-tier setting, default 8000, `0`
+  never defers), its tools stop arriving as first-class names and ride
+  `mcp_list` and `mcp_call` instead — the Deferred schemas section below
+  carries the rules, including which permission and hook spellings still
+  apply to the deferred calls.
+- **Already configured in Claude?** Nothing above has to be retyped: the
+  import route under "Foreign spellings that are read" translates a Claude
+  config in place — `candy-code mcp import claude <file>` — and the trust
+  gate then applies to what lands, entry by entry.
+
+---
+
 ## Listing without starting
 
 ```sh
