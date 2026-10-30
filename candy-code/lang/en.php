@@ -73,12 +73,14 @@ return [
     'cli.argv.config.no_such_file' => '--config {path}: no such file',
     'cli.argv.config.not_readable' => '--config {path}: not readable',
     'cli.argv.continue_with_resume' => '--continue and --resume both pick the session to open; use one of them',
+    'cli.argv.incognito_with_session' => '--incognito keeps nothing, so there is no stored session to reopen; it cannot be combined with --continue or --resume',
     'cli.argv.hint.append_system_prompt' => 'Expected the operator rules to append, written inline or as @path to a file containing them.',
     'cli.argv.hint.append_system_prompt_needs_prompt' => 'Use --append-system-prompt with -p "<prompt>" or `candy-code run "<prompt>"`; the interactive TUI takes no append.',
     'cli.argv.hint.config_value' => 'Write it as --config=<file> if the path begins with "-"; it may not be omitted.',
     'cli.argv.hint.continue_or_resume' => 'Use --continue for the most recent session, or --resume <id|name> for a specific one.',
     'cli.argv.hint.flag_alone' => 'Write it as {flag} alone.',
     'cli.argv.hint.flag_value' => 'Write it as {flag}=<value>; it may not be omitted.',
+    'cli.argv.hint.incognito_no_session' => 'Drop --incognito to reopen a stored session, or drop --continue/--resume to launch one that keeps nothing.',
     'cli.argv.hint.json_schema' => 'Expected a JSON Schema object, written inline as {"type":"object",...} or as a path to a file containing one.',
     'cli.argv.hint.json_schema_needs_prompt' => 'Use --json-schema with -p "<prompt>" or `candy-code run "<prompt>"`; the interactive TUI takes no schema.',
     'cli.argv.hint.max_cost' => 'Expected a spend ceiling in US dollars, for example 5 or $2.50.',
@@ -208,6 +210,7 @@ return [
     'cli.completion.option.output_format' => 'Output format: text, json or stream-json',
     'cli.completion.option.prompt' => 'Run a single prompt and exit (one-shot mode)',
     'cli.completion.option.resume' => 'Resume a stored session by id or name',
+    'cli.completion.option.incognito' => 'Launch keeping nothing: no session row, no transcript, no memory writes',
     'cli.completion.option.root' => 'Use <dir> as the project root',
     'cli.completion.option.version' => 'Show the installed version',
     'cli.completion.unsupported_shell' => 'completion {shell}: unsupported shell',
@@ -561,6 +564,12 @@ Options:
                          commits and no edits is removed again; one with
                          work stays and announces its path. Refused
                          outside a git work tree and beside `serve`.
+      --incognito            Launch that keeps nothing: no session row, no
+                         transcript, no automatic memory writes at turn end.
+                         What the run produced lives in the process only;
+                         sessions and notes stored EARLIER stay readable.
+                         Refused beside --continue or --resume, which reopen
+                         kept sessions.
   -h, --help             Show this help message
   -v, --version          Show the installed version and exit
       --                 End of options: every later argument is positional,
@@ -2206,6 +2215,7 @@ TXT,
     'chat.memory.recalled_notice.many' => 'Recalled {count} notes for this turn',
     'chat.mode.back_unsent' => 'Back to `{mode}` before anything was sent, so the agent is not told about the switch.',
     'chat.mode.no_gate' => 'This session runs without a permission gate, so there is no mode to switch.',
+    'chat.incognito.status' => 'incognito',
     'chat.mode.turn_running' => 'The permission mode does not change while a turn runs: the turn keeps the mode it started with. Switch after it ends, or Esc Esc to cancel it now.',
     'chat.model.usage' => 'Usage: /model [provider [model]]. Available: {available}',
     'chat.notify.awaiting_approval' => 'waiting for approval: {tool}{origin}',

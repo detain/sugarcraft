@@ -4395,6 +4395,7 @@ final class Subcommands
         '--append-system-prompt' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.append_system_prompt'],
         '--continue' => ['short' => '-c', 'value' => null, 'desc' => 'cli.completion.option.continue'],
         '--resume' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.resume'],
+        '--incognito' => ['short' => null, 'value' => null, 'desc' => 'cli.completion.option.incognito'],
         '--help' => ['short' => '-h', 'value' => null, 'desc' => 'cli.completion.option.help'],
         '--version' => ['short' => '-v', 'value' => null, 'desc' => 'cli.completion.option.version'],
     ];

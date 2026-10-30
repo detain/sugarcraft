@@ -98,6 +98,15 @@ final class LaunchContext
     private static ?string $sessionLaunchTarget = null;
 
     /**
+     * C-SES-7.c: whether this launch keeps NOTHING. `--incognito` registers
+     * it here so every session-opening surface — `chat()`, the `-p` funnel,
+     * and {@see Bootstrap::openSession()} itself — reads one static instead
+     * of threading a flag through each call site. Same clear-what-you-set
+     * contract as the launch mode above it.
+     */
+    private static bool $incognito = false;
+
+    /**
      * Where the ↑/↓ prompt history lives, when something other than
      * `~/.candy-code/prompt_history.jsonl` — see {@see pinPromptHistoryPath()}.
      */
@@ -240,6 +249,17 @@ final class LaunchContext
     }
 
     /**
+     * Register `--incognito` (C-SES-7.c): this launch keeps no session row,
+     * no transcript and no automatic memory writes. The parser has already
+     * refused the flag beside `--continue`/`--resume`, so an incognito launch
+     * can only be opening a NEW session — there is nothing stored to reopen.
+     */
+    public static function useIncognito(bool $incognito): void
+    {
+        self::$incognito = $incognito;
+    }
+
+    /**
      * Point the prompt history at $path instead of `~/.candy-code`, or back at
      * the default with null. For the test suite, which pins it into its sandbox
      * so a test that presses Enter on a {@see Bootstrap::chat()}-built Chat can never add
@@ -338,6 +358,12 @@ final class LaunchContext
     public static function sessionLaunchTarget(): ?string
     {
         return self::$sessionLaunchTarget;
+    }
+
+    /** Whether this launch keeps nothing ({@see useIncognito()}, C-SES-7.c). */
+    public static function incognito(): bool
+    {
+        return self::$incognito;
     }
 
     /** Where the ↑/↓ prompt history lives when the default is overridden. */

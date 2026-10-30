@@ -321,7 +321,15 @@ final class NonInteractive
         // the envelope - with one stderr line naming the cause.
         $opened = null;
         $sessionStore = null;
-        if ($ownsSession) {
+        // C-SES-7.c: `--incognito` keeps nothing, so a one-shot never opens
+        // a row at all — $opened and $sessionStore stay null, which is
+        // exactly the pre-AUT-2 downgrade shape the persist closure already
+        // treats as "nothing to save": the AUT-2 save and the C-SES-1.a
+        // usage-ledger append inside it both ride $opened, and the json
+        // envelope's session_id key comes away absent. The parser refuses
+        // the flag beside --continue/--resume, so no stored transcript is
+        // being skipped — there is nothing stored to reopen.
+        if ($ownsSession && !$args->incognito) {
             // The funnel reads the mode from useSessionLaunch(), which
             // bin/candy-code registers before dispatch. A run() entered
             // IN-process with session flags in its own $args must honour them
@@ -329,6 +337,12 @@ final class NonInteractive
             // 'new' beside a `--resume` is the very defect AUT-2 closes.
             // Re-registering the bin's own values is idempotent.
             Bootstrap::useSessionLaunch($args->continueSession, $args->resumeRequested, $args->resumeSession);
+            // C-SES-7.c: clear-as-well-as-set, same contract as the launch
+            // mode line above it. Reached only on non-incognito paths (the
+            // gate skipped this block otherwise), where it pins the static
+            // back to false so an earlier in-process --incognito verdict
+            // cannot leak a null row into THIS run's openSession().
+            Bootstrap::useIncognito($args->incognito);
 
             // A --resume target that names nothing is the operator's argv
             // mistake, checked before anything heavy runs - the same verdict

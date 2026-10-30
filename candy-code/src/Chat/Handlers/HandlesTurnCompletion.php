@@ -330,9 +330,18 @@ trait HandlesTurnCompletion
                 titleService: $done->titleService(),
             );
             $suggest = $done->schedulePromptSuggestion($work);
-            $consolidate = $work->consolidation;
+            // C-SES-7.c: an incognito launch keeps NOTHING, and the two
+            // memory passes ARE keeps — consolidation writes notes through
+            // MemoryWriter, the dream pass folds them further. They drop
+            // HERE, not by nulling the store: the table's own rules still
+            // decided them, memory READS stay on for the launch (saved
+            // notes still reach the prompt — only this turn's writes go
+            // off), and $work itself stays intact for the passes the
+            // launch does keep (suggestion, auto-commit). Transcript
+            // flush rides the null sessionStore openSession() arranged.
+            $consolidate = $done->incognito() ? null : $work->consolidation;
             $autoCommit = $done->scheduleAutoCommit($work);
-            $dream = $work->dream;
+            $dream = $done->incognito() ? null : $work->dream;
             $judge = null;
             if ($goal !== null) {
                 [$done, $judge] = $done->scheduleGoalJudge($goal);

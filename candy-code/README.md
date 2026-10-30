@@ -1059,7 +1059,22 @@ candy-code                  # a new session (Up still recalls prompts from earli
 candy-code --continue       # reopen the most recently used session (short: -c)
 candy-code --resume 3f9a    # reopen one by id, unique id prefix, or name
 candy-code --resume         # open the session picker at launch
+candy-code --incognito      # a new session that keeps nothing once the process exits
 ```
+
+`--incognito` is the opposite of saving: the run holds a real conversation
+against the same provider and tools, but keeps nothing once the process exits —
+no session row appears in `session list`, no transcript is written, and the
+turn-end memory passes (consolidation, the dream pass) are skipped, so no notes
+are added to memory either. What was stored *earlier* stays fully readable:
+saved memory still reaches the system prompt the way any fresh session reads
+it, and the status bar carries an `incognito` segment the whole launch, because
+a kept-looking session that keeps nothing is the one misunderstanding worth
+painting. `--continue` and `--resume` reopen *kept* sessions, so both are
+refused beside it at the parser (exit 2). The one-shot `-p`/`run` path honours
+it too: the answer prints and exits, nothing is appended to the store, the
+transcript sidecar, or the spend ledger, and the JSON envelope simply carries
+no `session_id` key.
 
 Inside the TUI, `/new` starts another one: a folder picker opens on this
 project (`Enter` starts the session right here; browse anywhere else and the
@@ -1845,6 +1860,7 @@ candy-code --max-turns 8 -p "audit this"          # cap this launch's tool-loop 
 candy-code --json-schema answer.json -p "extract fields" # constrain the answer to a JSON Schema
 candy-code --append-system-prompt @rules.md -p "audit this" # append operator rules to this one prompt's system prompt
 candy-code --worktree fix-bug        # run this session in its own git worktree
+candy-code --incognito                            # launch keeping nothing: no row, no transcript, no memory write
 candy-code --help                               # prints and exits (never opens the TUI)
 candy-code --version                            # prints the installed version and exits
 candy-code -- --not-a-flag                      # `--` ends options; everything after is positional

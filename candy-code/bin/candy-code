@@ -470,6 +470,11 @@ Bootstrap::useMaxCost($args->maxCost);
 // and both the -p path and the TUI read the same one static.
 Bootstrap::useMaxTurns($args->maxTurns);
 Bootstrap::useSessionLaunch($args->continueSession, $args->resumeRequested, $args->resumeSession);
+// C-SES-7.c: `--incognito` joins the launch-mode family registered before
+// dispatch — the flag was already refused beside --continue/--resume in the
+// parser, and every session-opening surface reads it back from the one
+// LaunchContext static (chat(), the -p funnel, openSession()).
+Bootstrap::useIncognito($args->incognito);
 
 // The real subcommands — `mcp list`, `session list|delete`, `models`, `doctor`
 // and `completion bash|zsh|fish` (crush_code.md Phase 4 item 6). Dispatched

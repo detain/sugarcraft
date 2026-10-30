@@ -1357,6 +1357,16 @@ final class Bootstrap
         $sessionId = $opened['id'];
         $sessionName = $opened['name'];
 
+        // C-SES-7.c: an incognito launch hands its Chat NO store at all. The
+        // null-store guards Chat already carries everywhere (transcript
+        // arming, lazy minting, the /branch and /rename refusals) ARE what
+        // "keeps nothing" means to the running loop, and arming none of them
+        // is the whole design — no new persistence branch inside Chat. The
+        // workspace store above is still built and used for this line's own
+        // resume lookups and prompt recall: incognito turns WRITES off, not
+        // READS of things already stored (BRIEF risk note).
+        $keptStore = self::incognito() ? null : $sessionStore;
+
         // OBS-1: the OTLP event sink, dark unless the launch environment
         // names an OTLP endpoint. chat() and the headless `-p` path thread
         // this sink into Chat directly; `serve` sessions run on
@@ -1372,7 +1382,7 @@ final class Bootstrap
             history: $opened['history'],
             backend: $workspace->backend,
             memoryStore: $workspace->memoryStore,
-            sessionStore: $sessionStore,
+            sessionStore: $keptStore,
             currentSessionId: $sessionId,
             currentSessionName: $sessionName,
             // ISS-102: for a plain launch this is the minter of the row the
@@ -1387,8 +1397,8 @@ final class Bootstrap
             // A fresh session has no rows, so the
             // accessor answers null and Chat's `?? new TokenTracker()`
             // fallback keeps byte-identical launch semantics.
-            tokenTracker: $sessionStore instanceof EnhancedSessionStore
-                ? $sessionStore->resumedTokenTracker($sessionId)
+            tokenTracker: $keptStore instanceof EnhancedSessionStore
+                ? $keptStore->resumedTokenTracker($sessionId)
                 : null,
             // OBS-1 (roadmap): typed spans over the Events DTOs to OTLP/HTTP.
             // {@see observabilitySink()} answers NullEventSink unless
@@ -1396,7 +1406,13 @@ final class Bootstrap
             // no-op call per folded event and zero I/O.
             eventSink: $eventSink,
             // A resumed session keeps the "always" answers it was given.
-            permissionGrants: Chat::storedPermissionGrants($sessionStore, $sessionId),
+            permissionGrants: Chat::storedPermissionGrants($keptStore, $sessionId),
+            // C-SES-7.c: the flag itself, so the surfaces that decide to keep
+            // (the turn-settle memory passes, the status bar segment) read
+            // one Chat field instead of sniffing the store's absence — a
+            // tabbed or embedded Chat may lawfully run store-less for other
+            // reasons, and must not start claiming to be incognito.
+            incognito: self::incognito(),
             titleBackend: $workspace->titleBackend,
             // crush_code.md Phase 5 item 6. Without this argument `/compact`
             // reaches only the heuristic summarizer, whose stage-2 output for a
@@ -4215,6 +4231,22 @@ public static function useSessionLaunch(bool $continue, bool $resume = false, ?s
     }
 
     /**
+     * Delegates to {@see LaunchContext::useIncognito()} — C-SES-7.c: bin
+     * registers `--incognito` here exactly as it registers the launch mode,
+     * and every session-opening surface reads the one static.
+     */
+public static function useIncognito(bool $incognito): void
+    {
+        LaunchContext::useIncognito($incognito);
+    }
+
+    /** Whether this launch keeps nothing — {@see LaunchContext::incognito()}. */
+public static function incognito(): bool
+    {
+        return LaunchContext::incognito();
+    }
+
+    /**
      * Delegates to {@see LaunchContext::pinPromptHistoryPath()} — the store and its full
      * doc-block moved to the launch-context shelf in the v4 S1b split; the
      * seam stays here so every caller reaches its registration there.
@@ -4303,6 +4335,17 @@ public static function pinPromptHistoryPath(?string $path): void
         $attached = \SugarCraft\Code\Host\RemoteSessionHost::forLaunch();
         if ($attached !== null && $attached->sessionId() !== null) {
             return ['id' => (string) $attached->sessionId(), 'name' => $attached->sessionName(), 'history' => $attached->history(), 'picker' => false];
+        }
+
+        // C-SES-7.c: an incognito launch keeps nothing. The id it runs under
+        // is generated here and dies with the process — no row is minted (no
+        // `mint` key, so Chat's lazy minter never exists), no empty-session
+        // sweep touches the store, and no transcript store is ever armed
+        // because the caller threads a null store alongside this verdict.
+        // The parser refuses the flag beside --continue/--resume, so the
+        // ladder below (which reopens stored rows) is unreachable with it.
+        if (LaunchContext::incognito()) {
+            return ['id' => bin2hex(random_bytes(8)), 'name' => null, 'history' => [], 'picker' => false];
         }
 
         if (LaunchContext::sessionLaunchMode() === 'continue') {

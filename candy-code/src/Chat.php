@@ -1815,6 +1815,18 @@ final class Chat implements Model
          * sessions (mutate()'s one session-identity choke).
          */
         private readonly ?\SugarCraft\Code\Agents\PrimaryAgent $primaryAgent = null,
+        /**
+         * C-SES-7.c — this launch keeps nothing: no session row, no
+         * transcript, no automatic memory writes. Set once by the launcher
+         * ({@see \SugarCraft\Code\Cli\Bootstrap::chat()} and the `-p`
+         * funnel, both behind `--incognito`, which the parser refuses
+         * beside --continue/--resume); read by the turn-settle memory
+         * passes (HandlesTurnCompletion) and the status bar (Renderer).
+         * NOT implied by a null $sessionStore: an embedded or tabbed Chat
+         * may lawfully run store-less for other reasons and must not
+         * start claiming incognito it was not launched with.
+         */
+        private readonly bool $incognito = false,
     ) {
         $this->transcriptWriter = $transcriptWriter ?? new DebouncedTranscriptWriter();
         $this->inputHistory = $inputHistory ?? ($promptHistory?->entries() ?? []);
@@ -8249,6 +8261,14 @@ final class Chat implements Model
     }
 
     /**
+     * Whether this launch keeps nothing (C-SES-7.c, `--incognito`).
+     */
+    public function incognito(): bool
+    {
+        return $this->incognito;
+    }
+
+    /**
      * Create a new Chat with an explicit session store.
      */
     public function withSessionStore(\SugarCraft\Code\Session\SessionStore|\SugarCraft\Code\Session\EnhancedSessionStore|null $sessionStore): self
@@ -9150,6 +9170,11 @@ final class Chat implements Model
             // mutate callers pass the narrowed engine), and the session-
             // identity choke below is where a hand-over undoes it.
             'primaryAgent' => $this->primaryAgent,
+            // C-SES-7.c: launch identity, carried by value like 'tabHosted'.
+            // Dropped here, the first keystroke would silently turn an
+            // incognito launch back into a keeping one — the very lie this
+            // flag exists to make impossible.
+            'incognito' => $this->incognito,
         ];
 
         // P-A4: who named the session, and a half-typed title, both belong to

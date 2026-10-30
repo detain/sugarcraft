@@ -2362,6 +2362,11 @@ final class Renderer
         // the mode switch says what it refused. With no agent chosen (the
         // default, and every serve session) the bar is byte-unchanged.
         $marker .= self::agentBadge($chat, $chat->cols() - Width::of($marker));
+        // C-SES-7.c: an incognito launch says so on the bar — a session that
+        // will keep nothing is invisible state, and a user who believes it is
+        // saved loses the conversation at exit. With the flag unset (every
+        // other launch) the segment is empty and the bar is byte-unchanged.
+        $marker .= self::incognitoBadge($chat, $chat->cols() - Width::of($marker));
         $cols = $chat->cols() - Width::of($marker);
 
         // The "Ctrl+P menu" hint is the live path's only affordance for
@@ -2621,6 +2626,28 @@ final class Renderer
         return self::firstFitting([
             Lang::t('tui.status.agent', ['name' => $name]) . ' · ',
             $name . ' · ',
+        ], $room - $restFloor);
+    }
+
+    /**
+     * C-SES-7.c: the status-bar segment naming an incognito launch — one
+     * that keeps no session row, no transcript and no automatic memory
+     * writes. Mirrors {@see agentBadge()}'s discipline: empty when the flag
+     * is not set (the plain launch's bar stays byte-for-byte what it was),
+     * ` · ` separated, and given the same rest-of-bar floor.
+     */
+    private static function incognitoBadge(Chat $chat, int $room): string
+    {
+        if (!$chat->incognito()) {
+            return '';
+        }
+
+        $restFloor = Width::of(' · ')
+            + Width::of(self::contextIndicator($chat, 0))
+            + Width::of(self::stripZoneMarkers(self::fitProcessingHint($chat, 0)));
+
+        return self::firstFitting([
+            Lang::t('chat.incognito.status') . ' · ',
         ], $room - $restFloor);
     }
 
