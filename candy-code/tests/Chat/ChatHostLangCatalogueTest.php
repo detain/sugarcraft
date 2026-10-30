@@ -249,6 +249,7 @@ final class ChatHostLangCatalogueTest extends TestCase
                     }
                     if ($arg === 0 && \is_array($t) && $t[0] === \T_CONSTANT_ENCAPSED_STRING) {
                         $value = substr($t[1], 1, -1);
+                        // W27 r2 NIT-1: the strict lowercase class here vs the widened ask-leg class is DELIBERATE (camelCase key carve-out, disclosed in lanes/W27/FIX-m2.md).
                         if (preg_match('/^(?:chat|host)\.[a-z0-9_.]+$/', $value) === 1) {
                             $keys[] = $value;
                         }
