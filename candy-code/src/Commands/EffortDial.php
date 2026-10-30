@@ -107,11 +107,21 @@ final class EffortDial
             // have the dial and simply does not read it for this pair —
             // claiming the provider lacks the control would trade one false
             // sentence for another. The persist door is never reached.
-            return [Lang::t($provider instanceof ShapesReasoningEffort
-                ? 'chat.effort.unsupported_model'
-                : 'chat.effort.unsupported', [
+            // W27-m2: the two arms pass their own params — a single ternary
+            // key with one shared [model, provider] array asked the catalogue
+            // to render {model} into chat.effort.unsupported, which spells no
+            // such placeholder (the off-roster sentence names only the
+            // provider: there is no per-model leg to accuse). Split at the
+            // call so each entry receives exactly the placeholders it spells.
+            if ($provider instanceof ShapesReasoningEffort) {
+                return [Lang::t('chat.effort.unsupported_model', [
+                    'provider' => $names,
+                    'model' => (string) $engine?->model(),
+                ]), null];
+            }
+
+            return [Lang::t('chat.effort.unsupported', [
                 'provider' => $names,
-                'model' => (string) $engine?->model(),
             ]), null];
         }
 

@@ -17,7 +17,13 @@ use SugarCraft\Code\Lang;
  * catalogue row of its own onto the notice seam the host drains, joined for
  * VIS-6 by `src/Runtime.php`, whose recall row rides that same seam. EffortGate
  * joins for C-PRV-1.a: the /effort verdict's shape phrases emit their own
- * `chat.effort.shape.*` rows from `src/Providers/`.
+ * `chat.effort.shape.*` rows from `src/Providers/`. Widened for W27-m2 over the
+ * full stranded-key census (wave review MAJOR-2, option (a)): the dial rows
+ * `src/Commands/EffortDial.php` asks, the incognito band `src/Renderer.php`
+ * paints, and the ask-home of every remaining stranded row — `src/Theme.php`,
+ * `src/Diagnostics/RuntimeNoticeSink.php`, `src/Support/StartupSummary.php`,
+ * `src/Attachments/FileMentions.php`, `src/Permissions/SavedRules.php`,
+ * `src/Cli/LaunchContext.php`.
  *
  * LangParityTest already proves every literal key src asks for exists. What it
  * cannot see is the other half of a call: the parameters. A call that passes
@@ -80,14 +86,14 @@ final class ChatHostLangCatalogueTest extends TestCase
     {
         $asked = [];
         foreach ($this->sources() as $source) {
-            preg_match_all("/'((?:chat|host)\\.[a-z0-9_.-]+)'/", $source, $m);
+            preg_match_all("/'((?:chat|host)\\.[a-zA-Z0-9_.-]+)'/", $source, $m);
             foreach ($m[1] as $key) {
                 $asked[$key] = true;
             }
         }
 
         $unused = array_values(array_diff(array_keys($this->catalogue()), array_keys($asked)));
-        self::assertSame([], $unused, 'chat./host. entries nothing in src/Chat.php, src/Host, SessionPermissionMemo, PermissionPrompt, PendingAsk, EngineBackend, GoalLoop, EffortGate or the two src/Context instruction files asks for');
+        self::assertSame([], $unused, 'chat./host. entries nothing in the sources() scan — Chat, Host, the Permissions/Backend/Runtime/Goal/Providers/Context rows, the shared EffortDial, the Renderer band, Theme, the notice sink, and the startup/attach/launch ask-homes — asks for');
     }
 
     public function testTheEnglishRenderingIsTheTextTheLiteralsUsedToSpell(): void
@@ -142,7 +148,23 @@ final class ChatHostLangCatalogueTest extends TestCase
         // load and the mid-session change each emit their own visibility row
         // (chat.instructions.loaded / chat.instructions.updated) through the
         // same RuntimeNoticeSink the refusal rows already ride from there.
-        $files = [self::SRC . '/Chat.php', self::SRC . '/Permissions/SessionPermissionMemo.php', self::SRC . '/Permissions/PermissionPrompt.php', self::SRC . '/Backend/PendingAsk.php', self::SRC . '/Backend/EngineBackend.php', self::SRC . '/Runtime.php', self::SRC . '/Goal/GoalLoop.php', self::SRC . '/Providers/EffortGate.php', self::SRC . '/Context/InstructionFileLoader.php', self::SRC . '/Context/InstructionDiffTracker.php'];
+        // W27-m2 (wave review MAJOR-2, lead option (a)): the scan covers the
+        // ask-home of every key the catalogue still ships, each leg attributed
+        // to the move that stranded it —
+        // C-WEB-2.f 75d2d19f5: /effort lifted out of Chat.php into the shared
+        // dial, its seven chat.effort rows (plus the launch_unshaped pair
+        // C-SES-8.g/Cli LaunchContext carries) asked from src/Commands/.
+        // C-SES-7.c: the incognito band paints chat.incognito.status from
+        // src/Renderer.php.
+        // Foreign legs adjudicated to their lanes' accounts at the review,
+        // scanned here so the guard is green at master rather than ledger-only:
+        // C-TUI-4.a 83353667a emits the chat.theme.file_* quartet from
+        // src/Theme.php; C-CTX-6.e/c 9c59bc8d1 + 16266186d the recalled_notice
+        // pair from src/Diagnostics/RuntimeNoticeSink.php (the seam's own row);
+        // src/Support/StartupSummary.php, src/Attachments/FileMentions.php,
+        // src/Permissions/SavedRules.php and src/Cli/LaunchContext.php carry
+        // the remaining startup/attach/permission/launch rows.
+        $files = [self::SRC . '/Chat.php', self::SRC . '/Permissions/SessionPermissionMemo.php', self::SRC . '/Permissions/PermissionPrompt.php', self::SRC . '/Backend/PendingAsk.php', self::SRC . '/Backend/EngineBackend.php', self::SRC . '/Runtime.php', self::SRC . '/Goal/GoalLoop.php', self::SRC . '/Providers/EffortGate.php', self::SRC . '/Context/InstructionFileLoader.php', self::SRC . '/Context/InstructionDiffTracker.php', self::SRC . '/Commands/EffortDial.php', self::SRC . '/Renderer.php', self::SRC . '/Theme.php', self::SRC . '/Diagnostics/RuntimeNoticeSink.php', self::SRC . '/Support/StartupSummary.php', self::SRC . '/Attachments/FileMentions.php', self::SRC . '/Permissions/SavedRules.php', self::SRC . '/Cli/LaunchContext.php'];
         foreach (new \RecursiveDirectoryIterator(self::SRC . '/Chat/Handlers', \FilesystemIterator::SKIP_DOTS) as $handlerFile) {
             if ($handlerFile->isFile() && $handlerFile->getExtension() === 'php') {
                 $files[] = $handlerFile->getPathname();
