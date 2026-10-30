@@ -2064,7 +2064,7 @@ run failed. A loop the program stopped itself — `/exit`, `q`, a model-raised
 interrupt — remains a clean `0`.
 
 `--output-format json` applies to `doctor`, `models`, every `session` verb,
-`mcp list` and `mcp import`, producing the same `{"result": …}` envelope the
+`mcp list`, `mcp import` and both `lsp` verbs, producing the same `{"result": …}` envelope the
 one-shot path does, and
 the same `{"result":null,"error":{"type":…,"message":…}}` document on any
 failure — an operand error, an unknown session id, or an unreadable trusted
@@ -2326,6 +2326,10 @@ candy-code mcp import claude|opencode|claude-project <path> [--write user]
                                      # translate a foreign MCP config and print the block — the verb
                                      # writes nothing unless --write user appends it into the user's
                                      # own ~/.candy-code/mcp.json (collisions refuse the whole write)
+candy-code lsp install <language>    # fetch the pinned language server: the npm package or the
+                                     #   checksum-verified release binary, into ~/.candy-code/lsp
+candy-code lsp list                  # every installable language: pinned version, install path or
+                                     #   "not installed", and whether a release exists for this machine
 candy-code serve                     # WebSocket + HTTP server for the web UI, until Ctrl+C
                                      #   [--host IP] [--port N] [--allow-remote] [--allowed-origin LIST]
                                      #   [--web-root DIR] [--no-web] [--allow-bypass] [--allow-root]

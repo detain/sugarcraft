@@ -131,6 +131,13 @@ final class HelpTest extends TestCase
         // actually list every option ArgvParser accepts.
         $this->assertStringContainsString('--root', $screen);
 
+        // C-TOOL-5.d: the lsp verbs carry their own rows in the Subcommands
+        // block — `lsp install <language>` and `lsp list`. DocFigureProseDrift
+        // pins the block's roster arithmetic; these keep this test honest about
+        // the two rows a user comes to the screen to find.
+        $this->assertStringContainsString('lsp install', $screen);
+        $this->assertStringContainsString('lsp list', $screen);
+
         // The env vars the screen documents are guarded from the SOURCE, not
         // from a hand-written list here — and from the ENTRY COLUMN, not by a
         // substring anywhere in the section: the _STREAM block's prose names

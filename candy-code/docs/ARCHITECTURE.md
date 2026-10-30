@@ -15,7 +15,7 @@ subsystem that is documented and does nothing, a stderr line inside a frame.
 bin/candy-code                argv → pre-flight → dispatch
       │
       ├─ ArgvParser / Help / NonInteractive / Subcommands
-      │      --help --version, twelve subcommands, -p one-shot
+      │      --help --version, thirteen subcommands, -p one-shot
       │
       └─ Cli\Bootstrap              ALL wiring lives here
              │
@@ -43,8 +43,8 @@ which is the whole of the next warning.
 
 The order in it is deliberate, and its size is whatever `wc -l bin/candy-code`
 says today — this sentence used to carry a line count and quotes none on
-purpose — quoted figures rot within rounds. `--help`, `--version` and the twelve
-subcommands (`doctor`, `login <provider>`, `models`, `session list|show|rename|delete|pin|unpin|archive|unarchive`, `mcp list`,
+purpose — quoted figures rot within rounds. `--help`, `--version` and the thirteen
+subcommands (`doctor`, `login <provider>`, `models`, `session list|show|rename|delete|pin|unpin|archive|unarchive`, `mcp list`, `lsp install|list`,
 `serve`, `self-update`, `attach`, `acp`, `bundles list|install`, `completion bash|zsh|fish`, `usage [7|30|all]`) are answered **before** `Program`, `Bootstrap::app()`
 or `NonInteractive` is reached, because every one of them but `attach` and `acp` is a question about
 the *install* rather than a turn of conversation: they must answer on a machine

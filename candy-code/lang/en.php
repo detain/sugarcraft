@@ -223,6 +223,7 @@ return [
     'cli.completion.verb.completion' => 'Emit a shell completion script',
     'cli.completion.verb.doctor' => 'Check this installation and exit',
     'cli.completion.verb.login' => 'Log a provider in: its own login flow, or a pasted API key',
+    'cli.completion.verb.lsp' => 'Install and list the pinned language servers',
     'cli.completion.verb.mcp' => 'Inspect the project MCP configuration',
     'cli.completion.verb.models' => 'List the providers this install can select',
     'cli.completion.verb.run' => 'Run a single prompt and exit (alias for --prompt)',
@@ -358,6 +359,16 @@ session; acp runs turns for an editor, until the editor disconnects):
                          (a name collision refuses the whole write, and the
                          project tier is never written). The renames the
                          translation made are listed on stderr.
+  lsp install <language> Install the pinned language server for one
+                         language: the npm package or the checksum-verified
+                         release binary, into the private install root under
+                         your home. `lsp list` answers which languages are
+                         installable.
+  lsp list               Report every installable language: its pinned
+                         version, where its server is installed (or that it
+                         is not), and whether a release exists for this
+                         machine's OS and architecture. Starts nothing,
+                         downloads nothing.
   self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|dev]
                          Replace this phar install with the latest published
                          candy-code release, sha256-verified against the
@@ -889,6 +900,14 @@ TXT,
     'cli.login.keychain.stored' => 'Stored the {provider} key in the OS keychain (written on stdin, never argv); {path} now holds the reference {reference} instead of the key.',
     'cli.login.keychain.timeout' => 'the {backend} keychain write for {provider} did not answer in time — the config was left untouched; try again, or paste the key without --keychain to store it in the config file.',
     'cli.login.keychain.unsupported' => 'no keychain backend exists on {os}, so the {provider} key cannot be kept there — paste the key without --keychain to store it in the config file instead.',
+    'cli.lsp.install.done' => '{message} — {path}',
+    'cli.lsp.install.no_language' => 'lsp install: no language given',
+    'cli.lsp.install.unexpected_operand' => 'lsp install: unexpected operand {operand}',
+    'cli.lsp.list.no_release' => 'no release for {os}/{arch}',
+    'cli.lsp.list.not_installed' => 'not installed',
+    'cli.lsp.no_action' => 'lsp: no action given',
+    'cli.lsp.unknown_action' => 'lsp {action}: unknown action',
+    'cli.lsp.usage' => 'Usage: candy-code lsp install <language> | candy-code lsp list',
     'cli.mcp.auth.bad_timeout' => 'mcp auth login: --timeout needs a positive number of seconds',
     'cli.mcp.auth.interactive' => 'mcp auth login: login is interactive by design',
     'cli.mcp.auth.interactive_hint' => 'Run it as a plain command: it prints a URL, waits for your browser, and stores the tokens.',

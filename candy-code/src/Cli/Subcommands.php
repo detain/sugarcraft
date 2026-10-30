@@ -11,6 +11,8 @@ use SugarCraft\Code\Lang;
 use SugarCraft\Code\Commands\UsageCommand;
 use SugarCraft\Code\Host\Commands\UsageHostCommand;
 use SugarCraft\Code\Host\SpendLedger;
+use SugarCraft\Code\LSP\LspInstaller;
+use SugarCraft\Code\LSP\LspReleases;
 use SugarCraft\Code\Providers\ProviderFactory;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Bundles\Bundle;
@@ -122,6 +124,7 @@ final class Subcommands
             'models'     => self::models($args),
             'self-update' => SelfUpdate::run($args),
             'login'      => self::login($args),
+            'lsp'        => self::lsp($args),
             'session'    => self::session($args),
             'serve'      => Serve::run($args),
             'attach'     => Attach::run($args),
@@ -4435,6 +4438,214 @@ final class Subcommands
         return NonInteractive::EXIT_OK;
     }
 
+    // ── C-TOOL-5.d: `candy-code lsp install <language> | lsp list` ──────────
+
+    /**
+     * Test seam for the installer call: null runs the real
+     * {@see LspInstaller::install()}. The suite NEVER downloads — an
+     * npm install or a release fetch would hit the network, wait minutes,
+     * and mutate a real home tree. The seam receives only the language, so
+     * what a test pins is the CLI→installer wiring itself.
+     *
+     * @var (callable(string): array{ok: bool, message: string, path: ?string})|null
+     */
+    private static ?\Closure $lspInstaller = null;
+
+    /**
+     * @param (callable(string): array{ok: bool, message: string, path: ?string})|null $seam
+     */
+    public static function setLspInstallSeamForTesting(?\Closure $seam): void
+    {
+        self::$lspInstaller = $seam;
+    }
+
+    public static function resetLspInstallSeamForTesting(): void
+    {
+        self::$lspInstaller = null;
+    }
+
+    /**
+     * `candy-code lsp` — the pinned language servers of
+     * {@see LspReleases}, reported and installed: `lsp list` answers what is
+     * pinned, what is installed and what is available for this machine;
+     * `lsp install <language>` fetches exactly that pinned entry through
+     * {@see LspInstaller::install()}, checksum-verified, into the private
+     * install root.
+     *
+     * The shape mirrors {@see self::mcp()}'s verb gate: action arms first,
+     * a loud failUsage for anything else, and ONE exit code per outcome for
+     * both output formats — a JSON consumer must never see a verdict the
+     * text arm would call a failure.
+     */
+    private static function lsp(ParsedArgs $args): int
+    {
+        $verb = $args->subcommandArgs[0] ?? null;
+        if ($verb === 'install') {
+            return self::lspInstall($args);
+        }
+        if ($verb !== 'list') {
+            return NonInteractive::failUsage(
+                $verb === null
+                    ? 'candy-code: ' . Lang::t('cli.lsp.no_action')
+                    : 'candy-code: ' . Lang::t('cli.lsp.unknown_action', ['action' => $verb]),
+                $args->outputFormat,
+                Lang::t('cli.lsp.usage'),
+            );
+        }
+
+        $rows = self::lspListRows();
+
+        if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
+            self::emitDocument(['result' => [
+                'installRoot' => LspInstaller::installRoot(),
+                'languages' => $rows,
+            ]]);
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        $width = 0;
+        foreach ($rows as $row) {
+            $width = \max($width, \strlen($row['language']));
+        }
+        foreach ($rows as $row) {
+            $state = $row['path'] !== null
+                ? $row['path']
+                : ($row['available']
+                    ? Lang::t('cli.lsp.list.not_installed')
+                    : Lang::t('cli.lsp.list.no_release', ['os' => $row['os'], 'arch' => $row['arch']]));
+            \printf("%-{$width}s  %-40s  %s\n", $row['language'], (string) $row['pinned'], $state);
+        }
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * `candy-code lsp install <language>` — hand the one language operand
+     * to {@see LspInstaller::install()} (or the test seam) and report its
+     * verdict verbatim. A failure message already carries the `lsp install:`
+     * self-label from the installer; it goes to stderr and exits 1 in BOTH
+     * formats — the mcp-list law again, formatting never changes the verdict.
+     */
+    private static function lspInstall(ParsedArgs $args): int
+    {
+        $language = $args->subcommandArgs[1] ?? null;
+        if ($language === null) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.lsp.install.no_language'),
+                $args->outputFormat,
+                Lang::t('cli.lsp.usage'),
+            );
+        }
+        if (isset($args->subcommandArgs[2])) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.lsp.install.unexpected_operand', ['operand' => $args->subcommandArgs[2]]),
+                $args->outputFormat,
+                Lang::t('cli.lsp.usage'),
+            );
+        }
+
+        $result = self::$lspInstaller === null
+            ? LspInstaller::install($language)
+            : (self::$lspInstaller)($language);
+
+        if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
+            if ($result['ok']) {
+                self::emitDocument(['result' => [
+                    'language' => $language,
+                    'ok' => true,
+                    'message' => $result['message'],
+                    'path' => $result['path'],
+                ]]);
+
+                return NonInteractive::EXIT_OK;
+            }
+
+            self::emitDocument([
+                'result' => null,
+                'error' => ['type' => 'lsp-install', 'message' => $result['message']],
+            ]);
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        if ($result['ok']) {
+            echo Lang::t('cli.lsp.install.done', [
+                'message' => $result['message'],
+                'path' => (string) $result['path'],
+            ]) . "\n";
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        \fwrite(\STDERR, 'candy-code: ' . $result['message'] . "\n");
+
+        return NonInteractive::EXIT_FAILURE;
+    }
+
+    /**
+     * One row per {@see LspReleases::installableLanguages()}: the pinned
+     * version (package@version on the npm arm, release tag on the binary
+     * arm), the install path when the launch probe already finds the
+     * binary executably, and whether a release exists for THIS machine.
+     *
+     * @return list<array{language: string, kind: string, pinned: string, binary: ?string, path: ?string, available: bool, os: string, arch: string}>
+     */
+    private static function lspListRows(): array
+    {
+        [$os, $arch] = self::lspHostTarget();
+        $rows = [];
+        foreach (LspReleases::installableLanguages() as $language) {
+            $npm = LspReleases::npmEntry($language);
+            if ($npm !== null) {
+                $binary = $npm['binary'];
+                $pinned = $npm['package'] . '@' . $npm['version'];
+                $available = true;
+            } else {
+                $entry = LspReleases::binaryEntry($language, $os, $arch);
+                $binary = $entry['binary'] ?? null;
+                $pinned = LspReleases::RUST_ANALYZER_RELEASE_TAG;
+                $available = $entry !== null;
+            }
+            $rows[] = [
+                'language' => $language,
+                'kind' => $npm !== null ? 'npm' : 'release',
+                'pinned' => $pinned,
+                'binary' => $binary,
+                'path' => $binary === null ? null : LspInstaller::installedBinaryPath($binary),
+                'available' => $available,
+                'os' => $os,
+                'arch' => $arch,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * The host's "<os>,<arch>" target keys, derived EXACTLY as
+     * {@see LspInstaller::install()} derives its defaults — the same Darwin
+     * comparison and the same arch normalisation, duplicated here because
+     * the installer keeps both private. {@see LspSubcommandTest} pins the
+     * mirror against the installer source so the two cannot drift.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private static function lspHostTarget(): array
+    {
+        $os = \strcasecmp(\PHP_OS_FAMILY, 'Darwin') === 0 ? 'darwin' : 'linux';
+        $lower = \strtolower(\php_uname('m'));
+        if ($lower === 'amd64' || $lower === 'x86_64' || $lower === 'x64') {
+            $arch = 'x86_64';
+        } elseif ($lower === 'arm64' || $lower === 'aarch64') {
+            $arch = 'aarch64';
+        } else {
+            $arch = $lower;
+        }
+
+        return [$os, $arch];
+    }
+
     /**
      * `candy-code completion bash|zsh|fish` — a completion script on stdout,
      * for `eval "$(candy-code completion bash)"` or redirection into the
@@ -4531,6 +4742,7 @@ final class Subcommands
         'completion' => 'cli.completion.verb.completion',
         'doctor' => 'cli.completion.verb.doctor',
         'login' => 'cli.completion.verb.login',
+        'lsp' => 'cli.completion.verb.lsp',
         'mcp' => 'cli.completion.verb.mcp',
         'models' => 'cli.completion.verb.models',
         'self-update' => 'cli.completion.verb.self_update',
@@ -4550,6 +4762,7 @@ final class Subcommands
         // needs a <target>, its operand is a transcript file.
         'session' => ['list', 'show', 'import', 'rename', 'delete', 'pin', 'unpin', 'archive', 'unarchive'],
         'bundles' => ['list', 'install', 'marketplace', 'update', 'search', 'recommend'],
+        'lsp' => ['install', 'list'],
         'mcp' => ['list', 'auth', 'import', 'trust'],
         'serve' => Serve::ACTIONS,
         'completion' => self::SHELLS,

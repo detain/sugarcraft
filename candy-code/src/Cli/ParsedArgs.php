@@ -53,7 +53,7 @@ final readonly class ParsedArgs
      *
      * @var list<string>
      */
-    public const SUBCOMMANDS = ['acp', 'attach', 'bundles', 'completion', 'doctor', 'login', 'mcp', 'models', 'self-update', 'serve', 'session', 'usage'];
+    public const SUBCOMMANDS = ['acp', 'attach', 'bundles', 'completion', 'doctor', 'login', 'lsp', 'mcp', 'models', 'self-update', 'serve', 'session', 'usage'];
 
     /**
      * The flags each subcommand verb owns, keyed by verb: `true` when the flag
@@ -83,6 +83,13 @@ final readonly class ParsedArgs
         'login' => [
             '--keychain' => false,
         ],
+        // `lsp` (C-TOOL-5.d): the verb family — `lsp install <language>` and
+        // `lsp list` — owns NO flags, so the entry is empty. It is spelled out
+        // rather than omitted because the table is the roster of what each
+        // verb recognises: an empty map says "the parser knows this verb and
+        // nothing after it is a flag", which is the answer a reader of
+        // `lsp list --all` needs (unknown option, not silently swallowed).
+        'lsp' => [],
         // `mcp` (C-MCP-4.d): `mcp import --write user` is the only value
         // flag the verb family takes. The parser checks the SHAPE (a value
         // follows); WHICH tier is honoured is `Subcommands::mcpImport()`'s
