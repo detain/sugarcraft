@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tools\Web;
 
+use DOMCdataSection;
 use DOMComment;
 use DOMDocument;
 use DOMElement;
@@ -38,8 +39,15 @@ use SugarCraft\Code\Tools\BuiltIn\WebFetch;
  * `iframe` and `noscript` subtrees are dropped whole: their text is never
  * rendered, not even as inert markup, so a "ignore all previous
  * instructions" payload inside a `<script>` never reaches the model at all.
- * Comments survive as literal `<!-- -->` text — the parser ends a comment at
- * the first `-->` it contains, so one can never forge its way out.
+ * The drop rule also governs every whole-subtree text read (fenced `pre`,
+ * inline code, form-control labels): those walk children with
+ * {@see visibleText()} instead of `textContent`, which would otherwise read
+ * straight through a dropped element and smuggle its payload inside the
+ * kept text around it. Comments survive as literal `<!-- -->` text — the
+ * parser ends a comment at the first `-->` it contains, so one can never
+ * forge its way out. A caller that knows the transport's declared charset
+ * (WebFetch passes its Content-Type one) hands it in, so a body that
+ * declares UTF-8 only in the header does not decode as mojibake.
  *
  * Everything else renders as its inline content, so unknown tags do not
  * silently swallow what they contain. Text nodes are NOT escaped for
@@ -88,12 +96,17 @@ final class HtmlToMarkdown
      * @param string $baseUrl the final URL after redirects, used to resolve
      *                        relative links; an empty base leaves every link
      *                        exactly as the page wrote it
+     * @param ?string $charset the transport-declared character set (an HTTP
+     *                        Content-Type parameter), used only to tell the
+     *                        parser how to read the bytes; a token that is
+     *                        not a bare charset name is ignored, never
+     *                        interpolated
      *
      * @return ?string Markdown ending in one newline, or null when the body
      *                 could not be converted and the caller should fall back
      *                 to the raw bytes
      */
-    public static function convert(string $html, string $baseUrl): ?string
+    public static function convert(string $html, string $baseUrl, ?string $charset = null): ?string
     {
         if ($html === '' || strlen($html) > self::MAX_PARSE_BYTES) {
             return null;
@@ -107,6 +120,15 @@ final class HtmlToMarkdown
         // encoding it was never told; undeclared BOMs are common in the wild.
         if (str_starts_with($html, "\xEF\xBB\xBF")) {
             $html = substr($html, 3);
+        }
+
+        // Without any declaration the HTML parser reads bytes as its
+        // single-byte default, so a UTF-8 body whose charset rides only in
+        // the header would surface as mojibake. A leading XML declaration
+        // is the one hint that parser honors before it inspects the bytes;
+        // only a well-formed token is ever placed into it.
+        if ($charset !== null && preg_match('/^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/', $charset) === 1) {
+            $html = '<?xml encoding=' . '"' . $charset . '"' . ' ?>' . $html;
         }
 
         $previous = libxml_use_internal_errors(true);
@@ -240,7 +262,7 @@ final class HtmlToMarkdown
 
     private static function renderPre(DOMElement $node): ?string
     {
-        $code = trim($node->textContent ?? '', "\n");
+        $code = trim(self::visibleText($node), "\n");
         if (trim($code) === '') {
             return null;
         }
@@ -311,15 +333,14 @@ final class HtmlToMarkdown
      * `table` as a pipe grid. The first row found becomes the header — pipe
      * tables require one, and a table without `th` still reads best with its
      * first row titled. `caption` text is not carried; nested tables flatten
-     * into their cell.
+     * into their cell (their rows never join this grid — the historical
+     * `getElementsByTagName('tr')` read lifted them twice, escaping the
+     * inner content into the cell AND emitting it as ghost top-level rows).
      */
     private static function renderTable(DOMElement $node, string $baseUrl): ?string
     {
         $rows = [];
-        foreach ($node->getElementsByTagName('tr') as $tr) {
-            if (!($tr instanceof DOMElement)) {
-                continue;
-            }
+        foreach (self::tableRows($node) as $tr) {
             $cells = [];
             foreach ($tr->childNodes as $cell) {
                 if ($cell instanceof DOMElement && in_array(strtolower($cell->nodeName), ['td', 'th'], true)) {
@@ -346,6 +367,60 @@ final class HtmlToMarkdown
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * The `tr` elements belonging to one table, rows of nested tables left
+     * out. libxml's HTML parser does not mint `tbody`, so plain rows are
+     * direct children; explicitly written section wrappers are descended
+     * exactly one level so their rows still count as this table's.
+     *
+     * @return list<DOMElement>
+     */
+    private static function tableRows(DOMElement $table): array
+    {
+        $rows = [];
+        foreach ($table->childNodes as $child) {
+            if (!($child instanceof DOMElement)) {
+                continue;
+            }
+            $name = strtolower($child->nodeName);
+            if ($name === 'tr') {
+                $rows[] = $child;
+            } elseif (in_array($name, ['thead', 'tbody', 'tfoot'], true)) {
+                foreach ($child->childNodes as $row) {
+                    if ($row instanceof DOMElement && strtolower($row->nodeName) === 'tr') {
+                        $rows[] = $row;
+                    }
+                }
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Raw text of a subtree with dropped elements removed from the walk.
+     * `textContent` reads through everything, which would hand a `<pre>`,
+     * an inline code span, or a form-control label the literal payload of a
+     * nested `<script>` — exactly the injection the drop list exists to
+     * prevent. Only text and CDATA survive; comments are markup the walker
+     * elsewhere renders as inert literal, and they are not text content
+     * here. Entity references are already merged into text nodes by the
+     * HTML parser, so decoding behavior matches `textContent`'s.
+     */
+    private static function visibleText(DOMNode $node): string
+    {
+        $out = '';
+        foreach ($node->childNodes as $child) {
+            if ($child instanceof DOMText || $child instanceof DOMCdataSection) {
+                $out .= $child->nodeValue ?? '';
+            } elseif ($child instanceof DOMElement && !in_array(strtolower($child->nodeName), self::DROP_TAGS, true)) {
+                $out .= self::visibleText($child);
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -386,7 +461,7 @@ final class HtmlToMarkdown
             case 'kbd':
             case 'samp':
             case 'tt':
-                return self::inlineCode(trim($node->textContent ?? '', " \t\n\r\0\x0B"));
+                return self::inlineCode(trim(self::visibleText($node), " \t\n\r\0\x0B"));
 
             case 'strong':
             case 'b':
@@ -414,7 +489,7 @@ final class HtmlToMarkdown
                 // Form controls: only their label text is meaningful as
                 // content, and it is set off with spaces so a control never
                 // welds itself to the text on either side of it.
-                $label = self::collapseWhitespace($node->textContent ?? '');
+                $label = self::collapseWhitespace(self::visibleText($node));
 
                 return $label === '' ? '' : ' ' . $label . ' ';
 

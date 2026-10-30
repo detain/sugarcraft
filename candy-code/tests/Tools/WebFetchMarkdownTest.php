@@ -160,6 +160,48 @@ final class WebFetchMarkdownTest extends TestCase
         $this->assertSame("HTTP 404\n<h1>Gone</h1>", $result->content());
     }
 
+    /**
+     * MINOR-2 cure end to end: a UTF-8 body that carries no in-document
+     * charset declaration converts intact when the header declares one (the
+     * hint reaches the converter), while rival charsets across two headers
+     * guess nothing — the same refuse-to-decide posture as rival
+     * Content-Length values — and the body falls to the parser's default.
+     */
+    public function testHeaderDeclaredCharsetReachesTheConverter(): void
+    {
+        $body = '<p>café</p>';
+
+        $declared = $this->startLoopbackHttpFixture([
+            $this->httpResponse($body, 200, ['Content-Type: text/html; charset=utf-8']),
+        ]);
+        $content = $this->fixtureFetch($declared)->execute(["url" => "http://md.test:$declared/utf8"])->content();
+        $this->assertSame("café\n", $content, 'the header charset never reached the converter');
+
+        $rival = $this->startLoopbackHttpFixture([
+            $this->httpResponse($body, 200, [
+                'Content-Type: text/html; charset=utf-8',
+                'Content-Type: text/html; charset=iso-8859-1',
+            ]),
+        ]);
+        $guessed = $this->fixtureFetch($rival)->execute(["url" => "http://md.test:$rival/rival"])->content();
+        $this->assertStringNotContainsString('café', $guessed, 'a guessed charset contradicts the rival-claims law');
+    }
+
+    /**
+     * A quoted charset parameter (`charset="utf-8"`) is legal HTTP and the
+     * quotes must not poison the hint.
+     */
+    public function testQuotedCharsetParameterIsUnwrapped(): void
+    {
+        $port = $this->startLoopbackHttpFixture([
+            $this->httpResponse('<p>naïve</p>', 200, ['Content-Type: text/html; charset="UTF-8"']),
+        ]);
+
+        $content = $this->fixtureFetch($port)->execute(["url" => "http://md.test:$port/quoted"])->content();
+
+        $this->assertSame("naïve\n", $content);
+    }
+
     public function testTheResultCapCountsTheConvertedTextNotTheRawBytes(): void
     {
         // 144,000 raw bytes of paragraph markup convert to far fewer bytes of

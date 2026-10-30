@@ -403,7 +403,11 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
                     );
                 }
 
-                $markdown = HtmlToMarkdown::convert($body, self::markdownBaseUrl($finalUrl));
+                $markdown = HtmlToMarkdown::convert(
+                    $body,
+                    self::markdownBaseUrl($finalUrl),
+                    self::responseCharset($headers),
+                );
                 if ($markdown !== null) {
                     // The cap governs the converted text; the wire figures
                     // ($complete, Content-Length) described the bytes the
@@ -613,6 +617,39 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
         }
 
         return $verdict === true;
+    }
+
+    /**
+     * The character set the response Content-Type declares, or null when
+     * none does. Only a bare token is read out of the parameter (a quoted
+     * `charset="utf-8"` sheds its quotes); two Content-Type headers naming
+     * two different charsets are rival claims and guess nothing, matching
+     * the refusal to decide between rival Content-Length values.
+     *
+     * @param list<string> $headers
+     */
+    private static function responseCharset(array $headers): ?string
+    {
+        $charset = null;
+        foreach ($headers as $header) {
+            if (!str_starts_with(strtolower($header), 'content-type:')) {
+                continue;
+            }
+            $params = strpos($header, ';');
+            if ($params === false) {
+                continue;
+            }
+            if (preg_match('/charset\s*=\s*"?([A-Za-z0-9][A-Za-z0-9._+-]{0,63})"?/i', substr($header, $params), $m) !== 1) {
+                continue;
+            }
+            $found = strtolower($m[1]);
+            if ($charset !== null && $charset !== $found) {
+                return null;
+            }
+            $charset = $found;
+        }
+
+        return $charset;
     }
 
     /**

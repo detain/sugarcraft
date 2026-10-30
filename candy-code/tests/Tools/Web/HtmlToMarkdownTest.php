@@ -104,6 +104,120 @@ final class HtmlToMarkdownTest extends TestCase
         $this->assertSame("Read this.\n", $markdown);
     }
 
+    /**
+     * MAJOR-1 cure: the three whole-subtree text reads (pre fence, inline
+     * code, form-control label) must not read through a dropped element.
+     * `textContent` did — it pulled the script's payload verbatim into the
+     * kept text. Each site now asserts the payload marker is absent AND the
+     * surrounding visible text is present, so reverting any one read to
+     * `textContent` reddens exactly that pin.
+     */
+    public function testDroppedSubtreeTextNeverLeaksThroughWholeSubtreeReads(): void
+    {
+        $pre = HtmlToMarkdown::convert(
+            '<pre><script>alert("PRE-PAYLOAD")</script>visible code</pre>',
+            '',
+        );
+        $this->assertIsString($pre);
+        $this->assertStringNotContainsString('PRE-PAYLOAD', $pre, 'script leaked into a pre fence');
+        $this->assertStringContainsString('visible code', $pre);
+
+        $code = HtmlToMarkdown::convert(
+            '<p>try <code>call<script>CODE-PAYLOAD</script></code> now</p>',
+            '',
+        );
+        $this->assertIsString($code);
+        $this->assertStringNotContainsString('CODE-PAYLOAD', $code, 'script leaked into an inline code span');
+        $this->assertStringContainsString('call', $code);
+
+        $button = HtmlToMarkdown::convert(
+            '<p>press <button>Go<script>BUTTON-PAYLOAD</script></button> done</p>',
+            '',
+        );
+        $this->assertIsString($button);
+        $this->assertStringNotContainsString('BUTTON-PAYLOAD', $button, 'script leaked through a control label');
+        $this->assertStringContainsString('Go', $button);
+    }
+
+    /**
+     * The drop rule is recursive: a dropped element DEEP inside the subtree
+     * (not a direct child of the read site) is still skipped, and every
+     * drop-tag (not just script) is honored at these sites.
+     */
+    public function testDeepAndNonScriptDroppedSubtreesStayOutOfWholeSubtreeReads(): void
+    {
+        $deep = HtmlToMarkdown::convert(
+            '<pre><code>x<span><script>DEEP-SCRIPT</script></span></code><style>.c{color:#DEEPSTYLE}</style>keep</pre>',
+            '',
+        );
+        $this->assertStringNotContainsString('DEEP-SCRIPT', (string) $deep, 'a script two levels down still leaked');
+        $this->assertStringNotContainsString('DEEPSTYLE', (string) $deep, 'style text leaked into a pre fence');
+        $this->assertStringContainsString('keep', (string) $deep);
+        $this->assertStringContainsString('x', (string) $deep);
+    }
+
+    /**
+     * MINOR-2 cure: a UTF-8 body whose charset is declared only in the HTTP
+     * header (not in a meta) must not decode as windows-1252 mojibake. The
+     * converter itself takes the hint; an unusable charset token is ignored,
+     * never interpolated into the parse.
+     */
+    public function testTransportCharsetHintDecodesUndeclaredUtf8(): void
+    {
+        $mojibake = HtmlToMarkdown::convert('<p>café naïve</p>', '');
+        $this->assertStringNotContainsString('café', (string) $mojibake, 'baseline: no hint means the old mojibake');
+
+        $hinted = HtmlToMarkdown::convert('<p>café naïve</p>', '', 'UTF-8');
+        $this->assertSame("café naïve\n", $hinted, 'header charset did not reach the parser');
+
+        $hostile = HtmlToMarkdown::convert('<p>plain text</p>', '', '"><script>evil</script>');
+        $this->assertStringNotContainsString('evil', (string) $hostile);
+        $this->assertSame("plain text\n", $hostile, 'a non-token charset must be ignored, not injected');
+    }
+
+    /**
+     * MINOR-1 cure: rows of a nested table must not be lifted into the outer
+     * grid (the old `getElementsByTagName('tr')` read emitted them twice —
+     * escaped in the cell AND as ghost top-level rows). Row count and column
+     * count both stay the outer table's.
+     */
+    public function testNestedTableRowsDoNotBecomeGhostOuterRows(): void
+    {
+        $markdown = HtmlToMarkdown::convert(
+            '<table><tr><td>outer<table><tr><td>inner</td></tr><tr><td>second</td></tr></table>tail</td></tr></table>',
+            '',
+        );
+        $this->assertIsString($markdown);
+
+        // Full byte pin: two lines (the single outer row titled, then the
+        // separator), the inner grid flattened once into the cell. The old
+        // `getElementsByTagName('tr')` read emitted four lines here — the
+        // inner rows lifted as ghost top-level rows.
+        $this->assertSame(
+            "| outer \\| inner \\| \\| --- \\| \\| second \\| tail |\n| --- |\n",
+            $markdown,
+            'nested table rows leaked as ghost outer rows',
+        );
+        $this->assertSame(1, substr_count($markdown, 'inner'));
+        $this->assertStringContainsString('outer', $markdown);
+        $this->assertStringContainsString('tail', $markdown);
+    }
+
+    /**
+     * The section wrappers libxml does NOT mint but a document can write
+     * (thead/tbody/tfoot) still contribute their rows as direct children of
+     * the table, so the cure reads real-world tables correctly.
+     */
+    public function testExplicitSectionWrapperRowsStillRender(): void
+    {
+        $markdown = HtmlToMarkdown::convert(
+            '<table><thead><tr><th>H</th></tr></thead><tbody><tr><td>d</td></tr></tbody></table>',
+            '',
+        );
+
+        $this->assertSame("| H |\n| --- |\n| d |\n", $markdown);
+    }
+
     public function testNavSvgIframeAndNoscriptAreDroppedToo(): void
     {
         $markdown = HtmlToMarkdown::convert(
