@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Commands;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\InsightsCommand;
 use SugarCraft\Code\Lang;
 
@@ -293,5 +294,14 @@ final class InsightsCommandTest extends TestCase
         self::assertSame(4, substr_count($html, '<td colspan='), 'four grid-shaped sections keep a visible zero row; the kinds block always prints in full');
         self::assertStringContainsString('<td colspan="5">' . Lang::t('cmd.insights.none') . '</td>', $html);
         self::assertStringContainsString('<h2>' . Lang::t('cmd.insights.spend-heading') . '</h2>', $html);
+    }
+
+    public function testInsightsIsAReadOnlySafeCommand(): void
+    {
+        $allowlist = (new \ReflectionClass(Chat::class))
+            ->getReflectionConstant('READ_ONLY_COMMANDS')
+            ->getValue();
+
+        self::assertContains('insights', $allowlist, '/insights reads the stores and writes only a shelf file — it must answer in a read-only session, the way /export does');
     }
 }

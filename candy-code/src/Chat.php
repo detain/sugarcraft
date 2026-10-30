@@ -10724,6 +10724,8 @@ final class Chat implements Model
      * `/generate` (crush-media W2.3) stays OUT: egress alone is not the test —
      * `/websearch` is admitted — but a dial-out that spends money and writes
      * image artifacts is not a read.
+     * `/insights` is in the way `/export` is: it reads the stores and writes
+     * only its 0600 shelf file, never the session under lock.
      */
     private const READ_ONLY_COMMANDS = [
         'exit', 'quit', 'keys', 'help', 'permissions', 'notices', 'rules', 'budget', 'share', 'export',
