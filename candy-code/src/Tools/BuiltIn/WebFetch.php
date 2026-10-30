@@ -411,11 +411,28 @@ final readonly class WebFetch implements Tool, ParallelSafe, BuildsFromCatalog
                 if ($markdown !== null) {
                     // The cap governs the converted text; the wire figures
                     // ($complete, Content-Length) described the bytes the
-                    // conversion consumed, so the truncated body here is the
-                    // full conversion — boundedBody sees a complete body.
+                    // conversion consumed, so the converted text IS the full
+                    // conversion — boundedBody sees a complete body. That is
+                    // only half the promise: a user-lowered wire bound (both
+                    // webFetchMaxBytes and toolSpillCaptureBytes below the
+                    // parse cap) can stop the read BELOW MAX_PARSE_BYTES, and
+                    // then a truncated page converts successfully. Its
+                    // Markdown is complete as a conversion while the fetch
+                    // that produced it was not — disclose that out of budget,
+                    // the same prefix shape the fallback note and a status
+                    // line use, so the result cap can never eat it.
+                    $note = $complete
+                        ? ''
+                        : "(The page exceeded the fetch byte limit; the Markdown covers only the bytes fetched.)\n";
+
                     return new ToolResult(
                         toolCallId: $toolCallId,
-                        content: $this->boundedBody($markdown, $headers, true, $this->resultCap()),
+                        content: $note . $this->boundedBody(
+                            $markdown,
+                            $headers,
+                            true,
+                            max(1, $this->resultCap() - strlen($note)),
+                        ),
                         isError: false,
                     );
                 }

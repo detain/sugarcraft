@@ -229,6 +229,39 @@ final class WebFetchMarkdownTest extends TestCase
     }
 
     /**
+     * Round-2 review MINOR cure: with both user byte settings below the
+     * 512 KiB parse cap, a wire-truncated body still converts — and the
+     * result must say the PAGE was truncated. The forced "complete" was
+     * true only of the conversion, never of the fetch. saveOverflow:false
+     * with a 64 KiB maxWireBytes is the same shape the two settings take
+     * together; the 260,000-byte body leaves the read stopped at ~131 KiB,
+     * inside the parse cap, with the stream still open.
+     */
+    public function testAWireTruncatedConvertedBodyDisclosesTheTruncation(): void
+    {
+        $body = str_repeat('<p>filler sentence here</p>', 10000);
+        $port = $this->startLoopbackHttpFixture([
+            $this->httpResponse($body, 200, ['Content-Type: text/html']),
+        ]);
+
+        $webFetch = new WebFetch(
+            resolveAddresses: $this->fakeDns(['md.test' => ['127.0.0.2']]),
+            isBlockedAddress: $this->fixtureOnlyBlocklist(),
+            saveOverflow: false,
+            maxWireBytes: 65536,
+        );
+
+        $content = $webFetch->execute(['url' => "http://md.test:$port/truncated"])->content();
+
+        $this->assertStringStartsWith(
+            "(The page exceeded the fetch byte limit; the Markdown covers only the bytes fetched.)\n"
+                . 'filler sentence here',
+            $content,
+            'a wire-truncated body was converted and shipped as complete with no disclosure',
+        );
+    }
+
+    /**
      * A WebFetch wired to the loopback fixture: md.test resolves only to the
      * fixture address and nothing else can be dialed at all.
      */

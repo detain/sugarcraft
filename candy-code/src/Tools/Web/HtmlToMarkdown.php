@@ -404,10 +404,14 @@ final class HtmlToMarkdown
      * `textContent` reads through everything, which would hand a `<pre>`,
      * an inline code span, or a form-control label the literal payload of a
      * nested `<script>` — exactly the injection the drop list exists to
-     * prevent. Only text and CDATA survive; comments are markup the walker
-     * elsewhere renders as inert literal, and they are not text content
-     * here. Entity references are already merged into text nodes by the
-     * HTML parser, so decoding behavior matches `textContent`'s.
+     * prevent. Only text survives. libxml's HTML lexer reads
+     * `<![CDATA[...]]>` as a bogus comment, so an HTML parse never yields a
+     * CDATA node and the CDATA test below is belt-only: it costs nothing and
+     * keeps this promise true even if a subtree ever arrives from an XML
+     * parse. Comments are markup the walker elsewhere renders as inert
+     * literal, and they are not text content here. Entity references are
+     * already merged into text nodes by the HTML parser, so decoding behavior
+     * matches `textContent`'s.
      */
     private static function visibleText(DOMNode $node): string
     {
