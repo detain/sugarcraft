@@ -239,7 +239,8 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * bundles() warning drain and the two declined-surface notices, and C-SEC-7.d
  * three more still: autoReviewModel's not-a-string, bad-shape and unusable
  * warnings, and C-SEC-6.b one more: the project-narrowing notice, and C-SEC-7.a one more:
- * the headless-default banner that now names `-p`'s new asking default; and C-SEC-7.b two more still: useRestricted()'s and useSafeMode()'s one-launch notices each), each producing a
+ * the headless-default banner that now names `-p`'s new asking default; and C-SEC-7.b two more still: useRestricted()'s and useSafeMode()'s
+ * one-launch notices each), each producing a
  * distinct `candy-code: ` line, against a channel-4 credit of eight for that
  * file (ISS-026's envelope-carrying resume notice joined the six as a raw
  * fwrite line, and its rv6 `--resume` pick twin joined the seven). Off by

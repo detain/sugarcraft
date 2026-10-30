@@ -9567,6 +9567,32 @@ public static function useMaxCost(?string $maxCost): void
     }
 
     /**
+     * C-SEC-7.b: the tools `--restricted` drops from the model-facing set,
+     * in one roster so the rule cannot drift from the flag. These are the
+     * names that can run code the operator did not read first: the
+     * shell-subject pair ({@see ShellSubjectTools::NAMES} — the same
+     * composition {@see \SugarCraft\Code\Runtime::$writeCapableToolNames}
+     * spelt with, and it must ride the source, not a copy, so a third shell
+     * subject cannot join one roster and miss the other), plus `Task` and
+     * `Workflow` (each spawns sub-agents that hold their own tool sets —
+     * dropping only the outer shell would leave the code path running
+     * through delegation), plus `ShellStop` (meaningless without a shell to
+     * stop, and its kill surface is a shell's), plus `mcp_call` (an MCP
+     * server is code the operator did not read, reached through a wire
+     * format the permission matcher only partly sees — McpToolShape's
+     * deferred-subject argument). File tools STAY: they are confined by the
+     * existing `WritePathScope` machinery, and a restricted launch that
+     * cannot read or edit anything would be a launch that cannot answer.
+     *
+     * The drop is a SHRINK, applied after the config's allow/deny
+     * conjunction inside {@see filterToolSet()}; like both KEYS there, no
+     * launch shape lets this list add a tool.
+     *
+     * @var list<string>
+     */
+    public const RESTRICTED_TOOL_NAMES = [...ShellSubjectTools::NAMES, 'Task', 'Workflow', 'ShellStop', 'mcp_call'];
+
+    /**
      * Apply the user's `allowedTools` / `disabledTools` settings to the
      * model-facing tool set — Phase 6 item 3's `tools.allow` / `tools.deny`.
      *
@@ -9621,32 +9647,6 @@ public static function useMaxCost(?string $maxCost): void
      * @param list<Tool> $tools
      * @return list<Tool>
      */
-    /**
-     * C-SEC-7.b: the tools `--restricted` drops from the model-facing set,
-     * in one roster so the rule cannot drift from the flag. These are the
-     * names that can run code the operator did not read first: the
-     * shell-subject pair ({@see ShellSubjectTools::NAMES} — the same
-     * composition {@see \SugarCraft\Code\Runtime::$writeCapableToolNames}
-     * spelt with, and it must ride the source, not a copy, so a third shell
-     * subject cannot join one roster and miss the other), plus `Task` and
-     * `Workflow` (each spawns sub-agents that hold their own tool sets —
-     * dropping only the outer shell would leave the code path running
-     * through delegation), plus `ShellStop` (meaningless without a shell to
-     * stop, and its kill surface is a shell's), plus `mcp_call` (an MCP
-     * server is code the operator did not read, reached through a wire
-     * format the permission matcher only partly sees — McpToolShape's
-     * deferred-subject argument). File tools STAY: they are confined by the
-     * existing `WritePathScope` machinery, and a restricted launch that
-     * cannot read or edit anything would be a launch that cannot answer.
-     *
-     * The drop is a SHRINK, applied after the config's allow/deny
-     * conjunction inside {@see filterToolSet()}; like both KEYS there, no
-     * launch shape lets this list add a tool.
-     *
-     * @var list<string>
-     */
-    public const RESTRICTED_TOOL_NAMES = [...ShellSubjectTools::NAMES, 'Task', 'Workflow', 'ShellStop', 'mcp_call'];
-
     public static function filterToolSet(array $tools): array
     {
         $kept = self::toolSetUnder($tools, self::readUserConfig());

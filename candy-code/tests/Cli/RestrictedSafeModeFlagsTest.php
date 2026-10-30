@@ -9,8 +9,12 @@ use ReflectionMethod;
 use SugarCraft\Code\Cli\ArgvParser;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\LaunchNotices;
+use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Permissions\ShellSubjectTools;
+use SugarCraft\Code\Skills\SkillLoader;
+use SugarCraft\Code\Skills\SkillManager;
+use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolResult;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
@@ -179,6 +183,63 @@ final class RestrictedSafeModeFlagsTest extends TestCase
         self::assertContains(Lang::t('cli.warn.no_tools_left'), Bootstrap::launchNotices());
     }
 
+    public function testTheRestrictedDropRunsAfterTheProjectTierReport(): void
+    {
+        // The other half of the order pin: the drop runs AFTER
+        // reportProjectTierToolRemovals(), so the launch's attribution row
+        // names ONLY what the project's own file took. Move the drop above
+        // the report call and this reddens: the report diffs the project-
+        // reduced set against what filterToolSet handed it, and with the
+        // restricted names already gone it would attribute Task and Bash to
+        // the PROJECT file — a wrong attribution on a security seam, which is
+        // exactly what the comment in filterToolSet() refuses to print.
+        $canonical = realpath($this->projectRoot);
+        self::assertIsString($canonical);
+        $this->writeUserConfig([
+            LayeredSettings::PROJECT_SETTINGS_TRUST_KEY => [$canonical],
+        ]);
+        file_put_contents(
+            $this->projectRoot . '/' . LayeredSettings::SHARED_PATH,
+            (string) json_encode(['disabledTools' => ['Grep']]),
+        );
+        Bootstrap::useProjectRootForSettings($canonical);
+
+        $source = LayeredSettings::projectKeySource($canonical, true, 'disabledTools');
+        self::assertIsString($source, 'the fixture must produce an attribution source or both legs are vacuous');
+        $expectedRow = sprintf(
+            Lang::t('cli.launch.tool_removal'),
+            $source,
+            1,
+            5,
+            'Grep',
+            Lang::t('cli.launch.tool_removal_leaving') . 'Read, Edit, Task, Bash',
+        );
+
+        // Unarmed control: the row exists, byte-exact, and the set keeps the
+        // restricted names — this proves the fixture reaches the report at all.
+        $unarmed = array_map(
+            static fn (Tool $tool): string => $tool->name(),
+            Bootstrap::filterToolSet(self::toolSet(['Read', 'Edit', 'Grep', 'Task', 'Bash'])),
+        );
+        self::assertSame(['Read', 'Edit', 'Task', 'Bash'], $unarmed);
+        self::assertContains($expectedRow, Bootstrap::launchNotices());
+
+        self::resetNoticeShelves();
+        Bootstrap::useRestricted(true);
+        $armed = array_map(
+            static fn (Tool $tool): string => $tool->name(),
+            Bootstrap::filterToolSet(self::toolSet(['Read', 'Edit', 'Grep', 'Task', 'Bash'])),
+        );
+
+        self::assertSame(['Read', 'Edit'], $armed, 'the restricted drop itself still lands');
+        self::assertContains(
+            $expectedRow,
+            Bootstrap::launchNotices(),
+            'the project attribution row is byte-identical armed: --restricted drops AFTER it, '
+            . 'so its names never leak into the row that blames the project file',
+        );
+    }
+
     // =========================================================================
     // The two launch notices
     // =========================================================================
@@ -291,6 +352,40 @@ final class RestrictedSafeModeFlagsTest extends TestCase
         self::assertNotSame([], $disarmed, 'the fixture must be discoverable unarmed, or the armed pin is vacuous');
     }
 
+    public function testSafeModeRefusesTheForeignSkillBandAndKeepsNativeManifests(): void
+    {
+        // The asymmetry IS the design: --safe-mode silences every foreign
+        // convention (the band other CLIs write), while the native built-in /
+        // project / user tiers keep loading. Pinned as a real SkillManager
+        // walk over fixture trees — project and user foreign legs plus a
+        // native project manifest — not a source scan.
+        $this->writeSkillFixture($this->projectRoot . '/.claude/skills', 'sec7b-proj-foreign', 'a project tree another CLI wrote');
+        $this->writeSkillFixture($this->home . '/.claude/skills', 'sec7b-user-foreign', 'the operator-level foreign tree');
+        $this->writeSkillFixture($this->projectRoot . '/.candy-code/skills', 'sec7b-native', 'the repositorys own native manifest');
+
+        // Unarmed control FIRST: all three fixtures load, so every armed
+        // verdict below is the switch's doing, not a fixture that never did.
+        $control = $this->walkSkillRegistry();
+        self::assertNotNull($control->get('sec7b-proj-foreign'), 'the project foreign fixture must load unarmed');
+        self::assertNotNull($control->get('sec7b-user-foreign'), 'the user foreign fixture must load unarmed');
+        self::assertNotNull($control->get('sec7b-native'), 'the native fixture must load unarmed');
+
+        ob_start();
+        Bootstrap::useSafeMode(true);
+        ob_end_clean();
+
+        $armed = $this->walkSkillRegistry();
+        Bootstrap::useSafeMode(false);
+
+        self::assertNull($armed->get('sec7b-proj-foreign'), 'safe mode must refuse the project foreign leg');
+        self::assertNull($armed->get('sec7b-user-foreign'), 'safe mode must refuse the user foreign leg');
+        self::assertNotNull(
+            $armed->get('sec7b-native'),
+            'safe mode keeps the native manifests — refusing them too would turn a '
+            . 'trust switch into a skills-less launch, which is not the design',
+        );
+    }
+
     // =========================================================================
     // The two deliberate source scans
     // =========================================================================
@@ -339,6 +434,28 @@ final class RestrictedSafeModeFlagsTest extends TestCase
     private function writeUserConfig(array $values): void
     {
         file_put_contents($this->configDir() . '/config.json', json_encode($values));
+    }
+
+    private function writeSkillFixture(string $dir, string $name, string $description): void
+    {
+        $skillDir = $dir . '/' . $name;
+        mkdir($skillDir, 0777, true);
+        file_put_contents($skillDir . '/SKILL.md', "---\ndescription: $description\n---\n\nBody.");
+    }
+
+    /**
+     * One real SkillManager::loadAll() walk over the fixture trees, returning
+     * the registry it filled. A FRESH loader/registry per call: the manager
+     * writes into the registry it is handed, and the armed/disarmed verdicts
+     * above must not share one.
+     */
+    private function walkSkillRegistry(): SkillRegistry
+    {
+        $loader = new SkillLoader(reportSkips: false);
+        $registry = new SkillRegistry();
+        (new SkillManager($loader, $registry))->loadAll($this->projectRoot);
+
+        return $registry;
     }
 
     /**

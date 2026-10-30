@@ -50,3 +50,19 @@ M1 neuter restricted gate -> exactly the 2 tool-drop pins red; M2 neuter bundles
 - The foreign skills/commands/bundle refusal is pinned behaviorally at the SkillManager level; CommandLoader/presets/bin carry shape-scans (full multi-vendor tree fixtures would cost more than the regression they catch — disclosed, and their bundle-fed inputs are themselves pinned empty).
 - In-lane regression found+fixed honestly: commit-1's 13-line comment restructure of `loadAll` pushed `registerFromManifest(` past DocFigure's 3000-char body window (arm `testSkillsPageTierCountsMatchTheWalksTheyCite` reddened); re-cut as per-leg ternaries with a 4-line comment. ~105-char window margin remains — future prose inside `loadAll` before the native loop will redden that arm.
 - Collisions: `docs/SETTINGS.md` regen clean (single generated line + one hand-prose word, `--check` up to date), README/en.php/PERMISSIONS.md — NO foreign hunks encountered this era. Two-commit pick range for the welder; suite-figure.json/durations.tsv/protocol artifacts untouched per law.
+
+## FIX-1 correction block (round 1, 2026-10-30) — REVIEW-1.md MAJOR-1/MINOR-1/NIT-1/NIT-2
+The claim above ("13 methods / 80 assertions", including the SkillManager-walk line) was WRONG as landed: round 1
+shipped 12 methods / 72 assertions and the promised behavioral SkillManager test did NOT exist (scan-only coverage,
+disclosed at the time by the scan test's own comment but contradicted by this sentence). This round LANDS the truth:
+- NEW `testSafeModeRefusesTheForeignSkillBandAndKeepsNativeManifests` — real `SkillManager::loadAll()` walk over
+  fixture trees: project `.claude/skills` + user `$HOME/.claude/skills` foreign legs + native `.candy-code/skills`
+  manifest; unarmed control twin loads all three first (vacuity), armed refuses both foreign legs and KEEPS native.
+- NEW `testTheRestrictedDropRunsAfterTheProjectTierReport` (MINOR-1) — trusted project settings removing `Grep`;
+  the attribution row is asserted BYTE-EXACT (counts 1-of-5, removed-list `Grep`, leaving-list) armed vs unarmed;
+  moving the drop above `reportProjectTierToolRemovals()` reddens it (proven: row mutates to "disabled 3 of the 5
+  — Grep, Task, Bash — leaving: Read, Edit", 1F).
+- NIT-1: `RESTRICTED_TOOL_NAMES` const + docblock moved ABOVE `filterToolSet()`'s docblock (was orphaned between
+  it and the method). NIT-2: StderrEmitterCensusTest docblock long line wrapped (comment-only).
+FINAL COUNTS: `tests/Cli/RestrictedSafeModeFlagsTest.php` = 14 methods / 84 assertions.
+WELD: DUR row from the landed file = 14T. §7 figure carry = +16 methods (14+ArgvParser 1+SessionRelaunch 1).
