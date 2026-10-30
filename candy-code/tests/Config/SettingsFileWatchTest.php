@@ -15,9 +15,11 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  * question — "did the merged settings change on disk since the last look?" —
  * and the answer must be right without ever being louder than the files.
  *
- * The ladder is the contract: a first observation seeds and reports nothing;
- * quiet files cost a stat; churn that rewrites identical bytes (or identical
- * values under different spacing) reports nothing; only a changed HASH feeds
+ * The ladder is the contract: a first observation seeds and reports nothing,
+ * and the launch takes that observation itself so an idle-window edit stays
+ * visible; quiet files cost the hash of a small JSON file; churn that rewrites
+ * identical bytes (or identical values under different spacing) reports
+ * nothing; only a changed HASH feeds
  * the merge diff, and a key is reported exactly once — the baseline moves
  * with every answer. The watch-set rule is the cross-process guard: a
  * different set of watched paths (a moved --config, another test's home)
@@ -63,6 +65,73 @@ final class SettingsFileWatchTest extends TestCase
         self::assertSame([], SettingsFileWatch::changedKeys(), 'the seed must never report the launch values as a change');
     }
 
+    public function testTheBootSeedMakesAnEditFromTheIdleWindowTheFirstReport(): void
+    {
+        // r1 MAJOR-2: seedAtLaunch() IS that first observation, taken at boot
+        // instead of at the first look — so an edit that landed while the
+        // session sat idle is a move against the launch's own baseline and the
+        // next look reports it, instead of being folded into a snapshot no one
+        // read at launch.
+        $this->writeWatched(['scrollWheelLines' => 4]);
+        SettingsFileWatch::seedAtLaunch();
+
+        $this->writeWatched(['scrollWheelLines' => 5]);
+
+        self::assertSame(['scrollWheelLines'], SettingsFileWatch::changedKeys(), 'the launch baseline makes the idle edit visible');
+        self::assertSame([], SettingsFileWatch::changedKeys(), 'and it is reported exactly once');
+    }
+
+    public function testASecondBootSeedBaselinesOnTheBytesItFound(): void
+    {
+        // A build is a launch: its own read is the baseline it is measured
+        // against. A second seed therefore swallows an edit nobody adopted yet
+        // rather than reporting it to a session that merged it at its start.
+        $this->writeWatched(['scrollWheelLines' => 4]);
+        SettingsFileWatch::seedAtLaunch();
+        $this->writeWatched(['scrollWheelLines' => 5]);
+        SettingsFileWatch::seedAtLaunch();
+
+        self::assertSame([], SettingsFileWatch::changedKeys(), 'the newer launch read is not a change for the session that read it');
+    }
+
+    public function testTheLaunchPathItselfTakesTheFirstObservation(): void
+    {
+        // The three seeds above prove what seedAtLaunch() does; none of them
+        // proves the production launch calls it — the whole defect was that
+        // nobody took the first observation before the first look. Wiring pin
+        // in the house source-scan shape: the call must live inside
+        // Bootstrap::chat(), the function that builds the launched Chat.
+        $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php');
+        $head = \strpos($source, 'public static function chat(');
+        self::assertNotFalse($head, 'Bootstrap::chat() is no longer where the launch is assembled');
+
+        $open = \strpos($source, '{', (int) $head);
+        self::assertNotFalse($open, 'chat() has no body to pin');
+        $depth = 0;
+        $close = -1;
+        $length = \strlen($source);
+        for ($i = (int) $open; $i < $length; $i++) {
+            $byte = $source[$i];
+            if ($byte === '{') {
+                $depth++;
+            } elseif ($byte === '}') {
+                $depth--;
+                if ($depth === 0) {
+                    $close = $i;
+                    break;
+                }
+            }
+        }
+        self::assertGreaterThan($open, $close, 'chat() body did not balance');
+
+        $body = \substr($source, (int) $open, $close - $open);
+        self::assertStringContainsString(
+            'SettingsFileWatch::seedAtLaunch();',
+            $body,
+            'the launch must take the watch\'s first observation itself, not leave it to the first settle'
+        );
+    }
+
     public function testQuietFilesAnswerNothingOnEveryLaterLook(): void
     {
         $this->writeWatched(['scrollWheelLines' => 4]);
@@ -84,8 +153,8 @@ final class SettingsFileWatchTest extends TestCase
 
     public function testRewritingIdenticalBytesAnswersNothing(): void
     {
-        // The `git checkout` shape: a fresh mtime, the exact same content. The
-        // stat gate lets it through; the hash gate is what answers.
+        // The `git checkout` shape: a fresh mtime, the exact same content. An
+        // mtime gate would accuse this file; the content hash is what answers.
         $this->writeWatched(['scrollWheelLines' => 4]);
         SettingsFileWatch::changedKeys();
 

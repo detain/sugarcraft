@@ -1263,8 +1263,10 @@ committed.
 
 A hand edit to those files is also picked up: a settings-file watch compares
 them at the end of every turn and routes any key whose merged value moved
-through the same `Chat::applySettings()` a save uses, so `live` keys are in
-force by the next turn while `restart` keys keep waiting for the next launch.
+through the same `Chat::applySettings()` a save uses, so a hand-edited `live`
+key is in force by the next turn while `restart` keys keep waiting for the next
+launch — and so do `provider` and `layout`, the two live keys only their own
+doors (`/model`, the pane shell) apply, because an edit on disk opens no door.
 `/settings reload` runs that check on the spot.
 
 **Above all four sits the session tier.** The settings view can save a change

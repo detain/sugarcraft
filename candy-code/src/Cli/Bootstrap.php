@@ -26,6 +26,7 @@ use SugarCraft\Code\Commands\CommandLoader;
 use SugarCraft\Code\Commands\KeyBindingRegistry;
 use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Config\PolicySnapshot;
+use SugarCraft\Code\Config\SettingsFileWatch;
 use SugarCraft\Code\Config\Settings\Validator\KeyBindingsValidator;
 use SugarCraft\Code\Config\StatusLineCommand;
 use SugarCraft\Code\Config\Trust\ProjectTrustCensus;
@@ -1275,7 +1276,17 @@ final class Bootstrap
     {
         self::scheduleUpdateCheck();
 
-        return self::buildChat($root, null, true);
+        $chat = self::buildChat($root, null, true);
+
+        // C-TUI-5.c r1: the launch is the settings watch's first observation.
+        // Deferred to the first settle it would baseline on whatever the file
+        // said AFTER an idle hand edit, swallowing it; seeded here, that edit
+        // is a move against the launch's own read and lands at the next turn
+        // boundary. It answers nothing by construction — the bytes it hashes
+        // are the bytes this build just merged.
+        SettingsFileWatch::seedAtLaunch();
+
+        return $chat;
     }
 
     /**

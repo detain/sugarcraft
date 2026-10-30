@@ -38,9 +38,14 @@ use SugarCraft\Code\Cli\LaunchContext;
  * Two deliberate behaviours protect the running session:
  *
  * - The FIRST observation of a watch-set seeds the fingerprint and reports
- *   nothing. The launch merge and the seed snapshot are read from the same
- *   files, so a process that has seen no settle yet has no "changed" — there
- *   is no baseline to be stale against.
+ *   nothing. The launch makes that observation itself —
+ *   {@see seedAtLaunch()} runs once {@see \SugarCraft\Code\Cli\Bootstrap::chat()}
+ *   has built the session — so the seed snapshot IS the merge the session
+ *   started from, and an edit made while the session sits idle before its
+ *   first settle is a MOVE against that baseline, not a change folded into it.
+ *   A watch that never seeded (a `Chat` built outside the launch, as the suite
+ *   does) still baselines on its own first look: with no earlier merge there
+ *   is nothing to be stale against.
  * - When the SET of watched paths itself differs (the --config location, the
  *   user settings dir, the project root or its trust moved between two
  *   settles, as between two test sandboxes sharing one process), the watch
@@ -123,6 +128,23 @@ final class SettingsFileWatch
         self::$mergedSnapshot = $merged;
 
         return $changed;
+    }
+
+    /**
+     * Take the watch's first observation at boot: record the fingerprint of
+     * every watched path and the merge the launch read, reporting nothing.
+     *
+     * Called once by {@see \SugarCraft\Code\Cli\Bootstrap::chat()} after the
+     * session is built. Without it the first observation waits for the first
+     * settle, so an edit that landed while a freshly-launched session sat idle
+     * is folded into the baseline it should have been measured against — the
+     * swallow the watch exists to close, wearing the "hot reload" clothes.
+     * After the build (not before) because the build is what settles the
+     * project root and its trust the watched set is derived from.
+     */
+    public static function seedAtLaunch(): void
+    {
+        self::seed(self::watchedFiles());
     }
 
     /**

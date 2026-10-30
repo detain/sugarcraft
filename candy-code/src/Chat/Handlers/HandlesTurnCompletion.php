@@ -298,10 +298,11 @@ trait HandlesTurnCompletion
             // re-read for keys the launch picks up per turn already; the LIVE
             // keys were the restart-and-reopen story until here. A cheap
             // fingerprint of exactly the files the merged settings read from
-            // runs at this boundary — stat unless a stat moved, hash unless a
-            // hash moved, merge-diff only then — and a change flows through
-            // the same `applySettings()` the settings view drives, with a
-            // source word naming the disk as its origin. Because it runs
+            // runs at this boundary — the content hash of every watched file,
+            // and the merge re-derived only once a hash has moved — and a
+            // change flows through the same `applySettings()` the settings
+            // view drives, with a source word naming the disk as its origin.
+            // Because it runs
             // AFTER the queued-prompt release above, the park rule is exact:
             // a turn a queued prompt carried on (`$done->inFlight`) parks
             // engine keys on the existing `pendingSettingsApply` shelf, and a

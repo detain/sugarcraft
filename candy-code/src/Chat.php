@@ -7817,9 +7817,25 @@ final class Chat implements Model
     /**
      * Keys whose live apply rebuilds the engine ({@see withEngineSettings()}),
      * and is therefore held while a turn runs. Every other `Live` key is Chat
-     * state or a Cmd and applies at once, even mid-turn: it touches no history.
+     * state or a Cmd and applies at once, even mid-turn: it touches no history
+     * — except the keys their own doors apply ({@see SETTINGS_DOOR_ONLY}).
      */
     private const ENGINE_SETTINGS = ['maxToolSteps', 'reasoningEffort'];
+
+    /**
+     * `Live` keys that this class does NOT apply — a command applies them by
+     * rebuilding what reads them: `/model` builds a fresh backend for
+     * `provider`, and the pane shell re-reads `layout` into the dock the
+     * launch assembled. Neither key can arrive here through the settings view
+     * (`provider` is refused by
+     * {@see \SugarCraft\Code\Config\Settings\SettingsWriter::sessionRefusal()},
+     * `layout` is {@see \SugarCraft\Code\Config\Settings\UiEditability::ReadOnly}
+     * to it), so the only door that can carry one is the settings-file watch or
+     * `/settings reload` — a hand edit. Counting such a key as "applies now"
+     * would promise a live change the running session never makes, so it is
+     * counted with the keys that need the next launch.
+     */
+    private const SETTINGS_DOOR_ONLY = ['provider', 'layout'];
 
     /** Widest the settings toast is drawn, in cells. */
     public const SETTINGS_TOAST_COLS = 56;
@@ -7863,7 +7879,9 @@ final class Chat implements Model
      *    every turn start, in the turn child, so the next turn has them.
      *  - RESTART / NEXT LAUNCH: nothing can apply them now; the toast says so.
      *  - `provider` and `layout` are live through their own doors (`/model`,
-     *    the pane shell), which apply them as they write them.
+     *    the pane shell), which apply them as they write them. A hand edit
+     *    reaches here through no door, so {@see SETTINGS_DOOR_ONLY} counts it
+     *    with the keys that need the next launch ({@see $restart}).
      *
      * The values are read back from the merged settings rather than carried
      * in: the session tier, a reset and a value another tier still outranks
@@ -7920,6 +7938,15 @@ final class Chat implements Model
             }
 
             if ($mode !== \SugarCraft\Code\Config\Settings\ApplyMode::Live) {
+                $restart[] = $key;
+                continue;
+            }
+
+            // C-TUI-5.c r1: a hand-edited key that only its own door applies
+            // (`/model`, the pane shell) is still the value the launch read —
+            // nothing in this loop can rebuild the backend or the dock, so it
+            // belongs with the keys that wait for the next launch.
+            if (\in_array($key, self::SETTINGS_DOOR_ONLY, true)) {
                 $restart[] = $key;
                 continue;
             }

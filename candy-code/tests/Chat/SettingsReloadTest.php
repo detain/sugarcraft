@@ -122,7 +122,9 @@ final class SettingsReloadTest extends TestCase
         $this->writeDisk(['theme' => 'dark']);
 
         // The first settle only baselines the watch: there is no earlier
-        // merged snapshot to diff the files against.
+        // merged snapshot to diff the files against. (A launched Chat seeds at
+        // boot instead — {@see SettingsFileWatch::seedAtLaunch()}; these
+        // hand-built chats never took that look.)
         [$seeded] = $this->settlingChat()->update(new AssistantMsg(Message::assistant('all done')));
         self::assertSame('dark', $seeded->theme()->name);
         self::assertSame('', self::reloadToast($seeded), 'a first look is a baseline, not a change');
@@ -202,17 +204,57 @@ final class SettingsReloadTest extends TestCase
         self::assertStringNotContainsString('Saved', $toast);
     }
 
-    public function testTheFirstForcedLookOnlyBaselinesTheFiles(): void
+    public function testTheBootSeedMakesAnEditLandingBeforeTheFirstLookVisible(): void
     {
-        // A process that launches with dracula already on disk must not toast
-        // "reloaded" for the values it read at launch: the first observation
-        // seeds. /settings reload right after a reset is that first look.
+        // r1 MAJOR-2: the launch performs the watch's first observation
+        // (Bootstrap::chat() calls SettingsFileWatch::seedAtLaunch()), so a
+        // hand edit made while the session sat idle — before any settle,
+        // before any `/settings reload` — is a move against the launch's own
+        // read. Baseline on a process that never seeded is the other polarity,
+        // pinned in SettingsFileWatchTest.
+        $this->writeDisk(['theme' => 'dark']);
+        SettingsFileWatch::seedAtLaunch();
+
         $this->writeDisk(['theme' => 'dracula']);
         [$next, $cmd] = $this->draftChat('/settings reload')->update(new KeyMsg(KeyType::Enter));
 
-        self::assertSame('dark', $next->theme()->name);
+        self::assertSame('dracula', $next->theme()->name, 'the idle-window edit is in force at the first look');
         self::assertNotInstanceOf(OpenSettingsMsg::class, $cmd === null ? $cmd : $cmd());
-        self::assertStringContainsString('Nothing changed', self::reloadToast($next));
+        $toast = self::reloadToast($next);
+        self::assertStringContainsString('reloaded from disk', $toast);
+        self::assertStringContainsString('1 applies now', $toast);
+        self::assertStringNotContainsString('Nothing changed', $toast);
+    }
+
+    public function testAHandEditedProviderOrLayoutIsNotCountedAsAppliedNow(): void
+    {
+        // r1 MAJOR-1: both keys carry the `live` badge because a DOOR applies
+        // them — `/model` rebuilds the backend, the pane shell rebuilds the
+        // dock. The watch has no such arm: the running session keeps what it
+        // launched with, so the toast must count the key with the ones that
+        // wait for the next launch, never as "applies now". Each door gets its
+        // own edit: whichever look runs first re-baselines the watch.
+        foreach (['provider' => ['openai', 'anthropic', 'vertex'], 'layout' => [['mode' => 'stacked'], ['mode' => 'docked'], ['mode' => 'floating']]] as $key => [$launch, $reloaded, $settledValue]) {
+            SettingsFileWatch::resetForTesting();
+            $this->writeDisk(['theme' => 'dark', $key => $launch]);
+            SettingsFileWatch::seedAtLaunch();
+
+            $this->writeDisk(['theme' => 'dark', $key => $reloaded]);
+            [$reloadedChat] = $this->draftChat('/settings reload')->update(new KeyMsg(KeyType::Enter));
+            $toast = self::reloadToast($reloadedChat);
+            self::assertStringContainsString('reloaded from disk', $toast, $key);
+            self::assertStringContainsString('needs a restart', $toast, $key);
+            self::assertStringContainsString($key, $toast, $key);
+            self::assertStringNotContainsString('applies now', $toast, $key);
+
+            $this->writeDisk(['theme' => 'dark', $key => $settledValue]);
+            [$settled] = $this->settlingChat()
+                ->update(new AssistantMsg(Message::assistant('again')));
+            $again = self::reloadToast($settled);
+            self::assertStringContainsString('reloaded from disk', $again, $key);
+            self::assertStringContainsString('needs a restart', $again, $key);
+            self::assertStringNotContainsString('applies now', $again, $key);
+        }
     }
 
     public function testARestartKeyReloadedStillOnlyRestarts(): void

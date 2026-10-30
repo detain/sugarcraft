@@ -1615,8 +1615,12 @@ The hand edit is not left behind: a settings-file watch fingerprints the very
 files the session reads — `config.json`, `settings.json` and the trusted
 project files — at the end of every turn, and feeds any key whose merged value
 moved through the same `Chat::applySettings()` a save uses. A hand edit to a
-`live` key — `theme` and `provider` among them — takes effect by the next turn;
-a key that rebuilds the engine waits for the running turn to end, exactly as on
+`live` key — `theme` among them — takes effect by the next turn. The two keys
+that are live through a DOOR are the exception, because a hand edit opens no
+door: `provider` is applied by "`/model`" and `layout` by the pane shell, so a
+file edit to either is counted with the keys that wait for the next launch, not
+as one that applies now. A key that rebuilds the engine waits for the running
+turn to end, exactly as on
 a save, and "`/settings reload`" runs the same check on the spot instead of
 waiting for the boundary, saying so when nothing moved. Still waiting for the
 next launch is the `restart` roster: the values consumed once while `Bootstrap`
