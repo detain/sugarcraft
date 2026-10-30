@@ -46,6 +46,11 @@ final class MenuBarLabelDerivationTest extends TestCase
         // red at the VIS-4 base, cured in-step here.
         'hooks' => 'List the hook chain',
         'rules' => 'List the rule packs',
+        // C-CTX-4.e (2996 spec, between rules and newrule): landed without
+        // its table entry — same forgotten-rider family as /usage. The test
+        // is invisible to the CI shards (no durations.tsv row yet), so the
+        // red only surfaced locally; §7 closeout owes the row.
+        'output-style' => 'List the output',
         'newrule' => 'Have the agent draft',
         'pane' => 'Dock a pane to a side',
         'editor' => 'Compose the prompt',

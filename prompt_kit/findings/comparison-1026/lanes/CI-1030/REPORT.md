@@ -34,3 +34,18 @@ Gate batch 2: ChatTest + MouseWiringTest + DenialPrefixRosterTest + SymbolCitati
 
 ## Not red anymore / transient
 - macOS smoke: green on 41079667214+ (older-run red was foreign).
+
+## Batch 3 (commits eba9f990f + 3b): phpstan level-5 code repairs — 118 → 12 errors
+- 3a (eba9f990f): App.php real defects — SessionTab::$name phantom property (silent tab-name loss, readonly dynamic read) fixed to sessionName + hoisted ternaries at 4 nullsafe sites; 7 applyPaneToggle-family docblocks ?Cmd→?\Closure (a real App\Cmd marker interface exists; kept ?Cmd only at handleUserInput which returns RunCompletionCmd); HandlesRunControl trait-namespace Chat FQN import (8 errors).
+- 3b (this commit, 39 src files): dead-guard removals (BackgroundShellRegistry decodeCursor, Bundle !=='', AuditLogReader ??'', AnthropicMessagesWire 2x dead break-blocks after never-null resume call), ternary rewrites where ??-on-never-null was the false path (SessionMailbox, Renderer, ContextPane, MenuBar, MemoryTool, HandlesRunControl), honest-docblock flips (McpAuthCommand @return shape, KeyboardHandler ?object, AnthropicProvider/Read/SkillWorkshop/SkillsSearch return.unusedType after caller check, PublicUrlGuard @param reflow + $http_response_header handling, SseMcpServer/HttpMcpServer onWait widenings, AutoCommitter snapshot?: string|null, ProcessReaper::escalate callable(int):mixed — this one root-cause cure deleted 10 baseline entries across 10 runner files), MenuCascade 3 real possibly-undefined initialisations, LspInstaller concrete Client type, SseLineParser/ThemeFile/UpdateCheck/NonInteractive/ClaudeSettingsHooks/McpToolShape/MacAltNotice/SkillRosterDiffTracker/Keychain/ProviderFactory/TurnRunner/RemoteSessionPush site repairs.
+- sugar-forms TextArea docblock narrowing TRIED+REVERTED (4 new errors inside the lib; forms stays byte-clean on this branch; ComposerVim side baselined with reason instead).
+- Batch 4 (phpstan-baseline.neon): 20 unmatched blocks deleted, 3 counts bumped (BSR is_string 1→2; Chat.php userConfig nullsafe 3→5, nullCoalesce 1→2 — REVERT these counts when the in-flight lanes fix the sites), 16 reason-commented additions (ref-write/GC-keepalive/TOCTOU/libdom-stub/reflection-seam families + ComposerVim forms-contract 4).
+- RESIDUE = 12 errors, all in-flight-lane owned (do not fix here): EngineBackend:3518 (C-SEC-8.b); Chat.php :2019/:8368/:16813/:17254/:17266 (C-SES-8.b/C-TOOL-5.d); Bootstrap:11128 (C-SEC-7.e); Subcommands :964/:971 (C-TOOL-5.d); SessionHost :1051/:1845/:2479 (C-SES-8.b). CI phpstan stays RED on this branch until those lanes land.
+
+## Batch 5: next-wave latent shard reds (base-reds invisible to CI because shard scheduling stops early)
+1. AutomaticCompactionModelSummaryTest /clear cmds count 1→2 (C-TUI-7.a 97113b210 added gatherCmd rider).
+2. CommandFailureTranscriptTest stdout scanner learned named-argument `echo:` labels (C-AGT-4.b 5e30f5e94) — colon-lookahead rewrite, mutation-proven with planted probe.
+3. MenuBarLabelDerivationTest missing 'output-style' => 'List the output' row (C-CTX-4.e forgotten rider). §7 NOTE: this test file itself has NO durations.tsv row → runs in ZERO shards.
+4. TreeWideGuardRosterTest: 3 WALKS_A_DIRECTORY_THE_TEST_MADE rows added (NonInteractiveSessionPersistence incognito sidecar walk, RestrictedSafeModeFlags removeTree, ServeArgs tls tearDown).
+5. RemoteBackendTest::testAnExistingSessionOpensFromItsSnapshotByUniquePrefix — re-attach by prefix after close() gets host.remote.no_session; server-side list handler is SessionHost.php/EnhancedSessionStore = C-SES-8.b IN-FLIGHT. REFERRED to that cycle, not fixed.
+- MediaSettingsTest also has no durations row (older red hidden; §7 duty).

@@ -627,8 +627,14 @@ final class TreeWideGuardRosterTest extends TestCase
         // (0700, nih_be_exit_* prefix) before its own rmdir.
         'Cli/NonInteractiveBackendErrorExitTest.php' => ['RecursiveDirectoryIterator($this->tempHome,\FilesystemIterator::SKIP_DOTS)'],
         // purgeTempTree() in tearDown() empties the sys_get_temp_dir() scratch tree
-        // setUp() made (session.db, repo, fake HOME and all) before the rmdir.
-        'Cli/NonInteractiveSessionPersistenceTest.php' => ['scandir($path)'],
+        // setUp() made (session.db, repo, fake HOME and all) before the rmdir; the
+        // SKIP_DOTS walk is the incognito sidecar census over that same fake HOME
+        // ($this->tempDir . '/home'), confined to the test's own sandbox.
+        'Cli/NonInteractiveSessionPersistenceTest.php' => ['RecursiveDirectoryIterator($this->tempDir.\'/home\',\FilesystemIterator::SKIP_DOTS)', 'scandir($path)'],
+        // removeTree() in tearDown() unlinks-then-rmdir's the sys_get_temp_dir()
+        // safe-mode scratch home the flag tests build; the walk is CHILD_FIRST
+        // inside that same sandbox and never leaves it.
+        'Cli/RestrictedSafeModeFlagsTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         // purgeTempTree() in tearDown() empties the sys_get_temp_dir() scratch tree
         // setUp() made (fake HOME and repo and all) before the rmdir.
         'Cli/NonInteractiveUsageLedgerTest.php' => ['scandir($path)'],
@@ -640,6 +646,10 @@ final class TreeWideGuardRosterTest extends TestCase
         // at the 404-sweep legs); the derivation cannot follow the assignment,
         // so both spellings of the identical walk carry their own licence.
         'Cli/SelfUpdateTest.php' => ['scandir($path)', "glob(\$this->livePharPath().'.tmp-'.\\chr(42))", "glob(\$phar.'.tmp-'.\\chr(42))"],
+        // tearDown() unlinks the cert/key pair writeTlsFixture() made inside the
+        // sys_get_temp_dir() cc-cmp-tlsargs-* dir setUp() created; the scandir is
+        // that unlink walk, confined to the test's own sandbox.
+        'Cli/ServeArgsTest.php' => ['scandir($this->tlsDir)'],
         'Cli/SubcommandsMcpImportTest.php' => ['scandir($this->tempDir)'],
         'Commands/McpAuthLoginGuidanceTest.php' => ['glob($this->tempDir.\'/*\')'],
         // w3c (VIS-3): tearDown's removeTree() lists the temp home setUp() made.

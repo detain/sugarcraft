@@ -185,8 +185,8 @@ final class CommandFailureTranscriptTest extends TestCase
      * side effects belong in a `Cmd`, and the screen belongs to sugar-core's frame
      * renderer — so writing to stdout from this file is wrong whether or not it
      * also crashes. Measured at the time of writing: zero `T_PRINT`/`T_ECHO`
-     * tokens, so the assertion starts satisfied rather than grandfathering
-     * anything in.
+     * *statements* — the file's only keyword tokens since are named-argument
+     * labels, which the walk below skips by their trailing colon.
      *
      * Tokenised rather than grepped, because a regex cannot tell code from the
      * comment describing it — which is the mistake this test made first.
@@ -197,10 +197,27 @@ final class CommandFailureTranscriptTest extends TestCase
         $this->assertIsString($source);
 
         $offenders = [];
-        foreach (token_get_all($source) as $token) {
-            if (\is_array($token) && \in_array($token[0], [\T_PRINT, \T_ECHO], true)) {
-                $offenders[] = 'line ' . $token[2] . ': ' . $token[1];
+        $tokens = token_get_all($source);
+        for ($i = 0, $n = \count($tokens); $i < $n; $i++) {
+            $token = $tokens[$i];
+            if (!\is_array($token) || !\in_array($token[0], [\T_PRINT, \T_ECHO], true)) {
+                continue;
             }
+
+            // PHP 8.1 admits reserved words as named-argument labels, and the
+            // label lexes as T_ECHO/T_PRINT — `switchPrimaryAgent($x, echo:
+            // true)` (C-AGT-4.b) names a parameter, it writes nothing. A real
+            // statement never puts ':' next to the keyword, so the colon is
+            // the whole discriminator: skip, do not grandfather.
+            $j = $i + 1;
+            while ($j < $n && \is_array($tokens[$j]) && $tokens[$j][0] === \T_WHITESPACE) {
+                $j++;
+            }
+            if ($j < $n && $tokens[$j] === ':') {
+                continue;
+            }
+
+            $offenders[] = 'line ' . $token[2] . ': ' . $token[1];
         }
 
         $this->assertSame(

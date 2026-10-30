@@ -1584,11 +1584,14 @@ final class AutomaticCompactionModelSummaryTest extends TestCase
 
         [$cleared, $cmd] = $this->submit($this->withDraft($chat, '/clear'));
 
-        // P-CTX.d: /clear rewrites the transcript, so exactly the context
-        // remeasure rides along — and it starts no turn.
+        // P-CTX.d: /clear rewrites the transcript, so the context remeasure
+        // rides along — and since C-TUI-7.a beside it the startup-summary
+        // regather, which the ClearTranscript effect schedules for the same
+        // reason (the bag must describe the emptied transcript). Two off-view
+        // helpers, and still no turn: the next submit below is what starts one.
         $opened = $cmd();
         $this->assertInstanceOf(BatchMsg::class, $opened);
-        $this->assertCount(1, $opened->cmds, '/clear starts no turn');
+        $this->assertCount(2, $opened->cmds, '/clear carries the regather and the remeasure, and no turn');
         $this->assertSame([], $cleared->history, 'the transcript is gone');
         $this->assertSame(0, $this->refillCountOf($cleared), 'and so is the run that was counted against it');
 
