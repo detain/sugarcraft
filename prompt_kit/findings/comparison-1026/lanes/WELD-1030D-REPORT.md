@@ -25,3 +25,9 @@ Companion session record for the already-landed C-SES-8.a weld (meta commit 2689
 - Durations carry (lead-assigned): row `candy-code/tests/Tools/McpToolBridgeImageChannelTest.php	0.208	15` inserted at line 619 (descending-sort boundary between 0.210 KeysReloadTest and 0.205 HooksCommandTest; single green measured run). Figure delta +16T confirmed live: ImageChannel 15T + ResultCap 4→5 leg. suite-figure.json untouched — staleness pair stays red by design; +16T recorded in mark row + weld_notes for §7 regen.
 - Gate: filter 'McpToolBridge|DocFigureProseDrift|ReadmeRosterDrift|StderrEmitterCensus|DescriptorInheritance' → **307T / 32117A OK** (2 pre-existing deprecations). NIT-1/NIT-2 (docblock wording, MCP.md jargon) → closeout per lead, not weld-touched.
 - §4 ✅ 5419a4f80 mark + run-state fold 244→245 in the meta commit (this file's final one-liners + prune proof ride the session stamp).
+
+## Session close (stamp)
+
+- Absorption proofs: `git cherry master cc/C-SES-8.a` = 4x '-' (b95a0e181,06352783a,4a1f4643d,2d1463e80); `cc/C-SES-8.d` = 1c5b34628 '-', 38f097f4b '+' EXPLAINED — range-diff proved the sole delta is the README roster union (gen-command-docs regenerated, ReadmeRosterDrift green); `cc/C-TOOL-2.f` = 2x '-' (eaa8aaa8b,81cdd8b29).
+- Pruned: worktrees cc-cmp-C-SES-8.{a,d} + cc-cmp-C-TOOL-2.f removed (d forced: byte-identical FIX-1 duplicate, diff-verified pre-force), branches cc/C-SES-8.a, cc/C-SES-8.d, cc/C-TOOL-2.f deleted; branch/worktree lists show zero residue. candy-code-web/node_modules.pre-weld-bak retained per lead ruling.
+- Master chain this session: d79502693 → (4 picks + weld meta 26896e349) → (picks 3311bba69, c6e5e2ecc) → cure dc9eea92d → evidence 402418b18 → mark+fold c18dffaed → (picks f8c9995a4, 5419a4f80) → meta ae109dfbb → stamp (this commit). welded_count 242→245, weld_pending [C-SES-7.c, C-TOOL-2.g] post-fold (values at fold time). NO PUSH (W24/W25/W26 open; push law = wave close only).
