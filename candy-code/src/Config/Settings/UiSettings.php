@@ -48,6 +48,7 @@ final class UiSettings
         'mouseClicks',
         'scrollWheelLines',
         'doubleEscSeconds',
+        'resumeCostWarnUsd',
         'paletteMru',
         'diffPreviewRows',
         'diffStyle',
