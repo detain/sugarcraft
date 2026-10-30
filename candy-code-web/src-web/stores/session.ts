@@ -196,6 +196,25 @@ function setup(sessionId: string) {
   }
 
   /**
+   * C-TUI-3.b: a transcript row action rewinds the conversation to just
+   * before a dispatched prompt. `stepsBack` counts checkpoints exactly as
+   * the host's `Checkpoints::rewindConversation` does — its list is newest
+   * first and the target is index `min(stepsBack, count) - 1`, so asking
+   * for more than exist silently clamps to the oldest. The caller derives
+   * the number from the transcript's `kind:'user'` items, which are 1:1
+   * with checkpoints: command echo rows arrive user-role but `uiOnly`, and
+   * the reducer maps those to notices, never to user items. Goes straight
+   * to `command.exec` (not through `send()`) so it does not depend on the
+   * command list having loaded, and takes a fresh snapshot the same way
+   * `send()`'s built-in path does — `/rewind` rewrites rows in place.
+   */
+  async function rewindTo(stepsBack: number): Promise<MethodResult<'command.exec'>> {
+    const result = await connection.request('command.exec', { sessionId, name: 'rewind', args: `${stepsBack} --chat` })
+    if ('rows' in result) await subscribe(true)
+    return result
+  }
+
+  /**
    * `fs.search` for the composer's @-mention popup (WEB-5b): workspace file
    * names ranked against the partial, jailed server-side to the project root.
    */
@@ -307,6 +326,7 @@ function setup(sessionId: string) {
     retain,
     release,
     send,
+    rewindTo,
     searchFiles,
     cancel,
     respond,

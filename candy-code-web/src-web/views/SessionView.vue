@@ -12,7 +12,7 @@ import Transcript from '../components/Transcript.vue'
 import type { PermissionMode } from '../protocol/generated'
 import { useConnectionStore } from '../stores/connection'
 import { useLayoutStore } from '../stores/layout'
-import type { ToolItem } from '../stores/reducer'
+import type { ToolItem, UserItem } from '../stores/reducer'
 import { describe, useSessionStore, type Delivery, type SessionStore } from '../stores/session'
 import { useSessionsStore } from '../stores/sessions'
 
@@ -192,6 +192,64 @@ async function loadFull(item: ToolItem): Promise<void> {
   }
 }
 
+/**
+ * C-TUI-3.b: how many checkpoints back the given prompt is. `kind:'user'`
+ * items are 1:1 with the host's checkpoints — one `saveCheckpoint` per
+ * dispatched prompt, and command echo rows arrive `uiOnly`, which the
+ * reducer maps to notices, never to user items — so the answer is one plus
+ * the user rows still below this one. Matches how
+ * `Checkpoints::rewindConversation` indexes its newest-first list; asking
+ * past the oldest (the 100-per-session cap prunes) clamps there server-side,
+ * never errors. Returns null when the row is gone (someone rewound first).
+ */
+function rewindSteps(item: UserItem): number | null {
+  const items = state.value.items
+  const at = items.findIndex((row) => row.kind === 'user' && row.key === item.key)
+  if (at === -1) return null
+  let steps = 1
+  for (let index = at + 1; index < items.length; index = index + 1) {
+    if (items[index]?.kind === 'user') steps = steps + 1
+  }
+  return steps
+}
+
+/**
+ * Both row actions run `/rewind n --chat` on the server behind a confirm
+ * (the design's guard); "Edit & resend" then seeds the composer with the
+ * prompt's text — seeded only after the rewind lands, and never sent from
+ * here, so the affordance cannot double-send: the one exec it makes is a
+ * command, not a prompt. A plain rewind leaves the draft alone; replacing a
+ * non-empty draft is named in its own confirm clause first. While a turn
+ * runs the server refuses commands — the client says so on the spot instead
+ * of exec'ing into a refused row.
+ */
+async function rewindRow(item: UserItem, seedComposer: boolean): Promise<void> {
+  error.value = null
+  if (session.value.busy) {
+    error.value = 'Rewind waits for the running turn to finish.'
+    return
+  }
+  const steps = rewindSteps(item)
+  if (steps === null) {
+    error.value = 'That prompt is no longer in the transcript; nothing was rewound.'
+    return
+  }
+  const preview = item.content.replace(/\s+/g, ' ').trim().slice(0, 60)
+  const replacesDraft = seedComposer && draft.value !== ''
+  const question = `Rewind the conversation to just before "${preview}"? The prompt and everything after it drop off the transcript.`
+    + (replacesDraft ? ' Your unsent draft in the composer will be replaced.' : '')
+  if (typeof window !== 'undefined' && !window.confirm(question)) return
+  try {
+    await session.value.rewindTo(steps)
+    if (seedComposer) draft.value = item.content
+  } catch (failure) {
+    error.value = describe(failure)
+  }
+}
+
+const rewindHere = (item: UserItem): Promise<void> => rewindRow(item, false)
+const editAndResend = (item: UserItem): Promise<void> => rewindRow(item, true)
+
 async function rename(): Promise<void> {
   const name = window.prompt('Rename the session', summary.value?.name ?? '')
   if (name === null || name.trim() === '') return
@@ -210,7 +268,7 @@ async function rename(): Promise<void> {
       <button type="button" class="link" @click="rename">rename</button>
     </header>
     <p v-if="session.error" class="error" role="alert">{{ session.error }}</p>
-    <Transcript :items="state.items" :subagents="state.subagents" :tick="liveText.length + liveReasoning.length + state.asks.length" :session-id="id" @load-full="loadFull">
+    <Transcript :items="state.items" :subagents="state.subagents" :tick="liveText.length + liveReasoning.length + state.asks.length" :session-id="id" @load-full="loadFull" @rewind="rewindHere" @edit-resend="editAndResend">
       <template #after>
         <ReasoningFold v-if="liveReasoning" :text="liveReasoning" live />
         <div v-if="liveText" class="live" data-testid="live-reply">

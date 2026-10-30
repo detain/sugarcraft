@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { computed, nextTick, ref, watch, type ComponentPublicInstance } from 'vue'
-import type { SubAgent, ToolItem, TranscriptItem as Item } from '../stores/reducer'
+import type { SubAgent, ToolItem, TranscriptItem as Item, UserItem } from '../stores/reducer'
 import { useTranscriptViewStore } from '../stores/transcriptView'
 import TranscriptItem from './TranscriptItem.vue'
 
@@ -14,7 +14,9 @@ import TranscriptItem from './TranscriptItem.vue'
  * the reader is there, and stays put once they scroll up.
  */
 const props = defineProps<{ items: Item[]; subagents?: Record<string, SubAgent>; tick?: unknown; sessionId?: string }>()
-const emit = defineEmits<{ loadFull: [item: ToolItem] }>()
+// C-TUI-3.b: the two checkpoint row actions ride through to the view, which
+// owns the transcript order, the confirm guard, and the composer draft.
+const emit = defineEmits<{ loadFull: [item: ToolItem]; rewind: [item: UserItem]; editResend: [item: UserItem] }>()
 
 const scroller = ref<HTMLElement | null>(null)
 const following = ref(true)
@@ -84,7 +86,7 @@ defineExpose({ jumpToEnd })
           :data-index="row.index"
           :style="{ transform: `translateY(${row.start}px)` }"
         >
-          <TranscriptItem v-if="items[row.index]" :item="items[row.index]!" :subagents="subagents" :session-id="sessionId" @load-full="(tool) => emit('loadFull', tool)" />
+          <TranscriptItem v-if="items[row.index]" :item="items[row.index]!" :subagents="subagents" :session-id="sessionId" @load-full="(tool) => emit('loadFull', tool)" @rewind="(user) => emit('rewind', user)" @edit-resend="(user) => emit('editResend', user)" />
         </div>
       </div>
       <slot name="after" />

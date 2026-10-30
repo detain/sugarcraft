@@ -26,8 +26,53 @@ async function colour(): Promise<void> {
   }
 }
 
-onMounted(colour)
-onUpdated(colour)
+/**
+ * C-TUI-3.b: one copy button per fenced block. The buttons cannot ride the
+ * sanitised HTML — DOMPurify's FORBID_TAGS drops `button` (the injection
+ * surface is exactly the point of that list) — so this pass appends real DOM
+ * nodes after each v-html render, skipping blocks that already carry one.
+ * The clipboard needs a secure context (the notifications precedent,
+ * `stores/settings.ts`), so outside one no buttons appear at all. The text
+ * is read from the code element at click time: a tokenised block's
+ * textContent is unchanged by the colouring pass, and an edit that lands
+ * between paint and click copies what is on screen.
+ */
+function decorate(): void {
+  const element = root.value
+  if (element === null) return
+  if (typeof window !== 'undefined' && window.isSecureContext === false) return
+  for (const block of Array.from(element.querySelectorAll<HTMLElement>('.code-block'))) {
+    if (block.querySelector('.code-copy') !== null) continue
+    const code = block.querySelector('pre > code')
+    if (code === null) continue
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'code-copy'
+    button.setAttribute('data-testid', 'copy-code-block')
+    button.textContent = 'copy'
+    button.title = 'Copy this code block'
+    button.addEventListener('click', () => {
+      const text = (code.textContent ?? '').replace(/\n$/, '')
+      if (typeof navigator === 'undefined' || !navigator.clipboard) {
+        button.textContent = "couldn't copy"
+        return
+      }
+      navigator.clipboard.writeText(text).then(
+        () => { button.textContent = 'copied' },
+        () => { button.textContent = "couldn't copy" },
+      )
+    })
+    block.appendChild(button)
+  }
+}
+
+function paint(): void {
+  void colour()
+  decorate()
+}
+
+onMounted(paint)
+onUpdated(paint)
 </script>
 
 <template>
@@ -69,6 +114,17 @@ onUpdated(colour)
   right: 0.5rem;
   font-size: 0.75rem;
   color: var(--muted);
+}
+.markdown :deep(.code-copy) {
+  position: absolute;
+  bottom: 0.4rem;
+  right: 0.6rem;
+  padding: 0.05rem 0.45rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
 }
 .markdown :deep(pre) {
   margin: 0;
