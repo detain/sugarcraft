@@ -14,4 +14,5 @@ use SugarCraft\Code\Palette\PaletteAction;
 // a prompt, not a request for the command list.
 return BuiltInCommand::new(
     CommandSpec::new('help', Lang::t('cmd.help.description'), Lang::t('cmd.category.app'), paletteAction: PaletteAction::ShowHelp),
-)->withHandler('handleHelpCommand', CommandArguments::None);
+)->withHandler('handleHelpCommand', CommandArguments::None)
+    ->withHostCommand(\SugarCraft\Code\Host\Commands\HelpHostCommand::class);

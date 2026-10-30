@@ -97,7 +97,11 @@ final class AttachRemoteCommandsTest extends TestCase
         self::assertSame('server', $roster['compact'] ?? null, 'compact ships a host body');
         self::assertSame('server', $roster['clear'] ?? null, 'clear ships a host body');
         self::assertSame('client', $roster['theme'] ?? null, 'theme opens a screen only this side can paint');
-        self::assertSame('client', $roster['help'] ?? null, 'help is the window\'s own page');
+        // C-WEB-2.e: /help ships a host body now, so the roster admits it as
+        // a server command; the attached window's local page still answers
+        // when the host is not a serve session (runsIn gates dispatch, not
+        // the TUI's own handler).
+        self::assertSame('server', $roster['help'] ?? null, 'help ships a host body');
     }
 
     public function testAHostOwnedCommandTypedInAnAttachedWindowExecutesOnTheServer(): void

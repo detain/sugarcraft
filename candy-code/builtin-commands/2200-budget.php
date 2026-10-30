@@ -17,4 +17,5 @@ return BuiltInCommand::new(CommandSpec::new(
     Lang::t('cmd.category.app'),
     paletteAction: PaletteAction::ShowBudget,
     argumentHint: Lang::t('cmd.budget.hint'),
-))->withHandler('handleBudgetCommand');
+))->withHandler('handleBudgetCommand')
+    ->withHostCommand(\SugarCraft\Code\Host\Commands\BudgetHostCommand::class);
