@@ -938,6 +938,7 @@ candy-code/tests/Context/Sections/MaximsSectionTest.php	0.041	9
 candy-code/tests/Tui/MediaForm/MediaFormKeysTest.php	0.041	12
 candy-code/tests/Cli/BootstrapLayeredSettingsTest.php	0.040	53
 candy-code/tests/Commands/CommandFailureTranscriptTest.php	0.040	7
+candy-code/tests/Providers/ResponsesToolResultMediaTest.php	0.040	10
 candy-code/tests/Backend/CompactSelfPreviewTest.php	0.039	5
 candy-code/tests/Providers/BedrockPromptCacheTest.php	0.039	30
 candy-code/tests/Skills/TruncatesOutputNudgeMarginDocTest.php	0.039	4

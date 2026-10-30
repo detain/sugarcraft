@@ -1,0 +1,13 @@
+- item: C-TOOL-2 (sources: GAP-TL-19 (wire half))
+- kind: gap · effort S
+- approach: NARROWED (plan review): reuse C-PRV-2.b's image arm and add only the `input_file` (document) parts; no hedges, the wire file is `candy-code/src/Providers/Concerns/OpenAiResponsesWire.php`. Once C-PRV-2's Responses wire exists, `function_call_output.output` can be an array of `input_text` + `input_image` (data URL) + `input_file` parts. Emit them when the tool result carries `imageBytes` / `documentBytes` and the provider `supportsVision()` / `supportsDocuments()`, under the same decision chain as `AnthropicMessagesWire::toolResultImage()`. Chat-completions keeps the recorded decline (the `toolResultImage` docblock).
+- files.create: `candy-code/tests/Providers/ResponsesToolResultMediaTest.php`
+- files.modify: the Responses wire file C-PRV-2 creates (expected `candy-code/src/Providers/Concerns/OpenAiResponsesWire.php`; confirm against design-prv.md), `candy-code/src/Providers/AttachmentEncoding.php` (shared data-URL helper), `candy-code/docs/MEDIA.md` (Responses document parts)
+- tests: create the file above (image part, file part, non-vision model keeps the caption, is_error stays text)
+- docs/guards: `docs/MEDIA.md` one line
+- serialized: [hot:candy-code/src/Providers/AttachmentEncoding.php]
+- deps: C-PRV-2 (Responses wire), C-TOOL-2.d, C-PRV-2.b (its image arm)
+- phase: normal
+- ruling: none
+- risks: path unknown until C-PRV-2's design lands.
+

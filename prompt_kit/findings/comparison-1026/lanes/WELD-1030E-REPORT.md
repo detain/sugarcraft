@@ -18,3 +18,17 @@
 - Gates (merged tree, cwd=candy-code, env -u LINES -u COLUMNS plain pipe): IncognitoLaunchTest 5T/35A OK; family (Incognito|ArgvParser|LaunchFlags|NonInteractiveSessionPersistence|StderrEmitterCensus) 359T/23548A OK; guard set (ReadmeRosterDrift|DocFigureProseDrift|GlobDialect|ChildWallClock|DuplicatedTestHelperDrift) 140T/17315A OK; ReadmeSuiteFigureDrift 4T/2F = STANDING staleness pair only (live 28526 vs pinned 25537). No PtyRun expectMiss (not in filters).
 - DUR row MINTED: candy-code/tests/Chat/IncognitoLaunchTest.php 0.469 5 (median of 3 junit per-file times 0.431/0.469/1.948; tests=5 from junit tests attr). tsv 1633->1634 lines.
 - §4 mark landed (uncommitted until weld commit): ✅ 2ae48be8d C-SES-7.c with gates/carries incl. +9T §7 carry (not re-pinned) + ChatHostLangCatalogueTest widen-to-Renderer.php closeout item.
+
+## Lane 1 weld commit
+- weld: C-SES-7.c = 62f412d9e (cat-file: commit). %ae grep -c detain = 1; %ce grep -c detain = 1; Co-Authored-By count 0.
+- run-state master_tip left at 2ae48be8d (pre-weld); stamped to 62f412d9e in the lane-2 weld commit to avoid a same-SHA churn (weld log is the record).
+- Zero conflicts during picks -> no '+'-from-resolution content to compare; absorption proof + prune next.
+- git cherry master cc/C-SES-7.c: 5 x '-' (merge excluded; all picks absorbed by patch-id). merge-base == 574e69f1d == analyzed mb, ancestor of master. Worktree removed (list 13->12); branch deleted (was 034b30363); branch --list count 0. LANE 1 CLOSED.
+
+## Lane 2 C-TOOL-2.g start
+- chain: master..cc/C-TOOL-2.g = single 25a6d642c (cat-file commit), parent a6c45be43 (= C-SES-7.b final landed pick on master per §4 mark) -> pick should be clean. No protocol change -> no trio regen, no dist, no npm.
+- pick 25a6d642c -> 06d7a9858 (cat-file: commit), zero-conflict. Parent a6c45be43 ancestor-verified. Content proof: 6 lane files vs base a6c45be43 — all four modified files differ ONLY where master moved; the two NEW files byte-identical lane-tip vs HEAD (5b4999d02 test, c444ab202 REPORT). Landed-blob: OpenAIProvider.php:436 responsesToolResultDocumentBudget + :448 responsesDocumentModelGate present; deviation noted in §4 mark per brief.
+- Gates: ResponsesToolResultMediaTest 10T/18A OK; media family 65T/161A OK; five guard set 140T/17322A OK (staleness pair outside window; live 28526 vs pinned 25537 — +10 from this lane rides the carry).
+- STANDING RED disclosed (not chased, base-proven foreign): MediaSettingsTest::testTheProviderSchemaCarriesTheMediaOptionals — openrouter mediaKinds. Pristine /home/sites/weld-base-e924 worktree at e924d3525 (cp -a vendor) reproduced EXACT 17T/196A/1F same line; worktree removed.
+- DUR row MINTED: candy-code/tests/Providers/ResponsesToolResultMediaTest.php 0.040 10 (median 0.040/0.032/0.042). tsv 1634->1635.
+- run-state: welded_count 246->247 ASSERT ok; weld_pending now EMPTY; master_tip 62f412d9e.
