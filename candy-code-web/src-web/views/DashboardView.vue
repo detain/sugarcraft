@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ago, oneLine } from '../lib/format'
+import type { MethodResult } from '../protocol/generated'
 import { useApprovalsStore } from '../stores/approvals'
 import { useConnectionStore } from '../stores/connection'
 import { useNewSessionStore } from '../stores/newSession'
@@ -17,6 +18,28 @@ const creating = ref(false)
 const error = ref<string | null>(null)
 
 const recent = computed(() => sessions.items.slice(0, 8))
+
+/**
+ * C-TUI-5.e: a brand-new install's dashboard would otherwise be a Start
+ * button that cannot answer. The server's own inventory decides — a
+ * `server.info` that lists nothing real (only the offline `echo` stand-in,
+ * or nothing at all) earns the notice; a failed or fieldless fetch stays
+ * silent, because an unreadable inventory is not proof of a missing
+ * provider (the StatusBar degradation law restated).
+ */
+const serverProviders = ref<string[] | null>(null)
+const noRealProvider = computed(
+  () => serverProviders.value !== null && serverProviders.value.filter((p) => p !== 'echo').length === 0,
+)
+
+onMounted(async () => {
+  try {
+    const info = await connection.request('server.info', {})
+    serverProviders.value = (info as MethodResult<'server.info'>).providers ?? null
+  } catch {
+    serverProviders.value = null
+  }
+})
 
 async function create(): Promise<void> {
   creating.value = true
@@ -37,6 +60,9 @@ async function create(): Promise<void> {
     <h1>CandyCode</h1>
     <p v-if="connection.hello?.server.root" class="root">
       Serving <code>{{ connection.hello.server.root }}</code>
+    </p>
+    <p v-if="noRealProvider" class="asks" data-testid="dashboard-no-provider">
+      No provider configured — run <code>candy-code login</code> and reload, or pick one in the terminal.
     </p>
     <p v-if="approvals.total > 0" class="asks">{{ approvals.total }} question{{ approvals.total === 1 ? '' : 's' }} waiting for an answer.</p>
     <p>
