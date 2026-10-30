@@ -6,9 +6,11 @@ namespace SugarCraft\Code\Tests\Chat;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Backend\EchoBackend;
+use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Config\Settings\UiSettings;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Providers\EchoProvider;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionMeta;
@@ -26,10 +28,13 @@ use SugarCraft\Core\Msg\KeyMsg;
  * consumes), not {@see \SugarCraft\Code\Host\ResumeCostEstimate}'s arithmetic
  * (pinned to the second in tests/Host/ResumeCostEstimateTest.php).
  *
- * The stores are seeded so the resume reads stale or warm; the backend is
- * always an {@see EchoBackend}, which is deliberately the UNPRICED shape
- * (no engine → no price on file → the `≥` notice), and the notice text
- * asserts against the real lang strings.
+ * The stores are seeded so the resume reads stale or warm. The guard is the
+ * engine's business — a NON-engine Chat (EchoBackend: no billable model
+ * exists) is inert and never holds, pinned by
+ * {@see testANonEngineChatNeverHolds()} — so every hold/warm case here runs
+ * on an {@see EngineBackend} double over the {@see EchoProvider} at model
+ * `echo`, deliberately the UNPRICED shape (no rate on file → the `≥`
+ * notice), and the notice text asserts against the real lang strings.
  */
 final class ResumeCostGuardTest extends TestCase
 {
@@ -84,8 +89,10 @@ final class ResumeCostGuardTest extends TestCase
         $this->assertSame(Role::System, $last->role);
         $this->assertTrue($last->uiOnly, 'the guard notice never reaches the model wire');
         $this->assertStringContainsString('Resuming re-sends ~84k tokens uncached', $last->content);
-        // EchoBackend has no price on file — the notice must NOT invent one:
-        // the threshold rides with `≥`, not `≈`.
+        // The engine's model has no price on file — the notice must NOT
+        // invent one: the threshold rides with `≥`, not `≈`. This is the
+        // unpriced branch's real audience: production --resume onto a
+        // custom or unknown model.
         $this->assertStringContainsString('(≥$0.25)', $last->content);
         $this->assertStringContainsString('Press Enter again to send, or run /compact first.', $last->content);
 
@@ -159,6 +166,36 @@ final class ResumeCostGuardTest extends TestCase
         $this->assertNotNull($cmd);
     }
 
+    public function testANonEngineChatNeverHolds(): void
+    {
+        // The guard holds only where a billable model EXISTS. An EchoBackend
+        // chat has no price to name, so the estimator's unpriced branch
+        // would otherwise fire on ANY stale resume with tokens to send —
+        // and plain stores answer no last-activity, which reads cold. That
+        // combination used to hold every test Chat built in the
+        // derived-armed shape; the EngineBackend gate in resumeCostHold()
+        // makes the guard inert instead. Same construction as resumedChat()
+        // (heavy history, real id, plain store = cold+unpriced → the worst
+        // shape), only the backend differs: the first Enter must SEND.
+        $chat = new Chat(
+            history: $this->heavyStoredHistory(),
+            inputBuf: 'hello',
+            backend: new EchoBackend(),
+            sessionStore: $this->plainStore,
+            currentSessionId: 'ses-resumed',
+        );
+        // Derived-armed, then spent by the send — not by a hold.
+        $this->assertTrue($chat->resumeCostGuardArmed());
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertNotNull($cmd, 'a non-engine chat never gates its own Enter');
+        $this->assertNotSame('hello', $next->inputBuf, 'the draft went out, it did not stay in the box');
+        foreach ($next->history as $message) {
+            $this->assertStringNotContainsString('Resuming re-sends', $message->content);
+        }
+    }
+
     public function testCommandsStayReachableWhileTheHoldStands(): void
     {
         // The notice itself tells the user to run /compact — so slash
@@ -166,7 +203,7 @@ final class ResumeCostGuardTest extends TestCase
         $chat = new Chat(
             history: [Message::user(str_repeat('x', self::HEAVY_CHARS))],
             inputBuf: '/help',
-            backend: new EchoBackend(),
+            backend: new EngineBackend(new EchoProvider(), 'echo'),
             sessionStore: $this->plainStore,
             currentSessionId: 'ses-resumed',
         );
@@ -223,7 +260,9 @@ final class ResumeCostGuardTest extends TestCase
         return new Chat(
             history: $this->heavyStoredHistory(),
             inputBuf: 'hello',
-            backend: new EchoBackend(),
+            // The guard's real audience: an engine-backed chat. 'echo' has
+            // no rate on file — the UNPRICED shape, `≥` over the threshold.
+            backend: new EngineBackend(new EchoProvider(), 'echo'),
             sessionStore: $store,
             currentSessionId: 'ses-resumed',
         );

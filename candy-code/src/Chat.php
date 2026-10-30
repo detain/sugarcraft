@@ -807,15 +807,6 @@ final class Chat implements Model
          * server-minted session).
          */
         ?\Closure $sessionMint = null,
-    /**
-         * C-SES-7.d: the resume cost guard's arm (see the field docblock).
-         * Null — the launch shape — means "derive it": a Chat constructed
-         * over stored history with no lazy minter under a real session id
-         * IS a launch-time resume. A clone names the flag, so the derived
-         * answer is computed exactly once per session, never re-decided
-         * mid-keystroke.
-         */
-        ?bool $resumeCostGuardArmed = null,
         private readonly ?\DateTimeImmutable $lastActivityAt = null,
     /** Highlighted row in the "/" popup (see {@see slashMenuMatches()}). */
         private readonly int $slashMenuIndex = 0,
@@ -1850,6 +1841,21 @@ final class Chat implements Model
          * start claiming incognito it was not launched with.
          */
         private readonly bool $incognito = false,
+    /**
+         * C-SES-7.d: the resume cost guard's arm (see the field docblock).
+         * Null — the launch shape — means "derive it": a Chat constructed
+         * over stored history with no lazy minter under a real session id
+         * IS a launch-time resume. A clone names the flag, so the derived
+         * answer is computed exactly once per session, never re-decided
+         * mid-keystroke. A `/branch` (SwitchSession effect) reaches the same
+         * answer through {@see mutate()}'s session-identity choke: it names a
+         * fresh id and clears the minter without naming this flag, so the
+         * fork's copied transcript re-derives armed — its next prompt is a
+         * resume re-send in every sense the guard cares about. Appended at
+         * the parameter-list TAIL so the positional shape of every parameter
+         * before it is untouched.
+         */
+        ?bool $resumeCostGuardArmed = null,
     ) {
         $this->transcriptWriter = $transcriptWriter ?? new DebouncedTranscriptWriter();
         $this->inputHistory = $inputHistory ?? ($promptHistory?->entries() ?? []);
@@ -20718,10 +20724,21 @@ final class Chat implements Model
      * UI-only row (never reaches the model wire); the draft stays in the
      * box, so the next Enter sends it — that is what "held ONCE" means.
      *
+     * The guard is INERT without an {@see Backend\EngineBackend}: a command
+     * or echo backend has no billable model, so there is no money to warn
+     * about and holding a keystroke for it would gate typing over nothing.
+     * That is also why the estimator's unpriced branch (fire on any stale
+     * resume, threshold rides with `≥`) keeps its real audience — an
+     * engine-backed chat whose model has no rate on file, the production
+     * `--resume` onto a custom or unknown model.
+     *
      * @return array{0: self, 1: null}|null
      */
     private function resumeCostHold(): ?array
     {
+        if (!$this->backend instanceof Backend\EngineBackend) {
+            return null;
+        }
         // Warm cache cannot be PROVEN, but the store's own last-activity is
         // the best clock there is: inside the TTL window the re-send is a
         // cache read, not fresh input. No row (legacy store, attach) answers
@@ -20729,11 +20746,9 @@ final class Chat implements Model
         $lastActivity = $this->sessionStore instanceof EnhancedSessionStore && $this->currentSessionId !== null
             ? $this->sessionStore->sessionMeta($this->currentSessionId)?->lastActivity
             : null;
-        // Price per 1k input tokens only an engine-backed Chat can name;
-        // a command/echo backend has no billable model at all.
-        $costPer1k = $this->backend instanceof Backend\EngineBackend
-            ? \SugarCraft\Code\Providers\ModelMetadata::new()->costPer1kTokens($this->backend->model(), 'input')
-            : null;
+        // Price per 1k input tokens for the engine's model; null = no rate
+        // on file, the estimator's unpriced shape.
+        $costPer1k = \SugarCraft\Code\Providers\ModelMetadata::new()->costPer1kTokens($this->backend->model(), 'input');
         $estimate = Host\ResumeCostEstimate::of(
             $this->contextMeter(),
             $this->history,
