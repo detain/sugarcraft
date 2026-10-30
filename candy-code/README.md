@@ -1688,7 +1688,8 @@ All of it is in [`docs/HOOKS.md`](docs/HOOKS.md).
 
 ### Interface settings
 
-`theme` (`/theme` or **Switch theme** in `Ctrl+P`), `statusLine` (a command
+`theme` (`/theme` or **Switch theme** in `Ctrl+P`, which also lists any JSON
+theme files under `~/.candy-code/themes/`), `statusLine` (a command
 whose output becomes a custom status line), `layout` (pane docking, saved as
 you change it), `queueMode` (what `Enter` does mid-turn), `mouse`,
 `scrollWheelLines`, `doubleEscSeconds` and the preview sizes are all live

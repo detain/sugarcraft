@@ -108,6 +108,24 @@ the attached terminal's actual background — asked over OSC 11, falling back to
 whatever the first one detected, and the chrome/markdown halves always come
 from the same side of the light/dark split.
 
+A theme vocabulary exists outside the code too: any JSON file at
+`~/.candy-code/themes/<name>.json` joins `/theme`, the palette's **Switch
+theme** row and what the `theme` key accepts — the file's stem is the theme
+name. The shape is `{"extends": "dracula", "tokens": {"border": "#444444"}}`:
+an optional `extends` naming a built-in palette to start from (built-ins
+always win a name collision), and an optional `tokens` object overriding some
+of the `StyleTheme` colour tokens by `#rrggbb`. Those colours are no more
+trusted to be legible than anyone's: they enter through the same contrast
+projection the built-in palettes do. The directory is the user's own —
+resolved from `HomeDirectory::owned()` — and the project tree is never read
+for theme bytes: a project can *name* a theme through the layered merge, but a
+name with no file in the owned home degrades to the default instead of
+throwing at launch, and a broken file paints as its `extends` base with one
+launch notice. What documents and validates the key is the built-in list
+(`Theme::builtInNames()`) plus `ThemeNameValidator`, which checks a name live
+— built-in, or a file that exists right now — so this page never bakes in one
+machine's theme files as another machine's vocabulary.
+
 The `/model` half is easy to miss and this page missed it: `Chat`'s
 `handleModelCommand()` ends in `selectPaletteProvider()`, which is the *sole*
 site that invokes `onConfigChange('provider', …)`. The palette row and the
