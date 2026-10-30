@@ -249,8 +249,12 @@ final class MediaSettingsTest extends TestCase
         }
 
         // Nothing else gained them, and no required list moved (regression:
-        // absent-media blocks validate exactly as before this step).
-        foreach (array_diff(array_keys($schemas), ['sglang', 'custom']) as $type) {
+        // absent-media blocks validate exactly as before this step). The
+        // `openrouter` entry rides the `custom` key list by construction
+        // (C-PRV-2.c: "the same keys `custom` takes"), so it carries the
+        // media optionals too; that widening predates this pin and is
+        // intended here.
+        foreach (array_diff(array_keys($schemas), ['sglang', 'custom', 'openrouter']) as $type) {
             self::assertNotContains('mediaKinds', $schemas[$type]['optional'], "{$type} gained a key the plan does not give it");
         }
         self::assertSame(['baseUrl', 'model'], $schemas['sglang']['required']);

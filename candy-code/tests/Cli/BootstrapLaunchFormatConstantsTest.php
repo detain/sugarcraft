@@ -431,24 +431,25 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
      * field is longer than this is NOT nominated, and the sweep reports its
      * absence as silence. Nothing here can detect that, which is why the bound
      * is generous — the longest field a quoting page interpolates is the
-     * project-tier tool-removal report's disabled list, 271 bytes for the
-     * thirty tools the sample names since comparison-plan SHL-1 (it was 235
-     * for twenty-six since crush-media W5.3, 205 for twenty-four until that
-     * join, and 160 until W10 widened the bound past
+     * project-tier tool-removal report's disabled list, 311 bytes for the
+     * thirty-two tools the sample names since C-TUI-2.e (it was 271 for the
+     * thirty since comparison-plan SHL-1, 235 for twenty-six since
+     * crush-media W5.3, 205 for twenty-four until that join, and 160 until
+     * W10 widened the bound past
      * it), every other one under sixty — and why the fixture in
      * {@see testTheSweepFindsAQuotedFormatOnAPageWhoseAnswerIsKnown()} pins
      * both directions rather than only the one this file wants.
      *
-     * THE CEILING IS THE FIXTURE, NOT A ROUND NUMBER: 282 clears the measured
-     * 271 with room for roughly one more tool name, and stays under the
-     * fixture's 283-byte "far" field (`it.` plus the 280-byte filler) so the
+     * THE CEILING IS THE FIXTURE, NOT A ROUND NUMBER: 322 clears the measured
+     * 311 with room for roughly one more tool name, and stays under the
+     * fixture's 325-byte "far" field (`it.` plus the 322-byte filler) so the
      * false-positive direction remains pinned. Each future tool that lands in
      * that sample spends part of the headroom; when it runs out, the sweep
      * reds LOUDLY on the quoting page dropping out — which is this bound's way
      * of asking for the same measured-widening W10 and W5 performed, or for the
      * doc sample to shrink.
      */
-    private const PAGE_QUOTE_FIELD_BYTES = 282;
+    private const PAGE_QUOTE_FIELD_BYTES = 322;
 
     /**
      * PHPUnit's own two output forms. Never excused by an anchor — see
@@ -1345,7 +1346,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // only a human reading the page can settle it. That is what the
         // roster's verdict column is for.
         $coincidence = self::flattenPages([
-            'far.md' => 'reject one at exit `2` rather than ignoring it.' . str_repeat(' filler', 40) . ' — and on.',
+            'far.md' => 'reject one at exit `2` rather than ignoring it.' . str_repeat(' filler', 46) . ' — and on.',
             'near.md' => 'reject one at exit `2` rather than ignoring it, which — as noted — is deliberate.',
         ]);
         self::assertSame(

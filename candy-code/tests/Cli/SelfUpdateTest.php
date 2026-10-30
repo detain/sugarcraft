@@ -284,12 +284,12 @@ final class SelfUpdateTest extends TestCase
         return self::SERVER_ORIGIN . '/' . $name;
     }
 
-    public function testTheRosterCarriesElevenVerbsWithSelfUpdateInAlphaOrder(): void
+    public function testTheRosterCarriesTwelveVerbsWithSelfUpdateInAlphaOrder(): void
     {
         $accepted = ParsedArgs::SUBCOMMANDS;
         sort($accepted);
         self::assertSame(
-            ['acp', 'attach', 'bundles', 'completion', 'doctor', 'login', 'mcp', 'models', 'self-update', 'serve', 'session'],
+            ['acp', 'attach', 'bundles', 'completion', 'doctor', 'login', 'mcp', 'models', 'self-update', 'serve', 'session', 'usage'],
             $accepted,
         );
         self::assertTrue(class_exists(ArgvParser::class));
