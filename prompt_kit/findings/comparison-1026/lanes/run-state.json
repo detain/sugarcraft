@@ -1,5 +1,5 @@
 {
-  "active_agents": 4,
+  "active_agents": 7,
   "anomalies_ledger": {
     "C-TOOL-6.a-FALSE-WELDED-STATE-AND-MY-OWN-MISREAD": "Two lead-side errors this tick: (1) run-state had C-TOOL-6.a in welded with no anchored \u00a74 mark / no landed test file / no landed MCP.md section \u2014 a false weld entry; (2) I then wrote that its branch+worktree were pruned, which is ALSO false (both exist: `git branch --list cc/C-TOOL-6.a` = checked out, dir present). ROOT LAW: a weld is proven by THREE independent artifacts \u2014 anchored `^#### \u2705 <sha> <ID>` mark + the landed new test file in the master tree + the deliverable blob content. And a mark census must use a regex that also accepts P-* pick ids and malformed lines like `\u2705 fad3d931e #### C-MCP-2.b`. Cured by removing the entry (259->258) and dispatching the owed r2 fixer off the REAL on-disk verdict.",
     "CROSS-WORKTREE-CONTAMINATION-TOOL6a-SES8e": "docs/MCP.md +126/-0 appears in BOTH c79073e20 (C-TOOL-6.a, declared) and b2e94003e (C-SES-8.e, OUT of its declared scope). C-TOOL-6.a builder disclosed a cross-worktree stash race. Both trees carry each other's untracked dirt (BinCandyCodeDispatchTest M + UsageSubcommandTest ??, byte-identical copies). Uncommitted files do not travel with cherry-picks, but a COMMITTED duplicate does -> must not double-land. Standing rule: never revert another lane's dirt; status --porcelain every lane before trusting scope or welding.",
@@ -191,7 +191,7 @@
     "candy-code/COMPARISON.md:447/:449 still teach \"headless default is bypass-permissions\" (program-owned matrix, C-SEC-7.a r7 report-only)",
     "C-TOOL-2.a NIT: WebFetchMarkdownTest docblock says 260,000 B, fixture measures 270,000 B (weld-carriable)"
   ],
-  "extra_agents": 1,
+  "extra_agents": 2,
   "inflight": {
     "C-SEC-8.b": {
       "branch": "cc/C-SEC-8.b",
@@ -217,6 +217,15 @@
       "tip": "e50ce81be",
       "session": "ses_e7328fafeffeAZnVOoocTSzAoq",
       "note": "t137 fixer cured r2 MAJOR: e50ce81be (lead disk-proved: 4th commit, 'src/Theme.php' => 4 at :818, FIX-2.md 4406B on-branch). In-step prose FORTY-FIVE->FORTY-NINE / NINETEEN->TWENTY + NUMBER_WORDS 46-49 widened; gate 95T/0F. Landed-blob proof master Theme.php has 0 warn sites (all 4 lane's, in-step duty legit). Disclosed: FIX-1 'trio 24T/117A' not reproducible; true 4-class total 33T/144A - r3 reviewer settling as NIT-truth. r3 reviewer LIVE scoped to cure only."
+    },
+    "C-TUI-2.e": {
+      "branch": "cc/C-TUI-2.e",
+      "worktree": "/home/sites/cc-cmp-C-TUI-2.e",
+      "stage": "build",
+      "round": 1,
+      "tip": null,
+      "session": "ses_e7325840bffe5Idl0v6u2SaelB",
+      "note": "t149: scheduler fresh pick (wave 28, deps C-TUI-2.c/.d welded). Worktree cut at 80fe2275b, vendor cp -a from cc-cmp-C-SEC-8.d, autoload Lang+Chat proven, plan file seeded. Design design-tui.md:229 (Diff-review wiring App slot /diff keys, effort M, hot files App.php/KeyBindingRegistry/Chat::handleDiffCommand/Tui-Renderer slot chain/en.php/README/COMMANDS regen). Serialized regions: builder told line-cites stale, locate by grep."
     }
   },
   "last_lead": "fresh-lead-1030 reconcile (disk-verified 10 worktrees -> 8 live lanes + WEB-5.a weld + CTX-4.e phantom void)",
@@ -255,9 +264,13 @@
     "C-SEC-7.e": "HELD: owner ruling open (autoReview default)",
     "WELDER": "ses_e734521deffebhyvGAYImNcIfO (1030O: STEP 0.5 DTHD cure + 7-lane batch C-SES-6.e/C-TOOL-6.a/C-WEB-2.c/C-WEB-2.f/C-WEB-2.d/C-WEB-2.g/C-TUI-3.e); 1030N closed on disk",
     "C-SEC-8.d": "fixer ses_e7345f4e4ffdBblw5473I1bZLi LIVE (real r2 reviewer on its completion notification only); phantom reviewer ses_e7344b618ffe23EBko5utka9S3 aborted-confirmed, zero writes",
-    "C-TUI-4.a-r3": "ses_e7328fafeffeAZnVOoocTSzAoq"
+    "C-TUI-4.a-r3": "ses_e7328fafeffeAZnVOoocTSzAoq",
+    "C-TUI-2.e-build": "ses_e7325840bffe5Idl0v6u2SaelB",
+    "welder-1030P": "ses_e7325840cffeKNl0cwloTgUn4x",
+    "W23-loop-r1": "ses_e7324ea07ffeJowPfzkXxnHnwg",
+    "W24-loop-r1": "ses_e7324ea06ffelblHgZ137sIWcF"
   },
-  "master_tip": "fd2224b4a",
+  "master_tip": "fa49d6115 (after 1030P: picks c53e53046/f002c9e37/b927d39b8 + 6147b3904/fcf112aa8/86ad79b52, marks 1a01f0ca8, DUR+evidence fa49d6115; run-state commit rides atop)",
   "master_tip_observed": "ca1e0b51f",
   "next_fill_queue": [],
   "next_lead": {
@@ -1352,10 +1365,7 @@
     "C-SEC-7.b": "CLEAN r2 0C/0M/0m (REVIEW-1.md 6902B + REVIEW-2.md 6330B main-tree). PICK RANGE = 484f313a9..56aa4987f EXCLUSIVE START (3 commits f0db09a45+60e99cc20+56aa4987f; f0db09a45.. was off-by-one and EXCLUDES the code commit - reviewer-corrected). Cherry-pick onto moving master, zero conflict expected. DUR row RestrictedSafeModeFlagsTest 14T median-of-3 AT WELD. \u00a77 +16 methods. gen-settings-doc 52-row claim statically re-proven (SETTINGS.md:1021 const-by-reference) - prove --check post-pick. COLLECT REVIEW-1+REVIEW-2 onto branch pre-prune; branch REPORT.md is corrected truth (dated FIX-1 block) - DO NOT overwrite with stale main-tree copy. StderrEmitterCensus 95T/22549A + seam trio 48T/824A green at lane.",
     "C-SEC-8.d": "t132 CLEAN r2 (REVIEW-2.md 5178B main-tree, header proven; reviewer made authorized scoped cure 2ebd4b77a=1-line citation fix, SymbolCitationDrift OK 9T/18250A post). LEAD DISK-PROVED: 3 commits aa5ddf638..2ebd4b77a (rev-list), fix touches only tests/Chat/SubmitInvisibleUnicodeTest.php. WELD: cherry-pick range aa5ddf638..2ebd4b77a EXCL start (f1d679d3d,378435bb6,2ebd4b77a). DUR rows: tests/Chat/SubmitInvisibleUnicodeTest.php 7T/~2.1s + tests/Host/SubmitInvisibleUnicodeTest.php 5T/~1.9s (reviewer CORRECTED: 5T not 6T - MINOR-2 widened existing method +0T). sec.7 +12T. HOOKS.md:346 submitDraft rename rode f1d679d3d (blob-proven). Collect REVIEW-1.md+REVIEW-2.md onto branch pre-prune; FIX-1.md already on-branch (6444B). Chat.php:9898-9903 + Host submit-path hot vs concurrent welds - re-check drift at pick."
   },
-  "weld_pending": [
-    "C-SEC-7.b",
-    "C-SEC-8.d"
-  ],
+  "weld_pending": [],
   "weld_queue": {
     "_legacy_list": [
       "C-SEC-7.d",
@@ -1635,9 +1645,11 @@
     "C-WEB-2.f",
     "C-WEB-2.d",
     "C-WEB-2.g",
-    "C-TUI-3.e"
+    "C-TUI-3.e",
+    "C-SEC-7.b",
+    "C-SEC-8.d"
   ],
-  "welded_count": 266,
+  "welded_count": 268,
   "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
   "welder_inflight_note": "WELDER ses_e7448801cffejnqD7XXhFFoIJG RUNNING: its welded_count=243 + the \u00a74 \u2705 94432cfd1 C-SES-8.a line are UNCOMMITTED working-tree writes (a commit cannot contain its own SHA) -> do NOT read as landed; do NOT write run-state concurrently except minimal fresh-read targeted patches; RE-VERIFY my TOOL-2.f weld_pending + TOOL-2.g entries survive its fold.",
   "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
@@ -1680,5 +1692,6 @@
     "scope": "owner directive @197@/@1108@: W10 loop + W11-W15 fully welded + wave loops closed; W16 band finished + welded under this lead per owner extension; W17+ builders NEVER started",
     "this_run": "welded 100 -> 161; waves closed W10,W11,W12,W13,W14,W15 (W14 96d36db45, W15 15046565a)"
   },
-  "batch1030o_note": "WELD-1030O: DTHD cure a1b075d1e (4 roster rows, di-precedent, guard 28T/572A green with GlobDialect; 7 lanes picked, ONE conflict resolved: SettingsWriterCensusTest docblock union in C-TUI-3.e 882c7536c/fd2224b4a keeps /effort + Alt+O text; marks 259->266; durations 8 NEW + StartupSummaryTest re-time 0.405/11->0.565/18, tsv 1647->1655; protocol regen: schema +skill enum line only, generated.ts same 1 line, dist byte-identical rebuild; gates: UpdateCheck 18T/88A + StartupSummary 18T/212A, McpBrowserPresetDoc 4T/101A, NonInteractiveSkillSlash 9T/47A, EffortDial 13T/39A + EffortHost 10T/40A, CommandListSkillRows 9T/149A, ReviewHost 10T/61A, VerboseToggle 5T/23A, KeyBindingDrift 226T/1855A, SettingsWriterCensus 5T/5019A, ProtocolSchemaDrift+ServerProtocolDocDrift 13T/362A OK, vitest generated+dormantRoster 2f/6T serial, five-family 134T/17431A sole-reds = ReadmeSuiteFigureDrift staleness pair (25537 vs live 28773, \u00a77 closeout duty, NOT re-pinned). C-TOOL-6.a worktree KEPT: foreign C-SES-8.e uncommitted dirt (UsageSubcommandTest + BinCandyCodeDispatchTest row) unreviewed, NOT welded, prune deferred. Other six cc/* pruned after cherry proofs."
+  "batch1030o_note": "WELD-1030O: DTHD cure a1b075d1e (4 roster rows, di-precedent, guard 28T/572A green with GlobDialect; 7 lanes picked, ONE conflict resolved: SettingsWriterCensusTest docblock union in C-TUI-3.e 882c7536c/fd2224b4a keeps /effort + Alt+O text; marks 259->266; durations 8 NEW + StartupSummaryTest re-time 0.405/11->0.565/18, tsv 1647->1655; protocol regen: schema +skill enum line only, generated.ts same 1 line, dist byte-identical rebuild; gates: UpdateCheck 18T/88A + StartupSummary 18T/212A, McpBrowserPresetDoc 4T/101A, NonInteractiveSkillSlash 9T/47A, EffortDial 13T/39A + EffortHost 10T/40A, CommandListSkillRows 9T/149A, ReviewHost 10T/61A, VerboseToggle 5T/23A, KeyBindingDrift 226T/1855A, SettingsWriterCensus 5T/5019A, ProtocolSchemaDrift+ServerProtocolDocDrift 13T/362A OK, vitest generated+dormantRoster 2f/6T serial, five-family 134T/17431A sole-reds = ReadmeSuiteFigureDrift staleness pair (25537 vs live 28773, \u00a77 closeout duty, NOT re-pinned). C-TOOL-6.a worktree KEPT: foreign C-SES-8.e uncommitted dirt (UsageSubcommandTest + BinCandyCodeDispatchTest row) unreviewed, NOT welded, prune deferred. Other six cc/* pruned after cherry proofs.",
+  "batch1030p_note": "WELD-1030P: C-SEC-7.b (range 484f313a9..56aa4987f EXCL start, 3 picks zero-conflict) + C-SEC-8.d (range aa5ddf638..2ebd4b77a EXCL start, 3 picks zero-conflict) onto 80fe2275b. HARNESS NOTE: first multi-pick aborted on untracked main-tree lanes/C-SEC-7.b/REPORT.md collision (sequencer tangled -> aborted to base, main-tree evidence dirs set aside to /tmp/opencode/weld1030P/, re-picked one-by-one, all clean). PROOF+MARKS: plan marks 7x batch-1030O + C-SEC-7.b(b927d39b8) + C-SEC-8.d(86ad79b52) committed path-scoped at 1a01f0ca8 (9+/9-); three-proofs per lane in lanes/WELD-1030P-REPORT.md (landed-blob: ArgvParser --restricted x4, Bootstrap choke gates :384/:2656, HOOKS.md:346 submitDraft, Chat.php:9904-9938 strip+submitDraft, zero Theme.php touches). GATES (merged tree, plain pipe): RestrictedSafeModeFlags 14T/84A OK; StderrEmitterCensus 95T/22639A OK (roster carried in-lane, +90A tree-scan drift vs lane-note 22549A); SubmitInvisibleUnicode Chat7+Host5=12T/43A OK; SymbolCitationDrift 9T/18332A OK (cure 86ad79b52 proven on merged tree); gen-protocol-schema --check up-to-date (zero schema bytes, no regen pair, npm untouched); gen-settings-doc/command/tool-docs --check all up to date. DUR rows x3 APPENDED tsv 1655->1658 (junit testsuite times, single-run disclosed): RestrictedSafeModeFlagsTest 0.051/14, Chat/SubmitInvisibleUnicodeTest 0.013/7, Host/SubmitInvisibleUnicodeTest 1.170/5 (lane notes ~2.1s/~1.9s NOT reproduced on merged tree - measured lower, shipped measured). EVIDENCE: REVIEW-1/2 x4 lanes collected from main tree (7.b sizes 6902B/6330B, 8.d 6305B/5178B, lead sizes matched); branch-corrected 7.b REPORT.md (10790B) kept, 9200B main-tree lead copy NOT used to overwrite (preserved /tmp); 8.d REPORT main==master byte-identical; FIX-1s rode picks. Ride-along: 1a01f0ca8 commits the lead-verified 7 batch-1030O working-tree marks per lead ruling (plan_comparison.md TRACKED, contrary to old never-stage note). suite-figure.json NOT touched (no re-pin mid-run); NO push. Marks commit 1a01f0ca8 is the reference for this note (a commit cannot contain its own SHA)."
 }
