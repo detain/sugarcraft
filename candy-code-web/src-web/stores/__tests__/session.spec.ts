@@ -116,6 +116,7 @@ describe('session store', () => {
       { name: 'clear', source: 'builtin', runsIn: 'server' },
       { name: 'theme', source: 'builtin', runsIn: 'client' },
       { name: 'review', source: 'file', runsIn: 'server' },
+      { name: 'shipit', source: 'skill', runsIn: 'server' },
     ]
     void session.send('/clear')
     expect(sent('command.exec').pop()?.params).toMatchObject({ sessionId: 's1', name: 'clear' })
@@ -123,6 +124,13 @@ describe('session store', () => {
     await expect(session.send('/theme dark')).rejects.toMatchObject({ kind: 'ui_only' })
     void session.send('/review src/')
     expect(sent('session.send').pop()?.params).toMatchObject({ text: '/review src/' })
+    // C-WEB-2.d: a skill row is the typed text going over `session.send` —
+    // the host rewrites it through the slash gate. A listed skill name must
+    // NEVER reach `command.exec`, so a spoofed row can no more become an
+    // exec target than the server's own list admits it.
+    void session.send('/shipit now')
+    expect(sent('session.send').pop()?.params).toMatchObject({ text: '/shipit now' })
+    expect(sent('command.exec').some((r) => (r.params as Record<string, unknown>).name === 'shipit')).toBe(false)
     void session.send('hello')
     expect(sent('session.send').pop()?.params).toMatchObject({ sessionId: 's1', text: 'hello' })
   })

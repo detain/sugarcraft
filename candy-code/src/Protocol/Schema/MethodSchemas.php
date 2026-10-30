@@ -356,7 +356,7 @@ final class MethodSchemas
                 'name' => Schema::string(),
                 'description' => Schema::string(),
                 'argumentHint' => Schema::string()->nullable(),
-                'source' => Schema::enum(['builtin', 'file', 'mcp']),
+                'source' => Schema::enum(['builtin', 'file', 'mcp', 'skill']),
                 'runsIn' => Schema::enum(['server', 'client']),
             ], ['name', 'source', 'runsIn']))],
             'command.exec' => [

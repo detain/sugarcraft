@@ -15,7 +15,7 @@ export interface CommandInfo {
   name: string
   description?: string
   argumentHint?: string | null
-  source: 'builtin' | 'file'
+  source: 'builtin' | 'file' | 'mcp' | 'skill'
   runsIn: 'server' | 'client'
 }
 

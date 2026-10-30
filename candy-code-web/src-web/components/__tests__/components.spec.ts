@@ -157,6 +157,9 @@ describe('Composer', () => {
     { name: 'clear', description: 'Clear the session', source: 'builtin' as const, runsIn: 'server' as const },
     { name: 'theme', source: 'builtin' as const, runsIn: 'client' as const },
     { name: 'review', source: 'file' as const, runsIn: 'server' as const },
+    // C-WEB-2.d: a served skill row. It completes like any server row, and
+    // selecting it must type `/shipit` — never become a `command.exec` name.
+    { name: 'shipit', description: 'Ship the lane', source: 'skill' as const, runsIn: 'server' as const },
   ]
 
   it('sends on Enter, not on Shift+Enter', async () => {
@@ -192,7 +195,7 @@ describe('Composer', () => {
   it('completes / commands that can run here', async () => {
     const wrapper = mount(Composer, { props: { modelValue: '/', busy: false, commands } })
     const names = wrapper.findAll('[data-testid="command-suggestions"] .cmd').map((n) => n.text())
-    expect(names).toEqual(['/clear', '/review'])
+    expect(names).toEqual(['/clear', '/review', '/shipit'])
     await wrapper.find('textarea').trigger('keydown', { key: 'Tab' })
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['/clear '])
   })

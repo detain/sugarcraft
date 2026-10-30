@@ -65,6 +65,33 @@ final class CommandMethods
             $source = McpPromptCommands::isMcpPrompt($spec) ? 'mcp' : 'file';
             $items[(string) $name] = self::describe($spec, $source, self::RUNS_IN_SERVER);
         }
+        // C-WEB-2.d (GAP-SKL-06, menu half): the session's user-invocable
+        // skills join the roster as `source: "skill"` rows. A skill is not a
+        // command — `command.exec` never runs one — and selecting its row is
+        // the client sending the typed `/name args` over `session.send`,
+        // which the host rewrites through the SAME gate the TUI's slash door
+        // passes ({@see SkillSlashInvocation::draft()}, C-WEB-2.b). So the
+        // listing rule is "list exactly what admission would dispatch": a
+        // name a built-in or a command file already claims is skipped (the
+        // draft veto below is what makes that claim the admission's own,
+        // including the gate's case-insensitive built-in re-check), and a
+        // disabled or non-user-invocable skill never reaches the loop at all
+        // (`getUserInvocable()`). An item the user cannot run is not shown,
+        // and an advertised row can never be spoofed into an action its
+        // spelling would not take when typed.
+        $skills = $host->workspace()->skills;
+        foreach ($skills?->getUserInvocable() ?? [] as $skill) {
+            if (isset($items[$skill->name]) || \SugarCraft\Code\Skills\SkillSlashInvocation::draft('/' . $skill->name, $skills) === null) {
+                continue;
+            }
+            $items[$skill->name] = [
+                'name' => $skill->name,
+                'description' => $skill->description,
+                'argumentHint' => null,
+                'source' => 'skill',
+                'runsIn' => self::RUNS_IN_SERVER,
+            ];
+        }
         \ksort($items);
 
         return ['items' => \array_values($items)];

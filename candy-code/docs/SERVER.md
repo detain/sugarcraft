@@ -689,7 +689,14 @@ the session, `/workflow pause|status` inside its own run excepted. The
 screen-only ones (`/theme`, `/pane`, the pickers) and those whose logic is
 still the TUI's are listed `runsIn: "client"` and refused `-32030`
 (`ui_only`). A project's or your own command files (`.candy-code/commands/`)
-run on the server exactly as typing `/name args` would.
+run on the server exactly as typing `/name args` would. A session's
+user-invocable skills (C-WEB-2.d) are listed with `source: "skill"` and
+`runsIn: "server"`: selecting one sends the typed `/name args` over
+`session.send`, and the host rewrites it into the `$name` mention the TUI's
+slash door would produce. A skill is never a `command.exec` target, and a
+row whose name admission would not dispatch — claimed by a built-in
+spelling or a command file, or holding characters the slash shape rejects —
+is not listed at all.
 
 `todo.get` answers the session's todo list as its `Todo` tool last wrote it:
 `{items: [{content, status}]}`, empty when the agent has kept none.
