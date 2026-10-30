@@ -1,0 +1,31 @@
+### C-PRV-3.d — Advisor tool
+- item: C-PRV-3 (sources: CC-new#7 (advisor half per candidates), GAP-MOD-N1)
+- kind: gap · effort M
+- approach:
+  - A built-in `Advisor` tool, `#[BuiltInTool(...)]` at the next free position (41 at HEAD; the orchestrator assigns it).
+  - Argument `{question}`. The tool sends a bounded transcript digest (reusing `BtwHostCommand`'s digest builder) plus the question to a tool-less backend on `advisorModel` / `CANDY_CODE_ADVISOR_MODEL`, and returns the answer as the tool result.
+  - The tool is offered only when `advisorModel` is set. It is capped per turn, and refused once the spend cap is reached.
+  - The new public `Bootstrap::advisorBackend()` sits beside `titleBackend()`/`summaryBackend()` over the private `toollessBackend()`.
+  - `ToolBuildContext` carries it, and `LaunchContext::tools()` (:1681) passes it.
+  - Usage from the call must reach the parent's `SpendLedger` through the seam that already bills in-turn sub-agent usage. The lane finds and names it.
+- files.create: `candy-code/src/Tools/BuiltIn/AdvisorTool.php`, `candy-code/tests/Tools/BuiltIn/AdvisorToolTest.php`
+- files.modify:
+  - `candy-code/src/Cli/Bootstrap.php` (new `advisorBackend()`)
+  - `candy-code/src/Tools/Catalog/ToolBuildContext.php`
+  - `candy-code/src/Tools/Catalog/ToolCatalog.php` (position roster)
+  - `candy-code/src/Cli/LaunchContext.php` (`tools()`)
+  - `candy-code/src/Config/Settings/Definitions/ModelProviderSettings.php` (`advisorModel`)
+  - `candy-code/src/Config/LayeredSettings.php` (gen)
+  - `candy-code/README.md` (Capabilities roster, gen)
+  - `candy-code/docs/SETTINGS.md` (gen)
+  - `candy-code/docs/ENVIRONMENT.md` (gen)
+- tests: AdvisorToolTest: absent without `advisorModel`; digest is bounded; per-turn cap; cap-reached refusal; usage reaches the ledger
+- docs/guards: `php tools/gen-tool-docs.php --write` under `candy-code/tests/Tools/Catalog/ToolDocDriftTest.php`; `candy-code/tests/Config/ReadmeRosterDriftTest.php::testTheCapabilitiesToolRosterNamesEveryToolALaunchShips`; settings gen + `SettingsSchemaDocDriftTest`; `EnvRosterDriftTest`
+- serialized: [catalog] [bootstrap:advisorBackend (new)] [lang:tool.advisor.*, settings.advisorModel.*] [docs:README.md] [docs:SETTINGS.md] [docs:ENVIRONMENT.md] [hot:candy-code/src/Cli/LaunchContext.php] [hot:candy-code/src/Config/Settings/Definitions/ModelProviderSettings.php] [hot:candy-code/src/Config/LayeredSettings.php]
+- deps: none
+- phase: normal
+- ruling: none
+- risks:
+  - Billing an LLM call made inside the turn child is the hard part. If no seam exists, the lane must add one, not skip billing.
+  - E646: no total timeout on the advisor call.
+
