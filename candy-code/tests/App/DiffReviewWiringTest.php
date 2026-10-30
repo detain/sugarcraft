@@ -142,7 +142,7 @@ final class DiffReviewWiringTest extends TestCase
         );
 
         [$clicked] = $app->update(new MouseClickMsg(1, 1, MouseButton::Left, MouseAction::Press));
-        $this->assertSame($wheeled, $clicked, 'the band is keyboard-only: clicks are inert');
+        $this->assertSame($app->diffReview, $clicked->diffReview, 'the band is keyboard-only: clicks are inert');
     }
 
     public function testTheBaseKeyRedialsTheStoreForTheNewWindow(): void

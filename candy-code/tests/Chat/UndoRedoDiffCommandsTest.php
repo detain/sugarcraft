@@ -14,7 +14,9 @@ use SugarCraft\Code\Workspace\WorkspaceCheckpointer;
 /**
  * Item 3.A-2: `/undo` takes back the last turn — conversation and files —
  * `/redo` walks forward again until the next prompt, and `/diff [n]` shows
- * what changed in the files since a checkpoint.
+ * what changed in the files since a checkpoint. The `--print` rows are this
+ * file's subject; the bare form's shell slot (C-TUI-2.e) is pinned in
+ * tests/App/DiffReviewWiringTest.php.
  *
  * @see Chat::handleUndoCommand()
  * @see Chat::handleRedoCommand()
@@ -124,7 +126,7 @@ final class UndoRedoDiffCommandsTest extends TestCase
     {
         $chat = $this->twoTurns();
 
-        $diffed = $this->send('/diff', $chat);
+        $diffed = $this->send('/diff --print', $chat);
 
         $reply = self::reply($diffed);
         self::assertStringStartsWith('1 file changed since checkpoint 1', $reply);
@@ -135,7 +137,7 @@ final class UndoRedoDiffCommandsTest extends TestCase
         self::assertSame(['first', 'one', 'second', 'two'], self::conversation($diffed), 'a diff changes nothing');
         self::assertSame("turn two\n", $this->file('file.txt'));
 
-        $older = self::reply($this->send('/diff 2', $chat));
+        $older = self::reply($this->send('/diff 2 --print', $chat));
         self::assertStringStartsWith('2 files changed since checkpoint 0', $older);
         self::assertStringContainsString('A new.txt', $older);
         self::assertStringContainsString('+created', $older);
@@ -145,7 +147,7 @@ final class UndoRedoDiffCommandsTest extends TestCase
     {
         $this->turnCheckpoint([], 'first');
 
-        self::assertSame('The files match checkpoint 0: nothing has changed since.', self::reply($this->send('/diff', [])));
+        self::assertSame('The files match checkpoint 0: nothing has changed since.', self::reply($this->send('/diff --print', [])));
         foreach (['/diff 0', '/diff -1', '/diff last'] as $bad) {
             self::assertStringStartsWith('Usage: /diff [n]', self::reply($this->send($bad, [])), $bad);
         }
@@ -156,7 +158,7 @@ final class UndoRedoDiffCommandsTest extends TestCase
         $this->turnCheckpoint([], 'first');
         file_put_contents($this->repo . '/file.txt', "\e]52;c;evil\x07 ```` fence\n");
 
-        $reply = self::reply($this->send('/diff', []));
+        $reply = self::reply($this->send('/diff --print', []));
 
         self::assertStringNotContainsString("\e", $reply);
         self::assertStringNotContainsString("\x07", $reply);
@@ -168,7 +170,7 @@ final class UndoRedoDiffCommandsTest extends TestCase
         $this->turnCheckpoint([], 'first');
         file_put_contents($this->repo . '/file.txt', "changed\n");
 
-        [$diffed] = $this->chatAt('/diff', [], true)->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Enter, ''));
+        [$diffed] = $this->chatAt('/diff --print', [], true)->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Enter, ''));
         self::assertStringStartsWith('1 file changed since checkpoint 0', self::reply($diffed));
 
         foreach (['/undo', '/redo'] as $writer) {
@@ -183,7 +185,7 @@ final class UndoRedoDiffCommandsTest extends TestCase
         $this->turnCheckpoint([], 'first');
         file_put_contents($this->repo . '/file.txt', str_repeat("line\n", CheckpointDiff::MAX_LINES * 2));
 
-        $reply = self::reply($this->send('/diff', []));
+        $reply = self::reply($this->send('/diff --print', []));
 
         self::assertLessThan(CheckpointDiff::MAX_BYTES + 4096, \strlen($reply));
         self::assertMatchesRegularExpression('/\d+ more lines of the patch are not shown\.$/', $reply);
