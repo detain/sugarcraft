@@ -2264,6 +2264,8 @@ candy-code login <provider>            # log one in: upstream CLI flow, pasted k
 candy-code session list              # stored sessions, pinned then newest first
                                      #   [--children] [--archived] [--all] [--limit N]
 candy-code session show <target>     # one session's details + transcript (Markdown)
+candy-code session import <path>     # a foreign transcript, imported as a resumable session
+                                     #   [--format auto|candy-code|claude-code|codex|opencode] [--name <title>]
 candy-code session rename <target> <title…>
 candy-code session delete <target>   # sub-agent children go too; [--with-children] takes branches
 candy-code session pin|unpin|archive|unarchive <target>

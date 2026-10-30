@@ -18,9 +18,10 @@ use SugarCraft\Code\Usage;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
- * P-A3 — `candy-code session list|show|rename|delete|pin|unpin|archive|
- * unarchive` and the subcommand-scoped flags that make `session list
- * --archived` parse at all (Appendix P §3.4).
+ * P-A3 — `candy-code session list|show|import|rename|delete|pin|unpin|
+ * archive|unarchive` and the subcommand-scoped flags that make `session list
+ * --archived` parse at all (Appendix P §3.4; the `import` verb arrived with
+ * C-SES-7.b and its own door-matrix file, SessionImportSubcommandTest).
  *
  * In-process, the way SubcommandsMcpImportTest drives its verb: ArgvParser →
  * Subcommands::dispatch with `HOME` pointed at a private directory, so
@@ -219,6 +220,9 @@ final class SessionSubcommandsTest extends TestCase
         );
         self::assertSame('session list extra: unexpected operand', $this->usageDoor(['session', 'list', 'extra']));
         self::assertSame('session frob: unknown action', $this->usageDoor(['session', 'frob']));
+        // C-SES-7.b grew the action list to nine, so `import` clears the
+        // unknown-action door: the verb now reports its own missing operand.
+        self::assertSame('session import: no transcript file given', $this->usageDoor(['session', 'import']));
     }
 
     // ── target resolution ────────────────────────────────────────────────
