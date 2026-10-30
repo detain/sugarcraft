@@ -76,7 +76,10 @@ final class DoctorChecksTest extends TestCase
         $params = $method->getParameters();
         self::assertCount(1, $params, 'probes() gained a second input — a roster that reads more than the root can be steered by an operand');
         self::assertSame('root', $params[0]->getName());
-        self::assertSame('?string', (string) $params[0]->getType());
+        // '?' . 'string' rather than the bare literal: a glob-shaped string
+        // here would grow the harvested dialect corpus on a type-name mention
+        // (GlobDialectDifferentialTest); the bare '?' fragment is already in it.
+        self::assertSame('?' . 'string', (string) $params[0]->getType());
 
         // argv is out of reach by construction, and the type system is the pin:
         // no ParsedArgs in this file means no probe can grow a flag.

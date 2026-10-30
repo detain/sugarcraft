@@ -224,24 +224,13 @@
  ],
  "extra_agents": 2,
  "inflight": {
-  "C-TUI-5.a": {
-   "stage": "clean",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-TUI-5.a",
-   "branch": "cc/C-TUI-5.a",
-   "tip": "31ebd16fa",
-   "fix": "M1 stale-cites x4 + NIT1 import order (in-lane)",
-   "weld_notes": "2 DUR rows DoctorChecksTest 6T + DoctorHostCommandTest 6T; PaletteSuperset hunk collision expected w/ 1b5192f42 (order ...status, doctor, output-style, pane...)",
-   "note": "r2 CLEAN 0C/0M/0m/0n at cf9f9e634; parked for welder-4 (after welder-3 C-SES-8.g): DUR rows DoctorChecksTest+DoctorHostCommandTest, suite-figure/README re-pin, PaletteSuperset merge-order watch"
-  },
   "C-TUI-5.e": {
-   "stage": "fix",
-   "round": 2,
+   "stage": "review",
+   "round": 3,
    "worktree": "/home/sites/cc-cmp-C-TUI-5.e",
    "branch": "cc/C-TUI-5.e",
-   "tip": "73bb33e2a",
-   "weld_notes": "DUR row FirstRunWizardWiringTest; dist rebuild (web src-web touched); trio untouched per builder",
-   "note": "r1 FINDINGS 1C/1M/1m/1n: App.php:2044 stream_isatty on freed STDIN (4E) + init-wiring vacuity + KeyHelp welder re-pin note"
+   "tip": "de6aeb15e",
+   "note": "r2 fixes: App.php:2044 is_resource guard 68T/0E + init-window source-scan pin mutation-proven; KeyHelp untouched (wizard grep 0), +7 re-pin rider to welder"
   }
  },
  "last_lead": "cc-cmp-lead(1030AA)",
@@ -304,7 +293,7 @@
   "BUILDERS": "none (owner t423 freeze)",
   "FIXERS": "none"
  },
- "master_tip": "6b955b0f5",
+ "master_tip": "e5e884135",
  "master_tip_at_dispatch": "9fb981c5c",
  "master_tip_observed": "ca1e0b51f",
  "next_fill_queue": [],
@@ -716,6 +705,15 @@
    "round": 2,
    "verdict": "CLEAN",
    "next": "weld-close queued behind W26-m2"
+  },
+  "W27": {
+   "round": 1,
+   "reviewer": "ses_e7144fbf4ffeGMTKsA3c9ySUsN",
+   "seeded": [
+    "worktree-completion-1889",
+    "layered-settings-cascade"
+   ],
+   "next": "verdict"
   }
  },
  "waved_loops": {
@@ -1461,9 +1459,7 @@
   "CI-1030_status": "fixers REAL this time (cat-file @532): branch EXACTLY 13 atop 616d27864 (7 orig + 438f61a09 ThirteenVerbs, 2e89918ba+3b4405f9d baseline 5-with-why (r1 misread adjudicated: PHPStan counts project-wide, HandlesTurnCompletion shares the message), 8d7646c99 SessionTab pin mutation-proven, 4e61c687a REPORT erratum, 7a691a09b review-file collect). r2 CRITICAL was pre-fixer-era -> mooted by its own collect note. r3 reviewer dispatched; then WELD FIRST per owner t406/t423.",
   "C-CTX-5.d": "r3 CLEAN 0C/0M REVIEW-3.md 10590B header-first. Pick b503bb054..35ba713a8 EXCL 3 (eb5108c9c/7179a0f58/35ba713a8; expect Chat/SessionHost/en collisions vs moved master - content-resolve, NEVER tree-copy). DUR RE-TIME KeepWarmTest 14->17; CacheHealthWatchTest row 20 present-check. \u00a77 ~+18T. \u00a74 mark text MUST carry: deviations (a)-(g) design-wins, spend-cap binds keep-warm tick (HandlesRunControl :501 gate), single anchor producer/tick (SessionHost :1097 + policy :152), MAJOR-2 REFUTED/retracted (brief premise confab - on-disk REVIEW-1 8050B 1M). Collect disk FIX-1.md (6160B on disk per r3; fixer had said 4098B - take disk) + REVIEW-3.md onto branch pre-prune. Gates post-pick: KeepWarm 17T/68A, +CHW 40T/173A, union 71T/289A, DocFigure 92T/4177A, DTHD 106T/4380A."
  },
- "weld_pending": [
-  "C-TUI-5.a"
- ],
+ "weld_pending": [],
  "weld_queue": {
   "_legacy_list": [
    "C-SEC-7.d",
@@ -1759,9 +1755,10 @@
   "C-TUI-5.c",
   "C-CTX-5.d",
   "C-CTX-6.e",
-  "C-SES-8.g"
+  "C-SES-8.g",
+  "C-TUI-5.a"
  ],
- "welded_count": 282,
+ "welded_count": 283,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "welder_inflight_note": "WELDER ses_e7448801cffejnqD7XXhFFoIJG RUNNING: its welded_count=243 + the \u00a74 \u2705 94432cfd1 C-SES-8.a line are UNCOMMITTED working-tree writes (a commit cannot contain its own SHA) -> do NOT read as landed; do NOT write run-state concurrently except minimal fresh-read targeted patches; RE-VERIFY my TOOL-2.f weld_pending + TOOL-2.g entries survive its fold.",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
@@ -1874,14 +1871,18 @@
   "C-SES-8.g": "r1 fix DONE 55d425d31; r2 reviewer live ses_e71573162ffeTc6oraJaEi5Gc4",
   "welder-1|C-WEB-2.a+W25/29/32": "DONE ses_e715d37a3ffeBhyA2t20qAVrSs master==origin==cf1078d45",
   "welder-2-W26close": "ses_e71516793ffe DONE a5591612f (master==origin, 2dd2cc74c+bef506abc+a5591612f)",
-  "welder-3-C-SES-8.g": "ses_e714b2702ffemfDlsy4wIAw77e LIVE weld-in-progress (no push)",
+  "welder-3-C-SES-8.g": "DONE faf2c1d03 (282 welded, no push)",
   "C-TUI-5.a-reviewer-r2": "DONE-CLEAN ses_e714d17ccffeYTB8GfHHsQ5pQk",
-  "C-TUI-5.e-reviewer-r1": "DONE-FINDINGS-1C1M1m1n ses_e715ce370ffexudFzWXqGizkQc"
+  "C-TUI-5.e-reviewer-r1": "DONE-FINDINGS-1C1M1m1n ses_e715ce370ffexudFzWXqGizkQc",
+  "welder-4-C-TUI-5.a": "LIVE ses_e7144fbf6ffeekJKXJ1wibh9Mz",
+  "W27-wave-reviewer-r1": "LIVE ses_e7144fbf4ffeGMTKsA3c9ySUsN",
+  "C-TUI-5.e-fixer-r2": "DONE de6aeb15e ses_e7146ad94ffeaZEce4x7CypRRJ"
  },
  "note_t588": "W29 r2 CLEAN disk-verified (WAVE-REVIEW-2.md 5841B). Main-tree M PaletteSupersetDispatchTest.php = W26-m2 fixer live work-in-progress (expected, master-direct).",
  "note_t589": "C-WEB-2.a r1 CLEAN (REVIEW-1.md 5576B disk-verified). parked-clean, zero slots. live: C-TUI-5.e builder(resume2), C-SES-8.g reviewer, C-TUI-5.a reviewer, W26-m2 fixer.",
  "note_t590": "W26 both findings disk-proven cured (master tip b5cf8dabb, tree clean, 5 ahead). W29 r2 CLEAN folded. C-WEB-2.a parked-clean awaiting welder. Weld order once quiescent: (1) lane weld C-WEB-2.a cherry 48ee2233a+DUR row, (2) combined wave-close weld W25+W29+W32 + PUSH milestone.",
  "note_t591": "Welder live (duty1 C-WEB-2.a cherry-pick, duty2 W25+W29+W32 close, duty3 evidence sweep, duty4 PUSH milestone). C-TUI-5.e builder done->review r1. live: C-TUI-5.a reviewer, C-SES-8.g fixer, W26-r3 reviewer, welder, C-TUI-5.e reviewer = 5+builder-queue clear.",
  "note_t592": "W26 r3 CLEAN disk-verified (WAVE-REVIEW-3.md 4670B). Loops closed-pending-weld: W25 W29 W32 (welder-1 live) + W26 (welder-2 queued). NIT carried: C-SES-6.e/C-TOOL-6.a marks lack in-\u00a74 weld narratives (cosmetic, \u00a77 sweep).",
- "batch1030s8g_note": "Welder-3 batch 1030S8G: C-SES-8.g welded (picks 4202b510e/55d425d31 -> ed42ed597/6b955b0f5 onto a5591612f, zero conflicts, base drift 740c29868 disclosed in mark). r2 CLEAN 0C/0M. Gates: 236T/868A/1F = the standing foreign LayeredSettingsTest user-tier cascade ONLY (two keepWarm/redactToolOutput legs widened by landed lint/format/mcp/debug keys); guards 135T/4836A OK. Generators --write: zero drift (lane carried). No DUR rows (12 M files, zero A). suite-figure untouched (s7 rider). No push (W27 loop not run)."
+ "batch1030s8g_note": "Welder-3 batch 1030S8G: C-SES-8.g welded (picks 4202b510e/55d425d31 -> ed42ed597/6b955b0f5 onto a5591612f, zero conflicts, base drift 740c29868 disclosed in mark). r2 CLEAN 0C/0M. Gates: 236T/868A/1F = the standing foreign LayeredSettingsTest user-tier cascade ONLY (two keepWarm/redactToolOutput legs widened by landed lint/format/mcp/debug keys); guards 135T/4836A OK. Generators --write: zero drift (lane carried). No DUR rows (12 M files, zero A). suite-figure untouched (s7 rider). No push (W27 loop not run).",
+ "batch1030t5a_note": "Welder-4 batch 1030T5A: C-TUI-5.a welded (picks b129f1754/31ebd16fa/cf9f9e634 -> 3b7acfe1c/4dd5ffc10/e5e884135 onto faf2c1d03; base drift 16c; ONE collision PaletteSupersetDispatchTest survivor roster resolved UNION registry order status,doctor,output-style,pane \u2014 palette gate 7T/274A green). DUR rows minted: DoctorChecksTest 0.379/6 + DoctorHostCommandTest 2.462/6. Welder cure: GlobDialect corpus drift from lane\u2019s bare \u2018?string\u2019 test literal (clean-review miss, law-(b) class) -> split-concat, base-proven lane-introduced, guards 135T/4840A green. Gates: Doctor 70T/1716A, Symbol 9T/18454A, Bin 132T/841A/1F = standing foreign --worktree completion (W27-seeded, not cured). Generators zero drift; protocol/web skipped with proof (zero src/Protocol + candy-code-web diff). suite-figure untouched (s7 rider). r2 CLEAN 0C/0M/0m/0n; REVIEW-2.md swept + WELD-1030T5A-REPORT.md landed. No push (W30 open)."
 }
