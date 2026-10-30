@@ -35,3 +35,10 @@ C-SEC-8.d: (i) mark ^#### ✅ 86ad79b52 C-SEC-8.d at plan:3368; (ii) master blob
 
 ## Prune + absorption
 (git-cherry proofs appended below)
+
+## Step 5 — absorption proofs + prune (recorded pre-prune)
+- git cherry master cc/C-SEC-7.b: '-' x3 (f0db09a45/60e99cc20/56aa4987f) — all absorbed.
+- git cherry master cc/C-SEC-8.d: '-' x3 (f1d679d3d/378435bb6/2ebd4b77a) — all absorbed.
+- Evidence on master (survives prune): REPORT/FIX-1 rode picks; REVIEW-1/2 x4 + this report committed fa49d6115. 7.b main-tree REPORT (9200B, superseded lead copy) + both lane main-tree dirs preserved /tmp/opencode/weld1030P/. 8.d worktree carried one stray untracked snapshot copy of plan_comparison.md under prompt_kit/findings/comparison-1026/ (126B off from root file, stale lane working copy) — backed up /tmp/opencode/weld1030P/sec8d-plan-copy.md, canonical tracked root plan landed marks at 1a01f0ca8.
+- run-state fold: 5ec7c8d90 (welded 268==len asserted; master_tip fa49d6115; note references marks commit — run-state cannot carry own SHA).
+- Prune: cc-cmp-C-SEC-7.b + cc-cmp-C-SEC-8.d worktrees removed, cc/C-SEC-7.b + cc/C-SEC-8.d deleted. cc-cmp-C-TOOL-6.a KEPT (foreign C-SES-8.e uncommitted dirt, not this weld's).
