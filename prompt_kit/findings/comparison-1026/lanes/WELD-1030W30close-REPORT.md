@@ -1,6 +1,6 @@
-# WELD-1030W30close — W30 wave-close (DRAFT — push milestone pending)
+# WELD-1030W30close — W30 wave-close (FINAL)
 
-VERDICT: IN PROGRESS — §3 flip + run-state fold + evidence sweep landed; push milestone follows (finalized in the close-stamp rider of this file).
+VERDICT: CLOSED — W30 wave loop r1 CLEAN 0C/0M/0m; §3 flip + fold + sweep landed and PUSHED ea388ec18..e4e269483, both ends verified equal at the milestone; the close-stamp rider (this report Final + run-state origin/push fold) rides post-push, one ahead (a commit cannot carry its own SHA; its push = next milestone, W27 precedent).
 
 ## Steps closed
 W30 = C-WEB-2.a · C-TUI-5.a · C-TUI-5.e (3 steps, all welded, wave loop r1 CLEAN 0C/0M/0m — lanes/W30/WAVE-REVIEW-1.md, 4,153 B lead-statted, reviewed at e4b3308ab).
@@ -21,5 +21,5 @@ PaletteSuperset 7T/274A; Doctor 70T/1716A; guard batch 135T/4840A EXACT; TUI-5.e
 - lanes/W30/WAVE-REVIEW-1.md (new, 4,153 B).
 - lanes/run-state.json.bak-t612, .bak-t614 (rotation baks, tracked-precedent family).
 
-## Push milestone
-PENDING — appended in close-stamp rider.
+## Push milestone (DONE)
+`git ls-remote origin master` pre-push = ea388ec18 (== brief expectation, == local); fetch + `pull --ff-only` = already up to date; push advanced origin ea388ec18..e4e269483 (3 commits: flip, fold, sweep). Both ends re-proved e4e2694836cd3eabeea44dbe46ba72489ad3dccb (ls-remote == rev-parse). run-state origin_tip/master_tip= e4e269483 + push_log entry + batch1030w30close_note PUSHED suffix ride this stamp commit (path-scoped: this report + lanes/run-state.json).
