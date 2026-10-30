@@ -39,9 +39,10 @@ use PHPUnit\Framework\TestCase;
  *    the settings view's save and its trust action (`App`), `/model`'s model
  *    choice (`ModelChoice::persist()`), the server's `settings.set`
  *    (`SettingsMethods::set()`, the web UI's settings form — roadmap O-6b),
- *    and the `/rendermode` and `/skills enable|disable` host commands (the
- *    render door is described in `docs/MEDIA.md`; `docs/SETTINGS.md`
- *    "Saving from the settings view" names the settings-file doors).
+ *    and the `/rendermode`, `/skills enable|disable`, and `/effort` host
+ *    commands (the render door is described in `docs/MEDIA.md`;
+ *    `docs/SETTINGS.md` "Saving from the settings view" names the
+ *    settings-file doors).
  *
  * A new caller of any of these reds here by EXISTING, which is the point: a
  * fifth door into `config.json` has to be written down, with its docs.
@@ -184,6 +185,12 @@ final class SettingsWriterCensusTest extends TestCase
             // a JSON file is exactly what it exists to catch.
             'Cli/Bootstrap.php::stampBundleRecommendations->write' => 1,
             'Config/Settings/ModelChoice.php::persist->write' => 1,
+            // C-WEB-2.f: the served `/effort` saves the tier through the
+            // workspace's writer — the same two sites (set and the auto/clear
+            // delete) as Chat's persistEffort row above, reached from the host
+            // surface over the shared EffortDial. A refusal or a bare read
+            // never opens the door; that is pinned dial-side.
+            'Host/Commands/EffortHostCommand.php::persist->write' => 2,
             // crush-media W5.7: /rendermode writes the chosen render mode
             // through the sanctioned writer — the one command that mutates a
             // settings key, which is why it takes the host command's writer
