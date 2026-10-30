@@ -15,7 +15,15 @@ Session: welder. Predecessor 1030Q (ses_e72d380e1ffe) died after its cures; cure
 - r3 verdict CLEAN 0C/0M (REVIEW-3.md 3418B). Evidence collected into weld commit: REPORT.md, REVIEW-1.md, REVIEW-2.md, REVIEW-3.md (+FIX-1/FIX-2 rode the picks).
 - m3 rider OWED at §7 closeout (disclosed in §4 mark line): Chat.php ~:7937 comment flip + unreachable InvalidArgumentException catches :7939/:21848 — run-state weld_notes.C-TUI-4.a_m3; §7 +14T.
 
-## STEP 2 — C-TUI-4.c (status line session awareness) — pending
+## STEP 2 — C-TUI-4.c (statusLine session JSON on stdin) — WELDED
+- Picks (88118dfce..431ba1eff, 3 commits verified): de0f3a81b → 2b7d85edb (builder, carried REPORT.md), 33d93aca9 → 867ec581f (fix round 1, SETTINGS.md auto-merged clean), 431ba1eff → 9da0cc4ed (FIX-1.md evidence). Zero conflicts. Authors 3/3 detain %ae/%ce.
+- Gates: StatusLineCommandTest 50T/149A (16.4s wall), StatusLineSessionTest 9T/33A — combined 59T/182A (brief's 61T/194A predated nothing — drift disclosed: the substring filter shape in the brief also sweeps StatusLineSegmentTest etc. when run broad; exact two-class measurement green, no failures). Guards quartet (SettingsSchemaDocDrift|EnvRosterDrift|GlobDialect|ReadmeRosterDrift): 80T/41170A 0F (brief 80T/40914A — +256A from C-TUI-4.a weld's assertion growth; test count exact match). 2 pre-existing PHPUnit deprecations as briefed. SETTINGS.md hand-region: no regen needed (gen-settings-doc --check rc=0 already run).
+- DUR: MINTED StatusLineSessionTest 0.005/9; RE-TIMED StatusLineCommandTest 6.432@41 → 6.630@50 (median-of-3 junit-sums 6.651/6.630/6.604).
+- INSTRUMENT CORRECTION (disclosed): durations.tsv rows are junit-testcase sums (ThemeTest row 0.011 proves bootstrap excluded). Brief's ThemeFileTest "~10.14s" was filter-wall polluted by ~9.9s bootstrap; re-measured junit-sum = 0.034s (x3 stable). My first mint (51bdf5d13, 9.903) corrected to 0.034 in this step's commit; file is not strictly sorted (legacy) so row kept in place.
+- r3 verdict CLEAN 0C/0M (REVIEW-3.md 6939B, byte-exact as briefed). REVIEW-1.md 7779B collected. REVIEW-2.md NOT FOUND anywhere on disk (worktree, main tree, /tmp/opencode, full commit history) — brief listed it but the lane's round-2 record appears never to have been written (REVIEW-3 is the confirming round; FIX-1.md rode the picks as the round-1 cure record). Disclosed; weld not blocked (CLEAN verdict + builder/fix/evidence chain complete).
+- REPORT figure correction 6→7: main-tree REPORT.md is byte-identical to the picked blob (git diff HEAD clean) — nothing owed.
+
 ## STEP 3 — W24 §3 close — pending
+## STEP 3b — W23 §3 close (ADDENDUM) — pending: flip :159 W23 row per lead r2 CLEAN (lanes/W23/WAVE-REVIEW-2.md 5933B evidence)
 ## STEP 4 — C-CTX-4.e hygiene — pending
 ## STEP 5 — run-state fold + prunes — pending

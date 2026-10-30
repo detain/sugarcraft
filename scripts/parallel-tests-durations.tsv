@@ -40,7 +40,7 @@ candy-code/tests/Agents/WorktreeManagerTest.php	6.590	44
 candy-code/tests/Tools/BuiltInToolCorpusTest.php	6.513	53
 candy-code/tests/Integration/FeatWiringReachabilityTest.php	6.496	44
 candy-code/tests/Integration/McpToolWiringTest.php	6.462	33
-candy-code/tests/Config/StatusLineCommandTest.php	6.432	41
+candy-code/tests/Config/StatusLineCommandTest.php	6.630	50
 candy-code/tests/Backend/ReasoningProgressTest.php	6.277	16
 candy-code/tests/Sessions/BackgroundSupervisorStopTest.php	6.186	8
 candy-code/tests/Server/SessionArchiveMethodsTest.php	6.174	7
@@ -1165,7 +1165,8 @@ candy-code/tests/Context/Sections/PlanModeSectionTest.php	0.011	4
 candy-code/tests/Providers/SglangProviderTruncationGuardTest.php	0.011	34
 candy-code/tests/Renderer/PermissionModalWrapTest.php	0.011	22
 candy-code/tests/ThemeTest.php	0.011	8
-candy-code/tests/Config/ThemeFileTest.php	9.903	9
+candy-code/tests/Config/ThemeFileTest.php	0.034	9
+candy-code/tests/Config/StatusLineSessionTest.php	0.005	9
 candy-code/tests/Tools/BuiltIn/GenerateImagePreviewEmitTest.php	0.011	4
 candy-code/tests/Tools/McpToolBridgeTest.php	0.011	62
 candy-code/tests/Tui/TerminalBackgroundSprinklesAgreementTest.php	0.011	16
