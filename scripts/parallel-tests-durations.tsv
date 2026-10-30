@@ -698,8 +698,10 @@ candy-code/tests/Support/HomeDirectoryTest.php	0.131	29
 candy-code/tests/Tools/BuiltIn/QuestionToolWiringTest.php	0.131	4
 candy-code/tests/Agents/AgentWorkerSkillListingTest.php	0.130	6
 candy-code/tests/MCP/SseMcpServerServerRequestTest.php	0.13	5
+candy-code/tests/Chat/SettingsReloadTest.php	0.130	8
 candy-code/tests/Server/TokenReloadTest.php	0.129	2
 candy-code/tests/Tui/Settings/SettingsEditorRenderTest.php	0.129	5
+candy-code/tests/Diagnostics/RuntimeNoticeSinkTest.php	0.128	35
 candy-code/tests/McpMessageWireShapeTest.php	0.126	1
 candy-code/tests/Server/InternalErrorLoggingTest.php	0.126	5
 candy-code/tests/Skills/SkillPathNudgeTest.php	0.126	21
@@ -830,7 +832,6 @@ candy-code/tests/Bundles/BundleSourceTest.php	0.070	7
 candy-code/tests/Backend/EngineBackendPromptSectionsTest.php	0.069	4
 candy-code/tests/MCP/McpToolShapeTest.php	0.069	17
 candy-code/tests/Media/ImportPngTest.php	0.069	16
-candy-code/tests/Diagnostics/RuntimeNoticeSinkTest.php	0.068	30
 candy-code/tests/Host/TurnControllerMcpSeamTest.php	0.068	4
 candy-code/tests/MCP/McpAuthStoreLoginTest.php	0.068	11
 candy-code/tests/MCP/McpClientTest.php	0.068	45
@@ -867,6 +868,8 @@ candy-code/tests/Tools/BuiltIn/GenerateImageTest.php	0.060	21
 candy-code/tests/Support/PublicUrlGuardTest.php	0.059	178
 candy-code/tests/Backend/InTurnPruneTest.php	0.059	4
 candy-code/tests/Context/MemoryRecallBlockTest.php	0.059	14
+candy-code/tests/Chat/RecallNoticeRowTest.php	0.059	9
+candy-code/tests/Config/SettingsFileWatchTest.php	0.059	12
 candy-code/tests/Cli/BootstrapContextWindowTest.php	0.058	5
 candy-code/tests/Cli/DoctorFts5ProbeTest.php	0.058	4
 candy-code/tests/Chat/RouteTraitParityTest.php	0.058	4
