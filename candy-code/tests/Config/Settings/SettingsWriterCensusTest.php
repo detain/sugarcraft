@@ -42,7 +42,11 @@ use PHPUnit\Framework\TestCase;
  *    and the `/rendermode`, `/skills enable|disable`, and `/effort` host
  *    commands (the render door is described in `docs/MEDIA.md`;
  *    `docs/SETTINGS.md` "Saving from the settings view" names the
- *    settings-file doors).
+ *    settings-file doors) plus
+ *    C-TUI-3.e's `Alt+O` verbose chord (`Chat/Handlers/HandlesKeys.php`,
+ *    `toggleVerboseOutput()`) — which saves through the writer on the
+ *    SESSION tier only: it opens no door into `config.json`, so it joins
+ *    the producers roster below without joining the writeUserConfig one.
  *
  * A new caller of any of these reds here by EXISTING, which is the point: a
  * fifth door into `config.json` has to be written down, with its docs.
@@ -170,6 +174,13 @@ final class SettingsWriterCensusTest extends TestCase
             // delete arm by design ('default' IS an affirmative word in the
             // user tier), and a failed save rides the note, never fatal.
             'Chat.php::persistFast->write' => 1,
+            // C-TUI-3.e: the `Alt+O` verbose chord. One token-site through the
+            // sanctioned writer, SESSION tier, the `expandToolOutput` key
+            // alone — the writer's refusals() still judge it, but a
+            // session-tier save returns before the config door, so this is
+            // the roster's only producer that writes nothing to disk. A
+            // Chat with no writer service never reaches this site at all.
+            'Chat/Handlers/HandlesKeys.php::toggleVerboseOutput->write' => 1,
             // C-SEC-5.a: the census's one grant door. The list/settings targets
             // go through the sanctioned writer exactly as the settings editor's
             // own confirmed action does — one site, the writer still built only

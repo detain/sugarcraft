@@ -387,12 +387,13 @@ final class KeyBindingRegistryTest extends TestCase
      * the same draft Enter carries but delivered as `MessageMode::Interrupt`,
      * skipping the step's unstarted calls. C-AGT-4.b carries it on:
      * 154 -> 155 live (155 all) with `chat.agent-cycle`, the Alt+A primary
-     * agent chord.
+     * agent chord. C-TUI-3.e carries it on: 155 -> 156 live (156 all) with
+     * `chat.verbose-toggle`, the Alt+O session-tier verbose dial.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(155, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(155, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(156, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(156, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(0, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(15, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }

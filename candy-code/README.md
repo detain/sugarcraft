@@ -300,6 +300,7 @@ all one component tree — not two parallel UIs.
 | `Alt+A` | Cycle the **primary agent** this session runs as: the plain default, then each preset that presents as primary, between turns only — the switch narrows tools, model and permission floor until you cycle back or `/agent use default`; it never persists across restarts. See [`docs/AGENTS.md`](docs/AGENTS.md). |
 | `Alt+↓` | Focus the **live agents strip**, the row of delegated runs above the input box — see the fine print below. |
 | `Alt+M` | Toggle **plan mode** between turns: read and explore, changes refused — see the fine print below. |
+| `Alt+O` | Toggle **verbose tool output** for this session only: `expandToolOutput` flips without leaving the chat, and nothing is written to disk (`Alt+O` again collapses) |
 | `Esc` / `Alt+↑` (Agent View) | Back to the main transcript; the `Esc` that leaves the view is never the first half of an `Esc` `Esc` cancel. `Alt+N` / `Alt+P` open the next / previous agent of the same `Task` batch |
 | `Ctrl+X` `c` / `p` / `s` / `o` / `b` (Agent View) | Control the agent on screen — cancel, pause, stop-all, open as a session, background — see the fine print below. |
 | `Ctrl+G` | **Broadcast**: the composer sends to every running agent of the batch at once — see the fine print below. |

@@ -978,6 +978,13 @@ trait HandlesKeys
             // offer stays a silent no-op.
             $msg->type === KeyType::Char && $msg->alt && !$msg->ctrl && strtolower($msg->rune) === 'a'
                 => $this->cyclePrimaryAgent(),
+            // C-TUI-3.e (`chat.verbose-toggle`): `Alt+O` flips the session's
+            // verbose dial — `expandToolOutput`, the settings view's key — in
+            // one keystroke, saved to the session tier and never to disk. The
+            // rune is lowered like the Alt+M and Alt+A rows above, because a
+            // real terminal can hand either case through the same chord.
+            $msg->type === KeyType::Char && $msg->alt && !$msg->ctrl && strtolower($msg->rune) === 'o'
+                => $this->toggleVerboseOutput(),
             // R20: Ctrl+Tab / Ctrl+Shift+Tab cycle the active session
             // through the OPEN TABS — see cycleSessionTab()'s docblock for
             // the decode/routing chain a real keypress takes and how this
@@ -1079,5 +1086,61 @@ trait HandlesKeys
                 => $this->delegateToInput($msg),
             default => [$this, null],
         };
+    }
+
+    /**
+     * C-TUI-3.e (`chat.verbose-toggle`): one keystroke flips
+     * `expandToolOutput` for this session — the same dial the settings
+     * view edits, but a flip is not a page turn. The save rides the
+     * session tier of the launch-built SettingsWriter, the workspace
+     * service {@see \SugarCraft\Code\Chat::persistEffort()} uses, so the
+     * writer's `refusals()` still judge the key; a session-tier write
+     * never reaches the user-config door, which is what "nothing is
+     * written to disk" means mechanically. {@see
+     * \SugarCraft\Code\Chat::applySettings()} then does the live re-read
+     * the renderer needs — `expandToolOutput` is a Live key and no engine
+     * key, so a mid-turn press lands at once and nothing is parked until
+     * the turn ends — and its generic "saved" toast is replaced by one
+     * naming which way the flip went (the replaced toast's expiry tick
+     * goes inert on the generation check, so neither timer strands a
+     * toast). A Chat built outside the launch has no writer service:
+     * that press is reported, never half-applied.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function toggleVerboseOutput(): array
+    {
+        $writer = $this->workspace?->service(\SugarCraft\Code\Config\Settings\SettingsWriter::class);
+        if (!$writer instanceof \SugarCraft\Code\Config\Settings\SettingsWriter) {
+            return $this->withSettingsToast(
+                Lang::t('chat.verbose.unsavable'),
+                \SugarCraft\Toast\ToastType::Warning,
+            );
+        }
+
+        $on = !\SugarCraft\Code\Config\Settings\UiSettings::bool('expandToolOutput');
+
+        try {
+            $writer->write(
+                \SugarCraft\Code\Config\Settings\SettingsTier::Session,
+                ['expandToolOutput' => $on],
+            );
+        } catch (\Throwable $e) {
+            return $this->withSettingsToast(
+                Lang::t('chat.verbose.failed', ['error' => self::reportField($e->getMessage())]),
+                \SugarCraft\Toast\ToastType::Warning,
+            );
+        }
+
+        [$chat, $applyCmd] = $this->applySettings(
+            ['expandToolOutput'],
+            \SugarCraft\Code\Config\Settings\SettingsWriter::SESSION_TARGET,
+        );
+        [$chat, $toastCmd] = $chat->withSettingsToast(
+            Lang::t($on ? 'chat.verbose.on' : 'chat.verbose.off'),
+            \SugarCraft\Toast\ToastType::Success,
+        );
+
+        return [$chat, $applyCmd === null ? $toastCmd : Cmd::batch($applyCmd, $toastCmd)];
     }
 }

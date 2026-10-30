@@ -1179,6 +1179,48 @@ final class KeyBindingDriftTest extends TestCase
                 [$home] = $second->update($k[0]);
                 $this->assertNull($home->primaryAgentName(), 'and returns to the plain session default');
             },
+            // C-TUI-3.e: Alt+O flips the session's verbose dial
+            // (`expandToolOutput`) through the SettingsWriter's SESSION tier —
+            // the writer's config door below THROWS, because a session-tier
+            // save must never reach it — and a second press returns the dial
+            // to where it started. The observation pins the real accessor
+            // (`UiSettings::bool`, the one the Live renderer reads), not a
+            // stored flag: applySettings forgets the memo, so a stale memo
+            // under a real ambient HOME would be caught red here.
+            'chat.verbose-toggle' => function (array $k): void {
+                $bool = static fn(): bool => \SugarCraft\Code\Config\Settings\UiSettings::bool('expandToolOutput');
+                $ambient = \SugarCraft\Code\Config\Settings\SessionSettings::all();
+                \SugarCraft\Code\Config\Settings\SessionSettings::reset();
+                \SugarCraft\Code\Config\Settings\UiSettings::forget();
+                try {
+                    $chat = (new Chat(
+                        backend: \SugarCraft\Code\Backend\EngineBackend::new(new \SugarCraft\Code\Tests\Support\ScriptedProvider([]), 'm'),
+                        workspace: \SugarCraft\Code\Host\WorkspaceContext::new(root: sys_get_temp_dir())->withService(
+                            \SugarCraft\Code\Config\Settings\SettingsWriter::class,
+                            \SugarCraft\Code\Config\Settings\SettingsWriter::new(
+                                '/never/used/the-session-tier-opens-no-door',
+                                static fn(array $set, array $unset): string => throw new \LogicException('a session-tier verbose save must not reach the config door'),
+                            ),
+                        ),
+                    ))->withSize(100, 30);
+                    $was = $bool();
+                    [$first] = $chat->update($k[0]);
+                    $this->assertNotSame($was, $bool(), 'the press flips the dial the renderer reads');
+                    $this->assertStringContainsString(
+                        $was ? 'Verbose tool output off' : 'Verbose tool output on',
+                        (string) preg_replace('/[│╭╮╰╯─✔ℹ\s]+/u', ' ', \SugarCraft\Core\Util\Ansi::strip($first->settingsToast()?->view('', 400, 0) ?? '')),
+                        'the toast says which way it went',
+                    );
+                    [$second] = $first->update($k[0]);
+                    $this->assertSame($was, $bool(), 'and the second press restores it');
+                } finally {
+                    // Order-independent against whatever ran before, and it
+                    // leaves the process static exactly as it found it.
+                    \SugarCraft\Code\Config\Settings\SessionSettings::reset();
+                    \SugarCraft\Code\Config\Settings\SessionSettings::apply($ambient);
+                    \SugarCraft\Code\Config\Settings\UiSettings::forget();
+                }
+            },
             'chat.quit' => function (array $k): void {
                 [, $cmd] = $this->chat()->update($k[0]);
                 $this->assertNotNull($cmd, 'Ctrl+C must return a quit Cmd');

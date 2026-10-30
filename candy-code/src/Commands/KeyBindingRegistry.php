@@ -1013,6 +1013,10 @@ final class KeyBindingRegistry
             KeyBinding::new('chat.page', 'PgUp / PgDn', Lang::t('keys.chat.page'), $c),
             KeyBinding::new('chat.palette', 'Ctrl+P', Lang::t('keys.chat.palette'), $c),
             KeyBinding::new('chat.tool-output', 'Ctrl+O', Lang::t('keys.chat.tool-output'), $c),
+            // C-TUI-3.e: the one-key verbose dial. Same `expandToolOutput`
+            // key the settings view writes, but in one keystroke, on the
+            // session tier — nothing lands on disk.
+            KeyBinding::new('chat.verbose-toggle', 'Alt+O', Lang::t('keys.chat.verbose-toggle'), $c),
             // v2:a11y-F1 (fix1021): the row cursor. `Ctrl+O` alone could only
             // ever NAME the newest row; a click could name any. This chord
             // moves a keyboard cursor over the transcript's collapsible rows
