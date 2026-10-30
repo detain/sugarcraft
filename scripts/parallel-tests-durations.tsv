@@ -79,6 +79,7 @@ candy-code/tests/Tools/PtyRunToolTest.php	4.919	13
 candy-code/tests/Tools/Web/Search/SearchBackendsTest.php	4.902	9
 candy-code/tests/Commands/BundleCommandNamespaceTest.php	4.878	9
 candy-code/tests/Server/WorkspaceHostTest.php	4.554	8
+candy-code/tests/Chat/UndoRedoDiffCommandsTest.php	4.498	10
 candy-code/tests/Support/ForkedChildExitConventionTest.php	4.496	4
 candy-code/tests/Commands/ExportCommandTest.php	4.400	24
 candy-code/tests/Tui/AgentSplitCompositorTest.php	4.384	27
@@ -110,7 +111,6 @@ candy-code/tests/Chat/CustomCommandShellAsyncTest.php	3.474	10
 candy-code/tests/Server/HandoffRemotePushTest.php	3.466	21
 candy-code/tests/SuiteChildStdinIsolationTest.php	3.427	3
 candy-code/tests/Hooks/BuiltIn/AutoTestHookTest.php	3.418	13
-candy-code/tests/Chat/UndoRedoDiffCommandsTest.php	3.417	10
 candy-code/tests/Host/McpLoginServedTest.php	3.407	10
 candy-code/tests/Protocol/PermissionSavedRulesMethodsTest.php	3.40	14
 candy-code/tests/Integration/BinCandyCodeAutoloadGuardTest.php	3.347	37
@@ -127,6 +127,7 @@ candy-code/tests/Backend/RemoteBackendTest.php	2.979	13
 candy-code/tests/Runtime/AgentHardCancelTest.php	2.972	7
 candy-code/tests/Server/ConformanceTest.php	2.965	22
 candy-code/tests/Server/HookWebhooksSignatureTest.php	2.90	10
+candy-code/tests/App/DiffReviewWiringTest.php	2.881	9
 candy-code/tests/LSP/LspExchangeLockTest.php	2.852	15
 candy-code/tests/Runtime/DroppedStreamContinueTest.php	2.798	7
 candy-code/tests/SwallowingCatchCensusTest.php	2.784	2
