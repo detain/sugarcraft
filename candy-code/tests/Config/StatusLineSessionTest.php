@@ -26,7 +26,7 @@ final class StatusLineSessionTest extends TestCase
         ?string $modelId = 'claude-sonnet-4-5',
         ?string $projectDir = '/home/u',
         string $version = '0.1.0',
-        float $totalCostUsd = 1.25,
+        ?float $totalCostUsd = 1.25,
         ?string $provider = 'anthropic',
         ?string $permissionMode = 'default',
         int $contextTokens = 12345,
@@ -88,6 +88,7 @@ final class StatusLineSessionTest extends TestCase
             cwd: null,
             modelId: null,
             projectDir: null,
+            totalCostUsd: null,
             provider: null,
             permissionMode: null,
             branch: null,
@@ -108,6 +109,8 @@ final class StatusLineSessionTest extends TestCase
         self::assertSame(['current_dir', 'project_dir'], array_keys($decoded['workspace']));
         self::assertNull($decoded['workspace']['project_dir']);
         self::assertSame(['total_cost_usd'], array_keys($decoded['cost']));
+        self::assertNull($decoded['cost']['total_cost_usd'], 'an unmeasured spend must not serialise as a number a script can bank on');
+        self::assertStringContainsString('"cost":' . chr(123) . '"total_cost_usd":null' . chr(125), $json);
         self::assertSame(
             ['provider', 'permission_mode', 'context_tokens', 'context_percent', 'branch'],
             array_keys($decoded['candy_code']),
@@ -175,6 +178,22 @@ final class StatusLineSessionTest extends TestCase
         // business, not this contract's.
         $zero = json_decode(self::session(totalCostUsd: 0.0)->toJson(), true);
         self::assertSame(0, $zero['cost']['total_cost_usd']);
+    }
+
+    public function testASpendNothingBilledIsAbsentFromTheDocumentAsANumber(): void
+    {
+        // THE MONEY LAW, in the payload's own shape. `0.0` and null are the
+        // same two bytes wide to a script that adds them up, and only one of
+        // them is honest about a backend that reports tokens but has no
+        // pricing — the case `Renderer::spendIndicator()` refuses to paint as
+        // `$0.0000`. The pinned raw needle is what reddens a revert to a
+        // non-nullable float: with the field non-nullable the document says
+        // `"total_cost_usd":0` and neither leg below can hold.
+        $json = self::session(totalCostUsd: null)->toJson();
+        $decoded = json_decode($json, true);
+
+        self::assertNull($decoded['cost']['total_cost_usd']);
+        self::assertStringNotContainsString('"total_cost_usd":0', $json);
     }
 
     // =====================================================================

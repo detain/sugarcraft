@@ -39,7 +39,8 @@ namespace SugarCraft\Code\Config;
  *
  * NULLES STAY NULL. Pre-session, every gathered field can be unknown: no
  * persisted id yet, no engine answering for a model, a detached HEAD, no
- * pricing. The keys are always present with JSON `null` — never omitted,
+ * pricing — and the spend stays in that group rather than becoming a `$0`.
+ * The keys are always present with JSON `null` — never omitted,
  * never the empty string — because a script cannot tell an omitted key from
  * a null one without a schema, and here the schema IS this class. Every
  * object in the shape is built from a fixed set of literal keys, so no
@@ -50,6 +51,15 @@ namespace SugarCraft\Code\Config;
  * timer with the inherited environment. The payload leaks nothing that
  * command does not already own: it runs in `cwd`, its environment carries
  * `PATH`, and `projectRoot()` is the directory it was launched against.
+ *
+ * WHY SPEND IS NULLABLE. An unpriced session has never been billed, and a
+ * `0` says it was billed for nothing — the same fake-free lie this repo
+ * refuses everywhere else: {@see \SugarCraft\Code\Renderer::spendIndicator()}
+ * prints `$?` rather than `$0.0000` for exactly this reason, and the payload
+ * may not hand an external script the lower bound the bar itself declines to
+ * paint. The gather therefore passes null until something has actually been
+ * reported (or an in-flight turn carries a billed figure); a real zero after
+ * a priced turn still arrives as `0`, which is a measurement, not a guess.
  */
 final class StatusLineSession
 {
@@ -58,7 +68,8 @@ final class StatusLineSession
      * @param string|null $cwd the directory the command runs in — also `workspace.current_dir`
      * @param string|null $modelId the served model when known; `display_name` carries the same string
      * @param string|null $projectDir the project root — `workspace.project_dir`
-     * @param float $totalCostUsd session spend including the in-flight turn's billed part
+     * @param float|null $totalCostUsd session spend including the in-flight turn's billed
+     *     part, or null when the session has never been BILLED — see below
      * @param string|null $provider this app's extra: the provider behind the model
      * @param string|null $permissionMode this app's extra: the PermissionMode value string
      * @param int $contextTokens this app's extra: the context figure the bar paints
@@ -71,7 +82,7 @@ final class StatusLineSession
         public readonly ?string $modelId,
         public readonly ?string $projectDir,
         public readonly string $version,
-        public readonly float $totalCostUsd,
+        public readonly ?float $totalCostUsd,
         public readonly ?string $provider,
         public readonly ?string $permissionMode,
         public readonly int $contextTokens,

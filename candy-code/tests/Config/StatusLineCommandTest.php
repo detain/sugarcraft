@@ -5,8 +5,15 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Config;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\Loop;
+use SugarCraft\Core\AsyncCmd;
+use SugarCraft\Code\App\StatusLineResultMsg;
+use SugarCraft\Code\App\StatusLineTickMsg;
+use SugarCraft\Code\Backend\EchoBackend;
+use SugarCraft\Code\Chat;
 use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Config\StatusLineCommand;
+use SugarCraft\Code\Message;
 
 /**
  * The `statusLine` settings key: its TIER, its BOUND, and its SANITISER.
@@ -918,6 +925,135 @@ final class StatusLineCommandTest extends TestCase
      * a `git`-shaped status command that ignored it would report the wrong
      * repository.
      */
+    /**
+     * THE PRODUCTION WIRING, end to end (GAP-UI-23). Everything else in this
+     * file drives {@see StatusLineCommand::run()} with a hand-written
+     * payload; that shape stays green if the tick caller forgets to pass one,
+     * because the parameter is optional by design (the legacy internal
+     * callers pass none). This test is the only thing standing between the
+     * feature and a silent revert to the original GAP: it drives a real
+     * {@see Chat} through a real {@see StatusLineTickMsg} and asserts the
+     * settled segment IS the session document. With the tick arm's argument
+     * deleted, `cat` reads an immediate EOF, paints nothing, and the first
+     * assertion below reddens — measured, not reasoned.
+     *
+     * The document is decoded rather than compared byte-for-byte on purpose:
+     * the exact bytes belong to {@see StatusLineSessionTest}'s pinned
+     * literal, and what this pin owns is ARRIVAL plus SHAPE — the keys a
+     * statusline script indexes.
+     */
+    public function testTheTickDeliversTheSessionDocumentToAReaderCommand(): void
+    {
+        $dir = sys_get_temp_dir() . '/candy_code_sl_tick_' . bin2hex(random_bytes(8));
+        mkdir($dir, 0o700, true);
+
+        StatusLineCommand::configure(self::settings(['type' => 'command', 'command' => 'cat']), $dir);
+
+        $chat = new Chat(history: [Message::user('hello')], backend: new EchoBackend());
+        [, $cmd] = $chat->update(new StatusLineTickMsg());
+        self::assertIsCallable($cmd, 'the tick armed no command at all');
+
+        $chat->update(self::settleTick($cmd));
+
+        $decoded = json_decode(StatusLineCommand::line(), true);
+
+        self::assertIsArray($decoded, 'the settled segment is not the session document: ' . StatusLineCommand::line());
+        self::assertSame(
+            ['session_id', 'cwd', 'model', 'workspace', 'version', 'cost', 'candy_code'],
+            array_keys($decoded),
+        );
+        self::assertSame(realpath($dir), realpath((string) $decoded['cwd']), 'the document did not carry the root the command runs in');
+        self::assertSame(['id', 'display_name'], array_keys($decoded['model']));
+        self::assertSame(['total_cost_usd'], array_keys($decoded['cost']));
+        // The fixture chat has never been billed, and this is the shape the
+        // money law cares about: on the PRODUCTION path the spend arrives as
+        // null, not as the `0` the gather used to hand over with the bar's
+        // gate dropped. A revert of either half lands here as a number.
+        self::assertNull($decoded['cost']['total_cost_usd'], 'a session nothing billed must not report a zero spend on the live path');
+        self::assertArrayHasKey('context_tokens', $decoded['candy_code']);
+
+        rmdir($dir);
+    }
+
+    /**
+     * STRUCTURAL half of the same claim, for the environment where a fork
+     * cannot be relied on: the tick arm must pass an ARGUMENT to `cmd(`, and
+     * the only argument it may pass is the gather.
+     */
+    public function testTheTickArmPassesTheGatherIntoTheArmedCommand(): void
+    {
+        $source = (string) file_get_contents(
+            \dirname(__DIR__, 2) . '/src/Chat/Handlers/HandlesRunControl.php',
+        );
+
+        $arm = (string) substr(
+            $source,
+            (int) strpos($source, '$msg instanceof StatusLineTickMsg'),
+            (int) strpos($source, 'if ($msg instanceof StatusLineResultMsg'),
+        );
+
+        self::assertSame(
+            1,
+            substr_count($arm, 'StatusLineCommand::cmd($this->statusLineStdin())'),
+            'the statusLine tick no longer hands the session document to the command it arms',
+        );
+        self::assertSame(
+            0,
+            substr_count($arm, 'StatusLineCommand::cmd()'),
+            'a bare cmd() call in the tick arm is the pre-GAP-UI-23 shape come back',
+        );
+        // NIT-1: `projectRoot()` returns '' when both the stored root and
+        // getcwd() fail, and '' would arrive as a plausible-looking empty
+        // path against a docblock that promises unknowns are null. Pinned
+        // over the gather's own body, which sits below the arm.
+        $gather = (string) substr(
+            $source,
+            (int) strpos($source, 'private function statusLineStdin()'),
+        );
+
+        self::assertSame(
+            1,
+            substr_count($gather, 'projectDir: $this->projectRoot() ?: null'),
+            'the gather can now hand workspace.project_dir an empty string',
+        );
+        // MAJOR-1's gate, structurally: the gather must test the bar's own
+        // reported-spend condition rather than summing unconditionally.
+        self::assertSame(
+            1,
+            substr_count($gather, '$this->hasReportedSpend() || $turnUsage !== null'),
+            'the gather dropped the spend gate the status bar enforces',
+        );
+        self::assertSame(
+            1,
+            substr_count($gather, 'totalCostUsd: $reported ?'),
+            'the gather passes an unconditional sum again, so an unbilled session reports a zero',
+        );
+    }
+
+    /** Run the armed tick's Cmd to its settle Msg; bounded so a regression fails rather than hangs. */
+    private static function settleTick(\Closure $cmd): object
+    {
+        $async = $cmd();
+        self::assertInstanceOf(AsyncCmd::class, $async);
+
+        $loop = Loop::get();
+        $settled = null;
+        $async->promise->then(static function (object $value) use (&$settled, $loop): void {
+            $settled = $value;
+            $loop->stop();
+        });
+
+        if ($settled === null) {
+            $leash = $loop->addTimer(20.0, static fn () => $loop->stop());
+            $loop->run();
+            $loop->cancelTimer($leash);
+        }
+
+        self::assertInstanceOf(StatusLineResultMsg::class, $settled, 'the forked statusLine run never settled');
+
+        return $settled;
+    }
+
     public function testTheConfiguredWorkingDirectoryIsWhereTheCommandRuns(): void
     {
         $dir = sys_get_temp_dir() . '/candy_code_sl_cwd_' . bin2hex(random_bytes(8));

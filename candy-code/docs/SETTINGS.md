@@ -814,14 +814,18 @@ status-line scripts expect:
 ```json
 {"session_id": "…", "cwd": "…", "model": {"id": "…", "display_name": "…"},
  "workspace": {"current_dir": "…", "project_dir": "…"}, "version": "…",
- "cost": {"total_cost_usd": 0.0},
+ "cost": {"total_cost_usd": null},
  "candy_code": {"provider": "…", "permission_mode": "…",
   "context_tokens": 0, "context_percent": 0, "branch": "…"}}
 ```
 
 Every key is always present; a value this build cannot measure stays `null`
-(no session id before the first save, no branch outside a repository), so a
-script can read the keys without probing for them. `display_name` is the same
+(no session id before the first save, no branch outside a repository, no cost
+before a provider has billed anything — the bar prints `$?` for that same
+session, and handing a script a `0` it could bank on would be the lie the bar
+refuses), so a script can read the keys without probing for them. A zero
+after a priced turn is a measurement and arrives as `0`.
+`display_name` is the same
 string as `id` until a display label exists. The `candy_code` block is the
 superset this build adds; a script written for Claude Code never has to look
 at it. The payload is small enough to be written in one non-blocking step, and

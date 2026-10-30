@@ -352,14 +352,21 @@ trait HandlesRunControl
         $backend = $this->backend();
         $engine = $backend instanceof EngineBackend ? $backend : null;
         $turnUsage = $this->liveUsage()?->turnUsage;
+        // The bar's own honesty gate, carried into the payload
+        // ({@see \SugarCraft\Code\Renderer::spendIndicator()}): a session
+        // nothing has ever billed has NO spend figure, not a zero one. The
+        // arithmetic below is the bar's, and the gate is part of it — copying
+        // the sum while dropping the test is what turned "cannot measure"
+        // into a fabricated `$0` for a script to bank on.
+        $reported = $this->hasReportedSpend() || $turnUsage !== null;
 
         return (new StatusLineSession(
             sessionId: $this->currentSessionId(),
             cwd: StatusLineCommand::workingDirectory() ?: (getcwd() !== false ? getcwd() : null),
             modelId: $engine === null ? null : ($engine->servedModel() ?? $engine->model()),
-            projectDir: $this->projectRoot(),
+            projectDir: $this->projectRoot() ?: null,
             version: $version,
-            totalCostUsd: $this->spentUsd() + ($turnUsage?->costUsd ?? 0.0),
+            totalCostUsd: $reported ? $this->spentUsd() + ($turnUsage?->costUsd ?? 0.0) : null,
             provider: $engine?->provider()->name(),
             permissionMode: $this->currentPermissionMode()?->value,
             contextTokens: $this->contextTokens(),
