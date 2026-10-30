@@ -82,6 +82,10 @@ final class PaletteSupersetDispatchTest extends TestCase
         // /status is a destination, not a mode, and the palette has no status
         // pane to pre-open. Bare form IS the whole read-only restatement.
         'status' => 'bare /status is the whole read surface; no palette pane exists to open',
+        // C-TUI-5.a: 1345-doctor.php, deliberately without a paletteAction for
+        // the same reason /status is. The install roster has no second shape to
+        // switch into — `/doctor` and a palette row would be the same table.
+        'doctor' => 'bare /doctor prints the whole install roster; no palette pane exists to open',
         // C-CTX-4.e (weld-18q): the spec file (builtin-commands/1405-output-style.php)
         // records its own no-paletteAction judgement — a style switch names a
         // file, which is a typed act, on the 0350-effort.php precedent this row
