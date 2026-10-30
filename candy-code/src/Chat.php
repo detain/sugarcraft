@@ -9895,7 +9895,12 @@ final class Chat implements Model
         // One notice says how many characters were removed; there is no
         // opt-out key on purpose (plan C-SEC-8.d: staying off the settings
         // rosters), and a user who means those bytes can attach the text as
-        // a file, which this never touches.
+        // a file, which this never touches. The mid-turn Tab door is the one
+        // prompt route that does NOT pass through here: `queueDraft()` holds
+        // the raw buffer in the queue, and the strip runs later, when
+        // `releaseQueuedPrompts()` re-enters this method with that entry as
+        // the draft — so the queue is the only place unstripped prompt bytes
+        // rest, and what the model is finally sent is still cleaned.
         $stripped = Sanitize::stripInvisibleFormatting($text, $invisibleRemoved);
         if ($invisibleRemoved === 0) {
             return $this->submitDraft($text);

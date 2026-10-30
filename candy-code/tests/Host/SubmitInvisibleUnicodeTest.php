@@ -142,12 +142,28 @@ final class SubmitInvisibleUnicodeTest extends TestCase
         $host = $this->makeHost();
         $ticket = $host->submit("\u{200B}\u{FEFF}");
 
-        self::assertNotSame(TurnTicket::STARTED, $ticket->admitted, 'nothing starts');
+        // The REFUSED shape, not merely "not STARTED": a ticket that came back
+        // QUEUED, STEERED, PENDING or HANDLED would satisfy a negated STARTED
+        // while describing a submission the host took. Refusal is the polarity
+        // this arm promises.
+        self::assertSame(TurnTicket::REFUSED, $ticket->admitted, 'nothing was taken');
         $rows = $this->appended($host);
         self::assertSame([], array_filter($rows, static fn (Message $r): bool => $r->role === Role::User));
         $notices = $this->noticesOf($rows);
         self::assertCount(1, $notices);
         self::assertSame(Lang::t('chat.notice.invisible_stripped', ['count' => 2]), $notices[0]->content);
+
+        // The refusal is about THAT draft, not the host. A clean prompt sent
+        // after it is admitted exactly as it would have been before, and adds
+        // no notice — the refusal's own row is the whole account of the bytes
+        // that went away, and an empty send must not leave the session deaf.
+        $after = $host->submit('back to normal');
+        self::assertSame(TurnTicket::STARTED, $after->admitted, 'the host still takes a clean draft');
+        $later = $this->appended($host);
+        $user = array_values(array_filter($later, static fn (Message $r): bool => $r->role === Role::User));
+        self::assertCount(1, $user, 'the follow-up is the only user row the two sends produced');
+        self::assertSame('back to normal', $user[0]->content, 'sent verbatim, with nothing extra to strip');
+        self::assertCount(1, $this->noticesOf($later), 'the clean send adds no second notice');
     }
 
     public function testAttachmentsAreNotThePromptAndKeepTheirBytes(): void
