@@ -88,7 +88,7 @@ final class CommandOverrideLaunchNoticeTest extends TestCase
         );
 
         // `default` for the same reason BootstrapLaunchNoticeRoutingTest pins
-        // it: under the headless bypass default an orthogonal unavoidable
+        // it: under the OLD headless bypass default an orthogonal unavoidable
         // notice would ride into the exact-count assertion below.
         exec(sprintf(
             'HOME=%s CANDY_CODE_PERMISSION_MODE=default timeout -s KILL 20 %s %s >%s 2>%s',

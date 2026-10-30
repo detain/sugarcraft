@@ -87,8 +87,9 @@ final class PermissionGateHookTest extends TestCase
     }
 
     /**
-     * BypassPermissions is the default a launch gets, and the circuit breaker
-     * is evaluated ahead of the mode — so even the most permissive mode
+     * BypassPermissions is the mode this fixture's gate is built with, and
+     * the circuit breaker is evaluated ahead of the mode — so even the most
+     * permissive mode
      * refuses `rm -rf /`.
      *
      * Note what this does NOT establish. In isolation the gate is stricter
@@ -99,9 +100,9 @@ final class PermissionGateHookTest extends TestCase
      * not more — only the gate's breaker and the policy-file floors survive.
      * That composed pair is pinned row by row by
      * {@see \SugarCraft\Code\Tests\Cli\BootstrapPermissionGateTest::testTheShippedDefaultGateStandsTheChainDownToTheBreakerFloor()};
-     * bypass-permissions stays the default only on the console paths (-p,
-     * the daemon; the TUI starts in `default` since DEF-MODE) because their
-     * approver refuses without a terminal.
+     * bypass-permissions stays the default only on the daemon path (whose
+     * approver refuses without a terminal); since C-SEC-7.a, `-p` and the TUI
+     * both start in the asking `default` (DEF-MODE).
      */
     public function testTheCircuitBreakerStillRefusesUnderBypassPermissions(): void
     {

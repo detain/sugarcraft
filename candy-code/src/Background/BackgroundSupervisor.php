@@ -230,14 +230,15 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
     /**
      * The permission mode daemons spawned WITHOUT an explicit one run in
      * (ISS-004), as its kebab value; null leaves them on the daemon's own
-     * documented headless resolution. A `serve` workspace host sets this to
+     * documented background (`bypass-permissions`) resolution. A `serve`
+     * workspace host sets this to
      * its admitted session mode once per server (the {@see
      * \SugarCraft\Code\Protocol\ServerContext} construction), which is how
      * the host-side `/bg` and `/fork` inherit the operator's choice — the
      * `bg.spawn` RPC names the mode on every spawn and does not consult this.
      * A local TUI's supervisor never learns one: the launch configured no
-     * server mode, and `-p`/daemon bypass-documented default (PERMISSIONS.md)
-     * stays exactly where its rejection notice says it is.
+     * server mode, and the daemon's documented bypass-permissions default
+     * (PERMISSIONS.md) stays exactly where its rejection notice says it is.
      */
     private ?string $spawnPermissionMode = null;
 
@@ -597,7 +598,8 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
      * NOT the delegation block's `permissionMode`, which keeps its bypass-
      * inheritance semantics (the delegating session's own mode). Null falls
      * back to {@see setSpawnPermissionMode()} (what a serve wires), and that
-     * to the daemon's own documented headless resolution. A non-null value
+     * to the daemon's own documented background (`bypass-permissions`)
+     * resolution. A non-null value
      * that names no real mode is refused HERE, before any file is created:
      * the daemon would otherwise carry a poison pill its fail-closed gate
      * resolution turns into a task failure at the first heartbeat.

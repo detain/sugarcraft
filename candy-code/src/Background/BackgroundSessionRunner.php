@@ -287,7 +287,7 @@ final class BackgroundSessionRunner
             delegation: self::delegationFrom($config['delegation'] ?? null),
             // String-shaped or absent: anything else on argv is dropped the
             // way delegationFrom() drops it, so the daemon falls back to the
-            // documented headless default rather than trusting a non-string.
+            // documented background (`bypass-permissions`) default rather than trusting a non-string.
             permissionMode: \is_string($config['permissionMode'] ?? null) ? $config['permissionMode'] : '',
             // Numeric or absent (ISS-004): a non-numeric value on argv is
             // dropped the way the string-shaped permissionMode above is, so

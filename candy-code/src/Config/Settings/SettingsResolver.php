@@ -119,7 +119,8 @@ final class SettingsResolver
      *
      * The schema holds one default per key, and for most keys that is the whole
      * truth. `permissionMode` is the exception (decision D5): the TUI starts in
-     * `default` while `-p` and the daemon keep `bypass-permissions`, so a view
+     * `default` (as `-p` does, since C-SEC-7.a) while a locally spawned daemon
+     * keeps `bypass-permissions`, so a view
      * explaining the TUI's own settings must say `default` where nothing set one
      * — {@see \SugarCraft\Code\Tui\Settings\SettingsSources::fromLaunch()} passes it.
      *

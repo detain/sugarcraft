@@ -11,7 +11,7 @@ use SugarCraft\Code\Permissions\PermissionMode;
 
 /**
  * rv-sec-1 (fix 7): whenever the EFFECTIVE permission mode for a launch is
- * `bypass-permissions` — the shipped headless default, and any explicit
+ * `bypass-permissions` — the then-shipped headless default, and any explicit
  * choice in config or env — the operator now gets one unavoidable line in
  * the same launch-notice store `/notices` reads (and one stderr pass, via
  * the channel's own once-per-process writer). No new mechanism: the banner

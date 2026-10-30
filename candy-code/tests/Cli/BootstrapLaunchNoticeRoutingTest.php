@@ -1021,7 +1021,7 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
         // `default` (not the empty/absent spelling) so these launches resolve
         // to a NON-bypass permission mode. rv-sec-1 added an unavoidable
         // bypass-mode launch notice, and every case below launches headless —
-        // under the headless bypass default that notice would ride into the
+        // under the OLD headless bypass default that notice would ride into the
         // exact-count and cap arithmetic these tests pin. It is orthogonal to
         // what this file guards (provider-fallback, dropped-rule, empty-tool-set
         // and over-long-notice ROUTING, none of which depend on the mode) and
