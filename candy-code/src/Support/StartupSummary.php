@@ -10,6 +10,7 @@ use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\Help;
+use SugarCraft\Code\Cli\UpdateCheck;
 use SugarCraft\Code\Agents\MemoryScope;
 use SugarCraft\Code\Context\ProjectMemoryWriter;
 use SugarCraft\Code\Skills\SkillLoader;
@@ -199,8 +200,10 @@ final class StartupSummary
      *
      *  1. app + version, provider, model, permission mode
      *  2. working directory (home shortened to `~`), git branch
-     *  3. instruction documents with their sizes, memory/skill/MCP counts
-     *  4. the conversation's tip
+     *  3. the cached update notice, when the last background check found a
+     *     newer release (C-SES-6.e; an absent fact simply drops the row)
+     *  4. instruction documents with their sizes, memory/skill/MCP counts
+     *  5. the conversation's tip
      *
      * @param array<string, mixed> $facts
      */
@@ -266,7 +269,10 @@ final class StartupSummary
             'tip' => Lang::t(self::TIP_KEYS[((int) ($facts['tipIndex'] ?? 0)) % count(self::TIP_KEYS)]),
         ]);
 
-        return self::rowsToString([$header, $place, $knowledge === [] ? '' : implode(self::SEP, $knowledge), $tip]);
+        $update = $facts['update'] ?? null;
+        $update = \is_string($update) ? $update : '';
+
+        return self::rowsToString([$header, $place, $update, $knowledge === [] ? '' : implode(self::SEP, $knowledge), $tip]);
     }
 
     /**
@@ -296,7 +302,7 @@ final class StartupSummary
      * value this process already holds (or a const version string), so
      * {@see render()} never stalls, gathered bag or not.
      *
-     * @return array{version: string, provider: ?string, model: ?string, mode: ?string, cwd: string, tipIndex: int}
+     * @return array{version: string, provider: ?string, model: ?string, mode: ?string, cwd: string, tipIndex: int, update: ?string}
      */
     private static function cheapFacts(Chat $chat, ?string $mode, ?string $provider, ?string $model): array
     {
@@ -309,6 +315,15 @@ final class StartupSummary
             'mode' => $mode,
             'cwd' => $root,
             'tipIndex' => self::tipIndex($chat->currentSessionId(), $root),
+            // C-SES-6.e: the PREVIOUS background check's cached notice — a
+            // per-process memo read, never the network, so paint stays
+            // stall-free. The server-chosen version inside it passes the same
+            // one-line choke as the served model above.
+            'update' => self::tryFact(static function (): ?string {
+                $notice = UpdateCheck::cachedNotice();
+
+                return $notice === null ? null : self::oneLine($notice);
+            }),
         ];
     }
 

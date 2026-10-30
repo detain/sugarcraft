@@ -170,6 +170,54 @@ final class StartupSummaryTest extends TestCase
     }
 
     /**
+     * C-SES-6.e: the update notice rides the cheap facts, so compose() paints
+     * it as its own row between the place row and the knowledge row — never
+     * merged into either, because it disappears on its own schedule (the next
+     * self-update consumes it, nothing else does).
+     */
+    public function testComposePaintsTheUpdateRowBetweenPlaceAndKnowledge(): void
+    {
+        $notice = 'update available: v0.2.0 — run `candy-code self-update`';
+        $rows = explode("\n", StartupSummary::compose([
+            'version' => '1.2.3',
+            'provider' => 'anthropic',
+            'model' => 'claude-test-4',
+            'mode' => 'plan',
+            'cwd' => '/somewhere/else',
+            'branch' => 'trunk',
+            'update' => $notice,
+            'memories' => 3,
+            'tipIndex' => 2,
+        ]));
+
+        $this->assertCount(5, $rows);
+        $this->assertSame('/somewhere/else' . self::SEP . 'trunk', $rows[1]);
+        $this->assertSame($notice, $rows[2]);
+        $this->assertStringContainsString(Lang::t('tui.startup.memory.many', ['count' => 3]), $rows[3]);
+        $this->assertSame(Lang::t('tui.startup.tip_label', ['tip' => Lang::t('tui.startup.tip.2')]), $rows[4]);
+    }
+
+    /**
+     * C-SES-6.e: a bag with no `update` string degrades exactly as it did
+     * before the notice existed — every pre-C-SES-6.e compose() pin in this
+     * file passes unchanged, which is the byte-safety this row owes them.
+     */
+    public function testTheUpdateFactDropsWhenItIsNotAString(): void
+    {
+        foreach ([7, [], null, ''] as $misshapen) {
+            $rows = explode("\n", StartupSummary::compose([
+                'version' => '0.0',
+                'cwd' => '/bare/dir',
+                'update' => $misshapen,
+                'tipIndex' => 0,
+            ]));
+            $this->assertCount(3, $rows, 'misshapen update fact must paint no row of its own');
+            $this->assertSame('/bare/dir', $rows[1]);
+            $this->assertStringStartsWith('Tip: ', $rows[2]);
+        }
+    }
+
+    /**
      * VIS-1-P1: /context lists the personal AGENTS.md but the startup summary
      * did not, because instructionFiles() only walked loadDocuments(). The
      * gathered bag now carries a `personal` provenance flag; compose() marks
@@ -330,6 +378,10 @@ final class StartupSummaryTest extends TestCase
      * single gather() became cheapFacts() (on the paint path, version only)
      * and gatherExpensive() (off it, landed through store()). The wrapper
      * totals are unchanged — 1 + 4 where the single body held 5.
+     *
+     * C-SES-6.e re-derived the cheap roster: the cached update notice joined
+     * the paint path (2 + 4), wrapped in the same fail-soft for the same
+     * reason — a frame must never die on a fact read.
      */
     public function testEveryFactReadOnTheGatherPathIsWrappedInTheFailSoft(): void
     {
@@ -337,9 +389,10 @@ final class StartupSummaryTest extends TestCase
 
         $readers = [
             'private static function cheapFacts' => [
-                'wraps' => 1,
+                'wraps' => 2,
                 'reads' => [
                     'Help::versionString(',
+                    'UpdateCheck::cachedNotice(',
                 ],
             ],
             'private static function gatherExpensive' => [

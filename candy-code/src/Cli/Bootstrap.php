@@ -1264,7 +1264,33 @@ final class Bootstrap
      */
     public static function chat(?string $root = null): Chat
     {
+        self::scheduleUpdateCheck();
+
         return self::buildChat($root, null, true);
+    }
+
+    /**
+     * C-SES-6.e: hand the once-per-24h update check to the same event loop
+     * the Program is about to run, via `futureTick` so even the cache stat
+     * leaves the synchronous start path. {@see UpdateCheck::refreshIfStale()}
+     * never blocks, never throws, and does nothing at all on a Composer
+     * install, with the opt-out set, or while a fresh cache stands — and its
+     * answer only ever reaches the NEXT launch, because the startup frame
+     * paints from the previous check's cache file. This is the TUI's own
+     * route: the one-shot `NonInteractive` path never calls through here, so
+     * scripted runs make no such request.
+     */
+    private static function scheduleUpdateCheck(): void
+    {
+        try {
+            \React\EventLoop\Loop::get()->futureTick(static function (): void {
+                UpdateCheck::refreshIfStale();
+            });
+        } catch (\Throwable) {
+            // The launch proceeds without the check; UpdateCheck logs its own
+            // degradations, and a loop that cannot even be named is not a
+            // reason to disturb a start that was already working.
+        }
     }
 
     /**

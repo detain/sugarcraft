@@ -693,6 +693,11 @@ Environment variables:
                           Any value other than empty or 0 stops reading and
                           refreshing the LiteLLM model database that sizes and
                           prices models with no built-in figure.
+   CANDY_CODE_NO_UPDATE_CHECK
+                          Any value other than empty or 0 stops the daily phar
+                          release check and the startup update notice it feeds;
+                          no request leaves the process and a stale cached
+                          notice is no longer painted.
    CANDY_CODE_DISABLE_SYMBOL_MAP
                           Any value other than empty or 0 keeps the ranked
                           symbol map out of the system prompt.
@@ -2959,6 +2964,7 @@ TXT,
     'tui.context.total' => '{used} / {window} · {percent}%',
     'tui.context.total_partial' => '{used} / {window}',
     'tui.context.unmeasured' => 'not measured',
+    'startup.update.available' => 'update available: {release} — run `candy-code self-update`',
     'tui.startup.app_line' => 'CandyCode {version}',
     'tui.startup.mcp.one' => '{count} MCP server',
     'tui.startup.mcp.many' => '{count} MCP servers',
