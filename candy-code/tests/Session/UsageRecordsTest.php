@@ -630,7 +630,7 @@ final class UsageRecordsTest extends TestCase
         self::assertSame(1, substr_count($trait, "'title')"), 'one titler settle arm in the trait');
         $host = file_get_contents(dirname(__DIR__, 2) . '/src/Host/SessionHost.php');
         foreach ([
-            ['count' => 2, "usageRecordSink(), null, '"], // the two bare sink sites: compact, turn
+            ['count' => 3, "usageRecordSink(), null, '"], // the three bare sink sites: compact, turn, warm
             ['count' => 3, ": null, 'aux')"],            // suggestion + auto-commit + dream (engine fallback)
             ['count' => 1, ": null, 'compact')"],        // consolidation (summary engine)
             ['count' => 1, ": null, 'goal')"],           // the judge (title engine)

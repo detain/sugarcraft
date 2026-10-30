@@ -7965,8 +7965,10 @@ final class Chat implements Model
                 $config ??= \SugarCraft\Code\Cli\Bootstrap::readUserConfig();
                 $theme = \is_string($config['theme'] ?? null) ? $config['theme'] : 'dark';
                 try {
-                    // theme() throws on a name it does not know, and a hand
-                    // edit can put one in a file the reset now falls back to.
+                    // Theme::byName() has no failure path since C-TUI-4.a:
+                    // an unknown hand edit warns once and paints the
+                    // default. The catch stays as dormant defense in depth
+                    // — dormant code is kept, never deleted — not a live route.
                     Theme::byName($theme);
                     $chat = $chat->mutate(['themeName' => $theme]);
                 } catch (\InvalidArgumentException) {
