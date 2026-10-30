@@ -53,7 +53,7 @@ final readonly class ParsedArgs
      *
      * @var list<string>
      */
-    public const SUBCOMMANDS = ['acp', 'attach', 'bundles', 'completion', 'doctor', 'login', 'lsp', 'mcp', 'models', 'self-update', 'serve', 'session', 'usage'];
+    public const SUBCOMMANDS = ['acp', 'attach', 'bundles', 'completion', 'doctor', 'import', 'login', 'lsp', 'mcp', 'models', 'self-update', 'serve', 'session', 'usage'];
 
     /**
      * The flags each subcommand verb owns, keyed by verb: `true` when the flag
@@ -75,6 +75,13 @@ final readonly class ParsedArgs
         // the one this user's `serve` state directory records.
         'attach' => [
             '--url' => true,
+        ],
+        // `import` (C-TUI-5.b): `--project` adds the project's own
+        // `.claude/settings.json` to the read; `--yes` skips the interactive
+        // confirm and lets the verb write. Both bare switches — they name nothing.
+        'import' => [
+            '--project' => false,
+            '--yes' => false,
         ],
         // `login` (C-SEC-8.f): `--keychain` keeps the pasted secret in the OS
         // keychain and stores only a `${keychain:<provider>}` reference in the

@@ -1182,6 +1182,7 @@ final class ArgvParserTest extends TestCase
             'session list'       => [['session', 'list'], 'session', ['list']],
             'session delete id'  => [['session', 'delete', 'abc123'], 'session', ['delete', 'abc123']],
             'mcp list'           => [['mcp', 'list'], 'mcp', ['list']],
+            'import claude'      => [['import', 'claude'], 'import', ['claude']],
             'completion zsh'     => [['completion', 'zsh'], 'completion', ['zsh']],
             // Behind a flag, in both --output-format spellings: pinning the verb
             // to $argv[1] is what made `run` fall through into the TUI.
@@ -1206,6 +1207,29 @@ final class ArgvParserTest extends TestCase
         $this->assertSame([], $args->unknownFlags);
         $this->assertNull($args->usageError);
         $this->assertFalse($args->promptRequested, 'a subcommand must not look like a one-shot run');
+    }
+
+    /**
+     * `import`'s flags belong to the verb, not to the root: they bind only
+     * after `import` is open, and a boolean flag carrying a value is a usage
+     * refusal rather than a silent shrug. The same `--project` spelled BEFORE
+     * the verb is not the verb's to take — it lands in the unknown-flag
+     * recorder exactly like any other invented global.
+     */
+    public function testImportFlagsAreScopedToTheVerb(): void
+    {
+        $args = ArgvParser::parse(['candy-code', 'import', 'claude', '--project', '--yes']);
+
+        $this->assertSame(['--project' => true, '--yes' => true], $args->subcommandFlags);
+        $this->assertSame([], $args->unknownFlags);
+        $this->assertNull($args->usageError);
+
+        $before = ArgvParser::parse(['candy-code', '--project', 'import', 'claude']);
+        $this->assertSame([], $before->subcommandFlags, 'a pre-verb flag must not bind to the verb');
+        $this->assertContains('--project', $before->unknownFlags);
+
+        $valued = ArgvParser::parse(['candy-code', 'import', 'claude', '--yes=now']);
+        $this->assertNotNull($valued->usageError, 'a boolean verb flag cannot carry a value');
     }
 
     /**

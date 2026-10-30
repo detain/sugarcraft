@@ -2337,6 +2337,7 @@ store instead. Binding anything but loopback additionally needs the explicit
 
 ```sh
 candy-code doctor                    # check this installation, exit 1 if anything FAILs
+candy-code import claude               # preview the Claude Code settings translation; --project adds the project file, --yes writes the user tier
 candy-code models                    # providers this install can select; * marks the selected one
 candy-code login <provider>            # log one in: upstream CLI flow, pasted key, or an owner-naming refusal
                                      #   [--keychain] keeps the pasted key in the OS keychain instead of

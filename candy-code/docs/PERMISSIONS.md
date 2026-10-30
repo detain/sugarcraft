@@ -664,6 +664,35 @@ rows carry a tier column naming which list each rule rode in on; the naming is
 by rule signature, so a user rule byte-identical to a project-contributed one
 shows as `project` — cosmetic only, the rule is in both lists.
 
+### Importing rules from Claude Code
+
+`candy-code import claude` reads the Claude Code settings files — your user
+`~/.claude/settings.json`, plus the project's `.claude/settings.json` when
+`--project` is spelled — and translates what candy-code has a home for:
+
+- `permissions.allow` / `permissions.deny` / `permissions.ask` become
+  `permissionRules` entries through `PermissionRule::fromClaudePrefixDialect()`,
+  the same `(prefix:*)` → `(prefix *)` spelling the loader accepts. Patterns
+  candy-code's grammar rejects are **named and skipped**, never applied.
+- **Deny wins.** A pattern that arrives in more than one list lands with the
+  stricter action, and every vetoed `allow` is printed as such in the preview —
+  an import can only ever tighten what you had, per pattern.
+- `model` lands only when the install has a selected provider to file it under
+  (candy-code remembers model ids per provider; a bare name nothing reads is
+  refused as a named skip, the same rule `/model` enforces on itself).
+- Every other key — `hooks`, `env`, anything foreign — is listed as **skipped**
+  with a one-line reason. Nothing is imported silently.
+
+The command **prints a preview and writes nothing** until you confirm: `--yes`
+or an interactive `y`. The preview names every `allow` rule that would widen
+what runs without asking, so the security decision stays yours. On confirmation
+only the **user tier** is written: existing rules are preserved, the imported
+rows land after them (first match wins, deny rows first), and a file that
+cannot be parsed fails the whole import loudly rather than importing part of
+it. The read side treats the settings file as untrusted input end to end —
+symlinks, oversized files and non-object documents are refused before a byte is
+interpreted.
+
 ### Pattern matching: a tool name, plus an optional argument glob
 
 A pattern is `Tool` or `Tool(argument-glob)`, and both halves are `fnmatch()`
@@ -1200,8 +1229,11 @@ and the next write asks again; a run with nobody to answer (`-p` without a
 terminal) refuses it. `Bash` asks on any mention, read or write —
 `cat .mcp.json` and `ls .candy-code/skills` prompt — since one shell string
 does not say which way it touches the file; `Read`, `Grep` and `Glob` never ask.
-`candy-code` now reads `.claude/settings*.json` for one thing — the `hooks` block
-(see [`HOOKS.md`](HOOKS.md#where-hooks-come-from)) — so a write there is shell queued
+`candy-code`'s launch reads `.claude/settings*.json` for the `hooks` block
+(see [`HOOKS.md`](HOOKS.md#where-hooks-come-from)), and `candy-code import claude`
+reads the same files **on demand** to translate permission rules and a model into
+the user tier — previewed, confirmed, never silently (see the import section
+under Rules above). Either way a write there is shell queued
 for the next launch and the row covers those two files. The `permissions`, `env` and
 `model` keys in the same file stay unread by the hook loader; the whole file is asked
 about because a tool call cannot say which half it touches.

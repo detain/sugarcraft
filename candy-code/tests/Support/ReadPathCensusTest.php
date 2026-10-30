@@ -759,6 +759,16 @@ final class ReadPathCensusTest extends TestCase
         // which is the transition this ledger exists to make visible.
         // C-TUI-5.a: the doctor roster left this file and became Cli\DoctorChecks,
         // so its config read is censused where it now lives.
+        'Config/ClaudeSettingsImport.php|file_get_contents' => [
+            'CALLER_SUPPLIED — one shared read() sink behind two operator-visible doors: the '
+                . 'user half is named by userSettingsFile() through Bootstrap::trustedConfigDirPath() '
+                . 'on a home HomeDirectory::owned() vouches for, and the project half by '
+                . 'projectSettingsFile(root) under the launch root argv named; read() refuses '
+                . 'symlinks, non-plain files and oversized files before a byte is consumed, '
+                . 'malformed JSON refuses loudly, and the document is only translated and '
+                . 'previewed — never executed; nothing writes without --yes or an interactive '
+                . 'confirm (C-TUI-5.b)',
+        ],
         'Cli/Subcommands.php|file_get_contents' => [
             'CALLER_SUPPLIED — `mcp import`\'s operand: the operator\'s own argv names the file, '
                 . 'the verb reads one document, translates it through the shared McpForeignTranslate '
@@ -768,13 +778,9 @@ final class ReadPathCensusTest extends TestCase
                 . 'the path is McpDecision::mcpUserConfigPath(), which answers only when '
                 . 'HomeDirectory::owned() vouched for the home; decoded to collide-check and append, '
                 . 'refused-not-repaired when unreadable, never executed (C-MCP-4.d)',
-            // W4 (PRV-4): `candy-code login` merges its new key onto the file's EXISTING
-            // providers map — same operator-named path as the `doctor` check below.
-            'CALLER_SUPPLIED — `login`\'s merge-read (Subcommands::loginStoreKey): Bootstrap::userConfigPath(), '
-                . 'decoded to keep the other providers\' entries when the map is rewritten through '
-                . 'Bootstrap::writeUserConfig(); the corrupt-config branch refuses, never repairs',
-            'CALLER_SUPPLIED — `login`\'s write-back re-read: the SAME path, re-read only to confirm the '
-                . 'slot settled before promising it on stdout (writeUserConfig() can bail unwritten)',
+            // C-TUI-5.b: login's merge-read and settle re-read sinks moved behind
+            // Config/ProviderKeyStore.php::store when loginStoreKey delegated its
+            // persist half; both reads stay credited on that file's rows.
             // C-EXT-4.b: the three bundlesGitSha() reads of a checkout's OWN git
             // metadata — HEAD, the loose ref HEAD names, and packed-refs as the
             // fallback. The directory is either a scratch the clone seam just

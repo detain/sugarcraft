@@ -8,6 +8,8 @@ use SugarCraft\Code\Bundles\BundleDiscovery;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Commands\UsageCommand;
+use SugarCraft\Code\Config\ClaudeSettingsImport;
+use SugarCraft\Code\Config\ProviderKeyStore;
 use SugarCraft\Code\Host\Commands\UsageHostCommand;
 use SugarCraft\Code\Host\SpendLedger;
 use SugarCraft\Code\LSP\LspInstaller;
@@ -128,6 +130,7 @@ final class Subcommands
             'acp'        => Acp::run($args),
             'bundles'    => self::bundles($args),
             'mcp'        => self::mcp($args),
+            'import'     => self::importClaude($args),
             'completion' => self::completion($args),
             'usage'      => self::usage($args),
             // Unreachable: ArgvParser only ever stores a ParsedArgs::SUBCOMMANDS
@@ -579,10 +582,11 @@ final class Subcommands
     }
 
     /**
-     * Read one key from stdin and persist it into the user config's
-     * `providers` map — merging onto the file's EXISTING map by hand, because
-     * writeUserConfig() merges shallow at the top level and replacing the
-     * whole `providers` key would silently drop every other named provider.
+     * Read one key from stdin and persist it through
+     * {@see ProviderKeyStore::store()}. The store merges onto the file's
+     * EXISTING `providers` map by hand, because writeUserConfig() merges
+     * shallow at the top level and replacing
+     * the whole `providers` key would silently drop every other named provider.
      *
      * The provider's OWN block is merged too (C-PRV-1.c): a rotation rewrites
      * `apiKey` and (re)asserts `type` but keeps `model`, `thinkingBudget`,
@@ -593,6 +597,8 @@ final class Subcommands
      * at a protocol it never asked for. A block with no `type` at all is
      * untyped rather than contradicting, so it merges and gains one. A
      * non-array block has no `type` to differ and is replaced, as before.
+     * All of that lives behind the store's door as of C-TUI-5.b; login used
+     * to carry its own copy.
      *
      * The read itself goes through {@see self::loginKeyLine()}: echo stays
      * off on a live terminal.
@@ -651,39 +657,13 @@ final class Subcommands
             $key = '${keychain:' . $type . '}';
         }
 
-        $providers = [];
-        if (is_file($path)) {
-            $raw = file_get_contents($path);
-            if ($raw !== false && $raw !== '') {
-                $decoded = json_decode($raw, true);
-                if (!is_array($decoded)) {
-                    echo Lang::t('cli.sub.login.corrupt_config', ['path' => $path]) . "\n";
-
-                    return NonInteractive::EXIT_FAILURE;
-                }
-                if (is_array($decoded['providers'] ?? null)) {
-                    $providers = $decoded['providers'];
-                }
-            }
-        }
-
-        $block = $providers[$type] ?? null;
-        if (is_array($block) && \array_key_exists('type', $block) && $block['type'] !== $type) {
-            $actual = \is_string($block['type']) ? $block['type'] : \get_debug_type($block['type']);
-            echo Lang::t('cli.sub.login.type_mismatch', ['path' => $path, 'provider' => $type, 'actual' => $actual]) . "\n";
-
-            return NonInteractive::EXIT_FAILURE;
-        }
-
-        $providers[$type] = [...(is_array($block) ? $block : []), 'type' => $type, 'apiKey' => $key];
-        Bootstrap::writeUserConfig(['providers' => $providers]);
-
-        // writeUserConfig() can bail without writing (lock contention, an
-        // unresolvable symlink); the confirmation must not promise a persist
-        // that did not happen, so re-read the exact slot instead.
-        $settled = json_decode((string) @file_get_contents($path), true);
-        if (!is_array($settled) || ($settled['providers'][$type]['apiKey'] ?? null) !== $key) {
-            echo Lang::t('cli.sub.login.stored_failed', ['path' => $path]) . "\n";
+        // The persist half — merge, type guard, write, settle re-read — is
+        // ProviderKeyStore's door (C-TUI-5.d); login was its duplicate. The
+        // store answers null on a settled write and the finished translated
+        // refusal sentence otherwise, which is exactly what this echo wants.
+        $refusal = ProviderKeyStore::store($type, $key);
+        if ($refusal !== null) {
+            echo $refusal . "\n";
 
             return NonInteractive::EXIT_FAILURE;
         }
@@ -3780,6 +3760,183 @@ final class Subcommands
     }
 
     /**
+     * `candy-code import claude [--project] [--yes]` (C-TUI-5.b): read
+     * Claude Code's own settings documents, translate what candy-code has a
+     * home for, PRINT the whole preview, and write the user tier only after
+     * `--yes` or an interactive confirm — the same print-first contract
+     * `mcp import` keeps, with a confirm instead of the paste-back step.
+     *
+     * Security posture (the imported file is UNTRUSTED INPUT): DENY WINS
+     * (see {@see \SugarCraft\Code\Config\ClaudeSettingsImport}); every
+     * `allow` the write would land — and every one the same document's
+     * stricter half vetoed — is enumerated on screen BEFORE anything is
+     * written; a malformed or hostile document exits 1 with nothing
+     * partially applied; a headless run without `--yes` refuses the write
+     * outright rather than guessing. All output rides stdout — this verb
+     * mints no stderr writer.
+     */
+    private static function importClaude(ParsedArgs $args): int
+    {
+        $operand = $args->subcommandArgs[0] ?? null;
+        if ($operand === null) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.sub.import.no_source'),
+                $args->outputFormat,
+                Lang::t('cli.sub.import.usage'),
+            );
+        }
+        if ($operand !== ClaudeSettingsImport::SOURCE) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.sub.import.unknown_source', ['source' => $operand]),
+                $args->outputFormat,
+                Lang::t('cli.sub.import.usage'),
+            );
+        }
+        if (($args->subcommandArgs[1] ?? null) !== null) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.sub.import.unexpected_operand', ['operand' => (string) $args->subcommandArgs[1]]),
+                $args->outputFormat,
+                Lang::t('cli.sub.import.usage'),
+            );
+        }
+
+        $withProject = \array_key_exists('--project', $args->subcommandFlags);
+        $autoYes = \array_key_exists('--yes', $args->subcommandFlags);
+
+        $userFile = ClaudeSettingsImport::userSettingsFile();
+        if ($userFile === null) {
+            // No vouched home means no readable user file AND no writable
+            // user tier — the import can never complete, so it says so before
+            // reading anything.
+            echo Lang::t('cli.sub.import.home_unowned') . "\n";
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        $projectFile = $withProject
+            ? ClaudeSettingsImport::projectSettingsFile(\rtrim($args->root ?? \getcwd(), '/'))
+            : null;
+        $paths = $withProject ? [$userFile, $projectFile] : [$userFile];
+
+        try {
+            $report = ClaudeSettingsImport::inspect($paths);
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            // The class raises translated, path-named sentences; the file was
+            // hostile or unreadable, and NOTHING has been applied.
+            echo $e->getMessage() . "\n";
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        if ($withProject && !\in_array((string) $projectFile, $report['files'], true)) {
+            echo Lang::t('cli.sub.import.project_missing', ['path' => (string) $projectFile]) . "\n";
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        // candy-code stores model ids per provider, so an imported scalar
+        // `model` needs a provider name to land under — and a name worth
+        // writing. When this install has no selected provider (or the name
+        // resolves to nothing real), the model becomes a named skip rather
+        // than a config entry nothing reads: the same rule `/model` enforces
+        // on itself.
+        $providerName = null;
+        if ($report['model'] !== null) {
+            try {
+                $candidate = Bootstrap::selectedProviderName();
+                $names = \array_map('strval', \array_keys(Bootstrap::availableProviders()));
+                if ($candidate !== null && \in_array($candidate, $names, true)) {
+                    $providerName = $candidate;
+                }
+            } catch (\Throwable) {
+                $providerName = null;
+            }
+            if ($providerName === null) {
+                $report['model'] = null;
+                $report['skipped'][] = ['key' => 'model', 'note' => Lang::t('cli.sub.import.skipped_noprovider')];
+            }
+        }
+
+        if ($report['files'] === []) {
+            echo Lang::t('cli.sub.import.no_files', ['path' => $userFile]) . "\n";
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        echo Lang::t('cli.sub.import.header') . "\n";
+        foreach ($report['files'] as $file) {
+            echo Lang::t('cli.sub.import.file_read', ['path' => $file]) . "\n";
+        }
+        foreach ($report['rules'] as $row) {
+            echo Lang::t('cli.sub.import.rule_row', ['action' => $row['action'], 'pattern' => $row['pattern']]) . "\n";
+        }
+        if ($report['rules'] !== [] && $report['widenings'] !== []) {
+            echo Lang::t('cli.sub.import.widening_note', ['count' => (string) \count($report['widenings'])]) . "\n";
+        }
+        foreach ($report['dropped'] as $pattern) {
+            echo Lang::t('cli.sub.import.dropped_row', ['pattern' => $pattern]) . "\n";
+        }
+        if ($report['model'] !== null) {
+            echo Lang::t('cli.sub.import.model_row', ['model' => $report['model']]) . "\n";
+        }
+        foreach ($report['skipped'] as $row) {
+            echo Lang::t('cli.sub.import.skipped_row', ['key' => $row['key'], 'note' => $row['note']]) . "\n";
+        }
+        foreach ($report['rejected'] as $row) {
+            echo Lang::t('cli.sub.import.rejected_row', ['pattern' => $row['pattern'], 'reason' => $row['reason']]) . "\n";
+        }
+
+        if ($report['rules'] === [] && $report['model'] === null) {
+            echo Lang::t('cli.sub.import.nothing_importable') . "\n";
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        echo Lang::t('cli.sub.import.order_note') . "\n";
+
+        if (!$autoYes) {
+            // The guarded probe is the house shape (as used by
+            // {@see \SugarCraft\Code\App\App::firstRunWizardOfferCmd()}):
+            // phpunit's bootstrap frees the STDIN resource during its fd-0
+            // repair, and an unguarded stream_isatty on it is a TypeError, not
+            // a "no". A dead STDIN is exactly the unattended case the refusal
+            // speaks about, so fail closed.
+            if (!\is_resource(\STDIN) || !\stream_isatty(\STDIN)) {
+                echo Lang::t('cli.sub.import.confirm_required') . "\n";
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+            echo Lang::t('cli.sub.import.ask_confirm') . "\n";
+            $answer = \strtolower(\trim((string) \fgets(\STDIN)));
+            if ($answer !== 'y' && $answer !== 'yes') {
+                echo Lang::t('cli.sub.import.declined') . "\n";
+
+                return NonInteractive::EXIT_OK;
+            }
+        }
+
+        try {
+            $result = ClaudeSettingsImport::persist($report, LaunchContext::settingsWriter($args->root), $providerName);
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            // The editor's own refusal sentence (it validates with the
+            // launch's strict parser): the file is byte-unchanged.
+            echo Lang::t('cli.sub.import.failed', ['reason' => $e->getMessage()]) . "\n";
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        echo Lang::t('cli.sub.import.written', [
+            'path' => $result['path'],
+            'rules' => (string) $result['added'],
+        ]) . "\n";
+        if ($result['model']) {
+            echo Lang::t('cli.sub.import.written_model') . "\n";
+        }
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
      * stdout's half of a successful import: the translated document, bare
      * (the redirect-exact contract of the print path) or inside the JSON
      * envelope. `$written` is the `--write user` path's one addition — the
@@ -4221,6 +4378,7 @@ final class Subcommands
         'bundles' => 'cli.completion.verb.bundles',
         'completion' => 'cli.completion.verb.completion',
         'doctor' => 'cli.completion.verb.doctor',
+        'import' => 'cli.completion.verb.import',
         'login' => 'cli.completion.verb.login',
         'lsp' => 'cli.completion.verb.lsp',
         'mcp' => 'cli.completion.verb.mcp',
@@ -4244,6 +4402,7 @@ final class Subcommands
         'bundles' => ['list', 'install', 'marketplace', 'update', 'search', 'recommend'],
         'lsp' => ['install', 'list'],
         'mcp' => ['list', 'auth', 'import', 'trust'],
+        'import' => ['claude'],
         'serve' => Serve::ACTIONS,
         'completion' => self::SHELLS,
     ];

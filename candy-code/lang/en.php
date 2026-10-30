@@ -222,6 +222,7 @@ return [
     'cli.completion.verb.bundles' => 'List, install, search and update Claude-format plugin bundles and marketplaces',
     'cli.completion.verb.completion' => 'Emit a shell completion script',
     'cli.completion.verb.doctor' => 'Check this installation and exit',
+    'cli.completion.verb.import' => 'Import Claude Code settings into this install and exit',
     'cli.completion.verb.login' => 'Log a provider in: its own login flow, or a pasted API key',
     'cli.completion.verb.lsp' => 'Install and list the pinned language servers',
     'cli.completion.verb.mcp' => 'Inspect the project MCP configuration',
@@ -314,6 +315,15 @@ session; acp runs turns for an editor, until the editor disconnects):
                          FAILS.
                          Distinct from the model-callable "doctor" tool, which
                          reports the terminal's image protocol to the model.
+  import claude          Preview importing Claude Code settings: reads Claude's user
+                         settings file, plus the .claude settings file under the launch
+                         root when --project is spelled, translates its permissions
+                         allow/deny/ask lists into permissionRules (the stricter side
+                         always wins — deny beats allow), maps model, and names every
+                         key it has no home for as skipped. Nothing is written until
+                         confirmed: --yes accepts the printed preview outright, and
+                         without it an interactive terminal is asked. The preview names
+                         every allow rule that would widen what runs without asking.
   login <provider>       Log one provider in: claude-code and codex hand the
                          terminal to their own CLI (the token never passes
                          through candy-code); openai, anthropic and gemini
@@ -1206,6 +1216,41 @@ TXT,
     'cli.sub.login.passthrough_codex' => 'Handing the terminal to `codex login`: the Codex CLI writes the subscription token under ~/.codex, candy-code stores nothing.',
     'cli.sub.login.passthrough_done' => 'login: {name} exited with code {code}.',
     'cli.sub.login.selectable' => 'Selectable providers are: {types}.',
+    'cli.sub.import.usage' => 'Usage: candy-code import claude [--project] [--yes]',
+    'cli.sub.import.no_source' => 'No import source given; candy-code imports settings from other agents today: claude.',
+    'cli.sub.import.unknown_source' => 'Unknown import source {source}; today `import` knows only `claude`.',
+    'cli.sub.import.unexpected_operand' => 'Unexpected operand {operand}; `import claude` takes no path — it reads the standard files Claude Code writes itself.',
+    'cli.sub.import.home_unowned' => 'Your home directory could not be vouched for, so there is no user config to import into; candy-code refuses to write outside a home it owns.',
+    'cli.sub.import.project_missing' => 'No Claude settings file at {path}; --project was spelled, so this is a refusal, not a shrug.',
+    'cli.sub.import.no_files' => 'No Claude settings file at {path}; nothing to import.',
+    'cli.sub.import.header' => 'candy-code import claude - preview (nothing written yet):',
+    'cli.sub.import.file_read' => '  read    {path}',
+    'cli.sub.import.rule_row' => '  {action}  {pattern}',
+    'cli.sub.import.widening_note' => '  {count} of these are allow rules that WIDEN what runs without asking - review the list above before confirming.',
+    'cli.sub.import.dropped_row' => '  vetoed    {pattern} - the same document asked to allow it while restricting it more tightly; the restriction won.',
+    'cli.sub.import.model_row' => '  model     {model}',
+    'cli.sub.import.skipped_row' => '  skipped   {key}: {note}',
+    'cli.sub.import.rejected_row' => '  rejected  {pattern}: {reason} - skipped and named, never applied.',
+    'cli.sub.import.nothing_importable' => 'The files said nothing candy-code has a home for; nothing written.',
+    'cli.sub.import.order_note' => 'Rules land after your existing ones (first match wins), deny rows first.',
+    'cli.sub.import.confirm_required' => 'Refusing to write without confirmation: stdin is not a terminal. Re-run with --yes to accept the preview above.',
+    'cli.sub.import.ask_confirm' => 'Write the user config as previewed? [y/N]',
+    'cli.sub.import.declined' => 'Declined; nothing written.',
+    'cli.sub.import.written' => 'Wrote {rules} new rule(s) into {path}.',
+    'cli.sub.import.written_model' => 'The imported model is selected as well.',
+    'cli.sub.import.failed' => 'Import refused: {reason} - the config file is byte-unchanged.',
+    'cli.sub.import.permissions_not_object' => '{path}: the permissions key is not an object; the import refuses rather than guessing.',
+    'cli.sub.import.list_not_array' => '{path}: permissions.{list} is not a list of patterns; the import refuses.',
+    'cli.sub.import.list_entry' => '{path}: permissions.{list} carries a non-string entry; the import refuses.',
+    'cli.sub.import.unreadable_kind' => '{path} is present but is not a plain readable file (symlink, device, or unreadable); the import refuses.',
+    'cli.sub.import.too_large' => '{path} is larger than {cap} bytes; the import refuses rather than reading it.',
+    'cli.sub.import.unreadable' => '{path} could not be read; the import refuses.',
+    'cli.sub.import.invalid_json' => '{path} is not valid JSON ({error}); the import refuses rather than importing part of a file.',
+    'cli.sub.import.not_an_object' => '{path} is not a settings object; the import refuses.',
+    'cli.sub.import.skipped_nohome' => 'no candy-code setting answers to it',
+    'cli.sub.import.skipped_hooks' => 'candy-code already reads the hooks block from this file at launch',
+    'cli.sub.import.skipped_unusable' => 'present but unusable (not a plain non-empty string)',
+    'cli.sub.import.skipped_noprovider' => 'candy-code remembers model ids per provider, and this install has no provider selected yet; pick the provider first (login or --provider) and re-run, or set the model with --model or /model',
     'cli.sub.login.stored' => 'Stored the {provider} API key under providers.{provider} in {path}; select it with provider={provider} (the {env} variable still wins when exported).',
     'cli.sub.login.stored_failed' => 'login: {path} could not be updated (a concurrent writer holds the config?); the key was not written.',
     'cli.sub.login.too_many' => 'login takes exactly one provider name, got {count} words.',

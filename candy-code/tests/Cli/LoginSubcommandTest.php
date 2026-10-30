@@ -470,6 +470,11 @@ final class LoginSubcommandTest extends TestCase
 
     public function testACorruptConfigFileRefusesRatherThanTrashingIt(): void
     {
+        // C-TUI-5.b: this refusal is now PRODUCED by {@see
+        // \SugarCraft\Code\Config\ProviderKeyStore::store()} — login's own
+        // copy of the merge/type/write/settle block was replaced by the
+        // delegation. The sentence is byte-for-byte what login used to
+        // assemble itself, which is exactly the point of the shared door.
         file_put_contents($this->dir . '/config.json', '{not json');
         $this->armKeyPaste('sk-whatever');
 
@@ -478,6 +483,28 @@ final class LoginSubcommandTest extends TestCase
         $this->assertSame(NonInteractive::EXIT_FAILURE, $code);
         $this->assertStringContainsString('not valid JSON', $out);
         $this->assertSame('{not json', file_get_contents($this->dir . '/config.json'));
+    }
+
+    /**
+     * Structural pin of the C-TUI-5.b delegation: the key arm of
+     * `candy-code login` holds no copy of the persist half anymore — it
+     * hands the finished key to the shared store and echoes whatever refusal
+     * comes back. {@see \SugarCraft\Code\Tests\Config\Settings\SettingsWriterCensusTest}
+     * polices the same fact from the writer side (login's own census row was
+     * deleted with the duplicate); this one names the door it moved behind.
+     */
+    public function testThePersistHalfOfTheKeyArmRidesTheSharedStore(): void
+    {
+        $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/Subcommands.php');
+        $start = \strpos($source, 'private static function loginStoreKey');
+        self::assertIsInt($start, 'loginStoreKey() moved — this pin needs re-anchoring');
+        $body = \substr($source, $start, (int) \strpos(\substr($source, $start), "\n    }") + 6);
+
+        self::assertStringContainsString('ProviderKeyStore::store(', $body);
+        self::assertStringNotContainsString('writeUserConfig(', $body,
+            'login must not carry a second copy of the user-config write');
+        self::assertStringNotContainsString('providers', \str_replace('ProviderKeyStore', '', $body),
+            'the providers-map merge moved into the store with the write');
     }
 
     /**

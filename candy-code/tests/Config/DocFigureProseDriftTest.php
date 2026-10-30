@@ -719,7 +719,7 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/and the (eleven|twelve|thirteen)\s+subcommands \(([^)]*)\)/s', $arch, $m),
+            preg_match('/and the (eleven|twelve|thirteen|fourteen)\s+subcommands \(([^)]*)\)/s', $arch, $m),
             'the pre-flight paragraph no longer spells its subcommand word-count and list together',
         );
         preg_match_all('/`([^`]+)`/', $m[2], $listed);
@@ -738,7 +738,7 @@ final class DocFigureProseDriftTest extends TestCase
             }
             self::assertTrue($matched, "ParsedArgs::SUBCOMMANDS gained '{$name}' but the pre-flight sentence's list did not");
         }
-        $wordNumbers = ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13];
+        $wordNumbers = ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14];
         self::assertSame(count($names), $wordNumbers[$m[1]] ?? -1, 'the spelled word no longer counts the live SUBCOMMANDS list — flip both together (census-trio lesson)');
     }
 
@@ -4038,14 +4038,14 @@ final class DocFigureProseDriftTest extends TestCase
      * touched through ArgvParser, per the lane-be autoload law), the server
      * halves the page enumerates, `serve` named as not an MCP server (O-3a
      * replaced the old no-`serve` negative), and `run` as the extra word
-     * argv treats specially — the page's fourteenth (with the line-number
+     * argv treats specially — the page's fifteenth (with the line-number
      * anchor the page carried until this tranche deleted).
      */
     public function testMcpCommandsSurfaceCountsHelpRowsAndTheRunArm(): void
     {
         $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
         $mcp = self::markdownProse($raw);
-        $wordNumbers = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14];
+        $wordNumbers = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15];
 
         self::assertSame(
             1,
@@ -4074,7 +4074,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertTrue(class_exists(ArgvParser::class), 'ArgvParser vanished — ParsedArgs has no loader without it');
         $commands = constant('SugarCraft\Code\Cli\ParsedArgs::SUBCOMMANDS');
         sort($commands);
-        self::assertCount($wordNumbers['thirteen'], $commands, 'the subcommand roster changed size — help block, page sentence and this count move together');
+        self::assertCount($wordNumbers['fourteen'], $commands, 'the subcommand roster changed size — help block, page sentence and this count move together');
 
         // The screen's ENGLISH text (15b-14-2 moved it into the catalogue):
         // the page quotes English, so the lookup pins the locale.
@@ -4083,8 +4083,8 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame((require \dirname(__DIR__, 2) . '/lang/en.php')['cli.help.screen'], $helpSource, 'the help screen is not the cli.help.screen catalogue entry');
         self::assertSame(
             1,
-            preg_match('/lists exactly thirteen under its ' . \preg_quote($bold . 'Subcommands' . $bold, '/') . ' heading/', $mcp),
-            'the exactly-thirteen sentence reworded — the help block below must keep carrying its row per verb',
+            preg_match('/lists exactly fourteen under its ' . \preg_quote($bold . 'Subcommands' . $bold, '/') . ' heading/', $mcp),
+            'the exactly-fourteen sentence reworded — the help block below must keep carrying its row per verb',
         );
         $block = (string) preg_replace('/^.*Subcommands \(/s', '', $helpSource);
         $block = explode("\n\n", $block)[0];
@@ -4107,7 +4107,7 @@ final class DocFigureProseDriftTest extends TestCase
         // MCP one — the page says which, rather than the old "there is none".
         self::assertTrue(in_array('serve', $commands, true), 'the serve subcommand left the roster — the page still describes it');
         self::assertStringContainsString('`candy-code serve` is not one of them', $mcp, 'the serve-is-not-MCP claim left the page');
-        self::assertStringContainsString('ten answer and exit, and `serve` runs until it is stopped', $mcp, 'the page lost the count of subcommands that exit before the one that does not');
+        self::assertStringContainsString('eleven answer and exit, and `serve` runs until it is stopped', $mcp, 'the page lost the count of subcommands that exit before the one that does not');
         foreach (['McpServer', 'GitMcpServer', 'GitCommandHandlers', 'HttpMcpServer', 'SseMcpServer', 'StdioMcpServer'] as $class) {
             $half = 'SugarCraft\Code\MCP\\' . $class;
             self::assertTrue(interface_exists($half) || class_exists($half), "the page enumerates {$class} among the server halves and it is gone");
@@ -4115,8 +4115,8 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/`run` is a fourteenth \(the `\$arg === .run.` arm in `Cli\\\\ArgvParser`/', $mcp),
-            'the run-is-a-fourteenth sentence no longer cites the argv arm by symbol — the drifted line-number anchor it used to carry is the reason this pin exists',
+            preg_match('/`run` is a fifteenth \(the `\$arg === .run.` arm in `Cli\\\\ArgvParser`/', $mcp),
+            'the run-is-a-fifteenth sentence no longer cites the argv arm by symbol — the drifted line-number anchor it used to carry is the reason this pin exists',
         );
         self::assertSame(0, preg_match('/ArgvParser` line \d+/', $mcp), 'a bare line-number anchor came back into the page — E686 law: symbols by name, never by line');
         self::assertStringContainsString("\$arg === 'run' && !\$promptRequested", self::sourceOf('Cli/ArgvParser.php'), 'the bare-run arm the sentence cites is no longer shaped this way');
@@ -4127,7 +4127,7 @@ final class DocFigureProseDriftTest extends TestCase
             'the Usage block stopped labelling run as an alias for -p',
         );
         self::assertStringContainsString('it is an alias for `-p`', $mcp, 'the alias half of the page sentence drifted from the help block');
-        self::assertCount($wordNumbers['fourteen'], array_merge($commands, ['run']), 'the thirteen-plus-run-is-a-fourteenth arithmetic broke against the live roster');
+        self::assertCount($wordNumbers['fifteen'], array_merge($commands, ['run']), 'the fourteen-plus-run-is-a-fifteenth arithmetic broke against the live roster');
 
         // E695 in-step: the auth section's new attachment truth, bound to the
         // code that makes it true — the page may only claim what the request

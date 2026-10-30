@@ -63,7 +63,6 @@ final class SettingsWriterCensusTest extends TestCase
         'Cli/LaunchContext.php::app' => 1,
         'Cli/LaunchContext.php::settingsWriter' => 1,
         'Cli/McpDecision.php::trustProjectMcp' => 1,
-        'Cli/Subcommands.php::loginStoreKey' => 1,
         // C-MCP-4.b (round-2 review): /mcp enable|disable --persist mirrors
         // ONE exact name into the user disabledMcpServers list through this
         // same door. Credited 3 because the method carries three write
@@ -195,6 +194,7 @@ final class SettingsWriterCensusTest extends TestCase
             // EVERY `->write(` token-site in src/ — an unannounced writer into
             // a JSON file is exactly what it exists to catch.
             'Cli/Bootstrap.php::stampBundleRecommendations->write' => 1,
+            'Config/ClaudeSettingsImport.php::persist->write' => 1,
             'Config/Settings/ModelChoice.php::persist->write' => 1,
             // C-WEB-2.f: the served `/effort` saves the tier through the
             // workspace's writer — the same two sites (set and the auto/clear
