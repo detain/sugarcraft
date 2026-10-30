@@ -108,6 +108,48 @@ final class LspSubcommandTest extends TestCase
         self::assertStringContainsString('unexpected operand extra', $message);
     }
 
+    /**
+     * ParsedArgs::SUBCOMMAND_FLAGS spells `'lsp' => []` and justifies the
+     * entry with exactly this invocation: `lsp list --all` must answer
+     * "unknown option", never a silently swallowed flag or a printed list.
+     * The parser only RECORDS the flag — the refusal is the binary's own
+     * door (a non-empty unknownFlags exits 2 before dispatch is ever
+     * reached), so this is the one usage case in the file that cannot be
+     * pinned in-process; it drives the real bin once.
+     */
+    public function testAnUnknownFlagOnListIsAUsageErrorFromTheBin(): void
+    {
+        $args = ArgvParser::parse(['candy-code', 'lsp', 'list', '--all']);
+        self::assertSame(['--all'], $args->unknownFlags, 'the verb-scoped flag must be reported verbatim');
+        self::assertSame(['list'], $args->subcommandArgs, 'the flag must never reach the verb as an operand');
+
+        $root = \dirname(__DIR__, 2);
+        $command = 'exec ' . \escapeshellarg(\PHP_BINARY) . ' ' . \escapeshellarg($root . '/bin/candy-code')
+            . ' lsp list --all';
+        $process = \proc_open(
+            $command,
+            [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            $root,
+        );
+        self::assertIsResource($process, 'failed to spawn bin/candy-code');
+
+        // Drain to EOF, then judge proc_close — the usage answer is two
+        // short lines, and reap-first leaves no window where a dead child
+        // could still read as running (the single-shot proc_get_status
+        // race the bin harnesses document).
+        $stdout = (string) \stream_get_contents($pipes[1]);
+        $stderr = (string) \stream_get_contents($pipes[2]);
+        self::assertNotFalse(\fclose($pipes[1]));
+        self::assertNotFalse(\fclose($pipes[2]));
+        $rc = \proc_close($process);
+
+        self::assertSame(NonInteractive::EXIT_CONFIG, $rc, 'stderr: ' . $stderr);
+        self::assertStringContainsString('unrecognized option', $stderr);
+        self::assertStringContainsString('--all', $stderr, 'the refused flag must be named');
+        self::assertSame('', $stdout, 'a usage door prints nothing to stdout');
+    }
+
     // ── install, through the seam ────────────────────────────────────────
 
     public function testInstallHandsTheLanguageToTheInstallerAndReportsTheVerdict(): void
