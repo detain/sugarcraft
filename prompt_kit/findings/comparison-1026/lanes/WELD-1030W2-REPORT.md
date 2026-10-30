@@ -36,5 +36,5 @@ Full story incl. the lead's mid-run re-anchor. NEVER pushed (lead owns push). Au
 ## Step 6 — absorption proof + prune + close (this rider commit)
 - `git cherry master cc/C-TUI-3.d`: 3/3 `-` (fa3487bb2/8e1ed751d/2593d9294 all absorbed) + patch-id SAME 3/3 from Step 1. Per-file blob check vs lane tip: 9/12 paths OK-identical; Chat.php/README.md/en.php differ ONLY by base-drift (master carries C-SES-8.b/C-SEC-8.b etc. changes the lane base predates) — expected, commit-level proof governs.
 - Prune: `git worktree remove /home/sites/cc-cmp-C-TUI-3.d` (clean, non-force) + `git branch -D cc/C-TUI-3.d` (was 2593d9294). Remaining cc/* branches = frozen five + CI-1030 pair only (untouched). Foreign working-tree dirt (lead agent-file edits, other lanes docs) never staged — every weld commit path-scoped.
-- Final master chain this weld: e6e701c82 -> 77199e554 -> f11a0b019 -> fc608096f (evidence+DUR) -> 21641a43f (§4 mark) -> a11868b4b (fold) -> rider (this commit, stamped next turn per own-SHA law). NO PUSH (lead owns).
+- Final master chain this weld: e6e701c82 -> 77199e554 -> f11a0b019 -> fc608096f (evidence+DUR) -> 21641a43f (§4 mark) -> a11868b4b (fold) -> 346507533 (close rider, stamped per own-SHA law). Final tip after stamp follow-up. NO PUSH (lead owns).
 - Ledger for lead: welded_count 276; weld_pending = C-CTX-6.e, C-SEC-8.b; C-TUI-3.d CLOSED.
