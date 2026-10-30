@@ -1165,6 +1165,7 @@ candy-code/tests/Context/Sections/PlanModeSectionTest.php	0.011	4
 candy-code/tests/Providers/SglangProviderTruncationGuardTest.php	0.011	34
 candy-code/tests/Renderer/PermissionModalWrapTest.php	0.011	22
 candy-code/tests/ThemeTest.php	0.011	8
+candy-code/tests/Config/ThemeFileTest.php	9.903	9
 candy-code/tests/Tools/BuiltIn/GenerateImagePreviewEmitTest.php	0.011	4
 candy-code/tests/Tools/McpToolBridgeTest.php	0.011	62
 candy-code/tests/Tui/TerminalBackgroundSprinklesAgreementTest.php	0.011	16
