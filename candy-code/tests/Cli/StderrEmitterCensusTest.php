@@ -606,7 +606,12 @@ final class StderrEmitterCensusTest extends TestCase
         // unknown-action refusals (a ternary pair), install's missing-language
         // and unexpected-operand refusals, and the install-result writer's
         // own envelope literal beside its fwrite.
-        'src/Cli/Subcommands.php' => 51,
+        // C-TUI-5.b 2026-10-30: +3 — the `import` verb's three usage doors
+        // (no source, unknown source, unexpected operand) each spell the
+        // prefix into the message {@see NonInteractive::failUsage()} carries;
+        // the verb's own prose never touches stderr — preview, refusals and
+        // the settle lines are all stdout echoes on the login arm's model.
+        'src/Cli/Subcommands.php' => 54,
         'src/Permissions/PermissionPrompt.php' => 1,
         // Not a message: the protocol schema's `$id` URN
         // (`urn:sugarcraft:candy-code:protocol:v1`, roadmap O-3c) spells the
