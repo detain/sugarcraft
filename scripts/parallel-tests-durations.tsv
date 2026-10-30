@@ -429,6 +429,7 @@ candy-code/tests/Protocol/ContextTrustTargetsTest.php	0.570	3
 candy-code/tests/Protocol/McpMethodsTest.php	0.566	5
 candy-code/tests/Chat/CallbackAuthoredRefusalTest.php	0.563	8
 candy-code/tests/DenialPrefixRosterTest.php	0.563	17
+candy-code/tests/Runtime/ToolOutputRedactionTest.php	0.561	24
 candy-code/tests/Media/PngTest.php	0.556	28
 candy-code/tests/Tools/BuiltIn/RepoMapToolTest.php	0.556	11
 candy-code/tests/Acp/AcpHandshakeTest.php	0.555	9

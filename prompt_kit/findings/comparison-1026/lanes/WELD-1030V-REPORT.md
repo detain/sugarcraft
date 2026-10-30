@@ -25,4 +25,12 @@ Base anchor: master = d07d55956 (STEP 0 VERIFIED). Single master writer. No push
 - DUR: UsageCommandTest cases 11->21 => RE-TIME row 0.306/11 -> 2.745/21 (median-of-3 2.744611/2.281960/3.763056), row relocated to line 137 (descending sort kept, 1662 lines). UsageSubcommandTest row untouched (9 cases unchanged).
 - FINDING CARRIED (from STEP 1, re-confirmed post-STEP-2): StderrEmitterCensusTest 3F — Subcommands.php fwrite roster 7 vs scan 8; shape roster 46 vs scan 51; BinCandyCodeAutoloadGuardTest prose 'thirty-six' vs scan 37. Introduced by C-TOOL-5.d lsp pick d7a2efbf1 (lane never touched the guard; lane gate list omitted it; r2 missed it). NOT on frozen standing-red list. Lead INSERTED STEP 3.5: master-direct cure AFTER STEP 3, roster rows + decision comment + PROSE_SITES/NUMBER_WORDS trio, numerals proven from landed blobs at cure time (SEC-8.b may move them further — re-measure on live tree).
 - §4 mark ✅ 4e896dd88 written (last CONTENT pick; evidence anchor c9cee706c named in bullet). §7: +730/-50, +14T (measured, brief said +7 — disclosed).
-- STEP 2 payload commit: pending (mark + DUR + report).
+- STEP 2 payload commit: 90127b4ad (name-only verified: plan_comparison.md, tsv, report).
+
+## STEP 3 C-SEC-8.b (DONE)
+- Evidence 0e41739ad on branch (4 files, sizes as briefed: REPORT 3,780 / FIX-1 1,686 / REVIEW-1 10,418 / REVIEW-2 4,542 B; main-tree copies cmp byte-identical, removed after content picks).
+- Picks 688547446->0416424d3, e94d13c59->5c46e4914, a8ea134ae->0f583ef81, evidence->67fc3e987. ALL 4 patch-id SAME. Expected LayeredSettings/SETTINGS.md/en.php collisions did NOT materialize (all additive; only PermissionSettings.php auto-merged).
+- Gates: ToolOutputRedactionTest 24T/47A exact; TrustKey|ReadmeRoster 22T/646A OK; LangParity|SettingsSchemaDocDrift 26T/3512A (brief shape 3485A, +27A live-tree re-derive disclosed); DocFigure 92T/4175A (brief shape 4169A, +6A disclosed); gen-settings-doc --check rc=0 (no regen pair needed).
+- SEC-8.b adds ZERO new stderr emitters (src/ diff grep 0) — census 3F provenance stays C-TOOL-5.d.
+- DUR MINT @432: ToolOutputRedactionTest 0.561/24 (median-of-3 0.534570/0.560817/0.583169; tsv 1662->1663).
+- §4 mark ✅ 0f583ef81 + §7 +24T. STEP 3 payload commit: pending.
