@@ -390,6 +390,97 @@ final class AnthropicServerWebSearchTest extends TestCase
         self::assertSame(1, Usage::sum($carriers)->webSearchRequests, 'counted exactly once across the stream');
     }
 
+    public function testABatchPausedEchoResendsZeroArgumentToolInputsAsObjects(): void
+    {
+        Bootstrap::writeUserConfig([
+            ToolLimits::WEB_SEARCH_BACKEND_KEY => SearchBackends::BACKEND_ANTHROPIC,
+            ToolLimits::WEB_SEARCH_MAX_RESULTS_KEY => 5,
+        ]);
+
+        // Under assoc decoding an empty JSON object IS an empty array, and
+        // json_encode would resend it as `"input":[]` — rejected as
+        // not-an-object. The C-TOOL-2.c fix-round law: every echoed
+        // tool_use/server_tool_use with no arguments rides as `"input":{}`,
+        // exactly like toolUseFrom() constructs it.
+        $leg1 = self::messageDoc([
+            ['type' => 'server_tool_use', 'id' => 'srvu_zero', 'name' => 'web_search', 'input' => []],
+            ['type' => 'tool_use', 'id' => 'tu_zero', 'name' => 'Alpha', 'input' => []],
+            ['type' => 'text', 'text' => 'paused with zero-arg calls'],
+        ], 'pause_turn', 1);
+        $leg2 = self::messageDoc([['type' => 'text', 'text' => 'done']], 'end_turn');
+
+        $captured = [];
+        $response = self::anthropicProvider([$leg1, $leg2], $captured)
+            ->complete(new CompleteRequest(model: self::MODEL, messages: [new UserMessage('go')], tools: [new WebSearch()]));
+
+        self::assertCount(2, $captured);
+        $resume = $captured[1][1]['messages'];
+        $partial = $resume[count($resume) - 1];
+        self::assertSame('assistant', $partial['role']);
+        self::assertCount(3, $partial['content'], 'every partial block rides the echo');
+
+        $wire = (string) json_encode($partial['content']);
+        self::assertSame(2, substr_count($wire, '"input":{}'), 'both zero-arg blocks echo as empty OBJECTS');
+        self::assertStringNotContainsString('"input":[]', $wire, 'an empty list never rides the pause echo');
+
+        // The normalization is echo-shape only — the call still reaches the
+        // loop as an ordinary zero-argument client call.
+        self::assertNotNull($response->toolCalls);
+        self::assertCount(1, $response->toolCalls);
+        self::assertSame('Alpha', $response->toolCalls[0]->name());
+    }
+
+    public function testAStreamedPausedEchoResendsZeroArgumentInputsAsObjects(): void
+    {
+        Bootstrap::writeUserConfig([ToolLimits::WEB_SEARCH_BACKEND_KEY => SearchBackends::BACKEND_ANTHROPIC]);
+
+        // Stream side of the same law, on BOTH arms the lane touched: the
+        // server_tool_use THIS FILE reconstructs at content_block_stop (its
+        // input_json_delta decodes to an empty map) and the RAW wire-decoded
+        // blocks a resumed leg re-echoes when the continuation pauses again.
+        $events = [
+            ['type' => 'message_start', 'message' => ['usage' => ['input_tokens' => 10, 'output_tokens' => 1]]],
+            ['type' => 'content_block_start', 'index' => 0, 'content_block' => ['type' => 'server_tool_use', 'id' => 'srvu_zero', 'name' => 'web_search', 'input' => []]],
+            ['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'input_json_delta', 'partial_json' => '{}']],
+            ['type' => 'content_block_stop', 'index' => 0],
+            ['type' => 'message_delta', 'delta' => ['stop_reason' => 'pause_turn'], 'usage' => ['output_tokens' => 5, 'input_tokens' => 10, 'server_tool_use' => ['web_search_requests' => 1]]],
+            ['type' => 'message_stop'],
+        ];
+        $resume1 = self::messageDoc([
+            ['type' => 'tool_use', 'id' => 'tu_zero', 'name' => 'Alpha', 'input' => []],
+            ['type' => 'text', 'text' => 'second pause'],
+        ], 'pause_turn');
+        $resume2 = self::messageDoc([['type' => 'text', 'text' => 'final']], 'end_turn');
+
+        $streamBodies = [];
+        $unary = [];
+        $provider = new AnthropicProvider(
+            'sk-test',
+            'https://api.anthropic.com',
+            self::MODEL,
+            self::dialScript([$resume1, $resume2], $unary),
+            self::streamScript($events, $streamBodies),
+        );
+
+        $frames = [];
+        foreach ($provider->completeStream(new CompleteRequest(model: self::MODEL, messages: [new UserMessage('go')], tools: [new WebSearch()])) as $frame) {
+            $frames[] = $frame;
+        }
+
+        self::assertCount(2, $unary, 'two pauses cost two continuations');
+
+        $firstEcho = (string) json_encode($unary[0][1]['messages']);
+        self::assertSame(1, substr_count($firstEcho, '"input":{}'), 'the reconstructed empty server_tool_use echoes as an object');
+        self::assertStringNotContainsString('"input":[]', $firstEcho);
+
+        $secondEcho = (string) json_encode($unary[1][1]['messages']);
+        self::assertSame(2, substr_count($secondEcho, '"input":{}'), 'the raw wire-decoded zero-arg tool_use of the resumed leg joins it, one per carried turn');
+        self::assertStringNotContainsString('"input":[]', $secondEcho);
+
+        $final = $frames[count($frames) - 1];
+        self::assertSame('second pausefinal', $final->content, 'the resumed legs continue the same answer — no separator');
+    }
+
     /**
      * @param list<array<string, mixed>> $responses
      * @param list<array{0: string, 1: array<string, mixed>}> $captured

@@ -1213,7 +1213,10 @@ trait AnthropicMessagesWire
             && $leg['blocks'] !== []
             && $continuations < self::MAX_PAUSED_TURN_CONTINUATIONS
         ) {
-            $assistantTurns[] = ['role' => 'assistant', 'content' => $leg['blocks']];
+            // C-TOOL-2.c fix-round: these blocks arrive RAW from the wire
+            // (assoc-decoded), so the zero-argument-input normalization
+            // toolUseFrom() applies at construction runs over them here.
+            $assistantTurns[] = ['role' => 'assistant', 'content' => $this->normalizedEchoBlocks($leg['blocks'])];
             $next = $this->anthropicServerWebSearchResume($requestBody, $assistantTurns, $model);
 
             if ($next === null) {
@@ -1566,6 +1569,36 @@ trait AnthropicMessagesWire
         return array_values(array_filter($content, 'is_array'));
     }
     /**
+     * C-TOOL-2.c fix-round: prepare wire-decoded assistant blocks for the
+     * `pause_turn` echo. A zero-argument `tool_use`/`server_tool_use`
+     * arrives from the wire as `'input' => []` under assoc decoding (PHP
+     * cannot tell an empty map from an empty list — see Concern\ToolSchema
+     * and {@see toolUseFrom()}), and re-sending that as `"input":[]` is an
+     * API-shape 400. Echoes of RAW decoded blocks run them through here;
+     * blocks this file CONSTRUCTS (`server_tool_use`, streamed `tool_use`)
+     * already carry the same normalization at their construction sites.
+     * Non-empty and already-normalized inputs ride through untouched, so
+     * the walk is idempotent.
+     *
+     * @param array<array-key, mixed> $blocks
+     * @return array<array-key, mixed>
+     */
+    private function normalizedEchoBlocks(array $blocks): array
+    {
+        foreach ($blocks as $index => $block) {
+            $type = is_array($block) ? ($block['type'] ?? null) : null;
+
+            if (($type === 'tool_use' || $type === 'server_tool_use')
+                && ($block['input'] ?? []) === []
+            ) {
+                $block['input'] = new \stdClass();
+                $blocks[$index] = $block;
+            }
+        }
+
+        return $blocks;
+    }
+    /**
      * Translates one decoded Anthropic SSE event into a delta response, or
      * null when the event carries nothing a caller can use (`ping`,
      * `content_block_start` for a tool call, …).
@@ -1734,18 +1767,23 @@ trait AnthropicMessagesWire
             // PAYLOAD only — never a ToolCall. Its input decodes the same
             // way a client call's would; a truncated server document is not
             // a call this client could run or refuse, so an undecodable
-            // input rides the echo as `[]` and the API judges it, not us.
+            // input rides the echo with no arguments and the API judges it,
+            // not us. C-TOOL-2.c fix-round: an EMPTY decoded map is
+            // indistinguishable from an empty list in an assoc array, and
+            // `"input":[]` is rejected as not-an-object — same law as
+            // toolUseFrom(), so the emptiness rides the echo as `{}`.
             $serverUse = $pauseState['server'][$index] ?? null;
             if ($serverUse !== null) {
                 unset($pauseState['server'][$index]);
 
                 $decoded = $serverUse['json'] === '' ? [] : json_decode($serverUse['json'], true);
+                $serverInput = is_array($decoded) ? $decoded : [];
 
                 $pauseState['blocks'][$index] = [
                     'type' => 'server_tool_use',
                     'id' => $serverUse['id'],
                     'name' => $serverUse['name'],
-                    'input' => is_array($decoded) ? $decoded : [],
+                    'input' => $serverInput === [] ? new \stdClass() : $serverInput,
                 ];
 
                 return null;
@@ -2108,7 +2146,10 @@ trait AnthropicMessagesWire
 
             $searches += $leg['usage']->webSearchRequests;
             $stopReason = $leg['stopReason'];
-            $blocks = $leg['blocks'];
+            // C-TOOL-2.c fix-round: a resumed leg's blocks are RAW
+            // wire-decoded (unlike the first echo's, which this file
+            // built), so they take the same walk the batch echo does.
+            $blocks = $this->normalizedEchoBlocks($leg['blocks']);
             $continuations++;
         }
 
