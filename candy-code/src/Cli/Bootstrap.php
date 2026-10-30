@@ -1040,7 +1040,7 @@ final class Bootstrap
      * a private const; nothing in `src/` branches on it, and nothing should —
      * see {@see warnPermissionConfigInTranscript()} for the seam itself.
      */
-    public const TRANSCRIPT_SEAM_CALL_SITES = 35;
+    public const TRANSCRIPT_SEAM_CALL_SITES = 36;
 
     /**
      * Every directory this launch refused to read, keyed by the path as
@@ -1747,7 +1747,7 @@ final class Bootstrap
 
         // LAST, so every warning the build raised is in hand — including
         // reportProjectTierRefusals() immediately above, which is one of the
-        // THIRTY-FIVE call sites now routed onto the transcript seam. This said
+        // THIRTY-SIX call sites now routed onto the transcript seam. This said
         // SIXTEEN, counting reportPrunedSessions()'s retention summary (E78,
         // round 42) as the last one until E86 (round 43) added the sixteenth,
         // in mcpClient()'s start-then-throw catch, and P7.S3 added the
@@ -5698,7 +5698,7 @@ public static function useMaxCost(?string $maxCost): void
             // user meets that as `/skill` not offering something they wrote. ONE
             // ROW, whatever the count: this message is already an aggregate, which
             // is what makes it safe to put in a transcript that also has to carry
-            // thirty-four other sources. THIS SAID ELEVEN. Round 44 could not correct
+            // thirty-five other sources. THIS SAID ELEVEN. Round 44 could not correct
         // it — this file was outside that lane's ownership, which is the whole
         // reason, and not how long the sentence had been wrong — so it asserted
         // the gap instead, with a test whose failure message was the
@@ -7445,11 +7445,27 @@ public static function useMaxCost(?string $maxCost): void
         // the reviewer OFF: a review costs real money on somebody's
         // credentials, so a half-understood override must not silently pick
         // a different one to burn.
+        // C-SEC-7.e (owner ruling t212, option 3): the ABSENCE of the key now
+        // engages this arm exactly as an explicit true does — whenever a title
+        // backend (or a usable `autoReviewModel`) exists, autoReview is ON.
+        // The first time the implicit default engages, the launch says so out
+        // loud, once per session: `warnPermissionConfigInTranscript` de-dups
+        // by message identity, so the per-turn re-resolutions of this method
+        // cost one notice total, and every review after it remains a paid
+        // model call the notice owns up to. The schema default stays false —
+        // the implicit engagement lives HERE, in the gate, not in the stored
+        // literal, so a config file that never mentions autoReview keeps its
+        // byte-identical shape. An explicit false opts out and never engages.
+        // The implicit path that finds no model to review with says NOTHING
+        // (the no-provider warning stays the explicit-true surface: a key the
+        // user typed deserves an answer; a default the product chose does not
+        // announce its own failure on every launch).
         $reviewer = null;
         $autoReview = self::readUserConfig()['autoReview'] ?? null;
+        $autoReviewImplicit = $autoReview === null;
         if ($autoReview !== null && !is_bool($autoReview)) {
             self::warnPermissionConfigOnce(Lang::t('cli.warn.auto_review_not_bool'));
-        } elseif ($autoReview === true) {
+        } elseif ($autoReview === true || $autoReviewImplicit) {
             $reviewBackend = null;
             $reviewModel = self::readUserConfig()['autoReviewModel'] ?? null;
             if ($reviewModel !== null && !is_string($reviewModel)) {
@@ -7477,7 +7493,7 @@ public static function useMaxCost(?string $maxCost): void
                 }
             } else {
                 $reviewBackend = self::titleBackend();
-                if ($reviewBackend === null) {
+                if ($reviewBackend === null && !$autoReviewImplicit) {
                     self::warnPermissionConfigOnce(Lang::t('cli.warn.auto_review_no_provider'));
                 }
             }
@@ -7485,6 +7501,9 @@ public static function useMaxCost(?string $maxCost): void
                 $reviewer = \SugarCraft\Code\Permissions\ExecReviewer::new($reviewBackend)->withTranscript(
                     static fn (string $sessionId): array => \SugarCraft\Code\Host\TranscriptStore::new(self::sessionStore(prune: false))->load($sessionId),
                 );
+                if ($autoReviewImplicit) {
+                    self::warnPermissionConfigInTranscript(Lang::t('appLaunch.notice.auto_review_default'));
+                }
             }
         }
 
@@ -9156,7 +9175,7 @@ public static function useMaxCost(?string $maxCost): void
             ));
 
             // REACHABILITY AT THIS SITE IS DRIVEN, not inherited from the other
-            // thirty-four call sites: {@see chat()} holds no `self::tools(` call of
+            // thirty-five call sites: {@see chat()} holds no `self::tools(` call of
             // its own and gets here transitively through `backend()` ->
             // `tools()` -> {@see mcpTools()} -> this method, then reads
             // {@see launchNotices()} on its last line — so a row recorded now is

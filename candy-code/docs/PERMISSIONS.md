@@ -559,9 +559,20 @@ explicit rule still comes first — `Allow mcp__git__*` grants those tools under
   `outside-root-write` — is denied with a strike, as before, unless the
   **exec reviewer** is on.
 
-**The exec reviewer.** `"autoReview": true` in your own `config.json` or
-`settings.json` (never a project file: every review is a paid call) sends each
-call in that second group to the reviewer model — the title model (`titleModel`),
+**The exec reviewer.** The reviewer is **on by default** whenever a model to
+review with resolves: a title backend exists (your `titleModel`, or the selected
+provider's cheap auxiliary default) or your user-tier `autoReviewModel` builds —
+even when your config never mentions `autoReview` at all. The first time that
+implicit default engages in a session, the launch prints one loud notice line —
+in the transcript and on stderr, **once per session, not once per review** — and
+owns up to the money: every review remains a paid model call. `"autoReview":
+false` in your own `config.json` or `settings.json` is the opt-out: written
+explicitly, the reviewer never engages and the companion keys are not even read;
+an implicit default that finds no model to review with says nothing and stays
+off. (Never a project file, either way: a paid switch is yours alone.)
+`"autoReview": true` is accepted and is what the default already does. When the
+reviewer is on, it sends each call in that second group to the reviewer model —
+the title model (`titleModel`),
 unless your user-tier `autoReviewModel` names another `provider/model` to answer
 on; one that cannot be built, is not a string, or is not spelled `provider/model`
 warns once on stderr and leaves the reviewer off — with the
@@ -577,15 +588,17 @@ error or a launch with no provider to review with all mean **ask**, never
 allow. The prompt or refusal you see names the category and the reviewer's
 one-line reason. The review call has the provider's connect timeout and no
 total timeout; it runs once per reviewed call — every flagged non-security
-call and, when `autoReview` is on, every call the pattern list passed that your
-user-tier `autoReviewScope` names: `shell` (the default) covers every
+call and, when the reviewer is engaged (on by default), every call the pattern
+list passed that your user-tier `autoReviewScope` names: `shell` (the default) covers every
 non-read-only shell command, `writes` adds `Edit`, `Write`, `ApplyPatch` and
 `WebFetch` — shown to the reviewer with their capped pending diff for the
 write tools, not their raw arguments (`WebFetch` has no diff, so it rides as
 its url plus arguments) — and `all` reviews every passed call; an unknown
 spelling is read as `shell`, and either way the reviewer can only narrow what
 would run.
-Each review is a paid call, so `writes` and `all` multiply the charges.
+Each review is a paid call — including under the default — so `writes` and `all`
+multiply the charges; the once-per-session notice names the default exactly so
+you can decide whether to keep it.
 
 ### `auto`'s circuit breaker
 

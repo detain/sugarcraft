@@ -59,6 +59,14 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withReaderSymbol(Bootstrap::class . '::permissionGate'),
             // Roadmap 5.11-2: user tier only (never a project's to switch on),
             // because every review is a paid call on the title model.
+            //
+            // C-SEC-7.e (owner ruling t212, option 3): the stored default stays
+            // false — an untouched config file keeps its byte-identical shape.
+            // The SHIPPED default is implicit ON: Bootstrap::permissionGate()
+            // engages the reviewer whenever the key is absent AND a reviewable
+            // model exists, announcing once per session. This literal is what a
+            // config editor displays as the value's type-default; the gate is
+            // what decides engagement. false is a real opt-out and never engages.
             SettingDefinition::new('autoReview', SettingType::Bool, false)
                 ->withCategory(SettingCategory::Permissions)
                 ->withRiskClass(RiskClass::Spend)

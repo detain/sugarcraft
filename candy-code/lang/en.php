@@ -3726,6 +3726,12 @@ TXT,
     // the one-flag fix. No trailing period — STDERR_LINE_FORMAT adds one
     // (LaunchNoticeOwnPeriodTest).
     'appLaunch.notice.headless_default' => 'ℹ -p starts in permission mode default: an unattended run refuses every tool call that would ask. Pass --permission-mode (bypass-permissions runs everything) for scripted runs',
+    // C-SEC-7.e (owner ruling t212, option 3): the implicit autoReview default
+    // announces once per session the first time it engages — de-duped by message
+    // identity in the launch-notices store, like the bypass banner. Names the
+    // opt-out and owns up to the money. No trailing period — STDERR_LINE_FORMAT
+    // adds one (LaunchNoticeOwnPeriodTest).
+    'appLaunch.notice.auto_review_default' => '⚠ autoReview is on by default for this launch: flagged auto-mode calls are reviewed by the title model, and every review is a paid model call. Set autoReview to false in ~/.candy-code/config.json to opt out',
     // C-SEC-6.b: names the file, what it added, and what could not be honoured.
     // No trailing period — STDERR_LINE_FORMAT adds one (LaunchNoticeOwnPeriodTest).
     'appLaunch.notice.project_narrowing_rules' => '⚠ {file} narrowed this launch\'s permissions: {count} deny/ask rule(s) loaded first, {dropped} allow rule(s) dropped — a project file cannot grant allow',
@@ -3749,7 +3755,9 @@ TXT,
     'settings.allowedTools.help' => 'Whitelist of tool names or globs; unset offers every tool.',
     'settings.attribution.help' => '{"commit": "…", "pr": "…"}: the trailer and PR line the git guidance asks for.',
     'settings.autoCommit.help' => 'off, turn (one commit per turn, message from the title model) or edit (one per Write/Edit); /undo reverts it.',
-    'settings.autoReview.help' => 'Under auto, a call the safety classifier flags (other than a security finding, which always asks) is reviewed by the title model, which allows it, asks you or denies it.',
+    // C-SEC-7.e (owner ruling t212, option 3): the help states the implicit
+    // default, the once-per-session announce, and the paid-call fact.
+    'settings.autoReview.help' => 'Under auto, a call the safety classifier flags (other than a security finding, which always asks) is reviewed by the title model, which allows it, asks you or denies it. On by default whenever a reviewable model exists, and a launch that engages that default says so once; set false to opt out. Every review is a paid model call.',
     'settings.autoReviewModel.help' => 'The `provider/model` the auto reviewer runs on, for example `openai/gpt-4.1-mini`; empty means the title model. A provider that cannot be built leaves the reviewer off with a launch warning.',
     'settings.autoReviewScope.help' => 'What `autoReview` sends to the reviewer: `shell` (the default) is every non-read-only shell command the pattern list passed; `writes` also reviews `Edit`, `Write`, `ApplyPatch` and `WebFetch`, with the pending diff for the write tools; `all` reviews every call the list passed. Any other spelling behaves as `shell`. Every review is a paid model call.',
     'settings.autoTest.help' => 'After a turn that edited a file, run `testCommand`; on failure the output goes back to the model, at most 3 times a turn.',

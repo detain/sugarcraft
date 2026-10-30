@@ -8,11 +8,16 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchNotices;
 use SugarCraft\Code\Cli\PermissionConfigException;
+use SugarCraft\Code\Config\Settings\SessionSettings;
+use SugarCraft\Code\Config\Settings\UiSettings;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
+use SugarCraft\Code\Lang;
+use SugarCraft\Code\Permissions\ExecReviewer;
 use SugarCraft\Code\Permissions\PermissionDecision;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
@@ -464,6 +469,119 @@ final class BootstrapPermissionGateTest extends TestCase
     {
         $this->assertFileDoesNotExist($this->tempDir . '/home/.candy-code/config.json');
         $this->assertSame(PermissionMode::BypassPermissions, Bootstrap::permissionGate()->mode());
+    }
+
+    /**
+     * C-SEC-7.e (owner ruling t212, option 3): the AUTO-REVIEW default now
+     * engages implicitly whenever a reviewable model resolves, and the gate
+     * must build the reviewer EXACTLY as an explicit true does — same tool
+     * identity, same model, same toolless backend — so the only difference
+     * between the two spellings is the launch notice. The explicit spelling
+     * stays accepted (it is what users already have in their configs); what
+     * changed is that ABSENCE no longer means off.
+     */
+    public function testTheImplicitDefaultBuildsTheReviewerExactlyAsAnExplicitTrueDoes(): void
+    {
+        $provider = [
+            'provider' => 'probe7d',
+            'providers' => [
+                'probe7d' => ['type' => 'custom', 'name' => 'Probe7d', 'baseUrl' => 'http://127.0.0.1:9', 'model' => 'probe-model-7d'],
+            ],
+        ];
+        $noticeKey = Lang::t('appLaunch.notice.auto_review_default');
+
+        $this->clearGateNoticeStore();
+
+        try {
+            $this->writeGateConfig($provider + ['autoReview' => true]);
+            $explicit = Bootstrap::permissionGate(false, false)->reviewer();
+            $this->assertInstanceOf(ExecReviewer::class, $explicit, 'the explicit spelling builds a reviewer, as ever');
+            $explicitShape = $this->reviewerShape($explicit);
+            $this->assertFalse(
+                LaunchNotices::reported($noticeKey),
+                'the EXPLICIT spelling announces no default — it was the user who said true',
+            );
+
+            $this->clearGateNoticeStore();
+            $this->writeGateConfig($provider);
+            $implicit = Bootstrap::permissionGate(false, false)->reviewer();
+            $this->assertInstanceOf(ExecReviewer::class, $implicit, 'the same config WITHOUT the key builds a reviewer too — absence is the default, not off');
+            $this->assertSame(
+                $explicitShape,
+                $this->reviewerShape($implicit),
+                'and it is the SAME construction: same model, same toolless backend, no implicit-only shortcut',
+            );
+            $this->assertTrue(
+                LaunchNotices::reported($noticeKey),
+                'the implicit engagement is the one that says so out loud, once',
+            );
+
+            $before = $this->gateNoticeStoreSize();
+            Bootstrap::permissionGate(false, false);
+            $this->assertSame($before, $this->gateNoticeStoreSize(), 'once per session, not once per build');
+        } finally {
+            $this->clearGateNoticeStore();
+        }
+    }
+
+    /**
+     * The silenced warning is ONLY the no-provider case, and it is silenced
+     * ONLY for the implicit default: an explicit true that finds no model to
+     * review with still says so, because that user asked for something that
+     * quietly did not happen. The implicit default that cannot engage says
+     * nothing — a default does not announce its own silence.
+     */
+    public function testTheNoProviderWarningIsSilencedForTheDefaultButSaidForAnExplicitTrue(): void
+    {
+        $warningKey = Lang::t('cli.warn.auto_review_no_provider');
+        $this->clearGateNoticeStore();
+
+        try {
+            $this->writeGateConfig(['autoReview' => true]);
+            $this->assertNull(Bootstrap::permissionGate(false, false)->reviewer(), 'explicit true with no provider: nothing to review with');
+            $this->assertTrue(
+                LaunchNotices::reported($warningKey),
+                'and the explicit ask that failed is still reported, as it was before C-SEC-7.e',
+            );
+
+            $this->clearGateNoticeStore();
+            $this->writeGateConfig(['theme' => 'dark']);
+            $this->assertNull(Bootstrap::permissionGate(false, false)->reviewer(), 'the default with no provider: still off — the default forces nothing');
+            $this->assertFalse(
+                LaunchNotices::reported($warningKey),
+                'but the default does not warn about its own absence',
+            );
+            $this->assertSame(0, $this->gateNoticeStoreSize(), 'the whole silent-default launch is said about nothing');
+        } finally {
+            $this->clearGateNoticeStore();
+        }
+    }
+
+    /**
+     * The opt-out has to be real: an explicit false is a decision, and the
+     * gate never even reads the companion keys behind it.
+     */
+    public function testExplicitFalseNeverEngagesTheReviewerEvenWithABuildableTitleBackend(): void
+    {
+        $this->clearGateNoticeStore();
+
+        try {
+            $this->writeGateConfig([
+                'autoReview' => false,
+                'provider' => 'probe7d',
+                'providers' => [
+                    'probe7d' => ['type' => 'custom', 'name' => 'Probe7d', 'baseUrl' => 'http://127.0.0.1:9', 'model' => 'probe-model-7d'],
+                ],
+            ]);
+
+            $this->assertNull(
+                Bootstrap::permissionGate(false, false)->reviewer(),
+                'an explicit false is the opt-out the announcement promises',
+            );
+            $this->assertSame(0, $this->gateNoticeStoreSize(), 'and opting out is a decision, not an error to warn about');
+        } finally {
+            $this->clearGateNoticeStore();
+        }
     }
 
     /**
@@ -1065,6 +1183,55 @@ final class BootstrapPermissionGateTest extends TestCase
         }
 
         file_put_contents($dir . '/config.json', $contents);
+    }
+
+    /**
+     * A user-tier config written whole (json), with the read caches dropped
+     * so the very next {@see Bootstrap::permissionGate()} sees it.
+     *
+     * @param array<string, mixed> $settings
+     */
+    private function writeGateConfig(array $settings): void
+    {
+        $this->writeRawConfig((string) json_encode($settings));
+        @chmod($this->tempDir . '/home/.candy-code/config.json', 0600);
+        UiSettings::forget();
+        SessionSettings::reset();
+    }
+
+    /**
+     * What the gate actually wired behind {@see ExecReviewer}: the model the
+     * reviews will be billed on, and the tool list riding that backend.
+     *
+     * @return array{0: ?string, 1: list<never>}
+     */
+    private function reviewerShape(?ExecReviewer $reviewer): array
+    {
+        if ($reviewer === null) {
+            return [null, []];
+        }
+
+        $backend = (new \ReflectionProperty(ExecReviewer::class, 'backend'))->getValue($reviewer);
+
+        return [
+            (new \ReflectionProperty(EngineBackend::class, 'model'))->getValue($backend),
+            (new \ReflectionProperty(EngineBackend::class, 'tools'))->getValue($backend),
+        ];
+    }
+
+    /** The warn-once launch-notice store is process static; these pins own it. */
+    private function clearGateNoticeStore(): void
+    {
+        $store = new \ReflectionProperty(LaunchNotices::class, 'reportedPermissionConfigWarnings');
+        $store->setValue(null, []);
+    }
+
+    private function gateNoticeStoreSize(): int
+    {
+        $store = new \ReflectionProperty(LaunchNotices::class, 'reportedPermissionConfigWarnings');
+        $reported = $store->getValue(null);
+
+        return is_array($reported) ? count($reported) : 0;
     }
 
     private function removeDirectory(string $dir): void

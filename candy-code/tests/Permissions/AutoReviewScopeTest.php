@@ -211,13 +211,95 @@ final class AutoReviewScopeTest extends TestCase
         self::assertSame($before, self::warnOnceStoreSize(), 'the second build adds no second stderr line');
     }
 
-    public function testWithAutoReviewOffNeitherCompanionIsEvenRead(): void
+    // C-SEC-7.e (owner ruling t212, option 3): the switch's ABSENCE is no
+    // longer off — it is the implicit default, engaging exactly as an
+    // explicit true does whenever a model to review with resolves. What
+    // changed at the gate is WHICH arms the key takes; what changed for the
+    // user is that silence now means ON-with-a-model, and only an explicit
+    // false means off. These pins draw the new map.
+
+    public function testWithAutoReviewExplicitlyFalseNeitherCompanionIsEvenRead(): void
     {
-        $this->userSettings(['autoReviewModel' => 'probe7d/probe-model-7d']);
+        $this->userSettings([
+            'autoReview' => false,
+            'autoReviewModel' => 'probe7d/probe-model-7d',
+            'provider' => 'probe7d',
+            'providers' => [
+                'probe7d' => ['type' => 'custom', 'name' => 'Probe7d', 'baseUrl' => 'http://127.0.0.1:9', 'model' => 'probe-model-7d'],
+            ],
+        ]);
 
         $gate = Bootstrap::permissionGate(false, false);
-        self::assertNull($gate->reviewer(), 'the reviewer switch is autoReview; the companions only shape it');
-        self::assertSame(0, self::warnOnceStoreSize(), 'and nothing is warned about while autoReview is off');
+        self::assertNull($gate->reviewer(), 'an explicit false is the opt-out: even a buildable override is never read');
+        self::assertSame(0, self::warnOnceStoreSize(), 'and opting out is a decision, not an error to warn about');
+        self::assertFalse(
+            LaunchNotices::reported(Lang::t('appLaunch.notice.auto_review_default')),
+            'nothing engaged, so the default-notice never prints',
+        );
+    }
+
+    public function testTheImplicitDefaultEngagesAndAnnouncesOnceWhenATitleBackendResolves(): void
+    {
+        $this->userSettings([
+            'provider' => 'probe7d',
+            'providers' => [
+                'probe7d' => ['type' => 'custom', 'name' => 'Probe7d', 'baseUrl' => 'http://127.0.0.1:9', 'model' => 'probe-model-7d'],
+            ],
+        ]);
+
+        $gate = Bootstrap::permissionGate(false, false);
+        self::assertNotNull(
+            $gate->reviewer(),
+            'no autoReview key at all, a title backend resolves — the default is ON, not off',
+        );
+        self::assertTrue(
+            LaunchNotices::reported(Lang::t('appLaunch.notice.auto_review_default')),
+            'and the first engagement says so out loud, once per session',
+        );
+
+        $before = self::warnOnceStoreSize();
+        Bootstrap::permissionGate(false, false);
+        self::assertSame(
+            $before,
+            self::warnOnceStoreSize(),
+            'a second build re-resolves and announces nothing again — once per session, not once per review',
+        );
+    }
+
+    public function testTheImplicitDefaultWithoutATitleBackendStaysSilentAndOff(): void
+    {
+        $this->userSettings(['theme' => 'dark']);
+
+        $gate = Bootstrap::permissionGate(false, false);
+        self::assertNull($gate->reviewer(), 'nothing to review with: the default cannot engage, and forces nothing');
+        self::assertFalse(
+            LaunchNotices::reported(Lang::t('cli.warn.auto_review_no_provider')),
+            'C-SEC-7.e: the no-provider warning stays the explicit-true surface — a default does not announce its own silence',
+        );
+        self::assertFalse(
+            LaunchNotices::reported(Lang::t('appLaunch.notice.auto_review_default')),
+            'and no engagement means no engagement notice',
+        );
+        self::assertSame(0, self::warnOnceStoreSize(), 'the whole launch is said about nothing');
+    }
+
+    public function testTheImplicitDefaultWarnsAboutABrokenOverrideButAnnouncesNoEngagement(): void
+    {
+        // The silenced warning is ONLY the no-provider case. A companion the
+        // user typed still earns its honest warning under the implicit
+        // default, and a failed engagement announces no engagement.
+        $this->userSettings(['autoReviewModel' => 'nosuchprovider7d/probe-model-7d']);
+
+        $gate = Bootstrap::permissionGate(false, false);
+        self::assertNull($gate->reviewer(), 'the override could not be built, so nothing engaged');
+        self::assertTrue(
+            LaunchNotices::reported(Lang::t('cli.warn.auto_review_model_unusable')),
+            'the typed key still gets its warning',
+        );
+        self::assertFalse(
+            LaunchNotices::reported(Lang::t('appLaunch.notice.auto_review_default')),
+            'but the notice belongs to engagement, not to trying',
+        );
     }
 
     // ── fixtures ────────────────────────────────────────────────────────

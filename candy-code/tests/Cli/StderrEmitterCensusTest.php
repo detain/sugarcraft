@@ -233,14 +233,15 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * application does not write one. `Bootstrap`'s warnings are handed to
  * {@see \SugarCraft\Code\Cli\Bootstrap::STDERR_LINE_FORMAT}, which adds the
  * prefix on the way out, so the message literals are invisible to a scan for
- * it — FORTY-SEVEN call sites in `src/Cli/Bootstrap.php` (f-app-launch 2026-10-14
+ * it — FORTY-EIGHT call sites in `src/Cli/Bootstrap.php` (f-app-launch 2026-10-14
  * added three: the rv-sec-1 bypass banner, the rv-sec-3 policy-freshness notice
  * and the rv-enduser-1 unselectable-override row; PLG-1 added three more: the
  * bundles() warning drain and the two declined-surface notices, and C-SEC-7.d
  * three more still: autoReviewModel's not-a-string, bad-shape and unusable
  * warnings, and C-SEC-6.b one more: the project-narrowing notice, and C-SEC-7.a one more:
  * the headless-default banner that now names `-p`'s new asking default; and C-SEC-7.b two more still: useRestricted()'s and useSafeMode()'s
- * one-launch notices each), each producing a
+ * one-launch notices each, and C-SEC-7.e one more: the once-per-session
+ * implicit-autoReview launch notice that rides the seam when the default engages), each producing a
  * distinct `candy-code: ` line, against a channel-4 credit of eight for that
  * file (ISS-026's envelope-carrying resume notice joined the six as a raw
  * fwrite line, and its rv6 `--resume` pick twin joined the seven). Off by
@@ -651,7 +652,9 @@ final class StderrEmitterCensusTest extends TestCase
         // seam from useRestricted()/useSafeMode() — the same routing as the
         // bypass-mode banner: stderr stays the complete record, the shelf
         // carries each switch's one row.
-        'src/Cli/Bootstrap.php' => 47,
+        // +1 in C-SEC-7.e: the implicit-autoReview launch notice rides the
+        // transcript seam from permissionGate() — same routing, same sibling.
+        'src/Cli/Bootstrap.php' => 48,
     ];
 
     /**
