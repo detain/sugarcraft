@@ -53,7 +53,7 @@ final readonly class ParsedArgs
      *
      * @var list<string>
      */
-    public const SUBCOMMANDS = ['acp', 'attach', 'bundles', 'completion', 'doctor', 'login', 'mcp', 'models', 'self-update', 'serve', 'session'];
+    public const SUBCOMMANDS = ['acp', 'attach', 'bundles', 'completion', 'doctor', 'login', 'mcp', 'models', 'self-update', 'serve', 'session', 'usage'];
 
     /**
      * The flags each subcommand verb owns, keyed by verb: `true` when the flag
@@ -144,6 +144,12 @@ final readonly class ParsedArgs
             '--limit' => true,
             '--name' => true,
             '--with-children' => false,
+        ],
+        // `usage` (C-SES-8.e): the ledger roll-up takes one optional window
+        // OPERAND (7|30|all, decided by the verb — the parser never interprets
+        // operands) and this one scoped flag naming the session to fold.
+        'usage' => [
+            '--session' => true,
         ],
     ];
 

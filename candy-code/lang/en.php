@@ -227,6 +227,7 @@ return [
     'cli.completion.verb.self_update' => 'Replace the phar install with the latest verified release',
     'cli.completion.verb.serve' => 'Run the WebSocket server for the web UI',
     'cli.completion.verb.session' => 'Manage stored sessions',
+    'cli.completion.verb.usage' => 'Roll up the durable spend ledger by day and model',
     'cli.completion.verb_argument' => '{verb} argument',
     'cli.doctor.absent' => 'absent',
     'cli.doctor.cap' => 'spend cap ${amount} per session',
@@ -467,6 +468,18 @@ session; acp runs turns for an editor, until the editor disconnects):
   completion bash|zsh|fish
                          Write a shell completion script to stdout, e.g.
                          eval "$(candy-code completion bash)".
+  usage [7|30|all] [--session <target>]
+                         Roll up the durable spend ledger by day and model:
+                         the same page `/usage` prints, over the same shared
+                         fold. 7 and 30 take whole UTC days today-included,
+                         all (or no operand) spans the whole ledger, and a
+                         window outside that set is refused rather than
+                         silently widened. --session narrows to one session
+                         by id, name or unique prefix; --output-format json
+                         emits the facts map the page was built from. An
+                         unreadable ledger states its reason and exits 1;
+                         dollars for folds that include an unpriced model
+                         print as a ≥ lower bound, never as a plain sum.
 
 Options:
   -p, --prompt <text>    Provide a prompt on the command line (one-shot mode)
@@ -1165,6 +1178,8 @@ TXT,
     'cli.truncate.length_stopped' => 'This answer stopped at the provider output limit and may end mid-thought; raise `maxOutputTokens` in ~/.candy-code/config.json for a longer single reply.',
     'cli.truncate.loop_guard' => 'This turn was ended by the repeat-call loop guard: the model called {tool} {count} times with the same arguments and got the same result each time. The answer above describes where it stopped — point the next run at a different approach.',
     'cli.truncate.steps' => 'This turn used all of its tool steps before the work was done; the answer above describes where it stopped, not a finished answer. Raise --max-turns (or the `maxToolSteps` setting in ~/.candy-code/config.json) for longer agentic runs.',
+    'cli.usage.bad_window' => 'usage {window}: the window must be 7, 30 or all (or omitted for the whole ledger).',
+    'cli.usage.usage' => 'Usage: candy-code usage [7|30|all] [--session <target>] [--output-format json]',
     'cli.warn.auto_review_model_bad_shape' => 'autoReviewModel must be spelled provider/model; the auto exec reviewer stays off',
     'cli.warn.auto_review_model_not_string' => 'autoReviewModel in your config.json or settings.json must be a string naming provider/model; the auto exec reviewer stays off',
     'cli.warn.auto_review_model_unusable' => 'autoReviewModel names a provider this build cannot configure; the auto exec reviewer stays off',

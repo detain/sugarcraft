@@ -588,7 +588,11 @@ final class StderrEmitterCensusTest extends TestCase
         // C-SES-7.b 2026-10-29: +3 — the `session import` arm's own
         // `candy-code: ` envelopes: the missing-operand usage door, the
         // unknown --format usage door, and the import-refused line.
-        'src/Cli/Subcommands.php' => 44,
+        // C-SES-8.e 2026-10-30: +2 — the `usage` arm's two usage doors (the
+        // extra-operand refusal and the bad-window refusal); its store/ledger
+        // and --session doors print through renderUsage()/resolveSessionTarget
+        // and add no new envelope literal.
+        'src/Cli/Subcommands.php' => 46,
         'src/Permissions/PermissionPrompt.php' => 1,
         // Not a message: the protocol schema's `$id` URN
         // (`urn:sugarcraft:candy-code:protocol:v1`, roadmap O-3c) spells the

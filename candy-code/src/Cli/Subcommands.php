@@ -8,6 +8,8 @@ use SugarCraft\Code\Bundles\BundleDiscovery;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Commands\UsageCommand;
+use SugarCraft\Code\Host\Commands\UsageHostCommand;
 use SugarCraft\Code\Host\SpendLedger;
 use SugarCraft\Code\Providers\ProviderFactory;
 use SugarCraft\Code\Session\EnhancedSessionStore;
@@ -37,7 +39,7 @@ use SugarCraft\Core\Util\Tty;
 /**
  * The real CLI subcommands — `mcp list`, `session list|show|rename|delete|
  * pin|unpin|archive|unarchive`, `models`, `doctor`, `bundles list|install`,
- * `serve`, `self-update` and `completion bash|zsh|fish` (crush_code.md Phase 4 item 6; the
+ * `serve`, `self-update`, `usage` and `completion bash|zsh|fish` (crush_code.md Phase 4 item 6; the
  * session verbs past
  * `list`/`delete` are Appendix P §3.4; `serve` is Appendix O §4.7, its body in
  * {@see Serve} — the one verb that keeps running rather than answering, and
@@ -127,6 +129,7 @@ final class Subcommands
             'bundles'    => self::bundles($args),
             'mcp'        => self::mcp($args),
             'completion' => self::completion($args),
+            'usage'      => self::usage($args),
             // Unreachable: ArgvParser only ever stores a ParsedArgs::SUBCOMMANDS
             // member. Answered rather than asserted because the two lists
             // drifting apart must not be a PHP fatal on a user's terminal.
@@ -1879,8 +1882,14 @@ final class Subcommands
         string $verb,
         ParsedArgs $args,
         EnhancedSessionStore $store,
+        ?string $targetOverride = null,
     ): SessionRow|int {
-        $target = $args->subcommandArgs[1] ?? null;
+        // The override is what lets the top-level `usage --session <target>`
+        // verb share this resolver: the session verbs carry the target as the
+        // POSITIONAL operand (`session show <target>`), `usage` carries it as
+        // a scoped FLAG, and the two report through the same ambiguous /
+        // not-found doors so a mistyped id behaves identically either way.
+        $target = $targetOverride ?? $args->subcommandArgs[1] ?? null;
         if ($target === null || $target === '') {
             return NonInteractive::failUsage(
                 'candy-code: ' . Lang::t('cli.session.no_target', ['action' => $verb]),
@@ -1921,6 +1930,100 @@ final class Subcommands
         }
 
         return $matches[0];
+    }
+
+    /**
+     * `candy-code usage [7|30|all] [--session <target>]` (C-SES-8.e) — the
+     * headless read of the durable spend ledger. It prints EXACTLY what the
+     * in-app `/usage` page composes: the same
+     * {@see UsageHostCommand::rollupFacts()} snapshot folded by the same
+     * {@see UsageCommand::compose()}, so the TUI, the usage RPC and this verb
+     * cannot disagree about the same ledger at the same instant. The window
+     * operand rides `/usage`'s own contract (OBS-3): `7`/`30` take whole UTC
+     * days today-included, `all` or no operand spans the whole ledger, and a
+     * token outside that set is a usage error — never a silent fall-back to
+     * all, because a typo'd window must not print a bigger number than was
+     * asked for. `--session <target>` narrows to one session through the same
+     * resolver the `session` verbs use (id, name or unique prefix; the same
+     * ambiguous / not-found doors), and JSON mode emits the facts map itself.
+     * A store that will not open prints its stated reason on the unavailable
+     * page and exits 1 — silence-with-zeros is the failure mode this command's
+     * completeness law forbids — and unpriced models keep compose()'s `≥`
+     * lower-bound framing because nothing here re-formats a figure compose()
+     * already worded.
+     */
+    private static function usage(ParsedArgs $args): int
+    {
+        $operands = $args->subcommandArgs;
+        if (\count($operands) > 1) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.sub.unexpected_operand', ['verb' => 'usage', 'operand' => (string) $operands[1]]),
+                $args->outputFormat,
+                Lang::t('cli.usage.usage'),
+            );
+        }
+
+        $token = $operands[0] ?? 'all';
+        $windowDays = match ($token) {
+            '7' => 7,
+            '30' => 30,
+            default => null,
+        };
+        if ($windowDays === null && $token !== 'all') {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.usage.bad_window', ['window' => $token]),
+                $args->outputFormat,
+                Lang::t('cli.usage.usage'),
+            );
+        }
+
+        $hasTarget = isset($args->subcommandFlags['--session']);
+        // A diagnostic never prunes: same law as `session list` — reading the
+        // ledger must not delete empty sessions as a side effect.
+        try {
+            $store = Bootstrap::sessionStore(prune: false);
+        } catch (\Throwable $e) {
+            return self::renderUsage([
+                'scopeAll' => !$hasTarget,
+                'windowDays' => $windowDays,
+                'days' => null,
+                'models' => null,
+                'reason' => $e->getMessage(),
+            ], $args);
+        }
+
+        $sessionId = null;
+        if ($hasTarget) {
+            $row = self::resolveSessionTarget('usage', $args, $store, (string) $args->subcommandFlags['--session']);
+            if (\is_int($row)) {
+                // The no-target / ambiguous / not-found door already answered;
+                // its exit code is the answer's.
+                return $row;
+            }
+            $sessionId = $row->id;
+        }
+
+        return self::renderUsage(UsageHostCommand::rollupFacts($store, $sessionId, $windowDays, !$hasTarget), $args);
+    }
+
+    /**
+     * The one print path of the `usage` verb: text gets compose()'s page,
+     * JSON gets the facts map under result.usage — both from the SAME array,
+     * so the machine shape can never drift from what the human read. An
+     * unreadable ledger (days/models null) exits 1 with its reason stated,
+     * exactly as the page words it.
+     *
+     * @param array<string, mixed> $facts
+     */
+    private static function renderUsage(array $facts, ParsedArgs $args): int
+    {
+        if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
+            self::emitDocument(['result' => ['usage' => $facts]]);
+        } else {
+            echo UsageCommand::compose($facts) . "\n";
+        }
+
+        return $facts['days'] === null ? NonInteractive::EXIT_FAILURE : NonInteractive::EXIT_OK;
     }
 
     /**
@@ -4421,6 +4524,7 @@ final class Subcommands
         'self-update' => 'cli.completion.verb.self_update',
         'serve' => 'cli.completion.verb.serve',
         'session' => 'cli.completion.verb.session',
+        'usage' => 'cli.completion.verb.usage',
     ];
 
     /**

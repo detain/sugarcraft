@@ -2317,6 +2317,10 @@ candy-code bundles marketplace add|list|remove|update
 candy-code bundles update [bundle]   # re-install recorded bundles from their marketplace pins
 candy-code bundles search|recommend  # read-only catalog queries, never a write
 candy-code completion bash|zsh|fish  # a shell completion script on stdout
+candy-code usage [7|30|all]          # the durable spend ledger folded by day and model —
+                                     #   the same page `/usage` prints; --session <target>
+                                     #   narrows to one session, --output-format json
+                                     #   emits the facts map behind the page
 ```
 
 Every one of these is dispatched in the same pre-flight place `--help` and

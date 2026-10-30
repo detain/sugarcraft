@@ -1213,19 +1213,19 @@ Git itself, hooks included, runs under three guarantees:
   `git rev-parse --local-env-vars` lists are removed. Every call runs against
   the contained root.
 
-`candy-code --help` lists exactly eleven under its **Subcommands** heading —
+`candy-code --help` lists exactly twelve under its **Subcommands** heading —
 `doctor`, `login <provider>`, `models`, `session list|show|rename|delete|pin|unpin|archive|unarchive`, `mcp list|trust|import`, `serve`,
-`self-update`, `attach`, `acp`, `bundles list|install`, `completion bash|zsh|fish` — and none of those but `attach`
+`self-update`, `attach`, `acp`, `bundles list|install`, `completion bash|zsh|fish`, `usage [7|30|all]` — and none of those but `attach`
 and `acp` needs a provider, an API key or a terminal; `login` answers with the
-criterion's own tool or a written key; eight answer and exit, and
+criterion's own tool or a written key; nine answer and exit, and
 `serve` runs until it is stopped. `self-update` exits too, but it is the one that
 rewrites the running file: a phar-only swap verified against the release sidecar.
 `attach` runs the TUI on a session of a
 running `serve`, whose turns run there; `acp` runs turns for an editor that
 started it, speaking the Agent Client Protocol on stdio.
 
-Eleven is the subcommand count, not the count of bare words argv treats specially:
-`run` is a twelfth (the `$arg === 'run'` arm in `Cli\ArgvParser`,
+Twelve is the subcommand count, not the count of bare words argv treats specially:
+`run` is a thirteenth (the `$arg === 'run'` arm in `Cli\ArgvParser`,
 `candy-code run "<prompt>"` in the help's Usage block), but it is an alias for
 `-p` and therefore a turn of conversation rather than a question about the
 install.
