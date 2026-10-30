@@ -1387,8 +1387,14 @@ final class Bootstrap
             currentSessionName: $sessionName,
             // ISS-102: for a plain launch this is the minter of the row the
             // id above names; every other mode has a real row already and
-            // passes null.
-            sessionMint: $opened['mint'] ?? null,
+            // passes null. C-SES-7.c rv1 MAJOR-1: the TAB path is the other
+            // lazy shape — openTabSession() hands a fresh tab a minter, and
+            // Chat's submit fires it regardless of the null store the line
+            // above threads, so an incognito process opening a new tab minted
+            // a real row on its first prompt. The flag gates the argument
+            // itself here: an incognito tab carries no minter, exactly as the
+            // launch arm of openSession() already carries none.
+            sessionMint: self::incognito() ? null : ($opened['mint'] ?? null),
             // SES-1: a resumed session's spend does not restart at $0.00 —
             // the durable usage_records rollup reseeds the tracker at THE
             // chat-construction seam both `--continue` and `--resume` pass
@@ -1809,11 +1815,13 @@ final class Bootstrap
             }
             $store->createSession($id, $provider, $model, null, null, $cwd, $branch);
         };
-        if ($store instanceof EnhancedSessionStore) {
+        if ($store instanceof EnhancedSessionStore && !self::incognito()) {
             try {
                 $store->pruneEmptySessions($id);
             } catch (\Throwable) {
                 // Housekeeping only; opening a tab never fails over it.
+                // C-SES-7.c rv1: incognito turns WRITES off, and the sweep is
+                // a write to the store — an incognito tab opens read-only.
             }
         }
 
@@ -4235,13 +4243,13 @@ public static function useSessionLaunch(bool $continue, bool $resume = false, ?s
      * registers `--incognito` here exactly as it registers the launch mode,
      * and every session-opening surface reads the one static.
      */
-public static function useIncognito(bool $incognito): void
+    public static function useIncognito(bool $incognito): void
     {
         LaunchContext::useIncognito($incognito);
     }
 
     /** Whether this launch keeps nothing — {@see LaunchContext::incognito()}. */
-public static function incognito(): bool
+    public static function incognito(): bool
     {
         return LaunchContext::incognito();
     }

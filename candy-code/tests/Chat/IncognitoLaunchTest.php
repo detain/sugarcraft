@@ -10,6 +10,7 @@ use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\BatchMsg;
 use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\App\ContextMeasuredMsg;
+use SugarCraft\Code\App\InitialPromptMsg;
 use SugarCraft\Code\App\MemoryConsolidatedMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
@@ -28,7 +29,8 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  * C-SES-7.c: `--incognito` launches keep nothing. The flag is one decision
  * carried on the Chat itself (and registered on the launch shelf); these
  * pins walk every surface that decision is supposed to reach: the launch
- * opens an id with no row and no minter, the settle drops its memory-writing
+ * opens an id with no row and no minter, the tab path's separate lazy minter
+ * is gated at the seam too (rv1 MAJOR-1), the settle drops its memory-writing
  * passes while every sibling pass stays scheduled, the carry survives the
  * clones the update loop performs (a dropped field would silently un-switch
  * the session at the first keystroke), and the status bar paints the
@@ -88,6 +90,96 @@ final class IncognitoLaunchTest extends TestCase
 
         Bootstrap::useIncognito(false);
         self::assertArrayHasKey('mint', Bootstrap::openSession($store), 'the control launch still carries its minter');
+    }
+
+    /**
+     * rv1 MAJOR-1: a tab does NOT ride the launch-mode ladder —
+     * `openTabSession()` hands every fresh tab the ISS-102 lazy minter, and
+     * Chat's submit fires that minter whatever store came alongside it. An
+     * `--incognito` process that opened a new tab and typed one message used
+     * to leave a real row (provider, model, cwd, branch) in the workspace
+     * store, showing up in `/sessions` — the exact record the flag promises
+     * will not exist. And the tab open itself ran the empty-session sweep, a
+     * store WRITE from a launch that keeps nothing (rv1's "full honesty"
+     * cure arm). The seam's own gate (no minter on the flagged Chat), the
+     * behavioral outcome (dispatch mints nothing), and the sweep's own
+     * silence (an aged prunable empty row survives an incognito tab open) are
+     * pinned together, and the keeping tab at the end proves BOTH arms are
+     * live: one flag bit away, the identical sweep deletes the aged row and
+     * the identical dispatch DOES mint.
+     */
+    public function testAnIncognitoTabOpensWriteFreeMintsNoRowAndTheKeepingTabDoesBoth(): void
+    {
+        // A real workspace is described for the tab factory; ambient
+        // provider-selection env would steer it (the same neutralisation the
+        // other launch-paying tests apply before calling Bootstrap itself).
+        $neutral = [];
+        foreach (['CANDY_CODE_PROVIDER', 'CANDY_CODE_BACKEND_CMD', 'CANDY_CODE_BACKEND_CMD_STREAM', 'CANDY_CODE_MODEL', 'CANDY_CODE_TITLE_MODEL'] as $name) {
+            $neutral[$name] = getenv($name);
+            putenv($name);
+        }
+
+        try {
+            Bootstrap::useIncognito(true);
+
+            // Cold tab: this call describes the workspace (its retention
+            // sweep runs while the store is still empty, so the aged row
+            // seeded below cannot be eaten by THAT write) and memoizes it —
+            // every later tab in this test rides the same store handle.
+            $tab = Bootstrap::tabChat($this->dir . '/root', null);
+            $store = (new \ReflectionProperty(Chat::class, 'workspace'))->getValue($tab)->sessionStore;
+            self::assertInstanceOf(EnhancedSessionStore::class, $store, 'the tab rides a real workspace store — the rows the bug could write are real ones');
+            self::assertTrue($tab->incognito());
+            self::assertNull((new \ReflectionProperty(Chat::class, 'sessionMint'))->getValue($tab), 'an incognito tab is handed no minter to fire');
+
+            // Seed an aged, nameless, transcript-less row: exactly the shape
+            // pruneEmptySessions() deletes (minAge past, nothing to keep it),
+            // written through an own handle onto the file the tab store just
+            // opened.
+            $seed = new EnhancedSessionStore($this->dir . '/home/.candy-code/session.db');
+            $seed->createSession('aged-empty', 'p', 'm');
+            (new \ReflectionProperty(EnhancedSessionStore::class, 'pdo'))
+                ->getValue($seed)
+                ->exec("UPDATE sessions SET updated_at = '2000-01-01 00:00:00' WHERE id = 'aged-empty'");
+            self::assertNotNull($store->getSession('aged-empty'), 'the seed sits on the same store the tab reads — the sweeps below would be vacuous otherwise');
+
+            // The bug's headline: first dispatch used to fire the minter. The
+            // returned Cmd is never RUN — the backend is not dialed; a pending
+            // minter would have fired synchronously inside update().
+            $tab->update(new InitialPromptMsg('first words on an incognito tab'));
+            self::assertSame(
+                ['aged-empty'],
+                array_column($store->listSessions(), 'id'),
+                'a --incognito tab minted a real session row on its first prompt',
+            );
+
+            // A second incognito tab open is the sweep's own probe: with the
+            // MAJOR-1 cure the open is read-only and the aged row stands;
+            // with `!self::incognito()` dropped from the prune gate, this is
+            // where it dies.
+            Bootstrap::tabChat($this->dir . '/root', null);
+            self::assertNotNull($store->getSession('aged-empty'), 'an incognito tab open ran the empty-session sweep — the flag turns WRITES off, and the sweep writes');
+
+            // Both positive controls, one flag bit away, on the SAME store:
+            // the keeping tab's open DOES prune the aged row, and its first
+            // dispatch DOES mint. (The kept tab rides the memoized workspace,
+            // so no retention sweep re-decides the seed.)
+            Bootstrap::useIncognito(false);
+            $kept = Bootstrap::tabChat($this->dir . '/root', null);
+            self::assertFalse($kept->incognito(), 'the control tab is a plain keeping tab');
+            self::assertNull($store->getSession('aged-empty'), 'the keeping tab ran the sweep the incognito one skipped — the arm above is the gate, not a dead path');
+            self::assertNotNull((new \ReflectionProperty(Chat::class, 'sessionMint'))->getValue($kept), 'the keeping fresh tab still carries its minter');
+            $kept->update(new InitialPromptMsg('first words on a keeping tab'));
+            self::assertSame(
+                [$kept->currentSessionId()],
+                array_column($store->listSessions(), 'id'),
+                'the same dispatch one flag away writes its row: the defect shape, now correctly reserved for keeping launches',
+            );
+        } finally {
+            foreach ($neutral as $name => $value) {
+                $value === false ? putenv($name) : putenv($name . '=' . $value);
+            }
+        }
     }
 
     public function testIncognitoDropsTheTurnEndMemoryPassesAndTheControlSchedulesOne(): void
