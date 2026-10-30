@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Hooks;
 
+use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Share\JsonlTranscriptWriter;
@@ -1319,7 +1320,7 @@ final readonly class ScriptHook implements BoundedHookInterface
             'transcript_path' => JsonlTranscriptWriter::enabled()
                 ? JsonlTranscriptWriter::pathFor(
                     $context->sessionId,
-                    \SugarCraft\Code\Cli\LaunchContext::projectRootForSettings(),
+                    LaunchContext::projectRootForSettings(),
                 )
                 : null,
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);

@@ -342,6 +342,15 @@ final class TranscriptResumeTest extends TestCase
         $this->assertIsInt($commit);
         $this->assertIsInt($mirror);
         $this->assertGreaterThan($commit, $mirror, 'the mirror call must follow the transaction call, not sit inside it');
+        // Position alone is vacuous: 'writeTransaction(' lexically precedes the
+        // whole closure, so a mirror moved to the CLOSURE TAIL would still pass
+        // it. The committed gate '$wrote === true' must sit BETWEEN the two —
+        // it only can if the mirror runs after the transaction has returned.
+        $this->assertStringContainsString(
+            '$wrote === true',
+            mb_substr($saveSlice, $commit, $mirror - $commit),
+            'the mirror must be gated on the transaction result, which places it after the commit, not at the closure tail',
+        );
 
         $mirrorReflection = new \ReflectionMethod(EnhancedSessionStore::class, 'mirrorTranscript');
         $mirrorSlice = (string) implode(
