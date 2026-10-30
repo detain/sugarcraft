@@ -294,7 +294,7 @@
    "session": "SPAWN_BUILDER_AFTER_COMPRESS"
   }
  },
- "master_tip": "1f7e4934a2aa9cda65303cbeddd6cfb59560aede",
+ "master_tip": "745a8001cfe16dd66b697c9f06bcd3c086755ac3",
  "master_tip_observed": "ca1e0b51f",
  "next_fill_queue": [],
  "next_lead": {
@@ -1358,9 +1358,9 @@
   "cure-w7": "MASTER REPAIR 2026-10-27 d3395595e (pick of 08862c003, lane base 8eab506d9; clean zero conflicts; 2 files: candy-code/src/Session/EnhancedSessionStore.php +31/-1, candy-code/tests/Session/UsageRecordsTest.php +54/0; %ae/%ce separate greps 1/1 detain@interserver.net, zero Co-Authored trailers). NOT a plan step: no §4 mark, welded count unchanged (90). Gates (plain pipe cwd candy-code env -u LINES -u COLUMNS): --filter 'UsageRecords|SessionStore|Tombstone' = Tests: 130, Assertions: 477 OK (2 pre-existing deprecations) EXACT; --filter 'SessionEventsTable|TranscriptResume|EventLog|DebouncedTranscript|ShareStore' = Tests: 61, Assertions: 306 OK EXACT; gen-command-docs/gen-tool-docs/gen-settings-doc --check all up-to-date rc0 (lane touched no docs); five-guard 133T/15816A F2 = staleness pair ONLY (25,537 pinned vs live - closeout re-pin). DUR: no new *Test.php (pins ride existing UsageRecordsTest). inflight entry removed at this weld."
  },
  "weld_pending": [
-  "C-TOOL-2.c",
   "C-TUI-2.g",
-  "C-TUI-4.b"
+  "C-TUI-4.b",
+  "C-SEC-7.a"
  ],
  "weld_queue": {
   "_legacy_list": [
@@ -1627,9 +1627,10 @@
   "C-TUI-2.f",
   "C-SES-7.d",
   "C-SES-8.e",
-  "C-TOOL-2.a"
+  "C-TOOL-2.a",
+  "C-TOOL-2.c"
  ],
- "welded_count": 252,
+ "welded_count": 253,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "welder_inflight_note": "WELDER ses_e7448801cffejnqD7XXhFFoIJG RUNNING: its welded_count=243 + the §4 ✅ 94432cfd1 C-SES-8.a line are UNCOMMITTED working-tree writes (a commit cannot contain its own SHA) -> do NOT read as landed; do NOT write run-state concurrently except minimal fresh-read targeted patches; RE-VERIFY my TOOL-2.f weld_pending + TOOL-2.g entries survive its fold.",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
