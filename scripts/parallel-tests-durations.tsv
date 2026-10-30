@@ -1641,3 +1641,4 @@ candy-code/tests/Session/SqliteConnectCensusTest.php	0.59	2
 candy-code/tests/Session/ThinkingBlocksTranscriptRoundTripTest.php	0.40	4
 candy-code/tests/Sessions/ScheduleCrossHostFireTest.php	0.59	7
 candy-code/tests/Protocol/FilesDiffCheckpointTest.php	1.919	9
+candy-code/tests/Cli/HeadlessDefaultPermissionModeTest.php	0.058	10
