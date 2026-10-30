@@ -475,6 +475,14 @@ Bootstrap::useSessionLaunch($args->continueSession, $args->resumeRequested, $arg
 // parser, and every session-opening surface reads it back from the one
 // LaunchContext static (chat(), the -p funnel, openSession()).
 Bootstrap::useIncognito($args->incognito);
+// C-SEC-7.b: the two launch-narrowing switches join the same pre-dispatch
+// family. Registered HERE, before subcommands and before either runner,
+// because both flags must already be true when the first tool set, trust
+// list or bundle scan is built — and each registration records its one
+// launch notice through Bootstrap, so the narrowing is announced on the
+// channel the operator reads whatever they then run.
+Bootstrap::useRestricted($args->restricted);
+Bootstrap::useSafeMode($args->safeMode);
 
 // The real subcommands — `mcp list`, `session list|delete`, `models`, `doctor`
 // and `completion bash|zsh|fish` (crush_code.md Phase 4 item 6). Dispatched

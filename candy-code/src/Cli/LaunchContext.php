@@ -107,6 +107,29 @@ final class LaunchContext
     private static bool $incognito = false;
 
     /**
+     * C-SEC-7.b: whether this launch is RESTRICTED — the code-running tools
+     * are dropped from the model-facing set at
+     * {@see \SugarCraft\Code\Cli\Bootstrap::filterToolSet()}, the one funnel
+     * every launch path's tool set passes through. Registered once from
+     * `--restricted` like the incognito static above it, because the drop
+     * must answer on EVERY backend build (main chat, sub-agents, `-p`) and
+     * threading a param through each builder is how one of them gets
+     * forgotten.
+     */
+    private static bool $restricted = false;
+
+    /**
+     * C-SEC-7.b: whether this launch is in SAFE MODE — the process behaves
+     * as if nothing were trusted, whatever the trust lists say. Read at the
+     * four places trust can enter a process: the trusted-roots funnel,
+     * {@see \SugarCraft\Code\Cli\Bootstrap::bundles()}, and the foreign
+     * skills/commands/presets discovery. Deliberately a launch static rather
+     * than a permission mode: a mode can be switched mid-session from the
+     * TUI, and trust memos frozen at first read would outlive the switch.
+     */
+    private static bool $safeMode = false;
+
+    /**
      * Where the ↑/↓ prompt history lives, when something other than
      * `~/.candy-code/prompt_history.jsonl` — see {@see pinPromptHistoryPath()}.
      */
@@ -260,6 +283,26 @@ final class LaunchContext
     }
 
     /**
+     * Register `--restricted` (C-SEC-7.b): this launch cannot run code — the
+     * shell-subject tools and the agent/workflow/MCP-call shapers leave the
+     * model-facing set at
+     * {@see \SugarCraft\Code\Cli\Bootstrap::filterToolSet()}.
+     */
+    public static function useRestricted(bool $restricted): void
+    {
+        self::$restricted = $restricted;
+    }
+
+    /**
+     * Register `--safe-mode` (C-SEC-7.b): this launch ignores every trust
+     * grant, bundle and foreign import, as if no root had ever been trusted.
+     */
+    public static function useSafeMode(bool $safeMode): void
+    {
+        self::$safeMode = $safeMode;
+    }
+
+    /**
      * Point the prompt history at $path instead of `~/.candy-code`, or back at
      * the default with null. For the test suite, which pins it into its sandbox
      * so a test that presses Enter on a {@see Bootstrap::chat()}-built Chat can never add
@@ -364,6 +407,18 @@ final class LaunchContext
     public static function incognito(): bool
     {
         return self::$incognito;
+    }
+
+    /** Whether this launch cannot run code ({@see useRestricted()}, C-SEC-7.b). */
+    public static function restricted(): bool
+    {
+        return self::$restricted;
+    }
+
+    /** Whether this launch ignores all trust ({@see useSafeMode()}, C-SEC-7.b). */
+    public static function safeMode(): bool
+    {
+        return self::$safeMode;
     }
 
     /** Where the ↑/↓ prompt history lives when the default is overridden. */

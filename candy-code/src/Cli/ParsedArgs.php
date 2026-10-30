@@ -277,6 +277,21 @@ final readonly class ParsedArgs
          *  bool; the refusal against `--continue`/`--resume` is decided in
          *  {@see ArgvParser::parse()} because both legs open a stored row. */
         public bool $incognito = false,
+        /** C-SEC-7.b: `--restricted` — the launch drops every code-running
+         *  tool from the model-facing set (the shell-subject pair plus
+         *  `Task`, `Workflow`, `ShellStop` and `mcp_call`); file tools stay,
+         *  confined by the existing `WritePathScope`. The judgement is made
+         *  at {@see \SugarCraft\Code\Cli\Bootstrap::filterToolSet()} because
+         *  that is the one funnel every launch path's tool set passes
+         *  through; the parser only carries the bool. */
+        public bool $restricted = false,
+        /** C-SEC-7.b: `--safe-mode` — the process ignores everything the
+         *  trust lists could have granted: no trusted project roots (hooks,
+         *  project MCP and project command shells all answer untrusted), no
+         *  bundles, and no foreign skills, commands or agent presets. Set at
+         *  launch only; like the roots it refuses, it is not negotiable
+         *  mid-session because the trust memos read the same static. */
+        public bool $safeMode = false,
     ) {
     }
 
@@ -366,7 +381,9 @@ final readonly class ParsedArgs
         ?string $worktreeName = null,
         ?string $appendSystemPrompt = null,
         bool $incognito = false,
+        bool $restricted = false,
+        bool $safeMode = false,
     ): self {
-        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito);
+        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode);
     }
 }

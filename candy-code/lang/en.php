@@ -210,8 +210,10 @@ return [
     'cli.completion.option.model' => 'Conversation model name (not a provider)',
     'cli.completion.option.output_format' => 'Output format: text, json or stream-json',
     'cli.completion.option.prompt' => 'Run a single prompt and exit (one-shot mode)',
+    'cli.completion.option.restricted' => 'Launch with no code-running tools (Bash, Task and friends leave the set)',
     'cli.completion.option.resume' => 'Resume a stored session by id or name',
     'cli.completion.option.root' => 'Use <dir> as the project root',
+    'cli.completion.option.safe_mode' => 'Launch that ignores all trust: roots, bundles, foreign skills and commands',
     'cli.completion.option.version' => 'Show the installed version',
     'cli.completion.unsupported_shell' => 'completion {shell}: unsupported shell',
     'cli.completion.usage' => 'Usage: candy-code completion {shells}',
@@ -584,6 +586,20 @@ Options:
                          sessions and notes stored EARLIER stay readable.
                          Refused beside --continue or --resume, which reopen
                          kept sessions.
+      --restricted       Launch that cannot run code: Bash, PtyRun, Task,
+                         Workflow, ShellStop and mcp_call are dropped from
+                         every model-facing set for the whole session, and
+                         /permissions cannot put them back. File tools stay,
+                         under the existing path confinement. Also accepts
+                         --restricted=true|false, so a wrapper can outvote
+                         an alias carrying the bare flag. Survives relaunch.
+      --safe-mode        Launch that ignores all trust: every trusted
+                         project root answers untrusted (hooks, project
+                         MCP and command shells), no bundles load, and no
+                         foreign skills, commands or agents are discovered.
+                         Native settings, skills and commands stay. Also
+                         accepts --safe-mode=true|false to outvote an
+                         alias. Survives relaunch.
   -h, --help             Show this help message
   -v, --version          Show the installed version and exit
       --                 End of options: every later argument is positional,
@@ -3700,6 +3716,8 @@ TXT,
     // C-SEC-6.b: names the file, what it added, and what could not be honoured.
     // No trailing period — STDERR_LINE_FORMAT adds one (LaunchNoticeOwnPeriodTest).
     'appLaunch.notice.project_narrowing_rules' => '⚠ {file} narrowed this launch\'s permissions: {count} deny/ask rule(s) loaded first, {dropped} allow rule(s) dropped — a project file cannot grant allow',
+    'appLaunch.notice.restricted' => '⚠ --restricted: this launch runs with no code-executing tools — Bash, PtyRun, Task, Workflow, ShellStop and mcp_call are absent from every model-facing set; file tools stay under their path confinement and /permissions cannot put the dropped tools back',
+    'appLaunch.notice.safe_mode' => '⚠ --safe-mode: trusted project roots, bundles, and foreign skills, commands and agents are all ignored for this launch — it behaves as if nothing had ever been trusted',
 
     // --- fix-w2-chat 2026-10-14 ---
     'chat.launch.echo_backend' => 'No provider is configured, so this session runs on the built-in offline echo backend — replies are echoed locally, no model is called. Run `candy-code doctor` to see what a provider needs, then press Ctrl+P to switch model once one is configured.',

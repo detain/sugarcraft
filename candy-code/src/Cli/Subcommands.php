@@ -4509,6 +4509,8 @@ final class Subcommands
         '--continue' => ['short' => '-c', 'value' => null, 'desc' => 'cli.completion.option.continue'],
         '--resume' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.resume'],
         '--incognito' => ['short' => null, 'value' => null, 'desc' => 'cli.completion.option.incognito'],
+        '--restricted' => ['short' => null, 'value' => null, 'desc' => 'cli.completion.option.restricted'],
+        '--safe-mode' => ['short' => null, 'value' => null, 'desc' => 'cli.completion.option.safe_mode'],
         '--help' => ['short' => '-h', 'value' => null, 'desc' => 'cli.completion.option.help'],
         '--version' => ['short' => '-v', 'value' => null, 'desc' => 'cli.completion.option.version'],
     ];

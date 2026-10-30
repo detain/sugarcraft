@@ -112,10 +112,26 @@ final class SkillManager
      */
     public function loadAll(string $projectRoot = '.', array $bundles = []): void
     {
-        $bundle = $this->foreign->bundleTiers($bundles);
-        $agents = $this->foreign->agentsTiers($projectRoot);
-        $claude = $this->foreign->claudeTiers($projectRoot);
-        $opencode = $this->foreign->opencodeTiers($projectRoot);
+        // C-SEC-7.b: `--safe-mode` skips the whole foreign band. The four
+        // legs below read trees the operator never wrote for this product —
+        // bundle `skills/`, `.agents/`, `.claude/skills`, `.opencode/skills` —
+        // and every SKILL.md that lands there is a description another
+        // ecosystem chose to hand this model. Safe mode's promise is that
+        // nothing imported runs or speaks, so the legs are refused TOGETHER,
+        // at the one place all four are walked; the refusal reads as empty
+        // tiers, which is the same shape an absent directory already has.
+        // The NATIVE manifests stay: this flag refuses foreign imports, not
+        // the project's own skill files. (Reading the latch as a fully
+        // qualified call is this namespace's existing shape for Bootstrap —
+        // see {@see SkillMatcher} and {@see SkillPathNudge}.)
+        if (\SugarCraft\Code\Cli\Bootstrap::safeMode()) {
+            $bundle = $agents = $claude = $opencode = [];
+        } else {
+            $bundle = $this->foreign->bundleTiers($bundles);
+            $agents = $this->foreign->agentsTiers($projectRoot);
+            $claude = $this->foreign->claudeTiers($projectRoot);
+            $opencode = $this->foreign->opencodeTiers($projectRoot);
+        }
         $native = $this->loader->manifestTiers($projectRoot);
 
         // Who holds each name so far, so every later registration that replaces

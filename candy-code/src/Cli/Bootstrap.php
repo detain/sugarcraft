@@ -56,6 +56,7 @@ use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionRule;
 use SugarCraft\Code\Permissions\ProjectNarrowingRules;
 use SugarCraft\Code\Permissions\SafetyClassifier;
+use SugarCraft\Code\Permissions\ShellSubjectTools;
 use SugarCraft\Code\Providers\EchoProvider;
 use SugarCraft\Code\Providers\ProviderFactory;
 use SugarCraft\Code\Providers\ProviderInterface;
@@ -257,7 +258,9 @@ final class Bootstrap
      * sum stops fitting under this cap — so the next source cannot spend the
      * headroom silently.
      *
-     * 50 is that sum — 49 after the C-SEC-6.b project-narrowing row
+     * 52 is that sum — 51 after the C-SEC-7.b launch-switch pair
+     * (useRestricted, useSafeMode) joined the roster on top of the C-SEC-6.b
+     * project-narrowing row
      * joined the roster on top of the C-EXT-4.d launch-recommendation
      * aggregate row, which joined on top of the C-PRV-1.b
      * unshaped-launch-tier row, which joined on top of the v1:F-1
@@ -271,7 +274,7 @@ final class Bootstrap
      * row, because a silently truncated warning list is the defect this seam
      * exists to end.
      */
-    public const LAUNCH_NOTICE_LIMIT = 50;
+    public const LAUNCH_NOTICE_LIMIT = 52;
 
     /**
      * Roadmap N-P4d: the setting that replaces {@see LAUNCH_NOTICE_LIMIT} (its
@@ -378,6 +381,12 @@ final class Bootstrap
         // every matching `name@marketplace` is named inside the single
         // sentence, so the bounded worst case is 1, not MAX_RECOMMENDATIONS.
         'reportBundleRecommendations' => 1,
+        // C-SEC-7.b: one row EACH — `--restricted` and `--safe-mode` each
+        // raise their own launch notice from their own registration seam,
+        // and both can be armed on one launch, so the bounded worst case is
+        // one row per switch, not one per launch.
+        'useRestricted' => 1,
+        'useSafeMode' => 1,
     ];
 
     /**
@@ -2644,6 +2653,16 @@ final class Bootstrap
      */
     public static function bundles(?string $root): array
     {
+        // C-SEC-7.b: `--safe-mode` answers "no bundles" BEFORE the memo is
+        // consulted, so the answer cannot be frozen by an earlier
+        // non-safe-mode read in the same process and cannot seed a memo a
+        // later safe-mode launch would reuse. Bundles can carry hooks, MCP
+        // servers and skills — code the operator did not read — so a locked
+        // launch sees none, whatever the config names.
+        if (self::safeMode()) {
+            return [];
+        }
+
         $configured = self::readUserConfig()[BundleDiscovery::SETTING_KEY] ?? [];
         $paths = array_values(array_filter(\is_array($configured) ? $configured : [], 'is_string'));
 
@@ -3211,7 +3230,18 @@ final class Bootstrap
         $registry = new ForeignAgentPresetRegistry();
 
         try {
-            $presets = $registry->discover($root, self::bundles($root));
+            // C-SEC-7.b: the bundles argument is already `[]` under
+            // `--safe-mode` ({@see bundles()}), but that only empties the
+            // EXTRA scan roots — `discover()` would still walk this root's
+            // own foreign agent directories (`.claude/agents` and the rest
+            // of the import family). Safe mode answers "no foreign agents"
+            // outright, so the walk is skipped, not filtered: a fresh
+            // registry also reports no skipped files, which keeps this
+            // method's per-file notice seam silent exactly as an empty scan
+            // would.
+            $presets = self::safeMode()
+                ? []
+                : $registry->discover($root, self::bundles($root));
         } catch (\Throwable $e) {
             // BOTH CHANNELS, and the stderr bytes are unchanged — see
             // {@see warnPermissionConfigInTranscript()}. A launch whose
@@ -4305,6 +4335,52 @@ public static function useSessionLaunch(bool $continue, bool $resume = false, ?s
     public static function incognito(): bool
     {
         return LaunchContext::incognito();
+    }
+
+    /**
+     * Register `--restricted` (C-SEC-7.b) — the flag's one launch notice is
+     * recorded HERE, at the seam that makes the restriction real, for the
+     * same reason the bypass-mode notice rides its resolution rather than
+     * the TUI paint: a launch that narrowed its tools without saying so is
+     * indistinguishable, from the model's end, from a launch that failed to
+     * wire them. Transcript AND stderr (the funnel's standing both-channel
+     * law) — a `-p` run pipes its answer elsewhere and the operator must
+     * still see what was taken away.
+     */
+    public static function useRestricted(bool $restricted): void
+    {
+        LaunchContext::useRestricted($restricted);
+
+        if ($restricted) {
+            self::warnPermissionConfigInTranscript(Lang::t('appLaunch.notice.restricted'));
+        }
+    }
+
+    /** Whether this launch cannot run code — {@see LaunchContext::restricted()}. */
+    public static function restricted(): bool
+    {
+        return LaunchContext::restricted();
+    }
+
+    /**
+     * Register `--safe-mode` (C-SEC-7.b), with the same one-launch-notice
+     * discipline as {@see useRestricted()} — the flags can be combined, and
+     * each states its own narrowing because each can be set without the
+     * other.
+     */
+    public static function useSafeMode(bool $safeMode): void
+    {
+        LaunchContext::useSafeMode($safeMode);
+
+        if ($safeMode) {
+            self::warnPermissionConfigInTranscript(Lang::t('appLaunch.notice.safe_mode'));
+        }
+    }
+
+    /** Whether this launch ignores all trust — {@see LaunchContext::safeMode()}. */
+    public static function safeMode(): bool
+    {
+        return LaunchContext::safeMode();
     }
 
     /**
@@ -7044,6 +7120,21 @@ public static function useMaxCost(?string $maxCost): void
      */
     private static function trustedProjectRoots(array $config, string $key, string $nothingTrusted): array
     {
+        // C-SEC-7.b: `--safe-mode` makes every trust list answer "nothing
+        // trusted". This is the ONE funnel all four `trusted*` readers walk
+        // through (hooks, MCP, command shells and settings roots all call
+        // here), so refusing at the source is the single switch the design
+        // asked for: the per-key predicates downstream ({@see
+        // projectHooksAreTrusted()}, {@see projectMcpIsTrusted()}, {@see
+        // projectCommandShellIsTrusted()}) each find their root absent and
+        // answer untrusted on their own, and {@see
+        // trustedRootsForThisProcess()} — which reads the same lists — sees
+        // none. No memo is consulted or seeded, so the refusal cannot be
+        // frozen out by an earlier non-safe-mode read.
+        if (self::safeMode()) {
+            return [];
+        }
+
         $raw = $config[$key] ?? null;
         if ($raw === null) {
             return [];
@@ -9530,11 +9621,52 @@ public static function useMaxCost(?string $maxCost): void
      * @param list<Tool> $tools
      * @return list<Tool>
      */
+    /**
+     * C-SEC-7.b: the tools `--restricted` drops from the model-facing set,
+     * in one roster so the rule cannot drift from the flag. These are the
+     * names that can run code the operator did not read first: the
+     * shell-subject pair ({@see ShellSubjectTools::NAMES} — the same
+     * composition {@see \SugarCraft\Code\Runtime::$writeCapableToolNames}
+     * spelt with, and it must ride the source, not a copy, so a third shell
+     * subject cannot join one roster and miss the other), plus `Task` and
+     * `Workflow` (each spawns sub-agents that hold their own tool sets —
+     * dropping only the outer shell would leave the code path running
+     * through delegation), plus `ShellStop` (meaningless without a shell to
+     * stop, and its kill surface is a shell's), plus `mcp_call` (an MCP
+     * server is code the operator did not read, reached through a wire
+     * format the permission matcher only partly sees — McpToolShape's
+     * deferred-subject argument). File tools STAY: they are confined by the
+     * existing `WritePathScope` machinery, and a restricted launch that
+     * cannot read or edit anything would be a launch that cannot answer.
+     *
+     * The drop is a SHRINK, applied after the config's allow/deny
+     * conjunction inside {@see filterToolSet()}; like both KEYS there, no
+     * launch shape lets this list add a tool.
+     *
+     * @var list<string>
+     */
+    public const RESTRICTED_TOOL_NAMES = [...ShellSubjectTools::NAMES, 'Task', 'Workflow', 'ShellStop', 'mcp_call'];
+
     public static function filterToolSet(array $tools): array
     {
         $kept = self::toolSetUnder($tools, self::readUserConfig());
 
         self::reportProjectTierToolRemovals($tools, $kept);
+
+        // C-SEC-7.b, AFTER the project-tier report on purpose: that report
+        // attributes removals to the PROJECT's file, and a --restricted drop
+        // is the OPERATOR's verdict, already announced by the launch notice
+        // `useRestricted()` raised. Diffing it inside the report would print
+        // `Task — removed by .candy-code/config.json` under an unmodified
+        // config, and a wrong attribution on a security seam is worse than
+        // no attribution. The launch notice states the whole roster once,
+        // whatever its position in argv.
+        if (self::restricted()) {
+            $kept = array_values(array_filter(
+                $kept,
+                static fn (Tool $tool): bool => !\in_array($tool->name(), self::RESTRICTED_TOOL_NAMES, true),
+            ));
+        }
 
         // NO FLOOR, and there deliberately still is not one. `disabledTools`
         // reducing the set to nothing is a fail-SAFE direction — a model holding

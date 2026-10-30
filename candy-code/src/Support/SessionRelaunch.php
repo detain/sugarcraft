@@ -31,6 +31,22 @@ final class SessionRelaunch
     /** Launch flags carried into the restart; each takes one value. */
     public const KEPT_FLAGS = ['--config', '--model', '--permission-mode', '--max-cost'];
 
+    /**
+     * C-SEC-7.b: the bare boolean launch switches carried into the restart.
+     * The split from {@see KEPT_FLAGS} is what keeps that constant's doc-block
+     * true — "each takes one value" is exactly what a switch must NOT do: a
+     * carry that consumed `--restricted`'s following word would eat the next
+     * flag or operand. Carried as the RAW token (`--restricted`, or
+     * `--restricted=<value>`): the restart re-judges the value through the
+     * same parser, so `--safe-mode=false` survives as the verdict it carried,
+     * not as a re-typed bare arm. A narrowing that died at the first `/new`
+     * would be worse than no flag: the operator believes they are safe in the
+     * new directory and are not.
+     *
+     * @var list<string>
+     */
+    public const KEPT_SWITCHES = ['--restricted', '--safe-mode'];
+
     private function __construct()
     {
     }
@@ -39,7 +55,10 @@ final class SessionRelaunch
      * The flags of $argv (the launch's, script name first) the restart keeps:
      * {@see KEPT_FLAGS} in either `--flag value` or `--flag=value` form, a
      * relative `--config` made absolute against $launchCwd (the restart runs
-     * in another directory). Dropped: `--resume`, `--continue`/`-c`, `--root`,
+     * in another directory), and every {@see KEPT_SWITCHES} token carried
+     * whole (C-SEC-7.b — a launch-narrowing switch that stopped at the first
+     * relaunch would leave the operator believing in a safety that ended with
+     * the old process). Dropped: `--resume`, `--continue`/`-c`, `--root`,
      * positional operands (a directory or an initial prompt), `-p`/`--prompt`,
      * and everything after `--`.
      *
@@ -55,6 +74,12 @@ final class SessionRelaunch
             $arg = $argv[$i];
             if ($arg === '--') {
                 break;
+            }
+            foreach (self::KEPT_SWITCHES as $switch) {
+                if ($arg === $switch || \str_starts_with($arg, $switch . '=')) {
+                    $out[] = $arg;
+                    continue 2;
+                }
             }
             foreach (self::KEPT_FLAGS as $flag) {
                 $value = null;

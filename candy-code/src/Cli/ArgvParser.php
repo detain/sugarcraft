@@ -154,6 +154,15 @@ final class ArgvParser
         $worktreeRequested = false;
         $worktreeName = null;
         $incognito = false;
+        // C-SEC-7.b: the two launch-narrowing switches, read as one-shot
+        // decisions by Bootstrap (the tool-set drop and the trust/bundle/
+        // foreign choke points). They change NO stored state, so they carry
+        // no refusal family beside --continue/--resume the way --incognito
+        // does: reopening a stored session under --safe-mode is exactly what
+        // the flag is FOR (run the old transcript through a locked-down
+        // process).
+        $restricted = false;
+        $safeMode = false;
 
         $i = 1; // skip $argv[0] (script name)
         while ($i < \count($argv)) {
@@ -791,6 +800,47 @@ final class ArgvParser
                 continue;
             }
 
+            // --restricted / --safe-mode (C-SEC-7.b): launch-narrowing
+            // switches, read once at dispatch by Bootstrap's two choke points
+            // (the tool-set drop; the trust/bundle/foreign refusals). Bare
+            // form arms. The `=` form lets a wrapper carry the switch through
+            // with an explicit verdict — including an OFF that outvotes an
+            // alias carrying the bare flag — and a value outside the two
+            // families is recorded as an unknown flag rather than guessed:
+            // a narrowing silently dropped by a typo is the failure mode
+            // these flags exist to prevent, so the bin's usage error (exit 2)
+            // answers instead.
+            if ($arg === '--restricted') {
+                $restricted = true;
+                ++$i;
+                continue;
+            }
+            if (\str_starts_with($arg, '--restricted=')) {
+                $value = self::switchValue(\substr($arg, 13)); // strlen('--restricted=')
+                if ($value === null) {
+                    $unknownFlags[] = $arg;
+                } else {
+                    $restricted = $value;
+                }
+                ++$i;
+                continue;
+            }
+            if ($arg === '--safe-mode') {
+                $safeMode = true;
+                ++$i;
+                continue;
+            }
+            if (\str_starts_with($arg, '--safe-mode=')) {
+                $value = self::switchValue(\substr($arg, 12)); // strlen('--safe-mode=')
+                if ($value === null) {
+                    $unknownFlags[] = $arg;
+                } else {
+                    $safeMode = $value;
+                }
+                ++$i;
+                continue;
+            }
+
             // --worktree=<name> (C-AGT-6.c): a main session run in its own
             // git worktree. Empty after `=` means bare, as --resume's does.
             if (\str_starts_with($arg, '--worktree=')) {
@@ -1016,7 +1066,7 @@ final class ArgvParser
             $root = \array_shift($positional);
         }
 
-        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito);
+        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode);
     }
 
     /**
@@ -1220,6 +1270,33 @@ final class ArgvParser
     private static function looksLikeFlag(?string $token): bool
     {
         return $token !== null && \strlen($token) > 1 && $token[0] === '-';
+    }
+
+    /**
+     * The `=`-form verdict of a boolean launch switch (C-SEC-7.b): the TRUE
+     * family is {@see \SugarCraft\Code\Support\EnvBool::isTrue()}'s — `1`,
+     * `true`, `yes`, case-insensitive — and the FALSE family is its mirror
+     * `0`/`false`/`no`, carried because an argv wrapper must be able to
+     * outvote an alias that carries the bare flag. Anything else answers
+     * null, and the caller records the WHOLE token as an unknown flag, so
+     * the bin's usage error names it: two bool spellings for one switch
+     * (guessing `on`, or treating a typo as OFF) is how a narrowing flag
+     * silently stops narrowing.
+     */
+    private static function switchValue(string $raw): ?bool
+    {
+        switch (\strtolower($raw)) {
+            case '1':
+            case 'true':
+            case 'yes':
+                return true;
+            case '0':
+            case 'false':
+            case 'no':
+                return false;
+            default:
+                return null;
+        }
     }
 
     /**

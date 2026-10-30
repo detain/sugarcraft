@@ -764,7 +764,16 @@ final class CommandLoader
         // overwrite another foreign row's source entry; it can never overwrite
         // a native tier's, because those walks run after this one and out-rank
         // it in the merge — the same right-bias does both jobs.
-        $foreign = (new ForeignCommandDiscovery($this))->discover($projectRoot, $this->bundles);
+        //
+        // C-SEC-7.b: under `--safe-mode` the walk itself is refused — a
+        // foreign `commands/*.md` is a prompt authored by another ecosystem,
+        // and safe mode's promise is that nothing imported speaks. Refusing
+        // it to `[]` keeps every statement above true of the tiers that DO
+        // run; the CONTROL_PLANE reservation below needs no change because
+        // it only ever answers rows that exist.
+        $foreign = \SugarCraft\Code\Cli\Bootstrap::safeMode()
+            ? []
+            : (new ForeignCommandDiscovery($this))->discover($projectRoot, $this->bundles);
 
         $user = $this->loadUserCommands();
         $project = $this->loadProjectCommands($projectRoot);
