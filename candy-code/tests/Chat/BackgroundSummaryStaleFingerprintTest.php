@@ -50,13 +50,13 @@ final class BackgroundSummaryStaleFingerprintTest extends TestCase
         return $history;
     }
 
-    /** ~62,500 estimated tokens: in the 70%–85% band. */
+    /** ~69,300 estimated tokens: in the 70%–85% band, over the prefetch floor. */
     private static function reminderBandPairs(): array
     {
         $history = [];
         for ($i = 0; $i < 3; $i++) {
-            $history[] = Message::user(str_repeat(chr(97 + $i), 41_500));
-            $history[] = Message::assistant(str_repeat(chr(110 + $i), 41_500));
+            $history[] = Message::user(str_repeat(chr(97 + $i), 46_000));
+            $history[] = Message::assistant(str_repeat(chr(110 + $i), 46_000));
         }
         for ($i = 0; $i < 10; $i++) {
             $history[] = Message::user("q{$i}");

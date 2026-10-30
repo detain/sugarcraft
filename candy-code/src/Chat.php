@@ -1750,7 +1750,7 @@ final class Chat implements Model
          * than spliced — plus `sessionId`, so a summary of one session is never
          * held for another.
          *
-         * @var array{id: string, sessionId: ?string, fingerprint: Context\Compaction\HistoryFingerprint, summaries: ?array<string, string>}|null
+         * @var array{id: string, sessionId: ?string, fingerprint: Context\Compaction\HistoryFingerprint, summaries: ?array<string, string>, model: string}|null
          */
         private readonly ?array $backgroundSummary = null,
     /**
@@ -11531,8 +11531,18 @@ final class Chat implements Model
         $backgroundSummary = $this->backgroundSummary;
         $backgroundCmd = null;
         $dispatched = [...$baseHistory, ...$newTurnMessages];
+        // C-CTX-5.b: the request is decided by OpenCode's skip rules, owned by
+        // CompactionService::aheadOfNeedAllowed() — the 64,000-token floor,
+        // and (for a slot already held) the model it was asked under, folded
+        // into the slot's identity beside the session id. Same tier
+        // arithmetic the reminder above runs, over the dispatched history.
+        $sessionModel = $this->backend instanceof Backend\EngineBackend ? $this->backend->model() : '';
+        $aheadTokens = $backgroundSummary !== null || $dueForReminder
+            ? \SugarCraft\Code\Host\CompactionService::tierTokenCount($this->estimateTokenCount($dispatched), $dispatched)
+            : 0;
         if ($backgroundSummary !== null && (
             $backgroundSummary['sessionId'] !== $this->currentSessionId
+            || !\SugarCraft\Code\Host\CompactionService::aheadOfNeedAllowed($aheadTokens, $backgroundSummary['model'] ?? null, $sessionModel)
             || ($backgroundSummary['summaries'] !== null && (
                 !$dueForReminder
                 || !$backgroundSummary['fingerprint']->matches($this->compactionService()->historyFingerprint($this->compactor, $dispatched))
@@ -11549,6 +11559,7 @@ final class Chat implements Model
             // mismatch the moment the reminder's summaries applied).
             && $this->pendingIdleCompaction === null
             && !$this->spendCapReached()
+            && \SugarCraft\Code\Host\CompactionService::aheadOfNeedAllowed($aheadTokens, null, $sessionModel)
         ) {
             $request = $this->buildSummarizationRequest($dispatched, null, null, '', true, $baseHistory);
             if ($request !== null) {
@@ -11557,6 +11568,7 @@ final class Chat implements Model
                     'sessionId' => $this->currentSessionId,
                     'fingerprint' => $request['fingerprint'],
                     'summaries' => null,
+                    'model' => $sessionModel,
                 ];
                 $backgroundCmd = $request['cmd'];
             }

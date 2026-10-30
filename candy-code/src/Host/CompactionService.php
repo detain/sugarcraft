@@ -897,6 +897,17 @@ final class CompactionService
     public const TRIGGER_AUTO = 'auto';
 
     /**
+     * The floor under which no ahead-of-need summary is ever requested
+     * (C-CTX-5.b, mirroring OpenCode's skip rules): small enough that the
+     * 85% tier's compaction is cheap and quick on its own, large enough that
+     * a paid prefetch under it usually buys nothing. The consequence is by
+     * design: on a small-window model whose 70% tier sits below the floor,
+     * the session never prefetches and the 85% tier folds (or parks) exactly
+     * as it did before background summaries existed.
+     */
+    public const AHEAD_OF_NEED_TOKEN_FLOOR = 64_000;
+
+    /**
      * The context a `PreCompact` / `PostCompact` hook is handed (roadmap 2.12),
      * smuggled through the tool-shaped {@see HookContext} exactly as the turn
      * events are ({@see \SugarCraft\Code\Hooks\HookManager::sessionStart()}):
@@ -1312,6 +1323,31 @@ final class CompactionService
             $this->attemptCompactor($compactor, $history)->exchangesToSummarize($wire),
             self::priorSummariesFromHistory($wire),
         );
+    }
+
+    /**
+     * The ahead-of-need skip rules (C-CTX-5.b, mirroring OpenCode's): both
+     * hosts' dispatch blocks ask their request arm through this one gate, and
+     * the held-slot validity check consults the model half of it. A session
+     * under {@see AHEAD_OF_NEED_TOKEN_FLOOR} never asks — the prefetch is
+     * pointless on histories a compaction handles quickly anyway. And a
+     * summary held under a different model than the session now runs is not
+     * the next model's work: the request stamped its model into the held
+     * slot's identity exactly like the session id, so a switch discards the
+     * old records instead of splicing another head's writing into this
+     * model's context.
+     *
+     * $heldModel is the stamped model of a slot already held (null for a slot
+     * predating the stamp — the idle-watch request — which the model rule
+     * leaves alone); pass null from a request arm that holds nothing.
+     */
+    public static function aheadOfNeedAllowed(int $tierTokens, ?string $heldModel = null, string $currentModel = ''): bool
+    {
+        if ($heldModel !== null && $heldModel !== $currentModel) {
+            return false;
+        }
+
+        return $tierTokens >= self::AHEAD_OF_NEED_TOKEN_FLOOR;
     }
 
     /**

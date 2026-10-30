@@ -151,7 +151,12 @@ there: they are spliced in and your prompt goes out at once. They are used
 only while they still describe the conversation — a `/rewind`, `/clear`,
 session switch or another compaction discards them — and when there is no
 usable one yet, the tier parks your prompt until the summaries arrive. The
-request runs off the render loop, so nothing freezes. The ahead-of-need
+request runs off the render loop, so nothing freezes. The request obeys
+OpenCode's skip rules in `CompactionService::aheadOfNeedAllowed()`: a session
+under the 64,000-token floor never prefetches (a small-window model whose
+reminder tier sits below the floor only folds at the blocking tier), and a held
+summary asked under a model the session has since switched away from is
+discarded rather than spliced. The ahead-of-need
 request and the dispatch-time one are the same call — the TUI's
 `Chat::buildSummarizationRequest()`, and on the served path
 `SessionHost::requestAheadOfNeed()`, which runs exactly the request the next

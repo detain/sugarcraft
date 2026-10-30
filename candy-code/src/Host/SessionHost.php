@@ -181,7 +181,7 @@ final class SessionHost
      * lands the heuristic fold can say why; the held summaries themselves are
      * discarded by the settle below and never spliced.
      *
-     * @var null|array{id:string,fingerprint:HistoryFingerprint,summaries:?array<string,string>,safeguardHold:?string}
+     * @var null|array{id:string,fingerprint:HistoryFingerprint,summaries:?array<string,string>,safeguardHold:?string,model?:string}
      */
     private ?array $aheadOfNeed = null;
 
@@ -2407,19 +2407,38 @@ final class SessionHost
         // one is kept while its fingerprint matches — failures included — and
         // dropped once the tier stops firing because nothing will need it.
         $dispatched = [...$baseHistory, ...$newTurnMessages];
-        if ($this->aheadOfNeed !== null && $this->aheadOfNeed['summaries'] !== null && (
-            !$dueForReminder
-            || !$this->aheadOfNeed['fingerprint']->matches(
-                $this->compaction()->historyFingerprint($this->compactor, $dispatched),
-            )
+        // C-CTX-5.b: the same skip rules the TUI's dispatchTurn block applies,
+        // owned by CompactionService::aheadOfNeedAllowed() — the 64,000-token
+        // floor, and the model a held slot was asked under, folded into its
+        // identity beside the request id. Same tier arithmetic as the
+        // reminder above, over the dispatched history.
+        $aheadEngine = $this->backend();
+        $currentModel = $aheadEngine instanceof EngineBackend ? $aheadEngine->model() : '';
+        $aheadTokens = $this->aheadOfNeed !== null || $dueForReminder
+            ? CompactionService::tierTokenCount($this->estimate($dispatched), $dispatched)
+            : 0;
+        if ($this->aheadOfNeed !== null && (
+            !CompactionService::aheadOfNeedAllowed($aheadTokens, $this->aheadOfNeed['model'] ?? null, $currentModel)
+            || ($this->aheadOfNeed['summaries'] !== null && (
+                !$dueForReminder
+                || !$this->aheadOfNeed['fingerprint']->matches(
+                    $this->compaction()->historyFingerprint($this->compactor, $dispatched),
+                )
+            ))
         )) {
             $this->aheadOfNeed = null;
         }
         if ($dueForReminder && $this->aheadOfNeed === null
             && $this->workspace->backend !== null
             && !$this->ledger()->capReached($this->spend, $this->workspace->maxCostUsd)
+            && CompactionService::aheadOfNeedAllowed($aheadTokens, null, $currentModel)
         ) {
-            $this->requestAheadOfNeed($dispatched, $baseHistory);
+            if ($this->requestAheadOfNeed($dispatched, $baseHistory)) {
+                // The latch itself is shared with the CTX-5 idle watch, which
+                // asks outside the reminder tier's decision; the stamp rides
+                // only on the slot this block asked for.
+                $this->aheadOfNeed = [...$this->aheadOfNeed, 'model' => $currentModel];
+            }
         }
 
         if ($refilled !== null) {

@@ -208,8 +208,8 @@ final class CompactionFallbackParityTest extends TestCase
 
     /**
      * The served reminder band of tests/Host/SessionHostAheadOfNeedTest.php:
-     * three heavy exchanges and ten trivial ones — past the 70% tier, under
-     * the 85% one, of an 88,000-token window.
+     * three heavy exchanges and ten trivial ones — past the 70% tier and the
+     * ahead-of-need token floor, under the 85% one, of an 88,000-token window.
      *
      * @return list<Message>
      */
@@ -217,8 +217,8 @@ final class CompactionFallbackParityTest extends TestCase
     {
         $history = [];
         for ($i = 0; $i < 3; $i++) {
-            $history[] = Message::user(str_repeat(chr(97 + $i), 41_500));
-            $history[] = Message::assistant(str_repeat(chr(110 + $i), 41_500));
+            $history[] = Message::user(str_repeat(chr(97 + $i), 46_000));
+            $history[] = Message::assistant(str_repeat(chr(110 + $i), 46_000));
         }
         for ($i = 0; $i < 10; $i++) {
             $history[] = Message::user("q{$i}");

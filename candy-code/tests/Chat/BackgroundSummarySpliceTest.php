@@ -41,8 +41,10 @@ use SugarCraft\Code\Usage;
 final class BackgroundSummarySpliceTest extends TestCase
 {
     /**
-     * 13 exchanges: three of ~20,750 estimated tokens and ten trivial ones, for
-     * ~62,500 — over the 70% tier, under the 85% one.
+     * 13 exchanges: three of ~23,000 estimated tokens and ten trivial ones, for
+     * ~69,300 — over the 70% tier and the ahead-of-need token floor, under the
+     * 85% one. (C-CTX-5.b raised the heavy pairs from 41,500 to 46,000 so the
+     * band sits above the 64,000-token floor the prefetch now obeys.)
      *
      * @return list<Message>
      */
@@ -50,8 +52,8 @@ final class BackgroundSummarySpliceTest extends TestCase
     {
         $history = [];
         for ($i = 0; $i < 3; $i++) {
-            $history[] = Message::user(str_repeat(chr(97 + $i), 41_500));
-            $history[] = Message::assistant(str_repeat(chr(110 + $i), 41_500));
+            $history[] = Message::user(str_repeat(chr(97 + $i), 46_000));
+            $history[] = Message::assistant(str_repeat(chr(110 + $i), 46_000));
         }
         for ($i = 0; $i < 10; $i++) {
             $history[] = Message::user("q{$i}");

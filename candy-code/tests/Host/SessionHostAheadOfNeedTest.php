@@ -29,8 +29,10 @@ use SugarCraft\Code\Usage;
  *
  * Mirrors the numbers of tests/Chat/BackgroundSummarySpliceTest.php: an
  * 88,000-token window puts the tiers at 61,600 / 74,800 / 83,600 estimated
- * tokens, and the 13-pair band below estimates ~62,500 — past the reminder
- * tier, under the blocking one.
+ * tokens, and the 13-pair band below estimates ~69,300 — past the reminder
+ * tier and the ahead-of-need token floor, under the blocking one. (C-CTX-5.b
+ * raised the heavy pairs from 41,500 to 46,000 characters so the band clears
+ * the 64,000-token floor the request now obeys.)
  */
 final class SessionHostAheadOfNeedTest extends TestCase
 {
@@ -200,8 +202,9 @@ final class SessionHostAheadOfNeedTest extends TestCase
     }
 
     /**
-     * 13 exchanges: three of ~20,750 estimated tokens and ten trivial ones, for
-     * ~62,500 — over the 70% tier of an 88,000-token window, under the 85% one.
+     * 13 exchanges: three of ~23,000 estimated tokens and ten trivial ones, for
+     * ~69,300 — over the 70% tier and the ahead-of-need token floor of an
+     * 88,000-token window, under its 85% tier.
      *
      * @return list<Message>
      */
@@ -209,8 +212,8 @@ final class SessionHostAheadOfNeedTest extends TestCase
     {
         $history = [];
         for ($i = 0; $i < 3; $i++) {
-            $history[] = Message::user(str_repeat(chr(97 + $i), 41_500));
-            $history[] = Message::assistant(str_repeat(chr(110 + $i), 41_500));
+            $history[] = Message::user(str_repeat(chr(97 + $i), 46_000));
+            $history[] = Message::assistant(str_repeat(chr(110 + $i), 46_000));
         }
         for ($i = 0; $i < 10; $i++) {
             $history[] = Message::user("q{$i}");
