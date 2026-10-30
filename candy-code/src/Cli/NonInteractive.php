@@ -17,6 +17,9 @@ use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\DenialKind;
 use SugarCraft\Code\Permissions\ToolRefusal;
+use SugarCraft\Code\Skills\SkillMentions;
+use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Skills\SkillSlashInvocation;
 use SugarCraft\Code\Tools\BuiltIn\AskUserTool;
 use SugarCraft\Code\Tools\BuiltIn\McpCallTool;
 use SugarCraft\Code\Tools\BuiltIn\PlanExitTool;
@@ -512,6 +515,13 @@ final class NonInteractive
                 })
                 // GAP-AGT-20: `@agent:<name>` reads the launch's roster.
                 ->withAgentRoster(self::launchAgentRoster($mentionRoot)),
+            // C-WEB-2.c: the typed prompt also carries the skill routes —
+            // a `/skill-name` rewrite and `$name` mentions — resolved
+            // against the SAME registry this launch's backend drives the
+            // Skill tool with, read off the backend itself (never a second
+            // fresh discovery pass). A non-engine injected backend carries
+            // none, and the whole leg stays off, byte-identical to before.
+            $backend instanceof \SugarCraft\Code\Backend\EngineBackend ? $backend->skillRegistry() : null,
         );
         foreach ($mentionNotices as $notice) {
             self::noticeAttachment($notice);
@@ -1669,6 +1679,15 @@ final class NonInteractive
      *   (`@diff`, `@session:<id>`, `@https://…`, roadmap 5.8); null builds a
      *   bare one over $mentionRoot, which has no session store and applies no
      *   permission rule to a URL.
+     * @param SkillRegistry|null $skillRegistry The registry the launch's
+     *   backend was built with (C-WEB-2.c). With one, a typed
+     *   `/skill-name args` prompt is rewritten to the `$skill-name args`
+     *   mention spelling — the TUI's {@see
+     *   \SugarCraft\Code\Skills\SkillSlashInvocation} rule — and every `$name`
+     *   mention in the typed prompt attaches that skill for this turn only,
+     *   exactly as {@see \SugarCraft\Code\Host\TurnController::userTurnMessage()}
+     *   does for an interactive turn. Null keeps the pre-C-WEB-2.c behaviour
+     *   byte-identical: no rewrite, no `$` scan.
      * @return list<Message>
      */
     public static function historyFrom(
@@ -1677,35 +1696,51 @@ final class NonInteractive
         ?string $mentionRoot = null,
         ?array &$mentionNotices = null,
         ?ContextMentions $contextMentions = null,
+        ?SkillRegistry $skillRegistry = null,
     ): array {
+        // C-WEB-2.c: only the TYPED prompt is rewritten and scanned — never
+        // $stdinContext, which can be anything a pipeline produced. With no
+        // registry the draft is the prompt unchanged, so a legacy caller's
+        // byte-shape and the `@`-leg below both ride exactly as before.
+        $text = SkillSlashInvocation::draft($prompt, $skillRegistry) ?? $prompt;
         $content = ($stdinContext !== null && $stdinContext !== '')
-            ? $stdinContext . "\n\n" . $prompt
-            : $prompt;
+            ? $stdinContext . "\n\n" . $text
+            : $text;
 
         $message = Message::user($content);
         $mentionNotices = [];
+        // The `$name` leg needs no root: the registry is the whole answerer.
+        // Gated on a literal `$` the way the TUI gates it, so a plain prompt
+        // never pays for a scan, and `$HOME`/`$1` stay text inside the
+        // resolver's own rules.
+        $skilled = $skillRegistry !== null && str_contains($text, '$')
+            ? SkillMentions::new($skillRegistry)->resolve($text)
+            : ['attachments' => [], 'notices' => []];
         // Audit 15b-15 residual: `@file` mentions, the TUI's rule. Only
-        // $prompt is scanned - the words the user typed on the command line -
-        // never $stdinContext, which can be anything a pipeline produced. A
-        // null root keeps the pre-attachment behaviour for a caller that
-        // does not ask.
-        if ($mentionRoot !== null && str_contains($prompt, '@')) {
-            $resolved = FileMentions::resolve($prompt, $mentionRoot);
+        // the rewritten prompt is scanned - the words the user typed on the
+        // command line - never $stdinContext. A null root keeps the
+        // pre-attachment behaviour for a caller that does not ask.
+        $resolved = ['attachments' => [], 'notices' => []];
+        $context = ['attachments' => [], 'notices' => []];
+        if ($mentionRoot !== null && str_contains($text, '@')) {
+            $resolved = FileMentions::resolve($text, $mentionRoot);
             // GAP-AGT-20: a caller that brings its own scanner keeps it
             // whole; the bare fallback arms only the two legs it can
             // answer itself — the file leg above and the launch-roster
             // `@agent:` leg below. `@session:`/`@mcp:`/`@url` land on
             // their existing no-store / no-client / no-policy refusals.
-            $context = ($contextMentions ?? ContextMentions::new($mentionRoot)->withAgentRoster(self::launchAgentRoster($mentionRoot)))->resolve($prompt);
-            foreach ([...$resolved['attachments'], ...$context['attachments']] as $attachment) {
-                $message = match ($attachment->type) {
-                    AttachmentType::Image => $message->attachImage($attachment->path, $attachment->data, $attachment->mimeType),
-                    AttachmentType::Document => $message->attachDocument($attachment->path, $attachment->data, $attachment->mimeType),
-                    AttachmentType::File => $message->attachFile($attachment->path, $attachment->data),
-                };
-            }
-            $mentionNotices = [...$resolved['notices'], ...$context['notices']];
+            $context = ($contextMentions ?? ContextMentions::new($mentionRoot)->withAgentRoster(self::launchAgentRoster($mentionRoot)))->resolve($text);
         }
+        // Skill attachments join FIRST — the TUI's order, so the skill body
+        // reads ahead of the files the same prompt mentions.
+        foreach ([...$skilled['attachments'], ...$resolved['attachments'], ...$context['attachments']] as $attachment) {
+            $message = match ($attachment->type) {
+                AttachmentType::Image => $message->attachImage($attachment->path, $attachment->data, $attachment->mimeType),
+                AttachmentType::Document => $message->attachDocument($attachment->path, $attachment->data, $attachment->mimeType),
+                AttachmentType::File => $message->attachFile($attachment->path, $attachment->data, $attachment->skill),
+            };
+        }
+        $mentionNotices = [...$skilled['notices'], ...$resolved['notices'], ...$context['notices']];
 
         return [$message];
     }

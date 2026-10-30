@@ -673,10 +673,14 @@ registry answers into this mention channel before the unknown-command refusal
 is consulted, so one gate, one
 `$ARGUMENTS` rule, and one `✨ Loaded skill:` row serve both spellings. The
 gate is one shared function, not a TUI-only one: `Chat::submit()` runs it in
-the terminal and a served `session.send` runs the same decision through
+the terminal, a served `session.send` runs the same decision through
 `Host\SessionHost::admit()` before its prompt is admitted (a send that
 declines mention resolution is not user-typed text, so the rewrite stays off
-that door too). A
+that door too), and a one-shot `bin/candy-code -p '…'` runs it in
+`Cli\NonInteractive::historyFrom()` on the prompt typed on the command line —
+against the same registry that launch's backend drives the `Skill` tool with,
+and again never on piped stdin, so `cat notes.txt | candy-code -p '…'` resolves
+only what you typed. A
 built-in or command-file name of the same word wins first: the rewrite only
 sees names no command claimed.
 

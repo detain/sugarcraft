@@ -1207,6 +1207,19 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     }
 
     /**
+     * The {@see SkillRegistry} attached by {@see withSkillRegistry()}, or null
+     * when none was. The mirror of {@see instructionLoader()} — the `-p`
+     * one-shot path reads it so a typed `/skill-name` rewrite and a `$name`
+     * mention resolve against the SAME registry the launch's backend (and the
+     * Skill tool at {@see self::complete()}) was built with, never a second
+     * fresh discovery pass (C-WEB-2.c).
+     */
+    public function skillRegistry(): ?SkillRegistry
+    {
+        return $this->skillRegistry;
+    }
+
+    /**
      * The session's shared {@see InstructionFileLoader}, or null when none was
      * attached. The mirror of {@see withInstructionLoader()} — TaskTool's
      * delegation path reads it to re-point the run's tools (ISS-065).
