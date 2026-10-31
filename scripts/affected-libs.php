@@ -28,7 +28,7 @@ const ROOT = __DIR__ . '/..';
 
 /** Per-job lib pools (hand-maintained — opt-in for OS-specific runners). */
 const WINDOWS_LIBS = [
-    'sugar-core', 'sugar-forms', 'sugar-widgets', 'candy-scriptui', 'sugar-markdown',
+    'sugar-core', 'sugar-forms', 'sugar-widgets', 'candy-scriptui', 'sugar-markdown', 'sugar-pty',
 ];
 const MACOS_LIBS = [
     // sugar-pty held out of the macOS pool. The split-job debug

@@ -1,6 +1,6 @@
 {
     "title": "SugarCraft — SugarPty",
-    "description": "SugarPty: Pseudo-terminals in PHP — spawn and drive child processes under a real tty, with resizing (Linux + macOS).",
+    "description": "SugarPty: Pseudo-terminals in PHP — spawn and drive child processes under a real tty, with resizing (Linux + macOS, and Windows via ConPTY on PHP 8.4+).",
     "ogTitle": "SugarCraft — SugarPty",
     "ogDescription": "Pseudo-terminal primitive — spawn child processes wired to a controlled PTY, with resize forwarding and non-blocking I/O.",
     "emoji": "🖥️",

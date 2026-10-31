@@ -53,7 +53,7 @@ ships as `App\` — called out in the table below.
 | **SugarVterm** (`sugar-vterm/`) | 🟡 in progress | In-memory virtual terminal emulator; ANSI byte stream → cell grid + cursor + mode state. |
 | **SugarAnsiParser** (`sugar-ansi-parser/`) | 🟢 ready | ANSI escape-sequence parser and state machine (SGR, cursor, erase, DEC modes); feeds into SugarVterm for cell-grid rendering. |
 | **SugarCellbuffer** (`sugar-cellbuffer/`) | 🟢 ready | Cell-grid value objects — Buffer (2-D cell grid) and Cell (rune/style/link/width); shared foundation for all rendering, with minimal-repaint diffs via `Buffer::diff()`. |
-| **SugarPty** (`sugar-pty/`) | 🟢 ready | PTY primitive (Linux + macOS) — contract interfaces (`PtySystem` / `MasterPty` / `SlavePty` / `Child` / `Process` / `Pump` / `Termios`) + POSIX implementations, all syscalls via FFI to libc; opt-in controlling-terminal support. Legacy facades (`Pty`, `Child`) remain @deprecated through v1.x; `Spawn` is @internal live plumbing. Windows ConPTY planned. |
+| **SugarPty** (`sugar-pty/`) | 🟢 ready | PTY primitive (Linux + macOS + Windows) — contract interfaces (`PtySystem` / `MasterPty` / `SlavePty` / `Child` / `Process` / `Pump` / `Termios`) + POSIX implementations, all syscalls via FFI to libc; opt-in controlling-terminal support. Legacy facades (`Pty`, `Child`) remain @deprecated through v1.x; `Spawn` is @internal live plumbing. Windows ConPTY landed (`Windows\ConPtySystem` over FFI primitives: Windows 10 1809+ / PHP 8.4+; no ctty/signals/fd — POSIX keeps those). |
 | **SugarFocus** (`sugar-focus/`) | 🟢 ready | Dependency-free focus ring — ordered focusable regions with a single focused member + wrap-around Tab/Shift-Tab traversal. |
 | **SugarGallery** (`sugar-gallery/`) | 🟢 ready | Poster grids & rails for media TUIs — a 2-D virtualized, sparse, absolute-indexed `PosterGrid` with owner-driven `need-range` paging (+ optional sugar-mouse mouse), a horizontal `Rail` carousel, and a renderer-agnostic `PosterCard` tile. |
 | **SugarFuzzy** (`sugar-fuzzy/`) | 🟢 ready | Fuzzy string matching with scored matched indices — Smith–Waterman + Sahilm algorithms. Unblocks filter-highlighting UI across the ecosystem. Extracted from sugar-forms. |
@@ -101,7 +101,7 @@ ships as `App\` — called out in the table below.
 | **CandyTop** (`candy-top/`) | 🟢 ready | Terminal system monitor — cpu / mem+disks / net / process boxes, battery + NVIDIA GPU readouts, braille, block and sextant graphs, menus, presets, 43 themes, btop-compatible config with save/reload; Linux `/proc`+`/sys` and FreeBSD collectors; container/VM tags; adopted btop upstream PRs. |
 | **CandyFlappy** (`candy-flappy/`) | 🟢 ready | Flappy Bird clone — the bird is a SugarSpring projectile. |
 
-<!-- Windows ConPTY backend for sugar-pty: tracked as a future row. -->
+<!-- Windows ConPTY backend for sugar-pty: landed (sugar-pty/src/Windows, C-TUI-6.b/C-TUI-6.c). -->
 
 ---
 

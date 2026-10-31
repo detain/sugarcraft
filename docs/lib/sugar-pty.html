@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarCraft — SugarPty</title>
-<meta name="description" content="SugarPty: Pseudo-terminals in PHP — spawn and drive child processes under a real tty, with resizing (Linux + macOS).">
+<meta name="description" content="SugarPty: Pseudo-terminals in PHP — spawn and drive child processes under a real tty, with resizing (Linux + macOS, and Windows via ConPTY on PHP 8.4+).">
 <meta property="og:title" content="SugarCraft — SugarPty">
 <meta property="og:description" content="Pseudo-terminal primitive — spawn child processes wired to a controlled PTY, with resize forwarding and non-blocking I/O.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-pty.png">
@@ -135,7 +135,7 @@ $pty-&gt;write("\x03");              // Ctrl+C → SIGINT to the child</code></p
 
     <h3 style="margin-top: 40px;">Known limitations</h3>
     <ul>
-      <li><strong>Linux + macOS only.</strong> Windows ConPTY is a separate port and not in scope for this lib.</li>
+      <li><strong>Windows ConPTY caveats.</strong> The <code>Windows\ConPtySystem</code> backend needs Windows 10 1809+ and PHP 8.4+ with ext-ffi; the pseudo console is not a PTY — no controlling terminal, every signal collapses to one job terminate, and <code>stream()</code>/<code>fd()</code> throw, so the pumps stay POSIX-only (poll <code>read($len, $timeout)</code> instead).</li>
     </ul>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>

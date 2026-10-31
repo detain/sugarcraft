@@ -574,13 +574,19 @@ jobs:
         run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n --ignore-platform-req=ext-pcntl --ignore-platform-req=ext-shmop
 
       # sugar-core: run TTY subsystem tests (where WindowsBackend / kernel32 FFI
-      # lives).  Downstream libs (sugar-forms, sugar-widgets, candy-scriptui,
-      # sugar-markdown): run full suite — any failures there are pre-existing and
+      # lives).  sugar-pty: run only tests\Windows — the rest of its suite is
+      # POSIX-pinned (libc FFI, /dev/ptmx, signals) and cannot pass on a
+      # Windows cell; tests\Windows carries the ConPTY primitives + adapter
+      # arms and skips its live legs below PHP 8.4.  Downstream libs
+      # (sugar-forms, sugar-widgets, candy-scriptui, sugar-markdown): run
+      # full suite — any failures there are pre-existing and
       # unrelated to the x/windows changes.
       - name: Run tests
         run: |
           if (Test-Path ${{ matrix.lib }}\tests\Util\Tty) {
             php ${{ matrix.lib }}\vendor\bin\phpunit -c ${{ matrix.lib }}\phpunit.xml ${{ matrix.lib }}\tests\Util\Tty\ --colors=never
+          } elseif (Test-Path ${{ matrix.lib }}\tests\Windows) {
+            php ${{ matrix.lib }}\vendor\bin\phpunit -c ${{ matrix.lib }}\phpunit.xml ${{ matrix.lib }}\tests\Windows\ --colors=never
           } else {
             php ${{ matrix.lib }}\vendor\bin\phpunit -c ${{ matrix.lib }}\phpunit.xml --colors=never
           }
