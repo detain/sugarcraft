@@ -3661,6 +3661,127 @@
                 ]
             }
         },
+        "push.subscribe": {
+            "description": "Store this browser's push endpoint so the server can notify it when a question is waiting or a turn finished while no client follows the session. The endpoint must be an https URL at a known push service (FCM, Mozilla, Apple, Microsoft); anything else is refused and nothing is stored. Keys arrive as the browser reports them (p256dh: base64url P-256 point, auth: base64url 16 octets). name opts the row into carrying the session title in the payload — WITHOUT it every notification stays redacted generic text.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "endpoint": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "description": "The PushManager endpoint URL. https, default port, no credentials, host on the push-service allowlist (FCM, Mozilla, Apple, Microsoft) — an endpoint outside it is refused before anything is stored."
+                    },
+                    "keys": {
+                        "type": "object",
+                        "properties": {
+                            "p256dh": {
+                                "type": "string",
+                                "maxLength": 256,
+                                "description": "base64url of the browser's uncompressed P-256 subscription public point (65 octets)."
+                            },
+                            "auth": {
+                                "type": "string",
+                                "maxLength": 64,
+                                "description": "base64url of the 16-octet subscription auth secret."
+                            }
+                        },
+                        "required": [
+                            "p256dh",
+                            "auth"
+                        ]
+                    },
+                    "name": {
+                        "type": "boolean",
+                        "description": "Opt this row into carrying the session title in the payload. Omitted or false: every notification stays redacted generic text (R13 default)."
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "endpoint",
+                    "keys"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "subscribed": {
+                        "type": "boolean",
+                        "description": "True only once the row is on disk."
+                    },
+                    "keyHash": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "sha256(endpoint), hex — the store's row key, so the raw endpoint never travels back as an identifier."
+                    }
+                },
+                "required": [
+                    "subscribed",
+                    "keyHash"
+                ]
+            }
+        },
+        "push.unsubscribe": {
+            "description": "Drop the stored row for this push endpoint, when this client's principal class owns it; an unknown or foreign-owned endpoint answers false.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "endpoint": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "description": "The endpoint to drop. Only a row owned by this client's principal class is removed."
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "endpoint"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "unsubscribed": {
+                        "type": "boolean",
+                        "description": "True when a row was removed; false for an unknown endpoint or one another principal owns — the answer does not distinguish which, so the store cannot be probed."
+                    }
+                },
+                "required": [
+                    "unsubscribed"
+                ]
+            }
+        },
+        "push.vapidKey": {
+            "description": "The VAPID public key (RFC 8292, base64url of the 65-octet P-256 point) this server signs push messages with — the value the browser passes to PushManager.subscribe(). The private half never leaves the server.",
+            "scope": "read",
+            "idempotent": false,
+            "params": {
+                "type": "object"
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "publicKey": {
+                        "type": "string",
+                        "maxLength": 256,
+                        "description": "RFC 8292 VAPID public key: base64url of the 65-octet uncompressed P-256 point, minted once into the serve state dir. The private half never appears on the wire."
+                    }
+                },
+                "required": [
+                    "publicKey"
+                ]
+            }
+        },
         "server.health": {
             "description": "Liveness and load.",
             "scope": "read",

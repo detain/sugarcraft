@@ -997,6 +997,50 @@ export interface Methods {
       sessionGrants: string[]
     }
   }
+  /** Store this browser's push endpoint so the server can notify it when a question is waiting or a turn finished while no client follows the session. The endpoint must be an https URL at a known push service (FCM, Mozilla, Apple, Microsoft); anything else is refused and nothing is stored. Keys arrive as the browser reports them (p256dh: base64url P-256 point, auth: base64url 16 octets). name opts the row into carrying the session title in the payload — WITHOUT it every notification stays redacted generic text. */
+  "push.subscribe": {
+    params: {
+      /** The PushManager endpoint URL. https, default port, no credentials, host on the push-service allowlist (FCM, Mozilla, Apple, Microsoft) — an endpoint outside it is refused before anything is stored. */
+      endpoint: string
+      keys: {
+        /** base64url of the browser's uncompressed P-256 subscription public point (65 octets). */
+        p256dh: string
+        /** base64url of the 16-octet subscription auth secret. */
+        auth: string
+      }
+      /** Opt this row into carrying the session title in the payload. Omitted or false: every notification stays redacted generic text (R13 default). */
+      name?: boolean
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      /** True only once the row is on disk. */
+      subscribed: boolean
+      /** sha256(endpoint), hex — the store's row key, so the raw endpoint never travels back as an identifier. */
+      keyHash: string
+    }
+  }
+  /** Drop the stored row for this push endpoint, when this client's principal class owns it; an unknown or foreign-owned endpoint answers false. */
+  "push.unsubscribe": {
+    params: {
+      /** The endpoint to drop. Only a row owned by this client's principal class is removed. */
+      endpoint: string
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      /** True when a row was removed; false for an unknown endpoint or one another principal owns — the answer does not distinguish which, so the store cannot be probed. */
+      unsubscribed: boolean
+    }
+  }
+  /** The VAPID public key (RFC 8292, base64url of the 65-octet P-256 point) this server signs push messages with — the value the browser passes to PushManager.subscribe(). The private half never leaves the server. */
+  "push.vapidKey": {
+    params: Record<string, unknown>
+    result: {
+      /** RFC 8292 VAPID public key: base64url of the 65-octet uncompressed P-256 point, minted once into the serve state dir. The private half never appears on the wire. */
+      publicKey: string
+    }
+  }
   /** Liveness and load. */
   "server.health": {
     params: Record<string, unknown>
@@ -1781,6 +1825,9 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "permission.pending": "read",
   "permission.respond": "approve",
   "permission.rules": "read",
+  "push.subscribe": "write",
+  "push.unsubscribe": "write",
+  "push.vapidKey": "read",
   "server.health": "read",
   "server.hello": "read",
   "server.info": "read",
@@ -1844,6 +1891,8 @@ export const IDEMPOTENT_METHODS: readonly MethodName[] = [
   "memory.undo",
   "permission.forget",
   "permission.respond",
+  "push.subscribe",
+  "push.unsubscribe",
   "server.shutdown",
   "session.archive",
   "session.cancel",

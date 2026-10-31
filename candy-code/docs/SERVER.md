@@ -517,6 +517,9 @@ it and the two tables below are generated from the code
 | `permission.pending` | read |  | — | The questions still open, for one session or all open sessions. |
 | `permission.respond` | approve | yes | `sessionId`, `askId`, `reply` | Answer an open permission question; the first answer wins. |
 | `permission.rules` | read |  | — | The effective permission mode and rules, read-only; saved user-tier rows carry their tier and 1-based saved index. |
+| `push.subscribe` | write | yes | `endpoint`, `keys` | Store this browser's push endpoint so the server can notify it when a question is waiting or a turn finished while no client follows the session. The endpoint must be an https URL at a known push service (FCM, Mozilla, Apple, Microsoft); anything else is refused and nothing is stored. Keys arrive as the browser reports them (p256dh: base64url P-256 point, auth: base64url 16 octets). name opts the row into carrying the session title in the payload — WITHOUT it every notification stays redacted generic text. |
+| `push.unsubscribe` | write | yes | `endpoint` | Drop the stored row for this push endpoint, when this client's principal class owns it; an unknown or foreign-owned endpoint answers false. |
+| `push.vapidKey` | read |  | — | The VAPID public key (RFC 8292, base64url of the 65-octet P-256 point) this server signs push messages with — the value the browser passes to PushManager.subscribe(). The private half never leaves the server. |
 | `server.health` | read |  | — | Liveness and load. |
 | `server.hello` | read |  | — | The handshake: protocol version, features, limits; optionally resume subscriptions (snapshotLimit pages their reset snapshots). |
 | `server.info` | read |  | — | What this server offers: providers, agents, commands, tools, permission modes. |
@@ -977,6 +980,36 @@ the same on-disk files the TUI claims, so a project pays at most one
 five-minute auto-memory budget and one two-hour dream budget across every
 process serving it. The next-prompt suggestion is deliberately not run on
 serve — a session over the wire has no input box to show a ghost prompt in.
+
+### Web Push (`push.*`)
+
+A browser that closes its tab stops hearing about the session — unless it
+registers a push subscription first. Three methods cover the lifecycle
+(C-WEB-5.d; the transport behind them is the C-WEB-5.c core: RFC 8291
+`aes128gcm` encryption, RFC 8292 VAPID, allowlisted dialing):
+
+- `push.vapidKey` (read) answers the server's VAPID public key — the value
+  `PushManager.subscribe()` takes as `applicationServerKey`. The pair is
+  minted once into the state dir at 0600 (`vapid.key`); the private half
+  never leaves the process.
+- `push.subscribe` (write) stores `{endpoint, keys}` — and refuses, before
+  storing, any endpoint outside the push-service allowlist (FCM, Mozilla,
+  Apple, Microsoft hosts). The row lives in `push.json` in the same 0600
+  state dir, keyed by `sha256(endpoint)` and owned by the caller's principal
+  class; `name: true` opts that row into carrying the session title.
+- `push.unsubscribe` (write) drops the row for an endpoint, and only when
+  the caller's principal class owns it.
+
+Triggers: a question waiting for an answer and a finished turn each send one
+notification — and only while **no client is following that session**, the
+rule being that push answers absence, never redundancy. Payloads are
+redacted generic text by default (the R13 ruling): `{"kind":
+"question"|"finished", "body": "A question is waiting", "sessionId": "…"}`,
+encrypted end-to-end so the push service ferries opaque bytes. The session
+title rides only for opted-in rows. A push service that reports the
+subscription gone (404/410) drops the row server-side; the browser
+re-subscribes if it still cares. Sends never block the serve loop: the
+sender resolves on the loop, and a failed delivery costs only a log line.
 
 ## More than one project root (workspace hosts)
 
