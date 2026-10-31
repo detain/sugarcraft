@@ -71,9 +71,11 @@ final class TerminalNotifier
         // cue every assistive path carries (the `osc9` desktop popup is
         // visual). Reading the mode here rather than at the two call sites
         // means every emitter — turn end, goal end, the permission ask —
-        // honors the switch with one door, and a user who DID set a mode
-        // keeps it untouched. Off-by-default: with the setting off (or
-        // unreadable) this returns the same notifier `off` always returned.
+        // honors the switch with one door, and a user who set a mode
+        // OTHER THAN `off` keeps it untouched — an explicit `off` under an
+        // armed screen reader upgrades too, because silence-while-SR-armed
+        // is the exact state the upgrade prevents. Off-by-default: with the
+        // setting off (or unreadable) this returns what `off` always returned.
         if ($notifier->mode === self::OFF && ScreenReaderMode::enabled()) {
             return self::new(self::BELL);
         }
