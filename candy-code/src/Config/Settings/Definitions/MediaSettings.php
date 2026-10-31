@@ -13,6 +13,7 @@ use SugarCraft\Code\Config\Settings\SettingsResolver;
 use SugarCraft\Code\Config\Settings\SettingType;
 use SugarCraft\Code\Config\Settings\UiEditability;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Media\Voice\VoiceConfig;
 
 /**
  * The "Media" category's keys (plan_crush_media W1.8). One file per category
@@ -155,6 +156,57 @@ final class MediaSettings implements SettingDefinitionSet
                 ->withHelp(Lang::t('settings.sd.savePattern.help'))
                 ->withReaderSymbol(SettingsResolver::class . '::resolve')
                 ->withReadBy('`SettingsResolver::resolve()` at the launch resolve; the save path names files with it'),
+            // THE VOICE FAMILY (C-TUI-6.l, GAP-MOD-23). Same egress posture as
+            // `sd.baseUrl`, same user-tier-only law: the recorded take leaves
+            // the machine ONLY toward `voice.baseUrl`, and the ruling answered
+            // 2026-10-28 keeps the whole feature OFF while that row is unset —
+            // no default endpoint, ever. These rows have no env binding on
+            // purpose (see VoiceConfig's docblock); `VoiceConfig::fromSettings`
+            // reads the family at arm/transcribe time rather than at launch.
+            SettingDefinition::new('voice.baseUrl', SettingType::Url)
+                ->withCategory(SettingCategory::Media)
+                ->withRiskClass(RiskClass::Egress)
+                ->withLayered()
+                ->withDefaultText('unset: no default; voice input stays off until one is set')
+                ->withLabel(Lang::t('settings.voice.baseUrl.label'))
+                ->withHelp(Lang::t('settings.voice.baseUrl.help'))
+                ->withReaderSymbol(VoiceConfig::class . '::fromSettings')
+                ->withReadBy('`VoiceConfig::fromSettings()` when the recorder arms and when a take is transcribed; the endpoint path appends `/audio/transcriptions` to it'),
+            SettingDefinition::new('voice.apiKey', SettingType::Secret)
+                ->withCategory(SettingCategory::Media)
+                ->withRiskClass(RiskClass::Security)
+                ->withLayered()
+                ->withDefaultText('${VAR} honored: `${OPENAI_API_KEY}` reads the env var, and an unset one resolves to empty (no key sent)')
+                ->withLabel(Lang::t('settings.voice.apiKey.label'))
+                ->withHelp(Lang::t('settings.voice.apiKey.help'))
+                ->withReaderSymbol(VoiceConfig::class . '::fromSettings')
+                ->withReadBy('`VoiceConfig::fromSettings()` at the same two moments; only the transcribe request reads it, and no error path carries it'),
+            SettingDefinition::new('voice.model', SettingType::String, 'whisper-1')
+                ->withCategory(SettingCategory::Media)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withLayered()
+                ->withLabel(Lang::t('settings.voice.model.label'))
+                ->withHelp(Lang::t('settings.voice.model.help'))
+                ->withReaderSymbol(VoiceConfig::class . '::fromSettings')
+                ->withReadBy('`VoiceConfig::fromSettings()` at the same two moments; the model field names the endpoint route'),
+            SettingDefinition::new('voice.language', SettingType::String)
+                ->withCategory(SettingCategory::Media)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withLayered()
+                ->withDefaultText('unset: the endpoint detects the language itself')
+                ->withLabel(Lang::t('settings.voice.language.label'))
+                ->withHelp(Lang::t('settings.voice.language.help'))
+                ->withReaderSymbol(VoiceConfig::class . '::fromSettings')
+                ->withReadBy('`VoiceConfig::fromSettings()` at the same two moments; when empty the language field is omitted from the request'),
+            SettingDefinition::new('voice.maxSeconds', SettingType::Int, 120)
+                ->withCategory(SettingCategory::Media)
+                ->withRiskClass(RiskClass::Tuning)
+                ->withLayered()
+                ->withRange(VoiceConfig::MIN_SECONDS, VoiceConfig::MAX_SECONDS)
+                ->withLabel(Lang::t('settings.voice.maxSeconds.label'))
+                ->withHelp(Lang::t('settings.voice.maxSeconds.help'))
+                ->withReaderSymbol(VoiceConfig::class . '::fromSettings')
+                ->withReadBy('`VoiceConfig::fromSettings()` when the recorder arms; the cap rides the recorder argument so an orphan stops itself'),
         ];
     }
 }

@@ -19,8 +19,9 @@ use SugarCraft\Code\Providers\ProviderFactory;
 use SugarCraft\Image\Mosaic;
 
 /**
- * The Media category's schema rows (plan_crush_media W1.8): the eight keys
- * resolve with the tiers, defaults and env bindings the plan names, the
+ * The Media category's schema rows (plan_crush_media W1.8): the thirteen keys
+ * (eight sd/ui rows plus the five-row voice family from C-TUI-6.l) resolve
+ * with the tiers, defaults and env bindings the plan names, the
  * render-mode vocabulary is cross-pinned against sugar-image's live
  * `fromModeString()` oracle, and the provider schema carries the three media
  * optionals without disturbing a single pre-existing provider block.
@@ -59,7 +60,7 @@ final class MediaSettingsTest extends TestCase
         return $definition;
     }
 
-    public function testTheMediaSetOwnsExactlyItsEightKeys(): void
+    public function testTheMediaSetOwnsExactlyItsThirteenKeys(): void
     {
         $keys = array_map(
             static fn (SettingDefinition $d): string => $d->key,
@@ -75,6 +76,11 @@ final class MediaSettingsTest extends TestCase
             'sd.presets',
             'ui.mediaDisplayOverrides',
             'sd.savePattern',
+            'voice.baseUrl',
+            'voice.apiKey',
+            'voice.model',
+            'voice.language',
+            'voice.maxSeconds',
         ], $keys, 'row order is declaration order — the panel lists in it');
         self::assertSame(SettingCategory::Media, MediaSettings::category());
     }
@@ -122,6 +128,37 @@ final class MediaSettingsTest extends TestCase
         self::assertSame(SettingType::Map, self::def('ui.mediaDisplayOverrides')->type);
         self::assertSame(SettingType::String, self::def('sd.defaultModel')->type);
         self::assertSame(SettingType::String, self::def('sd.savePattern')->type);
+
+        // THE VOICE FAMILY (C-TUI-6.l). Same user-tier-only egress law as
+        // `sd.baseUrl`: a checked-out repository must never steer where a
+        // spoken take leaves to, and the feature stays off while the row is
+        // unset — so the row must have NO default.
+        $voiceBase = self::def('voice.baseUrl');
+        self::assertSame(SettingType::Url, $voiceBase->type);
+        self::assertSame(RiskClass::Egress, $voiceBase->riskClass);
+        self::assertTrue($voiceBase->layered, 'voice.baseUrl must ride the layered merge (mutation pin: dropping withLayered() reddens here)');
+        self::assertFalse($voiceBase->projectSettable, 'where audio egresses is user tier only');
+        self::assertNull($voiceBase->default, 'no default endpoint — the ruling keeps voice off until set');
+
+        $voiceKey = self::def('voice.apiKey');
+        self::assertSame(SettingType::Secret, $voiceKey->type, 'the panel masks the transcription key');
+        self::assertSame(RiskClass::Security, $voiceKey->riskClass);
+        self::assertFalse($voiceKey->projectSettable);
+        self::assertStringContainsString('${VAR}', (string) $voiceKey->defaultText);
+        self::assertStringContainsString('resolves to empty', (string) $voiceKey->defaultText);
+
+        self::assertSame(SettingType::String, self::def('voice.model')->type);
+        self::assertFalse(self::def('voice.model')->projectSettable);
+        self::assertSame(SettingType::String, self::def('voice.language')->type);
+        self::assertNull(self::def('voice.language')->default);
+
+        $cap = self::def('voice.maxSeconds');
+        self::assertSame(SettingType::Int, $cap->type);
+        self::assertFalse($cap->projectSettable);
+        self::assertNotNull($cap->validate(4), 'the floor of the 5-600 range is enforced (mutation pin: widening the range reddens here)');
+        self::assertNotNull($cap->validate(601), 'the ceiling is enforced');
+        self::assertNull($cap->validate(5));
+        self::assertNull($cap->validate(600));
     }
 
     public function testTheDefaultsAreByteExact(): void

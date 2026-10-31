@@ -297,6 +297,11 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `sd.presets` | `SettingsResolver::resolve()` at the launch resolve; the media pipeline names the presets | **no** |
 | `ui.mediaDisplayOverrides` | `SettingsResolver::resolve()` at the launch resolve; the painter applies them | **no** |
 | `sd.savePattern` | `SettingsResolver::resolve()` at the launch resolve; the save path names files with it | **no** |
+| `voice.baseUrl` | `VoiceConfig::fromSettings()` when the recorder arms and when a take is transcribed; the endpoint path appends `/audio/transcriptions` to it | **no** |
+| `voice.apiKey` | `VoiceConfig::fromSettings()` at the same two moments; only the transcribe request reads it, and no error path carries it | **no** |
+| `voice.model` | `VoiceConfig::fromSettings()` at the same two moments; the model field names the endpoint route | **no** |
+| `voice.language` | `VoiceConfig::fromSettings()` at the same two moments; when empty the language field is omitted from the request | **no** |
+| `voice.maxSeconds` | `VoiceConfig::fromSettings()` when the recorder arms; the cap rides the recorder argument so an orphan stops itself | **no** |
 | `skills.pathNudges` | `SkillPathNudge::forPaths()` → `enabled()`, per tool call | yes |
 | `instructions` | `Bootstrap::forcedInstructions()` | **no** |
 | `instructions.walkToRoot` | `Bootstrap::instructionLoader()` | **no** |
@@ -359,7 +364,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 <!-- settings:layered:end -->
 
 Every key in that table has a real reader named beside it, and the table is
-COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these one hundred and forty-eight, and the
+COMPLETE — `LayeredSettings::LAYERED_KEYS` is exactly these one hundred and fifty-three, and the
 "Project may set" column is exactly `PROJECT_TIER_KEYS`. Both halves are
 asserted by `TrustKeyDocumentationDriftTest`, so a key added to either constant
 without a row here reds rather than drifting. The table and that count are
@@ -1343,6 +1348,11 @@ project-settable.
 | `sd.presets` | Media | object | {}: the media form offers only its built-in defaults | U C | — | restart | tuning |
 | `ui.mediaDisplayOverrides` | Media | object | {}: every render mode displays at its built-in size | U C | — | restart | cosmetic |
 | `sd.savePattern` | Media | string | `[date]-[time]-[seed]-[number]` | U C | — | restart | cosmetic |
+| `voice.baseUrl` | Media | URL | unset: no default; voice input stays off until one is set | U C | — | restart | egress |
+| `voice.apiKey` | Media | secret | ${VAR} honored: `${OPENAI_API_KEY}` reads the env var, and an unset one resolves to empty (no key sent) | U C | — | restart | security |
+| `voice.model` | Media | string | `whisper-1` | U C | — | restart | tuning |
+| `voice.language` | Media | string | unset: the endpoint detects the language itself | U C | — | restart | tuning |
+| `voice.maxSeconds` | Media | int | `120` | U C | — | restart | tuning |
 | `rules.standingMaxBytes` | Memory & Rules | int | `65536` | C | — | next turn | prompt |
 | `skills.pathNudges` | Memory & Rules | bool | `true` | P U C | — | next turn | narrowing |
 | `memory.projectNoteMaxBytes` | Memory & Rules | int | `8192` | C | — | live | tuning |
@@ -1562,10 +1572,10 @@ Saved is not applied: see the next section for when each key takes effect.
 | live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `reasoningEffort`, `maxToolSteps`, `maxCostUsd`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`, `compaction.idleAuto`, `promptCache.keepWarm`, `autoReviewScope`, `memory.projectNoteMaxBytes`, `theme`, `statusLine`, `layout`, `queueMode`, `terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `resumeCostWarnUsd`, `paletteMru`, `diffPreviewRows`, `diffStyle`, `toolOutputPreviewLines`, `sessions.autoTitle`, `promptSuggestions`, `promptSuggestionHistory`, `sessions.awayRecap`, `expandToolOutput`, `maxCheckpoints`, `vimMode`, `screenReader` |
 | next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`, `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`, `contextPruning.compress`, `repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`, `env.diffMaxBytes`, `contextPruning.mode`, `permissions.autoStrikeLimit`, `permissions.autoTotalLimit`, `permissions.autoAllowReadOnly`, `redactToolOutput`, `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`, `toolSpillWindowPercent`, `toolInstructionCapBytes`, `toolSpillCaptureBytes`, `toolSpillMinCapBytes`, `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `grepTimeoutSeconds`, `requireReadBeforeWrite`, `sd.timeoutSeconds`, `rules.standingMaxBytes`, `skills.pathNudges`, `memory.promptMaxEntries`, `memory.promptMaxBytes`, `memory.entryMaxBytes`, `memory.userMaxEntries`, `memory.userMaxBytes`, `memory.autoConsolidate`, `memory.dreamIntervalSeconds`, `memory.dreamProposeSkills`, `embeddingModel`, `skills.listingMaxBytes`, `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `streamHeaderTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
 | reload | On `/keys reload`, or at the next launch: the saved file is re-read and re-applied when you say the word (plan_comparison TUI-4a) | `keybindings` |
-| restart | At the next launch: read once while the session is built | `models`, `providers`, `titleModel`, `summaryModel`, `advisorModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `serviceTier`, `promptCache`, `symbolMap.enabled`, `notices.transcriptLimit`, `contextWindow`, `permissionMode`, `permissionRules`, `autoReview`, `autoReviewModel`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `references`, `bashSandbox`, `bashSandboxNestedUserns`, `sandboxScope`, `sandboxAllowedDomains`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `webSearchBackend`, `sd.baseUrl`, `sd.apiKey`, `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`, `sd.savePattern`, `instructions`, `instructions.walkToRoot`, `instructionsExclude`, `disabledRules`, `disabledSkills`, `enabledSkills`, `pluginPaths`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `notify`, `watchFiles`, `sessionRetentionDays`, `transcriptJsonl`, `lintCommands`, `formatCommands`, `formatAuto`, `hooksDefaultTimeoutSeconds`, `disabledMcpServers`, `mcp.enabled`, `mcp.lazySchemaTokens`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.allowedIps`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `server.dirBrowse`, `server.clientTools`, `server.browseRoot`, `webhooks`, `webhooksOut`, `connectTimeoutSeconds`, `debug.skills`, `debug.commands`, `debug.rules`, `debug.stream` |
+| restart | At the next launch: read once while the session is built | `models`, `providers`, `titleModel`, `summaryModel`, `advisorModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `serviceTier`, `promptCache`, `symbolMap.enabled`, `notices.transcriptLimit`, `contextWindow`, `permissionMode`, `permissionRules`, `autoReview`, `autoReviewModel`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `references`, `bashSandbox`, `bashSandboxNestedUserns`, `sandboxScope`, `sandboxAllowedDomains`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `webSearchBackend`, `sd.baseUrl`, `sd.apiKey`, `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`, `sd.savePattern`, `voice.baseUrl`, `voice.apiKey`, `voice.model`, `voice.language`, `voice.maxSeconds`, `instructions`, `instructions.walkToRoot`, `instructionsExclude`, `disabledRules`, `disabledSkills`, `enabledSkills`, `pluginPaths`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `notify`, `watchFiles`, `sessionRetentionDays`, `transcriptJsonl`, `lintCommands`, `formatCommands`, `formatAuto`, `hooksDefaultTimeoutSeconds`, `disabledMcpServers`, `mcp.enabled`, `mcp.lazySchemaTokens`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.allowedIps`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `server.dirBrowse`, `server.clientTools`, `server.browseRoot`, `webhooks`, `webhooksOut`, `connectTimeoutSeconds`, `debug.skills`, `debug.commands`, `debug.rules`, `debug.stream` |
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
 
-**In numbers:** forty-four live, fifty-seven next turn, one reload, eighty-four
+**In numbers:** forty-four live, fifty-seven next turn, one reload, eighty-nine
 restart and seven next launch.
 
 **This session only** accepts `maxOutputTokens`, `reasoningEffort`,
@@ -1861,7 +1871,7 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
   this stack.
   <!-- settings:env-split:begin -->
-  They do not cover it: only twenty-four of the one hundred and forty-eight
+  They do not cover it: only twenty-four of the one hundred and fifty-three
   layered keys have an env override (`provider`, `models`, `titleModel`,
   `summaryModel`, `advisorModel`, `serviceTier`, `promptCache`,
   `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxCostUsd`,
@@ -1893,7 +1903,8 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`,
   `chatToolTimeoutSeconds`, `grepTimeoutSeconds`, `requireReadBeforeWrite`,
   `sd.apiKey`, `sd.timeoutSeconds`, `sd.defaultModel`, `sd.presets`,
-  `ui.mediaDisplayOverrides`, `sd.savePattern`, `skills.pathNudges`,
+  `ui.mediaDisplayOverrides`, `sd.savePattern`, `voice.baseUrl`, `voice.apiKey`,
+  `voice.model`, `voice.language`, `voice.maxSeconds`, `skills.pathNudges`,
   `instructions`, `instructions.walkToRoot`, `instructionsExclude`,
   `disabledRules`, `embeddingModel`, `disabledSkills`, `enabledSkills`,
   `pluginPaths`, `subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,

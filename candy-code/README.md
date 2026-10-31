@@ -1300,7 +1300,7 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and forty-eight keys are layered — `provider`,
+Only these one hundred and fifty-three keys are layered — `provider`,
 `models`, `providers`, `titleModel`, `summaryModel`, `advisorModel`,
 `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
 `reasoningEffort`, `serviceTier`, `promptCache`, `parallelToolCalls`,
@@ -1329,7 +1329,8 @@ Only these one hundred and forty-eight keys are layered — `provider`,
 `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `grepTimeoutSeconds`,
 `requireReadBeforeWrite`, `sd.baseUrl`, `sd.apiKey`, `sd.timeoutSeconds`,
 `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`,
-`ui.mediaDisplayOverrides`, `sd.savePattern`, `skills.pathNudges`,
+`ui.mediaDisplayOverrides`, `sd.savePattern`, `voice.baseUrl`, `voice.apiKey`,
+`voice.model`, `voice.language`, `voice.maxSeconds`, `skills.pathNudges`,
 `instructions`, `instructions.walkToRoot`, `instructionsExclude`,
 `disabledRules`, `embeddingModel`, `disabledSkills`, `enabledSkills`,
 `pluginPaths`, `subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
@@ -1393,7 +1394,7 @@ in precedence only.
 > user-tier only. Details per key in
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
-Even for a trusted project, eighty-nine keys are **never** taken from a project file:
+Even for a trusted project, ninety-four keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
