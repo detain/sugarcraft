@@ -14,6 +14,7 @@ use SugarCraft\Code\Tools\BuiltIn\PtyRun;
 use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
 use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
 use SugarCraft\Code\Tools\Sandbox\SandboxFactory;
+use SugarCraft\Code\Tools\Sandbox\Seatbelt;
 
 /**
  * Roadmap 5.12: the optional bubblewrap write-jail under `Bash`.
@@ -420,6 +421,81 @@ final class BashSandboxTest extends TestCase
 
         $this->writeUserSettings(['bashSandbox' => 'on']);
         self::assertSame('on', $this->wiredPtySandbox()?->mode());
+    }
+
+    /**
+     * MAJOR-1 (round 1): the runtime pin above is vacuous on Linux — reverting
+     * a catalog door to `Bubblewrap::fromSetting` still hands out a Bubblewrap
+     * there, and the macos-smoke CI leg runs neither wired test. The
+     * structural slice pins the wiring itself instead: each door must ask the
+     * factory, and may not name the concrete backend at all.
+     */
+    public function testBothCatalogDoorsAskTheFactoryNotAConcreteBackend(): void
+    {
+        foreach (['Bash', 'PtyRun'] as $tool) {
+            $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Tools/BuiltIn/' . $tool . '.php');
+
+            $start = (int) strpos($src, 'public static function fromCatalog');
+            self::assertGreaterThan(0, $start, $tool . ': the catalog door must be findable by name');
+            self::assertSame(1, substr_count($src, 'public static function fromCatalog'), $tool . ': one door, so the slice cannot pick the wrong one');
+
+            $slice = substr($src, $start, (int) strpos(substr($src, $start), "\n    }"));
+            self::assertStringContainsString('SandboxFactory::fromSetting(', $slice, $tool . ': the door must route the setting through the factory');
+            self::assertSame(0, substr_count($slice, 'Bubblewrap::fromSetting('), $tool . ': a door re-hardwired to bubblewrap would hand macOS the Linux jail');
+        }
+    }
+
+    /**
+     * MINOR-1 (round 1, structural half): the shared refusal sentence must
+     * not hard-code the Linux remedy — each door builds its parenthetical
+     * from the backend's own refusalRemedy(), so a seatbelt refusal no
+     * longer tells a macOS user to fix Ubuntu's AppArmor. The sentence is
+     * pinned as one-per-file, its remedy slot as exactly one backend call,
+     * and the Linux treatment as absent from the whole door (a comment or a
+     * stray second copy would be the same wrong-OS bug); the behavioral
+     * sibling below ties the call to the rendered sentence.
+     */
+    public function testNeitherRefusalSentenceHardCodesALinuxRemedy(): void
+    {
+        foreach (['Bash', 'PtyRun'] as $tool) {
+            $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Tools/BuiltIn/' . $tool . '.php');
+
+            self::assertSame(1, substr_count($src, 'Not run: the bashSandbox setting is'), $tool . ': one refusal sentence to pin');
+            self::assertSame(1, substr_count($src, 'refusalRemedy('), $tool . ': that sentence gains exactly one remedy slot, filled from the refusing backend');
+            self::assertSame(0, substr_count($src, 'AppArmor'), $tool . ': a hard-coded Ubuntu parenthetical anywhere in the door blames the wrong OS for a seatbelt refusal');
+        }
+    }
+
+    /**
+     * MINOR-1 (round 1, behavioral half): both remedies reach the refusal
+     * through the real execute() path. The bubblewrap arm is byte-stability —
+     * the Ubuntu sentence it prints today is the one the setting has always
+     * printed; the seatbelt arm is the defect itself, and probe() refuses
+     * off-Darwin before touching a binary, so this host runs it
+     * deterministically without spawning anything.
+     */
+    public function testEachBackendRemedyRidesTheRefusalItBelongsTo(): void
+    {
+        $broken = $this->tmpDir . '/broken-bwrap-remedy';
+        file_put_contents($broken, "#!/bin/sh\necho 'bwrap: setting up uid map: Permission denied' >&2\nexit 1\n");
+        chmod($broken, 0o755);
+
+        $bubble = (new Bash($this->root, sandbox: Bubblewrap::new($broken)))
+            ->execute(['command' => 'touch should-not-exist-remedy', 'description' => 'probe']);
+        self::assertTrue($bubble->isError());
+        self::assertStringContainsString(
+            'they can fix bubblewrap (on Ubuntu, unprivileged user namespaces are restricted by AppArmor) or set bashSandbox to "off".',
+            $bubble->content(),
+        );
+        self::assertFileDoesNotExist($this->root . '/should-not-exist-remedy');
+
+        $seatbelt = (new Bash($this->root, sandbox: Seatbelt::new()))
+            ->execute(['command' => 'touch should-not-exist-remedy', 'description' => 'probe']);
+        self::assertTrue($seatbelt->isError());
+        self::assertStringContainsString('they can fix seatbelt (/usr/bin/sandbox-exec ships with macOS', $seatbelt->content());
+        self::assertStringNotContainsString('Ubuntu', $seatbelt->content(), 'a macOS refusal must not send the user to Ubuntu');
+        self::assertStringNotContainsString('AppArmor', $seatbelt->content());
+        self::assertFileDoesNotExist($this->root . '/should-not-exist-remedy');
     }
 
     /** The sandbox of the one PtyRun the launch's tool feed wires. */

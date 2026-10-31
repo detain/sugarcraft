@@ -214,6 +214,17 @@ final readonly class Seatbelt implements SandboxBackend
     }
 
     /**
+     * The macOS counterpart of the Linux userns line: sandbox-exec is not a
+     * package anyone installs, it is part of the OS, so a refusal here means
+     * this specific install stopped running the jail — the same truth the
+     * doctor row's remedy key carries, in the tool sentence's grammar.
+     */
+    public function refusalRemedy(): string
+    {
+        return '/usr/bin/sandbox-exec ships with macOS, so a refusal means it is missing or rejecting the profile on this install';
+    }
+
+    /**
      * The sentence the tool's description gains while this sandbox is on —
      * truthful about the two ways Seatbelt differs from bwrap: no private
      * `/tmp`, and `Operation not permitted` as the denial error.

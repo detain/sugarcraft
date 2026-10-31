@@ -427,12 +427,13 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
             if ($refusal !== null) {
                 return $this->refusal($toolCallId, sprintf(
                     'Not run: the bashSandbox setting is "%s" but the %s sandbox cannot start on this host (%s). '
-                    . 'Nothing ran, sandboxed or otherwise. Tell the user: they can fix %s '
-                    . '(on Ubuntu, unprivileged user namespaces are restricted by AppArmor) or set bashSandbox to "off".',
+                    . 'Nothing ran, sandboxed or otherwise. Tell the user: they can fix %s (%s) '
+                    . 'or set bashSandbox to "off".',
                     $this->sandbox->mode(),
                     $this->sandbox->name(),
                     $refusal,
                     $this->sandbox->name(),
+                    $this->sandbox->refusalRemedy(),
                 ));
             }
         }

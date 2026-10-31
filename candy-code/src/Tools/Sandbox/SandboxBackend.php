@@ -90,6 +90,17 @@ interface SandboxBackend
     public function probe(\Closure $run): ?string;
 
     /**
+     * The remedy interpolated into the shell tools' refusal sentence after
+     * "they can fix <name>" — the host fact that turns THIS backend's refusal
+     * into a fix on the host it belongs to. Per backend, exactly like the
+     * doctor row's remedy arms: bubblewrap's story is Ubuntu's AppArmor
+     * userns restriction, Seatbelt's is the OS-shipped /usr/bin/sandbox-exec
+     * that stopped running the profile. One sentence hard-coding either story
+     * misadvises the other OS's user, which is worse than naming no story.
+     */
+    public function refusalRemedy(): string;
+
+    /**
      * The sentence the tool's description gains while this sandbox is on, so
      * the model knows why a write outside the root fails instead of retrying
      * it. It must name the failure the backend actually produces — a jail

@@ -498,8 +498,10 @@ final class DoctorChecks
      * broken — only the jail is — and FAIL belongs to the checks that say the
      * program itself cannot run — the exit convention `Subcommands::doctor()` applies.
      *
-     * On Windows no jail exists, so the row stays at the vocabulary verdict
-     * there; on Linux and macOS alike the probe runs the backend the factory
+     * On any host family that runs neither jail (Windows today, and the BSD
+     * and Solaris families, whose bwrap does not exist and whose Seatbelt is
+     * macOS-only) the row stays at the vocabulary verdict; on Linux and macOS
+     * alike the probe runs the backend the factory
      * would hand Bash, which is the only answer that matters.
      *
      * $jail, $sysctlPath and $osFamily are test seams: injecting them makes
@@ -515,11 +517,14 @@ final class DoctorChecks
         $configured = SandboxFactory::fromSetting(Bootstrap::readUserConfig()['bashSandbox'] ?? null, $osFamily);
         $mode = $configured?->mode() ?? SandboxBackend::MODE_OFF;
 
-        if ($osFamily === 'Windows') {
-            // The jail cannot exist here. OK when nothing was configured —
-            // off is honest on every OS — WARN when something was, because
-            // that setting will never take effect on this host. (macOS has
-            // its own jail since C-TOOL-4.b and falls through to the probe.)
+        if (!in_array($osFamily, ['Linux', 'Darwin'], true)) {
+            // Neither jail exists here: bubblewrap is Linux-only and Seatbelt
+            // is macOS-only. The jail cannot run on any other family, so the
+            // row stays at the vocabulary verdict. OK when nothing was
+            // configured — off is honest on every OS — WARN when something
+            // was, because that setting will never take effect on this host.
+            // (macOS has its own jail since C-TOOL-4.b and falls through to
+            // the probe, exactly like Linux.)
             return [
                 'status' => $configured === null ? 'OK' : 'WARN',
                 'detail' => Lang::t($configured === null

@@ -254,6 +254,16 @@ final readonly class Bubblewrap implements SandboxBackend
     }
 
     /**
+     * The commonest Linux death, in the words the refusal has always used:
+     * the binary is present, Ubuntu's kernel restricts the namespaces it
+     * needs. Kept byte-stable — BashSandboxTest pins the whole sentence.
+     */
+    public function refusalRemedy(): string
+    {
+        return 'on Ubuntu, unprivileged user namespaces are restricted by AppArmor';
+    }
+
+    /**
      * Whether this host restricts unprivileged user namespaces — the commonest
      * reason a PRESENT bwrap still refuses (the class doc-block names Ubuntu
      * 24.04's AppArmor default). Null when the file cannot be read: a kernel

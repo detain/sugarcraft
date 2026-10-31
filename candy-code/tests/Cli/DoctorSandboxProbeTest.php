@@ -216,8 +216,9 @@ final class DoctorSandboxProbeTest extends TestCase
 
     public function testAWindowsHostReportsTheLinuxOnlyLine(): void
     {
-        // C-TOOL-4.b narrowed this early-return arm to Windows only: macOS has
-        // a jail of its own now, and Linux keeps probing through Bash.
+        // C-TOOL-4.b narrowed the old "not Linux" arm to the families that
+        // run neither jail — Windows first among them, since macOS has a
+        // jail of its own now and Linux keeps probing through Bash.
         $off = $this->sandboxProbeRow(osFamily: 'Windows');
         $this->assertSame('OK', $off['status'], $off['detail']);
         $this->assertSame('bashSandbox is off; bubblewrap is Linux-only and this host is Windows', $off['detail']);
@@ -226,6 +227,29 @@ final class DoctorSandboxProbeTest extends TestCase
         $on = $this->sandboxProbeRow(osFamily: 'Windows');
         $this->assertSame('WARN', $on['status'], 'a configured jail that can never run here is worth a WARN');
         $this->assertSame('bashSandbox "on" is configured but bubblewrap is Linux-only and this host is Windows', $on['detail']);
+    }
+
+    public function testFamiliesWithoutEitherJailReportTheVocabularyLineToo(): void
+    {
+        // MINOR-2 (round 1): the narrowing above was briefly `== Windows`
+        // only, which quietly sent BSD and Solaris down the Linux probe —
+        // where a jail closure that starts prints a bwrap "jail starts"
+        // verdict and an unset one prints the bwrap path line. The row must
+        // stay at the vocabulary verdict for EVERY family that runs neither
+        // jail, and the exact details pin that the fall-through cannot fake.
+        foreach (['BSD', 'Solaris'] as $family) {
+            $off = $this->sandboxProbeRow(osFamily: $family);
+            $this->assertSame('OK', $off['status'], $off['detail']);
+            $this->assertSame('bashSandbox is off; bubblewrap is Linux-only and this host is ' . $family, $off['detail']);
+
+            $this->armConfig(['bashSandbox' => 'no-network']);
+            $on = $this->sandboxProbeRow(static fn (): ?string => null, osFamily: $family);
+            $this->assertSame('WARN', $on['status'], $on['detail']);
+            $this->assertSame('bashSandbox "no-network" is configured but bubblewrap is Linux-only and this host is ' . $family, $on['detail']);
+            $this->assertStringNotContainsString('jail starts', $on['detail'], 'falling through to the probe would hand ' . $family . ' the bubblewrap verdict');
+
+            $this->armConfig([]);
+        }
     }
 
     public function testADarwinHostRoutesTheRowThroughTheSeatbeltBackend(): void
