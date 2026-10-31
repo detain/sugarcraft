@@ -97,7 +97,10 @@ final class EgressBridge
                             $tcp->write($chunk);
                         });
                         $dial->on('close', static function () use ($tcp): void {
-                            $tcp->close();
+                            // end() not close(): flushes bytes the relay just
+                            // wrote to the client before FIN (close would
+                            // discard react's userspace write buffer).
+                            $tcp->end();
                         });
                         // Swap the buffering listener out only once the direct
                         // forward is wired — no chunk is processed twice and
@@ -108,7 +111,7 @@ final class EgressBridge
                         });
                     },
                     static function (Throwable $error) use ($tcp): void {
-                        $tcp->close();
+                        $tcp->end();
                     },
                 );
         });

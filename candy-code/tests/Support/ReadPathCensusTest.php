@@ -1374,6 +1374,20 @@ final class ReadPathCensusTest extends TestCase
         'Tools/IgnoreRules.php|file_get_contents' => [
             'CALLER_SUPPLIED — a `.gitignore`-shaped file inside the walk the calling tool jailed',
         ],
+        'Tools/Sandbox/EgressProxyProcess.php|fopen' => [
+            'SELF_LOCATED — the 0600 stderr log seed created beside the mkdtemp-style socket '
+                . 'directory this class made moments earlier, opened once only to fix its mode '
+                . 'before proc_open() reopens the same path in append mode for the child',
+        ],
+        'Tools/Sandbox/EgressProxyProcess.php|require' => [
+            'PROCESS_DERIVED — inside the GENERATED live proxy stub '
+                . '(EgressProxyProcess::STUB): the composer autoload of the installation '
+                . 'already executing this code. The path is computed in the PARENT and '
+                . 'reaches the child only down the stdin pipe proc_open() just created for '
+                . 'it, so no party outside this process can name it; the child refuses a '
+                . 'value that is not is_file(). Same verdict AND same MECHANISM as '
+                . 'Agents/ProcessExecutor.php|require',
+        ],
         'Tools/Sandbox/Bubblewrap.php|file_get_contents' => [
             'PROCESS_DERIVED — the AppArmor userns sysctl (C-TOOL-4.a): the kernel interface named by '
                 . 'appArmorRestrictsUserns()\'s parameter default, read bounded at 16 bytes; the content '
@@ -1593,6 +1607,7 @@ final class ReadPathCensusTest extends TestCase
                 'Agents/ProcessExecutor.php|require',
                 'Commands/Specs/BuiltInCommands.php|require',
                 'Background/BackgroundSupervisor.php|require',
+                'Tools/Sandbox/EgressProxyProcess.php|require',
                 'Workflows/WorkflowRegistry.php|require',
             ],
             array_keys($execute),

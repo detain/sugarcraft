@@ -194,6 +194,15 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . '$processDescriptor array that also lands there, so it outlives the call',
         ],
 
+        'Tools/Sandbox/EgressProxyProcess.php::start' => [
+            'count' => 1,
+            'reason' => 'egress proxy child held in $this->process for the launch; stop() and '
+                . '__destruct() run ProcessReaper::terminateAndClose over the group recorded at '
+                . 'spawn time (ProcessContainment::groupId, ISS-014), and the child independently '
+                . 'exits on stdin EOF or a parent-pid change — the proxy socket can never outlive '
+                . 'the launch that created it',
+        ],
+
         // The handle is returned to a caller that drains it from a periodic
         // timer on the event loop, so the child outlives `spawn()` by design.
         'Backend/CommandBackend.php::spawn' => [

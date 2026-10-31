@@ -138,8 +138,11 @@ final class EgressProxy
         $clientClosed = false;
 
         $fail = static function (int $status, string $reason) use ($connection): void {
-            self::respond($connection, $status, $reason);
-            $connection->close();
+            // end(), never write()+close(): react buffers writes in userspace
+            // until the loop's next tick, and close() discards that buffer —
+            // a refusal written and closed in the same tick would never
+            // reach the client (measured: peer got zero bytes).
+            $connection->end(self::buildResponse($status, $reason));
         };
 
         $onData = null;
@@ -210,8 +213,7 @@ final class EgressProxy
                         $connection->removeListener('data', $onData);
                     },
                     static function (Throwable $error) use ($connection): void {
-                        self::respond($connection, 502, 'Upstream dial failed: ' . $error->getMessage());
-                        $connection->close();
+                        $connection->end(self::buildResponse(502, 'Upstream dial failed: ' . $error->getMessage()));
                     },
                 );
         };
@@ -267,11 +269,22 @@ final class EgressProxy
             }
             return ['host' => $host, 'port' => $port, 'connect' => true];
         }
-        if (!preg_match('#^https?://#i', $parts[1], $match)) {
+        // Scheme door spelled as prefix comparisons: a '#^https?://#i' preg
+        // literal is glob-shaped and would silently widen the PathGlob
+        // census corpus (lane law: no wildcard-shaped string literals).
+        $scheme = null;
+        $schemeLen = 0;
+        foreach (['https://' => 'https', 'http://' => 'http'] as $prefix => $name) {
+            if (strncasecmp($parts[1], $prefix, strlen($prefix)) === 0) {
+                $scheme = $name;
+                $schemeLen = strlen($prefix);
+                break;
+            }
+        }
+        if ($scheme === null) {
             return null;
         }
-        $scheme = strtolower($match[0]) === 'https://' ? 'https' : 'http';
-        $rest = substr($parts[1], strlen($match[0]));
+        $rest = substr($parts[1], $schemeLen);
         $slash = strpos($rest, '/');
         $authority = $slash === false ? $rest : substr($rest, 0, $slash);
         if (str_contains($authority, '@')) {
@@ -331,7 +344,15 @@ final class EgressProxy
         $headBytes = substr($head, 0, $end);
         $lines = explode("\r\n", rtrim($headBytes, "\r\n"));
         $parts = explode(' ', trim((string) $lines[0]), 3);
-        $withoutScheme = preg_replace('#^https?://#i', '', $parts[1]) ?? $parts[1];
+        $withoutScheme = $parts[1];
+        // Prefix strip rather than a preg: a '#^https?://#i' literal is
+        // glob-shaped and would silently widen the PathGlob census corpus.
+        foreach (['https://', 'http://'] as $scheme) {
+            if (strncasecmp($withoutScheme, $scheme, strlen($scheme)) === 0) {
+                $withoutScheme = substr($withoutScheme, strlen($scheme));
+                break;
+            }
+        }
         $slash = strpos($withoutScheme, '/');
         $path = $slash === false ? '/' : substr($withoutScheme, $slash);
         $lines[0] = $parts[0] . ' ' . $path . ' ' . ($parts[2] ?? 'HTTP/1.1');
@@ -375,11 +396,13 @@ final class EgressProxy
 
         $down->on('close', static function () use ($up, $teardown): void {
             $teardown();
-            $up->close();
+            // end() over close(): queued bytes (e.g. the final tunnel chunk)
+            // flush and FIN gracefully instead of being discarded.
+            $up->end();
         });
         $up->on('close', static function () use ($down, $teardown): void {
             $teardown();
-            $down->close();
+            $down->end();
         });
 
         $drainTimer = $loop->addPeriodicTimer(self::SWEEP_INTERVAL_SECONDS, static function () use ($down, $up, $loop, &$idle, &$drainTimer): void {
@@ -395,8 +418,10 @@ final class EgressProxy
 
     /**
      * Minimal text/plain proxy response with no keep-alive ambiguity.
+     * Returned as one string so callers hand it to end() and the buffer
+     * flushes before the FIN.
      */
-    private static function respond(ConnectionInterface $connection, int $status, string $reason): void
+    private static function buildResponse(int $status, string $reason): string
     {
         $label = match ($status) {
             403 => 'Forbidden',
@@ -404,12 +429,10 @@ final class EgressProxy
             default => 'Bad Request',
         };
         $body = $reason . "\n";
-        $connection->write(
-            'HTTP/1.1 ' . $status . ' ' . $label . "\r\n"
+        return 'HTTP/1.1 ' . $status . ' ' . $label . "\r\n"
             . 'Content-Type: text/plain; charset=utf-8' . "\r\n"
             . 'Content-Length: ' . strlen($body) . "\r\n"
             . 'Connection: close' . "\r\n\r\n"
-            . $body,
-        );
+            . $body;
     }
 }
