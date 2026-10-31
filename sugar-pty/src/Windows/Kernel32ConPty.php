@@ -98,9 +98,17 @@ typedef struct _STARTUPINFOW {
     WORD   wShowWindow;
     WORD   cbReserved2;
     void  *lpReserved2;
-    void  *hStdInput;
-    void  *hStdOutput;
-    void  *hStdError;
+    /*
+     * Handles are opaque pointer-SIZED values. They are modeled intptr_t
+     * here, exactly as every handle parameter in the function declarations
+     * below already is: on LLP64 an intptr_t and a void * occupy the
+     * identical 8-byte slot, so Microsoft's offsets and sizes are untouched
+     * (the layout pins in tests/Windows/Kernel32ConPtyTest.php prove it),
+     * and reads become plain scalar conversions — see createProcess().
+     */
+    intptr_t hStdInput;
+    intptr_t hStdOutput;
+    intptr_t hStdError;
 } STARTUPINFOW;
 
 typedef struct {
@@ -109,10 +117,11 @@ typedef struct {
 } STARTUPINFOEXW;
 
 typedef struct {
-    void  *hProcess;
-    void  *hThread;
-    DWORD  dwProcessId;
-    DWORD  dwThreadId;
+    /* HANDLEs again: pointer-sized, integer-modeled — see STARTUPINFOW. */
+    intptr_t hProcess;
+    intptr_t hThread;
+    DWORD    dwProcessId;
+    DWORD    dwThreadId;
 } PROCESS_INFORMATION;
 
 typedef struct {
@@ -657,14 +666,21 @@ CDEF;
             ));
         }
 
-        // hProcess and hThread are `void *` struct members. A pointer-typed
-        // FFI\CData does not convert with `(int)` — measured on PHP 8.3.6, it
-        // answers 1 AND emits "Object of class FFI\CData could not be converted
-        // to int", which this lib's failOnWarning would turn into a red on the
-        // Windows leg. The house idiom (sugar-core Kernel32) is the explicit
-        // intptr_t cast first.
-        $process = (int) \FFI::cast('intptr_t', $info->hProcess)->cdata;
-        $thread = (int) \FFI::cast('intptr_t', $info->hThread)->cdata;
+        // MAJOR-2, cured at the declaration: `(int)` applied to a POINTER-typed
+        // FFI\CData answers garbage AND emits "Object of class FFI\CData could
+        // not be converted to int", which this lib's failOnWarning would turn
+        // into a Windows-leg red. The sugar-core Kernel32 idiom
+        // `(int) \FFI::cast('intptr_t', $h)->cdata` was tried and is NOT
+        // transferable: measured on PHP 8.3.6, casting an integer-typed result
+        // out of a void * source RE-ANCHORS the CData at the pointer's value,
+        // so `->cdata` DEREFERENCES the handle as memory — a slot holding
+        // 0x1234 SIGSEGVs the read (exit 139). sugar-core gets away with it
+        // only because there the source is a pointer at real FFI-owned storage
+        // the cast re-reads; a kernel handle from CreateProcessW is not
+        // dereferenceable memory on any host. Declaring the slots intptr_t
+        // (same 8-byte LLP64 layout) makes this a silent, exact scalar read.
+        $process = (int) $info->hProcess;
+        $thread = (int) $info->hThread;
 
         // CreateProcessW hands back two handles and a PTY backend needs one of
         // them. The primary thread handle is closed HERE rather than returned,
