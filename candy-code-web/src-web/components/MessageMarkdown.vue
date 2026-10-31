@@ -7,6 +7,7 @@ let highlighter: Promise<typeof import('../lib/highlight')> | null = null
 <script setup lang="ts">
 import { computed, onMounted, onUpdated, ref } from 'vue'
 import { renderMarkdown } from '../lib/markdown'
+import { t } from '../lib/i18n'
 
 const props = defineProps<{ text: string }>()
 // Sanitised by renderMarkdown (DOMPurify) before it reaches v-html.
@@ -58,17 +59,17 @@ function decorate(): void {
     button.type = 'button'
     button.className = 'code-copy'
     button.setAttribute('data-testid', 'copy-code-block')
-    button.textContent = 'copy'
-    button.title = 'Copy this code block'
+    button.textContent = t('web.transcript.copy_idle')
+    button.title = t('web.transcript.copy_code_title')
     button.addEventListener('click', () => {
       const text = (code.textContent ?? '').replace(/\n$/, '')
       if (typeof navigator === 'undefined' || !navigator.clipboard) {
-        button.textContent = "couldn't copy"
+        button.textContent = t('web.transcript.copy_failed')
         return
       }
       navigator.clipboard.writeText(text).then(
-        () => { button.textContent = 'copied' },
-        () => { button.textContent = "couldn't copy" },
+        () => { button.textContent = t('web.transcript.copy_copied') },
+        () => { button.textContent = t('web.transcript.copy_failed') },
       )
     })
     block.appendChild(button)

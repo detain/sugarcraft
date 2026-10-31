@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
+import { t } from '../../lib/i18n'
 import { useTodosStore } from '../../stores/agents/todos'
 
 /**
@@ -22,9 +23,9 @@ function mark(status: string): string {
 <template>
   <div class="todo-panel" data-testid="todo-panel">
     <p v-if="list.error" class="error" role="alert">{{ list.error }}</p>
-    <p v-else-if="list.items.length === 0" class="empty">{{ list.loaded ? 'The agent keeps no todo list in this session.' : 'Loading…' }}</p>
+    <p v-else-if="list.items.length === 0" class="empty">{{ list.loaded ? t('web.panels.todo_empty') : t('web.panels.todo_loading') }}</p>
     <template v-else>
-      <p class="summary">{{ done }} of {{ list.items.length }} done</p>
+      <p class="summary">{{ t('web.panels.todo_summary', { done, total: list.items.length }) }}</p>
       <ol class="items">
         <li v-for="(item, i) in list.items" :key="i" :class="item.status" :data-status="item.status" data-testid="todo-item">
           <span class="mark" aria-hidden="true">{{ mark(item.status) }}</span>
