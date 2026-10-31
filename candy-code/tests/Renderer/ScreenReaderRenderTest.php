@@ -70,6 +70,9 @@ final class ScreenReaderRenderTest extends TestCase
         // that opened a dropdown and died before closing it would leak the
         // panel into every later frame in the process.
         MenuBar::closeMenu();
+        // Same hazard for the shell-declared Agent View (Renderer is
+        // process-static about it): no test in this file may leak one.
+        Renderer::setAgentView(null);
         UiSettings::forget();
         $this->restoreHomeSandbox();
         self::removeTree($this->home);
@@ -172,6 +175,68 @@ final class ScreenReaderRenderTest extends TestCase
         // `$frame = $overlay`) reddens this leg; the lead ruling on
         // review-1 (c).
         self::assertStringContainsString('Ctrl+P menu', $this->stripAnsi($frame), 'the overlay replaces the body, not the chrome — the status bar must survive beside it');
+    }
+
+    public function testTheAgentViewHeaderSurvivesBesideTheScreenReaderOverlay(): void
+    {
+        // Ruling (c) splices TWO chrome rows around the replacing overlay.
+        // The status bar is pinned by the test above; this is the other
+        // leg — the Agent View header, which P-C2 pins ABOVE the clipped
+        // body so "the way back" never scrolls off. The design block for
+        // this step (design-tui.md, C-TUI-6.j, "Overlays") says the chain
+        // "REPLACES the body" — the body band, not the chrome pinned
+        // outside it. Deleting the ($agentHeader ...) leg at the SR
+        // branch drops this row, and nothing else in the suite has ever
+        // opened an overlay over an agent view.
+        $name = 'srh-agent-' . bin2hex(random_bytes(6));
+        $view = [
+            'id' => 'run-1',
+            'name' => $name,
+            'state' => null,
+            'rows' => [Message::user('child-asks-loudly')],
+            'composer' => null,
+            'attach' => null,
+            'siblings' => ['run-1'],
+            'transcript' => true,
+        ];
+
+        $this->writeConfig(['screenReader' => true]);
+        Renderer::setAgentView($view);
+        try {
+            $sr = $this->stripAnsi(Renderer::render($this->paletteChat()));
+        } finally {
+            Renderer::setAgentView(null);
+        }
+
+        // The SR replacement branch is what painted: the agent run's own
+        // row is the body under an open view, and the replacing overlay
+        // took it — gutter and all. (The breadcrumb's own ' ▸ ' is
+        // AgentViewHeader::ARROW — chrome outside the box-drawing range —
+        // so the ▸-absence door the sibling test uses cannot be reused here.)
+        self::assertStringNotContainsString('user> chi', $sr, 'fixture: the overlay painted through the SR replacement path — the run transcript that is the body under an open view is gone with its gutter');
+        self::assertStringNotContainsString('child-asks-loudly', $sr, 'and no unclipped remnant of it survives either');
+        self::assertMatchesRegularExpression('/\d+\/\d+/', $sr, 'and the palette painted as positioned SR rows');
+        self::assertStringContainsString($name, $sr, 'the Agent View header survives beside the SR overlay — the splice at the SR branch is load-bearing chrome, not decoration');
+        self::assertStringContainsString('main ▸ ' . $name, $this->plainLines($sr)[0], 'and it stays the pinned top row — above the replacing overlay, the way P-C2 holds it above the clip');
+
+        // The off-mode counterpart: the header row is still pinned above
+        // the body — but under off the Veil composites over the row, so
+        // the full agent name is clipped away ("main ▸ sr╭ command…").
+        // The clipped prefix, not the name, is the off-mode needle.
+        $this->writeConfig(['screenReader' => false]);
+        Renderer::setAgentView($view);
+        try {
+            $off = $this->stripAnsi(Renderer::render($this->paletteChat()));
+        } finally {
+            Renderer::setAgentView(null);
+        }
+
+        $offLines = $this->plainLines($off);
+        // The row carries the click-zone sentinels around "main" (stripAnsi
+        // removes SGR runs only), so the door is the substring, not an anchor.
+        self::assertStringContainsString('main ▸ ', $offLines[0], 'off mode keeps the header row pinned above the body, with the composited box clipping the rest of it');
+        self::assertStringContainsString('user> chi', $off, 'and the run transcript is the body under off — clipped to "user> chi" beside the composited box, the same way the sibling off pin records');
+        self::assertStringContainsString("\u{25b8} ", $off, 'and the palette composites over it, sighted markers and all');
     }
 
     public function testTheSameOverlayCompositesOverTheBodyWithTheModeOff(): void
