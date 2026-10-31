@@ -1,0 +1,80 @@
+# C-TOOL-4.c — REVIEW-1 (first round, fresh reviewer)
+
+- Date: 2026-10-31. Reviewer: fresh round-1 cc-cmp-step-reviewer (no prior REVIEW existed for this step).
+- Verdict: **CLEAN — 0 critical / 0 major / 0 step-local minor / 3 NIT (2 out-of-scope, 1 step-local perf) + §7 hand-offs + 2 lead-premise corrections.**
+- Lane re-derived on disk BEFORE anything else: `/home/sites/cc-cmp-C-TOOL-4.c`, branch `cc/C-TOOL-4.c`, base `9a0c569eb796a00a9f1ae1fb3296375018b6d59a` (== `fb0c461c3^` ✓), tip `1ac60022a`, exactly TWO picks (`fb0c461c3` build+settings+docs-cascade, `1ac0… → 1ac60022a` tests+PERMISSIONS). `git status --porcelain` = 0. All lead-supplied numbers CONFIRMED.
+- Lead-premise corrections (recorded, not lane defects): (a) builder REPORT.md lists **11** files, not 10 (brief said 10) — the 11-file diff matches the design block's declared set exactly; (b) `git diff --name-only 9a0c569eb..1ac60022a` = the same 11 files, all design-declared (design-tool.md `### C-TOOL-4.c`, read verbatim from the LANE worktree copy, audit-era line cites re-read by symbol as instructed).
+- Builder REPORT.md stat'd at main-tree: 5,391 B (matches lead's read).
+
+## Q1 — Security semantics: PASS (no weaker-than-base path exists)
+
+Decision-table derivation from `src/Tools/Sandbox/Bubblewrap.php` @ tip (read in full):
+- (a) **Hardened-probe failure NEVER yields unsandboxed execution.** `probe()` (:412-444) stage-1 hardened `/bin/true`: exit 0 → memo `[null,true]` (one spawn). Stage-1 fail → stage-2 plain: ok → `[null,false]`; fail → `[stderr?:'<binary> exited N', false]` = the standing refusal. `hardened()` (:231-240) returns the memo's second slot; `argv()` (:231→jailArgv) then builds the PLAIN jail — identical protection to the pre-step base (base `probe()` was the same single-stage plain `/bin/true`, memo keyed identically — base blob verified via `git show`). The plain arm is an EXECUTION arm only when it PROBE-SUCCEEDS; execution in the plain jail == base behavior, which is the design's ceiling ("fallback DOWNWARD, never OUT", class docblock :60-68, still true).
+- (b) **No describe/isSupported/factory disagreement window.** `Bash.php:613` gate (pre-existing) runs `sandboxRefusal()` → `probe()` BEFORE `wrap()` on every command, so the memo is always populated before any jail argv is built at execution sites. The unknown-key default `hardened() ?? true` (:237) can only bite a caller that wraps WITHOUT probing; if a hardened-incapable host hit that path, its argv carries the two flags and bwrap fails LOUDLY (exec error), never silently running plain or unjailed — fail-closed both ways. `describe()` (:496-511) adds the "cannot block nested user namespaces" clause only when `!nestedUserns && !hardened()`, i.e. only from a REAL memo verdict: no clause unprobed, no clause after user opt-in, no user-blame. Factory reads the same single setting key (§Q4); no second source of truth.
+- (c) **THIS box end-to-end** (measured: `bwrap` present; `/proc/sys/kernel/apparmor_restrict_unprivileged_userns` = **1**): default config (`bashSandbox` on, `bashSandboxNestedUserns` absent→false) → stage-1 hardened probe spawns `--unshare-all --disable-userns --unshare-user … /bin/true`, userns creation is denied → stage-2 plain probe also fails here (bubblewrap cannot set up its user namespace under the restriction) → memo `[reason,false]` → Bash command **refuses loudly**: "Not run: the bashSandbox setting is \"%s\" but the bubblewrap sandbox cannot start on this host (<Ubuntu uid-map stderr>). Nothing ran, sandboxed or otherwise." + remedy "on Ubuntu, unprivileged user namespaces are restricted by AppArmor" (:463, byte-stable). Text matches reality exactly — nothing ran; refusal is the pre-step behavior, not new. Consistency check: `BashSandboxTest::testTheRealBubblewrapConfinesOrRefuses` (real-arm, no sentinel) passed in my green trio run (72T/393A) — the confine-or-refuse law holds on this host. `DoctorSandboxProbeTest` green in same window.
+- No new `proc_open`/fork site (probe spawns ONLY through the injected `$run` closure — static derivation from full file read): child-lifetimes roster owes nothing. No timers anywhere → E646 untouched. ✓
+
+## Q2 — Pins load-bearing: PASS (static mutation derivation; execution denied)
+
+My permission map denies `cp`/writes into the lane worktree, so I did NOT re-run mutations (disclosed, per brief allowance); builder claims M1 7F / M2 4F / M3 2F / M4 1F are CONSISTENT with my by-hand derivation:
+- **Drop HARDENED_FLAGS** (empty const / no array_push :303-305): reddens `flagsRideByDefault` + `HARDENED_FLAGS` contents pin + both probe-leg sink assertions (stage-1 argv must carry `--disable-userns`) + factory pair-carry pin + `BashSandboxTest` new `hasSequence(argv, HARDENED_FLAGS)` + index-order pin (`--unshare-user` before first `--ro-bind`) → ≥7 reds. ✓ matches M1.
+- **Invert probe order** (plain first): reddens `ProbeRunsHardenedFirst` (:128 leg) + `PlainSetOnlyOnFailure` spawn-count 2 + sink order (plain-first would make hardened-success hosts memo `hardened=false` → default-argv pin flips too) → ≥4. ✓
+- **Ignore `bashSandboxNestedUserns`** (`=== true` never applied): reddens `OptingInDropsThePair` (:90/91) + factory literal-true pin (:267) + memo-not-keyed-by-setting leg (:183, keyed test would flip) → ≥2. ✓
+- **Remove the `--ro-bind-try` re-bind loop** (:342-351): reddens `ConfigFileInsideRootIsReBound` (:197/201/210, order + ro-bind-try exactness) + factory `CarriesConfigPathOverride` (:286). Containment-filter removal matches builder M3's 2F (`OutsideRootUntouched` + `RootItselfNeverReBound`). ✓
+- Literal-`true`-only loop arm (`['true']`, `1`, `null` all keep hardening) is a real discriminator: a truthiness rewrite `!empty()` reddens it. Opt-out describe-leg and noSpawn-memo legs each fail-closed on their own mutation. 16 methods, sentinel binary per leg (`'/usr/bin/bwrap-'.getmypid().uniqid().'-leg'` per-process unique — matches the wire-scan sentinel law). No vacuous pins found.
+
+## Q3 — Memo correctness: PASS
+
+- Key = `resolvedBinary . "\0" . network-bit` (:453-456). Exclusions all JUSTIFIED: `nestedUserns` is a WANT, not a host fact — recording the host verdict once per (binary,network) is correct and is pinned NOT-keyed-by-setting (:183 leg); tmpdir/root-override are not probe inputs (probe runs `/bin/true` at root `/` with tmpdir `''`), so excluding them is sound. Network matters (`--share-net` swaps against `--unshare-net`) → keyed in; different `--dev`/mount layout does not change userns capability.
+- Mid-process flip of `apparmor_restrict_unprivileged_userns`: memo STICKS by design (first verdict wins, pinned by `stays memoised` leg) — the jail argv then agrees with the memo forever within the process; a host flipping underneath at most runs the already-accepted plain jail or keeps a hardened jail that was proven to start. No safety regression.
+- Two-spawn cost: at most 2 spawns per (binary,network) per PROCESS (`probeVerdicts()` function-local static by-ref accessor :134-139), third-and-later probes 0 spawns (pinned noSpawn leg). Bounded, not per-command. Builder's disclosed reason for by-ref accessor (final readonly class cannot hold a defaulted readonly static) is PHP-true; accessor is process-global across instances — intentional and keyed, so no cross-instance contamination. Different `--config` path override does NOT change the memo key: correct (the re-bind is an argv feature, not a capability fact).
+
+## Q4 — Settings cascade (§1.8 in-step): PASS — every obliged surface moved, nothing un-owed
+
+| Surface | State | Evidence |
+|---|---|---|
+| `Config/LayeredSettings.php` LAYERED_KEYS | MOVED (fb0c461c3) | `'bashSandboxNestedUserns'` after `bashSandbox`, generated region |
+| Definitions class | MOVED | `ToolSettings.php`: Bool, default false, Tools, Security, `withLayered()`, label/help Lang keys, `withReaderSymbol(SandboxFactory::class.'::fromSetting')` |
+| keys rosters | MOVED | in LAYERED_KEYS; NOT in PROJECT_TIER_KEYS — pinned both-ways by schema-row test |
+| `docs/SETTINGS.md` generated region | MOVED + drift-guard GREEN | `SettingsSchemaDocDriftTest` green in battery (gen-settings-doc `--check` itself UNVERIFIED-BY-EXEC: my map denies `php <script>`; guard green is the indirect proof) |
+| README rows | MOVED | 2-row region; `ReadmeSettingsTierClaimTest` + `ReadmeRosterDriftTest` green |
+| DocFigure numerals | CONSISTENT | `DocFigureProseDriftTest` green in trio (109T/4591A/3F = 2 staleness-pair + 1 foreign GlobDialect; DocFigure itself green) |
+| `ConfigWriteProducer`/`SettingsWriterCensus` | GREEN in battery (199T/7219A) | key is user-tier → writable surface guards agree as landed |
+| `lang/en.php` label+help | MOVED, sorted runs | `LangParityTest|EnvRosterDriftTest` = 44T/44366A OK (my own run) |
+
+**screenReader 86-vs-87 item — REPRODUCED, NOT this lane's defect.** Battery sole F = `LayeredSettingsTest.php:67` pinned-vs-derived roster; failure diff: derived list index 76 gains `'screenReader'`, shifting `transcriptJsonl…debug.stream` to 77…86 → derived **87** vs pinned **86**. `grep -c screenReader` at BASE `9a0c569eb:candy-code/src/Config/LayeredSettings.php` = **1** (:645) — the foreign key (welded C-TUI-6.i) was ALREADY derived at this base; base arithmetic: pinned 85 vs derived 86 → **red at base by construction**, independently confirming the builder's stash-and-run disclosure (consistent with the lead's own "red at base" adjudication of this family). This lane's addition is EXACTLY +1/+1: derived 86→87 AND pinned 85→86 in the same commit; the GAP stays 1 and did not widen — arithmetic stated precisely as demanded. **Cure:** 2-word `'screenReader',` insertion in the pinned roster at position 76 (before `transcriptJsonl`). **Who owes:** master-side §7/weld bookkeeping of the C-TUI-6.i weld (§2 rule: a lane may not fold another lane's hub-file surface; this lane correctly did not touch the foreign key's region).
+
+## Q5 — describe()/docs honesty: PASS
+
+- `describe()` clause fires only on a REAL probed-and-unsupported verdict (§Q1b) — never advertises hardened-when-plain, never blames config when the host lacks userns, never claims the opt-out clause when the user opted in. Lang help text ("too old for those flags → jail runs the plain set and its own description says so") matches the decision table; see NIT-3 for the one-word timing nuance.
+- PERMISSIONS.md + SETTINGS.md additions checked line-by-line against code: "refuses the command when the jail cannot start" = the loud refusal at `Bash.php:613` (verified text); "Nothing ran, sandboxed or otherwise" is the code's own string; nested-userns section documents default-false hardened pair + plain fallback + user-tier-only rationale (a `true` REMOVES a jail bound — project tier must never ask) exactly as `ToolSettings.php`'s comment + `projectSettable false` implement it. No string claims a capability the probe did not verify.
+
+## Q6 — Scope, §7 hand-offs, refusal-shape laws: PASS
+
+- Diff file list == design-declared set == REPORT's 11 (1 create + 10 modify). §2 hub note: `Config/LayeredSettings.php` IS a hub (2-lane disjoint-region rule) — this lane's edit stays inside the LAYERED_KEYS generated region it declared; `lang/en.php` is soft-cap per-prefix (§2 :109) and the lane appended ONLY under `settings.bashSandbox*`.
+- Forbidden surfaces all UNTOUCHED (name-list diff): `suite-figure.json`, `scripts/parallel-tests-durations.tsv`, `candy-code-web/dist`, protocol trio + `docs/SERVER.md` + `generated.ts`, `plan_comparison.md`, `.opencode/*`, `composer.json/lock`.
+- Literal laws: `grep` over new/changed test files — zero `**Refused:**`-shaped literals (only real refusal strings are the tool's own, pinned verbatim via the fixture sink, not planted as denial-vocabulary src tokens); 52 `*` hits in BubblewrapHardeningTest all inside `/**` docblocks, zero glob-shaped string literals; GlobDialect corpus figures byte-identical with/without the lane's file (builder claim re-confirmed: 310245-vs-docblock-311360 red is the FOREIGN PathGlob docblock item on the accepted list, unchanged by this lane, neither number asserted).
+- **§7 durations-gate hand-off (LIST, never minted):** `candy-code/tests/Tools/Sandbox/BubblewrapHardeningTest.php` — LIVE measured `--filter BubblewrapHardeningTest` = **16 tests, 79 assertions** (matches builder). `ReadmeSuiteFigureDrift` staleness pair red = expected §7 re-pin territory (+16T from this file).
+- Gates run (anchored, env-stripped plain pipe, cwd=candy-code): trio `tests/Tools/Sandbox + BashSandboxTest.php + DoctorSandboxProbeTest.php` = **72T/393A OK**; battery (9 settings/guard classes) = 199T/7219A/**1F** (the screenReader foreign red); TreeWideGuardRoster (bare name) = 17T/3867A OK; DocFigure|GlobDialect|ReadmeSuiteFigure = 109T/4591A/3F (staleness-pair + foreign GlobDialect, both accepted); LangParity|EnvRoster = 44T/44366A OK. `DuplicatedTestHelperDriftTest` GREEN inside the battery (the e78d5dc14 cure holds at this base, as demanded). Foreign 2-Deprecation "issues" line (private provider `AccessorDeprecationTest::eraPairs()/runtimeEraPairs()`, pre-existing at base, file not in lane diff) appears in filtered runs — foreign note, exit-0 informational.
+
+## Q7 — Author law + picks + weld overlap: PASS
+
+- `fb0c461c3`: %ae=detain@interserver.net(1) %ce(1) separately; `1ac60022a`: same 1/1; Co-Authored-By count 0 across `9a0c569eb..1ac60022a`. ✓
+- `git merge-base 1ac60022a master` = `9a0c569eb` (direct descendant of its base; lane-local master ref = 56893049b, main tree has moved on since).
+- Weld overlap vs enumerated commits: `git show --name-only --format= cf801710a` = **ONLY `prompt_kit/findings/comparison-1026/lanes/run-state.json`** → zero overlap with the 11 lane files (C-EXT-6.c fold commit). Of `c4f0c2f98 f248bb592 54036ef6d e390331c9`, only `c4f0c2f98` touches `candy-code/lang/en.php` — and its additions are the `hooks.http.*` block (deny_bad_url/deny_scheme/… 12 keys), a sorted region FAR from our `settings.bashSandbox.label/.help` inserts (base :2109/:3889); both purely additive per-prefix appends → 3-way merge lands cleanly; §2's soft en.php rule (per-prefix appends) covers exactly this. **Name the overlap and its resolution for the welder: `lang/en.php` only, adjacent-ordered, no hunk collision; zero overlap on any source/test/doc else.**
+
+## Findings (NIT only — none blocking)
+
+- NIT-1 (step-local, optional): `SandboxFactory::fromSetting` (:Linux arm) falls back to `Bootstrap::readUserConfig()` (un-memoized, known tree-wide) — if call sites (Bash.php:233, PtyRun.php:182) already hold the parsed user config, threading it via the new `?array $userConfig` param would save one config.json disk-parse per sandboxed command. The param exists and the factory default keeps a single-source read; purely a perf polish, behavior identical. Out-of-scope for a fix round if the lead prefers zero churn.
+- NIT-2 (out-of-scope, foreign): `AccessorDeprecationTest` private-provider PHPUnit deprecations surface in every filtered run here — pre-existing at base, not lane-owed.
+- NIT-3 (out-of-scope, doc nuance): the help sentence "…its own description says so" is true post-probe; the very first unprobed describe() carries no clause. Defensible (the clause is about a verdict the host must first produce); no change needed unless the lead wants "…once probed, its description says so".
+
+## Rulings (§6) + laws
+
+`plan-tail.md` §6 read in full: no ruling decides anything the C-TOOL-4.c block hedged (§6.3 open calls are C-TOOL-6/C-TUI-6 only). E646: no timers; probe spawns via injected closure only; no blanket request timeouts anywhere in the diff. Dormant code: nothing deleted (`dropLast` etc. untouched; no unused-wired surface). No weld-only files committed. Comments carry WHY (nested-userns rationale, key-exclusion reasoning, accessor law).
+
+## Tree left as found
+
+No repo edits, no staging, no commits; scratch: `/tmp/opencode` mkdir denied by map — nothing created, nothing to prune. background=true spawn law noted for the return.
+
+— end REVIEW-1 —
