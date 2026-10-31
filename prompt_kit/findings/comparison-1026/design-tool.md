@@ -946,7 +946,7 @@ Totals: 44 steps. 13 S, 31 M, 0 L. 18 LATE (C-TOOL-4.b–h, C-TOOL-6.b–l); 26 
     - `LaunchContext::unfilteredTools()` appends `...Bootstrap::userScriptTools($root)` after `...Bootstrap::mcpTools($root)` (:1715), so `allowedTools`/`disabledTools` filter them like MCP bridges.
   - **`UserScriptTool`.** `NAME_PREFIX = 'user__'`; the wire name is `user__<name>`.
     - It implements `AcceptsHeartbeat` (`runCaptured()`'s `$onWait`) and `AcceptsWorktreeJail` (cwd becomes the worktree).
-    - Args are validated against `required` and scalar types.
+    - Args are validated against `required`; scalar values only (an array or object value is refused before anything spawns). Declared schema types are not re-checked — an int supplied for a string property renders as one `escapeshellarg`-quoted word, which is the deliberate decision (round-1 review: docs aligned to code, no type-fidelity check added).
     - Scalars are substituted into `{{prop}}`. An element that is exactly an absent optional placeholder is dropped; array and object values are refused.
     - EVERY element is `escapeshellarg`'d, then joined, then wrapped through the `bashSandbox` backend (`SandboxFactory`, C-TOOL-4.b) with the project root writable, exactly as for Bash.
     - It runs through `CapturesProcessOutput::runCaptured()`: cwd is the root, the Bash output cap applies, the timeout is the tool's own, and `$envOverrides` carries `CANDY_CODE_TOOL_INPUT=<args JSON>`. That adds no new proc_open token.
