@@ -42,11 +42,11 @@ Lane base `288b81f11`; master since took `e78d5dc14` (master guard cure: Duplica
 - §3 UNTOUCHED: line 169 still `| W33 (LATE) | 8 | …` — no ✅ (W33 not closing: several members unwelded).
 
 ## Step 5 — record commit + absorption + prune
-- **`9e6538b49` "weld: C-TUI-6.i"** — A==C==detain@interserver.net (separate greps), zero trailers. `git show --name-only`: **7 paths** = plan_comparison.md, lanes/C-TUI-6.i/{REPORT,REVIEW-1,REVIEW-2,FIX-1,WELD}.md, lanes/run-state.json (VERBATIM as the lead folded — incl. note_t612 + anomaly entries; welder made zero content edits to it). (Amended once to carry this finished WELD.md; path set identical.)
+- **`d59cff2ae` "weld: C-TUI-6.i"** (pre-amend id `9e6538b49`; amended once to carry the finished WELD.md, path set identical) — A==C==detain@interserver.net (separate greps), zero trailers. `git show --name-only`: **7 paths** = plan_comparison.md, lanes/C-TUI-6.i/{REPORT,REVIEW-1,REVIEW-2,FIX-1,WELD}.md, lanes/run-state.json (VERBATIM as the lead folded — incl. note_t612 + anomaly entries; welder made zero content edits to it). (Stamp of this final sha rides the house follow-up one-liner — a commit cannot contain its own SHA.)
 - Absorption proof: `git cherry master cc/C-TUI-6.i` → all FOUR rows `-` (9d34122df, 156f0a5c7, 1c366fd1b, 0471efde5), zero `+`, rc 0. No manual conflict resolutions were made anywhere (the single auto-merge was the TWGR disjoint-hunk case) ⇒ content equivalence holds by construction.
 - Prune (after proof): `git worktree remove /home/sites/cc-cmp-C-TUI-6.i` + `git branch -D cc/C-TUI-6.i`. No other cc/* lanes or worktrees touched.
 
 ## Step 6 — ledger for the lead
-- Master chain of this weld: `6fd79a345` → `1e772aa23` → `ad91178bd` → `59577fafb` → `0e8de26e0` → `9e6538b49`. NOT PUSHED (push = lead, wave-close only).
+- Master chain of this weld: `6fd79a345` → `1e772aa23` → `ad91178bd` → `59577fafb` → `0e8de26e0` → `d59cff2ae` (+ this follow-up stamp one-liner). NOT PUSHED (push = lead, wave-close only).
 - §7 GATE riders: NEW test file `candy-code/tests/Tui/ScreenReaderModeTest.php` needs a `scripts/parallel-tests-durations.tsv` row (live 11T/54A); suite-figure/README staleness pair re-pin owed (pinned 25,537 vs live 29,132 at this weld).
 - Forbidden-path discipline: no §3 flip, no push/pull, no suite-figure.json/durations.tsv edit, no caliber; `.opencode/agents/cc-cmp-lead.md`, `lanes/C-WEB-5.g/WELD.md` dirt, and root junk files left untouched/unstaged.
