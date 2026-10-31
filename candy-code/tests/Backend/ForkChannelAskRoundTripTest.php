@@ -193,8 +193,10 @@ final class ForkChannelAskRoundTripTest extends TestCase
 
     public function testTheFrameVocabularyIsD1(): void
     {
-        self::assertSame(['ask', 'steer_ack', 'usage', 'step'], ChildChannel::TO_PARENT);
-        self::assertSame(['ask_reply', 'steer', 'cancel_soft', 'cancel_tool', 'agent_cancel'], ChildChannel::TO_CHILD);
+        // C-TOOL-6.h appended the client round trip: client_call travels
+        // child→parent and client_result travels back, both on this socket.
+        self::assertSame(['ask', 'steer_ack', 'usage', 'step', 'client_call'], ChildChannel::TO_PARENT);
+        self::assertSame(['ask_reply', 'steer', 'cancel_soft', 'cancel_tool', 'agent_cancel', 'client_result'], ChildChannel::TO_CHILD);
     }
 
     /**

@@ -9,6 +9,7 @@ use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Permissions\ApprovalVerdict;
 use SugarCraft\Code\Permissions\PermissionReply;
 use SugarCraft\Code\Tools\ToolCall;
+use SugarCraft\Code\Tools\ToolResult;
 
 /**
  * The turn child's half of the two-way frame channel (roadmap 1.C-1 =
@@ -35,9 +36,17 @@ use SugarCraft\Code\Tools\ToolCall;
  * | child→parent  | `steer_ack`   | `steerId`, `step`                                         |
  * | child→parent  | `usage`       | `step`, `usage`                                           |
  * | child→parent  | `step`        | `step`, `maxSteps`                                        |
+ * | child→parent  | `client_call` | `callId`, `toolCallId`, `name`, `arguments`, `deadlineSeconds` (C-TOOL-6.h) |
+ * | parent→child  | `client_result` | `callId`, `content`, `isError` (C-TOOL-6.h)             |
  *
  * 1.C-1 built the channel and the ask round trip; the other kinds ride the
- * same seam. Inbound `steer`/`cancel_*` frames are parsed and BUFFERED here
+ * same seam. C-TOOL-6.h adds the OTHER round trip on this same socket: a
+ * `client__*` proxy's call leaves the turn child as a `client_call`, the
+ * parent hands it to the registered client, and the answer comes back as a
+ * `client_result`. It is not an approver's verdict wearing another hat — a
+ * permission answer is an `ApprovalVerdict` whose note is clipped and whose
+ * `permission.requested` event reaches every client, and a tool RESULT is
+ * neither of those things — which is why it is two kinds and not one flag. Inbound `steer`/`cancel_*` frames are parsed and BUFFERED here
  * (an ask blocked on its reply must not drop a steer that overtook the
  * reply). Since roadmap 1.C-4 every forked turn carries a channel, not only
  * an interactive one: the turn loop writes a `step` frame before each
@@ -63,7 +72,9 @@ use SugarCraft\Code\Tools\ToolCall;
  * the policy — it pauses its idle ceiling while a question is open, and tears
  * the turn down on cancel — and the parent going away shows up here as EOF,
  * which settles the question as unanswered (`Permission required:`), never as
- * a grant.
+ * a grant. {@see callClient()} obeys the same law for a client's answer: the
+ * deadline rides the parent's timer, and EOF settles as an error result,
+ * never as content.
  *
  * ## Owned by one process
  *
@@ -95,12 +106,14 @@ final class ChildChannel
     public const AGENT_CANCEL = 'agent_cancel';
     public const USAGE = 'usage';
     public const STEP = 'step';
+    public const CLIENT_CALL = 'client_call';
+    public const CLIENT_RESULT = 'client_result';
 
-    /** The D1 kinds the child writes. */
-    public const TO_PARENT = [self::ASK, self::STEER_ACK, self::USAGE, self::STEP];
+    /** The D1 kinds the child writes (C-TOOL-6.h appended `client_call`). */
+    public const TO_PARENT = [self::ASK, self::STEER_ACK, self::USAGE, self::STEP, self::CLIENT_CALL];
 
-    /** The D1 kinds the parent writes. */
-    public const TO_CHILD = [self::ASK_REPLY, self::STEER, self::CANCEL_SOFT, self::CANCEL_TOOL, self::AGENT_CANCEL];
+    /** The D1 kinds the parent writes (C-TOOL-6.h appended `client_result`). */
+    public const TO_CHILD = [self::ASK_REPLY, self::STEER, self::CANCEL_SOFT, self::CANCEL_TOOL, self::AGENT_CANCEL, self::CLIENT_RESULT];
 
     /** A reply's `note` and a cancellation's reason are clipped to this many bytes (§5.1). */
     public const MAX_NOTE_BYTES = 2048;
@@ -159,6 +172,13 @@ final class ChildChannel
      *      lose the second; bounded by {@see MAX_HELD_REPLIES}
      */
     private array $heldReplies = [];
+
+    /**
+     * @var array<string, array<string, mixed>> `client_result` frames that
+     *      arrived for a call other than the one being waited on, by callId —
+     *      the same hold-not-drop law as {@see $heldReplies}, same bound
+     */
+    private array $heldResults = [];
 
     /**
      * @param resource                                              $socket      the child's end
@@ -304,8 +324,95 @@ final class ChildChannel
     }
 
     /**
-     * Write one child→parent frame that is not an ask (`steer_ack`, `usage`,
-     * `step`).
+     * The caller {@see \SugarCraft\Code\Tools\RelaysClientToolCalls::withClientCaller()}
+     * takes: hand one announced call to the parent, block until the client's
+     * answer arrives or the parent is gone.
+     *
+     * @return \Closure(string, string, array<string, mixed>, int): ToolResult
+     */
+    public function clientCaller(): \Closure
+    {
+        return fn (string $toolCallId, string $name, array $arguments, int $deadlineSeconds): ToolResult => $this->callClient($toolCallId, $name, $arguments, $deadlineSeconds);
+    }
+
+    /**
+     * Put one client-hosted call to the parent and block until the answer
+     * arrives or the parent is gone (C-TOOL-6.h).
+     *
+     * The child waits without a deadline exactly like {@see ask()}: the
+     * parent owns the policy (it pauses the idle ceiling while a call is
+     * open and answers the call itself when its deadline fires). EOF is an
+     * ERROR result, never content — a call whose parent vanished has no
+     * answer to report. A grandchild (foreign-pid writer) is refused here
+     * the way an inherited ask is: by roster a sub-agent never even holds a
+     * client proxy (DelegatesToEngine withholding), so this leg is defense
+     * in depth, same as {@see GRANDCHILD_REFUSAL} is for asks.
+     *
+     * @param array<string, mixed> $arguments
+     */
+    public function callClient(string $toolCallId, string $name, array $arguments, int $deadlineSeconds): ToolResult
+    {
+        $frame = PendingClientCall::describe(
+            PendingClientCall::callId($toolCallId, $name, $arguments),
+            $toolCallId,
+            $name,
+            $arguments,
+            $deadlineSeconds,
+        );
+        $callId = (string) $frame['callId'];
+
+        if ((int) getmypid() !== $this->ownerPid) {
+            return new ToolResult(
+                toolCallId: $toolCallId,
+                content: 'a client-hosted tool cannot be called from a parallel sub-agent; the client channel belongs to the turn',
+                isError: true,
+            );
+        }
+
+        if ($this->closed) {
+            return self::clientCallGone($toolCallId);
+        }
+
+        ($this->writeFrame)($frame);
+
+        $answer = $this->heldResults[$callId] ?? null;
+        unset($this->heldResults[$callId]);
+        $reply = null;
+        while ($answer === null) {
+            if (!$this->readInbound(true, null, $reply, $callId, $answer)) {
+                return self::clientCallGone($toolCallId);
+            }
+        }
+
+        $content = $answer['content'] ?? null;
+        if (!is_string($content)) {
+            // An answer this build cannot read is not an answer: fail closed,
+            // the same judgement an unreadable permission reply gets.
+            return new ToolResult(toolCallId: $toolCallId, content: 'the client answer could not be read', isError: true);
+        }
+
+        return new ToolResult(
+            toolCallId: $toolCallId,
+            content: $content,
+            isError: ($answer['isError'] ?? false) === true,
+        );
+    }
+
+    /** The EOF/corruption settlement for a waited-on client call. */
+    private static function clientCallGone(string $toolCallId): ToolResult
+    {
+        return new ToolResult(
+            toolCallId: $toolCallId,
+            content: 'the turn ended before the client answered',
+            isError: true,
+        );
+    }
+
+    /**
+     * Write one child→parent frame that is not a round trip of its own
+     * (`steer_ack`, `usage`, `step`). Neither `ask` nor `client_call` goes
+     * through here: each carries its own pending state and must ride its
+     * builder ({@see ask()}, {@see callClient()}).
      *
      * @param array<string, mixed> $fields
      *
@@ -314,7 +421,7 @@ final class ChildChannel
      */
     public function send(string $kind, array $fields = []): bool
     {
-        if ($kind === self::ASK || !in_array($kind, self::TO_PARENT, true)) {
+        if ($kind === self::ASK || $kind === self::CLIENT_CALL || !in_array($kind, self::TO_PARENT, true)) {
             return false;
         }
         if ((int) getmypid() !== $this->ownerPid) {
@@ -485,11 +592,12 @@ final class ChildChannel
     /**
      * Read what the socket has and route every whole frame in it.
      *
-     * @param ?array<string, mixed> $reply set to the `ask_reply` for $awaiting when one arrives
+     * @param ?array<string, mixed> $reply  set to the `ask_reply` for $awaiting when one arrives
+     * @param ?array<string, mixed> $result set to the `client_result` for $awaitingCall when one arrives
      *
      * @return bool false once the parent's end is gone
      */
-    private function readInbound(bool $block, ?string $awaiting, ?array &$reply): bool
+    private function readInbound(bool $block, ?string $awaiting, ?array &$reply, ?string $awaitingCall = null, ?array &$result = null): bool
     {
         $failures = 0;
         while (true) {
@@ -525,7 +633,7 @@ final class ChildChannel
             $this->inbound .= $chunk;
             $corrupt = false;
             foreach (($this->drainFrames)($this->inbound, $corrupt) as $frame) {
-                $this->route($frame, $awaiting, $reply);
+                $this->route($frame, $awaiting, $reply, $awaitingCall, $result);
             }
             if ($corrupt) {
                 // The offset no longer means anything, so no later reply can
@@ -535,7 +643,7 @@ final class ChildChannel
                 return false;
             }
 
-            if (!$block || $reply !== null) {
+            if (!$block || $reply !== null || $result !== null) {
                 return true;
             }
         }
@@ -544,8 +652,9 @@ final class ChildChannel
     /**
      * @param array<string, mixed>  $frame
      * @param ?array<string, mixed> $reply
+     * @param ?array<string, mixed> $result
      */
-    private function route(array $frame, ?string $awaiting, ?array &$reply): void
+    private function route(array $frame, ?string $awaiting, ?array &$reply, ?string $awaitingCall = null, ?array &$result = null): void
     {
         $kind = $frame['kind'] ?? null;
 
@@ -563,6 +672,24 @@ final class ChildChannel
             // id is held for the ask that will want it rather than dropped.
             if (!isset($this->heldReplies[$askId]) && count($this->heldReplies) < self::MAX_HELD_REPLIES) {
                 $this->heldReplies[$askId] = $frame;
+            }
+
+            return;
+        }
+
+        if ($kind === self::CLIENT_RESULT) {
+            $callId = $frame['callId'] ?? null;
+            if (!is_string($callId)) {
+                return;
+            }
+            if ($awaitingCall !== null && $result === null && $callId === $awaitingCall) {
+                $result = $frame;
+
+                return;
+            }
+            // Hold, not drop: two answers in one read must not lose the second.
+            if (!isset($this->heldResults[$callId]) && count($this->heldResults) < self::MAX_HELD_REPLIES) {
+                $this->heldResults[$callId] = $frame;
             }
 
             return;
