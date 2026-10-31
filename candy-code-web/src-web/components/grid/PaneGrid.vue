@@ -70,15 +70,15 @@ function maximize(id: string): void {
       @close="layout.closeTab(id)"
     />
     <div v-if="canAdd" class="add" data-testid="grid-add">
-      <p v-if="layout.tiles.length === 0" class="hint">Watch several sessions at once: open them here.</p>
+      <p v-if="layout.tiles.length === 0" class="hint">{{ t('web.grid.add_hint') }}</p>
       <form class="pick" @submit.prevent="add">
-        <select v-model="picked" aria-label="Session to open in the grid" data-testid="grid-pick">
+        <select v-model="picked" :aria-label="t('web.grid.pick_aria')" data-testid="grid-pick">
           <option value="" disabled>{{ t('web.grid.pane_open_option') }}</option>
           <option v-for="summary in candidates" :key="summary.id" :value="summary.id">{{ sessionLabel(summary, summary.id) }}</option>
         </select>
-        <button type="submit" :disabled="picked === ''" data-testid="grid-open">Open</button>
+        <button type="submit" :disabled="picked === ''" data-testid="grid-open">{{ t('web.grid.open') }}</button>
       </form>
-      <button type="button" class="primary" :disabled="creating || !connection.connected" data-testid="grid-new" @click="create">+ New session</button>
+      <button type="button" class="primary" :disabled="creating || !connection.connected" data-testid="grid-new" @click="create">{{ t('web.grid.new_session') }}</button>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
     </div>
   </section>

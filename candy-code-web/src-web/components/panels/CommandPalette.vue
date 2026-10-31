@@ -25,7 +25,8 @@ const props = defineProps<{ activeId: string | null }>()
 
 interface Entry {
   id: string
-  group: 'Sessions' | 'Commands' | 'Panels' | 'Actions'
+  /** Chrome group label — rendered, filtered, and translated with the entry. */
+  group: string
   label: string
   hint?: string
   run: () => unknown
@@ -44,12 +45,13 @@ const input = ref<HTMLInputElement | null>(null)
 
 const entries = computed<Entry[]>(() => {
   const list: Entry[] = []
-  list.push({ id: 'new-session', group: 'Actions', label: newSessionFlow.canBrowse ? 'New session…' : 'New session', hint: newSessionFlow.canBrowse ? 'choose its directory' : undefined, run: newSession })
-  list.push({ id: 'theme', group: 'Actions', label: `Theme: ${settings.theme} → next`, run: () => settings.cycleTheme() })
-  list.push({ id: 'clear-history', group: 'Actions', label: 'Clear prompt history', hint: 'this browser', run: clearHistory })
-  list.push({ id: 'panels', group: 'Actions', label: panels.open ? 'Close the panels' : 'Open the panels', run: () => panels.toggle() })
+  const actionsGroup = t('web.panels.palette_group_actions')
+  list.push({ id: 'new-session', group: actionsGroup, label: newSessionFlow.canBrowse ? t('web.panels.palette_new_browse') : t('web.panels.palette_new'), hint: newSessionFlow.canBrowse ? t('web.panels.palette_new_hint') : undefined, run: newSession })
+  list.push({ id: 'theme', group: actionsGroup, label: t('web.panels.palette_theme', { theme: settings.theme }), run: () => settings.cycleTheme() })
+  list.push({ id: 'clear-history', group: actionsGroup, label: t('web.panels.palette_clear'), hint: t('web.panels.palette_clear_hint'), run: clearHistory })
+  list.push({ id: 'panels', group: actionsGroup, label: panels.open ? t('web.panels.palette_panels_close') : t('web.panels.palette_panels_open'), run: () => panels.toggle() })
   for (const panel of PANELS) {
-    list.push({ id: `panel-${panel}`, group: 'Panels', label: `${PANEL_LABELS[panel]} panel`, run: () => panels.show(panel) })
+    list.push({ id: `panel-${panel}`, group: t('web.panels.palette_group_panels'), label: t('web.panels.palette_panel_entry', { label: PANEL_LABELS[panel] }), run: () => panels.show(panel) })
   }
   if (props.activeId !== null) {
     const session = useSessionStore(props.activeId)
@@ -58,7 +60,7 @@ const entries = computed<Entry[]>(() => {
       const name = command.name.replace(/^\//, '')
       list.push({
         id: `cmd-${name}`,
-        group: 'Commands',
+        group: t('web.panels.palette_group_commands'),
         label: `/${name}`,
         hint: [command.argumentHint, command.description].filter((part) => part).join(' — '),
         run: () => runCommand(name, command.argumentHint ?? null),
@@ -69,7 +71,7 @@ const entries = computed<Entry[]>(() => {
     if (summary.id === props.activeId) continue
     list.push({
       id: `session-${summary.id}`,
-      group: 'Sessions',
+      group: t('web.panels.palette_group_sessions'),
       label: summary.name || (summary.preview ? oneLine(summary.preview, 60) : summary.id),
       hint: summary.status === 'closed' ? '' : summary.status.replace('_', ' '),
       run: () => router.push({ name: 'session', params: { id: summary.id } }),
@@ -116,7 +118,7 @@ async function newSession(): Promise<void> {
  * in this browser, and the clear reaches every open tab.
  */
 function clearHistory(): void {
-  if (window.confirm('Clear this browser’s saved prompt history? Every open tab of this origin loses it too.')) clearPromptHistory()
+  if (window.confirm(t('web.panels.palette_clear_confirm'))) clearPromptHistory()
 }
 
 async function runCommand(name: string, argumentHint: string | null): Promise<void> {

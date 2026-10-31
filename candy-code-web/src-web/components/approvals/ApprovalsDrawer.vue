@@ -75,7 +75,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     ref="panel"
     class="drawer"
     role="dialog"
-    aria-label="Approvals"
+    :aria-label="t('web.approvals.drawer_title')"
     tabindex="-1"
     data-testid="approvals-drawer"
   >
