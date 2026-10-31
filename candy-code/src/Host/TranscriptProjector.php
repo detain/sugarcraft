@@ -95,9 +95,10 @@ final class TranscriptProjector
         'mov' => 'video/quicktime',
         'mkv' => 'video/x-matroska',
         'avi' => 'video/x-msvideo',
+        'html' => 'text/html; charset=utf-8',
     ];
 
-    /** Extensions whose refs project as {@see MediaKind::Video}; everything else is image. */
+    /** Extensions whose refs project as {@see MediaKind::Video}; `html` projects as {@see MediaKind::Html}; everything else is image. */
     private const MEDIA_VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov', 'mkv', 'avi'];
 
     private function __construct()
@@ -460,9 +461,14 @@ final class TranscriptProjector
 
         return array_filter([
             'artifactId' => MediaStore::idOf(basename($path)),
-            'kind' => \in_array($extension, self::MEDIA_VIDEO_EXTENSIONS, true)
-                ? MediaKind::Video->value
-                : MediaKind::Image->value,
+            'kind' => match (true) {
+                // C-TOOL-6.g: a Canvas page is neither raster nor video; the
+                // web client routes this kind to the sandboxed canvas card
+                // instead of the bytes-fetching media element.
+                $extension === 'html' => MediaKind::Html->value,
+                \in_array($extension, self::MEDIA_VIDEO_EXTENSIONS, true) => MediaKind::Video->value,
+                default => MediaKind::Image->value,
+            },
             'path' => $path,
             'bytes' => $bytes === null ? 0 : \strlen($bytes),
             'mime' => self::MEDIA_MIME_BY_EXTENSION[$extension] ?? 'application/octet-stream',

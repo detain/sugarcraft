@@ -84,7 +84,14 @@ final readonly class CapabilityDiscoverer
         $kinds = [];
         foreach ($kindsRaw as $entry) {
             $kind = is_string($entry) ? MediaKind::tryFrom($entry) : null;
-            if ($kind === null) {
+            // C-TOOL-6.g: `isGenerative()` — not just `tryFrom` — is the door.
+            // `Html` is a real enum case (the MEDIA_REF.kind projection
+            // vocabulary widened with the web Canvas card), but no provider is
+            // asked to dial one out, so declaring it as a capability would
+            // promise a render path that does not exist. The pre-existing
+            // "not a known modality" error stands: from config's chair, a
+            // kind that cannot be generated IS an unknown modality.
+            if ($kind === null || !$kind->isGenerative()) {
                 throw new InvalidArgumentException(
                     'CapabilityDiscoverer::fromConfig(): mediaKinds entry '
                     . (is_scalar($entry) ? var_export($entry, true) : get_debug_type($entry))

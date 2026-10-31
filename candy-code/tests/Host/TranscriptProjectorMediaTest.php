@@ -191,6 +191,38 @@ final class TranscriptProjectorMediaTest extends TestCase
         ]], $refs);
     }
 
+    public function testAnHtmlPathProjectsTheArtifactKindWithTheUtf8Mime(): void
+    {
+        $refs = TranscriptProjector::mediaRefs(self::finished('/sessions/s1/canvas.html'));
+        self::assertNotNull($refs);
+        self::assertSame([[
+            'artifactId' => 'canvas',
+            'kind' => 'html',
+            'path' => '/sessions/s1/canvas.html',
+            'bytes' => 0,
+            'mime' => 'text/html; charset=utf-8',
+        ]], $refs);
+    }
+
+    public function testAStoreContainedCanvasPathWithoutBytesProjectsForTheWebCard(): void
+    {
+        // The production Canvas shape: the tool stored the document, the
+        // result carries the store path with no bytes, and the frame still
+        // names the artifact so the web card can mint a sandboxed link.
+        $html = '<!doctype html><p>canvas</p>';
+        $store = MediaStore::forSession('sess');
+        $path = $store->putDocument($html, 'html');
+
+        $media = self::event(self::finished($path))->data['media'];
+        self::assertIsArray($media);
+        self::assertCount(1, $media);
+        self::assertSame(MediaStore::idOf(\basename($path)), $media[0]['artifactId']);
+        self::assertSame('html', $media[0]['kind']);
+        self::assertSame('text/html; charset=utf-8', $media[0]['mime']);
+        self::assertSame(0, $media[0]['bytes']);
+        self::assertSame($path, $media[0]['path']);
+    }
+
     public function testPngBytesWithoutInfotextCarryNoDigest(): void
     {
         $refs = TranscriptProjector::mediaRefs(

@@ -34,19 +34,23 @@ use SugarCraft\Code\Tools\ToolResult;
  * classes are allowed in every permission mode, so no mode prompts on it
  * either way.
  *
- * WHY THE BYTES ARE NOT SANITISED. The TUI never renders the page: the result
- * carries no `imagePath` and no `imageBytes`, so `TranscriptProjector`
- * projects no media ref and no painter receives the content. The display half
- * is the web `CanvasCard` (C-TOOL-6.g), which loads the artifact in a
+ * WHY THE BYTES ARE NOT SANITISED. Since C-TOOL-6.g the result carries the
+ * stored path as its `imagePath` leg, so the projector DOES emit an
+ * `Html`-kind media ref — identity and path only, never the page bytes (the
+ * TUI's image legs are bytes-gated by `ToolResult::hasImage()`, which a
+ * canvas never satisfies, so no painter receives the content). The display
+ * half is the web `CanvasCard` (C-TOOL-6.g), which loads the artifact in a
  * sandboxed, no-same-origin iframe under its own strict CSP — the containment
  * lives at the render door, where a sanitizer at the store door would only
  * mangle pages that never reach any terminal.
  *
- * WHY THERE IS NO `MediaKind::Html` HERE. The enum doubles as the protocol
+ * THE `MediaKind::Html` LEG. The enum doubles as the protocol
  * `MEDIA_REF.kind` vocabulary (`Definitions.php` builds the union from
- * `cases()`) and as the `mediaKinds` provider vocabulary, so a new case is a
- * schema-shape change — that step belongs to the web/protocol half together
- * with the projector's kind arm, not to the writer.
+ * `cases()`) and as the `mediaKinds` provider vocabulary; the case landed
+ * with this step's web/protocol half, and `isGenerative()` marks it as
+ * artifact vocabulary no provider is ever asked to dial. The ref's
+ * `application/...` mime and kind both come from the projector's single
+ * formatter, so `media.fetch` and `tool.finished` can never diverge on it.
  *
  * ENGINE DELEGATION. The class implements {@see DelegatesToEngine} for one
  * read: the bound engine's `sessionId()`, which picks the session folder the
@@ -111,7 +115,8 @@ final readonly class CanvasTool implements Tool, BuildsFromCatalog, DelegatesToE
         return 'Save a complete, self-contained HTML page as a session artifact. The page must carry everything it'
             . ' renders inline (styles, scripts, data as data: URIs) — it is served later from a sandboxed frame with'
             . ' no network of its own. Use it for what a terminal cannot show: diagrams, styled reports, small'
-            . ' interactive pages. The answer names the artifact id and path; nothing else displays the page yet.'
+            . ' interactive pages. The answer names the artifact id and path; the web client shows the page in a'
+            . ' sandboxed frame, and no other surface renders it.'
             . ' At most ' . self::MAX_BYTES . ' bytes.';
     }
 
@@ -177,6 +182,6 @@ final readonly class CanvasTool implements Tool, BuildsFromCatalog, DelegatesToE
         $path = $store->putDocument($html, 'html');
 
         return new ToolResult($callId, 'Canvas saved — ' . $title . ': artifact ' . MediaStore::idOf(basename($path))
-            . ', ' . $path . ' (' . $bytes . ' bytes)');
+            . ', ' . $path . ' (' . $bytes . ' bytes)', imagePath: $path);
     }
 }

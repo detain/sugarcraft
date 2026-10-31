@@ -244,7 +244,9 @@ path outside the store — a `Read` of a workspace image — has that copy
 adopted into it under a deterministic `read-<sha256(id|path) prefix>.<ext>`
 name (idempotent, so re-projecting the same row reuses the one copy), and a
 path with no bytes to adopt projects no ref at all — no card renders that
-cannot load. `hello` advertises `features.media` (`image`, `video`,
+cannot load. A document ref carries `kind: "html"` — the third case of
+`MediaKind`, vocabulary for artifacts at rest, never a generative
+capability. `hello` advertises `features.media` (`image`, `video`,
 `transcribe`, and a truncated SHA-256 of the configured origin's host,
 never the hostname) computed fail-open at boot; `transcribe` mirrors the
 voice door — a configured `voice.baseUrl` — independent of the SD server.
@@ -309,14 +311,24 @@ with the artifact id, the absolute path and the byte count. The cap is 512
 KiB and a breach refuses rather than truncating. The store door is the only
 writer, so nothing lands outside the session directory, and the age sweep of
 session directories retires the artifacts exactly as it retires generated
-media. The bytes are not sanitised at the store door: the TUI never renders
-the page (the result carries no media legs, so nothing projects). The web
-client does **not** show these artifacts yet — the projection arm, the
-sandboxed `/canvas/…` page and the card are the later web/protocol half of
-C-TOOL-6; until then the artifact is visible only as the path in the result.
-A `media.fetch` of such an id answers today with the projector's default arm
-(`kind: image`, `application/octet-stream`) — harmless while no event
-advertises the id, corrected by that later half.
+media. The bytes are not sanitised at the store door: nothing that renders
+them is ever trusted with the origin either. The web client shows the page
+through the C-TOOL-6.g half: the projection arm emits a ref with
+`kind: "html"` and `mime: "text/html; charset=utf-8"`, the card mints a
+single-use 60-second link — `POST /api/canvas` (authenticated) answers
+`{url: "/canvas/<token>", expiresInSeconds: 60}` — and the token-scoped page
+serves the stored document itself under a sandbox CSP (`sandbox
+allow-scripts`, no `allow-same-origin` on the frame, `connect-src 'none'` so
+the page can call nothing back) inside an `<iframe sandbox="allow-scripts">`.
+The token is a capability: consumed on first sight, every death (unknown,
+expired, spent, artifact retired) answers the same byte-identical 404, and
+the request log never carries the whole token. A `media.fetch` of the
+artifact id answers with the same `text/html; charset=utf-8` mime the
+projected ref names — the one shared formatter keeps the two doors from
+diverging — though the web client pages the artifact through the canvas
+frame rather than fetching its bytes. The TUI still paints nothing: the
+result carries a path with no bytes, and every image leg in the terminal is
+bytes-gated.
 
 ## Security posture
 

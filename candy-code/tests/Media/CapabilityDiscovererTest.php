@@ -294,6 +294,7 @@ final class CapabilityDiscovererTest extends TestCase
         return [
             'scalar mediaKinds' => [['mediaKinds' => 'image'], 'mediaKinds must be a list'],
             'unknown modality' => [['mediaKinds' => ['audio']], 'not a known modality'],
+            'html artifact kind' => [['mediaKinds' => ['html']], 'not a known modality'],
             'unknown family' => [['mediaKinds' => ['image'], 'mediaFamily' => 'nope'], 'not a known endpoint family'],
             'non-string family' => [['mediaKinds' => ['image'], 'mediaFamily' => 42], 'mediaFamily must be a string'],
             'non-string base url' => [['mediaKinds' => ['image'], 'mediaBaseUrl' => 42], 'base URL setting must be a string'],

@@ -20,7 +20,8 @@ use SugarCraft\Code\Tools\TakesToolCallId;
  * C-TOOL-6.f pins for the Canvas tool: catalog shape, the store seam it
  * shares with generated images (bound-session landing, 0600, id/path in the
  * result text, pathFor round trip), the refusal trio, the 'main' fallback,
- * and the promise that nothing projects the page to the TUI.
+ * and the promise that the terminal paints no page (every image leg the TUI
+ * reads is bytes-gated, and this result carries a path with no bytes).
  */
 final class CanvasToolTest extends TestCase
 {
@@ -92,9 +93,10 @@ final class CanvasToolTest extends TestCase
         // The id the result advertises resolves through the same store media.fetch would use.
         self::assertSame($path, $reference->pathFor($m[1]));
 
-        // Nothing projects: no image legs on the result.
+        // The artifact leg: a path with no bytes, so the projector names the
+        // ref for the web canvas card while every bytes-gated TUI leg stays off.
         self::assertFalse($result->hasImage());
-        self::assertNull($result->imagePath());
+        self::assertSame($path, $result->imagePath());
         self::assertNull($result->imageBytes());
     }
 

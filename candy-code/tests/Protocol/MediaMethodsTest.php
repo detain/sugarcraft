@@ -175,6 +175,48 @@ final class MediaMethodsTest extends TestCase
         );
     }
 
+    /**
+     * C-TOOL-6.g: a Canvas artifact stored by `putDocument` is a first-class
+     * media id. The projected ref names it with the html kind and the shared
+     * formatter's mime, and `media.fetch` of the same id answers with the
+     * identical mime — the two doors cannot diverge while one function types
+     * them. The card pages the bytes through the sandboxed /canvas route;
+     * the fetch leg exists for protocol parity, not for the iframe.
+     */
+    public function testACanvasArtifactProjectsAndFetchesWithTheHtmlMime(): void
+    {
+        $html = "<!doctype html><p id='x'>canvas</p>";
+        $path = MediaStore::forSession($this->sessionId)->putDocument($html, 'html');
+
+        $event = TranscriptProjector::new()->toolFinishedEvent(
+            new ToolFinished('canvas-1', 'Canvas', new ToolResult('canvas-1', 'saved')),
+            TranscriptProjector::resultRow(new \SugarCraft\Code\ToolResult(
+                name: 'Canvas',
+                result: 'saved',
+                id: 'canvas-1',
+                imagePath: $path,
+                durationMs: 4,
+            )),
+            null,
+            null,
+            $this->sessionId,
+            'turn',
+        );
+
+        self::assertArrayHasKey('media', $event->data);
+        $artifactId = (string) $event->data['media'][0]['artifactId'];
+        self::assertSame('html', $event->data['media'][0]['kind']);
+
+        $fetched = $this->client->call('media.fetch', [
+            'sessionId' => $this->sessionId,
+            'artifactId' => $artifactId,
+        ]);
+        self::assertSame($html, base64_decode($fetched['bytes'], true));
+        self::assertSame('text/html; charset=utf-8', $fetched['mime']);
+        self::assertTrue($fetched['eof']);
+        self::assertSame([], ProtocolSchema::errors($fetched, MethodSchemas::result('media.fetch')));
+    }
+
     public function testSlicesReassembleByteExactAndOnlyTheFirstRowCarriesMime(): void
     {
         $source = random_bytes(3000);
