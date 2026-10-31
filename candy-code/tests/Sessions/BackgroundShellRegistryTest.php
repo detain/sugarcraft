@@ -801,7 +801,14 @@ final class BackgroundShellRegistryTest extends TestCase
             'RLIMIT_FSIZE counts 512-byte blocks; the pinned figures must agree',
         );
         self::assertStringContainsString('exec timeout -s KILL ' . BackgroundShellRegistry::MAX_LIFETIME_SECONDS . ' bash -c "$SHELL_INNER"', $wrapper, 'the wall must ride an exec so the recorded pid stays the group leader');
-        self::assertStringContainsString('; else exec bash -c "$SHELL_INNER"; fi', $wrapper, 'hosts without coreutils timeout lose only the parent-independent wall — the sink recorders still cap the two files');
+        self::assertStringContainsString(
+            '; else ( trap ' . chr(39) . 'kill $s 2>/dev/null; exit 0' . chr(39) . ' TERM; sleep '
+            . BackgroundShellRegistry::MAX_LIFETIME_SECONDS
+            . ' & s=$!; wait $s; kill -KILL -$$ || kill -KILL $$ ) & ' . BackgroundShellRegistry::WATCHDOG_PID_ENV
+            . '=$!; export ' . BackgroundShellRegistry::WATCHDOG_PID_ENV . '; exec bash -c "$SHELL_INNER"; fi',
+            $wrapper,
+            'hosts without coreutils timeout get the pure-shell watchdog — same wall, group-KILL in front, and a trailer-visible pid under the env arm',
+        );
         self::assertSame(1, substr_count($wrapper, 'SHELL_STATUS=$?'), 'the recorder rides the ONE bound inner literal both arms exec — never two copies');
         $big = 'printf ' . str_repeat('x', 70_000) . '-TAILMARKER-';
         $bigWrapper = (new \ReflectionMethod(BackgroundShellRegistry::class, 'buildWrapper'))->invoke(null, $big);
@@ -905,7 +912,7 @@ final class BackgroundShellRegistryTest extends TestCase
         $started = $registry->start('printf grouped; sleep 120', 'grouped pin');
         self::assertTrue($started['ok']);
         $id = (string) $started['shell']['id'];
-        $grouped = ProcessContainment::detachedSpawnBinary() !== '';
+        $grouped = ProcessContainment::groupsSpawns();
 
         self::assertSame($grouped, $registry->status($id)['grouped'], 'grouped mirrors what the spawn actually had in front of it');
 

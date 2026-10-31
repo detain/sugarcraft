@@ -32,7 +32,8 @@ use SugarCraft\Code\Support\ProcessContainment;
  * would inherit a lifecycle the shell did not ask for.
  *
  * THE GROUP IS THE UNIT OF OWNERSHIP. Every child is spawned through
- * {@see ProcessContainment::spawnSpec()}, so under `setsid -w` the direct
+ * {@see ProcessContainment::spawnSpec()}, so under a probed detach arm —
+ * located `setsid -w` or the PHP helper arm (C-TOOL-4.h) — the direct
  * child pid IS the process-group id (and session id) by construction, and
  * every later signal goes to the GROUP — a shell that backgrounded children
  * takes them down with it. The pid is recorded AT SPAWN while the leader is
@@ -54,11 +55,14 @@ use SugarCraft\Code\Support\ProcessContainment;
  * by teardown, every signal is gated on members carrying the recorded pgid,
  * and the exposure is the same one every pid-caching killer accepts.
  *
- * THE GROUP IS ONLY AS REAL AS `setsid` (SHL-1, honest half). Where no usable
- * `setsid(1)` exists — macOS ships none with `-w`, Windows ships none at all —
- * {@see ProcessContainment::spawnSpec()} hands back the plain string and the
- * recorded pid is NOT a group leader: every group signal here degrades to the
- * wrapper's own pid, and processes the command started outlive it. The row
+ * THE GROUP IS AS REAL AS THE DETACH PROBE (SHL-1, honest half — C-TOOL-4.h).
+ * {@see ProcessContainment::spawnSpec()} now probes a detach prefix in order —
+ * a real `setsid -w --`, else the PHP helper arm that `posix_setsid()`s and
+ * `pcntl_exec`s through `/usr/bin/env` — and only where NEITHER arm passes
+ * (no usable setsid, no ext-posix+ext-pcntl CLI, or Windows) does it hand back
+ * the plain string, and THEN the recorded pid is NOT a group leader: every
+ * group signal here degrades to the wrapper's own pid, and processes the
+ * command started outlive it. The row
  * records that fact at spawn as `grouped` false; the status carries it, and
  * {@see \SugarCraft\Code\Tools\BuiltIn\ShellStop} narrates a confirmed stop as
  * per-pid-only when it is set — the same disclosure the synchronous
@@ -149,6 +153,12 @@ final class BackgroundShellRegistry
 
     /** Environment arm naming the exit-code file, handed to the spawn wrapper. */
     public const EXIT_CODE_FILE_ENV = 'SHELL_EXIT_CODE_FILE';
+
+    /**
+     * Environment arm carrying the wall-watchdog's pid to the trailer, set
+     * only by the no-`timeout` arm of {@see buildWrapper()} (C-TOOL-4.h).
+     */
+    public const WATCHDOG_PID_ENV = 'SHELL_WATCHDOG';
 
     /** Permission bits every shell file carries for its whole life (the MediaStore doctrine). */
     public const FILE_MODE = 0o600;
@@ -363,8 +373,8 @@ final class BackgroundShellRegistry
             // Recorded AT SPAWN, not observed later: whether the containment
             // wrapper really made this pid a group leader is a property of
             // the spawn that no later call can re-derive ({@see the class
-            // doc-block's setsid paragraph}).
-            'grouped' => ProcessContainment::detachedSpawnBinary() !== '',
+            // doc-block's detach-probe paragraph}).
+            'grouped' => ProcessContainment::groupsSpawns(),
             'stdoutPath' => $paths['stdout'],
             'stderrPath' => $paths['stderr'],
             'exitPath' => $paths['exit'],
@@ -437,9 +447,13 @@ final class BackgroundShellRegistry
      * exec limit on a 72 KiB quoted command, measured).
      *
      * `timeout` is probed with `command -v`: hosts without coreutils (stock
-     * macOS) lose only the parent-independent wall — the sink recorders
-     * live inside the bash inner and still cap the two files there, and the
-     * launch-side lazy ladder and the shutdown hook still apply regardless.
+     * macOS) fall to a pure-shell watchdog instead — a backgrounded subshell
+     * that sleeps the same wall and, if it outlives the command, group-KILLs
+     * `$$` (C-TOOL-4.h). The trailer TERMs the watchdog before stamping the
+     * exit file, so a settled shell leaves no sleeping member behind; the
+     * sink recorders live inside the bash inner and still cap the two files
+     * either way, and the launch-side lazy ladder and the shutdown hook still
+     * apply regardless.
      */
     private static function buildWrapper(string $command): string
     {
@@ -464,7 +478,13 @@ final class BackgroundShellRegistry
         $drain = '; exec >&- 2>&-; SHELL_DEADLINE=$((SECONDS + ' . self::SINK_DRAIN_SECONDS
             . ')); while { [ ! -f "${' . self::EXIT_CODE_FILE_ENV . '%.exit}.outd" ] || [ ! -f "${'
             . self::EXIT_CODE_FILE_ENV . '%.exit}.errd" ]; } && [ "$SECONDS" -lt "$SHELL_DEADLINE" ]; do sleep 0.05; done;';
-        $trailer = chr(10) . 'SHELL_STATUS=$?' . $drain . ' printf "%s" "$SHELL_STATUS" > "$' . self::EXIT_CODE_FILE_ENV . '"; exit "$SHELL_STATUS"';
+        // Watchdog disarm FIRST in the trailer: a settled shell must not leave
+        // a sleeping member for groupMemberAlive() to find (the pid may also
+        // be gone — `2>/dev/null` keeps the recorder quiet either way, and the
+        // timeout arm never sets the variable so `${...:-}` skips cleanly).
+        $trailer = chr(10) . 'SHELL_STATUS=$?'
+            . '; if [ -n "${' . self::WATCHDOG_PID_ENV . ':-}" ]; then kill "$' . self::WATCHDOG_PID_ENV . '" 2>/dev/null; fi'
+            . $drain . ' printf "%s" "$SHELL_STATUS" > "$' . self::EXIT_CODE_FILE_ENV . '"; exit "$SHELL_STATUS"';
         $inner = escapeshellarg('(' . $command . ')' . $recorders . $trailer);
 
         // The inner command is bound ONCE (SHELL_INNER) and referenced by
@@ -474,9 +494,21 @@ final class BackgroundShellRegistry
         // started it fine (measured). The assignment lives only in the
         // outer sh; whichever arm execs replaces the image and takes the
         // variable name away with it, leaving the user's bash a normal env.
+        // The else arm carries its own wall: a backgrounded watchdog subshell
+        // sleeps MAX_LIFETIME_SECONDS and, if nothing disarms it, group-KILLs
+        // `$$` — which is the real group only when a detach prefix made this
+        // pid its leader; in the bare degraded shape that negative target
+        // names no group, ESRCHs, and the `|| kill -KILL $$` rung ends just
+        // the wrapper itself, exactly the pre-watchdog degradation the class
+        // doc-block documents. The trap makes the trailer's disarm clean:
+        // `kill $s` ends the sleeper and `exit 0` leaves the group alone, so
+        // a settled shell is never SIGKILLed on its way to stamping the exit
+        // file (a bare `kill $s` would fall through to the group rung).
         return 'SHELL_INNER=' . $inner
             . '; if command -v timeout >/dev/null 2>&1; then exec timeout -s KILL ' . self::MAX_LIFETIME_SECONDS . ' bash -c "$SHELL_INNER"'
-            . '; else exec bash -c "$SHELL_INNER"; fi';
+            . '; else ( trap \'kill $s 2>/dev/null; exit 0\' TERM; sleep ' . self::MAX_LIFETIME_SECONDS
+            . ' & s=$!; wait $s; kill -KILL -$$ || kill -KILL $$ ) & ' . self::WATCHDOG_PID_ENV . '=$!; export '
+            . self::WATCHDOG_PID_ENV . '; exec bash -c "$SHELL_INNER"; fi';
     }
 
     /**
