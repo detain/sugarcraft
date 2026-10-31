@@ -731,12 +731,13 @@ final class BackgroundShellRegistryTest extends TestCase
         } finally {
             $registry->stop($id);
             // Hygiene: this flood's files are the test's own residue — the
-            // five names (<id>.out/.err/.exit/.outd/.errd) go now, not into
-            // the launch's sweep window.
+            // eight names (<id>.out/.err/.exit/.outd/.errd plus 6.j's
+            // interactive trio .in/.cmd/.pid) go now, not into the launch's
+            // sweep window.
             $row = $registry->status($id);
             $dir = \dirname((string) $row['stdoutPath']);
             $base = \basename((string) $row['stdoutPath'], '.out');
-            foreach (['.out', '.err', '.exit', '.outd', '.errd'] as $ext) {
+            foreach (['.out', '.err', '.exit', '.outd', '.errd', '.in', '.cmd', '.pid'] as $ext) {
                 @unlink($dir . '/' . $base . $ext);
             }
         }
