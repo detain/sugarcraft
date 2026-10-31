@@ -78,6 +78,8 @@ final class BashSandboxTest extends TestCase
         self::assertSame('on', Bubblewrap::fromSetting('on')?->mode());
         self::assertSame('on', Bubblewrap::fromSetting(true)?->mode());
         self::assertSame('no-network', Bubblewrap::fromSetting('no-network')?->mode());
+        self::assertSame('allowlist', Bubblewrap::fromSetting('allowlist')?->mode());
+        self::assertSame('no-network', Seatbelt::fromSetting('allowlist')?->mode(), 'macOS reads the new word as no-network, never wider (C-TOOL-4.g)');
     }
 
     public function testAnUnrecognisedValueIsTheStrictestModeNeverOff(): void

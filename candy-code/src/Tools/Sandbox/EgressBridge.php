@@ -175,14 +175,50 @@ final class EgressBridge
     }
 
     /**
+     * Turn the command's first word into an executable path for
+     * {@see run()}'s `pcntl_exec`. A path is a path — returned untouched.
+     * A bare word is searched along PATH, the way `execvp` would, because
+     * `pcntl_exec` is only `execv`. A word nothing on PATH can find comes
+     * back UNCHANGED on purpose: the child's exec failure then still lands
+     * on the bridge's honest 127, and no new exit code enters the jail's
+     * vocabulary.
+     */
+    public static function resolveProgram(string $program): string
+    {
+        if ($program === '' || str_contains($program, '/')) {
+            return $program;
+        }
+
+        $path = (string) (getenv('PATH') ?: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin');
+
+        foreach (explode(':', $path) as $dir) {
+            $candidate = rtrim($dir, '/') . '/' . $program;
+            if (is_executable($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return $program;
+    }
+
+    /**
      * Full bridge: bind first, fork, exec the command in the child, and in
      * the parent relay egress until the command exits — returning its exit
      * status (128+signal when it died on one).
+     *
+     * The program is resolved through {@see resolveProgram()} before the
+     * fork: the command arrives exactly as the shell would have seen it
+     * (`curl -s http://…` — a bare first word), and `pcntl_exec` is `execv`,
+     * which searches no PATH at all. Without this leg every ordinary
+     * command in an `allowlist` jail would die at 127 — a mode-wiring
+     * defect, not a network one, and the direct contradiction of the
+     * promise that `allowlist` changes only the network path.
      *
      * @param list<string> $programArgv
      */
     public static function run(string $unixPath, string $program, array $programArgv = [], int $tcpPort = 0, ?LoopInterface $loop = null): int
     {
+        $program = self::resolveProgram($program);
         $loop ??= Loop::get();
         $listener = self::bind($tcpPort, $loop);
         $pid = pcntl_fork();

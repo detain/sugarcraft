@@ -1057,6 +1057,10 @@ final class LaunchContext
     {
         self::$egressProxy = $proxy;
         self::$egressProxyPid = getmypid() ?: 0;
+        // Parking the handle IS the launch's answer — the next read must see
+        // this instance (or, after stopEgressProxy(), the resolved-null it
+        // leaves behind), never re-consult the config and double-spawn.
+        self::$egressProxyResolved = true;
     }
 
     /**
