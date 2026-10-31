@@ -867,6 +867,39 @@ final class MethodSchemas
                     'reason' => Schema::string()->describe('Empty when the folds were read; otherwise the stated cause of the empty folds — "nothing was spent" and "nothing can be seen" are different answers.'),
                 ], ['days', 'models', 'totals', 'unpriced', 'retentionDays', 'reason']),
             ],
+
+            // C-WEB-5.d: Web Push registration. The store refuses an endpoint
+            // the sender would refuse anyway — the schema says what a browser
+            // sends, the method says what gets stored (known push services
+            // only), and the row survives under sha256(endpoint) at 0600.
+            'push.vapidKey' => [
+                $empty,
+                Schema::object([
+                    'publicKey' => Schema::string(256)->describe('RFC 8292 VAPID public key: base64url of the 65-octet uncompressed P-256 point, minted once into the serve state dir. The private half never appears on the wire.'),
+                ], ['publicKey']),
+            ],
+            'push.subscribe' => [
+                Schema::object([
+                    'endpoint' => Schema::string(4096)->describe('The PushManager endpoint URL. https, default port, no credentials, host on the push-service allowlist (FCM, Mozilla, Apple, Microsoft) — an endpoint outside it is refused before anything is stored.'),
+                    'keys' => Schema::object([
+                        'p256dh' => Schema::string(256)->describe('base64url of the browser\'s uncompressed P-256 subscription public point (65 octets).'),
+                        'auth' => Schema::string(64)->describe('base64url of the 16-octet subscription auth secret.'),
+                    ], ['p256dh', 'auth']),
+                    'name' => Schema::boolean()->describe('Opt this row into carrying the session title in the payload. Omitted or false: every notification stays redacted generic text (R13 default).'),
+                ], ['endpoint', 'keys']),
+                Schema::object([
+                    'subscribed' => Schema::boolean()->describe('True only once the row is on disk.'),
+                    'keyHash' => Schema::string(64)->describe('sha256(endpoint), hex — the store\'s row key, so the raw endpoint never travels back as an identifier.'),
+                ], ['subscribed', 'keyHash']),
+            ],
+            'push.unsubscribe' => [
+                Schema::object([
+                    'endpoint' => Schema::string(4096)->describe('The endpoint to drop. Only a row owned by this client\'s principal class is removed.'),
+                ], ['endpoint']),
+                Schema::object([
+                    'unsubscribed' => Schema::boolean()->describe('True when a row was removed; false for an unknown endpoint or one another principal owns — the answer does not distinguish which, so the store cannot be probed.'),
+                ], ['unsubscribed']),
+            ],
         ];
         \ksort($schemas);
 

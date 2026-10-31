@@ -13,7 +13,11 @@ use SugarCraft\Code\Host\SessionHub;
 use SugarCraft\Code\Host\ServedMcpLogins;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Server\ErrorLog;
+use SugarCraft\Code\Server\Push\PushSubscriptionStore;
+use SugarCraft\Code\Server\Push\VapidKeys;
+use SugarCraft\Code\Server\Push\WebPushSender;
 use SugarCraft\Code\Server\ServerConfig;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Workspace\PrStatusCache;
 
@@ -41,6 +45,11 @@ use SugarCraft\Code\Workspace\PrStatusCache;
  */
 final class ServerContext
 {
+    /** C-WEB-5.d: the two payload kinds the push triggers emit (data, not prose — the notification text lives in `serve.push.notify_*`). */
+    public const PUSH_KIND_QUESTION = 'question';
+
+    public const PUSH_KIND_FINISHED = 'finished';
+
     /** @var array<string, Client> */
     private array $clients = [];
 
@@ -74,6 +83,15 @@ final class ServerContext
      */
     private array $webhookTurns = [];
 
+    /**
+     * C-WEB-5.d: the Web Push trio — rows, sender, and the VAPID pair behind
+     * it. Resolved once from the launch's state dir on first use (the same
+     * laziness as {@see $outboundWebhooks}); tests inject the first two
+     * through {@see new()}. A server that never sees a subscription mints no
+     * key and dials nothing.
+     */
+    private ?VapidKeys $pushVapid = null;
+
     /** @var (\Closure(?float): void)|null */
     private ?\Closure $shutdown = null;
 
@@ -93,6 +111,8 @@ final class ServerContext
         private readonly LoopInterface $loop,
         private readonly \Closure $clock,
         private readonly ?\Closure $log = null,
+        private ?PushSubscriptionStore $pushStore = null,
+        private ?WebPushSender $pushSender = null,
     ) {
         $this->startedAt = ($this->clock)();
 
@@ -114,6 +134,8 @@ final class ServerContext
     /**
      * @param (\Closure(): float)|null       $clock
      * @param (\Closure(string): void)|null  $log
+     * @param PushSubscriptionStore|null     $pushStore C-WEB-5.d test seam: the subscription rows to notify from; null opens the launch's own state dir
+     * @param WebPushSender|null             $pushSender C-WEB-5.d test seam: the sender the triggers use; null builds one over the state dir's VAPID pair
      */
     public static function new(
         SessionHub $hub,
@@ -122,8 +144,10 @@ final class ServerContext
         ?LoopInterface $loop = null,
         ?\Closure $clock = null,
         ?\Closure $log = null,
+        ?PushSubscriptionStore $pushStore = null,
+        ?WebPushSender $pushSender = null,
     ): self {
-        return new self($hub, $config, $version, $loop ?? Loop::get(), $clock ?? static fn (): float => \microtime(true), $log);
+        return new self($hub, $config, $version, $loop ?? Loop::get(), $clock ?? static fn (): float => \microtime(true), $log, $pushStore, $pushSender);
     }
 
     public function hub(): SessionHub
@@ -355,8 +379,8 @@ final class ServerContext
                 // switches only on the types the client protocol cares
                 // about, while the outbound contract (docs/SERVER.md) names
                 // turn.completed and permission.asked among the events an
-                // operator may subscribe to — and TURN_COMPLETED never
-                // reaches `heard()` at all.
+                // operator may subscribe to — `heard()` began switching on
+                // turn.completed only at C-WEB-5.d, for the push trigger.
                 $this->announceOutbound($sessionId, $event);
             },
         );
@@ -515,6 +539,11 @@ final class ServerContext
         switch ($event->type) {
             case SessionEvent::PERMISSION_REQUESTED:
                 $this->broadcast(EventEnvelope::server(EventType::PERMISSION_ASKED, ['sessionId' => $sessionId, ...$event->data]));
+                $this->pushNotify($sessionId, self::PUSH_KIND_QUESTION);
+                break;
+
+            case SessionEvent::TURN_COMPLETED:
+                $this->pushNotify($sessionId, self::PUSH_KIND_FINISHED);
                 break;
 
             case SessionEvent::PERMISSION_RESOLVED:
@@ -529,6 +558,94 @@ final class ServerContext
             case SessionEvent::SESSION_STATUS:
                 $this->broadcast(EventEnvelope::server(EventType::SESSION_UPDATED, $this->summaryOf($sessionId)));
                 break;
+        }
+    }
+
+    /**
+     * The launch's push rows: the injected seam if one exists, else
+     * `push.json` opened over the serve state dir (0700 owner-only, re-
+     * verified by {@see PrivateRetainedDir} on every read and write).
+     */
+    public function pushStore(): PushSubscriptionStore
+    {
+        return $this->pushStore ??= PushSubscriptionStore::forStateDir($this->config->stateDir);
+    }
+
+    /** The sender the triggers dial through: the injected seam, or the state dir's minted-once VAPID pair. */
+    public function pushSender(): WebPushSender
+    {
+        return $this->pushSender ??= WebPushSender::new($this->pushVapidKeys());
+    }
+
+    /** The VAPID pair behind the sender and `push.vapidKey`, minted once per process. */
+    public function pushVapidKeys(): VapidKeys
+    {
+        return $this->pushVapid ??= VapidKeys::new($this->config->stateDir);
+    }
+
+    /** @return string the base64url 65-octet public point the browser passes to PushManager.subscribe() */
+    public function pushVapidPublicKey(): string
+    {
+        return $this->pushVapidKeys()->publicKeyBase64Url();
+    }
+
+    /**
+     * C-WEB-5.d: one redacted Web Push notification per qualifying event.
+     *
+     * THE FOLLOWED-SESSION LAW: push answers absence, not redundancy — a
+     * session any client is actively following is on screen already, so the
+     * feed's subscriber count gates every send. THE SEND IS NEVER SYNC: the
+     * sender hands back a promise the loop settles; this method starts the
+     * dial and returns. A delivery whose push service says the subscription
+     * is gone (404/410) drops its row — the browser re-subscribes through
+     * `push.subscribe` if it still cares. Payloads are the design's redacted
+     * generic text; the session title rides only for rows whose owner opted
+     * in at subscribe time.
+     */
+    private function pushNotify(string $sessionId, string $kind): void
+    {
+        $entries = $this->pushStore()->entries();
+        if ($entries === []) {
+            return;
+        }
+
+        $feed = $this->feeds[$sessionId] ?? null;
+        if ($feed !== null && $feed->subscriberCount() > 0) {
+            return;
+        }
+
+        $body = Lang::t($kind === self::PUSH_KIND_QUESTION ? 'serve.push.notify_question' : 'serve.push.notify_completed');
+        $title = null;
+        foreach ($entries as $entry) {
+            if ($entry['withName']) {
+                $title = (string) ($this->summaryOf($sessionId)['name'] ?? '');
+                $title = $title === '' ? null : $title;
+                break;
+            }
+        }
+
+        $sender = $this->pushSender();
+        foreach ($entries as $entry) {
+            $payload = (string) \json_encode(\array_filter([
+                'kind' => $kind,
+                'body' => $body,
+                'sessionId' => $sessionId,
+                'title' => $entry['withName'] ? $title : null,
+            ], static fn (mixed $value): bool => $value !== null));
+            $endpoint = $entry['subscription']->endpoint;
+            $principal = $entry['principal'];
+            $sender->send($entry['subscription'], $payload)->then(
+                function (int $status) use ($endpoint, $principal): void {
+                    if (WebPushSender::subscriptionIsGone($status)) {
+                        $this->pushStore()->remove($endpoint, $principal);
+                    }
+                },
+                function (\Throwable $problem): void {
+                    // A push failure costs a notification, never the event
+                    // that earned it: the cause reaches the server log.
+                    $this->logError($problem, 'web push delivery failed');
+                },
+            );
         }
     }
 

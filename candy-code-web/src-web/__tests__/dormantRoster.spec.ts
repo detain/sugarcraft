@@ -28,6 +28,11 @@ const DORMANT_REASONS: Record<string, string> = {
   // C-SES-7.e shipped the session.import method; the browser's import dialog
   // arrives with a later step — external clients ride the wire meanwhile.
   'session.import': 'transcript import rides the protocol for external clients; the browser import dialog lands with a later step',
+  // C-WEB-5.d shipped the push.* wire and server-side triggers; the browser
+  // registration UI (service worker, subscription handshake) is C-WEB-5.e.
+  'push.subscribe': 'the wire stores push rows today; the browser registers a subscription with C-WEB-5.e',
+  'push.unsubscribe': 'the wire drops push rows today; the matching browser unregister lands with C-WEB-5.e',
+  'push.vapidKey': 'the server mints the VAPID pair today; the browser reads it with its first push registration in C-WEB-5.e',
 }
 
 /** Every module that ships to the browser: src minus the generated schema, tests and fixtures. */

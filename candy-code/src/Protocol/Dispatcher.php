@@ -16,6 +16,7 @@ use SugarCraft\Code\Protocol\Methods\FsMethods;
 use SugarCraft\Code\Protocol\Methods\McpMethods;
 use SugarCraft\Code\Protocol\Methods\MemoryMethods;
 use SugarCraft\Code\Protocol\Methods\PermissionMethods;
+use SugarCraft\Code\Protocol\Methods\PushMethods;
 use SugarCraft\Code\Protocol\Methods\ServerMethods;
 use SugarCraft\Code\Protocol\Methods\SessionMethods;
 use SugarCraft\Code\Protocol\Methods\SettingsMethods;
@@ -149,6 +150,7 @@ final class Dispatcher implements MessageHandler
         WorkspaceMethods::register($registry);
         WorkflowMethods::register($registry);
         UsageMethods::register($registry);
+        PushMethods::register($registry);
 
         return $registry;
     }
