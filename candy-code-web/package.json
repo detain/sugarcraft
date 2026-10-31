@@ -16,7 +16,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "e2e": "playwright test",
-    "gen:protocol": "node scripts/gen-protocol.mjs"
+    "gen:protocol": "node scripts/gen-protocol.mjs",
+    "gen:strings": "node scripts/gen-web-strings.mjs"
   },
   "dependencies": {
     "@tanstack/vue-virtual": "^3.13.39",

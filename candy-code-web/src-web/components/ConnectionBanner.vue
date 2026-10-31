@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useConnectionStore } from '../stores/connection'
+import { t } from '../lib/i18n'
 
 const connection = useConnectionStore()
 const now = ref(Date.now())
@@ -18,24 +19,24 @@ function reload(): void {
 
 <template>
   <div v-if="connection.shutdown !== null" class="banner error" role="alert" data-testid="banner-shutdown">
-    The server is stopping<template v-if="connection.shutdown.reason !== ''"> ({{ connection.shutdown.reason }})</template>.
-    <template v-if="connection.shutdown.graceSeconds > 0">It asks for {{ connection.shutdown.graceSeconds }} s to finish its work.</template>
-    The tabs reconnect on their own once a server is back.
+    {{ t('web.chrome.banner.stopping') }}<template v-if="connection.shutdown.reason !== ''">{{ t('web.chrome.banner.reason', { reason: connection.shutdown.reason }) }}</template>.
+    <template v-if="connection.shutdown.graceSeconds > 0">{{ t('web.chrome.banner.drain', { n: connection.shutdown.graceSeconds }) }}</template>
+    {{ t('web.chrome.banner.reconnect_note') }}
   </div>
   <div v-else-if="connection.serverChanged" class="banner info" role="status" data-testid="banner-updated">
-    The server was updated.
-    <button type="button" @click="reload">Reload</button>
+    {{ t('web.chrome.banner.updated') }}
+    <button type="button" @click="reload">{{ t('web.chrome.banner.reload') }}</button>
   </div>
   <div v-else-if="connection.status === 'reconnecting'" class="banner warn" role="status" data-testid="banner-reconnecting">
-    Connection lost<template v-if="connection.lastError"> ({{ connection.lastError }})</template>.
-    <template v-if="retryIn !== null">Retrying in {{ retryIn }} s.</template>
-    <button type="button" @click="connection.retryNow()">Retry now</button>
+    {{ t('web.chrome.banner.lost') }}<template v-if="connection.lastError">{{ t('web.chrome.banner.lost_error', { lastError: connection.lastError }) }}</template>.
+    <template v-if="retryIn !== null">{{ t('web.chrome.banner.retrying', { n: retryIn }) }}</template>
+    <button type="button" @click="connection.retryNow()">{{ t('web.chrome.banner.retry_now') }}</button>
   </div>
   <div v-else-if="connection.exhausted" class="banner error" role="alert" data-testid="banner-offline">
-    <template v-if="connection.lastError">{{ connection.lastError }}.</template>
-    <template v-else>The server is not answering.</template>
-    Retries have stopped: the sessions it held are gone with it.
-    <button type="button" @click="connection.retryNow()">Try again</button>
+    <template v-if="connection.lastError">{{ t('web.chrome.banner.error_period', { lastError: connection.lastError }) }}</template>
+    <template v-else>{{ t('web.chrome.banner.no_answer') }}</template>
+    {{ t('web.chrome.banner.stopped') }}
+    <button type="button" @click="connection.retryNow()">{{ t('web.chrome.banner.try_again') }}</button>
   </div>
   <div v-else-if="connection.status === 'stopped' && connection.lastError" class="banner error" role="alert">
     {{ connection.lastError }}

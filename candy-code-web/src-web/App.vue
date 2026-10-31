@@ -17,8 +17,10 @@ import { useConnectionStore } from './stores/connection'
 import { useLayoutStore } from './stores/layout'
 import { useSessionStore } from './stores/session'
 import { useSessionsStore } from './stores/sessions'
+import { useLocaleStore } from './stores/locale'
 import { NOTIFICATION_PROBLEM_TEXT, useSettingsStore } from './stores/settings'
 import { useQuestionAnnouncements } from './lib/questions'
+import { t } from './lib/i18n'
 import { bindingFor, captureActive, matchesBinding } from './lib/keymap'
 import { onPasteNotice } from './lib/paste'
 import SessionTools from './components/panels/SessionTools.vue'
@@ -26,6 +28,10 @@ import SessionTools from './components/panels/SessionTools.vue'
 const connection = useConnectionStore()
 // Created up front so they hear the first handshake and every event after it.
 useSessionsStore()
+// C-TUI-6.f: the locale store arms on the hello frame and fetches the chrome
+// strings once — created up front like the sessions store so the very first
+// handshake is heard.
+useLocaleStore()
 const layout = useLayoutStore()
 const panels = usePanelsStore()
 const settings = useSettingsStore()
@@ -128,19 +134,19 @@ async function signOut(): Promise<void> {
 <template>
   <div class="shell" :class="{ 'drawer-open': layout.sidebarOpen }">
     <header class="topbar">
-      <button v-if="!onLogin" type="button" class="link menu" aria-label="Sessions" @click="layout.toggleSidebar()">☰</button>
+      <button v-if="!onLogin" type="button" class="link menu" :aria-label="t('web.chrome.app.aria_sessions')" @click="layout.toggleSidebar()">☰</button>
       <span class="brand">&#9670; CandyCode</span>
       <span v-if="connection.hello?.server.root" class="root" :title="connection.hello.server.root">{{ connection.hello.server.root }}</span>
       <span class="spacer" />
       <ApprovalsButton v-if="!onLogin" />
       <span class="status" :data-status="connection.status" data-testid="connection-status">{{ connection.statusLabel }}<template v-if="rtt"> · {{ rtt }}</template></span>
-      <RouterLink v-if="!onLogin" :to="{ name: 'settings' }" class="nav" data-testid="settings-link">settings</RouterLink>
-      <button v-if="!onLogin" type="button" class="link" data-testid="about-button" @click="aboutOpen = true">about</button>
-      <button v-if="connection.canGenerateImage || connection.canGenerateVideo" type="button" class="link" data-testid="generate-button" @click="panels.show('generate')">generate</button>
-      <button type="button" class="link opt" :title="`Theme: ${settings.theme}`" @click="settings.cycleTheme()">theme: {{ settings.theme }}</button>
-      <button v-if="!settings.notify" type="button" class="link opt" :title="settings.notifyProblem ? NOTIFICATION_PROBLEM_TEXT[settings.notifyProblem] : 'Desktop notifications for questions'" @click="settings.enableNotifications()">notify</button>
+      <RouterLink v-if="!onLogin" :to="{ name: 'settings' }" class="nav" data-testid="settings-link">{{ t('web.chrome.app.settings') }}</RouterLink>
+      <button v-if="!onLogin" type="button" class="link" data-testid="about-button" @click="aboutOpen = true">{{ t('web.chrome.app.about') }}</button>
+      <button v-if="connection.canGenerateImage || connection.canGenerateVideo" type="button" class="link" data-testid="generate-button" @click="panels.show('generate')">{{ t('web.chrome.app.generate') }}</button>
+      <button type="button" class="link opt" :title="t('web.chrome.app.theme_title', { theme: settings.theme })" @click="settings.cycleTheme()">{{ t('web.chrome.app.theme', { theme: settings.theme }) }}</button>
+      <button v-if="!settings.notify" type="button" class="link opt" :title="settings.notifyProblem ? NOTIFICATION_PROBLEM_TEXT[settings.notifyProblem] : t('web.chrome.app.notify_title')" @click="settings.enableNotifications()">{{ t('web.chrome.app.notify') }}</button>
       <span v-if="settings.notifyProblem" class="notify-problem" role="status" data-testid="notify-problem">{{ NOTIFICATION_PROBLEM_TEXT[settings.notifyProblem] }}</span>
-      <button v-if="connection.status !== 'signed-out'" type="button" class="link" @click="signOut">sign out</button>
+      <button v-if="connection.status !== 'signed-out'" type="button" class="link" @click="signOut">{{ t('web.chrome.app.sign_out') }}</button>
     </header>
     <ConnectionBanner />
     <p class="sr-only" role="status" aria-live="polite" data-testid="question-announcement">{{ announcedQuestion }}</p>

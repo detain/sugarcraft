@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onScopeDispose, ref, watch } from 'vue'
 import { spendLabel, tokens } from '../lib/format'
+import { t } from '../lib/i18n'
 import type { MethodResult, PermissionMode, SessionSummary } from '../protocol/generated'
 import { useConnectionStore } from '../stores/connection'
 import { useContextSourcesStore } from '../stores/contextSources'
@@ -91,7 +92,9 @@ const selectableAgents = computed(() => {
   if (currentAgent.value !== '' && !names.includes(currentAgent.value)) names.push(currentAgent.value)
   return names.sort()
 })
-const agentLabel = computed(() => (currentAgent.value === '' ? 'default agent' : `primary agent: ${currentAgent.value}`))
+const agentLabel = computed(() =>
+  currentAgent.value === '' ? t('web.chrome.status.agent_default') : t('web.chrome.status.agent_title', { agent: currentAgent.value }),
+)
 function pickAgent(event: Event): void {
   const select = event.target as HTMLSelectElement
   const value = select.value
@@ -141,23 +144,23 @@ const elapsedLabel = computed(() => {
 const statusText = computed(() => {
   switch (props.state.status) {
     case 'busy': {
-      const bits = ['working']
+      const bits = [t('web.chrome.status.working')]
       const elapsed = elapsedLabel.value
       if (elapsed !== null) bits.push(elapsed)
-      if (props.state.maxSteps > 0) bits.push(`step ${props.state.step}/${props.state.maxSteps}`)
+      if (props.state.maxSteps > 0) bits.push(t('web.chrome.status.step', { step: props.state.step, max: props.state.maxSteps }))
       return bits.join(' · ')
     }
     case 'waiting_permission':
-      return 'waiting for you'
+      return t('web.chrome.status.waiting')
     default:
-      return 'idle'
+      return t('web.chrome.status.idle')
   }
 })
 const spent = computed(() => props.state.spentUsd + (props.state.turnId !== null ? props.state.turnUsage?.costUsd ?? 0 : 0))
 const model = computed(() => {
   const provider = props.summary?.provider || ''
   const name = props.summary?.model || ''
-  return [provider, name].filter((part) => part !== '').join(' · ') || 'default model'
+  return [provider, name].filter((part) => part !== '').join(' · ') || t('web.chrome.status.model_default')
 })
 
 /**
@@ -183,25 +186,25 @@ const cachePct = computed<number | null>(() => {
 <template>
   <footer class="status" data-testid="status-bar" :data-status="state.status">
     <span class="item state" :class="state.status">{{ statusText }}</span>
-    <button v-if="trustAwaiting" type="button" class="item action" data-testid="trust-badge" :title="trustAwaiting === 1 ? 'This project is not trusted — open the Context panel to answer' : `${trustAwaiting} project-trust prompts await — open the Context panel to answer`" @click="panels.show('context')">{{ trustAwaiting === 1 ? 'trust?' : `trust? (${trustAwaiting})` }}</button>
-    <button type="button" class="item action" data-testid="context-meter" title="Context used — open the Context panel" @click="panels.show('context')">
-      ~{{ tokens(state.contextTokens) }} tok<template v-if="contextPct !== null"> · {{ contextPct }}%</template>
+    <button v-if="trustAwaiting" type="button" class="item action" data-testid="trust-badge" :title="trustAwaiting === 1 ? t('web.chrome.status.trust_title') : t('web.chrome.status.trust_title_count', { n: trustAwaiting })" @click="panels.show('context')">{{ trustAwaiting === 1 ? t('web.chrome.status.trust') : t('web.chrome.status.trust_count', { n: trustAwaiting }) }}</button>
+    <button type="button" class="item action" data-testid="context-meter" :title="t('web.chrome.status.context_title')" @click="panels.show('context')">
+      {{ t('web.chrome.status.tokens', { tok: tokens(state.contextTokens) }) }}<template v-if="contextPct !== null"> · {{ contextPct }}%</template>
       <span v-if="contextPct !== null" class="meter" aria-hidden="true"><span :style="{ width: `${contextPct}%` }" /></span>
-      <span v-if="cachePct !== null" class="cache" data-testid="status-cache">cache {{ cachePct }}%</span>
+      <span v-if="cachePct !== null" class="cache" data-testid="status-cache">{{ t('web.chrome.status.cache', { n: cachePct }) }}</span>
     </button>
-    <span class="item" :title="state.unpriced ? 'No price on file for this model — spend shown is a lower bound' : 'Spent this session'" :data-unpriced="state.unpriced ? 'true' : 'false'" data-testid="spend">{{ spendLabel(spent, state.unpriced) }}</span>
+    <span class="item" :title="state.unpriced ? t('web.chrome.status.spend_unpriced') : t('web.chrome.status.spend')" :data-unpriced="state.unpriced ? 'true' : 'false'" data-testid="spend">{{ spendLabel(spent, state.unpriced) }}</span>
     <label v-if="selectableProviders.length > 0" class="item" :title="model">
-      <span class="sr-only">Model</span>
+      <span class="sr-only">{{ t('web.chrome.status.model') }}</span>
       <select :value="modelOptionValue(currentProvider)" data-testid="model-select" @change="pickModel">
-        <option v-if="currentProvider === ''" value="">default model</option>
+        <option v-if="currentProvider === ''" value="">{{ t('web.chrome.status.model_default') }}</option>
         <option v-for="provider in selectableProviders" :key="provider" :value="modelOptionValue(provider)">{{ modelOptionLabel(provider) }}</option>
       </select>
     </label>
     <span v-else class="item model" :title="model">{{ model }}</span>
     <label v-if="selectableAgents.length > 0" class="item" :title="agentLabel">
-      <span class="sr-only">Primary agent</span>
+      <span class="sr-only">{{ t('web.chrome.status.agent') }}</span>
       <select :value="currentAgent" data-testid="agent-select" @change="pickAgent">
-        <option v-if="currentAgent === ''" value="">default agent</option>
+        <option v-if="currentAgent === ''" value="">{{ t('web.chrome.status.agent_default') }}</option>
         <option v-for="name in selectableAgents" :key="name" :value="name">{{ name }}</option>
       </select>
     </label>
@@ -209,7 +212,7 @@ const cachePct = computed<number | null>(() => {
          summary field is read off the row, never off a live `git`, so the
          tooltip says what it is: a start-state fact an agent's `git checkout`
          cannot silently outdate. Chip only when the server named one. -->
-    <span v-if="summary?.branch" class="item branch" data-testid="branch-chip" :title="`Branch at session start: ${summary.branch}`">⎇ {{ summary.branch }}</span>
+    <span v-if="summary?.branch" class="item branch" data-testid="branch-chip" :title="t('web.chrome.status.branch_title', { branch: summary.branch })">⎇ {{ summary.branch }}</span>
     <!-- C-AGT-6.e (R13): the open PR for that branch with a CI dot, served
          from the server's cached `gh pr view` refresh path — the chip never
          fetches and appears only once the cache holds an answer. -->
@@ -220,20 +223,20 @@ const cachePct = computed<number | null>(() => {
       :href="summary.pr.url"
       target="_blank"
       rel="noopener noreferrer"
-      :title="`PR #${summary.pr.number} (${summary.pr.state}) — CI: ${summary.pr.checks}`"
+      :title="t('web.chrome.status.pr_title', { number: summary.pr.number, state: summary.pr.state, checks: summary.pr.checks })"
     >#{{ summary.pr.number }}<span class="pr-dot" :class="`is-${summary.pr.checks}`" data-testid="pr-dot" aria-hidden="true" /></a>
     <button
       type="button"
       class="item action"
       data-testid="compact-button"
-      title="Condense older exchanges into a summary"
+      :title="t('web.chrome.status.compact_title')"
       :disabled="state.status === 'busy'"
       @click="emit('runCommand', '/compact')"
-    >compact</button>
+    >{{ t('web.chrome.status.compact') }}</button>
     <label class="item">
-      <span class="sr-only">Permission mode</span>
+      <span class="sr-only">{{ t('web.chrome.status.mode_aria') }}</span>
       <select :value="state.permissionMode ?? 'default'" data-testid="mode-select" @change="emit('setMode', ($event.target as HTMLSelectElement).value as PermissionMode)">
-        <option v-for="mode in MODES" :key="mode" :value="mode">mode: {{ mode }}</option>
+        <option v-for="mode in MODES" :key="mode" :value="mode">{{ t('web.chrome.status.mode', { mode }) }}</option>
       </select>
     </label>
     <span class="item conn">{{ connection }}</span>

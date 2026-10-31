@@ -5,6 +5,7 @@ import { PANEL_LABELS, PANELS, usePanelsStore, type PanelName } from '../../stor
 import { activeCount, buildTree, foldRuns } from '../../stores/agents/tree'
 import { useAgentsStore } from '../../stores/agents/agents'
 import { useSessionStore } from '../../stores/session'
+import { t } from '../../lib/i18n'
 import AgentsPanel from '../agents/AgentsPanel.vue'
 import AgentCatalogPanel from '../agents/AgentCatalogPanel.vue'
 import BackgroundPanel from './BackgroundPanel.vue'
@@ -74,10 +75,10 @@ function onKey(event: KeyboardEvent): void {
     type="button"
     class="opener"
     data-testid="panels-toggle"
-    title="Agents, todo, background, workflows, memory"
+    :title="t('web.chrome.panels.title')"
     @click="panels.toggle(true)"
-  >panels<span v-if="agentsGoing + background.running > 0" class="dot">{{ agentsGoing + background.running }}</span></button>
-  <aside v-else class="drawer" aria-label="Session panels" data-testid="side-panels" :data-panel="panels.active" @keydown="onKey">
+  >{{ t('web.chrome.panels.label') }}<span v-if="agentsGoing + background.running > 0" class="dot">{{ agentsGoing + background.running }}</span></button>
+  <aside v-else class="drawer" :aria-label="t('web.chrome.panels.aria')" data-testid="side-panels" :data-panel="panels.active" @keydown="onKey">
     <div class="tabs" role="tablist">
       <button
         v-for="panel in PANELS"
@@ -89,10 +90,10 @@ function onKey(event: KeyboardEvent): void {
         :data-testid="`panel-tab-${panel}`"
         @click="panels.show(panel)"
       >{{ PANEL_LABELS[panel] }}<span v-if="badge(panel) > 0" class="dot">{{ badge(panel) }}</span></button>
-      <button type="button" class="close link" aria-label="Close the panels" data-testid="panels-close" @click="panels.toggle(false)">✕</button>
+      <button type="button" class="close link" :aria-label="t('web.chrome.panels.close_aria')" data-testid="panels-close" @click="panels.toggle(false)">✕</button>
     </div>
     <div class="body" role="tabpanel">
-      <p v-if="needsSession" class="empty">Open a session to see its {{ PANEL_LABELS[panels.active].toLowerCase() }}.</p>
+      <p v-if="needsSession" class="empty">{{ t('web.chrome.panels.empty', { label: PANEL_LABELS[panels.active].toLowerCase() }) }}</p>
       <AgentsPanel v-else-if="panels.active === 'agents' && sessionId" :session-id="sessionId" />
       <TodoPanel v-else-if="panels.active === 'todo' && sessionId" :session-id="sessionId" />
       <WorkflowPanel v-else-if="panels.active === 'workflows' && sessionId" :session-id="sessionId" />
