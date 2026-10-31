@@ -671,6 +671,11 @@ final class TreeWideGuardRosterTest extends TestCase
         // that unlink walk, confined to the test's own sandbox.
         'Cli/ServeArgsTest.php' => ['scandir($this->tlsDir)'],
         'Cli/SubcommandsMcpImportTest.php' => ['scandir($this->tempDir)'],
+        // C-MCP-5.b: tearDown() unlinks the entries the mcp-serve-proj/home
+        // sandboxes setUp() mkdir'd under sys_get_temp_dir() before its own
+        // rmdir — scandir($dir) is that listing walk and it never leaves the
+        // test's own sandbox.
+        'Cli/SubcommandsMcpServeTest.php' => ['scandir($dir)'],
         'Commands/McpAuthLoginGuidanceTest.php' => ['glob($this->tempDir.\'/*\')'],
         // w3c (VIS-3): tearDown's removeTree() lists the temp home setUp() made.
         'Commands/McpReconnectTest.php' => ['scandir($dir)'],

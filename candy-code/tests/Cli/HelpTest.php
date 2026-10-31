@@ -138,6 +138,11 @@ final class HelpTest extends TestCase
         $this->assertStringContainsString('lsp install', $screen);
         $this->assertStringContainsString('lsp list', $screen);
 
+        // C-MCP-5.b: `mcp serve` is the row a client author comes to the
+        // screen to find — DocFigureProseDrift pins the block's roster
+        // arithmetic, this keeps the row itself honestly present.
+        $this->assertStringContainsString('mcp serve', $screen);
+
         // The env vars the screen documents are guarded from the SOURCE, not
         // from a hand-written list here — and from the ENTRY COLUMN, not by a
         // substring anywhere in the section: the _STREAM block's prose names
