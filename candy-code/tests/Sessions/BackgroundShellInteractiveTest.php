@@ -87,6 +87,10 @@ final class BackgroundShellInteractiveTest extends TestCase
     {
         $registry = $this->liveRegistry('c6j-refuse');
         $memo = new \ReflectionProperty(ProcessContainment::class, 'interactiveAvailableMemo');
+        // Capture the host's own answer BEFORE the memo injection: the
+        // post-reset assertion below must compare the re-derivation against
+        // this hosts reality, never a hard-coded true (F-B r1).
+        $hostCapable = ProcessContainment::interactiveAvailable();
         $before = \scandir($this->root);
 
         try {
@@ -102,8 +106,10 @@ final class BackgroundShellInteractiveTest extends TestCase
 
         // The reset re-derives from the same STATs: the host's real answer
         // comes back, proving the injection was a memo ride and not a
-        // permanent dowsing of the probe.
-        self::assertTrue(ProcessContainment::interactiveAvailable());
+        // permanent dowsing of the probe. Compared against the captured
+        // pre-injection answer, so a pty-less host stays honest (green)
+        // while the dowsing failure mode still reddens.
+        self::assertSame($hostCapable, ProcessContainment::interactiveAvailable(), 'the reset must re-derive the hosts own answer');
     }
 
     /**

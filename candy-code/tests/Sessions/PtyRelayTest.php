@@ -349,7 +349,10 @@ final class PtyRelayTest extends TestCase
             'even the refusal path must exit promptly',
         );
         self::assertNotSame(0, self::relayStatus($launched['proc']), 'the relay must refuse without the pty substrate');
-        self::assertFalse(\is_file($paths['exit']), 'a refusing relay must record nothing');
+        // The .exit sink is pre-created EMPTY by stageRelaySinks before the
+        // launch (the trio shares the sinkFiles shape, builder correction (e)
+        // above), so absence was never the refusal signature — content is.
+        self::assertSame('', (string) @\file_get_contents($paths['exit']), 'a refusing relay must record nothing');
     }
 
     /**
