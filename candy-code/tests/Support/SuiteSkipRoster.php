@@ -13,6 +13,7 @@ use PHPUnit\Event\Test\Skipped;
 use PHPUnit\Event\Test\SkippedSubscriber;
 use PHPUnit\Event\TestSuite\Skipped as TestSuiteSkipped;
 use PHPUnit\Event\TestSuite\SkippedSubscriber as TestSuiteSkippedSubscriber;
+use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
 
 /**
  * The suite's skip roster: WHICH tests are allowed to opt out of running, by
@@ -204,6 +205,16 @@ final class SuiteSkipRoster
         'SugarCraft\Code\Tests\Integration\PharCompatTest::testARenamedPharBootsItsOwnArchiveThroughTheMapPharFallback';
 
     /**
+     * The C-TOOL-6.c jail key: the scripted child's jail arm can only run
+     * where bubblewrap actually starts. Same mechanism as
+     * {@see LIVE_SGLANG_SMOKE} — {@see scriptJailRuns()} IS the gate the test
+     * body calls, and {@see expectedForLayout()} lifts the entry exactly when
+     * the probe answers that the jail runs.
+     */
+    private const SCRIPT_JAIL =
+        'SugarCraft\Code\Tests\Tools\Script\ScriptRunnerTest::testTheJailBlocksProjectWritesAndNetworkButTheBridgeStillAnswers';
+
+    /**
      * The tests this suite is allowed to skip, `Class::method` => why.
      *
      * The first is UNCONDITIONAL -- no environment gate, no platform check, no
@@ -242,6 +253,13 @@ final class SuiteSkipRoster
      * The C-SES-6.a renamed-install arm mints its miniature the same way the
      * premise does, so its key rides `pharWritingPossible()` too — the two
      * phar-writing entries lift and rejoin the roster together.
+     *
+     * The C-TOOL-6.c jail entry is conditional the same way again: it is
+     * rostered wherever `scriptJailRuns()` cannot start bubblewrap (no bwrap
+     * on PATH, or a kernel that refuses the user namespaces it needs — the
+     * common Debian/Ubuntu posture), where the jail arm skips itself. On a
+     * runner where the probe answers, the entry lifts and the jail assertions
+     * judge the child for real.
      */
     public const EXPECTED = [
         'SugarCraft\Code\Tests\MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails'
@@ -281,6 +299,13 @@ final class SuiteSkipRoster
                 . 'new-Phar() mint as the premise test, so it skips on the same predicate it '
                 . 'calls in its body, and expectedForLayout() lifts both together wherever '
                 . 'pharWritingPossible() is true',
+        self::SCRIPT_JAIL
+            => 'conditional jail gate: rostered while this process cannot start bubblewrap -- no '
+                . 'bwrap on PATH, or a kernel refusing the user namespaces it needs. The '
+                . 'C-TOOL-6.c jail arm skips itself there; where scriptJailRuns() probes the same '
+                . 'two-stage start the backend answers and finds it runs, the test asserts the '
+                . 'jailed script loses project writes and network but keeps its fd-3 bridge, and '
+                . 'expectedForLayout() lifts the entry; the predicate IS the body gate',
     ];
 
     private static ?self $live = null;
@@ -488,6 +513,48 @@ final class SuiteSkipRoster
     }
 
     /**
+     * Whether this process can start the bubblewrap jail at all:
+     * {@see Bubblewrap::probe()} run through a capture path that leaves no
+     * stderr on the test runner. This IS the gate, not a mirror of it —
+     * `ScriptRunnerTest`'s jail arm calls this predicate directly, so roster
+     * and skip cannot drift. The verdict is process-memoised here on top of
+     * the backend's own per-binary memo: the roster computation and the test
+     * body share the ONE real `bwrap -- /bin/true` spawn, and a host that
+     * refuses the namespaces answers the same way for both.
+     */
+    public static function scriptJailRuns(): bool
+    {
+        static $verdict = null;
+
+        if ($verdict !== null) {
+            return $verdict;
+        }
+
+        $jail = Bubblewrap::new(network: false);
+
+        return $verdict = $jail->probe(static function (string $command): array {
+            $pipes = [];
+            $process = proc_open(
+                ['/bin/sh', '-c', $command],
+                [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+            );
+
+            if (!\is_resource($process)) {
+                return ['exitCode' => 127, 'stderr' => 'the jail probe could not be spawned'];
+            }
+
+            fclose($pipes[0]);
+            $stdout = stream_get_contents($pipes[1]);
+            fclose($pipes[1]);
+            $stderr = stream_get_contents($pipes[2]);
+            fclose($pipes[2]);
+
+            return ['exitCode' => proc_close($process), 'stderr' => (string) $stderr];
+        }) === null;
+    }
+
+    /**
      * The roster this checkout's layout and environment can be judged against:
      * {@see EXPECTED} minus the layout-conditional entry wherever the path-repo
      * symlinks are present and the conditional test RUNS instead of skipping,
@@ -527,6 +594,10 @@ final class SuiteSkipRoster
         if (self::pharWritingPossible()) {
             unset($effective[self::PHAR_PREMISE]);
             unset($effective[self::PHAR_RENAME]);
+        }
+
+        if (self::scriptJailRuns()) {
+            unset($effective[self::SCRIPT_JAIL]);
         }
 
         return $effective;

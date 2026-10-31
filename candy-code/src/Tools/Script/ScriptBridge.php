@@ -131,7 +131,7 @@ final class ScriptBridge
         }
 
         $decoded = json_decode($line, true);
-        if (is_array($decoded)) {
+        if (is_array($decoded) && !array_is_list($decoded)) {
             return $decoded;
         }
 

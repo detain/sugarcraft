@@ -180,9 +180,14 @@ final class ScriptRunner
         );
 
         $exitCode = -1;
-        // Recorded while the child is alive (ISS-014 doctrine); the finally's
-        // reap reads it on every path, so it exists even when the spawn died.
-        $groupId = null;
+        // The group id is measured AT SIGNAL TIME in the finally, never here:
+        // MEASURED (GitCommandHandlers.php's own comment records it), a
+        // groupId() taken immediately after the spawn answers null because
+        // the setsid wrapper has not reached setsid(2) yet, and the kill then
+        // reaches the script leader alone while its children survive. The
+        // finally's reap covers every path, spawn failures included, and a
+        // null answer there degrades to proc_terminate — the correct answer
+        // for a child that never led a group.
         $stdout = '';
         $stderr = '';
         $stdoutDropped = 0;
@@ -203,7 +208,6 @@ final class ScriptRunner
                 // go now or no bridge read will ever see EOF.
                 fclose($pipes[0]);
                 fclose($childEnd);
-                $groupId = ProcessContainment::groupId($process);
 
                 $bridge = new ScriptBridge();
                 $readable = ['bridge' => $parentEnd, 'stdout' => $pipes[1], 'stderr' => $pipes[2]];
@@ -324,9 +328,14 @@ final class ScriptRunner
             // finally's own level: terminateAndClose is idempotent by
             // contract (a false handle answers null), and the depth-keyed
             // ChildLifetimeScanner reads an if-wrapped closer as conditional.
-            // The group id recorded above rides the standard ladder (TERM,
-            // bounded wait, KILL, bounded wait), then proc_close.
-            $exitCode = ProcessReaper::terminateAndClose($process, $groupId) ?? -1;
+            // The group id is measured HERE, at signal time, where the
+            // kernel's answer is current: at expiry the child is alive by
+            // definition (the loop saw it running), and after its exit the
+            // zombie's pgid still reads until proc_close reaps it — so a
+            // self-exited script's surviving children ride the group kill
+            // too. The id rides the standard ladder (TERM, bounded wait,
+            // KILL, bounded wait), then proc_close.
+            $exitCode = ProcessReaper::terminateAndClose($process, ProcessContainment::groupId($process)) ?? -1;
             self::discardScratch($scratch);
         }
 

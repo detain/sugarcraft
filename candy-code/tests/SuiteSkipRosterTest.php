@@ -80,6 +80,10 @@ final class SuiteSkipRosterTest extends TestCase
     private const PHAR_RENAME_ENTRY =
         'SugarCraft\\Code\\Tests\\Integration\\PharCompatTest::testARenamedPharBootsItsOwnArchiveThroughTheMapPharFallback';
 
+    /** The C-TOOL-6.c script-jail key — the private `SCRIPT_JAIL`, by literal; its real predicate cannot be env-unarmed. */
+    private const JAIL_ENTRY =
+        'SugarCraft\\Code\\Tests\\Tools\\Script\\ScriptRunnerTest::testTheJailBlocksProjectWritesAndNetworkButTheBridgeStillAnswers';
+
     /**
      * Runs $body with CANDY_CODE_PHAR forced UNARMED and restores the caller's
      * shell state exactly, so the layout pins stay deterministic no matter
@@ -244,8 +248,10 @@ final class SuiteSkipRosterTest extends TestCase
 
     /**
      * Over a symlink farm with the live gate unarmed the effective roster is
-     * EXACTLY the unconditional entry plus the dormant smoke -- the structure is
-     * pinned, not just the count.
+     * EXACTLY the unconditional entry plus the dormant smokes -- and the jail
+     * arm wherever this host cannot start bubblewrap, mirrored from the same
+     * predicate the lift consults -- the structure is pinned, not just the
+     * count.
      */
     public function testExpectedForLayoutDropsTheConditionalEntryOverSymlinks(): void
     {
@@ -265,11 +271,14 @@ final class SuiteSkipRosterTest extends TestCase
                 [
                     self::MCP_ENTRY => SuiteSkipRoster::EXPECTED[self::MCP_ENTRY],
                     self::LIVE_SGLANG_ENTRY => SuiteSkipRoster::EXPECTED[self::LIVE_SGLANG_ENTRY],
-                ] + self::pharEntriesUnarmed(),
+                ] + self::pharEntriesUnarmed() + (SuiteSkipRoster::scriptJailRuns()
+                    ? []
+                    : [self::JAIL_ENTRY => SuiteSkipRoster::EXPECTED[self::JAIL_ENTRY]]),
                 'over a path-repo symlink farm the layout-conditional test RUNS while the dormant '
                 . 'smokes stay rostered, so the effective roster must be the const minus exactly '
                 . 'its GitignoreAwareness key (and minus the premise and the rename arm wherever '
-                . 'phar writing is possible), reasons intact',
+                . 'phar writing is possible, and minus the jail arm wherever bubblewrap starts), '
+                . 'reasons intact',
             );
         } finally {
             $this->purgeFarmSandbox($dir);
@@ -290,6 +299,9 @@ final class SuiteSkipRosterTest extends TestCase
                 unset($expected[self::PHAR_PREMISE_ENTRY]);
                 unset($expected[self::PHAR_RENAME_ENTRY]);
             }
+            if (SuiteSkipRoster::scriptJailRuns()) {
+                unset($expected[self::JAIL_ENTRY]);
+            }
 
             self::assertSame(
                 $expected,
@@ -301,7 +313,8 @@ final class SuiteSkipRosterTest extends TestCase
                 'over a packagist farm the layout-conditional test skips and the unarmed smokes skip '
                 . 'too, so the effective roster must be the full const -- all unconditional and '
                 . 'dormant keys, all reasons, same order (minus the premise and the rename arm '
-                . 'wherever phar writing is possible and they RUN instead of skipping)',
+                . 'wherever phar writing is possible, and minus the jail arm wherever bubblewrap '
+                . 'starts, and they RUN instead of skipping)',
             );
         } finally {
             $this->purgeFarmSandbox($dir);
