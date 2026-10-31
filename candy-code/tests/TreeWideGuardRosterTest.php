@@ -743,6 +743,8 @@ final class TreeWideGuardRosterTest extends TestCase
         // C-TUI-6.f: tearDown() sweeps the webstrings-<uniqid> dir setUp() mkdir'd
         // under sys_get_temp_dir() before its own rmdir — never leaves the sandbox.
         'Protocol/WebStringsTest.php' => ['scandir($this->dir)'],
+        // C-WEB-5.c: tearDown() empties the throwaway serve state dir setUp() made.
+        'Server/Push/WebPushSenderTest.php' => ["glob(\$this->dir.'/'.chr(42))"],
         // removeTree() tears down the serve state dir the test made under its sandbox.
         'Server/ServeStatusStopTest.php' => ['scandir($path)'],
         // tearDown() sweeps the two crossed-project sandbox dirs setUp() made.

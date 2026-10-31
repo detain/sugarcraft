@@ -43,14 +43,14 @@ final class PushPayloadCipherTest extends TestCase
     private const NONCE = '4h_95klXJ5E_qnoN';
 
     /** The complete HTTP body (144 bytes) the RFC's encryption produces. */
-    private const BODY = 'DGv6ra1nlYgDCS1FRnbzlwAAEABBBP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A_yl95bQpu6cVPTpK4Mqgkf1CXztLVBSt2Ks3oZwbuwXPXLWyouBWLVWGNWQexSgSxsj_Qulcy4a-fN';
+    private const RFC_BODY = 'DGv6ra1nlYgDCS1FRnbzlwAAEABBBP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A_yl95bQpu6cVPTpK4Mqgkf1CXztLVBSt2Ks3oZwbuwXPXLWyouBWLVWGNWQexSgSxsj_Qulcy4a-fN';
 
     public function testTheRfcVectorEncryptsByteExact(): void
     {
         $body = $this->pushVectorCipher()->encrypt(self::PLAINTEXT, $this->pushVectorSubscription());
 
         self::assertSame(
-            $this->decode64Url(self::BODY),
+            $this->decode64Url(self::RFC_BODY),
             $body,
             'the encryption must reproduce RFC 8291 section 5 byte for byte'
         );
