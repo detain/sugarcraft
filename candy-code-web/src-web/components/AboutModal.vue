@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { MethodResult } from '../protocol/generated'
 import { useConnectionStore } from '../stores/connection'
 import { describe } from '../stores/session'
@@ -19,6 +19,20 @@ const info = ref<MethodResult<'server.info'> | null>(null)
 const health = ref<MethodResult<'server.health'> | null>(null)
 const error = ref<string | null>(null)
 const loading = ref(false)
+const stopping = ref(false)
+const stopError = ref<string | null>(null)
+
+/**
+ * C-WEB-5.g (R13): the browser's ONLY caller of the Scope::Admin
+ * `server.shutdown` lives behind two doors. The control renders only for an
+ * admin-scoped principal — SettingsView's house gate shape — and only once a
+ * health answer is known: the confirm must name what it interrupts, and a
+ * click-through with an unknown running-turn count would misrepresent the
+ * blast radius. The standing sole-caller proof is the source scan in
+ * `__tests__/shutdownDormant.spec.ts`.
+ */
+const canAdmin = computed(() => connection.scopes.includes('admin'))
+const canStop = computed(() => canAdmin.value && health.value !== null)
 
 /**
  * w4j/w2h review MINOR: the close→rapid-reopen race. load() clears the
@@ -42,6 +56,10 @@ async function load(): Promise<void> {
   // not last session's stale version, uptime, or health line.
   info.value = null
   health.value = null
+  // C-WEB-5.g: a re-open never inherits the previous visit's stop state —
+  // a stale refusal row or a stuck "Stopping…" latch belongs to a dead visit.
+  stopping.value = false
+  stopError.value = null
   const [first, second] = await Promise.allSettled([connection.request('server.info', {}), connection.request('server.health', {})])
   if (mine !== generation) {
     return
@@ -65,6 +83,41 @@ function uptime(seconds: number): string {
   if (seconds < 60) return `${Math.round(seconds)} s`
   if (seconds < 3_600) return `${Math.floor(seconds / 60)} m ${seconds % 60} s`
   return `${Math.floor(seconds / 3_600)} h ${Math.floor((seconds % 3_600) / 60)} m`
+}
+
+/**
+ * The confirmed stop (C-WEB-5.g / R13). The question names the blast radius
+ * from the last health answer — running turns, open sessions, the fact that
+ * every client drops and only the operator brings the server back — because
+ * a click-through confirm that could not say what it interrupts would
+ * misrepresent it. Cancel sends nothing. The `stopping` latch is the send
+ * once-and-only-once door: a double-click never queues a second shutdown.
+ * A refusal (the server enforces the admin scope; hello scopes are the
+ * client's best guess, not an authority) lands loud on the control itself
+ * and re-arms it. On success the About overlay closes and the draining
+ * banner — the non-durable `server.shutdown` event the server broadcasts on
+ * its way out — takes over (ConnectionBanner reads connection.shutdown).
+ */
+async function stopServer(): Promise<void> {
+  const known = health.value
+  if (!canStop.value || stopping.value || known === null) return
+  const turns = known.turnsRunning === 1 ? 'running turn' : 'running turns'
+  const sessions = known.sessionsOpen === 1 ? 'open session' : 'open sessions'
+  const question =
+    `Stop this server? As of the last health check it reported ` +
+    `${known.turnsRunning} ${turns} and ${known.sessionsOpen} ${sessions}. ` +
+    'Stopping drains in-flight turns, exits the process, and drops every client connection; ' +
+    'the server returns only when its operator starts it again — there is no auto-restart. Proceed?'
+  if (!window.confirm(question)) return
+  stopping.value = true
+  stopError.value = null
+  try {
+    await connection.request('server.shutdown', {})
+    emit('close')
+  } catch (failure) {
+    stopping.value = false
+    stopError.value = describe(failure)
+  }
 }
 </script>
 
@@ -113,6 +166,13 @@ function uptime(seconds: number): string {
           <template v-if="health.draining"> · draining</template>
         </p>
       </template>
+      <p v-if="canStop" class="stop">
+        <button type="button" class="danger" :disabled="stopping" data-testid="about-stop" @click="void stopServer()">
+          {{ stopping ? 'Stopping…' : 'Stop server' }}
+        </button>
+        <span v-if="stopError" class="error" role="alert" data-testid="about-stop-error">{{ stopError }}</span>
+        <span v-else-if="stopping" class="hint" data-testid="about-stop-state">The confirmed stop is on the wire; the draining notice takes over when the server answers.</span>
+      </p>
     </div>
   </div>
 </template>
@@ -194,5 +254,26 @@ ul {
 }
 .error {
   color: var(--error);
+}
+.stop {
+  margin: 0.9rem 0 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.8125rem;
+}
+.stop .danger {
+  color: var(--error);
+  background: none;
+  border: 1px solid var(--error);
+  border-radius: 6px;
+  padding: 0.25rem 0.6rem;
+  font: inherit;
+  cursor: pointer;
+}
+.stop .danger:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 </style>

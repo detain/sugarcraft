@@ -1,8 +1,9 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AboutModal from '../AboutModal.vue'
 import { Wire } from '../grid/__tests__/harness'
+import { useConnectionStore } from '../../stores/connection'
 
 /**
  * WEB-1c: the About overlay — `server.info` for what the server offers,
@@ -166,5 +167,115 @@ describe('AboutModal (WEB-1c)', () => {
     expect(wrapper.find('[data-testid="about-error"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="about-info"]').text()).toContain('2.0.0')
     expect(wrapper.find('[data-testid="about-health"]').text()).toContain('up 10 s')
+  })
+})
+
+/**
+ * C-WEB-5.g: the confirmed "Stop server" control. R13's two doors — an
+ * admin-scoped principal AND a confirm that names the blast radius — plus
+ * a loud refusal row, are pinned here; the sole-caller source scan lives
+ * in __tests__/shutdownDormant.spec.ts.
+ */
+const INFO = {
+  version: '1.2.3',
+  protocol: 1,
+  permissionModes: ['default'],
+  defaultPermissionMode: 'default',
+}
+const HEALTH = { ok: true, version: '1.2.3', uptimeS: 60, sessionsOpen: 2, turnsRunning: 3, draining: false }
+
+/** Re-point the live hello at a token principal with only the given scopes. */
+function demoteTo(scopes: string[]): void {
+  const connection = useConnectionStore()
+  const hello = connection.hello
+  if (!hello) throw new Error('Wire.connect() should have established a hello')
+  connection.hello = { ...hello, principal: { ...hello.principal, scopes } }
+}
+
+describe('AboutModal confirmed stop (C-WEB-5.g)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  async function openAdminInformed(): Promise<ReturnType<typeof mount>> {
+    const wrapper = await openModal()
+    wire.answer('server.info', INFO)
+    wire.answer('server.health', HEALTH)
+    await flushPromises()
+    return wrapper
+  }
+
+  it('offers no stop control without admin scope', async () => {
+    const wrapper = await openModal()
+    demoteTo(['read'])
+    wire.answer('server.info', INFO)
+    wire.answer('server.health', HEALTH)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="about-health"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="about-stop"]').exists()).toBe(false)
+    expect(wire.sent('server.shutdown')).toEqual([])
+  })
+
+  it('offers no stop control while the health feed is unknown — the confirm must be able to name what it interrupts', async () => {
+    const wrapper = await openModal()
+    wire.answer('server.info', INFO)
+    const frame = wire.sent('server.health').at(-1)
+    if (!frame) throw new Error('no server.health sent')
+    wire.socket.fail(-32001, 'forbidden', 'no health for you', frame.id)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="about-info"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="about-stop"]').exists()).toBe(false)
+  })
+
+  it('a cancelled confirm names the counts in the question and sends nothing', async () => {
+    const confirmSpy = vi.fn(() => false)
+    vi.stubGlobal('confirm', confirmSpy)
+    const wrapper = await openAdminInformed()
+    const stop = wrapper.find('[data-testid="about-stop"]')
+    expect(stop.exists()).toBe(true)
+    await stop.trigger('click')
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    const question = String(confirmSpy.mock.calls[0]?.[0])
+    expect(question).toContain('last health check')
+    expect(question).toContain('3 running turns')
+    expect(question).toContain('2 open sessions')
+    expect(wire.sent('server.shutdown')).toEqual([])
+    expect(wrapper.emitted('close')).toBeUndefined()
+  })
+
+  it('a confirmed stop sends server.shutdown exactly once and the draining event takes over', async () => {
+    const confirmSpy = vi.fn(() => true)
+    vi.stubGlobal('confirm', confirmSpy)
+    const wrapper = await openAdminInformed()
+    const stop = wrapper.find('[data-testid="about-stop"]')
+    await stop.trigger('click')
+    await stop.trigger('click') // double-click: the stopping latch sends nothing more
+    const frames = wire.sent('server.shutdown')
+    expect(frames).toHaveLength(1)
+    // The client's mutating-method machinery rides an idempotency key on the
+    // request; no drainSeconds override — the server drains its configured grace.
+    expect(frames[0]?.params).toEqual({ idempotencyKey: expect.any(String) })
+    expect(wrapper.find('[data-testid="about-stop"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-testid="about-stop-state"]').exists()).toBe(true)
+    wire.answer('server.shutdown', { accepted: true })
+    await flushPromises()
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    const connection = useConnectionStore()
+    expect(connection.shutdown).toBeNull()
+    wire.serverEvent('server.shutdown', { reason: 'server.shutdown was requested', graceSeconds: 30 })
+    expect(connection.shutdown).toEqual({ reason: 'server.shutdown was requested', graceSeconds: 30 })
+  })
+
+  it('a refusal lands loudly on the control and re-arms it', async () => {
+    const confirmSpy = vi.fn(() => true)
+    vi.stubGlobal('confirm', confirmSpy)
+    const wrapper = await openAdminInformed()
+    await wrapper.find('[data-testid="about-stop"]').trigger('click')
+    const frame = wire.sent('server.shutdown').at(-1)
+    if (!frame) throw new Error('confirmed click sent nothing')
+    wire.socket.fail(-32001, 'forbidden', 'admin scope required', frame.id)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="about-stop-error"]').text()).toContain('admin scope required')
+    expect(wrapper.find('[data-testid="about-stop"]').attributes('disabled')).toBeUndefined()
   })
 })

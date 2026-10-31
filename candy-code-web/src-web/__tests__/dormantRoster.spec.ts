@@ -12,8 +12,10 @@ import { METHOD_SCOPES } from '../protocol/generated'
  * no caller now fails loudly here until the method is wired or declared
  * dormant; the step that later adds the caller removes the entry.
  *
- * `shutdownDormant.spec.ts` stays the behavioural pin for `server.shutdown`;
- * this spec is the roster that makes the same rule apply fleet-wide.
+ * `shutdownDormant.spec.ts` is no longer the negative control for
+ * `server.shutdown` — C-WEB-5.g wired its confirmed About caller and removed
+ * the roster row in that step — but it stays the standing sole-caller proof,
+ * and this roster makes the same caller-or-reason rule apply fleet-wide.
  */
 
 /** Method name -> one-line reason it is deliberately dormant today. */
@@ -21,9 +23,8 @@ const DORMANT_REASONS: Record<string, string> = {
   // C-MCP-2.c wired the first browser caller: the composer @mcp: resource
   // picker (SessionView's roster fetch). The row for mcp.resources came out
   // in the same commit that added the caller, per this spec's own rule.
-  // Scope::Admin host verb: the browser may receive the event but must never
-  // call the method; C-WEB-5.g wires the confirmed Admin caller later.
-  'server.shutdown': 'admin-scope shutdown is a host operator verb; the client only receives the event (WEB-1)',
+  // C-WEB-5.g wired server.shutdown's only caller (the confirmed About stop);
+  // its roster row came out in that step, per this spec's own rule.
   // C-SES-7.e shipped the session.import method; the browser's import dialog
   // arrives with a later step — external clients ride the wire meanwhile.
   'session.import': 'transcript import rides the protocol for external clients; the browser import dialog lands with a later step',
