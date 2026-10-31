@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Lint;
 
 use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
+use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
+use SugarCraft\Code\Tools\Sandbox\SandboxScope;
 
 /**
  * Runs the user's test command in the project root (step 3.H, Aider's
@@ -69,6 +72,7 @@ final class TestRunner
         private readonly ?string $command,
         private readonly float $timeoutSeconds,
         private readonly ?int $idleCeilingSeconds = null,
+        private readonly ?SandboxBackend $sandbox = null,
     ) {}
 
     /** A runner with no command: {@see run()} answers null until one is set. */
@@ -86,13 +90,13 @@ final class TestRunner
     {
         $command = is_string($setting) && trim($setting) !== '' ? trim($setting) : null;
 
-        return new self($command, $this->timeoutSeconds, $this->idleCeilingSeconds);
+        return new self($command, $this->timeoutSeconds, $this->idleCeilingSeconds, $this->sandbox);
     }
 
     /** The same runner with each run bounded at $seconds (floored at 10 ms). */
     public function withTimeout(float $seconds): self
     {
-        return new self($this->command, is_finite($seconds) ? max(0.01, $seconds) : self::DEFAULT_TIMEOUT_SECONDS, $this->idleCeilingSeconds);
+        return new self($this->command, is_finite($seconds) ? max(0.01, $seconds) : self::DEFAULT_TIMEOUT_SECONDS, $this->idleCeilingSeconds, $this->sandbox);
     }
 
     /**
@@ -104,7 +108,25 @@ final class TestRunner
      */
     public function withinTurnIdleCeiling(int $ceilingSeconds): self
     {
-        return new self($this->command, $this->timeoutSeconds, max(1, $ceilingSeconds));
+        return new self($this->command, $this->timeoutSeconds, max(1, $ceilingSeconds), $this->sandbox);
+    }
+
+    /**
+     * The same runner with its test command confined to a jail (C-TOOL-4.d).
+     *
+     * The paired jail is `bashSandbox`'s own — {@see SandboxScope} decides
+     * only which auxiliary runs ask for it — and a paired run is executed as
+     * {@see SandboxBackend::wrap()} renders it, the project root writable for
+     * the duration (a test suite writes caches, artifacts, and its own
+     * scratch there). Refused at the door, the run is SKIPPED with the
+     * reason rather than run unconfined. Verdict plumbing is unchanged: the
+     * skip reports as the class of "could not run" that
+     * {@see AutoTestHook} already stops on, so the reason reaches the model
+     * through the existing door.
+     */
+    public function withSandbox(?SandboxBackend $sandbox): self
+    {
+        return new self($this->command, $this->timeoutSeconds, $this->idleCeilingSeconds, $sandbox);
     }
 
     /** The idle ceiling a beatless run is kept inside, or null when none was named. */
@@ -147,8 +169,44 @@ final class TestRunner
             $bound = max(0.01, min($bound, $this->idleCeilingSeconds - self::IDLE_MARGIN_SECONDS));
         }
 
+        if ($this->sandbox !== null) {
+            $refusal = $this->sandbox->probe(
+                // Same one-command probe ceiling Bash pays (E646-clean: a
+                // bound probe spawn, never a blanket request timeout); in
+                // the shipped path the launch's single probe has already
+                // answered the memo and this closure never runs.
+                fn (string $probe): array => $this->runCaptured($probe, null, 4096, 10.0),
+            );
+            if ($refusal !== null) {
+                // FAIL CLOSED: the `test` scope paired with a jail that
+                // cannot start is SKIPPED with the reason as the note, never
+                // run unconfined. Exit 126 is the house's CLASSIFICATION of
+                // "the command could not run" ({@see TestReport::couldNotRun
+                // ()} → {@see AutoTestHook}'s stop), and it is the honest
+                // class here: the suite never started.
+                return new TestReport(
+                    command: $this->command,
+                    exitCode: 126,
+                    output: Lang::t('sandbox.runner.skipped', [
+                        'scope' => SandboxScope::SCOPE_TEST,
+                        'mode' => $this->sandbox->mode(),
+                        'name' => $this->sandbox->name(),
+                        'reason' => $refusal,
+                        'remedy' => $this->sandbox->refusalRemedy(),
+                    ]),
+                    timedOut: false,
+                    timeoutSeconds: $bound,
+                    droppedBytes: 0,
+                );
+            }
+
+            $line = $this->sandbox->wrap("exec 2>&1\n" . $this->command, $real);
+        } else {
+            $line = "exec 2>&1\n" . $this->command;
+        }
+
         $run = $this->runCaptured(
-            "exec 2>&1\n" . $this->command,
+            $line,
             $real,
             self::MAX_CAPTURE_BYTES,
             $bound,

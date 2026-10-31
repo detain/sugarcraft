@@ -2255,24 +2255,24 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertLessThan((int) strpos($boardSeam, 'loadEntries('), $boardAt, 'the board notices are no longer registered ahead of the hook files, as the bullet says');
         self::assertSame(HookEvent::Stop->value, $live[$testRow[1]]['event'], "the auto-test bullet names {$testRow[1]} first as the hook that runs the tests — it no longer fires on Stop");
         self::assertSame(HookEvent::PostToolUse->value, $live[$testRow[2]]['event'], "the auto-test bullet names {$testRow[2]} as the edit half — it no longer fires on PostToolUse");
-        $testSeam = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $testRow[3], 9000);
+        $testSeam = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $testRow[3], 9500); // C-TOOL-4.d widened 9000 -> 9500: the sandboxScope pairing block added ~9 lines ahead of these seams (same law as the 5.b widening above)
         foreach ([$testRow[1], $testRow[2]] as $testClass) {
             $testAt = strpos($testSeam, 'Hooks\\BuiltIn\\' . $testClass);
             self::assertIsInt($testAt, "Bootstrap::{$testRow[3]}() no longer names {$testClass} — the bullet names the wrong seam");
             self::assertGreaterThan((int) strpos($testSeam, 'Hooks\\BuiltIn\\' . $commitRow[1] . '('), $testAt, "{$testClass} is no longer registered after the auto-commit, as the bullet says");
             self::assertLessThan((int) strpos($testSeam, 'loadEntries('), $testAt, "{$testClass} is no longer registered ahead of the hook files, as the bullet says");
         }
-        $commitSeam = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $commitRow[2], 9000);
+        $commitSeam = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $commitRow[2], 9500); // C-TOOL-4.d window widening — see the $testSeam note
         $commitAt = strpos($commitSeam, 'Hooks\\BuiltIn\\' . $commitRow[1] . '(');
         self::assertIsInt($commitAt, "Bootstrap::{$commitRow[2]}() no longer constructs {$commitRow[1]} — the bullet names the wrong seam");
         self::assertGreaterThan((int) strpos($commitSeam, 'Hooks\\BuiltIn\\PostEditDiagnosticsHook('), $commitAt, 'the auto-commit is no longer registered after the post-edit diagnostics, as the bullet says');
         self::assertLessThan((int) strpos($commitSeam, 'loadEntries('), $commitAt, 'the auto-commit is no longer registered ahead of the hook files, as the bullet says');
-        $diagnosticsSeam = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $diagnosticsRow[2], 9000);
+        $diagnosticsSeam = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $diagnosticsRow[2], 9500); // C-TOOL-4.d window widening — see the $testSeam note
         $diagnosticsAt = strpos($diagnosticsSeam, 'Hooks\\BuiltIn\\' . $diagnosticsRow[1] . '(');
         self::assertIsInt($diagnosticsAt, "Bootstrap::{$diagnosticsRow[2]}() no longer constructs {$diagnosticsRow[1]} — the bullet names the wrong seam");
         self::assertGreaterThan((int) strpos($diagnosticsSeam, 'Hooks\\BuiltIn\\' . $lintRow[1] . '('), $diagnosticsAt, 'the post-edit diagnostics are no longer registered right after the lint, as the bullet says');
         self::assertLessThan((int) strpos($diagnosticsSeam, 'loadEntries('), $diagnosticsAt, 'the post-edit diagnostics are no longer registered ahead of the hook files, as the bullet says');
-        $lintSeam = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $lintRow[2], 9000);
+        $lintSeam = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $lintRow[2], 9500); // C-TOOL-4.d window widening — see the $testSeam note
         $lintAt = strpos($lintSeam, 'Hooks\\BuiltIn\\' . $lintRow[1] . '(');
         self::assertIsInt($lintAt, "Bootstrap::{$lintRow[2]}() no longer constructs {$lintRow[1]} — the bullet names the wrong seam");
         self::assertGreaterThan((int) strpos($lintSeam, 'registerBuiltIns()'), $lintAt, 'the post-edit lint is no longer registered after the three built-ins, as the bullet says');

@@ -6358,6 +6358,19 @@ public static function useMaxCost(?string $maxCost): void
         // spend never settles into the chat's /budget accounting.
         $hooks->withPromptBackend(self::titleBackend());
 
+        // C-TOOL-4.d: `sandboxScope` pairs each supporting run with the
+        // `bashSandbox` jail — the laws live at the one door below. Script-
+        // Hook needs the host verdict CARRIED (its spawn path has no captured-
+        // run door to probe through) and installs before the entries build.
+        $forScope = \SugarCraft\Code\Tools\Sandbox\SandboxFactory::forScope(...);
+        $sandboxConfig = self::readUserConfig();
+        $jails = [];
+        foreach (\SugarCraft\Code\Tools\Sandbox\SandboxScope::SCOPES as $scope) {
+            $jails[$scope] = $forScope($scope, $sandboxConfig);
+        }
+        $hookJail = $jails[\SugarCraft\Code\Tools\Sandbox\SandboxScope::SCOPE_HOOKS];
+        $hooks->withScriptSandbox($hookJail, $hookJail === null ? null : (new Bash(sandbox: $hookJail))->sandboxRefusal());
+
         // Post-edit format (EDT-1): the user's `formatCommands` map rewrites
         // each edited file, and the launch's shared read ledger is told about
         // every KEPT rewrite so the formatter's change never reads as an
@@ -6375,7 +6388,7 @@ public static function useMaxCost(?string $maxCost): void
         $formatConfig = self::readUserConfig();
         $formatRunner = \SugarCraft\Code\Format\FormatRunner::new()->withCommands(
             $formatConfig[\SugarCraft\Code\Format\FormatRunner::SETTINGS_KEY] ?? null,
-        );
+        )->withSandbox($jails['format']);
         $formatAuto = ($formatConfig[\SugarCraft\Code\Format\FormatRunner::AUTO_SETTINGS_KEY] ?? false) === true;
         if ($formatAuto) {
             $formatRunner = $formatRunner->withAuto(true, $root !== null && self::projectHooksAreTrusted($root));
@@ -6394,7 +6407,7 @@ public static function useMaxCost(?string $maxCost): void
         $hooks->register(new \SugarCraft\Code\Hooks\BuiltIn\PostEditLintHook(
             \SugarCraft\Code\Lint\LintRunner::new()->withCommands(
                 self::readUserConfig()[\SugarCraft\Code\Lint\LintRunner::SETTINGS_KEY] ?? null,
-            ),
+            )->withSandbox($jails['lint']),
         ));
 
         // Post-edit diagnostics (step 3.F): only when the user configured a
@@ -6446,7 +6459,8 @@ public static function useMaxCost(?string $maxCost): void
         // the hook files, for the lint hook's reason.
         $testRunner = \SugarCraft\Code\Lint\TestRunner::new()
             ->withCommand($userConfig[\SugarCraft\Code\Lint\TestRunner::SETTINGS_KEY] ?? null)
-            ->withinTurnIdleCeiling(EngineBackend::turnIdleTimeoutSeconds($userConfig));
+            ->withinTurnIdleCeiling(EngineBackend::turnIdleTimeoutSeconds($userConfig))
+            ->withSandbox($jails['test']);
         if ($root !== null && ($userConfig[\SugarCraft\Code\Lint\TestRunner::AUTO_TEST_SETTINGS_KEY] ?? false) === true && $testRunner->command() !== null) {
             $testEdits = \SugarCraft\Code\Hooks\BuiltIn\AutoTestEditHook::new();
             $hooks->register($testEdits);

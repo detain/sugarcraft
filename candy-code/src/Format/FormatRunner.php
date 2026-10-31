@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Format;
 
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\ToolOutputSpill;
 use SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Code\Tools\PathJail;
+use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
+use SugarCraft\Code\Tools\Sandbox\SandboxScope;
 
 /**
  * Formats one file with the command configured for its extension (EDT-1).
@@ -108,6 +111,7 @@ final class FormatRunner
      * @param bool $autoEnabled the `formatAuto` settings bit as read
      * @param bool $projectTrusted the project's answer to the hooks-trust gate, folded in by the caller (C-TOOL-5.b)
      * @param ?\Closure(string): bool $binaryPresent presence seam, same shape as {@see \SugarCraft\Code\LSP\LspLauncher::fromConfig()}'s
+     * @param ?SandboxBackend $sandbox the `format` scope's jail (C-TOOL-4.d), resolved once by {@see \SugarCraft\Code\Tools\Sandbox\SandboxFactory::forScope()} at launch; null keeps every run byte-identical to the pre-scope shape
      */
     private function __construct(
         private readonly array $commands,
@@ -116,6 +120,7 @@ final class FormatRunner
         private readonly bool $autoEnabled = false,
         private readonly bool $projectTrusted = false,
         private readonly ?\Closure $binaryPresent = null,
+        private readonly ?SandboxBackend $sandbox = null,
     ) {}
 
     /** A runner with no commands at all — the feature is off until configured. */
@@ -156,13 +161,34 @@ final class FormatRunner
             }
         }
 
-        return new self($commands, $this->timeoutSeconds, $suppressed, $this->autoEnabled, $this->projectTrusted, $this->binaryPresent);
+        return new self($commands, $this->timeoutSeconds, $suppressed, $this->autoEnabled, $this->projectTrusted, $this->binaryPresent, $this->sandbox);
     }
 
     /** The same runner with each format run bounded at $seconds (floored at 10 ms). */
     public function withTimeout(float $seconds): self
     {
-        return new self($this->commands, is_finite($seconds) ? max(0.01, $seconds) : self::DEFAULT_TIMEOUT_SECONDS, $this->suppressed, $this->autoEnabled, $this->projectTrusted, $this->binaryPresent);
+        return new self($this->commands, is_finite($seconds) ? max(0.01, $seconds) : self::DEFAULT_TIMEOUT_SECONDS, $this->suppressed, $this->autoEnabled, $this->projectTrusted, $this->binaryPresent, $this->sandbox);
+    }
+
+    /**
+     * The same runner with $sandbox as the jail its commands run in
+     * (C-TOOL-4.d): the `format` scope's answer, built once at launch by
+     * {@see \SugarCraft\Code\Tools\Sandbox\SandboxFactory::forScope()} — the
+     * same backend `bashSandbox` builds, so the jail a hook or a Bash call
+     * lands in is the jail the formatter lands in. A live jail WRAPS each
+     * command line at run time with the project root writable (the formatter
+     * must rewrite exactly the file the edit wrote, so the jail's writable
+     * root is the edit's root — no wider, no narrower); when the jail cannot
+     * start on this host the format is SKIPPED with the refusal as its note,
+     * never run unconfined — a sandboxed scope that quietly degraded to bare
+     * execution would teach the operator the opposite of what `sandboxScope`
+     * says. null (the default, and the answer whenever the scope is not
+     * requested or `bashSandbox` is `off`) leaves every command line
+     * byte-identical to the pre-scope shape.
+     */
+    public function withSandbox(?SandboxBackend $sandbox): self
+    {
+        return new self($this->commands, $this->timeoutSeconds, $this->suppressed, $this->autoEnabled, $this->projectTrusted, $this->binaryPresent, $sandbox);
     }
 
     /**
@@ -183,6 +209,7 @@ final class FormatRunner
             $enabled,
             $projectTrusted,
             $binaryPresent === null ? null : \Closure::fromCallable($binaryPresent),
+            $this->sandbox,
         );
     }
 
@@ -292,6 +319,43 @@ final class FormatRunner
         $line = str_contains($command, self::FILE_PLACEHOLDER)
             ? str_replace(self::FILE_PLACEHOLDER, escapeshellarg($display), self::unquotePlaceholder($command))
             : $command . ' ' . escapeshellarg($display);
+
+        if ($this->sandbox !== null) {
+            // The jail's verdict is memoised per binary and network flag
+            // (SandboxBackend::probe's own law), so this closes over a spawn
+            // that production never pays — and the ceiling is the probe's
+            // pre-existing one, per command, never a blanket timeout (E646).
+            $refusal = $this->sandbox->probe(
+                fn (string $probe): array => $this->runCaptured($probe, null, 4096, 10.0),
+            );
+            if ($refusal !== null) {
+                // FAIL CLOSED: the scope asked for this run to be jailed and no
+                // jail exists to hold it, so nothing runs and the note says so.
+                // Exit 126 is the house CLASSIFICATION for "command cannot
+                // start" (LintReport::COULD_NOT_RUN's reasoning), not an
+                // observed shell exit; the file is left exactly as the edit
+                // wrote it — changed false, restored null.
+                return new FormatReport(
+                    file: $display,
+                    absolute: $absolute,
+                    command: $line,
+                    exitCode: 126,
+                    output: Lang::t('sandbox.runner.skipped', [
+                        'scope' => SandboxScope::SCOPE_FORMAT,
+                        'mode' => $this->sandbox->mode(),
+                        'name' => $this->sandbox->name(),
+                        'reason' => $refusal,
+                        'remedy' => $this->sandbox->refusalRemedy(),
+                    ]),
+                    timedOut: false,
+                    timeoutSeconds: $this->timeoutSeconds,
+                    changed: false,
+                    restored: null,
+                );
+            }
+
+            $line = $this->sandbox->wrap($line, $rootReal);
+        }
 
         $run = $this->runCaptured(
             $line,

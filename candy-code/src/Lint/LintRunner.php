@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Lint;
 
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\ToolOutputSpill;
 use SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Code\Tools\PathJail;
+use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
+use SugarCraft\Code\Tools\Sandbox\SandboxScope;
 
 /**
  * Lints one file with the command configured for its extension (step 3.E).
@@ -72,10 +75,15 @@ final class LintRunner
 
     /**
      * @param array<string, string> $commands extension (lower case, no dot) => command
+     * @param null|SandboxBackend $sandbox the jail a `lint` scope was paired
+     *        into by {@see withSandbox()}, or null — every run of a null-
+     *        sandboxed row is the exact command line this class has always
+     *        built (C-TOOL-4.d).
      */
     private function __construct(
         private readonly array $commands,
         private readonly float $timeoutSeconds,
+        private readonly ?SandboxBackend $sandbox = null,
     ) {}
 
     /** A runner with only the built-in `php -l` entry. */
@@ -124,13 +132,32 @@ final class LintRunner
             }
         }
 
-        return new self($commands, $this->timeoutSeconds);
+        return new self($commands, $this->timeoutSeconds, $this->sandbox);
     }
 
     /** The same runner with each lint bounded at $seconds (floored at 10 ms). */
     public function withTimeout(float $seconds): self
     {
-        return new self($this->commands, is_finite($seconds) ? max(0.01, $seconds) : self::DEFAULT_TIMEOUT_SECONDS);
+        return new self($this->commands, is_finite($seconds) ? max(0.01, $seconds) : self::DEFAULT_TIMEOUT_SECONDS, $this->sandbox);
+    }
+
+    /**
+     * The same runner with its lints confined to a jail (C-TOOL-4.d).
+     *
+     * The jail is the one `bashSandbox` builds — {@see SandboxScope} decides
+     * only WHICH auxiliary runs pair with it. Paired, each lint command is
+     * executed as {@see SandboxBackend::wrap()} renders it, with the project
+     * root as the writable root (the linter reads sources and may write its
+     * own cache beside them); not paired, nothing about a run changes. The
+     * probe verdict is read at run time through the backend's own memo, so
+     * this class never stores a refusal string: {@see
+     * \SugarCraft\Code\Tools\BuiltIn\Bash::sandboxRefusal()} fills that memo
+     * once per launch from `Bootstrap::hooks()`, and a jail built directly by
+     * an embedder pays the same one bounded probe spawn Bash pays.
+     */
+    public function withSandbox(?SandboxBackend $sandbox): self
+    {
+        return new self($this->commands, $this->timeoutSeconds, $sandbox);
     }
 
     /** @return array<string, string> extension => command */
@@ -214,6 +241,42 @@ final class LintRunner
         $line = str_contains($command, self::FILE_PLACEHOLDER)
             ? str_replace(self::FILE_PLACEHOLDER, escapeshellarg($display), self::unquotePlaceholder($command))
             : $command . ' ' . escapeshellarg($display);
+
+        if ($this->sandbox !== null) {
+            $refusal = $this->sandbox->probe(
+                // The probe run keeps Bash's own one-command ceiling and its
+                // 4 KiB tail — per-command bounds, never a blanket
+                // request timeout (E646). In the shipped path the verdict
+                // memo was already answered by the launch's single probe, so
+                // this closure does not spawn anything.
+                fn (string $probe): array => $this->runCaptured($probe, null, 4096, 10.0),
+            );
+            if ($refusal !== null) {
+                // FAIL CLOSED: a lint paired with a jail that cannot start is
+                // SKIPPED with the reason — it does not run unconfined. Exit
+                // 126 here is the house's CLASSIFICATION for "the command
+                // could not run" ({@see LintReport::couldNotRun()}), which is
+                // exactly what happened: the linter never started, inside a
+                // jail or outside one, and the note says so.
+                return new LintReport(
+                    file: $display,
+                    command: $line,
+                    exitCode: 126,
+                    output: Lang::t('sandbox.runner.skipped', [
+                        'scope' => SandboxScope::SCOPE_LINT,
+                        'mode' => $this->sandbox->mode(),
+                        'name' => $this->sandbox->name(),
+                        'reason' => $refusal,
+                        'remedy' => $this->sandbox->refusalRemedy(),
+                    ]),
+                    timedOut: false,
+                    timeoutSeconds: $this->timeoutSeconds,
+                    source: '',
+                );
+            }
+
+            $line = $this->sandbox->wrap($line, $rootReal);
+        }
 
         $run = $this->runCaptured(
             $line,
