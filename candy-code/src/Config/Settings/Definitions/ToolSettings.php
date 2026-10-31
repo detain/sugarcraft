@@ -15,6 +15,7 @@ use SugarCraft\Code\Config\Settings\SettingDefinition;
 use SugarCraft\Code\Config\Settings\SettingDefinitionSet;
 use SugarCraft\Code\Config\Settings\SettingType;
 use SugarCraft\Code\Config\Settings\UiEditability;
+use SugarCraft\Code\Config\Settings\Validator\SandboxScopeValidator;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Lint\TestRunner;
 use SugarCraft\Code\Tools\BuiltIn\Bash;
@@ -27,6 +28,7 @@ use SugarCraft\Code\Tools\BuiltIn\WebSearch;
 use SugarCraft\Code\Tools\McpToolBridge;
 use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
 use SugarCraft\Code\Tools\Sandbox\SandboxFactory;
+use SugarCraft\Code\Tools\Sandbox\SandboxScope;
 use SugarCraft\Code\Support\ToolOutputSpill;
 use SugarCraft\Code\Tools\ToolLimits;
 use SugarCraft\Code\Tools\Web\Search\SearchBackends;
@@ -115,6 +117,20 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withHelp(Lang::t('settings.bashSandboxNestedUserns.help'))
                 ->withReaderSymbol(SandboxFactory::class . '::fromSetting')
                 ->withReadBy('`SandboxFactory::fromSetting()` → `Bubblewrap::withNestedUserns()`'),
+            // C-TOOL-4.d. User tier only, same direction as the two above:
+            // the list decides WHO SHARES the jail `bashSandbox` builds, and a
+            // checked-out repository must not be able to move the launch's own
+            // hooks, lint, format or test run back outside it (nor widen what
+            // is confined without the operator asking).
+            SettingDefinition::new(SandboxScope::SETTINGS_KEY, SettingType::StringList, [])
+                ->withCategory(SettingCategory::Tools)
+                ->withRiskClass(RiskClass::Security)
+                ->withLayered()
+                ->withValidators(SandboxScopeValidator::new())
+                ->withLabel(Lang::t('settings.sandboxScope.label'))
+                ->withHelp(Lang::t('settings.sandboxScope.help'))
+                ->withReaderSymbol(SandboxFactory::class . '::forScope')
+                ->withReadBy('`Bootstrap::hooks()` → `SandboxFactory::forScope()` → `ScriptHook`/`LintRunner`/`FormatRunner`/`TestRunner`'),
             // Step 3.H. Both user tier only: the command is shell the
             // after-the-turn run executes with no tool call and no gate in
             // the path, so a checkout must neither name it nor switch it on

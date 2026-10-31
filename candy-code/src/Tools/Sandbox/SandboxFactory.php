@@ -34,9 +34,10 @@ use SugarCraft\Code\Cli\LaunchContext;
  *
  * The vocabulary itself lives on the backends' shared `MODE_*` constants and
  * the unknown-value-is-strictest law is kept per backend, so the factory
- * routes, builds the jail, and nothing else. The $os parameter exists for the
- * doctor row and the tests: it is the host family the answer is for, and it
- * defaults to the real one.
+ * routes, builds the jail, and — through {@see forScope()} — pairs a
+ * `sandboxScope` entry with that same jail-built-here, and nothing else. The
+ * $os parameter exists for the doctor row and the tests: it is the host
+ * family the answer is for, and it defaults to the real one.
  */
 final class SandboxFactory
 {
@@ -86,5 +87,40 @@ final class SandboxFactory
         return $override === null || $override === ''
             ? $bubblewrap
             : $bubblewrap->withProtectedPaths([$override]);
+    }
+
+    /**
+     * The jail the `sandboxScope` list asks for $scope, or null when that
+     * command runs free (C-TOOL-4.d).
+     *
+     * THE ONE SCOPE READ. Every consumer — the hook loader, the lint, format
+     * and test runners, and the tests that pin them — asks here rather than
+     * re-implementing the vocabulary, because the whole point of the list is
+     * a single decision a checked-out repository cannot widen:
+     * {@see SandboxScope::requests()} owns the unknown-entry-is-every-scope
+     * reading, and this method owns the pairing with `bashSandbox` — a scope
+     * is live ONLY while the jail itself is on, and it rides THE SAME
+     * {@see fromSetting()} answer `Bash` gets, so backend, mode, nested-usns
+     * fold and `--config` re-bind cannot disagree between a jailed `Bash`
+     * call and a jailed hook beside it. `bashSandbox: off` (or unset)
+     * therefore leaves every scope inert: there is no jail to join, and a
+     * scope list names which commands share the jail, never whether one
+     * exists.
+     *
+     * $userConfig is read once for BOTH keys — the list and the mode — from
+     * the same array, so a launch whose config layers changed mid-read cannot
+     * scope the command under one answer and build the jail under another.
+     *
+     * @param ?array<string, mixed> $userConfig
+     */
+    public static function forScope(string $scope, ?array $userConfig = null): ?SandboxBackend
+    {
+        $config = $userConfig ?? Bootstrap::readUserConfig();
+
+        if (!SandboxScope::requests($config[SandboxScope::SETTINGS_KEY] ?? null, $scope)) {
+            return null;
+        }
+
+        return self::fromSetting($config['bashSandbox'] ?? null, PHP_OS_FAMILY, $config);
     }
 }

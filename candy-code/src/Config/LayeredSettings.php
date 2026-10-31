@@ -566,6 +566,7 @@ final class LayeredSettings
         'references',
         'bashSandbox',
         'bashSandboxNestedUserns',
+        'sandboxScope',
         'testCommand',
         'autoTest',
         'toolOutputCapBytes',

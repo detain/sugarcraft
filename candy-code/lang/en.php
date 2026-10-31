@@ -2227,6 +2227,7 @@ TXT,
     'settings.repoMap.maxBytes.label' => 'Repo map: bytes per section',
     'settings.requireReadBeforeWrite.label' => 'Read before write',
     'settings.resumeCostWarnUsd.label' => 'Resume cost warning ($)',
+    'settings.sandboxScope.label' => 'Sandbox scopes',
     'settings.screenReader.label' => 'Screen reader mode',
     'settings.rules.standingMaxBytes.label' => 'Standing rules: bytes',
     'settings.scrollWheelLines.label' => 'Wheel step (lines)',
@@ -2320,6 +2321,11 @@ TXT,
     'chat.background.readopted' => 'Background session {id} (\'{name}\') was re-adopted from an earlier run and is {status}.',
     'chat.background.reply.one' => 'A sub-agent sent the agent a message; it goes to the agent now.',
     'chat.background.reply.other' => 'Sub-agents sent the agent {count} messages; they go to the agent now.',
+    // ── C-TOOL-4.d: sandboxScope jail refusals (ScriptHook deny + the
+    // lint/format/test skip notes). Own region for this step; other locales
+    // arrive with the i18n carry wave.
+    'sandbox.hook.not_run' => 'Not run: the hook `{hook}` is scoped into the `{mode}` sandbox by sandboxScope, but the {name} sandbox cannot start on this host ({reason}). Nothing ran, sandboxed or otherwise. Tell the user: they can fix {name} ({remedy}) or set bashSandbox to "off".',
+    'sandbox.runner.skipped' => 'Skipped: the {scope} run is scoped into the `{mode}` sandbox by sandboxScope, but the {name} sandbox cannot start on this host ({reason}). Nothing ran, sandboxed or otherwise. Tell the user: they can fix {name} ({remedy}) or set bashSandbox to "off".',
     // ── C-AGT-4.e: cross-session mail (`SendMessage` `to: "session:<id>"`,
     // SessionMailbox drains). Own region for this step; other locales arrive
     // with the i18n carry wave.
@@ -4037,6 +4043,7 @@ TXT,
     'settings.repoMap.maxBytes.help' => 'Byte budget for each of the repo map\'s two sections; entries past it are counted, not listed.',
     'settings.requireReadBeforeWrite.help' => 'On, `Edit`, a `Write` that overwrites an existing file, and an `ApplyPatch` section that changes, moves or deletes one all refuse until the model has read that file in this session; creating new files is never blocked. Off by default: files the model did read stay guarded by the changed-on-disk rule either way.',
     'settings.resumeCostWarnUsd.help' => 'After a stale resume the first prompt is held once when re-sending the history is estimated to cost at least this many dollars uncached; press Enter again to send anyway, or /compact first. 0 disables the hold.',
+    'settings.sandboxScope.help' => 'Which commands outside the tool path join the `bashSandbox` jail: `hooks`, `lint`, `format`, `test` (default: none). Live only while `bashSandbox` is not `off` — the list says who shares the jail, never whether one exists. An unrecognised entry reads as EVERY scope (strictest, like an unrecognised `bashSandbox` value), and the settings audit names it. A jail that cannot start refuses the work rather than running it free: script hooks deny, and lint, format and test skip with the reason.',
     'settings.screenReader.help' => 'Presentation for screen-reader users. On, the app sheds decoration a reader cannot narrate — the agent spinner pins to one static frame, and box-drawing frames, reverse-video-only menu selection and the like give way to plain text and an audible cue as each surface honors the switch. Off is the painted terminal as usual. Your own accessibility setting, like the draft box vim mode: a checked-out project cannot change it. Applies on the next read after saving — live, no reload.',
     'settings.rules.standingMaxBytes.help' => 'Byte budget, framed and escaped, for the rule files spliced whole into every prompt; a rule past it is named by one pointer line instead.',
     'settings.scrollWheelLines.help' => 'Transcript lines one wheel tick scrolls.',
