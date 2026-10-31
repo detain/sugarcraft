@@ -1116,6 +1116,20 @@ final class ReadPathCensusTest extends TestCase
                 . 'capture names (out|err|exit|outd|errd) for an mtime check and an '
                 . 'unlink; no content read follows the listing',
         ],
+        'Background/PtyRelay.php|file_get_contents' => [
+            'SELF_LOCATED — main() reads back the staged command file the registry wrote into '
+                . 'this launch\'s own 0700 directory before spawning the relay; the name comes '
+                . 'from pathFor() over the argv directory and id, the body is unlinked '
+                . 'immediately after the read, and a false answer is the never-started refusal',
+        ],
+        'Background/PtyRelay.php|fopen' => [
+            'SELF_LOCATED — main() opens the transcript sink (`ab`) the registry created for '
+                . 'this id in its own 0700 directory; every byte comes off the pty master this '
+                . 'relay allocated',
+            'SELF_LOCATED — main() opens the keystroke FIFO (`r+`, never blocking, never EOF) '
+                . 'the registry minted with posix_mkfifo beside the other sinks; the relay is '
+                . 'the only reader and send() the only writer',
+        ],
         'Background/BackgroundSupervisor.php|file_get_contents' => [
             'SELF_LOCATED — the IPC buffer this supervisor named for its own child (or one '
                 . 'reconnect() adopted from the index after vetting its directory)',

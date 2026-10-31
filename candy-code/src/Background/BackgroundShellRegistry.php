@@ -327,7 +327,7 @@ final class BackgroundShellRegistry
         }
 
         $id = $this->mintId();
-        $paths = $this->pathFor($id);
+        $paths = self::pathFor($this->directory, $id);
         $failure = $this->sinkFiles($paths);
         if ($failure !== null) {
             return ['ok' => false, 'error' => $failure];
@@ -1252,13 +1252,29 @@ final class BackgroundShellRegistry
         return null;
     }
 
-    /** @return array{stdout: string, stderr: string, exit: string} */
-    private function pathFor(string $id): array
+    /**
+     * The file set one shell id owns inside a launch directory. Public and
+     * static because the interactive relay ({@see PtyRelay}) is a separate
+     * process that receives only the directory and the id on its argv, and
+     * must derive the very same names — one spelling for both sides, since a
+     * relay inventing its own paths is how a sweep starts orphaning files a
+     * row still addresses. The three plain-path sinks plus the interactive
+     * trio: `.pid` (the pty child's pid, the registry's kill-ladder handle),
+     * `.in` (the FIFO the model's keystrokes arrive through), and `.cmd`
+     * (the staged command file, read and unlinked by the relay before the
+     * shell ever starts — no command text on argv or environ).
+     *
+     * @return array{stdout: string, stderr: string, exit: string, ptyPid: string, in: string, cmd: string}
+     */
+    public static function pathFor(string $directory, string $id): array
     {
         return [
-            'stdout' => $this->directory . '/' . $id . '.out',
-            'stderr' => $this->directory . '/' . $id . '.err',
-            'exit' => $this->directory . '/' . $id . '.exit',
+            'stdout' => $directory . '/' . $id . '.out',
+            'stderr' => $directory . '/' . $id . '.err',
+            'exit' => $directory . '/' . $id . '.exit',
+            'ptyPid' => $directory . '/' . $id . '.pid',
+            'in' => $directory . '/' . $id . '.in',
+            'cmd' => $directory . '/' . $id . '.cmd',
         ];
     }
 
@@ -1309,7 +1325,7 @@ final class BackgroundShellRegistry
                 return null;
             }
         }
-        $paths = $this->pathFor($id);
+        $paths = self::pathFor($this->directory, $id);
         foreach (['stdoutPath' => $paths['stdout'], 'stderrPath' => $paths['stderr'], 'exitPath' => $paths['exit']] as $field => $expected) {
             if (($row[$field] ?? null) !== $expected) {
                 return null;
