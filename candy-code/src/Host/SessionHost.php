@@ -15,6 +15,7 @@ use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Backend\InteractiveTurn;
 use SugarCraft\Code\Backend\PendingAsk;
+use SugarCraft\Code\Backend\PendingClientCall;
 use SugarCraft\Code\Backend\QueueMode;
 use SugarCraft\Code\Backend\SummarisesWithCache;
 use SugarCraft\Code\Background\ScheduleRegistry;
@@ -57,6 +58,8 @@ use SugarCraft\Code\Host\Commands\CommandEffect;
 use SugarCraft\Code\Host\Commands\CommandEffectKind;
 use SugarCraft\Code\Host\Commands\CommandResult;
 use SugarCraft\Code\Host\Commands\CommandText;
+use SugarCraft\Code\Host\ClientTools\ClientToolRegistry;
+use SugarCraft\Code\Host\ClientTools\ClientToolSpec;
 use SugarCraft\Code\Host\ContextSources;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\MCP\McpClient;
@@ -277,6 +280,38 @@ final class SessionHost
     private array $pendingAsks = [];
 
     /**
+     * C-TOOL-6.h: the tools clients have hosted for THIS session, one
+     * registry per host — the same lifetime law as the transcript lease.
+     * A connection's registrations die with it ({@see
+     * forgetClientTools()}); the roster a turn dispatches with is fixed at
+     * turn start, so a registration reaches the NEXT turn's tools, never
+     * the one in flight. Whether any client may register at all is the
+     * `server.clientTools` door — that setting belongs to the protocol
+     * step (6.i), not to this substrate.
+     */
+    private readonly ClientToolRegistry $clientTools;
+
+    /**
+     * C-TOOL-6.h: this session's open client-hosted calls, by callId, each
+     * paired with the registration that carried it — the handle
+     * {@see resolveClientCall()} needs to answer a call and to refuse an
+     * answer from a stale registration with the same reading as a stale id.
+     * Settled-but-unpruned entries (a deadline that fired, a turn that
+     * ended) are dropped lazily at the next call.
+     *
+     * @var array<string, array{pending: PendingClientCall, clientKey: string, registrationId: string}>
+     */
+    private array $pendingClientCalls = [];
+
+    /**
+     * C-TOOL-6.h: the serve-side listener for a freshly opened client call
+     * ({@see onClientCall()}); null until 6.i wires it.
+     *
+     * @var (\Closure(PendingClientCall, string, string): void)|null
+     */
+    private ?\Closure $clientCallListener = null;
+
+    /**
      * How recent questions were settled, by askId — what a late second
      * answer is told it lost to. Bounded: only the newest are kept.
      *
@@ -350,6 +385,7 @@ final class SessionHost
     ) {
         $this->history = array_values($history);
         $this->inbox = new \ArrayObject();
+        $this->clientTools = new ClientToolRegistry();
         // The session's own "always" answers, saved with it (Chat does the same).
         $this->grants = SessionPermissionMemo::fromGrants($transcripts->loadPermissionGrants($sessionId));
         // SES-1b: serve adopts the durable ledger the way the interactive
@@ -727,6 +763,116 @@ final class SessionHost
     public function resolution(string $askId): ?PermissionResolved
     {
         return $this->resolutions[$askId] ?? null;
+    }
+
+    /**
+     * C-TOOL-6.h: host $specs as this client's tools for the session's NEXT
+     * turns, replacing whatever $clientKey held before. Returns the
+     * registration id every later answer for these tools must carry.
+     * Throws with a one-word verdict when the batch is not shippable
+     * ({@see ClientToolRegistry::register()}); who may call this at all —
+     * a connection holding Write scope, behind `server.clientTools` — is
+     * the protocol step's door (6.i), not this substrate's.
+     *
+     * @param list<ClientToolSpec> $specs
+     */
+    public function registerClientTools(string $clientKey, array $specs): string
+    {
+        return $this->clientTools->register($clientKey, $specs);
+    }
+
+    /**
+     * C-TOOL-6.h: drop $clientKey's registrations (its connection closed —
+     * the ruling that kills a client's tools with it) and settle its open
+     * calls as errors, so a child blocked on one of them learns the truth
+     * instead of waiting out its deadline.
+     */
+    public function forgetClientTools(string $clientKey): void
+    {
+        $this->clientTools->forget($clientKey);
+        foreach ($this->pendingClientCalls as $callId => $entry) {
+            if ($entry['clientKey'] !== $clientKey) {
+                continue;
+            }
+            unset($this->pendingClientCalls[$callId]);
+            $entry['pending']->cancel('the client that hosts this tool is gone');
+        }
+    }
+
+    /**
+     * C-TOOL-6.h: answer the open client call $callId — first answer wins
+     * (the same law {@see answer()} keeps for questions). An id not open, a
+     * call already settled another way, and an answer carrying a
+     * registration id other than the one that opened the call all read the
+     * same from here: false. A client re-registered between the call and
+     * the answer is exactly the case that id exists to refuse.
+     */
+    public function resolveClientCall(string $callId, string $registrationId, string $content, bool $isError): bool
+    {
+        $entry = $this->pendingClientCalls[$callId] ?? null;
+        if ($entry === null) {
+            return false;
+        }
+        if ($entry['registrationId'] !== $registrationId) {
+            return false;
+        }
+        if ($entry['pending']->isSettled()) {
+            unset($this->pendingClientCalls[$callId]);
+
+            return false;
+        }
+        unset($this->pendingClientCalls[$callId]);
+
+        return $entry['pending']->resolve($content, $isError);
+    }
+
+    /**
+     * C-TOOL-6.h: bind (or pass null to clear) the listener that hears each
+     * freshly opened client call with the client and registration that must
+     * answer it — the handle the serve relay (6.i) forwards on.
+     *
+     * @param (\Closure(PendingClientCall, string, string): void)|null $hook
+     */
+    public function onClientCall(?\Closure $hook): void
+    {
+        $this->clientCallListener = $hook;
+    }
+
+    /**
+     * C-TOOL-6.h: the sink {@see \SugarCraft\Code\Backend\EngineBackend::withClientCallSink()}
+     * takes — called in the parent when a turn child puts a client-hosted
+     * call on the channel. It opens the call in {@see $pendingClientCalls}
+     * under the registration that owns the name, tells the 6.i relay, and
+     * leaves the answer to {@see resolveClientCall()}; the engine's own
+     * deadline stays the bound either way. A call whose name no
+     * registration owns (the client forgot it mid-turn, after this turn's
+     * roster was fixed) is answered as an error at once rather than held.
+     */
+    private function clientCallSink(): \Closure
+    {
+        return function (PendingClientCall $pending, \Closure $answer): void {
+            foreach ($this->pendingClientCalls as $callId => $entry) {
+                if ($entry['pending']->isSettled()) {
+                    unset($this->pendingClientCalls[$callId]);
+                }
+            }
+            $clientKey = $this->clientTools->owner($pending->name);
+            if ($clientKey === null) {
+                $answer('the client that hosts this tool is gone', true);
+
+                return;
+            }
+            $registrationId = (string) $this->clientTools->currentRegistrationId($clientKey);
+            $this->pendingClientCalls[$pending->callId] = [
+                'pending' => $pending,
+                'clientKey' => $clientKey,
+                'registrationId' => $registrationId,
+            ];
+            $hook = $this->clientCallListener;
+            if ($hook !== null) {
+                $hook($pending, $clientKey, $registrationId);
+            }
+        };
     }
 
     /**
@@ -2629,6 +2775,8 @@ final class SessionHost
                 $this->compactor->config(),
                 $this->sessionId,
                 $this->grants,
+                $this->clientTools,
+                $this->clientCallSink(),
             ),
             history: $this->history,
             inbox: $this->inbox,

@@ -15,6 +15,7 @@ use SugarCraft\Code\Backend\InteractiveTurn;
 use SugarCraft\Code\Backend\ObservesReasoning;
 use SugarCraft\Code\App\BackendToolEventsMsg;
 use SugarCraft\Code\Attachments\MentionIndex;
+use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Context\ContextCategories;
 use SugarCraft\Code\Context\Pruning\ContextLedger;
@@ -32,6 +33,7 @@ use SugarCraft\Code\Events\ToolFinished;
 use SugarCraft\Code\Events\ToolProgress;
 use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Events\UsageUpdated;
+use SugarCraft\Code\Host\ClientTools\ClientToolRegistry;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\SessionPermissionMemo;
@@ -291,6 +293,15 @@ final class TurnRunner
      *   this turn's gate as Allow rules, read per dispatch so a grant given
      *   mid-turn covers every later turn. They answer an Ask, never lift a
      *   Deny ({@see \SugarCraft\Code\Permissions\PermissionGate::withSessionRules()}).
+     * - C-TOOL-6.h: the client-hosted proxies are appended HERE, at turn
+     *   start, from the live registry — the roster a turn dispatches with is
+     *   fixed then, which is what "a registration takes effect at the next
+     *   turn" means. The append runs through {@see Bootstrap::filterToolSet()}
+     *   like every other roster, so `disabledTools: ["client__..."]` removes
+     *   them. The sink is the session host's own pair of hands on the parent
+     *   side of the turn channel; with no registry or sink bound, a client
+     *   proxy that still reaches this backend answers its caller's refusal,
+     *   and the engine's no-sink reading answers one on the channel.
      */
     public static function backendForTurn(
         Backend $backend,
@@ -299,6 +310,8 @@ final class TurnRunner
         ?CompactorConfig $compactorConfig,
         ?string $sessionId,
         SessionPermissionMemo $grants,
+        ?ClientToolRegistry $clientTools = null,
+        ?\Closure $clientCallSink = null,
     ): Backend {
         if (!$backend instanceof EngineBackend) {
             return $backend;
@@ -314,6 +327,15 @@ final class TurnRunner
         }
         if ($grants->patterns() !== [] && ($gate = $backend->permissionGate()) !== null) {
             $backend = $backend->withPermissionGate($gate->withSessionRules($grants->rules()));
+        }
+        if ($clientTools !== null && $clientTools->clientCount() > 0) {
+            $backend = $backend->withTools([
+                ...$backend->tools(),
+                ...Bootstrap::filterToolSet($clientTools->proxies()),
+            ]);
+        }
+        if ($clientCallSink !== null) {
+            $backend = $backend->withClientCallSink($clientCallSink);
         }
 
         return $backend;
