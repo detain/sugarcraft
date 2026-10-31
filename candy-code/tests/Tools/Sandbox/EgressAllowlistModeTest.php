@@ -196,6 +196,33 @@ final class EgressAllowlistModeTest extends TestCase
         self::assertTrue(is_executable($sh));
     }
 
+    public function testTheBridgeRunResolvesAlongPathBeforeForkingSoTheCommandRuns(): void
+    {
+        // C-TOOL-4.g r1 MINOR-1: the resolveProgram call at run()'s entry is
+        // invisible to the pure-function pin above — an UNFINDABLE word
+        // arrives bare either way, and both shapes die in the bridge's
+        // exec-failure branch, so a uniqid/127-style assert cannot
+        // discriminate the call site. Discriminate it the way the code
+        // documents the promise: a word only a PATH search can find must
+        // EXECUTE. A planted script under a uniqid bare word rides run()
+        // and its own exit status must arrive; delete EgressBridge.php's
+        // run-entry resolve and pcntl_exec receives the bare word, so the
+        // observed status is the exec-failure death shape (rc=137, per the
+        // 4.f sibling pin) — never the planted rc=42. Spawned child, in
+        // this file's fork-law shape: the suite itself never pcntl_forks.
+        $probeBin = $this->tmpDir . '/path-probe-bin';
+        self::assertTrue(mkdir($probeBin, 0700, true));
+        $word = 'egress-path-probe-' . uniqid('', true);
+        self::assertGreaterThan(0, file_put_contents($probeBin . '/' . $word, "#!/bin/sh\nexit 42\n"));
+        self::assertTrue(chmod($probeBin . '/' . $word, 0755));
+
+        [$out, $code] = $this->bridgeBareWordSubprocess($probeBin, $word);
+        self::assertSame(0, $code, 'the bridge subprocess itself must end cleanly: ' . $out);
+        self::assertSame('rc=42', $out, 'the command the PATH holds must run through run() with a bare first word — '
+            . 'that is what makes an allowlist jail change ONLY the network path, and this string is the '
+            . 'run-entry resolveProgram call-site pin (MINOR-1)');
+    }
+
     public function testTheFactoryHandsTheShelfSocketToTheJail(): void
     {
         $proxy = new EgressProxyProcess(['egress.example.test']);
@@ -410,6 +437,57 @@ $proxy->stop();
 exit(0);
 PHP,
         );
+    }
+
+    /**
+     * Run {@see EgressBridge::run()} in a spawned child against a bare
+     * first word found ONLY by searching PATH (the child prepends
+     * `$probeBin` there), echoing `rc=<status>` on stdout. Distinct from
+     * the 4.f sibling's subprocess helper by contract: that one hands run()
+     * an absolute path and cannot see the resolve leg; this one hands it
+     * the bare word the jail's shell would have seen.
+     *
+     * @return array{0: string, 1: int} subprocess stdout and its exit code
+     */
+    private function bridgeBareWordSubprocess(string $probeBin, string $word): array
+    {
+        $driver = $this->tmpDir . '/bridge-path-resolve-driver.php';
+        $autoload = var_export(BackgroundSupervisor::autoloadPath(), true);
+        $unixPath = var_export($this->tmpDir . '/bridge-probe-unused.sock', true);
+        $binLit = var_export($probeBin, true);
+        $wordLit = var_export($word, true);
+
+        self::assertGreaterThan(0, file_put_contents($driver, str_replace(
+            ['AUTOLOADLIT', 'UNIXLIT', 'BINLIT', 'WORDLIT'],
+            [$autoload, $unixPath, $binLit, $wordLit],
+            <<<'PHP'
+            <?php
+            declare(strict_types=1);
+            require AUTOLOADLIT;
+
+            use SugarCraft\Code\Tools\Sandbox\EgressBridge;
+
+            putenv('PATH=' . BINLIT . ':' . (string) getenv('PATH'));
+
+            $loop = new React\EventLoop\StreamSelectLoop();
+            // No argv, no program of its own: run() resolves the bare word,
+            // forks, and the child execs exactly the planted script.
+            fwrite(STDOUT, 'rc=' . EgressBridge::run(UNIXLIT, WORDLIT, [], 0, $loop));
+            PHP,
+        )));
+
+        $process = proc_open(
+            [PHP_BINARY, '-d', 'error_log=/dev/null', $driver],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($process, 'the resolve probe must at least start — a php that cannot run is a broken box, not a test result');
+        $out = (string) stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $status = proc_close($process);
+
+        return [$out, $status];
     }
 
     /**
