@@ -38,3 +38,9 @@ suite-figure/README staleness pair — welder never edits lane-forbidden files);
 
 ## Step 5 — record commit + Step 6 — prune
 - (appended post-commit below)
+
+## FINAL RECORD (appended post-commit, same law as weld 8ed1c78fe for C-TUI-6.i)
+- Pick landings: be7c88bd0→0f0dc556e · 1c8166eab→74c521793 · 8aeae6900→7c240a92f (master 8ed1c78fe → 7c240a92f).
+- Record commit: 2e38ab7d0 "weld: C-MCP-5.a" — 7 paths (plan_comparison.md, lanes/C-MCP-5.a/{REPORT,REVIEW-1,REVIEW-2,FIX-1,WELD}.md, lanes/run-state.json); AE=CE=detain@interserver.net, Co-Authored 0; mark proven from landed blob at :3607; §3 untouched.
+- git cherry master cc/C-MCP-5.a: 3× '-', 0× '+' (patch-id absorption; zero conflict resolutions existed). Worktree ../cc-cmp-C-MCP-5.a removed, branch cc/C-MCP-5.a deleted (was 8aeae6900). Five sibling lanes/worktrees COMPLETELY UNTOUCHED.
+- No push attempted, no fetch/pull, no caliber, no regen commit (all four generators --check clean), no web chain (zero protocol touches; dist server.shutdown count 3 reported as unchanged read-only fact).
