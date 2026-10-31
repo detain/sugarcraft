@@ -1003,6 +1003,12 @@ final class ReadPathCensusTest extends TestCase
                 . 'PrivateRetainedDir::verified() keeps 0700 and ours; lstat refuses a link and '
                 . 'the bytes only reach openssl_pkey_get_private, which never executes them',
         ],
+        'Server/Push/PushSubscriptionStore.php|file_get_contents' => [
+            'SELF_LOCATED — push.json, the Web Push subscription rows this store itself wrote '
+                . '0600 into the `serve` state dir PrivateRetainedDir::verified() created 0700 and '
+                . 'checked is ours; lstat refuses a link, it is decoded as JSON at depth 8, and '
+                . 'every row is re-validated against PushSubscription::new before it can be dialed',
+        ],
         'Server/ServerConfig.php|file_get_contents' => [
             'CALLER_SUPPLIED — withTls() (C-WEB-5.a) reads the certificate the operator named '
                 . 'with serve --tls-cert: is_file()/is_readable() gate first, and the bytes are '
