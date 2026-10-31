@@ -13,6 +13,7 @@ use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Config\Settings\SettingsSchema;
+use SugarCraft\Code\Config\Settings\UiSettings;
 use SugarCraft\Code\Goal\GoalMode;
 use SugarCraft\Code\Goal\GoalState;
 use SugarCraft\Code\App\GoalJudgedMsg;
@@ -25,6 +26,7 @@ use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\Tui\TerminalNotifier;
 
@@ -32,26 +34,55 @@ use SugarCraft\Code\Tui\TerminalNotifier;
  * Roadmap 5.14a: the `notify` setting rings the terminal — BEL, or an OSC 9
  * desktop notification — when a turn ends and when the agent stops to wait
  * for an approval. Off by default, and never from `view()`: the bytes leave as
- * a sugar-core `Cmd::raw()`.
+ * a sugar-core `Cmd::raw()`. C-TUI-6.j adds one door: with `screenReader` on,
+ * `off` is upgraded to `bell` inside `TerminalNotifier::fromConfig()`, so the
+ * same turn-end / goal-end / approval paths ring without any caller change.
  *
  * @see TerminalNotifier
  */
 final class TurnEndNotificationTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private string|false $suggestions = false;
+
+    private string $srHome = '';
 
     protected function setUp(): void
     {
+        parent::setUp();
+
         // One Cmd per settle, so the test can read it.
         $this->suggestions = getenv('CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS');
         putenv('CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS=1');
+
+        // C-TUI-6.j: the notifier's screen-reader door reads UiSettings,
+        // which resolves through HOME. Sandbox it so the switch is the
+        // file's own to set, and never the developer machine's.
+        $this->srHome = sys_get_temp_dir() . '/crush-notify-' . bin2hex(random_bytes(6));
+        mkdir($this->srHome . '/.candy-code', 0o700, true);
+        $this->useHomeSandbox($this->srHome);
+        UiSettings::forget();
     }
 
     protected function tearDown(): void
     {
+        UiSettings::forget();
+        $this->restoreHomeSandbox();
+        self::removeTree($this->srHome);
+
         $this->suggestions === false
             ? putenv('CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS')
             : putenv('CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS=' . $this->suggestions);
+
+        parent::tearDown();
+    }
+
+    /** @param array<string, mixed> $values */
+    private function srConfig(array $values): void
+    {
+        file_put_contents($this->srHome . '/.candy-code/config.json', json_encode($values, JSON_THROW_ON_ERROR));
+        UiSettings::forget();
     }
 
     public function testATurnEndRingsTheBell(): void
@@ -76,6 +107,32 @@ final class TurnEndNotificationTest extends TestCase
             self::assertSame([], self::rawBytes($cmd), var_export($mode, true) . ' must not notify');
         }
         self::assertSame(TerminalNotifier::OFF, SettingsSchema::byKey('notify')?->default);
+    }
+
+    public function testScreenReaderModeUpgradesOffToBell(): void
+    {
+        // C-TUI-6.j: with `screenReader` on, an unconfigured or explicit-off
+        // notify still rings — the listener needs the audio cue.
+        $this->srConfig(['screenReader' => true]);
+
+        foreach ([null, 'off'] as $mode) {
+            [, $cmd] = $this->chat($mode)->update(new AssistantMsg(Message::assistant('Done.')));
+
+            self::assertSame(["\x07"], self::rawBytes($cmd), var_export($mode, true) . ' must ring under screenReader');
+        }
+    }
+
+    public function testScreenReaderModeLeavesAUserSetModeAlone(): void
+    {
+        // The upgrade is `off`-to-`bell` only; a chosen osc9 (or bell) is the
+        // user's, richer than a bare BEL, and must survive the mode untouched.
+        $this->srConfig(['screenReader' => true]);
+
+        [, $cmd] = $this->chat('osc9')->update(new AssistantMsg(Message::assistant('Done.')));
+        self::assertSame(["\x1b]9;candy-code: turn finished\x07"], self::rawBytes($cmd));
+
+        [, $cmd] = $this->chat('bell')->update(new AssistantMsg(Message::assistant('Done.')));
+        self::assertSame(["\x07"], self::rawBytes($cmd));
     }
 
     public function testATurnAQueuedPromptCarriesOnDoesNotNotify(): void
@@ -191,5 +248,20 @@ final class TurnEndNotificationTest extends TestCase
         }
 
         return $msg instanceof RawMsg ? [$msg->bytes] : [];
+    }
+
+    private static function removeTree(string $dir): void
+    {
+        if (!is_dir($dir) || is_link($dir)) {
+            @unlink($dir);
+
+            return;
+        }
+        foreach (scandir($dir) ?: [] as $entry) {
+            if ($entry !== '.' && $entry !== '..') {
+                self::removeTree($dir . '/' . $entry);
+            }
+        }
+        @rmdir($dir);
     }
 }
