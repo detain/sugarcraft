@@ -14,6 +14,8 @@ use SugarCraft\Code\Host\Commands\UsageHostCommand;
 use SugarCraft\Code\Host\SpendLedger;
 use SugarCraft\Code\LSP\LspInstaller;
 use SugarCraft\Code\LSP\LspReleases;
+use SugarCraft\Code\MCP\Serve\McpServeHost;
+use SugarCraft\Code\MCP\Serve\McpServeRoster;
 use SugarCraft\Code\Providers\ProviderFactory;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Bundles\Bundle;
@@ -3195,6 +3197,9 @@ final class Subcommands
         if ($verb === 'trust') {
             return self::mcpTrust($args);
         }
+        if ($verb === 'serve') {
+            return self::mcpServe($args);
+        }
         if ($verb !== 'list') {
             return NonInteractive::failUsage(
                 $verb === null
@@ -3341,6 +3346,36 @@ final class Subcommands
         foreach ($skipped as $entry) {
             \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.mcp.list.skipped', ['entry' => $entry]) . "\n");
         }
+    }
+
+    /**
+     * `candy-code mcp serve` — the C-MCP-5.b wiring for the stdio MCP host
+     * C-MCP-5.a built ({@see McpServeHost}).
+     *
+     * The root is the launch's own: ArgvParser has already refused a `--root`
+     * that does not exist, and the unset case is the working directory — the
+     * same resolution the `-p` path uses for its own root-bearing calls. The
+     * gate is the headless-surface gate: `Bootstrap::permissionGate()` with
+     * its defaults, the approval floor a spawned editor client will never be
+     * asked past in a terminal it does not own, and the hook chain is built
+     * AROUND it exactly as the host prescribes — {@see Bootstrap::hooks()}
+     * installs the gate last, so audit, confirm-rm and protect-files still
+     * run ahead of it. The roster is {@see McpServeRoster::build()}'s own
+     * output — the read-only four, classified, never a hand-list widened at
+     * this call site (r1 NIT-2). The host answers until stdin closes and
+     * returns 0 itself; nothing here duplicates its framing or touches
+     * `--output-format`, which governs candy-code's own documents, not the
+     * MCP wire.
+     */
+    private static function mcpServe(ParsedArgs $args): int
+    {
+        $root = $args->root ?? (getcwd() ?: '');
+
+        return McpServeHost::run(
+            McpServeRoster::build($root),
+            Bootstrap::hooks(Bootstrap::permissionGate(), $root),
+            $root,
+        );
     }
 
     /**
@@ -4413,7 +4448,7 @@ final class Subcommands
         'session' => ['list', 'show', 'import', 'rename', 'delete', 'pin', 'unpin', 'archive', 'unarchive'],
         'bundles' => ['list', 'install', 'marketplace', 'update', 'search', 'recommend'],
         'lsp' => ['install', 'list'],
-        'mcp' => ['list', 'auth', 'import', 'trust'],
+        'mcp' => ['list', 'auth', 'import', 'trust', 'serve'],
         'import' => ['claude'],
         'serve' => Serve::ACTIONS,
         'completion' => self::SHELLS,

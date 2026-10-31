@@ -298,8 +298,8 @@ Usage:
                                    its own (created if it does not exist)
 
 Subcommands (none of them opens the TUI or needs a provider, an API key or a
-terminal; each answers and exits except serve, which runs until stopped — and
-attach, which is the exception to both: it runs the TUI on a running server's
+terminal; each answers and exits except serve and mcp serve, which run until
+stopped — and attach, which is the exception to both: it runs the TUI on a running server's
 session; acp runs turns for an editor, until the editor disconnects):
   bundles list           List the plugin bundles this directory sees: name,
                          version, tier, and the surfaces each carries —
@@ -370,6 +370,16 @@ session; acp runs turns for an editor, until the editor disconnects):
                          (a name collision refuses the whole write, and the
                          project tier is never written). The renames the
                          translation made are listed on stderr.
+  mcp serve [--root PATH]
+                         Serve candy-code itself as an MCP server over stdio:
+                         one JSON-RPC frame per line in, one answer per line
+                         out, until stdin closes. Tool calls run the read-only
+                         roster (Read, Glob, Grep, Ls, RepoMap), jailed to the
+                         workspace root, through the launch's PermissionGate
+                         and the PreToolUse hook chain — this is the MCP
+                         server a client can spawn; the WebSocket
+                         `candy-code serve` still speaks no MCP. Runs until
+                         stopped.
   lsp install <language> Install the pinned language server for one
                          language: the npm package or the checksum-verified
                          release binary, into the private install root under
@@ -974,7 +984,7 @@ TXT,
     'cli.mcp.trust.unexpected_operand' => 'candy-code mcp trust: unexpected operand {operand}',
     'cli.mcp.trust.usage' => 'Usage: candy-code mcp trust (run it in the project, or pass the project directory first)',
     'cli.mcp.unknown_action' => 'mcp {action}: unknown action',
-    'cli.mcp.usage' => 'Usage: candy-code mcp list | candy-code mcp trust | candy-code mcp auth login <server> | candy-code mcp import claude|opencode|claude-project <path> [--write user]',
+    'cli.mcp.usage' => 'Usage: candy-code mcp list | candy-code mcp trust | candy-code mcp auth login <server> | candy-code mcp import claude|opencode|claude-project <path> [--write user] | candy-code mcp serve [--root PATH]',
     'cli.models.none_configured' => 'No providers are configured.',
     'cli.models.none_selected' => 'No provider is selected; set CANDY_CODE_PROVIDER or use Ctrl+P `Switch model`.',
     'cli.models.selected_legend' => '* = selected (CANDY_CODE_PROVIDER or {path}).',

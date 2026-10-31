@@ -4115,12 +4115,12 @@ final class DocFigureProseDriftTest extends TestCase
         // trust`): session held two second words, mcp three, completion one
         // line of three shells — eight leaf rows. P-A3 grew session to five
         // rows (list, show, rename, delete, and one pin|unpin|archive|unarchive
-        // line) — eleven.
-        self::assertSame(11, preg_match_all('/^  (doctor|models|session|mcp|completion)\b/m', $block), 'the block no longer carries the eleven leaf rows the code dispatches (session and mcp hold their own second words)');
-        foreach (['doctor', 'models', 'session list', 'session delete', 'mcp list', 'lsp install', 'lsp list', 'serve', 'completion bash|zsh|fish'] as $row) {
+        // line) — eleven. C-MCP-5.b grew mcp to four (`mcp serve`) — twelve.
+        self::assertSame(12, preg_match_all('/^  (doctor|models|session|mcp|completion)\b/m', $block), 'the block no longer carries the twelve leaf rows the code dispatches (session and mcp hold their own second words)');
+        foreach (['doctor', 'models', 'session list', 'session delete', 'mcp list', 'mcp serve', 'lsp install', 'lsp list', 'serve', 'completion bash|zsh|fish'] as $row) {
             self::assertStringContainsString('  ' . $row, $block, "the help block lost the `{$row}` row the page's list quotes");
         }
-        self::assertStringContainsString('none of them opens the TUI or needs a provider, an API key or a terminal; each answers and exits except serve, which runs until stopped', self::markdownProse($block), 'the help heading lost the promise the page repeats ("none of those six needs a provider, an API key or a terminal; five answer and exit")');
+        self::assertStringContainsString('none of them opens the TUI or needs a provider, an API key or a terminal; each answers and exits except serve and mcp serve, which run until stopped', self::markdownProse($block), 'the help heading lost the promise the page repeats ("none of those six needs a provider, an API key or a terminal; five answer and exit")');
 
         // O-3a: `serve` arrived, and it is the web UI's WebSocket server, not an
         // MCP one — the page says which, rather than the old "there is none".
@@ -4253,7 +4253,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertStringContainsString("if (\$action !== 'login') {", $subcommands, 'the verb gate stopped demanding login — an unknown action could reach the flow');
 
         $roster = (new \ReflectionClass(\SugarCraft\Code\Cli\Subcommands::class))->getConstant('SUBCOMMAND_ACTIONS');
-        self::assertSame(['list', 'auth', 'import', 'trust'], $roster['mcp'], 'the completion roster for mcp drifted from the verbs the gate implements');
+        self::assertSame(['list', 'auth', 'import', 'trust', 'serve'], $roster['mcp'], 'the completion roster for mcp drifted from the verbs the gate implements');
 
         $authSource = self::sourceOf('Commands/McpAuthCommand.php');
         self::assertStringContainsString("'login' => \$this->printLoginGuidance(),", $authSource, 'the chat arm no longer routes login to guidance');
