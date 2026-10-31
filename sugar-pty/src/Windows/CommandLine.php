@@ -25,6 +25,19 @@ use SugarCraft\Pty\PtyException;
  *    quote is escaped. `a\` + `"` is written `a\\\"`, and dropping the doubling
  *    turns the caller's data into a quote-delimiter change, i.e. a new token.
  *
+ * ## Why cmd.exe metacharacters are NOT quoted
+ *
+ * `&`, `|`, `^` and `%` are shell syntax for cmd.exe — and nothing produced by
+ * this class is ever given to cmd.exe. `CreateProcessW` does not start a shell;
+ * it hands `lpCommandLine` to the target program's own CRT parser, which
+ * assigns those characters no meaning at all. Quoting them would be the bug: a
+ * program receiving `"a&b"` from its argv would see literal quote characters
+ * the sender never intended. The inertness is CONDITIONAL on the no-shell
+ * premise — a later step that spawns `cmd.exe /c <line>` (a shell-command
+ * backend) must escape or reject these characters at that boundary and re-arm
+ * this section, because cmd.exe reparses the line after tokenisation and an
+ * unquoted `&` there splits one command into two.
+ *
  * ## Why an empty argument is `""` and not nothing
  *
  * Joining `['php', '', '-l']` with spaces yields `php  -l`, and the parser

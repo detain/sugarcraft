@@ -47,17 +47,21 @@ use SugarCraft\Pty\Windows\Kernel32ConPty;
 final class Kernel32ConPtyTest extends TestCase
 {
     /**
-     * Struct sizes on x64 Windows, derived field by field rather than measured.
+     * Struct sizes on x64 Windows, transcribed from the API pages rather than
+     * derived from the cdef under test.
      *
-     * The arithmetic is written out because an assertion copied from a measurement
-     * of the code under test proves only that the code is itself. Each entry is
-     * `sizeof` on Windows x64 (LLP64: `int` 4, pointer 8, `long long` 8, natural
-     * alignment):
+     * Round 0 of this file certified a 16-byte-early STARTUPINFOW green because
+     * these numbers were written from an arithmetic reading of the binding's own
+     * field list: drop `lpReserved` and `lpDesktop` and the derivation follows
+     * the drop. The table below is instead written from the MSDN pages
+     * (field order cited in {@see self::MSDN_LAYOUT}) under the LLP64 model
+     * (`DWORD` 4, `WORD` 2, pointer 8, natural alignment):
      *
      *  - COORD 4        = short + short
-     *  - STARTUPINFOW 88= cb 4, pad 4, lpTitle 8 | eight DWORDs 32 | two WORDs 4,
-     *    pad 4, lpReserved2 8, three HANDLEs 24  =>  8+8+32+8+8+24 = 88
-     *  - STARTUPINFOEXW 96 = STARTUPINFOW 88 + pad-to-8 0 + pointer 8
+     *  - STARTUPINFOW 104 = cb 4, pad 4, three pointers 24 | eight DWORDs 32
+     *    | two WORDs 4, pad 4, lpReserved2 8, three HANDLEs 24
+     *    =>  4+4+24+32+4+4+8+24 = 104
+     *  - STARTUPINFOEXW 112 = STARTUPINFOW 104 + pointer 8 (already 8-aligned)
      *  - PROCESS_INFORMATION 24 = two HANDLEs 16 + two DWORDs 8
      *  - JOBOBJECT_EXTENDED_LIMIT_INFORMATION 144
      *      = BasicLimitInformation 64 (LONGLONG 8 + LONGLONG 8 + DWORD 4 + pad 4
@@ -73,12 +77,57 @@ final class Kernel32ConPtyTest extends TestCase
      */
     private const EXPECTED_SIZES = [
         'COORD' => 4,
-        'STARTUPINFOW' => 88,
-        'STARTUPINFOEXW' => 96,
+        'STARTUPINFOW' => 104,
+        'STARTUPINFOEXW' => 112,
         'PROCESS_INFORMATION' => 24,
         'JOBOBJECT_BASIC_LIMIT_INFORMATION' => 64,
         'IO_COUNTERS' => 48,
         'JOBOBJECT_EXTENDED_LIMIT_INFORMATION' => 144,
+    ];
+
+    /**
+     * Field offsets on x64 Windows, transcribed by hand from the API pages:
+     *
+     *  - https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/ns-processthreadsapi-startupinfow
+     *  - https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/ns-processthreadsapi-process_information
+     *
+     * SIZES ALONE DO NOT PIN A LAYOUT: swapping two same-width fields keeps
+     * every `sizeof` intact and puts the wrong value into the call anyway. The
+     * probe test stamps each named field with a distinct marker and finds where
+     * the marker actually landed, against THIS table — which cannot be computed
+     * from the cdef, because that is precisely how the round-0 defect, one
+     * pointer where Microsoft declares three and every field from dwX onward
+     * 16 bytes early, was certified green.
+     *
+     * @var array<string, array<string, int>>
+     */
+    private const MSDN_LAYOUT = [
+        'STARTUPINFOW' => [
+            'cb' => 0,
+            'lpReserved' => 8,
+            'lpDesktop' => 16,
+            'lpTitle' => 24,
+            'dwX' => 32,
+            'dwY' => 36,
+            'dwXSize' => 40,
+            'dwYSize' => 44,
+            'dwXCountChars' => 48,
+            'dwYCountChars' => 52,
+            'dwFillAttribute' => 56,
+            'dwFlags' => 60,
+            'wShowWindow' => 64,
+            'cbReserved2' => 66,
+            'lpReserved2' => 72,
+            'hStdInput' => 80,
+            'hStdOutput' => 88,
+            'hStdError' => 96,
+        ],
+        'PROCESS_INFORMATION' => [
+            'hProcess' => 0,
+            'hThread' => 8,
+            'dwProcessId' => 16,
+            'dwThreadId' => 20,
+        ],
     ];
 
     /**
@@ -359,6 +408,278 @@ final class Kernel32ConPtyTest extends TestCase
         self::assertTrue($api->everythingIsClosed(), \implode("\n", $api->transcript));
     }
 
+    // ─── Layout probes (runnable on Linux — the cdef is parsed, not called) ──
+
+    public function testEveryDeclaredFieldLandsWhereWindowsDeclaresIt(): void
+    {
+        // The cdef is parsed identically on this host, so the offsets FFI
+        // assigns to its fields are checkable here against the hand-written
+        // MSDN table — a dropped pointer moves everything after it, a swapped
+        // pair keeps every sizeof intact and still hands the real call the
+        // wrong member. This is the pin that the round-0 self-derived size
+        // table could not be.
+        $ffi = \FFI::cdef(Kernel32ConPty::typesCdef(), null);
+
+        foreach (self::MSDN_LAYOUT as $struct => $fields) {
+            $found = self::stampFieldOffsets($ffi, $struct, \array_keys($fields));
+
+            foreach ($fields as $name => $offset) {
+                self::assertSame(
+                    $offset,
+                    $found[$name],
+                    \sprintf(
+                        '%s.%s is not at offset %d — the cdef does not match the '
+                        . 'Windows declaration (round 0 shipped STARTUPINFOW with one '
+                        . 'pointer after cb where MSDN declares three, putting every '
+                        . 'field from dwX on 16 bytes early)',
+                        $struct,
+                        $name,
+                        $offset,
+                    ),
+                );
+            }
+        }
+    }
+
+    public function testTheExtendedStructPlacesItsAttributeListAfterTheWholeStartupInfo(): void
+    {
+        $ffi = \FFI::cdef(Kernel32ConPty::typesCdef(), null);
+        $ex = $ffi->new('STARTUPINFOEXW');
+        \FFI::memset($ex, 0, \FFI::sizeof($ex));
+
+        // The inner block occupies exactly the STARTUPINFOW span...
+        self::assertSame(104, \FFI::sizeof($ex->StartupInfo));
+
+        // ...and lpAttributeList starts on the very next byte.
+        $ex->lpAttributeList = $ffi->cast('void' . '*', 0x101);
+        $at = self::scanFor($ffi, $ex, 0x101);
+
+        self::assertSame(104, $at, 'lpAttributeList is not at offset 104');
+        self::assertSame(112, \FFI::sizeof($ex), 'STARTUPINFOEXW is not 112 bytes');
+    }
+
+    public function testCreateProcessSetsCbToTheOuterExtendedStructSize(): void
+    {
+        // EXTENDED_STARTUPINFO_PRESENT makes CreateProcessW validate cb against
+        // sizeof(STARTUPINFOEXW), not the inner STARTUPINFOW. The pin is the
+        // source shape — sizeof($startup) where $startup is the EX instance —
+        // because the size itself is already pinned above; a re-spelling back
+        // to sizeof($startup->StartupInfo) is exactly the 8-byte-under defect.
+        $source = (string) \file_get_contents(\dirname(__DIR__, 2) . '/src/Windows/Kernel32ConPty.php');
+        $body = self::methodBody($source, 'createProcess');
+
+        self::assertMatchesRegularExpression(
+            '/StartupInfo->\s*cb\s*=\s*\\\\FFI::sizeof\(\s*\$startup\s*\)/',
+            $body,
+            'cb is not being set to the size of the outer STARTUPINFOEXW',
+        );
+        self::assertStringNotContainsString('sizeof($startup->StartupInfo)', $body);
+    }
+
+    public function testHandleSlotsAreDeclaredPointerSizedIntegersAndReadAsSuch(): void
+    {
+        // MAJOR-2's structural half. The old shape — `(int)` on a `void *`
+        // member — answers a garbage value AND emits "Object of class FFI\CData
+        // could not be converted to int", which meets this lib's
+        // failOnWarning and reddens the Windows CI leg. The literal
+        // sugar-core idiom `(int) \FFI::cast('intptr_t', $h)->cdata` is NOT
+        // transferable here: measured on this host it SEGFAULTS when the
+        // source is a pointer-typed member (rc=139 — the cast lands the
+        // result storage at the handle's VALUE and ->cdata dereferences it;
+        // sugar-core's idiom is only safe because its sources are scalar-typed).
+        // A HANDLE is a pointer-SIZED OPAQUE VALUE, so the binding declares
+        // every handle slot — in the structs as in the function signatures —
+        // as intptr_t, and the reads are plain integer reads. Same bytes on
+        // LLP64, no dereference on a kernel value (which would be an access
+        // violation on real Windows too, not just under FFI).
+        $types = Kernel32ConPty::typesCdef();
+
+        foreach (['hProcess', 'hThread', 'hStdInput', 'hStdOutput', 'hStdError'] as $member) {
+            self::assertMatchesRegularExpression(
+                '/intptr_t\s+' . $member . ';/',
+                $types,
+                $member . ' is not declared as an intptr_t handle slot',
+            );
+        }
+
+        $body = self::methodBody(
+            (string) \file_get_contents(\dirname(__DIR__, 2) . '/src/Windows/Kernel32ConPty.php'),
+            'createProcess',
+        );
+
+        foreach (['hProcess', 'hThread'] as $member) {
+            self::assertStringContainsString(
+                '(int) $info->' . $member,
+                $body,
+                $member . ' is not read as the integer-typed slot it is declared',
+            );
+        }
+
+        // No pointer-to-integer cast machinery may reappear on a struct
+        // member: it is the measured segfault shape.
+        self::assertStringNotContainsString("\\FFI::cast('intptr_t', \$info->", $body);
+        self::assertStringNotContainsString('\FFI::cast("intptr_t", $info->', $body);
+    }
+
+    public function testAHandleSlotRoundTripsAnOpaqueValueWithoutAConversionDiagnostic(): void
+    {
+        // MAJOR-2's behavioural half, Linux-provable because the conversion is
+        // an FFI-semantic property, not a kernel32 call: an integer written
+        // into a handle slot must come back out as the SAME integer, silently,
+        // through the exact `(int)` read form createProcess() uses. Under the
+        // old `void *` declaration this fails where it matters: the integer
+        // store is refused outright (FFI\Exception on assignment), and were a
+        // driver to keep `cast('void*', ...)` stores anyway, the `(int)` read
+        // captures the conversion diagnostic.
+        $ffi = \FFI::cdef(Kernel32ConPty::typesCdef(), null);
+        $info = $ffi->new('PROCESS_INFORMATION');
+        \FFI::memset($info, 0, \FFI::sizeof($info));
+
+        try {
+            $info->hProcess = 0x1234;
+            $info->hThread = 0x1235;
+        } catch (\FFI\Exception $e) {
+            self::fail(
+                'a handle slot refused an integer store — it is not declared '
+                . 'pointer-sized-integral, so `(int)` reads on it cannot be '
+                . 'silent: ' . $e->getMessage(),
+            );
+        }
+
+        $notices = [];
+        $process = self::readingWithCapturedDiagnostics(
+            $notices,
+            static fn (): int => (int) $info->hProcess,
+        );
+        $thread = self::readingWithCapturedDiagnostics(
+            $notices,
+            static fn (): int => (int) $info->hThread,
+        );
+
+        self::assertSame(0x1234, $process);
+        self::assertSame(0x1235, $thread);
+        self::assertSame([], $notices, 'reading a handle as an integer must not warn');
+    }
+
+    /**
+     * Stamp every named field of a fresh struct instance with a distinct low
+     * marker and report where each marker actually landed, by bytes.
+     *
+     * PHP's FFI has no offset-of primitive, so this walks the raw storage:
+     * markers are `0x100 + k*0x100` (distinct little-endian two-byte leading
+     * signatures, trailing zeros, no real addresses involved) and the first
+     * occurrence of each signature is the field's offset.
+     *
+     * @param list<string> $fields
+     * @return array<string, int>
+     */
+    private static function stampFieldOffsets(\FFI $ffi, string $struct, array $fields): array
+    {
+        try {
+            $instance = $ffi->new($struct);
+        } catch (\FFI\Exception $e) {
+            self::fail('the cdef does not declare ' . $struct . ': ' . $e->getMessage());
+        }
+
+        \FFI::memset($instance, 0, \FFI::sizeof($instance));
+        $markers = [];
+
+        foreach ($fields as $k => $name) {
+            $marker = 0x100 + ($k + 1) * 0x100;
+
+            try {
+                // Only the lp* members are `void *` and need the int-argument
+                // cast (casting a scalar CData to void* segfaults on this host;
+                // an int argument is the measured-safe shape). The h* members
+                // are HANDLEs and HANDLEs are pointer-SIZED OPAQUE VALUES — this
+                // binding declares them intptr_t, so they take the integer
+                // directly, exactly like every handle in the function
+                // declarations. If a revert re-spells one as `void *`, the
+                // plain store below throws FFI\Exception and the catch names
+                // the field: the layout probe doubles as the MAJOR-2 sentinel.
+                if (\preg_match('/^lp[A-Z]/', $name) === 1) {
+                    $instance->{$name} = $ffi->cast('void' . '*', $marker);
+                } else {
+                    $instance->{$name} = $marker;
+                }
+            } catch (\FFI\Exception $e) {
+                self::fail(
+                    \sprintf(
+                        '%s has no field %s — the binding dropped a member the '
+                        . 'Windows declaration names (%s)',
+                        $struct,
+                        $name,
+                        $e->getMessage(),
+                    ),
+                );
+            }
+
+            $markers[$name] = $marker;
+        }
+
+        $offsets = [];
+
+        foreach ($markers as $name => $marker) {
+            $offsets[$name] = self::scanFor($ffi, $instance, $marker);
+        }
+
+        return $offsets;
+    }
+
+    /**
+     * First byte index at which the little-endian head of $marker appears.
+     */
+    private static function scanFor(\FFI $ffi, \FFI\CData $instance, int $marker): int
+    {
+        $bytes = $ffi->cast('unsigned char*', \FFI::addr($instance));
+        $total = \FFI::sizeof($instance);
+        $low = $marker & 0xFF;
+        $high = ($marker >> 8) & 0xFF;
+
+        for ($i = 0; $i + 1 < $total; $i++) {
+            if ($bytes[$i] === $low && $bytes[$i + 1] === $high) {
+                return $i;
+            }
+        }
+
+        self::fail(\sprintf('marker 0x%04x never landed in the struct', $marker));
+    }
+
+    /**
+     * Run an int-returning read under an error handler that records every
+     * non-deprecation diagnostic and returns false so PHPUnit still sees them.
+     *
+     * @param list<string> $notices filled by reference with what fired
+     */
+    private static function readingWithCapturedDiagnostics(array &$notices, callable $read): int
+    {
+        $notices = [];
+        // E_DEPRECATED is filtered because static FFI calls are deprecated on
+        // 8.3 and a future call site may legitimately use one (and because
+        // failOnWarning does not police deprecations anyway); every other
+        // diagnostic, conversion warnings above all, is recorded.
+        \set_error_handler(
+            /**
+             * @param string $message
+             * @param string $filename
+             * @param int<0, max> $line
+             */
+            static function (int $severity, $message, $filename = 0, $line = 0) use (&$notices): bool {
+                if ($severity !== \E_DEPRECATED) {
+                    $notices[] = $message;
+                }
+
+                return $severity === \E_DEPRECATED;
+            },
+        );
+
+        try {
+            return $read();
+        } finally {
+            \restore_error_handler();
+        }
+    }
+
     // ─── Windows-gated ──────────────────────────────────────────────────────
 
     public function testTheWholeCdefResolvesAgainstKernel32(): void
@@ -407,8 +728,8 @@ final class Kernel32ConPtyTest extends TestCase
         // And the sizes the Linux-side derivation predicts, confirmed where they are
         // load-bearing.
         $ffi = $api->ffi();
-        self::assertSame(88, \FFI::sizeof($ffi->new('STARTUPINFOW')));
-        self::assertSame(96, \FFI::sizeof($ffi->new('STARTUPINFOEXW')));
+        self::assertSame(104, \FFI::sizeof($ffi->new('STARTUPINFOW')));
+        self::assertSame(112, \FFI::sizeof($ffi->new('STARTUPINFOEXW')));
         self::assertSame(24, \FFI::sizeof($ffi->new('PROCESS_INFORMATION')));
         self::assertSame(144, \FFI::sizeof($ffi->new('JOBOBJECT_EXTENDED_LIMIT_INFORMATION')));
     }

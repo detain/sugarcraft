@@ -116,6 +116,15 @@ final class CommandLineTest extends TestCase
             // doubling everything is the other classic port bug.
             'space then backslashes' => ['a \\b', '"a \\b"'],
             'embedded quote at end' => ['say "hi"', '"say \\"hi\\""'],
+            // cmd.exe metacharacters pass through UNQUOTED, by design: the CRT
+            // parser that CreateProcessW feeds gives them no meaning outside a
+            // quoted run, and quoting anything that does not need it would put
+            // literal quotes into programs that parse their own argv. This row
+            // pins the inertness both directions — escape() leaves them, and
+            // toArgv() reads them back as one token. The caveat that makes
+            // "inert" true lives in the class docblock: it holds only because
+            // nothing here runs the line through cmd.exe.
+            'shell metacharacters are inert data' => ['a|b^c&d%e', 'a|b^c&d%e'],
         ];
     }
 
