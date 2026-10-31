@@ -152,6 +152,14 @@ final class ScreenReaderRenderTest extends TestCase
         self::assertStringNotContainsString('zebra-questions', $frame, 'the full history row is absent too');
         self::assertStringContainsString("\u{1f50d}", $frame, 'the palette query line is the frame');
         self::assertMatchesRegularExpression('/\d+\/\d+/', $this->stripAnsi($frame), 'positioned palette rows prove the overlay painted');
+
+        // ...but the REPLACEMENT is of the clipped BODY band only. The status
+        // bar is chrome the frame pins outside that band — E48's "the row
+        // that survives" — and it answers "what state is the session in"
+        // independently of which modal owns the body. Deleting it (a plain
+        // `$frame = $overlay`) reddens this leg; the lead ruling on
+        // review-1 (c).
+        self::assertStringContainsString('Ctrl+P menu', $this->stripAnsi($frame), 'the overlay replaces the body, not the chrome — the status bar must survive beside it');
     }
 
     public function testTheSameOverlayCompositesOverTheBodyWithTheModeOff(): void

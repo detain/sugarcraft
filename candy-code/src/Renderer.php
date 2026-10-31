@@ -2004,8 +2004,13 @@ final class Renderer
             }
         }
 
+        // The bar is computed ONCE: the assembled body frame below and the
+        // screen-reader overlay path both splice it in verbatim. Hoisting the
+        // call changes nothing for the off mode — same call, same slot.
+        $statusBar = self::renderStatusBar($chat, $drawing);
+
         $frame = ($agentHeader === '' ? '' : $agentHeader . "\n")
-            . implode("\n", $contentLines) . "\n" . self::renderStatusBar($chat, $drawing);
+            . implode("\n", $contentLines) . "\n" . $statusBar;
 
         // ONE rule orders this chain: the overlay on screen must be the one
         // Chat::update() routes the next keystroke to, because an overlay the
@@ -2090,19 +2095,27 @@ final class Renderer
             $overlay = self::clipRowsToCols($overlay, $chat->cols());
             if (ScreenReaderMode::enabled()) {
                 // C-TUI-6.j: under screen-reader mode the overlay REPLACES
-                // the body instead of being Veil-composited over the
+                // the BODY instead of being Veil-composited over the
                 // transcript. Veil dims the backdrop with reverse-video and
                 // positions the box by cell arithmetic — a reader narrating
                 // line-by-line would get the transcript first, the modal
                 // somewhere below it, dimming as styling noise. Replacing
-                // makes the modal the whole frame: what the sighted user is
-                // forced to look at is what the reader reads aloud. Lift /
-                // backdrop / composite / restore are the Veil machinery and
-                // are skipped wholesale; the zone marking below stays because
-                // the overlay's own rows are now the frame's rows, verbatim,
-                // so the palette/picker registries still match their
-                // substrings and clicks keep landing.
-                $frame = $overlay;
+                // makes the modal the announcement surface: what the sighted
+                // user is forced to look at is what the reader reads aloud.
+                // Lift / backdrop / composite / restore are the Veil machinery
+                // and are skipped wholesale; the zone marking below stays
+                // because the overlay's own rows are now the body's rows,
+                // verbatim, so the palette/picker registries still match their
+                // substrings and clicks keep landing. The two rows the frame
+                // pins OUTSIDE the clipped body survive: the Agent View header
+                // (pinned above the clip, "the way back never scrolls off")
+                // and the status bar (E48 — the row that survives), because
+                // they answer "which run am I in" and "what state is the
+                // session in" independently of whatever modal owns the body.
+                // The session tab strip is part of the clipped body band and
+                // is replaced with it — the lead ruling on review-1 (c).
+                $frame = ($agentHeader === '' ? '' : $agentHeader . "\n")
+                    . $overlay . "\n" . $statusBar;
             } else {
                 // A fresh Veil per render call (rather than one persisted on
                 // Chat) means its own frame-diffing never kicks in - fine here,
