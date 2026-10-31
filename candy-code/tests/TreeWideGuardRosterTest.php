@@ -623,6 +623,18 @@ final class TreeWideGuardRosterTest extends TestCase
         // (fake homes, repos, registry dirs); scandir is that listing walk and
         // it never leaves the test's own sandbox.
         'Cli/LaunchFlagsTest.php' => ['scandir($dir)'],
+        // C-TUI-5.b (117c948bb), licensed by the t677 master guard-cure: tearDown()
+        // unlinks the config/key-store leftovers setUp() wrote into the
+        // sys_get_temp_dir() sc_login home the test mkdir'd, before its own
+        // rmdir — the glob is that listing walk and it never leaves the sandbox.
+        // Licensed as the guard's own message prescribes for this shape, and it is
+        // the same expression the HomebrewFormulaTest /
+        // ClaudeCodeMcpClientStdinWedgeTest rows above already carry. A chr(42)
+        // respell was NOT needed: measured at this commit, the corpus admits
+        // patterns by value ($admit keys $patterns[$value]) and 172 files under
+        // src/ + tests/ hold this same 'slash-star' literal, so respelling one site
+        // would have moved no figure while leaving the site unclassified.
+        'Cli/LoginSubcommandTest.php' => ['glob($this->dir.\'/*\')'],
         // w1e: tearDown() empties the sys_get_temp_dir() fake HOME the test mkdir'd
         // (0700, nih_be_exit_* prefix) before its own rmdir.
         'Cli/NonInteractiveBackendErrorExitTest.php' => ['RecursiveDirectoryIterator($this->tempHome,\FilesystemIterator::SKIP_DOTS)'],

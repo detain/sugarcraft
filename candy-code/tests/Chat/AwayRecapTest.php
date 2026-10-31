@@ -14,6 +14,7 @@ use SugarCraft\Core\Msg\FocusLostMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\App\SideQuestionAnsweredMsg;
 use SugarCraft\Code\Backend;
+use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\CommandRegistry;
@@ -431,7 +432,7 @@ final class AwayRecapTest extends TestCase
                 return Message::assistant($this->reply);
             }
 
-            public function completeAsync(array $history, ?callable $onToken = null, ?\SugarCraft\Code\Backend\CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
+            public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
             {
                 $this->asked[] = $history;
 
@@ -453,7 +454,7 @@ final class AwayRecapTest extends TestCase
                 throw new \LogicException('the recap rides the async seam only');
             }
 
-            public function completeAsync(array $history, ?callable $onToken = null, ?\SugarCraft\Code\Backend\CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
+            public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
             {
                 throw new \RuntimeException('title model exploded');
             }

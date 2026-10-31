@@ -2722,6 +2722,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         'WINDOW' => 'The absolute-threshold suite sizes a 1M-token window, the case roadmap 2.9 exists for; the compaction suites drive a small one. The identical trio lives on the duplication map.',
         'NOW' => 'Two unrelated fixed clocks: a Unix timestamp for the model-metadata cache age, a small float for the agent line\'s elapsed time.',
         'CAPTION' => 'The tool-result wire siblings each feed their own leg\'s caption text (an image caption against a PDF caption) as the tool_result payload; the values differ because the leg under test does, and the shared VERTEX_MODEL pair lives on the duplication map.',
+        'T0' => 'Two unrelated nominal clocks that share an abbreviation: the resume-cost suite pins 1_700_000_000 as an int because its value is fed to DateTimeImmutable("…") for transcript-age arithmetic, while the away-tracker suite pins 1_800_000_000.0 as a float because AwayTracker::focusLost()/focusGained() take float instants and its pins ride sub-second offsets. Neither file reads the other, and the int/float spelling is each suite\'s own time type rather than one copy fixed in one place, so consolidating would couple two clocks that re-roll independently (adjudicated 2026-10-31, master guard-cure t677, after the C-TUI-3.g weld landed the away-tracker file beside the older estimate suite).',
     ];
 
     /**
