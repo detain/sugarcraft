@@ -51,5 +51,11 @@ RESULT — picks landed (blob/byte-identical to lane commits):
 HEAD@{2} fce4c16b8 (pick-1 re-commit) · HEAD@{1} 89d6b5c21 (pick-2 re-commit) · HEAD@{0} c26cde056 (pick-2 amend folding the disclosed regen leg) = two picks + one disclosed fold, ZERO foreign movement (master sat at d1cd13055 at start; sole-welder law in force).
 
 ## Absorption proof + cleanup
-PENDING
+- `git cherry master cc/C-TOOL-6.e` = `- fcf16d15e` + `+ e9a76e057`; the `+` survives CONTENT-PROOF (added/removed-line multisets identical modulo the disclosed generator regen-leg; every other blob equal) — DoD-sanctioned, NOT a lane-skip condition.
+- cat-file -t commit ×4 (fce4c16b8, c26cde056, 005b8eb79, 778fcaa76 — citing shell); merge-base --is-ancestor both picks vs master = OK. master blob marks = 315 (python count); own heading first-110 read-back = `#### ✅ fce4c16b8,c26cde056 C-TOOL-6.e — User-tier script tools from ~/.candy-code/tools/*.json (2026-10-31 w`.
+- Weld commits path-lists: 005b8eb79 = plan_comparison.md + lanes/C-TOOL-6.e/{FIX-1,REPORT,REVIEW-1,REVIEW-2,WELD}.md (6); 778fcaa76 = lanes/run-state.json (1, disk md5 cc0d92320311c756b5c141d594908ad0 == blob md5). Law greps per commit: %ae=1 %ce=1 Co-Authored=0. §3 untouched (plan_comparison diff over whole weld = my single mark line only). Lead dirt preserved: 11 staged M + 3 unstaged M as found; NOTHING of it committed.
+- worktree /home/sites/cc-cmp-C-TOOL-6.e removed (porcelain 0 pre-removal), branch cc/C-TOOL-6.e deleted (was e9a76e057). Survivors EXACTLY cc/C-TOOL-6.g (worktree ccab7155c — untouched, read-only under its reviewer).
+- NO push/fetch/pull performed (lead pushes at wave close; W35 stays open pending 6.g). background=true honored throughout.
+- Close-record note (DO-NOT-RE-CHERRY-PICK stands): this WELD.md finalization rides as the ACCEPTED-but-DISCOURAGED third close-record of the evidence file only — zero code, zero plan, zero run-state content.
+
 
