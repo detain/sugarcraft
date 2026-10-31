@@ -860,6 +860,19 @@ final class Runtime
     public const USER_TOOL_PREFIX = \SugarCraft\Code\Tools\UserTools\UserScriptTool::NAME_PREFIX;
 
     /**
+     * C-TOOL-6.h: the wire-name prefix of the client-hosted tools an attached
+     * client registers for one session (`client__*` proxies over the turn
+     * channel), the same derived-constant shape as {@see MCP_TOOL_PREFIX}
+     * above — the class is the authority, and a re-spelling there goes red
+     * here. A `client__*` call runs wherever the client chooses to run it;
+     * no read-only hint could honestly claim what it does from this side,
+     * so the write class is why {@see isWriteCapableTool()} folds it in
+     * beside the MCP and user prefixes, and why the gate asks for it the way
+     * it asks for `user__*` — unseen by the classifier.
+     */
+    public const CLIENT_TOOL_PREFIX = \SugarCraft\Code\Host\ClientTools\ClientToolProxy::NAME_PREFIX;
+
+    /**
      * @param ?EnvironmentBlock $environmentBlock Pre-captured session snapshot; when omitted
      *                                            one is captured lazily on first use and
      *                                            reused for the life of this Runtime.
@@ -1435,15 +1448,17 @@ final class Runtime
 
     /**
      * One tool name against {@see WRITE_CAPABLE_TOOL_NAMES} and the
-     * {@see MCP_TOOL_PREFIX} and {@see USER_TOOL_PREFIX} rules — see those
-     * constants for the roster, for the drift test that pins it against
+     * {@see MCP_TOOL_PREFIX}, {@see USER_TOOL_PREFIX} and
+     * {@see CLIENT_TOOL_PREFIX} rules — see those constants for the roster,
+     * for the drift test that pins it against
      * `PermissionGate::isWriteTool()`, and for why `Bash` is on it.
      */
     private static function isWriteCapableTool(string $toolName): bool
     {
         return in_array($toolName, self::WRITE_CAPABLE_TOOL_NAMES, true)
             || str_starts_with($toolName, self::MCP_TOOL_PREFIX)
-            || str_starts_with($toolName, self::USER_TOOL_PREFIX);
+            || str_starts_with($toolName, self::USER_TOOL_PREFIX)
+            || str_starts_with($toolName, self::CLIENT_TOOL_PREFIX);
     }
 
     /**

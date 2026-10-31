@@ -3597,6 +3597,7 @@ DOC;
             'three reads' => [['Read', 'Grep', 'Read'], false, 'a whole read-only batch stays quiet'],
             'lowercase edit' => [['edit'], false, 'the roster is exact; tool names are not case-folded anywhere else either'],
             'a name merely containing mcp__' => [['not_mcp__real'], false, 'the MCP rule is a PREFIX, not a substring'],
+            'a name merely containing client__' => [['not_client__real'], false, 'the client rule is a PREFIX too, not a substring'],
 
             // Positive rows: every one must re-arm the diff.
             'Edit alone' => [['Edit'], true, 'the canonical write'],
@@ -3604,6 +3605,9 @@ DOC;
             'Bash alone' => [['Bash'], true, 'a shell can do anything - PermissionGate makes the same call'],
             'an MCP tool' => [['mcp__files__patch'], true, 'server-defined capability, treated conservatively as a write'],
             'the bare MCP prefix' => [['mcp__'], true, 'the prefix rule does not require a suffix, and neither does PermissionGate'],
+            // C-TOOL-6.h: the client-hosted prefix rides the same fold.
+            'a client-hosted tool' => [['client__browser_context'], true, 'the call runs in whatever the attached client does with it; nothing here can claim it read-only'],
+            'the bare client prefix' => [['client__'], true, 'same prefix law as mcp__: no suffix required'],
 
             // Mixed batches: ONE write anywhere in the batch is enough, and the
             // position of it must not matter. A classifier reading only the

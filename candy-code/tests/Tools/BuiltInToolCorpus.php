@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tests\Tools;
 
+use SugarCraft\Code\Host\ClientTools\ClientToolProxy;
+use SugarCraft\Code\Host\ClientTools\ClientToolSpec;
 use SugarCraft\Code\MCP\McpClient;
 use SugarCraft\Code\MCP\McpTool;
 use SugarCraft\Code\MCP\McpToolShape;
@@ -151,6 +153,13 @@ final class BuiltInToolCorpus
         // `Bootstrap::tools()`.
         UserScriptTool::class => \SugarCraft\Code\Tests\Tools\UserTools\UserToolLoaderTest::class
             . '::testTheLoadedToolsReachTheLaunchRoster',
+        // C-TOOL-6.h: the client-hosted proxies — built per registration by
+        // `ClientToolRegistry`, appended to the roster by
+        // `TurnRunner::backendForTurn()` on a serve-attached turn, never a
+        // literal in `Bootstrap::tools()` (an unforked local turn has no
+        // registry to read).
+        ClientToolProxy::class => \SugarCraft\Code\Tests\Host\ClientTools\ClientToolProxyTest::class
+            . '::testTheBoundCallerAnswersTheCallWithContentAndFlag',
     ];
 
     /**
@@ -1031,6 +1040,23 @@ final class BuiltInToolCorpus
                             ],
                             argv: ['printf', '%s', '{{msg}}'],
                             timeoutSeconds: UserToolSpec::DEFAULT_TIMEOUT_SECONDS,
+                        )),
+                        // C-TOOL-6.h: a proxy over a SYNTHETIC spec and NO
+                        // caller — the corpus asks name/description/schema
+                        // shape, and the one consumer that calls
+                        // `execute([])` gets the channelless refusal, which
+                        // answers at once with an error result: no socket to
+                        // the parent, no wait. Nothing is registered, no
+                        // client is contacted.
+                        ClientToolProxy::class => new ClientToolProxy(new ClientToolSpec(
+                            name: 'probe',
+                            description: 'corpus probe descriptor',
+                            inputSchema: [
+                                'type' => 'object',
+                                'properties' => ['msg' => ['type' => 'string']],
+                                'required' => ['msg'],
+                            ],
+                            timeoutSeconds: ClientToolSpec::DEFAULT_TIMEOUT_SECONDS,
                         )),
                         // MCP-7: the dispatcher pair over a shape with NO client
                         // config and an EMPTY roster — like the bridge above, the
