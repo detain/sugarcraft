@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { MethodResult } from '../protocol/generated'
+import { t } from '../lib/i18n'
 import { useConnectionStore } from '../stores/connection'
 import { describe } from '../stores/session'
 
@@ -101,13 +102,14 @@ function uptime(seconds: number): string {
 async function stopServer(): Promise<void> {
   const known = health.value
   if (!canStop.value || stopping.value || known === null) return
-  const turns = known.turnsRunning === 1 ? 'running turn' : 'running turns'
-  const sessions = known.sessionsOpen === 1 ? 'open session' : 'open sessions'
+  const turns = known.turnsRunning === 1 ? t('web.chrome.about.stop_running_turns_one') : t('web.chrome.about.stop_running_turns_other')
+  const sessions = known.sessionsOpen === 1 ? t('web.chrome.about.stop_open_sessions_one') : t('web.chrome.about.stop_open_sessions_other')
   const question =
-    `Stop this server? As of the last health check it reported ` +
-    `${known.turnsRunning} ${turns} and ${known.sessionsOpen} ${sessions}. ` +
-    'Stopping drains in-flight turns, exits the process, and drops every client connection; ' +
-    'the server returns only when its operator starts it again — there is no auto-restart. Proceed?'
+    t('web.chrome.about.stop_confirm_head') +
+    `${known.turnsRunning} ${turns}` +
+    t('web.chrome.about.stop_confirm_mid') +
+    `${known.sessionsOpen} ${sessions}` +
+    t('web.chrome.about.stop_confirm_foot')
   if (!window.confirm(question)) return
   stopping.value = true
   stopError.value = null
@@ -123,32 +125,32 @@ async function stopServer(): Promise<void> {
 
 <template>
   <div v-if="open" class="backdrop" data-testid="about-backdrop" @click.self="emit('close')">
-    <div class="dialog" role="dialog" aria-modal="true" aria-label="About this server" tabindex="-1" data-testid="about-modal" @keydown="onKey">
+    <div class="dialog" role="dialog" aria-modal="true" :aria-label="t('web.chrome.about.title')" tabindex="-1" data-testid="about-modal" @keydown="onKey">
       <header>
-        <h2>About this server</h2>
-        <button type="button" class="link" aria-label="Close" data-testid="about-close" @click="emit('close')">✕</button>
+        <h2>{{ t('web.chrome.about.title') }}</h2>
+        <button type="button" class="link" :aria-label="t('web.chrome.about.close_aria')" data-testid="about-close" @click="emit('close')">✕</button>
       </header>
       <p v-if="error" class="error" role="alert" data-testid="about-error">{{ error }}</p>
-      <p v-else-if="loading && info === null" class="empty">Asking the server…</p>
+      <p v-else-if="loading && info === null" class="empty">{{ t('web.chrome.about.loading') }}</p>
       <template v-else-if="info !== null">
         <dl class="grid" data-testid="about-info">
-          <dt>Version</dt>
+          <dt>{{ t('web.chrome.about.version') }}</dt>
           <dd>{{ info.version }}</dd>
-          <dt>Protocol</dt>
+          <dt>{{ t('web.chrome.about.protocol') }}</dt>
           <dd>{{ info.protocol }}</dd>
-          <dt v-if="info.root">Root</dt>
+          <dt v-if="info.root">{{ t('web.chrome.about.root') }}</dt>
           <dd v-if="info.root">{{ info.root }}</dd>
-          <dt v-if="info.providers?.length">Providers</dt>
+          <dt v-if="info.providers?.length">{{ t('web.chrome.about.providers') }}</dt>
           <dd v-if="info.providers?.length">{{ info.providers.join(', ') }}</dd>
-          <dt v-if="info.tools?.length">Tools</dt>
+          <dt v-if="info.tools?.length">{{ t('web.chrome.about.tools') }}</dt>
           <dd v-if="info.tools?.length" data-testid="about-tools">{{ info.tools.length }}<span class="hint"> · {{ info.tools.join(', ') }}</span></dd>
-          <dt v-if="info.commands?.length">Commands</dt>
+          <dt v-if="info.commands?.length">{{ t('web.chrome.about.commands') }}</dt>
           <dd v-if="info.commands?.length" data-testid="about-commands">{{ info.commands.join(', ') }}</dd>
-          <dt>Permission modes</dt>
-          <dd data-testid="about-modes">{{ info.permissionModes.join(', ') }} (default: {{ info.defaultPermissionMode }})</dd>
+          <dt>{{ t('web.chrome.about.permissions') }}</dt>
+          <dd data-testid="about-modes">{{ info.permissionModes.join(', ') }} {{ t('web.chrome.about.default_mode', { mode: info.defaultPermissionMode }) }}</dd>
         </dl>
         <template v-if="info.agents?.length">
-          <h3>Agents</h3>
+          <h3>{{ t('web.chrome.about.agents') }}</h3>
           <ul data-testid="about-agents">
             <li v-for="agent in info.agents" :key="agent.name">
               <strong>{{ agent.name }}</strong><template v-if="agent.description"> — {{ agent.description }}</template>
@@ -157,21 +159,21 @@ async function stopServer(): Promise<void> {
         </template>
       </template>
       <template v-if="health !== null">
-        <h3>Right now</h3>
+        <h3>{{ t('web.chrome.about.health') }}</h3>
         <p class="health" data-testid="about-health">
-          <span class="state" :class="health.ok ? 'ok' : 'bad'">{{ health.ok ? 'ok' : 'not ok' }}</span>
-          · up {{ uptime(health.uptimeS) }}
-          · {{ health.sessionsOpen }} sessions open
-          · {{ health.turnsRunning }} turns running
-          <template v-if="health.draining"> · draining</template>
+          <span class="state" :class="health.ok ? 'ok' : 'bad'">{{ health.ok ? t('web.chrome.about.health_ok') : t('web.chrome.about.health_not_ok') }}</span>
+          · {{ t('web.chrome.about.up') }} {{ uptime(health.uptimeS) }}
+          · {{ t('web.chrome.about.sessions_open', { n: health.sessionsOpen }) }}
+          · {{ t('web.chrome.about.turns_running', { n: health.turnsRunning }) }}
+          <template v-if="health.draining"> · {{ t('web.chrome.about.draining') }}</template>
         </p>
       </template>
       <p v-if="canStop" class="stop">
         <button type="button" class="danger" :disabled="stopping" data-testid="about-stop" @click="void stopServer()">
-          {{ stopping ? 'Stopping…' : 'Stop server' }}
+          {{ stopping ? t('web.chrome.about.stopping') : t('web.chrome.about.stop_btn') }}
         </button>
         <span v-if="stopError" class="error" role="alert" data-testid="about-stop-error">{{ stopError }}</span>
-        <span v-else-if="stopping" class="hint" data-testid="about-stop-state">The confirmed stop is on the wire; the draining notice takes over when the server answers.</span>
+        <span v-else-if="stopping" class="hint" data-testid="about-stop-state">{{ t('web.chrome.about.stop_state') }}</span>
       </p>
     </div>
   </div>

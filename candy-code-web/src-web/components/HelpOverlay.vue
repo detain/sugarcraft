@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { t } from '../lib/i18n'
 import type { CommandInfo } from '../stores/session'
 import { bindingLabel, KEY_ACTIONS, loadKeymap, type KeyAction } from '../lib/keymap'
 
@@ -15,22 +16,22 @@ const props = defineProps<{ open: boolean; commands: CommandInfo[] }>()
 const emit = defineEmits<{ close: [] }>()
 
 const ACTION_LABELS: Record<KeyAction, string> = {
-  palette: 'Command palette',
-  help: 'This help',
-  tabs: 'Pick the Nth open tab',
+  palette: 'web.chrome.help.action_palette',
+  help: 'web.chrome.help.action_help',
+  tabs: 'web.chrome.help.action_tabs',
 }
 
 /** The composer's keys (Composer.vue) — fixed, unlike the keymap's three. */
 const FIXED_KEYS: readonly [string, string][] = [
-  ['Send · new line', 'Enter · Shift+Enter'],
-  ['Complete commands · files', '/name · @path'],
-  ['Prompt history · search', 'Ctrl+↑ / Ctrl+↓ · Ctrl+G'],
-  ['Stop the running turn', 'Esc Esc'],
+  ['web.chrome.help.fixed_send', 'Enter · Shift+Enter'],
+  ['web.chrome.help.fixed_complete', '/name · @path'],
+  ['web.chrome.help.fixed_history', 'Ctrl+↑ / Ctrl+↓ · Ctrl+G'],
+  ['web.chrome.help.fixed_stop', 'Esc Esc'],
 ]
 
 const shortcuts = computed(() => {
   const bindings = loadKeymap()
-  return KEY_ACTIONS.map((action) => ({ action, label: ACTION_LABELS[action], keys: bindingLabel(bindings[action]) }))
+  return KEY_ACTIONS.map((action) => ({ action, label: t(ACTION_LABELS[action]), keys: bindingLabel(bindings[action]) }))
 })
 
 function displayName(command: CommandInfo): string {
@@ -40,13 +41,13 @@ function displayName(command: CommandInfo): string {
 
 <template>
   <div v-if="open" class="backdrop" data-testid="help-backdrop" @click.self="emit('close')">
-    <div class="dialog" role="dialog" aria-modal="true" aria-label="Keyboard help" tabindex="-1" data-testid="help-overlay">
+    <div class="dialog" role="dialog" aria-modal="true" :aria-label="t('web.chrome.help.aria')" tabindex="-1" data-testid="help-overlay">
       <header>
-        <h2>Keyboard help</h2>
-        <button type="button" class="link" aria-label="Close" data-testid="help-close" @click="emit('close')">&#10005;</button>
+        <h2>{{ t('web.chrome.help.title') }}</h2>
+        <button type="button" class="link" :aria-label="t('web.chrome.help.close_aria')" data-testid="help-close" @click="emit('close')">&#10005;</button>
       </header>
 
-      <h3>Shortcuts <span class="muted">(rebind in settings)</span></h3>
+      <h3>{{ t('web.chrome.help.shortcuts') }} <span class="muted">{{ t('web.chrome.help.shortcuts_hint') }}</span></h3>
       <ul data-testid="help-shortcuts">
         <li v-for="row in shortcuts" :key="row.action" data-testid="help-shortcut" :data-action="row.action">
           <code class="keys">{{ row.keys }}</code>
@@ -54,26 +55,26 @@ function displayName(command: CommandInfo): string {
         </li>
       </ul>
 
-      <h3>Composer keys</h3>
+      <h3>{{ t('web.chrome.help.composer_keys') }}</h3>
       <ul data-testid="help-fixed">
         <li v-for="row in FIXED_KEYS" :key="row[0]" data-testid="help-fixed-row">
           <code class="keys">{{ row[1] }}</code>
-          <span class="what">{{ row[0] }}</span>
+          <span class="what">{{ t(row[0]) }}</span>
         </li>
       </ul>
 
-      <h3>Commands</h3>
-      <p v-if="commands.length === 0" class="muted" data-testid="help-no-commands">No commands listed — open a session and the server’s roster shows here.</p>
+      <h3>{{ t('web.chrome.help.commands') }}</h3>
+      <p v-if="commands.length === 0" class="muted" data-testid="help-no-commands">{{ t('web.chrome.help.no_commands') }}</p>
       <ul v-else data-testid="help-commands">
         <li v-for="command in commands" :key="command.name" data-testid="help-command" :data-runs-in="command.runsIn">
           <code class="cmd">{{ displayName(command) }}</code>
           <span v-if="command.argumentHint" class="hint">{{ command.argumentHint }}</span>
           <span class="desc">{{ command.description }}</span>
-          <span class="runs" :class="command.runsIn" data-testid="help-runs-in">{{ command.runsIn === 'server' ? 'runs here' : 'terminal UI only' }}</span>
+          <span class="runs" :class="command.runsIn" data-testid="help-runs-in">{{ command.runsIn === 'server' ? t('web.chrome.help.command_runs_server') : t('web.chrome.help.command_runs_client') }}</span>
         </li>
       </ul>
 
-      <p class="muted foot">Close with Esc, this backdrop, or the help key again.</p>
+      <p class="muted foot">{{ t('web.chrome.help.footer') }}</p>
     </div>
   </div>
 </template>

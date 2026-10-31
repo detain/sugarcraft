@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ago, oneLine } from '../lib/format'
+import { t } from '../lib/i18n'
 import type { MethodResult } from '../protocol/generated'
 import { useApprovalsStore } from '../stores/approvals'
 import { useConnectionStore } from '../stores/connection'
@@ -59,18 +60,18 @@ async function create(): Promise<void> {
   <section class="dashboard" data-testid="dashboard">
     <h1>CandyCode</h1>
     <p v-if="connection.hello?.server.root" class="root">
-      Serving <code>{{ connection.hello.server.root }}</code>
+      {{ t('web.views.dashboard.root_serving') }} <code>{{ connection.hello.server.root }}</code>
     </p>
     <p v-if="noRealProvider" class="asks" data-testid="dashboard-no-provider">
-      No provider configured — run <code>candy-code login</code> and reload, or pick one in the terminal.
+      {{ t('web.views.dashboard.no_provider_before') }} <code>candy-code login</code> {{ t('web.views.dashboard.no_provider_after') }}
     </p>
-    <p v-if="approvals.total > 0" class="asks">{{ approvals.total }} question{{ approvals.total === 1 ? '' : 's' }} waiting for an answer.</p>
+    <p v-if="approvals.total > 0" class="asks">{{ t(approvals.total === 1 ? 'web.views.dashboard.asks_one' : 'web.views.dashboard.asks_other', { n: approvals.total }) }}</p>
     <p>
-      <button type="button" class="primary" :disabled="creating || !connection.connected" data-testid="dashboard-new" @click="create">Start a new session</button>
+      <button type="button" class="primary" :disabled="creating || !connection.connected" data-testid="dashboard-new" @click="create">{{ t('web.views.dashboard.new_session') }}</button>
     </p>
     <p v-if="error" class="error">{{ error }}</p>
     <template v-if="recent.length > 0">
-      <h2>Recent</h2>
+      <h2>{{ t('web.views.dashboard.recent') }}</h2>
       <ul>
         <li v-for="summary in recent" :key="summary.id">
           <RouterLink :to="{ name: 'session', params: { id: summary.id } }">{{ summary.name || oneLine(summary.preview ?? summary.id, 80) }}</RouterLink>
@@ -78,7 +79,7 @@ async function create(): Promise<void> {
         </li>
       </ul>
     </template>
-    <p class="version">candy-code-web {{ version }}<template v-if="connection.hello"> · server {{ connection.hello.server.version }}</template></p>
+    <p class="version">candy-code-web {{ version }}<template v-if="connection.hello"> · {{ t('web.views.dashboard.server_line', { version: connection.hello.server.version }) }}</template></p>
   </section>
 </template>
 

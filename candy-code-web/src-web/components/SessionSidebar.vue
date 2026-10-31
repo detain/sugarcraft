@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ago, oneLine, spendLabel } from '../lib/format'
+import { t } from '../lib/i18n'
 import type { SessionSummary } from '../protocol/generated'
 import { ProtocolError } from '../protocol/jsonrpc'
 import { useApprovalsStore } from '../stores/approvals'
@@ -140,13 +141,13 @@ async function closeHost(summary: SessionSummary): Promise<void> {
   menuFor.value = null
   const root = summary.root
   if (!root) return
-  if (!window.confirm(`Close the host for ${root}? Its sessions stay on disk; the rows leave the list.`)) return
+  if (!window.confirm(t('web.chrome.sidebar.close_host_confirm', { root }))) return
   await act(async () => {
     try {
       await sessions.closeRoot(root)
     } catch (failure) {
       if (!(failure instanceof ProtocolError) || failure.kind !== 'turn_running') throw failure
-      if (!window.confirm('A turn is running in that workspace. Stop the host anyway?')) return
+      if (!window.confirm(t('web.chrome.sidebar.close_host_turn_confirm'))) return
       await sessions.closeRoot(root, true)
     }
   })
@@ -155,7 +156,7 @@ async function closeHost(summary: SessionSummary): Promise<void> {
 /** WEB-1a: delete is the one destructive row action — it asks first. */
 async function removeRow(summary: SessionSummary): Promise<void> {
   menuFor.value = null
-  if (!window.confirm(`Delete session "${title(summary)}"? Its transcript goes with it.`)) return
+  if (!window.confirm(t('web.chrome.sidebar.delete_confirm', { name: title(summary) }))) return
   await act(() => sessions.remove(summary.id))
 }
 
@@ -279,19 +280,19 @@ function onKey(event: KeyboardEvent): void {
 </script>
 
 <template>
-  <nav class="sidebar" aria-label="Sessions" data-testid="sidebar" @keydown="onKey">
+  <nav class="sidebar" :aria-label="t('web.chrome.sidebar.heading')" data-testid="sidebar" @keydown="onKey">
     <div class="top">
-      <h2>Sessions</h2>
-      <button type="button" class="primary" :disabled="creating || !connection.connected" data-testid="new-session" @click="create()">+ New</button>
+      <h2>{{ t('web.chrome.sidebar.heading') }}</h2>
+      <button type="button" class="primary" :disabled="creating || !connection.connected" data-testid="new-session" @click="create()">{{ t('web.chrome.sidebar.new') }}</button>
       <!-- C-SES-7.e: the incognito entry — the same start path, ephemeral. -->
-      <button type="button" :disabled="creating || !connection.connected" data-testid="new-incognito" title="Incognito: nothing is persisted once it closes" @click="create(true)">Incognito</button>
+      <button type="button" :disabled="creating || !connection.connected" data-testid="new-incognito" :title="t('web.chrome.sidebar.incognito_hint')" @click="create(true)">{{ t('web.chrome.sidebar.incognito_button') }}</button>
     </div>
-    <input v-model="filter" type="search" placeholder="Filter…" aria-label="Filter sessions">
+    <input v-model="filter" type="search" :placeholder="t('web.chrome.sidebar.filter_placeholder')" :aria-label="t('web.chrome.sidebar.filter_aria')">
     <!-- C-SES-7.e: the tray toggle drives the store's re-read of the server. -->
-    <label class="tray"><input v-model="trayShown" type="checkbox" data-testid="show-archived"> Show archived</label>
+    <label class="tray"><input v-model="trayShown" type="checkbox" data-testid="show-archived"> {{ t('web.chrome.sidebar.show_archived') }}</label>
     <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="sessions.loaded && sessions.items.length === 0" class="empty">No sessions yet.</p>
-    <p v-else-if="filter.trim() !== '' && !sessions.searching && shown.length === 0" class="empty" data-testid="search-empty">No sessions match “{{ filter.trim() }}”.</p>
+    <p v-if="sessions.loaded && sessions.items.length === 0" class="empty">{{ t('web.chrome.sidebar.empty') }}</p>
+    <p v-else-if="filter.trim() !== '' && !sessions.searching && shown.length === 0" class="empty" data-testid="search-empty">{{ t('web.chrome.sidebar.search_empty', { query: filter.trim() }) }}</p>
     <ul>
       <li v-for="summary in shown" :key="summary.id" class="row" :class="{ open: menuFor === summary.id }">
         <a
@@ -305,43 +306,43 @@ function onKey(event: KeyboardEvent): void {
         >
           <span class="dot" :class="summary.status" aria-hidden="true" />
           <span class="name">{{ title(summary) }}</span>
-          <span v-if="approvals.countFor(summary.id) > 0" class="badge" :title="`${approvals.countFor(summary.id)} waiting for an answer`" data-testid="ask-badge">{{ approvals.countFor(summary.id) }}</span>
+          <span v-if="approvals.countFor(summary.id) > 0" class="badge" :title="t('web.chrome.sidebar.badge_title', { n: approvals.countFor(summary.id) })" data-testid="ask-badge">{{ approvals.countFor(summary.id) }}</span>
           <span v-if="summary.snippet" class="snippet" data-testid="session-snippet">{{ oneLine(summary.snippet, 90) }}</span>
-          <span class="meta">{{ summary.status === 'closed' ? '' : summary.status.replace('_', ' ') }}<template v-if="summary.updatedAt"> · {{ ago(summary.updatedAt) }}</template><template v-if="spendFor(summary)"> · <span data-testid="session-spend">{{ spendFor(summary) }}</span></template><template v-if="summary.branch"> · <span :title="`Branch at session start: ${summary.branch}`" data-testid="session-branch">⎇ {{ summary.branch }}</span></template><template v-if="summary.pr"> · <span :title="`PR #${summary.pr.number} (${summary.pr.state}) — CI: ${summary.pr.checks}`" data-testid="session-pr">#{{ summary.pr.number }}<span class="pr-dot" :class="'is-' + summary.pr.checks" aria-hidden="true" /></span></template><template v-if="elsewhere(summary)"> · <span :title="summary.root" data-testid="session-root">{{ elsewhere(summary) }}/</span></template><template v-if="summary.ephemeral === true"> · <span data-testid="session-incognito">incognito</span></template><template v-if="summary.archived === true"> · <span data-testid="session-archived">archived</span></template></span>
+          <span class="meta">{{ summary.status === 'closed' ? '' : summary.status.replace('_', ' ') }}<template v-if="summary.updatedAt"> · {{ ago(summary.updatedAt) }}</template><template v-if="spendFor(summary)"> · <span data-testid="session-spend">{{ spendFor(summary) }}</span></template><template v-if="summary.branch"> · <span :title="t('web.chrome.sidebar.branch_title', { branch: summary.branch })" data-testid="session-branch">⎇ {{ summary.branch }}</span></template><template v-if="summary.pr"> · <span :title="t('web.chrome.sidebar.pr_title', { number: summary.pr.number, state: summary.pr.state, checks: summary.pr.checks })" data-testid="session-pr">#{{ summary.pr.number }}<span class="pr-dot" :class="'is-' + summary.pr.checks" aria-hidden="true" /></span></template><template v-if="elsewhere(summary)"> · <span :title="summary.root" data-testid="session-root">{{ elsewhere(summary) }}/</span></template><template v-if="summary.ephemeral === true"> · <span data-testid="session-incognito">{{ t('web.chrome.sidebar.incognito_label') }}</span></template><template v-if="summary.archived === true"> · <span data-testid="session-archived">{{ t('web.chrome.sidebar.archived_label') }}</span></template></span>
         </a>
         <button
           type="button"
           class="more"
-          :aria-label="`Actions for ${title(summary)}`"
+          :aria-label="t('web.chrome.sidebar.actions_aria', { name: title(summary) })"
           aria-haspopup="menu"
           :aria-expanded="menuFor === summary.id"
           :data-testid="`row-menu-${summary.id}`"
           @click="menuFor = menuFor === summary.id ? null : summary.id"
         >&#8942;</button>
         <ul v-if="menuFor === summary.id" class="menu" role="menu" data-testid="row-actions">
-          <li><button type="button" role="menuitem" :data-testid="`row-fork-${summary.id}`" @click="fork(summary)">Fork</button></li>
-          <li><button type="button" role="menuitem" :data-testid="`row-export-markdown-${summary.id}`" @click="exportRow(summary, 'markdown')">Export · Markdown</button></li>
-          <li><button type="button" role="menuitem" :data-testid="`row-export-json-${summary.id}`" @click="exportRow(summary, 'json')">Export · JSON</button></li>
-          <li><button type="button" role="menuitem" :data-testid="`row-export-text-${summary.id}`" @click="exportRow(summary, 'text')">Export · Text</button></li>
-          <li v-if="canWrite"><button type="button" role="menuitem" :data-testid="`row-share-${summary.id}`" @click="shareRow(summary)">Share page…</button></li>
+          <li><button type="button" role="menuitem" :data-testid="`row-fork-${summary.id}`" @click="fork(summary)">{{ t('web.chrome.sidebar.fork') }}</button></li>
+          <li><button type="button" role="menuitem" :data-testid="`row-export-markdown-${summary.id}`" @click="exportRow(summary, 'markdown')">{{ t('web.chrome.sidebar.export_markdown') }}</button></li>
+          <li><button type="button" role="menuitem" :data-testid="`row-export-json-${summary.id}`" @click="exportRow(summary, 'json')">{{ t('web.chrome.sidebar.export_json') }}</button></li>
+          <li><button type="button" role="menuitem" :data-testid="`row-export-text-${summary.id}`" @click="exportRow(summary, 'text')">{{ t('web.chrome.sidebar.export_text') }}</button></li>
+          <li v-if="canWrite"><button type="button" role="menuitem" :data-testid="`row-share-${summary.id}`" @click="shareRow(summary)">{{ t('web.chrome.sidebar.share') }}</button></li>
           <li v-for="row in shareRows(summary)" :key="row.token">
-            <button type="button" role="menuitem" :data-testid="`row-unshare-${summary.id}-${row.tokenPrefix}`" @click="unshareRow(row)">Revoke share {{ row.tokenPrefix }}… · {{ expiryLabel(row.expiresAt) }}</button>
+            <button type="button" role="menuitem" :data-testid="`row-unshare-${summary.id}-${row.tokenPrefix}`" @click="unshareRow(row)">{{ t('web.chrome.sidebar.revoke_share', { prefix: row.tokenPrefix, when: expiryLabel(row.expiresAt) }) }}</button>
           </li>
-          <li v-if="canWrite && summary.ephemeral !== true && summary.archived !== true"><button type="button" role="menuitem" :data-testid="`row-archive-${summary.id}`" @click="archiveRow(summary)">Archive</button></li>
-          <li v-if="canWrite && summary.archived === true"><button type="button" role="menuitem" :data-testid="`row-restore-${summary.id}`" @click="restoreRow(summary)">Restore</button></li>
-          <li v-if="summary.status !== 'closed'"><button type="button" role="menuitem" :data-testid="`row-close-${summary.id}`" @click="closeRow(summary)">Close</button></li>
-          <li v-if="summary.ephemeral !== true"><button type="button" role="menuitem" class="danger" :data-testid="`row-delete-${summary.id}`" @click="removeRow(summary)">Delete</button></li>
-          <li v-if="elsewhere(summary)"><button type="button" role="menuitem" :data-testid="`row-close-host-${summary.id}`" @click="closeHost(summary)">Close {{ elsewhere(summary) }}/ host</button></li>
+          <li v-if="canWrite && summary.ephemeral !== true && summary.archived !== true"><button type="button" role="menuitem" :data-testid="`row-archive-${summary.id}`" @click="archiveRow(summary)">{{ t('web.chrome.sidebar.archive') }}</button></li>
+          <li v-if="canWrite && summary.archived === true"><button type="button" role="menuitem" :data-testid="`row-restore-${summary.id}`" @click="restoreRow(summary)">{{ t('web.chrome.sidebar.restore') }}</button></li>
+          <li v-if="summary.status !== 'closed'"><button type="button" role="menuitem" :data-testid="`row-close-${summary.id}`" @click="closeRow(summary)">{{ t('web.chrome.sidebar.close') }}</button></li>
+          <li v-if="summary.ephemeral !== true"><button type="button" role="menuitem" class="danger" :data-testid="`row-delete-${summary.id}`" @click="removeRow(summary)">{{ t('web.chrome.sidebar.delete') }}</button></li>
+          <li v-if="elsewhere(summary)"><button type="button" role="menuitem" :data-testid="`row-close-host-${summary.id}`" @click="closeHost(summary)">{{ t('web.chrome.sidebar.close_host', { dir: elsewhere(summary) }) }}</button></li>
         </ul>
       </li>
     </ul>
-    <div v-if="shareDialog" class="share" role="dialog" aria-label="Share page" data-testid="share-dialog">
-      <p>Share page published. Anyone with the link can read this snapshot until it expires.</p>
+    <div v-if="shareDialog" class="share" role="dialog" :aria-label="t('web.chrome.sidebar.share_dialog_aria')" data-testid="share-dialog">
+      <p>{{ t('web.chrome.sidebar.share_published') }}</p>
       <code class="share-url" data-testid="share-url">{{ shareDialog.url }}</code>
-      <p class="share-expiry" data-testid="share-expiry">Expires {{ expiryLabel(shareDialog.expiresAt) }} UTC</p>
+      <p class="share-expiry" data-testid="share-expiry">{{ t('web.chrome.sidebar.share_expiry', { when: expiryLabel(shareDialog.expiresAt) }) }}</p>
       <div class="share-actions">
-        <button type="button" class="primary" data-testid="share-copy" @click="copyShareUrl">{{ shareCopied ? 'Copied' : 'Copy link' }}</button>
-        <button type="button" data-testid="share-close" @click="closeShareDialog">Close</button>
+        <button type="button" class="primary" data-testid="share-copy" @click="copyShareUrl">{{ shareCopied ? t('web.chrome.sidebar.revoked') : t('web.chrome.sidebar.share_copy') }}</button>
+        <button type="button" data-testid="share-close" @click="closeShareDialog">{{ t('web.chrome.sidebar.close') }}</button>
       </div>
     </div>
   </nav>

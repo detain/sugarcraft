@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { t } from '../lib/i18n'
 import { AuthError } from '../protocol/auth'
 import { useConnectionStore } from '../stores/connection'
 
@@ -32,7 +33,7 @@ async function submit(): Promise<void> {
     void router.push({ name: 'dashboard' })
   } catch (failure) {
     error.value = failure instanceof AuthError && failure.status === 401
-      ? 'That code or token was not accepted. Codes are single-use and expire after 120 s.'
+      ? t('web.views.login.rejected')
       : failure instanceof Error ? failure.message : String(failure)
   } finally {
     busy.value = false
@@ -42,15 +43,14 @@ async function submit(): Promise<void> {
 
 <template>
   <section class="login" data-testid="login">
-    <h1>Sign in</h1>
+    <h1>{{ t('web.views.login.title') }}</h1>
     <p>
-      Open the sign-in link <code>candy-code serve</code> printed, or paste a code from
-      <code>candy-code serve url</code> — or the owner token from <code>candy-code serve token</code>.
+      {{ t('web.views.login.intro_link') }} <code>candy-code serve</code> {{ t('web.views.login.intro_paste') }} <code>candy-code serve url</code> {{ t('web.views.login.intro_token') }} <code>candy-code serve token</code>.
     </p>
     <form @submit.prevent="submit">
-      <label for="secret">Sign-in code or token</label>
+      <label for="secret">{{ t('web.views.login.code_label') }}</label>
       <input id="secret" v-model="secret" type="password" autocomplete="off" spellcheck="false" data-testid="login-secret">
-      <button type="submit" class="primary" :disabled="busy || secret.trim() === ''" data-testid="login-submit">Sign in</button>
+      <button type="submit" class="primary" :disabled="busy || secret.trim() === ''" data-testid="login-submit">{{ t('web.views.login.submit') }}</button>
     </form>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
   </section>

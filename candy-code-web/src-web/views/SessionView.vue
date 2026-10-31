@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import Composer, { type McpMention } from '../components/Composer.vue'
 import RunningAgentsLine from '../components/agents/RunningAgentsLine.vue'
 import { useAgentsStore } from '../stores/agents/agents'
+import { t } from '../lib/i18n'
 import type { PastedDocument, PastedImage } from '../lib/paste'
 import PermissionCard, { type Reply } from '../components/PermissionCard.vue'
 import QueueStrip from '../components/QueueStrip.vue'
@@ -41,7 +42,7 @@ const finishedReply = computed(() => {
   if (state.value.status !== 'idle' || liveText.value !== '') return ''
   for (let index = state.value.items.length - 1; index >= 0; index = index - 1) {
     const item = state.value.items[index]
-    if (item?.kind === 'assistant') return `Reply complete: ${item.content}`
+    if (item?.kind === 'assistant') return t('web.views.session.reply_complete', { content: item.content })
   }
   return ''
 })
@@ -237,18 +238,18 @@ async function rewindRow(item: UserItem, seedComposer: boolean): Promise<void> {
   if (rewinding) return
   error.value = null
   if (session.value.busy) {
-    error.value = 'Rewind waits for the running turn to finish.'
+    error.value = t('web.views.session.rewind_busy')
     return
   }
   const steps = rewindSteps(item)
   if (steps === null) {
-    error.value = 'That prompt is no longer in the transcript; nothing was rewound.'
+    error.value = t('web.views.session.rewind_gone')
     return
   }
   const preview = item.content.replace(/\s+/g, ' ').trim().slice(0, 60)
   const replacesDraft = seedComposer && draft.value !== ''
-  const question = `Rewind the conversation to just before "${preview}"? The prompt and everything after it drop off the transcript.`
-    + (replacesDraft ? ' Your unsent draft in the composer will be replaced.' : '')
+  const question = t('web.views.session.rewind_confirm', { preview })
+    + (replacesDraft ? t('web.views.session.rewind_confirm_draft') : '')
   if (typeof window !== 'undefined' && !window.confirm(question)) return
   // Everything from the exec to its full settle (the rows-answer refetch)
   // is the protected window; nothing between confirm() and this assignment
@@ -268,7 +269,7 @@ const rewindHere = (item: UserItem): Promise<void> => rewindRow(item, false)
 const editAndResend = (item: UserItem): Promise<void> => rewindRow(item, true)
 
 async function rename(): Promise<void> {
-  const name = window.prompt('Rename the session', summary.value?.name ?? '')
+  const name = window.prompt(t('web.views.session.rename_prompt'), summary.value?.name ?? '')
   if (name === null || name.trim() === '') return
   try {
     await sessions.rename(props.id, name.trim())
@@ -282,7 +283,7 @@ async function rename(): Promise<void> {
   <section class="session-view" data-testid="session-view" :data-session-id="id" :data-phase="session.phase">
     <header class="head">
       <h1 :title="id">{{ title }}</h1>
-      <button type="button" class="link" @click="rename">rename</button>
+      <button type="button" class="link" @click="rename">{{ t('web.views.session.rename') }}</button>
     </header>
     <p v-if="session.error" class="error" role="alert">{{ session.error }}</p>
     <Transcript :items="state.items" :subagents="state.subagents" :tick="liveText.length + liveReasoning.length + state.asks.length" :session-id="id" @load-full="loadFull" @rewind="rewindHere" @edit-resend="editAndResend">
