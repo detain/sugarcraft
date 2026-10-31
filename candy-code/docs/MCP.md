@@ -1293,8 +1293,27 @@ serves itself is `GitMcpServer` (with `GitCommandHandlers`) — pure-PHP git
 tools that run in-process. It
 is reachable as a `type: git` entry in your own `.mcp.json`, i.e. CandyCode
 serving git operations to itself. `candy-code serve` is not one of them: it is
-the WebSocket server the web UI drives ([SERVER.md](SERVER.md)), and nothing in
-it speaks MCP.
+the WebSocket server the web UI drives ([SERVER.md](SERVER.md)), and it speaks
+no MCP of its own. The verb that does is `candy-code mcp serve`: the stdio host
+in `MCP\Serve\McpServeHost`, one JSON-RPC frame per line in and out until stdin
+closes. It answers `initialize` and `tools/list` with the roster
+`MCP\Serve\McpServeRoster` builds — Read, Glob, Grep, Ls, RepoMap, the read-only
+tools classified for this purpose — and every call runs jailed to the launch's
+root, through the same permission gate a headless turn answers to and the same
+`PreToolUse` hook chain the TUI builds, so the containment rules the git server
+spells out below are not the only floor under it. A client spawns it the way it
+spawns any stdio server:
+
+```json
+{
+  "mcpServers": {
+    "candy-code": {
+      "command": "candy-code",
+      "args": ["mcp", "serve", "--root", "/path/to/project"]
+    }
+  }
+}
+```
 
 Every git tool argument comes from the model, so the git server bounds what
 the model can aim it at:
@@ -1344,11 +1363,12 @@ Git itself, hooks included, runs under three guarantees:
   the contained root.
 
 `candy-code --help` lists exactly fourteen under its **Subcommands** heading —
-`doctor`, `import claude`, `login <provider>`, `models`, `session list|show|rename|delete|pin|unpin|archive|unarchive`, `mcp list|trust|import`, `lsp install|list`, `serve`,
+`doctor`, `import claude`, `login <provider>`, `models`, `session list|show|rename|delete|pin|unpin|archive|unarchive`, `mcp list|trust|import|serve`, `lsp install|list`, `serve`,
 `self-update`, `attach`, `acp`, `bundles list|install`, `completion bash|zsh|fish`, `usage [7|30|all]` — and none of those but `attach`
 and `acp` needs a provider, an API key or a terminal; `login` answers with the
 criterion's own tool or a written key; eleven answer and exit, and
-`serve` runs until it is stopped. `self-update` exits too, but it is the one that
+`serve` runs until it is stopped; `mcp serve` is the same kind of long-runner,
+nested one word inside the `mcp` verb. `self-update` exits too, but it is the one that
 rewrites the running file: a phar-only swap verified against the release sidecar.
 `attach` runs the TUI on a session of a
 running `serve`, whose turns run there; `acp` runs turns for an editor that

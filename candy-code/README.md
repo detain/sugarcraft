@@ -1714,7 +1714,7 @@ All of it is in [`docs/HOOKS.md`](docs/HOOKS.md).
   splices into every following prompt — and `enabledSkills` makes one standing.
   See [`docs/SKILLS.md`](docs/SKILLS.md).
 - **MCP** — the servers a trusted project's `.mcp.json` declares become `mcp__<server>__<tool>` tools; `/mcp` lists the servers and manages
-  their auth, and `candy-code mcp list|trust|import` work from the shell. See [`docs/MCP.md`](docs/MCP.md).
+  their auth, and `candy-code mcp list|trust|import|serve` work from the shell. See [`docs/MCP.md`](docs/MCP.md).
 - **Workflows** — staged multi-agent pipelines in YAML or PHP, run with
   `/workflow run` or written by the model itself through the `Workflow` tool.
   See [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md).
