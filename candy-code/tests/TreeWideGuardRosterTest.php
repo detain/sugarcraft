@@ -577,6 +577,14 @@ final class TreeWideGuardRosterTest extends TestCase
      */
     private const WALKS_A_DIRECTORY_THE_TEST_MADE = [
         'Agents/AgentPresetRegistryTest.php' => ['scandir($dir)'],
+        // C-TUI-6.i: tearDown()'s removeTree() empties the sys_get_temp_dir()
+        // crush-agent-live-* home setUp() mkdir'd before its own rmdir — the walk
+        // never leaves the test's sandbox. The file is in the derivation's domain
+        // only because its a11y-F5 pin reads src/Renderer.php through
+        // dirname(__DIR__, 3); that root-name is what puts scandir($dir) up for
+        // classification (same shape as the Cli/LaunchFlagsTest row). ScreenReaderModeTest carries an identical removeTree but does
+        // not name the root, so its residue is never consulted — no row there.
+        'Agents/Live/AgentLiveRegistryTest.php' => ['scandir($dir)'],
         'Agents/WorktreeConfigTest.php' => ['scandir($dir)'],
         'Agents/WorktreeManagerConfigOriginTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         // W4.2: tearDown() lists the clipboard-paste PNGs the test itself landed
