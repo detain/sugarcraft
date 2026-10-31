@@ -791,6 +791,14 @@ final class TreeWideGuardRosterTest extends TestCase
         // autoloader; tearDown() empties the sys_get_temp_dir() fixture dir
         // setUp() made (audit R3).
         'Support/ProcessTreeKillAsyncTest.php' => ['glob($this->dir.\'/*\')'],
+        // C-TOOL-4.b r2 (MAJOR-2): the tearDown() sweep empties the
+        // sys_get_temp_dir() bash_sandbox_* tree setUp() made under $this->tmpDir
+        // before its own rmdir — the walk itself predates this lane and never
+        // leaves the test's sandbox. The file joined census scope only when the
+        // round-1 fix pick added two structural source-slice anchors (the
+        // dirname(__DIR__,2) file_get_contents pins, which read files, not
+        // directories); this row licences the walker, not those reads.
+        'Tools/BashSandboxTest.php' => ['RecursiveDirectoryIterator($this->tmpDir,\FilesystemIterator::SKIP_DOTS)'],
         // C-TOOL-1.b r2 (pick c5b1f923a): the :249 source-read anchor
         // realpath(__DIR__ . '/../../../src/Tools/BuiltIn/Grep.php') names the package
         // root, so the file joins census scope; removeTree() in tearDown() empties the

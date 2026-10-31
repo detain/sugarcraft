@@ -298,7 +298,10 @@ final readonly class Seatbelt implements SandboxBackend
         }
         foreach (JailPaths::PROTECTED_PATHS as $relative) {
             $name = 'PROTECT_' . $hatch;
-            $params[$name] = $root . '/' . $relative;
+            // rtrim mirrors the bwrap twin: at root '/' a bare join would
+            // spell '//.candy-code', which never matches a canonicalised
+            // vnode, so the deny would silently pass.
+            $params[$name] = rtrim($root, '/') . '/' . $relative;
             $lines[] = '(deny file-write* (subpath (param "' . $name . '")))';
             ++$hatch;
         }

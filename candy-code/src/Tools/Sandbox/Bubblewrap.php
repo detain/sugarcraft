@@ -232,12 +232,17 @@ final readonly class Bubblewrap implements SandboxBackend
     {
         static $verdicts = [];
 
+        // The OS fact answers before any binary lookup, per the interface
+        // sentence and the Seatbelt twin — on a host where bubblewrap can
+        // never exist, "Linux-only" is the true reason, and a PATH search
+        // for it would be the wrong question first.
+        if (PHP_OS_FAMILY !== 'Linux') {
+            return 'bubblewrap is Linux-only and this host is ' . PHP_OS_FAMILY;
+        }
+
         $binary = $this->resolvedBinary();
         if ($binary === '') {
             return 'bwrap was not found on PATH';
-        }
-        if (PHP_OS_FAMILY !== 'Linux') {
-            return 'bubblewrap is Linux-only and this host is ' . PHP_OS_FAMILY;
         }
 
         $key = $binary . "\0" . ($this->network ? '1' : '0');
