@@ -103,7 +103,7 @@ final readonly class ScriptTool implements Tool, BuildsFromCatalog, AcceptsHeart
 
     public function description(): string
     {
-        return 'Run a short PHP script whose only effects on the world are tool calls. Inside the script, `call(\'Edit\', [...])` dispatches that tool exactly as if the model had called it directly — same permission gate, same hooks, same rules — and `tools()` lists what is dispatchable. Reads and writes land in the transcript as if made one at a time; a long mechanical sequence (rename a symbol across twenty files) costs one row here instead of twenty turns. The child runs jailed with no network access; where no sandbox can start on this host the tool refuses rather than run unconfined. Script cannot launch Task or Workflow, call Script again, or touch the context ledger; each inner call still needs its own grant, so an always-ask session keeps asking per write. The result ends with a ledger of every call the script made.';
+        return 'Run a short PHP script whose only effects on the world are tool calls. Inside the script, `tool(\'Edit\', [...])` dispatches that tool exactly as if the model had called it directly — same permission gate, same hooks, same rules — and `tools()` lists what is dispatchable. Reads and writes land in the transcript as if made one at a time; a long mechanical sequence (rename a symbol across twenty files) costs one row here instead of twenty turns. The child runs jailed with no network access; where no sandbox can start on this host the tool refuses rather than run unconfined. Script cannot launch Task or Workflow, call Script again, or touch the context ledger; each inner call still needs its own grant, so an always-ask session keeps asking per write. The result ends with a ledger of every call the script made.';
     }
 
     /**
@@ -116,7 +116,7 @@ final readonly class ScriptTool implements Tool, BuildsFromCatalog, AcceptsHeart
             'properties' => [
                 'code' => [
                     'type' => 'string',
-                    'description' => 'PHP source to run (with or without the opening tag), at most ' . self::MAX_CODE_BYTES . ' bytes. Its effects are tool calls via call(); it has no other reach.',
+                    'description' => 'PHP source to run (with or without the opening tag), at most ' . self::MAX_CODE_BYTES . ' bytes. Its effects are tool calls via the tool() helper; it has no other reach.',
                 ],
                 'timeout' => [
                     'type' => 'number',
@@ -160,6 +160,21 @@ final readonly class ScriptTool implements Tool, BuildsFromCatalog, AcceptsHeart
         ]));
     }
 
+    /**
+     * The per-PROCESS run bound a call's `timeout` arg answers to, never a
+     * request timeout (E646): nonsense falls back to the default, a sent
+     * number is floored at one second and capped at the ceiling, never
+     * unbounded and never an immediate timeout.
+     */
+    public static function clampTimeoutSeconds(mixed $sent): float
+    {
+        if (!is_numeric($sent)) {
+            return self::DEFAULT_TIMEOUT_SECONDS;
+        }
+
+        return min(self::MAX_TIMEOUT_SECONDS, max(1.0, (float) $sent));
+    }
+
     public function execute(array $args): ToolResult
     {
         return $this->executeWithHeartbeat($args, static function (): void {});
@@ -179,10 +194,7 @@ final readonly class ScriptTool implements Tool, BuildsFromCatalog, AcceptsHeart
             ));
         }
 
-        $timeout = self::DEFAULT_TIMEOUT_SECONDS;
-        if (isset($args['timeout']) && is_numeric($args['timeout'])) {
-            $timeout = min(self::MAX_TIMEOUT_SECONDS, max(1.0, (float) $args['timeout']));
-        }
+        $timeout = self::clampTimeoutSeconds($args['timeout'] ?? null);
 
         if ($this->nestedCall === null || $this->catalogRows === null) {
             // Defensive only: the Runtime binds every DispatchesNestedTools
@@ -293,7 +305,7 @@ final readonly class ScriptTool implements Tool, BuildsFromCatalog, AcceptsHeart
     {
         $denial = $result->denial();
         if ($denial !== null) {
-            return 'denied (' . $denial->value . ')';
+            return 'denied (' . $denial->token() . ')';
         }
 
         return $result->isError() ? 'error' : 'ok';

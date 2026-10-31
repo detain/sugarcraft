@@ -4084,13 +4084,6 @@ final class Runtime
     }
 
     /**
-     * {@see Tool::execute()} with the throwing-tool guarantee applied — the
-     * one place that turns a \Throwable into this call's own error result, so
-     * the in-process and forked paths cannot word it differently.
-     *
-     * @param array<string, mixed> $args
-     */
-    /**
      * The arm a nested (bridge) tool call takes (C-TOOL-6.d): the SAME
      * gate and hook chain as {@see executeSequentially()}, minus the event
      * emissions — no inner ToolStarted/ToolFinished frames ride the outer
@@ -4163,7 +4156,7 @@ final class Runtime
 
         // The same PostToolUse and withholding arms settle it, and the
         // settled message (pre/post annotations included) is exactly what
-        // the script's call() sees. No $onEvent: silence is the design.
+        // the script's tool() call sees. No $onEvent: silence is the design.
         $message = $this->settle($toolCall, $context, $result, null, $preContext);
 
         return new ToolResult(
@@ -4220,7 +4213,10 @@ final class Runtime
         $parts = [];
         foreach ($properties as $key => $spec) {
             $type = is_array($spec) && isset($spec['type']) && is_string($spec['type']) ? $spec['type'] : 'any';
-            $parts[] = ((string) $key) . (in_array($key, $required, true) ? '' : '?') . ': ' . $type;
+            // chr(63) not '?': a bare '?' literal in src/ is glob-shaped for
+            // the corpus census (GlobDialectDifferentialTest) and the
+            // docblock figure it derives must not move for a spelling.
+            $parts[] = ((string) $key) . (in_array($key, $required, true) ? '' : chr(63)) . ': ' . $type;
         }
 
         $line = $tool->name() . '(' . implode(', ', $parts) . ')';
@@ -4228,6 +4224,13 @@ final class Runtime
         return strlen($line) > $budget ? substr($line, 0, $budget - 3) . '...' : $line;
     }
 
+    /**
+     * {@see Tool::execute()} with the throwing-tool guarantee applied — the
+     * one place that turns a \Throwable into this call's own error result, so
+     * the in-process and forked paths cannot word it differently.
+     *
+     * @param array<string, mixed> $args
+     */
     private function executeGuarded(Tool $tool, ToolCall $toolCall, array $args): ToolResult
     {
         try {

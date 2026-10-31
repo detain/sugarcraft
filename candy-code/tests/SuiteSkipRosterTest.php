@@ -84,6 +84,10 @@ final class SuiteSkipRosterTest extends TestCase
     private const JAIL_ENTRY =
         'SugarCraft\\Code\\Tests\\Tools\\Script\\ScriptRunnerTest::testTheJailBlocksProjectWritesAndNetworkButTheBridgeStillAnswers';
 
+    /** The C-TOOL-6.d script-jail TOOL key — the private `SCRIPT_JAIL_TOOL`, by literal; same predicate. */
+    private const JAIL_TOOL_ENTRY =
+        'SugarCraft\\Code\\Tests\\Tools\\BuiltIn\\ScriptToolTest::testAJailedEndToEndRunReadsAndEditsThroughTheBridge';
+
     /**
      * Runs $body with CANDY_CODE_PHAR forced UNARMED and restores the caller's
      * shell state exactly, so the layout pins stay deterministic no matter
@@ -273,7 +277,10 @@ final class SuiteSkipRosterTest extends TestCase
                     self::LIVE_SGLANG_ENTRY => SuiteSkipRoster::EXPECTED[self::LIVE_SGLANG_ENTRY],
                 ] + self::pharEntriesUnarmed() + (SuiteSkipRoster::scriptJailRuns()
                     ? []
-                    : [self::JAIL_ENTRY => SuiteSkipRoster::EXPECTED[self::JAIL_ENTRY]]),
+                    : [
+                        self::JAIL_ENTRY => SuiteSkipRoster::EXPECTED[self::JAIL_ENTRY],
+                        self::JAIL_TOOL_ENTRY => SuiteSkipRoster::EXPECTED[self::JAIL_TOOL_ENTRY],
+                    ]),
                 'over a path-repo symlink farm the layout-conditional test RUNS while the dormant '
                 . 'smokes stay rostered, so the effective roster must be the const minus exactly '
                 . 'its GitignoreAwareness key (and minus the premise and the rename arm wherever '
@@ -301,6 +308,7 @@ final class SuiteSkipRosterTest extends TestCase
             }
             if (SuiteSkipRoster::scriptJailRuns()) {
                 unset($expected[self::JAIL_ENTRY]);
+                unset($expected[self::JAIL_TOOL_ENTRY]);
             }
 
             self::assertSame(

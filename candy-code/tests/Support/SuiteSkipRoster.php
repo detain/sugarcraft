@@ -215,6 +215,16 @@ final class SuiteSkipRoster
         'SugarCraft\Code\Tests\Tools\Script\ScriptRunnerTest::testTheJailBlocksProjectWritesAndNetworkButTheBridgeStillAnswers';
 
     /**
+     * The C-TOOL-6.d jail key: the SCRIPT TOOL's own end-to-end arm can only
+     * run where bubblewrap actually starts, for exactly the reason stated on
+     * {@see SCRIPT_JAIL} — same predicate, same lift. The tool layer adds a
+     * nested Read/Write through the bridge under the jail, which is the arm
+     * the runner's own jail test does not cover.
+     */
+    private const SCRIPT_JAIL_TOOL =
+        'SugarCraft\Code\Tests\Tools\BuiltIn\ScriptToolTest::testAJailedEndToEndRunReadsAndEditsThroughTheBridge';
+
+    /**
      * The tests this suite is allowed to skip, `Class::method` => why.
      *
      * The first is UNCONDITIONAL -- no environment gate, no platform check, no
@@ -306,6 +316,12 @@ final class SuiteSkipRoster
                 . 'two-stage start the backend answers and finds it runs, the test asserts the '
                 . 'jailed script loses project writes and network but keeps its fd-3 bridge, and '
                 . 'expectedForLayout() lifts the entry; the predicate IS the body gate',
+        self::SCRIPT_JAIL_TOOL
+            => 'conditional jail gate (C-TOOL-6.d): the Script TOOL end-to-end arm needs the same '
+                . 'working bubblewrap as the runner jail key above, and skips under the same '
+                . 'scriptJailRuns() predicate its body calls; where the probe answers that the '
+                . 'jail starts, the test Reads and Writes a temp file through the bridge from a '
+                . 'confined child, and expectedForLayout() lifts both entries together',
     ];
 
     private static ?self $live = null;
@@ -598,6 +614,7 @@ final class SuiteSkipRoster
 
         if (self::scriptJailRuns()) {
             unset($effective[self::SCRIPT_JAIL]);
+            unset($effective[self::SCRIPT_JAIL_TOOL]);
         }
 
         return $effective;
