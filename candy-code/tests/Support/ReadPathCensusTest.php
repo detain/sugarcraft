@@ -528,10 +528,12 @@ final class ReadPathCensusTest extends TestCase
         ],
         'Config/ProviderKeyStore.php|file_get_contents' => [
             'CALLER_SUPPLIED — `store()`\'s providers-map merge-read: Bootstrap::userConfigPath(), '
-                . 'the operator\'s own config file — the same read `login` performs (credited on the '
-                . 'Cli/Subcommands.php row) — decoded only to keep the other providers\' entries when '
-                . 'the map is rewritten through Bootstrap::writeUserConfig(); the corrupt-config '
-                . 'branch refuses, never repairs (C-TUI-5.d extraction)',
+                . 'the operator\'s own config file — this is the read `login` used to perform '
+                . 'inline, so its credit moved onto these rows when loginStoreKey delegated the '
+                . 'persist half to store() (C-TUI-5.b) — decoded only to keep the other '
+                . 'providers\' entries when the map is rewritten through '
+                . 'Bootstrap::writeUserConfig(); the corrupt-config branch refuses, never '
+                . 'repairs (C-TUI-5.d extraction)',
             'CALLER_SUPPLIED — `store()`\'s write-back re-read: the SAME path, re-read only to confirm '
                 . 'the slot settled before any success is promised (writeUserConfig() can bail '
                 . 'unwritten); the never-fabricate law lifted from Subcommands::loginStoreKey',
