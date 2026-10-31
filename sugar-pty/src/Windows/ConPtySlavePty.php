@@ -54,8 +54,12 @@ final class ConPtySlavePty implements SlavePty
      * asked for Ctrl+C semantics on the wrong backend needs to know NOW.
      *
      * @param list<string>              $cmd
-     * @param array<string,string>|null $env null inherits the parent env;
-     *     a map REPLACES it wholesale (same law as the POSIX side)
+     * @param array<string,string>|null $env null or an empty map inherits
+     *     the parent env — the adapter hands the empty map to Kernel32ConPty,
+     *     which skips the encoded block and CREATE_UNICODE_ENVIRONMENT for
+     *     it; only a non-empty map REPLACES it wholesale. This differs from
+     *     the POSIX side, where any non-null array replaces the env (the
+     *     proc_open 5th-arg law) and an empty map means an empty environment.
      */
     public function spawn(
         array $cmd,

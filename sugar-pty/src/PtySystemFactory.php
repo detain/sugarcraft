@@ -36,8 +36,7 @@ use SugarCraft\Pty\Windows\Kernel32ConPty;
  * either throws {@see UnsupportedPlatformException}), `auto` (same as
  * unset / default behaviour).
  *
- * Mirrors charmbracelet/x/xpty.Open()'s platform-resolution layer. 
-
+ * Mirrors charmbracelet/x/xpty.Open()'s platform-resolution layer.
  */
 final class PtySystemFactory
 {
