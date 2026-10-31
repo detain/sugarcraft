@@ -15,6 +15,7 @@ use SugarCraft\Code\Tools\ReadLedger;
 use SugarCraft\Code\Session\PromptHistory;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Background\BackgroundSupervisor;
+use SugarCraft\Code\Tools\Sandbox\EgressProxyProcess;
 use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Context\RulesState;
 use SugarCraft\Code\Skills\SkillRegistry;
@@ -582,6 +583,24 @@ final class LaunchContext
      */
     private static array $shellRegistries = [];
 
+    /**
+     * The launch's egress proxy (C-TOOL-4.g). Null means "not started":
+     * while {@see self::$egressProxyResolved} is false it may still be
+     * started; after resolution null is the launch's FINAL answer —
+     * `bashSandbox` is not `allowlist`, or this host's jail never reads a
+     * socket at all (Darwin's Seatbelt backend).
+     */
+    private static ?EgressProxyProcess $egressProxy = null;
+
+    /** Whether the launch has already read `bashSandbox` for egress purposes. */
+    private static bool $egressProxyResolved = false;
+
+    /** Pid whose {@see self::$egressProxy} start() belongs to (shutdown law). */
+    private static int $egressProxyPid = 0;
+
+    /** Whether {@see stopEgressProxy()} is already registered to run at exit. */
+    private static bool $egressShutdownRegistered = false;
+
     /** @var array<string, list<Bundle>> the memoized scans, keyed by root|pluginPaths */
     private static array $bundlesCache = [];
 
@@ -996,6 +1015,114 @@ final class LaunchContext
                 // Nothing to report to — stderr may already be gone at
                 // shutdown, and there is no remedy left to offer.
             }
+        }
+    }
+
+    /**
+     * The launch's egress proxy — the {@see self::$egressProxy} shelf read
+     * (C-TOOL-4.g). {@see \SugarCraft\Code\Cli\Bootstrap::egressProxy()} owns
+     * starting it; consumers (the jail builder in
+     * {@see \SugarCraft\Code\Tools\Sandbox\SandboxFactory::fromSetting()})
+     * only ever READ this, so a probe path can never spawn a child.
+     */
+    public static function egressProxyInstance(): ?EgressProxyProcess
+    {
+        return self::$egressProxy;
+    }
+
+    /** Whether the launch has resolved its egress answer (null-is-final law). */
+    public static function egressProxyResolved(): bool
+    {
+        return self::$egressProxyResolved;
+    }
+
+    /**
+     * Records the launch's FINAL answer when no relay is asked for
+     * (C-TOOL-4.g): the setting is not `allowlist`, or this host's jail
+     * never reads a socket — so the shelf stays empty and later reads do
+     * not re-consult the config.
+     */
+    public static function markEgressProxyResolved(): void
+    {
+        self::$egressProxyResolved = true;
+    }
+
+    /**
+     * Park a started proxy on the shelf and note the owning pid — the pair
+     * {@see stopEgressProxy()} acts on. Called only by the starter, after
+     * {@see registerEgressProxyShutdown()} has run, so a stored handle can
+     * never outlive its shutdown hook.
+     */
+    public static function setEgressProxy(EgressProxyProcess $proxy): void
+    {
+        self::$egressProxy = $proxy;
+        self::$egressProxyPid = getmypid() ?: 0;
+    }
+
+    /**
+     * THE SHUTDOWN SEAM for the egress proxy — same shape and same
+     * once-per-process-image reasoning as
+     * {@see registerBackgroundShellShutdown()}: a forked tool child inherits
+     * the hook, and {@see stopEgressProxy()} acts only when THIS pid is the
+     * one that started the proxy, so a worker's exit never kills the parent's
+     * live relay — while the parent's own exit always reaps it, because the
+     * jail's only egress path dies with the launch that promised it.
+     */
+    public static function registerEgressProxyShutdown(): void
+    {
+        if (self::$egressShutdownRegistered) {
+            return;
+        }
+
+        self::$egressShutdownRegistered = true;
+
+        register_shutdown_function(static function (): void {
+            self::stopEgressProxy();
+        });
+    }
+
+    /**
+     * Stop the launch's egress proxy if THIS pid owns it, and clear the
+     * shelf. PUBLIC for the shutdown-hook reason {@see stopBackgroundShells()}
+     * states, and idempotent the same way: {@see EgressProxyProcess::stop()}
+     * reaps its group and discards the scaffold, and a child inheriting the
+     * hook sees a foreign pid and leaves the parent's relay running.
+     */
+    public static function stopEgressProxy(): void
+    {
+        $pid = getmypid() ?: 0;
+
+        if (self::$egressProxy === null || self::$egressProxyPid !== $pid) {
+            return;
+        }
+
+        $proxy = self::$egressProxy;
+        self::$egressProxy = null;
+        self::$egressProxyPid = 0;
+
+        try {
+            $proxy->stop();
+        } catch (\Throwable) {
+            // Nothing to report to — stderr may already be gone at
+            // shutdown, and the scaffold's unlink already rode stop().
+        }
+    }
+
+    /**
+     * TEST SEAM (C-TOOL-4.g): put the egress shelf in a chosen state —
+     * a stand-in started proxy, or the launch's final "no proxy" answer, or
+     * (null + unresolved) the untouched pre-resolution state. Clears the
+     * shutdown-registered flag ONLY when handed a proxy to stand in for, so
+     * the next starter re-arms its hook against the stand-in.
+     */
+    public static function useEgressProxyForTesting(?EgressProxyProcess $proxy, bool $resolved = true): void
+    {
+        self::$egressProxy = $proxy;
+        self::$egressProxyResolved = $resolved;
+        self::$egressProxyPid = $proxy === null ? 0 : (getmypid() ?: 0);
+
+        if ($proxy !== null) {
+            self::$egressShutdownRegistered = false;
         }
     }
 

@@ -94,6 +94,8 @@ use SugarCraft\Code\Tools\BuiltIn\Write;
 use SugarCraft\Code\Tools\Concerns\DetectsCapabilities;
 use SugarCraft\Code\Tools\McpToolBridge;
 use SugarCraft\Code\Tools\ReadLedger;
+use SugarCraft\Code\Tools\Sandbox\EgressProxyProcess;
+use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Workflows\WorkflowEngine;
@@ -9552,6 +9554,58 @@ public static function useMaxCost(?string $maxCost): void
     }
 
     /**
+     * THE LAUNCH'S EGRESS PROXY (C-TOOL-4.g) — started at most once per
+     * process image, when (and only when) the user-tier `bashSandbox` reads
+     * `allowlist` on a Linux jail host. `Bootstrap::tools()` calls it as its
+     * FIRST statement, so the proxy exists before any tool child is forked
+     * and every fork inherits the live unix socket path the jail re-binds;
+     * the memo answer (including the resolved-null one for `off`/`on`/
+     * `no-network`/Darwin launches, which never need a relay) is shared by
+     * {@see \SugarCraft\Code\Tools\Sandbox\SandboxFactory::fromSetting()},
+     * which only ever reads the shelf — a doctor probe cannot spawn.
+     *
+     * FAILS LOUD, NOT SILENT: a spawn that throws propagates. A launch that
+     * advertised `allowlist` and lost its proxy would otherwise hand the
+     * user a jail whose describe() promises egress through a socket that is
+     * not there; refusing to build the toolset is the honest direction (and
+     * matches {@see EgressProxyProcess::start()}'s own loud-spawn law since
+     * C-TOOL-4.f). The pid-keyed shutdown hook is registered BEFORE the
+     * spawn, so a half-built launch still reaps what the shelf may later
+     * hold.
+     *
+     * The entries list is this SAME single read of `sandboxAllowedDomains`
+     * — malformed entries are dropped at enforcement by
+     * {@see \SugarCraft\Code\Tools\Sandbox\EgressPolicy}, never widened here.
+     */
+    public static function egressProxy(): ?EgressProxyProcess
+    {
+        if (LaunchContext::egressProxyResolved()) {
+            return LaunchContext::egressProxyInstance();
+        }
+
+        // Resolve first: whatever the answer is, this launch has asked once.
+        $config = self::readUserConfig();
+        $allowlist = PHP_OS_FAMILY !== 'Darwin'
+            && ($config['bashSandbox'] ?? null) === SandboxBackend::MODE_ALLOWLIST;
+
+        if (!$allowlist) {
+            LaunchContext::markEgressProxyResolved();
+
+            return null;
+        }
+
+        $domains = array_values(array_filter((array) ($config['sandboxAllowedDomains'] ?? []), 'is_string'));
+
+        LaunchContext::registerEgressProxyShutdown();
+
+        $proxy = new EgressProxyProcess($domains);
+        $proxy->start();
+        LaunchContext::setEgressProxy($proxy);
+
+        return $proxy;
+    }
+
+    /**
      * Build the built-in coding tools, filtered for the session — the whole
      * model-facing tool array. The body moved to
      * {@see LaunchContext::tools()} in the S1b composition split (W7-E);
@@ -9571,6 +9625,11 @@ public static function useMaxCost(?string $maxCost): void
         ?AgentManager $taskManager = null,
         ?\SugarCraft\Code\Agents\AgentWorkerPool $taskPool = null,
     ): array {
+        // C-TOOL-4.g: the launch's egress relay is started HERE — before any
+        // tool child exists to inherit a dead socket — and only this once;
+        // the memo answers every later read, including the jail builder's.
+        self::egressProxy();
+
         return LaunchContext::tools(
             $root,
             $loader,

@@ -1292,7 +1292,7 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and forty-seven keys are layered — `provider`,
+Only these one hundred and forty-eight keys are layered — `provider`,
 `models`, `providers`, `titleModel`, `summaryModel`, `advisorModel`,
 `maxOutputTokens`, `modelPrices`, `extraBody`, `thinkingBudget`,
 `reasoningEffort`, `serviceTier`, `promptCache`, `parallelToolCalls`,
@@ -1311,20 +1311,20 @@ Only these one hundred and forty-seven keys are layered — `provider`,
 `autoReviewModel`, `permissions.autoStrikeLimit`, `permissions.autoTotalLimit`,
 `permissions.autoAllowReadOnly`, `redactToolOutput`, `secretEnvAllowlist`,
 `allowedTools`, `disabledTools`, `references`, `bashSandbox`,
-`bashSandboxNestedUserns`, `sandboxScope`, `testCommand`, `autoTest`,
-`toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`,
-`readPageBytes`, `toolSpillWindowPercent`, `toolInstructionCapBytes`,
-`toolSpillCaptureBytes`, `toolSpillMinCapBytes`, `globMaxMatches`,
-`webFetchMaxBytes`, `webFetchTimeoutSeconds`, `webSearchMaxResults`,
-`webSearchTimeoutSeconds`, `webSearchEndpoint`, `webSearchBackend`,
-`bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`,
-`chatToolTimeoutSeconds`, `grepTimeoutSeconds`, `requireReadBeforeWrite`,
-`sd.baseUrl`, `sd.apiKey`, `sd.timeoutSeconds`, `sd.defaultModel`,
-`ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`,
-`sd.savePattern`, `skills.pathNudges`, `instructions`,
-`instructions.walkToRoot`, `instructionsExclude`, `disabledRules`,
-`embeddingModel`, `disabledSkills`, `enabledSkills`, `pluginPaths`,
-`subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
+`bashSandboxNestedUserns`, `sandboxScope`, `sandboxAllowedDomains`,
+`testCommand`, `autoTest`, `toolOutputCapBytes`, `mcpResultCapBytes`,
+`readMaxBytes`, `readPageLines`, `readPageBytes`, `toolSpillWindowPercent`,
+`toolInstructionCapBytes`, `toolSpillCaptureBytes`, `toolSpillMinCapBytes`,
+`globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`,
+`webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`,
+`webSearchBackend`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`,
+`bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `grepTimeoutSeconds`,
+`requireReadBeforeWrite`, `sd.baseUrl`, `sd.apiKey`, `sd.timeoutSeconds`,
+`sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`,
+`ui.mediaDisplayOverrides`, `sd.savePattern`, `skills.pathNudges`,
+`instructions`, `instructions.walkToRoot`, `instructionsExclude`,
+`disabledRules`, `embeddingModel`, `disabledSkills`, `enabledSkills`,
+`pluginPaths`, `subagentModel`, `subagentMaxTurns`, `subagentMaxConcurrent`,
 `subagentMaxDepth`, `subagentMaxActive`, `includeGitInstructions`,
 `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `theme`, `statusLine`,
 `layout`, `notify`, `watchFiles`, `queueMode`, `terminalBackground`, `mouse`,
@@ -1385,7 +1385,7 @@ in precedence only.
 > user-tier only. Details per key in
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
-Even for a trusted project, eighty-eight keys are **never** taken from a project file:
+Even for a trusted project, eighty-nine keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for
@@ -1516,7 +1516,10 @@ script hooks, post-edit lint, post-edit format, auto-test, language servers
 and MCP stdio servers — join that jail at
 all, and a checkout narrowing the list would un-jail the very runs the
 operator chose to confine, the `bashSandbox` argument applied one layer up,
-to the scope list instead of the switch;
+to the scope list instead of the switch; `sandboxAllowedDomains`, because it
+widens the one door the `allowlist` jail opens — network egress — and a
+checkout choosing which hosts the operator's jailed commands may reach is the
+`bashSandbox` argument applied to the egress list instead of the switch;
 `attribution`, because it is the trailer the model is told to stamp on every
 commit it makes under the operator's git identity, and a checkout choosing that
 text would be a repository writing into the operator's own history (its sibling

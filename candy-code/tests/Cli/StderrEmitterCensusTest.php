@@ -57,7 +57,13 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — thirty-seven sites (C-TOOL-5.d 2026-10-30: +1 in
+ *  1. `fwrite(STDERR, …)` — thirty-eight sites (C-TOOL-4.g 2026-10-31: +1 in
+ *     `EgressBridge::runFromArgv()` for the bridge-argv contract line,
+ *     stderr-alone by the same sibling-process decision as the subcommand
+ *     writers below: the bridge is the jail's pre-exec relay, there is no
+ *     live transcript to fold it into and the relay exits 2 WITHOUT running
+ *     the command, so the refusal is the whole of what it reports;
+ *     C-TOOL-5.d 2026-10-30: +1 in
  *     `Subcommands::lsp()` for the install-result line, stderr-alone by the
  *     sibling-subcommand decision: a separate process, no live transcript;
  *     C-SES-7.b 2026-10-29: +1 in
@@ -393,6 +399,12 @@ final class StderrEmitterCensusTest extends TestCase
         // command that does it by hand. Stderr alone: the TUI has exited and
         // the terminal is the user's shell again; no transcript is left.
         'src/Support/SessionRelaunch.php' => 1,
+        // C-TOOL-4.g: the jail bridge's argv-contract line. Stderr alone:
+        // the bridge is the jail's pre-exec relay — a separate process
+        // image with no transcript to fold into — and it refuses the
+        // command outright (exit 2, never run) when the prefix is
+        // malformed, so naming the shape it expected IS the remedy.
+        'src/Tools/Sandbox/EgressBridge.php' => 1,
     ];
 
     /**

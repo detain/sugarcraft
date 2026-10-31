@@ -55,16 +55,21 @@ final readonly class Seatbelt implements SandboxBackend
     private function __construct(
         public string $binary,
         public bool $network,
+        public bool $allowlist,
     ) {
     }
 
     /**
      * $binary '' resolves `sandbox-exec` on PATH, falling back to the
-     * system location; a test or an embedder names its own.
+     * system location; a test or an embedder names its own. $allowlist
+     * records that the operator asked for `allowlist` (C-TOOL-4.g): Seatbelt
+     * has no way to police a domain name — its network rule is a boolean —
+     * so the mode READS AS `no-network`, the strictest answer, and the flag
+     * exists only so {@see describe()} can say so plainly.
      */
-    public static function new(string $binary = '', bool $network = true): self
+    public static function new(string $binary = '', bool $network = true, bool $allowlist = false): self
     {
-        return new self($binary, $network);
+        return new self($binary, $network, $allowlist);
     }
 
     /** The sandbox a `bashSandbox` value asks for on macOS, or null for `off`. */
@@ -73,18 +78,22 @@ final readonly class Seatbelt implements SandboxBackend
         return match (true) {
             $value === null, $value === false, $value === SandboxBackend::MODE_OFF => null,
             $value === true, $value === SandboxBackend::MODE_ON => self::new(),
+            // Fail closed, loudly described: no domain allowlist is honoured
+            // here until the loopback-port arm lands (tracked follow-up), so
+            // `allowlist` cannot make a macOS jail WIDER than `no-network`.
+            $value === SandboxBackend::MODE_ALLOWLIST => self::new('', false, true),
             default => self::new('', false),
         };
     }
 
     public function withNetwork(bool $network): self
     {
-        return new self($this->binary, $network);
+        return new self($this->binary, $network, $this->allowlist);
     }
 
     public function withBinary(string $binary): self
     {
-        return new self($binary, $this->network);
+        return new self($binary, $this->network, $this->allowlist);
     }
 
     public function name(): string
@@ -231,13 +240,19 @@ final readonly class Seatbelt implements SandboxBackend
      */
     public function describe(string $writableRoot): string
     {
+        // The allowlist clause leads when set: what the operator ASKED for
+        // is the fact a reader needs before the fallback makes sense.
+        $network = $this->allowlist
+            ? '; `allowlist` is enforced as NO NETWORK on macOS — Seatbelt cannot police domain names, and the loopback-port arm is a tracked follow-up'
+            : ($this->network ? '' : '; there is NO network access (local unix sockets stay open)');
+
         return sprintf(
             'Commands run inside a macOS Seatbelt sandbox: filesystem writes are allowed only under %s, '
             . 'the shared /tmp and $TMPDIR, and the git hooks/config, .candy-code/ and .mcp.json paths '
             . 'stay unwritable even there%s. A write elsewhere fails with '
             . '"Operation not permitted"; do not try to work around it — tell the user.',
             JailPaths::normalise($writableRoot),
-            $this->network ? '' : '; there is NO network access (local unix sockets stay open)',
+            $network,
         );
     }
 

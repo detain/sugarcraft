@@ -1457,6 +1457,7 @@ the same write jail:
 | `off` (default) | Commands run as the user, unconfined. |
 | `on` | The whole filesystem is unwritable except the working root, the temp area and `$TMPDIR`. On Linux the temp area is a private `/tmp` and every namespace is unshared except the network; on macOS the system `/tmp` stays shared (see Seatbelt below). |
 | `no-network` | `on`, plus no network access. |
+| `allowlist` | `no-network`, plus one door: the jail's only route out is the launch's egress proxy, which grants only the hosts listed in `sandboxAllowedDomains` and 403s every other. Linux only — on macOS it is enforced as `no-network`. With the default empty list it behaves EXACTLY like `no-network`. |
 
 What it holds and what it does not:
 
@@ -1528,6 +1529,23 @@ What it holds and what it does not:
   opt-out is the operator's own statement, and a project-tier MCP opt-out is
   ignored with a notice — a checkout cannot opt its servers out of the
   user's jail.
+- **The `sandboxAllowedDomains` list is the only door `allowlist` opens.**
+  The jail still unshares every namespace and binds no network — what it adds
+  is the launch's egress proxy: inside the jail the command's first process
+  is a tiny bridge that binds a loopback port and relays it to the proxy over
+  one unix socket bound into the jail, and the proxy env vars the jail sets
+  point every client at that port. The proxy answers only hosts in the list
+  (`example.com`, `*.example.com`, or `host:port` spellings); every other is
+  answered `403`, and because the bridge speaks HTTP(S) only, non-HTTP
+  traffic — ssh, database ports, anything raw — has no path and fails.
+  Malformed entries are ignored at enforcement, so a typo shrinks the grant
+  and never widens it; with an EMPTY list `allowlist` behaves EXACTLY like
+  `no-network` — the door is closed until you list hosts. The proxy starts in
+  the parent once per launch and dies with it: a forked tool child inherits
+  the socket path, and the jail's `describe()` names the granted hosts (or
+  says, in plain words, that the proxy is missing and there is no network at
+  all). macOS enforces `allowlist` as `no-network`: Seatbelt cannot police
+  domain names, and the loopback-port arm is a tracked follow-up.
 
 **Seatbelt on macOS** enforces the same intent with the platform's own
 mechanism, and the differences are deliberate. `sandbox-exec` ships with Apple

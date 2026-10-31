@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tools\Sandbox;
 
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Support\ProcessContainment;
 
 /**
@@ -56,6 +57,18 @@ use SugarCraft\Code\Support\ProcessContainment;
  * `--ro-bind / /` over the whole filesystem already keeps it read-only. The
  * same is true of `~/.candy-code` itself, which `PROTECTED_PATHS` re-binds
  * whenever the root is `$HOME`.
+ *
+ * EGRESS, NOT NETWORK (C-TOOL-4.g). In `allowlist` mode the network
+ * namespace is still fully unshared — there is no `--share-net` — but the
+ * jail is given a route OUT: the launch's egress proxy socket is bound into
+ * the private /tmp at {@see JAIL_EGRESS_SOCKET}, the standard proxy env
+ * quartet points at `127.0.0.1:` + {@see EgressBridge::JAIL_TCP_PORT}, and
+ * argv's tail starts the command behind the in-jail {@see EgressBridge} so
+ * that port is listening before anything can dial it. Every request is
+ * granted or 403'd by {@see EgressPolicy} against `sandboxAllowedDomains`
+ * OUTSIDE the jail — this class carries the list only to describe it. With
+ * the proxy absent (never started, or start failed) the jail degrades to the
+ * plain no-network argv: strictest reading, no egress, loudly described.
  *
  * FAIL CLOSED. A host can carry `bwrap` and still refuse to run it — Ubuntu
  * 24.04's AppArmor `apparmor_restrict_unprivileged_userns` makes every
@@ -117,6 +130,17 @@ final readonly class Bubblewrap implements SandboxBackend
     public const HARDENED_FLAGS = ['--unshare-user', '--disable-userns'];
 
     /**
+     * C-TOOL-4.g: the jail-visible name of the launch's egress proxy socket.
+     * The bridge's unix dial happens INSIDE the jail, where the host-side
+     * scaffold path (`<tmp>/cceXXXXXX/s`, random by construction — see
+     * {@see EgressProxyProcess}) is not visible, so the socket is bound to
+     * this fixed short in-jail path: fixed because the bridge prefix and the
+     * `--bind` must agree without a negotiation, short because `sun_path`
+     * caps at 108 bytes and this string is what both sides carry.
+     */
+    public const JAIL_EGRESS_SOCKET = '/tmp/.candy-egress.sock';
+
+    /**
      * The verdict memo: probe key → [why the jail cannot start (null when it
      * can), whether THIS host accepts {@see HARDENED_FLAGS}]. A property of the
      * host and the binary, never of one command, which is why {@see argv()}
@@ -162,6 +186,9 @@ final readonly class Bubblewrap implements SandboxBackend
         public bool $network,
         public bool $nestedUserns,
         public array $protectedPaths,
+        public bool $allowlist,
+        public ?string $egressSocket,
+        public array $allowedDomains,
     ) {
     }
 
@@ -172,15 +199,29 @@ final readonly class Bubblewrap implements SandboxBackend
      * dropped. $protectedPaths are absolute paths — typically the `--config`
      * file — that must stay read-only when they fall under the writable root.
      *
+     * $allowlist marks the `allowlist` reading of this jail (C-TOOL-4.g):
+     * network stays false (no `--share-net`), and the egress arms below are
+     * what makes any network reach at all. $egressSocket is the HOST-SIDE
+     * path of the launch's proxy socket (bound to
+     * {@see JAIL_EGRESS_SOCKET} inside the jail); null means the proxy never
+     * started, and the jail then has no egress path whatsoever — the strictest
+     * reading, never a wider one. $allowedDomains names the hosts the proxy
+     * will grant, for {@see describe()} only; enforcement lives in
+     * {@see EgressPolicy}, one copy.
+     *
      * @param list<string> $protectedPaths
+     * @param list<string> $allowedDomains
      */
     public static function new(
         string $binary = '',
         bool $network = true,
         bool $nestedUserns = false,
         array $protectedPaths = [],
+        bool $allowlist = false,
+        ?string $egressSocket = null,
+        array $allowedDomains = [],
     ): self {
-        return new self($binary, $network, $nestedUserns, $protectedPaths);
+        return new self($binary, $network, $nestedUserns, $protectedPaths, $allowlist, $egressSocket, $allowedDomains);
     }
 
     /**
@@ -198,18 +239,23 @@ final readonly class Bubblewrap implements SandboxBackend
         return match (true) {
             $value === null, $value === false, $value === self::MODE_OFF => null,
             $value === true, $value === self::MODE_ON => self::new(),
+            // C-TOOL-4.g: network is off first and the egress arms re-open it
+            // only when {@see SandboxFactory} hands this instance a live proxy
+            // socket; the bare setting still reads as the allowlist MODE so
+            // the doctor row and refusal prose name what the operator asked.
+            $value === self::MODE_ALLOWLIST => self::new('', false, allowlist: true),
             default => self::new('', false),
         };
     }
 
     public function withNetwork(bool $network): self
     {
-        return new self($this->binary, $network, $this->nestedUserns, $this->protectedPaths);
+        return new self($this->binary, $network, $this->nestedUserns, $this->protectedPaths, $this->allowlist, $this->egressSocket, $this->allowedDomains);
     }
 
     public function withBinary(string $binary): self
     {
-        return new self($binary, $this->network, $this->nestedUserns, $this->protectedPaths);
+        return new self($binary, $this->network, $this->nestedUserns, $this->protectedPaths, $this->allowlist, $this->egressSocket, $this->allowedDomains);
     }
 
     /**
@@ -220,7 +266,7 @@ final readonly class Bubblewrap implements SandboxBackend
      */
     public function withNestedUserns(bool $nestedUserns): self
     {
-        return new self($this->binary, $this->network, $nestedUserns, $this->protectedPaths);
+        return new self($this->binary, $this->network, $nestedUserns, $this->protectedPaths, $this->allowlist, $this->egressSocket, $this->allowedDomains);
     }
 
     /**
@@ -238,7 +284,36 @@ final readonly class Bubblewrap implements SandboxBackend
      */
     public function withProtectedPaths(array $protectedPaths): self
     {
-        return new self($this->binary, $this->network, $this->nestedUserns, $protectedPaths);
+        return new self($this->binary, $this->network, $this->nestedUserns, $protectedPaths, $this->allowlist, $this->egressSocket, $this->allowedDomains);
+    }
+
+    /**
+     * C-TOOL-4.g: this jail with the launch's egress path attached — the
+     * host-side proxy socket bound to {@see JAIL_EGRESS_SOCKET}, the proxy
+     * env quartet + `NO_PROXY` set for the command, and the argv tail
+     * prefixed with the in-jail {@see EgressBridge} so the real command only
+     * ever starts after the loopback front-end is listening. $domains is the
+     * `sandboxAllowedDomains` list, carried for {@see describe()} — the proxy
+     * enforces it, this class only says what will be enforced.
+     *
+     * @param list<string> $domains
+     */
+    public function withEgress(string $socketPath, array $domains): self
+    {
+        return new self($this->binary, false, $this->nestedUserns, $this->protectedPaths, true, $socketPath, $domains);
+    }
+
+    /**
+     * This jail knowing which domains the operator allowed, with NO egress
+     * path attached (the proxy did not start). The argv stays the plain
+     * no-network jail — fail-closed — while {@see describe()} can tell the
+     * model and the user why nothing reaches the network at all.
+     *
+     * @param list<string> $domains
+     */
+    public function withAllowedDomains(array $domains): self
+    {
+        return new self($this->binary, false, $this->nestedUserns, $this->protectedPaths, true, null, $domains);
     }
 
     /**
@@ -261,6 +336,10 @@ final readonly class Bubblewrap implements SandboxBackend
     /** The setting value this instance answers to. */
     public function mode(): string
     {
+        if ($this->allowlist) {
+            return self::MODE_ALLOWLIST;
+        }
+
         return $this->network ? self::MODE_ON : self::MODE_NO_NETWORK;
     }
 
@@ -343,6 +422,25 @@ final readonly class Bubblewrap implements SandboxBackend
             }
         }
 
+        // C-TOOL-4.g: the egress socket rides INSIDE the private tmpfs, so the
+        // bind must come AFTER `--tmpfs /tmp` (argv order is later-binds-win
+        // order for the same reason the escape-hatch re-binds are) — the jail
+        // sees the host-side proxy at a fixed short path under a name the
+        // tmpfs would otherwise have hidden. The proxy env quartet is the
+        // only egress a `no-network` jail lacks: everything still goes
+        // through the bridge→proxy→policy chain outside, where
+        // {@see EgressPolicy} grants per host. NO_PROXY keeps loopback
+        // self-calls working (a dev server the command starts itself must
+        // not be proxied to itself).
+        if ($this->allowlist && $this->egressSocket !== null) {
+            array_push($argv, '--bind', $this->egressSocket, self::JAIL_EGRESS_SOCKET);
+            $proxy = 'http://127.0.0.1:' . EgressBridge::JAIL_TCP_PORT;
+            foreach (['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy'] as $name) {
+                array_push($argv, '--setenv', $name, $proxy);
+            }
+            array_push($argv, '--setenv', 'NO_PROXY', 'localhost,127.0.0.1');
+        }
+
         array_push($argv, '--bind', $root, $root);
         foreach (JailPaths::gitDirs($root) as $gitDir => $linked) {
             // A linked worktree's git directories sit outside the root and
@@ -374,6 +472,26 @@ final readonly class Bubblewrap implements SandboxBackend
         // bwrap defaults to the caller's directory; the jail has always
         // pinned it to the root, and $chdir lets a later caller pin elsewhere.
         array_push($argv, '--chdir', $chdir === null ? $root : JailPaths::normalise($chdir), '--');
+
+        // The command does not start directly in allowlist mode: the jail's
+        // first program is the in-jail {@see EgressBridge} (bind-before-fork,
+        // then exec of the real command). The bridge is the tail's own argv,
+        // so both shapes that consume argv() — the escapeshellarg'd wrap()
+        // string and the pty spawn prefix, which always carries `/bin/sh` as
+        // the program after this tail — resolve the same way: the program
+        // name is what the jailed PATH has, the bridge execs it.
+        if ($this->allowlist && $this->egressSocket !== null) {
+            array_push(
+                $argv,
+                PHP_BINARY,
+                '-r',
+                EgressBridge::stub(BackgroundSupervisor::autoloadPath()),
+                '--',
+                self::JAIL_EGRESS_SOCKET,
+                (string) EgressBridge::JAIL_TCP_PORT,
+                '--',
+            );
+        }
 
         return $argv;
     }
@@ -463,15 +581,21 @@ final readonly class Bubblewrap implements SandboxBackend
     }
 
     /**
-     * The memo slot this instance's host fact lives under: the binary and the
-     * network flag, which are the two things that change the argv the probe
-     * runs. Deliberately NOT $nestedUserns — whether a host ACCEPTS
+     * The memo slot this instance's host fact lives under: the binary, the
+     * network flag and whether the jail carries an egress tail, which are the
+     * things that change the argv the probe runs — the egress arm forks a
+     * bridge before the command, so its verdict is not the plain jail's.
+     * Deliberately NOT $nestedUserns — whether a host ACCEPTS
      * {@see HARDENED_FLAGS} is the host's answer, and two instances that
-     * disagree about wanting them must not probe (or refuse) twice.
+     * disagree about wanting them must not probe (or refuse) twice — and not
+     * the socket path or domain list either, which cannot change whether the
+     * jail starts as long as the socket exists (the proxy creates it before
+     * the first command ever builds argv).
      */
     private function probeKey(): string
     {
-        return $this->resolvedBinary() . "\0" . ($this->network ? '1' : '0');
+        return $this->resolvedBinary() . "\0" . ($this->network ? '1' : '0')
+            . "\0" . ($this->egressSocket === null ? '' : 'e');
     }
 
     /**
@@ -518,13 +642,29 @@ final readonly class Bubblewrap implements SandboxBackend
             ? '; this host\'s bwrap cannot block nested user namespaces, so a jailed command can still create one'
             : '';
 
+        if ($this->allowlist) {
+            // C-TOOL-4.g: the model must know WHICH failures are policy.
+            // Domains are listed verbatim (they are the operator's own
+            // strings); a 403 from the proxy is not a network outage and
+            // ssh/db ports were never going to work here.
+            $egress = $this->egressSocket === null
+                ? '; `allowlist` is configured but the launch\'s egress proxy did not start, so there is NO network access at all'
+                : ($this->allowedDomains === []
+                    ? '; network reaches only the launch\'s egress proxy and its allowlist is EMPTY, so nothing is granted — this behaves exactly like no-network until the user lists hosts in `sandboxAllowedDomains`'
+                    : ('; network egress goes only through the launch\'s egress proxy, which grants '
+                        . implode(', ', $this->allowedDomains)
+                        . ' — every other host is answered 403, and non-HTTP traffic (ssh, database ports) fails'));
+        } else {
+            $egress = $this->network ? '' : '; there is NO network access';
+        }
+
         return sprintf(
             'Commands run inside a bubblewrap sandbox: the filesystem is read-only except %s, '
             . 'a private /tmp and $TMPDIR (and .git/hooks, .git/config, .candy-code/ and '
             . '.mcp.json stay read-only even there)%s%s. A write elsewhere fails with '
             . '"Read-only file system"; do not try to work around it — tell the user.',
             JailPaths::normalise($writableRoot),
-            $this->network ? '' : '; there is NO network access',
+            $egress,
             $unhardened,
         );
     }

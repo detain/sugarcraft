@@ -133,6 +133,20 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withHelp(Lang::t('settings.sandboxScope.help'))
                 ->withReaderSymbol(SandboxFactory::class . '::forScope')
                 ->withReadBy('`Bootstrap::hooks()` → `SandboxFactory::forScope()` → `ScriptHook`/`LintRunner`/`FormatRunner`/`TestRunner`; `Bootstrap::lspClient()` / `Bootstrap::mcpClient()` → `SandboxFactory::forScope()` → `LspLauncher`/`LspConnection` + `McpClient`/`StdioMcpServer`'),
+            // C-TOOL-4.g. User tier only, same direction as the three above:
+            // this list opens holes in the jail `bashSandbox: allowlist`
+            // builds, and a checked-out repository must never be able to
+            // widen the egress of the launch it arrived in. Enforced twice
+            // from the SAME reading: the launch's EgressProxyProcess starts
+            // with these entries, and 403s everything else.
+            SettingDefinition::new('sandboxAllowedDomains', SettingType::StringList, [])
+                ->withCategory(SettingCategory::Tools)
+                ->withRiskClass(RiskClass::Security)
+                ->withLayered()
+                ->withLabel(Lang::t('settings.sandboxAllowedDomains.label'))
+                ->withHelp(Lang::t('settings.sandboxAllowedDomains.help'))
+                ->withReaderSymbol(Bootstrap::class . '::egressProxy')
+                ->withReadBy('`Bootstrap::egressProxy()` → `EgressProxyProcess` entries; `SandboxFactory::fromSetting()` → `Bubblewrap::withEgress()`'),
             // Step 3.H. Both user tier only: the command is shell the
             // after-the-turn run executes with no tool call and no gate in
             // the path, so a checkout must neither name it nor switch it on

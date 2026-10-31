@@ -20,13 +20,16 @@ use SugarCraft\Code\Cli\LaunchContext;
  * run unsandboxed — see the class doc-block of {@see Bubblewrap} on why a
  * configured-but-dead jail fails while an absent setting does not.)
  *
- * THE BUBBLEWRAP ARM IS BUILT, NOT JUST CHOSEN. Two launch facts belong to the
- * jail rather than to any one command, and this is the one place both are
- * available: the user-tier {@see NESTED_USERNS_KEY} (C-TOOL-4.c — the flag pair
- * that stops a jailed command from creating its own user namespace), and the
- * `--config` file {@see LaunchContext::configPathOverride()} named, which the
- * jail re-binds read-only when it sits inside the writable root. They ride the
- * backend as instance state because the spawn sites are three — `Bash`'s
+ * THE BUBBLEWRAP ARM IS BUILT, NOT JUST CHOSEN. Three launch facts belong to
+ * the jail rather than to any one command, and this is the one place all
+ * three are available: the user-tier {@see NESTED_USERNS_KEY} (C-TOOL-4.c —
+ * the flag pair that stops a jailed command from creating its own user
+ * namespace), the `--config` file {@see LaunchContext::configPathOverride()}
+ * named, which the jail re-binds read-only when it sits inside the writable
+ * root, and — since C-TOOL-4.g — the launch's egress relay socket for the
+ * `allowlist` mode, read from the service shelf this class never starts
+ * (a doctor probe and the spawn share ONE builder; the probe must not fork).
+ * They ride the backend as instance state because the spawn sites are three — `Bash`'s
  * capture, `PtyRun`'s pty argv prefix and the probe — and a fact threaded
  * through only one of them is a fact that jail skips. Seatbelt carries neither:
  * `sandbox-exec` has no user namespaces to block, and its own config-file
@@ -84,9 +87,29 @@ final class SandboxFactory
 
         $override = LaunchContext::configPathOverride();
 
-        return $override === null || $override === ''
-            ? $bubblewrap
-            : $bubblewrap->withProtectedPaths([$override]);
+        if ($override !== null && $override !== '') {
+            $bubblewrap = $bubblewrap->withProtectedPaths([$override]);
+        }
+
+        if ($bubblewrap->mode() === SandboxBackend::MODE_ALLOWLIST) {
+            // C-TOOL-4.g: `allowlist` hands the jail its only way out — the
+            // launch's egress relay. The factory READS the service shelf
+            // ({@see Bootstrap::egressProxy()} starts it at the tools() door)
+            // and never starts one itself: this method is also the doctor
+            // probe's path, and a probe must not spawn a child. With no
+            // relay on the shelf the jail stays plain no-network in its argv
+            // while describe() names the missing path — the fail-closed
+            // reading of an advertised-but-absent egress, and the shape a
+            // bare (non-launch) caller gets until tools() has run.
+            $domains = array_values(array_filter((array) ($config['sandboxAllowedDomains'] ?? []), 'is_string'));
+            $proxy = LaunchContext::egressProxyInstance();
+
+            return $proxy === null
+                ? $bubblewrap->withAllowedDomains($domains)
+                : $bubblewrap->withEgress($proxy->socketPath(), $domains);
+        }
+
+        return $bubblewrap;
     }
 
     /**

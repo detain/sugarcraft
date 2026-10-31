@@ -41,6 +41,63 @@ final class EgressBridge
     public const DIAL_TIMEOUT_SECONDS = 5.0;
 
     /**
+     * C-TOOL-4.g: the loopback port the in-jail bridge answers on, and the
+     * single source for the `http://127.0.0.1:<port>` proxy URLs the jail's
+     * `--setenv HTTP_PROXY` family carries — the argv builder, this constant
+     * and {@see run()}'s bind must agree on one port, so it is a constant,
+     * not a negotiation. Fixed ports carry a theoretical collision risk with
+     * a foreign listener on the same loopback port; the jail's fresh network
+     * namespace means a sandboxed command can only ever reach THIS bridge at
+     * it, and a host process that had bound 50774 first makes the bridge's
+     * own bind fail — refusing the command loudly rather than silently
+     * double-routing it.
+     */
+    public const JAIL_TCP_PORT = 50774;
+
+    /**
+     * The `php -r` program that starts the bridge from the jail argv tail
+     * (C-TOOL-4.g). The bridge process is spawned by the jail's own argv,
+     * which cannot carry structured data, so the path to the autoloader is
+     * baked into the code at build time — the single source being
+     * {@see \SugarCraft\Code\Background\BackgroundSupervisor::autoloadPath()}
+     * at the call site. argv after the option separator is `<unixPath>
+     * <tcpPort> -- <program> <args...>` — the shape {@see
+     * Bubblewrap::argv()} appends; the FIRST `--` is consumed by PHP itself
+     * (`php -r` reports its code string as argv[0]), the second separates
+     * the bridge's own arguments from the command's, because the command may
+     * legitimately contain `--` of its own. {@see runFromArgv()} owns that
+     * contract, unpicked apart in tests.
+     */
+    public static function stub(string $autoload): string
+    {
+        return 'require ' . var_export($autoload, true) . '; '
+            . 'exit(\SugarCraft\Code\Tools\Sandbox\EgressBridge::runFromArgv($_SERVER["argv"] ?? []));';
+    }
+
+    /**
+     * The argv contract of {@see stub()}, as a method so the parse and its
+     * fail-closed refusals are testable without spawning anything. A shape
+     * mismatch exits 2 WITHOUT running the program: a mis-built jail tail
+     * must never degrade into "command ran, no relay" (the command would
+     * believe the network is reachable when nothing was forwarded) nor into
+     * executing an unintended argv slot.
+     *
+     * @param list<string> $argv
+     */
+    public static function runFromArgv(array $argv): int
+    {
+        $sock = (string) ($argv[1] ?? '');
+        $port = (string) ($argv[2] ?? '');
+        if ($sock === '' || !is_numeric($port) || ($argv[3] ?? null) !== '--' || ($argv[4] ?? '') === '') {
+            fwrite(STDERR, "candy-egress-bridge: expected -- <unixPath> <tcpPort> -- <program> [args...]\n");
+
+            return 2;
+        }
+
+        return self::run($sock, (string) $argv[4], array_slice($argv, 5), (int) $port);
+    }
+
+    /**
      * Binds the jail-local front-end. Exposed separately from {@see run()}
      * so the bind-before-fork ordering itself is testable.
      */

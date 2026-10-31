@@ -28,12 +28,16 @@ interface SandboxBackend
     public const MODE_OFF = 'off';
     public const MODE_ON = 'on';
     public const MODE_NO_NETWORK = 'no-network';
-    public const MODES = [self::MODE_OFF, self::MODE_ON, self::MODE_NO_NETWORK];
+    // C-TOOL-4.g: network ONLY to the `sandboxAllowedDomains` hosts, through
+    // the launch's egress proxy. On backends that cannot police egress this
+    // reads as the strictest mode, never as a wider one.
+    public const MODE_ALLOWLIST = 'allowlist';
+    public const MODES = [self::MODE_OFF, self::MODE_ON, self::MODE_NO_NETWORK, self::MODE_ALLOWLIST];
 
     /** What to call this backend in user-facing prose — lowercase, one word. */
     public function name(): string;
 
-    /** The setting value this instance answers to (`on` or `no-network`). */
+    /** The setting value this instance answers to (a {@see MODES} entry). */
     public function mode(): string;
 
     /**
