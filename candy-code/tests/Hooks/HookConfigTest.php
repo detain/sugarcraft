@@ -1032,4 +1032,112 @@ YAML;
             rmdir($home);
         }
     }
+
+    // =========================================================================
+    // C-EXT-6.c - per-type entry keys
+    // =========================================================================
+
+    public function testParseLoadsAnHttpEntryWithItsTarget(): void
+    {
+        $yaml = <<<'YAML'
+hooks:
+  PreToolUse:
+    - type: http
+      url: 'https://gate.example/api/hook'
+      headers:
+        X-Trace: $HOOK_TRACE
+      allowedEnvVars:
+        - HOOK_TRACE
+YAML;
+
+        $rows = HookConfig::parse($yaml);
+
+        $this->assertCount(1, $rows);
+        $this->assertSame('http', $rows[0]['type']);
+        $this->assertSame('https://gate.example/api/hook', $rows[0]['url']);
+        $this->assertSame(['X-Trace' => '$HOOK_TRACE'], $rows[0]['headers']);
+        $this->assertSame(['HOOK_TRACE'], $rows[0]['allowedEnvVars']);
+        $this->assertSame('', $rows[0]['command'], 'an http row must not arrive carrying a command');
+        $this->assertSame('https://gate.example/api/hook', $rows[0]['name'],
+            'an unnamed http row is named after its url, as a command row is after its command');
+    }
+
+    public function testParseDefaultsAPlainCommandRowToTheCommandKind(): void
+    {
+        $rows = HookConfig::parse("hooks:\n  PreToolUse:\n    - command: 'guard.sh'\n");
+
+        $this->assertSame('command', $rows[0]['type']);
+        $this->assertSame('', $rows[0]['url']);
+        $this->assertSame([], $rows[0]['headers']);
+        $this->assertSame([], $rows[0]['allowedEnvVars']);
+    }
+
+    public function testParseRefusesPerTypeKeysOnTheWrongKindOfEntry(): void
+    {
+        $cases = [
+            'a command row carrying a url' => ["hooks:\n  PreToolUse:\n    - command: 'guard.sh'\n      url: 'https://gate.example/x'\n", '/refusing rather than ignoring it/'],
+            'a command row carrying headers' => ["hooks:\n  PreToolUse:\n    - command: 'guard.sh'\n      headers:\n        X-Trace: t\n", '/refusing rather than ignoring it/'],
+            'a command row carrying an allow-list' => ["hooks:\n  PreToolUse:\n    - command: 'guard.sh'\n      allowedEnvVars:\n        - HOOK_TOKEN\n", '/refusing rather than ignoring it/'],
+            'an http row that also names a command' => ["hooks:\n  PreToolUse:\n    - type: http\n      url: 'https://gate.example/x'\n      command: 'guard.sh'\n", '/refusing rather than choosing between them/'],
+            'an http row with no url' => ["hooks:\n  PreToolUse:\n    - type: http\n      name: 'the gate'\n", '/hook with no/'],
+            'an http row with no url and no name' => ["hooks:\n  PreToolUse:\n    - type: http\n", "/empty 'name'/"],
+            'a kind this build does not run' => ["hooks:\n  PreToolUse:\n    - type: gopher\n      command: 'guard.sh'\n", '/rather than run as the kind you did not write/'],
+            'a kind that is not even a word' => ["hooks:\n  PreToolUse:\n    - type: [1, 2]\n      command: 'guard.sh'\n", '/rather than run as the kind you did not write/'],
+        ];
+
+        foreach ($cases as $label => [$yaml, $needle]) {
+            try {
+                HookConfig::parse($yaml);
+                $this->fail($label . ': the row loaded');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertMatchesRegularExpression($needle, $e->getMessage(), $label);
+            }
+        }
+    }
+
+    public function testParseRefusesATargetThisHostWouldNotDial(): void
+    {
+        // Judged at LOAD, not at call time: a settings file that names the
+        // metadata address has to fail the launch that would have dialled it.
+        foreach ([
+            'a non-http scheme' => 'ftp://gate.example/x',
+            'credentials in the url' => 'https://user:sekret@gate.example/x',
+            'loopback' => 'http://127.0.0.1:9000/x',
+            'the cloud metadata address' => 'http://169.254.169.254/latest/meta-data/',
+            'a private range' => 'http://10.4.4.4/x',
+        ] as $label => $url) {
+            try {
+                HookConfig::parse("hooks:\n  PreToolUse:\n    - type: http\n      url: '" . $url . "'\n");
+                $this->fail($label . ': an undiallable target loaded');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertMatchesRegularExpression('/this host will not dial/', $e->getMessage(), $label);
+                $this->assertStringContainsString('refused here rather than at call time', $e->getMessage(), $label);
+            }
+        }
+    }
+
+    public function testParseRefusesAHeaderOrEnvNameThatCannotBeUsed(): void
+    {
+        $cases = [
+            'a field the transport owns' => ["      headers:\n        Host: evil.example\n", '/cannot set them|header field/'],
+            'a field with a space in it' => ["      headers:\n        'Bad Name': x\n", '/header field/'],
+            'a value that is not a string' => ["      headers:\n        X-Trace: [1, 2]\n", '/header that is not a string/'],
+            'a value carrying a newline' => ["      headers:\n        X-Trace: \"up\\r\\nInjected: 1\"\n", '/request smuggling/'],
+            // A list reads as a field named `0`, and that is refused too — the
+            // two spellings are named apart only because both are refusals.
+            'headers that are a list' => ["      headers:\n        - X-Trace\n", '/is not a name|not a mapping/'],
+            'an env name that is not a name' => ["      allowedEnvVars:\n        - 'BAD-NAME'\n", '/shell identifier/'],
+            'an allow-list that is not a list' => ["      allowedEnvVars: HOOK_TOKEN\n", '/allowedEnvVars/'],
+        ];
+
+        foreach ($cases as $label => [$tail, $needle]) {
+            $yaml = "hooks:\n  PreToolUse:\n    - type: http\n      url: 'https://gate.example/x'\n" . $tail;
+            try {
+                HookConfig::parse($yaml);
+                $this->fail($label . ': the row loaded');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertMatchesRegularExpression($needle, $e->getMessage(), $label);
+            }
+        }
+    }
 }

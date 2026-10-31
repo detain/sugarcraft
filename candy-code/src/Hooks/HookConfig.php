@@ -514,10 +514,14 @@ final class HookConfig
      * request that happened while nobody was looking.
      *
      * @param array<string, mixed> $config
-     * @param string $type the entry's own `type`, already narrowed by this method
+     * @param mixed $type the entry's own `type` as written; the FIRST thing this
+     *                    method does is refuse anything but the two words it knows,
+     *                    which is why it takes mixed rather than string — a
+     *                    `type: [1, 2]` has to arrive as a refusal naming the key,
+     *                    not as a TypeError escaping the parser
      * @return array{0: string, 1: array<string, string>, 2: list<string>}
      */
-    private static function perTypeKeys(array $config, string $type, string $source, string $event, string $name): array
+    private static function perTypeKeys(array $config, mixed $type, string $source, string $event, string $name): array
     {
         if (!is_string($type) || ($type !== self::TYPE_COMMAND && $type !== self::TYPE_HTTP)) {
             throw new \InvalidArgumentException(
