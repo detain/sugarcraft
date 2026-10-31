@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\MCP\Serve;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Hooks\HookContext;
+use SugarCraft\Code\Hooks\HookEvent;
+use SugarCraft\Code\Hooks\HookInterface;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
+use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Code\MCP\Serve\McpServeHost;
 use SugarCraft\Code\MCP\Serve\McpServeRoster;
@@ -26,6 +30,15 @@ use SugarCraft\McpClient\McpMessage;
  * unknown, an unknown method answers -32601, EOF exits 0. The risk pin —
  * a `../` escape refused by the tool's own jail even though the hook chain
  * allows the Read class — rides alongside.
+ *
+ * Round-1 review pins (MAJOR-1 + NIT-1): the DENY arm already had a
+ * behavioural pin (the `.env` refusal), but no test produced an ASK verdict,
+ * so swapping `permitsExecution()` for `isDenied()` at the call gate — the
+ * exact silent widening §6 forbids — stayed green. The ASK pin below answers
+ * an injected ask-returning hook with `Permission required:` AND proves the
+ * tool never executed; alongside it, the two defensive arms the class
+ * docblock advertises (a MODIFY rewrite reaching execute, and a throwing
+ * hook answered as -32603 while the stream keeps serving) each get one pin.
  */
 final class McpServeHostTest extends TestCase
 {
@@ -48,6 +61,7 @@ final class McpServeHostTest extends TestCase
         mkdir($this->root . '/nested', 0700, true);
         mkdir($base . '/outside', 0700, true);
         file_put_contents($this->root . '/hello.txt', 'hello serve');
+        file_put_contents($this->root . '/altered.txt', 'the rewrite ran');
         file_put_contents($this->root . '/.env', 'SECRET=served-anyway');
         file_put_contents($base . '/outside/secret.txt', 'out of jail');
 
@@ -67,7 +81,7 @@ final class McpServeHostTest extends TestCase
     protected function tearDown(): void
     {
         $base = dirname($this->root);
-        foreach ([$this->root . '/hello.txt', $this->root . '/.env', $this->root . '/nested', $base . '/outside/secret.txt', $base . '/outside', $this->root, $base] as $path) {
+        foreach ([$this->root . '/hello.txt', $this->root . '/altered.txt', $this->root . '/.env', $this->root . '/nested', $base . '/outside/secret.txt', $base . '/outside', $this->root, $base] as $path) {
             if (is_dir($path)) {
                 @rmdir($path);
             } elseif (file_exists($path)) {
@@ -246,5 +260,126 @@ final class McpServeHostTest extends TestCase
                 $name . ' left the read-only class; serve must not follow it silently.',
             );
         }
+    }
+
+    public function testAnUnansweredAskRefusesAndNeverExecutesTheTool(): void
+    {
+        // MAJOR-1 (round-1 review): the DENY path had a behavioural pin, but
+        // nothing ever produced an ASK — so replacing the deny/ask-aware
+        // `permitsExecution()` gate with a bare `isDenied()` check (an ASK
+        // would then EXECUTE: the silent privilege widening §6 forbids) left
+        // the whole suite green. This pin reddens under exactly that mutation.
+        $this->chain->register(new class () implements HookInterface {
+            public function name(): string
+            {
+                return 'serve-pin-asks-everything';
+            }
+
+            public function event(): HookEvent
+            {
+                return HookEvent::PreToolUse;
+            }
+
+            public function matcher(): string
+            {
+                return '^Read$';
+            }
+
+            public function execute(HookContext $context): HookResult
+            {
+                return HookResult::ask('the serve path has no approver to answer this.');
+            }
+        });
+
+        $reply = $this->serveAsk('a1', 'tools/call', ['name' => 'Read', 'arguments' => ['file_path' => $this->root . '/hello.txt']]);
+
+        // Refused as a tool result (not a protocol error), through the house
+        // Unanswered prefix — a DIFFERENT prefix from the DENY arm's "Hook
+        // denied:", pinning the isAsk() render at McpServeHost.php:271.
+        self::assertArrayNotHasKey('error', $reply);
+        self::assertTrue($reply['result']['isError']);
+        $text = $reply['result']['content'][0]['text'];
+        self::assertStringStartsWith('Permission required: ', $text);
+        // Non-execution proof: the file this Read asked for exists and would
+        // have answered 'hello serve' (see the success pin); its absence is
+        // the side-effect-free witness that execute() never ran.
+        self::assertStringNotContainsString('hello serve', $text, 'an unanswered ASK must never execute the tool');
+    }
+
+    public function testAModifiedVerdictRunsTheRewrittenArgumentsNotTheOriginals(): void
+    {
+        // NIT-1: the isModified() re-write arm was advertised in the class
+        // docblock but unexercised. Deleting it (executing the ORIGINAL
+        // arguments despite the chain's settled rewrite) reddens this pin.
+        $altered = $this->root . '/altered.txt';
+        $this->chain->register(new class ($altered) implements HookInterface {
+            public function __construct(private readonly string $rewrittenTarget)
+            {
+            }
+
+            public function name(): string
+            {
+                return 'serve-pin-rewrites-reads';
+            }
+
+            public function event(): HookEvent
+            {
+                return HookEvent::PreToolUse;
+            }
+
+            public function matcher(): string
+            {
+                return '^Read$';
+            }
+
+            public function execute(HookContext $context): HookResult
+            {
+                return HookResult::modify((string) json_encode(['file_path' => $this->rewrittenTarget]));
+            }
+        });
+
+        $reply = $this->serveAsk('d1', 'tools/call', ['name' => 'Read', 'arguments' => ['file_path' => $this->root . '/hello.txt']]);
+
+        self::assertFalse($reply['result']['isError']);
+        self::assertStringContainsString('the rewrite ran', $reply['result']['content'][0]['text'], 'the rewrite the whole chain settled on must reach execute()');
+        self::assertStringNotContainsString('hello serve', $reply['result']['content'][0]['text'], 'the originals the rewrite replaced must not run');
+    }
+
+    public function testAThrowingHookAnswersInternalErrorAndTheStreamKeepsServing(): void
+    {
+        // NIT-1: the -32603 keep-serving arm. preToolUse keeps a hook throw
+        // propagating (failClosedOnThrow is false for this chain), so the
+        // host's catch must answer JSON-RPC internal error ONCE and survive —
+        // a dead stream on a buggy hook is the DoS this arm exists against.
+        $this->chain->register(new class () implements HookInterface {
+            public function name(): string
+            {
+                return 'serve-pin-throws-on-reads';
+            }
+
+            public function event(): HookEvent
+            {
+                return HookEvent::PreToolUse;
+            }
+
+            public function matcher(): string
+            {
+                return '^Read$';
+            }
+
+            public function execute(HookContext $context): HookResult
+            {
+                throw new \RuntimeException('injected serve-chain explosion');
+            }
+        });
+
+        $reply = $this->serveAsk('t1', 'tools/call', ['name' => 'Read', 'arguments' => ['file_path' => $this->root . '/hello.txt']]);
+        self::assertSame(-32603, $reply['error']['code']);
+        self::assertStringContainsString('injected serve-chain explosion', $reply['error']['message']);
+
+        // Still serving: the next request on the same host draws a normal frame.
+        $after = $this->serveAsk('t2', 'ping');
+        self::assertArrayNotHasKey('error', $after);
+        self::assertSame('t2', $after['id']);
     }
 }
