@@ -28,6 +28,7 @@ final class StaticFilesTest extends TestCase
         \file_put_contents($this->webRoot . '/index.html', '<!doctype html><title>app</title>');
         \file_put_contents($this->webRoot . '/assets/app-1a2b.js', 'console.log(1)');
         \file_put_contents($this->webRoot . '/favicon.svg', '<svg/>');
+        \file_put_contents($this->webRoot . '/sw.js', 'self.onpush = () => {};');
         \file_put_contents($this->webRoot . '/.env', 'SECRET=1');
         \file_put_contents($this->outside, 'outside the root');
         \symlink($this->outside, $this->webRoot . '/leak.txt');
@@ -36,7 +37,7 @@ final class StaticFilesTest extends TestCase
     protected function tearDown(): void
     {
         $base = \dirname($this->webRoot);
-        foreach (['/dist/leak.txt', '/dist/.env', '/dist/favicon.svg', '/dist/assets/app-1a2b.js', '/dist/index.html', '/secret.txt'] as $file) {
+        foreach (['/dist/leak.txt', '/dist/.env', '/dist/favicon.svg', '/dist/sw.js', '/dist/assets/app-1a2b.js', '/dist/index.html', '/secret.txt'] as $file) {
             @\unlink($base . $file);
         }
         @\rmdir($this->webRoot . '/assets');
@@ -65,6 +66,23 @@ final class StaticFilesTest extends TestCase
 
         self::assertSame('image/svg+xml', $this->fetch($files, '/favicon.svg')->getHeaderLine('Content-Type'));
         self::assertSame(200, $this->fetch($files, '/assets/app-1a2b.js', 'HEAD')->getStatusCode());
+    }
+
+    /**
+     * C-WEB-5.e: the push worker's URL must stay stable for its registered
+     * scope, so it sits at the dist root with an unhashed name and is
+     * revalidated on every navigation — an immutable pin here would stall
+     * worker updates for a year.
+     */
+    public function testTheServiceWorkerScriptIsRevalidatedOnEveryNavigation(): void
+    {
+        $files = StaticFiles::new($this->webRoot);
+
+        $worker = $this->fetch($files, '/sw.js');
+        self::assertSame(200, $worker->getStatusCode());
+        self::assertSame('text/javascript; charset=utf-8', $worker->getHeaderLine('Content-Type'));
+        self::assertSame('no-cache', $worker->getHeaderLine('Cache-Control'));
+        self::assertStringContainsString('onpush', (string) $worker->getBody());
     }
 
     public function testAnExtensionlessRouteGetsTheShellAndAMissingAssetDoesNot(): void

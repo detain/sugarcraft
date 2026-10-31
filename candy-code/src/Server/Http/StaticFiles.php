@@ -121,6 +121,13 @@ final class StaticFiles
         }
 
         $extension = \strtolower(\pathinfo($file, \PATHINFO_EXTENSION));
+        // Only Vite-fingerprinted paths may ride the immutable cache. The
+        // push service worker (sw.js, C-WEB-5.e) lives at the dist ROOT and
+        // keeps an unhashed name on purpose — its URL must be stable for the
+        // registered scope, so an update can only land through a browser
+        // revalidation. A future move of sw.js under assets/, or a broader
+        // hashed rule catching it, would stale the worker for a year;
+        // StaticFilesTest pins /sw.js at no-cache to catch that.
         $hashed = \str_starts_with($relative, 'assets/');
 
         // A HEAD answer keeps its Content-Length and loses the body in
