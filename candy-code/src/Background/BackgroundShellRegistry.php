@@ -187,6 +187,16 @@ final class BackgroundShellRegistry
     public const MAX_READ_BYTES = 262144;
 
     /**
+     * Default pty geometry for {@see startInteractive()} — the classic
+     * 80x24 the sugar-pty facade itself carries, so a shell that queries
+     * `stty size` sees a terminal shape even before any caller resizes.
+     */
+    public const INTERACTIVE_COLS = 80;
+
+    /** {@see INTERACTIVE_COLS}' row twin. */
+    public const INTERACTIVE_ROWS = 24;
+
+    /**
      * Per-file output cap handed to `ulimit -f`: RLIMIT_FSIZE counts in the
      * kernel's 512-byte blocks, so 131072 blocks = 64 MiB. Generous enough
      * that no build log a background shell plausibly produces is truncated,
@@ -232,6 +242,15 @@ final class BackgroundShellRegistry
 
     /** Poll cadence while the stop ladder waits for the group to go quiet. */
     private const STOP_POLL_SECONDS = 0.01;
+
+    /**
+     * Bytes one {@see send()} may hand the pty. A send rides the model's
+     * keystroke budget, not a file channel: anything longer than a terminal
+     * line a human could press is a paste shaped like an escape-strategy
+     * probe, and the pty's own buffer would silently coalesce it into the
+     * next read window.
+     */
+    private const SEND_MAX_BYTES = 4096;
 
     /**
      * @var array<string, array<string, mixed>> rows keyed by shell id, insertion-ordered
@@ -397,6 +416,215 @@ final class BackgroundShellRegistry
     }
 
     /**
+     * Start a shell that OUTLIVES every tool call: a relay process owns a
+     * real pty, the shell runs on it with a controlling terminal, and input
+     * arrives later through {@see send()}.
+     *
+     * WHY A RELAY PROCESS (and not a live handle in this launch): every tool
+     * answer is a new process view of the registry, and a pty master is a
+     * file descriptor — it cannot cross that boundary, so a shell whose
+     * master died with the tool would lose its screen between turns. The
+     * relay is the long-lived owner instead (src/Background/PtyRelay.php):
+     * it opens the pty at $cols x $rows, execs `$shell -c <staged command>`
+     * with the controlling-terminal wrap so the shell LEADS its own session
+     * (a group kill reaches it and every job), appends the master's output
+     * to <id>.out, feeds <id>.in (a FIFO) to the master, and settles by
+     * writing <id>.exit — the same file shape the plain path's recorder
+     * trailer leaves, which is why status()/read()/outputLimitNote() narrate
+     * both kinds unchanged. The wrapper trailer and its `ulimit -f` are
+     * deliberately NOT reused: SIGXFSZ would kill the relay, not the shell,
+     * so the relay measures the output cap in-process and records
+     * {@see OUTPUT_LIMIT_EXIT_CODE} itself (E646: process bounds — the wall
+     * and the cap — never a blanket timer on user work below them).
+     *
+     * The command text NEVER rides argv or environ: it is staged in
+     * <id>.cmd (0600) and the relay unlinks it after reading, so a
+     * `ps auxww` observer learns the shape of the launch, not its payload.
+     *
+     * Host refusal is total, not degraded: without
+     * {@see ProcessContainment::interactiveAvailable()}, posix_mkfifo, or
+     * pcntl_signal the answer is `ok: false` and nothing is spawned — a
+     * mode that silently became a pipe would hand the caller a tty-shaped
+     * lie (the same law Bash's interactive opt-in obeys).
+     *
+     * @param array<string, string> $envOverrides
+     */
+    public function startInteractive(string $command, string $label, int $cols = self::INTERACTIVE_COLS, int $rows = self::INTERACTIVE_ROWS, array $envOverrides = [], ?string $owner = null): array
+    {
+        $this->dropForkInheritedHandles(true);
+        if (count($this->rows) >= self::MAX_SHELLS) {
+            return ['ok' => false, 'error' => sprintf(
+                'this launch already tracks %d background shells, which is the cap; stop one with ShellStop first',
+                self::MAX_SHELLS,
+            )];
+        }
+        if (!ProcessContainment::interactiveAvailable()) {
+            return ['ok' => false, 'error' => 'pty mechanism unavailable on this host (no pty); the interactive shell was refused and never started'];
+        }
+        if (!\function_exists('posix_mkfifo') || !\function_exists('pcntl_signal')) {
+            return ['ok' => false, 'error' => 'the interactive shell needs a FIFO and a signal handler this build does not have (posix_mkfifo/pcntl_signal); the shell was refused and never started'];
+        }
+
+        $autoload = BackgroundSupervisor::autoloadPath();
+        if ($autoload === null) {
+            return ['ok' => false, 'error' => 'cannot find the composer autoloader the relay must load'];
+        }
+
+        $id = $this->mintId();
+        $paths = self::pathFor($this->directory, $id);
+        $failure = $this->sinkFiles($paths);
+        if ($failure !== null) {
+            return ['ok' => false, 'error' => $failure];
+        }
+        if (!@\posix_mkfifo($paths['in'], 0600)) {
+            return ['ok' => false, 'error' => 'the input FIFO could not be created; the interactive shell was refused and never started'];
+        }
+        // Stage-then-unlink: the file exists only between here and the
+        // relay's first act, and carries mode 0600 the whole time.
+        if (@\file_put_contents($paths['cmd'], $command) === false) {
+            @\unlink($paths['in']);
+
+            return ['ok' => false, 'error' => 'the command could not be staged for the relay; the interactive shell was refused and never started'];
+        }
+        @\chmod($paths['cmd'], self::FILE_MODE);
+
+        $code = \sprintf(
+            'require %s; exit(\\%s::main());',
+            \var_export($autoload, true),
+            PtyRelay::class,
+        );
+        $spawnSpec = ProcessContainment::spawnSpec([
+            \PHP_BINARY,
+            '-d', 'display_errors=stderr',
+            '-r', $code,
+            '--', $this->directory, $id, (string) $cols, (string) $rows,
+        ]);
+        $env = ProcessContainment::scrubbedEnv($envOverrides);
+        $descriptors = [
+            0 => ['file', '/dev/null', 'r'],
+            // The relay has no stdout contract; the transcript rides <id>.out.
+            1 => ['file', '/dev/null', 'w'],
+            // The relay's OWN stderr — warnings about a failed spawn, never
+            // shell output (that is the pty's). Discarding it would erase
+            // the only account of a relay that died before recording.
+            2 => ['file', $paths['stderr'], 'a'],
+        ];
+
+        error_clear_last();
+        $process = @proc_open($spawnSpec, $descriptors, $pipes, $this->directory, $env);
+        if (!\is_resource($process)) {
+            $cause = error_get_last()['message'] ?? 'proc_open() failed';
+            @\unlink($paths['in']);
+            @\unlink($paths['cmd']);
+
+            return ['ok' => false, 'error' => 'the interactive shell was not started: ' . $cause];
+        }
+
+        $status = proc_get_status($process);
+        $pid = (int) $status['pid'];
+        $this->handles[$id] = $process;
+        $this->rows[$id] = [
+            'id' => $id,
+            'label' => $label,
+            'owner' => $owner,
+            'pid' => $pid,
+            'pgid' => $pid,
+            'grouped' => ProcessContainment::groupsSpawns(),
+            'stdoutPath' => $paths['stdout'],
+            'stderrPath' => $paths['stderr'],
+            'exitPath' => $paths['exit'],
+            'spawnedAt' => \microtime(true),
+            'exitCode' => null,
+            'exitNote' => null,
+            'stopped' => false,
+            'expired' => false,
+            // Interactive extras: the row must survive a fork round trip
+            // ({@see parseRow()}) because send()/stop() may run in a
+            // different process view of this same launch.
+            'interactive' => true,
+            'cols' => $cols,
+            'rows' => $rows,
+            // The pty CHILD's pid — written by the relay, read by the kill
+            // ladder as the backstop for a shell that ignores SIGHUP when
+            // the relay itself is SIGKILLed. This row's `pid` is the relay.
+            'ptyPidPath' => $paths['ptyPid'],
+            // The input FIFO. An r+ open never blocks and never EOFs, so the
+            // relay can hold it for its whole life while send()s come and go.
+            'inPath' => $paths['in'],
+            'lastInputAt' => null,
+            'humanInputs' => 0,
+        ];
+        // Same last-act stat-cache law as plain start().
+        $this->sweepCorpseFiles();
+
+        return ['ok' => true, 'shell' => $this->status($id)];
+    }
+
+    /**
+     * Feed bytes to an interactive shell's pty and answer where its output
+     * stood BEFORE the write.
+     *
+     * The cursor-before semantics is what makes the send→read pairing
+     * race-free: the caller reads from the returned cursor and sees exactly
+     * the bytes this keystroke (or a later one) produced, never a frame that
+     * had already been waiting. The write opens <id>.in fresh each time —
+     * r+ so the open never blocks even in the window between the relay's
+     * death and the row's settle — and is bounded non-blocking: a relay not
+     * draining within the poll budget is a refusal, not a hang.
+     *
+     * $origin tags who pressed: 'human' bumps the row's humanInputs counter
+     * (the audit answer for "did anyone actually touch this"), anything
+     * else stamps lastInputAt without the counter. The only callers are the
+     * C-TOOL-6.k/6.l tools — until those land nothing reaches this, exactly
+     * as Bash refuses the interactive combination until 6.k.
+     *
+     * @return array{ok: bool, error?: string, cursor?: int}
+     */
+    public function send(string $shellId, string $bytes, string $origin = 'model', ?string $owner = null): array
+    {
+        $this->dropForkInheritedHandles(false);
+        $row = $this->rows[$shellId] ?? null;
+        if ($row === null || !self::rowVisible($row['owner'], $owner)) {
+            // The identical no-trace answer the visibility law gives every
+            // other call: foreign rows do not exist.
+            return ['ok' => false, 'error' => 'no background shell ' . $shellId . ' is tracked by this launch'];
+        }
+        if (($row['interactive'] ?? false) !== true) {
+            return ['ok' => false, 'error' => 'shell ' . $shellId . ' is not an interactive (pty) shell; its input closed with the command'];
+        }
+        if (strlen($bytes) > self::SEND_MAX_BYTES) {
+            return ['ok' => false, 'error' => sprintf(
+                'a send is capped at %d bytes; this one carried %d',
+                self::SEND_MAX_BYTES,
+                strlen($bytes),
+            )];
+        }
+        $state = $this->observe($shellId, $row);
+        if ($state['state'] !== 'running') {
+            return ['ok' => false, 'error' => 'shell ' . $shellId . ' has already finished; start a new one to type again'];
+        }
+
+        $cursor = (int) (@filesize($row['stdoutPath']) ?: 0);
+        $fifo = @fopen($row['inPath'], 'r+');
+        if ($fifo === false) {
+            return ['ok' => false, 'error' => 'the input FIFO could not be opened; the relay may have just died'];
+        }
+        @stream_set_blocking($fifo, false);
+        $written = @fwrite($fifo, $bytes);
+        @fclose($fifo);
+        if ($written === false || $written <= 0) {
+            return ['ok' => false, 'error' => 'the relay is not reading input; the send was refused'];
+        }
+
+        $this->rows[$shellId]['lastInputAt'] = \microtime(true);
+        if ($origin === 'human') {
+            $this->rows[$shellId]['humanInputs'] = (int) $row['humanInputs'] + 1;
+        }
+
+        return ['ok' => true, 'cursor' => $cursor];
+    }
+
+    /**
      * Assemble the spawn wrapper: the two sink-capped recorders, the
      * parent-independent lifetime wall, and the exit-code recorder.
      *
@@ -559,7 +787,7 @@ final class BackgroundShellRegistry
         }
         $ceiling = \microtime(true) - self::CORPSE_RETENTION_SECONDS;
         foreach ($entries as $entry) {
-            if (!\is_string($entry) || preg_match('/^(sh-[0-9a-f]{8})\.(?:out|err|exit|outd|errd)$/', $entry, $matches) !== 1) {
+            if (!\is_string($entry) || preg_match('/^(sh-[0-9a-f]{8})\.(?:out|err|exit|outd|errd|in|cmd|pid)$/', $entry, $matches) !== 1) {
                 continue; // not shell files this tree owns the names of
             }
             if (isset($this->rows[$matches[1]])) {
@@ -622,7 +850,7 @@ final class BackgroundShellRegistry
                     continue;
                 }
                 $innerPath = $path . '/' . $inner;
-                if (\is_file($innerPath)) {
+                if (\is_file($innerPath) || \is_fifo($innerPath)) {
                     $mtime = @filemtime($innerPath);
                     if ($mtime !== false && (float) $mtime < $ceiling) {
                         @unlink($innerPath);
@@ -1052,12 +1280,58 @@ final class BackgroundShellRegistry
     private function runKillLadder(string $id, int $pid): bool
     {
         self::signalShellGroup($pid, 15);
-        if ($this->awaitGroupDeath($id, $pid, self::TERM_GRACE_SECONDS)) {
-            return true;
+        $confirmed = $this->awaitGroupDeath($id, $pid, self::TERM_GRACE_SECONDS);
+        if (!$confirmed) {
+            self::signalShellGroup($pid, 9);
+            $confirmed = $this->awaitGroupDeath($id, $pid, self::TERM_GRACE_SECONDS);
         }
-        self::signalShellGroup($pid, 9);
 
-        return $this->awaitGroupDeath($id, $pid, self::TERM_GRACE_SECONDS);
+        // Interactive backstop: the row's pid is the RELAY, and a shell on
+        // its pty leads a separate session (the controlling-terminal shim
+        // setsid's it). A relay that died by SIGKILL closes the master and
+        // the kernel hangs the session up — but a shell that traps or
+        // ignores SIGHUP outlives that, so the recorded pty pid from
+        // <id>.pid gets the same two-rung ladder. With the relay gone this
+        // is the ONLY handle on the session (the Darwin risk paragraph:
+        // no /proc census there either).
+        $ptyPid = $this->ptyChildPid($id);
+        if ($ptyPid !== null && self::groupMemberAlive($ptyPid)) {
+            self::signalShellGroup($ptyPid, 15);
+            if (!$this->awaitGroupDeath($id, $ptyPid, self::TERM_GRACE_SECONDS)) {
+                self::signalShellGroup($ptyPid, 9);
+                $confirmed = $confirmed && $this->awaitGroupDeath($id, $ptyPid, self::TERM_GRACE_SECONDS);
+            }
+        }
+
+        return $confirmed;
+    }
+
+    /**
+     * The pty child pid a settled relay recorded, or null for a row that is
+     * not interactive or whose relay never got far enough to write the
+     * handle. Read fresh every time on purpose: the file IS the spawn-time
+     * record (ISS-014's "record at spawn" law, discharged by the relay
+     * before it serves any input), and re-reading costs one stat while a
+     * cached copy would go stale across the fork boundary this registry
+     * already lives behind.
+     */
+    private function ptyChildPid(string $id): ?int
+    {
+        $row = $this->rows[$id] ?? null;
+        if ($row === null || ($row['interactive'] ?? false) !== true) {
+            return null;
+        }
+        $path = $row['ptyPidPath'] ?? null;
+        if (!\is_string($path) || $path === '') {
+            return null;
+        }
+        $raw = @file_get_contents($path);
+        if (!\is_string($raw)) {
+            return null;
+        }
+        $pid = (int) trim($raw);
+
+        return $pid > 0 ? $pid : null;
     }
 
     /**
@@ -1338,6 +1612,30 @@ final class BackgroundShellRegistry
         if ($exitCode !== null && !\is_int($exitCode)) {
             return null;
         }
+        $interactive = ($row['interactive'] ?? false) === true;
+        $cols = null;
+        $rows = null;
+        $ptyPidPath = null;
+        $inPath = null;
+        if ($interactive) {
+            // An interactive row that loses its geometry or its relay paths
+            // describes a shell this launch can neither size nor feed —
+            // dropped whole, the same law the three plain paths obey.
+            if (!isset($row['cols'], $row['rows']) || !\is_int($row['cols']) || !\is_int($row['rows'])
+                || $row['cols'] <= 0 || $row['rows'] <= 0
+                || ($row['ptyPidPath'] ?? null) !== $paths['ptyPid']
+                || ($row['inPath'] ?? null) !== $paths['in']) {
+                return null;
+            }
+            $cols = (int) $row['cols'];
+            $rows = (int) $row['rows'];
+            $ptyPidPath = $paths['ptyPid'];
+            $inPath = $paths['in'];
+        }
+        $lastInputAt = $row['lastInputAt'] ?? null;
+        if ($lastInputAt !== null && !(\is_float($lastInputAt) || \is_int($lastInputAt))) {
+            $lastInputAt = null; // a stamped clock is an optimisation, never authority
+        }
 
         return [
             'label' => \is_string($row['label'] ?? null) ? $row['label'] : '',
@@ -1358,6 +1656,16 @@ final class BackgroundShellRegistry
             'exitCode' => $exitCode,
             'stopped' => ($row['stopped'] ?? false) === true,
             'expired' => ($row['expired'] ?? false) === true,
+            // The interactive family: a row that predates it (or a plain
+            // row) reads as the plain shell it is — every key defaulted,
+            // because send() and the kill-ladder backstop gate on the flag.
+            'interactive' => $interactive,
+            'cols' => $cols,
+            'rows' => $rows,
+            'ptyPidPath' => $ptyPidPath,
+            'inPath' => $inPath,
+            'lastInputAt' => $lastInputAt === null ? null : (float) $lastInputAt,
+            'humanInputs' => isset($row['humanInputs']) && \is_int($row['humanInputs']) ? $row['humanInputs'] : 0,
         ];
     }
 

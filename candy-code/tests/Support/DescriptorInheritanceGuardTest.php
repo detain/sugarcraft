@@ -176,6 +176,18 @@ final class DescriptorInheritanceGuardTest extends TestCase
             'reason' => 'long-lived background shell with file sinks for stdio; group-killed by '
                 . 'ShellStop, the lifetime wall, and the launch teardown hook',
         ],
+        // C-TOOL-6.j: the interactive launch spawns a RELAY (src/Background/
+        // PtyRelay.php), not the shell directly — the relay's own stdio are
+        // 0//dev/null, 1//dev/null, 2 the `.err` file sink, and the pty child
+        // it forks gets the sugar-pty slave (accounted in that lib). Death:
+        // the same three doors kill the relay group, and runKillLadder()
+        // backstops the relay-recorded pty child's group from the `.pid`
+        // file for a shell that ignores the hangup.
+        'Background/BackgroundShellRegistry.php::startInteractive' => [
+            'count' => 1,
+            'reason' => 'a long-lived relay with file sinks, group-killed by ShellStop, the wall '
+                . 'and the launch teardown',
+        ],
 
         // E366 MEDIUM. The handle goes into a local array literal, that array
         // into `$this->processes[$id]`, and the array is returned as well.

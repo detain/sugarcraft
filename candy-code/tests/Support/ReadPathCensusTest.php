@@ -1090,18 +1090,25 @@ final class ReadPathCensusTest extends TestCase
                 . 'no config, project or $HOME path reaches the name',
             'SELF_LOCATED — readExitFile() reads back the exit-code file the wrapper child wrote '
                 . 'into this registry\'s own 0700 directory; a non-numeric body answers null',
+            'SELF_LOCATED — ptyChildPid() reads back the pty-child pid file the relay wrote into '
+                . 'this launch\'s own 0700 directory before serving input; the kill-ladder '
+                . 'backstop only ever signals the number this tree\'s relay recorded',
         ],
         'Background/BackgroundShellRegistry.php|fopen' => [
             'SELF_LOCATED — sinkFiles() creates the stdout/stderr/exit sinks with `xb` in the '
                 . 'registry\'s own directory before the fork, settled to 0600',
             'SELF_LOCATED — sliceFrom() opens a capture file this registry created to tail from '
                 . 'the caller\'s cursor; the size guard answers before the open ever happens',
+            'SELF_LOCATED — send() opens the keystroke FIFO (`r+`, non-blocking) this registry '
+                . 'minted beside the other sinks for an interactive row; send is the only writer '
+                . 'side and the relay its only reader',
         ],
         'Background/BackgroundShellRegistry.php|scandir' => [
             'NAMES_ONLY — groupMemberAlive() enumerates /proc; the numeric names feed only the '
                 . 'stat reads above and nothing is admitted or refused on the listing itself',
             'NAMES_ONLY — sweepCorpseFiles() (SHL-1) lists this registry\'s own 0700 directory '
-                . 'for `sh-<hex>.(out|err|exit)` names no row still owns; the names feed only an '
+                . 'for `sh-<hex>.(out|err|exit|outd|errd|in|cmd|pid)` names no row still owns; '
+                . 'the names feed only an '
                 . 'mtime check and an unlink, and no content read follows the listing',
             // cure 2026-10-27 (C-TOOL-7.a finding): the launch sweep joined the key. The
             // containment leg for both new rows: the sweep only ever descends directories
@@ -1113,8 +1120,9 @@ final class ReadPathCensusTest extends TestCase
                 . 'admitted as content from the listing',
             'NAMES_ONLY — sweepDeadLaunchDirs()\'s descend into one already-matched '
                 . '`launch-<digits>` directory under its own 0700 root lists the `sh-*` '
-                . 'capture names (out|err|exit|outd|errd) for an mtime check and an '
-                . 'unlink; no content read follows the listing',
+                . 'capture names (out|err|exit|outd|errd|in|cmd|pid) for an mtime check and an '
+                . 'unlink (an aged input FIFO is unlinked like a regular file); no content '
+                . 'read follows the listing',
         ],
         'Background/PtyRelay.php|file_get_contents' => [
             'SELF_LOCATED — main() reads back the staged command file the registry wrote into '
