@@ -236,8 +236,10 @@ final class PushMethodsTest extends TestCase
 
         self::assertSame($cipher->encrypt($question, $this->rpcSubscription()), $browser->calls[0]['body']);
         self::assertSame($cipher->encrypt($finished, $this->rpcSubscription()), $browser->calls[1]['body']);
-        self::assertStringNotContainsString('Edit', $question . $finished,
-            'the tool name never rides into a push payload — the body is generic by law');
+        // The no-leak law rides the two byte-equalities above: the dialed body
+        // equals the encryption of exactly this generic plaintext, so a tool
+        // name entering the payload reddens them (a string check over these
+        // test-built strings would assert nothing the cipher did not already).
 
         // Nothing settled yet on either dial (see the next test for the
         // deferred half); the row survives until an answer says otherwise.

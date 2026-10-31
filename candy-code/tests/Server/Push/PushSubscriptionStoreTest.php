@@ -150,6 +150,25 @@ final class PushSubscriptionStoreTest extends TestCase
             'the cleanup write rejoins the 0600 discipline');
     }
 
+    public function testARowMissingItsNameFlagIsRefusedAtLoadWithoutAWarning(): void
+    {
+        $good = $this->rowOn('tokenabc');
+        $row = [...$good->toArray(), 'principal' => 'bearer', 'name' => false];
+        unset($row['name']);
+        \file_put_contents($this->dir . '/' . StateDir::PUSH_STORE_FILE, (string) \json_encode([
+            'subscriptions' => [PushSubscriptionStore::keyHash($good->endpoint) => $row],
+        ]));
+
+        // Under the suite's failOnWarning this read carries the warning-absence
+        // leg too: pre-gate, load() touched $row['name'] on this row and the
+        // undefined-array-key E_WARNING failed the test; now the shape gate
+        // refuses the row before any read site reaches it.
+        self::assertSame([], $this->store()->entries(), 'a row that never carried its name flag is malformed — the gate drops it, fail-closed, it is not defaulted');
+
+        $rewritten = (array) \json_decode((string) \file_get_contents($this->dir . '/' . StateDir::PUSH_STORE_FILE), true);
+        self::assertCount(0, (array) $rewritten['subscriptions'], 'the refusal is persisted like every other load-time drop');
+    }
+
     public function testARowOverAnUnusablePathCostsDurabilityNotTheRequest(): void
     {
         $blocked = $this->dir . '/not-a-directory';

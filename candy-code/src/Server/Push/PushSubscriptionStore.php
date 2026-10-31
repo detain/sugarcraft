@@ -189,7 +189,7 @@ final class PushSubscriptionStore
         $dropped = 0;
         foreach ($decoded[self::KEY_ROWS] as $key => $row) {
             if (!\is_string($key) || !\preg_match('/^[0-9a-f]{64}$/', $key) || !\is_array($row)
-                || !(isset($row['endpoint']) && isset($row['p256dh']) && isset($row['auth']) && isset($row['principal']))
+                || !(isset($row['endpoint']) && isset($row['p256dh']) && isset($row['auth']) && isset($row['principal']) && isset($row['name']))
                 || !\is_string($row['endpoint']) || !\is_string($row['p256dh'])
                 || !\is_string($row['auth']) || !\is_string($row['principal'])
                 || \hash('sha256', $row['endpoint']) !== $key) {
