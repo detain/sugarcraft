@@ -1358,13 +1358,16 @@ final class ReadPathCensusTest extends TestCase
             'CALLER_SUPPLIED — a `.gitignore`-shaped file inside the walk the calling tool jailed',
         ],
         'Tools/Sandbox/Bubblewrap.php|file_get_contents' => [
-            'CALLER_SUPPLIED — the `.git` FILE at the root the Bash tool runs in (5.12), read bounded '
-                . 'only for its `gitdir:` line; the path it names is believed only after the next read',
-            'CALLER_SUPPLIED — git\'s back-pointer `<gitdir>/gitdir`, read bounded and compared to the '
-                . 'root\'s own `.git`; nothing reaches the model, a mismatch binds nothing',
             'PROCESS_DERIVED — the AppArmor userns sysctl (C-TOOL-4.a): the kernel interface named by '
                 . 'appArmorRestrictsUserns()\'s parameter default, read bounded at 16 bytes; the content '
                 . 'is the kernel\'s own, the path is a test seam, and nothing model-supplied reaches either',
+        ],
+        'Tools/Sandbox/JailPaths.php|file_get_contents' => [
+            'CALLER_SUPPLIED — the `.git` FILE at the root a jail command runs in (5.12, moved out of '
+                . 'Bubblewrap in C-TOOL-4.b), read bounded only for its `gitdir:` line; the path it '
+                . 'names is believed only after the next read',
+            'CALLER_SUPPLIED — git\'s back-pointer `<gitdir>/gitdir`, read bounded and compared to the '
+                . 'root\'s own `.git`; nothing reaches the model, a mismatch binds nothing',
         ],
         'Tui/FirstRunWizard/FirstRunWizard.php|file_get_contents' => [
             'OWNED_HOME — readStamp(): the one-line dismissal stamp this class itself wrote under the '

@@ -8,7 +8,10 @@ use SugarCraft\Code\Support\ProcessContainment;
 
 /**
  * The optional bubblewrap write-jail the `Bash` tool runs its commands in on
- * Linux (roadmap 5.12, the `bashSandbox` setting).
+ * Linux (roadmap 5.12, the `bashSandbox` setting) — the Linux answer to the
+ * {@see SandboxBackend} seam; {@see SandboxFactory} routes macOS to
+ * {@see Seatbelt} instead, and the shared escape-hatch lists and git-dir
+ * trust logic live in {@see JailPaths}, one copy for both backends.
  *
  * WHAT IT CONFINES, AND WHAT IT DOES NOT. The whole filesystem is bound
  * READ-ONLY and only the working root (the jail root of a worktree-isolated
@@ -47,14 +50,8 @@ use SugarCraft\Code\Support\ProcessContainment;
  *
  * Mirrors zed-industries/zed.sandbox.build_bwrap_args_with_sandbox_paths.
  */
-final readonly class Bubblewrap
+final readonly class Bubblewrap implements SandboxBackend
 {
-    /** The `bashSandbox` vocabulary, default first. */
-    public const MODE_OFF = 'off';
-    public const MODE_ON = 'on';
-    public const MODE_NO_NETWORK = 'no-network';
-    public const MODES = [self::MODE_OFF, self::MODE_ON, self::MODE_NO_NETWORK];
-
     /**
      * The kernel interface Ubuntu 24.04 gates unprivileged user namespaces
      * behind — the sysctl named in the class doc-block, spelled out so
@@ -65,17 +62,17 @@ final readonly class Bubblewrap
 
     /**
      * Paths under the writable root that are re-bound read-only, relative to
-     * that root. See the class doc-block for why each one is an escape hatch.
+     * that root. Aliases onto {@see JailPaths} — the lists are the jail's
+     * safety and every backend shares them; these names stay because the
+     * bubblewrap argv below (and its tests) read them here.
      */
-    public const PROTECTED_PATHS = ['.candy-code', '.mcp.json'];
+    public const PROTECTED_PATHS = JailPaths::PROTECTED_PATHS;
 
     /**
-     * Paths re-bound read-only inside EVERY git directory the jail can write —
-     * the root's own `.git`, or a linked worktree's gitdir and common dir —
-     * relative to that git directory. One list for both shapes, so a worktree
-     * cannot end up with a different set of escape hatches than a checkout.
+     * Paths re-bound read-only inside every git directory the jail can
+     * write. Alias onto {@see JailPaths}; see its constant for the law.
      */
-    public const PROTECTED_GIT_PATHS = ['hooks', 'config'];
+    public const PROTECTED_GIT_PATHS = JailPaths::PROTECTED_GIT_PATHS;
 
     private function __construct(
         public string $binary,
@@ -127,6 +124,11 @@ final readonly class Bubblewrap
         return $this->network ? self::MODE_ON : self::MODE_NO_NETWORK;
     }
 
+    public function name(): string
+    {
+        return 'bubblewrap';
+    }
+
     /** The binary to run, or '' when none is configured or on PATH. */
     public function resolvedBinary(): string
     {
@@ -144,9 +146,14 @@ final readonly class Bubblewrap
      *
      * @return list<string>
      */
-    public function argv(string $writableRoot, bool $interactive = false, ?string $tmpDir = null): array
-    {
-        $root = self::normalise($writableRoot);
+    public function argv(
+        string $writableRoot,
+        bool $interactive = false,
+        ?string $tmpDir = null,
+        ?string $chdir = null,
+        array $readOnlyBinds = [],
+    ): array {
+        $root = JailPaths::normalise($writableRoot);
         $argv = [$this->resolvedBinary(), '--die-with-parent', '--unshare-all'];
         if ($this->network) {
             $argv[] = '--share-net';
@@ -160,7 +167,7 @@ final readonly class Bubblewrap
         // /tmp it is recreated in the private tmpfs, elsewhere it is bound
         // writable — the operator's own environment named it, not the
         // repository, and a temp dir that refuses writes is no temp dir.
-        $tmp = self::normalise($tmpDir ?? (string) getenv('TMPDIR'));
+        $tmp = JailPaths::normalise($tmpDir ?? (string) getenv('TMPDIR'));
         if ($tmp !== '' && $tmp !== '/tmp' && $tmp !== '/') {
             if (str_starts_with($tmp, '/tmp/')) {
                 array_push($argv, '--dir', $tmp);
@@ -170,7 +177,7 @@ final readonly class Bubblewrap
         }
 
         array_push($argv, '--bind', $root, $root);
-        foreach (self::gitDirs($root) as $gitDir => $linked) {
+        foreach (JailPaths::gitDirs($root) as $gitDir => $linked) {
             // A linked worktree's git directories sit outside the root and
             // would otherwise stay read-only — with them every commit.
             if ($linked) {
@@ -184,7 +191,12 @@ final readonly class Bubblewrap
             $path = rtrim($root, '/') . '/' . $relative;
             array_push($argv, '--ro-bind-try', $path, $path);
         }
-        array_push($argv, '--chdir', $root, '--');
+        foreach (array_values($readOnlyBinds) as $path) {
+            array_push($argv, '--ro-bind-try', JailPaths::normalise($path), JailPaths::normalise($path));
+        }
+        // bwrap defaults to the caller's directory; the jail has always
+        // pinned it to the root, and $chdir lets a later caller pin elsewhere.
+        array_push($argv, '--chdir', $chdir === null ? $root : JailPaths::normalise($chdir), '--');
 
         return $argv;
     }
@@ -193,9 +205,15 @@ final readonly class Bubblewrap
      * $shellCommand (an already-escaped `bash -c …` string) run inside the
      * jail, as one shell string — the shape both capture paths take.
      */
-    public function wrap(string $shellCommand, string $writableRoot, bool $interactive = false, ?string $tmpDir = null): string
-    {
-        return implode(' ', array_map('escapeshellarg', $this->argv($writableRoot, $interactive, $tmpDir)))
+    public function wrap(
+        string $shellCommand,
+        string $writableRoot,
+        bool $interactive = false,
+        ?string $tmpDir = null,
+        ?string $chdir = null,
+        array $readOnlyBinds = [],
+    ): string {
+        return implode(' ', array_map('escapeshellarg', $this->argv($writableRoot, $interactive, $tmpDir, $chdir, $readOnlyBinds)))
             . ' ' . $shellCommand;
     }
 
@@ -263,76 +281,8 @@ final readonly class Bubblewrap
             . 'a private /tmp and $TMPDIR (and .git/hooks, .git/config, .candy-code/ and '
             . '.mcp.json stay read-only even there)%s. A write elsewhere fails with '
             . '"Read-only file system"; do not try to work around it — tell the user.',
-            self::normalise($writableRoot),
+            JailPaths::normalise($writableRoot),
             $this->network ? '' : '; there is NO network access',
         );
-    }
-
-    /**
-     * The git directories a command in $root writes through: the root's own
-     * `.git` directory for an ordinary checkout; for a LINKED worktree, whose
-     * `.git` is a `gitdir:` file, that gitdir and the common dir above it.
-     * [] outside a repository.
-     *
-     * THE `.git` FILE IS REPOSITORY CONTENT, so it is not believed on its own
-     * word: a checkout committing `gitdir: /home/me` would otherwise have this
-     * jail bind the operator's home WRITABLE. A linked gitdir is accepted only
-     * when git's own back-pointer inside it (`<gitdir>/gitdir`) names this
-     * root's `.git` — a file a clone cannot plant outside its own tree — and
-     * the common dir only when it is the directory git keeps the registration
-     * under (`<common>/worktrees/<name>`), never wherever `commondir` says.
-     *
-     * Keyed by directory; the value says whether it is a linked worktree's,
-     * i.e. outside the root bind and in need of its own.
-     *
-     * @return array<string, bool>
-     */
-    private static function gitDirs(string $root): array
-    {
-        $dotGit = rtrim($root, '/') . '/.git';
-        if (is_dir($dotGit)) {
-            return [self::normalise($dotGit) => false];
-        }
-        if (!is_file($dotGit)) {
-            return [];
-        }
-        $text = @file_get_contents($dotGit, length: 4096);
-        if ($text === false || preg_match('/^gitdir:\s*(.+)$/m', $text, $m) !== 1) {
-            return [];
-        }
-        $gitDir = self::absolute(trim($m[1]), $root);
-        $backPointer = @file_get_contents($gitDir . '/gitdir', length: 4096);
-        if (!is_dir($gitDir)
-            || $backPointer === false
-            || self::absolute(trim($backPointer), $gitDir) !== self::normalise($dotGit)
-        ) {
-            return [];
-        }
-
-        $commonDir = self::normalise(\dirname($gitDir, 2));
-        if (basename(\dirname($gitDir)) !== 'worktrees' || !is_file($commonDir . '/HEAD')) {
-            return [$gitDir => true];
-        }
-
-        return [$gitDir => true, $commonDir => true];
-    }
-
-    private static function absolute(string $path, string $base): string
-    {
-        $joined = str_starts_with($path, '/') ? $path : rtrim($base, '/') . '/' . $path;
-        $real = realpath($joined);
-
-        return self::normalise($real === false ? $joined : $real);
-    }
-
-    private static function normalise(string $path): string
-    {
-        if ($path === '') {
-            return '';
-        }
-        $real = realpath($path);
-        $path = $real === false ? $path : $real;
-
-        return $path === '/' ? '/' : rtrim($path, '/');
     }
 }

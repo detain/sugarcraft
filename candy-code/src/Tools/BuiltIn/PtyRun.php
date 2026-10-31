@@ -8,6 +8,8 @@ use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\PtyDriver;
 use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
+use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
+use SugarCraft\Code\Tools\Sandbox\SandboxFactory;
 use SugarCraft\Code\Tools\AcceptsHeartbeat;
 use SugarCraft\Code\Tools\AcceptsToolProgress;
 use SugarCraft\Code\Tools\AcceptsWorktreeJail;
@@ -154,7 +156,7 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
         private int $defaultTimeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS,
         private int $maxTimeoutSeconds = self::MAX_TIMEOUT_SECONDS,
         private ?\SugarCraft\Code\Agents\PathJail $worktreeJail = null,
-        private ?Bubblewrap $sandbox = null,
+        private ?SandboxBackend $sandbox = null,
         private ?\Closure $toolProgressEmitter = null,
     ) {
         // The wall ceiling is what the turn waits on. Same purpose as Bash's —
@@ -177,7 +179,7 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
         // anywhere else is a jail one of the two shell tools skips.
         return new self(
             $context->root,
-            sandbox: Bubblewrap::fromSetting(Bootstrap::readUserConfig()['bashSandbox'] ?? null),
+            sandbox: SandboxFactory::fromSetting(Bootstrap::readUserConfig()['bashSandbox'] ?? null),
         );
     }
 
@@ -185,12 +187,12 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
      * This tool with its sandbox replaced (null runs unconfined), every other
      * knob carried over — the twin of {@see Bash::withSandbox()}.
      */
-    public function withSandbox(?Bubblewrap $sandbox): self
+    public function withSandbox(?SandboxBackend $sandbox): self
     {
         return new self(...array_replace(get_object_vars($this), ['sandbox' => $sandbox]));
     }
 
-    public function sandbox(): ?Bubblewrap
+    public function sandbox(): ?SandboxBackend
     {
         return $this->sandbox;
     }
@@ -424,11 +426,13 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
             });
             if ($refusal !== null) {
                 return $this->refusal($toolCallId, sprintf(
-                    'Not run: the bashSandbox setting is "%s" but the bubblewrap sandbox cannot start on this host (%s). '
-                    . 'Nothing ran, sandboxed or otherwise. Tell the user: they can fix bwrap '
+                    'Not run: the bashSandbox setting is "%s" but the %s sandbox cannot start on this host (%s). '
+                    . 'Nothing ran, sandboxed or otherwise. Tell the user: they can fix %s '
                     . '(on Ubuntu, unprivileged user namespaces are restricted by AppArmor) or set bashSandbox to "off".',
                     $this->sandbox->mode(),
+                    $this->sandbox->name(),
                     $refusal,
+                    $this->sandbox->name(),
                 ));
             }
         }

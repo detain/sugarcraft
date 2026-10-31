@@ -18,6 +18,8 @@ use SugarCraft\Code\Tools\TakesToolCallId;
 use SugarCraft\Code\Tools\AcceptsWorktreeJail;
 use SugarCraft\Code\Tools\Concerns\RebindsWorktreeJail;
 use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
+use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
+use SugarCraft\Code\Tools\Sandbox\SandboxFactory;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolResult;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
@@ -106,7 +108,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         private bool $includeGitInstructions = true,
         private string $commitAttribution = '',
         private string $prAttribution = '',
-        private ?Bubblewrap $sandbox = null,
+        private ?SandboxBackend $sandbox = null,
         private int $defaultTimeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS,
         private int $maxTimeoutSeconds = self::MAX_TIMEOUT_SECONDS,
         private ?\Closure $toolProgressEmitter = null,
@@ -168,12 +170,12 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
      * This tool with its sandbox replaced (null runs unconfined), every other
      * field kept — the {@see withGitGuidance()} rebuild.
      */
-    public function withSandbox(?Bubblewrap $sandbox): self
+    public function withSandbox(?SandboxBackend $sandbox): self
     {
         return new self(...array_replace(get_object_vars($this), ['sandbox' => $sandbox]));
     }
 
-    public function sandbox(): ?Bubblewrap
+    public function sandbox(): ?SandboxBackend
     {
         return $this->sandbox;
     }
@@ -228,7 +230,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
     {
         return new self(
             $context->root,
-            sandbox: Bubblewrap::fromSetting(Bootstrap::readUserConfig()['bashSandbox'] ?? null),
+            sandbox: SandboxFactory::fromSetting(Bootstrap::readUserConfig()['bashSandbox'] ?? null),
             registry: $context->backgroundShells,
         );
     }
@@ -613,11 +615,13 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
                 return new ToolResult(
                     toolCallId: $args['id'] ?? '',
                     content: sprintf(
-                        'Not run: the bashSandbox setting is "%s" but the bubblewrap sandbox cannot start on this host (%s). '
-                        . 'Nothing ran, sandboxed or otherwise. Tell the user: they can fix bwrap '
+                        'Not run: the bashSandbox setting is "%s" but the %s sandbox cannot start on this host (%s). '
+                        . 'Nothing ran, sandboxed or otherwise. Tell the user: they can fix %s '
                         . '(on Ubuntu, unprivileged user namespaces are restricted by AppArmor) or set bashSandbox to "off".',
                         $this->sandbox->mode(),
+                        $this->sandbox->name(),
                         $refusal,
+                        $this->sandbox->name(),
                     ),
                     isError: true,
                 );
