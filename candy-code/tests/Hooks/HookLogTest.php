@@ -225,12 +225,21 @@ final class HookLogTest extends TestCase
             $entry->message,
             'no token fragment survives when redaction runs before the cut',
         );
-        // Cut-then-redact WOULD leave this prefix intact — it ends inside the
-        // live token, where the redactor never got to run. The full marker
-        // cannot be asserted here: the 200-byte cap lands mid-marker
-        // (`189 pad + " Bearer " + "[RE"`), which is the honest shape of an
-        // edge-cut record, and the fragment-absence pin above is the
-        // discriminating one.
+        // THE discriminating leg for the order law (C-EXT-6.b review-1): under
+        // cut-then-redact the cap stops at byte 200 — `189 pad + " Bearer " +
+        // "Zk9"` — and that 3-byte head is below the bearer pattern's {16,},
+        // so the redactor never fires and the fragment RENDERS. The head-8 leg
+        // above cannot see that swap (only 3 of those 8 bytes survive it);
+        // absence of the head-3 can. Redact-then-cut ends `" Bearer " + "[RE"`
+        // — not one token character anywhere.
+        self::assertStringNotContainsString(
+            substr(self::LEAK_CANARY_TOKEN, 0, 3),
+            $entry->message,
+            'even the 3-byte head the cut-then-redact swap would print is absent',
+        );
+        // The full marker cannot be asserted here: the 200-byte cap lands
+        // mid-marker (`189 pad + " Bearer " + "[RE"`), which is the honest
+        // shape of an edge-cut record.
         self::assertStringContainsString('Bearer ', $entry->message);
         self::assertLessThanOrEqual(HookLogEntry::MESSAGE_CAP_BYTES, strlen($entry->message));
 

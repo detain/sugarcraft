@@ -191,7 +191,28 @@ final class HooksLogCommandTest extends TestCase
         $text = $this->runCommand('/hooks log', 'session-alpha');
 
         self::assertStringContainsString('al1 ', $text);
-        self::assertStringNotContainsString('session-beta', $text, 'the tail is this session\'s story, not the machine\'s');
+        self::assertStringContainsString('al2 ', $text);
+        // The rows that must NOT render carry their identity in the Message
+        // column — review-1 MAJOR-1: the shipped absence needle here read
+        // 'session-beta', which composeLog can never print (the table has no
+        // Session column), so this leg could not bite when the filter or its
+        // wiring at HooksHostCommand::runLog was removed. The bare tokens do
+        // render, and without a trailing space: an absence needle must also
+        // cover a cell the table truncated mid-token.
+        self::assertStringNotContainsString('be1', $text, 'the tail is this session\'s story, not the machine\'s');
+        self::assertStringNotContainsString('be2', $text);
+        // Honest as an ANTI-ECHO pin only: the session id itself never reaches
+        // the render (this string staying absent proves nothing about filtering).
+        self::assertStringNotContainsString('session-beta', $text);
+        // Positive control, mirrored selection: the same tokens DO render when
+        // they belong to the selected session — without this leg the absence
+        // needles above would be one step from vacuous the other way (a
+        // fixture whose other-session rows never print even unfiltered).
+        $other = $this->runCommand('/hooks log', 'session-beta');
+
+        self::assertStringContainsString('be1 ', $other);
+        self::assertStringContainsString('be2 ', $other);
+        self::assertStringNotContainsString('al1', $other, 'and the filter runs the other way too');
     }
 
     public function testANonNumericAskRefusesLoudlyInsteadOfClamping(): void
