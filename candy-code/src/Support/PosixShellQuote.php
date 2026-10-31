@@ -30,6 +30,15 @@ namespace SugarCraft\Code\Support;
  * point: `$0` of a `-c` script quoted this way cannot expand, redirect or
  * inject whatever it contains.
  *
+ * The one accepted divergence: raw non-UTF-8 8-bit bytes (chr(128)..chr(255))
+ * ride verbatim, where `escapeshellarg()` on a UTF-8-locale host STRIPS them
+ * (REVIEW-1's full-byte-range probe: the entire divergence class is these
+ * bytes; chr(1)..chr(127) and valid UTF-8 stay at full parity). Keeping them
+ * is the safe, receiver-correct direction: inside single quotes bash treats
+ * every non-`'` byte literally, so a caller's payload arrives whole instead
+ * of silently shortened — a verbatim high-bit byte cannot expand or inject,
+ * while a strip would change the command the caller asked to run.
+ *
  * NUL bytes are refused with a ValueError, mirroring PHP 8.3's own
  * `escapeshellarg()` behavior on them (measured: it throws, it does not
  * strip): a NUL inside a shell argument has no meaning past the point it
@@ -43,7 +52,9 @@ final class PosixShellQuote
      * Quote $argument as ONE literal word for a POSIX shell (bash, sh).
      *
      * Byte-identical to `escapeshellarg()` on a POSIX host for every input
-     * it accepts; refuses NUL exactly where it refuses NUL.
+     * it accepts; refuses NUL exactly where it refuses NUL. The one accepted
+     * divergence is the class documented on the class block: non-UTF-8 8-bit
+     * bytes ride verbatim where a UTF-8-locale `escapeshellarg()` strips them.
      *
      * @throws \ValueError when $argument contains a NUL byte
      */

@@ -125,4 +125,24 @@ final class PosixShellQuoteTest extends TestCase
         self::assertSame($first, PosixShellQuote::quote("/tmp/a b'c"));
         self::assertSame($first, PosixShellQuote::quote("/tmp/a b'c"));
     }
+
+    /**
+     * MINOR-1 (REVIEW-1) corpus row: the ONE divergence class from the live
+     * UTF-8 oracle. This payload CANNOT join quoteCorpus() — equality against
+     * `escapeshellarg()` is exactly what fails there (on a UTF-8 host the
+     * oracle strips raw 8-bit bytes), so the row documents its own expected
+     * bytes instead. Both legs go red the moment quote() ever grows a strip
+     * branch, which is the behavior the class docblock refuses to promise.
+     */
+    public function testHighBitNonUtf8BytesRideVerbatimTheAcceptedDivergenceClass(): void
+    {
+        $sample = \chr(128) . \chr(170) . \chr(255);
+        self::assertSame("'" . $sample . "'", PosixShellQuote::quote($sample));
+
+        $all = '';
+        for ($byte = 128; $byte <= 255; $byte++) {
+            $all .= \chr($byte);
+        }
+        self::assertSame("'" . $all . "'", PosixShellQuote::quote($all), 'every byte in chr(128)..chr(255) must ride untransformed');
+    }
 }

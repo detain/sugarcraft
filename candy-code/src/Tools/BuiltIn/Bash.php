@@ -532,7 +532,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         // spawn failure the capture path would have to special-case, where
         // the shell guard gives an ordinary non-zero exit with a reason.
         $script = $cwd !== null ? ProcessContainment::cdGuard($cwd) . $command : $command;
-        $cmd = 'bash -c ' . PosixShellQuote::quote($script);
+        $cmd = "bash -c " . PosixShellQuote::quote($script);
 
         // The Windows spawn shape (C-TUI-6.a): bash.exe is resolved through
         // the PATH-then-%ProgramFiles%\Git\bin ladder, and NOTHING runs
