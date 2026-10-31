@@ -937,6 +937,17 @@ final class ReadPathCensusTest extends TestCase
             'SELF_LOCATED — generate.status reads back only the jobs/<jobId>.json ledger this class wrote '
                 . 'under the session media root; the path is derived from the store layout, not from the request',
         ],
+        'Protocol/WebStrings.php|require' => [
+            'PROCESS_DERIVED — the `server.strings` catalogue (C-TUI-6.f): the path comes from the '
+                . 'installation\'s own `lang/` listing filtered to the locale grammar; a request can '
+                . 'only SELECT among those names, never construct one (a traversal spelling throws '
+                . 'before any path is formed)',
+        ],
+        'Protocol/WebStrings.php|scandir' => [
+            'NAMES_ONLY — enumerates the shipped catalogues to build that selection set; the entry '
+                . 'names are matched against the locale grammar and the content is read by the '
+                . 'require above',
+        ],
         'Providers/ModelMetadata.php|file_get_contents' => [
             'OWNED_HOME — readCache(): `~/.candy-code/cache/model_prices_and_context_window.json` under '
                 . 'HomeDirectory::owned() on the production path, new(); cachedAt() is the test and embedder '
@@ -1606,6 +1617,7 @@ final class ReadPathCensusTest extends TestCase
             [
                 'Agents/ProcessExecutor.php|require',
                 'Commands/Specs/BuiltInCommands.php|require',
+                'Protocol/WebStrings.php|require',
                 'Background/BackgroundSupervisor.php|require',
                 'Tools/Sandbox/EgressProxyProcess.php|require',
                 'Workflows/WorkflowRegistry.php|require',

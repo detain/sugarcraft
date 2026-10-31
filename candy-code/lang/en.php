@@ -4189,4 +4189,66 @@ TXT,
     // outside --bare (probe: claude --help, 2.1.312).
     'provider.claude_code.isolation_notice' => 'claude-code `bare: false`: the CLI child is isolated to project/local settings sources, its own MCP config and no slash-commands or skills — but CLAUDE.md auto-discovery and auto-memory still load; only `bare: true` skips them, and `isolate: false` restores the full user state.',
     // --- end provider.claude_code ---
+    // --- web.chrome (C-TUI-6.f: server.strings chrome migration) ---
+    // Fixed labels of the web UI's chrome, the ONLY strings the owner
+    // ruling lets onto the wire ('chrome/UI strings only; server, tool and
+    // model text stay untranslated'). WebStrings exposes exactly these
+    // `web.` keys; scripts/gen-web-strings.php mirrors them into
+    // docs/protocol/web-strings.en.json and candy-code-web's
+    // src-web/lib/strings.en.generated.ts renders the English baseline
+    // byte-identical before (or without) any server round-trip.
+    // Placeholders ride {braces}; the client interpolates.
+    'web.chrome.app.about' => 'about',
+    'web.chrome.app.aria_sessions' => 'Sessions',
+    'web.chrome.app.generate' => 'generate',
+    'web.chrome.app.notify' => 'notify',
+    'web.chrome.app.notify_title' => 'Desktop notifications for questions',
+    'web.chrome.app.settings' => 'settings',
+    'web.chrome.app.sign_out' => 'sign out',
+    'web.chrome.app.theme' => 'theme: {theme}',
+    'web.chrome.app.theme_title' => 'Theme: {theme}',
+    'web.chrome.banner.drain' => 'It asks for {n} s to finish its work.',
+    'web.chrome.banner.error_period' => '{lastError}.',
+    'web.chrome.banner.lost' => 'Connection lost',
+    'web.chrome.banner.lost_error' => ' ({lastError})',
+    'web.chrome.banner.no_answer' => 'The server is not answering.',
+    'web.chrome.banner.reconnect_note' => 'The tabs reconnect on their own once a server is back.',
+    'web.chrome.banner.reason' => ' ({reason})',
+    'web.chrome.banner.reload' => 'Reload',
+    'web.chrome.banner.retry_now' => 'Retry now',
+    'web.chrome.banner.retrying' => 'Retrying in {n} s.',
+    'web.chrome.banner.stopped' => 'Retries have stopped: the sessions it held are gone with it.',
+    'web.chrome.banner.stopping' => 'The server is stopping',
+    'web.chrome.banner.try_again' => 'Try again',
+    'web.chrome.banner.updated' => 'The server was updated.',
+    'web.chrome.panels.aria' => 'Session panels',
+    'web.chrome.panels.close_aria' => 'Close the panels',
+    'web.chrome.panels.empty' => 'Open a session to see its {label}.',
+    'web.chrome.panels.label' => 'panels',
+    'web.chrome.panels.title' => 'Agents, todo, background, workflows, memory',
+    'web.chrome.status.agent' => 'Primary agent',
+    'web.chrome.status.agent_default' => 'default agent',
+    'web.chrome.status.agent_title' => 'primary agent: {agent}',
+    'web.chrome.status.branch_title' => 'Branch at session start: {branch}',
+    'web.chrome.status.cache' => 'cache {n}%',
+    'web.chrome.status.compact' => 'compact',
+    'web.chrome.status.compact_title' => 'Condense older exchanges into a summary',
+    'web.chrome.status.context_title' => 'Context used — open the Context panel',
+    'web.chrome.status.idle' => 'idle',
+    'web.chrome.status.model' => 'Model',
+    'web.chrome.status.model_default' => 'default model',
+    'web.chrome.status.mode' => 'mode: {mode}',
+    'web.chrome.status.mode_aria' => 'Permission mode',
+    'web.chrome.status.pr_title' => 'PR #{number} ({state}) — CI: {checks}',
+    'web.chrome.status.spend' => 'Spent this session',
+    'web.chrome.status.spend_unpriced' => 'No price on file for this model — spend shown is a lower bound',
+    'web.chrome.status.step' => 'step {step}/{max}',
+    'web.chrome.status.tokens' => '~{tok} tok',
+    'web.chrome.status.trust' => 'trust?',
+    'web.chrome.status.trust_count' => 'trust? ({n})',
+    'web.chrome.status.trust_title' => 'This project is not trusted — open the Context panel to answer',
+    'web.chrome.status.trust_title_count' => '{n} project-trust prompts await — open the Context panel to answer',
+    'web.chrome.status.waiting' => 'waiting for you',
+    'web.chrome.status.working' => 'working',
+    // --- end web.chrome ---
 ];

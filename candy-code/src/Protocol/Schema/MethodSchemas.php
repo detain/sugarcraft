@@ -146,6 +146,13 @@ final class MethodSchemas
                 'defaultPermissionMode' => Schema::ref(D::PERMISSION_MODE),
                 'limits' => Schema::map(Schema::number(0)),
             ], ['version', 'protocol', 'permissionModes', 'defaultPermissionMode'])],
+            'server.strings' => [
+                Schema::object(['locale' => Schema::string(35)->describe('BCP-47-ish tag to serve; the ladder answers exact, then base-before-dash, then English.')]),
+                Schema::object([
+                    'locale' => Schema::string(35)->describe('The catalogue actually served.'),
+                    'strings' => Schema::map(Schema::string())->describe('The web UI chrome strings (web.-prefixed keys only); placeholders ride {braces} for the client to fill.'),
+                ], ['locale', 'strings']),
+            ],
             'server.shutdown' => [
                 Schema::object(['drainSeconds' => Schema::number(0)]),
                 Schema::object(['accepted' => Schema::boolean()], ['accepted']),

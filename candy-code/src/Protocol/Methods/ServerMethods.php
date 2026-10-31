@@ -22,6 +22,7 @@ use SugarCraft\Code\Protocol\Params;
 use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Protocol\Scope;
 use SugarCraft\Code\Protocol\SessionFeed;
+use SugarCraft\Code\Protocol\WebStrings;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\Ws\Outbox;
 use SugarCraft\Code\Tools\Tool;
@@ -43,6 +44,7 @@ final class ServerMethods
         $registry->add(MethodSpec::new(self::HELLO, Scope::Read, 'The handshake: protocol version, features, limits; optionally resume subscriptions (snapshotLimit pages their reset snapshots).', self::hello(...)));
         $registry->add(MethodSpec::new('server.health', Scope::Read, 'Liveness and load.', self::health(...)));
         $registry->add(MethodSpec::new('server.info', Scope::Read, 'What this server offers: providers, agents, commands, tools, permission modes.', self::info(...)));
+        $registry->add(MethodSpec::new('server.strings', Scope::Read, 'The web UI chrome strings in one locale (C-TUI-6.f): only web.-prefixed keys; server, tool and model text stay untranslated.', self::strings(...)));
         $registry->add(MethodSpec::new('server.shutdown', Scope::Admin, 'Stop the server, draining running turns first.', self::shutdown(...), true));
         $registry->add(MethodSpec::new('client.viewing', Scope::Read, 'Say which sessions this client shows, and which is in front.', self::viewing(...)));
     }
@@ -159,6 +161,28 @@ final class ServerMethods
             'turnsRunning' => $call->server->turnsRunning(),
             'draining' => $call->server->isDraining(),
         ];
+    }
+
+    /**
+     * C-TUI-6.f (owner ruling: chrome/UI strings only): the web UI's fixed
+     * labels for one locale, read from the installation catalogues through
+     * {@see WebStrings}. A request is never spliced into a path — the tag
+     * can only select among the shipped `lang/` names — and a request the
+     * grammar refuses is answered in English rather than faulted, because a
+     * browser with a junk `navigator.language` still deserves a working UI.
+     *
+     * @return array<string, mixed>
+     */
+    private static function strings(CallContext $call, Params $params): array
+    {
+        $requested = $params->optionalString('locale', 35) ?? '';
+        try {
+            $locale = WebStrings::negotiate($requested);
+        } catch (\InvalidArgumentException) {
+            $locale = 'en';
+        }
+
+        return ['locale' => $locale, 'strings' => WebStrings::for($locale)];
     }
 
     /** @return array<string, mixed> */
