@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { keyArgument } from '../lib/format'
+import { t } from '../lib/i18n'
 import { askDiffPreview, diffCounts } from '../lib/lineDiff'
 import DiffView from './DiffView.vue'
 import MessageMarkdown from './MessageMarkdown.vue'
@@ -28,7 +29,7 @@ const offers = computed(() => new Set(props.ask.options))
 const alwaysLabel = computed(() => {
   const scope = props.ask.alwaysScope
   const detail = scope ? Object.values(scope).filter((v) => v !== props.ask.tool).join(' ') : ''
-  return detail !== '' ? `Always (${detail}, this session)` : 'Always (this session)'
+  return detail !== '' ? t('web.approvals.always_detail', { detail }) : t('web.approvals.always_session')
 })
 
 /**
@@ -118,7 +119,7 @@ function onKey(event: KeyboardEvent): void {
 <template>
   <section class="ask" tabindex="0" data-testid="permission-card" :data-ask-id="ask.askId" @keydown="onKey">
     <header>
-      <span class="label">Permission</span>
+      <span class="label">{{ t('web.approvals.label') }}</span>
       <strong>{{ ask.tool }}</strong>
       <span v-if="what" class="what">{{ what }}</span>
     </header>
@@ -136,7 +137,7 @@ function onKey(event: KeyboardEvent): void {
          partial consent a security gate must not ask for. Collapsed by
          default, so the card's height is unchanged. -->
     <details data-testid="ask-arguments">
-      <summary>arguments</summary>
+      <summary>{{ t('web.transcript.args_summary') }}</summary>
       <pre>{{ argsJson }}</pre>
     </details>
     <input
@@ -145,8 +146,8 @@ function onKey(event: KeyboardEvent): void {
       class="note-field"
       maxlength="2048"
       :disabled="busy || !canAnswer"
-      :placeholder="question ? 'Your answer or feedback (optional)' : 'Note for the agent with Reject (optional)'"
-      :aria-label="question ? 'Your answer or feedback' : 'Rejection note'"
+      :placeholder="question ? t('web.approvals.answer_placeholder') : t('web.approvals.note_placeholder')"
+      :aria-label="question ? t('web.approvals.answer_aria') : t('web.approvals.note_aria')"
       data-testid="ask-note"
     />
     <div v-if="choices.length" class="choices" data-testid="ask-choices">
@@ -158,16 +159,16 @@ function onKey(event: KeyboardEvent): void {
         :disabled="busy || !canAnswer"
         data-testid="ask-choice"
         @click="answerChoice(option)"
-      >{{ index + 1 }}. {{ option }}<span v-if="index === 0" class="recommended"> (recommended)</span></button>
+      >{{ index + 1 }}. {{ option }}<span v-if="index === 0" class="recommended">{{ t('web.approvals.recommended') }}</span></button>
     </div>
     <div class="actions">
-      <button type="button" class="primary" :disabled="busy || !canAnswer" data-testid="ask-once" @click="answer('once')">{{ planText ? 'Approve plan' : 'Allow once' }}</button>
+      <button type="button" class="primary" :disabled="busy || !canAnswer" data-testid="ask-once" @click="answer('once')">{{ planText ? t('web.approvals.approve_plan') : t('web.approvals.allow_once') }}</button>
       <button v-if="offers.has('always')" type="button" :disabled="busy || !canAnswer" data-testid="ask-always" @click="answer('always')">{{ alwaysLabel }}</button>
-      <button v-if="offers.has('always')" type="button" :disabled="busy || !canAnswer" data-testid="ask-always-save" title="Answer always, and save the rule in your config for future launches" @click="answer('always', false, undefined, true)">Always (save)</button>
-      <button type="button" :disabled="busy || !canAnswer" data-testid="ask-reject" @click="answer('reject')">Reject</button>
-      <button type="button" class="danger" :disabled="busy || !canAnswer" data-testid="ask-reject-stop" @click="answer('reject', true)">Reject &amp; stop</button>
+      <button v-if="offers.has('always')" type="button" :disabled="busy || !canAnswer" data-testid="ask-always-save" :title="t('web.approvals.always_save_title')" @click="answer('always', false, undefined, true)">{{ t('web.approvals.always_save') }}</button>
+      <button type="button" :disabled="busy || !canAnswer" data-testid="ask-reject" @click="answer('reject')">{{ t('web.approvals.reject') }}</button>
+      <button type="button" class="danger" :disabled="busy || !canAnswer" data-testid="ask-reject-stop" @click="answer('reject', true)">{{ t('web.approvals.reject_stop') }}</button>
     </div>
-    <p v-if="!canAnswer" class="note">This sign-in may not answer questions (no approve scope).</p>
+    <p v-if="!canAnswer" class="note">{{ t('web.approvals.no_scope') }}</p>
   </section>
 </template>
 

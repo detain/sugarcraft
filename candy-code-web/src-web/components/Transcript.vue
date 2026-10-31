@@ -4,6 +4,7 @@ import { computed, nextTick, ref, watch, type ComponentPublicInstance } from 'vu
 import type { SubAgent, ToolItem, TranscriptItem as Item, UserItem } from '../stores/reducer'
 import { useTranscriptViewStore } from '../stores/transcriptView'
 import TranscriptItem from './TranscriptItem.vue'
+import { t } from '../lib/i18n'
 
 /**
  * The transcript, virtualised (Appendix O §7.2): only the rows near the
@@ -73,8 +74,8 @@ defineExpose({ jumpToEnd })
 <template>
   <div ref="scroller" class="scroller" data-testid="transcript" @scroll.passive="onScroll">
     <div class="toolbar" data-testid="transcript-toggles">
-      <button type="button" :aria-pressed="view.showThinking" data-testid="toggle-thinking" @click="view.toggleThinking()">Show thinking</button>
-      <button type="button" :aria-pressed="view.expandTools" data-testid="toggle-tools" @click="view.toggleExpandTools()">Expand tool cards</button>
+      <button type="button" :aria-pressed="view.showThinking" data-testid="toggle-thinking" @click="view.toggleThinking()">{{ t('web.transcript.show_thinking') }}</button>
+      <button type="button" :aria-pressed="view.expandTools" data-testid="toggle-tools" @click="view.toggleExpandTools()">{{ t('web.transcript.expand_tools') }}</button>
     </div>
     <div class="inner">
       <div class="list" :style="{ height: `${total}px` }">
@@ -91,7 +92,7 @@ defineExpose({ jumpToEnd })
       </div>
       <slot name="after" />
     </div>
-    <button v-if="!following" type="button" class="jump" @click="jumpToEnd">Jump to latest</button>
+    <button v-if="!following" type="button" class="jump" @click="jumpToEnd">{{ t('web.transcript.jump_latest') }}</button>
   </div>
 </template>
 

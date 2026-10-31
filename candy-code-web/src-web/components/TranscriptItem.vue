@@ -4,6 +4,7 @@ import type { SubAgent, ToolItem, TranscriptItem, UserItem } from '../stores/red
 import MessageMarkdown from './MessageMarkdown.vue'
 import ReasoningFold from './ReasoningFold.vue'
 import ToolCard from './ToolCard.vue'
+import { t } from '../lib/i18n'
 
 const props = defineProps<{ item: TranscriptItem; subagents?: Record<string, SubAgent>; sessionId?: string }>()
 // C-TUI-3.b: user rows ask the view for the two checkpoint actions (the view
@@ -25,7 +26,7 @@ const emit = defineEmits<{
 const secureContext = typeof window === 'undefined' || window.isSecureContext !== false
 const copyState = ref<'idle' | 'done' | 'failed'>('idle')
 const copyLabel = computed(() =>
-  copyState.value === 'done' ? 'copied' : copyState.value === 'failed' ? "couldn't copy" : 'copy')
+  copyState.value === 'done' ? t('web.transcript.copy_copied') : copyState.value === 'failed' ? t('web.transcript.copy_failed') : t('web.transcript.copy_idle'))
 
 async function copyText(text: string): Promise<void> {
   if (typeof navigator === 'undefined' || !navigator.clipboard) {
@@ -53,21 +54,21 @@ const agents = computed(() => {
 <template>
   <div class="entry" :class="item.kind" :data-kind="item.kind" data-testid="transcript-item">
     <template v-if="item.kind === 'user'">
-      <div class="who">you</div>
+      <div class="who">{{ t('web.transcript.who_user') }}</div>
       <div class="user-text">{{ item.content }}</div>
       <p class="row-actions">
-        <button type="button" data-testid="rewind-here" title="Rewind the conversation to just before this prompt" @click="emit('rewind', item)">Rewind to here</button>
-        <button type="button" data-testid="edit-resend" title="Rewind to just before this prompt and put its text in the composer" @click="emit('editResend', item)">Edit &amp; resend</button>
+        <button type="button" data-testid="rewind-here" :title="t('web.transcript.rewind_here_title')" @click="emit('rewind', item)">{{ t('web.transcript.rewind_here') }}</button>
+        <button type="button" data-testid="edit-resend" :title="t('web.transcript.edit_resend_title')" @click="emit('editResend', item)">{{ t('web.transcript.edit_resend') }}</button>
       </p>
     </template>
     <template v-else-if="item.kind === 'assistant'">
       <ReasoningFold v-if="item.reasoning" :text="item.reasoning" />
       <MessageMarkdown :text="item.content" />
       <p v-if="secureContext" class="row-actions">
-        <button type="button" data-testid="copy-message" title="Copy this reply" @click="copyText(item.content)">{{ copyLabel }}</button>
+        <button type="button" data-testid="copy-message" :title="t('web.transcript.copy_aria')" @click="copyText(item.content)">{{ copyLabel }}</button>
       </p>
-      <p v-if="item.lengthStopped" class="flag">The reply hit the output limit.</p>
-      <p v-if="item.stepsTruncated" class="flag">The turn reached its step limit.</p>
+      <p v-if="item.lengthStopped" class="flag">{{ t('web.transcript.flag_output_limit') }}</p>
+      <p v-if="item.stepsTruncated" class="flag">{{ t('web.transcript.flag_step_limit') }}</p>
     </template>
     <template v-else-if="item.kind === 'notice'">
       <p class="notice" :class="item.level">{{ item.content }}</p>

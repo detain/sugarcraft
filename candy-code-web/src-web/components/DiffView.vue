@@ -5,6 +5,7 @@ import { diffPathForHeader, parseUnifiedDiff, resolveDiffStyle, splitDiffRows, t
 import { highlight, languageForPath } from '../lib/highlight'
 import { useSettingsStore, type DiffStyleChoice } from '../stores/settings'
 import { readJson } from '../stores/storage'
+import { t } from '../lib/i18n'
 
 const props = defineProps<{ diff: string }>()
 
@@ -67,7 +68,7 @@ function rowClasses(row: DiffSplitRow): string[] {
 </script>
 
 <template>
-  <div class="diff" :class="{ split }" data-testid="diff" role="table" :aria-label="split ? 'diff, side by side' : 'diff'">
+  <div class="diff" :class="{ split }" data-testid="diff" role="table" :aria-label="split ? t('web.transcript.diff_split_aria') : t('web.transcript.diff_aria')">
     <template v-if="!split">
       <div v-for="(line, i) in lines" :key="i" class="row" :class="line.kind" role="row">
         <span class="no" role="cell">{{ line.oldNo ?? '' }}</span>

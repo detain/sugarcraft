@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useConnectionStore } from '../stores/connection'
 import { describe } from '../stores/session'
+import { t } from '../lib/i18n'
 
 /**
  * C-WEB-3.b: the shared read-only file viewer over `files.read`. Content
@@ -86,20 +87,20 @@ onMounted(() => void load(0))
   <div class="viewer" data-testid="file-viewer">
     <div class="head">
       <span class="path" data-testid="file-viewer-path">{{ path }}</span>
-      <button type="button" class="link close" aria-label="Close the file viewer" data-testid="file-viewer-close" @click="emit('close')">✕</button>
+      <button type="button" class="link close" :aria-label="t('web.transcript.file_close_aria')" data-testid="file-viewer-close" @click="emit('close')">✕</button>
     </div>
     <p v-if="error" class="error" role="alert" data-testid="file-viewer-error">{{ error }}</p>
-    <p v-else-if="binary" class="notice" data-testid="file-viewer-binary">{{ path }} is a binary file ({{ size }} bytes) — nothing to show as text.</p>
+    <p v-else-if="binary" class="notice" data-testid="file-viewer-binary">{{ t('web.transcript.file_binary', { path, size }) }}</p>
     <template v-else>
-      <div v-if="loading && text === ''" class="notice">Reading {{ path }}…</div>
+      <div v-if="loading && text === ''" class="notice">{{ t('web.transcript.file_reading', { path }) }}</div>
       <div class="lines" data-testid="file-viewer-lines">
         <div v-for="(line, i) in lines" :key="i" class="line" :data-testid="`file-viewer-line-${i + 1}`">
           <span class="ln">{{ i + 1 }}</span><pre class="txt">{{ line }}</pre>
         </div>
       </div>
       <p v-if="truncated" class="more">
-        <button type="button" class="link" data-testid="file-viewer-load-more" :disabled="loading" @click="loadMore">load more</button>
-        <span class="hint">showing {{ shownBytes }} of {{ size }} bytes</span>
+        <button type="button" class="link" data-testid="file-viewer-load-more" :disabled="loading" @click="loadMore">{{ t('web.transcript.file_load_more') }}</button>
+        <span class="hint">{{ t('web.transcript.file_showing', { shown: shownBytes, size }) }}</span>
       </p>
     </template>
   </div>

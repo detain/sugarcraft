@@ -4,6 +4,7 @@ import { fetchArtifact, MediaFetchCancelled, objectUrls } from '../lib/media'
 import type { MediaRef } from '../protocol/generated'
 import { useConnectionStore } from '../stores/connection'
 import { describe } from '../stores/session'
+import { t } from '../lib/i18n'
 
 /**
  * One artifact a finished tool produced (W6.4, Appendix C-7): the event
@@ -51,7 +52,7 @@ function disposeUrl(): void {
 async function load(): Promise<void> {
   if (props.sessionId === undefined || props.sessionId === '') {
     phase.value = 'error'
-    problem.value = 'No session to fetch this artifact from.'
+    problem.value = t('web.media.no_session')
     return
   }
   const current = ++token
@@ -83,7 +84,7 @@ function onImageError(): void {
   // The fetch delivered bytes but the browser cannot render them — an honest
   // error line, never a blank thumbnail (the R16 m3 arm).
   broken.value = true
-  problem.value = `The ${mime.value} bytes failed to decode; the artifact may be corrupt.`
+  problem.value = t('web.media.decode_failed', { mime: mime.value })
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -127,15 +128,15 @@ onBeforeUnmount(() => {
       <span v-if="sizeText" class="size">{{ sizeText }}</span>
     </figcaption>
 
-    <p v-if="phase === 'loading'" class="state" data-testid="media-loading">loading…</p>
+    <p v-if="phase === 'loading'" class="state" data-testid="media-loading">{{ t('web.media.loading') }}</p>
     <p v-else-if="phase === 'error'" class="state error" role="alert" data-testid="media-error">{{ problem }}</p>
-    <button v-else-if="phase === 'idle'" type="button" class="play" data-testid="media-play" @click="void load()">▶ load {{ media.kind }}</button>
+    <button v-else-if="phase === 'idle'" type="button" class="play" data-testid="media-play" @click="void load()">{{ t('web.media.load', { kind: media.kind }) }}</button>
 
     <template v-else>
-      <p v-if="media.kind === 'video' && unsupported" class="state" data-testid="media-unsupported">This browser cannot play {{ mime }}.</p>
+      <p v-if="media.kind === 'video' && unsupported" class="state" data-testid="media-unsupported">{{ t('web.media.unsupported', { mime }) }}</p>
       <video v-else-if="media.kind === 'video'" controls :src="url" class="video" data-testid="media-video" @error="unsupported = true" />
       <p v-else-if="media.kind === 'image' && !imageLike" class="state" data-testid="media-file">
-        <a :href="url" :download="media.artifactId">Download the {{ mime }} artifact</a>
+        <a :href="url" :download="media.artifactId">{{ t('web.media.download', { mime }) }}</a>
       </p>
       <p v-else-if="broken" class="state error" role="alert" data-testid="media-error">{{ problem }}</p>
       <button v-else type="button" class="thumb-button" data-testid="media-image" :aria-expanded="expanded" @click="expanded = !expanded">
@@ -144,13 +145,13 @@ onBeforeUnmount(() => {
     </template>
 
     <details v-if="media.infotextDigest" class="digest" data-testid="media-digest">
-      <summary>infotext digest</summary>
+      <summary>{{ t('web.media.digest_summary') }}</summary>
       <code>{{ media.infotextDigest }}</code>
     </details>
 
-    <div v-if="expanded" class="lightbox" role="dialog" aria-modal="true" aria-label="Artifact full size" data-testid="media-lightbox" @click.self="expanded = false">
+    <div v-if="expanded" class="lightbox" role="dialog" aria-modal="true" :aria-label="t('web.media.lightbox_aria')" data-testid="media-lightbox" @click.self="expanded = false">
       <img :src="url" :alt="altText" class="full" />
-      <button type="button" class="close" data-testid="lightbox-close" @click="expanded = false">close</button>
+      <button type="button" class="close" data-testid="lightbox-close" @click="expanded = false">{{ t('web.media.lightbox_close') }}</button>
     </div>
   </figure>
 </template>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useTranscriptViewStore } from '../stores/transcriptView'
+import { t } from '../lib/i18n'
 
 // The store, read at setup and tracked in the binding: a virtualised row that
 // remounts later (C-WEB-4) opens from the viewer's switch, not from local state.
@@ -9,7 +10,7 @@ defineProps<{ text: string; live?: boolean }>()
 
 <template>
   <details class="reasoning" :open="live || view.showThinking" data-testid="reasoning">
-    <summary>{{ live ? 'Thinking…' : 'Thought' }}</summary>
+    <summary>{{ live ? t('web.transcript.thinking_live') : t('web.transcript.thinking_done') }}</summary>
     <pre>{{ text }}</pre>
   </details>
 </template>

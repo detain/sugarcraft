@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { diffStats, parseUnifiedDiff } from '../lib/diff'
 import { duration, keyArgument } from '../lib/format'
 import { stripTerminalSequences } from '../lib/ansi'
+import { t } from '../lib/i18n'
 import type { SubAgent, ToolItem } from '../stores/reducer'
 import { usePanelsStore } from '../stores/agents/panels'
 import { useTranscriptViewStore } from '../stores/transcriptView'
@@ -84,24 +85,24 @@ function openAgent(id: string): void {
     <ReasoningFold v-if="reasoning !== ''" :text="reasoning" />
     <section v-if="tail !== null" class="progress" data-testid="tool-progress">
       <p class="progress-tag">
-        live tail<template v-if="item.progressTruncated"> · older output dropped</template>
+        {{ t('web.transcript.tool_tail') }}<template v-if="item.progressTruncated"> {{ t('web.transcript.tool_tail_dropped') }}</template>
       </p>
       <pre class="output">{{ tail }}</pre>
     </section>
     <div v-if="open" class="body">
-      <p v-if="item.denial" class="denial">Refused ({{ item.denial.kind }}){{ item.denial.reason ? `: ${item.denial.reason}` : '' }}</p>
+      <p v-if="item.denial" class="denial">{{ item.denial.reason ? t('web.transcript.refused_reason', { kind: item.denial.kind, reason: item.denial.reason }) : t('web.transcript.refused', { kind: item.denial.kind }) }}</p>
       <details class="args">
-        <summary>arguments</summary>
+        <summary>{{ t('web.transcript.args_summary') }}</summary>
         <pre>{{ argsJson }}</pre>
       </details>
       <DiffView v-if="item.diff" :diff="item.diff" />
       <pre v-if="output !== null && output !== ''" class="output" data-testid="tool-output">{{ output }}</pre>
-      <button v-if="item.truncated" type="button" class="more" @click="emit('loadFull', item)">Load the full output</button>
+      <button v-if="item.truncated" type="button" class="more" @click="emit('loadFull', item)">{{ t('web.transcript.tool_load_full') }}</button>
       <!-- Artifact refs ride the event; the bytes are pulled by each card on
            demand (Appendix C-7). Media joins after the output region. -->
       <div v-if="item.media && item.media.length > 0" class="media" data-testid="tool-media">
         <MediaCard v-for="artifact in item.media" :key="artifact.artifactId" :media="artifact" :session-id="sessionId" />
-        <p v-if="item.mediaTruncated" class="media-truncated" data-testid="media-truncated">Some artifacts are not listed.</p>
+        <p v-if="item.mediaTruncated" class="media-truncated" data-testid="media-truncated">{{ t('web.media.truncated') }}</p>
       </div>
     </div>
     <SubAgentTree v-if="agentTree.length > 0" class="agents" :nodes="agentTree" compact @open="openAgent" />
