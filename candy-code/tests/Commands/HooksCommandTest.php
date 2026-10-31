@@ -21,8 +21,10 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  * Roadmap VIS-3a: the read-only `/hooks` command.
  *
  * Three layers get pinned here: {@see HookRegistry::all()} (the value copies
- * the panel reads), {@see HooksCommand::compose()} (pure wording over a hand
- * -built inspection array, so every row shape is pinned without a chain),
+ * the panel reads), {@see HooksCommand::compose()} and
+ * {@see HooksCommand::composeLog()} (pure wording over hand-built inspection
+ * and row arrays, so every row shape is pinned without a chain or a log
+ * file),
  * and the host half end-to-end — a real `~/.candy-code/hooks.yaml` under a
  * sandboxed HOME, built through the launch's own builder and CARRIED on the
  * workspace the panel reads (C-EXT-7: the panel itself never builds).
@@ -138,6 +140,70 @@ final class HooksCommandTest extends TestCase
 
         self::assertStringContainsString("  - none\n", $report . "\n", 'an empty chain is a read result — it says none, never an empty table');
         self::assertStringNotContainsString('Event', $report);
+    }
+
+    // ---- composeLog(): pure wording over log rows ---------------------------
+
+    /**
+     * @param array<string, mixed> $overrides
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function oneLogRow(array $overrides = []): array
+    {
+        return [$overrides + [
+            'ts' => '2026-10-30 12:00:00',
+            'session' => 'sess-A',
+            'event' => 'PreToolUse',
+            'hook' => 'guard',
+            'verdict' => 'deny',
+            'ms' => 12,
+            'message' => 'blocked by policy',
+        ]];
+    }
+
+    public function testComposeLogWithoutRowsStillReportsTheHeadingAndSaysNone(): void
+    {
+        $report = HooksCommand::composeLog([], 120);
+
+        self::assertStringContainsString('**Hook log**', $report, 'the section is named even when it is empty — silence about the shape reads as a broken command');
+        self::assertStringContainsString('  - No hook-log entries for this session yet.', $report);
+        self::assertStringNotContainsString('Verdict', $report, 'no rows means no table, not a table of blanks');
+    }
+
+    public function testComposeLogRendersEveryFieldOfAGivenRow(): void
+    {
+        $report = HooksCommand::composeLog(self::oneLogRow(), 200);
+
+        foreach (['2026-10-30 12:00:00', 'PreToolUse', 'guard', 'deny', '12', 'blocked by policy'] as $needle) {
+            self::assertStringContainsString($needle, $report, 'field ' . $needle . ' did not reach the rendered row');
+        }
+        self::assertStringContainsString('Message', $report, 'the header row names the columns it prints');
+    }
+
+    public function testComposeLogQuotesAVerdictNoShippedResultProduces(): void
+    {
+        $report = HooksCommand::composeLog(self::oneLogRow(['verdict' => 'banana']), 200);
+
+        self::assertStringContainsString('banana', $report, 'an off-catalog verdict is echoed verbatim, not mislabelled');
+        self::assertStringNotContainsString('allow', $report, 'quoting means quoting — the renderer must not fabricate a catalogue label beside it');
+    }
+
+    public function testComposeLogCarriesAHostileFieldAsOneQuotedPhysicalRow(): void
+    {
+        $row = self::oneLogRow([
+            'hook' => "guar\x1b[31md\nhook",
+            'message' => "first\nsecond\x00line",
+        ]);
+
+        $report = HooksCommand::composeLog($row, 200);
+
+        self::assertStringNotContainsString("\x1b", $report, 'no raw escape reaches the transcript');
+        self::assertStringNotContainsString("\x00", $report, 'no NUL reaches the transcript');
+        self::assertStringContainsString('\n', $report, 'newlines land as the visible \n spelling reportField uses');
+        self::assertStringContainsString('guar', $report);
+        self::assertStringContainsString('first', $report);
+        self::assertStringNotContainsString('second' . "\n" . 'line', $report);
     }
 
     // ---- the host half, end to end -------------------------------------------

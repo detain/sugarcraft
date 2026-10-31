@@ -1533,6 +1533,37 @@ The `Bash` half stays best-effort: `$HOME` expansion, globs (`cat .en?`),
 variables and `cd` are outside what any text match sees. It is defence in depth,
 not a jail.
 
+## The hook log
+
+Every run of a *configured* hook appends one JSON line to
+`~/.candy-code/hooks-log.jsonl`: timestamp, session id, event, hook name,
+verdict, elapsed milliseconds, and the first line of the hook's message.
+Built-in hooks are excluded — they keep their own audit trail — so the file
+reads as what your configuration actually ran.
+
+Messages are secret-redacted before they are written: `SecretRedactor` runs
+first, then the first line is taken, then the line is cut to 200 bytes. That
+order is what makes it safe: a token straddling the cut leaves no fragment,
+where a cut-then-redact would keep the part it clipped in.
+
+The file is bounded. It rotates at 1 MiB and keeps one previous generation
+(the `.1` file); older history is out of scope. The write follows the same
+owned-home discipline as the rest of `~/.candy-code`: the directory is
+created `0700`, the file is created under a private umask, and a directory or
+leaf that is a symlink, foreign-owned or foreign-writable is refused rather
+than followed. If the home itself cannot serve, the log falls back to a
+per-user `candy-code-hooks-` directory under the system temp directory.
+Writing is fail-open in every case: a refused write never changes the hook's
+verdict, and the first refusal in a process surfaces as one runtime notice
+instead of a flood.
+
+Read it with `/hooks log [n]` — the last 20 rows for the current session by
+default, `n` accepted from 1 to 200. Rows the tail could not read whole
+(torn writes, a leaf swapped under us) are skipped, never guessed at, and the
+report then carries a plain-language suffix saying so. The log is
+observation, not enforcement: the chain runs whether or not it can be
+recorded.
+
 ## Writing a hook in PHP
 
 Implement `SugarCraft\Code\Hooks\HookInterface` (`name()`, `event()`,

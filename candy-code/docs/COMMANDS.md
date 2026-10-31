@@ -384,7 +384,7 @@ edit it by hand.
 | `/compress` | ✓ | | `[focus]` | Ask the model to compress a closed part of the conversation into a summary |
 | `/decompress` | ✓ | | `[bN]` | Send a compressed section in full again (no argument: list the sections) |
 | `/recompress` | ✓ | | `[bN]` | Restore the summary of a section /decompress took back |
-| `/hooks` | ✓ | | — | List the hook chain: every registered hook, its matcher and state, plus matchers that failed to evaluate |
+| `/hooks` | ✓ | | `[log [n]]` | List the hook chain: every registered hook, its matcher and state, plus matchers that failed to evaluate |
 | `/rules` | ✓ | | `[name]` | List the rule packs, or toggle one for this session |
 | `/output-style` | ✓ | | `[name\|off]` | List the output styles, or select one for this session; `off` clears it |
 | `/newrule` | ✓ | | `[focus]` | Have the agent draft a project rule from this conversation |
