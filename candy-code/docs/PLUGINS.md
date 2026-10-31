@@ -113,6 +113,29 @@ system rows in the transcript:
   carries the row). A per-origin opt-in is the planned follow-up. If those
   surfaces are unacceptable to you, the
   bundle is a stranger; deleting its directory takes it all back.
+- **Script tools.** A bundle cannot contribute script tools at all: there is
+  no bundle-side surface for them. A script tool is declared only by the
+  person's own account directory (C-TOOL-6.e, the ruling declined bundles
+  explicitly), so its trust is the same subject the rest of the user tier
+  has. No decline notice exists for this one because the surface does not.
+
+## User script tools
+
+A script tool is one small JSON file in the user tier's `tools/` directory
+under `~/.candy-code` — the shape, the validation rules and the `user__`
+prefix live in [PERMISSIONS.md](PERMISSIONS.md) and the tool list at launch.
+What matters from the plugin side:
+
+- every tool it declares reaches the model under the wire name
+  `user__<name>`, and `user__*` is write-classed — it asks wherever a
+  judgment is made ([PERMISSIONS.md](PERMISSIONS.md));
+- the directory is read ONCE at launch; adding or editing a file takes
+  effect at the next start, like the MCP roster;
+- the project tier has no script-tool surface — a `tools/` directory inside a
+  repository is never read, which is the same law that keeps a bundle's
+  `.mcp.json` from auto-starting;
+- bundles run only their commands, skills, agents and deliberately
+  imported MCP declarations.
 
 ## Installing and listing
 

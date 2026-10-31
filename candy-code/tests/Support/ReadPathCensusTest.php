@@ -1418,6 +1418,21 @@ final class ReadPathCensusTest extends TestCase
         'Tools/IgnoreRules.php|file_get_contents' => [
             'CALLER_SUPPLIED — a `.gitignore`-shaped file inside the walk the calling tool jailed',
         ],
+        'Tools/UserTools/UserToolLoader.php|file_get_contents' => [
+            'OWNED_HOME — C-TOOL-6.e reading one tool-declaration file of the user tier. The path is '
+                . 'assembled from HomeDirectory::owned() joined to the class DIRECTORY constant, so a '
+                . 'home the owning-uid checks refuse yields no directory to read at all; there is no '
+                . 'project-tier caller of this seam. The bytes are only ever json_decode\'d into a '
+                . 'validated UserToolSpec, and a file that fails validation contributes a skip '
+                . 'announcement and nothing else — never executed, never launched from here',
+        ],
+        'Tools/UserTools/UserToolLoader.php|scandir' => [
+            'NAMES_ONLY — lists the filenames under that same owned-home tool directory to pick the '
+                . '`.json` entries; scandir not glob since DST-1 so the listing reaches inside a '
+                . 'phar:// archive, and the sorted .json filter keeps directory order stable across '
+                . 'machines. Names only cross this line — each entry is read back through the '
+                . 'file_get_contents row above, bounded by the same owned-home assembly',
+        ],
         'Tools/Sandbox/EgressProxyProcess.php|fopen' => [
             'SELF_LOCATED — the 0600 stderr log seed created beside the mkdtemp-style socket '
                 . 'directory this class made moments earlier, opened once only to fix its mode '

@@ -848,6 +848,18 @@ final class Runtime
     public const MCP_TOOL_PREFIX = McpToolBridge::NAME_PREFIX;
 
     /**
+     * C-TOOL-6.e: the wire-name prefix of the person's own script tools
+     * (`~/.candy-code/tools/`), the same derived-constant shape as
+     * {@see MCP_TOOL_PREFIX} above — the class is the authority, and a
+     * re-spelling there goes red here. A `user__*` call runs argv the file
+     * declared, which no read-only hint could honestly claim; the write
+     * class is why {@see isWriteCapableTool()} folds it in beside the MCP
+     * prefix, and why the gate's `auto` branch asks for it unseen by the
+     * classifier.
+     */
+    public const USER_TOOL_PREFIX = \SugarCraft\Code\Tools\UserTools\UserScriptTool::NAME_PREFIX;
+
+    /**
      * @param ?EnvironmentBlock $environmentBlock Pre-captured session snapshot; when omitted
      *                                            one is captured lazily on first use and
      *                                            reused for the life of this Runtime.
@@ -1423,14 +1435,15 @@ final class Runtime
 
     /**
      * One tool name against {@see WRITE_CAPABLE_TOOL_NAMES} and the
-     * {@see MCP_TOOL_PREFIX} rule — see that constant for the roster, for the
-     * drift test that pins it against `PermissionGate::isWriteTool()`, and for
-     * why `Bash` is on it.
+     * {@see MCP_TOOL_PREFIX} and {@see USER_TOOL_PREFIX} rules — see those
+     * constants for the roster, for the drift test that pins it against
+     * `PermissionGate::isWriteTool()`, and for why `Bash` is on it.
      */
     private static function isWriteCapableTool(string $toolName): bool
     {
         return in_array($toolName, self::WRITE_CAPABLE_TOOL_NAMES, true)
-            || str_starts_with($toolName, self::MCP_TOOL_PREFIX);
+            || str_starts_with($toolName, self::MCP_TOOL_PREFIX)
+            || str_starts_with($toolName, self::USER_TOOL_PREFIX);
     }
 
     /**

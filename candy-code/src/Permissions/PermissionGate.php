@@ -1080,6 +1080,18 @@ final class PermissionGate
             return $this->isReadOnlyTool($call) ? PermissionDecision::Allow : PermissionDecision::Ask;
         }
 
+        // C-TOOL-6.e: a `user__*` script tool runs the argv its file declared.
+        // Nothing can answer "read-only" for one — there is no hint to consult
+        // (it is not an MCP announcement), and the classifier would judge the
+        // FILE's fixed spine, never the model-supplied values that fill its
+        // placeholders. So Auto always asks, with the same breaker discipline
+        // as the MCP branch directly above: an Ask returned before
+        // classify() is neither a strike nor a safe call — the counters stay
+        // exactly where the turn left them.
+        if (str_starts_with($call->name, \SugarCraft\Code\Tools\UserTools\UserScriptTool::NAME_PREFIX)) {
+            return PermissionDecision::Ask;
+        }
+
         // PtyRun-with-steps is a question, not a classification: keystrokes
         // typed into a live terminal can open a shell no pattern has judged
         // (vim `:!`, mysql `\!`), so Auto never Allows it and never resets its
@@ -1785,6 +1797,16 @@ final class PermissionGate
 
         if ($this->isReadOnlyMcpTool($call)) {
             return false;
+        }
+
+        // C-TOOL-6.e: a `user__*` script tool is write-class for every
+        // evaluator — its argv spine is chosen by the file, but the holes in
+        // it are filled by the model, and there is no per-call read-only hint
+        // for one (it is not an MCP announcement). The arm sits BEFORE the
+        // literal `mcp__` verdict below, which stays the last word for bridge
+        // names, untouched.
+        if (str_starts_with($call->name, \SugarCraft\Code\Tools\UserTools\UserScriptTool::NAME_PREFIX)) {
+            return true;
         }
 
         return str_starts_with($call->name, 'mcp__');

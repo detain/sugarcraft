@@ -1043,7 +1043,7 @@ final class Bootstrap
      * a private const; nothing in `src/` branches on it, and nothing should —
      * see {@see warnPermissionConfigInTranscript()} for the seam itself.
      */
-    public const TRANSCRIPT_SEAM_CALL_SITES = 36;
+    public const TRANSCRIPT_SEAM_CALL_SITES = 37;
 
     /**
      * Every directory this launch refused to read, keyed by the path as
@@ -1760,7 +1760,7 @@ final class Bootstrap
 
         // LAST, so every warning the build raised is in hand — including
         // reportProjectTierRefusals() immediately above, which is one of the
-        // THIRTY-SIX call sites now routed onto the transcript seam. This said
+        // THIRTY-SEVEN call sites now routed onto the transcript seam. This said
         // SIXTEEN, counting reportPrunedSessions()'s retention summary (E78,
         // round 42) as the last one until E86 (round 43) added the sixteenth,
         // in mcpClient()'s start-then-throw catch, and P7.S3 added the
@@ -5711,7 +5711,7 @@ public static function useMaxCost(?string $maxCost): void
             // user meets that as `/skill` not offering something they wrote. ONE
             // ROW, whatever the count: this message is already an aggregate, which
             // is what makes it safe to put in a transcript that also has to carry
-            // thirty-five other sources. THIS SAID ELEVEN. Round 44 could not correct
+            // thirty-six other sources. THIS SAID ELEVEN. Round 44 could not correct
         // it — this file was outside that lane's ownership, which is the whole
         // reason, and not how long the sentence had been wrong — so it asserted
         // the gap instead, with a test whose failure message was the
@@ -9225,7 +9225,7 @@ public static function useMaxCost(?string $maxCost): void
             ));
 
             // REACHABILITY AT THIS SITE IS DRIVEN, not inherited from the other
-            // thirty-five call sites: {@see chat()} holds no `self::tools(` call of
+            // thirty-six call sites: {@see chat()} holds no `self::tools(` call of
             // its own and gets here transitively through `backend()` ->
             // `tools()` -> {@see mcpTools()} -> this method, then reads
             // {@see launchNotices()} on its last line — so a row recorded now is
@@ -9343,6 +9343,69 @@ public static function useMaxCost(?string $maxCost): void
         LaunchContext::rememberMcpToolShape($pid, $memoKey, $shape);
 
         return $shape;
+    }
+
+    /**
+     * The model-facing {@see UserScriptTool} for every valid file in the
+     * user's `~/.candy-code/tools/` directory — the USER tier only, and the
+     * project tier is never consulted (C-TOOL-6.e): a repository must not be
+     * able to mint tools, for the same reason {@see mcpConfigDecision()}
+     * caps what a project `.mcp.json` can do.
+     *
+     * The idea is {@see mcpToolShape()}'s: read once, freeze the roster for
+     * the session, memoise per pid and home so a forked child re-derives
+     * under its own pid rather than mutating the parent's picture. Files that
+     * fail validation — or duplicate a name an earlier file already took —
+     * are skipped, each named ONCE here through the launch-notice channel
+     * {@see warnPermissionConfigInTranscript()} already owns: stderr gets the
+     * complete record, the transcript its capped summary, and a person
+     * debugging a skipped file sees why at launch instead of wondering which
+     * tool silently never arrived.
+     *
+     * Each surviving spec carries the launch's `bashSandbox` setting, read
+     * exactly as Bash reads it — the setting decides at call time whether the
+     * command is wrapped, and an unset or unknown value fails CLOSED to the
+     * strictest backend, never to unconfined.
+     *
+     * @return list<UserScriptTool>
+     */
+    public static function userScriptTools(?string $root = null): array
+    {
+        /** @var array<string, list<UserScriptTool>> $roster */
+        static $roster = [];
+
+        $home = \SugarCraft\Code\Support\HomeDirectory::owned();
+        $pid = getmypid() ?: 0;
+        $memoKey = $pid . '|' . ($home ?? '') . '|' . ($root ?? '');
+
+        if (isset($roster[$memoKey])) {
+            return $roster[$memoKey];
+        }
+
+        $loaded = $home === null
+            ? ['specs' => [], 'skips' => []]
+            : \SugarCraft\Code\Tools\UserTools\UserToolLoader::load();
+
+        foreach ($loaded['skips'] as $notice) {
+            self::warnPermissionConfigInTranscript($notice);
+        }
+
+        $sandbox = \SugarCraft\Code\Tools\Sandbox\SandboxFactory::fromSetting(
+            self::readUserConfig()['bashSandbox'] ?? null,
+        );
+
+        $tools = [];
+        foreach ($loaded['specs'] as $spec) {
+            $tools[] = new \SugarCraft\Code\Tools\UserTools\UserScriptTool(
+                spec: $spec,
+                root: $root,
+                sandbox: $sandbox,
+            );
+        }
+
+        $roster[$memoKey] = $tools;
+
+        return $tools;
     }
 
     /**

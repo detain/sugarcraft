@@ -9498,7 +9498,7 @@ final class Chat implements Model
      * already correct at every width, instead of a banner that would have to
      * learn all of that again.
      *
-     * THIRTY-SIX OF {@see \SugarCraft\Code\Cli\Bootstrap}'S LAUNCH-WARNING CALL
+     * THIRTY-SEVEN OF {@see \SugarCraft\Code\Cli\Bootstrap}'S LAUNCH-WARNING CALL
      * SITES ARE ROUTED HERE, and the rest deliberately are not.
      *
      * WHERE THAT NUMBER COMES FROM — do not `grep` for it. The identifier

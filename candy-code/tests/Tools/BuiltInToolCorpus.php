@@ -19,6 +19,8 @@ use SugarCraft\Code\Tools\BuiltIn\SkillsSearch;
 use SugarCraft\Code\Tools\BuiltIn\SkillWorkshop;
 use SugarCraft\Code\Tools\McpToolBridge;
 use SugarCraft\Code\Tools\Tool;
+use SugarCraft\Code\Tools\UserTools\UserScriptTool;
+use SugarCraft\Code\Tools\UserTools\UserToolSpec;
 
 /**
  * The built-in tool set, DERIVED from `src/` rather than listed.
@@ -143,6 +145,12 @@ final class BuiltInToolCorpus
         // `Bootstrap::tools()`, so no launch may carry it.
         DreamMemoryView::class => \SugarCraft\Code\Tests\Memory\DreamPassTest::class
             . '::testTheTurnRunsOnTheReadOnlyToolsAndTheAnswerIsAppliedTaggedAndRecorded',
+        // C-TOOL-6.e: the person's own script tools — built by
+        // `Bootstrap::userScriptTools()` from `~/.candy-code/tools`, appended
+        // to the launch roster after the MCP arm, never a literal in
+        // `Bootstrap::tools()`.
+        UserScriptTool::class => \SugarCraft\Code\Tests\Tools\UserTools\UserToolLoaderTest::class
+            . '::testTheLoadedToolsReachTheLaunchRoster',
     ];
 
     /**
@@ -1005,6 +1013,25 @@ final class BuiltInToolCorpus
                                 serverName: 'corpus',
                             ),
                         ),
+                        // C-TOOL-6.e: a script tool over a SYNTHETIC spec — the
+                        // corpus asks name/description/schema shape, and the one
+                        // consumer that calls `execute([])` gets the
+                        // missing-required-argument error renderArgv() raises
+                        // BEFORE any command is built, so nothing spawns. The
+                        // program ('printf') and the hole ('{{msg}}') follow the
+                        // loader's own grammar; no user home is consulted — a
+                        // corpus probe must not depend on files nobody installed.
+                        UserScriptTool::class => new UserScriptTool(new UserToolSpec(
+                            name: 'probe',
+                            description: 'corpus probe descriptor',
+                            inputSchema: [
+                                'type' => 'object',
+                                'properties' => ['msg' => ['type' => 'string']],
+                                'required' => ['msg'],
+                            ],
+                            argv: ['printf', '%s', '{{msg}}'],
+                            timeoutSeconds: UserToolSpec::DEFAULT_TIMEOUT_SECONDS,
+                        )),
                         // MCP-7: the dispatcher pair over a shape with NO client
                         // config and an EMPTY roster — like the bridge above, the
                         // corpus probes name/description/schema shape only, and

@@ -818,6 +818,11 @@ Environment variables:
                           refuses to launch at euid 0. Nothing about a
                           candy-code launch changes — the suite is not a
                           user-facing surface.
+   CANDY_CODE_TOOL_INPUT  The whole argument map of the current user script
+                          tool call, JSON-encoded, exported into the child
+                          process of every run of a ~/.candy-code/tools
+                          tool; the app writes it, never reads it back, and
+                          no one sets it themselves.
    CANDY_CODE_OTEL_BATCH_SIZE
                           How many spans one OTLP export batch carries
                           (default 64, clamped to 1..2048).
@@ -1281,6 +1286,17 @@ TXT,
     'cli.truncate.steps' => 'This turn used all of its tool steps before the work was done; the answer above describes where it stopped, not a finished answer. Raise --max-turns (or the `maxToolSteps` setting in ~/.candy-code/config.json) for longer agentic runs.',
     'cli.usage.bad_window' => 'usage {window}: the window must be 7, 30 or all (or omitted for the whole ledger).',
     'cli.usage.usage' => 'Usage: candy-code usage [7|30|all] [--session <target>] [--output-format json]',
+    'cli.usertools.skip.argv_placeholder' => '{file} puts a substitution placeholder in the first argv element, which chooses the program itself; the file was skipped',
+    'cli.usertools.skip.bad_argv' => '{file} argv is not a non-empty list of strings; the file was skipped',
+    'cli.usertools.skip.bad_description' => '{file} has a description that is not text of 1 to 1024 bytes; the file was skipped',
+    'cli.usertools.skip.bad_json' => '{file} is not valid JSON; the file was skipped',
+    'cli.usertools.skip.bad_name' => '{file} declares a name that is not a lowercase slug of letters, digits, underscores or dashes up to 48 characters; the file was skipped',
+    'cli.usertools.skip.bad_schema' => '{file} inputSchema is not a JSON Schema object with type object; the file was skipped',
+    'cli.usertools.skip.bad_shape' => '{file} is not a tool object declaring name, description, inputSchema and argv; the file was skipped',
+    'cli.usertools.skip.bad_timeout' => '{file} timeout must be a whole number of seconds from 1 to 600; the file was skipped',
+    'cli.usertools.skip.duplicate' => '{file} declares {name}, already taken by {first}; the file was skipped',
+    'cli.usertools.skip.undeclared_placeholder' => '{file} uses a placeholder that names no declared inputSchema property; the file was skipped',
+    'cli.usertools.skip.unreadable' => '{file} could not be read; the file was skipped',
     'cli.warn.auto_review_model_bad_shape' => 'autoReviewModel must be spelled provider/model; the auto exec reviewer stays off',
     'cli.warn.auto_review_model_not_string' => 'autoReviewModel in your config.json or settings.json must be a string naming provider/model; the auto exec reviewer stays off',
     'cli.warn.auto_review_model_unusable' => 'autoReviewModel names a provider this build cannot configure; the auto exec reviewer stays off',

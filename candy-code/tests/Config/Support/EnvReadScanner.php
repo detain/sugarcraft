@@ -663,6 +663,11 @@ final class EnvReadScanner
 
                     continue;
                 }
+                if ($this->isChildEnvExportKey($sig, $i)) {
+                    $this->exported[$value][] = $label . ':' . $sig[$i]['line'] . ' [S6-child-env:runCaptured]';
+
+                    continue;
+                }
             } elseif (
                 $sig[$i]['id'] === \T_STRING
                 && ($sig[$i - 1]['text'] ?? '') === '::'
@@ -695,6 +700,61 @@ final class EnvReadScanner
             }
             $this->reads[$value][] = $site . ' [' . $shape . ']';
         }
+    }
+
+    /**
+     * S6 — the child-environment EXPORT that never touches `putenv()`.
+     *
+     * `CapturesProcessOutput::runCaptured(..., array $envOverrides, ...)`
+     * writes each key of that map straight into the spawned child's
+     * environment. The parent's `getenv()` never sees the name and
+     * `putenv()` is never called, so both the read-side scan and the
+     * `NAME=' literal census are blind to the write — an occurrence in that
+     * position was previously reported as "matches no understood shape",
+     * which is the census refusing to guess, correctly. The shape is real
+     * and named (`UserScriptTool` exports the argument map to every script
+     * tool's child), so it is placed rather than excluded: a roster name
+     * used as the KEY of an array literal inside a `runCaptured(` call is an
+     * export, recorded on the same channel as the `putenv()` path so the
+     * environment page must tabulate it.
+     *
+     * THE DETECTOR IS THE CALL, NOT THE ARROW. A `=>` key inside any other
+     * call is a schema map or an option bag and exports nothing, so the
+     * innermost unmatched `(` behind the literal must be preceded by the
+     * name `runCaptured` — which covers both `$this->runCaptured(` and a
+     * bare call, because the `(` is what the walk finds and its preceding
+     * token is a `T_STRING` either way. The walk does not track which
+     * ARGUMENT the arrow sits in; a keyed roster literal in some other
+     * argument of the same call would be placed as an export too, and that
+     * approximation is safe in the demanding direction — the name still
+     * lands on the page, where an unplaced occurrence would once have red.
+     *
+     * @param list<array{text: string, id: int, line: int, value?: string, parts?: list<string>}> $sig
+     */
+    private function isChildEnvExportKey(array $sig, int $i): bool
+    {
+        if (($sig[$i + 1]['text'] ?? '') !== '=>') {
+            return false;
+        }
+
+        $depth = 0;
+        for ($j = $i; $j >= 0; --$j) {
+            $text = $sig[$j]['text'];
+            if ($text === ')') {
+                ++$depth;
+
+                continue;
+            }
+            if ($text !== '(') {
+                continue;
+            }
+            if ($depth === 0) {
+                return ($sig[$j - 1]['id'] ?? 0) === \T_STRING && 'runCaptured' === ($sig[$j - 1]['text'] ?? '');
+            }
+            --$depth;
+        }
+
+        return false;
     }
 
     /**

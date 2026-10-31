@@ -1944,6 +1944,13 @@ final class LaunchContext
                 advisorSpend: static fn (string $sessionId): ?array => Bootstrap::sessionStore(prune: false)->usageTotals($sessionId),
             )),
             ...Bootstrap::mcpTools($root),
+            // C-TOOL-6.e: the person's own script tools, appended right after
+            // the MCP arm so the allowedTools/disabledTools narrowing applied
+            // by every tools() caller filters them exactly like everything
+            // else here — declared in ~/.candy-code/tools/ (user tier only),
+            // read once per launch by Bootstrap::userScriptTools(), the same
+            // frozen-roster idea mcpTools() gets from mcpToolShape().
+            ...Bootstrap::userScriptTools($root),
         ];
 
         // THE CEILING, not the session's slice of it. Every caller that renders

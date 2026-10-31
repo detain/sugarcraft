@@ -447,6 +447,39 @@ final class EnvRosterDriftTest extends TestCase
     }
 
     /**
+     * A roster name keyed into a `runCaptured(` envOverrides literal is an
+     * EXPORT (S6), and it is not a read — and the same arrow inside any
+     * OTHER call is neither, staying an unplaced occurrence.
+     *
+     * THE POSITIVE FIXTURE MIRRORS THE REAL SITE — a keyed literal as the
+     * fourth argument, wrapped in the call's other positionals, so deleting
+     * the S6 leg reds the `unresolved()` assertion below, and misplacing it
+     * onto the read channel reds `reads()`. THE NEGATIVE FIXTURE IS WHAT
+     * KEEPS THE SHAPE HONEST: `'NAME' =>` inside an unrelated call exports
+     * nothing, and if the detector keyed on the arrow alone this fixture
+     * would green as an export — measured before the call-name condition
+     * existed, it did exactly that.
+     */
+    public function testARosterNameKeyedIntoRunCapturedEnvOverridesIsExportedNotRead(): void
+    {
+        $scanner = new EnvReadScanner([
+            'fixture.php' => '<?php class A { function f(): void { $r = $this->runCaptured($cmd, null, 4096, 60.0,'
+                . " ['CANDY_CODE_CHILD_ONLY' => json_encode(\$args)]); } }",
+        ]);
+
+        $this->assertSame([], $scanner->reads(), 'a child-environment write was counted as a read');
+        $this->assertSame([], $scanner->fragments(), 'the keyed export was mistaken for a fragment');
+        $this->assertSame(['CANDY_CODE_CHILD_ONLY'], array_keys($scanner->exported()), 'the S6 shape was not placed as an export');
+        $this->assertSame([], $scanner->unresolved(), 'the S6 shape left its own occurrence unplaced');
+
+        $foreign = new EnvReadScanner([
+            'x.php' => '<?php class A { function f(): void { optionBag([\'CANDY_CODE_NOT_EXPORTED\' => 1]); } }',
+        ]);
+        $this->assertSame([], $foreign->exported(), 'a `=>` key inside a foreign call was placed as an export');
+        $this->assertCount(1, $foreign->unresolved(), 'the foreign arrow shape escaped the unplaced report');
+    }
+
+    /**
      * A name ASSEMBLED at runtime is collected as a fragment, not silently lost.
      *
      * This is the scanner's one genuine blind spot — `getenv('CANDY_CODE_' .
@@ -843,14 +876,28 @@ final class EnvRosterDriftTest extends TestCase
 
     public function testEveryVariableTheEnvironmentPageTabulatesIsOneTheCodeReads(): void
     {
-        $read = array_keys($this->scanner()->reads());
-        sort($read);
+        // READS OR EXPORTS, and the widening has a reason. WHAT IT SAID:
+        // every tabulated name must be a read. WHAT IS TRUE since the
+        // script-tool child environment (S6): a name can be written by this
+        // code into a spawned child and read there and nowhere in `src/`,
+        // and tabulating it is the page's promise to the CHILD's author —
+        // the "user who sets it gets silence" hazard is a read-side hazard,
+        // and an export-only row cannot cause it. The defect this arm
+        // exists to catch is a name the code neither reads nor writes, and
+        // that stricter promise is exactly what `reads ∪ exported` restates;
+        // `mentionedNames()`' reconciliation has accepted the same
+        // union from the start.
+        $touched = array_merge(
+            array_keys($this->scanner()->reads()),
+            array_keys($this->scanner()->exported()),
+        );
+        sort($touched);
 
         $this->assertSame(
             [],
-            array_values(array_diff($this->tabulatedNames(), $read)),
-            'docs/ENVIRONMENT.md tabulates an environment variable nothing in src/ reads — a user '
-            . 'who sets it gets silence, which is worse than an undocumented variable',
+            array_values(array_diff($this->tabulatedNames(), $touched)),
+            'docs/ENVIRONMENT.md tabulates an environment variable nothing in src/ reads or exports '
+            . '— a user who sets it gets silence, which is worse than an undocumented variable',
         );
     }
 
