@@ -1399,6 +1399,23 @@ final class ReadPathCensusTest extends TestCase
                 . 'value that is not is_file(). Same verdict AND same MECHANISM as '
                 . 'Agents/ProcessExecutor.php|require',
         ],
+        'Tools/Script/ScriptPrelude.php|require' => [
+            'PROCESS_DERIVED — inside the prelude CODE STRING '
+                . '(ScriptPrelude::source(), the `php -r` payload): the staged script at a '
+                . 'path computed wholly by ScriptRunner::run() — its own 0700 random-named '
+                . 'scratch under the system temp dir — reaching the child ONLY down argv '
+                . 'after `--`; no party outside this process can name it, and the prelude '
+                . 'exits 2 when the path is not an is_file(). Same verdict AND same '
+                . 'MECHANISM as Tools/Sandbox/EgressProxyProcess.php|require: the read '
+                . 'executes in the CHILD, the target is decided wholly by the PARENT.',
+        ],
+        'Tools/Script/ScriptRunner.php|scandir' => [
+            'NAMES_ONLY — the scratch teardown (discardScratch) lists the random-named '
+                . '0700 directory this call created, to unlink names and rmdir; content is '
+                . 'never read and links are unlinked, never followed',
+            'NAMES_ONLY — the same teardown\'s one-level arm for a directory a script left '
+                . 'under its own scratch; same bounds, names only',
+        ],
         'Tools/Sandbox/Bubblewrap.php|file_get_contents' => [
             'PROCESS_DERIVED — the AppArmor userns sysctl (C-TOOL-4.a): the kernel interface named by '
                 . 'appArmorRestrictsUserns()\'s parameter default, read bounded at 16 bytes; the content '
@@ -1620,6 +1637,7 @@ final class ReadPathCensusTest extends TestCase
                 'Protocol/WebStrings.php|require',
                 'Background/BackgroundSupervisor.php|require',
                 'Tools/Sandbox/EgressProxyProcess.php|require',
+                'Tools/Script/ScriptPrelude.php|require',
                 'Workflows/WorkflowRegistry.php|require',
             ],
             array_keys($execute),

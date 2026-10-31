@@ -644,6 +644,21 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'for that helper; if it is ever wrong this site is a long-lived exposed '
                 . 'spawn and nothing else in this file would say so.',
         ],
+        'Tools/Script/ScriptRunner.php::run' => [
+            'count' => 1,
+            'reason' => 'C-TOOL-6.c: the fd-3 bridge child of the Code-mode runner. The spawn '
+                . 'and its reap live in the SAME method (run() — deliberately not split, the '
+                . 'finally below is what this row is keyed on): every path out of a successful '
+                . 'proc_open() — normal EOF end, wall-clock expiry, a throw from the loop\'s own '
+                . 'bookkeeping — closes the parent bridge end and the three pipes and runs '
+                . 'ProcessReaper::terminateAndClose() with the group id recorded while the '
+                . 'child was alive, so TERM reaches the script\'s whole process group before '
+                . 'KILL and proc_close always follows. The pre-spawn refusals (missing chdir, '
+                . 'unresolvable jail binary, staging failure, socketpair failure) hold no '
+                . 'handle. The short verdict rests on the CLOSING_HELPERS row for that helper; '
+                . 'if it is ever wrong this site is a long-lived exposed spawn and nothing '
+                . 'else in this file would say so.',
+        ],
     ];
 
     /**
