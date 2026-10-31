@@ -21,6 +21,7 @@ use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Core\Msg\PasteMsg;
+use SugarCraft\Core\Msg\BlurMsg;
 use SugarCraft\Core\Msg\FocusGainedMsg;
 use SugarCraft\Core\Msg\FocusLostMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
@@ -176,7 +177,19 @@ trait HandlesRunControl
         // back", enabled by `reportFocus` in `Chat::programOptions()`. The
         // loss only stamps time; the regain decides whether the absence was
         // long enough to deserve the recap Claude Code prints on return.
+        // Round-1 fix M1: the decoder's focus-OUT report is a `BlurMsg`
+        // (sugar-core InputReader final 'O'); a `FocusLostMsg` is constructed
+        // nowhere in production. Matching only the never-delivered class left
+        // the whole auto path dead on real terminals, so both shapes stamp the
+        // same absence — each keeps its own arm because the route-family
+        // census in RouteTraitParityTest harvests one class name per `if (`.
         if ($msg instanceof FocusLostMsg) {
+            \SugarCraft\Code\Tui\AwayTracker::focusLost();
+
+            return [$this, null];
+        }
+
+        if ($msg instanceof BlurMsg) {
             \SugarCraft\Code\Tui\AwayTracker::focusLost();
 
             return [$this, null];

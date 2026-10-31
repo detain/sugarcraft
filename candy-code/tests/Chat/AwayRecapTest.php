@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use React\Promise\PromiseInterface;
 use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\BlurMsg;
 use SugarCraft\Core\Msg\FocusGainedMsg;
 use SugarCraft\Core\Msg\FocusLostMsg;
 use SugarCraft\Core\Msg\KeyMsg;
@@ -70,6 +71,39 @@ final class AwayRecapTest extends TestCase
         self::assertNull($cmd, 'a blink is not an absence');
         self::assertSame([], $title->asked);
         self::assertSame($chat->history, $back->history);
+    }
+
+    public function testTheBlurShapeTheDecoderDeliversArmsTheRecap(): void
+    {
+        // Fix round-1 M1: sugar-core's focus-OUT report (CSI with final 'O')
+        // decodes to a BlurMsg — a FocusLostMsg is constructed nowhere in
+        // production — so the real-terminal chain is blur, then regain.
+        // Driving that first half must arm the stamp itself; the absence is
+        // then stretched past the threshold through AwayTracker's own
+        // stored clock (the same time seam beAway() seeds) so the regain the
+        // decoder pairs with it fires the paid call end to end.
+        $title = $this->titleBackend('Paused at the fixture table.');
+        $chat = $this->chat($title);
+
+        [$idle, $cmd] = $chat->update(new BlurMsg());
+        self::assertNull($cmd, 'the blur only stamps time');
+
+        $tracker = new \ReflectionClass(AwayTracker::class);
+        $lostAt = $tracker->getStaticPropertyValue('lostAt');
+        self::assertIsFloat($lostAt, 'the blur armed an absence stamp');
+        $tracker->setStaticPropertyValue('lostAt', $lostAt - self::AWAY);
+
+        [$back, $cmd] = $idle->update(new FocusGainedMsg());
+        self::assertNotNull($cmd, 'a regain after a real blur asks for the recap');
+
+        $answer = $this->resolve($cmd);
+        self::assertInstanceOf(SideQuestionAnsweredMsg::class, $answer);
+        [$settled] = $back->update($answer);
+        $last = $settled->history[\count($settled->history) - 1];
+        self::assertSame(Role::Assistant, $last->role);
+        self::assertTrue($last->uiOnly);
+        self::assertStringContainsString('Paused at the fixture table.', $last->content);
+        self::assertCount(1, $title->asked);
     }
 
     public function testAPastThresholdRegainRecapsOnceWithoutAnEchoRow(): void

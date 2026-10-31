@@ -50,6 +50,9 @@ final class RouteTraitParityTest extends TestCase
         'BackgroundTickMsg',
         'BackendToolEventsMsg',
         'BangShellResultMsg',
+        // C-TUI-3.g round-1 fix M1: the decoder's focus-out report — the
+        // production shape that arms the away stamp.
+        'BlurMsg',
         'CancelAgentRunMsg',
         'CancelledWorkflowReportMsg',
         'ClipboardImagePastedMsg',
