@@ -3871,7 +3871,19 @@ final class Subcommands
             echo Lang::t('cli.sub.import.rule_row', ['action' => $row['action'], 'pattern' => $row['pattern']]) . "\n";
         }
         if ($report['rules'] !== [] && $report['widenings'] !== []) {
-            echo Lang::t('cli.sub.import.widening_note', ['count' => (string) \count($report['widenings'])]) . "\n";
+            // The note speaks about "these" — the rule rows just printed —
+            // so it counts the rules that LAND as allow, i.e. the widening
+            // this write actually causes. `widenings` also carries every
+            // allow-spelled pattern the deny-wins precedence vetoed (the
+            // preview must show those requests), and counting them would
+            // overstate the note on any mixed import (C-TUI-5.b review).
+            $landedAllows = 0;
+            foreach ($report['rules'] as $row) {
+                if ($row['action'] === 'allow') {
+                    ++$landedAllows;
+                }
+            }
+            echo Lang::t('cli.sub.import.widening_note', ['count' => (string) $landedAllows]) . "\n";
         }
         foreach ($report['dropped'] as $pattern) {
             echo Lang::t('cli.sub.import.dropped_row', ['pattern' => $pattern]) . "\n";

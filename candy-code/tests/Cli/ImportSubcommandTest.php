@@ -291,6 +291,43 @@ final class ImportSubcommandTest extends TestCase
         self::assertStringContainsString('Wrote 0 new rule(s)', $againOut);
     }
 
+    /**
+     * MINOR-2 fix pin (C-TUI-5.b review round 1): the widening note speaks
+     * about "these" — the rule rows just printed — so its count must be the
+     * rules that LAND as allow, not the whole widenings list. A document
+     * mixing one allow that survives with one allow the same document's deny
+     * vetoes prints both enumerated (the vetoed one as a rule row and a
+     * vetoed row) yet only one printed rule widens: the landed allow.
+     * Counting `widenings` here would print 2 and overstate the write.
+     */
+    public function testTheWideningNoteCountsLandedAllowsNotTheVetoedOnes(): void
+    {
+        $this->writeUserSettings(['permissions' => [
+            'allow' => ['Bash(git:*)', 'Bash(npm:*)'],
+            'deny'  => ['Bash(npm:*)'],
+        ]]);
+        file_put_contents($this->configPath, '{"theme":"dark"}');
+
+        [$code, $out] = $this->capture(fn (): int => $this->dispatch(['import', 'claude', '--yes']));
+
+        self::assertSame(NonInteractive::EXIT_OK, $code, $out);
+        // Both allow-spelled patterns stay visible in the preview...
+        self::assertStringContainsString('  allow  Bash(git *)', $out);
+        self::assertStringContainsString('  deny  Bash(npm *)', $out);
+        self::assertStringContainsString('vetoed    Bash(npm *)', $out);
+        // ...but the note counts what the write actually widens with.
+        self::assertStringContainsString('1 of these are allow rules that WIDEN', $out);
+        self::assertStringNotContainsString('2 of these are allow rules', $out);
+        self::assertStringContainsString('Wrote 2 new rule(s)', $out);
+
+        $after = $this->readConfig();
+        self::assertSame('dark', $after['theme'] ?? null, 'unrelated keys survive');
+        self::assertSame([
+            ['pattern' => 'Bash(npm *)', 'action' => 'deny'],
+            ['pattern' => 'Bash(git *)', 'action' => 'allow'],
+        ], $after['permissionRules'] ?? null, 'the vetoed allow never lands as an allow');
+    }
+
     public function testTheImportedModelLandsUnderTheSelectedProvider(): void
     {
         $this->writeUserSettings(['model' => 'claude-sonnet-x']);
