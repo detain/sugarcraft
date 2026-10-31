@@ -117,6 +117,46 @@ final class ScreenReaderModeTest extends TestCase
         self::assertFalse(ScreenReaderMode::enabled(), 'and switching back is just as live');
     }
 
+    /**
+     * The memo IS the cost story of this switch — `AgentLiveRegistry` asks
+     * `enabled()` on every spinner frame, so the merged read must happen once,
+     * not per frame — and it is the Live story too: the read is held, and
+     * exactly two things drop it. Nothing else in this class pinned that:
+     * {@see writeConfig()} calls `forget()` itself, so the save-applies test
+     * above passes even with the memo deleted outright. Each leg here fails
+     * under one named removal (round-1 mutation proofs, FIX-1.md):
+     *  - a deleted memo answers leg one from the file and serves `true`;
+     *  - an inert `forget()` answers leg two from the held values;
+     *  - a fingerprint that dropped the session tier answers leg three stale.
+     */
+    public function testTheReadIsHeldAndOnlyASaveOrASessionWriteDropsIt(): void
+    {
+        self::assertFalse(ScreenReaderMode::enabled(), 'the first read arms the held values');
+
+        // Leg one: a HAND edit is not a save. The fingerprint covers the config
+        // path, $HOME and the session tier — never the files' contents — so a
+        // per-frame read does not re-open anything. That is the documented
+        // "applies at the next launch, or the next save", stated as behaviour.
+        file_put_contents(
+            $this->home . '/.candy-code/config.json',
+            json_encode(['screenReader' => true], JSON_THROW_ON_ERROR),
+        );
+        self::assertFalse(ScreenReaderMode::enabled(), 'the memo serves: the edit on disk is not consulted again');
+
+        // Leg two: the invalidation a save actually performs. `Chat::applySettings()`
+        // calls `UiSettings::forget()` for every `UiSettings::KEYS` key — including
+        // `screenReader` — and that drop is the entire reload.
+        UiSettings::forget();
+        self::assertTrue(ScreenReaderMode::enabled(), 'forget() is the whole reload story');
+
+        // Leg three: the session tier rides the fingerprint, so a session-only
+        // write applies on its own terms — the overlay is above `config.json` in
+        // the merged read, and a stale hold would silently win a save that the
+        // settings view just reported as applied.
+        SessionSettings::apply(['screenReader' => false]);
+        self::assertFalse(ScreenReaderMode::enabled(), 'a session write busts the memo with no forget() at all');
+    }
+
     public function testAnInvalidSpellingFallsBackToOff(): void
     {
         $this->writeConfig(['screenReader' => 'loud']);
@@ -173,6 +213,46 @@ final class ScreenReaderModeTest extends TestCase
         $msg = $cue();
         self::assertInstanceOf(RawMsg::class, $msg);
         self::assertSame("\x07", $msg->bytes);
+    }
+
+    /**
+     * The helpers' distinguishing bytes at the edges the sampled pins above
+     * cannot see. Three holes each one closes:
+     *  - `BOX_LAST`/`BOX_FIRST` are loop bounds, so an off-by-one there is
+     *    invisible to a fixture of sampled glyphs — only the code points on
+     *    either side of a bound prove the range is exactly U+2500-U+257F;
+     *  - an embedded title is bracketed by junction runes that ARE box glyphs,
+     *    which is the one case where "shed the frame" and "keep the title"
+     *    collide: the shed must stop at the frame, byte for byte;
+     *  - the marker column must answer `$selected` and nothing else, including
+     *    at `1/1`, where a position-based shortcut would still read plausible.
+     */
+    public function testTheShapesAreExactAtTheBlockBoundsAndTheJunctionsRideWithTheTitle(): void
+    {
+        $this->writeConfig(['screenReader' => true]);
+
+        // U+24FF and U+2580 are the code points immediately outside the block;
+        // U+2500 and U+257F are its first and last.
+        self::assertSame(
+            "\u{24FF}  \u{2580}",
+            ScreenReaderMode::glyph("\u{24FF}\u{2500}\u{257F}\u{2580}"),
+            'the blanked run starts at U+2500 and ends at U+257F, one space each',
+        );
+
+        $border = Border::normal()
+            ->withEmbeddedTitle('cpu', TitleAnchor::TopCenter, open: '┐', close: '┌');
+        $blanked = ScreenReaderMode::border($border);
+        $titles = $blanked->titles();
+        self::assertArrayHasKey('TopCenter', $titles, 'the anchor an embedded title rode is kept');
+        $junctioned = $titles['TopCenter'][0];
+        self::assertSame('cpu', $junctioned->text);
+        self::assertTrue($junctioned->embedded, 'it is still an EMBEDDED title, not flattened to a plain one');
+        self::assertSame('┐', $junctioned->open, 'the title\'s own box glyphs are title text: the shed never touches them');
+        self::assertSame('┌', $junctioned->close);
+        self::assertSame(' ', $blanked->top, 'while the frame it sits in goes blank');
+
+        self::assertSame('> One 1/1', ScreenReaderMode::menuRow(1, 1, 'One', true), 'first of one reads as selected');
+        self::assertSame('  One 1/1', ScreenReaderMode::menuRow(1, 1, 'One', false), 'and first of one still holds the column');
     }
 
     /** Copied byte-for-byte from UiSettingsTest (the sandbox-teardown house shape). */
