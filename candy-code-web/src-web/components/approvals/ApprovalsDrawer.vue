@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { t } from '../../lib/i18n'
 import { useRouter } from 'vue-router'
 import PermissionCard, { type Reply } from '../PermissionCard.vue'
 import { useApprovalsStore, type SessionAsk } from '../../stores/approvals'
@@ -79,22 +80,22 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     data-testid="approvals-drawer"
   >
     <header>
-      <h2>Approvals <span class="count">{{ approvals.total }}</span></h2>
+      <h2>{{ t('web.approvals.drawer_title') }} <span class="count">{{ approvals.total }}</span></h2>
       <button
         v-if="notificationsAvailable && !settings.notify"
         type="button"
         class="link"
-        :title="settings.notifyProblem ? NOTIFICATION_PROBLEM_TEXT[settings.notifyProblem] : 'Notify me when a question arrives or a turn finishes out of sight'"
+        :title="settings.notifyProblem ? NOTIFICATION_PROBLEM_TEXT[settings.notifyProblem] : t('web.approvals.notify_title')"
         data-testid="approvals-notify"
         @click="settings.enableNotifications()"
       >
-        notify me
+        {{ t('web.approvals.notify_btn') }}
       </button>
       <p v-if="settings.notifyProblem" class="notify-problem" role="status" data-testid="approvals-notify-problem">{{ NOTIFICATION_PROBLEM_TEXT[settings.notifyProblem] }}</p>
-      <button type="button" class="link" aria-label="Close the approvals drawer" data-testid="approvals-close" @click="close">&#10005;</button>
+      <button type="button" class="link" :aria-label="t('web.approvals.close_aria')" data-testid="approvals-close" @click="close">&#10005;</button>
     </header>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
-    <p v-if="approvals.total === 0" class="empty" data-testid="approvals-empty">No questions are waiting.</p>
+    <p v-if="approvals.total === 0" class="empty" data-testid="approvals-empty">{{ t('web.approvals.drawer_empty') }}</p>
     <section v-for="group in approvals.bySession" :key="group.sessionId" class="group" data-testid="approvals-group" :data-session-id="group.sessionId">
       <h3>
         <a :href="`#/s/${group.sessionId}`" @click.prevent="open(group.sessionId)">{{ sessionLabel(sessions.byId[group.sessionId], group.sessionId) }}</a>

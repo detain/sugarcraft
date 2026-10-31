@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { t } from '../../lib/i18n'
 import { useRouter } from 'vue-router'
 import SessionTile from './SessionTile.vue'
 import { sessionLabel } from '../approvals/attention'
@@ -72,7 +73,7 @@ function maximize(id: string): void {
       <p v-if="layout.tiles.length === 0" class="hint">Watch several sessions at once: open them here.</p>
       <form class="pick" @submit.prevent="add">
         <select v-model="picked" aria-label="Session to open in the grid" data-testid="grid-pick">
-          <option value="" disabled>open a session…</option>
+          <option value="" disabled>{{ t('web.grid.pane_open_option') }}</option>
           <option v-for="summary in candidates" :key="summary.id" :value="summary.id">{{ sessionLabel(summary, summary.id) }}</option>
         </select>
         <button type="submit" :disabled="picked === ''" data-testid="grid-open">Open</button>

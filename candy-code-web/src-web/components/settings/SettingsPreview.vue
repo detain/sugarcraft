@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { t } from '../../lib/i18n'
 import DiffView from '../DiffView.vue'
 import { displayValue, type SavePreview } from '../../stores/settings/fields'
 
@@ -24,8 +25,8 @@ const refusals = computed(() => Object.entries(props.preview.refusals).map(([key
 </script>
 
 <template>
-  <section class="preview" data-testid="settings-preview" :data-can-save="preview.canSave ? 'true' : 'false'" aria-label="Save preview">
-    <h2>Save to {{ tierLabel }}</h2>
+  <section class="preview" data-testid="settings-preview" :data-can-save="preview.canSave ? 'true' : 'false'" :aria-label="t('web.settings.preview_aria')">
+    <h2>{{ t('web.settings.save_to', {tier: tierLabel}) }}</h2>
     <p v-if="preview.path" class="path"><code>{{ preview.path }}</code></p>
 
     <ul v-if="refusals.length > 0" class="refusals" data-testid="settings-refusals">
@@ -35,23 +36,23 @@ const refusals = computed(() => Object.entries(props.preview.refusals).map(([key
     <ul class="changes">
       <li v-for="change in preview.changes" :key="change.key" data-testid="settings-change" :data-key="change.key">
         <code>{{ change.key }}</code>
-        <template v-if="change.action === 'reset'"> reset (deleted from the file)</template>
+        <template v-if="change.action === 'reset'"> {{ t('web.settings.reset_note') }}</template>
         <template v-else> &rarr; {{ displayValue(change.value) }}</template>
         <span class="badge" :data-applies="change.applies">{{ change.appliesLabel }}</span>
       </li>
     </ul>
 
     <DiffView v-if="preview.diff !== ''" :diff="preview.diff" />
-    <p v-else-if="refusals.length === 0" class="muted">No change to the file.</p>
+    <p v-else-if="refusals.length === 0" class="muted">{{ t('web.settings.no_change') }}</p>
 
-    <p v-if="preview.applySummary" class="summary" data-testid="settings-apply-summary">Applies: {{ preview.applySummary }}</p>
+    <p v-if="preview.applySummary" class="summary" data-testid="settings-apply-summary">{{ t('web.settings.applies_prefix') }} {{ preview.applySummary }}</p>
     <ul v-if="preview.notes.length > 0" class="notes" data-testid="settings-notes">
       <li v-for="note in preview.notes" :key="note">! {{ note }}</li>
     </ul>
 
     <div class="actions">
-      <button type="button" class="primary" :disabled="!preview.canSave || saving" data-testid="settings-save" @click="emit('save')">{{ saving ? 'Saving…' : 'Save' }}</button>
-      <button type="button" :disabled="saving" data-testid="settings-back" @click="emit('back')">Back to editing</button>
+      <button type="button" class="primary" :disabled="!preview.canSave || saving" data-testid="settings-save" @click="emit('save')">{{ saving ? t('web.settings.saving') : t('web.settings.save_btn') }}</button>
+      <button type="button" :disabled="saving" data-testid="settings-back" @click="emit('back')">{{ t('web.settings.back') }}</button>
     </div>
   </section>
 </template>

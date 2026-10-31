@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { t } from '../../lib/i18n'
 import { oneLine } from '../../lib/format'
 import type { TranscriptEntry } from '../../stores/agents/agents'
 import MessageMarkdown from '../MessageMarkdown.vue'
@@ -69,7 +70,7 @@ const rows = computed<Row[]>(() => {
   <ol class="agent-transcript" data-testid="agent-transcript">
     <li v-for="row in rows" :key="row.key" :class="row.kind" :data-kind="row.kind" data-testid="agent-row">
       <template v-if="row.kind === 'user'">
-        <div class="who">task</div>
+        <div class="who">{{ t('web.agents.who_task') }}</div>
         <div class="plain">{{ row.text }}</div>
       </template>
       <template v-else-if="row.kind === 'inbox'">

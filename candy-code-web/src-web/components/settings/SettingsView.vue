@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { t } from '../../lib/i18n'
 import { useConnectionStore } from '../../stores/connection'
 import { groupRows } from '../../stores/settings/fields'
 import { useServerSettingsStore } from '../../stores/settings/serverSettings'
@@ -60,9 +61,9 @@ watch(() => connection.connected, (connected) => {
  * answer is refused, never silently shadowed.
  */
 const KEYMAP_LABELS: Record<KeyAction, string> = {
-  palette: 'Command palette',
-  help: 'Help overlay',
-  tabs: 'Pick the Nth open tab',
+  palette: 'web.settings.key_palette',
+  help: 'web.settings.key_help_overlay',
+  tabs: 'web.settings.key_tabs',
 }
 const keymapRows = ref(loadKeymap())
 const capturing = ref<KeyAction | null>(null)
@@ -71,7 +72,7 @@ const keymapNote = ref('')
 function startCapture(action: KeyAction): void {
   stopCapture()
   capturing.value = action
-  keymapNote.value = `Press the new chord for ${KEYMAP_LABELS[action]}… (Esc keeps the current one)`
+  keymapNote.value = t('web.settings.note_press', {label: t(KEYMAP_LABELS[action])})
   beginKeyCapture()
   window.addEventListener('keydown', onCaptureKey, true)
 }
@@ -85,7 +86,7 @@ function stopCapture(): void {
 
 function reportClash(action: KeyAction, clash: KeyAction, binding: KeyBinding): void {
   keymapRows.value = loadKeymap()
-  keymapNote.value = `Not ${KEYMAP_LABELS[action]} — ${bindingLabel(binding)} is already the ${KEYMAP_LABELS[clash]} key.`
+  keymapNote.value = t('web.settings.note_clash', {first: t(KEYMAP_LABELS[action]), binding: bindingLabel(binding), second: t(KEYMAP_LABELS[clash])})
 }
 
 function onCaptureKey(event: KeyboardEvent): void {
@@ -101,15 +102,15 @@ function onCaptureKey(event: KeyboardEvent): void {
   const binding = bindingFromEvent(event, action === 'tabs' ? 'chord' : 'key')
   if (binding === null) {
     keymapNote.value = action === 'tabs'
-      ? 'The tab shortcut stays an Alt-family chord over a digit — press Alt, Alt+Shift or Ctrl+Alt with a number.'
-      : 'Not a bindable chord — press a letter, digit or F-key with its modifiers.'
+      ? t('web.settings.note_tab_chord')
+      : t('web.settings.note_bad_chord')
     return
   }
   const clash = setBinding(action, binding)
   if (clash !== null) reportClash(action, clash, binding)
   else {
     keymapRows.value = loadKeymap()
-    keymapNote.value = `${KEYMAP_LABELS[action]} → ${bindingLabel(binding)}.`
+    keymapNote.value = t('web.settings.note_bound', {label: t(KEYMAP_LABELS[action]), binding: bindingLabel(binding)})
   }
   stopCapture()
 }
@@ -119,14 +120,14 @@ function resetOne(action: KeyAction): void {
   if (clash !== null) reportClash(action, clash, DEFAULT_BINDINGS[action])
   else {
     keymapRows.value = loadKeymap()
-    keymapNote.value = `${KEYMAP_LABELS[action]} → ${bindingLabel(DEFAULT_BINDINGS[action])} (default).`
+    keymapNote.value = t('web.settings.note_defaulted', {label: t(KEYMAP_LABELS[action]), binding: bindingLabel(DEFAULT_BINDINGS[action])})
   }
 }
 
 function resetAll(): void {
   resetKeymap()
   keymapRows.value = loadKeymap()
-  keymapNote.value = 'Shortcuts reset to their defaults.'
+  keymapNote.value = t('web.settings.note_reset_all')
 }
 
 onBeforeUnmount(stopCapture)
@@ -135,16 +136,15 @@ onBeforeUnmount(stopCapture)
 <template>
   <section class="settings" data-testid="settings-view" :data-loaded="settings.loaded ? 'true' : 'false'">
     <header class="top">
-      <h1>Settings</h1>
+      <h1>{{ t('web.settings.title') }}</h1>
       <p class="lede">
-        The server's settings, from the same schema as the terminal UI's settings editor. A saved change applies as its
-        badge says — <em>live</em>, from the <em>next turn</em>, or after a <em>restart</em>.
+        {{ t('web.settings.lede_a') }} <em>{{ t('web.settings.applies_live') }}</em>{{ t('web.settings.lede_b') }} <em>{{ t('web.settings.applies_next') }}</em>{{ t('web.settings.lede_c') }} <em>{{ t('web.settings.applies_restart') }}</em>{{ t('web.settings.lede_end') }}
       </p>
-      <p v-if="!canAdmin && settings.loaded" class="warn" data-testid="settings-read-only">This sign-in can read settings but not change them.</p>
+      <p v-if="!canAdmin && settings.loaded" class="warn" data-testid="settings-read-only">{{ t('web.settings.read_only') }}</p>
 
       <div class="bar">
-        <fieldset class="tiers" aria-label="Save to">
-          <legend>Save to</legend>
+        <fieldset class="tiers" :aria-label="t('web.settings.save_to_label')">
+          <legend>{{ t('web.settings.save_to_label') }}</legend>
           <label
             v-for="tier in settings.tiers"
             :key="tier.scope"
@@ -157,17 +157,17 @@ onBeforeUnmount(stopCapture)
             {{ tier.label }}
           </label>
         </fieldset>
-        <input v-model="filter" class="filter" type="search" placeholder="Filter settings…" aria-label="Filter settings" data-testid="settings-filter">
+        <input v-model="filter" class="filter" type="search" :placeholder="t('web.settings.filter_placeholder')" :aria-label="t('web.settings.filter_aria')" data-testid="settings-filter">
       </div>
       <p v-if="settings.tier && !settings.tier.writable" class="muted">{{ settings.tier.refusal }}</p>
       <p v-else-if="settings.scope === 'project-shared'" class="warn" data-testid="settings-shared-warning">
-        This project's shared settings file is committed: everyone who clones the repository and trusts it gets what you save here.
+        {{ t('web.settings.shared_warning') }}
       </p>
     </header>
 
     <p v-if="settings.error" class="error" role="alert" data-testid="settings-error">{{ settings.error }}</p>
     <p v-if="savedSummary" class="ok" role="status" data-testid="settings-saved">{{ savedSummary }}</p>
-    <p v-if="!settings.loaded && settings.loading" class="muted">Loading settings…</p>
+    <p v-if="!settings.loaded && settings.loading" class="muted">{{ t('web.settings.loading') }}</p>
 
     <SettingsPreview
       v-if="settings.preview"
@@ -186,7 +186,7 @@ onBeforeUnmount(stopCapture)
         :row="row"
         :effective="settings.values[row.key]"
         :editable="canAdmin && settings.editabilityOf(row.key).editable"
-        :reason="canAdmin ? settings.editabilityOf(row.key).reason : 'this sign-in may not change settings'"
+        :reason="canAdmin ? settings.editabilityOf(row.key).reason : t('web.settings.reason_locked')"
         :staged="settings.staged[row.key]"
         @stage="(value) => settings.stage(row.key, value)"
         @reset="settings.stageReset(row.key)"
@@ -195,7 +195,7 @@ onBeforeUnmount(stopCapture)
     </div>
 
     <details v-if="settings.files.length > 0" class="files">
-      <summary>Where these values come from</summary>
+      <summary>{{ t('web.settings.files_summary') }}</summary>
       <ul>
         <li v-for="file in settings.files" :key="file.path" data-testid="settings-file">
           <strong>{{ file.role }}</strong> <code>{{ file.path }}</code> — {{ file.status }}
@@ -205,32 +205,31 @@ onBeforeUnmount(stopCapture)
     </details>
 
     <div class="group" data-testid="keymap-section">
-      <h2>Keyboard — this browser</h2>
+      <h2>{{ t('web.settings.keyboard_heading') }}</h2>
       <div class="keymap-body">
         <p class="muted">
-          The web client's own shortcuts, saved per viewer on this device — nothing here touches the server.
-          `?` opens the help overlay when the composer is empty or focus is outside any field.
+          {{ t('web.settings.keymap_a') }} {{ t('web.settings.keymap_b') }}
         </p>
         <div v-for="action in KEY_ACTIONS" :key="action" class="keymap-row" data-testid="keymap-row" :data-action="action">
-          <span class="what">{{ KEYMAP_LABELS[action] }}</span>
+          <span class="what">{{ t(KEYMAP_LABELS[action]) }}</span>
           <code class="keys" data-testid="keymap-binding" :data-action="action">{{ bindingLabel(keymapRows[action]) }}</code>
           <button type="button" :data-testid="`keymap-rebind-${action}`" @click="capturing === action ? stopCapture() : startCapture(action)">
-            {{ capturing === action ? 'Waiting… (Esc)' : 'Rebind' }}
+            {{ capturing === action ? t('web.settings.key_waiting') : t('web.settings.key_rebind') }}
           </button>
           <button type="button" :data-testid="`keymap-reset-${action}`" :disabled="bindingLabel(keymapRows[action]) === bindingLabel(DEFAULT_BINDINGS[action])" @click="resetOne(action)">
-            Default
+            {{ t('web.settings.key_default') }}
           </button>
         </div>
         <p v-if="keymapNote" class="ok" role="status" data-testid="keymap-note">{{ keymapNote }}</p>
-        <button type="button" data-testid="keymap-reset-all" @click="resetAll()">Reset all three to defaults</button>
+        <button type="button" data-testid="keymap-reset-all" @click="resetAll()">{{ t('web.settings.key_reset_all') }}</button>
       </div>
     </div>
 
     <footer v-if="settings.dirty" class="footer" data-testid="settings-footer">
-      <span data-testid="settings-staged-count">{{ settings.stagedCount }} change{{ settings.stagedCount === 1 ? '' : 's' }} staged for {{ tierLabel }}</span>
+      <span data-testid="settings-staged-count">{{ settings.stagedCount === 1 ? t('web.settings.staged_one', {n: settings.stagedCount, tier: tierLabel}) : t('web.settings.staged_other', {n: settings.stagedCount, tier: tierLabel}) }}</span>
       <span class="spacer" />
-      <button type="button" data-testid="settings-discard" @click="settings.discard()">Discard</button>
-      <button type="button" class="primary" :disabled="settings.previewing" data-testid="settings-preview-button" @click="settings.requestPreview()">Preview save</button>
+      <button type="button" data-testid="settings-discard" @click="settings.discard()">{{ t('web.settings.discard') }}</button>
+      <button type="button" class="primary" :disabled="settings.previewing" data-testid="settings-preview-button" @click="settings.requestPreview()">{{ t('web.settings.preview_save') }}</button>
     </footer>
   </section>
 </template>

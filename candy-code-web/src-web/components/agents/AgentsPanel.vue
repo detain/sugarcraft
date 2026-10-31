@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
+import { t } from '../../lib/i18n'
 import { useAgentsStore } from '../../stores/agents/agents'
 import { usePanelsStore } from '../../stores/agents/panels'
 import { activeCount, buildTree, foldRuns } from '../../stores/agents/tree'
@@ -33,9 +34,9 @@ watch(() => props.sessionId, (id) => void agents.refresh(id), { immediate: true 
     <AgentView v-if="picked" :session-id="sessionId" :run="picked" @close="panels.closeAgent()" />
     <template v-else>
       <p class="summary">
-        <template v-if="tree.length === 0">No delegated runs in this session yet.</template>
-        <template v-else>{{ Object.keys(runs).length }} run{{ Object.keys(runs).length === 1 ? '' : 's' }}<template v-if="running > 0">, {{ running }} going</template></template>
-        <button type="button" class="link" @click="agents.refresh(sessionId)">refresh</button>
+        <template v-if="tree.length === 0">{{ t('web.agents.none_yet') }}</template>
+        <template v-else>{{ Object.keys(runs).length === 1 ? t('web.agents.runs_one', {n: Object.keys(runs).length}) : t('web.agents.runs_other', {n: Object.keys(runs).length}) }}<template v-if="running > 0">{{ t('web.agents.runs_going', {n: running}) }}</template></template>
+        <button type="button" class="link" @click="agents.refresh(sessionId)">{{ t('web.agents.refresh') }}</button>
       </p>
       <p v-if="agents.errors[sessionId]" class="error" role="alert">{{ agents.errors[sessionId] }}</p>
       <SubAgentTree :nodes="tree" :selected="panels.agentId" @open="(id: string) => panels.openAgent(id)" />

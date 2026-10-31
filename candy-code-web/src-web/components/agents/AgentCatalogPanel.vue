@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { t } from '../../lib/i18n'
 import type { MethodResult } from '../../protocol/generated'
 import { useConnectionStore } from '../../stores/connection'
 import { describe } from '../../stores/session'
@@ -39,16 +40,16 @@ onMounted(() => void load())
 <template>
   <div class="catalog" data-testid="agent-catalog">
     <div class="head">
-      <span class="count" data-testid="catalog-count">{{ loaded ? `${items.length} agents` : '' }}</span>
-      <button type="button" class="link" data-testid="catalog-reload" :disabled="loading" @click="load">reload</button>
+      <span class="count" data-testid="catalog-count">{{ loaded ? t('web.agents.catalog_count', {n: items.length}) : '' }}</span>
+      <button type="button" class="link" data-testid="catalog-reload" :disabled="loading" @click="load">{{ t('web.agents.catalog_reload') }}</button>
     </div>
     <p v-if="error" class="error" role="alert" data-testid="catalog-error">{{ error }}</p>
-    <p v-else-if="loading && !loaded" class="empty">Loading the roster…</p>
-    <p v-else-if="loaded && items.length === 0" class="empty" data-testid="catalog-none">This server defines no named agents.</p>
+    <p v-else-if="loading && !loaded" class="empty">{{ t('web.agents.catalog_loading') }}</p>
+    <p v-else-if="loaded && items.length === 0" class="empty" data-testid="catalog-none">{{ t('web.agents.catalog_none') }}</p>
     <ul v-else-if="loaded">
       <li v-for="agent in items" :key="agent.name" class="row" :data-testid="`catalog-${agent.name}`">
-        <span class="name">{{ agent.name }}<span v-if="agent.active === true" class="on" title="Delegations run as this agent by default">default</span></span>
-        <span class="meta">{{ [agent.provider, agent.model].filter((part) => typeof part === 'string' && part !== '').join(' · ') }}<template v-if="agent.permissionMode"> · mode: {{ agent.permissionMode }}</template></span>
+        <span class="name">{{ agent.name }}<span v-if="agent.active === true" class="on" :title="t('web.agents.catalog_default_title')">{{ t('web.agents.catalog_default') }}</span></span>
+        <span class="meta">{{ [agent.provider, agent.model].filter((part) => typeof part === 'string' && part !== '').join(' · ') }}<template v-if="agent.permissionMode"> · {{ t('web.agents.catalog_mode') }} {{ agent.permissionMode }}</template></span>
         <p v-if="agent.description" class="desc">{{ agent.description }}</p>
       </li>
     </ul>

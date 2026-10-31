@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useApprovalsStore } from '../../stores/approvals'
 import { useLayoutStore } from '../../stores/layout'
+import { t } from '../../lib/i18n'
 
 const approvals = useApprovalsStore()
 const layout = useLayoutStore()
@@ -13,13 +14,13 @@ const layout = useLayoutStore()
     :class="{ waiting: approvals.total > 0 }"
     :aria-expanded="layout.approvalsOpen"
     aria-controls="approvals-drawer"
-    :title="approvals.total > 0 ? `${approvals.total} question${approvals.total === 1 ? '' : 's'} waiting — open the approvals drawer` : 'Approvals'"
+    :title="approvals.total > 0 ? (approvals.total === 1 ? t('web.approvals.button_one', {n: approvals.total}) : t('web.approvals.button_other', {n: approvals.total})) : t('web.approvals.drawer_title')"
     data-testid="approvals-button"
     @click="layout.toggleApprovals()"
   >
     <span aria-hidden="true">&#9888;</span>
     <span class="count" data-testid="approvals-count">{{ approvals.total }}</span>
-    <span class="sr-only">open questions</span>
+    <span class="sr-only">{{ t('web.approvals.sr_open_questions') }}</span>
   </button>
 </template>
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { t } from '../../lib/i18n'
 import { money, tokens } from '../../lib/format'
 import { useAgentsStore, type ControlVerb, type MessageMode } from '../../stores/agents/agents'
 import { statusIcon, type AgentRun } from '../../stores/agents/tree'
@@ -107,31 +108,31 @@ function onKeydown(event: KeyboardEvent): void {
 <template>
   <section class="agent-view" data-testid="agent-view" :data-agent-id="run.id" :data-status="run.status">
     <header>
-      <button type="button" class="link back" data-testid="agent-back" @click="emit('close')">← all runs</button>
+      <button type="button" class="link back" data-testid="agent-back" @click="emit('close')">← {{ t('web.agents.back') }}</button>
       <h3><span class="icon" :class="run.status" aria-hidden="true">{{ statusIcon(run.status) }}</span> {{ run.name }}</h3>
       <p v-if="run.description || run.task" class="task">{{ run.description || run.task }}</p>
       <p class="figures">
-        {{ run.status }}<template v-if="run.maxSteps > 0"> · step {{ run.step }}/{{ run.maxSteps }}</template> · {{ tokens(run.tokens) }} tok<template v-if="run.cost > 0"> · {{ money(run.cost) }}</template><template v-if="run.model"> · {{ run.model }}</template>
+        {{ run.status }}<template v-if="run.maxSteps > 0"> · {{ t('web.agents.step_count', {step: run.step, max: run.maxSteps}) }}</template> · {{ tokens(run.tokens) }} tok<template v-if="run.cost > 0"> · {{ money(run.cost) }}</template><template v-if="run.model"> · {{ run.model }}</template>
       </p>
       <p v-if="run.error" class="error">{{ run.error }}</p>
       <div v-if="canWrite" class="controls">
         <template v-if="live">
-          <button type="button" data-testid="agent-pause" @click="control('pause')">Pause</button>
-          <button type="button" data-testid="agent-resume" @click="control('resume')">Resume</button>
-          <button v-if="canBackground" type="button" data-testid="agent-background" title="Move this run to a background session; it keeps going there" @click="control('background')">Background</button>
-          <button type="button" class="danger" data-testid="agent-cancel" @click="control('cancel')">Cancel</button>
+          <button type="button" data-testid="agent-pause" @click="control('pause')">{{ t('web.agents.pause') }}</button>
+          <button type="button" data-testid="agent-resume" @click="control('resume')">{{ t('web.agents.resume') }}</button>
+          <button v-if="canBackground" type="button" data-testid="agent-background" :title="t('web.agents.background_title')" @click="control('background')">{{ t('web.agents.background_btn') }}</button>
+          <button type="button" class="danger" data-testid="agent-cancel" @click="control('cancel')">{{ t('web.agents.cancel') }}</button>
         </template>
-        <button v-else-if="canContinue" type="button" data-testid="agent-continue" @click="control('resume')">Continue</button>
+        <button v-else-if="canContinue" type="button" data-testid="agent-continue" @click="control('resume')">{{ t('web.agents.continue') }}</button>
       </div>
     </header>
     <p v-if="view.error" class="error" role="alert">{{ view.error }}</p>
-    <p v-if="view.items.length === 0 && !view.loading" class="empty">Nothing in this run's transcript yet.</p>
+    <p v-if="view.items.length === 0 && !view.loading" class="empty">{{ t('web.agents.transcript_empty') }}</p>
     <AgentTranscript :items="view.items" />
     <ul v-if="view.pending.length > 0" class="pending" data-testid="agent-pending">
       <li v-for="(message, i) in view.pending" :key="i" :class="message.status">
-        you → {{ message.text }} <span class="badge" data-testid="agent-pending-badge">{{ message.status === 'queued' ? (message.mode === 'interrupt' ? '⚡ interrupt' : '⧗ waiting for its next step') : message.status === 'resuming' ? '↻ continuing the run' : message.status }}</span>
+        {{ t('web.agents.who_you') }} → {{ message.text }} <span class="badge" data-testid="agent-pending-badge">{{ message.status === 'queued' ? (message.mode === 'interrupt' ? '⚡ ' + t('web.agents.interrupt') : '⧗ ' + t('web.agents.pending_waiting')) : message.status === 'resuming' ? '↻ ' + t('web.agents.pending_continuing') : message.status }}</span>
         <span v-if="message.error"> — {{ message.error }}</span>
-        <button v-if="message.status === 'failed'" type="button" class="link" @click="agents.dismissPending(sessionId, run.id, i)">dismiss</button>
+        <button v-if="message.status === 'failed'" type="button" class="link" @click="agents.dismissPending(sessionId, run.id, i)">{{ t('web.agents.dismiss') }}</button>
       </li>
     </ul>
     <p v-if="error" class="error" role="alert" data-testid="agent-error">{{ error }}</p>
@@ -139,8 +140,8 @@ function onKeydown(event: KeyboardEvent): void {
       <textarea
         v-model="draft"
         rows="2"
-        :placeholder="live ? `Message ${run.name}… (read at its next step; ⚡ interrupts the step, Ctrl+Enter sends one now)` : `Continue ${run.name}…`"
-        aria-label="Message the run"
+        :placeholder="live ? t('web.agents.placeholder_live', {name: run.name}) : t('web.agents.placeholder_continue', {name: run.name})"
+        :aria-label="t('web.agents.message_aria')"
         data-testid="agent-input"
         @keydown="onKeydown"
       />
@@ -150,11 +151,11 @@ function onKeydown(event: KeyboardEvent): void {
         class="interrupt"
         :class="{ on: interruptMode }"
         :aria-pressed="interruptMode"
-        title="Interrupt send: the run skips this step's unstarted calls and reads your message first (Ctrl+Enter sends one without arming the toggle)"
+        :title="t('web.agents.interrupt_title')"
         data-testid="agent-interrupt"
         @click="interruptMode = !interruptMode"
-      >⚡ interrupt</button>
-      <button type="button" class="primary" :disabled="sending || draft.trim() === ''" data-testid="agent-send" @click="send()">Send</button>
+      >⚡ {{ t('web.agents.interrupt') }}</button>
+      <button type="button" class="primary" :disabled="sending || draft.trim() === ''" data-testid="agent-send" @click="send()">{{ t('web.agents.send') }}</button>
     </div>
   </section>
 </template>

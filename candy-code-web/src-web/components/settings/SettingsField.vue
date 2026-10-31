@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { t } from '../../lib/i18n'
 import {
   appliesLabel,
   choices,
@@ -74,9 +75,9 @@ function onCheckbox(event: Event): void {
     <div class="head">
       <label :for="inputId" class="label">{{ row.label }}</label>
       <code class="key">{{ row.key }}</code>
-      <span class="badge applies" :data-applies="row.applies" :title="`A saved change applies: ${appliesLabel(row)}`" data-testid="settings-applies">{{ appliesLabel(row) }}</span>
+      <span class="badge applies" :data-applies="row.applies" :title="t('web.settings.applies_title', {label: appliesLabel(row)})" data-testid="settings-applies">{{ appliesLabel(row) }}</span>
       <span class="badge source" :class="{ lock: effective?.locked }" :title="effective?.sourcePath ?? source" data-testid="settings-source">
-        <template v-if="effective?.locked">&#128274; </template>{{ isDefault ? 'default' : source }}
+        <template v-if="effective?.locked">&#128274; </template>{{ isDefault ? t('web.settings.badge_default') : source }}
       </span>
     </div>
     <p v-if="row.help" class="help">{{ row.help }}</p>
@@ -99,7 +100,7 @@ function onCheckbox(event: Event): void {
         data-testid="settings-input"
         @change="commit(draft)"
       >
-        <option v-if="current === undefined || current === null" value="" disabled>unset</option>
+        <option v-if="current === undefined || current === null" value="" disabled>{{ t('web.settings.unset') }}</option>
         <option v-for="option in options" :key="option" :value="option">{{ option }}</option>
       </select>
       <textarea
@@ -108,7 +109,7 @@ function onCheckbox(event: Event): void {
         v-model="draft"
         :rows="kind === 'json' ? 4 : 3"
         :disabled="!editable"
-        :placeholder="kind === 'list' ? 'one per line' : 'JSON'"
+        :placeholder="kind === 'list' ? t('web.settings.placeholder_list') : 'JSON'"
         spellcheck="false"
         data-testid="settings-input"
         @change="commit(draft)"
@@ -121,7 +122,7 @@ function onCheckbox(event: Event): void {
         :min="row.min"
         :max="row.max"
         :step="row.type === 'int' ? 1 : 'any'"
-        :placeholder="row.defaultText ?? (row.default !== undefined ? displayValue(row.default) : 'unset')"
+        :placeholder="row.defaultText ?? (row.default !== undefined ? displayValue(row.default) : t('web.settings.unset'))"
         :disabled="!editable"
         data-testid="settings-input"
         @change="commit(draft)"
@@ -129,14 +130,14 @@ function onCheckbox(event: Event): void {
       >
 
       <template v-if="editable">
-        <button v-if="staged !== undefined" type="button" class="link" data-testid="settings-unstage" @click="emit('unstage')">undo</button>
-        <button v-else-if="!isDefault" type="button" class="link" title="Delete the key from the file, so the default (or a lower layer) applies" data-testid="settings-reset" @click="emit('reset')">reset</button>
+        <button v-if="staged !== undefined" type="button" class="link" data-testid="settings-unstage" @click="emit('unstage')">{{ t('web.settings.undo') }}</button>
+        <button v-else-if="!isDefault" type="button" class="link" :title="t('web.settings.reset_title')" data-testid="settings-reset" @click="emit('reset')">{{ t('web.settings.reset') }}</button>
       </template>
     </div>
 
     <p v-if="fieldError" class="error" role="alert" data-testid="settings-field-error">{{ fieldError }}</p>
-    <p v-if="staged?.action === 'reset'" class="note" data-testid="settings-staged">reset staged — the save deletes it</p>
-    <p v-else-if="staged" class="note" data-testid="settings-staged">changed from {{ displayValue(effective?.value) }}</p>
+    <p v-if="staged?.action === 'reset'" class="note" data-testid="settings-staged">{{ t('web.settings.staged_reset') }}</p>
+    <p v-else-if="staged" class="note" data-testid="settings-staged">{{ t('web.settings.staged_changed', {value: displayValue(effective?.value)}) }}</p>
     <p v-if="!editable && reason" class="reason" data-testid="settings-reason">{{ reason }}</p>
   </div>
 </template>

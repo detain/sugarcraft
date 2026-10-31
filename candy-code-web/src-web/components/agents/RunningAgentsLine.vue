@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { t } from '../../lib/i18n'
 import { oneLine } from '../../lib/format'
 import { useAgentsStore } from '../../stores/agents/agents'
 import { usePanelsStore } from '../../stores/agents/panels'
@@ -42,7 +43,7 @@ function activity(run: AgentRun): string {
 
 <template>
   <section v-if="running.length > 0" class="running-line" data-testid="running-agents-line">
-    <p class="head" data-testid="running-agents-count">⠋ {{ running.length }} agent{{ running.length === 1 ? '' : 's' }} running</p>
+    <p class="head" data-testid="running-agents-count">⠋ {{ running.length === 1 ? t('web.agents.line_one', {n: running.length}) : t('web.agents.line_other', {n: running.length}) }}</p>
     <ul class="rows">
       <li v-for="run in running" :key="run.id">
         <button

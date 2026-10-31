@@ -2,6 +2,7 @@
 import { money, oneLine, tokens } from '../../lib/format'
 import { useAgentsStore } from '../../stores/agents/agents'
 import { statusIcon, type AgentNode, type AgentRun } from '../../stores/agents/tree'
+import { t } from '../../lib/i18n'
 
 /**
  * Delegated runs as a tree (roadmap O-6c, Appendix O §7.4 "sub-agent tree"):
@@ -57,7 +58,7 @@ function activity(run: AgentRun): string {
         <span class="name">{{ node.run.name }}</span>
         <span class="what">{{ what(node.run) }}</span>
         <span v-if="!compact" class="figures">
-          <template v-if="node.run.maxSteps > 0">step {{ node.run.step }}/{{ node.run.maxSteps }} · </template>{{ tokens(node.run.tokens) }} tok<template v-if="node.run.cost > 0"> · {{ money(node.run.cost) }}</template>
+          <template v-if="node.run.maxSteps > 0">{{ t('web.agents.step_count', {step: node.run.step, max: node.run.maxSteps}) }} · </template>{{ tokens(node.run.tokens) }} tok<template v-if="node.run.cost > 0"> · {{ money(node.run.cost) }}</template>
         </span>
         <span v-if="activity(node.run)" class="activity" data-testid="agent-activity">{{ activity(node.run) }}</span>
       </button>

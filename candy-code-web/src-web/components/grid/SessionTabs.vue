@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { t } from '../../lib/i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { sessionLabel } from '../approvals/attention'
 import { describe } from '../../stores/session'
@@ -151,7 +152,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <nav v-if="visible" class="tabs-strip" aria-label="Open sessions" data-testid="session-tabs">
+  <nav v-if="visible" class="tabs-strip" :aria-label="t('web.grid.tabs_aria')" data-testid="session-tabs">
     <div class="tabs" role="tablist">
       <div
         v-for="(id, index) in layout.tabs"
@@ -167,17 +168,17 @@ onBeforeUnmount(() => {
           <span class="dot" :class="status(id)" aria-hidden="true" />
           <span class="name">{{ title(id) }}</span>
           <span v-if="approvals.countFor(id) > 0" class="badge" data-testid="tab-ask-badge">{{ approvals.countFor(id) }}</span>
-          <span v-else-if="layout.unseen[id] === true" class="fin" aria-label="finished since you last looked" data-testid="tab-unseen" title="Finished since you last looked" />
+          <span v-else-if="layout.unseen[id] === true" class="fin" :aria-label="t('web.grid.tab_unseen_aria')" data-testid="tab-unseen" :title="t('web.grid.tab_unseen_title')" />
         </button>
-        <button type="button" class="x" :aria-label="`Close ${title(id)}`" data-testid="tab-close" @click="close(id)">&#10005;</button>
+        <button type="button" class="x" :aria-label="t('web.grid.tab_close_aria', {name: title(id)})" data-testid="tab-close" @click="close(id)">&#10005;</button>
       </div>
-      <button type="button" class="new-tab" data-testid="new-session-tab" :disabled="starting" title="Start a new session" @click="create">&#43;</button>
+      <button type="button" class="new-tab" data-testid="new-session-tab" :disabled="starting" :title="t('web.grid.new_session_title')" @click="create">&#43;</button>
     </div>
     <p v-if="createError" class="error" role="alert" data-testid="new-session-error">{{ createError }}</p>
-    <div class="modes" role="group" aria-label="Layout">
-      <button type="button" class="chord" data-testid="tab-chord" title="Key chord that picks a tab — click to cycle (the digit is the physical key, so laptop Option and AZERTY glyphs do not get in the way)" @click="cycleChord()">tabs: {{ tabChordLabel(chord) }}+1</button>
-      <button type="button" :aria-pressed="!inGrid" data-testid="layout-tabs" @click="toTabs">&#9635; tabs</button>
-      <button type="button" :aria-pressed="inGrid" data-testid="layout-grid" @click="toGrid">&#9638; grid</button>
+    <div class="modes" role="group" :aria-label="t('web.grid.layout_aria')">
+      <button type="button" class="chord" data-testid="tab-chord" :title="t('web.grid.chord_title')" @click="cycleChord()">{{ t('web.grid.chord_label') }} {{ tabChordLabel(chord) }}+1</button>
+      <button type="button" :aria-pressed="!inGrid" data-testid="layout-tabs" @click="toTabs">&#9635; {{ t('web.grid.mode_tabs') }}</button>
+      <button type="button" :aria-pressed="inGrid" data-testid="layout-grid" @click="toGrid">&#9638; {{ t('web.grid.mode_grid') }}</button>
     </div>
   </nav>
 </template>

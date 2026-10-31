@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { t } from '../../lib/i18n'
 import PermissionCard, { type Reply } from '../PermissionCard.vue'
 import { sessionLabel } from '../approvals/attention'
 import { keyArgument, oneLine, spendLabel } from '../../lib/format'
@@ -117,13 +118,13 @@ async function answer(askId: string, reply: Reply, cascade: boolean, note = '', 
       <span class="dot" :class="status" aria-hidden="true" />
       <strong class="name" :title="id">{{ title }}</strong>
       <span class="meta" data-testid="tile-spend">{{ statusText }} · {{ spendLabel(spent, state.unpriced) }}</span>
-      <span v-if="asks > 0" class="badge" :title="`${asks} waiting for an answer`" data-testid="tile-ask-badge">{{ asks }}</span>
-      <button type="button" class="link" title="Open in a tab" aria-label="Open in a tab" data-testid="tile-maximize" @click.stop="emit('maximize')">&#10530;</button>
-      <button type="button" class="link" title="Close the tile" aria-label="Close the tile" data-testid="tile-close" @click.stop="emit('close')">&#10005;</button>
+      <span v-if="asks > 0" class="badge" :title="t('web.grid.tile_asks_title', {n: asks})" data-testid="tile-ask-badge">{{ asks }}</span>
+      <button type="button" class="link" :title="t('web.grid.tile_open_tab')" :aria-label="t('web.grid.tile_open_tab')" data-testid="tile-maximize" @click.stop="emit('maximize')">&#10530;</button>
+      <button type="button" class="link" :title="t('web.grid.tile_close_tile')" :aria-label="t('web.grid.tile_close_tile')" data-testid="tile-close" @click.stop="emit('close')">&#10005;</button>
     </header>
     <div class="body">
       <p v-if="session.error" class="error">{{ session.error }}</p>
-      <p v-if="recent.length === 0 && !live" class="empty">Nothing yet.</p>
+      <p v-if="recent.length === 0 && !live" class="empty">{{ t('web.grid.tile_empty') }}</p>
       <ul class="recent">
         <li v-for="item in recent" :key="item.key" :class="item.kind">{{ item.text }}</li>
       </ul>
@@ -140,9 +141,9 @@ async function answer(askId: string, reply: Reply, cascade: boolean, note = '', 
       <input
         v-model="text"
         type="text"
-        :placeholder="session.busy ? 'type to steer…' : 'type a prompt…'"
+        :placeholder="session.busy ? t('web.grid.tile_steer_ph') : t('web.grid.tile_prompt_ph')"
         :disabled="sending || !connection.connected"
-        :aria-label="`Prompt for ${title}`"
+        :aria-label="t('web.grid.tile_prompt_aria', {name: title})"
         data-testid="tile-input"
       >
     </form>
