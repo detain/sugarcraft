@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tests\Tools\Sandbox;
 
+use PhpToken;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Tools\Sandbox\EgressProxyProcess;
 
@@ -116,6 +118,56 @@ final class EgressProxyProcessTest extends TestCase
 
         self::assertSame(1, $status);
         self::assertStringContainsString('autoloader is not readable', $stderr);
+    }
+
+    /**
+     * MINOR-1 (round-1 review): the proc_open-false branch of start() must
+     * reach the throw through calls that actually exist, so a spawn failure
+     * surfaces as the controlled RuntimeException rather than a PHP Error
+     * that a later launch funnel could not catch. The branch itself cannot be
+     * driven from a unit test — the spawn command is always this running
+     * PHP_BINARY (plus the probed setsid wrapper), and proc_open() answers
+     * false only when the fork itself fails — so this pin is static, exactly
+     * the shape the rename is judged by: every $this->method() call site
+     * lexed out of the class source has to resolve to a method the class
+     * declares. It went red at the broken site (discardDirectory on the
+     * former spawn-failure leg) and is the tripwire for the whole call
+     * surface, including legs any 4.g wiring adds later.
+     */
+    public function testEveryInstanceCallInTheSpawnClassResolvesToADeclaredMethod(): void
+    {
+        $source = (new ReflectionClass(EgressProxyProcess::class))->getFileName();
+        self::assertIsString($source);
+
+        $tokens = PhpToken::tokenize((string) file_get_contents($source));
+        $sites = [];
+        $count = count($tokens);
+        for ($index = 0; $index + 3 < $count; $index++) {
+            if (!$tokens[$index]->is(T_VARIABLE) || $tokens[$index]->text !== '$this') {
+                continue;
+            }
+            if (!$tokens[$index + 1]->is([T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR])) {
+                continue;
+            }
+            if (!$tokens[$index + 2]->is(T_STRING)) {
+                continue;
+            }
+            if ($tokens[$index + 3]->text !== '(') {
+                continue;
+            }
+            $sites[$tokens[$index + 2]->text][] = $tokens[$index]->line;
+        }
+
+        $seen = array_sum(array_map('count', $sites));
+        self::assertGreaterThanOrEqual(4, $seen, 'the $this-> call walker found no sites — the pin went blind');
+
+        $undefined = [];
+        foreach ($sites as $name => $lines) {
+            if (!method_exists(EgressProxyProcess::class, $name)) {
+                $undefined[] = $name . ' at line ' . implode(', ', $lines);
+            }
+        }
+        self::assertSame([], $undefined, 'start()/stop() must only call methods the class declares');
     }
 
     /**

@@ -120,7 +120,12 @@ final class EgressProxyProcess
 
         $descriptors = [
             0 => ['pipe', 'r'],  // stdin — frame, then held open for EOF liveness
-            1 => ['pipe', 'w'],  // stdout — drained by nobody, closed on stop
+            // stdout — drained by nobody, closed on stop: legal ONLY because
+            // STUB never writes there. A future stub that prints to STDOUT
+            // must be paired with a reader in this class, or route through
+            // the STDERR log — an undrained pipe buffer fills and the child
+            // blocks on its own boot output, which presents as a hung start.
+            1 => ['pipe', 'w'],
             2 => ['file', $this->logPath, 'a'],
         ];
 
@@ -149,7 +154,7 @@ final class EgressProxyProcess
                     }
                 }
             }
-            $this->discardDirectory();
+            $this->discardScaffold();
             throw new RuntimeException('Failed to spawn egress proxy process');
         }
 
