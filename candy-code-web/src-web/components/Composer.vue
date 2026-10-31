@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import HistorySearch from "./HistorySearch.vue";
+import { t } from "../lib/i18n";
 import type { CommandInfo, Delivery } from "../stores/session";
 import { useSessionStore } from "../stores/session";
 import { useConnectionStore } from "../stores/connection";
@@ -424,11 +425,11 @@ const blockedReason = computed(() => {
     if (images.value.length === 0 && documents.value.length === 0) return "";
     if (/^[!/]/.test(props.modelValue.trim())) {
         if (images.value.length === 0)
-            return "Documents ride a prose prompt; a /command or !bang takes none.";
-        return "Images ride a prose prompt; a /command or !bang takes none.";
+            return t("web.composer.blocked_docs");
+        return t("web.composer.blocked_images");
     }
     if (props.busy && delivery.value !== "interrupt")
-        return "A turn is running — switch delivery to interrupt, or wait for it to end.";
+        return t("web.composer.blocked_turn");
     return "";
 });
 
@@ -906,7 +907,7 @@ defineExpose({ focus: () => input.value?.focus() });
                 @mousedown.prevent="completeAgent(name)"
             >
                 <span class="cmd">{{ `agent:${name}` }}</span>
-                <span class="desc">delegate this prompt</span>
+                <span class="desc">{{ t("web.composer.agent_delegate") }}</span>
             </li>
         </ul>
         <ul
@@ -944,7 +945,7 @@ defineExpose({ focus: () => input.value?.focus() });
                     <button
                         type="button"
                         class="remove"
-                        :aria-label="`Remove ${image.name}`"
+                        :aria-label="t('web.composer.remove_chip_aria', { name: image.name })"
                         data-testid="paste-chip-remove"
                         @click="images.splice(i, 1)"
                     >
@@ -966,7 +967,7 @@ defineExpose({ focus: () => input.value?.focus() });
                     <button
                         type="button"
                         class="remove"
-                        :aria-label="`Remove ${doc.name}`"
+                        :aria-label="t('web.composer.remove_chip_aria', { name: doc.name })"
                         data-testid="document-chip-remove"
                         @click="documents.splice(i, 1)"
                     >
@@ -981,11 +982,11 @@ defineExpose({ focus: () => input.value?.focus() });
                 :disabled="disabled"
                 :placeholder="
                     busy
-                        ? 'Type to queue, steer or interrupt…'
+                        ? t('web.composer.placeholder_busy')
                         : (suggestion ??
-                            'Message CandyCode… (Enter sends, Shift+Enter for a new line, / for commands, @ for files, paste or drop images and PDFs, Ctrl+↑ history, Ctrl+G search)')
+                            t('web.composer.placeholder_default'))
                 "
-                aria-label="Message"
+                :aria-label="t('web.composer.message_aria')"
                 data-testid="composer-input"
                 @input="onInput"
                 @keydown="onKeydown"
@@ -1014,8 +1015,7 @@ defineExpose({ focus: () => input.value?.focus() });
                 data-testid="composer-quick-add"
             >
                 <span class="quick-add-note"
-                    >Add to your personal instructions:
-                    {{ quickAdd.line.trim() }}</span
+                    >{{ t("web.composer.quick_add_note", { line: quickAdd.line.trim() }) }}</span
                 >
                 <button
                     type="button"
@@ -1023,14 +1023,14 @@ defineExpose({ focus: () => input.value?.focus() });
                     :disabled="quickAddBusy"
                     @click="confirmQuickAdd"
                 >
-                    Add (Enter)
+                    {{ t("web.composer.quick_add") }}
                 </button>
                 <button
                     type="button"
                     data-testid="composer-quick-add-cancel"
                     @click="cancelQuickAdd"
                 >
-                    Cancel (Esc)
+                    {{ t("web.composer.quick_add_cancel") }}
                 </button>
                 <span
                     v-if="quickAddError"
@@ -1045,12 +1045,12 @@ defineExpose({ focus: () => input.value?.focus() });
             <button
                 type="button"
                 class="attach"
-                aria-label="Attach files"
-                title="Attach images or PDFs to this prompt"
+                :aria-label="t('web.composer.attach_aria')"
+                :title="t('web.composer.attach_title')"
                 data-testid="composer-attach"
                 @click="pickFiles"
             >
-                Attach
+                {{ t("web.composer.attach") }}
             </button>
             <input
                 ref="fileInput"
@@ -1068,17 +1068,17 @@ defineExpose({ focus: () => input.value?.focus() });
                 class="mic"
                 :class="{ live: listening }"
                 :aria-pressed="listening"
-                :aria-label="listening ? 'Stop dictation' : 'Dictate'"
-                title="Dictate — your browser's speech service hears this audio; the candy-code server does not."
+                :aria-label="listening ? t('web.composer.mic_aria_stop') : t('web.composer.mic_aria')"
+                :title="t('web.composer.mic_title')"
                 data-testid="composer-mic"
                 @click="toggleDictation"
             >
-                {{ listening ? "Dictating…" : "Dictate" }}
+                {{ listening ? t("web.composer.mic_live") : t("web.composer.mic") }}
             </button>
             <select
                 v-if="busy"
                 v-model="delivery"
-                aria-label="Delivery"
+                :aria-label="t('web.composer.delivery_aria')"
                 data-testid="composer-delivery"
             >
                 <option value="queue">queue</option>
@@ -1098,11 +1098,11 @@ defineExpose({ focus: () => input.value?.focus() });
                 {{
                     busy
                         ? delivery === "queue"
-                            ? "Queue"
+                            ? t("web.composer.send_delivery_queue")
                             : delivery === "steer"
-                              ? "Steer"
-                              : "Interrupt"
-                        : "Send"
+                              ? t("web.composer.send_delivery_steer")
+                              : t("web.composer.send_delivery_interrupt")
+                        : t("web.composer.send")
                 }}
             </button>
             <button
@@ -1110,10 +1110,10 @@ defineExpose({ focus: () => input.value?.focus() });
                 type="button"
                 class="danger"
                 data-testid="composer-stop"
-                title="Stop the turn (Esc Esc)"
+                :title="t('web.composer.stop_title')"
                 @click="emit('stop')"
             >
-                Stop
+                {{ t("web.composer.stop") }}
             </button>
         </div>
         <HistorySearch

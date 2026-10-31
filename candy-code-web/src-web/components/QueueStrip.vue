@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { oneLine } from '../lib/format'
+import { t } from '../lib/i18n'
 import type { QueueEntry } from '../protocol/generated'
 
 defineProps<{ queue: QueueEntry[] }>()
@@ -9,14 +10,14 @@ const emit = defineEmits<{ remove: [queueId: string]; refresh: [] }>()
 <template>
   <section v-if="queue.length > 0" class="strip">
     <div class="head">
-      <span class="count">{{ queue.length }} queued</span>
-      <button type="button" class="link" title="Re-read the queue from the server (WEB-1a)" data-testid="queue-refresh" @click="emit('refresh')">reload</button>
+      <span class="count">{{ t('web.composer.queue_count', { n: queue.length }) }}</span>
+      <button type="button" class="link" :title="t('web.composer.queue_reload_title')" data-testid="queue-refresh" @click="emit('refresh')">{{ t('web.composer.queue_reload') }}</button>
     </div>
     <ol class="queue" data-testid="queue">
       <li v-for="entry in queue" :key="entry.queueId" data-testid="queue-entry">
-        <span class="pos">queued {{ entry.position }}</span>
+        <span class="pos">{{ t('web.composer.queue_pos', { position: entry.position }) }}</span>
         <span class="text">{{ oneLine(entry.text, 160) }}</span>
-        <button type="button" class="link" :aria-label="`Remove queued prompt ${entry.position}`" @click="emit('remove', entry.queueId)">remove</button>
+        <button type="button" class="link" :aria-label="t('web.composer.queue_remove_aria', { position: entry.position })" @click="emit('remove', entry.queueId)">{{ t('web.composer.queue_remove') }}</button>
       </li>
     </ol>
   </section>

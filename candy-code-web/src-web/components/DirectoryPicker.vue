@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { describe } from '../stores/session'
 import { useNewSessionStore, type DirListing } from '../stores/newSession'
+import { t } from '../lib/i18n'
 
 /**
  * The new-session directory picker (`serve --allow-dir-browse`): browse the
@@ -170,9 +171,9 @@ watch(selected, async () => {
 <template>
   <div v-if="picker.pickerOpen" class="backdrop" data-testid="dir-picker-backdrop" @click.self="picker.cancel()" @keydown="onKey">
     <div class="picker" role="dialog" aria-modal="true" aria-labelledby="dir-picker-title" data-testid="dir-picker">
-      <h2 id="dir-picker-title">Start a session in…</h2>
+      <h2 id="dir-picker-title">{{ t('web.composer.picker_title') }}</h2>
 
-      <nav class="crumbs" aria-label="Current directory" data-testid="picker-crumbs">
+      <nav class="crumbs" :aria-label="t('web.composer.picker_crumb_aria')" data-testid="picker-crumbs">
         <template v-for="(crumb, i) in crumbs" :key="crumb.path">
           <span v-if="i > 0" class="sep" aria-hidden="true">/</span>
           <button
@@ -191,20 +192,20 @@ watch(selected, async () => {
           type="text"
           spellcheck="false"
           autocomplete="off"
-          aria-label="Directory path"
+          :aria-label="t('web.composer.picker_path_aria')"
           placeholder="/path/to/project"
           data-testid="picker-path"
         >
-        <button type="submit" :disabled="loading" data-testid="picker-go">Go</button>
+        <button type="submit" :disabled="loading" data-testid="picker-go">{{ t('web.composer.picker_go') }}</button>
       </form>
 
       <div class="tools">
-        <button type="button" :disabled="atRoot || loading || listing === null" title="Parent directory (Backspace)" data-testid="picker-up" @click="up">↑ Up</button>
+        <button type="button" :disabled="atRoot || loading || listing === null" :title="t('web.composer.picker_up_title')" data-testid="picker-up" @click="up">{{ t('web.composer.picker_up') }}</button>
         <label class="hidden-toggle">
           <input v-model="showHidden" type="checkbox" data-testid="picker-hidden">
-          show hidden
+          {{ t('web.composer.picker_show_hidden') }}
         </label>
-        <span v-if="listing?.project" class="badge here" title="This directory looks like a project root">project</span>
+        <span v-if="listing?.project" class="badge here" :title="t('web.composer.picker_project_title')">{{ t('web.composer.picker_project') }}</span>
       </div>
 
       <p v-if="error" class="error" role="alert" data-testid="picker-error">{{ error }}</p>
@@ -215,7 +216,7 @@ watch(selected, async () => {
         class="entries"
         role="listbox"
         tabindex="0"
-        aria-label="Subdirectories"
+        :aria-label="t('web.composer.picker_list_aria')"
         :aria-activedescendant="entries[selected] ? `picker-entry-${selected}` : undefined"
         :aria-busy="loading"
         data-testid="picker-list"
@@ -234,18 +235,18 @@ watch(selected, async () => {
           @click="descend(i)"
         >
           <span class="name">{{ entry.name }}/</span>
-          <span v-if="entry.project" class="badge" data-testid="picker-project">project</span>
-          <span v-if="!entry.readable" class="muted">no access</span>
+          <span v-if="entry.project" class="badge" data-testid="picker-project">{{ t('web.composer.picker_project') }}</span>
+          <span v-if="!entry.readable" class="muted">{{ t('web.composer.picker_no_access') }}</span>
         </li>
-        <li v-if="listing !== null && !listing.readable" class="none">This directory cannot be read.</li>
-        <li v-else-if="listing !== null && entries.length === 0" class="none">No subdirectories.</li>
-        <li v-if="listing?.truncated" class="none">Only the first {{ entries.length }} are shown — type a path to go further.</li>
+        <li v-if="listing !== null && !listing.readable" class="none">{{ t('web.composer.picker_unreadable') }}</li>
+        <li v-else-if="listing !== null && entries.length === 0" class="none">{{ t('web.composer.picker_empty') }}</li>
+        <li v-if="listing?.truncated" class="none">{{ t('web.composer.picker_truncated', { n: entries.length }) }}</li>
       </ul>
 
       <footer>
         <span class="target" :title="listing?.path ?? ''" data-testid="picker-current">{{ listing?.path ?? '…' }}</span>
-        <button type="button" data-testid="picker-cancel" @click="picker.cancel()">Cancel</button>
-        <button type="button" class="primary" :disabled="listing === null || picker.starting" data-testid="picker-start" @click="start">Start session here</button>
+        <button type="button" data-testid="picker-cancel" @click="picker.cancel()">{{ t('web.composer.picker_cancel') }}</button>
+        <button type="button" class="primary" :disabled="listing === null || picker.starting" data-testid="picker-start" @click="start">{{ t('web.composer.picker_start') }}</button>
       </footer>
     </div>
   </div>

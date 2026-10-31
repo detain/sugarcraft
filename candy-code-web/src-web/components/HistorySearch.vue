@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { searchPromptHistory } from '../stores/promptHistory'
+import { t } from '../lib/i18n'
 
 /**
  * C-WEB-4.a: the Ctrl+G history search, the web shape of the TUI's
@@ -66,13 +67,13 @@ onMounted(async () => {
 
 <template>
   <div class="backdrop" data-testid="history-search-backdrop" @click.self="emit('close')">
-    <div class="search" role="dialog" aria-modal="true" aria-label="Search prompt history" data-testid="history-search">
+    <div class="search" role="dialog" aria-modal="true" :aria-label="t('web.composer.history_aria')" data-testid="history-search">
       <input
         ref="input"
         v-model="query"
         type="text"
-        placeholder="Search sent prompts…"
-        aria-label="Search prompt history"
+        :placeholder="t('web.composer.history_placeholder')"
+        :aria-label="t('web.composer.history_aria')"
         role="combobox"
         aria-controls="history-search-list"
         :aria-expanded="true"
@@ -92,9 +93,9 @@ onMounted(async () => {
         >
           {{ entry }}
         </li>
-        <li v-if="matches.length === 0" class="none" data-testid="history-search-none">Nothing matches.</li>
+        <li v-if="matches.length === 0" class="none" data-testid="history-search-none">{{ t('web.composer.history_none') }}</li>
       </ul>
-      <p class="hint">Enter fills the draft, Esc restores yours, Ctrl+G cycles the next match.</p>
+      <p class="hint">{{ t('web.composer.history_hint') }}</p>
     </div>
   </div>
 </template>
