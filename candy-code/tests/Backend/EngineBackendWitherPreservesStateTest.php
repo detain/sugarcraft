@@ -79,6 +79,16 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
                 static fn(EngineBackend $b): EngineBackend => $b->withPermissionApprover(static fn(): bool => false),
                 ['permissionApprover'],
             ],
+            // C-TOOL-6.h: the parent's client-call route and the child's
+            // channel caller, each carried exactly like the approver.
+            'withClientCallSink' => [
+                static fn(EngineBackend $b): EngineBackend => $b->withClientCallSink(static function (): void {}),
+                ['clientCallSink'],
+            ],
+            'withClientCaller' => [
+                static fn(EngineBackend $b): EngineBackend => $b->withClientCaller(static fn(): bool => true),
+                ['clientCaller'],
+            ],
             'withoutHooks' => [
                 static fn(EngineBackend $b): EngineBackend => $b->withoutHooks(),
                 ['hookManager', 'hooksDisabled'],
@@ -344,6 +354,8 @@ final class EngineBackendWitherPreservesStateTest extends TestCase
             root: '/populated',
             permissionGate: new PermissionGate(PermissionMode::BypassPermissions),
             permissionApprover: static fn(): bool => true,
+            clientCallSink: static function (): void {},
+            clientCaller: static fn(): bool => true,
             memoryStore: self::blank(MemoryStore::class),
             rulesState: RulesState::new(),
             spendCapUsd: 2.5,

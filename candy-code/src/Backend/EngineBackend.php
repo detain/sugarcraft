@@ -489,6 +489,27 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
          */
         private readonly ?\Closure $permissionApprover = null,
         /**
+         * Receives each `client_call` frame the turn child sends while a
+         * client-hosted tool waits for its browser-side answer (C-TOOL-6.h).
+         * The parent hands it the {@see PendingClientCall} plus the settle
+         * path that writes the `client_result` frame back; SessionHost's
+         * sink is what routes the call on to the attached client.
+         * Null means no client is attached, and the parent answers the
+         * call itself with a refusal, at once.
+         * @see withClientCallSink()
+         */
+        private readonly ?\Closure $clientCallSink = null,
+        /**
+         * The child-side caller bound onto every
+         * {@see \SugarCraft\Code\Tools\RelaysClientToolCalls} tool during a
+         * forked interactive turn: it carries one announced call over the
+         * turn socket and blocks for the answer. Null outside the fork —
+         * an unforked turn has no channel, and the proxy's own no-caller
+         * refusal answers there.
+         * @see withClientCaller()
+         */
+        private readonly ?\Closure $clientCaller = null,
+        /**
          * The cross-session memory store whose PROJECT-scope notes are folded
          * into every system prompt this backend builds (crush_code.md Phase 5
          * item 9). Forwarded straight onto {@see App::$memoryStore}, which is
@@ -1373,6 +1394,36 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     public function withPermissionApprover(\Closure $approver): self
     {
         return $this->mutate(['permissionApprover' => $approver]);
+    }
+
+    /**
+     * Attach the parent-side listener for `client_call` frames (C-TOOL-6.h).
+     * The sink is called as `fn(PendingClientCall $pending, \Closure $answer):
+     * void`, where `$answer` takes `(string $content, bool $isError)` and
+     * settles the call exactly once — first answer wins, later ones no-op.
+     * With no sink bound, the parent answers every call at once: "no client
+     * is attached to serve …", which is the fork-channel twin of the proxy's
+     * own no-caller refusal.
+     *
+     * @param \Closure(\SugarCraft\Code\Backend\PendingClientCall, \Closure): void $sink
+     */
+    public function withClientCallSink(\Closure $sink): self
+    {
+        return $this->mutate(['clientCallSink' => $sink]);
+    }
+
+    /**
+     * Bind the child-side caller onto this engine's
+     * {@see \SugarCraft\Code\Tools\RelaysClientToolCalls} tools (C-TOOL-6.h).
+     * Set by the forked child from its {@see ChildChannel::clientCaller()};
+     * never set from outside the child, which is why an unforked turn has
+     * none and its proxies refuse.
+     *
+     * @param \Closure(string, string, array<string, mixed>, int): \SugarCraft\Code\Tools\ToolResult $caller
+     */
+    public function withClientCaller(\Closure $caller): self
+    {
+        return $this->mutate(['clientCaller' => $caller]);
     }
 
     /**
@@ -3540,6 +3591,14 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 ) {
                     $tool = $tool->withPermissionApprover($this->permissionApprover);
                 }
+                // C-TOOL-6.h: the client-call relay lands beside the approver —
+                // on a forked turn the proxy's answer travels the same socket,
+                // and outside one it stays unbound so the proxy refuses.
+                if ($tool instanceof \SugarCraft\Code\Tools\RelaysClientToolCalls
+                    && $this->clientCaller !== null
+                ) {
+                    $tool = $tool->withClientCaller($this->clientCaller);
+                }
                 // C-MCP-3.d: a turn-bound MCP call — either dispatcher
                 // spelling — gets the CC-parity background hand-off. The
                 // arming is inert for `-p` copies: they carry
@@ -3566,6 +3625,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                     && $this->permissionApprover !== null
                 ) {
                     $tool = $tool->withPermissionApprover($this->permissionApprover);
+                }
+                // C-TOOL-6.h: same door for the client-call relay.
+                if ($tool instanceof \SugarCraft\Code\Tools\RelaysClientToolCalls
+                    && $this->clientCaller !== null
+                ) {
+                    $tool = $tool->withClientCaller($this->clientCaller);
                 }
                 $tools[] = $tool;
 
@@ -3621,6 +3686,13 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 && !$boundTool instanceof \SugarCraft\Code\Tools\BuiltIn\TaskTool
                 && $this->permissionApprover !== null) {
                 $boundTool = $boundTool->withPermissionApprover($this->permissionApprover);
+            }
+            // C-TOOL-6.h: a client proxy is DelegatesToEngine only for the
+            // sub-agent-withholding side effect, so it arrives here — bind
+            // the turn's caller onto the bound copy, beside the approver arm.
+            if ($boundTool instanceof \SugarCraft\Code\Tools\RelaysClientToolCalls
+                && $this->clientCaller !== null) {
+                $boundTool = $boundTool->withClientCaller($this->clientCaller);
             }
             if ($boundTool instanceof \SugarCraft\Code\Tools\BuiltIn\TaskTool) {
                 $forkHost = $boundTool;
@@ -4309,17 +4381,41 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             $pendingAsks = [];
         };
 
+        // C-TOOL-6.h: the same life for open client calls. While this map is
+        // non-empty the idle ceiling stays paused exactly like a pending ask
+        // — a person's browser fetching a page is progress waiting to land,
+        // not a stalled provider. Each open call also owns ONE deadline
+        // timer (a TOOL deadline on a client's answer; the blanket-request
+        // ban in E646 is about the provider round trip, which this never
+        // touches), and every leftover settles as an error when the turn
+        // settles, because a dead child has nobody to deliver an answer.
+        /** @var array<string, PendingClientCall> $pendingClientCalls */
+        $pendingClientCalls = [];
+        /** @var array<string, \React\EventLoop\Timer\TimerInterface> $clientDeadlineTimers */
+        $clientDeadlineTimers = [];
+        $cancelPendingClientCalls = static function (string $reason) use (&$pendingClientCalls, &$clientDeadlineTimers, $loop): void {
+            foreach ($clientDeadlineTimers as $timer) {
+                $loop->cancelTimer($timer);
+            }
+            $clientDeadlineTimers = [];
+            foreach ($pendingClientCalls as $pending) {
+                $pending->cancel($reason);
+            }
+            $pendingClientCalls = [];
+        };
+
         // Shared teardown for the failure ways this can end (timeout,
         // cancellation): stop watching the socket, cancel BOTH timers
         // (critical for $cancelTimer, a periodic timer that would otherwise
         // keep polling forever after settling via a different path), kill and
         // reap the child so it never zombies.
-        $teardown = function (string $rejectMessage) use (&$settled, $loop, $parentSocket, $pid, $deferred, &$timeoutTimer, &$cancelTimer, &$exitTimer, &$writing, $cancelPendingAsks): void {
+        $teardown = function (string $rejectMessage) use (&$settled, $loop, $parentSocket, $pid, $deferred, &$timeoutTimer, &$cancelTimer, &$exitTimer, &$writing, $cancelPendingAsks, $cancelPendingClientCalls): void {
             if ($settled) {
                 return;
             }
             $settled = true;
             $cancelPendingAsks($rejectMessage);
+            $cancelPendingClientCalls($rejectMessage);
             if ($writing) {
                 $loop->removeWriteStream($parentSocket);
                 $writing = false;
@@ -4363,12 +4459,13 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         // or was seen to exit by $exitTimer. Same cleanup as $teardown minus the kill (the child is
         // already on its way out), then settle from whatever result frame
         // arrived - a child that died before writing one is still a failure.
-        $finalize = function () use (&$settled, &$result, &$streamed, &$buffer, &$streamCorrupt, $loop, $parentSocket, $pid, $deferred, $onToken, &$timeoutTimer, &$cancelTimer, &$exitTimer, &$writing, $cancelPendingAsks): void {
+        $finalize = function () use (&$settled, &$result, &$streamed, &$buffer, &$streamCorrupt, $loop, $parentSocket, $pid, $deferred, $onToken, &$timeoutTimer, &$cancelTimer, &$exitTimer, &$writing, $cancelPendingAsks, $cancelPendingClientCalls): void {
             if ($settled) {
                 return;
             }
             $settled = true;
             $cancelPendingAsks(ChildChannel::PARENT_GONE);
+            $cancelPendingClientCalls(ChildChannel::PARENT_GONE);
             if ($writing) {
                 $loop->removeWriteStream($parentSocket);
                 $writing = false;
@@ -4404,7 +4501,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         // Restart the idle clock. Called once up front and again for every
         // frame the child streams, so the ceiling measures silence rather
         // than total turn length.
-        $resetTimeout = function () use (&$settled, $loop, &$timeoutTimer, $teardown, &$pendingAsks, $idleSeconds): void {
+        $resetTimeout = function () use (&$settled, $loop, &$timeoutTimer, $teardown, &$pendingAsks, &$pendingClientCalls, $idleSeconds): void {
             if ($settled) {
                 return;
             }
@@ -4417,6 +4514,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             // provider. The clock stays stopped until the last open question
             // is settled, which calls back in here to re-arm it.
             if ($pendingAsks !== []) {
+                return;
+            }
+            // C-TOOL-6.h: a child blocked on a CLIENT answer is the same
+            // silence by design — the ceiling resumes when the last call
+            // settles.
+            if ($pendingClientCalls !== []) {
                 return;
             }
             $timeoutTimer = $loop->addTimer($idleSeconds, static function () use ($teardown, $idleSeconds): void {
@@ -4533,6 +4636,73 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             $onEvent(new \SugarCraft\Code\Events\PermissionAsked($pending));
         };
 
+        // C-TOOL-6.h: where every client call settles, whoever settles it —
+        // the client's answer through the sink, the deadline timer, the turn
+        // settling, or an unreadable frame's instant error. The reply always
+        // goes down as `client_result` (the child matches it by callId);
+        // sendToChild is already a no-op once the turn has settled, so a
+        // cancel at teardown writes nothing. The idle clock resumes only
+        // when neither asks nor calls are left open.
+        $settleClientCall = function (PendingClientCall $pending) use (&$pendingClientCalls, &$clientDeadlineTimers, &$pendingAsks, $loop, $sendToChild, $resetTimeout): void {
+            unset($pendingClientCalls[$pending->callId]);
+            $timer = $clientDeadlineTimers[$pending->callId] ?? null;
+            if ($timer !== null) {
+                $loop->cancelTimer($timer);
+                unset($clientDeadlineTimers[$pending->callId]);
+            }
+            $sendToChild(PendingClientCall::resultFrame($pending->callId, $pending->content(), $pending->isError()));
+            if ($pendingAsks === [] && $pendingClientCalls === []) {
+                $resetTimeout();
+            }
+        };
+
+        // A `client_call` frame: the child is now blocked until it hears
+        // back. Only the turn child that holds a channel sends one — the
+        // proxy refuses everywhere else. The sink is SessionHost's route to
+        // the registered client; with no sink attached the call is answered
+        // at once rather than left to a deadline nobody will race.
+        /** @var \Closure(array<string, mixed>): void $handleClientCall */
+        $handleClientCall = function (array $frame) use (&$pendingClientCalls, &$clientDeadlineTimers, $settleClientCall, $sendToChild, $resetTimeout, $loop): void {
+            $pending = PendingClientCall::fromFrame($frame, $settleClientCall);
+            if ($pending === null) {
+                $callId = $frame['callId'] ?? null;
+                if (is_string($callId)) {
+                    $sendToChild(PendingClientCall::resultFrame($callId, 'the client call could not be read', true));
+                }
+
+                return;
+            }
+
+            $pendingClientCalls[$pending->callId] = $pending;
+            $resetTimeout();
+
+            $sink = $this->clientCallSink;
+            if ($sink === null) {
+                $pending->cancel('no client is attached to serve ' . $pending->name);
+
+                return;
+            }
+
+            // The deadline belongs to the DESCRIPTOR the client registered
+            // (1..600 s, validated at the door): a per-tool ceiling on a
+            // person's answer, not a blanket request timeout — E646 is
+            // about the provider round trip and stays untouched here.
+            $clientDeadlineTimers[$pending->callId] = $loop->addTimer(
+                (float) $pending->deadlineSeconds,
+                static function () use ($pending): void {
+                    $pending->cancel('the client did not answer within ' . $pending->deadlineSeconds . ' s');
+                },
+            );
+
+            // Hand the live handle to the session's route. The sink answers
+            // via $pending->resolve(...) — first settlement wins by the
+            // handle's own once-rule, so a late client answer after the
+            // deadline simply no-ops here.
+            $sink($pending, static function (string $content, bool $isError) use ($pending): bool {
+                return $pending->resolve($content, $isError);
+            });
+        };
+
         // Escape-Escape abort (see Chat::update()'s Escape handling): the
         // cancellation flag can flip at any point after this call returns,
         // long after the closures below were built, so it has to be polled
@@ -4572,7 +4742,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         // Frame dispatch for one chunk off the socket, shared by the read edge
         // below and by $exitTimer's final drain so the two cannot disagree
         // about what a frame means.
-        $consume = function (string $chunk) use (&$buffer, &$result, &$streamed, &$streamCorrupt, &$childReaped, $onToken, $onEvent, $onReasoning, $onStep, $finalize, $resetTimeout, $teardown, $handleAsk, $cancellation): void {
+        $consume = function (string $chunk) use (&$buffer, &$result, &$streamed, &$streamCorrupt, &$childReaped, $onToken, $onEvent, $onReasoning, $onStep, $finalize, $resetTimeout, $teardown, $handleAsk, $handleClientCall, $cancellation): void {
             $buffer .= $chunk;
             $corrupt = false;
             $frames = self::drainFrames($buffer, $corrupt);
@@ -4601,6 +4771,15 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 // actually sits between.
                 if (($frame['kind'] ?? null) === ChildChannel::ASK) {
                     $handleAsk($frame);
+
+                    continue;
+                }
+
+                // C-TOOL-6.h: a client-hosted call from the child, handled
+                // in the same frame order so the session's sink sees it
+                // between the events it actually sits between.
+                if (($frame['kind'] ?? null) === ChildChannel::CLIENT_CALL) {
+                    $handleClientCall($frame);
 
                     continue;
                 }
@@ -5340,6 +5519,13 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
             if ($interactive) {
                 $engine = $this->withPermissionApprover($channel->approver());
             }
+            // C-TOOL-6.h: the client-call relay binds beside the approver and
+            // on the same condition the approver itself needs — a live
+            // channel. Every announced client proxy in this child picks the
+            // caller up in turnTools(); an UNFORKED turn never comes through
+            // here, keeps no caller, and its proxies refuse loudly instead of
+            // blocking the loop with nobody to answer.
+            $engine = $engine->withClientCaller($channel->clientCaller());
             // 1.C-4: the step boundary and the step's bill, each as its own
             // frame the moment it happens (Appendix O §5.1 `step` / `usage`).
             $onStep = static function (\SugarCraft\Code\Events\StepStarted|\SugarCraft\Code\Events\UsageUpdated $event) use ($channel): void {
