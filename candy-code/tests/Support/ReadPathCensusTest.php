@@ -998,6 +998,11 @@ final class ReadPathCensusTest extends TestCase
         'Server/Http/StaticFiles.php|file_get_contents' => [
             'CONTAINED — a static asset, read only for a path ContainedPath::within() keeps under the web root',
         ],
+        'Server/Push/VapidKeys.php|file_get_contents' => [
+            'SELF_LOCATED — the VAPID signing PEM this class minted into the `serve` state dir '
+                . 'PrivateRetainedDir::verified() keeps 0700 and ours; lstat refuses a link and '
+                . 'the bytes only reach openssl_pkey_get_private, which never executes them',
+        ],
         'Server/ServerConfig.php|file_get_contents' => [
             'CALLER_SUPPLIED — withTls() (C-WEB-5.a) reads the certificate the operator named '
                 . 'with serve --tls-cert: is_file()/is_readable() gate first, and the bytes are '

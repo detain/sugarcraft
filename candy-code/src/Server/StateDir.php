@@ -22,6 +22,7 @@ use SugarCraft\Code\Support\ProcessContainment;
  * | `server.lock` | the singleton lock, held for the server's whole life |
  * | `control.sock` | the running server's local control socket (`serve url`) |
  * | `server.log` | a detached server's stdout + stderr, rotated at {@see LOG_ROTATE_BYTES} × {@see LOG_FILES} |
+ * | `vapid.key` | the Web Push VAPID signing pair ({@see Push\VapidKeys}), 0600 |
  *
  * THE SINGLETON IS AN OS LOCK, not the pidfile: `flock(LOCK_EX | LOCK_NB)` on
  * a descriptor held open for the process lifetime. The kernel drops it when
@@ -40,6 +41,9 @@ final class StateDir
     public const LOG_FILE = 'server.log';
 
     public const CONTROL_SOCKET = 'control.sock';
+
+    /** The VAPID signing pair {@see Push\VapidKeys} mints once and reloads. */
+    public const VAPID_KEY_FILE = 'vapid.key';
 
     /** A detached server's log is rotated past this size. */
     public const LOG_ROTATE_BYTES = 10 * 1024 * 1024;
