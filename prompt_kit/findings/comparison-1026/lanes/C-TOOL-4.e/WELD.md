@@ -29,3 +29,8 @@ Four explicit picks read from the lane (`git -C /home/sites/cc-cmp-C-TOOL-4.e lo
 §4 line 3819 flipped to `#### ✅ 1c138d298,4664ec680,2d7110462,0b7805b44 C-TOOL-4.e — Jail LSP and MCP stdio servers (…)` carrying the loop arc, the FIX-1.md:14 lang-keys-ride-pick-1 TRUTH-NOTE, r2's 9T/62A-SUPERSEDES ruling, the security-posture line, merged-tree figures, and §7 hand-offs LISTED-NEVER-FIXED. Proof (python, landed blob authority): master blob `#### ✅` count 309 -> worktree 310; exactly ONE ✅-prefixed C-TOOL-4.e line; zero unmarked own-headings. cat-file -t commit ×4 + merge-base --is-ancestor vs master YES ×4.
 
 ## Step 5 — Commits
+(1) ce8548945 `weld: C-TOOL-4.e — §4 mark + evidence` — git show --name-only: plan_comparison.md + lanes/C-TOOL-4.e/{REPORT,REVIEW-1,FIX-1,REVIEW-2,WELD}.md (mark + the five evidence files); law %ae/%ce separate counts 1/1, zero Co-Authored-By.
+(2) 880ab7094 `weld: C-TOOL-4.e — run-state fold` — ONE path: prompt_kit/findings/comparison-1026/lanes/run-state.json, VERBATIM as the lead folded it (re-read fresh from disk immediately before committing, same shell); md5 disk==blob ed94021f8d109e62987c9f75c62c7cf3.
+
+## Step 6 — Close
+Final `git cherry master cc/C-TOOL-4.e` = `-` × 4, zero `+`. Reflog accounts exactly 4 cherry-picks + 2 weld records. Worktree ../cc-cmp-C-TOOL-4.e removed; branch cc/C-TOOL-4.e deleted (was 55a934ef0). Surviving lanes EXACTLY: cc/C-TOOL-4.g, cc/C-TOOL-6.g, cc/C-TOOL-6.j, cc/C-WEB-5.d. §3 table untouched; no push/fetch/pull; lead's .opencode + foreign WELD.md/run-state dirt left exactly as found (explicit-path staging only).
