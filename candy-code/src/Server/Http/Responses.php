@@ -35,6 +35,54 @@ final class Responses
         'Cross-Origin-Resource-Policy' => 'same-origin',
     ];
 
+    /**
+     * Headers on the sandboxed `/canvas/{token}` page. These REPLACE
+     * {@see SECURITY_HEADERS} where the two must differ — {@see secured()}
+     * only fills a header that is absent, so every entry here wins — because
+     * the document under this policy is MODEL-AUTHORED HTML: the containment
+     * story is the frame itself, directive by directive.
+     *
+     * - `sandbox allow-scripts` (CSP): the browsing-context sandbox applies
+     *   even to same-origin frames — an opaque origin, no access to this
+     *   server, no top-navigation, no popups, no forms, no downloads. Only
+     *   scripts are admitted, because a canvas page that cannot run its own
+     *   drawing code is not the feature. There is deliberately NO
+     *   `allow-same-origin` to go with it: scripts in an opaque origin are
+     *   harmless, and that pairing is exactly what the iframe attribute
+     *   repeats client-side.
+     * - `default-src 'none'` with per-source carve-outs: the page may load
+     *   NOTHING except what is inlined or generated locally — `script-src`
+     *   and `style-src` admit `'unsafe-inline'` because the artifact is one
+     *   self-contained document (that is the tool's contract) and its
+     *   `<script>`/`<style>` blocks are the artifact; there is no
+     *   script-src `https:` for the model to exfiltrate to or be exploited
+     *   through. `img-src`/`font-src`/`media-src` take `data:`/`blob:` for
+     *   the same reason — inline payloads only, never a network URL.
+     * - `connect-src 'none'`: no fetch/XHR/WebSocket/callback of any kind.
+     *   The page cannot dial this server's API with the browser's
+     *   credentials, and it cannot phone home.
+     * - `form-action 'none'`, `base-uri 'none'`: no form submissions, and a
+     *   forged `<base>` cannot repoint the document's relative URLs.
+     * - `frame-ancestors 'self'`: only this client frames the page (the app
+     *   embeds it in a same-origin iframe); the wider web cannot put the
+     *   artifact in a clickjacking frame of its own.
+     * - `X-Frame-Options: SAMEORIGIN` — the legacy mirror of
+     *   `frame-ancestors 'self'`. The default policy says DENY; a canvas
+     *   page MUST be framable by its own client or the card shows nothing,
+     *   so the override is explicit and no looser.
+     * - `Cache-Control: no-store` — the token is a single-use capability,
+     *   and the model may re-save the artifact under the same id; a cached
+     *   body would serve a dead artifact's bytes or leak a spent page.
+     * - `Content-Type: text/html; charset=utf-8` — charset pinned so no
+     *   sniffing heuristic gets to reinterpret the bytes.
+     */
+    public const CANVAS_HEADERS = [
+        'Content-Type' => 'text/html; charset=utf-8',
+        'Cache-Control' => 'no-store',
+        'X-Frame-Options' => 'SAMEORIGIN',
+        'Content-Security-Policy' => "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'self'",
+    ];
+
     private function __construct()
     {
     }

@@ -18,6 +18,8 @@ use SugarCraft\Code\Server\Auth\AuthContext;
 use SugarCraft\Code\Server\Auth\LoginCodes;
 use SugarCraft\Code\Server\Auth\TokenStore;
 use SugarCraft\Code\Server\DiscoveryFile;
+use SugarCraft\Code\Server\Http\CanvasLinks;
+use SugarCraft\Code\Server\Http\CanvasPageController;
 use SugarCraft\Code\Server\Http\HookWebhooks;
 use SugarCraft\Code\Server\Http\SharePageController;
 use SugarCraft\Code\Server\Http\StaticFiles;
@@ -438,6 +440,14 @@ final class Serve
                 }
             },
         );
+        // C-TOOL-6.g: sandboxed canvas pages. Built after the detach fork,
+        // like $share — the minted-link table is live server state and must
+        // not ride into the child. The controller answers both doors: the
+        // authenticated `POST /api/canvas` mint and the public single-use
+        // `/canvas/{token}` page; the mint re-checks the artifact against the
+        // media store, the page re-resolves it again at delivery, so a sweep
+        // between the two retires the link with the artifact.
+        $canvas = new CanvasPageController(CanvasLinks::new());
         // AUT-6: inbound webhook delivery, mounted ONLY when the operator's
         // user config names hooks (they were validated at launch inside
         // ServerConfig::resolve — one bad hook refused the boot, never a
@@ -486,7 +496,7 @@ final class Serve
                 return $events->summary($session);
             },
         );
-        $server = Server::new($config, AuthContext::new($tokens), $static, $gateway, $loop, $log, null, null, $share(...), $hooks);
+        $server = Server::new($config, AuthContext::new($tokens), $static, $gateway, $loop, $log, null, null, $share(...), $canvas(...), $hooks);
 
         try {
             $server->start();

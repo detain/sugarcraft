@@ -995,6 +995,15 @@ final class ReadPathCensusTest extends TestCase
                 . 'PrivateDir verified 0700 and ours; lstat refuses a link, and it is decoded as '
                 . 'JSON at depth 8, never executed',
         ],
+        'Server/Http/CanvasPageController.php|file_get_contents' => [
+            'CALLER_SUPPLIED — resolveDocument() reaches this read only with a path returned by '
+                . 'MediaStore::pathFor(), which rebuilds the path from the store\'s own scandir '
+                . 'entries, re-checks realpath containment (a planted symlink throws, and the '
+                . 'controller catches that as the shared 404), and refuses separator/control ids; '
+                . 'the controller pins the `.html` extension in between, and the bytes are served '
+                . 'only into a sandboxed iframe with no origin and no outbound channels, never '
+                . 'executed server-side',
+        ],
         'Server/Http/StaticFiles.php|file_get_contents' => [
             'CONTAINED — a static asset, read only for a path ContainedPath::within() keeps under the web root',
         ],

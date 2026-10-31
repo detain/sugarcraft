@@ -48,7 +48,7 @@ use function substr;
  * THE CHAIN, in order, for every request (ISS-055: nothing that can wait on
  * request bytes sits in front of the guards):
  *  1. react/http's streaming parse — headers only reach the chain;
- *  2. the request log (method, path with share tokens redacted, status —
+ *  2. the request log (method, path with share and canvas tokens redacted, status —
  *     refusals included);
  *  3. {@see ClientAddressGuard} — `--allowed-ips`, ahead of everything that
  *     could tell a refused address more than "refused", and ahead of any
@@ -66,7 +66,8 @@ use function substr;
  *     before anything reads it;
  *  8. {@see AuthMiddleware} — a credential on everything but health, login
  *     and the static UI;
- *  9. {@see Router} — `/ws`, `/api/*`, `/s/{token}` share pages, the UI.
+ *  9. {@see Router} — `/ws`, `/api/*`, `/s/{token}` share pages,
+ *     `/canvas/{token}` pages and `POST /api/canvas` mints, the UI.
  *
  * WHAT A MESSAGE MEANS is the handler's: `candy-code serve` hands this the
  * `candy-code.v1` {@see \SugarCraft\Code\Protocol\Dispatcher} (O-3b) over the
@@ -147,6 +148,7 @@ final class Server
         private readonly \Closure $clock,
         private readonly float $readDeadlineSeconds,
         private readonly ?\Closure $share = null,
+        private readonly ?\Closure $canvas = null,
         private readonly ?HookWebhooks $webhooks = null,
     ) {
     }
@@ -166,6 +168,7 @@ final class Server
         ?\Closure $clock = null,
         ?float $requestDeadlineSeconds = null,
         ?\Closure $share = null,
+        ?\Closure $canvas = null,
         ?HookWebhooks $webhooks = null,
     ): self {
         return new self(
@@ -179,6 +182,7 @@ final class Server
             $clock ?? static fn (): float => \microtime(true),
             $requestDeadlineSeconds ?? self::REQUEST_READ_DEADLINE_SECONDS,
             $share,
+            $canvas,
             $webhooks,
         );
     }
@@ -220,8 +224,9 @@ final class Server
             $this->log,
         );
         // SES-3: serve publishes share pages from the session database; a
-        // server built without $share answers /s/... through the UI, as before.
-        $router = new Router($upgrade(...), $api(...), ($this->static)(...), $this->share === null ? null : ($this->share)(...));
+        // server built without $share answers /s/... through the UI, as before;
+        // the same holds for $canvas and the /canvas/... pages.
+        $router = new Router($upgrade(...), $api(...), ($this->static)(...), $this->share === null ? null : ($this->share)(...), $this->canvas === null ? null : ($this->canvas)(...));
 
         $http = new HttpServer(
             $this->loop,
@@ -231,7 +236,7 @@ final class Server
             // there), a header or a body (Appendix O §8.6) — and never a
             // whole share token, which lives in the path itself (C-SES-3).
             function (ServerRequestInterface $request, callable $next): PromiseInterface {
-                $path = self::redactShareToken($request->getUri()->getPath());
+                $path = self::redactPathTokens($request->getUri()->getPath());
 
                 return resolve($next($request))->then(function (ResponseInterface $response) use ($request, $path): ResponseInterface {
                     ($this->log)(\sprintf('%s %s %d', $request->getMethod(), $path, $response->getStatusCode()));
@@ -463,6 +468,39 @@ final class Server
         }
 
         return $prefix . substr($token, 0, 4) . '…';
+    }
+
+    /**
+     * Redact a canvas page token the same way {@see self::redactShareToken()}
+     * redacts a share token (C-TOOL-6.g): the `/canvas/{token}` path carries
+     * a single-use capability, and a log line holding the whole token hands
+     * anyone who can read the log the page — before its owner clicks it. Same
+     * four-character correlation prefix, same verbatim answer for every other
+     * path. The prefix is a fixed literal, not a constant, because that is
+     * exactly the string the Router branch and the controller dispatch match
+     * on; all three share the literal by law, and the page test pins it.
+     */
+    private static function redactCanvasToken(string $path): string
+    {
+        if (!str_starts_with($path, '/canvas/')) {
+            return $path;
+        }
+        $token = substr($path, strlen('/canvas/'));
+        if ($token === '') {
+            return $path;
+        }
+
+        return '/canvas/' . substr($token, 0, 4) . '…';
+    }
+
+    /**
+     * Every path-shaped credential the request log must abbreviate, through
+     * one door so a future page path has one obvious place to join. The two
+     * prefixes are disjoint, so the order cannot matter.
+     */
+    private static function redactPathTokens(string $path): string
+    {
+        return self::redactCanvasToken(self::redactShareToken($path));
     }
 
     /**
