@@ -1289,8 +1289,8 @@ came from.
 `McpServer` is the interface for any tool provider a session can call, and
 most of its implementations are CLIENT transports: `StdioMcpServer`,
 `HttpMcpServer` and `SseMcpServer` talk to servers some OTHER program hosts. What CandyCode
-serves itself is `GitMcpServer` (with `GitCommandHandlers`) — pure-PHP git
-tools that run in-process. It
+serves itself for git is `GitMcpServer` (with `GitCommandHandlers`) — pure-PHP
+git tools that run in-process. It
 is reachable as a `type: git` entry in your own `.mcp.json`, i.e. CandyCode
 serving git operations to itself. `candy-code serve` is not one of them: it is
 the WebSocket server the web UI drives ([SERVER.md](SERVER.md)), and it speaks
