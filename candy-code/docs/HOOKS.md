@@ -1558,6 +1558,40 @@ runs your tests before it ends, Aider's way:
   slower suite. It is also charged against the chain deadline
   (`BoundedHookInterface`).
 
+### Sandboxed runs
+
+While `bashSandbox` is on, one `sandboxScope` list decides which of these
+supporting runs — script hooks, post-edit lint, post-edit format, auto-test —
+join that same jail. There is no second jail: a scoped run gets the same
+backend and the same mode `Bash` gets, and a run whose scope is not listed
+behaves exactly as it always did, byte for byte. The list is user-tier for
+the same reason `bashSandbox` is: a checked-out project can neither trim the
+scope list to un-jail its own hooks nor widen one beyond the switch the
+operator set. An unrecognised entry reads as every scope — the strictest
+answer — and the `settings keys` audit in `doctor` names the entry it could
+not place. While `bashSandbox` is `off` every scope is inert: there is no
+jail to join, and the entries cost nothing until the switch is on.
+
+When the jail cannot start on the host, the fail-closed answer splits into
+the two shapes that fit each surface. A script hook **denies**: it rides the
+same could-not-execute path as a refused `proc_open()`, so a `PreToolUse`
+row vetoes the call and a gating hook is never quietly skipped. Lint, format
+and the auto-test run *skip with the reason as the note* the model sees —
+the familiar exit `126` could-not-run classification, never a fabricated
+pass, and never an unconfined fallback.
+
+Two jail details matter when a hook is written. The staged input and output
+payloads arrive as temporary files in the parent's temp directory, and the
+Linux jail mounts a private `/tmp` over that ground — so the hook carries its
+payload files in as read-only binds, and they stay visible inside the jail at
+exactly the paths `CRUSH_TOOL_INPUT` and its siblings name. And the hook's
+working directory is pinned through the jail's `--chdir`, the project root.
+A hook that needs cache space therefore writes it under the project root —
+durable and reviewable — or uses the `/tmp` the jail itself hands out, which
+is private to the command and gone when it exits. Nothing a hook caches in
+the parent's temp directory survives a journey into the jail, because that
+directory is not mounted at all.
+
 ### What the audit log records
 
 One line per record, in three shapes. The separator after the input says which
