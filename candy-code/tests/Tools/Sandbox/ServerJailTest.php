@@ -237,6 +237,29 @@ final class ServerJailTest extends TestCase
         self::assertSame([], $prefix->invoke($plain, 'any', '', null, null));
     }
 
+    public function testTheOptOutNoticeStaysSilentWhenNoJailIsActive(): void
+    {
+        // C-TOOL-4.e r1 MINOR: a project-tier false under a DEAD scope must
+        // not be recorded — the drained notice says the server "jails as
+        // scoped", and that claim is false when nothing jails. Both
+        // polarities, same client, same server name.
+        $user = '/home/op/' . uniqid('candy-config-', true) . '.json';
+        $client = new McpClient('/nonexistent/' . uniqid('mcp-', true) . '/.mcp.json', userConfigPath: $user);
+        $prefix = new ReflectionMethod(McpClient::class, 'stdioJailPrefix');
+        $prefix->setAccessible(true);
+        $projTier = $this->root . '/.mcp.json';
+
+        // NO jail in force: no prefix (unchanged) and NO notice.
+        self::assertSame([], $prefix->invoke($client, 'projSrv', $projTier, false, null));
+        self::assertSame('', $client->sandboxOptOutNotice(), 'with no jail, no opt-out was ignored');
+
+        // Jail installed: the same project-tier false is now IGNORED and
+        // the user must be told.
+        $client->withSandbox(new RecordingTestJail(), null, '/trust/root');
+        self::assertNotSame([], $prefix->invoke($client, 'projSrv', $projTier, false, null));
+        self::assertStringContainsString('projSrv', $client->sandboxOptOutNotice());
+    }
+
     public function testARefusedMcpJailThrowsBeforeTheServerIsBuilt(): void
     {
         $user = '/home/op/' . uniqid('candy-config-', true) . '.json';

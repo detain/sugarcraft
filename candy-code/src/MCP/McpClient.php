@@ -1107,12 +1107,14 @@ final class McpClient
      *
      * - a spelled `"sandbox": false` opts out ONLY when the entry came from
      *   the user settings file — `$tierPath === $this->userConfigPath` with a
-     *   known user path. A project-tier (or provenance-less) opt-out is
-     *   IGNORED, recorded for {@see self::sandboxOptOutNotice()}, and the
-     *   server jails as scoped: a checked-out `.mcp.json` must not reach out
-     *   of the user's jail.
+     *   known user path. While a jail is active, a project-tier (or
+     *   provenance-less) opt-out is IGNORED, recorded for
+     *   {@see self::sandboxOptOutNotice()}, and the server jails as scoped:
+     *   a checked-out `.mcp.json` must not reach out of the user's jail.
      * - no jail installed (scope not requested, or `bashSandbox: off`) — the
-     *   empty prefix, byte-identical to before the jail existed.
+     *   empty prefix, byte-identical to before the jail existed, and nothing
+     *   recorded: with no jail in force no opt-out was ignored, and the
+     *   drained notice must never claim a jail that is not there.
      * - a jail that cannot start (`$sandboxRefusal` set) and a server still
      *   in scope: THROW, which lands in the startServer config-error
      *   aggregate — the server is not started and the reason is reported.
@@ -1135,7 +1137,7 @@ final class McpClient
                 return [];
             }
 
-            if (!in_array($name, $this->sandboxOptOuts, true)) {
+            if ($this->sandboxJail !== null && !in_array($name, $this->sandboxOptOuts, true)) {
                 $this->sandboxOptOuts[] = $name;
             }
         }
