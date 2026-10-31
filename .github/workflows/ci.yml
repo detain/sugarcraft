@@ -703,6 +703,17 @@ jobs:
       - name: Boot — help
         run: php candy-code/bin/candy-code --help
 
+      # The Seatbelt backend of the sandbox seam (C-TOOL-4.b). The full suite
+      # never runs on macOS, so this is the only place the generated SBPL
+      # profile is exercised against a real /usr/bin/sandbox-exec. Both arms
+      # of the live test are assertion-complete (refusal-or-run) and the
+      # refusal arm drops the Linux-only message pin on Darwin, so a hostile
+      # runner profile fails LOUD here instead of false-red-ing: any failure
+      # on this leg means the profile text pinned byte-wise in SeatbeltTest
+      # does not behave as claimed on real macOS.
+      - name: Sandbox — Seatbelt tests
+        run: cd candy-code && vendor/bin/phpunit -c phpunit.xml --filter '\(SandboxFactoryTest|SeatbeltTest)::'
+
   # Coverage report — runs once on PHP 8.3 + pcov for every lib in the
   # matrix, uploads a per-lib clover XML to codecov with the lib slug
   # as a flag. Codecov uses the flag to surface a separate badge per

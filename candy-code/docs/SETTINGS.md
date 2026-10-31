@@ -261,7 +261,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `allowedTools` | `Bootstrap::tools()` → `filterToolSet()` | **no** |
 | `disabledTools` | `Bootstrap::tools()` → `filterToolSet()` | yes |
 | `references` | `LaunchContext::referenceReadRoots()` → `ToolBuildContext::$readRoots` → Read/Grep/Glob/Ls | **no** |
-| `bashSandbox` | `Bash::fromCatalog()` → `Bubblewrap::fromSetting()` | **no** |
+| `bashSandbox` | `Bash::fromCatalog()` / `PtyRun::fromCatalog()` → `SandboxFactory::fromSetting()` | **no** |
 | `testCommand` | `Bootstrap::hooks()` → `TestRunner::withCommand()` | **no** |
 | `autoTest` | `Bootstrap::hooks()` → `AutoTestHook` | **no** |
 | `toolOutputCapBytes` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | **no** |

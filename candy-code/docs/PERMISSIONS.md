@@ -1426,13 +1426,14 @@ re-judges exactly what was typed.
 
 The gate decides *whether* a `Bash` call runs; it cannot bound what the shell
 text does once it is allowed, because `Bash` is deliberately not path-jailed
-(a free-form command cannot be jailed by rewriting its string). On Linux the
-user-tier `bashSandbox` setting adds that bound underneath the gate by running
-every command inside [bubblewrap](https://github.com/containers/bubblewrap)
-— and the same setting jails `PtyRun` too: the jail flags ride
-the pseudo-terminal's spawn argv (the interactive argv form keeps the pty as
-the child's controlling terminal), so the terminal program is born inside the
-same write jail:
+(a free-form command cannot be jailed by rewriting its string). The user-tier
+`bashSandbox` setting adds that bound underneath the gate: on Linux every
+command runs inside [bubblewrap](https://github.com/containers/bubblewrap), and
+on macOS it runs inside a Seatbelt profile handed to Apple's system
+`/usr/bin/sandbox-exec`. The same setting jails `PtyRun` too: the jail flags
+ride the pseudo-terminal's spawn argv (the interactive argv form keeps the pty
+as the child's controlling terminal), so the terminal program is born inside
+the same write jail:
 
 ```json
 { "bashSandbox": "on" }
@@ -1441,7 +1442,7 @@ same write jail:
 | Value | Effect |
 |---|---|
 | `off` (default) | Commands run as the user, unconfined. |
-| `on` | The whole filesystem is bound read-only; only the working root, a private `/tmp` and `$TMPDIR` are writable. Every namespace is unshared except the network. |
+| `on` | The whole filesystem is unwritable except the working root, the temp area and `$TMPDIR`. On Linux the temp area is a private `/tmp` and every namespace is unshared except the network; on macOS the system `/tmp` stays shared (see Seatbelt below). |
 | `no-network` | `on`, plus no network access. |
 
 What it holds and what it does not:
@@ -1463,16 +1464,32 @@ What it holds and what it does not:
 - **Fail closed.** A host can ship `bwrap` and still refuse to run it — on
   Ubuntu 24.04 AppArmor restricts unprivileged user namespaces and every call
   dies with `setting up uid map: Permission denied`. The tool probes the exact
-  flag set once per process; when the sandbox cannot start (or `bwrap` is
-  missing, or the host is not Linux), every `Bash` and every `PtyRun` call is
+  flag set once per process; when the sandbox cannot start (the backend binary
+  is missing, or the host is neither Linux nor macOS — on Windows the bubblewrap
+  probe is the refusal), every `Bash` and every `PtyRun` call is
   **refused** with the reason, and nothing runs unsandboxed. An unrecognised
   value is read as `no-network`, never as `off`.
 - **User tier only.** `off` is the direction that widens, so a project file
   can never set it — not even a trusted one.
 
+**Seatbelt on macOS** enforces the same intent with the platform's own
+mechanism, and the differences are deliberate. `sandbox-exec` ships with Apple
+(and the major CLI agents drive it the same way), but Apple deprecates the
+profile path, so this is a write jail, not a sandbox escape boundary. There is
+no private `/tmp`: the jail allows writes under the shared `/private/tmp` and
+`$TMPDIR`, which means the escape-hatch paths above (`.git/hooks`,
+`.git/config`, `.candy-code/`, `.mcp.json`) are *re-denied after* the allows —
+Seatbelt rules are last-match-wins. There are no PID or IPC namespaces, so
+`sandbox-exec` has no `--die-with-parent` equivalent: the command timeout's
+group kill remains the backstop against an escaped child. A `no-network`
+profile adds `(deny network*)` but keeps local unix sockets open, which is
+what the MCP transports and the daemon connect over. Denied writes answer
+`Operation not permitted` rather than Linux's `Read-only file system`.
+
 The model is told about the sandbox in the `Bash` tool's description while it
-is on, so a "Read-only file system" error reads as a boundary rather than
-something to work around. Where bubblewrap is unavailable, the remaining
+is on, so a "Read-only file system" (Linux) or "Operation not permitted"
+(macOS) error reads as a boundary rather than
+something to work around. Where the platform backend is unavailable, the remaining
 layer is the heuristic `BashEscapeDenyHook` — which in this product runs only
 on worktree-isolated teammate turns, where `EngineBackend` registers it
 against the worktree root; an ordinary session gets it only if the embedder
