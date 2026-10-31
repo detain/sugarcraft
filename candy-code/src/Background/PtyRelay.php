@@ -104,6 +104,16 @@ final class PtyRelay
     private const TICK_MICROSECONDS = 50000;
 
     /**
+     * The timeout handed to {@see \SugarCraft\Pty\Pty::read()} AFTER select
+     * already reported the master readable. read()'s deadline arithmetic
+     * answers null for a 0.0 timeout without looking (deadline == now is
+     * "expired"), so the loop needs a hair of a real ceiling — the pending
+     * chunk answers instantly, and the ceiling only bites if the data was
+     * consumed from under us.
+     */
+    private const POST_SELECT_READ_SECONDS = 0.05;
+
+    /**
      * Final-drain discipline: two consecutive quiet reads and the session is
      * over — the twin of {@see \SugarCraft\Code\Support\PtyDriver}'s
      * quiet-drain, kept as a count because the child's exit is what actually
@@ -177,9 +187,47 @@ final class PtyRelay
         }
         @\unlink($paths['cmd']);
 
+        // THE FORK IS THE CONTROLLING-TERMINAL CONTRACT, not decoration.
+        // The launch arrives here as a setsid-wrapped child (spawnSpec), so
+        // this process LEADS a fresh session with no controlling terminal —
+        // and a session leader that opens a tty slave without O_NOCTTY is
+        // handed that terminal as its ctty BY THE KERNEL. sugar-pty's spawn
+        // opens the slave here, in us, before forking the shim; the shim's
+        // own setsid()+TIOCSCTTY(0) claim would then fail — arg zero never
+        // steals a terminal already bound to another session (measured:
+        // claim fails with errno EPERM for exactly this shape, while the
+        // same spawn from a session MEMBER claims clean, which is why
+        // PtyDriver/runCapturedInteractive work in-process). So the pty
+        // opener must NOT be a session leader: fork, and let the child — a
+        // member of this session and group — run the pump below. The parent
+        // keeps the setsid lifecycle intact: it is the signal target the
+        // wrapper forwards to, it reaps the pump, and it mirrors the pump's
+        // exit status for proc_close. Group signals from the kill ladder
+        // still reach BOTH members of this group; the pump's own handler
+        // below stays load-bearing for those.
+        if (!\function_exists('pcntl_fork')) {
+            \fwrite(\STDERR, "pty relay: refused — pcntl_fork is unavailable, the pty could not be claimed\n");
+
+            return 2;
+        }
+        $pump = @\pcntl_fork();
+        if ($pump === -1) {
+            \fwrite(\STDERR, "pty relay: refused — the pump could not be forked\n");
+
+            return 2;
+        }
+        if ($pump > 0) {
+            return self::supervise($pump);
+        }
+
         $childPid = 0;
         $termAt = null;
         $signalledBeforeSpawn = false;
+        // Pump-side twin of supervise()'s patrol: if the forwarding relay
+        // (our parent) dies, single-pid TERMs stop reaching us and only the
+        // group rungs and this clock remain. Watch for the reparent and take
+        // over the ladder through the same termAt path the handler uses.
+        $relayParent = \function_exists('posix_getppid') ? \posix_getppid() : 0;
 
         // Signals arrive while we are in the loop, in the spawn, or never —
         // the handler only records the moment and forwards what it can see;
@@ -283,6 +331,17 @@ final class PtyRelay
         while (true) {
             \pcntl_signal_dispatch();
 
+            // Parent-patrol twin of supervise()'s: a KILL that took the
+            // relay parent without the pump (or a fork-parent reaper race)
+            // must still end the shell — TERM the child's group, and the
+            // existing escalation ladder turns it into KILL after the
+            // grace. The pump cannot receive the registry's signals once
+            // its parent is gone; the ppid change is the only notice.
+            if ($relayParent > 0 && \posix_getppid() !== $relayParent && $termAt === null && $childPid > 0) {
+                @\posix_kill(-$childPid, 15);
+                $termAt = \microtime(true);
+            }
+
             $read = [$master, $fifo];
             $write = null;
             $except = null;
@@ -294,9 +353,18 @@ final class PtyRelay
 
             foreach ($read as $fd) {
                 if ($fd === $master) {
-                    $chunk = $pty->read(self::READ_CHUNK_BYTES, 0.0);
+                    // The deadline semantics of read(): timeout 0.0 means
+                    // "already expired" and answers null WITHOUT looking —
+                    // select above already proved a chunk is pending, so a
+                    // hair of real timeout just lets its fread run.
+                    $chunk = $pty->read(self::READ_CHUNK_BYTES, self::POST_SELECT_READ_SECONDS);
                     if ($chunk !== null && $chunk !== '') {
                         @\fwrite($out, $chunk);
+                        // Flush per chunk: a buffered transcript would stay
+                        // invisible until settle — read() slices the FILE,
+                        // sinkCapped() sizes the FILE, and a live session's
+                        // whole point is seeing output WHILE the shell runs.
+                        @\fflush($out);
                         $written += \strlen($chunk);
                         if (!$capped && $written >= $capBytes) {
                             // The cap is the plain path's SIGXFSZ with the
@@ -375,5 +443,73 @@ final class PtyRelay
         }
 
         return 0;
+    }
+
+    /**
+     * The parent's whole job: stay alive as the session-and-group anchor the
+     * kill ladder signals, forward one TERM to the pump, reap it, and mirror
+     * its exit. It opens NO pty and NO sinks — those belong to the pump, the
+     * session member whose slave-open must not auto-claim the terminal (see
+     * main()). If the parent is killed outright the pump is reparented and
+     * keeps pumping (its own handler and the registry's recorded-child
+     * backstop still cover teardown); the arrangement optimises the normal
+     * ladder path, it does not depend on the parent for anything load-bearing.
+     */
+    private static function supervise(int $pumpPid): int
+    {
+        if (!@\pcntl_signal(15, static function () use ($pumpPid): void {
+            @\posix_kill($pumpPid, 15);
+        })) {
+            // No handler, no forwarding — the pump still answers to the
+            // group rungs and the recorded-child backstop; say so loudly.
+            \fwrite(\STDERR, "pty relay: SIGTERM forwarding could not be armed; the pump relies on group signals\n");
+        }
+
+        $status = 0;
+        $reaped = false;
+        // Parent patrol: this process's own parent is the setsid wrapper the
+        // registry signals, and the KILL rung of a kill ladder is not
+        // forwardable — if that wrapper dies, no future signal reaches us,
+        // so the pump (and the shell behind it) would leak until the wall.
+        // On becoming an orphan we run the wrapper's remaining job ourselves:
+        // one more TERM, the grace, then KILL.
+        $wrapperPid = \function_exists('posix_getppid') ? \posix_getppid() : 0;
+        $orphanedAt = null;
+        while (true) {
+            $gone = @\pcntl_waitpid($pumpPid, $status, WNOHANG | WUNTRACED);
+            if ($gone === $pumpPid) {
+                $reaped = true;
+
+                break;
+            }
+            if ($gone === -1) {
+                // ECHILD (already reaped elsewhere) or a fatal wait error:
+                // the pump is not ours to report on any more.
+                break;
+            }
+            \pcntl_signal_dispatch();
+            if ($wrapperPid > 0 && \posix_getppid() !== $wrapperPid) {
+                if ($orphanedAt === null) {
+                    $orphanedAt = \microtime(true);
+                    @\posix_kill($pumpPid, 15);
+                } elseif (\microtime(true) >= $orphanedAt + BackgroundShellRegistry::TERM_GRACE_SECONDS) {
+                    @\posix_kill($pumpPid, 9);
+                }
+            }
+            @\usleep(20000);
+        }
+        \pcntl_signal_dispatch();
+
+        if (!$reaped) {
+            // Never got the pump's own status: a surprise, say so in the
+            // exit shape rather than mirroring a code we never observed.
+            return 2;
+        }
+
+        if (WIFSIGNALED($status)) {
+            return 128 + WTERMSIG($status);
+        }
+
+        return WIFEXITED($status) ? WEXITSTATUS($status) : 2;
     }
 }

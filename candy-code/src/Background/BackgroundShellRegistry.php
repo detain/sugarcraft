@@ -442,10 +442,11 @@ final class BackgroundShellRegistry
      * `ps auxww` observer learns the shape of the launch, not its payload.
      *
      * Host refusal is total, not degraded: without
-     * {@see ProcessContainment::interactiveAvailable()}, posix_mkfifo, or
-     * pcntl_signal the answer is `ok: false` and nothing is spawned — a
-     * mode that silently became a pipe would hand the caller a tty-shaped
-     * lie (the same law Bash's interactive opt-in obeys).
+     * {@see ProcessContainment::interactiveAvailable()}, posix_mkfifo,
+     * pcntl_signal, or pcntl_fork (the relay forks its pty pump — see
+     * {@see PtyRelay}) the answer is `ok: false` and nothing is spawned —
+     * a mode that silently became a pipe would hand the caller a
+     * tty-shaped lie (the same law Bash's interactive opt-in obeys).
      *
      * @param array<string, string> $envOverrides
      */
@@ -461,8 +462,8 @@ final class BackgroundShellRegistry
         if (!ProcessContainment::interactiveAvailable()) {
             return ['ok' => false, 'error' => 'pty mechanism unavailable on this host (no pty); the interactive shell was refused and never started'];
         }
-        if (!\function_exists('posix_mkfifo') || !\function_exists('pcntl_signal')) {
-            return ['ok' => false, 'error' => 'the interactive shell needs a FIFO and a signal handler this build does not have (posix_mkfifo/pcntl_signal); the shell was refused and never started'];
+        if (!\function_exists('posix_mkfifo') || !\function_exists('pcntl_signal') || !\function_exists('pcntl_fork')) {
+            return ['ok' => false, 'error' => 'the interactive shell needs a FIFO, a signal handler, and a fork this build does not have (posix_mkfifo/pcntl_signal/pcntl_fork); the shell was refused and never started'];
         }
 
         $autoload = BackgroundSupervisor::autoloadPath();
