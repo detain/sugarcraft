@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Protocol;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Protocol\WebStrings;
+use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
 
 /**
  * C-TUI-6.f: the `server.strings` bundle rules — only `web.` keys reach the
@@ -145,5 +146,24 @@ final class WebStringsTest extends TestCase
         foreach ($strings as $key => $value) {
             self::assertStringStartsWith('web.', $key);
         }
+    }
+
+    /**
+     * The handler's mercy leg: ServerMethods::strings() catches the grammar
+     * refusal and answers in English instead of faulting, so a browser with a
+     * junk navigator.language still gets a working UI. Deleting that catch
+     * surfaces as a generic RPC error and reddens this pin.
+     */
+    public function testTheWireAnswersJunkLocaleTagsInEnglishRatherThanFaulting(): void
+    {
+        $fixture = ProtocolFixture::new();
+        try {
+            $result = $fixture->client()->call('server.strings', ['locale' => 'not a locale!']);
+        } finally {
+            $fixture->tearDown();
+        }
+
+        self::assertSame('en', $result['locale'], 'the refused tag settles on English, no RPC error');
+        self::assertNotSame([], $result['strings'], 'the English chrome bundle rides the mercy answer');
     }
 }
