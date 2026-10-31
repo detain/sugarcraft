@@ -4348,6 +4348,12 @@ TXT,
     'web.chrome.panels.empty' => 'Open a session to see its {label}.',
     'web.chrome.panels.label' => 'panels',
     'web.chrome.panels.title' => 'Agents, todo, background, workflows, memory',
+    // C-WEB-5.e: the two headings the service worker may ever show. Both are
+    // chosen by `sw.ts` from a payload `kind` restricted to this pair — a
+    // malformed payload falls back to `push.generic`, never to server text.
+    'web.chrome.push.finished' => 'Turn finished',
+    'web.chrome.push.generic' => 'CandyCode needs your attention',
+    'web.chrome.push.question' => 'A question needs you',
     'web.chrome.sidebar.actions_aria' => 'Actions for {name}',
     'web.chrome.sidebar.archive' => 'Archive',
     'web.chrome.sidebar.archived_label' => 'archived',
@@ -4688,6 +4694,16 @@ TXT,
     'web.settings.placeholder_list' => 'one per line',
     'web.settings.preview_aria' => 'Save preview',
     'web.settings.preview_save' => 'Preview save',
+    // C-WEB-5.e: the device-push consent row in SettingsView's client section.
+    // The note is the R13 redaction promise, said to the user where the
+    // toggle lives; the problem strings name why an enable never landed.
+    'web.settings.push_label' => 'Notify me on this device',
+    'web.settings.push_note' => 'Push messages carry only generic text — no session title and no transcript line ever travels to this browser.',
+    'web.settings.push_problem_denied' => 'notifications are blocked by the browser',
+    'web.settings.push_problem_insecure' => 'push needs HTTPS or localhost',
+    'web.settings.push_problem_refused' => 'the server refused this subscription',
+    'web.settings.push_problem_unavailable' => 'this server does not offer push',
+    'web.settings.push_problem_unsupported' => 'this browser has no push support',
     'web.settings.read_only' => 'This sign-in can read settings but not change them.',
     'web.settings.reason_locked' => 'this sign-in may not change settings',
     'web.settings.reset' => 'reset',

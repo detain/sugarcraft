@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { t } from '../../lib/i18n'
 import { useConnectionStore } from '../../stores/connection'
+import { PUSH_PROBLEM_KEYS, usePushStore } from '../../stores/push'
 import { groupRows } from '../../stores/settings/fields'
 import { useServerSettingsStore } from '../../stores/settings/serverSettings'
 import {
@@ -130,6 +131,26 @@ function resetAll(): void {
   keymapNote.value = t('web.settings.note_reset_all')
 }
 
+/**
+ * C-WEB-5.e: device push (roadmap WEB-8/GAP-WEB-10). The consent row beside
+ * the keymap is the ONLY caller of the `push.*` RPCs; `stores/push.ts` keeps
+ * the security laws (endpoint-as-bearer, no title opt-in, no prompt outside
+ * a secure context). The row is hidden — not merely disabled — when the
+ * runtime cannot honour it, mirroring the settings store's ISS-111 guard.
+ */
+const push = usePushStore()
+const pushBusy = ref(false)
+
+async function onPushChange(event: Event): Promise<void> {
+  const on = (event.target as HTMLInputElement).checked
+  pushBusy.value = true
+  try {
+    await push.setConsent(on)
+  } finally {
+    pushBusy.value = false
+  }
+}
+
 onBeforeUnmount(stopCapture)
 </script>
 
@@ -222,6 +243,17 @@ onBeforeUnmount(stopCapture)
         </div>
         <p v-if="keymapNote" class="ok" role="status" data-testid="keymap-note">{{ keymapNote }}</p>
         <button type="button" data-testid="keymap-reset-all" @click="resetAll()">{{ t('web.settings.key_reset_all') }}</button>
+      </div>
+    </div>
+
+    <div v-if="push.visible" class="group" data-testid="push-section">
+      <div class="push-body">
+        <label class="push-row">
+          <input type="checkbox" data-testid="push-toggle" :checked="push.consent" :disabled="pushBusy" @change="onPushChange($event)">
+          {{ t('web.settings.push_label') }}
+        </label>
+        <p class="muted" data-testid="push-note">{{ t('web.settings.push_note') }}</p>
+        <p v-if="push.problem" class="warn" role="status" data-testid="push-problem">{{ t(PUSH_PROBLEM_KEYS[push.problem]) }}</p>
       </div>
     </div>
 
@@ -366,6 +398,23 @@ h1 {
 }
 .keymap-body .muted,
 .keymap-body .ok {
+  margin: 0;
+}
+/* C-WEB-5.e: the consent row mirrors the keymap group's body layout. */
+.push-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+.push-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.875rem;
+}
+.push-body .muted,
+.push-body .warn {
   margin: 0;
 }
 </style>

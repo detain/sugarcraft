@@ -63,3 +63,27 @@ describe('PWA manifest (WEB-7b)', () => {
     expect(read('../../dist/favicon.svg')).toContain('<svg')
   })
 })
+
+/**
+ * C-WEB-5.e: the push service worker exists, but registration is CONSENT-
+ * GATED — only the push store (driven by the Settings toggle) may register
+ * it, never the app boot path. Pins are source reads: this lane's committed
+ * dist predates the sw chunk (the weld rebuilds dist before web.yml's
+ * parity gate runs), so asserting on dist/sw.js here would test the weld.
+ */
+describe('push service worker registration (C-WEB-5.e)', () => {
+  it('ships a module worker that answers push and click', () => {
+    const worker = read('../sw.ts')
+    expect(worker).toContain("addEventListener('push'")
+    expect(worker).toContain("addEventListener('notificationclick'")
+  })
+
+  it('registers only from the consented push store', () => {
+    expect(read('../stores/push.ts')).toContain('serviceWorker.register')
+    // The boot path must stay inert: an un-registered worker delivers nothing,
+    // and registering one before consent would put a background script on the
+    // device without the user ever saying yes.
+    expect(read('../main.ts')).not.toContain('serviceWorker.register')
+    expect(read('../App.vue')).not.toContain('serviceWorker.register')
+  })
+})

@@ -47,6 +47,19 @@ export default defineConfig({
     emptyOutDir: true,
     manifest: 'manifest.json',
     sourcemap: false,
+    rollupOptions: {
+      input: {
+        index: fileURLToPath(new URL('./index.html', import.meta.url)),
+        // C-WEB-5.e: the service worker must ship at the SCOPE ROOT, next to
+        // index.html — a worker's maximum scope is its own directory, and the
+        // app is served from any mount point, so the script cannot live under
+        // assets/ with the hashed chunks. `stores/push.ts` registers ../sw.js.
+        sw: fileURLToPath(new URL('./src-web/sw.ts', import.meta.url)),
+      },
+      output: {
+        entryFileNames: (chunk) => (chunk.name === 'sw' ? 'sw.js' : 'assets/[name]-[hash].js'),
+      },
+    },
   },
   server: {
     proxy: {

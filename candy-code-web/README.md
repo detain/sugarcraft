@@ -88,6 +88,12 @@ documents the protocol and the UI).
   in place. A question arrives the moment it is put, whether or not this page
   follows its session; opt-in desktop notifications also say when a turn
   finishes out of sight.
+- **Device push** (opt-in): a "Notify me on this device" toggle in Settings
+  subscribes this browser through a service worker served at `/sw.js`, so a
+  question or a finished turn still raises a notification when the page is
+  closed. Payloads carry only generic catalogue text — never a session title
+  or transcript line — and the toggle needs a secure context (HTTPS or
+  localhost); switching it off unsubscribes both the browser and the server.
 - **Transcript**: virtualised (`@tanstack/vue-virtual`); replies stream in as
   Markdown (`markdown-it`, raw HTML off, then DOMPurify — model and tool text
   are untrusted), fenced code coloured by a small highlighter loaded on first
