@@ -2458,7 +2458,7 @@ final class DocFigureProseDriftTest extends TestCase
     {
         $hooksRaw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/HOOKS.md');
         $hooks = self::markdownProse($hooksRaw);
-        $words = ['four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7];
+        $words = ['four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11];
 
         self::assertSame(1, preg_match('/Those (\w+) are the \*\*only\*\* keys an entry may carry/', $hooks, $six), 'the entry-key sentence lost its spelled count');
         $entryKeys = (new \ReflectionClassConstant(HookConfig::class, 'ENTRY_KEYS'))->getValue();
@@ -2472,8 +2472,27 @@ final class DocFigureProseDriftTest extends TestCase
         $secondEntryStart = strpos($fence[1], 'PostToolUse:');
         self::assertIsInt($firstEntryStart);
         self::assertIsInt($secondEntryStart);
-        preg_match_all('/^ {4,6}(?:- )?(\w+):/m', substr($fence[1], $firstEntryStart, $secondEntryStart - $firstEntryStart), $full);
-        self::assertEqualsCanonicalizing($entryKeys, $full[1], 'the example entry no longer demonstrates every key "Those six" counts');
+        $exampleGroup = substr($fence[1], $firstEntryStart, $secondEntryStart - $firstEntryStart);
+        preg_match_all('/^ {4,6}(?:- )?(\w+):/m', $exampleGroup, $full);
+        // C-EXT-6.c: the keys an entry may carry turned into keys an entry may
+        // carry PER TYPE, so one entry can no longer demonstrate all of them —
+        // an `http` row that also wrote `command` is refused by the loader. The
+        // example is therefore TWO `PreToolUse` entries, and the claim stays as
+        // strong as it was: the union of what they demonstrate is exactly the
+        // accepted set, and the example is exactly those two entries. A third
+        // key added to ENTRY_KEYS without the page showing it still lands here.
+        self::assertSame(
+            2,
+            substr_count($exampleGroup, "\n    - "),
+            'the format example no longer carries exactly the two entries (one per type) it demonstrates with',
+        );
+        self::assertEqualsCanonicalizing(
+            $entryKeys,
+            array_values(array_unique($full[1])),
+            'the example entries no longer demonstrate every key the sentence counts',
+        );
+        self::assertStringContainsString('type: http', $exampleGroup, 'the example stopped showing the second entry type');
+        self::assertStringContainsString('type: command', $exampleGroup, 'the example stopped showing the default entry type');
 
         self::assertSame(1, preg_match('/picks the first of `([^`]+)` that your pattern does not contain/', $hooks, $alphabet), 'the delimiter sentence no longer spells the alphabet in one code span');
         $delimiters = (new \ReflectionClassConstant(HookConfig::class, 'DELIMITERS'))->getValue();

@@ -713,6 +713,12 @@ final class ReadPathCensusTest extends TestCase
                 . 'the user copy through trustedConfigDirPath() (owned home) and puts the project '
                 . 'copy behind projectHooksAreTrusted(), which refuses the LAUNCH rather than the read',
         ],
+        'Hooks/HttpHook.php|fopen' => [
+            'NOT_A_FILESYSTEM_PATH — a POST to a configured http(s) URL. PublicUrlGuard::guardedDialAddress '
+                . 'resolves and vets the address BEFORE this dial, the authority in the stream is that '
+                . 'validated literal (the Host header carries the virtual name), redirects are refused '
+                . 'rather than followed, and the read is capped at MAX_RESPONSE_BYTES (C-EXT-6.c)',
+        ],
         'Hooks/ClaudeSettingsHooks.php|file_get_contents' => [
             'CALLER_SUPPLIED — `hooks` block of a `.claude/settings*.json`; same resolution as the '
                 . 'HookConfig row above and for the same reasons: user copy from the owned home '

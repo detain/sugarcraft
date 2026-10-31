@@ -126,7 +126,7 @@ final class HookManager
      * cannot install shell into a chain the launch already vetted. Embedders
      * that just want "load my file" keep calling loadFromFile().
      *
-     * @param array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool}> $configs
+     * @param array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool, type: string, url: string, headers: array<string, string>, allowedEnvVars: list<string>}> $configs
      *
      * @throws \InvalidArgumentException when an entry would displace an
      *         already-registered hook
@@ -149,7 +149,15 @@ final class HookManager
                 continue;
             }
 
-            $hook = ScriptHook::fromConfig($config);
+            // C-EXT-6.c (LATE): the entry says which kind of hook it is, and
+            // the kind decides the class. Both builders read the SAME vetted
+            // row, and both hand the verdict to {@see HookEnvelope}, so an
+            // HTTP hook can be registered exactly where a command hook was —
+            // including beside a built-in of the same name, which the refusal
+            // below still stops.
+            $hook = ($config['type'] ?? HookConfig::TYPE_COMMAND) === HookConfig::TYPE_HTTP
+                ? HttpHook::fromConfig($config)
+                : ScriptHook::fromConfig($config);
             $event = $hook->event()->value;
             $name = $hook->name();
 

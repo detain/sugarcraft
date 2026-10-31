@@ -70,14 +70,18 @@ that claims one of these generated names still does, and that collision
 refuses the launch exactly as a native name collision
 does. Differences that are this loader's own:
 
-- `type` runs only `command`. The newer `prompt`, `agent`, `http` and
-  `mcp_tool` types have no exit-code verdict to read; an entry with such a
+- `type` runs `command` and `http`. The newer `prompt`, `agent` and
+  `mcp_tool` types have no verdict shape for this chain to read — a script
+  answers with an exit code and an HTTP hook answers with a status and a JSON
+  envelope, and those three answer with neither; an entry with such a
   string `type` is SKIPPED and RECORDED — it contributes no guard, and the
   launch notice names the type, so nothing is skipped quietly. A `type` that
   is missing or not a string is not a dialect this loader recognises at all
-  and still refuses the launch by name.
-- An entry may carry five keys: `type`, `command`, `timeout`, `statusMessage`
-  and `async`. An entry carrying any other key — CC grows them, `if` and
+  and still refuses the launch by name. An `http` entry carries the SAME trust
+  as a `command` entry from the same file, and its `url` is refused at load
+  when this host will not dial it — see "HTTP hooks" below.
+- An entry may carry eight keys: `type`, `command`, `timeout`, `statusMessage`,
+  `async`, `url`, `headers` and `allowedEnvVars`. An entry carrying any other key — CC grows them, `if` and
   `once` are real today — is skipped whole and every off-dialect key is named
   on the same launch notice, never run silently. The two beyond
   the native three have no `hooks.yaml` equivalent to refuse *them*, so each
@@ -120,19 +124,30 @@ does. Differences that are this loader's own:
 hooks:
   PreToolUse:
     - name: confirm-deploy            # optional; defaults to `command`
+      type: command                   # optional; `command` is the default
       matcher: '^Bash$'
       command: ./hooks/confirm-deploy.sh
       description: Ask before anything touches production
       disabled: false                 # optional; true keeps it out of the chain
       timeout: 30                     # optional seconds; default 60 (hooksDefaultTimeoutSeconds)
       unattendedAsk: false            # optional; true keeps this ASK live under bypass-permissions
+    - name: ask-the-gate
+      type: http                      # the second kind; `command` is the default above
+      matcher: '^Bash$'
+      url: https://gate.example/api/candy-code-hook
+      headers:                        # field names, values may read $VAR from
+        x-trace-id: $HOOK_TRACE       # allowedEnvVars only (8-space children
+      allowedEnvVars: [HOOK_TRACE]    # are header fields, not entry keys)
   PostToolUse:
     - matcher: 'Read|Write/Edit'
       command: ./hooks/log-touch.sh
 ```
 
-Those seven are the **only** keys an entry may carry. An unrecognised key is
-refused rather than ignored. A user-tier file's relative `./hooks/...` command
+Those eleven are the **only** keys an entry may carry. An unrecognised key is
+refused rather than ignored. Which of them one entry may use turns on its
+`type`: a `command` entry has no `url`, `headers` or `allowedEnvVars`, and an
+`http` entry has no `command` — a stray key of the other kind is refused the
+same way, because a row that asks for two runners is not a row to guess at. A user-tier file's relative `./hooks/...` command
 resolves against `~/.candy-code/` — the file's own directory — not the repo you
 open; so does a bare `hooks/...` spelling, but only when a real file exists
 under `~/.candy-code/` (the existence gate means a cloned repo cannot plant the
@@ -1050,6 +1065,65 @@ it. On `PostToolUse` the engine path (`Runtime::settle()`) treats it as any
 other deny and **withholds the tool's output**. That is fail-closed, so a
 secret scanner that runs out of time cannot let through what it never finished
 reading. The dormant Chat path (`Chat::applyPostToolUse()`) does the same.
+
+---
+
+### HTTP hooks
+
+A `type: http` entry posts the same JSON a script hook gets on stdin — see
+"Environment handed to the script" for the fields — to its `url`, and reads the
+answer as the JSON envelope a script would print to stdout. The shape is the
+one {@see \SugarCraft\Code\Hooks\HttpHook} runs, and it is deliberately
+small, because the URL is configuration the chain has no reason to trust:
+
+- **Only `http` and `https`, and no credentials in the URL.** A password typed
+  into a URL lands in logs and proxies, so it is refused at load rather than
+  stripped at call.
+- **Refused at load, refused again at call.** {@see HookConfig} asks the guard
+  whether the host is dialable while it parses the file, so a project-tier file
+  cannot park `127.0.0.1` or `169.254.169.254` until something later reaches
+  it. The call repeats the check on the address it actually dials: DNS that
+  answers differently at call time gets the same answer as the guard gave at
+  load. Both questions go to `Support\PublicUrlGuard` — the repo's one SSRF
+  rule, the same one `WebFetch` dials through — so there is no second policy to
+  fall out of agreement with.
+- **No redirects.** A `3xx` is not an answer, and following one would let a
+  host that passes the check hand the request to one that does not. A redirect
+  is reported as *the hook answered nothing*.
+- **The response is capped** at 262,144 bytes (`HttpHook::MAX_RESPONSE_BYTES`);
+  a body that does not end inside the cap is also *answered nothing*, not
+  truncated into a verdict.
+- **Header values read `$VAR` from `allowedEnvVars` only.** A name that is not
+  on that list stays literal text in the value, so forgetting the list fails by
+  sending a template instead of by leaking a secret. The framing fields
+  (`Host`, `Content-Length`, `Content-Type`, `Transfer-Encoding`, `Connection`,
+  and the rest) are owned by the transport and refused as entry keys; a value
+  carrying a control byte is refused as request smuggling.
+- **Nothing secret is echoed.** A refusal or a notice names the hook and
+  `scheme://host` (never the path, query, or any header value), so an
+  `Authorization` field cannot ride out of the process in its own error
+  message.
+- **A 2xx that is not an envelope ALLOWS**, and its body arrives as additional
+  context — untrusted-sanitised and clipped to the same bound a script hook's
+  context gets. A 2xx envelope is read by the same {@see HookEnvelope} that
+  reads a script's stdout, with the same precedence: a deny in it denies, and a
+  malformed one refuses the call loudly rather than approving it.
+- **Failing to consult is dialect-split**, exactly like an unexpected exit
+  code: under the native format it is a **DENY** (a guard that could not be
+  reached has not approved the call); under Claude Code's, or on an `async`
+  row, it is an **ALLOW with a notice**, so a dead endpoint costs a message on
+  the notice strip rather than the whole tool call.
+- **The bound is the hook's `timeout`.** It is a per-request transport timeout
+  on a call the user configured, which is what the request needs; the ban on a
+  blanket total-request timeout (E646) is about LLM calls, and this is not one.
+
+The reach is the reach of a command hook with a network: a project-tier
+`type: http` entry can post your tool arguments to a host someone else chose.
+That is why it rides the SAME gate — `trustedProjectHooks` decides whether the
+file is read at all, and an untrusted tier's file never reaches the URL
+question. A project that needs a remote guard should ship a hook whose URL is
+its own, reviewed, and dialable; the guard will not take your loopback either
+way.
 
 ---
 

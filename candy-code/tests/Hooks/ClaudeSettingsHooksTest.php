@@ -223,7 +223,7 @@ YAML;
     }
 
     /**
-     * The eight native keys, in the validator's order, plus the two this file
+     * The eleven native keys, in the validator's order, plus the two this file
      * format alone can add: {@see ClaudeSettingsHooks} is the only writer of
      * `dialect`/`advisory`, and {@see ScriptHook::fromConfig()} reads them.
      */
@@ -242,6 +242,10 @@ YAML;
             'disabled' => false,
             'timeout' => ScriptHook::defaultTimeoutSeconds(),
             'unattendedAsk' => false,
+            'type' => 'command',
+            'url' => '',
+            'headers' => [],
+            'allowedEnvVars' => [],
             'dialect' => ScriptHook::DIALECT_CLAUDE,
             'advisory' => false,
         ]], $rows);
@@ -374,7 +378,7 @@ YAML;
         $section = (string) preg_replace('/\s+/', ' ', substr($doc, $from, $to - $from));
 
         $accepted = (new \ReflectionClassConstant(ClaudeSettingsHooks::class, 'ENTRY_KEYS'))->getValue();
-        $words = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6];
+        $words = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8];
 
         $this->assertMatchesRegularExpression('/may carry (\w+) keys:/', $section, 'the section must count the entry keys');
         preg_match('/may carry (\w+) keys:/', $section, $counted);
@@ -547,7 +551,8 @@ YAML;
     /**
      * THE polarity flip this item exists to make. CC grew `prompt`/`agent`/
      * `http`/`mcp_tool` hooks — kinds with no exit-code verdict for this chain
-     * to read. Running one would not be the guard the author wrote, and
+     * to read. `http` left this arm with C-EXT-6.c, which gave it a runner;
+     * the three that remain have nothing to read a verdict from. Running one would not be the guard the author wrote, and
      * skipping it quietly is the silently-shorter chain; but refusing a whole
      * launch over a type this loader does not speak gave one vendor's settings
      * file the blast radius of an outage (the same v1:F-1 reasoning that

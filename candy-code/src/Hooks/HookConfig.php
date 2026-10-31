@@ -66,8 +66,38 @@ final class HookConfig
     /**
      * Every key a single hook entry may carry. Exact, not advisory — see the
      * check in {@see parse()} for why an unrecognised one is refused.
+     *
+     * ELEVEN, and they are not all available to every entry: four of them
+     * (`type`, `url`, `headers`, `allowedEnvVars`) belong to one kind of hook,
+     * which is why the shape of a row is a function of its `type` rather than
+     * a flat list. {@see perTypeKeys()} is where that function is written, and
+     * a key of the other kind is refused there rather than ignored.
      */
-    private const ENTRY_KEYS = ['name', 'matcher', 'command', 'description', 'disabled', 'timeout', 'unattendedAsk'];
+    private const ENTRY_KEYS = [
+        'name',
+        'matcher',
+        'command',
+        'description',
+        'disabled',
+        'timeout',
+        'unattendedAsk',
+        'type',
+        'url',
+        'headers',
+        'allowedEnvVars',
+    ];
+
+    /** The kind of hook that runs a script. The default, and the only one this format had until C-EXT-6.c. */
+    public const TYPE_COMMAND = 'command';
+
+    /**
+     * The kind of hook that POSTs the payload to a URL
+     * ({@see HttpHook}). Since C-EXT-6.c (GAP-HK-03), which is also the day a
+     * `hooks.yaml` entry could make the host dial out — so the URL is resolved
+     * through the same SSRF rule `WebFetch` answers to, and the payload it is
+     * sent is the same one a script would have received.
+     */
+    public const TYPE_HTTP = 'http';
 
     /**
      * The candidate PCRE delimiters, tried in order, for wrapping a
@@ -277,7 +307,8 @@ final class HookConfig
                 // has a first-class disable()/isDisabled() pair, so `disabled`
                 // is the natural thing for a user to reach for and it did
                 // exactly nothing. Same exact-key check as the top level: this
-                // format defines the seven keys in self::ENTRY_KEYS and no more.
+                // format defines the eleven keys in self::ENTRY_KEYS and no more,
+                // and which of them an entry may use turns on its `type`.
                 $unknownKeys = array_diff(array_keys($config), self::ENTRY_KEYS);
                 if ($unknownKeys !== []) {
                     $hint = match (true) {
@@ -294,14 +325,25 @@ final class HookConfig
                     );
                 }
 
-                $command = $config['command'] ?? '';
-                if (!is_string($command) || trim($command) === '') {
-                    throw new \InvalidArgumentException(
-                        "{$source}: a hook under 'hooks.{$event}' has no 'command' to run.",
-                    );
+                $type = $config['type'] ?? self::TYPE_COMMAND;
+
+                // A ROW'S TYPE DECIDES WHAT IT MUST CARRY: a command hook a
+                // command to run, an http hook a URL to ask. The cross-check
+                // (including the keys of the other kind) is
+                // {@see perTypeKeys()}, below the matcher read rather than
+                // here, so the entry's shape stays cheap to scan.
+                if ($type === self::TYPE_HTTP) {
+                    $command = '';
+                } else {
+                    $command = $config['command'] ?? '';
+                    if (!is_string($command) || trim($command) === '') {
+                        throw new \InvalidArgumentException(
+                            "{$source}: a hook under 'hooks.{$event}' has no 'command' to run.",
+                        );
+                    }
                 }
 
-                $name = $config['name'] ?? $command;
+                $name = $config['name'] ?? ($type === self::TYPE_HTTP ? ($config['url'] ?? '') : $command);
                 if (!is_string($name) || trim($name) === '') {
                     throw new \InvalidArgumentException(
                         "{$source}: a hook under 'hooks.{$event}' has an empty 'name'.",
@@ -318,7 +360,7 @@ final class HookConfig
                 // The name fallback above saw the RAW command, so the chain
                 // label stays the text the user typed even though the RUN
                 // text is now absolute.
-                $command = $userTierBase !== null
+                $command = $userTierBase !== null && $command !== ''
                     ? self::anchorToUserTier($command, $userTierBase)
                     : $command;
 
@@ -419,6 +461,8 @@ final class HookConfig
                     );
                 }
 
+                [$url, $headers, $allowedEnvVars] = self::perTypeKeys($config, $type, $source, $event, $name);
+
                 // {@see HookRegistry} keys by event+name, so a repeat is one
                 // hook quietly overwriting another — the exact collapse `name`
                 // was added to prevent, and a way for a later entry to disarm
@@ -441,11 +485,142 @@ final class HookConfig
                     'disabled' => $disabled,
                     'timeout' => (float) $timeout,
                     'unattendedAsk' => $unattendedAsk,
+                    'type' => $type,
+                    'url' => $url,
+                    'headers' => $headers,
+                    'allowedEnvVars' => $allowedEnvVars,
                 ];
             }
         }
 
         return $hooks;
+    }
+
+    /**
+     * The keys that belong to one kind of hook, validated for that kind.
+     *
+     * WHY A ROW'S SHAPE IS CHECKED HERE AND NOT AT RUN TIME. An `http` entry
+     * that also carries `command:` is either a half-migrated row or a row whose
+     * author believed the script still runs as a fallback; neither reading ends
+     * with the guard the file describes, so the ambiguity is refused instead of
+     * resolved by a coin flip. The same argument runs the other way: a command
+     * row carrying `allowedEnvVars:` would widen an environment the script was
+     * never meant to see.
+     *
+     * The URL is judged by {@see HttpHook::inspect()} — the same function the
+     * dial path calls — so the parser and the transport cannot disagree about
+     * what is diallable, which is the only way a `169.254.169.254` in a
+     * repository's `.candy-code/hooks.yaml` stays a refusal rather than a
+     * request that happened while nobody was looking.
+     *
+     * @param array<string, mixed> $config
+     * @param string $type the entry's own `type`, already narrowed by this method
+     * @return array{0: string, 1: array<string, string>, 2: list<string>}
+     */
+    private static function perTypeKeys(array $config, string $type, string $source, string $event, string $name): array
+    {
+        if (!is_string($type) || ($type !== self::TYPE_COMMAND && $type !== self::TYPE_HTTP)) {
+            throw new \InvalidArgumentException(
+                "{$source}: hook '{$name}' under 'hooks.{$event}' has a 'type' of "
+                . (is_string($type) ? "'{$type}'" : get_debug_type($type))
+                . "; candy-code runs 'command' hooks and 'http' hooks, so this row is refused "
+                . 'rather than run as the kind you did not write.',
+            );
+        }
+
+        if ($type === self::TYPE_COMMAND) {
+            foreach (['url', 'headers', 'allowedEnvVars'] as $stray) {
+                if (array_key_exists($stray, $config)) {
+                    throw new \InvalidArgumentException(
+                        "{$source}: hook '{$name}' is a 'command' hook and so has no '{$stray}' — "
+                        . "that is a key of an 'http' hook; refusing rather than ignoring it.",
+                    );
+                }
+            }
+
+            return ['', [], []];
+        }
+
+        if (array_key_exists('command', $config)) {
+            throw new \InvalidArgumentException(
+                "{$source}: hook '{$name}' is an 'http' hook and so has no 'command' to run — "
+                . "that is what its 'url' is for; refusing rather than choosing between them.",
+            );
+        }
+
+        $url = $config['url'] ?? '';
+        if (!is_string($url) || trim($url) === '') {
+            throw new \InvalidArgumentException(
+                "{$source}: hook '{$name}' under 'hooks.{$event}' is an 'http' hook with no 'url' to ask.",
+            );
+        }
+
+        $checked = HttpHook::inspect($url);
+        if (is_string($checked)) {
+            throw new \InvalidArgumentException(
+                "{$source}: hook '{$name}' has an 'url' this host will not dial ("
+                . HttpHook::problemSentence($checked)
+                . '): ' . HttpHook::targetSummary($url)
+                . '; a hook URL is untrusted input, so it is refused here rather than at call time.',
+            );
+        }
+
+        $headers = [];
+        $rawHeaders = $config['headers'] ?? [];
+        if (!is_array($rawHeaders)) {
+            throw new \InvalidArgumentException(
+                "{$source}: hook '{$name}' has 'headers' that are not a mapping of field to value.",
+            );
+        }
+        foreach ($rawHeaders as $field => $value) {
+            if (!is_string($field) || !HttpHook::validHeaderName($field)) {
+                throw new \InvalidArgumentException(
+                    "{$source}: hook '{$name}' has a header field "
+                    . (is_string($field) ? "'{$field}'" : 'that is not a name')
+                    . ' — a header name cannot contain a colon, a space or a control byte, and the '
+                    . 'framing fields (Host, Content-Length, Content-Type, Transfer-Encoding, …) are '
+                    . 'owned by the transport, so a hook cannot set them.',
+                );
+            }
+            if (!is_string($value)) {
+                throw new \InvalidArgumentException(
+                    "{$source}: hook '{$name}' has a '{$field}' header that is not a string.",
+                );
+            }
+            if (preg_match('/[\x00-\x1F\x7F]/', $value) === 1) {
+                throw new \InvalidArgumentException(
+                    "{$source}: hook '{$name}' has a '{$field}' header carrying a control character, "
+                    . 'which is request smuggling rather than a header value.',
+                );
+            }
+            $headers[$field] = $value;
+        }
+
+        $allowedEnvVars = [];
+        $rawVars = $config['allowedEnvVars'] ?? [];
+        if (!is_array($rawVars) || array_keys($rawVars) !== range(0, count($rawVars) - 1)) {
+            throw new \InvalidArgumentException(
+                "{$source}: hook '{$name}' has 'allowedEnvVars' that are not a list of names.",
+            );
+        }
+        foreach ($rawVars as $var) {
+            if (!is_string($var) || !HttpHook::validEnvName($var)) {
+                throw new \InvalidArgumentException(
+                    "{$source}: hook '{$name}' allows an environment variable "
+                    . (is_string($var) ? "'{$var}'" : 'that is not a name')
+                    . '; an allowed name is a shell identifier, because it is the only thing a '
+                    . '$VAR in a header value may read.',
+                );
+            }
+            if (in_array($var, $allowedEnvVars, true)) {
+                throw new \InvalidArgumentException(
+                    "{$source}: hook '{$name}' lists '{$var}' in 'allowedEnvVars' twice.",
+                );
+            }
+            $allowedEnvVars[] = $var;
+        }
+
+        return [$url, $headers, $allowedEnvVars];
     }
 
     /**

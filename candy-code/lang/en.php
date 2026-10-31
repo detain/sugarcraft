@@ -3872,6 +3872,23 @@ TXT,
     'hooks.notice.said_nothing' => '(nothing on stderr)',
     'hooks.notice.system_message' => '⚠ The hook `{hook}` left a message for you: {message}',
 
+    // --- C-EXT-6.c (type: http hooks) 2026-10-30 ---
+    // Every row names the hook and scheme://host only: never a path, a query,
+    // or any header value, so an Authorization cannot ride out of the process
+    // inside its own refusal.
+    'hooks.http.deny_bad_url' => 'The HTTP hook `{hook}` is configured with a URL that cannot be used ({reason}); the target shown is {target}. A hook that cannot state where it is going has not approved this call.',
+    'hooks.http.deny_scheme' => 'The HTTP hook `{hook}` names {target}, which is not an http or https URL. candy-code dials hooks over those two schemes only, and the call is refused rather than run against a transport nobody vetted.',
+    'hooks.http.deny_credentials' => 'The HTTP hook `{hook}` carries credentials in its URL ({target}). A password written into a URL ends up in logs and proxies, so it is refused here; send it as a header whose value reads an `allowedEnvVars` name instead.',
+    'hooks.http.deny_blocked_target' => 'The HTTP hook `{hook}` cannot be consulted: {reason} ({target}). Private and link-local addresses are refused by the same rule an outbound fetch is, and a guard that was never reached has not approved this call.',
+    'hooks.http.deny_unanswered' => 'The HTTP hook `{hook}` did not answer ({reason}); the target was {target}. A hook that could not be reached has not approved this call, so it is refused.',
+    'hooks.http.deny_header_injection' => 'The HTTP hook `{hook}` cannot send its `{field}` header: the name or its value carries a control character, which is request framing rather than a header value. Nothing was sent to {target} and the call is refused.',
+    'hooks.http.notice_unanswered' => '⚠ The HTTP hook `{hook}` did not answer ({reason}), so it could not gate the call. It was asked at {target}.',
+    'hooks.http.reason_unreachable' => 'the connection or the request timed out inside its own hook timeout',
+    'hooks.http.reason_oversized' => 'the response was larger than {bytes} bytes and ended nowhere',
+    'hooks.http.reason_no_status' => 'the answer carried no HTTP status line',
+    'hooks.http.reason_redirect' => 'it redirected, and a hook call follows no redirects',
+    'hooks.http.reason_status' => 'the answer was not a 2xx status',
+
 
     // --- settings help (W3-B i18n migration) ---
     'settings.advisorModel.help' => 'Model the `Advisor` tool consults for a second opinion; unset — the default — does not offer the tool at all (there is no cheap-model fallback: the point is a model you picked).',

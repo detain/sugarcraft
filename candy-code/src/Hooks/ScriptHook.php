@@ -289,7 +289,7 @@ final readonly class ScriptHook implements BoundedHookInterface
      *   docblock. It is left as-is because there is no exposure to fix, not
      *   because its size is "what the author chose to emit".
      */
-    private const MAX_DENY_REASON_BYTES = 16384;
+    public const MAX_DENY_REASON_BYTES = 16384;
 
     /**
      * Bytes of an {@see EXIT_ASK} script's question that reach a human and the
@@ -328,7 +328,7 @@ final readonly class ScriptHook implements BoundedHookInterface
      * end; that is the accepted cost, and it is the one the deny path already
      * accepts.
      */
-    private const MAX_ASK_PROMPT_BYTES = 16384;
+    public const MAX_ASK_PROMPT_BYTES = 16384;
 
     /**
      * Bytes of a downgraded hook's stderr that ride into its notice.
@@ -339,7 +339,7 @@ final readonly class ScriptHook implements BoundedHookInterface
      * that serves a deny reason (16 KiB) would be the wrong ceiling here even
      * though the sink clips a row anyway.
      */
-    private const NOTICE_REASON_BYTES = 400;
+    public const NOTICE_REASON_BYTES = 400;
 
     /**
      * The floor under an {@see EXIT_MODIFY} rewrite's ceiling — see
@@ -368,14 +368,14 @@ final readonly class ScriptHook implements BoundedHookInterface
      * the floor, and the whole chain is bounded by
      * `max(16384, len(the model's own arguments))` however many passes it takes.
      */
-    private const MIN_REWRITE_BYTES = 16384;
+    public const MIN_REWRITE_BYTES = 16384;
 
     /**
      * The keys that make an exit-0 stdout a JSON ENVELOPE rather than a note
      * (step 3.D-1) — at least one must sit at the top level of the object.
      * See {@see allowOrEnvelope()} for why the bar is this high.
      */
-    private const ENVELOPE_KEYS = [
+    public const ENVELOPE_KEYS = [
         'decision',
         'reason',
         'continue',
@@ -397,7 +397,7 @@ final readonly class ScriptHook implements BoundedHookInterface
      * case-insensitively. `approve`/`block` are Claude Code's older spellings
      * of `allow`/`deny` and are still emitted by hooks written against it.
      */
-    private const ENVELOPE_DECISIONS = ['allow', 'approve', 'deny', 'block', 'ask'];
+    public const ENVELOPE_DECISIONS = ['allow', 'approve', 'deny', 'block', 'ask'];
 
     /**
      * A GUESS AT the longest `NAME=VALUE\0` one environment entry may be, used
@@ -1024,6 +1024,22 @@ final readonly class ScriptHook implements BoundedHookInterface
      */
     private function recordSystemMessageNotice(string $message): void
     {
+        // C-EXT-6.c (LATE): the showing lives in showSystemMessage(), which
+        // HttpHook reaches for the same row a `systemMessage` earns here.
+        self::showSystemMessage($this->name, $message);
+    }
+
+    /**
+     * Show a hook's `systemMessage` to the human, and only to the human.
+     *
+     * Shared by the two transports since C-EXT-6.c: a notice is a line for the
+     * terminal, never model context, and an HTTP hook that reads the same
+     * envelope key must not be able to answer it differently. The sweep is the
+     * network's fault rather than the hook's — control bytes and zone sentinels
+     * in a row that is about to be painted into a terminal.
+     */
+    public static function showSystemMessage(string $hookName, string $message): void
+    {
         $shown = trim((string) preg_replace('/\s+/', ' ', Sanitize::untrusted($message)));
         if ($shown === '') {
             // Nothing displayable survived the sweep (the message was all
@@ -1033,7 +1049,7 @@ final readonly class ScriptHook implements BoundedHookInterface
         }
 
         RuntimeNoticeSink::record(Lang::t('hooks.notice.system_message', [
-            'hook' => $this->name,
+            'hook' => $hookName,
             'message' => self::clip($shown, self::NOTICE_REASON_BYTES),
         ]));
     }
@@ -1250,7 +1266,7 @@ final readonly class ScriptHook implements BoundedHookInterface
      * deliberately — this is arbitrary program output, not guaranteed UTF-8,
      * and the marker that follows makes the seam visible either way.
      */
-    private static function clip(string $text, int $limit): string
+    public static function clip(string $text, int $limit): string
     {
         $length = strlen($text);
         if ($length <= $limit) {
@@ -1305,27 +1321,9 @@ final readonly class ScriptHook implements BoundedHookInterface
      */
     private function stdinPayload(HookContext $context): string
     {
-        $payload = \json_encode([
-            'session_id' => $context->sessionId,
-            'cwd' => $context->projectRoot,
-            'hook_event_name' => $this->event->value,
-            'tool_name' => $context->toolName,
-            'tool_input' => $context->toolArgs === [] ? new \stdClass() : $context->toolArgs,
-            'tool_response' => $context->toolOutput,
-            // The launch's settings root, not $context->projectRoot: this is
-            // the file the store's mirror writes, and the store was wired
-            // against the root the settings tiers resolved against. Task-list
-            // and host contexts carry a cwd that can differ from it; the
-            // journal's location is decided once at launch, not per context.
-            'transcript_path' => JsonlTranscriptWriter::enabled()
-                ? JsonlTranscriptWriter::pathFor(
-                    $context->sessionId,
-                    LaunchContext::projectRootForSettings(),
-                )
-                : null,
-        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        // C-EXT-6.c (LATE): the shape lives in HookPayload::stdin(), which HttpHook
 
-        return $payload === false ? '{}' : $payload;
+        return HookPayload::stdin($context, $this->event->value);
     }
 
     /**
@@ -1665,31 +1663,9 @@ final readonly class ScriptHook implements BoundedHookInterface
      */
     private function modifyOrDeny(string $output, int $replacedBytes): HookResult
     {
-        $ceiling = max(self::MIN_REWRITE_BYTES, $replacedBytes);
-        $size = strlen($output);
+        // C-EXT-6.c (LATE): the derived ceiling is HookEnvelope::rewrite(), shared with
 
-        if ($size > $ceiling) {
-            return HookResult::deny(sprintf(
-                'Hook %s proposed a %d-byte rewrite of the tool input, over the %d-byte ceiling for '
-                . 'this call (the larger of the %d bytes it replaces and %d); a rewrite cannot be '
-                . 'truncated, so it is refused rather than cut.',
-                $this->name,
-                $size,
-                $ceiling,
-                $replacedBytes,
-                self::MIN_REWRITE_BYTES,
-            ));
-        }
-
-        $decoded = json_decode($output, true);
-
-        if (!is_array($decoded) || !str_starts_with(ltrim($output), '{')) {
-            return HookResult::deny(
-                "Hook {$this->name} asked to rewrite the tool input but did not print a JSON object",
-            );
-        }
-
-        return HookResult::modify($output);
+        return HookEnvelope::rewrite($this->name, $output, $replacedBytes);
     }
 
     /**
@@ -1761,27 +1737,9 @@ final readonly class ScriptHook implements BoundedHookInterface
      */
     private static function envelope(string $output): ?\stdClass
     {
-        if (!str_starts_with($output, '{')) {
-            return null;
-        }
+        // C-EXT-6.c (LATE): the bar and the decode live in HookEnvelope::read(), which
 
-        try {
-            $decoded = json_decode($output, false, 512, JSON_THROW_ON_ERROR);
-        } catch (\JsonException) {
-            return null;
-        }
-
-        if (!$decoded instanceof \stdClass) {
-            return null;
-        }
-
-        foreach (self::ENVELOPE_KEYS as $key) {
-            if (property_exists($decoded, $key)) {
-                return $decoded;
-            }
-        }
-
-        return null;
+        return HookEnvelope::read($output);
     }
 
     /**
@@ -1800,132 +1758,15 @@ final readonly class ScriptHook implements BoundedHookInterface
      */
     private function fromEnvelope(\stdClass $envelope, int $replacedBytes): HookResult
     {
-        $specific = $envelope->hookSpecificOutput ?? null;
-        if ($specific !== null && !$specific instanceof \stdClass) {
-            return $this->malformedEnvelope('"hookSpecificOutput" must be an object');
-        }
+        // C-EXT-6.c (LATE): the precedence and the refusal live in HookEnvelope::verdict(),
 
-        $field = static function (string $specificKey, string $topKey) use ($envelope, $specific): mixed {
-            if ($specific !== null && isset($specific->{$specificKey})) {
-                return $specific->{$specificKey};
-            }
-
-            return $envelope->{$topKey} ?? null;
-        };
-
-        $continue = $envelope->continue ?? null;
-        $stopReason = $envelope->stopReason ?? null;
-        $decision = $field('permissionDecision', 'decision');
-        $reason = $field('permissionDecisionReason', 'reason');
-        $note = $field('additionalContext', 'additionalContext');
-        $updated = $field('updatedInput', 'updatedInput');
-
-        // ISS-090(e): TOP LEVEL ONLY — Claude Code documents both as envelope
-        // fields, not hookSpecificOutput ones, and reading them through
-        // $field() would invent a per-tool spelling the spec does not carry.
-        $suppress = $envelope->suppressOutput ?? null;
-        $systemMessage = $envelope->systemMessage ?? null;
-
-        $typed = [
-            'continue' => [$continue, 'bool'],
-            'stopReason' => [$stopReason, 'string'],
-            'decision' => [$decision, 'string'],
-            'reason' => [$reason, 'string'],
-            'additionalContext' => [$note, 'string'],
-            'suppressOutput' => [$suppress, 'bool'],
-            'systemMessage' => [$systemMessage, 'string'],
-        ];
-        foreach ($typed as $key => [$value, $type]) {
-            if ($value !== null && get_debug_type($value) !== $type) {
-                return $this->malformedEnvelope(sprintf(
-                    '"%s" must be a %s, not %s',
-                    $key,
-                    $type === 'bool' ? 'boolean' : 'string',
-                    get_debug_type($value),
-                ));
-            }
-        }
-
-        if ($updated !== null && !$updated instanceof \stdClass) {
-            return $this->malformedEnvelope('"updatedInput" must be a JSON object of tool arguments');
-        }
-
-        $reason = trim((string) $reason);
-        $verdict = $decision === null ? 'allow' : strtolower(trim($decision));
-        if (!in_array($verdict, self::ENVELOPE_DECISIONS, true)) {
-            return $this->malformedEnvelope(sprintf(
-                '"decision" must be one of %s, not "%s"',
-                implode(', ', self::ENVELOPE_DECISIONS),
-                self::clip($decision, 60),
-            ));
-        }
-
-        // C-EXT-6.a: a string `systemMessage` is HONORED — as a notice to the
-        // HUMAN, never as model context. Placed after every malformed return
-        // above so a broken envelope records nothing, and before every verdict
-        // below so an allow, a stop, a deny and an ask all still show the line
-        // its hook wrote for the person at the terminal. The sink is drained
-        // only by human-facing paths; nothing here writes the transcript
-        // directly — the drain lands the row as a UI-only notice.
-        if ($systemMessage !== null && trim($systemMessage) !== '') {
-            $this->recordSystemMessageNotice($systemMessage);
-        }
-
-        if ($continue === false) {
-            $stopReason = trim((string) $stopReason);
-
-            return HookResult::stop(
-                self::clip(
-                    $stopReason !== '' ? $stopReason
-                        : ($reason !== '' ? $reason : "Hook {$this->name} stopped the turn"),
-                    self::MAX_DENY_REASON_BYTES,
-                ),
-                self::clip($stopReason, self::MAX_DENY_REASON_BYTES),
-            );
-        }
-
-        if ($verdict === 'deny' || $verdict === 'block') {
-            return HookResult::deny(
-                $reason !== '' ? self::clip($reason, self::MAX_DENY_REASON_BYTES)
-                    : "Hook {$this->name} blocked the call",
-            );
-        }
-
-        // ISS-090(e): `suppressOutput: true` kills the hook's stdout. Our only
-        // stdout-borne surface is the additional-context note; the deny reason
-        // and the ask question are verdicts, not output, and Claude Code's own
-        // renderer keeps showing those. C-EXT-6.a completes the pair: a string
-        // `systemMessage` is honored ABOVE as a human notice, and a notice is
-        // not stdout — suppressing does not hide it, exactly as Claude Code
-        // keeps showing a suppressed hook's system message to its human.
-        if ($suppress === true) {
-            $note = null;
-        }
-
-        $context = HookContextFiles::bound(trim((string) $note), HookResult::MAX_ADDITIONAL_CONTEXT_BYTES);
-
-        $rewrite = null;
-        if ($updated !== null) {
-            $rewrite = $this->modifyOrDeny(
-                json_encode($updated, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR),
-                $replacedBytes,
-            );
-            if (!$rewrite->isModified()) {
-                return $rewrite;
-            }
-        }
-
-        if ($verdict === 'ask') {
-            return HookResult::ask(
-                $reason !== '' ? self::clip($reason, self::MAX_ASK_PROMPT_BYTES) : $this->defaultQuestion(),
-                $rewrite?->modifiedInput,
-                $context,
-            );
-        }
-
-        return $rewrite !== null
-            ? $rewrite->withContextSet($context)
-            : HookResult::allow('', $context);
+        return (new HookEnvelope(
+            $this->name,
+            noticeRecorder: function (string $message): void {
+                $this->recordSystemMessageNotice($message);
+            },
+            questionFallback: fn (): string => $this->defaultQuestion(),
+        ))->verdict($envelope, $replacedBytes);
     }
 
     /**
@@ -1934,10 +1775,9 @@ final readonly class ScriptHook implements BoundedHookInterface
      */
     private function malformedEnvelope(string $why): HookResult
     {
-        return HookResult::deny(
-            "Hook {$this->name} printed a JSON hook envelope that cannot be honoured ({$why}); "
-            . 'a hook that meant to steer the call has not approved it.',
-        );
+        // C-EXT-6.c (LATE): the wording is HookEnvelope::malformed(), which HttpHook
+
+        return (new HookEnvelope($this->name))->malformed($why);
     }
 
     /**

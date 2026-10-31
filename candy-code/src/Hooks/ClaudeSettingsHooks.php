@@ -53,16 +53,28 @@ use Symfony\Component\Yaml\Yaml;
  * anything that is malformed LOUDLY refuses the launch, only a file that is
  * not there is a no-op.
  *
- * `type` RUNS ONLY `command`; the rest of the type question is
- * SKIP-AND-RECORD (C-EXT-1.b widened what v1:F-1 had covered). CC's newer
- * `prompt`, `agent`, `http` and `mcp_tool` types have no exit-code verdict
- * for candy-code to read, so running them would not be the guard the author
- * wrote — but a whole launch refusing over a type this loader simply does
- * not speak gave one vendor's settings file the blast radius of a hard
- * outage again. An entry with a STRING type that is not `command` now
+ * `type` RUNS `command` AND `http`; the rest of the type question is
+ * SKIP-AND-RECORD (C-EXT-1.b widened what v1:F-1 had covered, C-EXT-6.c gave
+ * `http` a runner). CC's newer `prompt`, `agent` and `mcp_tool` types have no
+ * verdict shape for candy-code to read — a script hook answers with an exit
+ * code and an HTTP hook answers with a status and a JSON envelope, and those
+ * three answer with neither — so running them would not be the guard the
+ * author wrote. But a whole launch refusing over a type this loader simply
+ * does not speak gave one vendor's settings file the blast radius of a hard
+ * outage again. An entry with a STRING type outside the two it runs now
  * contributes no row and is RECORDED by type name for the same
  * launch-notice aggregate. A MISSING or non-string `type` is not a dialect
  * candy-code recognises at all, and still refuses the launch by name.
+ *
+ * AN `http` ENTRY IS UNTRUSTED-EGRESS CONFIGURATION, and it is loaded exactly
+ * as a `command` entry is: same tier, same trust gate over the file it came
+ * from, no extra authority for the kind. What it carries (`url`, `headers`,
+ * `allowedEnvVars`) is copied into the row and judged by
+ * {@see HookConfig::parse()} — the ONE validator for both dialects — which
+ * refuses a URL this host will not dial at LOAD time, so a project-tier file
+ * cannot park a loopback or metadata endpoint until some later call reaches
+ * it. {@see HttpHook} is the runner, and it dials nowhere except through
+ * {@see \SugarCraft\Code\Support\PublicUrlGuard}.
  *
  * SKIP-AND-RECORD FOR WHAT CANNOT RUN (v1:F-1, widened by C-EXT-1.b): CC's
  * `Notification` event has no {@see HookEvent} case, and neither do the
@@ -184,11 +196,24 @@ final class ClaudeSettingsHooks
      * and `async` are here because Claude Code WRITES them on real hooks — a
      * file that carries either is not a file that means something else — and
      * what the loader does with each is the pair of bullets in the "What is
-     * read from a Claude settings file" section of `docs/HOOKS.md`. They are
+     * read from a Claude settings file" section of `docs/HOOKS.md`. `url`,
+     * `headers` and `allowedEnvVars` are the three C-EXT-6.c added for the
+     * `http` type, and this parser only COPIES them: whether an `http` entry
+     * may carry a `command`, or a `command` entry a `url`, is
+     * {@see HookConfig}'s verdict, not a second opinion from here. They are
      * keys of THIS dialect only: a native `hooks.yaml` entry carrying either
-     * is still refused by {@see HookConfig}.
+     * of the two CC-only ones is still refused by {@see HookConfig}.
      */
-    private const ENTRY_KEYS = ['type', 'command', 'timeout', 'statusMessage', 'async'];
+    private const ENTRY_KEYS = [
+        'type',
+        'command',
+        'timeout',
+        'statusMessage',
+        'async',
+        'url',
+        'headers',
+        'allowedEnvVars',
+    ];
 
     /** Whether $path names a file this parser reads. */
     public static function isClaudeSettingsPath(string $path): bool
@@ -205,7 +230,7 @@ final class ClaudeSettingsHooks
      *        it becomes the scope segment of every generated row name so two
      *        tiers naming one event at one index no longer collide
      *
-     * @return list<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool, dialect: string, advisory: bool}>
+     * @return list<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool, type: string, url: string, headers: array<string, string>, allowedEnvVars: list<string>, dialect: string, advisory: bool}>
      *
      * @throws \InvalidArgumentException when $scope is not a tier this loader speaks
      * @throws \RuntimeException when the file exists and cannot be read
@@ -255,7 +280,7 @@ final class ClaudeSettingsHooks
      *        path when there is one, so the report names the file to fix
      * @param string $scope the tier rows are named for (see {@see fromFile()})
      *
-     * @return list<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool, dialect: string, advisory: bool}>
+     * @return list<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool, type: string, url: string, headers: array<string, string>, allowedEnvVars: list<string>, dialect: string, advisory: bool}>
      *
      * @throws \InvalidArgumentException when the content is not usable
      */
@@ -397,20 +422,23 @@ final class ClaudeSettingsHooks
                     }
 
                     $type = $entry['type'] ?? null;
-                    if ($type !== 'command') {
+                    if ($type !== 'command' && $type !== 'http') {
                         if (!\is_string($type)) {
                             // A missing or non-string type is not a dialect
                             // candy-code recognises at all — that stays loud.
                             throw new \InvalidArgumentException(
                                 "{$source}: a hook under `hooks.{$event}` has type "
                                 . get_debug_type($type)
-                                . "; candy-code runs Claude Code hooks of type 'command' only, and running "
+                                . "; candy-code runs Claude Code hooks of type 'command' and 'http', and running "
                                 . 'the others anyway — or skipping them quietly — would not be the guard you wrote.',
                             );
                         }
 
                         // Skip-and-record by type name (C-EXT-1.b), same
-                        // reasoning as the unknown-key arm above.
+                        // reasoning as the unknown-key arm above. `http` left
+                        // this arm when C-EXT-6.c gave it a runner; `prompt`,
+                        // `agent` and `mcp_tool` still have nothing here to
+                        // read a verdict from.
                         $groupSkips[$type] = 'type';
 
                         continue;
@@ -422,8 +450,23 @@ final class ClaudeSettingsHooks
                         // CC spells "every tool" as `*` (or empty, or absent);
                         // the native default is the regex that means it.
                         'matcher' => $matcher === '' || $matcher === '*' ? '.*' : $matcher,
-                        'command' => $entry['command'] ?? '',
                     ];
+                    if ($type === 'command') {
+                        $row['command'] = $entry['command'] ?? '';
+                    } else {
+                        // The `http` keys are COPIED, not checked — with one
+                        // deliberate exception. A `command` the author left on
+                        // an `http` entry rides through too, so the per-type
+                        // refusal in HookConfig fires on it: the row is
+                        // ambiguous, and this parser does not get to choose
+                        // which half of it to run.
+                        $row['type'] = HookConfig::TYPE_HTTP;
+                        foreach (['command', 'url', 'headers', 'allowedEnvVars'] as $key) {
+                            if (\array_key_exists($key, $entry)) {
+                                $row[$key] = $entry[$key];
+                            }
+                        }
+                    }
 
                     // `statusMessage` is CC's spinner label, and the native row
                     // has the same slot for the same reader: `description`,
