@@ -236,6 +236,9 @@ final class HttpHookTest extends TestCase
 
     public function testTheDialIsTheValidatedLiteralAndTheHostHeaderKeepsTheName(): void
     {
+        // What this seam test can see is that the framed request carries the
+        // name; that the REAL dial then puts it on the wire as `Host:` is
+        // pinned structurally by the test below, not vacuously here.
         $seen = null;
         $hook = $this->hook('https://gate.example:8443/a/b' . self::Q . 'x=1',
             resolve: static fn (string $host): array => ['203.0.113.9'],
@@ -257,6 +260,36 @@ final class HttpHookTest extends TestCase
             'the POST body is not the payload a script hook is handed on stdin');
         $decoded = json_decode($seen['body'], false);
         $this->assertSame('PreToolUse', $decoded->hook_event_name);
+    }
+
+    public function testTheRealWireCarriesTheHostPinTheClaimSitesPromise(): void
+    {
+        // The seam tests hand the transport a pre-framed request, so they can
+        // read the 'host' key but never see what the dial itself sends. The
+        // claim sites — the class docblock, the pinnedPost docblock, and the
+        // ReadPathCensus row — all say the resolved name rides the wire as
+        // `Host:`; that is pinned structurally here, per the
+        // PublicUrlGuardTest::transferPinned precedent, because a dial that
+        // omits it defaults Host to the bracketed literal and a name-based
+        // virtual host then answers nothing to an http hook.
+        $source = (string) file_get_contents((new \ReflectionClass(HttpHook::class))->getFileName());
+        $start = strpos($source, 'private static function pinnedPost');
+        $this->assertIsInt($start, 'the slice below is the structural pin — it needs the method');
+        $wire = substr($source, (int) $start);
+        $end = strpos($wire, "\n    }\n");
+        $this->assertIsInt($end, 'the method slice must end at its own closing brace');
+        $wire = substr($wire, 0, (int) $end);
+
+        // The same construction the guard makes of the same inputs: the name
+        // always, the port only when it is not the scheme default.
+        $this->assertStringContainsString('$hostHeader = $port === $defaultPort ? $name : "$name:$port"', $wire);
+        // The Host line LEADS the header block the stream context is built
+        // from — with the escape spelling the guard uses, not a lookalike.
+        $this->assertStringContainsString("'header' => \"Host: ", $wire);
+        $this->assertStringContainsString('"Host: $hostHeader\r\n"', $wire);
+        // The no-re-dial refusal and the TLS name both survive in the slice.
+        $this->assertStringContainsString("'max_redirects' => 0", $wire);
+        $this->assertStringContainsString("'peer_name' => (string) \$request['host']", $wire);
     }
 
     // =========================================================================

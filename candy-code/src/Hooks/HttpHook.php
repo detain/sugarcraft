@@ -354,8 +354,10 @@ final class HttpHook implements BoundedHookInterface
         }
         if ($status >= 300 && $status < 400) {
             // Named apart from a plain 4xx/5xx because a moved endpoint is the
-            // one answer that reads like success from here, and a fallthrough
-            // would let a 302 with an empty body look like an allow.
+            // one answer that reads like success from here. Falling through
+            // would NOT make a 302 an allow — the <200||>=300 arm below still
+            // denies it — so this arm's job is the distinct reason word the
+            // message table pins, not a different outcome.
             return $this->couldNotConsult('hooks.http.reason_redirect');
         }
         if ($status < 200 || $status >= 300) {
@@ -652,6 +654,14 @@ final class HttpHook implements BoundedHookInterface
         $port = (int) $request['port'];
         $authority = (str_contains($address, ':') ? '[' . $address . ']' : $address) . ':' . $port;
 
+        // The name the guard judged, not the bracketed literal we dial: this
+        // is what keeps name-based virtual hosting alive over plain http, and
+        // the port rides only when it is not the scheme default — the SAME
+        // construction PublicUrlGuard::transferPinned makes of its inputs.
+        $name = (string) $request['host'];
+        $defaultPort = $scheme === 'https' ? 443 : 80;
+        $hostHeader = $port === $defaultPort ? $name : "$name:$port";
+
         $body = (string) $request['body'];
         $lines = [];
         foreach ((array) $request['headers'] as $field => $value) {
@@ -663,7 +673,7 @@ final class HttpHook implements BoundedHookInterface
         $context = stream_context_create([
             'http' => [
                 'method' => 'POST',
-                'header' => implode("\r\n", $lines) . "\r\n",
+                'header' => "Host: $hostHeader\r\n" . implode("\r\n", $lines) . "\r\n",
                 'content' => $body,
                 'timeout' => (float) $request['timeout'],
                 'ignore_errors' => true,
