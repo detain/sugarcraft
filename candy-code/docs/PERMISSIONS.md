@@ -1459,12 +1459,40 @@ What it holds and what it does not:
   would run unsandboxed the next time *you* run git), the project's
   `.candy-code/` and `.mcp.json`. Commits work; objects, refs and the index are
   writable. A path that does not exist when a command starts is not protected.
-- **Your home directory is read-only**, so a tool that writes a cache under
-  `~` (composer, npm, pip) needs its cache pointed into the project or `/tmp`.
+- **Nested user namespaces are blocked** (bubblewrap only, and by default).
+  A mount jail is only as good as its last mount, and the classic way back out
+  is for the jailed command to create a fresh user namespace of its own — which
+  hands it root over its own view of the tree. Where the host's `bwrap` accepts
+  it (`--disable-userns` arrived in 0.8) the jail adds `--unshare-user` and
+  `--disable-userns` and a command cannot create one at all. Support is a host
+  fact, so the probe decides: it runs the hardened flag set first and, only if
+  that fails, the plain one, and on a host that needs the fallback the jail's
+  own description says it cannot block nested namespaces. The user-tier
+  `bashSandboxNestedUserns` setting is the only thing that drops the pair — it
+  exists for an operator who deliberately runs rootless podman or buildah, or a
+  Chromium sandbox, inside `Bash`. Neither the fallback nor the setting lets a
+  command out of the write jail itself: the plain set still confines writes to
+  the root, and a host where even that set fails refuses the command.
+- **The `--config` file is jail reading material.** `--config <file>` names the
+  settings file the next launch reads, so a file that sits *inside* the writable
+  root is a file a jailed command could rewrite into `bashSandbox: "off"` before
+  it is next read. The jail re-binds it read-only whenever it falls under the
+  root; outside the root the whole-filesystem `--ro-bind` already keeps it
+  read-only, and `~/.candy-code` is protected both ways — by that read-only bind
+  over `/`, and by the escape-hatch list above whenever the working root is
+  `$HOME`.
+- **Shell startup files are not a hole.** `Bash` runs a non-login,
+  non-interactive `bash -c`, which reads no `/etc/profile` and no `~/.bashrc`;
+  the one startup file that mode does honour is whatever `$BASH_ENV` names, and
+  the bash that sources it is already the jailed one. There is nothing under the
+  root for the jail to protect here.
 - **Fail closed.** A host can ship `bwrap` and still refuse to run it — on
   Ubuntu 24.04 AppArmor restricts unprivileged user namespaces and every call
   dies with `setting up uid map: Permission denied`. The tool probes the exact
-  flag set once per process; when the sandbox cannot start (the backend binary
+  flag set once per process — the hardened set above first, the plain set only
+  if that one fails — and the answer is memoised, so a doctor row and a first
+  command cost the host the same probe; when the sandbox cannot start (the
+  backend binary
   is missing, or the host is neither Linux nor macOS — on Windows the bubblewrap
   probe is the refusal), every `Bash` and every `PtyRun` call is
   **refused** with the reason, and nothing runs unsandboxed. An unrecognised
