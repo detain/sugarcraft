@@ -765,6 +765,10 @@ final class TreeWideGuardRosterTest extends TestCase
         // files their own test wrote next to a tempnam() buffer — never the package.
         // W5-C (v4:F5): src/Sessions/ became src/Background/, but tests/Sessions/
         // did NOT move, so these three keys stay tests-relative as written.
+        // 6.j: tearDown() empties the sys_get_temp_dir() interactive sandbox
+        // setUp() made — the launch dirs it creates plus the FIFO/sink residue the
+        // relay leaves (unlinking a FIFO needs the walk); never the package.
+        'Sessions/BackgroundShellInteractiveTest.php' => ['scandir($this->root)', 'scandir($path)'],
         'Sessions/BackgroundSessionRunnerTest.php' => ['glob($sidecar.\'*\')'],
         'Sessions/BackgroundSupervisorReapTest.php' => ['glob($this->tempDir.\'/*\')'],
         // the supervisor test tears down the temp root its fixtures live in.
