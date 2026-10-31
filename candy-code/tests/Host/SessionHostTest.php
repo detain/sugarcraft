@@ -9,8 +9,11 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
+use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Backend\PendingClientCall;
 use SugarCraft\Code\Backend\QueueMode;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Events\ToolFinished;
 use SugarCraft\Code\Events\ToolStarted;
@@ -20,17 +23,23 @@ use SugarCraft\Code\Hooks\HookInterface;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Hooks\HookResult;
+use SugarCraft\Code\Host\ClientTools\ClientToolRegistry;
+use SugarCraft\Code\Host\ClientTools\ClientToolSpec;
 use SugarCraft\Code\Host\EventLog;
 use SugarCraft\Code\Host\SessionEvent;
 use SugarCraft\Code\Host\SessionHost;
 use SugarCraft\Code\Host\SubmitOptions;
 use SugarCraft\Code\Host\TranscriptStore;
 use SugarCraft\Code\Host\TurnController;
+use SugarCraft\Code\Host\TurnRunner;
 use SugarCraft\Code\Host\TurnTicket;
 use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Permissions\SessionPermissionMemo;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Session\EnhancedSessionStore;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Code\Tests\Support\ScriptedProvider;
 use SugarCraft\Code\Tools\ToolResult as EngineToolResult;
 use SugarCraft\Code\Usage;
 
@@ -42,6 +51,8 @@ use SugarCraft\Code\Usage;
  */
 final class SessionHostTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private string $dir;
 
     private EnhancedSessionStore $store;
@@ -425,5 +436,148 @@ final class SessionHostTest extends TestCase
                 $deferred?->resolve($reply);
             }
         };
+    }
+
+    // ---- C-TOOL-6.h: client-hosted tools ride the session's registry ----
+
+    public function testARegistrationReachesTheNextTurnsToolRoster(): void
+    {
+        $registry = new ClientToolRegistry();
+        $base = EngineBackend::new(new ScriptedProvider([]), 'm')->withTools([]);
+
+        // Nothing registered: the roster is untouched.
+        $untouched = TurnRunner::backendForTurn($base, null, 0.0, null, null, SessionPermissionMemo::new(), $registry, static function (): void {});
+        self::assertSame([], self::c6hRosterNames($untouched));
+
+        $registry->register('c1', [self::c6hSpec()]);
+        $next = TurnRunner::backendForTurn($base, null, 0.0, null, null, SessionPermissionMemo::new(), $registry, static function (): void {});
+
+        self::assertInstanceOf(EngineBackend::class, $next);
+        self::assertContains('client__browse', self::c6hRosterNames($next), 'a registration takes effect at the NEXT turn');
+    }
+
+    public function testDisabledToolsDropsTheProxiesFromTheRoster(): void
+    {
+        $registry = new ClientToolRegistry();
+        $registry->register('c1', [self::c6hSpec()]);
+        $base = EngineBackend::new(new ScriptedProvider([]), 'm')->withTools([]);
+        $sandbox = $this->useHomeSandbox($this->dir . '/c6h-home');
+
+        try {
+            // Assembled at runtime: a source-level wildcard literal would join
+            // the PathGlob corpus (the house glob-spelling law for tests).
+            Bootstrap::writeUserConfig(['disabledTools' => ['client__' . chr(42)]]);
+            self::assertStringContainsString('client__', (string) file_get_contents($sandbox . '/.candy-code/config.json'));
+
+            $after = TurnRunner::backendForTurn($base, null, 0.0, null, null, SessionPermissionMemo::new(), $registry, static function (): void {});
+            self::assertNotContains('client__browse', self::c6hRosterNames($after), 'the user setting shrinks the appended proxies like any other tool');
+        } finally {
+            $this->restoreHomeSandbox();
+        }
+    }
+
+    public function testTheFirstAnswerWinsAndAStaleRegistrationIsRefused(): void
+    {
+        $host = $this->host(self::scripted());
+        $registrationId = $host->registerClientTools('c1', [self::c6hSpec()]);
+        $sink = (new \ReflectionMethod(SessionHost::class, 'clientCallSink'))->invoke($host);
+
+        $settled = [];
+        $settle = static function (PendingClientCall $pending) use (&$settled): void {
+            $settled[] = [$pending->content(), $pending->isError()];
+        };
+        $pending = new PendingClientCall(
+            PendingClientCall::callId('call_1', 'client__browse', ['url' => 'page']),
+            'call_1',
+            'client__browse',
+            ['url' => 'page'],
+            60,
+            $settle,
+        );
+        self::assertMatchesRegularExpression('/\A[0-9a-f]{16}\z/', $pending->callId);
+        $sink($pending, static fn (string $content, bool $isError): bool => $pending->resolve($content, $isError));
+
+        // A wrong id cannot spend the call — and an id from AFTER a
+        // re-registration reads exactly the same from here: the id exists to
+        // bind the answer to the registration that was told about the call.
+        self::assertFalse($host->resolveClientCall($pending->callId, '0000000000000000', 'nope', false));
+        $secondRegistration = $host->registerClientTools('c1', [self::c6hSpec()]);
+        self::assertNotSame($registrationId, $secondRegistration);
+        self::assertFalse($host->resolveClientCall($pending->callId, $secondRegistration, 'late', false), 'a client that re-registered between the call and the answer cannot spend the old call with its new id');
+        self::assertSame([], $settled, 'a refused answer settles nothing');
+
+        self::assertTrue($host->resolveClientCall($pending->callId, $registrationId, 'first', false), 'the id the call was opened under still answers it');
+        self::assertSame([['first', false]], $settled);
+        self::assertFalse($host->resolveClientCall($pending->callId, $registrationId, 'second', false), 'first answer wins');
+        self::assertSame([['first', false]], $settled, 'the losing answer never reaches the tool');
+    }
+
+    public function testForgetFailsTheClientsOpenCalls(): void
+    {
+        $host = $this->host(self::scripted());
+        $host->registerClientTools('c1', [self::c6hSpec()]);
+        $sink = (new \ReflectionMethod(SessionHost::class, 'clientCallSink'))->invoke($host);
+
+        $settled = [];
+        $pending = new PendingClientCall(
+            PendingClientCall::callId('call_9', 'client__browse', []),
+            'call_9',
+            'client__browse',
+            [],
+            60,
+            static function (PendingClientCall $p) use (&$settled): void {
+                $settled[] = [$p->content(), $p->isError()];
+            },
+        );
+        $sink($pending, static fn (string $content, bool $isError): bool => $pending->resolve($content, $isError));
+
+        $host->forgetClientTools('c1');
+
+        self::assertSame([['the client that hosts this tool is gone', true]], $settled, 'a closed connection answers its open calls with the truth');
+        self::assertFalse($host->resolveClientCall($pending->callId, '0000000000000000', 'too late', false));
+    }
+
+    public function testACallForANameNoClientHoldsIsAnsweredAtOnce(): void
+    {
+        $host = $this->host(self::scripted());
+        $sink = (new \ReflectionMethod(SessionHost::class, 'clientCallSink'))->invoke($host);
+
+        $settled = [];
+        $pending = new PendingClientCall(
+            PendingClientCall::callId('call_5', 'client__ghost', []),
+            'call_5',
+            'client__ghost',
+            [],
+            60,
+            static function (PendingClientCall $p) use (&$settled): void {
+                $settled[] = [$p->content(), $p->isError()];
+            },
+        );
+        // Nothing registered: the sink answers its own refusal, the child
+        // never waits, and nothing is left open.
+        $sink($pending, static fn (string $content, bool $isError): bool => $pending->resolve($content, $isError));
+
+        self::assertSame([['the client that hosts this tool is gone', true]], $settled);
+        self::assertFalse($host->resolveClientCall($pending->callId, str_repeat('a', 16), 'belated', false));
+    }
+
+    private static function c6hSpec(): ClientToolSpec
+    {
+        return new ClientToolSpec(
+            name: 'browse',
+            description: 'opens a page in the user browser',
+            inputSchema: ['type' => 'object', 'properties' => ['url' => ['type' => 'string']]],
+            timeoutSeconds: 60,
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function c6hRosterNames(Backend $backend): array
+    {
+        self::assertInstanceOf(EngineBackend::class, $backend);
+
+        return array_map(static fn ($tool): string => $tool->name(), $backend->tools());
     }
 }

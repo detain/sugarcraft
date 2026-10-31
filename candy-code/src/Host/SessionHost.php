@@ -813,6 +813,11 @@ final class SessionHost
         if ($entry === null) {
             return false;
         }
+        // The id must be the one THIS call was opened under: the answerer is
+        // the relay that heard the notification, and nobody else's id — not a
+        // fresh registration of the same client, not a stranger's — spends a
+        // call it was never told about. A refused answer leaves the call
+        // open: the parent's deadline settles that, not this caller.
         if ($entry['registrationId'] !== $registrationId) {
             return false;
         }
