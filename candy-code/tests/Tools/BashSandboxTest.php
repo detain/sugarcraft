@@ -129,9 +129,13 @@ final class BashSandboxTest extends TestCase
 
     public function testTheJailIsReadOnlyEverywhereButTheRoot(): void
     {
-        $argv = Bubblewrap::new('/usr/bin/bwrap')->argv($this->root, false, '');
+        // The binary name is the probe key, and an unprobed key reads as
+        // "hardened supported"; naming a per-process sentinel keeps this
+        // argv pin independent of whatever a real-binary leg recorded.
+        $binary = '/usr/bin/bwrap-' . getmypid() . '_' . uniqid('', true);
+        $argv = Bubblewrap::new($binary)->argv($this->root, false, '');
 
-        self::assertSame('/usr/bin/bwrap', $argv[0]);
+        self::assertSame($binary, $argv[0]);
         self::assertSame('--', $argv[array_key_last($argv)]);
         self::assertTrue($this->hasSequence($argv, ['--ro-bind', '/', '/']));
         self::assertTrue($this->hasSequence($argv, ['--bind', $this->root, $this->root]));
@@ -141,6 +145,20 @@ final class BashSandboxTest extends TestCase
         self::assertContains('--die-with-parent', $argv);
         self::assertContains('--share-net', $argv);
         self::assertContains('--new-session', $argv);
+        // C-TOOL-4.c: the hardened pair rides by default. An unprobed host
+        // reads as SUPPORTED, because the safer flag set is the one this build
+        // wants and every production path probes before it wraps; the three
+        // arms the probe can answer (supported, unsupported-and-still-jailed,
+        // cannot-start-at-all) and the opt-out are BubblewrapHardeningTest's.
+        self::assertTrue(
+            $this->hasSequence($argv, Bubblewrap::HARDENED_FLAGS),
+            'nested user namespaces are blocked by default',
+        );
+        self::assertLessThan(
+            array_search('--ro-bind', $argv, true),
+            array_search('--unshare-user', $argv, true),
+            'the namespace flags precede the mounts they govern',
+        );
 
         // The root bind precedes the read-only re-binds: in bwrap later binds win.
         $rootBind = array_search($this->root, $argv, true);

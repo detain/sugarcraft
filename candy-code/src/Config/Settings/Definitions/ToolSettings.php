@@ -26,6 +26,7 @@ use SugarCraft\Code\Tools\BuiltIn\WebFetch;
 use SugarCraft\Code\Tools\BuiltIn\WebSearch;
 use SugarCraft\Code\Tools\McpToolBridge;
 use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
+use SugarCraft\Code\Tools\Sandbox\SandboxFactory;
 use SugarCraft\Code\Support\ToolOutputSpill;
 use SugarCraft\Code\Tools\ToolLimits;
 use SugarCraft\Code\Tools\Web\Search\SearchBackends;
@@ -101,6 +102,19 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withHelp(Lang::t('settings.bashSandbox.help'))
                 ->withReaderSymbol(Bash::class . '::fromCatalog')
                 ->withReadBy('`Bash::fromCatalog()` / `PtyRun::fromCatalog()` → `SandboxFactory::fromSetting()`'),
+            // C-TOOL-4.c. User tier only, for the same reason as the key above
+            // and pointing the same way: `true` here REMOVES a jail bound (it
+            // lets a sandboxed command create the user namespace bwrap's
+            // `--disable-userns` exists to block), so a checked-out repository
+            // must never be able to ask for it. Default false keeps the bound.
+            SettingDefinition::new(SandboxFactory::NESTED_USERNS_KEY, SettingType::Bool, false)
+                ->withCategory(SettingCategory::Tools)
+                ->withRiskClass(RiskClass::Security)
+                ->withLayered()
+                ->withLabel(Lang::t('settings.bashSandboxNestedUserns.label'))
+                ->withHelp(Lang::t('settings.bashSandboxNestedUserns.help'))
+                ->withReaderSymbol(SandboxFactory::class . '::fromSetting')
+                ->withReadBy('`SandboxFactory::fromSetting()` → `Bubblewrap::withNestedUserns()`'),
             // Step 3.H. Both user tier only: the command is shell the
             // after-the-turn run executes with no tool call and no gate in
             // the path, so a checkout must neither name it nor switch it on

@@ -565,6 +565,7 @@ final class LayeredSettings
         'disabledTools',
         'references',
         'bashSandbox',
+        'bashSandboxNestedUserns',
         'testCommand',
         'autoTest',
         'toolOutputCapBytes',
