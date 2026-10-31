@@ -167,7 +167,7 @@ Three name classes drive the evaluators. Each built-in tool declares its class i
 
 - **read-only**: `Read`, `Glob`, `Grep`, `Skill`, `Lsp`, `RepoMap`, `Ls`, `ShellOutput`, `mcp_list`, `skills_search`, `BoardRead`
 - **write-capable**: `Bash`, `Edit`, `Write`, `Workflow`, `ApplyPatch`, `PtyRun`, `ShellStop`, `mcp_call`, `SkillWorkshop`, `Task`, and anything starting `mcp__`
-- **no-ask** (allowed in every mode; they write only harness-owned state): `Memory`, `Prune`, `Todo`, `Compress`, `Recall`, `Team`, `AskUser`, `PlanExit`, `SendMessage`, `Subagents`, `InterruptAgent`, `Advisor`, `BoardPost`
+- **no-ask** (allowed in every mode; they write only harness-owned state): `Memory`, `Prune`, `Todo`, `Compress`, `Recall`, `Team`, `AskUser`, `PlanExit`, `SendMessage`, `Subagents`, `InterruptAgent`, `Advisor`, `Canvas`, `BoardPost`
 
 Note what is in *none* of these lists: `WebFetch`, `WebSearch`, `doctor`, `GenerateImage`, `GenerateVideo` and `Schedule`.
 <!-- tools:classes:end -->
@@ -861,7 +861,7 @@ The tool names a pattern can start with are the tool catalog's names —
 `SendMessage`, `Subagents`, `InterruptAgent`, `Ls`, `ShellOutput`, `ShellStop`,
 `GenerateImage`,
 `GenerateVideo`, `BoardPost`, `BoardRead`, `Advisor`, `Schedule`,
-`SkillWorkshop`, `skills_search`,
+`SkillWorkshop`, `skills_search`, `Canvas`,
 `mcp_list`, `mcp_call` — and
 `mcp__<server>__<tool>` for bridges (`mcp__git__*`). What differs per tool is
 the argument's *grammar*: shell segments for `Bash` and `PtyRun`, path

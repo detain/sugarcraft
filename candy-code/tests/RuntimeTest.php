@@ -3948,9 +3948,13 @@ DOC;
         // keeps it ask-bound. `GenerateVideo` joined the same side at media
         // plan W5.3 by the identical argument: fetched bytes and the job
         // sidecar land in MediaStore, never the checkout, while the render
-        // itself is a job on an external video server.
+        // itself is a job on an external video server. `Canvas` joined the
+        // harness-state side at comparison plan C-TOOL-6.f (the gate classes
+        // it no-ask — the page write lands in MediaStore beside the renders),
+        // and `Advisor` joined the name list on the same pass as a CURE of
+        // the catalog-classification drift the sweep test records above.
         $this->assertSame(
-            ['AskUser', 'BoardPost', 'Compress', 'GenerateImage', 'GenerateVideo', 'InterruptAgent', 'Memory', 'PlanExit', 'Prune', 'Recall', 'SendMessage', 'Subagents', 'Team', 'Todo', 'WebFetch', 'WebSearch', 'doctor'],
+            ['Advisor', 'AskUser', 'BoardPost', 'Canvas', 'Compress', 'GenerateImage', 'GenerateVideo', 'InterruptAgent', 'Memory', 'PlanExit', 'Prune', 'Recall', 'SendMessage', 'Subagents', 'Team', 'Todo', 'WebFetch', 'WebSearch', 'doctor'],
             $onlyOurs,
             'the divergence between this classifier\'s read-only list and PermissionGate::isReadOnlyTool() '
             . 'changed. It is DELIBERATE - see that method\'s doc-block - so the repair is to update the '
@@ -4190,7 +4194,22 @@ DOC;
         // bounded head of an already-loaded body — and opens nothing itself:
         // no file, no socket, no process. The truth test below sees no write
         // primitive in its source, exactly the shape its doc-block demands.
-        return ['mcp_list', 'Read', 'Grep', 'Glob', 'Ls', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune', 'Todo', 'Compress', 'Recall', 'Team', 'AskUser', 'PlanExit', 'SendMessage', 'Subagents', 'InterruptAgent', 'BoardRead', 'BoardPost', 'GenerateImage', 'GenerateVideo', 'ShellOutput', 'skills_search'];
+        // `Canvas` (comparison plan C-TOOL-6.f) joins on the `GenerateImage`
+        // doctrine word for word: its HTML artifact lands under the session
+        // media directory through MediaStore::putDocument() — harness state,
+        // never a byte in the checkout — and the tool's own source calls no
+        // write primitive; the store does the writing, exactly as it does for
+        // the generated images that sit beside these files.
+        // `Advisor` (comparison plan C-PRV-3.d) joins as a CURE, not a new
+        // judgement — the same shape the `Ls` row above records: the tool
+        // landed classified by the catalog's no-ask class but without its row
+        // in this list, and this sweep has been red on master ever since. It
+        // consults a second model over a bounded transcript digest and moves
+        // no byte anywhere, so it stands beside `WebFetch` (same outbound-read
+        // family) and needs no argument of its own beyond the truth test
+        // below, which decides the classification exactly as it does for the
+        // names above.
+        return ['mcp_list', 'Read', 'Grep', 'Glob', 'Ls', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune', 'Todo', 'Compress', 'Recall', 'Team', 'AskUser', 'PlanExit', 'SendMessage', 'Subagents', 'InterruptAgent', 'BoardRead', 'BoardPost', 'GenerateImage', 'GenerateVideo', 'ShellOutput', 'skills_search', 'Canvas', 'Advisor'];
     }
 
     /**

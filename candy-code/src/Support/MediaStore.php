@@ -191,6 +191,35 @@ final class MediaStore
     }
 
     /**
+     * Publish a document artifact and return its absolute path.
+     *
+     * The `Canvas` tool's door into this store (C-TOOL-6.f): an HTML page has
+     * no generation-token palette to fill (no seed, no dimensions), so the
+     * name rides the default pattern alone, and {@see MediaKind} carries no
+     * `Html` case yet — the case is the web/protocol half's step (it reshapes
+     * `MEDIA_REF.kind` in the schema), which is also why this returns the
+     * path string rather than a {@see MediaArtifact} typed by a kind. The
+     * caller takes the id back out with {@see idOf()} on the basename, and
+     * `media.fetch` already serves any file in the store by that id.
+     *
+     * Publishing rides exactly what {@see put()} rides: {@see publish()} —
+     * temp-then-rename, `0600` settled on the partial before any payload, the
+     * collision window, the containment re-check after the rename.
+     *
+     * @throws \InvalidArgumentException on a junk extension
+     * @throws \RuntimeException when every name in the collision window is taken or the publish fails
+     */
+    public function putDocument(string $bytes, string $ext): string
+    {
+        $extension = self::normalizeExtension($ext);
+        [$values, $startNumber] = $this->tokenValues([]);
+        [$target, $partial] = $this->resolveTarget($values, $extension, $startNumber);
+        $this->publish($target, $partial, $bytes);
+
+        return $target;
+    }
+
+    /**
      * Every published artifact of this session, name-sorted. In-flight
      * `.partial` files and non-regular entries are not listed.
      *

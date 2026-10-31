@@ -323,6 +323,64 @@ final class MediaStoreTest extends TestCase
         $this->assertStringStartsWith('/', $artifact->path());
     }
 
+    public function testPutDocumentCollidesIncrementRoundTripsByIdAndKeepsSixZeroZero(): void
+    {
+        $store = MediaStore::forSession('alpha', $this->storeRoot, 'doc-[number]');
+        $first = $store->putDocument('A', 'html');
+        $second = $store->putDocument('B', 'html');
+
+        $this->assertSame('doc-0.html', basename($first));
+        $this->assertSame('doc-1.html', basename($second));
+        $this->assertTrue(is_file($first));
+        $this->assertTrue(is_file($second));
+        $this->assertSame('doc-0', MediaStore::idOf(basename($first)));
+        $this->assertSame($first, $store->pathFor('doc-0'));
+        $this->assertSame('A', $store->read('doc-0'));
+        $this->assertSame(0o600, fileperms($first) & 0o777);
+        $this->assertSame([], $this->partialEntries($store->directoryPath()));
+
+        $mixedCase = $store->putDocument('C', '.HTML');
+        $this->assertStringEndsWith('.html', basename($mixedCase));
+    }
+
+    public function testPutDocumentRefusesJunkExtensions(): void
+    {
+        $store = MediaStore::forSession('alpha', $this->storeRoot);
+        foreach (['', 'html/..', 'htmllltoolongx', 'h t m l'] as $junk) {
+            try {
+                $store->putDocument('x', $junk);
+                $this->fail('extension door should refuse ' . var_export($junk, true));
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('extension', $e->getMessage());
+            }
+        }
+    }
+
+    public function testPutDocumentThrowingWriterLeavesNeitherFinalNorPartial(): void
+    {
+        $store = MediaStore::forSession(
+            'burst',
+            $this->storeRoot,
+            'doc-[number]',
+            static function ($handle, string $bytes): void {
+                throw new \RuntimeException('injected mid-write failure');
+            },
+        );
+
+        $caught = null;
+        try {
+            $store->putDocument('<p>x</p>', 'html');
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught, 'the injected writer must surface');
+        $this->assertSame('injected mid-write failure', $caught->getMessage());
+
+        $this->assertSame([], $this->partialEntries($store->directoryPath()));
+        $this->assertSame([], $store->list());
+    }
+
     /** Both umask polarities must settle to the same 0600/0700 outcome. */
     private function assertModesUnderUmask(int $umask): void
     {

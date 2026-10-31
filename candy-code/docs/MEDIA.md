@@ -243,6 +243,25 @@ Responses-API sibling carries the same bytes as an `input_file` part on its
 tool row (C-TOOL-2.g), and Gemini/Bedrock carry no tool calls
 to attach to at all.
 
+### Canvas artifacts (C-TOOL-6.f)
+
+The `Canvas` tool writes a model-authored, self-contained HTML page into the
+same session store the generated images land in — `~/.candy-code/media/` under
+the bound session's folder (the `main` folder when nothing is bound), mode
+`0600`, temp-then-rename through `MediaStore::putDocument()` — and answers
+with the artifact id, the absolute path and the byte count. The cap is 512
+KiB and a breach refuses rather than truncating. The store door is the only
+writer, so nothing lands outside the session directory, and the age sweep of
+session directories retires the artifacts exactly as it retires generated
+media. The bytes are not sanitised at the store door: the TUI never renders
+the page (the result carries no media legs, so nothing projects). The web
+client does **not** show these artifacts yet — the projection arm, the
+sandboxed `/canvas/…` page and the card are the later web/protocol half of
+C-TOOL-6; until then the artifact is visible only as the path in the result.
+A `media.fetch` of such an id answers today with the projector's default arm
+(`kind: image`, `application/octet-stream`) — harmless while no event
+advertises the id, corrected by that later half.
+
 ## Security posture
 
 Media egress is pinned to the configured origin rather than run through the
