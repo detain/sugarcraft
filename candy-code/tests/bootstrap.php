@@ -452,6 +452,17 @@ $GLOBALS['__candyCodeHomeSandbox'] = $homeSandbox;
 AuditHook::pinDefaultLogDirectory($sandbox . '/audit');
 
 /*
+ * C-EXT-6.b: and the hook log rides the same lesson. `HookRegistry::scan()`
+ * appends one entry per configured, NON-built-in hook run, and several suites
+ * drive exactly that through `executeHooks()` — without this pin every one of
+ * them would populate the developer's own `~/.candy-code/hooks-log.jsonl`
+ * with test traffic, the E351 audit-log leak repeated one file over. The
+ * guards stay armed on whatever path is pinned; only where an UNCONFIGURED
+ * log writes moves. `tests/Hooks/HookLogTest.php` asserts this line held.
+ */
+\SugarCraft\Code\Hooks\HookLog::pinDefaultLogFile($sandbox . '/hooks-log.jsonl');
+
+/*
  * Sub-agent transcript logs (roadmap P-C1), pinned for the audit log's
  * reason: a Task test whose engine carries a session id writes one, and
  * without the pin it lands in the developer's own ~/.candy-code/subagents.

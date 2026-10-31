@@ -157,8 +157,8 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     {@see \SugarCraft\Code\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — FORTY-NINE
- *     of them, in TWENTY files. THE SECOND EMITTER-SIDE FUNNEL, and the same
+ *     {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn()} — FIFTY
+ *     of them, in TWENTY-ONE files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
  *     with the ONE site in `src/Diagnostics/RuntimeNoticeSink.php` and cannot
@@ -612,6 +612,14 @@ final class StderrEmitterCensusTest extends TestCase
         // the verb's own prose never touches stderr — preview, refusals and
         // the settle lines are all stdout echoes on the login arm's model.
         'src/Cli/Subcommands.php' => 54,
+        // C-EXT-6.b: the three prefixed reason strings of a refused hook-log
+        // write (directory not private, symlinked leaf, throwing append). All
+        // three ride RuntimeNoticeSink::warn() behind a once-per-process latch
+        // — the AuditHook decision in the channel-6 roster, mirrored: the
+        // user's config is intact and the session is unaffected, so this is
+        // neither the transcript seam nor silence; it is a notice that the
+        // LOG died.
+        'src/Hooks/HookLog.php' => 3,
         'src/Permissions/PermissionPrompt.php' => 1,
         // Not a message: the protocol schema's `$id` URN
         // (`urn:sugarcraft:candy-code:protocol:v1`, roadmap O-3c) spells the
@@ -759,6 +767,12 @@ final class StderrEmitterCensusTest extends TestCase
         // Latched per pattern per object, so the row is one SITE regardless
         // of how often the pathological matcher is exercised.
         'src/Hooks/HookDispatcher.php' => 1,
+        // C-EXT-6.b: the once-per-process notice for a refused hook-log write
+        // (foreign directory, symlinked leaf, or a throwing append). One call
+        // site behind a latch, so it is one row and stays one — the AuditHook
+        // shape above, mirrored for the same reason: a broken log must announce
+        // itself once and never fail the chain it describes.
+        'src/Hooks/HookLog.php' => 1,
         'src/Hooks/HookRegistry.php' => 1,
         // X-31a / audit 15a A4: the end-of-stream tool-call flush's two drop
         // warnings (never-streamed payload on a truncated end; arguments that
@@ -1070,6 +1084,7 @@ final class StderrEmitterCensusTest extends TestCase
         'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39, 'forty' => 40,
         'forty-one' => 41, 'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44, 'forty-five' => 45,
         'forty-six' => 46, 'forty-seven' => 47, 'forty-eight' => 48, 'forty-nine' => 49,
+        'fifty' => 50,
     ];
 
     public function testTheDirectFwriteStderrRosterIsUnchanged(): void
@@ -3104,12 +3119,12 @@ final class StderrEmitterCensusTest extends TestCase
                 'what' => 'channel 3, the number of files it spans',
             ],
             [
-                'anchor' => '/RuntimeNoticeSink::warn\(\)} — ([A-Z-]+) of them, in [A-Z]+ files/',
+                'anchor' => '/RuntimeNoticeSink::warn\(\)} — ([A-Z-]+) of them, in [A-Z-]+ files/',
                 'expected' => array_sum(self::RUNTIME_NOTICE_SITES),
                 'what' => 'channel 6, the RuntimeNoticeSink::warn() total',
             ],
             [
-                'anchor' => '/of them, in ([A-Z]+) files\. THE SECOND EMITTER/',
+                'anchor' => '/of them, in ([A-Z-]+) files\. THE SECOND EMITTER/',
                 'expected' => \count(self::RUNTIME_NOTICE_SITES),
                 'what' => 'channel 6, the number of files it spans',
             ],

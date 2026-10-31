@@ -62,6 +62,12 @@ final class HookRegistry
     private array $matcherFailures = [];
 
     /**
+     * The hook log ({@see HookLog}, C-EXT-6.b), built on first use: a
+     * registry that never runs a configured hook never touches the file.
+     */
+    private ?HookLog $hookLog = null;
+
+    /**
      * @throws \InvalidArgumentException when a hook claims a reserved name
      *         without being the built-in that owns it — see
      *         {@see self::isReserved()}
@@ -166,6 +172,24 @@ final class HookRegistry
     public static function isReserved(string $name): bool
     {
         return isset(self::RESERVED[$name]);
+    }
+
+    /**
+     * Shipped code rather than user configuration: a reserved name, or a
+     * class in the BuiltIn namespace. {@see all()} reports exactly this
+     * predicate to the panel and the hook log keys its writer scope on it,
+     * so the two surfaces can never disagree about what "built-in" means.
+     */
+    private static function isBuiltInHook(HookInterface $hook): bool
+    {
+        return self::isReserved($hook->name())
+            || str_starts_with((string) get_class($hook), 'SugarCraft\\Code\\Hooks\\BuiltIn\\');
+    }
+
+    /** The hook log, built on first use (see the property). */
+    private function hookLog(): HookLog
+    {
+        return $this->hookLog ??= new HookLog();
     }
 
     /**
@@ -354,8 +378,7 @@ final class HookRegistry
                     'name' => $name,
                     'matcher' => $hook->matcher(),
                     'disabled' => $this->isDisabled($name),
-                    'builtIn' => self::isReserved($name)
-                        || str_starts_with((string) get_class($hook), 'SugarCraft\\Code\\Hooks\\BuiltIn\\'),
+                    'builtIn' => self::isBuiltInHook($hook),
                 ];
             }
         }
@@ -968,11 +991,25 @@ final class HookRegistry
             // LEDGERED UNCONDITIONALLY, before any early return: a hook that
             // denies still spent the clock, and on a rewriting chain the pass
             // that spends the budget is often not the pass that hits the wall.
+            $elapsed = microtime(true) - $startedAt;
             $spend[] = [
                 'name' => $hook->name(),
-                'seconds' => microtime(true) - $startedAt,
+                'seconds' => $elapsed,
                 'bounded' => $hook instanceof BoundedHookInterface,
             ];
+
+            // C-EXT-6.b: one row per CONFIGURED hook run, in a FILE, because
+            // the run just performed often happens in a forked turn or tool
+            // child the parent's memory never sees. It shares the ledger's
+            // unconditional point for the same reason: a hook that denies (or
+            // throws into a fail-closed deny) still RAN, and "what did my hook
+            // answer" is exactly the question the log answers. Built-ins are
+            // excluded — their trail is the audit log; this file is the user's.
+            // record() is fail-open bookkeeping: the bool it answers with is
+            // not this loop's business, and no arm of it can reach the hook.
+            if (!self::isBuiltInHook($hook)) {
+                $this->hookLog()->record(HookLogEntry::forRun($event, $context, $hook->name(), $result, $elapsed));
+            }
 
             if (!$result->isAsk() && !$result->permitsExecution()) {
                 // STAMPED WITH WHO REFUSED (audit R6), from the hook this loop

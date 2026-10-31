@@ -689,6 +689,17 @@ final class ReadPathCensusTest extends TestCase
                 . 'a bounded tail window. A serve under a different HOME/TMPDIR simply finds no file — '
                 . '`filesize()` false answers as the empty trail the class note promises',
         ],
+        // C-EXT-6.b: the hook log reader. The WRITER is not a row because
+        // `file_put_contents()` is not a read sink; this single `fopen` is the
+        // one read door, and `tail()` is the only caller.
+        'Hooks/HookLog.php|fopen' => [
+            'SELF_LOCATED — window(): the `hooks-log.jsonl` (and its rotated `hooks-log.jsonl.1`) at '
+                . 'the path `HookLog::defaultLogFile()` names — the pinned test location, the '
+                . 'HOME-owned `.candy-code` directory, or the per-uid temp family, all named by this '
+                . 'class itself; lstat refuses anything but a regular file before the open, and every '
+                . 'read is a bounded tail window. A machine with no logged hook run simply finds no '
+                . 'file — `filesize()` false answers as the empty trail',
+        ],
         // CALLER_SUPPLIED, not CONTAINED_UPSTREAM, and the correction was made BY
         // this test: the first draft claimed the upstream gate was in
         // `Cli/Bootstrap.php`, and the measured check refused it, because Bootstrap's
