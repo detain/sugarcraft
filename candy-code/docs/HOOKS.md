@@ -256,7 +256,7 @@ already run:
 
 | Event | Fires | Dispatched from |
 |---|---|---|
-| `PreToolUse` | before a tool runs — the one that can stop it | `Runtime::gate()`, `Chat::gateToolCall()` |
+| `PreToolUse` | before a tool runs — the one that can stop it | `Runtime::gate()`, `Chat::gateToolCall()`, `McpServeHost::toolsCall()` |
 | `PostToolUse` | after a tool ran, in provider order | `Runtime::settle()`, `Chat::applyPostToolUse()` |
 | `Stop` | the agent answered without calling a tool and is about to stop — the one that can keep it going | `EngineBackend::runTurn()` |
 | `SubagentStop` | a sub-agent (a `Task` run, or a workflow stage's agent) is about to stop | `EngineBackend::runTurn()` |
@@ -594,10 +594,12 @@ block" hook into a prompt.
 Notes that matter in practice:
 
 - **Do not try to reach the non-blocking path by printing `[exit-1]` yourself.**
-  Only the dispatcher path strips that prefix. The two live gates
-  (`Runtime::gate()` and `Chat::gateToolCall()`) quote the deny message verbatim
-  into the model's tool result, so a hook that emitted the marker would leak it
-  into the transcript rather than being treated as non-blocking.
+  Only the dispatcher path strips that prefix. The live gates
+  (`Runtime::gate()`, `Chat::gateToolCall()` and `McpServeHost::toolsCall()`)
+  quote the deny message verbatim into the tool result the call is answered
+  with — the model's transcript for the first two, the MCP wire result on
+  `mcp serve` — so a hook that emitted the marker would leak it into the
+  transcript rather than being treated as non-blocking.
 - **Exit 3 with no stdout** falls back to the hook's `description`, then to a
   generic question. A prompt with an empty body is unanswerable, and defaulting
   to allow or deny would make silence mean something the hook never said.
