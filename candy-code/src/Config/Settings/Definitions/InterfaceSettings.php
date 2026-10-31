@@ -29,6 +29,7 @@ use SugarCraft\Code\Share\JsonlTranscriptWriter;
 use SugarCraft\Code\Support\AiCommentWatcher;
 use SugarCraft\Code\Theme;
 use SugarCraft\Code\Tui\AwayTracker;
+use SugarCraft\Code\Tui\ScreenReaderMode;
 use SugarCraft\Code\Tui\TerminalBackground;
 use SugarCraft\Code\Tui\TerminalNotifier;
 
@@ -348,6 +349,23 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withHelp(Lang::t('settings.vimMode.help'))
                 ->withReaderSymbol(Chat::class . '::vimModeEnabled')
                 ->withReadBy('`Chat::update()` key dispatch (arm re-sync + operator resolution, TUI-3A) → `ComposerVim` over the sugar-forms `TextArea` Vim layer (w5f)'),
+            // C-TUI-6.i (plan_comparison.md §3): the screen-reader switch. USER
+            // tier on purpose — like `vimMode` above it, an accessibility
+            // setting belongs to the operator, not to a checked-out project;
+            // and like `vimMode` it is Live, because `Chat::applySettings()`
+            // drops the held values of every `UiSettings::KEYS` key on a
+            // save and `screenReader` joins that list in this commit, so
+            // the next read — the next spinner frame, the next settings
+            // reopen — takes the new answer with no reload.
+            SettingDefinition::new('screenReader', SettingType::Bool, false)
+                ->withCategory(SettingCategory::Interface)
+                ->withRiskClass(RiskClass::Cosmetic)
+                ->withLayered()
+                ->withApplyMode(ApplyMode::Live)
+                ->withLabel(Lang::t('settings.screenReader.label'))
+                ->withHelp(Lang::t('settings.screenReader.help'))
+                ->withReaderSymbol(ScreenReaderMode::class . '::enabled')
+                ->withReadBy('`AgentLiveRegistry::staticSpinner()` → `frameAt()` pins the agent spinner to its first frame (C-TUI-6.i); `ScreenReaderMode::border()` / `glyph()` / `menuRow()` / `cue()` reach the renderer and menus in C-TUI-6.j'),
             // C-SES-8.g (plan_comparison.md §3): the JSONL mirror switch. USER
             // tier on purpose — no withProjectSettable(): `transcript_path`
             // rides into hook STDIN and hooks are project-definable, so a

@@ -60,6 +60,7 @@ final class UiSettings
         'promptSuggestionHistory',
         'maxCheckpoints',
         'vimMode',
+        'screenReader',
     ];
 
     /** @var array{fingerprint: string, values: array<string, mixed>}|null */

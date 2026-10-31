@@ -1292,7 +1292,7 @@ them, and says when every other key a save changes applies.
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 <!-- settings:layered:begin -->
-Only these one hundred and forty-four keys are layered — `provider`, `models`,
+Only these one hundred and forty-five keys are layered — `provider`, `models`,
 `providers`, `titleModel`, `summaryModel`, `advisorModel`, `maxOutputTokens`,
 `modelPrices`, `extraBody`, `thinkingBudget`, `reasoningEffort`, `serviceTier`,
 `promptCache`, `parallelToolCalls`, `parallelToolDeadlineSeconds`,
@@ -1330,11 +1330,11 @@ Only these one hundred and forty-four keys are layered — `provider`, `models`,
 `paletteMru`, `diffPreviewRows`, `diffStyle`, `toolOutputPreviewLines`,
 `sessionRetentionDays`, `sessions.autoTitle`, `promptSuggestions`,
 `promptSuggestionHistory`, `sessions.awayRecap`, `expandToolOutput`,
-`maxCheckpoints`, `keybindings`, `vimMode`, `transcriptJsonl`, `lintCommands`,
-`formatCommands`, `formatAuto`, `disabledMcpServers`, `mcp.enabled`,
-`mcp.lazySchemaTokens`, `connectTimeoutSeconds`, `providerRetryAttempts`,
-`providerRetryBaseBackoffMs`, `debug.skills`, `debug.commands`, `debug.rules`,
-`debug.stream`.
+`maxCheckpoints`, `keybindings`, `vimMode`, `screenReader`, `transcriptJsonl`,
+`lintCommands`, `formatCommands`, `formatAuto`, `disabledMcpServers`,
+`mcp.enabled`, `mcp.lazySchemaTokens`, `connectTimeoutSeconds`,
+`providerRetryAttempts`, `providerRetryBaseBackoffMs`, `debug.skills`,
+`debug.commands`, `debug.rules`, `debug.stream`.
 <!-- settings:layered:end -->
 
 That roster (and its count) is generated from `SettingsSchema` by
@@ -1383,7 +1383,7 @@ in precedence only.
 > user-tier only. Details per key in
 > [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
-Even for a trusted project, eighty-five keys are **never** taken from a project file:
+Even for a trusted project, eighty-six keys are **never** taken from a project file:
 `statusLine`, because its value is a shell command this app runs on a timer —
 a project-tier one would be arbitrary code execution on clone-and-launch, with
 no tool call and no permission gate anywhere in the path; `lintCommands`, for

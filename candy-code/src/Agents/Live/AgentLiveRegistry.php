@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Agents\Live;
 
 use SugarCraft\Code\Events\SubAgentActivity;
+use SugarCraft\Code\Tui\ScreenReaderMode;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Style\Style;
 
@@ -65,7 +66,11 @@ final class AgentLiveRegistry
      * tabulated the variable in docs/ENVIRONMENT.md, as the env-roster drift
      * guard demands. The read stays OUT of this class: a library-state holder
      * that sniffed its own environment could not be driven from tests that
-     * want a deterministic answer.
+     * want a deterministic answer. The C-TUI-6.i screen-reader door is the
+     * one settings read that DOES reach this gate — via
+     * {@see self::staticSpinner()} over {@see ScreenReaderMode::enabled()},
+     * never a sniff inside the frame maths — because the accessibility
+     * setting is exactly a presentation fact about how this session draws.
      */
     private static bool $staticSpinner = false;
 
@@ -330,7 +335,7 @@ final class AgentLiveRegistry
 
     private static function frameAt(float $seconds): int
     {
-        if (self::$staticSpinner) {
+        if (self::staticSpinner()) {
             return 0;
         }
 
@@ -347,10 +352,16 @@ final class AgentLiveRegistry
         self::$staticSpinner = $static;
     }
 
-    /** Whether the spinner is pinned to its first frame (see {@see setStaticSpinner()}). */
+    /**
+     * Whether the spinner is pinned to its first frame (see
+     * {@see setStaticSpinner()}): on when the launch switch was set OR the
+     * `screenReader` setting is on — the door is {@see ScreenReaderMode},
+     * whose settings memo makes this cheap on the per-frame path
+     * (C-TUI-6.i).
+     */
     public static function staticSpinner(): bool
     {
-        return self::$staticSpinner;
+        return self::$staticSpinner || ScreenReaderMode::enabled();
     }
 
     private function evictFinished(): void

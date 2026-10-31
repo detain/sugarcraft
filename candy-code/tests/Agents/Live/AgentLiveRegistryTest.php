@@ -14,14 +14,70 @@ use SugarCraft\Code\Agents\Live\AgentLiveStatus;
 use SugarCraft\Code\Agents\Live\AgentRunCards;
 use SugarCraft\Code\Agents\Live\RunCardStatus;
 use SugarCraft\Code\Events\SubAgentActivity;
+use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Config\Settings\SessionSettings;
+use SugarCraft\Code\Config\Settings\UiSettings;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
  * Roadmap P-B2: the parent's fold of the v2 activity frames — one state per
  * run, the runs hung under their Task call, the queued placeholder handed
  * over to the real run, and a clock that moves only when update() says so.
+ *
+ * C-TUI-6.i: staticSpinner() now consults the live user settings, so the
+ * whole class runs under a HOME sandbox — every test sees an empty config,
+ * and the screen-reader door can only be opened by the test that writes it.
  */
 final class AgentLiveRegistryTest extends TestCase
 {
+    use HomeSandboxTrait;
+
+    private string $home = '';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->home = sys_get_temp_dir() . '/crush-agent-live-' . bin2hex(random_bytes(6));
+        mkdir($this->home . '/.candy-code', 0o700, true);
+        $this->useHomeSandbox($this->home);
+        SessionSettings::reset();
+        UiSettings::forget();
+    }
+
+    protected function tearDown(): void
+    {
+        SessionSettings::reset();
+        UiSettings::forget();
+        Bootstrap::useConfigPath(null);
+        $this->restoreHomeSandbox();
+        self::removeTree($this->home);
+
+        parent::tearDown();
+    }
+
+    /** @param array<string, mixed> $values */
+    private function writeConfig(array $values): void
+    {
+        file_put_contents($this->home . '/.candy-code/config.json', json_encode($values, JSON_THROW_ON_ERROR));
+        UiSettings::forget();
+    }
+
+    private static function removeTree(string $dir): void
+    {
+        if (!is_dir($dir) || is_link($dir)) {
+            @unlink($dir);
+
+            return;
+        }
+        foreach (scandir($dir) ?: [] as $entry) {
+            if ($entry !== '.' && $entry !== '..') {
+                self::removeTree($dir . '/' . $entry);
+            }
+        }
+        @rmdir($dir);
+    }
+
     /**
      * a11y-F5: under the ambient Ascii colour profile the spinner cycle is
      * the four-stroke `|/-\`, and the stored (mod 10) frame index wraps on
@@ -242,6 +298,34 @@ final class AgentLiveRegistryTest extends TestCase
         }
 
         self::assertFalse(AgentLiveRegistry::staticSpinner());
+    }
+
+    /**
+     * C-TUI-6.i: the screen-reader setting reaches the spinner gate through
+     * the getter — with the launch switch never engaged and the environment
+     * read cleared, a saved user-tier screenReader pin still resolves every
+     * frame to zero, and clearing the setting releases the gate again.
+     */
+    public function testTheScreenReaderSettingPinsTheFrameWithTheEnvSwitchUnset(): void
+    {
+        putenv('CANDY_CODE_REDUCED_MOTION');
+        self::assertFalse(AgentLiveRegistry::staticSpinner(), 'an empty sandbox config engages neither door');
+
+        $this->writeConfig(['screenReader' => true]);
+        self::assertTrue(AgentLiveRegistry::staticSpinner(), 'the setting reaches the gate through the getter');
+
+        $clock = 50.48;
+        $registry = AgentLiveRegistry::new(static function () use (&$clock): float {
+            return $clock;
+        });
+        self::assertSame(0, $registry->spinnerFrame(), 'the ctor resolves frame 0 from the setting alone');
+
+        $clock = 500.48;
+        $registry->advance();
+        self::assertSame(0, $registry->spinnerFrame(), 'twelve seconds later, still frame 0');
+
+        $this->writeConfig(['screenReader' => false]);
+        self::assertFalse(AgentLiveRegistry::staticSpinner(), 'un-saving releases the gate — Live, no reload');
     }
 
     /**
