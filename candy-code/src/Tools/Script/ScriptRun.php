@@ -36,7 +36,8 @@ final class ScriptRun
      *        sent, `bytes` counting the request and response frames together
      * @param array<string, int> $capBreaches cap name => bytes dropped or
      *        calls refused under it (`stdout`, `stderr`, `calls`, `response`,
-     *        `frame`); a breach with a byte value says how much was lost
+     *        `return`, `frame`); a breach with a byte value says how much
+     *        was lost
      * @param string[] $notes non-cap disclosures that must survive: why the
      *        return value is absent when a return frame did arrive, and the
      *        runner's own observations that fit no other field

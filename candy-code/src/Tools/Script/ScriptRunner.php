@@ -56,7 +56,7 @@ use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
  *
  * Every path out of the spawn — normal end, expiry, dispatch blowup, a throw
  * from this method's own bookkeeping — runs the reaper on the child with the
- * group id recorded while it was alive, closes every descriptor, and deletes
+ * group id measured at signal time, closes every descriptor, and deletes
  * the scratch directory, all in the one `finally` of {@see run()} (the spawn
  * deliberately lives in `run()` itself because that finally is what the
  * SHORT receipt row in tests/Support/DescriptorInheritanceGuardTest.php is
