@@ -12,6 +12,11 @@ use SugarCraft\Pty\Contract\PtySystem;
 use SugarCraft\Pty\Contract\Pump;
 use SugarCraft\Pty\Contract\SlavePty;
 use SugarCraft\Pty\Contract\Termios;
+use SugarCraft\Pty\Windows\ConPtyChild;
+use SugarCraft\Pty\Windows\ConPtyMasterPty;
+use SugarCraft\Pty\Windows\ConPtyPair;
+use SugarCraft\Pty\Windows\ConPtySlavePty;
+use SugarCraft\Pty\Windows\ConPtySystem;
 use PHPUnit\Framework\TestCase;
 
 final class InterfacesTest extends TestCase
@@ -199,6 +204,32 @@ final class InterfacesTest extends TestCase
     {
         $methods = self::methodNames(Pump::class);
         $this->assertContains('run', $methods);
+    }
+
+    public function testConPtyAdaptersImplementTheContracts(): void
+    {
+        // The Windows namespace is a pure adapter layer over the primitives —
+        // each class must satisfy the SAME contract its POSIX sibling does, so
+        // factory-resolved call sites type-check identically on both backends.
+        $contractFor = [
+            ConPtySystem::class => PtySystem::class,
+            ConPtyPair::class => PtyPair::class,
+            ConPtyMasterPty::class => MasterPty::class,
+            ConPtySlavePty::class => SlavePty::class,
+            ConPtyChild::class => Child::class,
+        ];
+
+        foreach ($contractFor as $adapter => $contract) {
+            $this->assertTrue(
+                \is_subclass_of($adapter, $contract),
+                'ConPTY adapter ' . $adapter . ' must implement ' . $contract,
+            );
+        }
+
+        $this->assertSame(
+            ['conpty', 'controllingTerminal', 'signals', 'fd'],
+            \array_keys((new ConPtySystem())->capabilities()),
+        );
     }
 
     /**
