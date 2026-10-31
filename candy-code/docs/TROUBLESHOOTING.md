@@ -615,6 +615,19 @@ WARN with the AppArmor profile remedy, not as a healthy install.
   process detached from any ctty instead (`setsid`, or `start_new_session` in
   a Python harness over a bare `openpty`), and inject keys on the pty master
   — that is the shape the test suite itself drives.
+- **On macOS, process groups ride the PHP helper and the shell wall needs no
+  coreutils.** Stock macOS ships no usable `setsid` for this purpose and no GNU
+  `timeout` at all. `ProcessContainment::spawnSpec()` probes the candidates in
+  order: a real `setsid -w` first, else a two-extension PHP helper
+  (`posix_setsid()` then `pcntl_exec("/usr/bin/env", …)`) — under either, the
+  recorded pid is its own group and session leader, so `ShellStop` and the
+  background-shell teardown can still signal the whole group; and the
+  background-shell wrapper carries a pure-shell watchdog that enforces the same
+  max-lifetime wall and disarms itself the moment the command settles. The
+  helper needs `pcntl` and `posix` in the CLI PHP that launches candy-code; if
+  neither arm can prove itself, detached spawns fall back to the old degraded
+  shape where a group signal reaches only the wrapper's own pid — the TUI then
+  narrates stops as per-pid-only instead of hiding it.
 
 ## Session store problems
 

@@ -667,7 +667,7 @@ jobs:
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
           php-version: '8.3'
-          extensions: mbstring, intl, json, pcntl, ffi, :xdebug
+          extensions: mbstring, intl, json, pcntl, posix, ffi, :xdebug
           tools: composer:v2
           coverage: none
           ini-values: ffi.enable=true
@@ -713,6 +713,15 @@ jobs:
       # does not behave as claimed on real macOS.
       - name: Sandbox — Seatbelt tests
         run: cd candy-code && vendor/bin/phpunit -c phpunit.xml --filter '\(SandboxFactoryTest|SeatbeltTest)::'
+
+      # C-TOOL-4.h: the PHP detach helper is the ONLY arms race macOS can win —
+      # Darwin ships no setsid(1) with -w, so on this runner the helper arm is
+      # what every detached spawn rides, and the Linux gate can only prove the
+      # forced-candidate shape. These tests run it live: own-pgid leadership,
+      # exit-status forwarding through pcntl_exec, 127 on a missing binary.
+      # posix is on the extension list above for exactly this leg.
+      - name: Containment — Darwin detach helper tests
+        run: cd candy-code && vendor/bin/phpunit -c phpunit.xml --filter 'ProcessContainmentPhpSetsidTest::'
 
   # Coverage report — runs once on PHP 8.3 + pcov for every lib in the
   # matrix, uploads a per-lib clover XML to codecov with the lib slug
