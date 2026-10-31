@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Renderer;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\App\App;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Config\Settings\UiSettings;
@@ -15,11 +16,18 @@ use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\ToolCall;
+use SugarCraft\Code\ToolResult;
+use SugarCraft\Code\Tui\Components\MenuBar;
+use SugarCraft\Code\Tui\DiffReview\DiffReview;
+use SugarCraft\Code\Tui\DiffReview\OpenDiffReviewMsg;
+use SugarCraft\Code\Tui\Renderer as TuiRenderer;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Ansi;
 
 /**
  * C-TUI-6.j: the screen-reader wiring in `Renderer`. With `screenReader`
@@ -58,6 +66,10 @@ final class ScreenReaderRenderTest extends TestCase
 
     protected function tearDown(): void
     {
+        // The menu bar keeps its opened index in class-static state; a test
+        // that opened a dropdown and died before closing it would leak the
+        // panel into every later frame in the process.
+        MenuBar::closeMenu();
         UiSettings::forget();
         $this->restoreHomeSandbox();
         self::removeTree($this->home);
@@ -178,6 +190,142 @@ final class ScreenReaderRenderTest extends TestCase
         self::assertStringContainsString('marsh-', $frame, 'and so does the assistant row prefix');
         self::assertStringContainsString("\u{1f50d}", $frame, 'and the palette still paints');
         self::assertStringContainsString("\u{25b8} ", $frame, 'sanity: the ▸ sighted marker is on the off path');
+    }
+
+    public function testPermissionOptionRowsCarryTheirPositionsOnlyWithTheModeOn(): void
+    {
+        $this->writeConfig(['screenReader' => true]);
+        $on = $this->positionedRows($this->plainLines($this->stripAnsi(Renderer::render($this->askingChat()))));
+
+        // menuRow() stamps every permission option with its place in the
+        // list — four options, one per row, in order. Deleting the wrapper
+        // at the permission loop leaves bare labels: this list empties.
+        self::assertSame(['1/4', '2/4', '3/4', '4/4'], $on, 'the SR permission prompt must read "option n/of" for every option, in order');
+
+        $this->writeConfig(['screenReader' => false]);
+        $off = $this->positionedRows($this->plainLines($this->stripAnsi(Renderer::render($this->askingChat()))));
+        self::assertSame([], $off, 'off mode is the pre-6.j shape: option rows carry no position suffix at all');
+    }
+
+    public function testTheSplitDiffCentreGutterShedsItsDividerWithTheModeOn(): void
+    {
+        $needle = '-$oldline';
+
+        $this->writeConfig(['screenReader' => true]);
+        $sr = $this->lineContaining($needle, $this->plainLines($this->stripAnsi(Renderer::render($this->splitDiffChat()))));
+        self::assertStringNotContainsString('= 1;│', $sr, 'the centre divider between the halves must shed — the side row-number columns are unwired design scope and keep their │');
+        self::assertMatchesRegularExpression('/= 1; 2│/', $sr, 'the shed centre sits flush before the right half');
+
+        $this->writeConfig(['screenReader' => false]);
+        $off = $this->lineContaining($needle, $this->plainLines($this->stripAnsi(Renderer::render($this->splitDiffChat()))));
+        self::assertMatchesRegularExpression('/= 1;│2│/', $off, 'off mode keeps the centre divider fused to the right-hand row number');
+    }
+
+    public function testTheDiffReviewRuleUnderScreenReaderIsBlankPaper(): void
+    {
+        $this->writeConfig(['screenReader' => true]);
+        $sr = $this->ruleLineBeneath('Files changed', $this->plainLines(Ansi::strip(TuiRenderer::render($this->reviewApp(), 90, 22))));
+        self::assertSame('', trim($sr), 'the review pane rule under SR: ScreenReaderMode::glyph sheds the full-width ─ run to spaces (delete the glyph() call and this line is ──…── again)');
+
+        $this->writeConfig(['screenReader' => false]);
+        $off = $this->ruleLineBeneath('Files changed', $this->plainLines(Ansi::strip(TuiRenderer::render($this->reviewApp(), 90, 22))));
+        self::assertMatchesRegularExpression('/^\x{2500}+$/u', trim($off), 'off paints the rule as one continuous light-box dash');
+    }
+
+    public function testTheDropdownOverflowLineShedsItsWallsOnlyWithTheModeOn(): void
+    {
+        MenuBar::closeMenu();
+        MenuBar::openMenu(1);
+
+        $this->writeConfig(['screenReader' => false]);
+        $off = $this->plainLines(Ansi::strip(TuiRenderer::render($this->plainApp(), 100, 12)));
+        self::assertGreaterThanOrEqual(1, preg_grep('/│ …+│/', $off), 'fixture: the clipped Session dropdown ends in its "│ …  │" overflow line under off');
+        self::assertSame([], preg_grep('/^\s+…\s{2,}/', $off), 'and no wall-less ellipsis row exists there');
+
+        $this->writeConfig(['screenReader' => true]);
+        $sr = $this->plainLines(Ansi::strip(TuiRenderer::render($this->plainApp(), 100, 12)));
+        self::assertSame(1, \count(preg_grep('/^\s+…\s{2,}/', $sr)), 'under SR the whole overflow row sheds to bare spaces plus the text ellipsis (dropdownOverflowLine is wired through glyph(); deleting it restores the │ …│ walls and reddens this)');
+        self::assertSame([], preg_grep('/│ …+│/', $sr), 'the wired row keeps no walls under SR');
+
+        MenuBar::closeMenu();
+    }
+
+    /** @param list<string> $lines rows of a stripped frame */
+    private function positionedRows(array $lines): array
+    {
+        $positions = [];
+        foreach ($lines as $line) {
+            if (preg_match('/^\s+\S.*\s(\d+)\/(\d+)$/', rtrim($line), $m) === 1) {
+                $positions[] = $m[1] . '/' . $m[2];
+            }
+        }
+
+        return $positions;
+    }
+
+    /** @param list<string> $lines */
+    private function lineContaining(string $needle, array $lines): string
+    {
+        foreach ($lines as $line) {
+            if (str_contains($line, $needle)) {
+                return rtrim($line);
+            }
+        }
+        self::fail('fixture: no frame row contains ' . $needle);
+    }
+
+    /** @param list<string> $lines */
+    private function ruleLineBeneath(string $anchor, array $lines): string
+    {
+        foreach ($lines as $i => $line) {
+            if (str_contains($line, $anchor)) {
+                self::assertArrayHasKey($i + 1, $lines, 'fixture: the anchored line is not the last row');
+
+                return $lines[$i + 1];
+            }
+        }
+        self::fail('fixture: no frame row contains ' . $anchor);
+    }
+
+    /** @return Chat */
+    private function splitDiffChat(): Chat
+    {
+        $diff = "--- a/src/App.php\n+++ b/src/App.php\n@@ -1,3 +1,3 @@\n <?php\n-\$oldline = 1;\n+\$newline = 2;\n";
+
+        return new Chat(
+            history: [
+                Message::user('zebra-questions'),
+                Message::assistant('')->withToolResults([new ToolResult(name: 'Edit', result: 'File updated: src/App.php', id: 'call_diff', diff: $diff)]),
+            ],
+            rows: 30,
+            cols: 140,
+            backend: new EchoBackend(),
+        );
+    }
+
+    private function plainApp(): App
+    {
+        return App::new($this->createMock(ProviderInterface::class), 'test-model')
+            ->withChat(new Chat(
+                history: [Message::user('zebra-questions'), Message::assistant('marsh-answers')],
+                backend: new EchoBackend(),
+            ));
+    }
+
+    private function reviewApp(): App
+    {
+        [$app] = $this->plainApp()->update(new OpenDiffReviewMsg(
+            DiffReview::open([[
+                'status' => 'M',
+                'path' => 'file.txt',
+                'added' => 1,
+                'removed' => 1,
+                'patch' => "--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-old\n+new\n",
+            ]], 1, 1, false, 0),
+        ));
+        self::assertNotNull($app->diffReview, 'fixture: the review slot armed');
+
+        return $app;
     }
 
     /** @return array<string, Chat> label => chat to render with an open overlay or framed body */
