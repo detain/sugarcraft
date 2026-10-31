@@ -465,7 +465,8 @@ session; acp runs turns for an editor, until the editor disconnects):
       --force            SIGKILL at once.
   serve logs [-f]        Print the end of a detached server's log.
   -f, --follow           Keep printing what it appends until it stops.
-  serve url              Print a sign-in URL with a fresh one-time code.
+  serve url [--qr]       Print a sign-in URL with a fresh one-time code.
+      --qr              Render each sign-in URL as a scannable terminal QR code.
   serve token [--rotate] Print the owner token bearer clients send.
       --rotate           Replace it; a running server keeps the old one until
                          it restarts.
@@ -1116,6 +1117,8 @@ TXT,
     'cli.serve.status.mode_background' => '  mode:    background, log {log}',
     'cli.serve.status.mode_foreground' => '  mode:    foreground',
     'cli.serve.status.not_running' => 'not running',
+    'cli.serve.qr.cleartext' => 'warning: {host} is reached over plain http; the one-time code inside the QR below is readable by anyone on that path.',
+    'cli.serve.qr.too_long' => 'a sign-in URL this long cannot be rendered as a QR code; use the printed URL.',
     'cli.serve.status.root' => '  root:    {root}',
     'cli.serve.status.running' => 'running: pid {pid}, {url} (health: {health})',
     'cli.serve.status.stale' => 'not running (stale record for pid {pid} left in {path})',
@@ -1146,8 +1149,9 @@ TXT,
     'cli.serve.url.failed' => 'candy-code serve url: {reason}',
     'cli.serve.url.no_answer' => 'the server did not answer on {path}',
     'cli.serve.url.one_time_code' => '(one-time code, valid {seconds} s)',
+    'cli.serve.url.qr_json' => 'candy-code serve url --qr: the QR code is text; it does not combine with --output-format json',
     'cli.serve.url.token_refused' => 'the server refused this token (was it started with a different CANDY_CODE_SERVER_TOKEN?)',
-    'cli.serve.usage' => 'Usage: candy-code serve [--host <ip>] [--port <n>] [--allow-remote] [--allowed-host <hosts>] [--allowed-ips <ips>] [--allowed-origin <origins>] [--allow-dir-browse] [--browse-root <dir>] [--web-root <dir>] [--no-web] [--allow-bypass] [--allow-root] [--detach] [--parent-pid <pid>] [--tls-cert <file>] [--tls-key <file>] | serve status | serve stop [--force] | serve logs [-f] | serve url | serve token [--rotate]',
+    'cli.serve.usage' => 'Usage: candy-code serve [--host <ip>] [--port <n>] [--allow-remote] [--allowed-host <hosts>] [--allowed-ips <ips>] [--allowed-origin <origins>] [--allow-dir-browse] [--browse-root <dir>] [--web-root <dir>] [--no-web] [--allow-bypass] [--allow-root] [--detach] [--parent-pid <pid>] [--tls-cert <file>] [--tls-key <file>] | serve status | serve stop [--force] | serve logs [-f] | serve url [--qr] | serve token [--rotate]',
     'cli.serve.workspace_unavailable' => 'cannot open the workspace: {error}',
     'cli.session.accepts' => 'session {action} accepts: {flags}.',
     'cli.session.ambiguous' => 'session {action} {target}: ambiguous id prefix, {count} sessions match',

@@ -129,6 +129,7 @@ final readonly class ParsedArgs
             '--no-web' => false,
             '--parent-pid' => true,
             '--port' => true,
+            '--qr' => false,
             '--rotate' => false,
             '--tls-cert' => true,
             '--tls-key' => true,

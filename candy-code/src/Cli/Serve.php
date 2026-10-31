@@ -23,6 +23,8 @@ use SugarCraft\Code\Server\Http\SharePageController;
 use SugarCraft\Code\Server\Http\StaticFiles;
 use SugarCraft\Code\Server\InterfaceAddresses;
 use SugarCraft\Code\Server\Listener;
+use SugarCraft\Code\Server\Pairing\QrEncoder;
+use SugarCraft\Code\Server\Pairing\QrTerminal;
 use SugarCraft\Code\Server\ParentPidWatchdog;
 use SugarCraft\Code\Server\Preflight;
 use SugarCraft\Code\Server\Server;
@@ -95,7 +97,7 @@ final class Serve
         'status' => [],
         'stop' => ['--force'],
         'logs' => ['--follow', '-f'],
-        'url' => [],
+        'url' => ['--qr'],
         'token' => ['--rotate'],
     ];
 
@@ -866,6 +868,11 @@ final class Serve
     /** @param array<string, string> $env */
     private static function url(ParsedArgs $args, array $env): int
     {
+        $qr = isset($args->subcommandFlags['--qr']);
+        if ($qr && $args->outputFormat === NonInteractive::FORMAT_JSON) {
+            return NonInteractive::failUsage(Lang::t('cli.serve.url.qr_json'), $args->outputFormat);
+        }
+
         $found = self::locate($args, $env);
         if (\is_int($found)) {
             return $found;
@@ -896,10 +903,49 @@ final class Serve
             echo NonInteractive::encodeDocument(['result' => ['url' => $record->url, 'loginUrl' => $answer['loginUrl'], 'loginUrls' => $loginUrls, 'pid' => $record->pid]]) . "\n";
         } else {
             echo \implode("\n", $loginUrls) . "\n";
+            if ($qr) {
+                foreach ($loginUrls as $loginUrl) {
+                    $cleartextHost = self::qrCleartextHost($loginUrl);
+                    if ($cleartextHost !== null) {
+                        self::stderr(Lang::t('cli.serve.qr.cleartext', ['host' => $cleartextHost]));
+                    }
+
+                    try {
+                        $symbol = QrEncoder::encode($loginUrl);
+                    } catch (\InvalidArgumentException) {
+                        self::stderr(Lang::t('cli.serve.qr.too_long'));
+
+                        continue;
+                    }
+                    echo QrTerminal::render($symbol['modules'], $symbol['size']) . "\n";
+                }
+            }
             self::stderr(Lang::t('cli.serve.url.one_time_code', ['seconds' => LoginCodes::TTL_SECONDS]));
         }
 
         return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * The host a pairing QR would carry in the clear, or null when the URL is
+     * safe to print: https (TLS — `serve` itself refuses to mint LAN/WAN http
+     * codes elsewhere), or an http bind on a loopback host where the token
+     * never leaves the machine. Names the host only — never the fragment code.
+     */
+    private static function qrCleartextHost(string $loginUrl): ?string
+    {
+        $parts = \parse_url($loginUrl);
+        if (!\is_array($parts) || ($parts['scheme'] ?? '') !== 'http') {
+            return null;
+        }
+
+        $host = (string) ($parts['host'] ?? '');
+        $host = \trim($host, '[]'); // parse_url keeps IPv6 brackets; LOOPBACK_HOSTS spells '::1' bare
+        if ($host === '' || \in_array($host, ServerConfig::LOOPBACK_HOSTS, true) || \str_starts_with($host, '127.')) {
+            return null;
+        }
+
+        return $host;
     }
 
     /** @param array<string, string> $env */

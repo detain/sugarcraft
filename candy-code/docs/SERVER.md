@@ -133,7 +133,7 @@ candy-code serve --detach        # background: prints the URL + pid once bound, 
 candy-code serve status          # pid, URL, root, uptime, and whether /api/health answers
 candy-code serve stop [--force]  # SIGTERM, time to drain, then SIGKILL (--force: SIGKILL now)
 candy-code serve logs [-f]       # the end of server.log; -f follows it until the server stops
-candy-code serve url             # a sign-in URL with a fresh one-time code
+candy-code serve url [--qr]    # a sign-in URL with a fresh one-time code (--qr: also a scannable terminal QR code, text output only)
 candy-code serve token [--rotate]
 ```
 
@@ -187,12 +187,13 @@ engine's own sweep.
 | `serve status` | a server runs (`health` is `ok`, or `unreachable` when it does not answer `/api/health`) | none runs (a stale record is reported as such) |
 | `serve stop` | it stopped | none was running, or it did not exit |
 | `serve logs` | the log was printed | there is no `server.log` (only a detached server writes one) |
-| `serve url` | a fresh sign-in URL was printed | no server runs, or it refused the token |
+| `serve url` | a fresh sign-in URL was printed (`--qr`: each URL also as a terminal QR code) | no server runs, or it refused the token |
 | `serve token` | the token was printed (`--rotate`: replaced first, and a running server reloads it) | — (refused at `2` while `CANDY_CODE_SERVER_TOKEN` is set) |
 
 Under `--output-format json` each prints one `{"result": …}` document — the
 "no server" answers included, as results rather than errors; `logs -f` streams
-text and does not combine with it. The management verbs read the state
+text and does not combine with it, and neither does `serve url --qr` (the code
+is text). The management verbs read the state
 directory without creating it.
 
 ### Parent-pid watchdog

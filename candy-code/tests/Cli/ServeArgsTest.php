@@ -11,6 +11,7 @@ use SugarCraft\Code\Cli\NonInteractive;
 use SugarCraft\Code\Cli\ParsedArgs;
 use SugarCraft\Code\Cli\Serve;
 use SugarCraft\Code\Cli\Subcommands;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Server\Preflight;
 use SugarCraft\Code\Server\ServerConfig;
@@ -522,6 +523,45 @@ final class ServeArgsTest extends TestCase
         self::assertSame('/tmp', $config->root);
         self::assertStringEndsWith('/.candy-code/server', $config->stateDir);
         self::assertSame('/elsewhere', Serve::config(self::parse(['serve']), ['CANDY_CODE_SERVER_DIR' => '/elsewhere'], [])->stateDir);
+    }
+
+    public function testUrlAcceptsQrAndRefusesItOnEveryOtherSurface(): void
+    {
+        self::assertSame(['--qr' => true], self::parse(['serve', 'url', '--qr'])->subcommandFlags);
+        self::assertNull(self::parse(['serve', 'url', '--qr'])->usageError);
+        self::assertSame('candy-code: serve --qr takes no value', self::parse(['serve', '--qr=1'])->usageError);
+
+        // The flag belongs to `url` alone: a refusal happens before any
+        // server is located, so these run hermetically against an empty env.
+        self::assertSame(NonInteractive::EXIT_CONFIG, Serve::run(self::parse(['serve', 'token', '--qr'])));
+        self::assertSame(NonInteractive::EXIT_CONFIG, Serve::run(self::parse(['serve', 'logs', '--qr'])));
+        self::assertSame(NonInteractive::EXIT_CONFIG, Serve::run(self::parse(['serve', '--qr'])));
+        self::assertSame(
+            NonInteractive::EXIT_CONFIG,
+            Serve::run(self::parse(['--output-format', 'json', 'serve', 'url', '--qr'])),
+            '--qr is text output; it refuses to mix with the JSON document',
+        );
+    }
+
+    public function testTheQrCleartextWarningNamesTheHostAndNeverTheOneTimeCode(): void
+    {
+        $code = uniqid('sentinel', true);
+        $method = new \ReflectionMethod(Serve::class, 'qrCleartextHost');
+        $method->setAccessible(true);
+
+        self::assertSame('10.9.8.7', $method->invoke(null, 'http://10.9.8.7:7420/#code=' . $code));
+
+        $line = Lang::t('cli.serve.qr.cleartext', ['host' => '10.9.8.7']);
+        self::assertStringContainsString('10.9.8.7', $line);
+        self::assertStringNotContainsString($code, $line, 'the warning template must never carry the fragment');
+        self::assertStringNotContainsString('#code=', $line);
+
+        // Loopback http and every https URL print no warning.
+        self::assertNull($method->invoke(null, 'http://127.0.0.1:7420/#code=' . $code));
+        self::assertNull($method->invoke(null, 'http://127.9.9.9:7420/#code=' . $code));
+        self::assertNull($method->invoke(null, 'http://localhost:7420/#code=' . $code));
+        self::assertNull($method->invoke(null, 'http://[::1]:7420/#code=' . $code));
+        self::assertNull($method->invoke(null, 'https://10.9.8.7:7420/#code=' . $code));
     }
 
     /**
