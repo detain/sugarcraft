@@ -1099,7 +1099,7 @@ final class BinCandyCodeDispatchTest extends TestCase
             'session list'    => [['session', 'list']],
             'usage'           => [['usage']],
             'mcp list'        => [['mcp', 'list']],
-            'import claude'    => [['import', 'claude']],
+            'import claude'   => [['import', 'claude']],
             'completion bash' => [['completion', 'bash']],
             'completion zsh'  => [['completion', 'zsh']],
             'completion fish' => [['completion', 'fish']],
