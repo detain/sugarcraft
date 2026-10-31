@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\LSP;
 
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Tools\Concerns\DetectsCapabilities;
+use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
 
 /**
  * Starts the language servers the user configured under the `lsp` settings
@@ -22,7 +24,10 @@ use SugarCraft\Code\Tools\Concerns\DetectsCapabilities;
  * Each key is the LSP language identifier sent in `didOpen`. Per server:
  * `command` (required), `args`, `extensions` (default: the key itself), `env`,
  * `initializationOptions`, `timeout` (seconds per request, default
- * {@see DEFAULT_TIMEOUT_SECONDS}) and `disabled`.
+ * {@see DEFAULT_TIMEOUT_SECONDS}), `disabled` and `sandbox` (C-TOOL-4.e:
+ * literal `false` exempts THIS server from the `lsp` sandboxScope jail — the
+ * map is user tier only, so that exemption is the user's own statement; any
+ * other value jails, strictest).
  *
  * AUTO-DETECT IS THE OTHER USER-TIER STATEMENT (EDT-2): with `lspAutoDetect`
  * true, {@see AUTO_TABLE} starts the server a project fingerprint names and a
@@ -157,14 +162,32 @@ final class LspLauncher
     ];
 
     /**
-     * @param list<array{language: string, command: string, args: list<string>, extensions: list<string>, env: array<string, string>, initializationOptions: ?array<mixed>, timeout: float}> $servers
+     * @param list<array{language: string, command: string, args: list<string>, extensions: list<string>, env: array<string, string>, initializationOptions: ?array<mixed>, timeout: float, sandbox: bool}> $servers
      * @param list<string> $problems
      */
     private function __construct(
         private readonly string $root,
         private readonly array $servers,
         private readonly array $problems,
+        private readonly ?SandboxBackend $sandbox = null,
+        private readonly ?string $sandboxRefusal = null,
     ) {
+    }
+
+    /**
+     * Install the `lsp` scope jail (C-TOOL-4.e), before {@see launch()} — the
+     * same install-before-use posture as 4.d's
+     * {@see \SugarCraft\Code\Hooks\HookManager::withScriptSandbox()}. A null
+     * jail (the default, or no scope) leaves every server exactly as it was
+     * before the scope existed. `$refusal` pairs the one probe
+     * {@see \SugarCraft\Code\Tools\BuiltIn\Bash::sandboxRefusal()} answers for
+     * this backend: when a jail is installed but cannot start, a scoped
+     * server is NOT started — the reason rides {@see problems()} and the
+     * server is never run unconfined.
+     */
+    public function withSandbox(?SandboxBackend $sandbox, ?string $refusal): self
+    {
+        return new self($this->root, $this->servers, $this->problems, $sandbox, $refusal);
     }
 
     /**
@@ -275,6 +298,7 @@ final class LspLauncher
                         'env' => [],
                         'initializationOptions' => null,
                         'timeout' => self::DEFAULT_TIMEOUT_SECONDS,
+                        'sandbox' => true,
                     ];
                     // Provenance, not a problem: the launch report is the
                     // surface that shows WHERE a server came from, and a
@@ -338,19 +362,38 @@ final class LspLauncher
      * came up, or null when none did. The second element is this launcher with
      * the start-up failures appended to {@see problems()}.
      *
-     * @param \Closure(string, list<string>): LspConnectionInterface|null $connect
-     *        builds the connection for a command and its arguments; null
-     *        builds a real {@see LspConnection}
+     * @param \Closure(string, list<string>, list<string>): LspConnectionInterface|null $connect
+     *        builds the connection for a command, its arguments and the jail
+     *        prefix; null builds a real {@see LspConnection}
      * @return array{0: ?LspClient, 1: self}
      */
     public function launch(?\Closure $connect = null): array
     {
-        $connect ??= static fn (string $command, array $args): LspConnectionInterface => new LspConnection($command, $args);
+        $connect ??= static fn (string $command, array $args, array $prefix = []): LspConnectionInterface => new LspConnection($command, $args, $prefix);
 
         $client = null;
         $problems = $this->problems;
         foreach ($this->servers as $server) {
-            $connection = $connect($server['command'], $server['args']);
+            // C-TOOL-4.e: the `lsp` scope jail. A server opted out with a
+            // user-tier `"sandbox": false`, or no jail installed, runs exactly
+            // as it did before the scope. A scoped server whose jail cannot
+            // start is NOT started at all — the refusal rides problems() and
+            // the server never runs unconfined.
+            $jailed = $this->sandbox !== null && ($server['sandbox'] ?? true) !== false;
+            if ($jailed && $this->sandboxRefusal !== null) {
+                $problems[] = Lang::t('sandbox.lsp.not_started', [
+                    'language' => $server['language'],
+                    'command' => $server['command'],
+                    'mode' => $this->sandbox->mode(),
+                    'name' => $this->sandbox->name(),
+                    'reason' => $this->sandboxRefusal,
+                    'remedy' => $this->sandbox->refusalRemedy(),
+                ]);
+                continue;
+            }
+
+            $prefix = $jailed ? array_values($this->sandbox->argv($this->root)) : [];
+            $connection = $connect($server['command'], $server['args'], $prefix);
             $failure = $this->start($connection, $server);
             if ($failure !== null) {
                 $problems[] = sprintf('lsp: the %s server (%s) did not start: %s', $server['language'], $server['command'], $failure);
@@ -365,14 +408,14 @@ final class LspLauncher
             $client->mapExtensions($server['language'], $server['extensions']);
         }
 
-        return [$client, new self($this->root, $this->servers, $problems)];
+        return [$client, new self($this->root, $this->servers, $problems, $this->sandbox, $this->sandboxRefusal)];
     }
 
     /**
      * Spawn and initialise one server; null on success, else why not. A server
      * that started but failed the handshake is stopped again.
      *
-     * @param array{language: string, command: string, args: list<string>, extensions: list<string>, env: array<string, string>, initializationOptions: ?array<mixed>, timeout: float} $server
+     * @param array{language: string, command: string, args: list<string>, extensions: list<string>, env: array<string, string>, initializationOptions: ?array<mixed>, timeout: float, sandbox: bool} $server
      */
     private function start(LspConnectionInterface $connection, array $server): ?string
     {
@@ -513,6 +556,10 @@ final class LspLauncher
             'env' => $cleanEnv,
             'initializationOptions' => $options,
             'timeout' => (float) $timeout,
+            // C-TOOL-4.e: only a literal `false` opts the server out of the
+            // `lsp` jail — the map is user tier, so that word is the user's
+            // own. Anything else (junk included) jails, strictest.
+            'sandbox' => !isset($spec['sandbox']) || $spec['sandbox'] !== false,
         ];
     }
 }

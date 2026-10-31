@@ -269,9 +269,21 @@ final class LspConnection implements LspConnectionInterface
      */
     private bool $framingBroken = false;
 
+    /**
+     * @param string $serverPath The server executable this connection fronts
+     * @param array<int, string> $serverArgs argv AFTER the program name
+     * @param list<string> $spawnPrefix C-TOOL-4.e: the sandboxScope jail prefix
+     *     for the `lsp` scope (see {@see \SugarCraft\Code\Tools\Sandbox\SandboxFactory::forScope()}).
+     *     Like the 4.d hook jail this is PREFIX-ONLY: it prepends the backend's
+     *     own `argv()` output in front of the server command at the one spawn
+     *     site in {@see connect()}, so the `@proc_open` token count and the
+     *     DescriptorInheritanceGuard roster stay untouched. Empty (the default)
+     *     means the server runs exactly as it did before the scope existed.
+     */
     public function __construct(
         private readonly string $serverPath,
         private readonly array $serverArgs = [],
+        private readonly array $spawnPrefix = [],
     ) {
         $this->ids = new RequestIdSequence();
     }
@@ -336,9 +348,12 @@ final class LspConnection implements LspConnectionInterface
         $this->notesSeen = 0;
 
         // E672/E674: choke-point spec + env; a language server is configured
-        // third-party code and its own env keys ride last.
+        // third-party code and its own env keys ride last. C-TOOL-4.e: the
+        // sandboxScope prefix (empty unless the `lsp` scope jails this server)
+        // prepends here — the E672 pre-check above still names $command itself,
+        // and the prefix only rides the spawn argv.
         $this->process = @proc_open(
-            ProcessContainment::spawnSpec([$command, ...array_values($this->serverArgs)]),
+            ProcessContainment::spawnSpec([...$this->spawnPrefix, $command, ...array_values($this->serverArgs)]),
             [
                 0 => ['pipe', 'r'],
                 1 => ['pipe', 'w'],

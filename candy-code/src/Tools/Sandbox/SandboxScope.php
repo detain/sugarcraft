@@ -9,11 +9,12 @@ namespace SugarCraft\Code\Tools\Sandbox;
  *
  * `bashSandbox` decides WHETHER commands are jailed; this list decides WHICH
  * of the tool-less command runners join them — lifecycle hooks, the post-edit
- * lint, the post-edit format and the `autoTest` reflection run, all of which
- * shell out with no tool call in the path and so never pass through `Bash`'s
- * own jail. The names are the settings vocabulary; {@see SCOPE_HOOKS},
- * {@see SCOPE_LINT}, {@see SCOPE_FORMAT} and {@see SCOPE_TEST} are what the
- * wiring reads.
+ * lint, the post-edit format, the `autoTest` reflection run and the long-lived
+ * servers (LSP language servers, MCP stdio servers), all of which shell out
+ * with no tool call in the path and so never pass through `Bash`'s own jail.
+ * The names are the settings vocabulary; {@see SCOPE_HOOKS}, {@see SCOPE_LINT},
+ * {@see SCOPE_FORMAT}, {@see SCOPE_TEST}, {@see SCOPE_LSP} and {@see SCOPE_MCP}
+ * are what the wiring reads.
  *
  * USER TIER ONLY, for the same reason `bashSandbox` is: {@see
  * \SugarCraft\Code\Config\LayeredSettings::PROJECT_TIER_KEYS} keeps it out of
@@ -23,7 +24,7 @@ namespace SugarCraft\Code\Tools\Sandbox;
  *
  * STRICTEST IN THE READ DIRECTION, mirroring {@see Bubblewrap::fromSetting()}'
  * "an unrecognised value means the tightest jail, never no jail": an entry
- * that is not one of the four names reads as EVERY scope. A typo cannot
+ * that is not one of the six names reads as EVERY scope. A typo cannot
  * silently drop a scope the operator wanted jailed — it jails everything
  * instead, and the doctor's settings-key audit says the list carries a value
  * it does not recognise while the run keeps the safer reading.
@@ -45,12 +46,18 @@ final class SandboxScope
     /** The `autoTest` reflection run ({@see \SugarCraft\Code\Lint\TestRunner}). */
     public const SCOPE_TEST = 'test';
 
+    /** The LSP language servers ({@see \SugarCraft\Code\LSP\LspLauncher}). */
+    public const SCOPE_LSP = 'lsp';
+
+    /** The MCP stdio servers ({@see \SugarCraft\Code\MCP\StdioMcpServer}). */
+    public const SCOPE_MCP = 'mcp';
+
     /**
      * The recognised vocabulary, in the order the help text lists it.
      *
      * @var list<string>
      */
-    public const SCOPES = [self::SCOPE_HOOKS, self::SCOPE_LINT, self::SCOPE_FORMAT, self::SCOPE_TEST];
+    public const SCOPES = [self::SCOPE_HOOKS, self::SCOPE_LINT, self::SCOPE_FORMAT, self::SCOPE_TEST, self::SCOPE_LSP, self::SCOPE_MCP];
 
     private function __construct() {}
 
