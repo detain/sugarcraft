@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Tests\Support\SuiteSkipRoster;
 use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
 use SugarCraft\Code\Tools\Sandbox\Seatbelt;
+use SugarCraft\Code\Tools\Script\ScriptBridge;
 use SugarCraft\Code\Tools\Script\ScriptRun;
 use SugarCraft\Code\Tools\Script\ScriptRunner;
 
@@ -379,6 +380,53 @@ final class ScriptRunnerTest extends TestCase
         self::assertFalse($run->timedOut);
         self::assertSame(-1, $run->exitCode);
         self::assertSame('', $run->stdout);
+    }
+
+    public function testAReturnFrameOverTheBudgetIsNamedAndDropped(): void
+    {
+        $run = ScriptRunner::run(
+            code: 'return str_repeat("R", 70000);',
+            chdir: $this->laneProjectDir,
+            dispatch: static fn (): array => ['content' => 'x', 'isError' => false],
+            catalog: static fn (): array => [],
+            jail: null,
+            wallSeconds: 15.0,
+        );
+
+        self::assertSame(0, $run->exitCode, $run->stderr);
+        self::assertNull($run->return, 'an over-budget return is dropped whole, never half-trusted');
+        $dropped = $run->capBreaches['return'] ?? 0;
+        self::assertGreaterThan(0, $dropped, 'the breach is named with its byte count');
+        self::assertLessThan(6_000, $dropped, 'the count is the excess over the cap, not the whole frame');
+        self::assertMatchesRegularExpression('/return frame .* was dropped/', implode('|', $run->notes));
+    }
+
+    public function testAResponseOverTheFrameCapIsClippedAtTheEndAndNamed(): void
+    {
+        $big = str_repeat('C', ScriptBridge::MAX_FRAME_BYTES + 600);
+        $run = ScriptRunner::run(
+            // The child measures what ARRIVED: if the clip were removed the
+            // over-cap line would truncate inside the child's fgets and the
+            // decode would fail into an error frame instead of this content.
+            code: '$a = tool("big", []); return ["bytes" => strlen((string)($a["content"] ?? "")), "tail" => substr((string)($a["content"] ?? ""), -4), "err" => (bool)($a["isError"] ?? false)];',
+            chdir: $this->laneProjectDir,
+            dispatch: static function () use ($big): array {
+                return ['content' => $big, 'isError' => false];
+            },
+            catalog: static fn (): array => [],
+            jail: null,
+            wallSeconds: 15.0,
+        );
+
+        self::assertSame(0, $run->exitCode, $run->stderr);
+        self::assertIsArray($run->return);
+        self::assertFalse(($run->return ?? [])['err'], 'the child received a well-formed frame, not a decode failure');
+        $bytes = (int) (($run->return ?? [])['bytes'] ?? 0);
+        self::assertLessThanOrEqual(ScriptBridge::MAX_FRAME_BYTES, $bytes, 'no frame crosses the 1MiB budget');
+        self::assertGreaterThan(ScriptBridge::MAX_FRAME_BYTES - 200, $bytes, 'the clip trims to the cap, it does not collapse the response');
+        self::assertSame('cap]', (string) (($run->return ?? [])['tail'] ?? ''), 'the breach is named inside the content itself');
+        self::assertGreaterThan(600, $run->capBreaches['response'] ?? 0, 'the dropped tail is counted by name');
+        self::assertSame(ScriptRun::OUTCOME_OK, $run->calls[0]['outcome'] ?? null);
     }
 
     public function testTheJailBlocksProjectWritesAndNetworkButTheBridgeStillAnswers(): void

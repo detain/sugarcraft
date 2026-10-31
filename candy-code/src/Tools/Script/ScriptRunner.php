@@ -537,9 +537,19 @@ final class ScriptRunner
             return [$line, 0];
         }
 
-        $marker = '… [content truncated by the bridge frame cap]';
+        // ASCII-only on purpose: json escapes a non-ASCII marker (an ellipsis
+        // costs \u2026 — 6 bytes, not 3), and the clip arithmetic above is
+        // byte-for-byte escape-neutral only while the appended marker is
+        // unescaped. MEASURED: a multibyte marker lands the "clipped" line 3
+        // bytes OVER the cap and the child reads a truncated uncorrelated
+        // frame. 71 bytes.
+        $marker = '[content truncated by the script-runner frame cap]';
         $original = strlen($content);
         $over = strlen($line) - ScriptBridge::MAX_FRAME_BYTES;
+        // The marker rides INSIDE the clipped region: content loses
+        // $over + strlen($marker) bytes and gets strlen($marker) back, so the
+        // re-encode nets out at exactly the cap for unescaped content, and
+        // below it whenever the removed tail had cost json escaping.
         $keep = max(0, $original - $over - strlen($marker));
         $content = substr($content, 0, $keep) . $marker;
         $line = ScriptBridge::encode(['id' => $id, 'result' => ['content' => $content, 'isError' => $isError]]);
