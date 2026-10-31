@@ -1094,6 +1094,19 @@ export interface Methods {
       accepted: boolean
     }
   }
+  /** The web UI chrome strings in one locale (C-TUI-6.f): only web.-prefixed keys; server, tool and model text stay untranslated. */
+  "server.strings": {
+    params: {
+      /** BCP-47-ish tag to serve; the ladder answers exact, then base-before-dash, then English. */
+      locale?: string
+    }
+    result: {
+      /** The catalogue actually served. */
+      locale: string
+      /** The web UI chrome strings (web.-prefixed keys only); placeholders ride {braces} for the client to fill. */
+      strings: Record<string, string>
+    }
+  }
   /** Move a session to the archive tray; it leaves the default listing. */
   "session.archive": {
     params: {
@@ -1772,6 +1785,7 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "server.hello": "read",
   "server.info": "read",
   "server.shutdown": "admin",
+  "server.strings": "read",
   "session.archive": "write",
   "session.cancel": "write",
   "session.close": "write",

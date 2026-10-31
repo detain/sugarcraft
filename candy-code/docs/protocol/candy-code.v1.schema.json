@@ -4048,6 +4048,42 @@
                 ]
             }
         },
+        "server.strings": {
+            "description": "The web UI chrome strings in one locale (C-TUI-6.f): only web.-prefixed keys; server, tool and model text stay untranslated.",
+            "scope": "read",
+            "idempotent": false,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "locale": {
+                        "type": "string",
+                        "maxLength": 35,
+                        "description": "BCP-47-ish tag to serve; the ladder answers exact, then base-before-dash, then English."
+                    }
+                }
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "locale": {
+                        "type": "string",
+                        "maxLength": 35,
+                        "description": "The catalogue actually served."
+                    },
+                    "strings": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "The web UI chrome strings (web.-prefixed keys only); placeholders ride {braces} for the client to fill."
+                    }
+                },
+                "required": [
+                    "locale",
+                    "strings"
+                ]
+            }
+        },
         "session.archive": {
             "description": "Move a session to the archive tray; it leaves the default listing.",
             "scope": "write",

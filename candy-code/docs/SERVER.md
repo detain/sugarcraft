@@ -521,6 +521,7 @@ it and the two tables below are generated from the code
 | `server.hello` | read |  | — | The handshake: protocol version, features, limits; optionally resume subscriptions (snapshotLimit pages their reset snapshots). |
 | `server.info` | read |  | — | What this server offers: providers, agents, commands, tools, permission modes. |
 | `server.shutdown` | admin | yes | — | Stop the server, draining running turns first. |
+| `server.strings` | read |  | — | The web UI chrome strings in one locale (C-TUI-6.f): only web.-prefixed keys; server, tool and model text stay untranslated. |
 | `session.archive` | write | yes | `sessionId` | Move a session to the archive tray; it leaves the default listing. |
 | `session.cancel` | write | yes | `sessionId` | Cancel the running turn (hard, or soft at the next step boundary). |
 | `session.close` | write | yes | `sessionId` | Release a session (refused while a turn runs unless force). |
