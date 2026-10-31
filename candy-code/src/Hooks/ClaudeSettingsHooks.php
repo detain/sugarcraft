@@ -53,15 +53,17 @@ use Symfony\Component\Yaml\Yaml;
  * anything that is malformed LOUDLY refuses the launch, only a file that is
  * not there is a no-op.
  *
- * `type` RUNS `command` AND `http`; the rest of the type question is
+ * `type` RUNS `command`, `http` AND `prompt`; the rest of the type question is
  * SKIP-AND-RECORD (C-EXT-1.b widened what v1:F-1 had covered, C-EXT-6.c gave
- * `http` a runner). CC's newer `prompt`, `agent` and `mcp_tool` types have no
+ * `http` a runner, C-EXT-6.d gave `prompt` one — the model's own
+ * `{"ok":bool,"reason":string}` reply is its verdict shape). CC's newer
+ * `agent` and `mcp_tool` types still have no
  * verdict shape for candy-code to read — a script hook answers with an exit
  * code and an HTTP hook answers with a status and a JSON envelope, and those
- * three answer with neither — so running them would not be the guard the
+ * two answer with neither — so running them would not be the guard the
  * author wrote. But a whole launch refusing over a type this loader simply
  * does not speak gave one vendor's settings file the blast radius of a hard
- * outage again. An entry with a STRING type outside the two it runs now
+ * outage again. An entry with a STRING type outside the three it runs now
  * contributes no row and is RECORDED by type name for the same
  * launch-notice aggregate. A MISSING or non-string `type` is not a dialect
  * candy-code recognises at all, and still refuses the launch by name.
@@ -75,6 +77,15 @@ use Symfony\Component\Yaml\Yaml;
  * cannot park a loopback or metadata endpoint until some later call reaches
  * it. {@see HttpHook} is the runner, and it dials nowhere except through
  * {@see \SugarCraft\Code\Support\PublicUrlGuard}.
+ *
+ * AN `prompt` ENTRY SENDS TEXT INTO MODEL CONTEXT, and it is loaded the same
+ * way again: same tier, same trust gate, no extra authority. What the model
+ * is asked is the entry's `prompt`, and the hook input the model sees beside
+ * it is fenced as untrusted data by {@see PromptHook} before the call — the
+ * payload can neither forge the fence's markers nor outrank the fixed system
+ * prompt. Like an exec reviewer's, the verdict call rides the title backend
+ * and spends nothing the chat's /budget accounting sees; the entry's
+ * `timeout` is validated and deliberately never applied to that call (E646).
  *
  * SKIP-AND-RECORD FOR WHAT CANNOT RUN (v1:F-1, widened by C-EXT-1.b): CC's
  * `Notification` event has no {@see HookEvent} case, and neither do the
@@ -203,6 +214,10 @@ final class ClaudeSettingsHooks
      * {@see HookConfig}'s verdict, not a second opinion from here. They are
      * keys of THIS dialect only: a native `hooks.yaml` entry carrying either
      * of the two CC-only ones is still refused by {@see HookConfig}.
+     * `prompt` and `model` join the COPIED set for the `prompt` type
+     * (C-EXT-6.d); they are keys of BOTH dialects — the native validator
+     * reads them itself — so nothing here decides whether an entry may
+     * carry them.
      */
     private const ENTRY_KEYS = [
         'type',
@@ -213,6 +228,8 @@ final class ClaudeSettingsHooks
         'url',
         'headers',
         'allowedEnvVars',
+        'prompt',
+        'model',
     ];
 
     /** Whether $path names a file this parser reads. */
@@ -422,21 +439,23 @@ final class ClaudeSettingsHooks
                     }
 
                     $type = $entry['type'] ?? null;
-                    if ($type !== 'command' && $type !== 'http') {
+                    if ($type !== 'command' && $type !== 'http' && $type !== 'prompt') {
                         if (!\is_string($type)) {
                             // A missing or non-string type is not a dialect
                             // candy-code recognises at all — that stays loud.
                             throw new \InvalidArgumentException(
                                 "{$source}: a hook under `hooks.{$event}` has type "
                                 . get_debug_type($type)
-                                . "; candy-code runs Claude Code hooks of type 'command' and 'http', and running "
-                                . 'the others anyway — or skipping them quietly — would not be the guard you wrote.',
+                                . "; candy-code runs Claude Code hooks of type 'command', 'http' and 'prompt', "
+                                . 'and running the others anyway — or skipping them quietly — would not be the guard you wrote.',
                             );
                         }
 
                         // Skip-and-record by type name (C-EXT-1.b), same
                         // reasoning as the unknown-key arm above. `http` left
-                        // this arm when C-EXT-6.c gave it a runner; `prompt`,
+                        // this arm when C-EXT-6.c gave it a runner and
+                        // `prompt` left it when C-EXT-6.d gave it one (the
+                        // model's JSON ok/reason reply is its verdict shape);
                         // `agent` and `mcp_tool` still have nothing here to
                         // read a verdict from.
                         $groupSkips[$type] = 'type';
@@ -454,14 +473,18 @@ final class ClaudeSettingsHooks
                     if ($type === 'command') {
                         $row['command'] = $entry['command'] ?? '';
                     } else {
-                        // The `http` keys are COPIED, not checked — with one
+                        // The per-type keys are COPIED, not checked — with one
                         // deliberate exception. A `command` the author left on
                         // an `http` entry rides through too, so the per-type
                         // refusal in HookConfig fires on it: the row is
                         // ambiguous, and this parser does not get to choose
-                        // which half of it to run.
-                        $row['type'] = HookConfig::TYPE_HTTP;
-                        foreach (['command', 'url', 'headers', 'allowedEnvVars'] as $key) {
+                        // which half of it to run. The same superseded-copy
+                        // algebra covers `prompt` (C-EXT-6.d): an `http` entry
+                        // carrying a `prompt`, or a `prompt` entry carrying a
+                        // `command`, arrives at the ONE validator ambiguous
+                        // and leaves the launch refused by name.
+                        $row['type'] = $type === 'prompt' ? HookConfig::TYPE_PROMPT : HookConfig::TYPE_HTTP;
+                        foreach (['command', 'url', 'headers', 'allowedEnvVars', 'prompt', 'model'] as $key) {
                             if (\array_key_exists($key, $entry)) {
                                 $row[$key] = $entry[$key];
                             }

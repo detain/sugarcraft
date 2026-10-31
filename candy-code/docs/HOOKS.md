@@ -70,18 +70,21 @@ that claims one of these generated names still does, and that collision
 refuses the launch exactly as a native name collision
 does. Differences that are this loader's own:
 
-- `type` runs `command` and `http`. The newer `prompt`, `agent` and
-  `mcp_tool` types have no verdict shape for this chain to read — a script
-  answers with an exit code and an HTTP hook answers with a status and a JSON
-  envelope, and those three answer with neither; an entry with such a
+- `type` runs `command`, `http` and `prompt`. CC's newer
+  `agent` and `mcp_tool` types have no verdict shape for this chain to read — a
+  script answers with an exit code, an HTTP hook answers with a status and a
+  JSON envelope, a prompt hook answers with the model's own single `ok`/`reason`
+  JSON object, and those two answer with neither; an entry with such a
   string `type` is SKIPPED and RECORDED — it contributes no guard, and the
   launch notice names the type, so nothing is skipped quietly. A `type` that
   is missing or not a string is not a dialect this loader recognises at all
   and still refuses the launch by name. An `http` entry carries the SAME trust
   as a `command` entry from the same file, and its `url` is refused at load
-  when this host will not dial it — see "HTTP hooks" below.
-- An entry may carry eight keys: `type`, `command`, `timeout`, `statusMessage`,
-  `async`, `url`, `headers` and `allowedEnvVars`. An entry carrying any other key — CC grows them, `if` and
+  when this host will not dial it — see "HTTP hooks" below. So does a
+  `prompt` entry, and what the model is shown beside the hook's own prompt is
+  fenced as untrusted data before the call — see "Prompt hooks" below.
+- An entry may carry ten keys: `type`, `command`, `timeout`, `statusMessage`,
+  `async`, `url`, `headers`, `allowedEnvVars`, `prompt` and `model`. An entry carrying any other key — CC grows them, `if` and
   `once` are real today — is skipped whole and every off-dialect key is named
   on the same launch notice, never run silently. The two beyond
   the native three have no `hooks.yaml` equivalent to refuse *them*, so each
@@ -138,16 +141,23 @@ hooks:
       headers:                        # field names, values may read $VAR from
         x-trace-id: $HOOK_TRACE       # allowedEnvVars only (8-space children
       allowedEnvVars: [HOOK_TRACE]    # are header fields, not entry keys)
+    - name: ask-the-model
+      type: prompt                    # the third kind; the model's reply IS the verdict
+      matcher: '^Bash$'
+      prompt: Does this command look destructive? $ARGUMENTS
+      model: claude-haiku-4-5         # optional; honoured only where the title backend can serve it
   PostToolUse:
     - matcher: 'Read|Write/Edit'
       command: ./hooks/log-touch.sh
 ```
 
-Those eleven are the **only** keys an entry may carry. An unrecognised key is
+Those thirteen are the **only** keys an entry may carry. An unrecognised key is
 refused rather than ignored. Which of them one entry may use turns on its
-`type`: a `command` entry has no `url`, `headers` or `allowedEnvVars`, and an
-`http` entry has no `command` — a stray key of the other kind is refused the
-same way, because a row that asks for two runners is not a row to guess at. A user-tier file's relative `./hooks/...` command
+`type`: a `command` entry has no `url`, `headers`, `allowedEnvVars`, `prompt`
+or `model`; an `http` entry has no `command`, `prompt` or `model`; and a
+`prompt` entry has no `command`, `url`, `headers` or `allowedEnvVars` — a
+stray key of another kind is refused the same way, because a row that asks
+for two runners is not a row to guess at. A user-tier file's relative `./hooks/...` command
 resolves against `~/.candy-code/` — the file's own directory — not the repo you
 open; so does a bare `hooks/...` spelling, but only when a real file exists
 under `~/.candy-code/` (the existence gate means a cloned repo cannot plant the
@@ -1124,6 +1134,57 @@ file is read at all, and an untrusted tier's file never reaches the URL
 question. A project that needs a remote guard should ship a hook whose URL is
 its own, reviewed, and dialable; the guard will not take your loopback either
 way.
+
+### Prompt hooks
+
+A `type: prompt` entry asks a MODEL instead of forking a process or dialling a
+URL. The runner is {@see PromptHook}: one tool-less completion on the launch's
+TITLE backend (the same cheap auxiliary the session titles and exec reviews
+ride), carrying the entry's `prompt` with every `$ARGUMENTS` replaced by the
+hook input — the same JSON a command hook would get on stdin — fenced as
+untrusted data between `UNTRUSTED_HOOK_INPUT_BEGIN`/`END` markers that the
+payload cannot forge: the text is `PromptFence::escape`d, any marker bytes it
+carries are broken apart, and the block is clipped before it is inserted. An
+entry whose prompt names no `$ARGUMENTS` gets the fenced block appended. The
+reply must be exactly one JSON object: `{"ok":true}` allows (a `reason` on an
+allow is shown as a notice), and `{"ok":false,"reason":"..."}` DENIES the call
+with that reason, sanitized and clipped — the model's own words are the guard
+that fired.
+
+Anything else is the hook saying nothing, and the dialect decides what silence
+means, exactly as it does for an HTTP hook that never answered: a native entry
+DENIES (`deny_unanswered` — a guard that failed to guard has not approved the
+call), while a claude-dialect or `async` entry allows with a launch notice. A
+launch with no provider has no title backend to ask, and that lands on the
+same door rather than a fourth one.
+
+Two laws the shape depends on:
+
+- **`timeout` is accepted and never applied to the call.** The entry's
+  `timeout` is validated like every row's and then left alone — the ban on a
+  blanket total-request timeout (E646) is about LLM calls, and this is one.
+  `PromptHook` is deliberately not a bounded hook: the registry charges it no
+  deadline and the call carries only the provider's connect timeout, exactly
+  as `ExecReviewer`'s does.
+- **The spend is not the chat's.** The verdict call rides a fresh tool-less
+  `EngineBackend` built once per launch (`Bootstrap::titleBackend()`), never
+  the conversation's backend, and nothing of it settles into the `/budget`
+  accounting — again the `ExecReviewer` precedent. A matched prompt hook is
+  cheap tokens per gated call, not a billed turn.
+
+`model` is honoured, not promised: the entry may name one, and the hook asks
+`EngineBackend::withModel()` only if the rebound backend can show it serves
+that exact id — a provider that reports nothing back, or serves something
+else, keeps the title model silently rather than running the guard on a model
+nobody chose. The reply contract is the entry's own `ok`/`reason` shape, NOT
+the script hook's JSON envelope: a prompt hook answers the hook author's
+question; it does not speak `decision`/`continue`.
+
+The reach is the reach of a hook that feeds text into a model: a project-tier
+`type: prompt` entry puts its `prompt` in front of the title backend beside
+the tool arguments. That is why it rides the SAME gate — `trustedProjectHooks`
+decides whether the file is read at all, and the hook input beside it is
+fenced no matter which tier wrote the entry.
 
 ---
 

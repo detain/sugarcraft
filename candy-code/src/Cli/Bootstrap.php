@@ -6348,6 +6348,15 @@ public static function useMaxCost(?string $maxCost): void
         self::installSecretEnvAllowlist();
         $hooks = new HookManager(new HookRegistry());
         $hooks->registerBuiltIns(); // audit + confirm-rm + protect-files guards
+        // C-EXT-6.d: prompt hooks answer on the model itself, and the manager
+        // hands its backend to every prompt hook the chain builds from here on
+        // — the install-before-the-load law HookManager documents. A null
+        // answer (no provider, or the shell-out tiers) is not a refusal: the
+        // hooks still load and answer through their own loud door. The verdict
+        // call carries no total-request timeout (E646) — only the provider's
+        // connect timeout, exactly as ExecReviewer's does — and this backend's
+        // spend never settles into the chat's /budget accounting.
+        $hooks->withPromptBackend(self::titleBackend());
 
         // Post-edit format (EDT-1): the user's `formatCommands` map rewrites
         // each edited file, and the launch's shared read ledger is told about

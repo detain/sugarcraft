@@ -2458,7 +2458,7 @@ final class DocFigureProseDriftTest extends TestCase
     {
         $hooksRaw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/HOOKS.md');
         $hooks = self::markdownProse($hooksRaw);
-        $words = ['four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11];
+        $words = ['four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13];
 
         self::assertSame(1, preg_match('/Those (\w+) are the \*\*only\*\* keys an entry may carry/', $hooks, $six), 'the entry-key sentence lost its spelled count');
         $entryKeys = (new \ReflectionClassConstant(HookConfig::class, 'ENTRY_KEYS'))->getValue();
@@ -2477,14 +2477,15 @@ final class DocFigureProseDriftTest extends TestCase
         // C-EXT-6.c: the keys an entry may carry turned into keys an entry may
         // carry PER TYPE, so one entry can no longer demonstrate all of them —
         // an `http` row that also wrote `command` is refused by the loader. The
-        // example is therefore TWO `PreToolUse` entries, and the claim stays as
-        // strong as it was: the union of what they demonstrate is exactly the
-        // accepted set, and the example is exactly those two entries. A third
-        // key added to ENTRY_KEYS without the page showing it still lands here.
+        // example is therefore THREE `PreToolUse` entries (C-EXT-6.d added the
+        // `prompt` kind and its two keys), and the claim stays as strong as it
+        // was: the union of what they demonstrate is exactly the accepted set,
+        // and the example is exactly those three entries. A third key added to
+        // ENTRY_KEYS without the page showing it still lands here.
         self::assertSame(
-            2,
+            3,
             substr_count($exampleGroup, "\n    - "),
-            'the format example no longer carries exactly the two entries (one per type) it demonstrates with',
+            'the format example no longer carries exactly the three entries (one per type) it demonstrates with',
         );
         self::assertEqualsCanonicalizing(
             $entryKeys,
@@ -2493,6 +2494,7 @@ final class DocFigureProseDriftTest extends TestCase
         );
         self::assertStringContainsString('type: http', $exampleGroup, 'the example stopped showing the second entry type');
         self::assertStringContainsString('type: command', $exampleGroup, 'the example stopped showing the default entry type');
+        self::assertStringContainsString('type: prompt', $exampleGroup, 'the example stopped showing the third entry type');
 
         self::assertSame(1, preg_match('/picks the first of `([^`]+)` that your pattern does not contain/', $hooks, $alphabet), 'the delimiter sentence no longer spells the alphabet in one code span');
         $delimiters = (new \ReflectionClassConstant(HookConfig::class, 'DELIMITERS'))->getValue();

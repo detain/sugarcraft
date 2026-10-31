@@ -737,6 +737,8 @@ YAML);
      * cannot run, and the launch notice names it, but one vendor-side feature
      * flag in a foreign file no longer bricks every launch mode. A command
      * entry in the same file still registers, under its tier-qualified name.
+     * (`prompt` was this test's example of an unsupported type until C-EXT-6.d
+     * gave it a runner; `agent` still has none, so the example moved there.)
      */
     public function testAClaudeHookOfANonCommandTypeIsSkippedAndRecorded(): void
     {
@@ -746,7 +748,7 @@ YAML);
                     [
                         'matcher' => 'Bash',
                         'hooks' => [
-                            ['type' => 'prompt', 'command' => 'true'],
+                            ['type' => 'agent', 'command' => 'true'],
                             ['type' => 'command', 'command' => 'true'],
                         ],
                     ],
@@ -757,8 +759,8 @@ YAML);
         $chain = $this->chainOf(Bootstrap::backend($this->project));
 
         $this->assertContains('cc:user:PreToolUse:0', $this->namesOn($chain, 'PreToolUse'), 'the command sibling still loads');
-        $this->assertArrayHasKey('prompt', ClaudeSettingsHooks::skippedEntries(), 'the skipped type is recorded, not silent');
-        $this->assertSame('type', ClaudeSettingsHooks::skippedEntries()['prompt']['kind']);
+        $this->assertArrayHasKey('agent', ClaudeSettingsHooks::skippedEntries(), 'the skipped type is recorded, not silent');
+        $this->assertSame('type', ClaudeSettingsHooks::skippedEntries()['agent']['kind']);
     }
 
     /**

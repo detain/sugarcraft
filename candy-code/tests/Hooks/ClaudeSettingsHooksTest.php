@@ -276,6 +276,61 @@ YAML;
     }
 
     /**
+     * C-EXT-6.d: a `type: prompt` entry in a Claude file maps onto the SAME
+     * native row shape a hand-written `hooks.yaml` prompt row produces — the
+     * `prompt` is the ask, the `model` rides through, and the row leaves
+     * {@see HookConfig::parse()} with everything an http or command row would
+     * carry. This is the mapping half of "prompt now RUNS"; the verdict half
+     * lives in {@see \SugarCraft\Code\Hooks\PromptHook}.
+     */
+    public function testAPromptEntryMapsToTheNativePromptRowCarryingItsAskAndModel(): void
+    {
+        $rows = ClaudeSettingsHooks::parse((string) json_encode([
+            'hooks' => ['PreToolUse' => [[
+                'matcher' => 'Bash',
+                'hooks' => [['type' => 'prompt', 'prompt' => 'Is this destructive? $ARGUMENTS', 'model' => 'm-1']],
+            ]]],
+        ]));
+
+        $this->assertSame([[
+            'name' => 'cc:user:PreToolUse:0',
+            'event' => 'PreToolUse',
+            'matcher' => 'Bash',
+            'command' => '',
+            'description' => '',
+            'disabled' => false,
+            'timeout' => ScriptHook::defaultTimeoutSeconds(),
+            'unattendedAsk' => false,
+            'type' => 'prompt',
+            'url' => '',
+            'headers' => [],
+            'allowedEnvVars' => [],
+            'prompt' => 'Is this destructive? $ARGUMENTS',
+            'model' => 'm-1',
+            'dialect' => ScriptHook::DIALECT_CLAUDE,
+            'advisory' => false,
+        ]], $rows);
+    }
+
+    /**
+     * The copy-through design means a prompt entry that ALSO carries a
+     * `command` is not silently resolved here — the row keeps both keys and
+     * the native validator refuses the launch for the ambiguity, exactly like
+     * the command-key-on-an-http-row leg C-EXT-6.c established. A row that
+     * asks for two runners is not a row to guess at.
+     */
+    public function testAPromptEntryCarryingACommandRefusesThroughHookConfig(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/is a \'prompt\' hook and so has no \'command\' to run/');
+
+        ClaudeSettingsHooks::parse(
+            '{"hooks":{"PreToolUse":[{"hooks":[{"type":"prompt","prompt":"why","command":"./two-runners.sh"}]}]}}',
+            '/home/u/.claude/settings.json',
+        );
+    }
+
+    /**
      * `async: true` means Claude Code does not wait for the hook, so its verdict
      * can never block anything. candy-code has no detached runner — the row runs
      * inline inside its timeout and is marked ADVISORY, and
@@ -380,7 +435,7 @@ YAML;
         $section = (string) preg_replace('/\s+/', ' ', substr($doc, $from, $to - $from));
 
         $accepted = (new \ReflectionClassConstant(ClaudeSettingsHooks::class, 'ENTRY_KEYS'))->getValue();
-        $words = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8];
+        $words = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10];
 
         $this->assertMatchesRegularExpression('/may carry (\w+) keys:/', $section, 'the section must count the entry keys');
         preg_match('/may carry (\w+) keys:/', $section, $counted);
@@ -553,8 +608,10 @@ YAML;
     /**
      * THE polarity flip this item exists to make. CC grew `prompt`/`agent`/
      * `http`/`mcp_tool` hooks — kinds with no exit-code verdict for this chain
-     * to read. `http` left this arm with C-EXT-6.c, which gave it a runner;
-     * the three that remain have nothing to read a verdict from. Running one would not be the guard the author wrote, and
+     * to read. `http` left this arm with C-EXT-6.c, which gave it a runner, and
+     * `prompt` left it with C-EXT-6.d, whose verdict is the model's own JSON
+     * `ok`/`reason` reply; the two that remain have nothing to read.
+     * Running one would not be the guard the author wrote, and
      * skipping it quietly is the silently-shorter chain; but refusing a whole
      * launch over a type this loader does not speak gave one vendor's settings
      * file the blast radius of an outage (the same v1:F-1 reasoning that
@@ -564,18 +621,18 @@ YAML;
     public function testAHookOfAnotherTypeIsSkippedAndRecordedAndNamesItself(): void
     {
         $rows = ClaudeSettingsHooks::parse(
-            '{"hooks":{"PreToolUse":[{"hooks":[{"type":"prompt","command":"be smart"},{"type":"command","command":"./guard.sh"}]}]}}',
+            '{"hooks":{"PreToolUse":[{"hooks":[{"type":"agent","command":"be smart"},{"type":"command","command":"./guard.sh"}]}]}}',
             '/home/u/.claude/settings.json',
         );
 
         $this->assertSame(['cc:user:PreToolUse:0'], array_column($rows, 'name'));
 
         $record = ClaudeSettingsHooks::skippedEntries();
-        $this->assertSame(['prompt'], array_keys($record));
-        $this->assertSame('type', $record['prompt']['kind']);
-        $this->assertSame(1, $record['prompt']['groups']);
-        $this->assertSame(['PreToolUse'], array_keys($record['prompt']['events']));
-        $this->assertArrayHasKey('/home/u/.claude/settings.json', $record['prompt']['files']);
+        $this->assertSame(['agent'], array_keys($record));
+        $this->assertSame('type', $record['agent']['kind']);
+        $this->assertSame(1, $record['agent']['groups']);
+        $this->assertSame(['PreToolUse'], array_keys($record['agent']['events']));
+        $this->assertArrayHasKey('/home/u/.claude/settings.json', $record['agent']['files']);
     }
 
     public function testAMissingTypeRefusesRatherThanDefaulting(): void

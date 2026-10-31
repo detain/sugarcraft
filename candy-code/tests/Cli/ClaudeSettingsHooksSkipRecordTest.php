@@ -124,7 +124,7 @@ final class ClaudeSettingsHooksSkipRecordTest extends TestCase
     {
         ClaudeSettingsHooks::parse(
             '{"hooks":{"Notification":[{"hooks":[{"type":"command","command":"./a.sh"}]}],'
-            . '"PreToolUse":[{"hooks":[{"type":"prompt","command":"be smart"},'
+            . '"PreToolUse":[{"hooks":[{"type":"agent","command":"be smart"},'
             . '{"type":"command","command":"./gate.sh","if":"Bash(ls)"}]}]}}',
             '/home/user/.claude/settings.json',
         );
@@ -134,10 +134,10 @@ final class ClaudeSettingsHooksSkipRecordTest extends TestCase
         $notices = Bootstrap::launchNotices();
         $this->assertCount(1, $notices);
         $this->assertStringContainsString("no candy-code hook event matches 'Notification'", $notices[0]);
-        $this->assertStringContainsString("typed 'prompt'", $notices[0]);
+        $this->assertStringContainsString("typed 'agent'", $notices[0]);
         $this->assertStringContainsString("carrying 'if'", $notices[0]);
         // C-EXT-1.b round 2 (rv1 MINOR): the figure was '3' here, because
-        // the single PreToolUse group carried TWO names ('prompt' and 'if')
+        // the single PreToolUse group carried TWO names ('agent' and 'if')
         // and the old row summed the per-name counters.  Two physical groups
         // contributed no guard in this file — the Notification one and the
         // PreToolUse one — and that is what the row now says.
@@ -156,16 +156,16 @@ final class ClaudeSettingsHooksSkipRecordTest extends TestCase
     public function testAGroupCarryingTwoDifferentSkipsCountsOnceInTheAggregate(): void
     {
         ClaudeSettingsHooks::parse(
-            '{"hooks":{"PreToolUse":[{"hooks":[{"type":"prompt","command":"be smart"},'
+            '{"hooks":{"PreToolUse":[{"hooks":[{"type":"agent","command":"be smart"},'
             . '{"type":"command","command":"./gate.sh","if":"Bash(ls)"}]}]}}',
             '/home/user/.claude/settings.json',
         );
 
         $entries = ClaudeSettingsHooks::skippedEntries();
-        $this->assertSame(['prompt', 'if'], array_keys($entries));
+        $this->assertSame(['agent', 'if'], array_keys($entries));
         $this->assertSame(
             2,
-            $entries['prompt']['groups'] + $entries['if']['groups'],
+            $entries['agent']['groups'] + $entries['if']['groups'],
             'the per-name tally still counts skips (it is a diagnostic, not the row)',
         );
         $this->assertCount(1, ClaudeSettingsHooks::skippedGroups(), 'the census counts the group once');
@@ -185,8 +185,8 @@ final class ClaudeSettingsHooksSkipRecordTest extends TestCase
     public function testTwoGroupsCarryingTheSameSkipStillCountAsTwoGroups(): void
     {
         ClaudeSettingsHooks::parse(
-            '{"hooks":{"PreToolUse":[{"hooks":[{"type":"prompt","command":"be smart"}]},'
-            . '{"matcher":"Bash","hooks":[{"type":"prompt","command":"be smarter"}]}]}}',
+            '{"hooks":{"PreToolUse":[{"hooks":[{"type":"agent","command":"be smart"}]},'
+            . '{"matcher":"Bash","hooks":[{"type":"agent","command":"be smarter"}]}]}}',
             '/home/user/.claude/settings.json',
         );
 
@@ -195,7 +195,7 @@ final class ClaudeSettingsHooksSkipRecordTest extends TestCase
         $notices = Bootstrap::launchNotices();
         $this->assertCount(1, $notices);
         $this->assertStringContainsString(', so 2 hook group(s) across 1 file(s) ', $notices[0]);
-        $this->assertStringContainsString("typed 'prompt'", $notices[0]);
+        $this->assertStringContainsString("typed 'agent'", $notices[0]);
     }
 
     private function resetNoticeStatics(): void
