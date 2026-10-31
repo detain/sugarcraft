@@ -1513,15 +1513,21 @@ What it holds and what it does not:
 - **User tier only.** `off` is the direction that widens, so a project file
   can never set it — not even a trusted one.
 - **`sandboxScope` extends the jail to the app's own supporting runs.** The
-  entries `hooks`, `lint`, `format` and `test` route script hooks, post-edit
-  lint, post-edit format and the auto-test run into the same jail `Bash`
-  runs in — the same backend, the same mode, no second jail. The list is
-  user-tier for the same reason: a checked-out project, even a trusted one,
-  can neither un-jail its own hooks by trimming the list nor jail runs the
+  entries `hooks`, `lint`, `format`, `test`, `lsp` and `mcp` route script
+  hooks, post-edit lint, post-edit format, the auto-test run and the launch's
+  long-lived servers (LSP language servers, MCP stdio servers) into the same
+  jail `Bash` runs in — the same backend, the same mode, no second jail. The
+  list is user-tier for the same reason: a checked-out project, even a trusted
+  one, can neither un-jail its own hooks by trimming the list nor jail runs the
   operator did not scope by widening it. An unrecognised entry reads as
   every scope, and when the probe says the jail cannot start, those runs
   fail closed the way `Bash` does — the hook denies, lint/format/test skip
-  carrying the reason as their note, and nothing runs unconfined.
+  carrying the reason as their note, a scoped server is not started at all,
+  and nothing runs unconfined. A server may exempt itself with
+  `"sandbox": false` in its own entry: the `lsp` map is user-tier so that
+  opt-out is the operator's own statement, and a project-tier MCP opt-out is
+  ignored with a notice — a checkout cannot opt its servers out of the
+  user's jail.
 
 **Seatbelt on macOS** enforces the same intent with the platform's own
 mechanism, and the differences are deliberate. `sandbox-exec` ships with Apple

@@ -8,6 +8,8 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use SugarCraft\Code\Agents\AgentPreset;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Lang;
+use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
 use SugarCraft\McpClient\McpRouter as LibraryMcpRouter;
 
 final class McpClient
@@ -168,6 +170,28 @@ final class McpClient
      */
     private array $sessionDisabled = [];
 
+    /**
+     * C-TOOL-4.e: the sandboxScope `mcp` jail installed by
+     * {@see withSandbox()} — null means nothing jails (the `mcp` scope is not
+     * requested or `bashSandbox` is off), a backend means every stdio server
+     * that does not carry the user-tier `"sandbox": false` opt-out spawns
+     * behind its prefix.
+     */
+    private ?SandboxBackend $sandboxJail = null;
+
+    /** The jail's probe verdict — non-null means the jail cannot start. */
+    private ?string $sandboxRefusal = null;
+
+    /** The jail's writable root: this launch's trust root. */
+    private string $sandboxRoot = '';
+
+    /**
+     * Stdio servers whose `"sandbox": false` was ignored (non-user tier).
+     *
+     * @var list<string>
+     */
+    private array $sandboxOptOuts = [];
+
     public function __construct(
         private string $configPath,
         ?Client $httpClient = null,
@@ -268,6 +292,31 @@ final class McpClient
     public function setDenyPatterns(array $denyPatterns): void
     {
         $this->denyPatterns = $denyPatterns;
+    }
+
+    /**
+     * Install the `mcp` sandboxScope jail for stdio servers (C-TOOL-4.e).
+     *
+     * Same BEFORE-the-start posture as {@see self::setDenyPatterns()} (the
+     * E696 law): `Bootstrap::mcpClient()` installs this before `startServers()`
+     * so no server can be built without the jail decision. A non-null
+     * `$refusal` — the probe said the jail cannot start — makes every scoped,
+     * non-opted server refuse through {@see self::stdioJailPrefix()} rather
+     * than spawn unconfined; nothing ever dials out of the jail-less path
+     * because of a broken jail.
+     *
+     * @param string $writableRoot the trust root: the jail's one writable
+     *                             directory, and the fallback spawn cwd
+     *                             (the per-server cwd rides the jail's
+     *                             `--chdir`, so a user-tier `$HOME` cwd from
+     *                             C-MCP-1 survives the jail without making
+     *                             `$HOME` writable)
+     */
+    public function withSandbox(?SandboxBackend $jail, ?string $refusal, string $writableRoot): void
+    {
+        $this->sandboxJail = $jail;
+        $this->sandboxRefusal = $refusal;
+        $this->sandboxRoot = $writableRoot;
     }
 
     /**
@@ -473,6 +522,22 @@ final class McpClient
             'MCP stdio servers start without inherited credentials: %s. A server that needs one declares it in its .mcp.json "env" block, e.g. "GITHUB_TOKEN": "${GITHUB_TOKEN}", or list the name in secretEnvAllowlist.',
             implode('; ', $parts),
         );
+    }
+
+    /**
+     * Names the stdio servers whose `"sandbox": false` opt-out was IGNORED
+     * because the entry did not come from the user settings file
+     * (C-TOOL-4.e), or the empty string when none was. A project-tier
+     * `.mcp.json` must not be able to opt its own server out of the
+     * user's jail; the server jails as scoped and the user learns why.
+     */
+    public function sandboxOptOutNotice(): string
+    {
+        if ($this->sandboxOptOuts === []) {
+            return '';
+        }
+
+        return Lang::t('sandbox.mcp.opt_out_ignored', ['servers' => implode(', ', $this->sandboxOptOuts)]);
     }
 
     /**
@@ -877,6 +942,10 @@ final class McpClient
                     ? (float) $config['startTimeout']
                     : null,
                 toolTimeoutSeconds: self::toolTimeout($config['toolTimeout'] ?? null),
+                // C-TOOL-4.e: the jail prefix (empty unless the `mcp` scope jails
+                // this server and no user-tier opt-out exempted it) — read here so
+                // the Keys census and the factory agree on the spelled key.
+                spawnPrefix: $this->stdioJailPrefix($name, $tierPath, $config['sandbox'] ?? null, $this->stdioSpawnCwd($config['cwd'] ?? null, $tierPath)),
                 // C-MCP-3: declared capabilities + a default answer desk
                 // over the spawn root itself; see the two helpers below.
                 cwd: $this->stdioSpawnCwd($config['cwd'] ?? null, $tierPath),
@@ -1029,6 +1098,63 @@ final class McpClient
         return $tierPath === $this->userConfigPath
             ? dirname(dirname($tierPath))
             : dirname($tierPath);
+    }
+
+    /**
+     * The `mcp` sandboxScope jail prefix for one stdio server (C-TOOL-4.e).
+     *
+     * The door, per the design:
+     *
+     * - a spelled `"sandbox": false` opts out ONLY when the entry came from
+     *   the user settings file — `$tierPath === $this->userConfigPath` with a
+     *   known user path. A project-tier (or provenance-less) opt-out is
+     *   IGNORED, recorded for {@see self::sandboxOptOutNotice()}, and the
+     *   server jails as scoped: a checked-out `.mcp.json` must not reach out
+     *   of the user's jail.
+     * - no jail installed (scope not requested, or `bashSandbox: off`) — the
+     *   empty prefix, byte-identical to before the jail existed.
+     * - a jail that cannot start (`$sandboxRefusal` set) and a server still
+     *   in scope: THROW, which lands in the startServer config-error
+     *   aggregate — the server is not started and the reason is reported.
+     *   Failing closed is the whole point: a broken jail never downgrades
+     *   the child to unconfined.
+     * - otherwise: the backend's argv with the writable root = the trust
+     *   root, and the resolved per-server cwd riding `--chdir` — so a
+     *   user-tier `$HOME` cwd (C-MCP-1) survives the jail without `$HOME`
+     *   becoming writable.
+     *
+     * @param mixed  $spelled the raw `sandbox` entry value
+     * @param string $cwd     the resolved spawn cwd, null for no override
+     *
+     * @return list<string>
+     */
+    private function stdioJailPrefix(string $name, string $tierPath, mixed $spelled, ?string $cwd): array
+    {
+        if ($spelled === false) {
+            if ($this->userConfigPath !== '' && $tierPath === $this->userConfigPath) {
+                return [];
+            }
+
+            if (!in_array($name, $this->sandboxOptOuts, true)) {
+                $this->sandboxOptOuts[] = $name;
+            }
+        }
+
+        if ($this->sandboxJail === null) {
+            return [];
+        }
+
+        if ($this->sandboxRefusal !== null) {
+            throw new \RuntimeException(Lang::t('sandbox.mcp.not_started', [
+                'server' => $name,
+                'mode' => $this->sandboxJail->mode(),
+                'name' => $this->sandboxJail->name(),
+                'reason' => $this->sandboxRefusal,
+                'remedy' => $this->sandboxJail->refusalRemedy(),
+            ]));
+        }
+
+        return array_values($this->sandboxJail->argv($this->sandboxRoot, chdir: $cwd));
     }
 
     /**

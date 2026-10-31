@@ -180,7 +180,7 @@ Five types, and they are the five `McpClient::startServer()` constructs:
 
 | `type` | Class | Keys |
 |---|---|---|
-| `stdio` (the default when `type` is absent) | `StdioMcpServer` | `command`, `args`, `env`, `startTimeout`, `toolTimeout`, `cwd` |
+| `stdio` (the default when `type` is absent) | `StdioMcpServer` | `command`, `args`, `env`, `startTimeout`, `toolTimeout`, `cwd`, `sandbox` |
 | `http` | `HttpMcpServer` | `url`, `headers`, `toolTimeout`, `stream`, `cwd` |
 | `sse` | `SseMcpServer` | `url`, `headers`, `toolTimeout`, `cwd` |
 | `git` | `GitMcpServer` | `path` (omitted → this project), `timeout` |
@@ -193,6 +193,37 @@ file, collects each failure, and throws one report after the loop naming the
 entries that failed. That throw is caught in `Bootstrap::mcpClient()`, reported
 through `error_log()`, and the launch continues with fewer tools rather than
 dying over a live TUI.
+
+### Jailed servers
+
+A stdio server runs as a child process, and the sandboxScope setting can
+route those children through the same jail the app's own supporting runs use.
+When the list contains `mcp` — and `bashSandbox` is not `off` — every stdio
+server the launch starts is spawned behind the jail: the file system is
+read-only from `/` up, and only the project's trusted root stays writable.
+The per-server `cwd` rides the jail's `--chdir`, so a user-tier server that
+runs from `$HOME` keeps that working directory without `$HOME` becoming
+writable.
+
+A server exempts itself with `"sandbox": false` in its own entry, and only
+the user settings file counts: an opt-out spelled in a checked-out
+`.mcp.json` cannot escape the user's jail, so a project-tier value is
+**ignored** and the launch names the servers it ignored. `sandbox` is a
+pinned trust key — flipping it re-asks trust for the file it lives in.
+
+When the jail cannot start on this host the server is **not started** at
+all — the refusal rides the launch's normal config-error report — and never
+runs unconfined.
+
+One practical hazard: `npx -y` and `uvx` servers write their package cache
+under `$HOME`, which the jail mounts read-only, so the first jailed launch
+can fail its handshake. Point the caches somewhere writable instead —
+inside the jail `/tmp` is a private writable tmpfs, so an entry such as
+`"env": { "npm_config_cache": "/tmp/npm-cache", "UV_CACHE_DIR": "/tmp/uv-cache" }`
+keeps the jail and the cache happy (write the path itself; a `${TMPDIR}`
+spelling is interpolated from the parent's environment, not the jail's);
+the user-tier `"sandbox": false` opt-out is the fallback when a server
+cannot be moved.
 
 ### Foreign spellings that are read
 

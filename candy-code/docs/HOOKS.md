@@ -1448,8 +1448,11 @@ ERROR [42:9] Undefined method 'totl'.
 
 - Each key is the LSP language identifier. Per server: `command` (required),
   `args`, `extensions` (default: the key itself), `env`,
-  `initializationOptions`, `timeout` (seconds per request, default 10) and
-  `disabled`. A malformed entry or a server that will not start is reported at
+  `initializationOptions`, `timeout` (seconds per request, default 10),
+  `disabled` and `sandbox` (`false` exempts this server from the
+  `sandboxScope` jail when the `lsp` scope jails language servers; the map
+  is user-tier, so the exemption is the operator's own statement). A malformed
+  entry or a server that will not start is reported at
   launch and costs only that server.
 - The servers start once, at launch, in the process that builds the tools, and
   every forked turn, tool call and sub-agent shares them. They are stopped at

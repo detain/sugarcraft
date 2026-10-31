@@ -6446,7 +6446,7 @@ final class DocFigureProseDriftTest extends TestCase
 
         $aliases = (new \ReflectionClassConstant(\SugarCraft\Code\MCP\McpForeignTranslate::class, 'TYPE_ALIASES'))->getValue();
         $nativeOnlyKeys = ['type', 'command', 'args', 'url', 'env', 'headers', 'startTimeout', 'enabled'];
-        $buildServer = self::bodyExcerpt($client, 'buildServer');
+        $buildServer = self::bodyExcerpt($client, 'buildServer', 3600); // C-TOOL-4.e widened 3000 -> 3600: the jail-prefix comment + spawnPrefix arm line added ~7 lines ahead of the http headers-optional seam (same law as the C-TOOL-4.d widenings)
 
         foreach ($nativeServers as $name => $entry) {
             foreach (array_keys($entry) as $key) {

@@ -112,6 +112,14 @@ final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptP
      * @param \Closure|null $onServerMessage C-MCP-3: connection-wide
      *        answerer for the server's own requests and notifications;
      *        null lets the library default answer ping and refuse the rest
+     * @param list<string> $spawnPrefix C-TOOL-4.e: the sandboxScope `mcp`
+     *        jail's argv prefix, resolved by {@see McpClient::stdioJailPrefix()}
+     *        — empty unless the scope jails this server and neither the
+     *        user-tier `"sandbox": false` opt-out nor an absent scope exempts
+     *        it. PREFIX-ONLY by the 4.d law: it prepends inside
+     *        {@see spawnPlan()}, so the library's proc_open site, the
+     *        DescriptorInheritanceGuard roster and the
+     *        check-child-lifetimes row all ride untouched.
      */
     public function __construct(
         public readonly string $name,
@@ -123,6 +131,7 @@ final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptP
         ?string $cwd = null,
         array $serverCapabilities = [],
         ?\Closure $onServerMessage = null,
+        private readonly array $spawnPrefix = [],
     ) {
         $this->toolTimeoutSeconds = $toolTimeoutSeconds !== null && $toolTimeoutSeconds > 0.0
             ? $toolTimeoutSeconds
@@ -155,6 +164,11 @@ final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptP
      * from `.mcp.json` is exactly the untrusted command class containment is
      * for; the entry's own env rides as overrides so configured keys still win.
      *
+     * C-TOOL-4.e: the sandboxScope `mcp` jail prefix (ctor) prepends the argv
+     * INSIDE the existing spec wrapper — the E672 pre-check above still names
+     * the server binary itself, never the jail fronting it, and no new
+     * proc_open site or token appears anywhere.
+     *
      * 0.14-b (decision D3): the env is {@see ProcessContainment::mcpEnv()} —
      * inherited credentials are SCRUBBED unless the entry declares them in
      * its `env` block or `secretEnvAllowlist` releases them. The names held
@@ -176,7 +190,10 @@ final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptP
 
         $this->strippedSecretEnv = ProcessContainment::strippedSecretEnvNames($env);
 
-        return [ProcessContainment::spawnSpec($argv), ProcessContainment::mcpEnv($env)];
+        return [
+            ProcessContainment::spawnSpec([...$this->spawnPrefix, ...$argv]),
+            ProcessContainment::mcpEnv($env),
+        ];
     }
 
     /**

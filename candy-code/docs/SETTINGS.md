@@ -263,7 +263,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `references` | `LaunchContext::referenceReadRoots()` → `ToolBuildContext::$readRoots` → Read/Grep/Glob/Ls | **no** |
 | `bashSandbox` | `Bash::fromCatalog()` / `PtyRun::fromCatalog()` → `SandboxFactory::fromSetting()` | **no** |
 | `bashSandboxNestedUserns` | `SandboxFactory::fromSetting()` → `Bubblewrap::withNestedUserns()` | **no** |
-| `sandboxScope` | `Bootstrap::hooks()` → `SandboxFactory::forScope()` → `ScriptHook`/`LintRunner`/`FormatRunner`/`TestRunner` | **no** |
+| `sandboxScope` | `Bootstrap::hooks()` → `SandboxFactory::forScope()` → `ScriptHook`/`LintRunner`/`FormatRunner`/`TestRunner`; `Bootstrap::lspClient()` / `Bootstrap::mcpClient()` → `SandboxFactory::forScope()` → `LspLauncher`/`LspConnection` + `McpClient`/`StdioMcpServer` | **no** |
 | `testCommand` | `Bootstrap::hooks()` → `TestRunner::withCommand()` | **no** |
 | `autoTest` | `Bootstrap::hooks()` → `AutoTestHook` | **no** |
 | `toolOutputCapBytes` | `EngineBackend::turnTools()` → `ToolLimits::applyTo()` | **no** |

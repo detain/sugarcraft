@@ -9061,6 +9061,20 @@ public static function useMaxCost(?string $maxCost): void
             'deny',
         ));
 
+        // C-TOOL-4.e: the `mcp` sandboxScope jail, installed BEFORE the
+        // start and BEFORE rememberMcpClient — same before-the-start posture
+        // as the deny patterns above (E696 law). The writable root is the
+        // trust root; each server's resolved cwd rides the jail's --chdir.
+        // A jail that cannot start refuses every scoped, non-opted stdio
+        // server at build time (config-error report, never a start) — the
+        // broken jail never hands the child back its freedoms.
+        $sandboxConfig = self::readUserConfig();
+        $mcpJail = \SugarCraft\Code\Tools\Sandbox\SandboxFactory::forScope(
+            \SugarCraft\Code\Tools\Sandbox\SandboxScope::SCOPE_MCP,
+            $sandboxConfig,
+        );
+        $client->withSandbox($mcpJail, $mcpJail === null ? null : (new Bash(sandbox: $mcpJail))->sandboxRefusal(), $trustRoot);
+
         // Registered BEFORE start, and the order matters: startServers() adds
         // each server to the client as it comes up, so a client that throws
         // part-way through still owns live processes that stopMcpServers() has to
@@ -9258,6 +9272,13 @@ public static function useMaxCost(?string $maxCost): void
         // notice rides the SAME seam call, same one-row-per-path bound.
         if ($client->authRequired() !== []) {
             $notices[] = $client->authRequiredNotice();
+        }
+
+        // C-TOOL-4.e: project-tier `"sandbox": false` opt-outs are ignored —
+        // the user learns which servers stayed jailed because the file that
+        // asked for the exemption was not theirs.
+        if ($client->sandboxOptOutNotice() !== '') {
+            $notices[] = $client->sandboxOptOutNotice();
         }
 
         foreach ($notices as $notice) {
@@ -9464,6 +9485,19 @@ public static function useMaxCost(?string $maxCost): void
             // throws, {@see rawUserConfig()} does not).
             projectTrusted: $autoDetect && self::projectHooksAreTrusted($root),
         );
+
+        // C-TOOL-4.e: the `lsp` sandboxScope jail, resolved from the SAME
+        // config array as the server map (one read, one decision — the 4.d
+        // pairing law). Installed BEFORE launch: a jailed server spawns
+        // behind the jail's prefix, and a jail that cannot start leaves the
+        // server not-started with the reason on the problems() channel —
+        // never unconfined.
+        $lspJail = \SugarCraft\Code\Tools\Sandbox\SandboxFactory::forScope(
+            \SugarCraft\Code\Tools\Sandbox\SandboxScope::SCOPE_LSP,
+            $config,
+        );
+        $launcher = $launcher->withSandbox($lspJail, $lspJail === null ? null : (new Bash(sandbox: $lspJail))->sandboxRefusal());
+
         $client = null;
         if ($launcher->hasServers()) {
             self::registerLspShutdown();

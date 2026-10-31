@@ -121,7 +121,9 @@ final class ToolSettings implements SettingDefinitionSet
             // the list decides WHO SHARES the jail `bashSandbox` builds, and a
             // checked-out repository must not be able to move the launch's own
             // hooks, lint, format or test run back outside it (nor widen what
-            // is confined without the operator asking).
+            // is confined without the operator asking). C-TOOL-4.e grew the
+            // readers: the `lsp` and `mcp` scopes route the launch's long-lived
+            // servers through the same jail.
             SettingDefinition::new(SandboxScope::SETTINGS_KEY, SettingType::StringList, [])
                 ->withCategory(SettingCategory::Tools)
                 ->withRiskClass(RiskClass::Security)
@@ -130,7 +132,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.sandboxScope.label'))
                 ->withHelp(Lang::t('settings.sandboxScope.help'))
                 ->withReaderSymbol(SandboxFactory::class . '::forScope')
-                ->withReadBy('`Bootstrap::hooks()` → `SandboxFactory::forScope()` → `ScriptHook`/`LintRunner`/`FormatRunner`/`TestRunner`'),
+                ->withReadBy('`Bootstrap::hooks()` → `SandboxFactory::forScope()` → `ScriptHook`/`LintRunner`/`FormatRunner`/`TestRunner`; `Bootstrap::lspClient()` / `Bootstrap::mcpClient()` → `SandboxFactory::forScope()` → `LspLauncher`/`LspConnection` + `McpClient`/`StdioMcpServer`'),
             // Step 3.H. Both user tier only: the command is shell the
             // after-the-turn run executes with no tool call and no gate in
             // the path, so a checkout must neither name it nor switch it on

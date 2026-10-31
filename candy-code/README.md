@@ -1512,7 +1512,8 @@ jail — it drops the two bubblewrap flags that stop a jailed command from
 creating the fresh user namespace that is the usual way back out of a
 read-only mount;
 `sandboxScope`, because it decides WHICH of this app's own supporting runs —
-script hooks, post-edit lint, post-edit format, auto-test — join that jail at
+script hooks, post-edit lint, post-edit format, auto-test, language servers
+and MCP stdio servers — join that jail at
 all, and a checkout narrowing the list would un-jail the very runs the
 operator chose to confine, the `bashSandbox` argument applied one layer up,
 to the scope list instead of the switch;
