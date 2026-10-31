@@ -43,4 +43,34 @@ final class UnsupportedPlatformException extends PtyException
             $backend,
         ));
     }
+
+    /**
+     * Raised when the Windows ConPTY backend is asked for on a host where it
+     * cannot work, carrying the reason the availability probe found.
+     *
+     * ## Why the reason is in the message and not in a code
+     *
+     * There are four distinct ways to land here — not Windows, PHP below the
+     * FFI floor this package requires on Windows, ext-ffi absent, or a Windows
+     * old enough to have no `CreatePseudoConsole` export (pre-1809) — and the
+     * four have four different fixes. "Windows ConPTY is not available" tells a
+     * user none of them, and the upgrade-one-thing reflex sends someone with a
+     * missing extension to upgrade PHP. {@see \SugarCraft\Pty\Windows\ConPtyApi::supported()}
+     * already knows which one it is; this factory is where that knowledge becomes
+     * a sentence.
+     *
+     * The wording deliberately does NOT point at the issue tracker the way
+     * {@see forPosixOnly()} does: by the time this fires, the ConPTY primitives
+     * exist in this package, and the remaining work is a platform binding the
+     * caller's own host is missing, not a feature request.
+     */
+    public static function forConPtyUnavailable(string $reason): self
+    {
+        return new self(\sprintf(
+            'the Windows ConPTY backend is not available on this host: %s. '
+            . 'ConPTY needs Windows 10 1809 or newer, PHP 8.4 or newer with the ffi '
+            . 'extension, and it is not selected by SUGARCRAFT_PTY_BACKEND yet.',
+            $reason,
+        ));
+    }
 }

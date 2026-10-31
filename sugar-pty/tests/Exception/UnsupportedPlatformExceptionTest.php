@@ -70,6 +70,82 @@ final class UnsupportedPlatformExceptionTest extends TestCase
         $this->assertStringContainsString('pecl', $e->getMessage());
     }
 
+    /**
+     * The four availability reasons all reach the user through this one factory,
+     * so the message carries the reason VERBATIM — a rewrite here is how "install
+     * the ffi extension" turns back into "Windows is not supported".
+     */
+    public function testForConPtyUnavailableCarriesTheProbeReasonVerbatim(): void
+    {
+        $reason = 'the ffi extension is not loaded, and ConPTY is reached through FFI';
+        $e = UnsupportedPlatformException::forConPtyUnavailable($reason);
+
+        $this->assertStringContainsString($reason, $e->getMessage());
+        $this->assertStringContainsString('ConPTY', $e->getMessage());
+        $this->assertStringContainsString('not available', $e->getMessage());
+        $this->assertInstanceOf(PtyException::class, $e);
+    }
+
+    /**
+     * Each of the four shapes names a different fix, so each must survive into the
+     * message intact. The pair that is easy to lose is the version one: a user on
+     * 8.3 with ext-ffi present has to be told to upgrade PHP, and a user on 8.4
+     * without the extension has to be told to install it.
+     */
+    public function testForConPtyUnavailableReasonsDistinguishTheFourCauses(): void
+    {
+        $reasons = [
+            'this host is Linux, and ConPTY is a Windows API',
+            'this PHP is 8.3.6; FFI binding to Win32 in this package requires 8.4 or newer',
+            'the ffi extension is not loaded, and ConPTY is reached through FFI',
+            'kernel32.dll does not export CreatePseudoConsole (...); ConPTY needs Windows 10 1809 or newer',
+        ];
+
+        $messages = [];
+
+        foreach ($reasons as $reason) {
+            $messages[] = UnsupportedPlatformException::forConPtyUnavailable($reason)->getMessage();
+        }
+
+        // Four distinct messages, each containing its own cause and not another's.
+        $this->assertCount(4, \array_unique($messages));
+
+        foreach ($reasons as $index => $reason) {
+            $this->assertStringContainsString($reason, $messages[$index]);
+
+            foreach ($reasons as $otherIndex => $other) {
+                if ($otherIndex !== $index) {
+                    $this->assertStringNotContainsString($other, $messages[$index]);
+                }
+            }
+        }
+    }
+
+    public function testForConPtyUnavailablePointsAtTheHostNotTheIssueTracker(): void
+    {
+        // forPosixOnly() sends the reader to the tracker because the work did not
+        // exist. Once the primitives exist the remaining cause is this host, and
+        // sending someone to an issue tracker for a missing extension is a
+        // dead end — so the two messages are deliberately different in kind.
+        $e = UnsupportedPlatformException::forConPtyUnavailable('no ffi');
+
+        $this->assertStringNotContainsString('github.com', $e->getMessage());
+        $this->assertStringContainsString('SUGARCRAFT_PTY_BACKEND', $e->getMessage());
+    }
+
+    public function testForConPtyUnavailableIsCaughtByTheGenericPtyCatch(): void
+    {
+        $thrown = false;
+
+        try {
+            throw UnsupportedPlatformException::forConPtyUnavailable('no ffi');
+        } catch (PtyException $e) {
+            $thrown = true;
+        }
+
+        $this->assertTrue($thrown);
+    }
+
     public function testCanBeCaughtAsPtyException(): void
     {
         $thrown = false;
