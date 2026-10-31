@@ -1393,7 +1393,7 @@ final class Renderer
 
         $box = [];
         $box[] = Style::new()->foreground($theme->systemLabel)->bold()->render(self::reviewText($review->title()));
-        $box[] = self::reviewDim($theme)->render(str_repeat('─', $cols));
+        $box[] = self::reviewDim($theme)->render(ScreenReaderMode::glyph(str_repeat('─', $cols)));
 
         $highlighter = new RegexHighlighter();
         for ($i = 0; $i < $bodyRows; $i++) {
@@ -2930,7 +2930,7 @@ final class Renderer
         $inner = Width::string($panel[0]) - 4;
 
         return Style::new()->foreground($theme->border)->render(
-            '│ …' . str_repeat(' ', max(0, $inner - 1)) . ' │'
+            ScreenReaderMode::glyph('│ …' . str_repeat(' ', max(0, $inner - 1)) . ' │')
         );
     }
 

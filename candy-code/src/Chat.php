@@ -36,8 +36,9 @@ use SugarCraft\Code\Host\SessionTabState;
 use SugarCraft\Code\Host\SessionSwitch;
 use SugarCraft\Code\Host\ContextSources;
 use SugarCraft\Code\Tui\ComposerVim;
-use SugarCraft\Code\Tui\Renderer as TuiRenderer;
 use SugarCraft\Code\Tui\Pane;
+use SugarCraft\Code\Tui\Renderer as TuiRenderer;
+use SugarCraft\Code\Tui\ScreenReaderMode;
 use SugarCraft\Code\Tui\SessionPicker;
 use SugarCraft\Code\Tui\SessionTabs;
 use SugarCraft\Code\Tui\TextSelection;
@@ -3051,7 +3052,16 @@ final class Chat implements Model
             $msg->toolCall->name,
         ));
 
-        return [$next, $notify === null ? $wait : Cmd::batch($wait, $notify)];
+        // C-TUI-6.j: under screen-reader mode, batch the BEL cue beside the
+        // wait promise — the prompt appears silently otherwise, and a reader
+        // has nothing to announce the moment the agent needs them. `cue()` is
+        // null with the mode off, and `Cmd::batch()` drops nulls, so the
+        // off-mode dispatch shape is byte-untouched.
+        $cue = ScreenReaderMode::cue();
+
+        return [$next, $notify === null && $cue === null
+            ? $wait
+            : Cmd::batch($wait, $notify, $cue)];
     }
 
     /**

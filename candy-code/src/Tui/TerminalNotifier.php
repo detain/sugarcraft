@@ -12,7 +12,8 @@ use SugarCraft\Core\Util\Sanitize;
  * when the agent stops to wait for an approval, so a user who switched away
  * comes back at the right moment.
  *
- *  - `off` (the default) — nothing.
+ *  - `off` (the default) — nothing, except under screen-reader mode, which
+ *    upgrades it to `bell` (see {@see self::fromConfig()}; C-TUI-6.j).
  *  - `bell` — BEL. Every terminal understands it (as a sound, a flash, an
  *    urgent window hint or a tmux bell flag, by its own settings), which is
  *    why Aider and Goose ring it for the same two events.
@@ -61,8 +62,23 @@ final class TerminalNotifier
     public static function fromConfig(array $config): self
     {
         $mode = $config[self::SETTINGS_KEY] ?? self::OFF;
+        $notifier = self::new(\is_string($mode) ? $mode : self::OFF);
 
-        return self::new(\is_string($mode) ? $mode : self::OFF);
+        // C-TUI-6.j: under screen-reader mode, `off` upgrades to `bell`. The
+        // two events this notifier serves — a turn ending, an agent waiting
+        // on an approval — are exactly the moments a non-sighted user cannot
+        // see happen, and the default `off` leaves them silent; a BEL is the
+        // cue every assistive path carries (the `osc9` desktop popup is
+        // visual). Reading the mode here rather than at the two call sites
+        // means every emitter — turn end, goal end, the permission ask —
+        // honors the switch with one door, and a user who DID set a mode
+        // keeps it untouched. Off-by-default: with the setting off (or
+        // unreadable) this returns the same notifier `off` always returned.
+        if ($notifier->mode === self::OFF && ScreenReaderMode::enabled()) {
+            return self::new(self::BELL);
+        }
+
+        return $notifier;
     }
 
     /**

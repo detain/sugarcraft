@@ -19,6 +19,7 @@ use SugarCraft\Code\Config\StatusLineCommand;
 use SugarCraft\Code\Media\PreviewPaint;
 use SugarCraft\Code\Media\PreviewSlots;
 use SugarCraft\Code\Support\StartupSummary;
+use SugarCraft\Code\Tui\ScreenReaderMode;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Core\View;
 use SugarCraft\Image\ImageLayer;
@@ -2087,40 +2088,57 @@ final class Renderer
             // (backlog E47); see clipRowsToCols() for why this cuts rather
             // than wraps.
             $overlay = self::clipRowsToCols($overlay, $chat->cols());
-            // A fresh Veil per render call (rather than one persisted on
-            // Chat) means its own frame-diffing never kicks in - fine here,
-            // since Chat already does its own diffing at a higher level in
-            // view() and double-diffing isn't needed for correctness.
-            // Veil clips the overlay to the background's widest line, and the
-            // frame's lines are only as wide as their own content - so a modal
-            // wider than the current transcript would lose its right border
-            // (most visibly mid-turn, which is exactly when a permission
-            // prompt appears). Widen the backdrop to fit first.
-            //
-            // The rows the overlay covers have their zone sentinels LIFTED
-            // first and put back afterwards (audit 15b-09). Veil splits each
-            // covered row around the overlay by cell offset, and its Width
-            // calls count every sentinel codepoint (and the zone id between
-            // them) as a cell. So a covered row carrying a `toolcall:` zone,
-            // or the bar's `pane:menu` zone under a full-height palette, was
-            // cut at the wrong column: the overlay slid left by the
-            // sentinels' length on that row, id fragments leaked on screen,
-            // and the row came out wider than the terminal. With the
-            // sentinels out of the way the cut lands on visible columns; a
-            // zone lying wholly beside the overlay is restored at the same
-            // columns, and a zone the overlay overlaps is dropped, because
-            // part of it is no longer on screen.
-            [$frame, $lifted] = self::liftZonesUnderOverlay($frame, $overlay);
-            $backdrop = self::padForOverlay($frame, $overlay, $chat->cols());
-            $shift = self::overlayLeftShift($backdrop, $overlay, $chat->cols());
-            $frame = Veil::new()->withBackdrop(50)->composite(
-                $overlay,
-                $backdrop,
-                Position::CENTER,
-                Position::CENTER,
-                $shift,
-            );
-            $frame = self::restoreLiftedZones($frame, $lifted, $backdrop, $overlay, $shift);
+            if (ScreenReaderMode::enabled()) {
+                // C-TUI-6.j: under screen-reader mode the overlay REPLACES
+                // the body instead of being Veil-composited over the
+                // transcript. Veil dims the backdrop with reverse-video and
+                // positions the box by cell arithmetic — a reader narrating
+                // line-by-line would get the transcript first, the modal
+                // somewhere below it, dimming as styling noise. Replacing
+                // makes the modal the whole frame: what the sighted user is
+                // forced to look at is what the reader reads aloud. Lift /
+                // backdrop / composite / restore are the Veil machinery and
+                // are skipped wholesale; the zone marking below stays because
+                // the overlay's own rows are now the frame's rows, verbatim,
+                // so the palette/picker registries still match their
+                // substrings and clicks keep landing.
+                $frame = $overlay;
+            } else {
+                // A fresh Veil per render call (rather than one persisted on
+                // Chat) means its own frame-diffing never kicks in - fine here,
+                // since Chat already does its own diffing at a higher level in
+                // view() and double-diffing isn't needed for correctness.
+                // Veil clips the overlay to the background's widest line, and the
+                // frame's lines are only as wide as their own content - so a modal
+                // wider than the current transcript would lose its right border
+                // (most visibly mid-turn, which is exactly when a permission
+                // prompt appears). Widen the backdrop to fit first.
+                //
+                // The rows the overlay covers have their zone sentinels LIFTED
+                // first and put back afterwards (audit 15b-09). Veil splits each
+                // covered row around the overlay by cell offset, and its Width
+                // calls count every sentinel codepoint (and the zone id between
+                // them) as a cell. So a covered row carrying a `toolcall:` zone,
+                // or the bar's `pane:menu` zone under a full-height palette, was
+                // cut at the wrong column: the overlay slid left by the
+                // sentinels' length on that row, id fragments leaked on screen,
+                // and the row came out wider than the terminal. With the
+                // sentinels out of the way the cut lands on visible columns; a
+                // zone lying wholly beside the overlay is restored at the same
+                // columns, and a zone the overlay overlaps is dropped, because
+                // part of it is no longer on screen.
+                [$frame, $lifted] = self::liftZonesUnderOverlay($frame, $overlay);
+                $backdrop = self::padForOverlay($frame, $overlay, $chat->cols());
+                $shift = self::overlayLeftShift($backdrop, $overlay, $chat->cols());
+                $frame = Veil::new()->withBackdrop(50)->composite(
+                    $overlay,
+                    $backdrop,
+                    Position::CENTER,
+                    Position::CENTER,
+                    $shift,
+                );
+                $frame = self::restoreLiftedZones($frame, $lifted, $backdrop, $overlay, $shift);
+            }
             // No-op unless the overlay was the palette or the session picker:
             // only renderPalette()/renderSessionPicker() record item zones,
             // an overlay earlier in the chain above takes the slot before
@@ -4393,8 +4411,8 @@ final class Renderer
         // The rule is one row clipped to the pane, never wrapped: it marks a
         // place, and a second row would be a row it does not own.
         $boundaryRule = self::dim($theme)->render(Width::truncate(
-            '── ' . Lang::t('tui.chat.compaction_boundary') . ' '
-                . str_repeat('─', max(0, $width)),
+            ScreenReaderMode::glyph('── ' . Lang::t('tui.chat.compaction_boundary') . ' '
+                . str_repeat('─', max(0, $width))),
             max(1, $width),
         ));
         $blocks = [];
@@ -5691,7 +5709,7 @@ final class Renderer
         }
 
         return Style::new()
-            ->border(Border::normal())
+            ->border(ScreenReaderMode::border(Border::normal()))
             ->borderForeground($theme->border)
             ->padding(0, 1)
             ->render(implode("\n", $painted));
@@ -5815,7 +5833,7 @@ final class Renderer
             $rightPrefix = DiffGutter::sidePrefix($pair->right?->newNumber, $digits);
             $painted[] = ($leftPrefix === '' ? '' : $gutterStyle->render($leftPrefix))
                 . self::renderDiffHalf($pair->left, $theme, $language, $highlighter, $half)
-                . $gutterStyle->render('│')
+                . $gutterStyle->render(ScreenReaderMode::glyph('│'))
                 . ($rightPrefix === '' ? '' : $gutterStyle->render($rightPrefix))
                 . self::renderDiffHalf($pair->right, $theme, $language, $highlighter, $half);
         }
@@ -6607,7 +6625,7 @@ final class Renderer
         $lines = self::menuWindow($lines, $selected, $maxRows, $theme, $budget);
 
         return Style::new()
-            ->border(Border::normal())
+            ->border(ScreenReaderMode::border(Border::normal()))
             ->borderForeground($theme->border)
             ->padding(0, 1)
             ->render(implode("\n", $lines));
@@ -6724,7 +6742,7 @@ final class Renderer
         $lines = self::menuWindow($lines, $selected, $maxRows, $theme, $budget);
 
         return Style::new()
-            ->border(Border::normal())
+            ->border(ScreenReaderMode::border(Border::normal()))
             ->borderForeground($theme->border)
             ->padding(0, 1)
             ->render(implode("\n", $lines));
@@ -7055,12 +7073,28 @@ final class Renderer
                     static fn(string $run): string => $matchStyle->render($run) . $reopen,
                 );
 
-                $marker = match (true) {
-                    $index === $selected => '▸ ',
-                    $result->haystack === $activePickerRow => '● ',
-                    default => '  ',
-                };
-                $row = $rowStyle->render($marker . $body);
+                // C-TUI-6.j: under screen-reader mode the row is painted
+                // through ScreenReaderMode::menuRow() — '> ' marks the
+                // selection by TEXT (the reverse-video/▸ glyph carries no
+                // signal to a reader) and ' n/of' states the row's position.
+                // The active-theme dot stays on the label so it reads in
+                // both modes. With the mode OFF the branch below is the
+                // pre-6.j code, byte-for-byte: menuRow() is not consulted,
+                // because its plain-text marker would erase the '▸ ' glyph
+                // sighted users steer by.
+                $active = $result->haystack === $activePickerRow;
+                $row = ScreenReaderMode::enabled()
+                    ? $rowStyle->render(ScreenReaderMode::menuRow(
+                        $index + 1,
+                        \count($results),
+                        ($active ? '● ' : '') . $body,
+                        $index === $selected,
+                    ))
+                    : $rowStyle->render((match (true) {
+                        $index === $selected => '▸ ',
+                        $active => '● ',
+                        default => '  ',
+                    }) . $body);
                 $lines[] = $row;
                 $rows[$index] = $row;
             }
@@ -7076,7 +7110,7 @@ final class Renderer
         };
 
         $box = Style::new()
-            ->border(Border::rounded()->withTitle($title))
+            ->border(ScreenReaderMode::border(Border::rounded()->withTitle($title)))
             ->borderForeground($theme->border)
             ->padding(1, 2)
             ->width(50)
@@ -7478,7 +7512,7 @@ final class Renderer
         }
 
         return Style::new()
-            ->border(Border::rounded()->withTitle(' ' . Lang::t('tui.key_help.title') . ' '))
+            ->border(ScreenReaderMode::border(Border::rounded()->withTitle(' ' . Lang::t('tui.key_help.title') . ' ')))
             ->borderForeground($theme->border)
             ->padding(0, 1)
             ->width($width)
@@ -7618,11 +7652,30 @@ final class Renderer
         $options = self::permissionOptions($stage, $question, $request->pendingAsk?->choices() ?? [], $alwaysScope, $chat->permissionEditableScope() !== null, $chat->permissionPersistScope());
 
         $lines[] = '';
-        foreach ($options as $option) {
+        // C-TUI-6.j: the option rows carry their position under screen-reader
+        // mode ('1/3'), so a reader can say which option the list is on; the
+        // letter key stays the answer either way, so nothing is selected-state
+        // here and menuRow() is asked only for the position. With the mode off
+        // menuRow() returns the label untouched — byte-identical rows.
+        // The 'v' view-toggle row below is an aid, not an option, and stays
+        // uncounted.
+        $optionCount = \count($options);
+        foreach ($options as $optionIndex => $option) {
             [$keys, $label] = $option;
-            $lines[] = Style::new()->foreground($theme->userLabel)->bold()->render($keys)
-                . ' ' . Style::new()->foreground($theme->systemLabel)->faint()
-                    ->render(self::wrapPermissionText(Lang::t($label, $option[2] ?? []), max(1, $inner - Width::string($keys) - 1)));
+            // The wrap budget reserves the room the row paint adds around the
+            // label — measured FROM menuRow() itself on an empty label, so a
+            // format change in the helper re-sizes the reserve by itself and
+            // cannot drift. Off-mode that probe returns '' (the bare label
+            // door), reserving zero, and the row is exactly the pre-6.j bytes.
+            $srOverhead = \strlen(ScreenReaderMode::menuRow($optionIndex + 1, $optionCount, '', false));
+            $lines[] = ScreenReaderMode::menuRow(
+                $optionIndex + 1,
+                $optionCount,
+                Style::new()->foreground($theme->userLabel)->bold()->render($keys)
+                    . ' ' . Style::new()->foreground($theme->systemLabel)->faint()
+                        ->render(self::wrapPermissionText(Lang::t($label, $option[2] ?? []), max(1, $inner - Width::string($keys) - 1 - $srOverhead))),
+                false,
+            );
         }
 
         // ISS-003: the view-only key, offered on every armed prompt. `v`
@@ -7651,11 +7704,11 @@ final class Renderer
         }
 
         return Style::new()
-            ->border(Border::rounded()->withTitle(match ($question) {
+            ->border(ScreenReaderMode::border(Border::rounded()->withTitle(match ($question) {
                 \SugarCraft\Code\Tools\BuiltIn\AskUserTool::NAME => ' ' . Lang::t('tui.permission.title_ask') . ' ',
                 \SugarCraft\Code\Tools\BuiltIn\PlanExitTool::NAME => ' ' . Lang::t('tui.permission.title_plan') . ' ',
                 default => ' ' . Lang::t('tui.permission.title') . ' ',
-            }))
+            })))
             ->borderForeground($theme->border)
             ->padding(1, 2)
             ->width($inner)
@@ -8455,7 +8508,7 @@ final class Renderer
         $rows = self::windowInputRows($rows, $chat, $clean, $at, $theme, $indented, $textWidth);
 
         $box = Style::new()
-            ->border(Border::normal())
+            ->border(ScreenReaderMode::border(Border::normal()))
             ->borderForeground($theme->border)
             ->padding(0, 1)
             ->render(implode("\n", $rows));
