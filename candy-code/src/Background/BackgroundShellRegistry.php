@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Background;
 
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Support\PosixShellQuote;
 use SugarCraft\Code\Support\PrivateDir;
 use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Code\Support\WindowsShell;
 
 /**
  * The launch's table of background shells — the state behind Bash's
@@ -345,6 +347,20 @@ final class BackgroundShellRegistry
             )];
         }
 
+        // C-TUI-6.a, before anything is written: the same resolution the
+        // Bash tool applies — Git for Windows' bash.exe over PATH first,
+        // then the installer's stock %ProgramFiles%\Git\bin\bash.exe, and a
+        // loud refusal with no cmd.exe fallback when neither exists. A
+        // refused start leaves no sink files behind and no row.
+        $bashPath = null;
+        if (WindowsShell::isWindows()) {
+            $resolved = WindowsShell::bash();
+            if ($resolved === '') {
+                return ['ok' => false, 'error' => WindowsShell::BASH_MISSING_NOTICE];
+            }
+            $bashPath = $resolved;
+        }
+
         $id = $this->mintId();
         $paths = self::pathFor($this->directory, $id);
         $failure = $this->sinkFiles($paths);
@@ -359,10 +375,27 @@ final class BackgroundShellRegistry
         // cache, and a sink this launch is about to serve reads from must
         // never be among the files it stats.
         $wrapped = self::buildWrapper($command);
-        $spawnSpec = ProcessContainment::spawnSpec($wrapped);
+        // Stdin sink: the null device of the KERNEL the spawn lands on, read
+        // from the path separator, NOT from the family — a Windows-family
+        // spawn executed by the injected-family tests runs on a POSIX runner
+        // where the literal 'NUL' is a missing path, and a ['file', ...]
+        // descriptor on a missing path fails the whole spawn. Real hosts
+        // answer as before: '\\' means Windows means NUL; '/' means
+        // /dev/null, and the detached shell's stdin reads EOF on either.
+        $nullDevice = \DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null';
+        if ($bashPath !== null) {
+            // Windows spawn shape (C-TUI-6.a): [bash.exe, '-c', wrapper] —
+            // the ARRAY form proc_open hands to CreateProcess quoted by its
+            // rules, with no cmd.exe in between; spawnSpec passes it
+            // unchanged on a host whose detach probe can only answer "no
+            // wrapper" (there is no setsid(1) there).
+            $spawnSpec = ProcessContainment::spawnSpec([$bashPath, '-c', $wrapped]);
+        } else {
+            $spawnSpec = ProcessContainment::spawnSpec($wrapped);
+        }
         $env = ProcessContainment::scrubbedEnv($envOverrides + [self::EXIT_CODE_FILE_ENV => $paths['exit']]);
         $descriptors = [
-            0 => ['file', '/dev/null', 'r'],
+            0 => ['file', $nullDevice, 'r'],
             1 => ['file', $paths['stdout'], 'w'],
             2 => ['file', $paths['stderr'], 'w'],
         ];
@@ -714,7 +747,12 @@ final class BackgroundShellRegistry
         $trailer = chr(10) . 'SHELL_STATUS=$?'
             . '; if [ -n "${' . self::WATCHDOG_PID_ENV . ':-}" ]; then kill "$' . self::WATCHDOG_PID_ENV . '" 2>/dev/null; fi'
             . $drain . ' printf "%s" "$SHELL_STATUS" > "$' . self::EXIT_CODE_FILE_ENV . '"; exit "$SHELL_STATUS"';
-        $inner = escapeshellarg('(' . $command . ')' . $recorders . $trailer);
+        // PosixShellQuote (C-TUI-6.a), not escapeshellarg: this argument is
+        // assigned and later re-parsed by bash on BOTH hosts (Git for
+        // Windows ships one), and the host-dependent quoting would corrupt a
+        // payload carrying `%`/`!`/`"` into that bash inner script. POSIX
+        // bytes are identical to what escapeshellarg produced.
+        $inner = PosixShellQuote::quote('(' . $command . ')' . $recorders . $trailer);
 
         // The inner command is bound ONCE (SHELL_INNER) and referenced by
         // both arms: embedding the literal in two exec lines doubled the

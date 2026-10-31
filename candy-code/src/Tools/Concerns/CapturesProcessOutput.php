@@ -151,6 +151,11 @@ trait CapturesProcessOutput
      * long-running command reads as alive to the turn's idle watchdog. It
      * is only ever called from this process; the caller throttles.
      *
+     * @param string|list<string> $command the shell string, or — since
+     *        C-TUI-6.a, for the Windows Bash path — the direct-exec argv the
+     *        array form of proc_open takes; {@see
+     *        ProcessContainment::spawnSpec()} types both and hands the array
+     *        unchanged on hosts with no detach wrapper
      * @param array<string, string> $envOverrides
      * @param (\Closure(): void)|null $onWait
      * @return array{
@@ -166,7 +171,7 @@ trait CapturesProcessOutput
      *     groupKilled: bool,
      * }
      */
-    private function runCaptured(string $command, ?string $cwd = null, ?int $maxBytes = null, ?float $timeoutSeconds = null, array $envOverrides = [], ?\Closure $onWait = null, ?\Closure $onChunk = null): array
+    private function runCaptured(string|array $command, ?string $cwd = null, ?int $maxBytes = null, ?float $timeoutSeconds = null, array $envOverrides = [], ?\Closure $onWait = null, ?\Closure $onChunk = null): array
     {
         $descriptors = [
             0 => ['pipe', 'r'],

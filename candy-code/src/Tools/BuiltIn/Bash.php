@@ -6,7 +6,9 @@ namespace SugarCraft\Code\Tools\BuiltIn;
 
 use SugarCraft\Code\Agents\PathJail as AgentPathJail;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Support\PosixShellQuote;
 use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Code\Support\WindowsShell;
 use SugarCraft\Code\Tools\AcceptsHeartbeat;
 use SugarCraft\Code\Tools\AcceptsShellOwner;
 use SugarCraft\Code\Tools\AcceptsToolProgress;
@@ -507,7 +509,8 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         // edge case of a join helper that checks no containment at all.
         $cwd = $this->worktreeJail?->root() ?? $this->root ?? null;
         // Mirrors charmbracelet/bubbletea.*.Exec.
-        // Use bash -c to interpret shell syntax; escapeshellarg prevents command injection.
+        // Use bash -c to interpret shell syntax; PosixShellQuote prevents
+        // command injection.
         //
         // The prefix is ProcessContainment::cdGuard() — `cd ROOT || exit 1` on
         // a line of its own, never `cd ROOT && COMMAND` (audit F-E3; the
@@ -515,16 +518,43 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         // shared with interactiveSpawnCommand() since F-E5, which had kept
         // the old form, so the two spellings cannot drift apart again.
         //
+        // The quoting is host-independent since C-TUI-6.a: `escapeshellarg()`
+        // emits cmd.exe double-quotes on a Windows host and blanks every
+        // `%`/`!`/`"` the payload carries, but the receiver is always bash.
+        // On POSIX the bytes are identical to what it produced before, so
+        // this swap costs Linux and macOS nothing (pinned in
+        // PosixShellQuoteTest).
+        //
         // proc_open's own cwd parameter is not the alternative it looks like.
         // MEASURED, PHP 8.3.6: a missing cwd makes proc_open() raise
         // "posix_spawn() failed: No such file or directory" as a PHP warning
         // and return false — a warning painted outside the TUI frame and a
         // spawn failure the capture path would have to special-case, where
         // the shell guard gives an ordinary non-zero exit with a reason.
-        if ($cwd !== null) {
-            $cmd = "bash -c " . escapeshellarg(ProcessContainment::cdGuard($cwd) . $command);
-        } else {
-            $cmd = "bash -c " . escapeshellarg($command);
+        $script = $cwd !== null ? ProcessContainment::cdGuard($cwd) . $command : $command;
+        $cmd = 'bash -c ' . PosixShellQuote::quote($script);
+
+        // The Windows spawn shape (C-TUI-6.a): bash.exe is resolved through
+        // the PATH-then-%ProgramFiles%\Git\bin ladder, and NOTHING runs
+        // without it — cmd.exe is never a fallback, its quoting grammar
+        // cannot carry this script and a silently mistranslated command
+        // would report success over a corrupted run. When bash.exe exists,
+        // the command rides proc_open's ARRAY form — [bash.exe, '-c',
+        // script] — which PHP hands CreateProcess quoted by ITS rules with
+        // no cmd.exe in between, and still passes through
+        // ProcessContainment::spawnSpec() (whose detach probe answers "no
+        // wrapper" on Windows, so the argv rides unchanged).
+        $isWindows = WindowsShell::isWindows();
+        $bashPath = null;
+        if ($isWindows) {
+            $bashPath = WindowsShell::bash();
+            if ($bashPath === '') {
+                return new ToolResult(
+                    toolCallId: $args['id'] ?? '',
+                    content: WindowsShell::BASH_MISSING_NOTICE,
+                    isError: true,
+                );
+            }
         }
         // runCaptured(), not exec(): exec() leaves the child's stderr
         // attached to the real terminal, so a command that writes there
@@ -608,7 +638,10 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         // both capture mechanisms — and the setsid group kill the timeout
         // fires — keep working unchanged. A configured sandbox that cannot
         // start REFUSES the command: running it unconfined because the jail
-        // failed would turn the setting into a promise nobody keeps.
+        // failed would turn the setting into a promise nobody keeps. (On
+        // Windows this block cannot mutate $cmd: no sandbox backend proves a
+        // live jail there, so sandboxRefusal() answers above and the array
+        // dispatch below is reached only with an unwrapped script.)
         if ($this->sandbox !== null) {
             $refusal = $this->sandboxRefusal();
             if ($refusal !== null) {
@@ -645,12 +678,26 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
                 );
             }
 
-            return $this->backgroundAnswer($args, $this->registry->start($cmd, (string) ($args['description'] ?? ''), [], $this->shellOwner));
+            return $this->backgroundAnswer($args, $this->registry->start(
+                // C-TUI-6.a: on Windows the registry's own arm spawns the
+                // [bash.exe, '-c', wrapper] array, so it receives the plain
+                // script — prefixing 'bash -c' here would nest a second
+                // bash for no reason. POSIX hands the same $cmd string the
+                // synchronous path was about to run, sandbox prefix and all.
+                $isWindows ? $script : $cmd,
+                (string) ($args['description'] ?? ''),
+                [],
+                $this->shellOwner,
+            ));
         }
 
         $run = $interactive
             ? $this->runCapturedInteractive($cmd, null, $maxBytes, null, (float) $timeout, $onWait, $onChunk)
-            : $this->runCaptured($cmd, null, $maxBytes, (float) $timeout, [], $onWait, $onChunk);
+            // The interactive leg keeps the POSIX-shaped string on purpose:
+            // ProcessContainment::interactiveAvailable() refuses Windows,
+            // so the array form belongs only to the captured path it is
+            // built for (C-TUI-6.a).
+            : $this->runCaptured($isWindows ? [$bashPath, '-c', $script] : $cmd, null, $maxBytes, (float) $timeout, [], $onWait, $onChunk);
         // The last frame: bytes that arrived between the final cadence slice
         // and EOF would otherwise never have been shown. tool.finished lands
         // the full contract right after, so a client that missed this frame

@@ -618,10 +618,16 @@ final class ProcessContainment
      * complete command whatever the command's first line is, and an empty
      * command is a no-op rather than a dangling-`&&` syntax error. The shell's
      * own "cd: DIR: No such file or directory" reaches the caller on stderr.
+     *
+     * The quoting is {@see PosixShellQuote::quote()}, not `escapeshellarg()`:
+     * the receiver is always a POSIX shell even when the PHP process is not
+     * (C-TUI-6.a), and on a Windows host `escapeshellarg()` would emit cmd.exe
+     * double-quotes and blank out every `%`/`!`/`"` a directory name carries.
+     * On POSIX hosts the bytes are identical either way.
      */
     public static function cdGuard(string $dir): string
     {
-        return 'cd ' . \escapeshellarg($dir) . " || exit 1\n";
+        return 'cd ' . PosixShellQuote::quote($dir) . " || exit 1\n";
     }
 
     /**
@@ -669,11 +675,27 @@ final class ProcessContainment
      * those come from ext-pcntl and this runs on teardown paths that must
      * not themselves fatal on a build without it (same rule as
      * {@see ProcessReaper}).
+     *
+     * On Windows there is no group kill to reach for (ext-posix is absent
+     * and `proc_terminate()` only closes the direct child handle, leaving
+     * everything the command started alive), so the arm hands the whole
+     * tree to {@see WindowsTaskKill::tree()} and reserves
+     * `proc_terminate()` for the leg where the pid could not even be read
+     * (C-TUI-6.a).
      */
     public static function terminate(mixed $process, int $signal = 15): bool
     {
         if (!\is_resource($process)) {
             return false;
+        }
+
+        if (WindowsShell::isWindows()) {
+            $pid = (int) (\proc_get_status($process)['pid'] ?? 0);
+            if ($pid > 0 && WindowsTaskKill::tree($pid)) {
+                return true;
+            }
+
+            return \proc_terminate($process, $signal);
         }
 
         $groupId = self::groupId($process);
@@ -790,9 +812,18 @@ final class ProcessContainment
      * killing only the shell would leave the actual child painting on a
      * terminal nobody reads anymore. Signals stay INTEGER LITERALS for the
      * same ext-pcntl-free teardown reason as terminate().
+     *
+     * The Windows arm replaces the whole posix_kill ladder, which on that
+     * host returns false at the `function_exists` gate and signals NOTHING
+     * while the caller narrates a kill (C-TUI-6.a): ext-posix is absent
+     * there, so the pid read and the tree kill are the only honest legs.
      */
     public static function terminatePid(int $pid, int $signal = 15): bool
     {
+        if (WindowsShell::isWindows()) {
+            return $pid > 0 && WindowsTaskKill::tree($pid);
+        }
+
         if ($pid <= 0 || !\function_exists('posix_kill')) {
             return false;
         }
@@ -869,9 +900,27 @@ final class ProcessContainment
      *
      * Refuses $pid <= 0 and the caller's own pid (a kill(0)/kill(-1)/self-kill
      * through this method is never what a teardown meant).
+     *
+     * WINDOWS ARM FIRST, and it skips the freeze-walk entirely: /proc and
+     * process groups do not exist there, so {@see ProcessTree} is Linux-only
+     * by construction and this method never consults it on Windows. The
+     * single `taskkill /T /F` already carries the terminal force (no second
+     * rung to escalate through) and reaches every descendant (the `/T`),
+     * which is why $termGraceSeconds costs nothing on that host — there is
+     * no waiting between a kill that is already maximal and the reaping
+     * caller (C-TUI-6.a).
      */
     public static function killTree(int $pid, float $termGraceSeconds = 0.0): void
     {
+        if (WindowsShell::isWindows()) {
+            if ($pid <= 0 || $pid === \getmypid()) {
+                return;
+            }
+            WindowsTaskKill::tree($pid);
+
+            return;
+        }
+
         if ($pid <= 0 || !\function_exists('posix_kill')) {
             return;
         }
@@ -982,11 +1031,22 @@ final class ProcessContainment
      * Same degradations as killTree(): without /proc or ext-posix's getpgrp
      * this is the direct `posix_kill($pid, 9)`, resolved at once — or, with a
      * grace, the same 15-then-9 ladder against the root alone, on the timer.
+     * On Windows it is killTree()'s single `taskkill /T /F` arm, resolved at
+     * once (C-TUI-6.a) — the force kill is already maximal, so there is no
+     * grace for a timer to spend.
      *
      * @return \React\Promise\PromiseInterface<null>
      */
     public static function killTreeAsync(int $pid, ?\React\EventLoop\LoopInterface $loop = null, float $termGraceSeconds = 0.0): \React\Promise\PromiseInterface
     {
+        if (WindowsShell::isWindows()) {
+            if ($pid > 0 && $pid !== \getmypid()) {
+                WindowsTaskKill::tree($pid);
+            }
+
+            return \React\Promise\resolve(null);
+        }
+
         if ($pid <= 0 || !\function_exists('posix_kill')) {
             return \React\Promise\resolve(null);
         }
@@ -1515,9 +1575,18 @@ final class ProcessContainment
      * An empty PATH element is skipped, not treated as '.': answering a
      * containment question from whatever the working directory happens to be
      * is the nondeterminism DetectsCapabilities exists to avoid, same rule.
+     *
+     * On Windows the whole lookup is {@see WindowsShell::locate()}
+     * (C-TUI-6.a): the `:` split below would cut `C:\dir` at the colon and
+     * the is_executable() gate below never admits a `.exe`, so the POSIX
+     * ladder cannot answer for that host at all.
      */
     public static function locateOnPath(string $binary): string
     {
+        if (WindowsShell::isWindows()) {
+            return WindowsShell::locate($binary);
+        }
+
         foreach (\explode(':', (string) \getenv('PATH')) as $dir) {
             if ($dir === '') {
                 continue;
