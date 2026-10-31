@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { t } from '../../lib/i18n'
 import { useConnectionStore } from '../../stores/connection'
 import { useGenerateStore } from '../../stores/generate'
 import MediaCard from '../MediaCard.vue'
@@ -94,9 +95,9 @@ watch(() => props.sessionId, (id) => generate.follow(id), { immediate: true })
 <template>
   <div class="generate-panel" data-testid="generate-panel">
     <div class="head">
-      <span class="count" data-testid="generate-title">generate</span>
-      <button v-if="running" type="button" class="link" data-testid="generate-reload" @click="generate.retry()">reload</button>
-      <button v-else-if="job !== null" type="button" class="link" data-testid="generate-clear" @click="generate.forget()">clear</button>
+      <span class="count" data-testid="generate-title">{{ t('web.panels.gen_generate') }}</span>
+      <button v-if="running" type="button" class="link" data-testid="generate-reload" @click="generate.retry()">{{ t('web.panels.reload') }}</button>
+      <button v-else-if="job !== null" type="button" class="link" data-testid="generate-clear" @click="generate.forget()">{{ t('web.panels.gen_clear') }}</button>
     </div>
 
     <p v-if="!offered" class="empty" data-testid="generate-unoffered">{{ reason }}</p>
@@ -112,7 +113,7 @@ watch(() => props.sessionId, (id) => generate.follow(id), { immediate: true })
           :aria-selected="kind === 'image'"
           data-testid="generate-tab-image"
           @click="kind = 'image'"
-        >Image</button>
+        >{{ t('web.panels.gen_image') }}</button>
         <button
           v-if="connection.canGenerateVideo"
           type="button"
@@ -122,20 +123,20 @@ watch(() => props.sessionId, (id) => generate.follow(id), { immediate: true })
           :aria-selected="kind === 'video'"
           data-testid="generate-tab-video"
           @click="kind = 'video'"
-        >Video</button>
+        >{{ t('web.panels.gen_video') }}</button>
       </div>
 
       <form class="form" data-testid="generate-form" @submit.prevent="send">
         <label>
-          <span>Prompt</span>
-          <textarea v-model="prompt" rows="3" data-testid="generate-prompt" placeholder="What to render, self-contained: style, subject, framing." />
+          <span>{{ t('web.panels.gen_prompt') }}</span>
+          <textarea v-model="prompt" rows="3" data-testid="generate-prompt" :placeholder="t('web.panels.gen_prompt_ph')" />
         </label>
         <label>
-          <span>Negative</span>
-          <input v-model="negative" type="text" data-testid="generate-negative" placeholder="What to steer away from (optional)" />
+          <span>{{ t('web.panels.gen_negative') }}</span>
+          <input v-model="negative" type="text" data-testid="generate-negative" :placeholder="t('web.panels.gen_negative_ph')" />
         </label>
         <label v-if="kind === 'image'">
-          <span>Images</span>
+          <span>{{ t('web.panels.gen_images') }}</span>
           <input v-model.number="count" type="number" min="1" max="8" data-testid="generate-count" />
         </label>
         <button type="submit" data-testid="generate-submit" :disabled="!canSubmit">{{ generate.busy ? 'Sending…' : 'Generate' }}</button>

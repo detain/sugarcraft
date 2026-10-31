@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { t } from '../../lib/i18n'
 import { useConnectionStore } from '../../stores/connection'
 import { useContextSourcesStore, type ContextSourcesResult } from '../../stores/contextSources'
 import { ProtocolError } from '../../protocol/jsonrpc'
@@ -43,12 +44,12 @@ async function answer(askId: string, decision: 'grant' | 'reject', remember: 'se
     // C-SEC-5.b: the verdict names the row it answers — settling one door
     // never settles the others of the same measurement.
     const settled = await context.respondTrust(askId, decision, remember)
-    if (!settled) trustError.value = 'The prompt was settled elsewhere — reload to re-measure.'
+    if (!settled) trustError.value = t('web.panels.ctx_trust_settled_elsewhere')
   } catch (failure) {
     // C-SEC-4: a refused write is not a lost prompt — the server kept the
     // record `asked`, so say what failed and leave the buttons usable.
     if (failure instanceof ProtocolError && failure.kind === 'trust_write_failed') {
-      trustError.value = 'Your user config could not be written — the project stays untrusted and the prompt stays open. Fix the config, then answer again.'
+      trustError.value = t('web.panels.ctx_trust_write_error')
     } else {
       trustError.value = failure instanceof Error ? failure.message : String(failure)
     }
@@ -171,10 +172,10 @@ const mcpUserRows = computed<McpServerRow[]>(
   () => (context.sources?.mcp.servers ?? []).filter((row) => row.tier === 'user'),
 )
 function livenessDot(row: McpServerRow): { cls: string; label: string } {
-  if (row.liveness === null) return { cls: 'cold', label: 'no liveness data' }
-  if (row.liveness.up === true) return { cls: 'up', label: 'up' }
-  if (row.liveness.up === false) return { cls: 'down', label: 'down' }
-  return { cls: 'unknown', label: 'liveness unknown' }
+  if (row.liveness === null) return { cls: 'cold', label: t('web.panels.ctx_liveness_none') }
+  if (row.liveness.up === true) return { cls: 'up', label: t('web.panels.ctx_liveness_up') }
+  if (row.liveness.up === false) return { cls: 'down', label: t('web.panels.ctx_liveness_down') }
+  return { cls: 'unknown', label: t('web.panels.ctx_liveness_unknown') }
 }
 const drill = ref<string | null>(null)
 
@@ -226,15 +227,15 @@ onMounted(() => void context.load(props.sessionId))
 <template>
   <div class="context-panel" data-testid="context-panel">
     <div class="head">
-      <span v-if="context.loaded && context.sessionId === sessionId" class="count" data-testid="context-count">context</span>
-      <button type="button" class="link" data-testid="context-reload" :disabled="context.loading" @click="context.load(sessionId)">reload</button>
+      <span v-if="context.loaded && context.sessionId === sessionId" class="count" data-testid="context-count">{{ t('web.panels.ctx_head_badge') }}</span>
+      <button type="button" class="link" data-testid="context-reload" :disabled="context.loading" @click="context.load(sessionId)">{{ t('web.panels.reload') }}</button>
     </div>
     <p v-if="context.error" class="error" role="alert" data-testid="context-error">{{ context.error }}</p>
-    <p v-else-if="loading" class="empty">Measuring the context…</p>
+    <p v-else-if="loading" class="empty">{{ t('web.panels.ctx_measuring') }}</p>
     <template v-else-if="context.loaded && context.sessionId === sessionId && context.sources">
       <section v-if="context.sources.breakdown" data-testid="context-breakdown">
         <p class="share">
-          ~{{ context.sources.breakdown.historyTokens.toLocaleString() }} / {{ context.sources.breakdown.window.toLocaleString() }} context
+          ~{{ context.sources.breakdown.historyTokens.toLocaleString() }} / {{ context.sources.breakdown.window.toLocaleString() }} {{ t('web.panels.ctx_share_suffix') }}
           <template v-if="share !== null"> ({{ share }}%)</template>
         </p>
         <ul v-if="context.sources.breakdown.sections" class="layers" data-testid="context-layers">
@@ -244,16 +245,16 @@ onMounted(() => void context.load(props.sessionId))
           </li>
         </ul>
         <p class="meta">
-          tools: <template v-if="context.sources.breakdown.toolCount !== null">{{ context.sources.breakdown.toolCount }} (~{{ context.sources.breakdown.toolTokens?.toLocaleString() }} tokens)</template>
-          <template v-else>not measured</template>
-          · history: {{ context.sources.breakdown.historyMessages }} sent, {{ context.sources.breakdown.uiOnlyRows }} UI-only
-          <template v-if="context.sources.breakdown.pruning"> · pruned ~{{ context.sources.breakdown.pruning.outputTokens.toLocaleString() }} tokens ({{ context.sources.breakdown.pruning.mode }})</template>
+          {{ t('web.panels.ctx_tools_label') }} <template v-if="context.sources.breakdown.toolCount !== null">{{ t('web.panels.ctx_tools_count', {count: context.sources.breakdown.toolCount, tokens: context.sources.breakdown.toolTokens?.toLocaleString()}) }}</template>
+          <template v-else>{{ t('web.panels.ctx_not_measured') }}</template>
+          {{ t('web.panels.ctx_history_stats', {sent: context.sources.breakdown.historyMessages, uiOnly: context.sources.breakdown.uiOnlyRows}) }}
+          <template v-if="context.sources.breakdown.pruning"> {{ t('web.panels.ctx_pruned', {tokens: context.sources.breakdown.pruning.outputTokens.toLocaleString(), mode: context.sources.breakdown.pruning.mode}) }}</template>
         </p>
       </section>
-      <p v-else class="empty" data-testid="context-no-breakdown">The breakdown is not measured for this session.</p>
+      <p v-else class="empty" data-testid="context-no-breakdown">{{ t('web.panels.ctx_no_breakdown') }}</p>
 
       <section v-if="categories !== null" data-testid="context-categories">
-        <h3>By category</h3>
+        <h3>{{ t('web.panels.ctx_by_category') }}</h3>
         <div class="cat-bar" data-testid="context-cat-bar" aria-hidden="true">
           <span v-for="seg in barSegments" :key="seg.key" class="cat-seg" :data-testid="`context-cat-seg-${seg.key}`" :style="{ width: `${seg.pct}%`, background: seg.color }" :title="`${seg.label} · ${Math.round(seg.pct)}%`"></span>
         </div>
@@ -268,33 +269,33 @@ onMounted(() => void context.load(props.sessionId))
             <ul v-if="drill === cat.key && cat.sub.length > 0" class="subs" :data-testid="`context-subs-${cat.key}`">
               <li v-for="(row, index) in cat.sub" :key="index" class="sub" :data-testid="`context-sub-${cat.key}-${index}`">
                 <span class="label sub-label">{{ row.label }}</span>
-                <span v-if="row.personal" class="badge">personal</span>
+                <span v-if="row.personal" class="badge">{{ t('web.panels.ctx_personal') }}</span>
                 <span class="tokens">{{ subFigure(row) }}</span>
               </li>
             </ul>
           </li>
         </ul>
-        <p class="meta" data-testid="context-raw-hint">Run <code>/context --raw</code> in the terminal to dump the exact prompt bytes.</p>
+        <p class="meta" data-testid="context-raw-hint">{{ t('web.panels.ctx_run_pre') }} <code>/context --raw</code> {{ t('web.panels.ctx_run_post') }}</p>
       </section>
 
       <section data-testid="context-instruction-files">
-        <h3>Instruction files</h3>
-        <p v-if="context.sources.instructionFiles === null" class="empty">not measured</p>
-        <p v-else-if="context.sources.instructionFiles.length === 0" class="empty">none</p>
+        <h3>{{ t('web.panels.ctx_instruction_files') }}</h3>
+        <p v-if="context.sources.instructionFiles === null" class="empty">{{ t('web.panels.ctx_not_measured') }}</p>
+        <p v-else-if="context.sources.instructionFiles.length === 0" class="empty">{{ t('web.panels.ctx_none') }}</p>
         <ul v-else>
           <li v-for="file in context.sources.instructionFiles" :key="file.path">
             <span class="path" :data-testid="`context-file-${file.path}`">{{ file.path }}</span>
             <span class="bytes">{{ file.bytes.toLocaleString() }} B</span>
-            <span v-if="file.tier === 'personal'" class="badge">personal</span>
+            <span v-if="file.tier === 'personal'" class="badge">{{ t('web.panels.ctx_personal') }}</span>
             <span class="badge">{{ file.tier }}</span>
-            <button v-if="canWrite" type="button" class="link edit" :data-testid="`context-edit-${file.path}`" @click="openEdit(file)">Edit</button>
+            <button v-if="canWrite" type="button" class="link edit" :data-testid="`context-edit-${file.path}`" @click="openEdit(file)">{{ t('web.panels.edit') }}</button>
           </li>
         </ul>
-        <p v-if="context.sources.instructionFiles && bytes > 0" class="meta">{{ bytes.toLocaleString() }} B spliced total</p>
+        <p v-if="context.sources.instructionFiles && bytes > 0" class="meta">{{ t('web.panels.ctx_spliced_total', {bytes: bytes.toLocaleString()}) }}</p>
       </section>
 
       <section v-if="context.sources.untrusted.length > 0" data-testid="context-untrusted">
-        <h3>Not read</h3>
+        <h3>{{ t('web.panels.ctx_not_read') }}</h3>
         <ul>
           <li v-for="entry in context.sources.untrusted" :key="entry.path">
             <span class="path">{{ entry.path }}</span> — <span class="reason">{{ entry.reason }}</span>
@@ -303,8 +304,8 @@ onMounted(() => void context.load(props.sessionId))
       </section>
 
       <section data-testid="context-memory">
-        <h3>Memory ({{ context.sources.memorySections.length }})</h3>
-        <p v-if="context.sources.memorySections.length === 0" class="empty">none</p>
+        <h3>{{ t('web.panels.ctx_memory_heading', {n: context.sources.memorySections.length}) }}</h3>
+        <p v-if="context.sources.memorySections.length === 0" class="empty">{{ t('web.panels.ctx_none') }}</p>
         <ul v-else>
           <li v-for="note in context.sources.memorySections" :key="`${note.source}-${note.id}`">
             <span class="content">{{ note.content }}</span>
@@ -315,13 +316,13 @@ onMounted(() => void context.load(props.sessionId))
       </section>
 
       <section data-testid="context-skills">
-        <h3>Skills ({{ context.sources.skills.length }})</h3>
-        <p v-if="context.sources.skills.length === 0" class="empty">none</p>
+        <h3>{{ t('web.panels.ctx_skills_heading', {n: context.sources.skills.length}) }}</h3>
+        <p v-if="context.sources.skills.length === 0" class="empty">{{ t('web.panels.ctx_none') }}</p>
         <ul v-else>
           <li v-for="skill in context.sources.skills" :key="skill.name">
             <span class="name">{{ skill.name }}</span>
             <span class="badge">{{ skill.tier }}</span>
-            <span v-if="!skill.enabled" class="badge off">disabled</span>
+            <span v-if="!skill.enabled" class="badge off">{{ t('web.panels.ctx_disabled') }}</span>
           </li>
         </ul>
       </section>
@@ -339,9 +340,9 @@ onMounted(() => void context.load(props.sessionId))
             <span class="badge">{{ server.trust }}</span>
           </li>
         </ul>
-        <p v-if="context.sources.mcp.skipped.length > 0" class="meta">Skipped entries: <span class="reason">{{ context.sources.mcp.skipped.join('; ') }}</span></p>
+        <p v-if="context.sources.mcp.skipped.length > 0" class="meta">{{ t('web.panels.ctx_skipped') }} <span class="reason">{{ context.sources.mcp.skipped.join('; ') }}</span></p>
         <template v-if="mcpUserRows.length > 0">
-          <h4 data-testid="context-mcp-user-heading">User scope</h4>
+          <h4 data-testid="context-mcp-user-heading">{{ t('web.panels.ctx_user_scope') }}</h4>
           <ul data-testid="context-mcp-user">
             <li v-for="server in mcpUserRows" :key="server.name" data-testid="context-mcp-user-row">
               <span
@@ -359,35 +360,35 @@ onMounted(() => void context.load(props.sessionId))
       </section>
 
       <section v-if="(context.sources.trusts?.length ?? 0) > 0 || trustError" data-testid="context-trust">
-        <h3>Project trust</h3>
+        <h3>{{ t('web.panels.ctx_trust') }}</h3>
         <p v-if="trustError" class="error" role="alert" data-testid="context-trust-error">{{ trustError }}</p>
         <div v-for="prompt in context.sources.trusts" :key="prompt.askId" class="trust-row" data-testid="context-trust-row" :data-target="prompt.target">
           <p class="reason" data-testid="context-trust-reason">{{ prompt.reason }}</p>
-          <p class="meta">root: <span class="path" data-testid="context-trust-root">{{ prompt.root }}</span></p>
+          <p class="meta">{{ t('web.panels.ctx_root_prefix') }} <span class="path" data-testid="context-trust-root">{{ prompt.root }}</span></p>
           <div v-if="prompt.status === 'asked'" class="actions">
-            <button type="button" data-testid="context-trust-session" :disabled="busy || !canAnswer" @click="answer(prompt.askId, 'grant', 'session')">Silence prompts (this run)</button>
-            <button type="button" data-testid="context-trust-user" :disabled="busy || !canAnswer" @click="answer(prompt.askId, 'grant', 'user')">Always trust</button>
-            <button type="button" data-testid="context-trust-reject" :disabled="busy || !canAnswer" @click="answer(prompt.askId, 'reject', 'session')">Leave untrusted</button>
+            <button type="button" data-testid="context-trust-session" :disabled="busy || !canAnswer" @click="answer(prompt.askId, 'grant', 'session')">{{ t('web.panels.ctx_trust_silence') }}</button>
+            <button type="button" data-testid="context-trust-user" :disabled="busy || !canAnswer" @click="answer(prompt.askId, 'grant', 'user')">{{ t('web.panels.ctx_trust_always') }}</button>
+            <button type="button" data-testid="context-trust-reject" :disabled="busy || !canAnswer" @click="answer(prompt.askId, 'reject', 'session')">{{ t('web.panels.ctx_trust_leave') }}</button>
           </div>
           <p v-else class="meta" data-testid="context-trust-settled">
             <template v-if="prompt.status === 'granted'">
-              {{ prompt.persisted ? 'Trusted and written to your user config — the servers start at the next launch.' : 'Question settled for this run — the trust roster was frozen at launch, so this grant only silences further prompts while this server process runs; the servers start after a saved (user-tier) trust at next launch.' }}
+              {{ prompt.persisted ? t('web.panels.ctx_trust_grant_saved') : t('web.panels.ctx_trust_grant_run') }}
             </template>
-            <template v-else>Left untrusted — nothing of this project starts.</template>
+            <template v-else>{{ t('web.panels.ctx_trust_settled_reject') }}</template>
           </p>
         </div>
       </section>
     </template>
 
-    <div v-if="editing !== null" class="edit-modal" role="dialog" aria-label="Edit instruction file" data-testid="instruction-edit-modal">
-      <h3>{{ editing.tier === 'personal' ? 'Personal file' : 'Edit instruction file' }}</h3>
+    <div v-if="editing !== null" class="edit-modal" role="dialog" :aria-label="t('web.panels.ctx_edit_aria')" data-testid="instruction-edit-modal">
+      <h3>{{ editing.tier === 'personal' ? t('web.panels.ctx_personal_file') : t('web.panels.ctx_edit_modal_title') }}</h3>
       <p class="meta path">{{ editing.path }}</p>
-      <p class="meta">The protocol never sends the file's current content to the browser — saving replaces the file with what you type here. The save carries the {{ editing.bytes.toLocaleString() }} B this listing measured and is refused rather than clobber a file someone else changed.</p>
-      <textarea v-model="editText" rows="10" aria-label="New content for the instruction file" data-testid="instruction-edit-text"></textarea>
+      <p class="meta">{{ t('web.panels.ctx_edit_note', {bytes: editing.bytes.toLocaleString()}) }}</p>
+      <textarea v-model="editText" rows="10" :aria-label="t('web.panels.ctx_new_content_aria')" data-testid="instruction-edit-text"></textarea>
       <p v-if="editError" class="error" role="alert" data-testid="instruction-edit-error">{{ editError }}</p>
       <div class="actions">
-        <button type="button" class="link" data-testid="instruction-edit-save" :disabled="saving" @click="saveEdit">Save</button>
-        <button type="button" class="link" data-testid="instruction-edit-cancel" @click="cancelEdit">Cancel</button>
+        <button type="button" class="link" data-testid="instruction-edit-save" :disabled="saving" @click="saveEdit">{{ t('web.panels.save') }}</button>
+        <button type="button" class="link" data-testid="instruction-edit-cancel" @click="cancelEdit">{{ t('web.panels.cancel') }}</button>
       </div>
     </div>
   </div>

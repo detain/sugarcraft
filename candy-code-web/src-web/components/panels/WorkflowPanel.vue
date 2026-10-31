@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { t } from '../../lib/i18n'
 import { useWorkflowsStore, parseVars, type WorkflowRun } from '../../stores/agents/workflows'
 import { useConnectionStore } from '../../stores/connection'
 import { describe, useSessionStore } from '../../stores/session'
@@ -95,17 +96,17 @@ function label(run: WorkflowRun): string {
 
 <template>
   <div class="workflow-panel" data-testid="workflow-panel">
-    <p v-if="!workflows.available" class="empty">No workflow engine in this workspace.</p>
+    <p v-if="!workflows.available" class="empty">{{ t('web.panels.wf_no_engine') }}</p>
     <form v-else-if="canWrite" class="start" @submit.prevent="start">
-      <select v-model="name" aria-label="Workflow" data-testid="workflow-name" :disabled="workflows.names.length === 0">
-        <option v-if="workflows.names.length === 0" value="">no workflows defined</option>
+      <select v-model="name" :aria-label="t('web.panels.wf_workflow_aria')" data-testid="workflow-name" :disabled="workflows.names.length === 0">
+        <option v-if="workflows.names.length === 0" value="">{{ t('web.panels.wf_none_defined') }}</option>
         <option v-for="workflow in workflows.names" :key="workflow" :value="workflow">{{ workflow }}</option>
       </select>
-      <input v-model="vars" type="text" placeholder="key=value …" aria-label="Context" data-testid="workflow-vars">
-      <button type="submit" class="primary" :disabled="name === '' || busy" :title="busy ? 'A turn is running in this session' : ''" data-testid="workflow-run">Run</button>
+      <input v-model="vars" type="text" :placeholder="t('web.panels.wf_vars_ph')" :aria-label="t('web.panels.wf_context_aria')" data-testid="workflow-vars">
+      <button type="submit" class="primary" :disabled="name === '' || busy" :title="busy ? t('web.panels.wf_busy_title') : ''" data-testid="workflow-run">{{ t('web.panels.run') }}</button>
     </form>
     <p v-if="error || workflows.error" class="error" role="alert" data-testid="workflow-error">{{ error || workflows.error }}</p>
-    <p v-if="runs.length === 0" class="empty">No workflow runs in this session.</p>
+    <p v-if="runs.length === 0" class="empty">{{ t('web.panels.wf_no_runs') }}</p>
     <ul class="runs">
       <li v-for="(run, i) in runs" :key="run.toolCallId ?? run.workflowId ?? i" :data-status="run.status" :data-source="run.source" data-testid="workflow-runitem">
         <button type="button" class="head" :aria-expanded="opened === i" @click="opened = opened === i ? null : i">
@@ -115,13 +116,13 @@ function label(run: WorkflowRun): string {
         </button>
         <div v-if="opened === i" class="body">
           <MessageMarkdown v-if="run.report" :text="run.report" />
-          <p v-else class="empty">Running…</p>
+          <p v-else class="empty">{{ t('web.panels.wf_running') }}</p>
           <div v-if="canWrite && run.workflowId" class="actions">
-            <button v-if="run.status === 'paused'" type="button" :disabled="busy" @click="act(() => workflows.resume(sessionId, run.workflowId!))">Resume</button>
+            <button v-if="run.status === 'paused'" type="button" :disabled="busy" @click="act(() => workflows.resume(sessionId, run.workflowId!))">{{ t('web.panels.wf_resume') }}</button>
           </div>
         </div>
         <div v-if="canWrite && run.running && run.workflowId" class="actions">
-          <button type="button" @click="act(() => workflows.pause(run.workflowId!))">Pause</button>
+          <button type="button" @click="act(() => workflows.pause(run.workflowId!))">{{ t('web.panels.wf_pause') }}</button>
         </div>
       </li>
     </ul>

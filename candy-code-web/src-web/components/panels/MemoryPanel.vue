@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { t } from '../../lib/i18n'
 import { MEMORY_SCOPES, useMemoryStore, type MemoryRevision, type MemoryScope } from '../../stores/agents/memory'
 import { useConnectionStore } from '../../stores/connection'
 import { describe } from '../../stores/session'
@@ -91,7 +92,7 @@ async function remove(id: string): Promise<void> {
 
 <template>
   <div class="memory-panel" data-testid="memory-panel">
-    <div class="scopes" role="tablist" aria-label="Memory scope">
+    <div class="scopes" role="tablist" :aria-label="t('web.panels.mem_scope_aria')">
       <button
         v-for="scope in MEMORY_SCOPES"
         :key="scope"
@@ -105,31 +106,31 @@ async function remove(id: string): Promise<void> {
       <button
         type="button"
         role="tab"
-        aria-label="Memory history"
+        :aria-label="t('web.panels.mem_history_aria')"
         :aria-selected="tab === 'history'"
         :class="{ on: tab === 'history' }"
         data-testid="memory-tab-history"
         @click="openHistory"
-      >history</button>
+      >{{ t('web.panels.mem_history') }}</button>
     </div>
     <p v-if="error || memory.error" class="error" role="alert">{{ error || memory.error }}</p>
     <p v-if="notice" class="notice" role="status" data-testid="memory-notice">{{ notice }}</p>
     <template v-if="tab === 'notes'">
     <form class="search" role="search" @submit.prevent="memory.search(query)">
-      <input v-model="query" type="search" placeholder="Search every scope…" aria-label="Search notes" data-testid="memory-search">
+      <input v-model="query" type="search" :placeholder="t('web.panels.mem_search_ph')" :aria-label="t('web.panels.mem_search_aria')" data-testid="memory-search">
     </form>
     <form v-if="canWrite && memory.query === ''" class="add" @submit.prevent="add">
-      <textarea v-model="draft" rows="2" :placeholder="`A new ${memory.scope} note…`" aria-label="New note" data-testid="memory-draft" />
-      <button type="submit" class="primary" :disabled="draft.trim() === ''" data-testid="memory-add">Add</button>
+      <textarea v-model="draft" rows="2" :placeholder="t('web.panels.mem_new_note', { scope: memory.scope })" :aria-label="t('web.panels.mem_new_note_aria')" data-testid="memory-draft" />
+      <button type="submit" class="primary" :disabled="draft.trim() === ''" data-testid="memory-add">{{ t('web.panels.mem_add') }}</button>
     </form>
     <p v-if="memory.entries.length === 0 && !memory.loading" class="empty">{{ memory.query ? 'No note matches.' : `No ${memory.scope} notes.` }}</p>
     <ul class="notes">
       <li v-for="entry in memory.entries" :key="entry.id" data-testid="memory-entry" :data-id="entry.id">
         <template v-if="editing === entry.id">
-          <textarea v-model="editText" rows="3" aria-label="Edit note" />
+          <textarea v-model="editText" rows="3" :aria-label="t('web.panels.mem_edit_aria')" />
           <div class="actions">
-            <button type="button" class="primary" :disabled="editText.trim() === ''" @click="saveEdit(entry.id)">Save</button>
-            <button type="button" @click="editing = null">Cancel</button>
+            <button type="button" class="primary" :disabled="editText.trim() === ''" @click="saveEdit(entry.id)">{{ t('web.panels.save') }}</button>
+            <button type="button" @click="editing = null">{{ t('web.panels.cancel') }}</button>
           </div>
         </template>
         <template v-else>
@@ -139,20 +140,20 @@ async function remove(id: string): Promise<void> {
             <span v-if="memory.query">{{ entry.scope }} · </span>{{ entry.modifiedAt || entry.createdAt || '' }}<span v-if="entry.tags && entry.tags.length > 0"> · {{ entry.tags.join(', ') }}</span>
           </p>
           <div v-if="canWrite" class="actions">
-            <button type="button" class="link" @click="startEdit(entry.id, entry.content)">edit</button>
-            <button type="button" class="link" data-testid="memory-delete" @click="remove(entry.id)">delete</button>
+            <button type="button" class="link" @click="startEdit(entry.id, entry.content)">{{ t('web.panels.mem_edit') }}</button>
+            <button type="button" class="link" data-testid="memory-delete" @click="remove(entry.id)">{{ t('web.panels.mem_delete') }}</button>
           </div>
         </template>
       </li>
     </ul>
     </template>
     <template v-else>
-      <p v-if="memory.revisions.length === 0 && !memory.historyLoading" class="empty">No memory history yet.</p>
+      <p v-if="memory.revisions.length === 0 && !memory.historyLoading" class="empty">{{ t('web.panels.mem_empty_history') }}</p>
       <ul class="revisions" data-testid="memory-history">
         <li v-for="revision in memory.revisions" :key="revision.sha" data-testid="memory-revision" :data-sha="revision.sha">
           <p class="meta"><span data-testid="memory-rev-sha">{{ revision.shortSha }}</span> · <span>{{ revision.committedAt }}</span> · <span data-testid="memory-rev-subject">{{ revision.subject }}</span></p>
           <div v-if="canWrite" class="actions">
-            <button type="button" class="link" data-testid="memory-undo" @click="undoTo(revision)">undo to this revision</button>
+            <button type="button" class="link" data-testid="memory-undo" @click="undoTo(revision)">{{ t('web.panels.mem_undo') }}</button>
           </div>
         </li>
       </ul>

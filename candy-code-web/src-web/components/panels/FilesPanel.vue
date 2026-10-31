@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
+import { t } from '../../lib/i18n'
 import { describe, useSessionStore } from '../../stores/session'
 import FileViewer from '../FileViewer.vue'
 
@@ -55,13 +56,13 @@ onMounted(() => void search())
       v-model="query"
       type="search"
       class="search"
-      placeholder="Search workspace files…"
-      aria-label="Search workspace files"
+      :placeholder="t('web.panels.files_search_ph')"
+      :aria-label="t('web.panels.files_search_aria')"
       data-testid="files-search"
     />
     <p v-if="error" class="error" role="alert" data-testid="files-error">{{ error }}</p>
-    <p v-else-if="loading && matches.length === 0" class="empty">Searching the workspace…</p>
-    <p v-else-if="matches.length === 0" class="empty" data-testid="files-none">No files match that search.</p>
+    <p v-else-if="loading && matches.length === 0" class="empty">{{ t('web.panels.files_searching') }}</p>
+    <p v-else-if="matches.length === 0" class="empty" data-testid="files-none">{{ t('web.panels.files_empty') }}</p>
     <ul v-else class="list" data-testid="files-list">
       <li v-for="path in matches" :key="path">
         <button type="button" class="row" :class="{ on: viewing === path }" :data-testid="`files-row-${path}`" @click="open(path)">{{ path }}</button>

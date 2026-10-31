@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { t } from '../../lib/i18n'
 import type { BackgroundShell } from '../../protocol/generated'
 import { useShellsStore } from '../../stores/agents/shells'
 import { useConnectionStore } from '../../stores/connection'
@@ -89,10 +90,10 @@ function outputText(shellId: string): string {
 
 /** What the row's settle column says: the code, else the note, else an honest dash. */
 function settleText(shell: BackgroundShell): string {
-  if (shell.state === 'running') return 'running'
-  if (shell.exitCode !== null && shell.exitCode !== undefined) return `exit ${shell.exitCode}`
+  if (shell.state === 'running') return t('web.panels.proc_running')
+  if (shell.exitCode !== null && shell.exitCode !== undefined) return t('web.panels.proc_exit', { code: shell.exitCode })
 
-  return shell.exitNote ?? 'exit ?'
+  return shell.exitNote ?? t('web.panels.proc_exit_unknown')
 }
 
 function ageText(seconds: number): string {
@@ -106,22 +107,22 @@ function ageText(seconds: number): string {
 
 <template>
   <section class="processes" data-testid="processes-section">
-    <h3>Processes</h3>
+    <h3>{{ t('web.panels.proc_title') }}</h3>
     <p v-if="error || shells.error" class="error" role="alert" data-testid="proc-error">{{ error || shells.error }}</p>
-    <p v-if="sessionId === null" class="empty">Open a session to see its background shells.</p>
+    <p v-if="sessionId === null" class="empty">{{ t('web.panels.proc_open_session') }}</p>
     <template v-else>
-      <p v-if="shells.items.length === 0" class="empty" data-testid="proc-empty">No background shells.</p>
+      <p v-if="shells.items.length === 0" class="empty" data-testid="proc-empty">{{ t('web.panels.proc_empty') }}</p>
       <ul v-else>
         <li v-for="shell in shells.items" :key="shell.shellId" :data-state="shell.state" data-testid="proc-item">
           <button type="button" class="head" :aria-expanded="expanded === shell.shellId" :data-testid="`proc-head-${shell.shellId}`" @click="toggle(shell)">
             <span class="status" :class="shell.state">{{ shell.state }}</span>
             <span class="name">{{ shell.label }}</span>
-            <span class="meta">{{ settleText(shell) }}<template v-if="shell.expired"> · expired</template> · {{ ageText(shell.ageSeconds) }}</span>
+            <span class="meta">{{ settleText(shell) }}<template v-if="shell.expired"> {{ t('web.panels.proc_expired') }}</template> · {{ ageText(shell.ageSeconds) }}</span>
           </button>
           <div v-if="expanded === shell.shellId" class="body">
             <pre data-testid="proc-output">{{ outputText(shell.shellId) }}</pre>
             <div v-if="canWrite && shell.state === 'running'" class="actions">
-              <button type="button" class="danger" :data-testid="`proc-stop-${shell.shellId}`" @click="stop(shell.shellId)">Stop</button>
+              <button type="button" class="danger" :data-testid="`proc-stop-${shell.shellId}`" @click="stop(shell.shellId)">{{ t('web.panels.stop') }}</button>
             </div>
           </div>
         </li>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { t } from '../../lib/i18n'
 import { ago, spendLabel, tokens } from '../../lib/format'
 import type { BackgroundSession, PermissionMode } from '../../protocol/generated'
 import { isSettled, useBackgroundStore } from '../../stores/agents/background'
@@ -139,13 +140,13 @@ function toggle(session: BackgroundSession): void {
 <template>
   <div class="background-panel" data-testid="background-panel">
     <form v-if="canWrite" class="spawn" @submit.prevent="start">
-      <input v-model="task" type="text" placeholder="Run a task in the background…" aria-label="Background task" data-testid="bg-task">
-      <button type="submit" class="primary" :disabled="starting || task.trim() === ''">Start</button>
+      <input v-model="task" type="text" :placeholder="t('web.panels.bg_ph')" :aria-label="t('web.panels.bg_task_aria')" data-testid="bg-task">
+      <button type="submit" class="primary" :disabled="starting || task.trim() === ''">{{ t('web.panels.bg_start') }}</button>
       <!-- bg01 row 1: the mode is the server's, the refusal consequence is the user-facing half. -->
-      <p class="mode-note" data-testid="bg-mode-note">The daemon runs in this server's permission mode; actions it would need to ask about are refused — there is no terminal to answer them.</p>
+      <p class="mode-note" data-testid="bg-mode-note">{{ t('web.panels.bg_mode_note') }}</p>
     </form>
     <p v-if="error || background.error" class="error" role="alert">{{ error || background.error }}</p>
-    <p v-if="background.items.length === 0" class="empty">No background sessions.</p>
+    <p v-if="background.items.length === 0" class="empty">{{ t('web.panels.bg_empty') }}</p>
     <ul class="items">
       <li v-for="session in background.items" :key="session.bgId" :data-status="session.status" data-testid="bg-item">
         <button type="button" class="head" :aria-expanded="expanded === session.bgId" @click="toggle(session)">
@@ -162,26 +163,26 @@ function toggle(session: BackgroundSession): void {
           <p v-if="session.error" class="error">{{ session.error }}</p>
           <pre data-testid="bg-output">{{ background.output(session.bgId).text || (background.output(session.bgId).loading ? 'Loading…' : 'No output yet.') }}</pre>
           <div v-if="canWrite" class="actions">
-            <button type="button" @click="background.loadOutput(session.bgId)">Refresh output</button>
-            <button v-if="!isSettled(session)" type="button" class="danger" @click="act(() => background.stop(session.bgId))">Stop</button>
-            <button v-else-if="sessionId" type="button" data-testid="bg-inject" @click="act(() => background.inject(session.bgId, sessionId!))">Send to this session</button>
+            <button type="button" @click="background.loadOutput(session.bgId)">{{ t('web.panels.bg_refresh_output') }}</button>
+            <button v-if="!isSettled(session)" type="button" class="danger" @click="act(() => background.stop(session.bgId))">{{ t('web.panels.stop') }}</button>
+            <button v-else-if="sessionId" type="button" data-testid="bg-inject" @click="act(() => background.inject(session.bgId, sessionId!))">{{ t('web.panels.bg_send') }}</button>
           </div>
         </div>
       </li>
     </ul>
     <section class="schedules" data-testid="bg-schedules">
       <div class="sched-head">
-        <h3>Schedules</h3>
-        <button v-if="sessionId" type="button" data-testid="bg-schedules-refresh" :disabled="schedulesBusy" @click="act(loadSchedules)">Refresh</button>
+        <h3>{{ t('web.panels.bg_schedules') }}</h3>
+        <button v-if="sessionId" type="button" data-testid="bg-schedules-refresh" :disabled="schedulesBusy" @click="act(loadSchedules)">{{ t('web.panels.refresh') }}</button>
       </div>
-      <p v-if="!sessionId" class="empty">Open a session to read its schedule roster.</p>
+      <p v-if="!sessionId" class="empty">{{ t('web.panels.bg_open_roster') }}</p>
       <p v-else-if="scheduleLines.length === 0" class="empty" data-testid="bg-schedules-empty">{{ schedulesBusy ? 'Loading…' : 'No schedules listed.' }}</p>
       <ul v-else>
         <li v-for="(line, index) in scheduleLines" :key="index" data-testid="bg-schedule-line">
           <span class="sched-text">{{ line.text }}</span>
           <span v-if="line.name !== null && canWrite" class="actions">
             <button type="button" :data-testid="`bg-schedule-toggle-${line.name}`" @click="editSchedule(`${line.enabled ? 'disable' : 'enable'} ${line.name}`)">{{ line.enabled ? 'Disable' : 'Enable' }}</button>
-            <button type="button" class="danger" :data-testid="`bg-schedule-delete-${line.name}`" @click="editSchedule(`delete ${line.name}`)">Delete</button>
+            <button type="button" class="danger" :data-testid="`bg-schedule-delete-${line.name}`" @click="editSchedule(`delete ${line.name}`)">{{ t('web.panels.delete') }}</button>
           </span>
         </li>
       </ul>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { t } from '../../lib/i18n'
 import { useRouter } from 'vue-router'
 import { oneLine } from '../../lib/format'
 import { bindingFor, captureActive, matchesBinding } from '../../lib/keymap'
@@ -167,13 +168,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
 
 <template>
   <div v-if="panels.paletteOpen" class="backdrop" data-testid="palette-backdrop" @click.self="panels.togglePalette(false)">
-    <div class="palette" role="dialog" aria-modal="true" aria-label="Command palette" data-testid="command-palette">
+    <div class="palette" role="dialog" aria-modal="true" :aria-label="t('web.panels.palette_aria')" data-testid="command-palette">
       <input
         ref="input"
         v-model="query"
         type="text"
-        placeholder="Sessions, commands, panels…"
-        aria-label="Search the palette"
+        :placeholder="t('web.panels.palette_ph')"
+        :aria-label="t('web.panels.palette_search_aria')"
         role="combobox"
         aria-controls="palette-list"
         :aria-expanded="true"
@@ -199,7 +200,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
           <span class="label">{{ entry.label }}</span>
           <span v-if="entry.hint" class="hint">{{ entry.hint }}</span>
         </li>
-        <li v-if="shown.length === 0" class="none">Nothing matches.</li>
+        <li v-if="shown.length === 0" class="none">{{ t('web.panels.palette_empty') }}</li>
       </ul>
     </div>
   </div>

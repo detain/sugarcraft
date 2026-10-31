@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { t } from '../../lib/i18n'
 import type { MethodResult, PermissionMode } from '../../protocol/generated'
 import { useConnectionStore } from '../../stores/connection'
 import { describe } from '../../stores/session'
@@ -121,15 +122,15 @@ onMounted(() => void load())
     <div class="head">
       <span class="mode" data-testid="rules-mode">mode: {{ mode ?? 'unknown' }}</span>
       <span v-if="modeSource" class="src" data-testid="rules-source" :title="modeSource">{{ modeSource }}</span>
-      <button type="button" class="link" data-testid="rules-reload" :disabled="loading" @click="load">reload</button>
+      <button type="button" class="link" data-testid="rules-reload" :disabled="loading" @click="load">{{ t('web.panels.reload') }}</button>
     </div>
     <p v-if="error" class="error" role="alert" data-testid="rules-error">{{ error }}</p>
-    <p v-else-if="loading && !loaded" class="empty">Loading the policy…</p>
+    <p v-else-if="loading && !loaded" class="empty">{{ t('web.panels.rules_loading') }}</p>
     <template v-else-if="loaded">
-      <p v-if="rules.length === 0" class="empty" data-testid="rules-none">The server configured no allow/ask/deny rules.</p>
+      <p v-if="rules.length === 0" class="empty" data-testid="rules-none">{{ t('web.panels.rules_no_rules') }}</p>
       <table v-else class="list" data-testid="rules-list">
         <thead>
-          <tr><th>Pattern</th><th>Action</th></tr>
+          <tr><th>{{ t('web.panels.rules_pattern') }}</th><th>{{ t('web.panels.rules_action') }}</th></tr>
         </thead>
         <tbody>
           <tr v-for="rule in configured" :key="`${rule.pattern} ${rule.action}`" data-testid="rule-row">
@@ -138,29 +139,29 @@ onMounted(() => void load())
           </tr>
         </tbody>
       </table>
-      <h3>Saved in your config</h3>
-      <p v-if="saved.length === 0" class="empty" data-testid="rules-saved-none">Nothing has been saved for future launches.</p>
+      <h3>{{ t('web.panels.rules_saved_config') }}</h3>
+      <p v-if="saved.length === 0" class="empty" data-testid="rules-saved-none">{{ t('web.panels.rules_no_saved') }}</p>
       <template v-else>
         <ul data-testid="rules-saved">
           <li v-for="row in saved" :key="`saved-${row.savedIndex}-${row.pattern}`" data-testid="saved-row">
             <span class="idx">{{ row.savedIndex }}.</span>
             <span class="pattern">{{ row.pattern }}</span>
             <span class="action" :data-action="row.action">{{ row.action }}</span>
-            <button type="button" class="link" :disabled="forgetting !== null" data-testid="saved-forget" @click="forget(row)">Forget</button>
+            <button type="button" class="link" :disabled="forgetting !== null" data-testid="saved-forget" @click="forget(row)">{{ t('web.panels.rules_forget') }}</button>
           </li>
         </ul>
-        <p class="note" data-testid="rules-saved-note">A saved rule takes effect at the next launch — this session keeps the policy it started with.</p>
+        <p class="note" data-testid="rules-saved-note">{{ t('web.panels.rules_launch_note') }}</p>
       </template>
       <p v-if="forgetError" class="error" role="alert" data-testid="rules-forget-error">{{ forgetError }}</p>
-      <h3>Grants made this session</h3>
-      <p v-if="sessionGrants.length === 0" class="empty" data-testid="grants-none">Nothing has been granted while running.</p>
+      <h3>{{ t('web.panels.rules_grants') }}</h3>
+      <p v-if="sessionGrants.length === 0" class="empty" data-testid="grants-none">{{ t('web.panels.rules_no_grants') }}</p>
       <ul v-else data-testid="grants-list">
         <li v-for="grant in sessionGrants" :key="grant" data-testid="grant-row">{{ grant }}</li>
       </ul>
-      <h3>Recent decisions</h3>
-      <p v-if="auditUnreadable" class="error" data-testid="rules-audit-unreadable">The server could not read its audit trail just now.</p>
-      <p v-else-if="auditRows === null" class="empty" data-testid="rules-audit-none">This server does not report audited decisions.</p>
-      <p v-else-if="auditRows.length === 0" class="empty" data-testid="rules-audit-none">No tool calls have been audited yet.</p>
+      <h3>{{ t('web.panels.rules_recent') }}</h3>
+      <p v-if="auditUnreadable" class="error" data-testid="rules-audit-unreadable">{{ t('web.panels.rules_trail_error') }}</p>
+      <p v-else-if="auditRows === null" class="empty" data-testid="rules-audit-none">{{ t('web.panels.rules_no_report') }}</p>
+      <p v-else-if="auditRows.length === 0" class="empty" data-testid="rules-audit-none">{{ t('web.panels.rules_no_audit') }}</p>
       <ul v-else data-testid="rules-audit">
         <li v-for="(row, index) in auditRows" :key="`${row.time}-${index}`" class="decision" :class="`decision-${row.verdict}`" data-testid="audit-row" :data-verdict="row.verdict">
           <span class="idx">{{ row.time }}</span>
@@ -170,7 +171,7 @@ onMounted(() => void load())
           <span v-if="row.reason" class="reason">{{ row.reason }}</span>
         </li>
       </ul>
-      <p class="note" data-testid="rules-audit-note">The trail is this user's own redacted audit log, read from a bounded tail on the server. A serve started under a different HOME or TMPDIR reads a different — usually empty — one.</p>
+      <p class="note" data-testid="rules-audit-note">{{ t('web.panels.rules_trail_note') }}</p>
     </template>
   </div>
 </template>

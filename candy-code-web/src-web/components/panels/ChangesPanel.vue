@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { t } from '../../lib/i18n'
 import type { MethodParams, MethodResult } from '../../protocol/generated'
 import { diffSectionForPath } from '../../lib/diff'
 import { useConnectionStore } from '../../stores/connection'
@@ -127,7 +128,7 @@ onMounted(() => void load())
         class="base"
         :value="base"
         data-testid="changes-base"
-        aria-label="Diff base"
+        :aria-label="t('web.panels.changes_base_aria')"
         :disabled="loading"
         @change="chooseBase"
       >
@@ -135,13 +136,13 @@ onMounted(() => void load())
         <option v-for="k in bases" :key="k" :value="k">{{ k }} turn{{ k === 1 ? '' : 's' }} ago</option>
       </select>
       <span v-if="loaded" class="count" data-testid="changes-count">{{ items.length }} changed</span>
-      <button type="button" class="link" data-testid="changes-reload" :disabled="loading" @click="load">reload</button>
+      <button type="button" class="link" data-testid="changes-reload" :disabled="loading" @click="load">{{ t('web.panels.reload') }}</button>
     </div>
     <p v-if="error" class="error" role="alert" data-testid="changes-error">{{ error }}</p>
-    <p v-else-if="loading && !loaded" class="empty">Checking the workspace…</p>
+    <p v-else-if="loading && !loaded" class="empty">{{ t('web.panels.changes_checking') }}</p>
     <template v-else-if="loaded">
-      <p v-if="changedTruncated" class="warn" data-testid="changes-truncated">The changed list is truncated.</p>
-      <p v-if="items.length === 0" class="empty" data-testid="changes-none">The workspace is clean.</p>
+      <p v-if="changedTruncated" class="warn" data-testid="changes-truncated">{{ t('web.panels.changes_truncated_list') }}</p>
+      <p v-if="items.length === 0" class="empty" data-testid="changes-none">{{ t('web.panels.changes_clean') }}</p>
       <ul v-else class="list" data-testid="changes-list">
         <li v-for="item in items" :key="item.path" class="entry">
           <button
@@ -156,20 +157,20 @@ onMounted(() => void load())
             <span class="path">{{ item.path }}</span>
             <span v-if="item.from" class="from">{{ item.from }} →</span>
           </button>
-          <button type="button" class="view" :data-testid="`changed-view-${item.path}`" title="View the file" @click="viewerPath = item.path">view</button>
+          <button type="button" class="view" :data-testid="`changed-view-${item.path}`" :title="t('web.panels.changes_view_title')" @click="viewerPath = item.path">{{ t('web.panels.changes_view') }}</button>
         </li>
       </ul>
       <FileViewer v-if="viewerPath !== null" :path="viewerPath" @close="viewerPath = null" />
-      <p v-if="diffTruncated" class="warn" data-testid="diff-truncated">The workspace diff is truncated.</p>
+      <p v-if="diffTruncated" class="warn" data-testid="diff-truncated">{{ t('web.panels.changes_truncated_diff') }}</p>
       <!-- The stub precedes the untracked line in this chain: a refused diff is not an untracked file. -->
       <p v-if="diffError" class="error" role="alert" data-testid="changes-diff-error">{{ diffError }}</p>
       <p v-else-if="untracked" class="empty" data-testid="changes-untracked">{{ selected }} is untracked — no diff for it in the workspace.</p>
       <template v-else-if="shownDiff">
         <div class="diff-head">
           <span v-if="selection" class="sel" data-testid="changes-selected">{{ selection.path }}</span>
-          <span v-else class="sel" data-testid="changes-selected">all files</span>
+          <span v-else class="sel" data-testid="changes-selected">{{ t('web.panels.changes_all_files') }}</span>
           <span v-if="base > 0" class="hint" data-testid="changes-diff-ref">against {{ diffRef }}</span>
-          <span v-else-if="selection" class="hint">click the row again for the whole diff</span>
+          <span v-else-if="selection" class="hint">{{ t('web.panels.changes_hint') }}</span>
         </div>
         <DiffView :diff="shownDiff" />
       </template>

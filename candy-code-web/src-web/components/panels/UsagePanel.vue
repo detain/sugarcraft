@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { t } from '../../lib/i18n'
 import { spendLabel, tokens } from '../../lib/format'
 import { useConnectionStore } from '../../stores/connection'
 import { useServerSettingsStore } from '../../stores/settings/serverSettings'
@@ -103,27 +104,27 @@ function modelKey(row: ModelRow): string {
   return row.model ?? ''
 }
 
-const windowLabel = computed(() => (windowDays.value === 0 ? 'whole ledger' : `last ${windowDays.value} days`))
+const windowLabel = computed(() => (windowDays.value === 0 ? t('web.panels.usage_whole') : t('web.panels.usage_last_days', { days: windowDays.value })))
 </script>
 
 <template>
   <div class="usage-panel" data-testid="usage-panel">
     <div class="head">
       <span class="count">usage · {{ windowLabel }}</span>
-      <span class="scopes" role="group" aria-label="scope">
-        <button type="button" class="link" :class="{ on: scope === 'session' }" data-testid="usage-scope-session" @click="chooseScope('session')">session</button>
-        <button type="button" class="link" :class="{ on: scope === 'all' }" data-testid="usage-scope-all" @click="chooseScope('all')">all</button>
+      <span class="scopes" role="group" :aria-label="t('web.panels.usage_scope_aria')">
+        <button type="button" class="link" :class="{ on: scope === 'session' }" data-testid="usage-scope-session" @click="chooseScope('session')">{{ t('web.panels.usage_session') }}</button>
+        <button type="button" class="link" :class="{ on: scope === 'all' }" data-testid="usage-scope-all" @click="chooseScope('all')">{{ t('web.panels.usage_all') }}</button>
       </span>
-      <span class="windows" role="group" aria-label="window">
-        <button type="button" class="link" :class="{ on: windowDays === 0 }" data-testid="usage-window-full" @click="chooseWindow(0)">full</button>
+      <span class="windows" role="group" :aria-label="t('web.panels.usage_window_aria')">
+        <button type="button" class="link" :class="{ on: windowDays === 0 }" data-testid="usage-window-full" @click="chooseWindow(0)">{{ t('web.panels.usage_full') }}</button>
         <button type="button" class="link" :class="{ on: windowDays === 7 }" data-testid="usage-window-7" @click="chooseWindow(7)">7d</button>
         <button type="button" class="link" :class="{ on: windowDays === 30 }" data-testid="usage-window-30" @click="chooseWindow(30)">30d</button>
       </span>
-      <button type="button" class="link" data-testid="usage-reload" :disabled="loading" @click="load()">reload</button>
+      <button type="button" class="link" data-testid="usage-reload" :disabled="loading" @click="load()">{{ t('web.panels.reload') }}</button>
     </div>
 
     <p v-if="error" class="error" role="alert" data-testid="usage-error">{{ error }}</p>
-    <p v-else-if="loading && answer === null" class="empty">Reading the ledger…</p>
+    <p v-else-if="loading && answer === null" class="empty">{{ t('web.panels.usage_reading') }}</p>
 
     <template v-else-if="answer">
       <p class="totals" data-testid="usage-totals">
@@ -135,13 +136,13 @@ const windowLabel = computed(() => (windowDays.value === 0 ? 'whole ledger' : `l
 
       <p class="retention" data-testid="usage-retention">
         Sessions kept {{ answer.retentionDays }} day{{ answer.retentionDays === 1 ? '' : 's' }}
-        <a v-if="retentionWritable" class="link" href="#/settings" data-testid="usage-settings-link">adjust in Settings</a>
+        <a v-if="retentionWritable" class="link" href="#/settings" data-testid="usage-settings-link">{{ t('web.panels.usage_adjust') }}</a>
       </p>
 
       <section v-if="answer.days.length" class="grid" data-testid="usage-day-grid">
         <table>
           <thead>
-            <tr><th>day</th><th>model</th><th>calls</th><th>tokens</th><th>spend</th></tr>
+            <tr><th>{{ t('web.panels.usage_day') }}</th><th>{{ t('web.panels.usage_model') }}</th><th>{{ t('web.panels.usage_calls') }}</th><th>{{ t('web.panels.usage_tokens') }}</th><th>{{ t('web.panels.usage_spend') }}</th></tr>
           </thead>
           <tbody>
             <tr v-for="row in answer.days" :key="dayKey(row)">
@@ -158,7 +159,7 @@ const windowLabel = computed(() => (windowDays.value === 0 ? 'whole ledger' : `l
       <section v-if="answer.models.length" class="models" data-testid="usage-model-table">
         <table>
           <thead>
-            <tr><th>model</th><th>calls</th><th>tokens</th><th>spend</th></tr>
+            <tr><th>{{ t('web.panels.usage_model') }}</th><th>{{ t('web.panels.usage_calls') }}</th><th>{{ t('web.panels.usage_tokens') }}</th><th>{{ t('web.panels.usage_spend') }}</th></tr>
           </thead>
           <tbody>
             <tr v-for="row in answer.models" :key="modelKey(row)">
@@ -171,7 +172,7 @@ const windowLabel = computed(() => (windowDays.value === 0 ? 'whole ledger' : `l
         </table>
       </section>
 
-      <p v-if="!answer.days.length && !answer.models.length && !answer.reason" class="empty" data-testid="usage-empty">No calls on this ledger yet.</p>
+      <p v-if="!answer.days.length && !answer.models.length && !answer.reason" class="empty" data-testid="usage-empty">{{ t('web.panels.usage_no_calls') }}</p>
     </template>
   </div>
 </template>
