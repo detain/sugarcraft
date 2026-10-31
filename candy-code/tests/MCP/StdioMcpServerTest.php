@@ -440,6 +440,54 @@ final class StdioMcpServerTest extends TestCase
         $this->assertTrue(true, 'reaching here is the assertion');
     }
 
+    public function testTheSpawnPlanPrefixesInsideTheContainmentWrap(): void
+    {
+        // C-TOOL-4.e: the jail prefix sits AFTER the detach wrapper and
+        // BEFORE the server command — the containment wrap stays the outer
+        // shape and the @proc_open site in the library never sees a new
+        // token (PREFIX-ONLY law).
+        $server = new StdioMcpServer(
+            name: 'jailplan',
+            command: '/bin/true',
+            args: ['--x'],
+            env: [],
+            spawnPrefix: ['sentinel-jail-bin', '--ro', '--'],
+        );
+
+        $plan = $this->planThrough($server, 'jailplan', ['/bin/true', '--x'], []);
+        $detach = count(ProcessContainment::detachedSpawnPrefix());
+
+        $this->assertSame(
+            ['sentinel-jail-bin', '--ro', '--', '/bin/true', '--x'],
+            array_slice($plan[0], $detach),
+            'the jail prefix must lead the command, right after the detach wrapper',
+        );
+    }
+
+    public function testThePreCheckStillGatesTheServerBinaryUnderAPrefix(): void
+    {
+        // If the pre-check ever read the prefix head instead of argv[0], the
+        // on-PATH sentinel would pass and this would NOT raise — the bogus
+        // binary behind it is what must fail.
+        $binary = 'definitely-not-on-any-path-' . \bin2hex(\random_bytes(6));
+        $server = new StdioMcpServer(
+            name: 'jailpre',
+            command: $binary,
+            args: [],
+            env: [],
+            spawnPrefix: ['/bin/echo'],
+        );
+
+        $raised = null;
+        try {
+            $this->planThrough($server, 'jailpre', [$binary], []);
+        } catch (\RuntimeException $failure) {
+            $raised = $failure->getMessage();
+        }
+
+        $this->assertSame('Failed to start MCP server: jailpre', $raised);
+    }
+
     // =========================================================================
     // Fixtures and helpers — names unique tree-wide (helper-drift discipline)
     // =========================================================================

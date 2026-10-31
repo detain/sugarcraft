@@ -24,6 +24,7 @@ final class McpTrustPinsTest extends TestCase
             'arg order' => ['args' => ['some-mcp', '-y']] + self::ENTRY,
             'env' => ['env' => ['TOKEN' => '${TOKEN}', 'LD_PRELOAD' => '/tmp/x.so']] + self::ENTRY,
             'an unanticipated key' => self::ENTRY + ['cwd' => '/elsewhere'],
+            'sandbox opt-out flip' => self::ENTRY + ['sandbox' => false],
         ] as $what => $entry) {
             self::assertNotSame($base, McpTrustPins::fingerprint('stdio', $entry), $what);
         }

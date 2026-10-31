@@ -213,6 +213,18 @@ final class LspLauncherTest extends TestCase
         $this->assertFalse($client->isConnected('php'));
     }
 
+    public function testTheSandboxKeyOnlyReadsALiteralFalseAsAnOptOut(): void
+    {
+        $parse = new \ReflectionMethod(LspLauncher::class, 'parseServer');
+        $parse->setAccessible(true);
+
+        $this->assertTrue($parse->invoke(null, 'php', ['command' => 'x'])['sandbox']);
+        $this->assertFalse($parse->invoke(null, 'php', ['command' => 'x', 'sandbox' => false])['sandbox']);
+        // Strictest reading: a truthy or junk spelling jails.
+        $this->assertTrue($parse->invoke(null, 'php', ['command' => 'x', 'sandbox' => 'false'])['sandbox']);
+        $this->assertTrue($parse->invoke(null, 'php', ['command' => 'x', 'sandbox' => null])['sandbox']);
+    }
+
     /**
      * @param array<string, array<string, mixed>> $config
      */
