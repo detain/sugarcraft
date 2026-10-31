@@ -119,7 +119,8 @@
   "PHANTOM-PICK-CHAIN-6c-foldstate-t949": "Post-@b13@ notes carried \"C-TUI-6.c 3 picks landed e523687a1/117dd0544/e79185851\" — cat-file: NOT OBJECTS; cherry four +. Claim leaked from mid-weld wake prose not yet blob-checked. RE-LOCKED: every sha entering run-state passes cat-file in the same writing shell; promotion never off it.",
   "TUI6G-R2-DOUBLE-NOARTIFACT-t952": "Second FINISHED mid-fragment return from the resumed r2 session with zero artifact on disk both times (fragment tails: ...Pruning the scratch worktree: / ...expect GREEN): — session context-starved, honest but unable to land. Third cut dispatched with file-MUST-exist clause. The one-chance precedent chain (6.j 19,098 B, 5.c 12,057 B, 6.f fix) worked three times and fired its limit once here — the rule is bounded by design.",
   "WELDER-KEY-LOSS-6c-ERAS-ZERO-WRITE-t952": "6.c welder lineage: id lost from registry mid-preflight (lost-write family #86/#87), two-era zero-write stall confirmed by blob (master/marks/cherry/reflog). Fresh welder sanctioned per armed rule; zombie wake gets STOP-ORDER-then-blob-judgment. Walk-check #100 now covers registry-key presence AND absence-remedy.",
-  "6J-FINISHER-LINEAGE-t983": "6.j lane completed on disk through a chain of unregistered helper spawns (builder self-spawned TWO finishers across resumes; ids ses_e6cd026dbffe… and ses_e6cbb6e91ffe… surfaced only in prose/wakes, never in my returns). Rule re-banked hard: never wake-wait on child sessions I did not receive; lane truth = tip/porcelain/REPORT only. Work landed genuine (5 picks, clean, law greps pending print above). No harm; noted to keep future briefs from relying on self-spawned finishers — finish-in-session or stop-point + lead dispatches a NEW builder under MY id."
+  "6J-FINISHER-LINEAGE-t983": "6.j lane completed on disk through a chain of unregistered helper spawns (builder self-spawned TWO finishers across resumes; ids ses_e6cd026dbffe… and ses_e6cbb6e91ffe… surfaced only in prose/wakes, never in my returns). Rule re-banked hard: never wake-wait on child sessions I did not receive; lane truth = tip/porcelain/REPORT only. Work landed genuine (5 picks, clean, law greps pending print above). No harm; noted to keep future briefs from relying on self-spawned finishers — finish-in-session or stop-point + lead dispatches a NEW builder under MY id.",
+  "PHANTOM-COMPLETION-C-TOOL-6j-FIXER-t992": "Second child-side phantom-completion (after #111 C-TOOL-6.g builder): completed-state receipt with confident sha 432121a03 + file-size claims for commits/artifacts that do not exist, while work sits uncommitted. Same remedy proven: evidence-grounded same-session correction resume with commit-the-dirty-set order; refuse the receipt, bank nothing off it. Watch all future fixer/builder receipts with cat-file-before-bank (law already universal; this is its second firing)."
  },
  "batch1030M_note_lane2": "C-TUI-4.b welded batch-1030M: picks e5ab9c7f2/f57e82f25 -> a527faadb/2ff921113 zero conflicts; dist rebuilt (index-D4-Fago9.js/DS0QTvoO.css); vitest 2f/36T+17f/135T EXACT; vue-tsc --build 21 foreign/0 lane — reviewer denied-empirical item CLOSED; no DUR rows (no PHP tests); ARCHITECTURE:155 dispatch-arms=64 from LANDED BLOB; §4 mark incident #2: first mark edit swept by concurrent checkout ~05:57, re-applied same turn. weld commit carries REVIEW-1.md copy. NO PUSH. master_tip above = final pick, NOT the weld commit (a commit cannot contain its own SHA).",
  "batch1030M_note_lane3": "C-SEC-7.a welded batch-1030M: 8 picks 4306ec4b2..642827a9a -> 9ce183850..eee747273 onto 750b99c49, zero conflicts; SETTINGS regen up-to-date/--check rc0; collisions none; DUR minted HeadlessDefaultPermissionModeTest 0.058/10 (median of 3 junit); LangParity|DocFigure 99T/7423A green; touched-classes all variants green (155T/534A full, 516T superset green); guard quintet 134T/17341A/3F = staleness pair + FOREIGN C-SES-7.d HEAVY_CHARS dup red pre-existing at 750b99c49 (new standing red reported); +10T carry, no suite-figure re-pin; REVIEW-5/6/8 copied main-tree->branch (sizes verified); lead 8576B untracked REPORT.md backed up to /tmp/opencode/weld-1030m/C-SEC-7.a-main-tree-backup/ to unblock pick (branch 8724B version landed). NO PUSH. master_tip = final pick, NOT own weld commit.",
@@ -316,35 +317,32 @@
    "commits_off_base": 5,
    "reviewer": "ses_e6d48549affeLwhSWueVHVWhML"
   },
-  "C-TOOL-4.g": {
+  "C-TOOL-6.j": {
    "stage": "welding",
    "round": 2,
-   "worktree": "/home/sites/cc-cmp-C-TOOL-4.g",
-   "branch": "cc/C-TOOL-4.g",
-   "base": "895b9d6fd",
-   "builder": "ses_e6cfd86b9ffeKSSjSSUCWyUdSF",
-   "tip": "fcda09f3b",
-   "pick_range": "895b9d6fd..ed626d858",
-   "commits_off_base": 3,
-   "reviewer": "ses_e6cc3db2dffe5zPtNJ6VrqAz76",
-   "note": "welder resumed-1 for record half; picks on master",
-   "fixer": "ses_e6ccf9991ffe66j01wVlpVuCxX",
-   "welder": "ses_e6cafde31ffe4T3pYmyQuyyaHW"
-  },
-  "C-TOOL-6.j": {
-   "stage": "fix",
-   "round": 1,
    "worktree": "/home/sites/cc-cmp-C-TOOL-6.j",
    "branch": "cc/C-TOOL-6.j",
    "base": "895b9d6fd",
    "builder": "ses_e6cfd86b8ffew7vM4XLA4xtqAn",
    "resume_count": 1,
-   "tip": "a8628f131",
-   "commits_off_base": 5,
-   "note": "r1 banked FINDINGS 1M/1min; F-A one-line cure + F-B capture-pre-injection; five reviewed picks NEVER amended",
-   "pick_range": "895b9d6fd..a8628f131",
-   "reviewer": "ses_e6cb953e5ffelYL4TpPWXv9nbA",
-   "fixer": "ses_e6cab0f02ffeJeC20YN91Bw8BG"
+   "tip": "6a6b6c9f5",
+   "commits_off_base": 6,
+   "note": "r2 CLEAN banked; WELDER dispatching THIS tick (slot idle; six picks read-from-lane; heading UNMARKED re-verified in dispatch shell)",
+   "pick_range": "895b9d6fd..6a6b6c9f5",
+   "reviewer": "ses_e6c9961b9ffeqxeMZpE1cdUMpV",
+   "fixer": "ses_e6cab0f02ffeJeC20YN91Bw8BG",
+   "welder": "ses_e6c8e7452ffentmZ2YxJOQbsLg"
+  },
+  "C-WEB-5.e": {
+   "stage": "review",
+   "round": 1,
+   "worktree": "/home/sites/cc-cmp-C-WEB-5.e",
+   "branch": "cc/C-WEB-5.e",
+   "base": "444bb0f70",
+   "builder": "ses_e6ca2dc1effe22MnHXtEk1q9Z6",
+   "tip": "c8b76091b",
+   "note": "FRESH r1 owed next tick (after welder registration; centers: SW hygiene, consent gates ALL push calls, no second client, bearer-never-persist, TRIO-UNOWED re-derive, dist-RESTORE + web.yml drift LIST, 551 sorted span + dupscan + guard pairs NON-ZERO, vitest serial + vue-tsc base-red adjudication, E646 bounded; header-first lanes/C-WEB-5.e/REVIEW-1.md MUST exist)",
+   "reviewer": "ses_e6c8de4cbffecB4dU771qG4ZSJ"
   }
  },
  "last_lead": "cc-cmp-lead(1030AA)",
@@ -407,7 +405,7 @@
   "BUILDERS": "none (owner t423 freeze)",
   "FIXERS": "none"
  },
- "master_tip": "2bed47348b133b22b2ef97a78c9843555b9962f2",
+ "master_tip": "444bb0f708edabdea6b5d9b4847a3c91e237b5a6",
  "master_tip_at_dispatch": "9fb981c5c",
  "master_tip_observed": "ca1e0b51f",
  "next_fill_queue": [],
@@ -645,7 +643,7 @@
   "owner": "SERIALIZE any master-direct cure behind the running welder; candidate mini-cure lane after current welds land (a2d5d0e3f precedent), else §7 closeout absorbs"
  },
  "status": "RUNNING",
- "tick": "t989-4g-welder-resume1",
+ "tick": "t998-5e-r1-live",
  "tip": "4f1bdab31",
  "updated": "2026-10-30T22:46:48Z",
  "wave_loops": {
@@ -1595,9 +1593,10 @@
   "C-CTX-5.d": "r3 CLEAN 0C/0M REVIEW-3.md 10590B header-first. Pick b503bb054..35ba713a8 EXCL 3 (eb5108c9c/7179a0f58/35ba713a8; expect Chat/SessionHost/en collisions vs moved master - content-resolve, NEVER tree-copy). DUR RE-TIME KeepWarmTest 14->17; CacheHealthWatchTest row 20 present-check. §7 ~+18T. §4 mark text MUST carry: deviations (a)-(g) design-wins, spend-cap binds keep-warm tick (HandlesRunControl :501 gate), single anchor producer/tick (SessionHost :1097 + policy :152), MAJOR-2 REFUTED/retracted (brief premise confab - on-disk REVIEW-1 8050B 1M). Collect disk FIX-1.md (6160B on disk per r3; fixer had said 4098B - take disk) + REVIEW-3.md onto branch pre-prune. Gates post-pick: KeepWarm 17T/68A, +CHW 40T/173A, union 71T/289A, DocFigure 92T/4177A, DTHD 106T/4380A."
  },
  "weld_pending": [
-  "C-TOOL-4.g (LIVE NOW — sole master writer; DoD verify COUNT 312 + heading CK+3 landed shas by TEXT + reflog 3+2 + cherry + trio-clean paths + prune + md5 BEFORE promoting)",
-  "C-TOOL-6.g (CRITICAL PATH — W35 LAST member; r1 resumed-1 STILL artifactless (ABSENT @t985); bank ONLY off real lanes/C-TOOL-6.g/REVIEW-1.md; finished-no-artifact => VOID + FRESH third cut; on CLEAN cut its welder FIRST — carry in @b16@/@b17@; its weld => W35 7/7 => quiescence => loop => flip => MY push)",
-  "C-TOOL-6.j (after r1 verdict loop)"
+  "C-TOOL-6.j (DISPATCHING NOW: six explicit picks fbdf219e8/747aa6c44/86a340422/65196e347/a8628f131/6a6b6c9f5 off 895b9d6fd NEVER a range no -x; marks 312->313; prune survivors cc/C-TOOL-6.g + cc/C-WEB-5.e; §4 phantom-arc disclosure citing FIX-1)",
+  "C-TOOL-6.g (CRITICAL PATH r1 pending — W35 completer; full carry in @b29@/registry)",
+  "C-WEB-5.e (after loop)",
+  "C-TOOL-4.g... WELDED 312"
  ],
  "weld_queue": {
   "_legacy_list": [
@@ -1819,6 +1818,7 @@
   "C-TOOL-4.d",
   "C-TOOL-4.e",
   "C-TOOL-4.f",
+  "C-TOOL-4.g",
   "C-TOOL-4.h",
   "C-TOOL-5.a",
   "C-TOOL-5.b",
@@ -1925,7 +1925,7 @@
   "P-TABS.g",
   "P-TABS.h"
  ],
- "welded_count": 311,
+ "welded_count": 312,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "welder_inflight_note": "WELDER ses_e7448801cffejnqD7XXhFFoIJG RUNNING: its welded_count=243 + the §4 ✅ 94432cfd1 C-SES-8.a line are UNCOMMITTED working-tree writes (a commit cannot contain its own SHA) -> do NOT read as landed; do NOT write run-state concurrently except minimal fresh-read targeted patches; RE-VERIFY my TOOL-2.f weld_pending + TOOL-2.g entries survive its fold.",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
@@ -2461,7 +2461,7 @@
    "cut_tick": "t937",
    "resume_count": 1,
    "terminal_evidence": "none yet",
-   "note": "t945 stat: lanes/C-TOOL-6.g/REVIEW-1.md STILL ABSENT — resumed-1 lineage working (artifactless != death, no twin). Law armed: a SECOND no-artifact FINISHED return => VOID round + FRESH third cut (6.j/5.c precedents). t960 stat: REVIEW-1.md STILL ABSENT (my read @138@) — resumed-1 lineage working; SECOND no-artifact finish => VOID + FRESH third cut (TUI-6.g third cut delivered CLEAN 10,087 B + weld 308 — precedent armed)."
+   "note": "t993 re-stat: lanes/C-TOOL-6.g/REVIEW-1.md STILL ABSENT (my own statx error printed) — resumed-1 artifactless continues; CRITICAL PATH; finished-no-artifact fires VOID+FRESH third cut."
   },
   "C-TUI-6.c:reviewer-r1": {
    "session": "ses_e6d485499ffekLzz0CZfrbOik4",
@@ -2572,21 +2572,31 @@
    "terminal_evidence": "t987 my own stat+verdict-line same-invocation: 10,540 B @14:56:49 | VERDICT: FINDINGS — 1 MAJOR (F-A: refusal-branch pin broken-by-construction, one-line cure) / 1 MINOR step-loc",
    "note": "ECHO: registered from RETURNED id desc==key (#99). Header-first mandate (three no-artifact deaths cited in brief). Centers: relay fd data-flow + no-hang pump/teardown parity, zero-new-cdef + sugar-pty factory reuse, §1.8 census rows same-commit (ChildLifetime/Descriptor/Stderr/ReadPath tight file+expression; over-broad=MAJOR) + DTH-siblings + sorted-run-or-zero-lang, pins delete-reasoned + anchored FULL Test-suffixed NON-ZERO (scratch rev-6j-r1-mut or UNCONFIRMED), inventory, weld-readiness vs foreign roster + pairing GREEN expected, §7 live counts + welder union-re-derive flags (master moved: 4.e-310 + 5.d-era welds since base 895b9d6fd). Finisher-lineage disclosure mandated; content not provenance."
   },
-  "C-TOOL-4.g:welder-r1": {
-   "session": "ses_e6cafde31ffe4T3pYmyQuyyaHW",
-   "status": "LIVE-RESUMED-1",
-   "cut_tick": "t986",
-   "terminal_evidence": "t987 my refs: all THREE 4.g picks on master (df106a84c allowlist mode / 8efbebce1 test+shelf cures / b07df4007 review fixes) atop 2bed47348; marks UNMOVED 311; own heading exact-form UNMARKED; lane+branch present = expected picks-first-record-second. TERMINAL owed; slot stays its; blob-denied receipt => refuse + record-half resume DO-NOT-RE-CHERRY-PICK (DO-NOT re-pick landed chain).",
-   "note": "t989 RESUME #1 SENT (error!=death; the harness class struck the original turn twice: blank completed-state then state=error delta-missing — both disk-adjudicated ZERO-RECORD mid-weld: all THREE picks landed b07df4007-era df106a84c/8efbebce1/b07df4007, marks 311, own heading UNMARKED, WELD.md incremental exists). Record-half-only order: DO-NOT-RE-CHERRY-PICK, gates re-verify, TWO commits (mark+evidence then run-state VERBATIM fresh-read md5), cherry 3-dash, prune survivors cc/C-TOOL-6.g + cc/C-TOOL-6.j, §4 disclosures incl EgressAllowlistMode 12T/100A RULE. If THIS resume dies again mid-record: resume #2 (<=10) same order; slot remains ITS until quotable TERMINAL or era-proven stall (then fresh welder under MY returned id, heading-UNMARKED blob-check FIRST, cherry shows the 3 picks as - already-absorbed: fresh cut MUST NOT re-apply - lines).",
-   "resume_count": 1
-  },
+  "C-TOOL-4.g:welder-r1": "TERMINAL-WELDED (t990 MY OWN refs: master 444bb0f70; COUNT 311 to 312; own heading exact-prefix checkmark df106a84c,8efbebce1,b07df4007 C-TOOL-4.g = the THREE landed picks per reflog; reflog 3-cherry+2-records zero foreign; c1 d8678780a = 6 paths (plan + lanes/C-TOOL-4.g/{FIX-1,REPORT,REVIEW-1,REVIEW-2,WELD}.md); c2 444bb0f70 = 1 path run-state.json md5 disk==blob fdb0de033df8; law %ae=2 %ce=2 SEPARATE COUNT greps Co-Authored=0; branch+worktree GONE; survivors exactly cc/C-TOOL-6.g + cc/C-TOOL-6.j; §4 line 9,628 chars carries 12T/100A RULE + WARN NEXT WELDER; deviations a-f accepted; pairing 39T/192A GREEN; Layered 99T/413A 0F. LINEAGE VINDICATED: blank+error double death at picks-landed-zero-record, then record-half-only resume #1 under DO-NOT-RE-CHERRY-PICK delivered the weld exactly once. NOTE: the 540-added-lines cherry content-proof disclosure for the 685ffddb5 union-conflict plus sign lives in WELD.md + receipt, not the §4 line (grep false there — no arithmetic mismatch).)",
   "C-TOOL-6.j:reviewer-r1-FACTS": "FINDINGS: F-A MAJOR PtyRelayTest.php:352 refusal-branch assertFalse(is_file(exit)) broken-by-construction (stageRelaySinks fopen xb PRE-CREATES .exit) — never-skip polarity can never pass on hosts that take it; cure assertSame empty-string vs file_get_contents exit path. F-B MINOR step-local BackgroundShellInteractiveTest:106 hard-asserts true post-reset — capture host answer pre-injection. NIT driveSend sub-ms pid→fifo window builder-disclosed for 6.k. PASSes: Q1 bounded waits (50ms tick, 1.0s drain cap, wait-after-exited, ECHILD-safe supervise) E646-clean; Q2 zero cdef/FFI added, sugar-pty public API + ProcessContainment reuse, no Windows exec; Q3 census/DIG/TWGR same-commit, ReadPath|DIG 34T/5950A, Registry|PtyRelay|Interactive|SuiteSkipRoster 77T/563A zero skips, combined==builder 111T/6513A, TWGR 17T/3925A DTH 14T/204A; Q5 8-file set declared+justified, zero forbidden, zero weakened/skips, GlobDialect corpus delta ZERO both directions 1F base-FOREIGN honored; Q6 reds == accepted-foreign exactly. WELD-ELIGIBLE NO until F-A cured (one line). §7 LIST: PtyRelayTest 8T/80A + BackgroundShellInteractiveTest 12T/75A + +20T suite carry; welder re-derives DIG/ReadPath/TWGR unions by TEXT on moved master. No mutation EXEC — map denied, UNCONFIRMED-BY-RUN honest per STATIC-CERT law (credited). No scratch; lane read-only held.",
   "C-TOOL-6.j:fixer-r1": {
    "session": "ses_e6cab0f02ffeJeC20YN91Bw8BG",
-   "status": "LIVE",
+   "status": "TERMINAL-BANKED-CORRECTED",
    "cut_tick": "t988",
+   "terminal_evidence": "t993 MY OWN verify (the phantom-playbook correction LANDED honestly): tip 6a6b6c9f5f3 cat-file commit, 6 picks off 895b9d6fd, porcelain 0, law ae=6 ce=6 SEPARATE COUNT greps Co-Authored=0, residue 0, forbidden-path grep across six picks = 0, git show --stat 6a6b6c9f5 == EXACTLY 2 test files candy-code/tests/Sessions/PtyRelayTest.php + candy-code/tests/Sessions/BackgroundShellInteractiveTest.php 12+/3- (paths are tests/Sessions — my first grep used tests/Runtime, PATH ARTIFACT not absence; blob-content coverage of the assertSame empty-exit leg + pre-injection hostCapable capture is the FRESH r2 job at the correct paths). FIX-1.md 5,203 B @15:16:51 real; REVIEW-1.md 10,540 + REPORT.md 9,366 mtimes UNCHANGED. Master untouched 444bb0f70 marks 312. Echo line returned this time. Arc: fabricated 432121a03 (anomaly t992) -> cat-file refutation -> same-session correction resume -> real commit of the previously-dirty cure set with honest acknowledgement — #111 playbook working on a fixer; anomaly count stays 117.",
+   "note": "claim quotes: F-A assertSame empty-string exit leg + WHY-comment; F-B pre-injection capture + assertSame(hostCapable, interactiveAvailable()); NIT fifo-window record-only; its 3-leg EXEC set (M1a/M1b/M2 refusal-door via disable_functions) + F-B mutation re-dowse = to be adjudicated by r2 EXEC-or-UNCONFIRMED; §7 r1 rows STAND: PtyRelayTest 8T/80A + BackgroundShellInteractiveTest 12T/75A + +20T suite carry; welder picks 6 incl 6a6b6c9f5",
+   "resume_count": 1
+  },
+  "C-WEB-5.e:builder": "TERMINAL-WITH-BUILD (t996 my own verify: tip c8b76091b, 2 picks off 444bb0f70, porcelain 0, law 2/2/0 separate COUNT greps, forbidden-path grep 0, welded-core diff ZERO lines (src/Server/Push + PushMethods + ServerContext READ-only reuse), REPORT 5,562 B @15:28:16. Web half 02e18c14c (sw.ts/push.ts/push.spec 20/vite/SettingsView/pwa/dormantRoster -3/en.php 10 keys BOTH sanctioned mirrors) + php half c8b76091b (StaticFiles WHY + sw.js pin, mutation-EXEC-proved 1F md5-restore). Consent gates enable() chain; locals never persisted; bearer/name payload pins; sw kind-allowlist+bidi+SESSION_ID gate. TRIO UNOWED (no RPC surface; per-pick exact-path grep 0); dist rebuilt->RESTORED porcelain 0 (welder carry: web.yml parity rebuild + drift list). 551-key sorted span dupscan 0; WebStrings 9T/586A + Lang pair 15T/4220A + StaticFiles 7T/43A + BARE pair. vue-tsc: own 0 / 28 base-inherited adjudicated-report-only. Deviations disclosed: manifest untouched, location.href registration, keys-missing branch unexercised. §7: NO new phpunit files (durations unchanged), push.spec.ts 20 vitest not durations-governed.)",
+  "C-TOOL-6.j:reviewer-r2": "TERMINAL-BANKED CLEAN (t996 my own stat+verdict-line: REVIEW-2.md 6443 B @15:27:11: VERDICT: CLEAN — F-A + F-B closed exactly as r1 prescribed; F-A EXEC-confirmed independently (3 — 0C/0M/0MINOR/0NIT WELD-ELIGIBLE YES. F-A CLOSED EXEC-CONFIRMED independently (forced refusal via disable_functions=posix_kill: cured leg GREEN, old is_file line RED, forged-X RED non-vacuous — FIX-1 M1a/M1b/M2 reproduced); F-B CLOSED pre-injection capture; zero-collateral additive 6th pick five reviewed byte-intact; gates PtyRelayTest 8T/80A + Interactive 12T/75A + combo 77T/563A + BARE pair 17T/3925A+14T/204A; RegistryTest:954 shrink transient + AccessorDeprecation pair = foreign report-only; §7 durations rows stand + +20T suite carry; /tmp/opencode/rev-6j-r2-mut left by denied-rm = sweep rider. Loop CLOSED: builder 5 picks + phantom-corrected fixer + r1 FINDINGS-1M + r2 CLEAN — the #111 playbook end-to-end.)",
+  "C-WEB-5.e:reviewer-r1": {
+   "session": "ses_e6c8de4cbffecB4dU771qG4ZSJ",
+   "status": "LIVE",
+   "cut_tick": "t998",
    "terminal_evidence": "none yet",
-   "note": "echo-registered desc==key (#99). F-A one-line refusal-branch cure per landed REVIEW-1.md (empty-string exit assertion replacing is_file false-assert; stageRelaySinks xb PRE-CREATES the file) + discriminating leg EXEC-or-UNCONFIRMED; F-B capture host pty answer pre-injection at BackgroundShellInteractiveTest:106; NIT fifo window record-only (6.k follow-up stands). Five reviewed picks NEVER amended; tests-only; master moves under it (4.g welder) — NEVER rebase; FIX-1 main-tree incremental; COMMIT LAW split-var separate COUNT greps; porcelain 0; never blank. After terminal: verify own refs then FRESH r2 closure (r1 ses_e6cb953e5ffe done)."
+   "note": "ECHO: registered from RETURNED id (desc==key #99). HEADER-FIRST REVIEW-1.md mandate (sibling double-void arc cited in brief). Centers: consent-gates-ALL-push-calls + locals-never-persisted + sw kind-allowlist/bidi/SESSION_ID gate/href whitelist pins; core zero-diff + auth-client reuse + TRIO-UNOWED exact-path greps + dormantRoster-vs-5.d byte-consistency; dist RESTORE proof + StaticFiles sw pin 7T/43A-era; 551-key sorted span derived + dupscan + guard pairs NON-ZERO; DTH across push/pwa specs; vue-tsc base-red 28 adjudication; vitest serial spot; deviations judged (manifest/href/unexercised branch); weld-readiness vs full foreign roster; §7 durations unchanged + push.spec 20 vitest note + web.yml parity welder-carry."
+  },
+  "C-TOOL-6.j:welder-r1": {
+   "session": "ses_e6c8e7452ffentmZ2YxJOQbsLg",
+   "status": "LIVE",
+   "cut_tick": "t997",
+   "terminal_evidence": "none yet",
+   "note": "ECHO: registered from RETURNED id (desc==key #99). SOLE master writer. SIX explicit picks fbdf219e8/747aa6c44/86a340422/65196e347/a8628f131/6a6b6c9f5 off 895b9d6fd NEVER a range no -x; heading UNMARKED re-verified pre-launch; DoD COUNT 312->313 + heading CK+SIX LANDED shas BY TEXT + reflog 6+2 + cherry 6-dash content-prove any plus + prune survivors cc/C-TOOL-6.g + cc/C-WEB-5.e; merged duties DIG/ReadPath/TWGR unions BY TEXT vs 4.e/5.c/5.d/4.g-era rows + zero-lang name-diff prove + LayeredSettingsTest 0F + PAIRING GREEN universal; §4 discloses the phantom-correction arc citing FIX-1; §7 durations PtyRelayTest 8T/80A + Interactive 12T/75A live-rule + +20T carry; two commits run-state VERBATIM fresh-read md5 (third close-record discouraged t979); §3 untouched NO push"
   }
  },
  "note_t628": "PARK TICK per owner orders (two live reviewers on C-TUI-3.g and C-TUI-5.b). Nothing welded, nothing looped, nothing pushed. Corrections to my own record: (1) BOTH live lanes are based on 364a52876, NOT on 8bc797e09 as my t624 note said — merge-base proved it this tick, and c829e0954 (C-WEB-2.e) is NOT an ancestor of either lane branch. Consequence for both future welds: the lang/en.php catalogue runs and the README/ARCHITECTURE counters must be re-derived on the MERGED tree, and the second of the two welds will conflict-merge against the first; the welder must expect en.php append-merge resolution rather than a clean pick. (2) The claim that C-TUI-5.b was welded is VOID and was never true (see the t627 anomaly). welded stays 285, waves_closed stays [1..27,29,30,32], W31 wave loop is NOT eligible, and the W31 directory does not exist. (3) The 452B/392B PENDING headers are live incremental writes, not death evidence: C-TUI-5.b reviewer is mid-write and untouched; C-TUI-3.g survivor owns the restore of its own report after the twin truncated it. (4) live_registry is the PREDECESSOR legacy free-text key, kept intact for history; my new structural gate is fleet_registry. live=2 (survivor reviewer + C-TUI-5.b reviewer, both backgrounded); the wave-reviewer and the twin are TERMINAL. idle slots stay empty by rule and by phase gate: scheduler reports start [] with 42 LATE steps locked (late_unlocked false), and owner order 6 forbids new spawns until these two reviews close.",
@@ -2919,5 +2929,13 @@
  "note_t986": "t986: 4.g welder dispatched+registered same tick after the 5.d disk-complete promotion (blank wake, blob full — slot released on arithmetic per recorded reasoning). Fleet LIVE=3: 4.g welder (writer) + 6.g r1 (artifactless resumed-1) + 6.j r1 (fresh). marks/welded 311 == blob == len; master 2bed47348; origin 7e042da7b.",
  "note_t987": "t987: 6.j r1 CLEAN-of-honesty — full findings with one-line MAJOR cure path; fresh fixer being cut now. 4.g welder mid-weld (picks landed, records pending). 6.g TOOL r1 STILL artifactless (absent at t987 stat) — armed: finished-no-artifact ⇒ VOID + FRESH third cut. marks 311 == blob == len; master b07df4007 (moving under welder); origin 7e042da7b.",
  "note_t988": "t988: 6.j fixer registered LIVE. Fleet LIVE=4 (all backgrounded): 4.g welder (mid-weld: three picks on master b07df4007, records pending, heading unmarked) · 6.g r1 resumed-1 STILL artifactless (6.g TOOL REVIEW-1.md absent at t987 recheck — critical path, armed void+fresh-third-cut) · 6.j fixer (new) · —. marks 311==blob==len; master b07df4007; origin 7e042da7b. Wakes: 4.g welder TERMINAL (verify->312->W35-completer 6.g weld if its r1 lands, else 4.g next), 6.j fixer terminal (verify->fresh r2), 6.g r1 verdict.",
- "note_t989": "t989: 4.g welder lineage resumed same-session (record half) — mid-weld harness double-death handled per law; no twin, no re-cherry. 6.j fixer still live; 6.g TOOL r1 still artifactless (critical path). Fleet LIVE=3: 4.g welder resumed, 6.j fixer, 6.g r1. marks 311==blob==len; master b07df4007; origin 7e042da7b."
+ "note_t989": "t989: 4.g welder lineage resumed same-session (record half) — mid-weld harness double-death handled per law; no twin, no re-cherry. 6.j fixer still live; 6.g TOOL r1 still artifactless (critical path). Fleet LIVE=3: 4.g welder resumed, 6.j fixer, 6.g r1. marks 311==blob==len; master b07df4007; origin 7e042da7b.",
+ "note_t990b": "t990b: fold RETRIED after my own unmatched-paren death (wrote NOTHING; .bak-t990 existed, file untouched). C-TOOL-4.g PROMOTED 312 — weld era 309 TOOL-6.d / 310 TOOL-4.e / 311 WEB-5.d / 312 TOOL-4.g. Scheduler now offers START C-WEB-5.e W37 (free 7, inflight 3, remaining 18, late_unlocked True) — lane cut + builder next shell. Weld slot IDLE by authority (6.g r1 pending, 6.j fixer mid-work). marks 312 == blob == len; master 444bb0f70; origin 7e042da7b (push only W35 close); anomalies 116 riders 23.",
+ "note_t991": "t991: 5.e registered LIVE (third active lane). Fleet LIVE=3: 6.g r1 resumed-1 artifactless (CRITICAL PATH) + 6.j fixer (dirty 2 working) + 5.e builder. Weld slot IDLE BY AUTHORITY (nothing CLEAN to weld: queue waits 6.g r1 verdict). marks 312 == blob == len; master 444bb0f70; origin 7e042da7b.",
+ "note_t992": "t992: 6.j fixer wake = PHANTOM (refuted on disk: tip unmoved a8628f131 5 picks dirty 2, claimed sha not an object, FIX-1 absent). Correction resume #1 dispatched (id kept ses_e6cab0f02ffe… background=true). 5.e builder quiet (tip 444bb0f70 own 0 dirty 0 = early, no wake). 6.g TOOL r1 artifact STILL ABSENT (critical path; resumed-1 — next finished-no-artifact fires VOID+fresh third cut). marks 312 == blob == len; master 444bb0f70; origin 7e042da7b.",
+ "note_t993": "t993: 6.j fixer CORRECTED-banked on my own refs (tip 6a6b6c9f5, 6 picks, 2 test files +12/3-, law 6/6/0, FIX-1 5,203 B, master untouched 444bb0f70 marks 312==blob==len). Stage fix->review r2; FRESH r2 dispatching this tick. 6.g TOOL r1 still artifactless. Weld slot IDLE. C-WEB-5.e builder quiet. Fleet after registration: 4 live.",
+ "note_t994": "t994: r2 registered LIVE ses_e6c9961b9ffe. Fleet LIVE=3: C-TOOL-6.j:reviewer-r2 · C-TOOL-6.g:reviewer-r1 (resumed-1 artifactless CRITICAL PATH) · C-WEB-5.e:builder (quiet-early tip 444bb0f70 own 0). weld slot IDLE. marks 312==blob==len. Queue: 6.j after r2 CLEAN -> weld; 6.g after its verdict -> weld W35-completer 313; 5.e after build+review loop. RESTRICTED+=Script LEAD ruling still pending (quiet moment).",
+ "note_t996": "t996: double bank on my own refs — 6.j loop CLOSED CLEAN (r2 6,443 B EXEC-re-derivation; #111 playbook vindicated on this step) + 5.e builder TERMINAL-WITH-BUILD (2 picks, core zero-diff, trio UNOWED, dist restored). 6.j welder dispatching this tick (slot idle, heading UNMARKED re-verified). 5.e r1 dispatch follows registration. 6.g TOOL r1 still artifactless (critical path). marks 312==blob==len; master 444bb0f70; origin 7e042da7b; anomalies 117 riders 23.",
+ "note_t997": "t997: 6.j welder registered LIVE (sole master writer). Fleet LIVE=3: 6.j welder + 6.g TOOL r1 (resumed-1 artifactless — CRITICAL PATH W35 completer) + 5.e r1 about to dispatch. Queue after 6.j weld (313): 6.g weld (314, W35 CLOSE ⇒ quiescence ⇒ loop reviewer ⇒ §3-flip ⇒ MY push) then 5.e.",
+ "note_t998": "t998: 5.e r1 registered LIVE. Fleet LIVE=3: 6.j welder (sole master writer) + 6.g TOOL r1 (artifactless critical path) + 5.e r1 (new). weld_pending: 6.j LIVE -> 6.g (W35 completer when r1 lands) -> 5.e after its loop. Scheduler re-read below."
 }
