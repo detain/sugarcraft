@@ -12,6 +12,7 @@ use SugarCraft\Code\Support\HookContextFiles;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Support\ToolIpcFiles;
+use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
 use SugarCraft\Core\Util\Sanitize;
 
 /**
@@ -509,6 +510,19 @@ final readonly class ScriptHook implements BoundedHookInterface
      *        tool call open (`async: true`). candy-code has no detached hook
      *        runner, so such a row still runs inline and inside its timeout;
      *        what it loses is the power to block — see {@see $advisory}.
+     * @param null|SandboxBackend $sandbox the jail this row's `hooks` scope
+     *        was paired into by
+     *        {@see \SugarCraft\Code\Tools\Sandbox\SandboxFactory::forScope()}
+     *        through {@see HookManager::withScriptSandbox()}, or null when the
+     *        scope is not asked for (or `bashSandbox` is off) — the row then
+     *        runs exactly as it always did (C-TOOL-4.d).
+     * @param null|string $sandboxRefusal the launch's ONE probe answer for
+     *        that jail, from {@see \SugarCraft\Code\Tools\BuiltIn\Bash::sandboxRefusal()}
+     *        — non-null with a non-null sandbox means the jail cannot start on
+     *        this host, and the fail-closed law of C-TOOL-4.d refuses the hook
+     *        rather than running it unconfined. It is CARRIED rather than
+     *        re-probed because this class spawns with `proc_open()` directly
+     *        and has no captured-run door to probe through.
      */
     public function __construct(
         private string $name,
@@ -520,6 +534,8 @@ final readonly class ScriptHook implements BoundedHookInterface
         ?callable $clock = null,
         private string $dialect = self::DIALECT_NATIVE,
         private bool $advisory = false,
+        private ?SandboxBackend $sandbox = null,
+        private ?string $sandboxRefusal = null,
     ) {
         $this->clock = $clock !== null
             ? \Closure::fromCallable($clock)
@@ -652,6 +668,44 @@ final readonly class ScriptHook implements BoundedHookInterface
             // the moment the chain budget was shortened.
             $this->dialect,
             $this->advisory,
+            // The jail pair rides for the same reason the dialect does: a
+            // row clamped after {@see withSandbox()} must not shed its
+            // confinement (or its recorded refusal) on the way in.
+            $this->sandbox,
+            $this->sandboxRefusal,
+        );
+    }
+
+    /**
+     * The same hook confined to a sandbox jail (C-TOOL-4.d).
+     *
+     * IMMUTABLE like every other `with*` on this class — unlike {@see
+     * HookManager::withScriptSandbox()}, which mutates the launch-owned
+     * manager on purpose; the manager hands each freshly-built row through
+     * this door at load time.
+     *
+     * @param null|SandboxBackend $sandbox the jail to spawn inside, or null
+     *        to stay unconfined (the out-of-scope shape: byte-identical to
+     *        every run this class has ever made)
+     * @param null|string $refusal the launch's probe answer; non-null beside a
+     *        non-null sandbox means the jail cannot start here and the hook
+     *        is REFUSED — the fail-closed law: a scoped hook never runs
+     *        unconfined just because its jail is unavailable
+     */
+    public function withSandbox(?SandboxBackend $sandbox, ?string $refusal): self
+    {
+        return new self(
+            $this->name,
+            $this->event,
+            $this->matcher,
+            $this->command,
+            $this->description,
+            $this->timeoutSeconds,
+            $this->clock,
+            $this->dialect,
+            $this->advisory,
+            $sandbox,
+            $refusal,
         );
     }
 
@@ -744,6 +798,42 @@ final readonly class ScriptHook implements BoundedHookInterface
     }
 
     /**
+     * The spawn command for one run of this row (C-TOOL-4.d).
+     *
+     * PREFIX-ONLY BY LAW: both {@see executeStaged()} proc_open sites stay
+     * exactly the shape the descriptor-inheritance census accounts for — only
+     * what goes THROUGH {@see ProcessContainment::spawnSpec()} changes, and
+     * only when a jail is paired. Out of scope the row's spec is byte-for-byte
+     * the one this class has always built.
+     *
+     * In scope the jail's own argv ends with `--chdir <root> --`, so the hook
+     * WORKS the directory the jail declares: the project root when the context
+     * had one, and this process's own directory when it did not — the same
+     * inheritance the bare `$cwd = null` already gives an unjailed row. The
+     * staged payload files ride {@see SandboxBackend::argv()}'s read-only
+     * binds because the jail carries a private `/tmp`: without the bind the
+     * `CRUSH_TOOL_INPUT`/`CRUSH_TOOL_OUTPUT` file paths the hook was told
+     * about would name files that do not exist inside it.
+     *
+     * @param list<string> $payloadFiles
+     *
+     * @return string|array<int|string, string>
+     */
+    private function spawnCommand(?string $cwd, array $payloadFiles): string|array
+    {
+        if ($this->sandbox === null) {
+            return $this->command;
+        }
+
+        return [
+            ...$this->sandbox->argv($cwd ?? (string) getcwd(), readOnlyBinds: $payloadFiles),
+            '/bin/sh',
+            '-c',
+            $this->command,
+        ];
+    }
+
+    /**
      * {@see execute()} with the payload files already on disk and guaranteed to
      * be cleaned up after it, whatever it returns or throws.
      *
@@ -751,6 +841,23 @@ final readonly class ScriptHook implements BoundedHookInterface
      */
     private function executeStaged(HookContext $context, ?string $cwd, array $payload): HookResult
     {
+        if ($this->sandbox !== null && $this->sandboxRefusal !== null) {
+            // FAIL CLOSED (C-TOOL-4.d). The scope asked for the jail, the
+            // launch's one probe answered that the jail cannot start on this
+            // host — and the law is that a scoped hook is NOT quietly run
+            // unconfined instead. This is the same could-not-execute deny the
+            // `proc_open()` refusal below produces, reached before any child
+            // is attempted: nothing ran, sandboxed or otherwise, and the
+            // message says so and names the fix.
+            return HookResult::deny(Lang::t('sandbox.hook.not_run', [
+                'hook' => $this->name,
+                'mode' => $this->sandbox->mode(),
+                'name' => $this->sandbox->name(),
+                'reason' => $this->sandboxRefusal,
+                'remedy' => $this->sandbox->refusalRemedy(),
+            ]));
+        }
+
         $fixed = [
             'CRUSH_SESSION_ID' => $context->sessionId,
             'CRUSH_TOOL_NAME' => $context->toolName,
@@ -781,7 +888,7 @@ final readonly class ScriptHook implements BoundedHookInterface
         // variables are dropped unless the operator's `secretEnvAllowlist`
         // names them. The size-refusal reasoning below is unchanged.
         $process = @proc_open(
-            ProcessContainment::spawnSpec($this->command),
+            ProcessContainment::spawnSpec($this->spawnCommand($cwd, $payload['files'])),
             $descriptors,
             $pipes,
             $cwd,
@@ -794,7 +901,7 @@ final readonly class ScriptHook implements BoundedHookInterface
             // has not run — `proc_open()` returning false means no child was
             // started — so this is a retry, never a second execution.
             $process = @proc_open(
-                ProcessContainment::spawnSpec($this->command),
+                ProcessContainment::spawnSpec($this->spawnCommand($cwd, $payload['files'])),
                 $descriptors,
                 $pipes,
                 $cwd,

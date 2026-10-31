@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Hooks;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Permissions\ApprovalVerdict;
 use SugarCraft\Code\Permissions\PermissionMode;
+use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
 
 /**
  * Manages hook loading and execution.
@@ -37,6 +38,21 @@ final class HookManager
      * dialect, denial under the native one).
      */
     private ?Backend $promptBackend = null;
+
+    /**
+     * The jail `hooks`-scoped script rows spawn inside, or null when this
+     * launch asked for no such scope (or `bashSandbox` is off). {@see
+     * withScriptSandbox()} installs it from `Bootstrap::hooks()` BEFORE any
+     * {@see loadEntries()} call for exactly the reason the prompt backend
+     * above has: {@see ScriptHook::fromConfig()} builds the row at load time,
+     * and a setter that ran after the file load would leave every script hook
+     * unconfined — the fail-open direction C-TOOL-4.d exists to close. The
+     * refusal travels beside it because a script hook's spawn path has no
+     * captured-run door to probe through; the launch answers once.
+     */
+    private ?SandboxBackend $scriptSandbox = null;
+
+    private ?string $scriptSandboxRefusal = null;
 
     /**
      * Delegated runs in progress, per fiber — see {@see runAsSubagent()}.
@@ -91,6 +107,28 @@ final class HookManager
     public function withPromptBackend(?Backend $backend): self
     {
         $this->promptBackend = $backend;
+
+        return $this;
+    }
+
+    /**
+     * Install the jail `hooks`-scoped script rows run inside (C-TOOL-4.d).
+     *
+     * MUTATES and returns `$this` on purpose, following the {@see
+     * withPromptBackend()} precedent exactly: this is the LAUNCH-OWNED chain
+     * object, and a clone here would orphan the built-ins and file hooks
+     * already registered on the original. Install BEFORE {@see
+     * loadEntries()} — the law stated at {@see $scriptSandbox}.
+     *
+     * @param null|SandboxBackend $sandbox the jail, or null for none
+     * @param null|string $refusal the launch's one probe answer for that
+     *        jail; a scoped script hook is refused rather than run
+     *        unconfined when it is non-null
+     */
+    public function withScriptSandbox(?SandboxBackend $sandbox, ?string $refusal): self
+    {
+        $this->scriptSandbox = $sandbox;
+        $this->scriptSandboxRefusal = $refusal;
 
         return $this;
     }
@@ -194,7 +232,13 @@ final class HookManager
             $hook = match ($config['type'] ?? HookConfig::TYPE_COMMAND) {
                 HookConfig::TYPE_HTTP => HttpHook::fromConfig($config),
                 HookConfig::TYPE_PROMPT => PromptHook::fromConfig($config, $this->promptBackend),
-                default => ScriptHook::fromConfig($config),
+                // C-TOOL-4.d: the command arm is the scoped one. When the
+                // launch paired `hooks` into a jail the row is built through
+                // withSandbox(); out of scope (null jail) it is the byte-for-byte
+                // row this arm has always returned.
+                default => $this->scriptSandbox === null
+                    ? ScriptHook::fromConfig($config)
+                    : ScriptHook::fromConfig($config)->withSandbox($this->scriptSandbox, $this->scriptSandboxRefusal),
             };
             $event = $hook->event()->value;
             $name = $hook->name();
