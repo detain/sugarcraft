@@ -1,5 +1,5 @@
 {
- "active_agents": 3,
+ "active_agents": 2,
  "anomalies_ledger": {
   "C-SEC-8.b-TWIN-CHECK-t243": "OWNER FLAG adjudicated: NOT a twin - both sessions TERMINAL (original ses_e73e33f98ffe resume->session-not-found; takeover ses_e72d1d652ffe terminal completion @~207 w/ phantom 04587268c claim; second follow-up claim 40777b95f phantom cat-file-fail t242). Succession chain, zero concurrent writers (branch tip stable 688547446, worktree dirt from dead session inherited by fresh builder ses_e72a05ee4ffe)",
   "C-TOOL-6.a-FALSE-WELDED-STATE-AND-MY-OWN-MISREAD": "Two lead-side errors this tick: (1) run-state had C-TOOL-6.a in welded with no anchored §4 mark / no landed test file / no landed MCP.md section — a false weld entry; (2) I then wrote that its branch+worktree were pruned, which is ALSO false (both exist: `git branch --list cc/C-TOOL-6.a` = checked out, dir present). ROOT LAW: a weld is proven by THREE independent artifacts — anchored `^#### ✅ <sha> <ID>` mark + the landed new test file in the master tree + the deliverable blob content. And a mark census must use a regex that also accepts P-* pick ids and malformed lines like `✅ fad3d931e #### C-MCP-2.b`. Cured by removing the entry (259->258) and dispatching the owed r2 fixer off the REAL on-disk verdict.",
@@ -315,31 +315,19 @@
    "commits_off_base": 5,
    "reviewer": "ses_e6d48549affeLwhSWueVHVWhML"
   },
-  "C-TUI-6.g": {
-   "stage": "welding",
-   "round": 2,
-   "worktree": "/home/sites/cc-cmp-C-TUI-6.g",
-   "branch": "cc/C-TUI-6.g",
-   "base": "29929c305",
-   "builder": "ses_e6d5fd55affeSoJQs1YXDJSaGh",
-   "tip": "27e427e85",
-   "pick_range": "29929c305..f73ac4315",
-   "commits_off_base": 5,
-   "note": "r2 CLEAN banked; weld-queued — next in line (slot free at 307)",
-   "reviewer": "ses_e6d1db887ffeb8EJeUsLAGmY1r",
-   "fixer": "ses_e6d2fdf47ffew4WEC4YLWFdr1o",
-   "welder": "ses_e6d131a3bffe1k7Jj1mGggHixY"
-  },
   "C-TOOL-6.d": {
-   "stage": "review",
+   "stage": "welding",
    "round": 1,
    "worktree": "/home/sites/cc-cmp-C-TOOL-6.d",
    "branch": "cc/C-TOOL-6.d",
    "base": "acc851ca3",
    "builder": "ses_e6d4550b9ffeGhhuXSvlPIBpzj",
-   "note": "Script catalog tool nested-calls-through-gate+hook-chain; design-tool.md:871; lane cut at acc851ca3, vendor cp-a OK",
+   "note": "r1 CLEAN banked; welder dispatch this tick — WELD SLOT FREE (TUI-6.g welder TERMINAL + verified)",
    "tip": "6d12b9b81",
-   "reviewer": "ses_e6d129bc1ffe30R6M0mM5sVhzd"
+   "reviewer": "ses_e6d129bc1ffe30R6M0mM5sVhzd",
+   "pick_range": "c53098787..6d12b9b81",
+   "commits_off_base": 3,
+   "welder": "ses_e6d07907dffe9JLPCFzEWZZGY9"
   }
  },
  "last_lead": "cc-cmp-lead(1030AA)",
@@ -402,7 +390,7 @@
   "BUILDERS": "none (owner t423 freeze)",
   "FIXERS": "none"
  },
- "master_tip": "07593d459",
+ "master_tip": "b008cc14c3d63346ac4561c6f844db876bc5fdb6",
  "master_tip_at_dispatch": "9fb981c5c",
  "master_tip_observed": "ca1e0b51f",
  "next_fill_queue": [],
@@ -640,7 +628,7 @@
   "owner": "SERIALIZE any master-direct cure behind the running welder; candidate mini-cure lane after current welds land (a2d5d0e3f precedent), else §7 closeout absorbs"
  },
  "status": "RUNNING",
- "tick": "t956-weld6gtui-live-r1-6d-live",
+ "tick": "t958-6d-welding",
  "tip": "4f1bdab31",
  "updated": "2026-10-30T22:46:48Z",
  "wave_loops": {
@@ -1590,9 +1578,8 @@
   "C-CTX-5.d": "r3 CLEAN 0C/0M REVIEW-3.md 10590B header-first. Pick b503bb054..35ba713a8 EXCL 3 (eb5108c9c/7179a0f58/35ba713a8; expect Chat/SessionHost/en collisions vs moved master - content-resolve, NEVER tree-copy). DUR RE-TIME KeepWarmTest 14->17; CacheHealthWatchTest row 20 present-check. §7 ~+18T. §4 mark text MUST carry: deviations (a)-(g) design-wins, spend-cap binds keep-warm tick (HandlesRunControl :501 gate), single anchor producer/tick (SessionHost :1097 + policy :152), MAJOR-2 REFUTED/retracted (brief premise confab - on-disk REVIEW-1 8050B 1M). Collect disk FIX-1.md (6160B on disk per r3; fixer had said 4098B - take disk) + REVIEW-3.md onto branch pre-prune. Gates post-pick: KeepWarm 17T/68A, +CHW 40T/173A, union 71T/289A, DocFigure 92T/4177A, DTHD 106T/4380A."
  },
  "weld_pending": [
-  "C-TUI-6.g (DISPATCHING NOW: seven explicit picks cfbbeffc5/b9c7b9db6/d993a3904/0685ff8d5/f73ac4315 + c270a3843/27e427e85 off 29929c305 NEVER a range no -x; marks 307->308; en.php web.chrome span union + dupscan + CliLang/LangParity; LayeredSettingsTest + pairing universal; TWGR rows survive zero lane rows; DIST REBUILD welder-carry per r2; trio ZERO drift no regen; §4 cites REPORT 4,959 + r1 9,995 M1 + FIX-1 6,380 + r2 10,087 CLEAN verbatim; §7 durations ZERO rows; two commits run-state VERBATIM md5; §3 untouched NO push; prune survivors cc/C-TOOL-6.d + cc/C-TOOL-6.g)",
-  "C-TOOL-6.g (after r1 verdict; welder-carry: schema +2/−1 MEDIA_REF html + generated.ts +1/−1 :227 + SERVER.md TWO MANUAL canvas rows verbatim regen-wont-derive + dist rebuild + ProtocolSchemaDrift in-lane 1F by-design; base predates db1441a61 WELD-GREENS; five picks 111c077e6/26bf24b3c/3eb1072f5/3fd9e10c3/ccab7155c; §7 CanvasPageTest 10T/~60A + CanvasLinksTest 5T/22A + canvasCard.spec 7T)",
-  "C-TOOL-6.d (after r1)"
+  "C-TOOL-6.d (DISPATCHING NOW: three explicit picks d5bd4823c/4b9873e86/6d12b9b81 off c53098787 NEVER a range no -x; §4 cites REPORT 7,043 + r1 9,949 CLEAN verbatim + position-46 benign + RESTRICTED_TOOL_NAMES §7 follow-up step per r1 recommendation + dev-5 honesty; §7 durations 22T/75A + 10T/64A + suite +32T carry; pairing+Layered universal; en.php ZERO-hunk verified by r1; marks 308->309)",
+  "C-TOOL-6.g (r1 resumed verdict OWED — bank off real file only; second no-artifact => VOID + FRESH third cut)"
  ],
  "weld_queue": {
   "_legacy_list": [
@@ -1852,6 +1839,7 @@
   "C-TUI-6.b",
   "C-TUI-6.c",
   "C-TUI-6.f",
+  "C-TUI-6.g",
   "C-TUI-6.i",
   "C-TUI-6.j",
   "C-TUI-6.k",
@@ -1916,7 +1904,7 @@
   "P-TABS.g",
   "P-TABS.h"
  ],
- "welded_count": 307,
+ "welded_count": 308,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
  "welder_inflight_note": "WELDER ses_e7448801cffejnqD7XXhFFoIJG RUNNING: its welded_count=243 + the §4 ✅ 94432cfd1 C-SES-8.a line are UNCOMMITTED working-tree writes (a commit cannot contain its own SHA) -> do NOT read as landed; do NOT write run-state concurrently except minimal fresh-read targeted patches; RE-VERIFY my TOOL-2.f weld_pending + TOOL-2.g entries survive its fold.",
  "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
@@ -1986,7 +1974,8 @@
    "probeVerdicts pairing pollution: CURED on master at db1441a61 (t883b, my own refs); battery re-verifies pairing green at final tip; lanes with bases pre-dating db1441a61 (e62fd7f49/7e042da7b/older) keep the KNOWN-FOREIGN BubblewrapHardeningTest pairing 1F until base-fresh or weld — 4.d has the ff-only clause; 6.c/6.f/TUI-6.f reviewers: do not cure, adjudicate; keep the two classes in separate filters meanwhile.",
    "C-TUI-6.f rider (t884 lead call): web.yml gen:strings --check CI twin-step OWED (design-external file; lane correctly refused) — closeout adds the step; eslint-on-generated unverified; welder carries protocol-trio regen (+36/+1/+14) + web dist rebuild; generated.ts typecheck AFTER weld regen",
    "accepted-foreign NEW (t900b, base-proven): RegistryTest::testAStdoutThatShrinksAloneDoesNotStrandTheUnreadStderr - O_TRUNC race at BackgroundShellRegistry.php:474 (byte-identical base..tip); 4F/18 at BASE 00fedf519 without lane files; tip-amplified ~14F/18, root cause NOT established; report-only, never cure; keep the method OUT of combined filters; §7 battery may chase.",
-   "ForkedChildReaperAdoptionTest::testNoDirectoryWithUnreapedForksIsUnaccountedFor 1F naming Sessions/BackgroundShellRegistryTest.php — base-proven pre-existing (6.c welder: guard+offender blobs md5-identical at pre-weld e3ca3d2b9, zero weld touch); same O_TRUNC shrink-stdout method family as the 4.h §7 rider; lead glance owed at battery — adjudicate-only meanwhile."
+   "ForkedChildReaperAdoptionTest::testNoDirectoryWithUnreapedForksIsUnaccountedFor 1F naming Sessions/BackgroundShellRegistryTest.php — base-proven pre-existing (6.c welder: guard+offender blobs md5-identical at pre-weld e3ca3d2b9, zero weld touch); same O_TRUNC shrink-stdout method family as the 4.h §7 rider; lead glance owed at battery — adjudicate-only meanwhile.",
+   "C-TOOL-6.d r1 recommendation (t957, LEAD ruling pending): add Script to Bootstrap RESTRICTED_TOOL_NAMES + RestrictedSafeModeFlagsTest:153 mirror as a §7 follow-up step — r1 ruled the current state NOT a lane defect (nested calls cannot reach hard-dropped tools; blast jailed ro-bind + worktree-only) but the --restricted code-exec promise residue deserves the closure step."
   ],
   "standing_reds_added": [
    "t622 tests/Server/AttachPagingTest 2F 'the server has no session' = BASE-PROVEN red at 364a52876 (welder reproduced in a scratch detached worktree, zero lane diff-lines on its path). FOREIGN-INHERITED standing red, not C-WEB-2.e's; any gate filter using substring 'Attach' sweeps it in — prefer exact classes AttachRemoteCommandsTest|ConformanceTest. Needs a disposition at the §7 gate loop."
@@ -2513,17 +2502,18 @@
   },
   "C-TOOL-6.d:reviewer-r1": {
    "session": "ses_e6d129bc1ffe30R6M0mM5sVhzd",
-   "status": "LIVE",
+   "status": "TERMINAL-BANKED",
    "cut_tick": "t956",
-   "terminal_evidence": "none yet",
+   "terminal_evidence": "t957: REVIEW-1.md 9,949 B stat + verdict-line read in this SAME invocation: VERDICT: CLEAN (0C / 0M / 0 lane MINOR / 0 NIT; the RESTRICTED_TOOL_NAMES gap is a §7 secu — CLEAN 0/0/0/0 WELD-ELIGIBLE. Q1 single-gate trace (ScriptTool:215 -> Runtime 2494-2503 -> executeNested -> gate():3400 identical to direct :2516; engine holds no policy; no second validator). RESTRICTED_TOOL_NAMES adjudication: roster keeps Edit/Write by design; real residue = arbitrary-PHP executor surviving --restricted code-exec promise (blast jailed ro-bind + worktree-only); RECOMMENDS §7 follow-up step Script + mirror test — LEAD ADJUDICATES, not a lane defect (builder dev-5 disclosed). Q2 engine zero-diff 4 blobs base->tip. Q3 position-46 benign (Advisor 44 Canvas 45; assertUnique pinned honest comment). Gates full-stem non-zero 42T/291A/1S; BARE pair GREEN; pairing GREEN 39T/190A. Q4 mutations UNCONFIRMED-BY-RUN disclosed per house law. Q5 en.php ZERO hunks — no welder collision. §7: durations ScriptToolTest 22T/75A + NestedToolDispatchTest 10T/64A battery rows; suite pair +32T-class; RESTRICTED += Script rider.",
    "note": "echo-registered desc==key (#99). PermissionGate nested-path same-gate proof = CRITICAL class; RESTRICTED_TOOL_NAMES seam adjudication recommendation; 6.c engine zero-diff; position-46 deviation judgment; §7 ScriptToolTest 22T/75A + NestedToolDispatchTest 10T/64A durations LIST; header-first REVIEW-1.md MUST exist at return"
   },
-  "C-TUI-6.g:welder-r1": {
-   "session": "ses_e6d131a3bffe1k7Jj1mGggHixY",
+  "C-TUI-6.g:welder-r1": "TERMINAL-WELDED (t957 MY OWN verify: master b008cc14c; marks 307->308; own heading CK+seven landed cb630ea46,77a328148,5b66a65af,774b7866d,34524cf58,9b1e240f0,08f53f2eb all cat-file+ancestors; reflog 7 cherry + 2 records; 15c7d4210 = 12 paths incl 6 dist + 5 evidence + plan; b008cc14c = run-state ONLY md5 ea0e334e5911058982babaa2fe23fec0 disk==blob; law 9/9 separate COUNTs Co-Authored 0; lane pruned survivors cc/C-TOOL-6.d + cc/C-TOOL-6.g; §4 carries the honest three-session arc (builder -> r1 FINDINGS 0C/1M/2m incl FALSE TodoPanel disclosure -> 2 cures -> r2 CLEAN after TWO VOIDED fragments -> this weld) + WELD.md 8,026 B. Self-caught draft-figure erratum corrected PRE-commit: credited.)",
+  "C-TOOL-6.d:welder-r1": {
+   "session": "ses_e6d07907dffe9JLPCFzEWZZGY9",
    "status": "LIVE",
-   "cut_tick": "t956",
+   "cut_tick": "t958",
    "terminal_evidence": "none yet",
-   "note": "echo-registered desc==key (#99). SOLE master writer; seven explicit picks; DIST REBUILD carry per r2; trio ZERO drift no regen; en.php chrome-span union + dupscan; marks 307->308 DoD; prune survivors cc/C-TOOL-6.d + cc/C-TOOL-6.g; §4 cites the 3-cut lineage honestly; §3 untouched NO push"
+   "note": "ECHO: registered from RETURNED id; desc Weld C-TOOL-6.d == key step (#99). SOLE master writer. Brief: three explicit picks d5bd4823c/4b9873e86/6d12b9b81 off c53098787 NEVER a range no -x; DoD COUNT 308->309 + own heading CK+four-disk-read-landed-shas-by-TEXT + reflog + cherry 3-dash + prune survivor ONLY cc/C-TOOL-6.g; pairing+Layered+TWGR-union+BARE-2 universal gates; en.php zero-hunk re-verify; RESTRICTED_TOOL_NAMES = §7 follow-up candidate (LEAD ruling pending), position-46 benign; §7 durations ScriptTool 22T/75A + Nested 10T/64A; exactly two commits run-state VERBATIM md5; §3 untouched NO push; W35 does NOT close on this weld."
   }
  },
  "note_t628": "PARK TICK per owner orders (two live reviewers on C-TUI-3.g and C-TUI-5.b). Nothing welded, nothing looped, nothing pushed. Corrections to my own record: (1) BOTH live lanes are based on 364a52876, NOT on 8bc797e09 as my t624 note said — merge-base proved it this tick, and c829e0954 (C-WEB-2.e) is NOT an ancestor of either lane branch. Consequence for both future welds: the lang/en.php catalogue runs and the README/ARCHITECTURE counters must be re-derived on the MERGED tree, and the second of the two welds will conflict-merge against the first; the welder must expect en.php append-merge resolution rather than a clean pick. (2) The claim that C-TUI-5.b was welded is VOID and was never true (see the t627 anomaly). welded stays 285, waves_closed stays [1..27,29,30,32], W31 wave loop is NOT eligible, and the W31 directory does not exist. (3) The 452B/392B PENDING headers are live incremental writes, not death evidence: C-TUI-5.b reviewer is mid-write and untouched; C-TUI-3.g survivor owns the restore of its own report after the twin truncated it. (4) live_registry is the PREDECESSOR legacy free-text key, kept intact for history; my new structural gate is fleet_registry. live=2 (survivor reviewer + C-TUI-5.b reviewer, both backgrounded); the wave-reviewer and the twin are TERMINAL. idle slots stay empty by rule and by phase gate: scheduler reports start [] with 42 LATE steps locked (late_unlocked false), and owner order 6 forbids new spawns until these two reviews close.",
@@ -2822,5 +2812,7 @@
  "note_t952": "t952: wake #2 no-artifact fired the armed limit — fresh third-cut r2 for TUI-6.g + fresh r2 welder for C-TUI-6.c dispatched this tick. 6.g lane still 7 picks tip 27e427e85 (my reads); 6.d builder producing 4b9873e86; 6.g-tool r1 resumed artifactless (its next finished-no-artifact fires the same rule). marks 306 == blob == len; master 07593d459; origin 7e042da7b.",
  "note_t953": "t953: third-cut registrations landed. Fleet LIVE=4: C-TUI-6.c:welder-r2 (sole master writer), C-TUI-6.g:reviewer-r2-fresh, C-TOOL-6.g:reviewer-r1 (resumed-1, artifactless — next finished-no-artifact fires fresh-cut), C-TOOL-6.d:builder (producing). marks 306 == blob == len; master 07593d459 (moving under welder-r2); origin 7e042da7b. Queue: 6.c weld landing -> 307 -> 6.g-tool weld when its r1 verdict lands; then TUI-6.g; then 6.d. Nearest push: W35 close (row :171: 6 members marked, 7th C-TUI-6.c pending now + C-TOOL-6.g pending).",
  "note_t955": "t955: 6.c PROMOTED 307 on full blob verification (the fresh-cut welder delivered what the stalled orphan never touched — #109 one-motion vindicated); TUI-6.g r2 CLEAN banked (10,087 B) — third-cut law worked, weld dispatched now; 6.d builder banked (3 picks, 6.c engine zero-diff, REPORT 7,043 B) — r1 dispatched now with PermissionGate-nested-path + RESTRICTED_TOOL_NAMES-seam adjudication centers. Fleet: welder TUI-6.g (sole master writer) + r1 6.d + r1 6.g-tool (resumed, artifactless) = 3 after registrations. W35 = 6/7 marked, C-TOOL-6.g the last; push milestone after its weld + loop.",
- "note_t956": "t956: two dispatches echo-registered from returned ids. C-TUI-6.g welder LIVE (sole master writer; §4 mark also carries the honest r2-lineage note + dist carry). C-TOOL-6.d r1 reviewer LIVE with the gate-trace centers. C-TUI-6.c 6.c §4 supersession DISCLOSURE CONFIRMED PRESENT in the landed mark (phrasing: builder stale-15T tolerated-only-through-this-disclosure; re-verified merged tip; silent-15T would be a finding none exists) — no erratum needed, has-not-15 regex was phrasing-blind only. 6.g-tool r1 (resumed-1) still artifactless — one more no-artifact fired ⇒ VOID + FRESH third cut. marks 307 == blob == ledger; master 828aab3eb moving under welder."
+ "note_t956": "t956: two dispatches echo-registered from returned ids. C-TUI-6.g welder LIVE (sole master writer; §4 mark also carries the honest r2-lineage note + dist carry). C-TOOL-6.d r1 reviewer LIVE with the gate-trace centers. C-TUI-6.c 6.c §4 supersession DISCLOSURE CONFIRMED PRESENT in the landed mark (phrasing: builder stale-15T tolerated-only-through-this-disclosure; re-verified merged tip; silent-15T would be a finding none exists) — no erratum needed, has-not-15 regex was phrasing-blind only. 6.g-tool r1 (resumed-1) still artifactless — one more no-artifact fired ⇒ VOID + FRESH third cut. marks 307 == blob == ledger; master 828aab3eb moving under welder.",
+ "note_t957": "t957: C-TUI-6.g WELDED 308 (verified EVERY element on my own refs — lane pruned, honest three-session arc disclosed in the mark). C-TOOL-6.d r1 CLEAN banked off the real file (9,949 B — my stat+verdict-line same invocation). Weld slot released by the TUI-6.g terminal; C-TOOL-6.d welder dispatching NOW. W35 MATH: six of seven marked (C-TOOL-4.d 305 / C-TUI-6.f 302 / C-WEB-5.c 306 / C-TOOL-6.c 303 / C-TUI-6.c 307 / C-MCP-5.b / C-TOOL-6.g LAST — r1 owed; note C-TUI-6.g is NOT in the seven — it was the W34/W36-window member; re-derive the row BY TEXT at loop dispatch). Fleet after this fold: 6.g r1 reviewer (artifactless-resumed-1) + new 6.d welder = 2 live.",
+ "note_t958": "t958: C-TOOL-6.d welder dispatched+registered after the TUI-6.g terminal freed the slot. FLEET LIVE=2: C-TOOL-6.d:welder-r1 (sole master writer) + C-TOOL-6.g:reviewer-r1 (resumed-1, artifactless — bank ONLY off real REVIEW-1.md; second no-artifact => VOID + FRESH third cut). WAKE: 6.d welder terminal -> verify -> promote 309 -> queue next weld C-TOOL-6.g after its verdict; 6.g-tool verdict any moment. Then W35: all seven members marked (4.d, TUI-6.f, WEB-5.c, TOOL-6.c, TUI-6.c, MCP-5.b, TOOL-6.g) -> WELD-QUIESCENCE -> fresh W35 loop reviewer (first round, header-first lanes/W35/WAVE-REVIEW-1.md, full W33 template duties) -> §3-flip welder (row only, NO push) -> MY push (ls-remote expect 7e042da7b + fetch + pull --ff-only + push + both ends SAME shell; non-FF stop). marks 308 == blob == len; master b008cc14c (moving); anomalies 115 riders 23; RESTRICTED_TOOL_NAMES+=Script rider logged for lead ruling post-loop."
 }
