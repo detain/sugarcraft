@@ -193,12 +193,21 @@ final class BackgroundShellWallFallbackTest extends TestCase
     private function runDetachedBounded(string $wrapper, string $exitPath, callable $midway): array
     {
         $spec = ProcessContainment::spawnSpec($wrapper);
+        // Per-run lineage sentinel: the census below cannot trust pgid alone.
+        // Between the settled shell's exit and the last census, a recycled
+        // pid may become some UNRELATED process's group leader (this very
+        // class doc-block's accepted RESIDUAL RISK bites tests harder than
+        // production — thousands of runs, high-pid churn). Requiring this
+        // token in the member's inherited environment binds every observation
+        // to THIS spawn's lineage.
+        $this->probeToken = 'c4h-' . uniqid((string) getmypid(), true);
         $proc = proc_open($spec, [
             0 => ['file', '/dev/null', 'r'],
             1 => ['file', $this->dir . '/sink.out', 'a'],
             2 => ['file', $this->dir . '/sink.err', 'a'],
         ], $pipes, null, [
             'PATH' => self::toolBinDir(),
+            'C4H_PROBE_TOKEN' => $this->probeToken,
             BackgroundShellRegistry::EXIT_CODE_FILE_ENV => $exitPath,
         ]);
         self::assertTrue(is_resource($proc), 'the wrapper must launch through the real prefix path');
@@ -212,10 +221,16 @@ final class BackgroundShellWallFallbackTest extends TestCase
         return [$pid, $status, microtime(true) - $start, $seen];
     }
 
+    /** Lineage sentinel carried in every census subject's inherited environment (set at launch). */
+    private string $probeToken = '';
+
     /**
-     * Live (non-zombie) processes whose recorded pgid is $pgid — the same
-     * census shape groupMemberAlive() applies on /proc hosts, rebuilt here so
-     * the pins can name WHICH members died, not just that the group did.
+     * Live (non-zombie) processes whose recorded pgid is $pgid AND whose
+     * environment still carries the current probe token — the same census
+     * shape groupMemberAlive() applies on /proc hosts, lineage-bound so a
+     * recycled pid cannot pose as a member. An UNREADABLE environ counts as a
+     * member (fail-closed: the assertion then demands proof of death, never
+     * the benefit of the doubt).
      *
      * @return array<int, string> pid => comm
      */
@@ -236,9 +251,18 @@ final class BackgroundShellWallFallbackTest extends TestCase
                 continue;
             }
             $fields = preg_split('/\s+/', trim(substr($stat, $close + 1))) ?: [];
-            if (($fields[2] ?? '') === (string) $pgid && ($fields[0] ?? 'Z') !== 'Z') {
-                $members[(int) $entry] = substr($stat, $open + 1, $close - $open - 1);
+            if (($fields[2] ?? '') !== (string) $pgid || ($fields[0] ?? 'Z') === 'Z') {
+                continue;
             }
+            $environ = @file_get_contents('/proc/' . $entry . '/environ');
+            if ($environ === false || !in_array('C4H_PROBE_TOKEN=' . $this->probeToken, explode("\0", $environ), true)) {
+                if ($environ === false) {
+                    $members[(int) $entry] = substr($stat, $open + 1, $close - $open - 1);
+                }
+
+                continue;
+            }
+            $members[(int) $entry] = substr($stat, $open + 1, $close - $open - 1);
         }
 
         return $members;
