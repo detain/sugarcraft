@@ -44,14 +44,18 @@ namespace SugarCraft\Code\Support;
  *     answers non-null ONLY when the child's pgid equals its own pid, so a
  *     group-kill can never fire against the PHP process's own group).
  *
- * NOTHING HERE SPAWNS ON THE TTY-PATH FALLBACK. When no usable `setsid(1)`
- * exists (macOS ships none) {@see spawnSpec()} returns the command
- * unchanged and {@see env()} still applies — fail-fast half, attached
- * spawn, exactly the fallback CapturesProcessOutput measured. {@see
- * terminate()} then simply finds no owned group and falls back to
- * `proc_terminate()`, which is the pre-containment behaviour — correct for
- * an unwrapped child, because without the wrapper the direct child IS the
- * command.
+ * THE TTY-PATH FALLBACK IS THE LAST RESORT, NOT THE macOS DEFAULT.
+ * {@see spawnSpec()} prepends a detach prefix proven by probe: a located
+ * `setsid(1)` with working `-w` where one exists, else the PHP helper arm
+ * of {@see detachedSpawnPrefix()} — stock macOS ships no setsid(1) at all,
+ * so the helper is how a Darwin host still gets a real group (its CLI PHP
+ * must carry ext-posix and ext-pcntl; the probe proves that too). Only when
+ * NEITHER arm probes clean does spawnSpec() return the command unchanged
+ * and {@see env()} still applies — fail-fast half, attached spawn, exactly
+ * the fallback CapturesProcessOutput measured. {@see terminate()} then
+ * simply finds no owned group and falls back to `proc_terminate()`, which
+ * is the pre-containment behaviour — correct for an unwrapped child,
+ * because without the wrapper the direct child IS the command.
  */
 final class ProcessContainment
 {
@@ -163,77 +167,251 @@ final class ProcessContainment
     private static array $secretEnvAllowlist = [];
 
     /**
-     * Path of a `setsid(1)` proven to forward its child's exit status
-     * through `-w`, or '' when this host offers no usable detach.
+     * The PHP helper detach arm: a `php -r` stub that leads a new session
+     * with posix_setsid(), then REPLACES itself with the real command
+     * through `pcntl_exec('/usr/bin/env', $args)`, exiting 127 when the
+     * exec fails — the same 127 `/usr/bin/env` itself prints for a missing
+     * binary stays the reported status.
      *
-     * The probe RUNS the claim it makes — `setsid -w -- /bin/sh -c 'exit
-     * 7'` must come back 7 — because the two real failure modes are silent:
-     * a binary predating `-w` (or a busybox lacking it) execs, the wrapper
-     * exits 0 immediately, and every wrapped spawn on the box reports
-     * success for commands that failed. Trading a hang for a lie is not
-     * containment. Located by a stat walk, never by spawning `setsid`
-     * itself when it may be missing (PHP warns on a missing proc_open
-     * target and phpunit.xml sets failOnWarning).
-     *
-     * Memoized PER PROCESS now: the probe used to run once per trait-host
-     * class; with one choke point the honest question ("does THIS host have
-     * a usable setsid?") has one answer per process, so the memo moved to
-     * class scope — which only a Support class may declare (the trait hosts
-     * are `final readonly` and PHP refuses a readonly class composing a
-     * trait that declares any property).
+     * `$argv` under `php -r code -- a b` is `['Standard input code', 'a',
+     * 'b']` (php consumes the `--` separator itself), hence the slice
+     * offset of 1. The exec keeps the pid through both replacements, so the
+     * recorded spawn pid IS the command: group leader, session leader, and
+     * source of the exit status — exactly what `setsid -w` achieves
+     * natively, without a binary macOS does not ship.
      */
-    public static function detachedSpawnBinary(): string
+    public const PHP_SETSID_STUB = 'if (posix_setsid() < 0) { exit(127); } pcntl_exec("/usr/bin/env", array_slice($argv, 1)); exit(127);';
+
+    /**
+     * The proven detach prefix for this process, or [] when nothing here
+     * detaches cleanly. Memoized at class scope — the honest question
+     * ("what detaches on THIS host?") has one answer per process, and only
+     * a Support class may declare the property (the trait hosts are `final
+     * readonly` and PHP refuses a readonly class composing a trait that
+     * declares any property).
+     *
+     * @var ?list<string>
+     */
+    private static ?array $detachedSpawnPrefixMemo = null;
+
+    /**
+     * Test override for the candidate list; null means "derive from host".
+     *
+     * @var ?list<list<string>>
+     */
+    private static ?array $detachedSpawnCandidatesForTesting = null;
+
+    /**
+     * The argument prefix that detaches a spawn into its own process group
+     * and session, proven for this host, or [] when nothing offers a usable
+     * detach.
+     *
+     * Candidates are probed IN ORDER through one short-lived proc_open
+     * each: the located `setsid -w --` first (the cheap native wrapper),
+     * then {@see PHP_SETSID_STUB} as `php -r <stub> --`. A candidate passes
+     * only when `/bin/sh -c 'exit 7'` comes back 7 AND the probe's child is
+     * observed as its own group leader. The exit leg catches the two real
+     * silent failure modes of a wrapper — one predating `-w` (or a busybox
+     * lacking it) execs, exits 0 immediately, and every wrapped spawn on
+     * the box would report success for commands that failed; a pcntl-less
+     * CLI fatals the stub. The leadership leg is the load-bearing half
+     * against a wrapper that merely forwards exit codes while nobody leads
+     * the group — the group kill this package exists for would then fire
+     * against a group no child belongs to. Trading a hang for a lie, or a
+     * kill against thin air, is not containment.
+     *
+     * Located by a stat walk, never by spawning `setsid` itself when it may
+     * be missing (PHP warns on a missing proc_open target and phpunit.xml
+     * sets failOnWarning).
+     *
+     * @return list<string>
+     */
+    public static function detachedSpawnPrefix(): array
     {
-        static $resolved = null;
-
-        if ($resolved !== null) {
-            return $resolved;
+        if (self::$detachedSpawnPrefixMemo !== null) {
+            return self::$detachedSpawnPrefixMemo;
         }
 
-        if (PHP_OS_FAMILY === 'Windows') {
-            return $resolved = '';
+        $prefix = [];
+
+        if (PHP_OS_FAMILY !== 'Windows') {
+            foreach (self::detachedSpawnCandidates() as $candidate) {
+                if (self::probeDetachedCandidate($candidate)) {
+                    $prefix = $candidate;
+                    break;
+                }
+            }
         }
 
-        $path = self::locateOnPath('setsid');
-        if ($path === '') {
-            return $resolved = '';
+        return self::$detachedSpawnPrefixMemo = $prefix;
+    }
+
+    /**
+     * Whether a spawn through {@see spawnSpec()} lands in a group this
+     * package can kill wholesale — true exactly when some detach prefix
+     * probed clean. This feeds the background-shell registry's `grouped`
+     * flag: the narration must tell the truth about what `kill -- -PGID`
+     * will reach.
+     */
+    public static function groupsSpawns(): bool
+    {
+        return self::detachedSpawnPrefix() !== [];
+    }
+
+    /**
+     * Force the detach-candidate list for the duration of a test (null
+     * restores host derivation). Clears the memo so the next resolution
+     * re-probes; callers must restore null in tearDown.
+     *
+     * @param ?list<list<string>> $candidates
+     */
+    public static function setDetachedSpawnCandidatesForTesting(?array $candidates): void
+    {
+        self::$detachedSpawnCandidatesForTesting = $candidates;
+        self::$detachedSpawnPrefixMemo = null;
+    }
+
+    /**
+     * @return list<list<string>>
+     */
+    private static function detachedSpawnCandidates(): array
+    {
+        if (self::$detachedSpawnCandidatesForTesting !== null) {
+            return self::$detachedSpawnCandidatesForTesting;
         }
 
+        $candidates = [];
+
+        $setsid = self::locateOnPath('setsid');
+        if ($setsid !== '') {
+            $candidates[] = [$setsid, '-w', '--'];
+        }
+
+        $candidates[] = [\PHP_BINARY, '-r', self::PHP_SETSID_STUB, '--'];
+
+        return $candidates;
+    }
+
+    /**
+     * Run ONE candidate's claim through one short-lived proc_open closed by
+     * the single proc_close below: forwards `exit 7`, and its child leads
+     * its own group.
+     *
+     * The pipes are DRAINED before they close, up to the probe deadline: an
+     * output stream closed unread can kill the child on SIGPIPE while it
+     * writes its own error, and proc_close then reports a corrupted status
+     * (measured: the helper arm's missing-binary probe answers 125
+     * undrained, 127 drained) — the drain is what keeps the exit-code leg
+     * honest. Drained chunks are DISCARDED, nothing reaches the parent's
+     * streams (ChildStderrCaptureTest's census relies on the silence).
+     *
+     * The pid is read from proc_get_status() EXACTLY ONCE, at launch: the
+     * child cannot have exited that early, and any later call reaps it —
+     * erasing the zombie whose pgid the leadership poll below reads (the
+     * kernel keeps a reaped-pending task's group answerable until
+     * proc_close takes it). Leadership is POLLED, not sampled, because the
+     * PHP arm detaches only once its interpreter reaches posix_setsid(). A
+     * candidate that neither drains to EOF nor detaches inside the deadline
+     * is terminated and rejected, so a broken arm costs one bounded probe —
+     * never the process's remaining life.
+     *
+     * @param list<string> $candidate
+     */
+    private static function probeDetachedCandidate(array $candidate): bool
+    {
         $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
         $pipes = [];
-        $probe = @\proc_open([$path, '-w', '--', '/bin/sh', '-c', 'exit 7'], $descriptors, $pipes);
+        $probe = @\proc_open([...$candidate, '/bin/sh', '-c', 'exit 7'], $descriptors, $pipes);
         if (!\is_resource($probe)) {
-            return $resolved = '';
+            return false;
+        }
+
+        $pid = \proc_get_status($probe)['pid'];
+        $deadline = \hrtime(true) + 2_000_000_000;
+
+        $readable = [$pipes[1], $pipes[2]];
+        while ($readable !== []) {
+            $now = \hrtime(true);
+            if ($now >= $deadline) {
+                break;
+            }
+            $write = $except = null;
+            $micros = (int) min(50_000, ($deadline - $now) / 1000);
+            if (@\stream_select($readable, $write, $except, 0, $micros) === false) {
+                break;
+            }
+            foreach ($readable as $key => $stream) {
+                if (@\fread($stream, 4096) === '' && \feof($stream)) {
+                    unset($readable[$key]);
+                }
+            }
         }
         \fclose($pipes[0]);
         \fclose($pipes[1]);
         \fclose($pipes[2]);
 
-        return $resolved = \proc_close($probe) === 7 ? $path : '';
+        $leader = true;
+        if (\function_exists('posix_getpgid')) {
+            $leader = false;
+            while (true) {
+                if (@\posix_getpgid($pid) === $pid) {
+                    $leader = true;
+                    break;
+                }
+                if (\hrtime(true) >= $deadline) {
+                    break;
+                }
+                \usleep(1000);
+            }
+            if (!$leader) {
+                \proc_terminate($probe, \SIGKILL);
+            }
+        }
+
+        $status = \proc_close($probe);
+
+        return $leader && $status === 7;
     }
 
     /**
-     * The command to hand `proc_open()`: a `setsid -w` wrapped spec when the
-     * host offers a usable detach, the original command otherwise.
+     * First token of the proven detach prefix — the `setsid(1)` path when
+     * that arm won the probe, the PHP binary when the helper arm won — or
+     * '' when this host offers no usable detach at all.
      *
-     * Array commands wrap as `[$setsid, '-w', '--', ...$argv]` — direct
-     * exec, no shell, PHP's own argument escaping intact. String commands
-     * wrap as `[$setsid, '-w', '--', '/bin/sh', '-c', $command]`, which is
-     * exactly the shell PHP's string form runs. `-w` keeps `proc_close()`
+     * Every caller asks the PRESENCE question (`!== ''`), which reads the
+     * same for either arm; the code that needs the whole wrapper shape
+     * belongs to {@see spawnSpec()} alone.
+     */
+    public static function detachedSpawnBinary(): string
+    {
+        return self::detachedSpawnPrefix()[0] ?? '';
+    }
+
+    /**
+     * The command to hand `proc_open()`: the original command prefixed by
+     * the proven detach wrapper when the host offers one, unchanged
+     * otherwise.
+     *
+     * Array commands wrap as `[...$prefix, ...$argv]` — direct exec, no
+     * shell, PHP's own argument escaping intact. String commands wrap as
+     * `[...$prefix, '/bin/sh', '-c', $command]`, which is exactly the shell
+     * PHP's string form runs. For the setsid arm, `-w` keeps `proc_close()`
      * reporting the COMMAND's status, not the wrapper's, and forwards
-     * received TERM/INT to the child (the kernel-proof floor for signal
-     * delivery stays {@see terminate()}'s group kill).
+     * received TERM/INT to the child; for the helper arm the exec chain
+     * makes the recorded pid the command itself, so status and signals ride
+     * it directly (the kernel-proof floor for signal delivery stays {@see
+     * terminate()}'s group kill).
      */
     public static function spawnSpec(string|array $command): string|array
     {
-        $setsid = self::detachedSpawnBinary();
-        if ($setsid === '') {
+        $prefix = self::detachedSpawnPrefix();
+        if ($prefix === []) {
             return $command;
         }
 
         return \is_array($command)
-            ? [$setsid, '-w', '--', ...\array_values($command)]
-            : [$setsid, '-w', '--', '/bin/sh', '-c', $command];
+            ? [...$prefix, ...\array_values($command)]
+            : [...$prefix, '/bin/sh', '-c', $command];
     }
 
     /**
@@ -648,7 +826,8 @@ final class ProcessContainment
      * tick per pass (audit R3).
      *
      * WHY `posix_kill($pid, 9)` WAS NOT ENOUGH. Every command a tool runs is
-     * `setsid -w`-wrapped ({@see spawnSpec()}), so it leads its OWN session and
+     * detach-prefixed ({@see spawnSpec()} — a real `setsid -w` or the PHP
+     * helper arm), so it leads its OWN session and
      * process group. SIGKILLing the forked PHP child that ran it leaves
      * `/bin/sh -c …` and its children reparented to init, still running — a
      * cancelled `rm` loop, migration or `git push` finished anyway. And a
