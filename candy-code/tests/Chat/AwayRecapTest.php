@@ -157,6 +157,35 @@ final class AwayRecapTest extends TestCase
         self::assertNull($again);
     }
 
+    public function testAFailedAutoRecapLandsTheRecapFailureVoice(): void
+    {
+        // Round-1 fix m2: the auto arm replicates RecapHostCommand's call
+        // arguments instead of executing the class, so the one piece of that
+        // replication no test yet checked was its failureKey. A title model
+        // that throws must come back wearing the RECAP failure voice (
+        // 'host.recap.failed'), not the btw default — swapping either key on
+        // the arm reddens this pin. This is the same DTO the shared side
+        // fold lands, so the assertion runs through the real settle.
+        $title = $this->failingTitleBackend();
+        $chat = $this->chat($title);
+
+        $this->beAway();
+        [$back, $cmd] = $chat->update(new FocusGainedMsg());
+        self::assertNotNull($cmd);
+
+        $answer = $this->resolve($cmd);
+        self::assertInstanceOf(SideQuestionAnsweredMsg::class, $answer);
+        self::assertStringContainsString('The recap failed', $answer->answer);
+        self::assertStringContainsString('title model exploded', $answer->answer);
+
+        [$settled] = $back->update($answer);
+        $last = $settled->history[\count($settled->history) - 1];
+        self::assertSame(Role::Assistant, $last->role);
+        self::assertTrue($last->uiOnly);
+        self::assertStringContainsString('The recap failed', $last->content);
+        self::assertStringNotContainsString('side question', $last->content, 'not the btw failure voice');
+    }
+
     public function testMidTurnTheReturnIsSilentAndTheStampIsConsumed(): void
     {
         $title = $this->titleBackend('x');
@@ -290,6 +319,25 @@ final class AwayRecapTest extends TestCase
         self::assertStringContainsString('so the recap was not asked', $next->history[\count($next->history) - 1]->content);
     }
 
+    public function testAtTheSpendCapTheAutoReturnIsSilent(): void
+    {
+        // Round-1 fix m1: the auto arm's own spend-cap clause was the single
+        // unpinned silence gate — deleting it kept the suite green because no
+        // focus-path test ever carried a cap. Here the title model is present
+        // and every other gate is clear, so the cap is the ONLY thing standing
+        // between the regain and a paid call: the clause deleted makes the
+        // assertNull and the empty-asked both go red.
+        $title = $this->titleBackend('x');
+        $chat = $this->chat($title, maxCostUsd: 0.0005);
+        [$spent] = $chat->update(new SideQuestionAnsweredMsg(null, 'earlier', Usage::new(10, 0.001)));
+
+        $this->beAway();
+        [, $cmd] = $spent->update(new FocusGainedMsg());
+
+        self::assertNull($cmd, 'the refusal voice belongs to the typed door alone');
+        self::assertSame([], $title->asked);
+    }
+
     public function testAReadOnlyWindowRunsTheTypedRecap(): void
     {
         $chat = $this->mutate($this->chat($this->titleBackend('x')), ['readOnlySession' => true]);
@@ -321,7 +369,7 @@ final class AwayRecapTest extends TestCase
     }
 
     /** @param list<Message> $history */
-    private function chat(?Backend $title, array $history = [], bool $inFlight = false): Chat
+    private function chat(?Backend $title, array $history = [], bool $inFlight = false, ?float $maxCostUsd = null): Chat
     {
         if ($history === []) {
             $history = [
@@ -339,6 +387,7 @@ final class AwayRecapTest extends TestCase
             inFlight: $inFlight,
             backend: new EchoBackend(),
             titleBackend: $title,
+            maxCostUsd: $maxCostUsd,
         ))->withSize(100, 30);
     }
 
@@ -387,6 +436,26 @@ final class AwayRecapTest extends TestCase
                 $this->asked[] = $history;
 
                 return \React\Promise\resolve(Message::assistant($this->reply)->withUsage(Usage::new(20, 0.001)));
+            }
+        };
+    }
+
+    /**
+     * A title model whose side call raises: the seam BtwHostCommand::call()
+     * catches into the failure-voiced answer the {@see
+     * testAFailedAutoRecapLandsTheRecapFailureVoice()} pin reads.
+     */
+    private function failingTitleBackend(): Backend
+    {
+        return new class implements Backend {
+            public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null): Message
+            {
+                throw new \LogicException('the recap rides the async seam only');
+            }
+
+            public function completeAsync(array $history, ?callable $onToken = null, ?\SugarCraft\Code\Backend\CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
+            {
+                throw new \RuntimeException('title model exploded');
             }
         };
     }
