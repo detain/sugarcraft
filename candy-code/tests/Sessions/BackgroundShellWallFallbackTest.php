@@ -110,7 +110,15 @@ final class BackgroundShellWallFallbackTest extends TestCase
 
     public function testASettledFallbackShellDisarmsTheWatchdogAndStampsZero(): void
     {
-        $wrapper = $this->fallbackWrapper('echo hi');
+        // The settle pin runs a 60 s wall — longer than the two-second census
+        // window below — so the watchdog CANNOT legitimately die before the
+        // assertion: the only force that empties the census on the settled
+        // path is the trailer's disarm. Delete that kill and this pin goes
+        // red on a live member, not on a race (the 2 s wall variant did —
+        // the watchdog's own group-KILL rung suicided it just inside the
+        // polling window and hid the defect; recorded so nobody shortens
+        // this figure again).
+        $wrapper = $this->fallbackWrapper('echo hi', 60);
         $exitPath = $this->dir . '/e.exit';
 
         [$pid, $status] = $this->runDetachedBounded($wrapper, $exitPath, static fn (int $p): array => []);
@@ -125,7 +133,7 @@ final class BackgroundShellWallFallbackTest extends TestCase
             usleep(50_000);
             $survivors = $this->groupMembers($pid);
         }
-        self::assertSame([], $survivors, 'the trailer TERMs the watchdog before stamping, so a settled shell leaves no sleeping member for a later sweep to find');
+        self::assertSame([], $survivors, 'the trailer TERMs the watchdog before stamping, so a settled shell leaves no sleeping member for a later sweep to find — with a 60 s wall out, a survivor here IS the missing disarm');
     }
 
     public function testTheTimeoutArmSegmentIsByteIdenticalAndTheWatchLiteralRidesOnce(): void
@@ -154,12 +162,12 @@ final class BackgroundShellWallFallbackTest extends TestCase
         return sys_get_temp_dir() . '/cc-cmp-4h-wallbin-' . getmypid();
     }
 
-    private function fallbackWrapper(string $command): string
+    private function fallbackWrapper(string $command, int $wallSeconds = self::WALL_SECONDS): string
     {
         $built = (new \ReflectionMethod(BackgroundShellRegistry::class, 'buildWrapper'))->invoke(null, $command);
         $shortened = str_replace(
             'sleep ' . BackgroundShellRegistry::MAX_LIFETIME_SECONDS,
-            'sleep ' . self::WALL_SECONDS,
+            'sleep ' . $wallSeconds,
             $built,
             $count,
         );
@@ -170,6 +178,14 @@ final class BackgroundShellWallFallbackTest extends TestCase
 
     /**
      * Launches through the real detach prefix, observes once, then reaps.
+     *
+     * A settled wrapper's backgrounded watchdog is reparented to init the
+     * moment bash exits — this process can never `waitpid` it, and neither
+     * can any second `setsid`-style reap. The census is the ONLY honest
+     * observation surface here, which is exactly why the settle pin below
+     * shortens nothing that could suicide its evidence: it runs a wall LONGER
+     * than the polling window, so a surviving (non-disarmed) watchdog stays
+     * visible to the census until a red assertion, never until a race.
      *
      * @param  callable(int): array<int, string> $midway
      * @return array{0:int,1:int,2:float,3:array<int, string>}
