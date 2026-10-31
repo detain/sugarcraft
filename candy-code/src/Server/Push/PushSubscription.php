@@ -80,6 +80,15 @@ final class PushSubscription
         if ($path !== '' && !preg_match('#^/[A-Za-z0-9\-._~%!$&\'()*+,;=:@\/]*$#', $path)) {
             return 'the push endpoint path carries characters a push service never issues';
         }
+        // The query rides requestTarget() into the HTTP request line verbatim,
+        // exactly like the path, so it answers to the same pchar law — widened
+        // only by '?' itself, the query/pchar boundary octet (RFC 3986 §3.4
+        // permits '/' and '?' in a query; parse_url has already defanged any
+        // raw control octet to '_', which is pchar-legal and inert).
+        $query = $parts['query'] ?? '';
+        if ($query !== '' && !preg_match('#^[A-Za-z0-9\-._~%!$&\'()*+,;=:@\/?]*$#', $query)) {
+            return 'the push endpoint query carries characters a push service never issues';
+        }
 
         return null;
     }
@@ -106,7 +115,7 @@ final class PushSubscription
         return 'https://' . $this->host();
     }
 
-    /** @return null|string the path+query to carry, defaulting to '/' like RFC 8291 §5's example */
+    /** @return null|string the path+query to carry, defaulting to '/' like RFC 8291 §5's example; both legs were shape-gated by {@see endpointRefusal} at construction */
     public function requestTarget(): ?string
     {
         $path = (string) (parse_url($this->endpoint, PHP_URL_PATH) ?? '');

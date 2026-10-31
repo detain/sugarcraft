@@ -205,7 +205,10 @@ final class VapidKeys
 
         return $details !== false
             && $details['type'] === OPENSSL_KEYTYPE_EC
-            && (int) ($details['bits'] ?? 0) === 256;
+            && (int) ($details['bits'] ?? 0) === 256
+            // Bit width alone would adopt a 256-bit curve that is not P-256
+            // (secp256k1, brainpoolP256r1); only prime256v1 signs ES256.
+            && ($details['ec']['curve_name'] ?? '') === 'prime256v1';
     }
 
     private function dir(): string

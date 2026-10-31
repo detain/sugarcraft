@@ -74,6 +74,50 @@ final class WebPushSenderTest extends TestCase
         PushSubscription::new('http://fcm.googleapis.com/push/x', $this->makeLocalPair()[1], 'BTBZMqHH6r4Tts7J_aSIgg');
     }
 
+    public function testQueryShapesAPushServiceNeverIssuesCannotBeConstructed(): void
+    {
+        // MINOR-1: the endpointRefusal path leg enforces the pchar law, and
+        // requestTarget() copies the query verbatim — so the query leg must
+        // answer to the same gate. parse_url defangs raw control octets to
+        // '_', which is why the printable request-line breakers below are
+        // the shapes that actually survive to a composed target.
+        foreach ([
+            'https://updates.push.services.mozilla.com/wpush/v2/tokenabc?q=a[1]&x=1',
+            'https://updates.push.services.mozilla.com/wpush/v2/tokenabc?q=a|b&x=1',
+            'https://updates.push.services.mozilla.com/wpush/v2/tokenabc?q=a{b}&x=1',
+            'https://updates.push.services.mozilla.com/wpush/v2/tokenabc?q=a b&x=1',
+        ] as $endpoint) {
+            try {
+                PushSubscription::new($endpoint, $this->makeLocalPair()[1], 'BTBZMqHH6r4Tts7J_aSIgg');
+                self::fail("construction must gate a hostile query out: $endpoint");
+            } catch (\InvalidArgumentException $problem) {
+                self::assertStringContainsString('query carries characters', $problem->getMessage());
+            }
+        }
+    }
+
+    public function testLegitimateEndpointQueriesRideTheRequestTargetVerbatim(): void
+    {
+        $token = PushSubscription::new(
+            'https://fcm.googleapis.com/fcm/send/762551172809:APA91bGv8cFqdWl0U7fYHnRkPqzT?key=AIzaSyBxW2pQz8LmN4tRvE&v=2',
+            $this->makeLocalPair()[1],
+            'BTBZMqHH6r4Tts7J_aSIgg'
+        );
+        self::assertSame(
+            '/fcm/send/762551172809:APA91bGv8cFqdWl0U7fYHnRkPqzT?key=AIzaSyBxW2pQz8LmN4tRvE&v=2',
+            $token->requestTarget()
+        );
+
+        // The design's URL shape needs the slash and semicolon boundary
+        // octets admitted by the query leg, not just the path leg's set.
+        $boundary = PushSubscription::new(
+            'https://updates.push.services.mozilla.com/wpush/v2/tokenabc?p=/probe;x&a=b',
+            $this->makeLocalPair()[1],
+            'BTBZMqHH6r4Tts7J_aSIgg'
+        );
+        self::assertSame('/wpush/v2/tokenabc?p=/probe;x&a=b', $boundary->requestTarget());
+    }
+
     public function testTheAllowlistIsExactHostsPlusStrictServiceSuffixes(): void
     {
         foreach ([

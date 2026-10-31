@@ -203,6 +203,31 @@ final class VapidKeysTest extends TestCase
         self::assertNotSame(48, strlen($keys->publicKeyUncompressed()) - 1);
     }
 
+    public function testAStoredEcKeyAtTwoHundredFiftySixBitsOnTheWrongCurveIsReplacedNotUsed(): void
+    {
+        // NIT-1: bits===256 alone would adopt a secp256k1 pair — same type,
+        // same width, not P-256 — so the door must name the curve.
+        $resource = openssl_pkey_new([
+            'curve_name' => 'secp256k1',
+            'private_key_type' => OPENSSL_KEYTYPE_EC,
+        ]);
+        self::assertNotFalse($resource);
+        openssl_pkey_export($resource, $secp256k1Pem);
+
+        $path = $this->dir . '/' . StateDir::VAPID_KEY_FILE;
+        file_put_contents($path, $secp256k1Pem);
+        chmod($path, 0o600);
+
+        $keys = VapidKeys::new($this->dir);
+        self::assertSame(65, strlen($keys->publicKeyUncompressed()), 'a re-minted P-256 pair answers instead');
+
+        $replaced = openssl_pkey_get_private((string) file_get_contents($path));
+        self::assertNotFalse($replaced, 'the replacement is a readable private key');
+        $replacedDetails = openssl_pkey_get_details($replaced);
+        self::assertSame('prime256v1', $replacedDetails === false ? null : ($replacedDetails['ec']['curve_name'] ?? null),
+            'a 256-bit key on another curve is replaced in state, never adopted');
+    }
+
     public function testTheDerParserLeftPadsMinimalIntegersIntoTheFixedWidthPair(): void
     {
         // A 31-byte minimal r (high bit clear, no sign octet) is the case the
