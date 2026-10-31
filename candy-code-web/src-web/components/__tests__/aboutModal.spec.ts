@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AboutModal from '../AboutModal.vue'
 import { Wire } from '../grid/__tests__/harness'
 import { useConnectionStore } from '../../stores/connection'
+import type { Scope } from '../../protocol/generated'
 
 /**
  * WEB-1c: the About overlay — `server.info` for what the server offers,
@@ -185,7 +186,7 @@ const INFO = {
 const HEALTH = { ok: true, version: '1.2.3', uptimeS: 60, sessionsOpen: 2, turnsRunning: 3, draining: false }
 
 /** Re-point the live hello at a token principal with only the given scopes. */
-function demoteTo(scopes: string[]): void {
+function demoteTo(scopes: Scope[]): void {
   const connection = useConnectionStore()
   const hello = connection.hello
   if (!hello) throw new Error('Wire.connect() should have established a hello')
@@ -221,14 +222,16 @@ describe('AboutModal confirmed stop (C-WEB-5.g)', () => {
     wire.answer('server.info', INFO)
     const frame = wire.sent('server.health').at(-1)
     if (!frame) throw new Error('no server.health sent')
-    wire.socket.fail(-32001, 'forbidden', 'no health for you', frame.id)
+    wire.socket.fail(-32003, 'forbidden', 'no health for you', frame.id)
     await flushPromises()
     expect(wrapper.find('[data-testid="about-info"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="about-stop"]').exists()).toBe(false)
   })
 
   it('a cancelled confirm names the counts in the question and sends nothing', async () => {
-    const confirmSpy = vi.fn(() => false)
+    // The typed parameter is what gives mock.calls[0]?.[0] below its
+    // string type; a zero-arg arrow would type the call tuple as [].
+    const confirmSpy = vi.fn((_question: string) => false)
     vi.stubGlobal('confirm', confirmSpy)
     const wrapper = await openAdminInformed()
     const stop = wrapper.find('[data-testid="about-stop"]')
@@ -273,9 +276,59 @@ describe('AboutModal confirmed stop (C-WEB-5.g)', () => {
     await wrapper.find('[data-testid="about-stop"]').trigger('click')
     const frame = wire.sent('server.shutdown').at(-1)
     if (!frame) throw new Error('confirmed click sent nothing')
-    wire.socket.fail(-32001, 'forbidden', 'admin scope required', frame.id)
+    wire.socket.fail(-32003, 'forbidden', 'admin scope required', frame.id)
     await flushPromises()
     expect(wrapper.find('[data-testid="about-stop-error"]').text()).toContain('admin scope required')
+    expect(wrapper.find('[data-testid="about-stop"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('a re-open hands back a clean control — neither a stale refusal row nor a stuck latch crosses visits', async () => {
+    const confirmSpy = vi.fn(() => true)
+    vi.stubGlobal('confirm', confirmSpy)
+    const wrapper = await openAdminInformed()
+
+    // Visit 1: a refusal lands the loud stop-error row on the control.
+    await wrapper.find('[data-testid="about-stop"]').trigger('click')
+    const refused = wire.sent('server.shutdown').at(-1)
+    if (!refused) throw new Error('confirmed click sent nothing')
+    wire.socket.fail(-32003, 'forbidden', 'admin scope required', refused.id)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="about-stop-error"]').text()).toContain('admin scope required')
+
+    // Close and re-open: the refusal belongs to a dead visit. Without the
+    // stop-state reset in load() this stale row would repaint forever.
+    await wrapper.setProps({ open: false })
+    await wrapper.setProps({ open: true })
+    await flushPromises()
+    const info1 = wire.sent('server.info').at(-1)
+    const health1 = wire.sent('server.health').at(-1)
+    if (!info1 || !health1) throw new Error('re-open did not ask again')
+    wire.socket.answer(INFO, info1.id)
+    wire.socket.answer(HEALTH, health1.id)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="about-health"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="about-stop-error"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="about-stop"]').attributes('disabled')).toBeUndefined()
+
+    // Visit 2 pins the other half: a confirmed send latched as "Stopping…"
+    // and left on the wire. Close and re-open again — the latch must not
+    // carry over either, or a fresh visit is a dead button forever.
+    await wrapper.find('[data-testid="about-stop"]').trigger('click')
+    const pending = wire.sent('server.shutdown').at(-1)
+    if (!pending) throw new Error('second confirmed click sent nothing')
+    expect(wrapper.find('[data-testid="about-stop"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-testid="about-stop-state"]').exists()).toBe(true)
+
+    await wrapper.setProps({ open: false })
+    await wrapper.setProps({ open: true })
+    await flushPromises()
+    const info2 = wire.sent('server.info').at(-1)
+    const health2 = wire.sent('server.health').at(-1)
+    if (!info2 || !health2) throw new Error('second re-open did not ask again')
+    wire.socket.answer(INFO, info2.id)
+    wire.socket.answer(HEALTH, health2.id)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="about-stop-state"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="about-stop"]').attributes('disabled')).toBeUndefined()
   })
 })
