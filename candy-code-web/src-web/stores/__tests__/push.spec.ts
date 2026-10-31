@@ -437,6 +437,37 @@ describe('push service worker payload handling (C-WEB-5.e)', () => {
     })
   })
 
+  it('refuses a bare hostile kind: null payload, generic heading and tag', async () => {
+    // FIX-1 (REVIEW-1 MINOR-1): the kind allowlist at sw.ts:105 must be
+    // observable. A kind outside {question, finished} that rides no body and
+    // no id is the WHOLE payload, so the guard's presence is what makes this
+    // dispatch the null-payload shape. Widen the test to any string and the
+    // hostile kind survives: the heading flips to the finished fall-through
+    // and the raw kind — control character included — rides the dedupe tag
+    // `candy-code:${kind}`, splitting one collapse-card into one card per
+    // hostile string. These two asserts are the discriminating pair.
+    await loadWorker()
+    await dispatchPush(JSON.stringify({ kind: 'evil\u0001x' }))
+    expect(shown.length).toBe(1)
+    expect(shown[0]?.title).toBe('CandyCode needs your attention')
+    expect(shown[0]?.options?.tag).toBe('candy-code:generic')
+    expect(shown[0]?.options?.tag).not.toContain('evil')
+  })
+
+  it('coerces a hostile kind beside a body to the question card', async () => {
+    // Same guard, other branch: kind is dropped but the payload still shows
+    // (there is safe content to show), so `kind ?? 'question'` decides the
+    // heading and the tag. Under a widened kind test this card would be
+    // titled 'finished' and tagged with the hostile string; under the real
+    // allowlist the tag collapses exactly like a legitimate question row.
+    await loadWorker()
+    await dispatchPush(JSON.stringify({ kind: 'evil\u0001x', body: 'a body', sessionId: 'sess-7' }))
+    expect(shown.length).toBe(1)
+    expect(shown[0]?.title).toBe('A question needs you')
+    expect(shown[0]?.options?.tag).toBe('candy-code:question:sess-7')
+    expect(shown[0]?.options?.body).toBe('a body')
+  })
+
   it('opens the stored route on click, and only a route', async () => {
     await loadWorker()
     await dispatchClick({ href: '#/s/s-42_x' })
