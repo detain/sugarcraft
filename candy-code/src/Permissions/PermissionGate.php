@@ -1092,6 +1092,20 @@ final class PermissionGate
             return PermissionDecision::Ask;
         }
 
+        // C-TOOL-6.h: a `client__*` proxy runs wherever the attached client
+        // decided to run it — a browser tab, an IDE, a phone. Nothing in the
+        // serve process can answer "read-only" for one: there is no hint to
+        // consult (it is not an MCP announcement, and the descriptor's own
+        // schema is the CLIENT's claim, not a trusted server's), and the
+        // classifier would see only JSON arguments, never what the client
+        // does with them. So Auto always asks, with the same breaker
+        // discipline as the `user__` branch directly above: an Ask returned
+        // before classify() is neither a strike nor a safe call — the
+        // counters stay exactly where the turn left them.
+        if (str_starts_with($call->name, \SugarCraft\Code\Host\ClientTools\ClientToolProxy::NAME_PREFIX)) {
+            return PermissionDecision::Ask;
+        }
+
         // PtyRun-with-steps is a question, not a classification: keystrokes
         // typed into a live terminal can open a shell no pattern has judged
         // (vim `:!`, mysql `\!`), so Auto never Allows it and never resets its
@@ -1806,6 +1820,16 @@ final class PermissionGate
         // literal `mcp__` verdict below, which stays the last word for bridge
         // names, untouched.
         if (str_starts_with($call->name, \SugarCraft\Code\Tools\UserTools\UserScriptTool::NAME_PREFIX)) {
+            return true;
+        }
+
+        // C-TOOL-6.h: a `client__*` proxy is write-class for every evaluator
+        // too — the execution happens outside this process entirely, on the
+        // client's own say-so, and a registered descriptor carries no
+        // read-only claim this gate is allowed to trust. Like the `user__`
+        // arm directly above, this sits BEFORE the literal `mcp__` verdict
+        // below, which stays the last word for bridge names, untouched.
+        if (str_starts_with($call->name, \SugarCraft\Code\Host\ClientTools\ClientToolProxy::NAME_PREFIX)) {
             return true;
         }
 
