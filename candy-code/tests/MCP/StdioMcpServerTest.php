@@ -183,13 +183,20 @@ final class StdioMcpServerTest extends TestCase
             'the planner stopped handing the transport the scrubbed environment (0.14-b: mcpEnv, credentials withheld)',
         );
 
-        if (ProcessContainment::detachedSpawnBinary() !== '') {
-            $this->assertSame(
-                [ProcessContainment::detachedSpawnBinary(), '-w', '--', 'php', '/somewhere/server.php', '--flag'],
-                $plan[0],
-                'with a usable setsid the spawn plan must lead with the wrapper',
-            );
-        }
+        // C-TOOL-4.h review MINOR-1: the wrapper SHAPE is host-derived — Linux
+        // steady state leads with `setsid -w --`, a Darwin box where setsid(1)
+        // lacks -w (or is absent entirely) may lead with the PHP helper arm
+        // `[PHP_BINARY, -r, <stub>, --]`. Pin what the code actually plans on
+        // THIS host instead of hardcoding one shape. Unconditional on purpose:
+        // where no detach probed clean the spread collapses to the bare
+        // command, so there is no silent skip — deleting the prefix prepend
+        // from spawnSpec() reddens right here on every host that does have a
+        // real detach prefix.
+        $this->assertSame(
+            [...ProcessContainment::detachedSpawnPrefix(), 'php', '/somewhere/server.php', '--flag'],
+            $plan[0],
+            'the spawn plan must lead with exactly the detach prefix this host proved (or with nothing where none probed clean)',
+        );
 
         $this->assertSame('wins', $plan[1]['MCP_ONLY'], 'the configured override must still win');
     }
