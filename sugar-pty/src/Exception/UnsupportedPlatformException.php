@@ -8,11 +8,12 @@ use SugarCraft\Pty\PtyException;
 
 /**
  * Raised when {@see \SugarCraft\Pty\PtySystemFactory::new()} can
- * not return a PTY system for the current host — currently this is
- * Windows, where the v1 sugar-pty backend is POSIX-only.
+ * not return a PTY system for the current host — today that means a
+ * platform outside both backends (neither of the POSIX families nor
+ * Windows), or a Windows host the ConPTY probe refuses.
  *
- * Windows ConPTY support is reserved for a v2 sidecar implementation;
- * the exception message points users at the issue tracker so they can
+ * The two POSIX/ConPTY families are covered; the message keeps a
+ * pointer at the issue tracker so users on any remaining platform can
  * upvote / request the work without needing to read the source.
  *
  * Extends {@see PtyException} so callers that already catch the
@@ -23,9 +24,10 @@ final class UnsupportedPlatformException extends PtyException
     public static function forPosixOnly(string $detectedPlatform): self
     {
         return new self(\sprintf(
-            'sugar-pty is POSIX-only in v1 (detected: %s). '
-            . 'Windows ConPTY is reserved for v2 sidecar; '
-            . 'track / request progress at https://github.com/detain/sugarcraft/issues',
+            'sugar-pty has no PTY backend for the platform "%s". '
+            . 'Linux, Darwin, BSD and Solaris use the POSIX pty interface, and '
+            . 'Windows uses ConPTY through the ffi extension; '
+            . 'track / request progress for other platforms at https://github.com/detain/sugarcraft/issues',
             $detectedPlatform,
         ));
     }
@@ -69,7 +71,7 @@ final class UnsupportedPlatformException extends PtyException
         return new self(\sprintf(
             'the Windows ConPTY backend is not available on this host: %s. '
             . 'ConPTY needs Windows 10 1809 or newer, PHP 8.4 or newer with the ffi '
-            . 'extension, and it is not selected by SUGARCRAFT_PTY_BACKEND yet.',
+            . 'extension, and SUGARCRAFT_PTY_BACKEND=conpty selects it once those conditions hold.',
             $reason,
         ));
     }

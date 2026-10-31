@@ -7,39 +7,49 @@ namespace SugarCraft\Pty;
 use SugarCraft\Pty\Contract\PtySystem;
 use SugarCraft\Pty\Exception\UnsupportedPlatformException;
 use SugarCraft\Pty\Posix\PosixPtySystem;
+use SugarCraft\Pty\Windows\ConPtySystem;
+use SugarCraft\Pty\Windows\Kernel32ConPty;
 
 /**
  * Resolves a host-appropriate {@see PtySystem} implementation. Lets
- * application code stay DI-friendly without hard-coding the POSIX
- * backend at the call site.
+ * application code stay DI-friendly without hard-coding the backend
+ * at the call site.
  *
- * Linux / macOS → {@see PosixPtySystem}.
- * Windows       → {@see UnsupportedPlatformException} (v2 ConPTY).
+ * Linux / macOS / BSD / Solaris → {@see PosixPtySystem}.
+ * Windows → {@see ConPtySystem} (needs Windows 10 1809+ and PHP 8.4+
+ * with the ffi extension; the availability refusal arrives at
+ * `$system->open()`, not here).
  *
  * The factory is dependency-free — no FFI handles allocated, no
  * `/dev/ptmx` probe — so constructing it is cheap enough to call from
  * tests and bootstrappers alike. The actual PTY syscalls only run
- * when a caller invokes `$system->open()`.
+ * when a caller invokes `$system->open()`. On Windows the ConPTY FFI
+ * load is likewise deferred into `open()`, which is why this file may
+ * name {@see Kernel32ConPty} only through its static `supported()`
+ * probe (which gates on the OS family before touching FFI at all).
  *
  * Backend selection is controlled by `SUGARCRAFT_PTY_BACKEND`:
- * `posix-ffi` (default on POSIX), `sidecar` / `pecl` (declared but
- * not implemented in v1 — selecting either throws
- * {@see UnsupportedPlatformException}), `auto` (same as unset / default
- * behaviour).
+ * `posix-ffi` (default on POSIX), `conpty` (forces the Windows ConPTY
+ * backend; on a non-Windows host it throws
+ * {@see UnsupportedPlatformException} naming the probe's reason),
+ * `sidecar` / `pecl` (declared but not implemented in v1 — selecting
+ * either throws {@see UnsupportedPlatformException}), `auto` (same as
+ * unset / default behaviour).
  *
- * Mirrors charmbracelet/x/xpty.Open()'s platform-resolution layer.
+ * Mirrors charmbracelet/x/xpty.Open()'s platform-resolution layer. 
 
  */
 final class PtySystemFactory
 {
-    private const VALID_BACKENDS = ['posix-ffi', 'sidecar', 'pecl', 'auto'];
+    private const VALID_BACKENDS = ['posix-ffi', 'conpty', 'sidecar', 'pecl', 'auto'];
 
     /**
      * Default factory entry point. Respects `SUGARCRAFT_PTY_BACKEND`
      * when set, otherwise falls back to platform-appropriate behaviour.
      *
-     * @throws UnsupportedPlatformException on Windows or when an
-     *     unreleased backend (`sidecar`, `pecl`) is selected.
+     * @throws UnsupportedPlatformException when an unreleased backend
+     *     (`sidecar`, `pecl`) is selected, or `conpty` is selected on
+     *     a host the ConPTY probe refuses.
      * @throws \InvalidArgumentException    on an unrecognised value.
      */
     public static function new(): PtySystem
@@ -52,6 +62,17 @@ final class PtySystemFactory
 
         if ($backend === 'posix-ffi') {
             return self::forPlatform(\PHP_OS_FAMILY);
+        }
+
+        if ($backend === 'conpty') {
+            if (\PHP_OS_FAMILY === 'Windows') {
+                return new ConPtySystem();
+            }
+
+            $reason = Kernel32ConPty::supported()
+                ?? 'the availability probe found no reason, yet this host is not Windows';
+
+            throw UnsupportedPlatformException::forConPtyUnavailable($reason);
         }
 
         if ($backend === 'sidecar' || $backend === 'pecl') {
@@ -89,6 +110,7 @@ final class PtySystemFactory
     {
         return match ($platform) {
             'Linux', 'Darwin', 'BSD', 'Solaris' => new PosixPtySystem(),
+            'Windows' => new ConPtySystem(),
             default => throw UnsupportedPlatformException::forPosixOnly($platform),
         };
     }

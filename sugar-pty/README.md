@@ -11,7 +11,8 @@ driving child processes inside terminal UIs. Open a master/slave PTY pair, spawn
 its stdio wired to the slave, pump bytes between the host and the
 child, and forward host resizes into the child via `TIOCSWINSZ`.
 
-**Status**: Linux + macOS. Windows ConPTY is not covered here.
+**Status**: Linux + macOS, and Windows ConPTY through `Windows\ConPtySystem`
+(FFI — Windows 10 1809 or newer, PHP 8.4 or newer; see Backend selection).
 
 ## Install
 
@@ -28,13 +29,13 @@ libc `kill(2)` over FFI otherwise.
 ## Quickstart
 
 Contract-first — resolve the backend through the factory so tests can
-inject a stub `PtySystem` without touching libc (and so a Windows
-ConPTY sidecar can land in v2 without call-site changes):
+inject a stub `PtySystem` without touching libc (and so the POSIX and
+ConPTY backends swap under one call-site):
 
 ```php
 use SugarCraft\Pty\PtySystemFactory;
 
-$system = PtySystemFactory::new();       // throws UnsupportedPlatformException on Windows
+$system = PtySystemFactory::new();       // PosixPtySystem on POSIX, ConPtySystem on Windows (open() refuses below Win10 1809 / PHP 8.4)
 $pair   = $system->open(100, 30);        // cols × rows — winsize applied at open
 $master = $pair->master();
 
@@ -451,7 +452,7 @@ and a row here nothing reads.
 | Variable | Read by | Effect |
 |---|---|---|
 | `SUGARCRAFT_LIBC` | `Libc` | Path to the C library to bind FFI against, instead of the platform default (`libc.so.6` on Linux, `/usr/lib/libSystem.B.dylib` on macOS). For musl, Alpine and custom sysroots. |
-| `SUGARCRAFT_PTY_BACKEND` | `PtySystemFactory::new()` | Which PTY backend to build: unset / `auto`, `posix-ffi`, `sidecar`, `pecl`. Unrecognised values throw `\InvalidArgumentException`. See [Backend selection](#backend-selection). |
+| `SUGARCRAFT_PTY_BACKEND` | `PtySystemFactory::new()` | Which PTY backend to build: unset / `auto`, `posix-ffi`, `conpty`, `sidecar`, `pecl`. `conpty` resolves `Windows\ConPtySystem` on Windows and, on any other host, throws `UnsupportedPlatformException` naming the availability probe's reason. Unrecognised values throw `\InvalidArgumentException`. See [Backend selection](#backend-selection). |
 | `SUGARCRAFT_TERMIOS` | `TermiosFactory` | `stty` forces the subprocess termios backend instead of the FFI one. Anything else leaves the platform default in place. |
 | `SUGAR_PTY_HANG_BUDGET` | `tests/Support/HangWatchdog` | Seconds a single test may run before the suite's own watchdog turns a wedged test into a named failure plus a forensic bundle. `0` opts the watchdog out entirely; unset uses the built-in budget. **Test suite only** — it configures nothing in `src/`, and it is here because a contributor chasing a hang needs to find it. |
 
@@ -465,7 +466,7 @@ The pre-rename prefix `CANDY_PTY_` is still read, with a deprecation warning, an
 Cross-ecosystem parity table for the dominant PTY libraries in Go,
 Rust, and Node.js. The goal is "as good as `creack/pty` on Linux and
 macOS" — not a kitchen-sink reimplementation. This table is deliberately honest
-about gaps: Windows ConPTY, foreground-job control, and worker-thread
+about gaps: foreground-job control and worker-thread
 support are flagged as planned-or-missing rather than papered over.
 
 | Feature | sugar-pty | creack/pty (Go) | portable-pty (Rust) | node-pty (Node.js) |
@@ -487,7 +488,7 @@ support are flagged as planned-or-missing rather than papered over.
 | Non-blocking master I/O | ✅ `setBlocking(false)` + `stream_select` | ✅ `os.File` non-blocking | ✅ `set_nonblocking()` | ✅ event-driven |
 | Byte pump abstraction | ✅ `PosixPump::run()` w/ EOF grace + keepalive | ❌ caller copies bytes | ❌ caller copies bytes | ✅ libuv-driven |
 | Async / threaded operation | ⚠️ single-loop pump only (ReactPHP-friendly) | ✅ goroutines built-in | ✅ thread / async runtime | ✅ libuv worker thread |
-| Windows ConPTY | ❌ not yet implemented | ❌ Linux/macOS only | ✅ `ConPtySystem` | ✅ `winpty` / ConPTY |
+| Windows ConPTY | ✅ `Windows\ConPtySystem` (FFI; Win10 1809+ / PHP 8.4+; no ctty/signals/streams — see Known limitations) | ❌ Linux/macOS only | ✅ `ConPtySystem` | ✅ `winpty` / ConPTY |
 | Dependency-free DI seam | ✅ `Contract\PtySystem` interface | ❌ concrete `*Pty` only | ✅ `PtySystem` trait | ❌ concrete bindings |
 
 Legend: ✅ shipping today · ⚠️ partial / opt-in / caller-driven · ❌ not
@@ -528,8 +529,9 @@ environment variable to select which PTY backend to use:
 
 | Value | Behaviour |
 |---|---|
-| _(unset)_ / `auto` | Platform-appropriate default (same as `posix-ffi` on POSIX) |
+| _(unset)_ / `auto` | Platform-appropriate default — `posix-ffi` on the POSIX families, `conpty` on Windows |
 | `posix-ffi` | `PosixPtySystem` — FFI into libc `posix_openpt` etc. (Linux / macOS) |
+| `conpty` | `Windows\ConPtySystem` — FFI into the kernel32 pseudo-console APIs (Windows 10 1809+ / PHP 8.4+). On a non-Windows host it throws `UnsupportedPlatformException` naming the probe's reason; the FFI load itself is deferred to `open()`. |
 | `sidecar` | Not implemented in v1 — throws `UnsupportedPlatformException` |
 | `pecl` | Not implemented in v1 — throws `UnsupportedPlatformException` |
 
@@ -615,7 +617,17 @@ sugar-pty builds on two sibling libraries for input/output escape-sequence handl
 
 ## Known limitations
 
-- **Linux + macOS only.** Windows ConPTY is not yet supported.
+- **Windows ConPTY caveats.** `Windows\ConPtySystem` ships as the Windows
+  backend (Windows 10 1809+, PHP 8.4+, ext-ffi), but the pseudo console is
+  not a PTY: `capabilities()` reports `controllingTerminal`, `signals` and
+  `fd` as false, `Child::kill()` collapses every signal into one
+  `TerminateJobObject` (exit surfaces as `128 + signal` by convention),
+  `MasterPty::stream()` and `fd()` throw — so `PosixPump`, `ReactPump` and
+  `MultiPump` stay POSIX-only and ConPTY masters are pumped by polling
+  `read($len, $timeout)` — and `size()` answers the cached geometry with
+  `xpix`/`ypix` always 0 (there is no pixel query to bind). The Windows CI
+  cells on PHP 8.3 therefore run the platform-neutral suites only; the
+  ConPTY live test skips there and executes on the 8.4 cell.
 - **ext-ffi is required but disabled by default.** `ext-ffi` is loaded eagerly
   because `FFI::cdef()` must resolve symbols at script startup. Many Linux
   distributions ship PHP with `ffi.enable=0` in `php.ini` (a security hardening

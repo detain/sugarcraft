@@ -9,13 +9,14 @@ use SugarCraft\Pty\Exception\UnsupportedPlatformException;
 use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\PtyException;
 use SugarCraft\Pty\PtySystemFactory;
+use SugarCraft\Pty\Windows\ConPtySystem;
 
 final class PtySystemFactoryTest extends TestCase
 {
     public function testDefaultReturnsPosixSystemOnPosixHost(): void
     {
         if (\PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('new() throws on Windows; covered by testWindowsThrowsUnsupportedPlatformException');
+            $this->markTestSkipped('the default resolves the ConPTY backend on Windows; pinned by testBackendConptyResolvesTheConPtySystemOnWindows');
         }
         $this->assertInstanceOf(PosixPtySystem::class, PtySystemFactory::new());
     }
@@ -62,10 +63,16 @@ final class PtySystemFactoryTest extends TestCase
         $this->assertInstanceOf(PosixPtySystem::class, PtySystemFactory::forPlatform('BSD'));
     }
 
-    public function testWindowsThrowsUnsupportedPlatformException(): void
+    /**
+     * C-TUI-6.c: Windows resolves the ConPTY adapter instead of throwing.
+     * This runs on Linux too — `forPlatform('Windows')` must construct the
+     * system without touching FFI, so the dependency-free construction law
+     * is pinned off-Windows (before C-TUI-6.c this call threw, which is the
+     * red-under-deletion shape for the factory wiring).
+     */
+    public function testWindowsResolvesTheConPtySystem(): void
     {
-        $this->expectException(UnsupportedPlatformException::class);
-        PtySystemFactory::forPlatform('Windows');
+        $this->assertInstanceOf(ConPtySystem::class, PtySystemFactory::forPlatform('Windows'));
     }
 
     public function testUnknownPlatformThrowsUnsupportedPlatformException(): void
@@ -77,9 +84,10 @@ final class PtySystemFactoryTest extends TestCase
     public function testUnsupportedPlatformExceptionExtendsPtyException(): void
     {
         // Callers catching the generic sugar-pty error type must not
-        // miss the platform-specific subclass.
+        // miss the platform-specific subclass. 'Unknown' is the platform
+        // with no backend; Windows now resolves ConPtySystem (C-TUI-6.c).
         try {
-            PtySystemFactory::forPlatform('Windows');
+            PtySystemFactory::forPlatform('Unknown');
             $this->fail('Expected exception was not thrown');
         } catch (PtyException $e) {
             $this->assertInstanceOf(UnsupportedPlatformException::class, $e);
@@ -89,12 +97,12 @@ final class PtySystemFactoryTest extends TestCase
     public function testUnsupportedPlatformExceptionMessageIsActionable(): void
     {
         try {
-            PtySystemFactory::forPlatform('Windows');
+            PtySystemFactory::forPlatform('Unknown');
             $this->fail('Expected exception was not thrown');
         } catch (UnsupportedPlatformException $e) {
             $msg = $e->getMessage();
-            $this->assertStringContainsString('Windows', $msg, 'message should name the platform');
-            $this->assertStringContainsString('v2', $msg, 'message should point at the v2 sidecar plan');
+            $this->assertStringContainsString('Unknown', $msg, 'message should name the detected platform');
+            $this->assertStringContainsString('ConPTY', $msg, 'message should state which platforms the shipped backends cover');
             $this->assertStringContainsString('http', $msg, 'message should include an upstream URL');
         }
     }
@@ -187,11 +195,62 @@ final class PtySystemFactoryTest extends TestCase
         } catch (\InvalidArgumentException $e) {
             $this->assertStringContainsString('SUGARCRAFT_PTY_BACKEND', $e->getMessage());
             $this->assertStringContainsString('posix-ffi', $e->getMessage());
+            $this->assertStringContainsString('conpty', $e->getMessage());
             $this->assertStringContainsString('sidecar', $e->getMessage());
             $this->assertStringContainsString('pecl', $e->getMessage());
             $this->assertStringContainsString('auto', $e->getMessage());
         } finally {
             \putenv('SUGARCRAFT_PTY_BACKEND');
         }
+    }
+
+    /**
+     * `SUGARCRAFT_PTY_BACKEND=conpty` selects the ConPTY adapter on Windows
+     * — construction is dependency-free, so even a Windows cell below the
+     * 8.4 FFI floor resolves here and only refuses later at `open()`.
+     * Off Windows the probe's reason must ride in the refusal.
+     */
+    public function testBackendConptyResolvesTheConPtySystemOnWindows(): void
+    {
+        \putenv('SUGARCRAFT_PTY_BACKEND=conpty');
+        try {
+            if (\PHP_OS_FAMILY === 'Windows') {
+                $this->assertInstanceOf(ConPtySystem::class, PtySystemFactory::new());
+
+                return;
+            }
+
+            try {
+                PtySystemFactory::new();
+                $this->fail('conpty must refuse on a non-Windows host');
+            } catch (UnsupportedPlatformException $e) {
+                $msg = $e->getMessage();
+                $this->assertStringContainsString('ConPTY', $msg);
+                $this->assertStringContainsString('Windows API', $msg, 'the probe reason must ride in the message');
+                $this->assertStringContainsString('SUGARCRAFT_PTY_BACKEND', $msg, 'the message must show how to select the backend');
+                $this->assertStringNotContainsString('github.com', $msg, 'a host-binding refusal is not a feature request');
+            }
+        } finally {
+            \putenv('SUGARCRAFT_PTY_BACKEND');
+        }
+    }
+
+    /**
+     * The factory may name Kernel32ConPty only through the static
+     * availability probe (which gates on the OS family before any FFI
+     * surface). Loading FFI here — at factory time — would break the
+     * dependency-free construction law the whole class docblock sells.
+     */
+    public function testFactorySourceKeepsFfiBehindTheAvailabilityProbe(): void
+    {
+        $source = \file_get_contents(__DIR__ . '/../src/PtySystemFactory.php');
+        $this->assertNotFalse($source);
+        // Strip comments so docblock prose cannot forge the census.
+        $code = \php_strip_whitespace(__DIR__ . '/../src/PtySystemFactory.php');
+        $this->assertStringContainsString('Kernel32ConPty::supported()', $code);
+        $this->assertStringNotContainsString('Kernel32ConPty::self()', $code);
+        $this->assertStringNotContainsString('new Kernel32ConPty', $code);
+        $this->assertStringNotContainsString('FFI::cdef', $code);
+        $this->assertStringNotContainsString('$system->open()', $code, 'the factory itself must never open a console');
     }
 }

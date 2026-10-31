@@ -16,24 +16,30 @@ final class UnsupportedPlatformExceptionTest extends TestCase
         $this->assertInstanceOf(PtyException::class, $e);
     }
 
+    /**
+     * Since C-TUI-6.c the POSIX message serves platforms outside BOTH
+     * backends, so the detected-platform pin must use a name that appears
+     * nowhere in the boilerplate — 'Windows' would stay green even if the
+     * %s interpolation broke (the sentence names Windows as supported).
+     */
     public function testForPosixOnlyIncludesDetectedPlatform(): void
     {
-        $e = UnsupportedPlatformException::forPosixOnly('Windows');
-        $this->assertStringContainsString('Windows', $e->getMessage());
+        $e = UnsupportedPlatformException::forPosixOnly('Haiku');
+        $this->assertStringContainsString('Haiku', $e->getMessage());
         $this->assertStringContainsString('POSIX', $e->getMessage());
-        $this->assertStringContainsString('v1', $e->getMessage());
     }
 
-    public function testForPosixOnlyIncludesV2Reference(): void
+    public function testForPosixOnlyStatesTheTwoShippedBackendFamilies(): void
     {
-        $e = UnsupportedPlatformException::forPosixOnly('Windows');
-        $this->assertStringContainsString('v2', $e->getMessage());
+        $e = UnsupportedPlatformException::forPosixOnly('Haiku');
         $this->assertStringContainsString('ConPTY', $e->getMessage());
+        $this->assertStringContainsString('ffi', $e->getMessage());
+        $this->assertStringNotContainsString('sidecar', $e->getMessage(), 'ConPTY is no longer reserved for a sidecar plan');
     }
 
     public function testForPosixOnlyIncludesIssueTrackerUrl(): void
     {
-        $e = UnsupportedPlatformException::forPosixOnly('Windows');
+        $e = UnsupportedPlatformException::forPosixOnly('Haiku');
         $this->assertStringContainsString('github.com', $e->getMessage());
     }
 
@@ -51,8 +57,8 @@ final class UnsupportedPlatformExceptionTest extends TestCase
 
     public function testForDeferredBackend(): void
     {
-        $e = UnsupportedPlatformException::forDeferredBackend('conpty');
-        $this->assertStringContainsString('conpty', $e->getMessage());
+        $e = UnsupportedPlatformException::forDeferredBackend('future-ffi');
+        $this->assertStringContainsString('future-ffi', $e->getMessage());
         $this->assertStringContainsString('SUGARCRAFT_PTY_BACKEND', $e->getMessage());
         $this->assertStringContainsString('reserved for a future release', $e->getMessage());
         $this->assertStringContainsString('posix-ffi', $e->getMessage());
