@@ -166,13 +166,26 @@ It fires for `Bash` **and** `PtyRun` alike: `PtyRun` hands its `command` to the 
 Three name classes drive the evaluators. Each built-in tool declares its class in its `#[BuiltInTool]` attribute, and `Tools\Catalog\ToolCatalog` reads them:
 
 - **read-only**: `Read`, `Glob`, `Grep`, `Skill`, `Lsp`, `RepoMap`, `Ls`, `ShellOutput`, `mcp_list`, `skills_search`, `BoardRead`
-- **write-capable**: `Bash`, `Edit`, `Write`, `Workflow`, `ApplyPatch`, `PtyRun`, `ShellStop`, `mcp_call`, `SkillWorkshop`, `Task`, and anything starting `mcp__`
+- **write-capable**: `Bash`, `Edit`, `Write`, `Workflow`, `ApplyPatch`, `PtyRun`, `ShellStop`, `mcp_call`, `SkillWorkshop`, `Script`, `Task`, and anything starting `mcp__`
 - **no-ask** (allowed in every mode; they write only harness-owned state): `Memory`, `Prune`, `Todo`, `Compress`, `Recall`, `Team`, `AskUser`, `PlanExit`, `SendMessage`, `Subagents`, `InterruptAgent`, `Advisor`, `Canvas`, `BoardPost`
 
 Note what is in *none* of these lists: `WebFetch`, `WebSearch`, `doctor`, `GenerateImage`, `GenerateVideo` and `Schedule`.
 <!-- tools:classes:end -->
 They fall through to each mode's default arm — `Ask` under `default`,
 `accept-edits` and `plan`, `Deny` under `dont-ask`.
+
+**`Script` asks once for the script and again for each write it does.** The
+script's tool calls are not a new capability class: each one goes through the
+same gate, the same hooks and the same rule vocabulary as the identical call
+made directly, and an `always` grant on the inner call covers later direct
+calls exactly as it does between turns. The outer call is write-class, so
+`plan` and `dont-ask` refuse it outright and `auto` judges the inner calls by
+their own arms (a script never classifies as itself). An ask about `Script`
+shows the script's code — what it *will* attempt is only what it *does*
+attempt, and the settled result carries a per-call ledger so the transcript
+names every effect the script had, granted or denied. Scripts cannot call
+`Script`, `Task`, `Workflow` or the ledger tools, and cannot reach MCP
+dispatch; those refusals are structural, not a rule you can write.
 
 **An MCP tool its server declares read-only is a read.** A bridge whose
 server sends `annotations.readOnlyHint: true` — and does not also send
@@ -861,7 +874,7 @@ The tool names a pattern can start with are the tool catalog's names —
 `SendMessage`, `Subagents`, `InterruptAgent`, `Ls`, `ShellOutput`, `ShellStop`,
 `GenerateImage`,
 `GenerateVideo`, `BoardPost`, `BoardRead`, `Advisor`, `Schedule`,
-`SkillWorkshop`, `skills_search`, `Canvas`,
+`SkillWorkshop`, `skills_search`, `Canvas`, `Script`,
 `mcp_list`, `mcp_call` — and
 `mcp__<server>__<tool>` for bridges (`mcp__git__*`). What differs per tool is
 the argument's *grammar*: shell segments for `Bash` and `PtyRun`, path

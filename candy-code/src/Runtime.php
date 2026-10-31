@@ -46,6 +46,9 @@ use SugarCraft\Code\Tools\ParallelSafe;
 use SugarCraft\Code\Tools\PromptGuidance;
 use SugarCraft\Code\Tools\StreamsActivity;
 use SugarCraft\Code\Tools\SharesSiblingSpend;
+use SugarCraft\Code\Tools\DelegatesToEngine;
+use SugarCraft\Code\Tools\DispatchesNestedTools;
+use SugarCraft\Code\Tools\MutatesContextLedger;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Tools\ToolResult;
@@ -784,7 +787,15 @@ final class Runtime
     // into the live user tier (owner ruling R-EXT-2 — live-in-stant behind the
     // Write-class ask-gate), the same shared-state judgement Schedule rides:
     // a skill the workshop wrote changes the roster every later launch loads.
-    public const WRITE_CAPABLE_TOOL_NAMES = [...ShellSubjectTools::NAMES, 'Edit', 'Write', 'ApplyPatch', 'Task', 'Workflow', 'ShellStop', 'Schedule', 'SkillWorkshop', 'mcp_call'];
+    // 'Script' joined at C-TOOL-6.d: its every effect on the world is nested
+    // tool calls, and those go through THIS gate (DispatchesNestedTools binds
+    // the Runtime's own gate path, no second validator) — but the outer call
+    // itself must still be a write: a granted outer with per-inner asks is a
+    // weaker posture than the direct calls it replaces, so the outer cannot
+    // be free of the write class. The Write permission class carries it in
+    // PermissionGate; this roster is the Runtime-side mirror the drift test
+    // ties to it.
+    public const WRITE_CAPABLE_TOOL_NAMES = [...ShellSubjectTools::NAMES, 'Edit', 'Write', 'ApplyPatch', 'Task', 'Workflow', 'ShellStop', 'Schedule', 'SkillWorkshop', 'Script', 'mcp_call'];
 
     /**
      * MCP tool-name prefix — an `mcp__<server>__<tool>` call's capability is
@@ -2469,6 +2480,29 @@ final class Runtime
             return $this->failure($toolCall, "Tool not found: {$toolCall->name()}", $onEvent);
         }
 
+        // C-TOOL-6.d: a nested-dispatch tool's bridge calls run through THIS
+        // Runtime — the same gate, the same hook chain, the same settled
+        // output, judged with the live outer call's permission callback so a
+        // script's write reaches the same UI the model's write reaches. There
+        // is no second validator on this path; inner ids are `<outer>~<n>`
+        // (see executeNested()). Bound before the gate so even a PreToolUse
+        // rewrite of the outer's args cannot steer a different pair in.
+        if ($tool instanceof DispatchesNestedTools) {
+            $nestedSeq = 0;
+            $tool = $tool->withNestedDispatch(
+                function (string $nestedName, array $nestedArguments) use ($toolCall, $app, $onPermissionRequest, &$nestedSeq): ToolResult {
+                    $nestedSeq++;
+
+                    return $this->executeNested(
+                        new ToolCall($toolCall->id() . '~' . $nestedSeq, $nestedName, $nestedArguments),
+                        $app,
+                        $onPermissionRequest,
+                    );
+                },
+                static fn (): array => self::nestedCatalogRows($app),
+            );
+        }
+
         $malformed = self::malformedArguments($toolCall);
         if ($malformed !== null) {
             return $this->failure($toolCall, $malformed, $onEvent);
@@ -4056,6 +4090,144 @@ final class Runtime
      *
      * @param array<string, mixed> $args
      */
+    /**
+     * The arm a nested (bridge) tool call takes (C-TOOL-6.d): the SAME
+     * gate and hook chain as {@see executeSequentially()}, minus the event
+     * emissions — no inner ToolStarted/ToolFinished frames ride the outer
+     * call's `$onEvent`; the UI shows one Script row and inner visibility
+     * is the disclosed `AcceptsToolProgress` follow-up. Refusals answer as
+     * settled error {@see ToolResult}s so the bridge (and the script's call
+     * ledger) carries the verdict, denial kind included.
+     *
+     * Refused targets are refused by CLASS, not name-plate: a script must
+     * not re-enter itself ({@see DispatchesNestedTools}), delegate a whole
+     * sub-session ({@see DelegatesToEngine} — Task, Workflow and the
+     * rest), or rewrite the conversation ledger
+     * ({@see MutatesContextLedger} — Prune, Compress, Recall); MCP dispatch
+     * (`mcp_call` and the bridged `mcp__*` names) stays direct-call only.
+     */
+    private function executeNested(ToolCall $toolCall, App $app, ?callable $onPermissionRequest): ToolResult
+    {
+        $name = $toolCall->name();
+        $tool = $this->findTool($name, $app);
+        if ($tool === null) {
+            return new ToolResult(
+                toolCallId: $toolCall->id(),
+                content: "Error: tool not found: {$name}",
+                isError: true,
+            );
+        }
+
+        if (
+            $tool instanceof DispatchesNestedTools
+            || $tool instanceof DelegatesToEngine
+            || $tool instanceof MutatesContextLedger
+            || $name === 'mcp_call'
+            || str_starts_with($name, self::MCP_TOOL_PREFIX)
+        ) {
+            return new ToolResult(
+                toolCallId: $toolCall->id(),
+                content: 'Error: ' . $name . ' cannot be called from a script: nested calls are leaves of '
+                    . 'the tool tree — a script cannot re-enter itself, delegate a sub-session, rewrite the '
+                    . 'context ledger, or reach MCP dispatch.',
+                isError: true,
+            );
+        }
+
+        $malformed = self::malformedArguments($toolCall);
+        if ($malformed !== null) {
+            return new ToolResult(toolCallId: $toolCall->id(), content: $malformed, isError: true);
+        }
+
+        $context = $this->hookContext($toolCall, $tool, $app);
+        if (is_string($context)) {
+            return new ToolResult(
+                toolCallId: $toolCall->id(),
+                content: $context,
+                isError: true,
+                denial: DenialKind::Hook,
+            );
+        }
+
+        [$args, $denial, $context, $preContext, $denialKind] = $this->gate($toolCall, $context, $onPermissionRequest);
+        if ($denial !== null) {
+            return new ToolResult(
+                toolCallId: $toolCall->id(),
+                content: $denial,
+                isError: true,
+                denial: $denialKind,
+            );
+        }
+
+        $result = $this->executeGuarded($tool, $toolCall, $args ?? []);
+
+        // The same PostToolUse and withholding arms settle it, and the
+        // settled message (pre/post annotations included) is exactly what
+        // the script's call() sees. No $onEvent: silence is the design.
+        $message = $this->settle($toolCall, $context, $result, null, $preContext);
+
+        return new ToolResult(
+            toolCallId: $toolCall->id(),
+            content: $message->content(),
+            isError: $message->isError(),
+            denial: $result->denial(),
+        );
+    }
+
+    /**
+     * The rows the Script tool's `tools()` answers (C-TOOL-6.d): every
+     * nested-dispatchable target the session actually carries, each with a
+     * budgeted one-line signature derived live from its input schema — the
+     * same class refusals {@see executeNested()} enforces, so the catalog
+     * never advertises a name the bridge would then deny.
+     *
+     * @return list<array{name: string, signature?: string}>
+     */
+    private static function nestedCatalogRows(App $app): array
+    {
+        $rows = [];
+        foreach ($app->tools as $tool) {
+            $name = $tool->name();
+            if (
+                $tool instanceof DispatchesNestedTools
+                || $tool instanceof DelegatesToEngine
+                || $tool instanceof MutatesContextLedger
+                || $name === 'mcp_call'
+                || str_starts_with($name, self::MCP_TOOL_PREFIX)
+            ) {
+                continue;
+            }
+            $rows[] = ['name' => $name, 'signature' => self::nestedSignature($tool)];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * `name(required: type, optional?: type)` for one tool, budgeted to one
+     * line so a `tools()` dump stays readable against the runner's frame
+     * caps (C-TOOL-6.d).
+     */
+    private static function nestedSignature(Tool $tool, int $budget = 160): string
+    {
+        $schema = $tool->inputSchema();
+        $properties = $schema['properties'] ?? null;
+        if (!is_array($properties) || $properties === []) {
+            return $tool->name() . '()';
+        }
+
+        $required = is_array($schema['required'] ?? null) ? $schema['required'] : [];
+        $parts = [];
+        foreach ($properties as $key => $spec) {
+            $type = is_array($spec) && isset($spec['type']) && is_string($spec['type']) ? $spec['type'] : 'any';
+            $parts[] = ((string) $key) . (in_array($key, $required, true) ? '' : '?') . ': ' . $type;
+        }
+
+        $line = $tool->name() . '(' . implode(', ', $parts) . ')';
+
+        return strlen($line) > $budget ? substr($line, 0, $budget - 3) . '...' : $line;
+    }
+
     private function executeGuarded(Tool $tool, ToolCall $toolCall, array $args): ToolResult
     {
         try {
