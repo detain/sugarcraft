@@ -100,7 +100,7 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.bashSandbox.label'))
                 ->withHelp(Lang::t('settings.bashSandbox.help'))
                 ->withReaderSymbol(Bash::class . '::fromCatalog')
-                ->withReadBy('`Bash::fromCatalog()` → `Bubblewrap::fromSetting()`'),
+                ->withReadBy('`Bash::fromCatalog()` / `PtyRun::fromCatalog()` → `SandboxFactory::fromSetting()`'),
             // Step 3.H. Both user tier only: the command is shell the
             // after-the-turn run executes with no tool call and no gate in
             // the path, so a checkout must neither name it nor switch it on

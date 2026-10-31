@@ -12,6 +12,8 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Tools\BuiltIn\Bash;
 use SugarCraft\Code\Tools\BuiltIn\PtyRun;
 use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
+use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
+use SugarCraft\Code\Tools\Sandbox\SandboxFactory;
 
 /**
  * Roadmap 5.12: the optional bubblewrap write-jail under `Bash`.
@@ -381,7 +383,7 @@ final class BashSandboxTest extends TestCase
     }
 
     /** The sandbox of the one Bash the launch's tool feed wires. */
-    private function wiredSandbox(): ?Bubblewrap
+    private function wiredSandbox(): ?SandboxBackend
     {
         foreach (Bootstrap::tools($this->root) as $tool) {
             if ($tool instanceof Bash) {
@@ -389,6 +391,22 @@ final class BashSandboxTest extends TestCase
             }
         }
         self::fail('Bootstrap::tools() wired no Bash');
+    }
+
+    public function testTheWiredJailsAreTheFactorysChoiceForThisOs(): void
+    {
+        // Both catalog doors must hand out exactly what the factory picks for
+        // the real host — a door still hard-wired to one backend would drift
+        // from the doctor row and the refusal wording, which both ask the
+        // factory's lineage too.
+        $this->writeUserSettings(['bashSandbox' => 'on']);
+
+        $expected = SandboxFactory::fromSetting('on');
+        self::assertNotNull($expected);
+        self::assertInstanceOf($expected::class, $this->wiredSandbox());
+        self::assertInstanceOf($expected::class, $this->wiredPtySandbox());
+        self::assertSame($expected->name(), $this->wiredSandbox()?->name());
+        self::assertSame($expected->name(), $this->wiredPtySandbox()?->name());
     }
 
     public function testTheSameSettingReachesTheWiredPtyRun(): void
@@ -405,7 +423,7 @@ final class BashSandboxTest extends TestCase
     }
 
     /** The sandbox of the one PtyRun the launch's tool feed wires. */
-    private function wiredPtySandbox(): ?Bubblewrap
+    private function wiredPtySandbox(): ?SandboxBackend
     {
         foreach (Bootstrap::tools($this->root) as $tool) {
             if ($tool instanceof PtyRun) {

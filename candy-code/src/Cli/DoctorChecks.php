@@ -9,6 +9,9 @@ use SugarCraft\Code\Lang;
 use SugarCraft\Code\Providers\ProviderFactory;
 use SugarCraft\Code\Tools\BuiltIn\Bash;
 use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
+use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
+use SugarCraft\Code\Tools\Sandbox\SandboxFactory;
+use SugarCraft\Code\Tools\Sandbox\Seatbelt;
 
 /**
  * The install checks behind `candy-code doctor` AND the in-session `/doctor`
@@ -481,7 +484,8 @@ final class DoctorChecks
      * "sandboxing is not working" needs, each answered through the SAME code
      * the Bash tool uses, never a second opinion —
      *   1. what `bashSandbox` is configured to;
-     *   2. where `bwrap` resolves;
+     *   2. where the jail binary resolves (`bwrap` on Linux, `sandbox-exec`
+     *      on macOS — whichever {@see SandboxFactory::fromSetting()} picks);
      *   3. whether the jail actually STARTS — exercised through
      *      {@see Bash::sandboxRefusal()}, the probe the tool itself runs
      *      before its first command. Presence is not capability: a host with
@@ -494,23 +498,28 @@ final class DoctorChecks
      * broken — only the jail is — and FAIL belongs to the checks that say the
      * program itself cannot run — the exit convention `Subcommands::doctor()` applies.
      *
+     * On Windows no jail exists, so the row stays at the vocabulary verdict
+     * there; on Linux and macOS alike the probe runs the backend the factory
+     * would hand Bash, which is the only answer that matters.
+     *
      * $jail, $sysctlPath and $osFamily are test seams: injecting them makes
-     * every verdict arm reachable on ANY host — Linux or not, bwrap or not —
-     * without the live row (all three defaulted) ever lying about the real
-     * one. The live row still spawns exactly what Bash would spawn, once per
-     * process, which is the whole point of asking through Bash.
+     * every verdict arm reachable on ANY host — Linux, macOS or not, bwrap
+     * or not — without the live row (all three defaulted) ever lying about
+     * the real one. The live row still spawns exactly what Bash would spawn,
+     * once per process, which is the whole point of asking through Bash.
      *
      * @param ?\Closure(): ?string $jail
      */
     private static function sandboxProbe(?\Closure $jail = null, ?string $sysctlPath = null, string $osFamily = \PHP_OS_FAMILY): array
     {
-        $configured = Bubblewrap::fromSetting(Bootstrap::readUserConfig()['bashSandbox'] ?? null);
-        $mode = $configured?->mode() ?? Bubblewrap::MODE_OFF;
+        $configured = SandboxFactory::fromSetting(Bootstrap::readUserConfig()['bashSandbox'] ?? null, $osFamily);
+        $mode = $configured?->mode() ?? SandboxBackend::MODE_OFF;
 
-        if ($osFamily !== 'Linux') {
+        if ($osFamily === 'Windows') {
             // The jail cannot exist here. OK when nothing was configured —
             // off is honest on every OS — WARN when something was, because
-            // that setting will never take effect on this host.
+            // that setting will never take effect on this host. (macOS has
+            // its own jail since C-TOOL-4.b and falls through to the probe.)
             return [
                 'status' => $configured === null ? 'OK' : 'WARN',
                 'detail' => Lang::t($configured === null
@@ -522,13 +531,19 @@ final class DoctorChecks
             ];
         }
 
-        // The jail is exercised even while `off`: "off, and a working bwrap is
-        // sitting right there" is a different sentence from "off, and it would
-        // not start anyway", and the first one tells the user the fix is a
-        // setting rather than an install.
-        $sandbox = $configured ?? Bubblewrap::new();
+        // The jail is exercised even while `off`: "off, and a working jail is
+        // sitting right there" is a different sentence from "off, and it
+        // would not start anyway", and the first one tells the user the fix
+        // is a setting rather than an install.
+        $sandbox = $configured ?? SandboxFactory::fromSetting(true, $osFamily);
         $binary = $sandbox->resolvedBinary();
         $refusal = ($jail ?? static fn (): ?string => (new Bash(sandbox: $sandbox))->sandboxRefusal())();
+        // The row names the binary, not the backend brand: on Linux this is
+        // the `bwrap` the sentence has always printed, on macOS `sandbox-exec`.
+        $binaryLabel = basename($binary !== '' ? $binary : ($sandbox instanceof Seatbelt ? Seatbelt::SYSTEM_BINARY : 'bwrap'));
+        $jailReport = static fn (): string => Lang::t($binary === ''
+            ? 'cli.doctor.sandbox_binary_absent'
+            : 'cli.doctor.sandbox_binary', ['backend' => $binaryLabel, 'path' => $binary]);
 
         if ($configured === null) {
             return [
@@ -536,9 +551,7 @@ final class DoctorChecks
                 'detail' => Lang::t($refusal === null
                     ? 'cli.doctor.sandbox_off'
                     : 'cli.doctor.sandbox_off_blocked', [
-                    'bwrap' => $binary === ''
-                        ? Lang::t('cli.doctor.sandbox_binary_absent')
-                        : Lang::t('cli.doctor.sandbox_binary', ['path' => $binary]),
+                    'bwrap' => $jailReport(),
                     'reason' => (string) $refusal,
                 ]),
             ];
@@ -546,13 +559,13 @@ final class DoctorChecks
 
         if ($refusal === null) {
             // Reaching this arm with a jail that starts means the binary
-            // resolved — Bubblewrap::probe() answers 'not found on PATH'
-            // first — so the path form is the only one printed here.
+            // resolved — the backends' probe() answers 'not found' first —
+            // so the path form is the only one printed here.
             return [
                 'status' => 'OK',
                 'detail' => Lang::t('cli.doctor.sandbox_ready', [
                     'mode' => $mode,
-                    'bwrap' => Lang::t('cli.doctor.sandbox_binary', ['path' => $binary]),
+                    'bwrap' => $jailReport(),
                 ]),
             ];
         }
@@ -563,17 +576,23 @@ final class DoctorChecks
         // install changes nothing — the fix is the AppArmor profile, with the
         // sysctl as the blunt fallback. An unreadable sysctl (null) is not
         // "permissive": absence answers unknown, and the generic remedy stays
-        // honest for the missing-binary case it also covers.
-        $appArmor = Bubblewrap::appArmorRestrictsUserns($sysctlPath ?? Bubblewrap::APPARMOR_RESTRICT_USERNS_PATH);
+        // honest for the missing-binary case it also covers. macOS has no
+        // such story — sandbox-exec ships with the OS, so its remedy names
+        // the binary instead of a package.
+        $appArmor = $sandbox instanceof Bubblewrap
+            ? Bubblewrap::appArmorRestrictsUserns($sysctlPath ?? Bubblewrap::APPARMOR_RESTRICT_USERNS_PATH)
+            : null;
 
         return [
             'status' => 'WARN',
             'detail' => Lang::t('cli.doctor.sandbox_refused', [
                 'mode' => $mode,
                 'reason' => $refusal,
-                'remedy' => Lang::t($appArmor === true
-                    ? 'cli.doctor.sandbox_remedy_apparmor'
-                    : 'cli.doctor.sandbox_remedy_generic'),
+                'remedy' => $appArmor === true
+                    ? Lang::t('cli.doctor.sandbox_remedy_apparmor')
+                    : ($sandbox instanceof Bubblewrap
+                        ? Lang::t('cli.doctor.sandbox_remedy_generic')
+                        : Lang::t('cli.doctor.sandbox_remedy_seatbelt')),
             ]),
         ];
     }

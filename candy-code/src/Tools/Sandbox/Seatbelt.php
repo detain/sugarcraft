@@ -41,7 +41,7 @@ use SugarCraft\Code\Support\ProcessContainment;
  *
  * @see https://developer.apple.com/library/archive/documentation/Security/Conceptual/SeatBeltGuide/
  */
-final readonly class Seatbelt
+final readonly class Seatbelt implements SandboxBackend
 {
     /** The OS's own copy of the runner — deprecation has not removed it. */
     public const SYSTEM_BINARY = '/usr/bin/sandbox-exec';

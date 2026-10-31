@@ -14,7 +14,8 @@ use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
  * C-TOOL-4.a: the doctor's `sandbox` row.
  *
  * The row answers three questions through the SAME code the Bash tool uses —
- * the configured `bashSandbox` mode, where `bwrap` resolves, and whether the
+ * the configured `bashSandbox` mode, where the jail binary resolves (bwrap
+ * on Linux, sandbox-exec on macOS since C-TOOL-4.b), and whether the
  * jail actually STARTS — because presence is not capability (ISS-083): Ubuntu
  * 24.04 ships a `bwrap` that AppArmor's userns restriction kills before it
  * runs, and until this row `doctor` said nothing while every `Bash` call
@@ -213,16 +214,47 @@ final class DoctorSandboxProbeTest extends TestCase
         }
     }
 
-    public function testANonLinuxHostReportsTheLinuxOnlyLine(): void
+    public function testAWindowsHostReportsTheLinuxOnlyLine(): void
     {
-        $off = $this->sandboxProbeRow(osFamily: 'Darwin');
+        // C-TOOL-4.b narrowed this early-return arm to Windows only: macOS has
+        // a jail of its own now, and Linux keeps probing through Bash.
+        $off = $this->sandboxProbeRow(osFamily: 'Windows');
         $this->assertSame('OK', $off['status'], $off['detail']);
-        $this->assertSame('bashSandbox is off; bubblewrap is Linux-only and this host is Darwin', $off['detail']);
+        $this->assertSame('bashSandbox is off; bubblewrap is Linux-only and this host is Windows', $off['detail']);
 
         $this->armConfig(['bashSandbox' => 'on']);
-        $on = $this->sandboxProbeRow(osFamily: 'Darwin');
+        $on = $this->sandboxProbeRow(osFamily: 'Windows');
         $this->assertSame('WARN', $on['status'], 'a configured jail that can never run here is worth a WARN');
-        $this->assertSame('bashSandbox "on" is configured but bubblewrap is Linux-only and this host is Darwin', $on['detail']);
+        $this->assertSame('bashSandbox "on" is configured but bubblewrap is Linux-only and this host is Windows', $on['detail']);
+    }
+
+    public function testADarwinHostRoutesTheRowThroughTheSeatbeltBackend(): void
+    {
+        // The forced-Darwin row asks the SAME backend the factory would hand
+        // Bash there — Seatbelt::probe() refuses deterministically off-Darwin
+        // before touching a binary, which is what makes these arms pinnable
+        // on this (non-macOS) runner; the live macOS verdict rides the
+        // macos-smoke CI step instead.
+        $reason = 'seatbelt (sandbox-exec) is macOS-only and this host is ' . \PHP_OS_FAMILY;
+
+        $off = $this->sandboxProbeRow(static fn (): ?string => $reason, osFamily: 'Darwin');
+        $this->assertSame('OK', $off['status'], $off['detail']);
+        $this->assertStringStartsWith('bashSandbox is off; sandbox-exec', $off['detail'], 'the row names the macOS jail binary');
+        $this->assertStringContainsString('and the jail would not start here even if it were enabled (' . $reason . ')', $off['detail']);
+        $this->assertStringNotContainsString('cli.doctor.', $off['detail']);
+
+        $this->armConfig(['bashSandbox' => 'on']);
+        $on = $this->sandboxProbeRow(static fn (): ?string => $reason, osFamily: 'Darwin');
+        $this->assertSame('WARN', $on['status'], $on['detail']);
+        $this->assertStringContainsString('bashSandbox "on" is configured but the jail does not start (' . $reason . ')', $on['detail']);
+        // The remedy arm is the routing discriminator: bubblewrap advice
+        // (package install, AppArmor) would prove the row still thinks it is
+        // holding a Bubblewrap — on Darwin the backend IS the Seatbelt.
+        $this->assertStringContainsString('check that /usr/bin/sandbox-exec still runs', $on['detail']);
+        $this->assertStringContainsString('set bashSandbox to "off"', $on['detail']);
+        $this->assertStringNotContainsString('install bubblewrap', $on['detail']);
+        $this->assertStringNotContainsString('apparmor', $on['detail']);
+        $this->assertStringNotContainsString('cli.doctor.', $on['detail']);
     }
 
     public function testTheSysctlReaderAnswersTrueFalseAndUnknown(): void
