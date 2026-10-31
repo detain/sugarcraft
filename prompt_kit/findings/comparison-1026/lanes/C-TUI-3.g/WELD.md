@@ -32,3 +32,7 @@ gen-command-docs / gen-settings-doc / gen-tool-docs / gen-protocol-schema --chec
 ## Step 3 — §4 mark (pending landed-blob proof below)
 
 plan_comparison.md: heading flipped to `#### ✅ bc61748b4,99347a0fe,c34c94962,874324d35 C-TUI-3.g — …` with dated parenthetical disclosing r1→r2→r3, the 4-pick shape, M1 BlurMsg cure, rider 2a38595d1, merged-tree en.php union + septet 150T/8448A (+6A drift fact for §7), §7 riders (2 DUR mint rows AwayRecapTest 13T→16T / AwayTrackerTest 9T/15A, staleness pair, m3/m4/m5/m6/n1), foreign reds NOT cured, WARN NEXT WELDER counter-re-derivation line. §3 W28 NOT flipped (wave loop's). NOT pushed.
+
+## Steps 4-5 — record + prune (closed)
+
+Record commit 8a9f1b6bf `weld: C-TUI-3.g` — diff-tree names exactly 8 paths: plan_comparison.md (1 line: the §4 mark), lanes/C-TUI-3.g/{REPORT,REVIEW-1,REVIEW-2,REVIEW-3,FIX-1,WELD}.md, lanes/run-state.json (lead's t635 fold VERBATIM — never edited here). %ae/%ce detain separate greps, trailers 0. Landed-blob proof: `git show master:plan_comparison.md | grep -n '^#### ✅ bc61748b4'` → line 3409; §3 W28 row UNMARKED (line 164, wave loop's). Absorption: `git cherry -v master cc/C-TUI-3.g` = 4/4 `-`, zero `+`. Pruned: worktree removed, branch -D (was 78b3b97b7); `git worktree list` = main tree only; `git branch --list 'cc/*'` EMPTY. NOT pushed (push gate = wave-close, owed). WELD.md final.
