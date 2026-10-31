@@ -138,6 +138,25 @@ final readonly class Bubblewrap implements SandboxBackend
         return $verdicts;
     }
 
+    /**
+     * Forget every memoised probe verdict (W33 r4 MAJOR-1 test seam).
+     *
+     * Production never calls it: the verdict is a host-and-binary fact
+     * recorded once per process by design, and re-paying the spawn per suite
+     * would be the cost this memo exists to avoid. The seam exists because a
+     * test that asserts the UNANSWERED reading of the memo (the safer default
+     * {@see hardened()} gives it) cannot state that premise while another
+     * suite may already have probed the same real-binary key in the same
+     * process — a function-local static is unreachable from outside this
+     * class otherwise, which is the same reason the house carries the other
+     * `reset*ForTesting()` seams.
+     */
+    public static function resetProbeVerdictsForTesting(): void
+    {
+        $verdicts = &self::probeVerdicts();
+        $verdicts = [];
+    }
+
     private function __construct(
         public string $binary,
         public bool $network,

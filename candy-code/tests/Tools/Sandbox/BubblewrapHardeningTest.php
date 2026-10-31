@@ -47,6 +47,16 @@ final class BubblewrapHardeningTest extends TestCase
     {
         parent::setUp();
 
+        // W33 r4 MAJOR-1: the class premise is "every leg starts from an
+        // unknown host". The sentinel names secure that for the synthetic
+        // keys; the factory legs read the REAL binary key, which is not the
+        // sender's to assume — BashSandboxTest's live-bwrap arm can legally
+        // fill it (apparmor-restricted hosts answer "not hardened") in any
+        // same-process ordering. Clearing the memo per test makes the
+        // premise hold for the real key too, and keeps every leg's answer
+        // its own.
+        Bubblewrap::resetProbeVerdictsForTesting();
+
         $this->sandboxDir = sys_get_temp_dir() . '/bwrap_harden_' . getmypid() . '_' . uniqid('', true);
         $this->root = $this->sandboxDir . '/repo';
         $this->home = $this->sandboxDir . '/home';
