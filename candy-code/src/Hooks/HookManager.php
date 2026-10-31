@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Hooks;
 
+use SugarCraft\Code\Backend;
 use SugarCraft\Code\Permissions\ApprovalVerdict;
 use SugarCraft\Code\Permissions\PermissionMode;
 
@@ -25,6 +26,17 @@ final class HookManager
      * stop ({@see HookResult::haltsTurn()}), or null — see {@see turnHalt()}.
      */
     private ?HookResult $turnHalt = null;
+
+    /**
+     * The backend `type: prompt` entries will be answered on, or null when
+     * this launch has no title backend. {@see withPromptBackend()} installs it
+     * from `Bootstrap::hooks()` BEFORE any {@see loadEntries()} call, because
+     * {@see PromptHook::fromConfig()} captures the backend into the hook row
+     * it builds — a setter that ran after the file load would leave every
+     * prompt hook on the null door (allow-with-notice under the claude
+     * dialect, denial under the native one).
+     */
+    private ?Backend $promptBackend = null;
 
     /**
      * Delegated runs in progress, per fiber — see {@see runAsSubagent()}.
@@ -60,6 +72,27 @@ final class HookManager
     {
         $this->registry = clone $this->registry;
         $this->turnHalt = null;
+    }
+
+    /**
+     * Install the backend `type: prompt` entries are answered on.
+     *
+     * MUTATES and returns `$this` on purpose, unlike the house `with*`
+     * immutability idiom: this is the LAUNCH-OWNED chain object (the one
+     * `Bootstrap::hooks()` builds and hands to every consumer), and a clone
+     * here would orphan the built-ins and file hooks already registered on
+     * the original. The name follows the design block's seam exactly because
+     * that is the call site `Bootstrap::hooks()` writes.
+     *
+     * @param null|Backend $backend the title backend, or null when this
+     *                              launch has none — prompt hooks then take
+     *                              their documented no-backend door
+     */
+    public function withPromptBackend(?Backend $backend): self
+    {
+        $this->promptBackend = $backend;
+
+        return $this;
     }
 
     /**
@@ -126,7 +159,7 @@ final class HookManager
      * cannot install shell into a chain the launch already vetted. Embedders
      * that just want "load my file" keep calling loadFromFile().
      *
-     * @param array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool, type: string, url: string, headers: array<string, string>, allowedEnvVars: list<string>}> $configs
+     * @param array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool, type: string, url: string, headers: array<string, string>, allowedEnvVars: list<string>, prompt: string, model: string}> $configs
      *
      * @throws \InvalidArgumentException when an entry would displace an
      *         already-registered hook
@@ -150,14 +183,19 @@ final class HookManager
             }
 
             // C-EXT-6.c (LATE): the entry says which kind of hook it is, and
-            // the kind decides the class. Both builders read the SAME vetted
-            // row, and both hand the verdict to {@see HookEnvelope}, so an
-            // HTTP hook can be registered exactly where a command hook was —
-            // including beside a built-in of the same name, which the refusal
-            // below still stops.
-            $hook = ($config['type'] ?? HookConfig::TYPE_COMMAND) === HookConfig::TYPE_HTTP
-                ? HttpHook::fromConfig($config)
-                : ScriptHook::fromConfig($config);
+            // the kind decides the class. C-EXT-6.d added the third arm: a
+            // `prompt` row builds a {@see PromptHook} on the launch's title
+            // backend. All three builders read the SAME vetted row, and the
+            // command and http arms hand their verdict to {@see
+            // HookEnvelope} while the prompt arm reads the model's own ok/reason
+            // reply, so an HTTP or prompt hook can be registered exactly where a
+            // command hook was — including beside a built-in of the same name,
+            // which the refusal below still stops.
+            $hook = match ($config['type'] ?? HookConfig::TYPE_COMMAND) {
+                HookConfig::TYPE_HTTP => HttpHook::fromConfig($config),
+                HookConfig::TYPE_PROMPT => PromptHook::fromConfig($config, $this->promptBackend),
+                default => ScriptHook::fromConfig($config),
+            };
             $event = $hook->event()->value;
             $name = $hook->name();
 

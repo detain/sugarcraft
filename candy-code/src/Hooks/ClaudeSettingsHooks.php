@@ -230,7 +230,7 @@ final class ClaudeSettingsHooks
      *        it becomes the scope segment of every generated row name so two
      *        tiers naming one event at one index no longer collide
      *
-     * @return list<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool, type: string, url: string, headers: array<string, string>, allowedEnvVars: list<string>, dialect: string, advisory: bool}>
+     * @return list<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool, type: string, url: string, headers: array<string, string>, allowedEnvVars: list<string>, prompt: string, model: string, dialect: string, advisory: bool}>
      *
      * @throws \InvalidArgumentException when $scope is not a tier this loader speaks
      * @throws \RuntimeException when the file exists and cannot be read
@@ -280,7 +280,7 @@ final class ClaudeSettingsHooks
      *        path when there is one, so the report names the file to fix
      * @param string $scope the tier rows are named for (see {@see fromFile()})
      *
-     * @return list<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool, type: string, url: string, headers: array<string, string>, allowedEnvVars: list<string>, dialect: string, advisory: bool}>
+     * @return list<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool, type: string, url: string, headers: array<string, string>, allowedEnvVars: list<string>, prompt: string, model: string, dialect: string, advisory: bool}>
      *
      * @throws \InvalidArgumentException when the content is not usable
      */

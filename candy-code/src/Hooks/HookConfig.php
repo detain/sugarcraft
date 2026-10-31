@@ -67,11 +67,12 @@ final class HookConfig
      * Every key a single hook entry may carry. Exact, not advisory — see the
      * check in {@see parse()} for why an unrecognised one is refused.
      *
-     * ELEVEN, and they are not all available to every entry: four of them
-     * (`type`, `url`, `headers`, `allowedEnvVars`) belong to one kind of hook,
-     * which is why the shape of a row is a function of its `type` rather than
-     * a flat list. {@see perTypeKeys()} is where that function is written, and
-     * a key of the other kind is refused there rather than ignored.
+     * THIRTEEN, and they are not all available to every entry: six of them
+     * (`type`, `url`, `headers`, `allowedEnvVars`, `prompt`, `model`) belong to
+     * one kind of hook, which is why the shape of a row is a function of its
+     * `type` rather than a flat list. {@see perTypeKeys()} is where that
+     * function is written, and a key of another kind is refused there rather
+     * than ignored.
      */
     private const ENTRY_KEYS = [
         'name',
@@ -85,6 +86,8 @@ final class HookConfig
         'url',
         'headers',
         'allowedEnvVars',
+        'prompt',
+        'model',
     ];
 
     /** The kind of hook that runs a script. The default, and the only one this format had until C-EXT-6.c. */
@@ -98,6 +101,17 @@ final class HookConfig
      * sent is the same one a script would have received.
      */
     public const TYPE_HTTP = 'http';
+
+    /**
+     * The kind of hook that asks a model ({@see PromptHook}). Since C-EXT-6.d,
+     * the Claude Code `type: prompt` parity row: the entry carries a `prompt`
+     * to ask and an optional `model` to ask it with, and the verdict is the
+     * model's own `{"ok":bool,"reason":string}` reply. The completion rides
+     * the title backend with only the provider's connect timeout — E646, the
+     * ExecReviewer precedent — which is why the entry's `timeout` key is
+     * validated like every other kind's and applied to nothing.
+     */
+    public const TYPE_PROMPT = 'prompt';
 
     /**
      * The candidate PCRE delimiters, tried in order, for wrapping a
@@ -307,7 +321,7 @@ final class HookConfig
                 // has a first-class disable()/isDisabled() pair, so `disabled`
                 // is the natural thing for a user to reach for and it did
                 // exactly nothing. Same exact-key check as the top level: this
-                // format defines the eleven keys in self::ENTRY_KEYS and no more,
+                // format defines the thirteen keys in self::ENTRY_KEYS and no more,
                 // and which of them an entry may use turns on its `type`.
                 $unknownKeys = array_diff(array_keys($config), self::ENTRY_KEYS);
                 if ($unknownKeys !== []) {
@@ -328,11 +342,11 @@ final class HookConfig
                 $type = $config['type'] ?? self::TYPE_COMMAND;
 
                 // A ROW'S TYPE DECIDES WHAT IT MUST CARRY: a command hook a
-                // command to run, an http hook a URL to ask. The cross-check
-                // (including the keys of the other kind) is
-                // {@see perTypeKeys()}, below the matcher read rather than
-                // here, so the entry's shape stays cheap to scan.
-                if ($type === self::TYPE_HTTP) {
+                // command to run, an http hook a URL to ask, a prompt hook a
+                // PROMPT to ask. The cross-check (including the keys of the
+                // other kinds) is {@see perTypeKeys()}, below the matcher read
+                // rather than here, so the entry's shape stays cheap to scan.
+                if ($type === self::TYPE_HTTP || $type === self::TYPE_PROMPT) {
                     $command = '';
                 } else {
                     $command = $config['command'] ?? '';
@@ -343,7 +357,16 @@ final class HookConfig
                     }
                 }
 
-                $name = $config['name'] ?? ($type === self::TYPE_HTTP ? ($config['url'] ?? '') : $command);
+                $name = $config['name'] ?? match (true) {
+                    $type === self::TYPE_HTTP => ($config['url'] ?? ''),
+                    // An unnamed prompt hook has no command and no url to borrow;
+                    // its prompt IS its identity, flattened and head-clipped, so
+                    // the chain still keys it by something a reader can recognise.
+                    $type === self::TYPE_PROMPT => is_string($config['prompt'] ?? null)
+                        ? mb_substr(trim((string) preg_replace('/\s+/u', ' ', (string) $config['prompt'])), 0, PromptHook::NAME_FALLBACK_CHARS)
+                        : '',
+                    default => $command,
+                };
                 if (!is_string($name) || trim($name) === '') {
                     throw new \InvalidArgumentException(
                         "{$source}: a hook under 'hooks.{$event}' has an empty 'name'.",
@@ -461,7 +484,7 @@ final class HookConfig
                     );
                 }
 
-                [$url, $headers, $allowedEnvVars] = self::perTypeKeys($config, $type, $source, $event, $name);
+                [$url, $headers, $allowedEnvVars, $prompt, $model] = self::perTypeKeys($config, $type, $source, $event, $name);
 
                 // {@see HookRegistry} keys by event+name, so a repeat is one
                 // hook quietly overwriting another — the exact collapse `name`
@@ -489,6 +512,8 @@ final class HookConfig
                     'url' => $url,
                     'headers' => $headers,
                     'allowedEnvVars' => $allowedEnvVars,
+                    'prompt' => $prompt,
+                    'model' => $model,
                 ];
             }
         }
@@ -515,19 +540,22 @@ final class HookConfig
      *
      * @param array<string, mixed> $config
      * @param mixed $type the entry's own `type` as written; the FIRST thing this
-     *                    method does is refuse anything but the two words it knows,
+     *                    method does is refuse anything but the three words it knows,
      *                    which is why it takes mixed rather than string — a
      *                    `type: [1, 2]` has to arrive as a refusal naming the key,
      *                    not as a TypeError escaping the parser
-     * @return array{0: string, 1: array<string, string>, 2: list<string>}
+     * @return array{0: string, 1: array<string, string>, 2: list<string>, 3: string, 4: string}
      */
     private static function perTypeKeys(array $config, mixed $type, string $source, string $event, string $name): array
     {
-        if (!is_string($type) || ($type !== self::TYPE_COMMAND && $type !== self::TYPE_HTTP)) {
+        if (
+            !is_string($type)
+            || ($type !== self::TYPE_COMMAND && $type !== self::TYPE_HTTP && $type !== self::TYPE_PROMPT)
+        ) {
             throw new \InvalidArgumentException(
                 "{$source}: hook '{$name}' under 'hooks.{$event}' has a 'type' of "
                 . (is_string($type) ? "'{$type}'" : get_debug_type($type))
-                . "; candy-code runs 'command' hooks and 'http' hooks, so this row is refused "
+                . "; candy-code runs 'command' hooks, 'http' hooks and 'prompt' hooks, so this row is refused "
                 . 'rather than run as the kind you did not write.',
             );
         }
@@ -542,7 +570,51 @@ final class HookConfig
                 }
             }
 
-            return ['', [], []];
+            foreach (['prompt', 'model'] as $stray) {
+                if (array_key_exists($stray, $config)) {
+                    throw new \InvalidArgumentException(
+                        "{$source}: hook '{$name}' is a 'command' hook and so has no '{$stray}' — "
+                        . "that is a key of a 'prompt' hook; refusing rather than ignoring it.",
+                    );
+                }
+            }
+
+            return ['', [], [], '', ''];
+        }
+
+        if ($type === self::TYPE_PROMPT) {
+            if (array_key_exists('command', $config)) {
+                throw new \InvalidArgumentException(
+                    "{$source}: hook '{$name}' is a 'prompt' hook and so has no 'command' to run — "
+                    . "that is what its 'prompt' is for; refusing rather than choosing between them.",
+                );
+            }
+
+            foreach (['url', 'headers', 'allowedEnvVars'] as $stray) {
+                if (array_key_exists($stray, $config)) {
+                    throw new \InvalidArgumentException(
+                        "{$source}: hook '{$name}' is a 'prompt' hook and so has no '{$stray}' — "
+                        . "that is a key of an 'http' hook; refusing rather than ignoring it.",
+                    );
+                }
+            }
+
+            $prompt = $config['prompt'] ?? '';
+            if (!is_string($prompt) || trim($prompt) === '') {
+                throw new \InvalidArgumentException(
+                    "{$source}: hook '{$name}' under 'hooks.{$event}' is a 'prompt' hook with no 'prompt' to ask.",
+                );
+            }
+
+            $model = $config['model'] ?? '';
+            if (!is_string($model)) {
+                throw new \InvalidArgumentException(
+                    "{$source}: hook '{$name}' has a 'model' that is not text; it names which model the "
+                    . 'prompt hook should be honoured on, so there is nothing to guess at.',
+                );
+            }
+
+            return ['', [], [], $prompt, trim($model)];
         }
 
         if (array_key_exists('command', $config)) {
@@ -550,6 +622,15 @@ final class HookConfig
                 "{$source}: hook '{$name}' is an 'http' hook and so has no 'command' to run — "
                 . "that is what its 'url' is for; refusing rather than choosing between them.",
             );
+        }
+
+        foreach (['prompt', 'model'] as $stray) {
+            if (array_key_exists($stray, $config)) {
+                throw new \InvalidArgumentException(
+                    "{$source}: hook '{$name}' is an 'http' hook and so has no '{$stray}' — "
+                    . "that is a key of a 'prompt' hook; refusing rather than ignoring it.",
+                );
+            }
         }
 
         $url = $config['url'] ?? '';
@@ -624,7 +705,7 @@ final class HookConfig
             $allowedEnvVars[] = $var;
         }
 
-        return [$url, $headers, $allowedEnvVars];
+        return [$url, $headers, $allowedEnvVars, '', ''];
     }
 
     /**

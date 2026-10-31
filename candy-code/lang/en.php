@@ -3901,6 +3901,18 @@ TXT,
     'hooks.http.reason_status' => 'the answer was not a 2xx status',
 
 
+    // --- C-EXT-6.d (type: prompt hooks) 2026-10-31 ---
+    // Nothing was dialled and nothing was spent when these fire, so no row
+    // carries a {target}: the hook either has no backend to be asked on, or
+    // the answer it got is not a verdict.
+    'hooks.prompt.deny_unanswered' => 'The prompt hook `{hook}` did not answer ({reason}). A hook whose verdict was never returned has not approved this call, so it is refused.',
+    'hooks.prompt.notice_unanswered' => '⚠ The prompt hook `{hook}` did not answer ({reason}), so it could not gate the call.',
+    'hooks.prompt.reason_call_failed' => 'the model could not be asked',
+    'hooks.prompt.reason_empty_verdict' => 'The prompt hook `{hook}` denied this call without giving a reason.',
+    'hooks.prompt.reason_no_backend' => 'this launch has no title backend to ask it on',
+    'hooks.prompt.reason_no_prompt' => 'the entry carries an empty prompt to ask',
+    'hooks.prompt.reason_unparseable' => 'its reply was not the single JSON object with a boolean `ok` it is required to answer with',
+
     // --- settings help (W3-B i18n migration) ---
     'settings.advisorModel.help' => 'Model the `Advisor` tool consults for a second opinion; unset — the default — does not offer the tool at all (there is no cheap-model fallback: the point is a model you picked).',
     'settings.allowedTools.help' => 'Whitelist of tool names or globs; unset offers every tool.',

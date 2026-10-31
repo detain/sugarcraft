@@ -1072,6 +1072,39 @@ YAML;
         $this->assertSame([], $rows[0]['allowedEnvVars']);
     }
 
+    public function testParseLoadsAPromptRowWithItsAskItsModelAndTheInertTimeout(): void
+    {
+        $rows = HookConfig::parse(
+            "hooks:\n  PreToolUse:\n    - name: 'the gate'\n      type: prompt\n"
+            . "      prompt: 'Does this call look destructive?'\n      model: 'small-fast'\n      timeout: 5\n",
+        );
+
+        $this->assertCount(1, $rows);
+        $this->assertSame('prompt', $rows[0]['type']);
+        $this->assertSame('Does this call look destructive?', $rows[0]['prompt']);
+        $this->assertSame('small-fast', $rows[0]['model']);
+        // The row STILL carries a validated timeout — HookRegistry simply never
+        // charges it, because PromptHook is not a BoundedHookInterface (E646:
+        // the deadline this kind could carry would be a total LLM timeout).
+        $this->assertSame(5.0, $rows[0]['timeout']);
+        $this->assertSame('', $rows[0]['command'], 'a prompt row must not arrive carrying a command');
+        $this->assertSame('', $rows[0]['url']);
+        $this->assertSame([], $rows[0]['headers']);
+        $this->assertSame([], $rows[0]['allowedEnvVars']);
+    }
+
+    public function testParseNamesAnUnnamedPromptRowAfterItsFlattenedAsk(): void
+    {
+        $rows = HookConfig::parse(
+            "hooks:\n  PreToolUse:\n    - type: prompt\n      prompt: \"Does this\\n  look destructive?\"\n",
+        );
+
+        $this->assertSame('Does this look destructive?', $rows[0]['name'],
+            'an unnamed prompt row is named after its ask (flattened), as an http row is after its url');
+        $this->assertSame("Does this\n  look destructive?", $rows[0]['prompt'],
+            'only the NAME is flattened for the chain label; the ask itself rides to the model byte-raw');
+    }
+
     public function testParseRefusesPerTypeKeysOnTheWrongKindOfEntry(): void
     {
         $cases = [
@@ -1083,6 +1116,17 @@ YAML;
             'an http row with no url and no name' => ["hooks:\n  PreToolUse:\n    - type: http\n", "/empty 'name'/"],
             'a kind this build does not run' => ["hooks:\n  PreToolUse:\n    - type: gopher\n      command: 'guard.sh'\n", '/rather than run as the kind you did not write/'],
             'a kind that is not even a word' => ["hooks:\n  PreToolUse:\n    - type: [1, 2]\n      command: 'guard.sh'\n", '/rather than run as the kind you did not write/'],
+            // C-EXT-6.d (LATE): the third kind crosses the same way, and the
+            // shared fragments are the ones already pinned above — the new
+            // wording names which kind the stray key belongs to.
+            'a command row carrying a prompt' => ["hooks:\n  PreToolUse:\n    - command: 'guard.sh'\n      prompt: 'is this safe?'\n", '/refusing rather than ignoring it/'],
+            'a command row carrying a model' => ["hooks:\n  PreToolUse:\n    - command: 'guard.sh'\n      model: 'small'\n", '/refusing rather than ignoring it/'],
+            'an http row carrying a model' => ["hooks:\n  PreToolUse:\n    - type: http\n      url: 'https://gate.example/x'\n      model: 'small'\n", '/refusing rather than ignoring it/'],
+            'a prompt row that also names a command' => ["hooks:\n  PreToolUse:\n    - type: prompt\n      prompt: 'is this safe?'\n      command: 'guard.sh'\n", '/refusing rather than choosing between them/'],
+            'a prompt row carrying a url' => ["hooks:\n  PreToolUse:\n    - type: prompt\n      prompt: 'is this safe?'\n      url: 'https://gate.example/x'\n", '/refusing rather than ignoring it/'],
+            'a prompt row with no prompt' => ["hooks:\n  PreToolUse:\n    - type: prompt\n      name: 'the gate'\n", "/is a 'prompt' hook with no 'prompt' to ask/"],
+            'a prompt row with no prompt and no name' => ["hooks:\n  PreToolUse:\n    - type: prompt\n", "/empty 'name'/"],
+            'a prompt row whose model is not text' => ["hooks:\n  PreToolUse:\n    - type: prompt\n      prompt: 'is this safe?'\n      model: ['x']\n", '/that is not text/'],
         ];
 
         foreach ($cases as $label => [$yaml, $needle]) {

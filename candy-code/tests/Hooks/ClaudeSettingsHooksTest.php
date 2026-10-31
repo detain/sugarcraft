@@ -223,7 +223,7 @@ YAML;
     }
 
     /**
-     * The eleven native keys, in the validator's order, plus the two this file
+     * The thirteen native keys, in the validator's order, plus the two this file
      * format alone can add: {@see ClaudeSettingsHooks} is the only writer of
      * `dialect`/`advisory`, and {@see ScriptHook::fromConfig()} reads them.
      */
@@ -246,6 +246,8 @@ YAML;
             'url' => '',
             'headers' => [],
             'allowedEnvVars' => [],
+            'prompt' => '',
+            'model' => '',
             'dialect' => ScriptHook::DIALECT_CLAUDE,
             'advisory' => false,
         ]], $rows);
