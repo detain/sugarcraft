@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseUnifiedDiff } from '../../lib/diff'
 import { markdownToHtml } from '../../lib/markdown'
 import type { ToolItem } from '../../stores/reducer'
@@ -74,6 +74,26 @@ describe('ToolCard', () => {
     const wrapper = mount(ToolCard, { props: { item } })
     await wrapper.find('button.more').trigger('click')
     expect(wrapper.emitted('loadFull')?.[0]).toEqual([item])
+  })
+
+  it('routes html refs to CanvasCard and image refs to MediaCard (C-TOOL-6.g)', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ error: { kind: 'unauthorized', message: 'sign in' } }), { status: 401 }))
+    vi.stubGlobal('fetch', fetchImpl)
+    const item = tool({
+      name: 'Canvas',
+      media: [
+        { artifactId: 'page-1', kind: 'html' as unknown as 'image', path: '/media/s1/page-1.html', bytes: 0, mime: 'text/html; charset=utf-8' },
+        { artifactId: 'img-1', kind: 'image', path: '/media/s1/img-1.png', bytes: 0, mime: 'image/png' },
+      ],
+    })
+    const wrapper = mount(ToolCard, { props: { item, sessionId: 's1' } })
+    await wrapper.find('button.head').trigger('click')
+    expect(wrapper.find('[data-testid="canvas-card"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="canvas-show"]').text()).toBe('Show canvas')
+    const cards = wrapper.findAll('[data-testid="media-card"]')
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.attributes('data-kind')).toBe('image')
+    vi.unstubAllGlobals()
   })
 })
 

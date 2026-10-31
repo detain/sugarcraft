@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AuthError,
   LOGIN_SECRET_HEADER,
+  canvasLink,
   clearLoginSecret,
   login,
   logout,
@@ -82,6 +83,31 @@ describe('login secret (ISS-007 web half)', () => {
     const broken = responder(() => json(500, { error: { kind: 'boom', message: 'boom' } }))
     await expect(logout(broken.fetchImpl)).rejects.toBeInstanceOf(AuthError)
     expect(storedLoginSecret()).toBeNull()
+  })
+})
+
+describe('canvasLink (C-TOOL-6.g web half)', () => {
+  it('posts the pair to /api/canvas with the login secret and returns the minted url', async () => {
+    const stored = responder(() => json(200, { ok: true, loginSecret: 'abc123' }))
+    await login({ code: 'c0dec0dec0de' }, stored.fetchImpl)
+
+    const { calls, fetchImpl } = responder((call) =>
+      String(call.url).endsWith('/canvas') ? json(200, { url: '/canvas/' + 'f'.repeat(64), expiresInSeconds: 60 }) : json(200, { ok: true }),
+    )
+    expect(await canvasLink('s1', 'canvas-1', fetchImpl)).toBe('/canvas/' + 'f'.repeat(64))
+    expect(calls[0]?.url).toMatch(/api\/canvas$/)
+    expect(calls[0]?.headers[LOGIN_SECRET_HEADER]).toBe('abc123')
+    expect(calls[0]?.body).toEqual({ sessionId: 's1', artifactId: 'canvas-1' })
+  })
+
+  it('maps the shared 404 refusal to an AuthError of the server kind', async () => {
+    const { fetchImpl } = responder(() => json(404, { error: { kind: 'not_found', message: 'this canvas page does not exist, or its link has been used or has expired' } }))
+    await expect(canvasLink('s1', 'gone', fetchImpl)).rejects.toSatisfy((f: unknown) => f instanceof AuthError && f.status === 404 && f.kind === 'not_found')
+  })
+
+  it('refuses an answer that carries no url', async () => {
+    const { fetchImpl } = responder(() => json(200, { expiresInSeconds: 60 }))
+    await expect(canvasLink('s1', 'a1', fetchImpl)).rejects.toSatisfy((f: unknown) => f instanceof AuthError && f.kind === 'bad_canvas_link')
   })
 })
 
