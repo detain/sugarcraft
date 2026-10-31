@@ -26,9 +26,10 @@ namespace SugarCraft\Code\Backend;
  *
  * The `callId` is a hash of the identity triple (call id, proxy name,
  * arguments), the same construction {@see PendingAsk::askId()} uses for asks:
- * the child computes it before writing, the parent recomputes it from the
- * frame to prove the payload was not altered in transit, and a client can
- * only answer a call whose exact arguments it was shown.
+ * the child computes it before writing, the parent format-validates it
+ * (the `/[0-9a-f]{16}/` shape and the deadline bounds — nothing is
+ * recomputed), and a client can only answer a call whose exact arguments
+ * it was shown.
  */
 final class PendingClientCall
 {
