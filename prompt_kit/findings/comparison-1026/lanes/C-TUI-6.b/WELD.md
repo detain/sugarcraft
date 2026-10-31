@@ -24,5 +24,9 @@
 - `FIX-1.md`: both cured; the SELF-PROVING layout test (meta-defect: expectation derived FROM the cdef, certifying a wrong struct green) replaced by hand-transcribed MSDN tables; discrimination measured (in-place swap 6 reds naming lpReserved; R2/R4 isolations exact).
 - r2 `REVIEW-2.md` (9,733 B, re-statted): CLEAN C=0 M=0 MINOR=0 NIT=2; independently reproduced the rc=139 segfault and ACCEPTED the intptr_t deviation; 5 out-of-tree reds; numbers authority = 777/3834 (fixer's ran 4 low); NIT-2 sugar-core "scalar-typed" wording loose → §7/sugar-core report-only probe candidate (function-RETURN cast semantics un-adjudicated).
 
+## Record proofs (post-commit 1)
+- Commit 1 (mark + evidence): `4f3ad1ae7` — landed-blob proof, verbatim output of `git show master:plan_comparison.md | sed -n '3573p'`: `#### ✅ 9fb7ceab2,0634a741f,4bd369b3b,e3780691e C-TUI-6.b — sugar-pty ConPTY FFI primitives`. `^#### ✅` count **291** (was 290). Diff of the mark was exactly +2/−1 (heading flipped in place + WELD comment; no content lost).
+- Author law: `%ae`/`%ce` separate greps = detain each; zero Co-Authored-By; no -x trailers.
+
 ## Anomalies carried
 - t711: this step was once narrated welded with zero record. t729 (this half): the picks-session receipt cited shas (`a3511f47a`/`4a7cb2e4b`/`f35a6e6a8`/`515e57256`) that exist NOWHERE — welder-self-phantom; the picks themselves are genuine and ancestry-proven twice. This record half is derived entirely from re-read disk state.
