@@ -173,7 +173,7 @@ final class ToolDocGenerator
 
         $lists = [
             '- **read-only**: ' . self::codeList($read, ', '),
-            '- **write-capable**: ' . self::codeList($write, ', ') . ', and anything starting `mcp__`',
+            '- **write-capable**: ' . self::codeList($write, ', ') . ', and anything starting `mcp__` or `client__`',
         ];
         if ($noAsk !== []) {
             $lists[] = '- **no-ask** (allowed in every mode; they write only harness-owned state): '

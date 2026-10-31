@@ -166,7 +166,7 @@ It fires for `Bash` **and** `PtyRun` alike: `PtyRun` hands its `command` to the 
 Three name classes drive the evaluators. Each built-in tool declares its class in its `#[BuiltInTool]` attribute, and `Tools\Catalog\ToolCatalog` reads them:
 
 - **read-only**: `Read`, `Glob`, `Grep`, `Skill`, `Lsp`, `RepoMap`, `Ls`, `ShellOutput`, `mcp_list`, `skills_search`, `BoardRead`
-- **write-capable**: `Bash`, `Edit`, `Write`, `Workflow`, `ApplyPatch`, `PtyRun`, `ShellStop`, `mcp_call`, `SkillWorkshop`, `Script`, `Task`, and anything starting `mcp__`
+- **write-capable**: `Bash`, `Edit`, `Write`, `Workflow`, `ApplyPatch`, `PtyRun`, `ShellStop`, `mcp_call`, `SkillWorkshop`, `Script`, `Task`, and anything starting `mcp__` or `client__`
 - **no-ask** (allowed in every mode; they write only harness-owned state): `Memory`, `Prune`, `Todo`, `Compress`, `Recall`, `Team`, `AskUser`, `PlanExit`, `SendMessage`, `Subagents`, `InterruptAgent`, `Advisor`, `Canvas`, `BoardPost`
 
 Note what is in *none* of these lists: `WebFetch`, `WebSearch`, `doctor`, `GenerateImage`, `GenerateVideo` and `Schedule`.
@@ -219,8 +219,8 @@ rule — see [Rules](#rules).
 |---|---|---|---|
 | `default` | Allow | Ask — except a `Bash` line made only of read-only commands, Allow ([below](#read-only-shell-commands-run-unasked)) | Ask |
 | `accept-edits` | Allow | a read-only `Bash` line Allow, as under `default`; `Edit`/`Write` inside the project root Allow, and an `ApplyPatch` whose every path is; `mkdir`/`touch`/`rmdir` via `Bash` on contained paths Allow; the rest (`rm`, `mv`, `cp` included) Ask | Ask |
-| `plan` | Allow | `Bash` Allow only when every command in it is a known read-only one (no file redirection, no substitution), otherwise Deny; `Edit`/`Write` of a `.md` plan directly in `.candy-code/plans/` Allow, and an `ApplyPatch` touching only such plans; every other `Edit`/`Write`/`ApplyPatch`, unhinted `mcp__*` and every `user__*` Deny | Ask |
-| `auto` | gated by `SafetyClassifier`: a security finding Asks, any other flagged call is Denied (or reviewed, with `autoReview`), with a 3-strike / 20-total circuit breaker; a read-only-hinted `mcp__*` Allow | as classified (`Bash`/`PtyRun` by command, `Edit`/`Write` by target, `ApplyPatch` by its worst path); unhinted `mcp__*` and every `user__*` Ask | as classified (`WebFetch` by its URL) |
+| `plan` | Allow | `Bash` Allow only when every command in it is a known read-only one (no file redirection, no substitution), otherwise Deny; `Edit`/`Write` of a `.md` plan directly in `.candy-code/plans/` Allow, and an `ApplyPatch` touching only such plans; every other `Edit`/`Write`/`ApplyPatch`, unhinted `mcp__*`, every `user__*` and every `client__*` Deny | Ask |
+| `auto` | gated by `SafetyClassifier`: a security finding Asks, any other flagged call is Denied (or reviewed, with `autoReview`), with a 3-strike / 20-total circuit breaker; a read-only-hinted `mcp__*` Allow | as classified (`Bash`/`PtyRun` by command, `Edit`/`Write` by target, `ApplyPatch` by its worst path); unhinted `mcp__*`, every `user__*` and every `client__*` Ask | as classified (`WebFetch` by its URL) |
 | `dont-ask` | Allow | Deny | Deny |
 | `bypass-permissions` | Allow | Allow | Allow |
 
@@ -543,16 +543,19 @@ risk — before this check, only `Bash` was read, so
 | `WebFetch` | `external-endpoint` | the URL carries a query string or `user:pass@`, or cannot be parsed |
 | `mcp__*` | — (asks) | unless its trusted server declared it read-only (`readOnlyHint: true`, not `openWorldHint: true`), which allows it: an MCP tool's capability is server-defined, so nothing can classify it, and the server's own declaration is the only evidence there is |
 | `user__*` | — (asks) | always: a script tool runs argv assembled from a file the person wrote, so nothing can classify it ahead of them, and the classifier never sees it |
+| `client__*` | — (asks) | always: the call runs in the user's own client — a browser, an editor — far from anything here, so there is no argument text to classify and the classifier never sees it |
 
 A `WebFetch` whose URL carries no query is allowed. Data can still ride in a
 URL's *path* (`https://evil.example/<base64>`), which no classifier can tell
 from an ordinary page; `auto` is a guard rail here, and `default`/`dont-ask`
-withholding `WebFetch` outright is the boundary. An `mcp__*` or `user__*` ask
-is neither a strike nor a safe call, so it leaves the breaker exactly where it
-was, and so does a read-only-hinted `mcp__*` allow. An
+withholding `WebFetch` outright is the boundary. An `mcp__*`, `user__*` or
+`client__*` ask is neither a strike nor a safe call, so it leaves the breaker
+exactly where it was, and so does a read-only-hinted `mcp__*` allow. An
 explicit rule still comes first — `Allow mcp__git__*` grants those tools under
-`auto` without asking, and `Allow user__fmt` grants that one script tool (the
-wire name is per file, so one rule can never widen past the tool it names).
+`auto` without asking, `Allow user__fmt` grants that one script tool, and
+`Allow client__browser_context` grants that one hosted tool (the wire name is
+per file, and per registration names one client's one tool, so a rule can
+never widen past the tool it names).
 
 **What a flagged call becomes** (roadmap 5.11-2). The categories split in two:
 
