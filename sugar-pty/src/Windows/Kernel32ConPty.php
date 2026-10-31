@@ -84,6 +84,8 @@ typedef struct { short X; short Y; } COORD;
 
 typedef struct _STARTUPINFOW {
     DWORD  cb;
+    void  *lpReserved;
+    void  *lpDesktop;
     void  *lpTitle;
     DWORD  dwX;
     DWORD  dwY;
@@ -605,7 +607,13 @@ CDEF;
         $cwdBuffer = $this->wideBuffer($workingDirectory);
 
         $startup = $ffi->new('STARTUPINFOEXW');
-        $startup->StartupInfo->cb = \FFI::sizeof($startup->StartupInfo);
+        // cb is the size of the OUTER struct, not the inner one: the
+        // EXTENDED_STARTUPINFO_PRESENT contract on MSDN's CreateProcessW page
+        // states the lpStartupInfo parameter "points to a STARTUPINFOEXW
+        // structure", and the STARTUPINFOEXW page states its StartupInfo.cb
+        // "must be set to sizeof(STARTUPINFOEXW)" — here 112, not the inner
+        // STARTUPINFOW's 104. CreateProcessW validates cb against the flag.
+        $startup->StartupInfo->cb = \FFI::sizeof($startup);
         $startup->lpAttributeList = \FFI::addr($list);
         // wShowWindow + the flag that makes it mean anything: a ConPTY child left
         // with the default show-state opens a console window on a desktop.
@@ -649,8 +657,14 @@ CDEF;
             ));
         }
 
-        $process = (int) $info->hProcess;
-        $thread = (int) $info->hThread;
+        // hProcess and hThread are `void *` struct members. A pointer-typed
+        // FFI\CData does not convert with `(int)` — measured on PHP 8.3.6, it
+        // answers 1 AND emits "Object of class FFI\CData could not be converted
+        // to int", which this lib's failOnWarning would turn into a red on the
+        // Windows leg. The house idiom (sugar-core Kernel32) is the explicit
+        // intptr_t cast first.
+        $process = (int) \FFI::cast('intptr_t', $info->hProcess)->cdata;
+        $thread = (int) \FFI::cast('intptr_t', $info->hThread)->cdata;
 
         // CreateProcessW hands back two handles and a PTY backend needs one of
         // them. The primary thread handle is closed HERE rather than returned,
