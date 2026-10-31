@@ -131,6 +131,21 @@ export async function ticket(fetchImpl: Fetch = fetch): Promise<string> {
 }
 
 /**
+ * A single-use link to the sandboxed page for one canvas artifact
+ * (`POST /api/canvas`, docs/MEDIA.md "Canvas artifacts"). The answer is the
+ * path only — `/canvas/<64-hex>` — and it dies on first sight, so every
+ * frame load needs a fresh mint; refusals arrive as `AuthError`s with the
+ * server's kind (`bad_request`, `not_found`) already mapped by `post()`.
+ */
+export async function canvasLink(sessionId: string, artifactId: string, fetchImpl: Fetch = fetch): Promise<string> {
+  const json = await post(fetchImpl, 'canvas', { sessionId, artifactId })
+  if (typeof json.url !== 'string' || json.url === '') {
+    throw new AuthError(500, 'bad_canvas_link', 'the server answered no canvas link')
+  }
+  return json.url
+}
+
+/**
  * End the session: the server revokes the cookie, and this browser keeps
  * nothing behind — the login secret goes, and so does the prompt history
  * ring (`stores/promptHistory.ts`), the one per-viewer record of what was

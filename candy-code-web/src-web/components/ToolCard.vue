@@ -9,6 +9,7 @@ import { usePanelsStore } from '../stores/agents/panels'
 import { useTranscriptViewStore } from '../stores/transcriptView'
 import { buildTree, foldRuns, startedBy } from '../stores/agents/tree'
 import SubAgentTree from './agents/SubAgentTree.vue'
+import CanvasCard from './CanvasCard.vue'
 import DiffView from './DiffView.vue'
 import MediaCard from './MediaCard.vue'
 import ReasoningFold from './ReasoningFold.vue'
@@ -101,7 +102,10 @@ function openAgent(id: string): void {
       <!-- Artifact refs ride the event; the bytes are pulled by each card on
            demand (Appendix C-7). Media joins after the output region. -->
       <div v-if="item.media && item.media.length > 0" class="media" data-testid="tool-media">
-        <MediaCard v-for="artifact in item.media" :key="artifact.artifactId" :media="artifact" :session-id="sessionId" />
+        <template v-for="artifact in item.media" :key="artifact.artifactId">
+          <CanvasCard v-if="artifact.kind === 'html'" :media="artifact" :session-id="sessionId" />
+          <MediaCard v-else :media="artifact" :session-id="sessionId" />
+        </template>
         <p v-if="item.mediaTruncated" class="media-truncated" data-testid="media-truncated">{{ t('web.media.truncated') }}</p>
       </div>
     </div>
