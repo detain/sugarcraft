@@ -11,8 +11,9 @@ use SugarCraft\Code\Config\Settings\UiSettings;
  * terminal-agnostic half of "recap when I get back".
  *
  * sugar-core reports focus only when `ProgramOptions::$reportFocus` is on
- * ({@see \SugarCraft\Code\Chat::programOptions()}); every
- * `FocusLostMsg`/`FocusGainedMsg` then lands in
+ * ({@see \SugarCraft\Code\Chat::programOptions()}); the decoder's reports —
+ * `BlurMsg` for focus-out (InputReader's final 'O'; a `FocusLostMsg` is
+ * never built by it), `FocusGainedMsg` for focus-in — then land in
  * `Chat::handleRunControlMessages()`, which stamps and consumes through
  * here. The stamp is process-global on purpose: sugar-core's `Program`
  * owns one terminal, and an absence that outlives a tab switch inside the
