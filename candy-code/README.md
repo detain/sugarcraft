@@ -1507,7 +1507,15 @@ and under which preset; `sd.timeoutSeconds`, because it bounds that same
 generation; `sd.savePattern`, because it names where artifacts land on the
 operator's disk; `ui.imageRenderMode` and `ui.mediaDisplayOverrides`, the
 display half of the same surface, held user-tier so the media settings cannot
-be split across tiers by a checkout; `subagentMaxTurns`, `subagentMaxConcurrent`, `subagentMaxDepth`
+be split across tiers by a checkout; `voice.baseUrl` and `voice.apiKey`, the
+provider argument applied to the transcription server — together they decide
+which host and which credential every recorded take is sent to, and a take
+carries the operator's spoken words, often code or secrets read aloud;
+`voice.model`, because it chooses which model burns the operator's key on each
+transcription; `voice.language`, because a checkout forcing the wrong language
+silently corrupts what lands in the composer; `voice.maxSeconds`, because it
+bounds how long a single take — and its upload and transcription bill — may
+run; `subagentMaxTurns`, `subagentMaxConcurrent`, `subagentMaxDepth`
 and `subagentMaxActive`, because each multiplies the provider calls one turn
 may fan out through delegated runs — the `maxToolSteps` argument applied to
 sub-agents;
