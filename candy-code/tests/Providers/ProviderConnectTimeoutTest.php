@@ -370,7 +370,11 @@ final class ProviderConnectTimeoutTest extends TestCase
         $client = self::buildSeamClient(['handler' => $inner, 'base_uri' => 'https://candy-preflight.invalid/']);
 
         try {
-            $client->request('POST', 'chat/completions', ['stream' => true, 'json' => []]);
+        // §7 closeout: explicit no-proxy. This pin measures the ORIGIN dial;
+        // under a proxy environment Guzzle merges a proxy array and
+        // connectPreflight's proxy bail (correctly) skips the probe —
+        // proxy=false keeps the pin measuring what it names.
+            $client->request('POST', 'chat/completions', ['stream' => true, 'json' => [], 'proxy' => false]);
             $this->fail('the probe should have settled the unresolvable host before the transport ran');
         } catch (\GuzzleHttp\Exception\ConnectException $e) {
             $this->assertStringContainsString('Could not resolve host', $e->getMessage());
@@ -402,7 +406,9 @@ final class ProviderConnectTimeoutTest extends TestCase
             ]);
 
             try {
-                $client->request('POST', 'chat/completions', ['stream' => true, 'json' => []]);
+                // §7 closeout: explicit no-proxy — see the DNS pin above;
+                // the probe must dial the local listener directly.
+                $client->request('POST', 'chat/completions', ['stream' => true, 'json' => [], 'proxy' => false]);
                 $this->fail('the lying handler must still surface a rejection');
             } catch (\GuzzleHttp\Exception\ConnectException $e) {
                 $this->assertStringContainsString('streamHeaderTimeoutSeconds', $e->getMessage());
