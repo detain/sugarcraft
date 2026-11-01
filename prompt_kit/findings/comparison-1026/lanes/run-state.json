@@ -1281,7 +1281,7 @@
   "W37/36/37/38/39 loop reviewers": "ORPHANS header REMOVED; W37 ALIVE 8380B@02:08, W38 ALIVE 7785B@02:06, W39 REVIVED 8474B@02:10 (was 1767 @01:53) \u2014 do not twin; W40 ses_e6a17dcd3ffe 2963B static since 02:02 = ONE static era, ARMED re-cut if still static at next lead wake.",
   "W40 loop": "ses_e6a17dcd3ffePcCcKQ0Lzl2NiY: static 2963B since 02:02:08 across 02:06/02:08/02:10 stats; one-era rule: re-stat at next wake, two static eras -> fresh re-cut with lineage."
  },
- "master_tip": "8416644c5",
+ "master_tip": "f3e31905d",
  "master_tip_at_dispatch": "9fb981c5c",
  "master_tip_observed": "16fe158c8",
  "next_fill_queue": [],
@@ -1964,7 +1964,7 @@
   "C-WEB-5.b/REVIEW-2.md": 570
  },
  "status": "RUNNING",
- "tick": "t1131-6h-clean-weld-dispatched",
+ "tick": "t1132-C-TUI-6.h-final-step-welded",
  "tip": "4f1bdab31",
  "updated": "2026-11-01T03:27:19.167910",
  "wave_flip_owed": [
