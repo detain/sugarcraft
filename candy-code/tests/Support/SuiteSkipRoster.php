@@ -225,6 +225,33 @@ final class SuiteSkipRoster
         'SugarCraft\Code\Tests\Tools\BuiltIn\ScriptToolTest::testAJailedEndToEndRunReadsAndEditsThroughTheBridge';
 
     /**
+     * The C-TUI-6.d Windows keys: the Bash smoke arms can only run on a real
+     * Windows runner, where the Git-for-Windows locate ladder and the
+     * taskkill tree ladder exist to be driven — {@see windowsSmokeRuns()} IS
+     * the gate the bodies call, and {@see expectedForLayout()} lifts all
+     * three entries exactly where it answers true (the windows-smoke CI job).
+     * On this Linux box they are dormant skips, never silent absences.
+     */
+    private const WINDOWS_BASH_VERBATIM =
+        'SugarCraft\Code\Tests\Windows\WindowsBashSmokeTest::testBashAnswersAGitForWindowsLineVerbatim';
+
+    /**
+     * The C-TUI-6.d Windows key: the timeout tree-kill leg needs the real
+     * `taskkill /T /F` ladder, which only exists on a Windows runner. Same
+     * predicate and lift as {@see WINDOWS_BASH_VERBATIM}.
+     */
+    private const WINDOWS_BASH_TREE_KILL =
+        'SugarCraft\Code\Tests\Windows\WindowsBashSmokeTest::testTheTimeoutKillsTheWholeProcessTree';
+
+    /**
+     * The C-TUI-6.d Windows key: PtyRun's ConPTY leg needs a real ConPTY host
+     * (`Windows 10 1809+`, PHP 8.4, ext-ffi), which only the windows-smoke CI
+     * job is. Same predicate and lift as {@see WINDOWS_BASH_VERBATIM}.
+     */
+    private const WINDOWS_PTYRUN_CONPTY =
+        'SugarCraft\Code\Tests\Windows\WindowsPtyRunSmokeTest::testPtyRunDrivesAReadPromptOverConPty';
+
+    /**
      * The tests this suite is allowed to skip, `Class::method` => why.
      *
      * The first is UNCONDITIONAL -- no environment gate, no platform check, no
@@ -322,6 +349,23 @@ final class SuiteSkipRoster
                 . 'scriptJailRuns() predicate its body calls; where the probe answers that the '
                 . 'jail starts, the test Reads and Writes a temp file through the bridge from a '
                 . 'confined child, and expectedForLayout() lifts both entries together',
+        self::WINDOWS_BASH_VERBATIM
+            => 'conditional platform gate (C-TUI-6.d): rostered while this host is not Windows — '
+                . 'the Bash arm drives a real Git-for-Windows bash.exe and asserts the cmd.exe '
+                . 'shapes (%PATH%, !x) survive it verbatim. windowsSmokeRuns() IS the body gate; '
+                . 'the windows-smoke CI job runs on a Windows runner where the lift drops this '
+                . 'entry and the assertion judges live',
+        self::WINDOWS_BASH_TREE_KILL
+            => 'conditional platform gate (C-TUI-6.d): the timeout leg proves the taskkill /T /F '
+                . 'tree ladder really collects backgrounded grandchildren on Windows, which only '
+                . 'a Windows runner has. Same windowsSmokeRuns() body gate and same lift as '
+                . 'WINDOWS_BASH_VERBATIM',
+        self::WINDOWS_PTYRUN_CONPTY
+            => 'conditional platform gate (C-TUI-6.d): the PtyRun leg drives `read` over a real '
+                . 'ConPTY allocation, which needs the Windows API this host does not have; the '
+                . 'windows-smoke CI job (PHP 8.4 + ext-ffi on windows-latest) runs the same body '
+                . 'under the same predicate, and expectedForLayout() lifts all three C-TUI-6.d '
+                . 'entries together wherever windowsSmokeRuns() is true',
     ];
 
     private static ?self $live = null;
@@ -571,6 +615,22 @@ final class SuiteSkipRoster
     }
 
     /**
+     * Whether the C-TUI-6.d Windows smoke arms run instead of skipping: they
+     * drive real Git-for-Windows bash.exe, the real `taskkill` tree ladder,
+     * and a real ConPTY allocation, none of which exist on this Linux box.
+     * The gate is the platform itself — {@see expectedForLayout()} lifts the
+     * three rostered entries exactly where this answers true, and the test
+     * bodies call THIS method, so skip and roster cannot drift. The
+     * windows-smoke CI job is the runner where the assertions execute; on
+     * every other shape the entries stay dormant skips, never silent
+     * absences. No spawn, no FFI here — one string comparison.
+     */
+    public static function windowsSmokeRuns(): bool
+    {
+        return \PHP_OS_FAMILY === 'Windows';
+    }
+
+    /**
      * The roster this checkout's layout and environment can be judged against:
      * {@see EXPECTED} minus the layout-conditional entry wherever the path-repo
      * symlinks are present and the conditional test RUNS instead of skipping,
@@ -615,6 +675,12 @@ final class SuiteSkipRoster
         if (self::scriptJailRuns()) {
             unset($effective[self::SCRIPT_JAIL]);
             unset($effective[self::SCRIPT_JAIL_TOOL]);
+        }
+
+        if (self::windowsSmokeRuns()) {
+            unset($effective[self::WINDOWS_BASH_VERBATIM]);
+            unset($effective[self::WINDOWS_BASH_TREE_KILL]);
+            unset($effective[self::WINDOWS_PTYRUN_CONPTY]);
         }
 
         return $effective;

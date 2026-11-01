@@ -88,6 +88,18 @@ final class SuiteSkipRosterTest extends TestCase
     private const JAIL_TOOL_ENTRY =
         'SugarCraft\\Code\\Tests\\Tools\\BuiltIn\\ScriptToolTest::testAJailedEndToEndRunReadsAndEditsThroughTheBridge';
 
+    /** The C-TUI-6.d Windows bash-verbatim key — the private `WINDOWS_BASH_VERBATIM`, by literal. */
+    private const WINDOWS_BASH_VERBATIM_ENTRY =
+        'SugarCraft\\Code\\Tests\\Windows\\WindowsBashSmokeTest::testBashAnswersAGitForWindowsLineVerbatim';
+
+    /** The C-TUI-6.d Windows tree-kill key — the private `WINDOWS_BASH_TREE_KILL`, by literal; same predicate. */
+    private const WINDOWS_BASH_TREE_KILL_ENTRY =
+        'SugarCraft\\Code\\Tests\\Windows\\WindowsBashSmokeTest::testTheTimeoutKillsTheWholeProcessTree';
+
+    /** The C-TUI-6.d Windows ConPTY key — the private `WINDOWS_PTYRUN_CONPTY`, by literal; same predicate. */
+    private const WINDOWS_PTYRUN_CONPTY_ENTRY =
+        'SugarCraft\\Code\\Tests\\Windows\\WindowsPtyRunSmokeTest::testPtyRunDrivesAReadPromptOverConPty';
+
     /**
      * Runs $body with CANDY_CODE_PHAR forced UNARMED and restores the caller's
      * shell state exactly, so the layout pins stay deterministic no matter
@@ -254,8 +266,9 @@ final class SuiteSkipRosterTest extends TestCase
      * Over a symlink farm with the live gate unarmed the effective roster is
      * EXACTLY the unconditional entry plus the dormant smokes -- and the jail
      * arm wherever this host cannot start bubblewrap, mirrored from the same
-     * predicate the lift consults -- the structure is pinned, not just the
-     * count.
+     * predicate the lift consults, and likewise the three C-TUI-6.d Windows
+     * smoke arms wherever this host is not Windows --
+     * the structure is pinned, not just the count.
      */
     public function testExpectedForLayoutDropsTheConditionalEntryOverSymlinks(): void
     {
@@ -280,11 +293,18 @@ final class SuiteSkipRosterTest extends TestCase
                     : [
                         self::JAIL_ENTRY => SuiteSkipRoster::EXPECTED[self::JAIL_ENTRY],
                         self::JAIL_TOOL_ENTRY => SuiteSkipRoster::EXPECTED[self::JAIL_TOOL_ENTRY],
+                    ]) + (SuiteSkipRoster::windowsSmokeRuns()
+                    ? []
+                    : [
+                        self::WINDOWS_BASH_VERBATIM_ENTRY => SuiteSkipRoster::EXPECTED[self::WINDOWS_BASH_VERBATIM_ENTRY],
+                        self::WINDOWS_BASH_TREE_KILL_ENTRY => SuiteSkipRoster::EXPECTED[self::WINDOWS_BASH_TREE_KILL_ENTRY],
+                        self::WINDOWS_PTYRUN_CONPTY_ENTRY => SuiteSkipRoster::EXPECTED[self::WINDOWS_PTYRUN_CONPTY_ENTRY],
                     ]),
                 'over a path-repo symlink farm the layout-conditional test RUNS while the dormant '
                 . 'smokes stay rostered, so the effective roster must be the const minus exactly '
                 . 'its GitignoreAwareness key (and minus the premise and the rename arm wherever '
-                . 'phar writing is possible, and minus the jail arm wherever bubblewrap starts), '
+                . 'phar writing is possible, and minus the jail arm wherever bubblewrap starts, '
+                . 'and minus the three C-TUI-6.d Windows smoke arms wherever this host IS Windows), '
                 . 'reasons intact',
             );
         } finally {

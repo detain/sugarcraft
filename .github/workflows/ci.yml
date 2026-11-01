@@ -729,6 +729,66 @@ jobs:
       - name: Containment — Darwin detach helper tests
         run: cd candy-code && vendor/bin/phpunit -c phpunit.xml --filter 'ProcessContainmentPhpSetsidTest::'
 
+  # C-TUI-6.d Windows smoke · candy-code — the interactive layer's FIRST
+  # real-OS measurement: `--version` must boot (a load-time fatal on any
+  # POSIX-only constant consumed at boot fails here, not in a user shell),
+  # and tests\Windows runs the three live legs — Bash over the located
+  # Git-for-Windows bash.exe (verbatim quoting + the taskkill tree-kill) and
+  # PtyRun over a real ConPTY allocation. PHP is pinned to 8.4 because
+  # Kernel32ConPty::supported() refuses anything older, so the smoke would
+  # skip its own purpose on 8.3. NOT the full suite: it carries
+  # pcntl/posix/setsid legs that cannot pass on a Windows cell — the same
+  # scoping law sugar-pty's matrix cell follows above. These legs are the
+  # design's own risk statement: first real measurement, failures there are
+  # findings, not flakes to forgive.
+  candy-code-windows-smoke:
+    name: 'Windows smoke · candy-code'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    # Read-only checkout: this job publishes nothing.
+    permissions:
+      contents: read
+    concurrency:
+      group: ci-windows-smoke-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+
+      # Same FFI shape as the windows-test cell; 8.4 is the ConPTY floor
+      # (Kernel32ConPty::supported() checks PHP_VERSION_ID), and ext-ffi is
+      # what the cdef probe loads CreatePseudoConsole through. No new cdef
+      # is added anywhere in candy-code — the 6.b/6.c adapters own that.
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.4'
+          extensions: mbstring, intl, json, pcntl, ffi
+          tools: composer:v2
+          coverage: none
+          ini-values: ffi.enable=true
+
+      - name: Cache vendor/
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: candy-code/vendor
+          key: vendor-win-v3-8.4-candy-code-${{ hashFiles('candy-code/composer.json') }}
+          restore-keys: |
+            vendor-win-v3-8.4-candy-code-
+
+      - name: Link sibling libs
+        run: php tools/check-path-repos.php --fix --strict-closure
+
+      # pcntl/shmop do not exist on Windows PHP; the same ignore-platform
+      # pair the windows-test cell passes above.
+      - name: Install dependencies
+        run: cd candy-code && composer install --prefer-dist --no-progress -n --ignore-platform-req=ext-pcntl --ignore-platform-req=ext-shmop
+
+      - name: Boot the binary
+        run: php candy-code\bin\candy-code --version
+
+      - name: Run tests\Windows
+        run: php candy-code\vendor\bin\phpunit -c candy-code\phpunit.xml candy-code\tests\Windows\ --colors=never
+
   # Coverage report — runs once on PHP 8.3 + pcov for every lib in the
   # matrix, uploads a per-lib clover XML to codecov with the lib slug
   # as a flag. Codecov uses the flag to surface a separate badge per
