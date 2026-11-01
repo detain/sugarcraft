@@ -55,8 +55,10 @@ use SugarCraft\Code\Tools\ToolResult;
  * {@see \SugarCraft\Code\Permissions\ShellSubjectTools}. That roster is the
  * list of tools whose SUBJECT IS A SHELL COMMAND LINE — text the permission
  * matchers parse with `Bash(rm *)`-style rules, segment splitting, and the
- * cross-binding proxy. ShellSend's `keys` are not a command line: they are
- * keystrokes into whatever program holds the terminal, which may itself be a
+ * cross-binding proxy. The command line a relay runs was `/bin/sh -c` text
+ * when `Bash` started the shell, and it was judged then; what ShellSend
+ * types never travels that argv again — `keys` are keystrokes into whatever
+ * program holds the terminal, which may itself be a
  * REPL, an editor, or a shell the row's original command never mentioned.
  * Membership would let `Allow Bash(git *)` grant typing `git` into any
  * session, and would let the auto classifier read a line of REPL input as if
@@ -185,11 +187,12 @@ final readonly class ShellSend implements Tool, AcceptsShellOwner, BuildsFromCat
             return $this->refuse('keys must be a non-empty string of text and key tokens (for example "ls<Enter>")');
         }
         $decoded = PtyRun::decode($keys);
-        if ($decoded === '') {
-            // An all-`<>`-less-empty template is a typing call that types
-            // nothing; refusing beats writing zero bytes and waiting on them.
-            return $this->refuse('keys decoded to nothing to type — the grammar only removes bytes through known tokens');
-        }
+        // No second empty-check on the decoded bytes is needed, and none is
+        // spelled: the grammar only ADDS (literal chars pass through, every
+        // token maps to at least one byte), so a non-empty template can never
+        // decode to nothing — a refusal here would be a path no call can
+        // reach. The passthrough half of that property is pinned live in
+        // ShellSendTest (an unknown `<x>` rides the wire as itself).
 
         $waitMs = $args['wait_ms'] ?? self::DEFAULT_WAIT_MS;
         $waitMs = \is_int($waitMs) ? \max(0, \min(self::MAX_WAIT_MS, $waitMs)) : self::DEFAULT_WAIT_MS;
@@ -205,6 +208,27 @@ final readonly class ShellSend implements Tool, AcceptsShellOwner, BuildsFromCat
         }
         if (($row['interactive'] ?? false) !== true) {
             return $this->refuse('shell ' . $id . ' is not an interactive (pty) shell; start it with interactive: true; a plain background shell has no terminal to type into');
+        }
+
+        // READINESS BEFORE THE FIRST WRITE (the 6.j hand-off NIT, measured
+        // there): a non-blocking r+ open of the FIFO succeeds the instant
+        // the node exists — while the pump is still between writing its
+        // .pid record and attaching to the read side — and bytes typed into
+        // that window sit in the sender's own fd and DIE when the send
+        // closes it. The row's ptyPidPath is the readiness handle 6.j
+        // names: the pump writes it two statements before it opens its
+        // sinks, so waiting for the file closes the data-loss window and
+        // the bounded write-retry below absorbs the two-statement gap. A
+        // merged row that carries no pid path (state written before the
+        // relay era) skips the wait and takes only the retry. A window
+        // that never opens types NOTHING and refuses — believing a write
+        // into a pipe nobody reads would be a fabricated success.
+        if ($this->relayReady($row) === false) {
+            return $this->refuse(sprintf(
+                'the relay for shell %s had not opened its input within %d ms — nothing was typed; read what exists with ShellOutput, or ShellStop it and start a fresh one',
+                $id,
+                self::RELAY_ATTACH_BUDGET_MS,
+            ));
         }
 
         $answer = $this->sendBounded($id, $decoded);
@@ -245,6 +269,36 @@ final readonly class ShellSend implements Tool, AcceptsShellOwner, BuildsFromCat
     public function mergeSessionState(array $state): void
     {
         $this->registry?->merge($state[BackgroundShellRegistry::SESSION_STATE_KEY] ?? null);
+    }
+
+    /**
+     * Wait (bounded, ticked) for the relay's shell-pid record — the node
+     * whose existence says the pump is about to be reading. TRUE when ready
+     * or when the row names no pid path at all (a pre-relay merged row: the
+     * write-retry loop is the whole defence there, and refusing a legacy
+     * row outright would invent a door the engine does not have). FALSE
+     * only after the declared budget passed with no record — which is
+     * answered as "typed nothing", never as a lost write. PUBLIC because
+     * `/shells send` obeys the same law through this one predicate — the
+     * readiness rule lives once.
+     *
+     * @param array<string, mixed> $row
+     */
+    public static function relayReady(array $row): bool
+    {
+        $pidPath = $row['ptyPidPath'] ?? null;
+        if (!\is_string($pidPath) || $pidPath === '') {
+            return true;
+        }
+        $deadline = \microtime(true) + self::RELAY_ATTACH_BUDGET_MS / 1000;
+        while (!\is_file($pidPath)) {
+            if (\microtime(true) >= $deadline) {
+                return false;
+            }
+            \usleep(self::RELAY_ATTACH_TICK_MS * 1000);
+        }
+
+        return true;
     }
 
     /**

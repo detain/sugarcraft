@@ -77,6 +77,7 @@ final class ShellsCommandTest extends TestCase
         self::assertTrue(ShellsCommand::isReadOnlyVerb('list'));
         self::assertTrue(ShellsCommand::isReadOnlyVerb('output'), 'reading a log file changes nothing');
         self::assertFalse(ShellsCommand::isReadOnlyVerb('stop'), 'stop runs the kill ladder on a live child');
+        self::assertFalse(ShellsCommand::isReadOnlyVerb('send'), 'C-TOOL-6.k: a send types into a live terminal — the read-only window never opens it');
         self::assertFalse(ShellsCommand::isReadOnlyVerb('frobnicate'));
         // The judgement is case-insensitive the way the dispatch verb read is.
         self::assertTrue(ShellsCommand::isReadOnlyVerb('LIST'));
@@ -236,6 +237,84 @@ final class ShellsCommandTest extends TestCase
     }
 
     /** The command context: workspace carries the registry, session A is the caller. */
+    // =====================================================================
+    // send (C-TOOL-6.k)
+    // =====================================================================
+
+    public function testSendWithoutAnIdAnswersTheUsageLine(): void
+    {
+        $registry = $this->shellsRegistry();
+        $body = self::body($this->dispatchShells($registry, '/shells send'));
+        self::assertStringContainsString('/shells', $body);
+        self::assertStringContainsString('send <id> <keys', $body, 'the usage sentence names the verb the caller forgot');
+    }
+
+    public function testSendRefusesAMalformedIdBeforeAskingAnythingElse(): void
+    {
+        $registry = $this->shellsRegistry();
+        $body = self::body($this->dispatchShells($registry, '/shells send bash-1 ls<Enter>'));
+        self::assertStringContainsString('is not of the form sh-xxxxxxxx', $body);
+    }
+
+    public function testSendWithoutKeysRefusesAndWithoutATargetRowAnswersTrackedBy(): void
+    {
+        $registry = $this->shellsRegistry();
+        $body = self::body($this->dispatchShells($registry, '/shells send sh-deadbeef'));
+        self::assertStringContainsString('needs keys after the id', $body);
+
+        $missing = self::body($this->dispatchShells($registry, '/shells send sh-deadbeef ls<Enter>'));
+        self::assertStringContainsString('is tracked by this launch', $missing, 'the registry sentence rides the interface path verbatim');
+    }
+
+    public function testSendToAPlainBackgroundShellCarriesTheEnginesSentence(): void
+    {
+        $registry = $this->shellsRegistry();
+        $start = $registry->start('sleep 120', 'plain row');
+        $this->trackShell($registry, (string) $start['shell']['id']);
+
+        $body = self::body($this->dispatchShells($registry, '/shells send ' . (string) $start['shell']['id'] . ' ls<Enter>'));
+        self::assertStringContainsString('is not an interactive (pty) shell', $body);
+        self::assertStringContainsString('input closed with the command', $body, 'the human gets the same honest sentence the model gets');
+    }
+
+    public function testAStrangersInteractiveRowIsInvisibleToSend(): void
+    {
+        $registry = $this->shellsRegistry();
+        $start = $registry->startInteractive('sleep 120', 'foreign typing', 80, 24, [], 'session-B');
+        self::assertTrue($start['ok']);
+        $id = (string) $start['shell']['id'];
+        $this->trackShell($registry, $id);
+
+        $body = self::body($this->dispatchShells($registry, '/shells send ' . $id . ' ls<Enter>'));
+        self::assertStringContainsString('is tracked by this launch', $body, 'the same sentence as a missing id — no probe of which case fired');
+        self::assertSame(0, (int) ($registry->status($id, 'session-B')['humanInputs'] ?? -1), 'the stranger typed nothing the owner can see');
+    }
+
+    public function testSendTypesAsAHumanCountsTheTouchAndAnswersTheCursor(): void
+    {
+        $registry = $this->shellsRegistry();
+        $start = $registry->startInteractive('cat', 'human channel', 80, 24);
+        self::assertTrue($start['ok']);
+        $id = (string) $start['shell']['id'];
+        $this->trackShell($registry, $id);
+
+        $marker = 'c6kc' . bin2hex(random_bytes(4));
+        $body = self::body($this->dispatchShells($registry, '/shells send ' . $id . ' ' . $marker . '<Enter>'));
+        self::assertStringContainsString('Typed into shell ' . $id, $body);
+        self::assertStringContainsString('(' . (strlen($marker) + 1) . ' bytes)', $body, 'the byte count is the DECODED size — <Enter> folded to one byte');
+        self::assertMatchesRegularExpression('/cursor \d+/', $body, 'the human answer threads the cursor to read from');
+        self::assertSame(1, (int) $registry->status($id)['humanInputs'], 'origin is human: the audit counter moves — this is what tells the model someone touched the shell');
+
+        for ($i = 0; $i < 80; $i++) {
+            if (str_contains((string) $registry->read($id, 0)['stdout'], $marker)) {
+                break;
+            }
+            usleep(50_000);
+        }
+        $shown = self::body($this->dispatchShells($registry, '/shells output ' . $id . ' 0'));
+        self::assertStringContainsString($marker, $shown, 'what the human typed is on the screen the human can read back');
+    }
+
     private function shellsContext(?BackgroundShellRegistry $registry): CommandContext
     {
         $workspace = WorkspaceContext::new(root: $this->root);

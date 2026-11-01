@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Host\Commands;
 use SugarCraft\Code\Background\BackgroundShellRegistry;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Tools\BuiltIn\PtyRun;
+use SugarCraft\Code\Tools\BuiltIn\ShellSend;
 
 /**
  * `/shells` (C-TOOL-3.d) — the list / read / type / stop surface over the
@@ -26,11 +27,13 @@ use SugarCraft\Code\Tools\BuiltIn\PtyRun;
  * started, through the SAME registry door the ShellSend tool uses, tagged
  * `human` so the row's audit counter sees the hand that pressed.
  *
- * A send here is ONE honest try, not the ShellSend tool's bounded
- * relay-attach re-trial: a human who typed `/shells send` into a relay that
- * has not attached yet gets the engine's refusal and may press again —
- * blocking the interface loop on a kernel promise is not what a command
- * should do.
+ * A send here obeys the SAME readiness law as the tool — it waits the
+ * declared attach budget once through {@see ShellSend::relayReady} rather
+ * than letting a fast `/shells send` after a spawn type into a FIFO nobody
+ * is reading yet — but it is still ONE try: the sendBounded re-trial loop
+ * belongs to the model's path, and a human who draws the honest not-ready
+ * answer simply presses again. Blocking the interface loop past the budget
+ * for a kernel promise that may never land is not what a command should do.
  *
  * OWNERSHIP rides the rows C-TOOL-3.c tags: every read passes
  * `$context->currentSessionId()` as the owner, so the table a session lists
@@ -190,9 +193,25 @@ final class ShellsCommand implements HostCommand
         if ($rest === '') {
             return CommandResult::errorReply($text, Lang::t('host.shells.send_empty'));
         }
+        // No second empty-check after the decode: the grammar only ADDS
+        // (see ShellSend's own door), so a non-empty rest can never type
+        // nothing — a refusal branch here would be a path no call reaches.
         $decoded = PtyRun::decode($rest);
-        if ($decoded === '') {
-            return CommandResult::errorReply($text, Lang::t('host.shells.send_empty'));
+
+        // The same readiness law the tool obeys (C-TOOL-6.k): before the
+        // relay's pump has opened the input side, a write is answered OK and
+        // the bytes die with the sender's fd. The human path waits the
+        // declared budget once through the tool's shared predicate — a
+        // typed command vanishing silently is worse than a two-second
+        // pause — and answers honestly when the window passes without an
+        // attach. The write-retry loop inside send() still absorbs the
+        // two-statement gap the pump itself carries.
+        $row = $registry->status($id, $owner);
+        if ($row !== null && (bool) ($row['interactive'] ?? false) && !ShellSend::relayReady($row)) {
+            return CommandResult::errorReply($text, Lang::t('host.shells.send_not_ready', [
+                'id' => $id,
+                'ms' => (string) ShellSend::RELAY_ATTACH_BUDGET_MS,
+            ]));
         }
 
         $answer = $registry->send($id, $decoded, 'human', $owner);
