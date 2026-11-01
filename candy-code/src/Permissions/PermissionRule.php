@@ -198,6 +198,10 @@ final class PermissionRule
         'Read' => 'file_path',
         'Edit' => 'file_path',
         'Write' => 'file_path',
+        // C-TOOL-6.b, in-step: NotebookEdit edits one cell of a notebook file —
+        // the mapped argument IS the path, exactly as for Edit and Write, so a
+        // path-scoped rule names it the same way.
+        'NotebookEdit' => 'file_path',
         'Glob' => 'path',
         'Grep' => 'path',
         'Lsp' => 'path',
@@ -270,7 +274,7 @@ final class PermissionRule
      *
      * @var list<string>
      */
-    private const PATH_SUBJECT_TOOLS = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Lsp', 'Ls'];
+    private const PATH_SUBJECT_TOOLS = ['Read', 'Edit', 'Write', 'NotebookEdit', 'Glob', 'Grep', 'Lsp', 'Ls'];
 
     /**
      * How many symlinks {@see resolveOnDisk()} follows by hand before it stops —

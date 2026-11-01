@@ -181,7 +181,7 @@ final class PermissionGate
      */
     public const AUTO_REVIEW_SCOPE_SETTING = 'autoReviewScope';
     public const AUTO_REVIEW_SCOPES = ['shell', 'writes', 'all'];
-    public const AUTO_REVIEW_WRITE_TOOLS = ['Edit', 'Write', ApplyPatch::NAME, 'WebFetch'];
+    public const AUTO_REVIEW_WRITE_TOOLS = ['Edit', 'Write', 'NotebookEdit', ApplyPatch::NAME, 'WebFetch'];
 
     // -------------------------------------------------------------------------
     // Auto-mode circuit breaker state
@@ -1034,7 +1034,7 @@ final class PermissionGate
      * the target as `file_path` ({@see PermissionRule::SUBJECT_ARGUMENTS}
      * pins that against the schemas).
      */
-    private const EDIT_TOOLS = ['Edit', 'Write'];
+    private const EDIT_TOOLS = ['Edit', 'Write', 'NotebookEdit'];
 
     /**
      * Auto: everything runs gated by SafetyClassifier; circuit breaker triggers Ask after

@@ -39,7 +39,7 @@ final class StaleReadStrategy implements PruningStrategy
      * The tools whose success changes the file they name — every file, for
      * an `ApplyPatch` ({@see writtenPaths()}).
      */
-    public const WRITERS = ['Edit', 'Write', 'ApplyPatch'];
+    public const WRITERS = ['Edit', 'Write', 'NotebookEdit', 'ApplyPatch'];
 
     public static function new(): self
     {

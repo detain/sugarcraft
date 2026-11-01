@@ -10,6 +10,8 @@ use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Context\RulePathNudge;
 use SugarCraft\Code\LSP\LspClient;
+use SugarCraft\Code\Notebook\Notebook;
+use SugarCraft\Code\Notebook\NotebookPages;
 use SugarCraft\Code\Providers\AnthropicProvider;
 use SugarCraft\Code\Skills\SkillPathNudge;
 use SugarCraft\Code\Tools\CarriesSessionState;
@@ -371,7 +373,10 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             . 'as a page of its extracted text when this host has a PDF text extractor, and otherwise as the document '
             . 'itself within a ' . number_format(AnthropicProvider::TOOL_RESULT_DOCUMENT_MAX_BYTES)
             . '-byte result budget, which a document-capable wire renders as a real document block; when neither fits, '
-            . 'the result is a notice that says so — never mojibake lines. Prefer this over `cat`/`head` through Bash: '
+            . 'the result is a notice that says so — never mojibake lines. A Jupyter notebook '
+            . '(`.ipynb` that parses as nbformat v4) comes back as numbered cell pages — one header per cell, '
+            . 'its source, and a digest of its outputs — and there `offset` and `limit` count cells, not lines; '
+            . 'a notebook that does not parse comes back as ordinary text. Prefer this over `cat`/`head` through Bash: '
             . implode('; ', $advantages) . '.';
     }
 
@@ -561,6 +566,21 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             $binary = $this->binaryAnswer($path, $args['id'] ?? '', $offset, $limit);
             if ($binary !== null) {
                 return $binary;
+            }
+        }
+
+        // C-TOOL-6.b (GAP-TL-15): a `.ipynb` that PARSES as an nbformat v4
+        // notebook within the byte cap answers as numbered cell pages rather
+        // than a wall of JSON, with `offset`/`limit` counting cells. The
+        // ledger observes the RAW bytes the parse consumed — stat plus full
+        // hash — so a later NotebookEdit's staleness check sees the very
+        // bytes this answer was built from. A notebook that does not parse,
+        // or that is over cap, falls through to ordinary text paging: raw
+        // JSON is exactly what a model debugging a corrupt notebook needs.
+        if (is_file($path) && str_ends_with(strtolower($path), '.ipynb')) {
+            $notebook = $this->notebookAnswer($path, $args['id'] ?? '', $offset, $limit);
+            if ($notebook !== null) {
+                return $notebook;
             }
         }
 
@@ -887,6 +907,70 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
         } finally {
             fclose($handle);
         }
+    }
+
+    /**
+     * C-TOOL-6.b (GAP-TL-15): the `.ipynb` branch of {@see self::execute()}.
+     * Answers with the cell pages of a parseable nbformat v4 notebook — see
+     * {@see \SugarCraft\Code\Notebook\NotebookPages()} for the page shape —
+     * and returns NULL whenever the text paging must answer instead: over the
+     * byte cap, not JSON, not v4, or unreadable. That fall-through is the
+     * design's "unparsable falls back to today's text paging", not a silence:
+     * a model facing a broken notebook sees the same raw bytes it sees for
+     * any other file. When the ledger is armed, the RAW file is observed
+     * (fresh stat + hash of the full bytes read) rather than the rendered
+     * page, because a subsequent NotebookEdit compares against the bytes on
+     * disk, and staleness that never saw them would either refuse a fresh
+     * file or accept a changed one.
+     */
+    private function notebookAnswer(string $path, string $callId, ?int $offset, ?int $limit): ?ToolResult
+    {
+        $size = @filesize($path);
+        if ($size === false || $size > $this->maxBytes) {
+            return null;
+        }
+
+        $bytes = @file_get_contents($path);
+        if ($bytes === false) {
+            return null;
+        }
+
+        $notebook = Notebook::parse($bytes);
+        if ($notebook === null) {
+            return null;
+        }
+
+        $total = $notebook->cellCount();
+        $start = $offset ?? 1;
+        if ($start > $total) {
+            return new ToolResult(
+                toolCallId: $callId,
+                content: "Error: offset {$start} is past the end of {$path}, which has {$total} " . ($total === 1 ? 'cell' : 'cells'),
+                isError: true,
+            );
+        }
+
+        $page = NotebookPages::render($notebook, $start, $limit ?? $total);
+        if ($page === null) {
+            return null;
+        }
+
+        if ($this->readLedger !== null) {
+            $stat = @stat($path);
+            if ($stat !== false) {
+                $context = ReadLedger::hashContext();
+                hash_update($context, $bytes);
+                $this->readLedger->observe(
+                    $path,
+                    (int) $stat['mtime'],
+                    (int) $stat['size'],
+                    (int) $stat['ino'],
+                    hash_final($context),
+                );
+            }
+        }
+
+        return new ToolResult(toolCallId: $callId, content: $page, isError: false);
     }
 
     /**

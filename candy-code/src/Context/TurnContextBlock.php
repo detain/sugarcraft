@@ -86,7 +86,7 @@ final readonly class TurnContextBlock
      * Bash and MCP tools also write, but their targets are not knowable from
      * the call, and the git status in the same row already lists them.
      */
-    public const FILE_WRITING_TOOLS = ['Edit', 'Write', 'ApplyPatch'];
+    public const FILE_WRITING_TOOLS = ['Edit', 'Write', 'NotebookEdit', 'ApplyPatch'];
 
     /**
      * Opens the roster of skills loaded this session (roadmap 2.6). One line,

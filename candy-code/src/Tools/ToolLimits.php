@@ -11,6 +11,7 @@ use SugarCraft\Code\Tools\BuiltIn\ApplyPatch;
 use SugarCraft\Code\Tools\BuiltIn\Bash;
 use SugarCraft\Code\Tools\BuiltIn\Edit;
 use SugarCraft\Code\Tools\BuiltIn\Glob;
+use SugarCraft\Code\Tools\BuiltIn\NotebookEdit;
 use SugarCraft\Code\Tools\BuiltIn\Read;
 use SugarCraft\Code\Tools\BuiltIn\TaskTool;
 use SugarCraft\Code\Tools\BuiltIn\WebFetch;
@@ -355,7 +356,7 @@ final readonly class ToolLimits
         // same turn-time rebind. Unset leaves the tool as built — off, which
         // is byte-identical to every earlier turn. A `false` spelling still
         // rebinds explicitly (the merged config said so), harmlessly.
-        if ($tool instanceof Edit || $tool instanceof Write || $tool instanceof ApplyPatch) {
+        if ($tool instanceof Edit || $tool instanceof Write || $tool instanceof ApplyPatch || $tool instanceof NotebookEdit) {
             $require = $this->bool(self::REQUIRE_READ_BEFORE_WRITE_KEY);
             if ($require !== null) {
                 $tool = $tool->withRequireReadBeforeWrite($require);

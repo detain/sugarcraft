@@ -62,6 +62,7 @@ final class AcpUpdateMapper
         'Read' => 'read',
         'Edit' => 'edit',
         'Write' => 'edit',
+        'NotebookEdit' => 'edit',
         'ApplyPatch' => 'edit',
         'Bash' => 'execute',
         'Grep' => 'search',

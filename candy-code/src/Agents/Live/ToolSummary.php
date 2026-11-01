@@ -48,7 +48,7 @@ final class ToolSummary
         $path = self::line($args['file_path'] ?? $args['path'] ?? null);
 
         $summary = match ($tool) {
-            'Read', 'Edit', 'Write' => $path,
+            'Read', 'Edit', 'Write', 'NotebookEdit' => $path,
             'ApplyPatch' => self::patchPaths($args['patch'] ?? null),
             'Grep' => self::quoted(self::line($args['pattern'] ?? null)) . ($path === '' ? '' : ' ' . $path),
             'Glob' => self::line($args['pattern'] ?? null),

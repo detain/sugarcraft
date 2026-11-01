@@ -799,7 +799,7 @@ final class Runtime
     // input moves whatever program holds the terminal, so a batch that typed
     // into a shell changed what later calls in the same batch can depend on,
     // exactly like the teardown ShellStop records.
-    public const WRITE_CAPABLE_TOOL_NAMES = [...ShellSubjectTools::NAMES, 'Edit', 'Write', 'ApplyPatch', 'Task', 'Workflow', 'ShellStop', 'ShellSend', 'Schedule', 'SkillWorkshop', 'Script', 'mcp_call'];
+    public const WRITE_CAPABLE_TOOL_NAMES = [...ShellSubjectTools::NAMES, 'Edit', 'Write', 'NotebookEdit', 'ApplyPatch', 'Task', 'Workflow', 'ShellStop', 'ShellSend', 'Schedule', 'SkillWorkshop', 'Script', 'mcp_call'];
 
     /**
      * MCP tool-name prefix — an `mcp__<server>__<tool>` call's capability is

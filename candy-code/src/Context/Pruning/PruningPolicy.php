@@ -26,7 +26,7 @@ namespace SugarCraft\Code\Context\Pruning;
 final readonly class PruningPolicy
 {
     /** @var list<string> */
-    public const PROTECTED_TOOLS = ['Task', 'Skill', 'Edit', 'Write', 'ApplyPatch'];
+    public const PROTECTED_TOOLS = ['Task', 'Skill', 'Edit', 'Write', 'NotebookEdit', 'ApplyPatch'];
 
     /**
      * The outputs a `Compress` range keeps VERBATIM beside its summary

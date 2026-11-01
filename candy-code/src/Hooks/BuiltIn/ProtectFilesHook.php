@@ -587,7 +587,7 @@ final readonly class ProtectFilesHook implements HookInterface
             // the generic walk, PLUS each step's DECODED text — what the driver
             // actually types — through the shell spelling reader.
             'Ptyrun' => [...self::leafSpellings($args), ...self::stepSpellings($args)],
-            'Edit', 'Write', 'Read' => self::pathSpellings($args['file_path'] ?? null),
+            'Edit', 'Write', 'Notebookedit', 'Read' => self::pathSpellings($args['file_path'] ?? null),
             'Grep' => [...self::pathSpellings($args['path'] ?? null), ...self::strings($args['include'] ?? null)],
             'Glob' => [...self::pathSpellings($args['path'] ?? null), ...self::strings($args['pattern'] ?? null)],
             'Lsp' => self::pathSpellings($args['path'] ?? null),

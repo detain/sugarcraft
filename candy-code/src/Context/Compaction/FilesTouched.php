@@ -40,7 +40,7 @@ final class FilesTouched
      * Tool names whose successful result means the file was modified — every
      * file its patch names, for `ApplyPatch` ({@see PATCH_ARGUMENT}).
      */
-    public const MODIFY_TOOLS = ['Edit', 'Write', 'ApplyPatch'];
+    public const MODIFY_TOOLS = ['Edit', 'Write', 'NotebookEdit', 'ApplyPatch'];
 
     /** The argument `ApplyPatch` carries its patch (and so its paths) in. */
     public const PATCH_ARGUMENT = 'patch';

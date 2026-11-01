@@ -382,7 +382,7 @@ final class SafetyClassifier
             // because match patterns cannot interpolate a constant —
             // ShellSubjectToolsCompletenessTest pins them equal.
             'Bash', 'PtyRun' => $this->classifyBash($call),
-            'Edit', 'Write' => $this->classifyWrite($call, $projectRoot),
+            'Edit', 'Write', 'NotebookEdit' => $this->classifyWrite($call, $projectRoot),
             'ApplyPatch' => self::scopeCategory(self::patchScope($call, $projectRoot)),
             'WebFetch' => $this->classifyFetch($call),
             default => null,
