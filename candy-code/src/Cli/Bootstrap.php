@@ -261,7 +261,9 @@ final class Bootstrap
      * sum stops fitting under this cap — so the next source cannot spend the
      * headroom silently.
      *
-     * 52 is that sum — 51 after the C-SEC-7.b launch-switch pair
+     * 53 is that sum — 52 after the §7-closeout user-tool skip aggregate
+     * (userScriptTools, one row whatever the directory) joined the roster
+     * on top of the C-SEC-7.b launch-switch pair
      * (useRestricted, useSafeMode) joined the roster on top of the C-SEC-6.b
      * project-narrowing row
      * joined the roster on top of the C-EXT-4.d launch-recommendation
@@ -277,7 +279,7 @@ final class Bootstrap
      * row, because a silently truncated warning list is the defect this seam
      * exists to end.
      */
-    public const LAUNCH_NOTICE_LIMIT = 52;
+    public const LAUNCH_NOTICE_LIMIT = 53;
 
     /**
      * Roadmap N-P4d: the setting that replaces {@see LAUNCH_NOTICE_LIMIT} (its
@@ -369,6 +371,10 @@ final class Bootstrap
         // launch parsed — names, groups and files are counted INTO the row,
         // never per entry.
         'reportSkippedClaudeSettingsEvents' => 1,
+        // §7 closeout: the user-tool skips were per-file fan-out over a
+        // directory listing; the emit now aggregates them into ONE row with
+        // the tail folded into an honest count (the foreign-agent polity).
+        'userScriptTools' => 1,
         // v1:m-1: one row, message-identity de-duped, whatever how many reads
         // took the stand-in.
         'reportHomeDirectoryStandIn' => 1,
@@ -9397,8 +9403,22 @@ public static function useMaxCost(?string $maxCost): void
             ? ['specs' => [], 'skips' => []]
             : \SugarCraft\Code\Tools\UserTools\UserToolLoader::load();
 
-        foreach ($loaded['skips'] as $notice) {
-            self::warnPermissionConfigInTranscript($notice);
+        // §7 closeout (roadmap N-P4d polity): the loader announces one skip per
+        // file that did not make it, over a directory nobody counted — the
+        // very fan-out the transcript cap exists for. Aggregate it into ONE
+        // row the way the foreign-agent skips do it (ISS-090(d)): names ride
+        // inside the sentence, the tail folds into an honest count, and the
+        // joining is CONCATENATION, not a new sprintf site — the launch-format
+        // census every Bootstrap notice must pass stays byte-untouched.
+        $skips = $loaded['skips'];
+        if ($skips !== []) {
+            $shown = \array_slice($skips, 0, 4);
+            $rest = \count($skips) - \count($shown);
+            self::warnPermissionConfigInTranscript(
+                'skipped ' . \count($skips) . ' user tool file' . (\count($skips) === 1 ? '' : 's')
+                . ': ' . \implode('; ', $shown)
+                . ($rest > 0 ? ' (and ' . $rest . ' more)' : '')
+            );
         }
 
         $sandbox = \SugarCraft\Code\Tools\Sandbox\SandboxFactory::fromSetting(
