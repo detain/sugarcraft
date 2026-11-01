@@ -251,6 +251,11 @@ final class AudioRecorder
     /** A take whose file holds more than a bare header carries samples. */
     public static function hasAudio(string $wavPath): bool
     {
+        // The recorder child writes the take OUTSIDE this process, long after
+        // reserveTake()'s fopen/chmod filled PHP's per-path stat cache;
+        // without this drop, a filled take could answer from the cached
+        // zero-byte size and stop() would report a silent-empty lie.
+        \clearstatcache(true, $wavPath);
         if (!\is_file($wavPath)) {
             return false;
         }

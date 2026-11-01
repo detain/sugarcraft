@@ -790,6 +790,13 @@ final class TreeWideGuardRosterTest extends TestCase
         // that test's own happy/cancel/failed paths landed there (chr(42) spelling per
         // the MediaFormWiringTest precedent - a glued '*' literal drifts the PathGlob corpus).
         'Media/Video/JobClientTest.php' => ['scandir($dir)'],
+        // C-TUI-6.l: trnPrune()/vcsPrune() walk only the ct6l_* scratch dirs the test
+        // itself made under sys_get_temp_dir() before unlinking them; the two files
+        // enter the derivation's domain because their structural source pins read
+        // shipped src paths and so name the package root. The walk never leaves the
+        // test's own sandbox.
+        'Media/Voice/TranscriberTest.php' => ['scandir($dir)'],
+        'Media/Voice/VoiceSessionTest.php' => ['scandir($dir)'],
         'Support/AtomicFileWriterTest.php' => ['scandir($this->dir)'],
         'Support/FixtureLifetimeCensusTest.php' => ['RecursiveDirectoryIterator($root)', "glob(\$dir.'/*.php')"],
         // crush-media W1.9: partialEntries() lists the session directory the test

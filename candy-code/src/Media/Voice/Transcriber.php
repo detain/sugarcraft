@@ -78,15 +78,17 @@ final class Transcriber
      */
     public function transcribe(AudioRecording $recording, VoiceConfig $config): string
     {
-        if (!$config->enabled()) {
-            throw TranscriptionException::off();
-        }
-
-        if (!AudioRecorder::hasAudio($recording->path)) {
-            throw TranscriptionException::noAudio();
-        }
-
+        // The guards ride the try so the finally's unlink covers EVERY exit —
+        // an endpoint switched off mid-take must still cost the user no file.
         try {
+            if (!$config->enabled()) {
+                throw TranscriptionException::off();
+            }
+
+            if (!AudioRecorder::hasAudio($recording->path)) {
+                throw TranscriptionException::noAudio();
+            }
+
             $bytes = @\file_get_contents($recording->path);
 
             if ($bytes === false) {
@@ -131,7 +133,7 @@ final class Transcriber
                 throw TranscriptionException::status(
                     $status,
                     trim($response->getReasonPhrase()),
-                    self::excerpt(self::body($response)),
+                    self::excerpt(self::body($response), $expanded),
                 );
             }
 
@@ -141,7 +143,7 @@ final class Transcriber
                 : null;
 
             if ($text === null) {
-                throw TranscriptionException::unparseable(self::excerpt(self::body($response)));
+                throw TranscriptionException::unparseable(self::excerpt(self::body($response), $expanded));
             }
 
             return $text;
@@ -190,10 +192,18 @@ final class Transcriber
         return $expanded ?? '';
     }
 
-    /** Body text made safe to quote: escape/control-free, then clipped. */
-    private static function excerpt(string $body): string
+    /**
+     * Body text made safe to quote: escape/control-free, the request's own
+     * key scrubbed (a server that echoes the credential back in its error
+     * body must not have it ride the exception message), then clipped.
+     */
+    private static function excerpt(string $body, string $key = ''): string
     {
         $clean = Sanitize::untrusted($body);
+
+        if ($clean !== '' && $key !== '') {
+            $clean = \str_replace($key, '[redacted]', $clean);
+        }
 
         return \mb_substr(trim($clean), 0, self::EXCERPT_LIMIT);
     }
