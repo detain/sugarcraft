@@ -10,7 +10,7 @@ declare(strict_types=1);
  * (`tests/LangParityTest.php`); `docs/CONTRIBUTING.md` carries the rule that
  * a new English key must be translated into every shipped locale. Text the
  * model reads is not in this catalogue and stays English.
-*/
+ */
 return [
     'settings.category.model' => '模型與供應商',
     'settings.category.loop' => '代理迴圈',
