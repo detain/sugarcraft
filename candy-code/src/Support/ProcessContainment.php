@@ -718,14 +718,23 @@ final class ProcessContainment
      * the layer-C opt-in consults before promising anything.
      *
      * An `interactive: true` request on a host that cannot honour it (no
-     * ext-ffi, /dev/ptmx sealed, Windows, or sugar-pty simply absent) is
-     * refused, not deferred: a mode that silently degrades to a pipe would
-     * hand the model a tty-shaped lie. Every check is a STAT, never a
-     * spawn — same discipline as {@see locateOnPath()} answering "might the
-     * binary be missing", because a probe that opened a pty to prove pty
-     * availability would leak descriptors on exactly the failure paths this
-     * method exists to survive. The class_exists check is the vendor-closure
-     * half: candy-code requires sugar-pty, but a trimmed install or a
+     * ext-ffi, /dev/ptmx sealed, a Windows host whose ConPTY probe refuses
+     * — sub-1809 build, pre-8.4 PHP, no ffi — or sugar-pty simply absent)
+     * is refused, not deferred: a mode that silently degrades to a pipe
+     * would hand the model a tty-shaped lie. Every check is a STAT or a
+     * VERSION read, never a spawn — same discipline as {@see locateOnPath()}
+     * answering "might the binary be missing", because a probe that opened
+     * a pty to prove pty availability would leak descriptors on exactly the
+     * failure paths this method exists to survive. The Windows arm is
+     * {@see \SugarCraft\Pty\Windows\Kernel32ConPty::supported()}: its own
+     * ladder (OS family, PHP version, ext-ffi, a bare cdef of the
+     * kernel32.dll export table) consults nothing but stat-and-version
+     * state before answering, which is why promising interactive mode here
+     * does not need a Windows box to have run. The class_exists /
+     * interface_exists check is the vendor-closure half — it asks for the
+     * factory and the pair contract {@see PtyBackend()} actually consumes
+     * (C-TUI-6.d retired the two direct calls to the deprecated POSIX-only
+     * facade): candy-code requires sugar-pty, but a trimmed install or a
      * mislinked vendor must answer "unavailable", not fatal mid-tool.
      * Memoized per process like the setsid probe — the honest question is
      * "can this host", and that answer does not change within a process.
@@ -741,7 +750,16 @@ final class ProcessContainment
             return self::$interactiveAvailableMemo;
         }
 
-        if (PHP_OS_FAMILY === 'Windows' || !\extension_loaded('ffi')) {
+        if (WindowsShell::isWindows()) {
+            // C-TUI-6.d: the ConPTY probe is the whole Windows answer. On a
+            // real Windows host its first leg passes and the ladder reads
+            // version, ext-ffi and the kernel32 export table — still every
+            // leg a stat, never a spawn.
+            return self::$interactiveAvailableMemo = \class_exists(\SugarCraft\Pty\Windows\Kernel32ConPty::class)
+                && \SugarCraft\Pty\Windows\Kernel32ConPty::supported() === null;
+        }
+
+        if (!\extension_loaded('ffi')) {
             return self::$interactiveAvailableMemo = false;
         }
 
@@ -749,7 +767,27 @@ final class ProcessContainment
             return self::$interactiveAvailableMemo = false;
         }
 
-        return self::$interactiveAvailableMemo = \class_exists(\SugarCraft\Pty\Pty::class);
+        return self::$interactiveAvailableMemo = \class_exists(\SugarCraft\Pty\PtySystemFactory::class)
+            && \interface_exists(\SugarCraft\Pty\Contract\PtyPair::class);
+    }
+
+    /**
+     * Whether this host needs a Git-for-Windows bash.exe for the interactive
+     * path and does not have one — the §6.3 law's stat half. The Windows
+     * interactive spawn argv is `bash.exe -c` (see
+     * {@see interactiveSpawnCommand()}); ConPTY can carry any program, so the
+     * availability gate alone would promise a terminal the plan forbids this
+     * path to fall back into: cmd.exe is not a substitute, and its quoting
+     * and command grammar cannot carry a bash script. Callers refuse with
+     * {@see WindowsShell::BASH_MISSING_NOTICE} — naming the install to fix —
+     * before a byte is spawned. Pure stat (PATH walk plus one is_file), never
+     * a spawn, and on a non-Windows host the family read short-circuits the
+     * locate walk to false, so the POSIX cost of the caller's extra gate is
+     * zero.
+     */
+    public static function interactiveBashMissing(): bool
+    {
+        return WindowsShell::isWindows() && WindowsShell::bash() === '';
     }
 
     /**
@@ -766,8 +804,13 @@ final class ProcessContainment
     }
 
     /**
-     * The argv for a pty spawn: $command through /bin/sh, entered in $cwd
-     * when one is given.
+     * The argv for a pty spawn: $command through the platform's bash —
+     * /bin/sh on POSIX, Git-for-Windows' bash.exe on Windows (C-TUI-6.d,
+     * §6.3) — entered in $cwd when one is given. There is no cmd.exe leg: a
+     * Windows host without bash.exe is refused upstream through
+     * {@see interactiveBashMissing()} before this argv ever reaches a spawn,
+     * so the never-fall-back-to-cmd.exe law is structurally kept, not merely
+     * documented.
      *
      * There is deliberately NO setsid wrapper here, and that is not a
      * containment gap: layer A's detach exists to REMOVE the controlling
@@ -798,6 +841,15 @@ final class ProcessContainment
     public static function interactiveSpawnCommand(string $command, ?string $cwd = null, array $jailArgvPrefix = []): array
     {
         $script = ($cwd === null || $cwd === '' ? '' : self::cdGuard($cwd)) . $command;
+
+        if (WindowsShell::isWindows()) {
+            // Same array-spawn law as the Bash tool's Windows arm: argv
+            // straight to CreateProcess, quoting carried by the script, never
+            // a cmd.exe /c re-parse. bash()==='' would mean the caller
+            // skipped interactiveBashMissing(); '' as argv[0] makes the spawn
+            // throw loudly rather than run something else.
+            return [...$jailArgvPrefix, WindowsShell::bash(), '-c', $script];
+        }
 
         return [...$jailArgvPrefix, '/bin/sh', '-c', $script];
     }

@@ -112,6 +112,14 @@ final class PtyDriver
             return $empty;
         }
 
+        if (ProcessContainment::interactiveBashMissing()) {
+            // ConPTY is fine here; the plan it would carry is not. §6.3: name
+            // the install that fixes it, never a cmd.exe substitute.
+            $empty['refusal'] = WindowsShell::BASH_MISSING_NOTICE;
+
+            return $empty;
+        }
+
         $master = null;
         try {
             // Open at the requested size, then spawn at it too: the master's

@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tools\Concerns;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Support\PtyBackend;
+use SugarCraft\Code\Support\WindowsShell;
 
 /**
  * Runs a shell command capturing BOTH stdout and stderr.
@@ -518,6 +519,12 @@ trait CapturesProcessOutput
             return self::interactiveRefusal(
                 'interactive mode is unavailable on this host (no pty mechanism); the command was refused and never started',
             );
+        }
+
+        if (ProcessContainment::interactiveBashMissing()) {
+            // ConPTY would open; the script it would carry has no interpreter.
+            // §6.3: the refusal names the install, never a cmd.exe fallback.
+            return self::interactiveRefusal(WindowsShell::BASH_MISSING_NOTICE);
         }
 
         $master = null;
