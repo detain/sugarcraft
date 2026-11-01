@@ -2425,7 +2425,7 @@ final class NonInteractive
      * {@see HeadlessPermissionPrompt::__invoke()}, "so that one case produces
      * two lines". WHAT IS TRUE NOW, MEASURED on PHP 8.3.6 at round 49 in a
      * child process with fd 2 on a plain file: the NO-TTY arm doubles too —
-     * that class's eight-line refusal block plus this line. Both arms, not one.
+     * that class's nine-line refusal block plus this line. Both arms, not one.
      * WHY THE PARAGRAPH STILL EARNS ITS PLACE: the reason neither is
      * suppressed is unchanged and is the half a reader needs. The approver's
      * text records WHICH ARM — a person answering no, versus nobody being
