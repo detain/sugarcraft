@@ -76,6 +76,50 @@ final class ShellOutputTest extends TestCase
         self::fail('shell ' . $id . ' never settled');
     }
 
+    /**
+     * C-TOOL-6.k: the interactive half of the paint. A pty screen is not a
+     * log — its bytes are colors and cursor movement — so an interactive
+     * row's display text comes back ANSI-stripped, the terminal size rides
+     * beside the state, and human typing is reported: total on the first
+     * read a window makes, then the count SINCE that read. Plain rows keep
+     * the byte-faithful framing above, untouched.
+     */
+    public function testAnInteractiveRowIsStrippedSizedAndReportsTheHumanHand(): void
+    {
+        $registry = $this->registry();
+        $started = $registry->startInteractive("printf '\\033[31mREDCOL\\033[0m\\n'; sleep 60", 'strip probe');
+        self::assertTrue((bool) ($started['ok'] ?? false));
+        $id = (string) $started['shell']['id'];
+
+        self::assertTrue(\SugarCraft\Code\Tools\BuiltIn\ShellSend::relayReady($registry->status($id)), 'the relay attached within its declared budget');
+        for ($i = 0; $i < 80; $i++) {
+            if (str_contains((string) $registry->read($id, 0)['stdout'], 'REDCOL')) {
+                break;
+            }
+            usleep(25_000);
+        }
+
+        $tool = $this->tool($registry);
+        $first = $tool->execute(['shell_id' => $id]);
+        self::assertFalse($first->isError(), $first->content());
+        $text = $first->content();
+        self::assertStringContainsString('interactive pty 80x24', $text, 'the row answers as a terminal, with its size');
+        self::assertStringContainsString('ANSI-stripped', $text);
+        self::assertStringContainsString('REDCOL', $text, 'the words on the screen survive the strip');
+        self::assertStringNotContainsString("\x1b", $text, 'no SGR byte reaches the model from an interactive row');
+        self::assertStringNotContainsString('typed into this shell', $text, 'nobody has touched it; nothing is claimed');
+
+        $registry->send($id, 'x', 'human');
+        $second = $tool->execute(['shell_id' => $id]);
+        self::assertStringContainsString('1 times since your last read', $second->content(), 'the same tool instance anchored its first read at zero touches — the next report is the delta since that read');
+
+        $registry->send($id, 'y', 'human');
+        $third = $this->tool($registry)->execute(['shell_id' => $id]);
+        self::assertStringContainsString('2 times in all', $third->content(), 'a DIFFERENT window has no anchor to speak of — it reports the total, never a delta it cannot name');
+
+        $registry->stop($id);
+    }
+
     public function testAMalformedShellIdIsRefusedWhenReading(): void
     {
         $result = $this->tool()->execute(['shell_id' => 'bash-1']);
