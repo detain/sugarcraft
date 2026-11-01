@@ -245,7 +245,12 @@ final class PtyRelay
         })) {
             \fwrite(\STDERR, "pty relay: refused — SIGTERM could not be armed\n");
 
-            return 2;
+            // §7 closeout (ForkedChildExitConvention): the CHILD region leaves
+            // with exit(), not `return` — same status either way under the
+            // bin's `exit(...::main())`, but naming the departure is what the
+            // scanner's tail law can read, and bare exit is this pump's
+            // licensed shape (supervise mirrors the status for proc_close).
+            exit(2);
         }
 
         $pty = null;
@@ -284,7 +289,7 @@ final class PtyRelay
             }
             \fwrite(\STDERR, 'pty relay: the pty or the shell could not be started: ' . $failure->getMessage() . "\n");
 
-            return 2;
+            exit(2);
         }
 
         // A TERM that landed during the spawn must not be lost: forward now.
@@ -316,7 +321,7 @@ final class PtyRelay
             }
             \fwrite(\STDERR, "pty relay: the transcript sinks could not be opened\n");
 
-            return 2;
+            exit(2);
         }
         @\stream_set_blocking($fifo, false);
 
@@ -442,7 +447,7 @@ final class PtyRelay
             // the kernel reclaims the master with this process.
         }
 
-        return 0;
+        exit(0);
     }
 
     /**

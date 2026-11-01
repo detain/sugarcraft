@@ -204,6 +204,22 @@ final class ForkedChildExitConventionTest extends TestCase
                 . 'raw-tty half is fixed at the root by sugar-core\'s PID-aware restore(). The '
                 . 'E295 comment at the site carries all three.',
         ],
+
+        'src/Background/PtyRelay.php::main' => [
+            'count' => 1,
+            'reason' =>
+                'DELIBERATE, §7 closeout. The relay binary\'s pump child leaves with a bare '
+                . 'exit(code) — the status IS the protocol: supervise() mirrors exactly this '
+                . 'waited code for proc_close (the doc-block at the fork is the controlling-'
+                . 'terminal contract), and exitNow()\'s self-SIGKILL would describe the clean '
+                . 'end of a shell session as a kill. Shutdown here re-runs only this pump\'s '
+                . 'own inherited cleanup, and the transcript sinks and pty master are already '
+                . 'settled inline before the exit. It never runs inside the test runner: main '
+                . 'is reached only through the spawned `exit(...::main())` line. The scanner '
+                . 'learned the parent-guard shape (`if ($pump > 0) return supervise(...)` — '
+                . 'child = rest of function) in the same commit; before that the site read '
+                . 'unclassified, a hole in the guard rather than a licence.',
+        ],
     ];
 
     /**

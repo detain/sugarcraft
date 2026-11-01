@@ -137,6 +137,7 @@ final class ForkedChildExitScanner
                     $i,
                     $never,
                     $enclosing['name'] ?? null,
+                    $enclosing['to'] ?? null,
                 ),
                 // E445: the licence rosters are keyed by SITE, and the site's
                 // coordinate is file + function. Exposing it here is the one
@@ -170,7 +171,7 @@ final class ForkedChildExitScanner
      * @param list<array{0:int,1:string,2:int}|string> $tokens
      * @param array<string,array{from:int,to:int}> $never
      */
-    private static function classify(array $tokens, int $forkAt, array $never, ?string $enclosing): string
+    private static function classify(array $tokens, int $forkAt, array $never, ?string $enclosing, ?int $enclosingTo = null): string
     {
         // A fork whose value the enclosing fork-spelling function RETURNS
         // outright (`return pcntl_fork();`) has no child branch here at all -
@@ -230,6 +231,56 @@ final class ForkedChildExitScanner
             // operand order. `!== 0` is the parent's branch and is not it.
             $isChild = \preg_match('/(?<![!])===?\s*0\b|\b0\s*===?(?![=])/', $condition) === 1
                 && \preg_match('/!==?\s*0\b|\b0\s*!==?/', $condition) !== 1;
+
+            // The PARENT guard: `if ($pump > 0) { return …; }` — the branch
+            // the parent leaves by. When its own last statement is a
+            // real departure (return/throw/exit — the parent cannot fall
+            // out of the branch into the child's region) and the rest of
+            // this function holds no second fork, the CHILD is the region
+            // from the guard's close to the function's end, read by the
+            // same tail law as any branch. Without this shape the walk
+            // below bails at the first non-child `if` and reports a
+            // perfectly conventional parent-guard split (the W36
+            // `PtyRelay::main` relay, and the fork-boundary pins'
+            // mirror shape) as a hole.
+            if (\preg_match('/^\s*\$\w+\s*>\s*0\s*$/', $condition) === 1) {
+                $gbrace = self::next($tokens, $closeParen);
+                if ($gbrace === null || self::tokenText($tokens[$gbrace]) !== '{') {
+                    return self::SHAPE_UNCLASSIFIED;
+                }
+                $gclose = TokenFunctionRanges::matching($tokens, $gbrace, '{', '}');
+                if ($gclose === null || $enclosingTo === null) {
+                    return self::SHAPE_UNCLASSIFIED;
+                }
+
+                [$gtail, $gterm] = self::lastStatement($tokens, $gbrace + 1, $gclose);
+                if ($gtail === null || $gterm !== ';') {
+                    return self::SHAPE_UNCLASSIFIED;
+                }
+                $gFirst = $gtail[0];
+                while ($gFirst <= $gtail[1] && \is_array($tokens[$gFirst])
+                    && \in_array($tokens[$gFirst][0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)) {
+                    $gFirst++;
+                }
+                $leavesParentSide = $gFirst <= $gtail[1] && \is_array($tokens[$gFirst])
+                    && \in_array($tokens[$gFirst][0], [\T_RETURN, \T_THROW, \T_EXIT], true);
+                if (!$leavesParentSide) {
+                    return self::SHAPE_UNCLASSIFIED;
+                }
+
+                for ($j = $gclose + 1; $j < $enclosingTo; $j++) {
+                    if (self::forkSpellingAt($tokens, $j) !== null) {
+                        // A second fork inside the child region: the region
+                        // is not a straight run to the function's end, and
+                        // this scanner does not model that.
+                        return self::SHAPE_UNCLASSIFIED;
+                    }
+                }
+
+                $openBrace = $gclose;
+                $closeBrace = $enclosingTo;
+                break;
+            }
 
             if (!$isChild) {
                 return self::SHAPE_UNCLASSIFIED;
