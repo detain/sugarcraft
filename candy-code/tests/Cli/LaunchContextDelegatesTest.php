@@ -217,13 +217,17 @@ final class LaunchContextDelegatesTest extends TestCase
      * The builder families the composition-root wave moved (S1b W7-E C1-C5):
      * name => [whether the Bootstrap door was public before the move, whether
      * the door is the reason-SPEAKER (C-PRV-1.b) rather than a pure one-line
-     * forward].
+     * forward, whether the door is the EGRESS-ARMED launcher (C-TOOL-4.g) —
+     * one pinned self::egressProxy(); above the forward, nothing else].
      *
-     * @return array<string, array{0: string, 1: bool, 2?: bool}>
+     * @return array<string, array{0: string, 1: bool, 2?: bool, 3?: bool}>
      */
     public static function migratedBuilders(): iterable
     {
-        yield 'tools' => ['tools', true];
+        // C-TOOL-4.g: the launch's egress relay starts behind this door —
+        // before any tool child exists to inherit a dead socket. The arm is
+        // an ordering contract, not a second truth; pinned at its floor below.
+        yield 'tools' => ['tools', true, false, true];
         yield 'unfilteredTools' => ['unfilteredTools', true];
         yield 'provider' => ['provider', true];
         yield 'selectedProviderLabel' => ['selectedProviderLabel', true];
@@ -257,6 +261,7 @@ final class LaunchContextDelegatesTest extends TestCase
         string $name,
         bool $doorWasPublic,
         bool $reasonSpeaker = false,
+        bool $egressArmedDoor = false,
     ): void {
         $door = new ReflectionMethod(Bootstrap::class, $name);
         $body = new ReflectionMethod(LaunchContext::class, $name);
@@ -315,6 +320,22 @@ final class LaunchContextDelegatesTest extends TestCase
                 '/return\s+\$engine;\s*$/',
                 $code,
                 "Bootstrap::{$name}() must hand back exactly the narrowed engine",
+            );
+
+            return;
+        }
+
+        if ($egressArmedDoor) {
+            // The egress arm's allowance, pinned at its floor exactly like
+            // the speaker's: one relay start, one forward, in that order,
+            // nothing else. The ORDER is the contract C-TOOL-4.g moved here
+            // (the relay must exist before the first tool child is forked to
+            // inherit its socket), so it is matched as one shape rather than
+            // counted as two statements — any creep between them reddens.
+            self::assertMatchesRegularExpression(
+                '/^\s*self::egressProxy\(\);\s*return LaunchContext::' . preg_quote($name, '/') . '\([^;]*\);\s*$/',
+                $code,
+                "Bootstrap::{$name}() must start the egress relay and forward — nothing else behind the door",
             );
 
             return;
