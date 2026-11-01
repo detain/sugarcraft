@@ -1354,7 +1354,7 @@ final class ChatTest extends TestCase
 
     public function testSlashMenuUpDownWrapsSelection(): void
     {
-        $chat = new Chat(inputBuf: '/re'); // matches: recompress, redo, rename, rendermode, review, rewind, rules
+        $chat = new Chat(inputBuf: '/re'); // matches: recap, recompress, redo, rename, rendermode, review, rewind, rules
         $this->assertSame(0, $chat->slashMenuIndex());
 
         [$down] = $chat->update(new KeyMsg(KeyType::Down, ''));
@@ -1372,24 +1372,28 @@ final class ChatTest extends TestCase
         [$down] = $down->update(new KeyMsg(KeyType::Down, ''));
         $this->assertSame(5, $down->slashMenuIndex());
 
-        // GIT-1's /review made this prefix a seven-row run: one more step
+        [$down] = $down->update(new KeyMsg(KeyType::Down, ''));
+        $this->assertSame(6, $down->slashMenuIndex());
+
+        // GIT-1's /review made this prefix a seven-row run; the away-recap
+        // wave's /recap made it eight (README's slash roster): one more step
         // before the wrap the test exists to pin.
         [$atEnd] = $down->update(new KeyMsg(KeyType::Down, ''));
-        $this->assertSame(6, $atEnd->slashMenuIndex());
+        $this->assertSame(7, $atEnd->slashMenuIndex());
 
         [$wrapped] = $atEnd->update(new KeyMsg(KeyType::Down, ''));
         $this->assertSame(0, $wrapped->slashMenuIndex());
 
         [$up] = $wrapped->update(new KeyMsg(KeyType::Up, ''));
-        $this->assertSame(6, $up->slashMenuIndex());
+        $this->assertSame(7, $up->slashMenuIndex());
     }
 
     public function testEnterCompletesAmbiguousMatchInsteadOfSubmitting(): void
     {
-        $chat = new Chat(inputBuf: '/re'); // matches: recompress, redo, rename, rewind, rules — ambiguous
+        $chat = new Chat(inputBuf: '/re'); // matches: recap, recompress, redo, rename, rewind, rules — ambiguous
         [$next] = $chat->update(new KeyMsg(KeyType::Enter, ''));
 
-        $this->assertSame('/recompress ', $next->inputBuf);
+        $this->assertSame('/recap ', $next->inputBuf);
         $this->assertSame([], $next->history); // not submitted
     }
 
