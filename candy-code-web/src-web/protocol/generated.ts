@@ -479,6 +479,33 @@ export interface Methods {
       finished: boolean
     }
   }
+  /** A transcription job's state and text, from its ledger. */
+  "audio.status": {
+    params: {
+      sessionId: SessionId
+      jobId: string
+    }
+    result: {
+      state: "running" | "done" | "failed"
+      text?: string
+      error?: string
+    }
+  }
+  /** Transcribe a base64 audio take through the configured voice endpoint; answers with its job id. */
+  "audio.transcribe": {
+    params: {
+      sessionId: SessionId
+      /** Base64 of the recorded take; the decode is capped at 8 MiB of audio bytes, and the inbound WS frame ceiling (ServerConfig::MAX_CLIENT_FRAME_BYTES) already refuses a larger body before dispatch. */
+      audioBase64: string
+      mime: "audio/webm" | "audio/ogg" | "audio/mp4"
+      language?: string
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      jobId: string
+    }
+  }
   /** Send a settled background session's result into a session as a prompt. */
   "bg.inject": {
     params: {
@@ -1087,10 +1114,11 @@ export interface Methods {
           enabled: boolean
           root: string | null
         }
-        /** Whether this server may offer image/video generation, derived at boot from config intersected with probed capability without dialing the server; `baseUrlHostOnly` is a sha256 prefix of the SD host — never the URL or hostname in the clear, null when none is configured. */
+        /** Whether this server may offer image/video generation, derived at boot from config intersected with probed capability without dialing the server; `transcribe` is optional (old clients and servers interoperate either way) and says whether `voice.baseUrl` names an endpoint — while it is off, the `audio.*` pair answers `voice_unconfigured`; `baseUrlHostOnly` is a sha256 prefix of the SD host — never the URL or hostname in the clear, null when none is configured. */
         media?: {
           image: boolean
           video: boolean
+          transcribe?: boolean
           baseUrlHostOnly: string | null
         }
       }
@@ -1848,6 +1876,8 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "agents.message": "write",
   "agents.subtree": "read",
   "agents.transcript": "read",
+  "audio.status": "read",
+  "audio.transcribe": "write",
   "bg.inject": "write",
   "bg.list": "read",
   "bg.output": "read",
@@ -1937,6 +1967,7 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
 export const IDEMPOTENT_METHODS: readonly MethodName[] = [
   "agents.control",
   "agents.message",
+  "audio.transcribe",
   "bg.inject",
   "bg.spawn",
   "bg.stop",

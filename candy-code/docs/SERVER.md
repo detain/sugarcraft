@@ -485,6 +485,8 @@ it and the two tables below are generated from the code
 | `agents.message` | write | yes | `sessionId`, `agentId`, `text` | Message a delegated run: into its mailbox while it runs, as a follow-up once it finished. |
 | `agents.subtree` | read |  | `sessionId` | The sub-agents a session's turns have delegated to, with their latest activity. |
 | `agents.transcript` | read |  | `sessionId`, `agentId` | A delegated run's own transcript, read from a byte offset. |
+| `audio.status` | read |  | `sessionId`, `jobId` | A transcription job's state and text, from its ledger. |
+| `audio.transcribe` | write | yes | `sessionId`, `audioBase64`, `mime` | Transcribe a base64 audio take through the configured voice endpoint; answers with its job id. |
 | `bg.inject` | write | yes | `bgId`, `sessionId` | Send a settled background session's result into a session as a prompt. |
 | `bg.list` | read |  | — | The background sessions this server supervises, running and settled. |
 | `bg.output` | read |  | `bgId` | A background session's output from an offset. |

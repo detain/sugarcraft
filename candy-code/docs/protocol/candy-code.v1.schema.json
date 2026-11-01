@@ -1866,6 +1866,100 @@
                 ]
             }
         },
+        "audio.status": {
+            "description": "A transcription job's state and text, from its ledger.",
+            "scope": "read",
+            "idempotent": false,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "jobId": {
+                        "type": "string",
+                        "maxLength": 64
+                    }
+                },
+                "required": [
+                    "sessionId",
+                    "jobId"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "state": {
+                        "enum": [
+                            "running",
+                            "done",
+                            "failed"
+                        ]
+                    },
+                    "text": {
+                        "type": "string"
+                    },
+                    "error": {
+                        "type": "string",
+                        "maxLength": 2048
+                    }
+                },
+                "required": [
+                    "state"
+                ]
+            }
+        },
+        "audio.transcribe": {
+            "description": "Transcribe a base64 audio take through the configured voice endpoint; answers with its job id.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "audioBase64": {
+                        "type": "string",
+                        "maxLength": 11184812,
+                        "description": "Base64 of the recorded take; the decode is capped at 8 MiB of audio bytes, and the inbound WS frame ceiling (ServerConfig::MAX_CLIENT_FRAME_BYTES) already refuses a larger body before dispatch."
+                    },
+                    "mime": {
+                        "enum": [
+                            "audio/webm",
+                            "audio/ogg",
+                            "audio/mp4"
+                        ]
+                    },
+                    "language": {
+                        "type": "string",
+                        "maxLength": 64
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "sessionId",
+                    "audioBase64",
+                    "mime"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "jobId": {
+                        "type": "string",
+                        "maxLength": 64
+                    }
+                },
+                "required": [
+                    "jobId"
+                ]
+            }
+        },
         "bg.inject": {
             "description": "Send a settled background session's result into a session as a prompt.",
             "scope": "write",
@@ -3957,6 +4051,9 @@
                                     "video": {
                                         "type": "boolean"
                                     },
+                                    "transcribe": {
+                                        "type": "boolean"
+                                    },
                                     "baseUrlHostOnly": {
                                         "type": [
                                             "string",
@@ -3969,7 +4066,7 @@
                                     "video",
                                     "baseUrlHostOnly"
                                 ],
-                                "description": "Whether this server may offer image/video generation, derived at boot from config intersected with probed capability without dialing the server; `baseUrlHostOnly` is a sha256 prefix of the SD host — never the URL or hostname in the clear, null when none is configured."
+                                "description": "Whether this server may offer image/video generation, derived at boot from config intersected with probed capability without dialing the server; `transcribe` is optional (old clients and servers interoperate either way) and says whether `voice.baseUrl` names an endpoint — while it is off, the `audio.*` pair answers `voice_unconfigured`; `baseUrlHostOnly` is a sha256 prefix of the SD host — never the URL or hostname in the clear, null when none is configured."
                             }
                         },
                         "required": [
