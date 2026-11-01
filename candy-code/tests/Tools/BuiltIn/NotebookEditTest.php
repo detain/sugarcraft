@@ -45,7 +45,7 @@ final class NotebookEditTest extends TestCase
     }
 
     /** Lay a v4 fixture at a temp path and hand back both bytes and path. */
-    private function plant(string $name, string $fixture = 'v45-outputs.ipynb'): string
+    private function plant(string $name, string $fixture): string
     {
         copy(\dirname(__DIR__, 2) . '/fixtures/notebooks/' . $fixture, $this->dir . '/' . $name);
 
@@ -72,7 +72,7 @@ final class NotebookEditTest extends TestCase
 
     public function testReplaceRewritesOneCellAndRecordsItsOwnBytes(): void
     {
-        $path = $this->plant('nb.ipynb');
+        $path = $this->plant('nb.ipynb', 'v45-outputs.ipynb');
         $originalBytes = (string) file_get_contents($path);
         $ledger = ReadLedger::new();
         $tool = new NotebookEdit($this->dir, readLedger: $ledger);
@@ -95,7 +95,7 @@ final class NotebookEditTest extends TestCase
 
     public function testInsertAtHeadMintsTheEightHexIdInFileBytes(): void
     {
-        $path = $this->plant('nb.ipynb');
+        $path = $this->plant('nb.ipynb', 'v45-outputs.ipynb');
         $done = (new NotebookEdit($this->dir))->execute(
             ['file_path' => 'nb.ipynb', 'edit_mode' => 'insert', 'new_source' => "# head\n", 'cell_type' => 'markdown'],
         );
@@ -110,7 +110,7 @@ final class NotebookEditTest extends TestCase
 
     public function testDeleteTakesExactlyTheNamedCellOutOfTheFile(): void
     {
-        $path = $this->plant('nb.ipynb');
+        $path = $this->plant('nb.ipynb', 'v45-outputs.ipynb');
         $done = (new NotebookEdit($this->dir))->execute(
             ['file_path' => 'nb.ipynb', 'edit_mode' => 'delete', 'cell_id' => 'deadbeef'],
         );
@@ -122,7 +122,7 @@ final class NotebookEditTest extends TestCase
 
     public function testAWriteThatDiesHalfwayLeavesTheNotebookBytesIntact(): void
     {
-        $path = $this->plant('nb.ipynb');
+        $path = $this->plant('nb.ipynb', 'v45-outputs.ipynb');
         $original = (string) file_get_contents($path);
         $tool = new NotebookEdit(
             $this->dir,
@@ -184,7 +184,7 @@ final class NotebookEditTest extends TestCase
             // The one leg whose refusal comes after the file guard — plant
             // NOTHING: plain.ipynb stays absent.
         } else {
-            $this->plant('nb.ipynb');
+            $this->plant('nb.ipynb', 'v45-outputs.ipynb');
         }
 
         $refused = (new NotebookEdit($this->dir))->execute($args);
@@ -219,7 +219,7 @@ final class NotebookEditTest extends TestCase
 
     public function testAnUnknownCellNamesTheAddressableKeys(): void
     {
-        $this->plant('nb.ipynb');
+        $this->plant('nb.ipynb', 'v45-outputs.ipynb');
         $refused = (new NotebookEdit($this->dir))->execute(
             ['file_path' => 'nb.ipynb', 'edit_mode' => 'delete', 'cell_id' => 'ff00ff00'],
         );
@@ -233,7 +233,7 @@ final class NotebookEditTest extends TestCase
 
     public function testTheLedgerRefusalsCarryEditsFamilyWordingVerbatim(): void
     {
-        $path = $this->plant('nb.ipynb');
+        $path = $this->plant('nb.ipynb', 'v45-outputs.ipynb');
         $bytes = (string) file_get_contents($path);
 
         // Stale: recorded, then the file moved under the session.
@@ -260,7 +260,7 @@ final class NotebookEditTest extends TestCase
 
     public function testAnOversizedNotebookIsRefusedByNameAndLeftWhole(): void
     {
-        $path = $this->plant('nb.ipynb');
+        $path = $this->plant('nb.ipynb', 'v45-outputs.ipynb');
         // Grow it past a hand-set cap.
         $notebook = Notebook::parse((string) file_get_contents($path));
         self::assertNotNull($notebook);

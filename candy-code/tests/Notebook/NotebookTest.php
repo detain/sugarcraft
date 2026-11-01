@@ -22,11 +22,11 @@ use SugarCraft\Code\Notebook\Notebook;
  */
 final class NotebookTest extends TestCase
 {
-    private const FIXTURES = __DIR__ . '/../fixtures/notebooks/';
+    private const NOTEBOOK_FIXTURES = __DIR__ . '/../fixtures/notebooks/';
 
     private function notebookOf(string $fixture): Notebook
     {
-        $notebook = Notebook::parse((string) file_get_contents(self::FIXTURES . $fixture));
+        $notebook = Notebook::parse((string) file_get_contents(self::NOTEBOOK_FIXTURES . $fixture));
         self::assertNotNull($notebook, $fixture . ' must parse — it is the designed-to-work case');
 
         return $notebook;
@@ -34,7 +34,7 @@ final class NotebookTest extends TestCase
 
     public function testTheRichFixtureRoundTripsByteForByte(): void
     {
-        $bytes = (string) file_get_contents(self::FIXTURES . 'v45-outputs.ipynb');
+        $bytes = (string) file_get_contents(self::NOTEBOOK_FIXTURES . 'v45-outputs.ipynb');
         // The fixture itself carries a raw U+2028 (not \u2028) and a raw
         // em-dash; if it ever stops carrying them this test proves nothing.
         self::assertStringContainsString("\u{2028}", $bytes, 'fixture lost its raw line separator');
@@ -45,7 +45,7 @@ final class NotebookTest extends TestCase
 
     public function testTheIdlessFixtureRoundTripsByteForByte(): void
     {
-        $bytes = (string) file_get_contents(self::FIXTURES . 'v44-idless.ipynb');
+        $bytes = (string) file_get_contents(self::NOTEBOOK_FIXTURES . 'v44-idless.ipynb');
         // String-form sources (not the list form) and an empty metadata
         // object must survive; the v45 file pins the list form.
         self::assertStringContainsString('"source": "id-less', $bytes, 'fixture lost its string-form source');
@@ -54,7 +54,7 @@ final class NotebookTest extends TestCase
 
     public function testEmptyObjectAndEmptyListDoNotCollideAcrossRoundTrip(): void
     {
-        $bytes = (string) file_get_contents(self::FIXTURES . 'v45-outputs.ipynb');
+        $bytes = (string) file_get_contents(self::NOTEBOOK_FIXTURES . 'v45-outputs.ipynb');
         // The fixture carries both shapes: `widgets` is a top-level object
         // leg and `tags` an empty list leg. json_decode(assoc) would have
         // merged them at mint time; decode-with-false is what keeps them
@@ -80,7 +80,7 @@ final class NotebookTest extends TestCase
 
     public function testNonV4AndUnparsableNotesRefuseToParse(): void
     {
-        self::assertNull(Notebook::parse((string) file_get_contents(self::FIXTURES . 'v3-legacy.ipynb')));
+        self::assertNull(Notebook::parse((string) file_get_contents(self::NOTEBOOK_FIXTURES . 'v3-legacy.ipynb')));
         self::assertNull(Notebook::parse('not json at all {'));
         self::assertNull(Notebook::parse('{"nbformat": 5, "nbformat_minor": 0, "cells": []}'));
         self::assertNull(Notebook::parse('[]'));
@@ -115,7 +115,7 @@ final class NotebookTest extends TestCase
 
     public function testUntouchedCellsSerializeByteIdenticallyThroughAnEdit(): void
     {
-        $before = json_decode((string) file_get_contents(self::FIXTURES . 'v45-outputs.ipynb'));
+        $before = json_decode((string) file_get_contents(self::NOTEBOOK_FIXTURES . 'v45-outputs.ipynb'));
         $after = json_decode($this->notebookOf('v45-outputs.ipynb')
             ->replace('a1b2c3d4', 'x = 1')
             ->serialize());
@@ -189,7 +189,7 @@ final class NotebookTest extends TestCase
 
     public function testTheDetectedIndentIsReusedNotJsonEncodesDefault(): void
     {
-        $fourIndent = json_encode(json_decode((string) file_get_contents(self::FIXTURES . 'v44-idless.ipynb')), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_LINE_TERMINATORS | JSON_PRESERVE_ZERO_FRACTION) . "\n";
+        $fourIndent = json_encode(json_decode((string) file_get_contents(self::NOTEBOOK_FIXTURES . 'v44-idless.ipynb')), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_LINE_TERMINATORS | JSON_PRESERVE_ZERO_FRACTION) . "\n";
         self::assertStringContainsString("\n    \"cells\": [", $fourIndent);
 
         $notebook = Notebook::parse($fourIndent);

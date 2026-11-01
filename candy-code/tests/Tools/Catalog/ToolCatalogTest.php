@@ -14,7 +14,6 @@ use SugarCraft\Code\Skills\SkillPathNudge;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tools\BuiltIn\BoardPostTool;
 use SugarCraft\Code\Tools\BuiltIn\BoardReadTool;
-use SugarCraft\Code\Tools\BuiltIn\CanvasTool;
 use SugarCraft\Code\Tools\BuiltIn\McpCallTool;
 use SugarCraft\Code\Tools\BuiltIn\McpListTool;
 use SugarCraft\Code\Tools\BuiltIn\ScheduleTool;
@@ -128,11 +127,12 @@ final class ToolCatalogTest extends TestCase
         self::assertContains(McpCallTool::NAME, $names);
         self::assertSame(
             // C-TOOL-6.k truth-flip: ShellSend (47) landed unconditional after
-            // Script (46, C-TOOL-6.d), so the pair now rides ahead of only
-            // the three newest unconditional tools. The pin keeps its meaning
-            // (the pair never sneaks in before its trigger) by naming the
-            // unconditional tools that land after it.
-            [CanvasTool::NAME, ScriptTool::NAME, ShellSend::NAME],
+            // Script (46, C-TOOL-6.d), so the pair rides ahead of only the
+            // newest unconditional tools. C-TOOL-6.b in-step: NotebookEdit
+            // (48) landed unconditional after ShellSend, moving the window —
+            // the pin keeps its meaning (the pair never sneaks in before its
+            // trigger) by naming the unconditional tools that land after it.
+            [ScriptTool::NAME, ShellSend::NAME, 'NotebookEdit'],
             \array_slice($names, -3),
             'the dispatcher pair lands in roster order 39 then 40, ahead only of the newest unconditional tools',
         );
