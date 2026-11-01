@@ -26,7 +26,7 @@ namespace SugarCraft\Code\Support;
  * SIGTERM cannot turn a bounded refusal back into a hang. Teardown fires on
  * every exit path, including expect-timeout and mid-script exceptions.
  *
- * THE WINDOW SIZE IS SET BEFORE THE CHILD DRAWS. `Pty::spawn()` applies the
+ * THE WINDOW SIZE IS SET BEFORE THE CHILD DRAWS. `SlavePty::spawn()` applies the
  * winsize to the master before forking (and re-asserts it best-effort after,
  * the Darwin zeroing quirk), so a TUI's first frame already sees the requested
  * geometry — the Python-PTY-harness law this repo learned auditing btop-style
@@ -112,12 +112,16 @@ final class PtyDriver
             return $empty;
         }
 
-        $pty = null;
+        $master = null;
         try {
             // Open at the requested size, then spawn at it too: the master's
             // winsize is set before the child's first draw (class docblock).
-            $pty = \SugarCraft\Pty\Pty::open($cols, $rows);
-            $child = $pty->spawn(
+            // The backend seam asks the platform factory, so this same run
+            // loop speaks to a ConPTY master on Windows and the canonical
+            // POSIX master everywhere else (C-TUI-6.d).
+            $pair = PtyBackend::open($cols, $rows);
+            $master = $pair->master();
+            $child = $pair->slave()->spawn(
                 ProcessContainment::interactiveSpawnCommand($command, $cwd, $spawnArgvPrefix),
                 // Scrubbed for the same reason as every other capture path:
                 // the pty transcript is the model's to read (audit F-E1), and
@@ -130,11 +134,12 @@ final class PtyDriver
             );
         } catch (\Throwable $failure) {
             // spawn() throwing AFTER open() succeeded would otherwise strand the
-            // master fd — the finally below belongs to the run loop, which this
-            // path never reaches. open() itself throwing leaves $pty null.
-            if ($pty !== null) {
+            // master handle — the finally below belongs to the run loop, which
+            // this path never reaches. open() itself throwing leaves $master
+            // null, and the systems close their own partials on a failed open.
+            if ($master !== null) {
                 try {
-                    $pty->close();
+                    $master->close();
                 } catch (\Throwable) {
                     // Nothing to escalate a failure to; the refusal is the answer.
                 }
@@ -168,7 +173,7 @@ final class PtyDriver
 
                 if ($step['send'] !== '') {
                     try {
-                        $pty->write($step['send']);
+                        $master->write($step['send']);
                     } catch (\Throwable $writeFailure) {
                         // A dead master (program raced us to exit) must not
                         // abort the script: note it and let the windows below
@@ -182,7 +187,7 @@ final class PtyDriver
                 }
 
                 [$output, $matched, $note, $childExited, $wallHit] = self::collectWindow(
-                    $pty,
+                    $master,
                     $child,
                     $step['windowSeconds'],
                     $deadline,
@@ -238,13 +243,13 @@ final class PtyDriver
             // One last bounded drain so the final frame rides the answer even
             // when the exit beat the last read; it belongs to the step that
             // was open when the program went.
-            $tail = self::drain($pty);
+            $tail = self::drain($master);
             if ($tail !== '') {
                 $lastIndex = \max(0, \count($ran) - 1);
                 $ran[$lastIndex]['output'] = self::retain($ran[$lastIndex]['output'], $tail, $maxBytes, $retained, $dropped);
             }
 
-            $pty->close();
+            $master->close();
         }
 
         $exitCode = $killed ? 124 : $child->exitCode();
@@ -267,8 +272,8 @@ final class PtyDriver
      * after the child is gone are pulled with one bounded drain so a final
      * repaint (the `BYE` printed a hair before exit) still rides the step.
      *
-     * @param \SugarCraft\Pty\Pty $pty
-     * @param \SugarCraft\Pty\Child $child
+     * @param \SugarCraft\Pty\Contract\MasterPty $pty
+     * @param \SugarCraft\Pty\Contract\Child $child
      * @return array{0: string, 1: ?bool, 2: string, 3: bool, 4: bool}
      */
     private static function collectWindow($pty, $child, float $windowSeconds, float $deadline, int $maxBytes, int &$retained, int &$dropped, ?string $regex, ?\Closure $heartbeat, ?\Closure $onChunk): array
@@ -338,6 +343,8 @@ final class PtyDriver
 
     /**
      * Read the master until it answers nothing twice in a row, chunk-capped.
+     *
+     * @param \SugarCraft\Pty\Contract\MasterPty $pty
      */
     private static function drain($pty): string
     {

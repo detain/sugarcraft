@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tools\Concerns;
 
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
+use SugarCraft\Code\Support\PtyBackend;
 
 /**
  * Runs a shell command capturing BOTH stdout and stderr.
@@ -519,9 +520,14 @@ trait CapturesProcessOutput
             );
         }
 
+        $master = null;
         try {
-            $pty = \SugarCraft\Pty\Pty::open();
-            $child = $pty->spawn(
+            // The backend seam asks the platform factory (C-TUI-6.d): ConPTY
+            // pair on Windows, the same canonical POSIX pair the facade used
+            // everywhere else.
+            $pair = PtyBackend::open();
+            $master = $pair->master();
+            $child = $pair->slave()->spawn(
                 ProcessContainment::interactiveSpawnCommand($command, $cwd),
                 // Scrubbed for the same reason as runCaptured(): the pty's
                 // transcript is the model's to read (audit F-E1).
@@ -531,6 +537,17 @@ trait CapturesProcessOutput
                 true,
             );
         } catch (\Throwable $failure) {
+            // spawn() throwing AFTER open() succeeded would strand the master
+            // handle — the run loop's finally below is never reached from this
+            // path. open() itself throwing leaves $master null.
+            if ($master !== null) {
+                try {
+                    $master->close();
+                } catch (\Throwable) {
+                    // Nothing to escalate a failure to; the refusal is the answer.
+                }
+            }
+
             return self::interactiveRefusal(
                 'interactive mode refused: the pty could not be allocated (' . $failure->getMessage() . ')',
             );
@@ -550,7 +567,7 @@ trait CapturesProcessOutput
                 if ($onWait !== null) {
                     $onWait();
                 }
-                $chunk = $pty->read(8192, 0.05);
+                $chunk = $master->read(8192, 0.05);
                 if ($chunk !== null && $chunk !== '') {
                     $transcript = self::appendBounded($transcript, $chunk, $maxBytes, $dropped);
                     $lastProgressAt = \microtime(true);
@@ -603,7 +620,7 @@ trait CapturesProcessOutput
                         $child->wait();
                     }
 
-                    $transcript = self::appendBounded($transcript, self::drainPty($pty), $maxBytes, $dropped);
+                    $transcript = self::appendBounded($transcript, self::drainPty($master), $maxBytes, $dropped);
 
                     break;
                 }
@@ -612,9 +629,9 @@ trait CapturesProcessOutput
             // The exited() break can beat the last buffered screen repaint;
             // one more short drain so the transcript ends where the program
             // did, not one frame earlier.
-            $transcript = self::appendBounded($transcript, self::drainPty($pty), $maxBytes, $dropped);
+            $transcript = self::appendBounded($transcript, self::drainPty($master), $maxBytes, $dropped);
         } finally {
-            $pty->close();
+            $master->close();
         }
 
         $exitCode = $stuck ? 124 : ($child->exitCode() ?? 0);
@@ -653,7 +670,7 @@ trait CapturesProcessOutput
      * so a program STILL writing (impossible right after exit/TERM, cheap
      * insurance anyway) cannot extend the drain forever.
      */
-    private static function drainPty(\SugarCraft\Pty\Pty $pty, int $maxChunks = 32): string
+    private static function drainPty(\SugarCraft\Pty\Contract\MasterPty $pty, int $maxChunks = 32): string
     {
         $seen = '';
         $quiet = 0;
