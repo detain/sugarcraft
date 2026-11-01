@@ -65,6 +65,24 @@ final class BinCandyCodeDispatchTest extends TestCase
      */
     private const WATCHDOG_GRACE_SECONDS = 5;
 
+    /**
+     * Launch-locale floor for the inherited-env path of {@see self::runBin()}.
+     *
+     * Every English-wording assertion in this file reads output of a REAL
+     * `bin/candy-code`, and the binary calls `Lang::useLaunchLocale()`, which
+     * honours LC_ALL/LC_MESSAGES/LANG. Before the community catalogues under
+     * `lang/` existed the only way to get non-English wording was to be
+     * handed a config, so "null inherits" was safe for the argv-only cases.
+     * Now a runner launched from a developer shell with e.g.
+     * `LC_ALL=de_DE.UTF-8` makes the child answer German and reddens 13
+     * wording pins here (measured on the C-TUI-6.h lane). `C.UTF-8` is the
+     * CI spelling and is already pinned to decide `en` by
+     * {@see \SugarCraft\Code\Tests\LangLaunchLocaleTest}. The non-null path
+     * cannot be poisoned: `minimalEnv()` is a whitelist and ships no locale
+     * variable at all.
+     */
+    private const EN_LAUNCH_FLOOR = ['LC_ALL' => 'C.UTF-8'];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -354,6 +372,53 @@ final class BinCandyCodeDispatchTest extends TestCase
 
         $this->assertSame(0, $result['status'], 'stderr: ' . $result['stderr']);
         $this->assertStringContainsString('Usage:', $result['stdout']);
+    }
+
+    /**
+     * C-TUI-6.h host-locale regression pin.
+     *
+     * The community catalogues under `lang/` mean a runner started from a
+     * foreign-locale shell used to poison the inherited-env spawns: the
+     * child's `Lang::useLaunchLocale()` landed on the foreign catalogue and
+     * the English assertions above went red (13 of them, measured). This arm
+     * makes the poisoning explicit at the harness level — remove
+     * `self::EN_LAUNCH_FLOOR` from {@see self::runBin()} and this test
+     * reddens on a green host, exactly where the defect returns.
+     */
+    public function testTheChildSpeaksEnglishEvenWhenTheRunnerSitsOnAForeignLocale(): void
+    {
+        $previousAll = \getenv('LC_ALL');
+        $previousLang = \getenv('LANG');
+        // Both spellings, because LC_ALL outranks LANG in the ladder — a
+        // hostile host typically sets both, and pinning only LANG would be
+        // masked by the runner's own LC_ALL on this developer box.
+        \putenv('LC_ALL=de_DE.UTF-8');
+        \putenv('LANG=de_DE.UTF-8');
+        try {
+            $result = $this->runBin(['--help']);
+        } finally {
+            \putenv($previousAll === false ? 'LC_ALL' : 'LC_ALL=' . $previousAll);
+            \putenv($previousLang === false ? 'LANG' : 'LANG=' . $previousLang);
+        }
+
+        $this->assertSame(0, $result['status'], 'stderr: ' . $result['stderr']);
+        $this->assertStringContainsString('Usage:', $result['stdout']);
+
+        // Negative leg: a leaked host locale buys the German help screen, so
+        // the German counterpart of the 'Usage:' headline must be ABSENT.
+        // Derived positionally from the two shipped screens — never hardcoded.
+        $english = (require \dirname(__DIR__, 2) . '/lang/en.php')['cli.help.screen'];
+        $german = (require \dirname(__DIR__, 2) . '/lang/de.php')['cli.help.screen'];
+        $englishLines = \explode("\n", (string) $english);
+        $germanLines = \explode("\n", (string) $german);
+        $headline = \array_search('Usage:', $englishLines, true);
+        $this->assertIsInt($headline, 'fixture: the English help screen lost its Usage: headline');
+        $this->assertArrayHasKey($headline, $germanLines);
+        $this->assertStringNotContainsString(
+            $germanLines[$headline],
+            $result['stdout'],
+            'the spawn answered German, so the launch-locale floor is gone'
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -2123,7 +2188,9 @@ final class BinCandyCodeDispatchTest extends TestCase
      *   inheriting the runner's environment would let a real `OPENAI_API_KEY`
      *   or a persisted `~/.candy-code/config.json` provider turn a vector
      *   that must fail at construction into one that opens a socket. Null
-     *   inherits, which is right for the argv-only cases.
+     *   inherits the runner's environment except the launch-locale floor in
+     *   {@see self::EN_LAUNCH_FLOOR}, which keeps the argv-only cases'
+     *   English-wording pins independent of the host locale.
      * @return array{status: int, stdout: string, stderr: string}
      */
     private function runBin(array $args, ?array $env = null): array
@@ -2140,7 +2207,10 @@ final class BinCandyCodeDispatchTest extends TestCase
             2 => ['pipe', 'w'],
         ];
 
-        $process = \proc_open($command, $descriptors, $pipes, $root, $env === null ? null : $this->minimalEnv($env));
+        $childEnv = $env === null
+            ? \array_merge(\getenv() ?: [], self::EN_LAUNCH_FLOOR)
+            : $this->minimalEnv($env);
+        $process = \proc_open($command, $descriptors, $pipes, $root, $childEnv);
         $this->assertIsResource($process, 'failed to spawn bin/candy-code');
 
         // `exec` above makes $pid the php process itself, not an sh wrapper.
