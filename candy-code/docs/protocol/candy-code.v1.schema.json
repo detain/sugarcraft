@@ -169,6 +169,10 @@
                 "ageSeconds": {
                     "type": "number",
                     "minimum": 0
+                },
+                "interactive": {
+                    "type": "boolean",
+                    "description": "True when the row is an interactive (pty) shell — the C-TOOL-6.l tail pane and `shells.input` door apply; plain rows keep the read-only tail."
                 }
             },
             "required": [
@@ -5488,6 +5492,70 @@
                     "scope",
                     "written",
                     "changed"
+                ]
+            }
+        },
+        "shells.input": {
+            "description": "Type into a running interactive background shell: literal bytes plus at most one named key, composed in that order and delivered as one human-origin send; the answer carries the cursor a following shells.output read threads from. This is a line-oriented door for a polling client — not a PTY stream over the socket, and it does not make the browser a terminal emulator.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "shellId": {
+                        "type": "string",
+                        "maxLength": 128
+                    },
+                    "text": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "description": "Literal UTF-8 bytes to type — at most 4096, never a NUL. The call needs text or key (or both; text goes first)."
+                    },
+                    "key": {
+                        "enum": [
+                            "Enter",
+                            "Esc",
+                            "Tab",
+                            "Backspace",
+                            "Up",
+                            "Down",
+                            "Left",
+                            "Right",
+                            "C-c",
+                            "C-d",
+                            "C-z"
+                        ],
+                        "description": "One named key from the PtyRun token grammar, appended after text; \"Enter\" is \"\\r\" and completes a line."
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "sessionId",
+                    "shellId"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "accepted": {
+                        "type": "boolean"
+                    },
+                    "cursor": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "The stdout byte offset recorded before the keystroke — exactly what a following shells.output read threads from, so the typed answer cannot be missed."
+                    }
+                },
+                "required": [
+                    "accepted",
+                    "cursor"
                 ]
             }
         },

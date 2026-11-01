@@ -51,6 +51,8 @@ export interface BackgroundShell {
   /** True when the lifetime wall stopped the shell. */
   expired: boolean
   ageSeconds: number
+  /** True when the row is an interactive (pty) shell — the C-TOOL-6.l tail pane and `shells.input` door apply; plain rows keep the read-only tail. */
+  interactive?: boolean
 }
 
 /** WEB-3a: what the session's context is built from — structure for the panel `/context` prints as text. */
@@ -1534,6 +1536,24 @@ export interface Methods {
       appliesByKey?: Record<string, string>
     }
   }
+  /** Type into a running interactive background shell: literal bytes plus at most one named key, composed in that order and delivered as one human-origin send; the answer carries the cursor a following shells.output read threads from. This is a line-oriented door for a polling client — not a PTY stream over the socket, and it does not make the browser a terminal emulator. */
+  "shells.input": {
+    params: {
+      sessionId: SessionId
+      shellId: string
+      /** Literal UTF-8 bytes to type — at most 4096, never a NUL. The call needs text or key (or both; text goes first). */
+      text?: string
+      /** One named key from the PtyRun token grammar, appended after text; "Enter" is "\r" and completes a line. */
+      key?: "Enter" | "Esc" | "Tab" | "Backspace" | "Up" | "Down" | "Left" | "Right" | "C-c" | "C-d" | "C-z"
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      accepted: boolean
+      /** The stdout byte offset recorded before the keystroke — exactly what a following shells.output read threads from, so the typed answer cannot be missed. */
+      cursor: number
+    }
+  }
   /** The background shells this session may see — its own plus the untagged ones — without their output. */
   "shells.list": {
     params: {
@@ -1893,6 +1913,7 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "settings.preview": "admin",
   "settings.schema": "read",
   "settings.set": "admin",
+  "shells.input": "write",
   "shells.list": "read",
   "shells.output": "read",
   "shells.stop": "write",
@@ -1946,6 +1967,7 @@ export const IDEMPOTENT_METHODS: readonly MethodName[] = [
   "session.unarchive",
   "session.unshare",
   "settings.set",
+  "shells.input",
   "shells.stop",
   "tools.client.register",
   "tools.client.result",

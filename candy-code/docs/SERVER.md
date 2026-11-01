@@ -550,6 +550,7 @@ it and the two tables below are generated from the code
 | `settings.preview` | admin |  | — | What a save would write — the target file's diff, when each change applies, and what blocks it — without writing. |
 | `settings.schema` | read |  | — | Every setting: type, default, help, apply mode, and whether a client may write it; and the tiers a save can target. |
 | `settings.set` | admin | yes | — | Write allowlisted settings to the user tier or a trusted project's local or shared file, in one write. |
+| `shells.input` | write | yes | `sessionId`, `shellId` | Type into a running interactive background shell: literal bytes plus at most one named key, composed in that order and delivered as one human-origin send; the answer carries the cursor a following shells.output read threads from. This is a line-oriented door for a polling client — not a PTY stream over the socket, and it does not make the browser a terminal emulator. |
 | `shells.list` | read |  | `sessionId` | The background shells this session may see — its own plus the untagged ones — without their output. |
 | `shells.output` | read |  | `sessionId`, `shellId` | One windowed read of a background shell's output from a cursor. |
 | `shells.stop` | write | yes | `sessionId`, `shellId` | Stop a background shell through the launch's kill ladder; a settled or foreign id is a no-op answer. |
