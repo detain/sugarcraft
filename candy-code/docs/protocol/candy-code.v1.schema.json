@@ -905,7 +905,8 @@
                 "kind": {
                     "enum": [
                         "image",
-                        "video"
+                        "video",
+                        "html"
                     ]
                 },
                 "path": {

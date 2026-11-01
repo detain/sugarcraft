@@ -226,7 +226,7 @@ export interface EventEnvelope {
 export interface MediaRef {
   /** MediaStore artifact id: the stored name minus its final extension. */
   artifactId: string
-  kind: "image" | "video"
+  kind: "image" | "video" | "html"
   /** Server-local path to the stored file — a reference, never the bytes (Appendix C-7). */
   path: string
   /** Size as the tool delivered it; 0 when the event carries only a path. */
