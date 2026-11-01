@@ -186,8 +186,10 @@ final class SettingsEditorTest extends TestCase
         // O-3a's `server.trustedProxies` matches too: the search spans categories.
         // So do the MCP keys whose help says "a trusted project's .mcp.json" /
         // "`untrusted_*`": the substring pass reads the help sentence on purpose.
+        // And so does `git.lspAutoDetect` — its help conditions auto-start on
+        // "projects you have trusted for hooks", the same sentence law.
         self::assertEqualsCanonicalizing(
-            [SettingCategory::HooksMcp->value, SettingCategory::Permissions->value, SettingCategory::Server->value],
+            [SettingCategory::Git->value, SettingCategory::HooksMcp->value, SettingCategory::Permissions->value, SettingCategory::Server->value],
             array_values($categories),
         );
 
