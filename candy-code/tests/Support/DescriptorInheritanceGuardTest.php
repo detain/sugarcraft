@@ -264,6 +264,25 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'across the closure boundary and reports it as returned',
         ],
 
+        // C-TUI-6.e Windows self-update relaunch helper. This one IS a survivor
+        // BY CONSTRUCTION: the whole point of the dance is that the child
+        // finishes the phar rename AFTER the verb process exits, so the handle
+        // is deliberately dropped (proc_close would WAIT and defeat it). What
+        // this row licenses is exactly that shape, and only that shape: all
+        // three stdio descriptors are the kernel's null device chosen from
+        // DIRECTORY_SEPARATOR ('NUL' on NT, '/dev/null' here), so zero parent
+        // fds are inherited; the orphan is self-bounded by the fixed 60 s
+        // retry budget (WindowsSwap::RETRY_BUDGET_SECONDS, design-declared,
+        // E646-only ceiling); and spawnSpec keeps it detached from the verb's
+        // session/group on both OS families.
+        'Cli/WindowsSwap.php::launch' => [
+            'count' => 1,
+            'reason' => 'windows relaunch swap helper; the child outlives the call ON PURPOSE '
+                . '(renaming the staged .new onto the running image requires the parent to exit '
+                . 'first) — handle dropped, all three stdio on the null device (zero fd '
+                . 'inheritance), fixed 60s self-terminating retry budget, paths as argv only',
+        ],
+
         // W5 MCP OAuth login helper. This one IS long-lived by design: the
         // child is parked in self::$slots[$server] and polled non-blocking
         // from poll(). Death is accounted at both slot terminals — poll()

@@ -22,6 +22,7 @@ use SugarCraft\Code\Cli\ParsedArgs;
 use SugarCraft\Code\Cli\SelfUpdate;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\Version;
+use SugarCraft\Code\Support\WindowsShell;
 use SugarCraft\Code\Tests\Support\MintsStampedPharTrait;
 use SugarCraft\Code\Tests\Support\RunsWallClockBoundedChildTrait;
 
@@ -514,6 +515,129 @@ final class SelfUpdateTest extends TestCase
         $again = SelfUpdate::run(self::selfUpdateArgs(['self-update', '--rollback']), null, null, $this->livePharPath());
         self::assertSame(NonInteractive::EXIT_FAILURE, $again, 'the restore is one-shot: the kept copy is gone');
         self::assertStringContainsString('no kept copy', \strtolower($this->errorText()));
+    }
+
+    public function testWindowsSelfUpdateStagesTheSwapAndTheDetachedHelperLandsIt(): void
+    {
+        // C-TUI-6.e via the injected osFamily seam. On this runner the swap
+        // LEGS all execute for real — the stage lands and the detached helper
+        // completes the rename while the verb has already returned (Linux has
+        // no image lock, so it lands immediately instead of at parent exit;
+        // the wait-out is what stays UNCONFIRMED-BY-RUN, pinned as far as it
+        // goes in WindowsSwapTest). The verb must answer EXIT_OK with the
+        // staged toast, never the POSIX rename_failed failure leg.
+        WindowsShell::setOsFamilyForTesting('Windows');
+        try {
+            self::assertNotFalse(\file_put_contents($this->livePharPath(), 'ORIGINAL-PHAR-BYTES'));
+            $exit = SelfUpdate::run(
+                self::selfUpdateArgs(['self-update']),
+                $this->fakeServerClient(),
+                $this->releasesUrl([$this->stageRelease('candy-code/v9.9.9', 'UPDATED-PHAR-BYTES')]),
+                $this->livePharPath(),
+                'v0.1.0',
+                '',
+            );
+        } finally {
+            WindowsShell::setOsFamilyForTesting(null);
+        }
+
+        self::assertSame(NonInteractive::EXIT_OK, $exit);
+        $text = $this->errorText();
+        self::assertStringContainsString('relaunch dance', $text);
+        self::assertStringContainsString('when this process exits', $text);
+        self::assertStringNotContainsString('could not be moved into place', $text, 'the POSIX fail-loud leg must not fire on Windows');
+
+        $landed = $this->awaitWindowsSwapLanded();
+        self::assertTrue($landed, 'the detached helper must land the stage within its budget');
+        \clearstatcache();
+        self::assertSame('UPDATED-PHAR-BYTES', \file_get_contents($this->livePharPath()));
+        self::assertFileDoesNotExist($this->livePharPath() . '.new');
+        self::assertSame('ORIGINAL-PHAR-BYTES', \file_get_contents($this->livePharPath() . '.old'), 'the kept copy survives the dance for --rollback');
+        self::assertStringContainsString('swap complete', (string) \file_get_contents($this->livePharPath() . '.swap.log'));
+    }
+
+    public function testWindowsRollbackRunsTheSameDanceAndConsumesTheKeptCopy(): void
+    {
+        // Same dance in reverse: --rollback on Windows stages `.old` as
+        // `.new`, the helper lands it, and the rename's consumption of `.old`
+        // keeps the one-shot law identical to the POSIX leg.
+        $this->makeWindowsStagedBackout();
+        WindowsShell::setOsFamilyForTesting('Windows');
+        try {
+            $exit = SelfUpdate::run(self::selfUpdateArgs(['self-update', '--rollback']), null, null, $this->livePharPath());
+        } finally {
+            WindowsShell::setOsFamilyForTesting(null);
+        }
+
+        self::assertSame(NonInteractive::EXIT_OK, $exit);
+        self::assertStringContainsString('when this process exits', $this->errorText());
+        self::assertFileDoesNotExist($this->livePharPath() . '.old', 'staging consumes the kept copy — one-shot by construction, as on POSIX');
+
+        self::assertTrue($this->awaitWindowsSwapLanded());
+        \clearstatcache();
+        self::assertSame('ORIGINAL-PHAR-BYTES', \file_get_contents($this->livePharPath()));
+    }
+
+    public function testWindowsSelfUpdateAnnouncesAnAbandonedStageBeforeReplacingIt(): void
+    {
+        // The never-freed target from a previous run leaves `.new` behind (the
+        // helper's gave-up leg). The next update must SAY so before it
+        // proceeds, then replace the stage and complete the fresh dance.
+        $stale = $this->livePharPath() . '.new';
+        self::assertNotFalse(\file_put_contents($stale, 'ABANDONED-STAGE'));
+        WindowsShell::setOsFamilyForTesting('Windows');
+        try {
+            self::assertNotFalse(\file_put_contents($this->livePharPath(), 'ORIGINAL-PHAR-BYTES'));
+            $exit = SelfUpdate::run(
+                self::selfUpdateArgs(['self-update']),
+                $this->fakeServerClient(),
+                $this->releasesUrl([$this->stageRelease('candy-code/v9.9.9', 'UPDATED-PHAR-BYTES')]),
+                $this->livePharPath(),
+                'v0.1.0',
+                '',
+            );
+        } finally {
+            WindowsShell::setOsFamilyForTesting(null);
+        }
+
+        self::assertSame(NonInteractive::EXIT_OK, $exit);
+        $text = $this->errorText();
+        self::assertStringContainsString('left a staged swap', $text);
+        self::assertStringContainsString('never applied', $text);
+        self::assertStringContainsString('relaunch dance', $text, 'the announcement rides before the fresh dance, not instead of it');
+
+        self::assertTrue($this->awaitWindowsSwapLanded());
+        \clearstatcache();
+        self::assertSame('UPDATED-PHAR-BYTES', \file_get_contents($this->livePharPath()), 'the abandoned stage was replaced, never honored');
+    }
+
+    /**
+     * Lay the pre-dance state for a rollback run: a live phar of new bytes and
+     * a `.old` kept copy of the prior bytes, as the swap leg would leave them.
+     */
+    private function makeWindowsStagedBackout(): void
+    {
+        self::assertNotFalse(\file_put_contents($this->livePharPath(), 'UPDATED-PHAR-BYTES'));
+        self::assertNotFalse(\file_put_contents($this->livePharPath() . '.old', 'ORIGINAL-PHAR-BYTES'));
+    }
+
+    /**
+     * Bounded poll for the detached helper consuming the stage — the test's
+     * own ceiling bounds the WAIT, never the helper's 60 s design budget.
+     */
+    private function awaitWindowsSwapLanded(): bool
+    {
+        $stage = $this->livePharPath() . '.new';
+        $deadline = \microtime(true) + 5.0;
+        while (\microtime(true) < $deadline) {
+            \clearstatcache(true, $stage);
+            if (!\is_file($stage)) {
+                return true;
+            }
+            \usleep(50_000);
+        }
+
+        return false;
     }
 
     public function testUnwritableTargetsRefuseByNamedReasonBeforeTheNetwork(): void

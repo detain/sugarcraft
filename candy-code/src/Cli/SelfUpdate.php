@@ -10,6 +10,7 @@ use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\TransferException;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\Version;
+use SugarCraft\Code\Support\WindowsShell;
 
 /**
  * `candy-code self-update` — replace the running phar with the latest
@@ -90,14 +91,24 @@ use SugarCraft\Code\Support\Version;
  * because the rename carries `.old`'s mode onto the target and legacy
  * `.old` copies predate the preservation above.
  *
- * WINDOWS CAVEAT (DST-3). On NT, renaming over the image a live process is
- * executing from fails while that process runs — so on Windows the LAST leg
- * of the sequence above is the one that dies, and it dies LOUD: the temp is
- * deleted, the preserved `.old` copy and the untouched running phar remain
- * exactly as they were, `rename_failed` goes to stderr, and the verb exits
- * 1. There is no silent half-swap to recover from. Updating a Windows
- * install stays a manual file replace until someone rules a relaunch dance;
- * the fail-loud leg is the documented answer, not a defect to route around.
+ * WINDOWS CAVEAT (DST-3 — the relaunch dance was RULED and shipped, C-TUI-6.e).
+ * On NT, renaming over the image a live process is executing from fails while
+ * that process runs. The verb therefore never attempts that rename against
+ * itself on Windows: after verification and the `.old` copy it stages the new
+ * bytes at `<phar>.new` and hands the swap to the detached helper in
+ * {@see WindowsSwap}, which retries the rename every 200 ms up to 60 s until
+ * this process exits and NT releases the image lock, logging every outcome to
+ * `<phar>.swap.log`; the verb exits 0 and says the update applies when this
+ * process exits. `--rollback` on Windows runs the same dance, staging `.old`
+ * as `<phar>.new`. The legs that CAN still die, die LOUD exactly as before: a
+ * stage that cannot be placed reports `rename_failed`, an unspawnable helper
+ * reports `swap_spawn_failed`, both with the untouched running phar and the
+ * preserved `.old` in place — there is no silent half-swap to recover from.
+ * If the target never frees within the budget (an antivirus hold outlasting
+ * it), the `.new` stage survives, the swap log records the abandoned
+ * attempts, and the next run announces the leftover before downloading. On
+ * POSIX the fail-loud `rename_failed` leg is unchanged, and remains the
+ * documented answer, not a defect to route around.
  *
  * TRUST MODEL, HONESTLY — TWO STATES. Both the phar and its sidecar come
  * from the same origin (GitHub release assets, over TLS). Keyless state (a
@@ -391,6 +402,17 @@ final class SelfUpdate
             return self::rollback($old, $phar, $pharMode);
         }
 
+        // C-TUI-6.e: a `.new` stage still on disk means an earlier detached
+        // swap gave up (an antivirus hold outlasting the budget, or a helper
+        // that never landed). Announce the leftover rather than silently
+        // overwriting it; this run's verified download replaces it below.
+        if (WindowsShell::isWindows()) {
+            $staged = $phar . '.new';
+            if (\is_file($staged)) {
+                self::stderr(Lang::t('cli.selfupdate.swap_leftover', ['new' => $staged]));
+            }
+        }
+
         // Resolution moved ahead of the fetch (choosing a channel needs the
         // current version): same seam, same arms, identical value.
         $current = $currentVersion ?? \trim(Help::versionString());
@@ -586,6 +608,38 @@ final class SelfUpdate
         if ($pharMode !== null) {
             @\chmod($old, $pharMode);
             @\chmod($temp, $pharMode);
+        }
+
+        // C-TUI-6.e (WINDOWS): the swap leg cannot run against the image this
+        // process is executing from, so the verified bytes (mode already
+        // carried by the chmod above — rename publishes it, same law as the
+        // POSIX leg) are staged at `<phar>.new` and the detached
+        // {@see WindowsSwap} helper lands them once this process exits. A
+        // leftover stage from an abandoned swap is cleared first; refusing
+        // the fresh update over it would strand the install behind a file
+        // nobody asked for.
+        if (WindowsShell::isWindows()) {
+            $new = $phar . '.new';
+            if (\is_file($new) && !@\unlink($new)) {
+                self::forget($temp);
+                self::stderr(Lang::t('cli.selfupdate.rename_failed', ['old' => $old, 'path' => $phar]));
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+            if (!\rename($temp, $new)) {
+                self::forget($temp);
+                self::stderr(Lang::t('cli.selfupdate.rename_failed', ['old' => $old, 'path' => $phar]));
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+            if (!WindowsSwap::launch(\getmypid(), $new, $phar)) {
+                self::stderr(Lang::t('cli.selfupdate.swap_spawn_failed', ['new' => $new, 'path' => $phar]));
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+            self::stderr(Lang::t('cli.selfupdate.staged_windows', ['new' => $new, 'old' => $old]));
+
+            return NonInteractive::EXIT_OK;
         }
 
         if (!\rename($temp, $phar)) {
@@ -1061,6 +1115,39 @@ final class SelfUpdate
 
             return NonInteractive::EXIT_FAILURE;
         }
+
+        // C-TUI-6.e (WINDOWS): the same dance in reverse — `.old` cannot be
+        // renamed over the running image either, so it is staged as
+        // `<phar>.new` and the detached helper lands it when this process
+        // exits. The rename still CONSUMES `.old` (one-shot by construction,
+        // the same law the POSIX leg pins), and the mode re-assert rides the
+        // stage before it is handed over, so the helper's final rename
+        // publishes it onto the target just as the POSIX rename would.
+        if (WindowsShell::isWindows()) {
+            $new = $phar . '.new';
+            if (\is_file($new) && !@\unlink($new)) {
+                self::stderr(Lang::t('cli.selfupdate.rollback_failed', ['old' => $old, 'path' => $phar]));
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+            if (!\rename($old, $new)) {
+                self::stderr(Lang::t('cli.selfupdate.rollback_failed', ['old' => $old, 'path' => $phar]));
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+            if ($pharMode !== null) {
+                @\chmod($new, $pharMode);
+            }
+            if (!WindowsSwap::launch(\getmypid(), $new, $phar)) {
+                self::stderr(Lang::t('cli.selfupdate.swap_spawn_failed', ['new' => $new, 'path' => $phar]));
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+            self::stderr(Lang::t('cli.selfupdate.staged_windows', ['new' => $new, 'old' => $old]));
+
+            return NonInteractive::EXIT_OK;
+        }
+
         if (!\rename($old, $phar)) {
             self::stderr(Lang::t('cli.selfupdate.rollback_failed', ['old' => $old, 'path' => $phar]));
 
