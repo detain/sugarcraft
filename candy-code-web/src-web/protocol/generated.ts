@@ -1335,6 +1335,8 @@ export interface Methods {
       limit?: number
       cursor?: SessionId
       query?: string
+      /** LIKE prefilter over name, last preview and id — the pre-full-text search shape; an attach resolving a session by id or name sends this, never `query`. */
+      search?: string
       /** true lists ONLY archived sessions; omitted or false lists the unarchived ones (the historical law). */
       archived?: boolean
       /** Another project root: the serve gateway routes the call to that root's workspace host (roadmap O-7). */

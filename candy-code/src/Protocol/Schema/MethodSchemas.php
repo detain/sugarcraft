@@ -181,6 +181,7 @@ final class MethodSchemas
                     'limit' => Schema::integer(1, 200),
                     'cursor' => Schema::ref(D::SESSION_ID),
                     'query' => Schema::string(256),
+                    'search' => Schema::string(256)->describe('LIKE prefilter over name, last preview and id — the pre-full-text search shape; an attach resolving a session by id or name sends this, never `query`.'),
                     'archived' => Schema::boolean()->describe('true lists ONLY archived sessions; omitted or false lists the unarchived ones (the historical law).'),
                     'root' => $root,
                 ]),

@@ -498,7 +498,7 @@ final class RemoteSessionHost
     {
         $chosen = $target === null || \trim($target) === ''
             ? $this->call('session.create')
-            : $this->call('session.list', ['query' => $target, 'limit' => self::RESOLVE_PAGE])
+            : $this->call('session.list', ['search' => $target, 'limit' => self::RESOLVE_PAGE])
                 ->then(static fn (array $page): array => self::resolveTarget((array) ($page['items'] ?? []), $target));
 
         return $chosen->then(function (array $summary) use ($pageRows): PromiseInterface {

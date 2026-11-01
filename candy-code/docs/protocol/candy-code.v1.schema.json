@@ -4769,6 +4769,11 @@
                         "type": "string",
                         "maxLength": 256
                     },
+                    "search": {
+                        "type": "string",
+                        "maxLength": 256,
+                        "description": "LIKE prefilter over name, last preview and id — the pre-full-text search shape; an attach resolving a session by id or name sends this, never `query`."
+                    },
                     "archived": {
                         "type": "boolean",
                         "description": "true lists ONLY archived sessions; omitted or false lists the unarchived ones (the historical law)."

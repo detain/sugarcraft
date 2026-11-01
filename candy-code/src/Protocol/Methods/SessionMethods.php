@@ -145,7 +145,14 @@ final class SessionMethods
         // snippets attached, LIKE as the degrade — instead of str_contains
         // over what the first 200-row chunk happened to hold. Both paths
         // page $limit MATCHES, so the cursor law is one law.
-        $page = $call->server->hub()->list($limit, $cursor, $query, $archived);
+        //
+        // §7 closeout: `search` is the pre-FTS shape spelled explicitly —
+        // the name/preview/id LIKE leg the FTS wave folded into the degrade
+        // path only. RemoteSessionHost::open() resolves an attach target
+        // (a session id or name) and must keep answering even while the
+        // body index is healthy; `query` stays body-ranked search. Both
+        // together narrow conjunctively, mirroring the store's law.
+        $page = $call->server->hub()->list($limit, $cursor, $query, $archived, $params->optionalString('search', 256));
 
         return [
             'items' => \array_map(static fn (array $row): array => self::summary($call, $row), $page['sessions']),

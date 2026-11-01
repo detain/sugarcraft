@@ -62,8 +62,38 @@ final class SessionListBodySearchTest extends TestCase
         self::assertFalse((bool) $result['items'][0]['open']);
     }
 
-    public function testAnUnqueriedSummaryCarriesNoSnippetAndNoInventedSpend(): void
+    public function testTheSearchArmResolvesNamePreviewAndIdWhereTheBodyQueryIsBlind(): void
     {
+        $fixture = $this->fixture = ProtocolFixture::new();
+        // The attach-time resolution RemoteSessionHost::open() performs:
+        // C-SES-2.c made `query` body-only, and the LIKE leg (name, preview,
+        // id) that the pre-FTS arm carried got spelled as its own `search`
+        // parameter at the §7 closeout, so resolving a session by id or name
+        // answers whether or not the body index is healthy.
+        $this->saveChat($fixture->store, 'c40a519541186307', ['a transcript with no needle in it']);
+        $this->saveChat($fixture->store, 'quiet', ['nothing remarkable here at all']);
+
+        $client = $fixture->client();
+
+        $byId = $client->call('session.list', ['search' => 'c40a519541186307']);
+        self::assertSame(
+            ['c40a519541186307'],
+            array_map(static fn (array $row): string => (string) $row['id'], $byId['items']),
+            'an exact id resolves through search while the body index is up',
+        );
+
+        $byPrefix = $client->call('session.list', ['search' => 'c40a51']);
+        self::assertSame(
+            ['c40a519541186307'],
+            array_map(static fn (array $row): string => (string) $row['id'], $byPrefix['items']),
+            'the unique-prefix id leg rides the same LIKE path (attach by short target)',
+        );
+
+        $miss = $client->call('session.list', ['query' => 'c40a519541186307']);
+        self::assertSame([], $miss['items'], 'body search stays body-only — the query contract as pinned');
+    }
+
+    public function testAnUnqueriedSummaryCarriesNoSnippetAndNoInventedSpend(): void    {
         $fixture = $this->fixture = ProtocolFixture::new();
         $this->saveChat($fixture->store, 'plain', ['nothing remarkable here at all']);
 

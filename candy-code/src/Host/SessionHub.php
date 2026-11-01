@@ -223,7 +223,7 @@ final class SessionHub
      *
      * @return array{sessions: list<array<string, mixed>>, nextCursor: ?string}
      */
-    public function list(int $limit = 20, ?string $cursor = null, ?string $query = null, ?bool $archived = null): array
+    public function list(int $limit = 20, ?string $cursor = null, ?string $query = null, ?bool $archived = null, ?string $search = null): array
     {
         $store = $this->workspace->sessionStore;
         if (!$store instanceof EnhancedSessionStore || $limit < 1) {
@@ -245,12 +245,21 @@ final class SessionHub
         $rows = $query !== null
             ? array_map(
                 static fn (SessionRow $row): array => [...$row->toArray(), 'bodySnippet' => $row->bodySnippet],
-                $store->listSessionsFiltered(self::archiveQuery($archived)->withBodySearch($query)->withLimit(PHP_INT_MAX)),
+                $store->listSessionsFiltered(self::archiveQuery($archived)->withBodySearch($query)->withSearch($search)->withLimit(PHP_INT_MAX)),
             )
-            : \array_values(\array_filter(
-                $store->listSessionsWithMeta(PHP_INT_MAX),
-                static fn (array $row): bool => self::archivedMatches($row, $archived),
-            ));
+            : ($search !== null
+                // §7 closeout: the name/preview/id LIKE leg, spelled. It
+                // answers through the same filtered path the FTS degrade
+                // uses, so an attach that resolves by id or name works
+                // whether or not the body index is up.
+                ? array_map(
+                    static fn (SessionRow $row): array => [...$row->toArray(), 'bodySnippet' => $row->bodySnippet],
+                    $store->listSessionsFiltered(self::archiveQuery($archived)->withSearch($search)->withLimit(PHP_INT_MAX)),
+                )
+                : \array_values(\array_filter(
+                    $store->listSessionsWithMeta(PHP_INT_MAX),
+                    static fn (array $row): bool => self::archivedMatches($row, $archived),
+                )));
         if ($cursor !== null) {
             $ids = array_map(static fn (array $row): string => (string) ($row['id'] ?? ''), $rows);
             $at = array_search($cursor, $ids, true);
