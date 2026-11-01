@@ -170,6 +170,21 @@ final class ServerContext
         ($this->log)(ErrorLog::line($e, $prefix));
     }
 
+    /**
+     * One already-rendered audit line for the server log (C-TOOL-6.l): the
+     * caller composed the facts — a human keystroke is recorded by its shape
+     * (method, session, shell, client, principal, byte count) and never by
+     * its bytes. Without a sink the line falls exactly as silent as an
+     * unlogged error does under {@see logError()}.
+     */
+    public function logLine(string $line): void
+    {
+        if ($this->log === null) {
+            return;
+        }
+        ($this->log)($line);
+    }
+
     public function config(): ServerConfig
     {
         return $this->config;

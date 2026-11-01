@@ -659,6 +659,18 @@ final class MethodSchemas
                     'expired' => Schema::boolean(),
                 ], ['shellId', 'stdout', 'stderr', 'cursor', 'skippedBytes', 'bytesAvailable', 'state', 'expired']),
             ],
+            'shells.input' => [
+                Schema::object([
+                    ...$sid,
+                    'shellId' => Schema::string(128),
+                    'text' => Schema::string(4096)->describe('Literal UTF-8 bytes to type — at most 4096, never a NUL. The call needs text or key (or both; text goes first).'),
+                    'key' => Schema::enum(['Enter', 'Esc', 'Tab', 'Backspace', 'Up', 'Down', 'Left', 'Right', 'C-c', 'C-d', 'C-z'])->describe('One named key from the PtyRun token grammar, appended after text; "Enter" is "\\r" and completes a line.'),
+                ], ['sessionId', 'shellId']),
+                Schema::object([
+                    'accepted' => Schema::boolean(),
+                    'cursor' => Schema::integer(0)->describe('The stdout byte offset recorded before the keystroke — exactly what a following shells.output read threads from, so the typed answer cannot be missed.'),
+                ], ['accepted', 'cursor']),
+            ],
             'shells.stop' => [
                 Schema::object([...$sid, 'shellId' => Schema::string(128)], ['sessionId', 'shellId']),
                 Schema::object([
