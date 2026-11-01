@@ -1463,14 +1463,14 @@ final class NonInteractive
      * see at all from stdout. {@see self::refusalFrom()} draws that line, and
      * draws it with the roster the TUI renderer already uses.
      *
-     * THREE MORE TYPES EXIST THAT THIS METHOD NEVER EMITS, and this table used
+     * FIVE MORE TYPES EXIST THAT THIS METHOD NEVER EMITS, and this table used
      * to name one of them and call it the only one.
      *
      *   WHAT IT SAID. That `installation` was "the one type this method never
-     *   emits". WHAT IS TRUE NOW. It is one of three. WHY THE ENTRY STILL EARNS
+     *   emits". WHAT IS TRUE NOW. It is one of five. WHY THE ENTRY STILL EARNS
      *   ITS PLACE. `installation` is the only one that is a DUPLICATE of this
      *   shape rather than another caller of it, which is why it is the one with
-     *   a justification below; the other two are ordinary callers that happen
+     *   a justification below; the other four are ordinary callers that happen
      *   not to route through this method. The count was the wrong thing to
      *   lean on, not the distinction.
      *
@@ -1482,12 +1482,21 @@ final class NonInteractive
      *   `mcp-config`            -> {@see self::EXIT_FAILURE} (1), from
      *                              `candy-code mcp list` on a trusted
      *                              `.mcp.json` that could not be read or decoded
+     *   `import-refused`        -> {@see self::EXIT_FAILURE} (1), from
+     *                              `candy-code session import` when the
+     *                              {@see \SugarCraft\Code\Session\SessionImporter}
+     *                              refuses the transcript (unreadable bytes, an
+     *                              unparsable shape, a source shrinking under
+     *                              its own ledger)
+     *   `lsp-install`           -> {@see self::EXIT_FAILURE} (1), from
+     *                              `candy-code lsp install` when the probe
+     *                              produces no server
      *
-     * The last two are {@see Subcommands}', built through its own
+     * The last four are {@see Subcommands}', built through its own
      * `emitDocument()` over {@see self::encodeDocument()} — the same shape and
      * the same flags, a different caller. They are listed here because this
      * doc-block is the closest thing the source has to an index of the contract,
-     * and an index that lists five of seven sends a reader looking in the wrong
+     * and an index that lists six of eleven sends a reader looking in the wrong
      * file. {@see \SugarCraft\Code\Tests\Config\ReadmeJsonErrorContractDriftTest}
      * derives the full set from `src/` and `bin/` and reds if this list or
      * README.md falls behind it again.

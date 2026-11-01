@@ -2126,7 +2126,7 @@ The same three exit codes govern every subcommand below.
 | exit | meaning |
 | --- | --- |
 | `0` | the prompt ran and produced an answer, or the subcommand answered |
-| `1` | ran and failed: the backend threw (unreachable host, rejected key, model error), the answer could not be encoded in the requested format, a `doctor` check came back `FAIL`, `session delete` found no such session, a trusted `.mcp.json` could not be parsed, or a turn hook (`UserPromptSubmit`/`SessionStart`) blocked the prompt before the first billed call — retrying may help. `error.type`: `backend`, `encoding`, `mcp-config`, `not-found`, `hook` |
+| `1` | ran and failed: the backend threw (unreachable host, rejected key, model error), the answer could not be encoded in the requested format, a `doctor` check came back `FAIL`, `session delete` found no such session, `session import` attempted a transcript the importer refused (unreadable bytes, a shape it cannot parse, a source that shrank under its own ledger), a trusted `.mcp.json` could not be parsed, an `lsp install` probe failed to produce the server, or a turn hook (`UserPromptSubmit`/`SessionStart`) blocked the prompt before the first billed call — retrying may help. `error.type`: `backend`, `encoding`, `import-refused`, `mcp-config`, `not-found`, `lsp-install`, `hook` |
 | `2` | usage/configuration error, nothing was attempted: no prompt given, unrecognized flag, a word left over after `-p`/`run`'s prompt or before a subcommand, a second project directory, an `--output-format` value that is none of `text`, `json` or `stream-json`, `--config` naming no readable file, `--root` naming no directory, a missing `vendor/autoload.php`, a **permission policy that is present but unusable** (see [Permission modes](#capabilities) — an unreadable/unreachable/unparseable `~/.candy-code/config.json`, or a `permissionMode` naming no real mode), or a provider (from `$CANDY_CODE_PROVIDER` **or** the persisted Ctrl+P choice) that cannot be constructed — retrying will not help — or `--json-schema` asked of a provider that cannot honour the schema (its own `error.type`, so a consumer knows the schema was never sent), or `--json-schema` with no `-p`/`run` prompt to constrain — nothing would have read it, so the launch is refused rather than silently un-schema'd — or `--worktree` beside `serve`, outside a git work tree, or with a name its path and ref rules refuse. `error.type`: `usage`, `provider_configuration`, `json_schema_unsupported`, `installation` — the last one is the missing `vendor/autoload.php`, and it is what tells a consumer which kind of `2` it got |
 
 `2` covers "no prompt given" (`candy-code -p`, `candy-code run`) deliberately:
@@ -2171,7 +2171,7 @@ outside is the only retry it gets.
 With `--output-format json`, stdout is always exactly one JSON object: either
 `{"result": <the answer>}` or `{"result": null, "error": {"type": "usage" |
 "provider_configuration" | "installation" | "json_schema_unsupported" | "backend" | "encoding" |
-"not-found" | "mcp-config" | "hook", "message":
+"not-found" | "mcp-config" | "import-refused" | "lsp-install" | "hook", "message":
 "...", "provider": "..."}}` (`provider` present only when a selection is to blame), so
 a `| jq` consumer never sees an empty pipe. That holds for the flag, `--config`
 and `--root` usage errors too, which `bin/candy-code` catches before the one-shot
@@ -2179,10 +2179,11 @@ path is entered, and for a reply or an error message carrying bytes that are
 not valid UTF-8 (they are substituted, not dropped along with the whole
 document). `error.type` is not the exit code renamed — `usage`,
 `provider_configuration`, `json_schema_unsupported` and `installation` are all `2`, `backend`,
-`encoding`, `not-found`, `mcp-config` and `hook` are all `1` — it is how a consumer
+`encoding`, `not-found`, `mcp-config`, `import-refused`, `lsp-install` and `hook` are all `1` — it is how a consumer
 that kept the code tells apart the kinds of each. The set's spellings are
 mixed by history, not by mistake: seven names are single words or
-`snake_case`, while `not-found` and `mcp-config` are the two `kebab-case`
+`snake_case`, while `not-found`, `mcp-config`, `import-refused` and
+`lsp-install` are the four `kebab-case`
 names `src/Cli/Subcommands.php` added when its subcommand errors joined the
 contract. Renaming them to `snake_case` was weighed and declined;
 match exact strings, never an inferred alphabet. The one-shot JSON envelope also carries a top-level `"schema"` version key — currently `1` — so a consumer can branch on the document shape without sniffing for keys.
