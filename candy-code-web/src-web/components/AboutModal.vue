@@ -24,6 +24,21 @@ const stopping = ref(false)
 const stopError = ref<string | null>(null)
 
 /**
+ * C-WEB-5.f (R13): the admin-scoped log tail. server.log lines can quote
+ * prompts and paths, so this section renders ONLY behind Scope::Admin — the
+ * same door the stop control stands behind — and the server flattens and
+ * caps every answer ({@see LogTail::answer}). The fetch is load-driven, so
+ * a non-admin never sends the request at all (a click-gated control could
+ * not prove that). Refusals land loud on the logs row; the `no_log` machine
+ * token — a foreground server that never wrote the file — renders as the
+ * chrome note, never a blank void.
+ */
+const logs = ref<string[] | null>(null)
+const logsReason = ref<string | null>(null)
+const logsError = ref<string | null>(null)
+const logsLoading = ref(false)
+
+/**
  * C-WEB-5.g (R13): the browser's ONLY caller of the Scope::Admin
  * `server.shutdown` lives behind two doors. The control renders only for an
  * admin-scoped principal — SettingsView's house gate shape — and only once a
@@ -61,6 +76,10 @@ async function load(): Promise<void> {
   // a stale refusal row or a stuck "Stopping…" latch belongs to a dead visit.
   stopping.value = false
   stopError.value = null
+  // C-WEB-5.f: a re-open never inherits the previous visit's log rows.
+  logs.value = null
+  logsReason.value = null
+  logsError.value = null
   const [first, second] = await Promise.allSettled([connection.request('server.info', {}), connection.request('server.health', {})])
   if (mine !== generation) {
     return
@@ -68,7 +87,26 @@ async function load(): Promise<void> {
   if (first.status === 'fulfilled') info.value = first.value
   else error.value = describe(first.reason)
   if (second.status === 'fulfilled') health.value = second.value
+  if (canAdmin.value) void loadLogs()
   loading.value = false
+}
+
+async function loadLogs(): Promise<void> {
+  if (!canAdmin.value) return
+  const mine = generation
+  logsLoading.value = true
+  logsError.value = null
+  try {
+    const answer = await connection.request('server.logs', {})
+    if (mine !== generation) return
+    logs.value = answer.lines
+    logsReason.value = answer.reason
+  } catch (failure) {
+    if (mine !== generation) return
+    logsError.value = describe(failure)
+  } finally {
+    if (mine === generation) logsLoading.value = false
+  }
 }
 
 watch(() => props.open, (open) => {
@@ -167,6 +205,16 @@ async function stopServer(): Promise<void> {
           · {{ t('web.chrome.about.turns_running', { n: health.turnsRunning }) }}
           <template v-if="health.draining"> · {{ t('web.chrome.about.draining') }}</template>
         </p>
+      </template>
+      <template v-if="canAdmin">
+        <h3 class="logs-head">
+          <span>{{ t('web.chrome.about.logs') }}</span>
+          <button type="button" class="link" :disabled="logsLoading" :aria-label="t('web.chrome.about.logs_refresh')" data-testid="about-logs-refresh" @click="void loadLogs()">{{ t('web.chrome.about.logs_refresh') }}</button>
+        </h3>
+        <p v-if="logsLoading && logs === null && logsReason === null && logsError === null" class="empty" data-testid="about-logs-loading">{{ t('web.chrome.about.loading') }}</p>
+        <p v-else-if="logsError" class="error" role="alert" data-testid="about-logs-error">{{ logsError }}</p>
+        <p v-else-if="logsReason !== null" class="empty" data-testid="about-logs-reason">{{ logsReason === 'no_log' ? t('web.chrome.about.logs_no_log') : logsReason }}</p>
+        <pre v-else-if="logs !== null" class="logs" data-testid="about-logs">{{ logs.length === 0 ? t('web.chrome.about.logs_empty') : logs.join('\n') }}</pre>
       </template>
       <p v-if="canStop" class="stop">
         <button type="button" class="danger" :disabled="stopping" data-testid="about-stop" @click="void stopServer()">
@@ -277,5 +325,25 @@ ul {
 .stop .danger:disabled {
   opacity: 0.6;
   cursor: default;
+}
+.logs-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.logs-head .link {
+  margin-left: auto;
+}
+.logs {
+  margin: 0.3rem 0 0;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 16rem;
+  overflow-y: auto;
 }
 </style>
