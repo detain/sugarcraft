@@ -2494,6 +2494,13 @@ final class CompactionService
             // ISS-097: the failure paint is a property of the row, not of its
             // length - truncating the content must not re-label an error.
             error: $message->error,
+            // §7 closeout: the two later additive columns were left out of
+            // this field list when they landed (O-2 thinking rows; C-CTX-6.e
+            // recall titles), which the old all-empty fixtures could not
+            // see. A truncated copy of a thinking row lost its blocks and a
+            // truncated recall notice silently lost its expand affordance.
+            thinkingBlocks: $message->thinkingBlocks,
+            recallTitles: $message->recallTitles,
             // O-2b: the live-row identity token, so the store sees the same
             // row and does not spend a fresh ref on the truncated copy.
             rowKey: $message->rowKey(),

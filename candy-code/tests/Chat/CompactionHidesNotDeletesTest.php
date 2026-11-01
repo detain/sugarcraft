@@ -360,7 +360,11 @@ final class CompactionHidesNotDeletesTest extends TestCase
             'turnTranscript' => [Message::assistant('row')],
             'contextLedger' => \SugarCraft\Code\Context\Pruning\ContextLedger::new(),
             'error' => true,
-            'thinkingBlocks' => [],
+            // §7 closeout: non-empty values for the two later columns — the
+            // copy seam dropped both when they landed and all-empty fixtures
+            // could not see it.
+            'thinkingBlocks' => [['text' => 'first thought', 'stoppedAt' => 12]],
+            'recallTitles' => ['Remembered: launch checklist'],
             'rowKey' => new \stdClass(),
         ];
         $parameters = array_map(
