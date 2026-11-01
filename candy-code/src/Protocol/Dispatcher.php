@@ -9,6 +9,7 @@ use Ratchet\RFC6455\Messaging\Frame;
 use SugarCraft\Code\Host\BackgroundEvents;
 use SugarCraft\Code\Protocol\Methods\AgentsMethods;
 use SugarCraft\Code\Protocol\Methods\BgMethods;
+use SugarCraft\Code\Protocol\Methods\ClientToolMethods;
 use SugarCraft\Code\Protocol\Methods\CommandMethods;
 use SugarCraft\Code\Protocol\Methods\ContextMethods;
 use SugarCraft\Code\Protocol\Methods\FilesMethods;
@@ -145,6 +146,7 @@ final class Dispatcher implements MessageHandler
         FilesMethods::register($registry);
         FsMethods::register($registry);
         ToolMethods::register($registry);
+        ClientToolMethods::register($registry);
         MediaMethods::register($registry);
         TodoMethods::register($registry);
         WorkspaceMethods::register($registry);

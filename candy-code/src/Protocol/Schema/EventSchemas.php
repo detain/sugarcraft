@@ -154,6 +154,13 @@ final class EventSchemas
                 'truncated' => Schema::boolean()->describe('True once bytes fell out of the ring.'),
                 'tailBudget' => Schema::integer(0)->describe('Byte cap the tail obeys.'),
             ], ['toolCallId', 'name', 'seq', 'tail', 'truncated', 'tailBudget']),
+            E::TOOL_CLIENT_CALL => Schema::object([
+                'callId' => Schema::string()->describe('Answer tools.client.result with this; the first accepted result settles the call.'),
+                'registrationId' => Schema::string()->describe('The registration that owns the name; clients whose current registration is not this one ignore the event.'),
+                'name' => Schema::string()->describe('The full proxy name, `client__` prefix included.'),
+                'arguments' => Schema::map(Schema::any())->describe('The model-supplied arguments, validated against the registered inputSchema.'),
+                'deadlineAt' => Schema::integer(0)->describe('Wall-clock milliseconds by which the answer must land; after it the call settles as an error.'),
+            ], ['callId', 'registrationId', 'name', 'arguments', 'deadlineAt']),
             E::PERMISSION_REQUESTED => Schema::ref(D::PENDING_ASK),
             E::PERMISSION_RESOLVED => Schema::object([
                 'askId' => Schema::string(),

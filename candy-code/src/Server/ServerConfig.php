@@ -114,6 +114,7 @@ final class ServerConfig
      * @param list<string> $interfaceAddresses this machine's own IPs, for a wildcard bind ({@see InterfaceAddresses})
      * @param list<string> $allowedIps     client IPs/CIDRs admitted beside loopback; empty admits every address ({@see Http\ClientAddressGuard})
      * @param bool         $dirBrowse      whether `fs.listDirs` and the browse-rooted `workspace.open` answer
+     * @param bool         $clientTools    C-TOOL-6.i: whether `tools.client.*` answers at all — off means every client-hosted tool call is refused with kind `client_tools_disabled`
      * @param string|null  $browseRoot     the directory they are confined to (resolved by {@see \SugarCraft\Code\Cli\Serve::config()}; null = the user's home)
      * @param array<string,array{secret:string,prompt:string,permissionMode:PermissionMode|null,rate:int,signature:null|array{scheme:string,header:string,deliveryHeader:string|null}}> $webhooks
      *                                     AUT-6 inbound webhook hooks, validated at launch ({@see self::webhooksValue()}); empty = the route is not mounted at all
@@ -141,6 +142,7 @@ final class ServerConfig
         public readonly array $interfaceAddresses = [],
         public readonly array $allowedIps = [],
         public readonly bool $dirBrowse = false,
+        public readonly bool $clientTools = false,
         public readonly ?string $browseRoot = null,
         public readonly array $webhooks = [],
         public readonly ?string $tlsCert = null,
@@ -246,6 +248,12 @@ final class ServerConfig
         if (!\is_bool($dirBrowseKey)) {
             throw new ServerConfigException(Lang::t('serve.dir_browse.not_bool'));
         }
+        // C-TOOL-6.i: key-only — there is deliberately no command-line flag
+        // for this door; the user config is its single switch.
+        $clientToolsKey = $userConfig['server.clientTools'] ?? false;
+        if (!\is_bool($clientToolsKey)) {
+            throw new ServerConfigException('server.clientTools in the user config must be true or false');
+        }
         $browseRoot = $flags['--browse-root'] ?? $userConfig['server.browseRoot'] ?? null;
         if ($browseRoot !== null) {
             $config = $config->withBrowseRoot(self::stringValue('server.browseRoot', $browseRoot));
@@ -297,6 +305,7 @@ final class ServerConfig
             ->withAllowBypass(isset($flags['--allow-bypass']) || $allowBypassKey)
             ->withAllowRoot(isset($flags['--allow-root']))
             ->withDirBrowse(isset($flags['--allow-dir-browse']) || $dirBrowseKey)
+            ->withClientTools($clientToolsKey)
             ->withRoot($root);
     }
 
@@ -429,6 +438,17 @@ final class ServerConfig
     public function withDirBrowse(bool $dirBrowse): self
     {
         return $this->mutate(dirBrowse: $dirBrowse);
+    }
+
+    /**
+     * Whether the client-hosted tools door is open at all (C-TOOL-6.i). Off
+     * answers every `tools.client.*` call with kind `client_tools_disabled` —
+     * registration and result alike, so a client can neither announce tools
+     * nor settle a call it learned about before the door shut.
+     */
+    public function withClientTools(bool $clientTools): self
+    {
+        return $this->mutate(clientTools: $clientTools);
     }
 
     /** The directory browsing is confined to; null = the user's home. */

@@ -776,6 +776,43 @@ final class MethodSchemas
                     'more' => Schema::boolean(),
                 ], ['toolCallId', 'offset', 'content', 'total', 'isError', 'more']),
             ],
+            // C-TOOL-6.i: client-hosted tools. `tools.client.register` replaces
+            // the calling connection's whole set (an empty list withdraws it);
+            // the per-entry shape mirrors the host-side ClientToolSpec, whose
+            // validation is the authority — this schema admits the field shapes
+            // only. `tools.client.result` answers a `tool.client.call` event.
+            'tools.client.register' => [
+                Schema::object([
+                    ...$sid,
+                    'tools' => Schema::arrayOf(
+                        Schema::object([
+                            'name' => Schema::string(48),
+                            'description' => Schema::string(\SugarCraft\Code\Host\ClientTools\ClientToolSpec::MAX_DESCRIPTION_CHARS),
+                            'inputSchema' => Schema::map(Schema::any())->describe('A JSON Schema object for the arguments, at most 16 KiB encoded; must declare `"type": "object"`.'),
+                            'timeoutSeconds' => Schema::integer(
+                                \SugarCraft\Code\Host\ClientTools\ClientToolSpec::MIN_TIMEOUT_SECONDS,
+                                \SugarCraft\Code\Host\ClientTools\ClientToolSpec::MAX_TIMEOUT_SECONDS,
+                            ),
+                        ], ['name', 'description', 'inputSchema']),
+                        \SugarCraft\Code\Protocol\Methods\ClientToolMethods::MAX_TOOLS_PER_REGISTRATION,
+                    ),
+                ], ['sessionId', 'tools']),
+                Schema::object([
+                    'registrationId' => Schema::string(),
+                    'names' => Schema::arrayOf(Schema::string()),
+                    'effective' => Schema::enum(['next_turn']),
+                ], ['registrationId', 'names', 'effective']),
+            ],
+            'tools.client.result' => [
+                Schema::object([
+                    ...$sid,
+                    'callId' => Schema::string(64),
+                    'registrationId' => Schema::string(64),
+                    'content' => Schema::string(\SugarCraft\Code\Protocol\Methods\ClientToolMethods::MAX_RESULT_BYTES),
+                    'isError' => Schema::boolean(),
+                ], ['sessionId', 'callId', 'registrationId', 'content']),
+                Schema::object(['accepted' => Schema::boolean()], ['accepted']),
+            ],
             'todo.get' => [$sessionOnly, Schema::object(['items' => Schema::arrayOf(Schema::object(['content' => Schema::string(), 'status' => Schema::enum(\SugarCraft\Code\Todo\TodoStatus::values())], ['content', 'status']))], ['items'])],
 
             // Plan W6.2, widened by C-WEB-3.f: the submit params embed

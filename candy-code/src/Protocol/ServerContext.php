@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Protocol;
 
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
+use SugarCraft\Code\Backend\PendingClientCall;
 use SugarCraft\Code\Host\BackgroundEvents;
 use SugarCraft\Code\Host\SessionEvent;
 use SugarCraft\Code\Host\SessionHost;
@@ -286,6 +287,14 @@ final class ServerContext
         foreach ($this->feeds as $feed) {
             $feed->unsubscribe($client);
         }
+        // C-TOOL-6.i: a registration belongs to the connection that made it —
+        // the moment the socket is gone the tools are gone with it, and any
+        // call already opened against them fails at once instead of waiting
+        // out its deadline. Swept over every open host, not just served ones:
+        // a client may have registered against a session it never subscribed.
+        foreach ($this->hub->openSessionIds() as $sessionId) {
+            $this->hub->get($sessionId)?->forgetClientTools($client->id());
+        }
     }
 
     /** @return list<Client> */
@@ -365,6 +374,23 @@ final class ServerContext
         // never left silent again.
         $host->onSummaryChanged(function () use ($sessionId): void {
             $this->broadcast(EventEnvelope::server(EventType::SESSION_UPDATED, $this->summaryOf($sessionId)));
+        });
+
+        // C-TOOL-6.i: when the engine calls a client__* tool, the host opens a
+        // pending call and hands it here; the announcement rides the feed the
+        // very same line below attaches, so every subscriber of THIS session
+        // hears it and only a client whose current registration matches
+        // answers (tools.client.result names the registrationId). Bound here,
+        // like the summary lane, so a hub-reopened host is never left mute.
+        $host->onClientCall(function (PendingClientCall $pending, string $clientKey, string $registrationId) use ($host, $sessionId): void {
+            $nowMs = (int) \floor(($this->clock)() * 1000);
+            $host->announce(SessionEvent::new(SessionEvent::TOOL_CLIENT_CALL, [
+                'callId' => $pending->callId,
+                'registrationId' => $registrationId,
+                'name' => $pending->name,
+                'arguments' => $pending->arguments,
+                'deadlineAt' => $nowMs + $pending->deadlineSeconds * 1000,
+            ], $sessionId, null, $nowMs));
         });
 
         return $this->feeds[$sessionId] = SessionFeed::attach(
@@ -683,6 +709,10 @@ final class ServerContext
         // bound it — a host released from following announces nothing, the
         // same silence its missing status lane keeps.
         $this->hub->get($sessionId)?->onSummaryChanged(null);
+        // C-TOOL-6.i: same lifetime for the client-call relay — with no feed
+        // there is no subscriber to ask, and the engine's own deadline is the
+        // answer path again (the pending call settles as an error on expiry).
+        $this->hub->get($sessionId)?->onClientCall(null);
     }
 
     /** Detach every feed (the server is stopping). */

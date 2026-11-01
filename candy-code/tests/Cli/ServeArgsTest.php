@@ -189,6 +189,7 @@ final class ServeArgsTest extends TestCase
             'allowed ip prefix' => [['serve'], ['CANDY_CODE_SERVER_ALLOWED_IPS' => '10.0.0.0/40'], [], 'is not an IP address or CIDR range'],
             'allowed ip key type' => [['serve'], [], ['server.allowedIps' => [7]], 'list of strings'],
             'dir browse key type' => [['serve'], [], ['server.dirBrowse' => 'yes'], 'server.dirBrowse in the user config must be true or false'],
+            'client tools key type' => [['serve'], [], ['server.clientTools' => 'yes'], 'server.clientTools in the user config must be true or false'],
             'bypass key type' => [['serve'], [], ['server.allowBypass' => 'yes'], 'must be true or false'],
             'list type' => [['serve'], [], ['server.allowedOrigins' => [1]], 'list of strings'],
         ];
@@ -287,6 +288,17 @@ final class ServeArgsTest extends TestCase
             self::assertStringContainsString('cannot be used: no directory at', $e->getMessage());
         }
         self::assertSame(NonInteractive::EXIT_CONFIG, Serve::run(self::parse(['serve', '--allow-dir-browse', '--browse-root', '/no/such/dir/anywhere'])));
+    }
+
+    /**
+     * C-TOOL-6.i: `server.clientTools` is a user-config-only bool, exactly
+     * like the dir-browse key above it — no flag turns it on at launch, and
+     * a non-bool stored value costs the launch.
+     */
+    public function testTheClientToolsKeyIsAUserConfigBool(): void
+    {
+        self::assertFalse(self::config(['serve'])->clientTools, 'client-hosted tools are off until the user says so');
+        self::assertTrue(self::config(['serve'], [], ['server.clientTools' => true])->clientTools);
     }
 
     /**

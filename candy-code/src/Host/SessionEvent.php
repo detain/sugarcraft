@@ -67,6 +67,12 @@ final class SessionEvent
     // for the next settle — so neither joins DURABLE_TYPES.
     public const PROMPT_SUGGESTED = 'prompt.suggested';
     public const CONTEXT_CHANGED = 'context.changed';
+    // C-TOOL-6.i: the host asking a registered client to RUN one of its
+    // client__* tools now. Ephemeral by construction — the call rides a live
+    // pending slot with a wall-clock deadline, and a client that missed the
+    // event has nothing to replay it from (the turn's tool call is already
+    // resolved by timeout or teardown), so it never joins DURABLE_TYPES.
+    public const TOOL_CLIENT_CALL = 'tool.client.call';
 
     /**
      * The types Appendix O §6.5 marks durable (D) among those this package

@@ -138,6 +138,17 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withHelp(Lang::t('settings.server.dirBrowse.help'))
                 ->withReaderSymbol(ServerConfig::class . '::resolve')
                 ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
+            // C-TOOL-6.i: the client-hosted tools door. User-config only like
+            // its siblings — a repository a person clones must not be able to
+            // open the door that lets a connected client hand the model tools
+            // whose bodies run on that client's machine.
+            SettingDefinition::new('server.clientTools', SettingType::Bool, false)
+                ->withCategory(SettingCategory::Server)
+                ->withRiskClass(RiskClass::Security)
+                ->withLabel(Lang::t('settings.server.clientTools.label'))
+                ->withHelp(Lang::t('settings.server.clientTools.help'))
+                ->withReaderSymbol(ServerConfig::class . '::resolve')
+                ->withReadBy('`Cli\Serve::config()` → `ServerConfig::resolve()`'),
             SettingDefinition::new('server.browseRoot', SettingType::Path)
                 ->withCategory(SettingCategory::Server)
                 ->withRiskClass(RiskClass::Security)

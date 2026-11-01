@@ -32,7 +32,11 @@ final class MethodSpec
      */
     public static function new(string $name, Scope $scope, string $description, \Closure $handler, bool $sideEffects = false): self
     {
-        if (\preg_match('/^[a-z]+\.[a-zA-Z]+$/', $name) !== 1) {
+        // Namespace segments are lowercase words; the final verb keeps its
+        // camelCase. Two-or-more leading segments are legal since C-TOOL-6.i:
+        // `tools.client.register` names a tool family under a sub-namespace,
+        // and every existing single-dot name still matches the same shape.
+        if (\preg_match('/^[a-z]+(\.[a-z]+)*\.[a-zA-Z]+$/', $name) !== 1) {
             throw new \InvalidArgumentException(\sprintf('A method name is namespace.verb; got "%s".', $name));
         }
 
