@@ -1299,7 +1299,7 @@
   "W37/36/37/38/39 loop reviewers": "ORPHANS header REMOVED; W37 ALIVE 8380B@02:08, W38 ALIVE 7785B@02:06, W39 REVIVED 8474B@02:10 (was 1767 @01:53) \u2014 do not twin; W40 ses_e6a17dcd3ffe 2963B static since 02:02 = ONE static era, ARMED re-cut if still static at next lead wake.",
   "W40 loop": "ses_e6a17dcd3ffePcCcKQ0Lzl2NiY: static 2963B since 02:02:08 across 02:06/02:08/02:10 stats; one-era rule: re-stat at next wake, two static eras -> fresh re-cut with lineage."
  },
- "master_tip": "a2745916c",
+ "master_tip": "a48287d9a902a9ec8133dadf4bdb5af334792a91",
  "master_tip_at_dispatch": "9fb981c5c",
  "master_tip_observed": "16fe158c8",
  "next_fill_queue": [],
@@ -2379,6 +2379,8 @@
   31,
   32,
   33,
+  34,
+  36,
   37,
   38,
   39,
@@ -3473,5 +3475,6 @@
  "note_t1098": "W37 wave loop CLOSED at r1 CLEAN (8,380 B review, anchor 16d1a94e8 no advance); 7/7 SHAs ancestor+law-proven; \u00a77 riders listed (durations 5 new phpunit files, HookConfig @return seam); ReadPathCensus 1F charged to C-TUI-6.n/W40 not W37. Welder B2 lineage: C-TOOL-6.g picks+regen landed 02:19-02:22 (fa17dc725..16fe158c8), mark+WELD.md evidence commit 6122dfae6, \u00a73 W35 row stays lead duty (step-loop complete).",
  "note_t1099": "W38 wave loop CLOSED at r1 (C=0 M=0 MINOR=2 NIT=1; 7,785 B, anchor 16d1a94e8): all 12 SHAs ancestor+law-proven, own gates EXACT incl pairing 39T/192A; MINOR-1 ReadPathCensus->W40/6.n ledger, MINOR-2 RuntimeTest idle-compaction 3F->W39 gate ledger, NIT-1 6.i mark W38->W39 wording fix (W39 account).",
  "note_t1100": "W39 wave loop CLOSED at r1 (C=0 M=0 MINOR=1 NIT=1; 8,474 B): 14/14 SHAs ancestor+law clean, gates all OK; MINOR-1 cured AT the close flip (C-TUI-6.d \u00a74:3981 arc sentence landed); NIT-1 PtyRelay.php:270 owner adjudication open; ReadPathCensus foreign routed W40.",
- "note_t1101": "W40 wave loop CLOSED at r1 CLEAN (7,127 B review, disk-vs-brief 9,618 B erratum disclosed): all 8 SHAs ancestor+law clean, gates all OK/exact-disclosed, mid-review advance to 16fe158c8 adjudicated W40-members-untouched. waves_closed now [1..33,37,38,39,40]. W34/W35/W36 stay open (loops incomplete: W34/W36 members in flight, W35 step-loop complete - \u00a73 row is lead wave-loop duty). Push milestone after W40 commit: FF-only."
+ "note_t1101": "W40 wave loop CLOSED at r1 CLEAN (7,127 B review, disk-vs-brief 9,618 B erratum disclosed): all 8 SHAs ancestor+law clean, gates all OK/exact-disclosed, mid-review advance to 16fe158c8 adjudicated W40-members-untouched. waves_closed now [1..33,37,38,39,40]. W34/W35/W36 stay open (loops incomplete: W34/W36 members in flight, W35 step-loop complete - \u00a73 row is lead wave-loop duty). Push milestone after W40 commit: FF-only.",
+ "note_t1093c": "t1093 row-only close-flip weld (no picks/regen/dist): W34 closed r1 \u2014 verbatim 'WAVE VERDICT: FINDINGS C=0 M=0 MINOR=0 NIT=5' from lanes/W34/WAVE-REVIEW-1.md 15,881 B (flip ad41fe82c; NIT-1..5 ledger-wording riders routed to \u00a77 closeout, foreign RED C idle-compaction one leg routed to battery, ReadPathCensus MediaMethods stays 6.n-routed unchanged); W36 closed r1 CLEAN \u2014 verbatim 'WAVE VERDICT: CLEAN \u2014 0 CRITICAL / 0 MAJOR / 0 MINOR / 1 NIT' from lanes/W36/WAVE-REVIEW-1.md 11,485 B :74 (flip a48287d9a; NIT F2 HOOKS.md :1448 4.e un-itemized doc touch = one ledger-word closeout rider). waves_closed += [34,36] -> [1..34,36..40]; welded_count 327 unchanged; W35 stays open. FLIP.md weld-notes in lanes/W34/ + lanes/W36/. No push (lead batches)."
 }
