@@ -536,6 +536,7 @@ candy-code/tests/Attachments/ContextMentionsTest.php	0.344	13
 candy-code/tests/ClaudeCodeMcpClientArgumentsShapeTest.php	0.343	3
 candy-code/tests/Cli/BootstrapStatusLineWiringTest.php	0.340	4
 candy-code/tests/Cli/NonInteractiveOtelExportTest.php	0.339	2
+candy-code/tests/Server/CanvasPageTest.php	0.337	9
 candy-code/tests/Chat/SessionChangeResetsTest.php	0.335	4
 candy-code/tests/Skills/SkillLoaderTest.php	0.335	61
 candy-code/tests/Tools/WebFetchMarkdownTest.php	0.335	12
@@ -1229,6 +1230,7 @@ candy-code/tests/Renderer/BidiOverrideFrameTest.php	0.008	7
 candy-code/tests/Renderer/PasteIngestTest.php	0.008	20
 candy-code/tests/Skills/SkillMentionTest.php	0.008	13
 candy-code/tests/Skills/SkillRegistryTest.php	0.008	48
+candy-code/tests/Server/CanvasLinksTest.php	0.008	6
 candy-code/tests/Support/AtomicFileWriterReplaceTest.php	0.008	4
 candy-code/tests/Support/CommandLoaderContainmentTest.php	0.008	10
 candy-code/tests/Support/FrontmatterKeyAuditTest.php	0.008	23

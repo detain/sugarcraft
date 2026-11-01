@@ -48,3 +48,24 @@ schema 8,171 / SERVER.md 1,626 (canvas rows :303-304 must survive) / generated.t
 
 ## Cleanup
 After absorption proof: `git worktree remove ../cc-cmp-C-TOOL-6.g` + `git branch -D cc/C-TOOL-6.g` (done at milestone commit; see §4 mark block).
+
+## Step 2 (COMPLETED) — trio regen + manual rows → committed 16fe158c8
+schema +2/−1 (MEDIA_REF kind enum html), SERVER.md +2/−0 two MANUAL canvas rows verbatim (regen never derives), generated.ts +1/−1 @:227, dist rebuild local node_modules (NEVER npm ci): index-D7O4eLLT.js→C5qC4V7n.js, index-BmdNjbGT.css→YMJl61cb.css + index.html/manifest.json (NO sw.js change). vue-tsc rc0. Build re-run reproduced identical hashes.
+
+## Step 3 (COMPLETED) — gates at merged tip (cwd=candy-code plain pipe, PtyRun expect-miss excluded)
+- WELD-MUST-GREEN pairing (BashSandbox|BubblewrapHardening):: OK 39T/192A.
+- drift duo (ProtocolSchema|ServerProtocolDocumentation):: OK 13T/362A (green-at-regen by design).
+- canvas family 6-class :: OK 85T/426A — merged per-class truth CanvasPageTest 9T/63A + CanvasLinksTest 6T/21A (lane's 10+5 split off-by-one; SAME 15T total; 89T/450A earlier read = pre-adjudication filter shape; 85/426 fresh-adjudicated at 16fe158c8 this shell).
+- guard batch 252T/33718A 5F all FOREIGN-attributed: Stderr×2 PtyRelay-era · ReadPathCensus = NIT-3 (C-TUI-6.n 1784d207f audio sites, base-proven at 16d1a94e8, routed to lead) · GlobDialect = NIT-1 §7 battery rider (assert NEITHER number) · SwallowingCatch = NIT-2 ClaudeSettingsImportTest.php:232 owed by that welder. DocFigure green (MEDIA.md union survives).
+- vitest serial: lane 3 specs 43T PASS; full suite 104 files 917T, 4F = C-TOOL-6.l typing-pane trio (shellsInput 2 + processesSection 2) — the §7(1) 28/4-until-rider state, foreign, reported-not-cured.
+
+## Steps 4-6 (COMPLETED) — marks, durations, evidence
+- §4 flip at :3803: ✅ + five LANDED shas by text + full record incl r1 CLEAN, three-incarnation review arc, #111 arc narrative, reference-intel concurrence. Marks 326→327 (python startswith census, W35 7/7 after flip: 4.d/6.f/5.c/6.c/TUI-6.c/5.b all ✅ verified census).
+- Truth-fixes applied pre-commit: sw.js clause removed; "wave closes, push" → duties actually done; "ALL CONFLICT-FREE" → TWO doc-union conflicts KEEP-BOTH; durations clause MINTED not battery.
+- durations.tsv rows MINTED live --log-junit: CanvasPageTest.php 0.337/9 · CanvasLinksTest.php 0.008/6 (sorted positions).
+- Evidence REPORT.md/REVIEW-1.md + run-state fold landed EARLY in twin-lineage commits 6122dfae6 (evidence+fold; §4 mark/durations NOT included there — this commit carries them) + 869d9ca68 (W37 wave-close, lead-lineage duty, disclosed).
+- THIS commit (plan as-found incl lead's W37/W38 §3 close-flips + C-TUI-6.d W39 annotation, disclosed bundling + durations rows + WELD.md completion).
+
+## Steps 7-9 — run-state correction + proofs + prune
+- run-state as-commended at 6122dfae6 left welded_count=326 vs len(welded)=327 and master_tip=16fe158c8; corrected next commit: count 327 (assert len==count==327), master_tip=<record sha>.
+- Absorption: `git cherry master cc/C-TOOL-6.g` = '+ 111c077e6' '− 26bf24b3c' '− 3eb1072f5' '+ 3fd9e10c3' '− ccab7155c' — 3 '-' patch-id exact; both '+' CONTENT-PROVEN (MEDIA.md union re-wrap; ToolCard line-multiset identical) per §4 record. Then worktree ../cc-cmp-C-TOOL-6.g + branch cc/C-TOOL-6.g pruned. NO push (lead-only).
