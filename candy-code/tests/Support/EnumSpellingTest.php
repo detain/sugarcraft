@@ -144,15 +144,17 @@ final class EnumSpellingTest extends TestCase
     }
 
     /**
-     * `memory` keeps its documented fallback (nothing reads it yet); `effort`
-     * and `isolation` refuse an unknown spelling since roadmap 4.1-1.
+     * `memory` REFUSES an unknown spelling too now: the agent-scoped memory
+     * tier (C-AGT-3.b) gave the field a reader, and a field with a reader
+     * silently falling back to `user` is exactly the failure mode roadmap 4.1-1
+     * closed for `effort` and `isolation`. All three share one resolver.
      */
     public function testNativePresetReaderKeepsEachFieldsDocumentedFallback(): void
     {
-        $preset = $this->loadNative('memory: nonsense');
-        $this->assertSame(MemoryScope::User, $preset->memory);
+        $preset = $this->loadNative('memory: local');
+        $this->assertSame(MemoryScope::Local, $preset->memory);
 
-        foreach (['effort: nonsense', 'isolation: nonsense'] as $line) {
+        foreach (['memory: nonsense', 'effort: nonsense', 'isolation: nonsense'] as $line) {
             try {
                 $this->loadNative($line);
                 $this->fail("`{$line}` loaded instead of being refused");
