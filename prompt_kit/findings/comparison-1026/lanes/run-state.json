@@ -1299,7 +1299,7 @@
     "W37/36/37/38/39 loop reviewers": "ORPHANS header REMOVED; W37 ALIVE 8380B@02:08, W38 ALIVE 7785B@02:06, W39 REVIVED 8474B@02:10 (was 1767 @01:53) \u2014 do not twin; W40 ses_e6a17dcd3ffe 2963B static since 02:02 = ONE static era, ARMED re-cut if still static at next lead wake.",
     "W40 loop": "ses_e6a17dcd3ffePcCcKQ0Lzl2NiY: static 2963B since 02:02:08 across 02:06/02:08/02:10 stats; one-era rule: re-stat at next wake, two static eras -> fresh re-cut with lineage."
   },
-  "master_tip": "16fe158c8",
+  "master_tip": "90417ce8866c7d6e25162f3f9e3a23aa67ef912a",
   "master_tip_at_dispatch": "9fb981c5c",
   "master_tip_observed": "16fe158c8",
   "next_fill_queue": [],
@@ -3384,7 +3384,7 @@
     "P-TABS.h",
     "C-TOOL-6.g"
   ],
-  "welded_count": 326,
+  "welded_count": 327,
   "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
   "welder_inflight_note": "WELDER ses_e7448801cffejnqD7XXhFFoIJG RUNNING: its welded_count=243 + the \u00a74 \u2705 94432cfd1 C-SES-8.a line are UNCOMMITTED working-tree writes (a commit cannot contain its own SHA) -> do NOT read as landed; do NOT write run-state concurrently except minimal fresh-read targeted patches; RE-VERIFY my TOOL-2.f weld_pending + TOOL-2.g entries survive its fold.",
   "welder_session": "ses_e7c372e47ffe4xVvmkxYJAULO1",
