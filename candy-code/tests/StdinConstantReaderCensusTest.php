@@ -389,6 +389,10 @@ final class StdinConstantReaderCensusTest extends TestCase
         'sugar-core/src/WorkerPool.php' => ['php://fd/0'],
         'sugar-image/src/Detect.php' => ['STDIN'],
         'candy-code/src/Agents/ProcessExecutor.php' => ['STDIN'],
+        // §7 closeout (C-TUI waves): the alternate-screen probe. stream_isatty
+        // on a CLOSED descriptor 0 answers false — the safe direction, and the
+        // method around :2050 guards the freed resource explicitly. DEGRADES.
+        'candy-code/src/App/App.php' => ['STDIN'],
         'candy-code/src/Cli/Acp.php' => ['STDIN'],
         'candy-code/src/Cli/NonInteractive.php' => ['STDIN'],
         // plan_comparison W4 (PRV-4): loginStoreKey() reads the typed provider key with
@@ -398,7 +402,19 @@ final class StdinConstantReaderCensusTest extends TestCase
         // EXIT_FAILURE. DEGRADES, never throws.
         'candy-code/src/Cli/Subcommands.php' => ['STDIN'],
         'candy-code/src/Hooks/BuiltIn/BashEscapeDenyHook.php' => ['/dev/stdin'],
+        // §7 closeout (C-MCP waves): run()'s DEFAULT argument — the constant is
+        // only evaluated when a caller omits $stdin, and every in-suite caller
+        // passes an explicit stream; the serve host in production owns its own
+        // descriptor 0. DEGRADES inside the suite, structurally.
+        'candy-code/src/MCP/Serve/McpServeHost.php' => ['STDIN'],
         'candy-code/src/Server/Workspace/WorkspaceHostProcess.php' => ['STDIN'],
+        // §7 closeout (sandbox waves): the proxy parent guards the constant
+        // (`defined('STDIN') ? STDIN : null`, so a freed descriptor answers
+        // null), and the child process reads one JSON frame over its OWN
+        // stdin — spawned, never in-process under the suite. DEGRADES / OWN
+        // PROCESS respectively.
+        'candy-code/src/Tools/Sandbox/EgressProxy.php' => ['STDIN'],
+        'candy-code/src/Tools/Sandbox/EgressProxyProcess.php' => ['STDIN'],
         // rv-qa-1: the no-tty pre-flight names \STDIN in stream_isatty() only. A closed
         // descriptor 0 makes stream_isatty() answer false, which is the SAFE direction —
         // the launch is refused with the usage line instead of degrading into a read.

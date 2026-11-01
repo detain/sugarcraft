@@ -69,6 +69,10 @@ final class SwallowingCatchSrcCensusTest extends TestCase
             1,
             'unlink of a verified-context artifact already wrapped in @; an undeletable temp file is not a forget failure',
         ],
+        'src/Background/PtyRelay.php::main' => [
+            1,
+            'close() on a pty that never started while the launch-failure refusal below is already the answer; the sibling arm at the first close() says the same in a comment, this one was bare when the census grew',
+        ],
         'src/Cli/Bootstrap.php::mcpClient' => [
             1,
             'a trust-pin record that failed to write costs only a re-record on the next launch (its own comment above the try says so)',
@@ -104,6 +108,10 @@ final class SwallowingCatchSrcCensusTest extends TestCase
         'src/Session/SessionStore.php::immediateTransaction' => [
             1,
             'swallows the ROLLBACK "no transaction is active" so the original PDOException is the one rethrown on the next line',
+        ],
+        'src/Tools/BuiltIn/SkillTool.php::execute' => [
+            1,
+            'the typed-skill re-parse is an upgrade of a skill the registry ALREADY holds; a parse accident (the file moved under us) falls back to the loaded skill rather than failing the fork — the comment above the if says a parse accident must not lose the turn',
         ],
     ];
 
