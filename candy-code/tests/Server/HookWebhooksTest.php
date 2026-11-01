@@ -93,7 +93,11 @@ final class HookWebhooksTest extends TestCase
             null,
             null,
             null,
-            HookWebhooks::new($hooks, $run ?? $this->run, $clock),
+            null,
+            // Named arg: the webhooks slot follows the canvas slot in the Server
+            // positional signature; naming it keeps this call drift-proof against
+            // any further parameter inserts between them.
+            webhooks: HookWebhooks::new($hooks, $run ?? $this->run, $clock),
         );
         $this->server->start();
         $this->port = (int) $this->server->port();

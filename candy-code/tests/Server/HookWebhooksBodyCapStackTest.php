@@ -102,7 +102,10 @@ final class HookWebhooksBodyCapStackTest extends TestCase
             null,
             null,
             null,
-            HookWebhooks::new(
+            null,
+            // Named arg — see HookWebhooksTest::serve(); drift-proof against future
+            // inserts into the Server positional signature.
+            webhooks: HookWebhooks::new(
                 ['deploy' => ['secret' => self::SECRET, 'prompt' => '{{payload}}', 'permissionMode' => null, 'rate' => 5]],
                 $run,
                 static fn (): float => \microtime(true),
