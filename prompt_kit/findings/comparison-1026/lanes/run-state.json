@@ -332,7 +332,7 @@
   "CI-1030 r3 dual-verdict provenance: REVIEW-3.md on disk = twin's 5542B (0C/2M, MOOTED post-weld); survivor 7708B 0C/0M/1m/1n in notifications+anomalies; FIX-1.md/REPORT.md safe main-tree lanes/CI-1030/.",
   "C-TUI-5.c lane REPORT.md (5109B) lost to 1030U worktree prune \u2014 it was UNTRACKED-in-worktree, never branch-committed; reviews safe on-branch (a12ce3931) and \u00a74 mark carries the verdict record; re-emittable from the lane build lineage if closeout wants the prose."
  ],
- "extra_agents": 2,
+ "extra_agents": 1,
  "fix_queue": [
   "W25-m1 (master-direct, NEXT welder STEP 0.4): ReadPathCensusTest red \u2014 add roster rows Session/Import/RemoteSessionPush.php::file_get_contents (W25, C-SES-7.g) AND Server/ServerConfig.php (foreign C-WEB-5.a)."
  ],
@@ -1206,15 +1206,7 @@
   "C-TOOL-6.a": "RESOLVED-t643 \u2014 OWNER-ORDERED RETIREMENT. Worktree /home/sites/cc-cmp-C-TOOL-6.a pruned (--force, dirt proven stale-only) and branch cc/C-TOOL-6.a deleted. Absorption double-proven before pruning: `git log --cherry-pick --right-only master...cc/C-TOOL-6.a` = EMPTY, and 9c887f03b confirmed a master ancestor. \u00a74 mark present in the landed blob at plan_comparison.md:3193 (`#### \u2705 9c887f03b C-TOOL-6.a \u2014 Browser-control and computer-use MCP presets (docs)`), and the step is counted inside the closed W26 row. The two dirty files were diffed against master FIRST: BinCandyCodeDispatchTest.php differs only by master being AHEAD (usage/import-claude rows, the two import refusal rows, the DoctorChecks rename pair, the C-SES-8.b widened key list); UsageSubcommandTest.php differs only at :150 where master carries the C-SES-8.b reason/sources superset. ZERO unique content, so nothing was lost. Evidence dir prompt_kit/findings/comparison-1026/lanes/C-TOOL-6.a/ KEPT \u2014 BRIEF.md there is tracked history.",
   "note": "This closes the long-standing FOREIGN-KEPT exception. `git worktree list` is now main + the two live lane worktrees only, and the ONLY cc/* branches remaining are the two live lanes."
  },
- "inflight": {
-  "C-TUI-6.h": {
-   "stage": "build",
-   "round": 1,
-   "worktree": "/home/sites/cc-cmp-C-TUI-6.h",
-   "branch": "cc/C-TUI-6.h",
-   "note": "BUILT 7e38caae6 all 12 lang files + LangCommunityLocaleTest; weld HELD until C-WEB-5.f welds then re-add 5.f en.php keys (strict-parity last). builder ses_e69fe13ecffepi76dZPdsoheG5 completed."
-  }
- },
+ "inflight": {},
  "last_lead": "cc-cmp-lead(1030AA)",
  "late_rulings": [
   {
@@ -1289,7 +1281,7 @@
   "W37/36/37/38/39 loop reviewers": "ORPHANS header REMOVED; W37 ALIVE 8380B@02:08, W38 ALIVE 7785B@02:06, W39 REVIVED 8474B@02:10 (was 1767 @01:53) \u2014 do not twin; W40 ses_e6a17dcd3ffe 2963B static since 02:02 = ONE static era, ARMED re-cut if still static at next lead wake.",
   "W40 loop": "ses_e6a17dcd3ffePcCcKQ0Lzl2NiY: static 2963B since 02:02:08 across 02:06/02:08/02:10 stats; one-era rule: re-stat at next wake, two static eras -> fresh re-cut with lineage."
  },
- "master_tip": "e9da7a605-pre-fold",
+ "master_tip": "8416644c5",
  "master_tip_at_dispatch": "9fb981c5c",
  "master_tip_observed": "16fe158c8",
  "next_fill_queue": [],
@@ -1972,7 +1964,7 @@
   "C-WEB-5.b/REVIEW-2.md": 570
  },
  "status": "RUNNING",
- "tick": "t1124-w35w42-close-fold-push",
+ "tick": "t1131-6h-clean-weld-dispatched",
  "tip": "4f1bdab31",
  "updated": "2026-11-01T03:27:19.167910",
  "wave_flip_owed": [
@@ -3280,6 +3272,7 @@
   "C-TOOL-6.d",
   "C-TOOL-6.e",
   "C-TOOL-6.f",
+  "C-TOOL-6.g",
   "C-TOOL-6.h",
   "C-TOOL-6.i",
   "C-TOOL-6.j",
@@ -3320,6 +3313,7 @@
   "C-TUI-6.e",
   "C-TUI-6.f",
   "C-TUI-6.g",
+  "C-TUI-6.h",
   "C-TUI-6.i",
   "C-TUI-6.j",
   "C-TUI-6.k",
@@ -3357,6 +3351,7 @@
   "C-WEB-5.c",
   "C-WEB-5.d",
   "C-WEB-5.e",
+  "C-WEB-5.f",
   "C-WEB-5.g",
   "C-WEB-7.a",
   "C-WEB-7.b",
@@ -3387,9 +3382,7 @@
   "P-TABS.e",
   "P-TABS.f",
   "P-TABS.g",
-  "P-TABS.h",
-  "C-TOOL-6.g",
-  "C-WEB-5.f"
+  "P-TABS.h"
  ],
  "welded_count": 328,
  "welder": "ses_e841b9938ffeRqSqxxjQ8TPQLg",
@@ -3528,5 +3521,7 @@
  "close_notes": {
   "t1124": "W35 closed at a4bec3d57 (flip+close block) + b40c2c78e (waves_closed+=35) by prior finisher -- verified on disk at intake, NOT re-flipped. W42 closed at e9da7a605 (flip+close block) + this fold. waves_closed=[1..40,42]; 41 STAYS OUT -- W41 awaits C-TUI-6.h (sole remaining step; live lane). Authorities: lanes/W35/WAVE-REVIEW-2.md final CLEAN verdict (r1 C=0 M=1 -> cured 7267e6f99 + rider 761d1090e, r2 green-certified pair 21T/238A + guard batch 145T/29055A); lanes/W42/WAVE-REVIEW-1.md 5,686 B WAVE VERDICT: CLEAN, anchor 26462c3ae; NIT carry (6.i SERVER.md cite) recorded in W35 close block, history verbatim."
  },
- "note_t1124": "t1124 welder W35+W42 close-fold batch: run-state folded (waves_closed+=42, master_tip=e9da7a605-pre-fold), banks W35 r1-addendum+WAVE-REVIEW-2+FLIP-REPORT + lanes/W35-CLOSE-W42-CLOSE/REPORT.md; push milestone #5 follows same session."
+ "note_t1124": "t1124 welder W35+W42 close-fold batch: run-state folded (waves_closed+=42, master_tip=e9da7a605-pre-fold), banks W35 r1-addendum+WAVE-REVIEW-2+FLIP-REPORT + lanes/W35-CLOSE-W42-CLOSE/REPORT.md; push milestone #5 follows same session.",
+ "note_t1093n": "t1093n: 6.h builder DONE disk-verified (3 commits off 26462c3ae, detain both greps, tree clean). r1 reviewer dispatched background=true. Count truth: plan 328 real steps (run-state welded list carries pseudo-entry ADHOC-CI-1030), 327 welded, 6.h last. W42 closed e9da7a605+8416644c5; waves_closed [1..40,42]; origin b40c2c78e; PUSH #5 after W41 flip. Untracked sweep owed at batch close: lanes/W34/WAVE-REVIEW-1.md, W35/WAVE-REVIEW-1+2, FIX files?, C-WEB-5.f/WELD.md, W42 confirmation 7,068B, C-TUI-6.h worktree REPORT.md.",
+ "note_t1132": "C-TUI-6.h FINAL-STEP WELD landed: picks e3190757e/7303d08ca/e41295110 + cure f3e31905d + weld 1fb8ab334 on 8416644c5; welded 328->329 == raw ####-mark-heading count 329 (328 genuine step marks + 1 CI-1030 ad-hoc record mark; lead dispatch figures were stale-vs-disk, reconciled by set-equality \u2014 lanes/C-TUI-6.h/WELD.md heading reconciliation); W41 members ALL welded \u2014 wave loop r1 + ####-W41 flip + milestone push are lead duty; lane branch/worktree KEPT (close welder prunes); extra_agents=1 retained for duplicate r2 reviewer lineage ses_e69c62e46ffe (dispatch record) / ses_e69c24d2dffe (disk inflight record at fold time)"
 }
