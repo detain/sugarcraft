@@ -1157,6 +1157,19 @@ export interface Methods {
       limits?: Record<string, number>
     }
   }
+  /** The tail of the server log, flattened and capped; admin scope is the only door (R13). */
+  "server.logs": {
+    params: {
+      /** How many trailing lines to answer with; the newest survive the line and byte caps. Default 100. */
+      lines?: number
+    }
+    result: {
+      /** Flattened server.log lines, oldest first (control bytes collapsed, each line clipped); the newest survive the byte cap. */
+      lines: string[]
+      /** `no_log` when this server has no regular server.log to read — a foreground launch never wrote one; null otherwise. Machine token: server text stays untranslated, the browser maps it to chrome. */
+      reason?: string | null
+    }
+  }
   /** Stop the server, draining running turns first. */
   "server.shutdown": {
     params: {
@@ -1916,6 +1929,7 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "server.health": "read",
   "server.hello": "read",
   "server.info": "read",
+  "server.logs": "admin",
   "server.shutdown": "admin",
   "server.strings": "read",
   "session.archive": "write",

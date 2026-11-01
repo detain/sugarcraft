@@ -527,6 +527,7 @@ it and the two tables below are generated from the code
 | `server.health` | read |  | — | Liveness and load. |
 | `server.hello` | read |  | — | The handshake: protocol version, features, limits; optionally resume subscriptions (snapshotLimit pages their reset snapshots). |
 | `server.info` | read |  | — | What this server offers: providers, agents, commands, tools, permission modes. |
+| `server.logs` | admin |  | — | The tail of the server log, flattened and capped; admin scope is the only door (R13). |
 | `server.shutdown` | admin | yes | — | Stop the server, draining running turns first. |
 | `server.strings` | read |  | — | The web UI chrome strings in one locale (C-TUI-6.f): only web.-prefixed keys; server, tool and model text stay untranslated. |
 | `session.archive` | write | yes | `sessionId` | Move a session to the archive tray; it leaves the default listing. |

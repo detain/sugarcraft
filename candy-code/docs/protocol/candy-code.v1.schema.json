@@ -4241,6 +4241,46 @@
                 ]
             }
         },
+        "server.logs": {
+            "description": "The tail of the server log, flattened and capped; admin scope is the only door (R13).",
+            "scope": "admin",
+            "idempotent": false,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "lines": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 200,
+                        "description": "How many trailing lines to answer with; the newest survive the line and byte caps. Default 100."
+                    }
+                }
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "lines": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "maxItems": 200,
+                        "description": "Flattened server.log lines, oldest first (control bytes collapsed, each line clipped); the newest survive the byte cap."
+                    },
+                    "reason": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 35,
+                        "description": "`no_log` when this server has no regular server.log to read — a foreground launch never wrote one; null otherwise. Machine token: server text stays untranslated, the browser maps it to chrome."
+                    }
+                },
+                "required": [
+                    "lines"
+                ]
+            }
+        },
         "server.shutdown": {
             "description": "Stop the server, draining running turns first.",
             "scope": "admin",
