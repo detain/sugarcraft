@@ -264,7 +264,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         'Agents/WorktreeConfig.php|.candy-code/config.json' => self::REPOSITORY,
         // The settings layering's project tier. Both files arrive with a CLONE,
         // and neither feeds this collector — see the gap list in
-        // {@see testTheTenThatFeedTheCollectorAndTheFourteenThatAreNamedGaps()}
+        // {@see testTheTenThatFeedTheCollectorAndTheNineteenThatAreNamedGaps()}
         // for why a silent refusal is right for these two specifically. THREE
         // rows joined the repository-chosen block in this change-set; the row
         // above is the third and it is a RECLASSIFICATION, not a new path, so
@@ -316,6 +316,36 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // (the OD2 discipline its native `.candy-code/rules` row already keeps).
         'Context/RuleLoader.php|.claude/rules' => self::BOTH,
         'Context/RuleLoader.php|.cursor/rules' => self::BOTH,
+        // C-TUI-6.g: the output-styles tier, one literal in `RuleLoader`
+        // serving both `~/.candy-code/styles` and `<repoRoot>/.candy-code/styles`
+        // — repository-chosen on the project leg exactly like the rules trees
+        // above, gated loader-local in the same `refusedPaths()` and named as a
+        // GAP beside them (§7 closeout classification).
+        'Context/RuleLoader.php|.candy-code/styles' => self::BOTH,
+        // C-CTX-6.a: the per-agent memory stores. The bare tier is ONE string
+        // serving both `~/.candy-code/agent-memory/<name>` and
+        // `<root>/.candy-code/agent-memory/<name>`; the `-local` sibling is a
+        // `<root>`-only tier, so the checkout picks its location outright. Both
+        // are written behind `ContainedPath` gates at their call sites and refuse
+        // nothing of their own to drain — named GAPS (§7 closeout classification).
+        'Memory/AgentMemory.php|.candy-code/agent-memory' => self::BOTH,
+        'Memory/AgentMemory.php|.candy-code/agent-memory-local' => self::REPOSITORY,
+        // C-TUI-6.m: `/newagent`'s two project-tree paths. TARGET is the same
+        // `<root>/.candy-code/agents` the preset readers above classify — a
+        // SECOND file arriving with it, which is exactly what the derivation
+        // exists to catch — because the prompt lists the names already taken
+        // there before drafting. DIRECTORY is the proposal draft tree beside it,
+        // where a `/newagent` write lands instead of a refused direct write.
+        // Neither reads a preset nor refuses anything here: named GAPS, the
+        // `Host/Commands/NewRulePrompt.php` discipline in full (§7 closeout).
+        'Host/Commands/NewAgentPrompt.php|.candy-code/agents' => self::REPOSITORY,
+        'Host/Commands/NewAgentPrompt.php|.candy-code/agents-proposed' => self::REPOSITORY,
+        // C-TOOL-6.n: `node_modules/.bin/prettier` ships INSIDE the checkout and
+        // is deliberately project-local — the repository chooses the very binary
+        // exec'd, which is why the formatter allowlist is the attack this row
+        // exists to make visible. It reads nothing and refuses nothing, so there
+        // is nothing to drain: a named GAP (§7 closeout classification).
+        'Format/FormatAutoTable.php|.bin/prettier' => self::REPOSITORY,
 
         // User-tier: rooted at `~`, so nobody but the user chose the location.
         'Agents/ForeignAgentPresetRegistry.php|.config/opencode' => self::USER,
@@ -459,6 +489,75 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // `~`), same basis as the shells and media rows.
         'Background/ScheduleRegistry.php|.candy-code/schedules.json' => self::USER,
 
+        // 'Background/ScheduleRegistry.php|.candy-code/schedules.json' row's
+        // second file (§7 closeout): the schedule TOOL's description prose
+        // names the same `~/.candy-code/schedules.json` store its registry
+        // above classifies — the SAME path arriving in a SECOND file is the
+        // derivation's bread and butter, and the classification rides with it.
+        'Tools/BuiltIn/ScheduleTool.php|.candy-code/schedules.json' => self::USER,
+        // C-EXT-4.b/.c (waves 16-17): the marketplace registry lives entirely
+        // under `~` — `~/.candy-code/marketplaces.json` records the rows,
+        // `~/.candy-code/marketplaces/<name>/` holds the checkouts — so nobody
+        // but the user chose these locations, and `bundles marketplace add`
+        // reads `.claude-plugin/marketplace.json` inside one of THOSE
+        // home-backed checkouts (or an operator-named source dir): the manifest
+        // rides its checkout's tier, which is USER here, the same basis the
+        // C-EXT-4.b `.git` reads above adjudicated (§7 closeout classification).
+        'Bundles/MarketplaceRegistry.php|.candy-code/marketplaces.json' => self::USER,
+        'Bundles/MarketplaceRegistry.php|.candy-code/marketplaces' => self::USER,
+        'Bundles/Marketplace.php|.claude-plugin/marketplace.json' => self::USER,
+        // C-AGT-6.d: Bootstrap's own fallback for the installed-bundle root —
+        // `$home . '/.candy-code/bundles'`, the USER half of the path the
+        // Bundle reader above classifies BOTH. The project floor is built from
+        // the caller's root, not this literal; this occurrence is the home leg
+        // only (§7 closeout classification).
+        'Cli/Bootstrap.php|.candy-code/bundles' => self::USER,
+        // C-TOOL-6.m + the self-update/push waves: three independent home-cache
+        // files — the update-check notice, the mac-alt-option once-per-version
+        // stamp, the first-run wizard's dismissal stamp — and the voice recorder's
+        // take directory all live under `~/.candy-code/cache`, rooted at
+        // `HomeDirectory::owned()`. No clone picks any of them (§7 closeout).
+        'Cli/UpdateCheck.php|.candy-code/cache' => self::USER,
+        'Support/MacAltNotice.php|.candy-code/cache' => self::USER,
+        'Tui/FirstRunWizard/FirstRunWizard.php|.candy-code/cache' => self::USER,
+        'Media/Voice/AudioRecorder.php|.candy-code/cache' => self::USER,
+        // C-TOOL-6.j/l: the custom-theme surface is home-only — `ThemeFile`'s
+        // SUBDIRECTORY constant joins onto `~`, and the settings validator's
+        // refusal sentence NAMES that same path in prose. Neither resolves
+        // against a checkout (§7 closeout classification).
+        'Config/ThemeFile.php|.candy-code/themes' => self::USER,
+        'Config/Settings/Validator/ThemeNameValidator.php|.candy-code/themes' => self::USER,
+        // C-TOOL-6.a/.l: the user-tool tier, rooted at the owned home's
+        // `.candy-code/tools` — the loader's one directory constant, and the
+        // sentence in its own docblock is a comment the scanner never sees.
+        // A project tier for tools does not exist (§7 closeout classification).
+        'Tools/UserTools/UserToolLoader.php|.candy-code/tools' => self::USER,
+        // C-DEV-6.b: the LSP installer's whole layout — downloads, venvs, the
+        // server executables it fetches — lives under the home-private
+        // `.candy-code/lsp` (installRoot()). The operator installed these; no
+        // clone chooses the path (§7 closeout classification).
+        'LSP/LspInstaller.php|.candy-code/lsp' => self::USER,
+        // C-SES-6.h: the import-push path falls back to the user's serve state
+        // dir (`$home/.candy-code/server`) when the env names none — the same
+        // home-rooted state directory the `/status` pane above classifies USER.
+        'Session/Import/RemoteSessionPush.php|.candy-code/server' => self::USER,
+        // C-CTX-6.b/C-WEB-5.a: two protocol catalogue SENTENCES — the
+        // `context.instructionWrite` description and its schema's `path`
+        // field — name the operator's OWN `~/.candy-code/AGENTS.md` personal
+        // memory file inside a wire string. The sentence is not a read path:
+        // the loader that opens the file classifies it under the user tier,
+        // and these occurrences ride with it. The trailing period is the
+        // derivation's own greed at work — the capture class admits `.`, so a
+        // sentence-final dot lands inside the key — and it is carried through
+        // rather than laundered (§7 closeout classification).
+        'Protocol/Methods/ContextMethods.php|.candy-code/AGENTS.md.' => self::USER,
+        'Protocol/Schema/MethodSchemas.php|.candy-code/AGENTS.md' => self::USER,
+        // rv-enduser-3's sentence, SECOND file-shape inside the SAME file: the
+        // connect-failure and baseUrl hints end the sentence with the path and
+        // its period in the string, so the derivation sees a distinct key. It
+        // names the same user file the row above classifies (§7 closeout).
+        'Providers/ProviderFactory.php|.candy-code/config.json.' => self::USER,
+
         // Neither: not a tier this collector is about.
         'Agents/WorktreeConfig.php|.candy-code/worktrees' => self::NOT_A_TIER,
         // OAuth discovery's wire paths. They used to sit in TWO files — the
@@ -501,11 +600,11 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is SEVENTY-THREE occurrences — one per entry
-     * in {@see DOT_PATHS} — of FIFTY-SEVEN distinct paths. TWENTY-NINE of those
+     * APPEARS IN. On this tree that is NINETY-FIVE occurrences — one per entry
+     * in {@see DOT_PATHS} — of SIXTY-FOUR distinct paths. THIRTY-FIVE of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
-     * they are TWENTY-FOUR distinct paths — which is the figure
+     * they are TWENTY-NINE distinct paths — which is the figure
      * {@see testEveryRepositoryChosenPathIsNamedWhereTheClaimIsMade()} asserts,
      * on PATHS. All four figures are measured off the map above, and each is
      * written next to the thing it counts because the pair has been mixed up in
@@ -577,11 +676,13 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     }
 
     /**
-     * TWENTY-FOUR repository-chosen paths, and the enumeration in
+     * TWENTY-NINE repository-chosen paths, and the enumeration in
      * {@see Bootstrap::projectTierRefusals()}'s own doc-block must name every one
      * of them. It named FOUR, then FIVE, both hand-written, while `src/` held
-     * ten; it now names twenty-four. See that doc-block for which of the three
-     * additions is a NEW path and which is one literal reclassified.
+     * ten; it now names twenty-nine — the §7 closeout classified the last
+     * twenty-three occurrences and grew the set with five loader-local gaps.
+     * See that doc-block for which of the additions are NEW paths and which are
+     * one literal reclassified.
      *
      * `BOTH` counts here: a string serving the project tier is repository-chosen
      * whatever else it also serves.
@@ -590,7 +691,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     {
         $repository = $this->repositoryChosenPaths();
 
-        $this->assertCount(24, $repository);
+        $this->assertCount(29, $repository);
 
         // SCOPED TO THE DOC-BLOCKS THAT MAKE THE CLAIM, not to the file. Asserted
         // file-wide, this passed while the enumeration itself was missing a name,
@@ -674,25 +775,25 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             $distinct[$path] = true;
         }
 
-        self::assertCount(57, $distinct, 'distinct dot-DIRECTORY paths in src/');
-        self::assertCount(24, $this->repositoryChosenPaths(), 'of which repository-chosen');
+        self::assertCount(64, $distinct, 'distinct dot-DIRECTORY paths in src/');
+        self::assertCount(29, $this->repositoryChosenPaths(), 'of which repository-chosen');
 
         $enumeration = $this->docBlockAbove(
             \dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php',
             'public static function projectTierRefusals()',
         );
 
-        self::assertStringContainsString('TWENTY-FOUR repository-chosen', $enumeration);
-        // C-EXT-4.b (wave 16): the derived truth above is FIFTY-SEVEN (55 at
-        // this file's last re-derivation, plus the marketplace pin reads). The
-        // collector's doc-block still says FORTY-EIGHT; this arm reds NAMING it
-        // on purpose — the guard's design is that the doc-block is what needs
-        // editing, and laundering the literal down to the stale figure would
-        // recreate the exact defect this test exists to catch. The prose fix
-        // rides the wave that classifies the eight foreign occurrences the
-        // enumeration arm still refuses (C-EXT-4.a, C-TOOL-7.c, lsp/memory/
-        // schedule/mac reads) — Bootstrap.php is not this lane's file.
-        self::assertStringContainsString('FIFTY-SEVEN distinct', $enumeration);
+        self::assertStringContainsString('TWENTY-NINE repository-chosen', $enumeration);
+        // C-EXT-4.b (wave 16) left this arm deliberately red so the prose fix
+        // could not be laundered past the guard; the §7 closeout IS that fix —
+        // the derived truth is now SIXTY-FOUR distinct paths (57 at this file's
+        // last re-derivation, plus the marketplace pin reads and the
+        // twenty-three occurrences the closeout classified), and the
+        // collector's doc-block below carries it. The arm keeps its design:
+        // the doc-block is what needs editing when a number moves, and
+        // laundering a literal down to a stale figure recreates the defect
+        // this test exists to catch.
+        self::assertStringContainsString('SIXTY-FOUR distinct', $enumeration);
 
         // AND THIS FILE'S OWN DOC-BLOCK, which is where all four figures went
         // stale unnoticed — the assertions above only ever read `Bootstrap`'s.
@@ -711,7 +812,13 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             62 => 'SIXTY-TWO', 63 => 'SIXTY-THREE', 64 => 'SIXTY-FOUR', 65 => 'SIXTY-FIVE',
             66 => 'SIXTY-SIX', 67 => 'SIXTY-SEVEN', 68 => 'SIXTY-EIGHT',
             69 => 'SIXTY-NINE', 70 => 'SEVENTY', 71 => 'SEVENTY-ONE', 72 => 'SEVENTY-TWO',
-            73 => 'SEVENTY-THREE'];
+            73 => 'SEVENTY-THREE', 74 => 'SEVENTY-FOUR', 75 => 'SEVENTY-FIVE',
+            76 => 'SEVENTY-SIX', 77 => 'SEVENTY-SEVEN', 78 => 'SEVENTY-EIGHT',
+            79 => 'SEVENTY-NINE', 80 => 'EIGHTY', 81 => 'EIGHTY-ONE', 82 => 'EIGHTY-TWO',
+            83 => 'EIGHTY-THREE', 84 => 'EIGHTY-FOUR', 85 => 'EIGHTY-FIVE',
+            86 => 'EIGHTY-SIX', 87 => 'EIGHTY-SEVEN', 88 => 'EIGHTY-EIGHT',
+            89 => 'EIGHTY-NINE', 90 => 'NINETY', 91 => 'NINETY-ONE', 92 => 'NINETY-TWO',
+            93 => 'NINETY-THREE', 94 => 'NINETY-FOUR', 95 => 'NINETY-FIVE'];
         $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE',
             24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE', 26 => 'TWENTY-SIX', 27 => 'TWENTY-SEVEN',
             28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE', 30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO',
@@ -721,13 +828,17 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             44 => 'FORTY-FOUR', 45 => 'FORTY-FIVE', 46 => 'FORTY-SIX',
             47 => 'FORTY-SEVEN', 48 => 'FORTY-EIGHT', 49 => 'FORTY-NINE',
             50 => 'FIFTY', 51 => 'FIFTY-ONE', 52 => 'FIFTY-TWO', 53 => 'FIFTY-THREE',
-            54 => 'FIFTY-FOUR', 55 => 'FIFTY-FIVE', 56 => 'FIFTY-SIX', 57 => 'FIFTY-SEVEN'];
+            54 => 'FIFTY-FOUR', 55 => 'FIFTY-FIVE', 56 => 'FIFTY-SIX', 57 => 'FIFTY-SEVEN',
+            58 => 'FIFTY-EIGHT', 59 => 'FIFTY-NINE', 60 => 'SIXTY', 61 => 'SIXTY-ONE',
+            62 => 'SIXTY-TWO', 63 => 'SIXTY-THREE', 64 => 'SIXTY-FOUR'];
         $repoWords = [13 => 'THIRTEEN', 14 => 'FOURTEEN', 15 => 'FIFTEEN',
             16 => 'SIXTEEN', 17 => 'SEVENTEEN', 18 => 'EIGHTEEN', 19 => 'NINETEEN', 20 => 'TWENTY',
             21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO',
             23 => 'TWENTY-THREE', 24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE',
             26 => 'TWENTY-SIX', 27 => 'TWENTY-SEVEN',
-            28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE'];
+            28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE',
+            30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO',
+            33 => 'THIRTY-THREE', 34 => 'THIRTY-FOUR', 35 => 'THIRTY-FIVE'];
 
         $occurrences = \count(self::DOT_PATHS);
         $repositoryOccurrences = 0;
@@ -765,8 +876,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     }
 
     /**
-     * Which of the TWENTY-FOUR reach the collector, and which are gated elsewhere.
-     * TEN and FOURTEEN — stated here so "nine feeders" cannot quietly stand in
+     * Which of the TWENTY-NINE reach the collector, and which are gated elsewhere.
+     * TEN and NINETEEN — stated here so "nine feeders" cannot quietly stand in
      * for "and eight paths nobody drains".
      *
      * It was FIVE AND FIVE until crush_code.md Phase 1 item 3 wired
@@ -800,6 +911,12 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * `Bootstrap::bundles()` choke through `$discovery->refusedDirectories()`, and
      * the bundle manifest `.claude-plugin/plugin.json` is gated WITH its bundle
      * directory — a gap by the command-floor discipline, one row younger.
+     * The §7 closeout made it TEN and NINETEEN: the styles tier
+     * `.candy-code/styles`, the two agent-memory tiers `.candy-code/agent-memory`
+     * and `.candy-code/agent-memory-local`, the `/newagent` draft tree
+     * `.candy-code/agents-proposed` and the project-shipped formatter binary
+     * `.bin/prettier` join the gap column — each loader-local or never-refusing,
+     * none drained, entered the same way as the rows above.
      *
      * `.candy-code/commands` NEARLY WENT BACK TO THE GAP COLUMN, and the union
      * check below could not have stopped it: `assertSame($union, $paths)` plus
@@ -821,7 +938,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * matching evidence row in the same edit. The positive direction is what
      * this covers, and it is the direction the defect ran in.
      */
-    public function testTheTenThatFeedTheCollectorAndTheFourteenThatAreNamedGaps(): void
+    public function testTheTenThatFeedTheCollectorAndTheNineteenThatAreNamedGaps(): void
     {
         $feeders = ['.agents/skills', '.claude/agents', '.claude/skills', '.opencode/agents',
             '.opencode/skills', '.candy-code/agents', '.candy-code/bundles',
@@ -837,10 +954,20 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             '.claude/commands', '.opencode/command', '.opencode/commands',
             // PLG-1 (w6a): the manifest is read inside a bundle directory whose
             // containment was already judged — it refuses nothing of its own.
-            '.claude-plugin/plugin.json'];
+            '.claude-plugin/plugin.json',
+            // §7 closeout: the five classified late, all loader-local or
+            // never-refusing. The styles tier refuses inside its own loader;
+            // the two agent-memory tiers write user-home and read the
+            // repository through ContainedPath at their single call sites;
+            // /newagent drafts are gated at the write seam; and the prettier
+            // binary is located through PATH-style lookup that records
+            // nothing into this collector.
+            '.candy-code/styles', '.candy-code/agent-memory',
+            '.candy-code/agent-memory-local', '.candy-code/agents-proposed',
+            '.bin/prettier'];
 
         $this->assertCount(10, $feeders, 'the TEN this test is named for');
-        $this->assertCount(14, $gaps, 'and the FOURTEEN');
+        $this->assertCount(19, $gaps, 'and the NINETEEN');
 
         $union = array_merge($feeders, $gaps);
         sort($union);

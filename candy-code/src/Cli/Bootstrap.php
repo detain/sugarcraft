@@ -2473,10 +2473,10 @@ final class Bootstrap
      * {@see reportProjectTierRefusals()} putting one bounded line in front of
      * the user at launch.
      *
-     * TWENTY-FOUR repository-chosen DOT-DIRECTORY paths exist in `src/` — and the
+     * TWENTY-NINE repository-chosen DOT-DIRECTORY paths exist in `src/` — and the
      * qualifier is the number's domain rather than decoration. What the
      * derivation counts is a string literal of the shape `.<dir>/<segment>`:
-     * FORTY-EIGHT distinct ones on this tree, twenty-four of them classified
+     * SIXTY-FOUR distinct ones on this tree, twenty-nine of them classified
      * repository-chosen. This list said FOUR, then FIVE, both hand-written; it is
      * now DERIVED from `src/` by
      * {@see \SugarCraft\Code\Tests\Cli\ProjectTierRefusalInventoryTest}, which
@@ -2509,6 +2509,13 @@ final class Bootstrap
      * `.claude-plugin/plugin.json`, one literal in
      * {@see \SugarCraft\Code\Bundles\Bundle} serving both tiers, gated with its
      * bundle directory and named as a gap beside the command-floor trees.
+     * The §7 closeout (plan_comparison) made it TWENTY-NINE with the five
+     * occurrences the enumeration had left unclassified: the styles tier
+     * `.candy-code/styles`, the two agent-memory tiers `.candy-code/agent-memory`
+     * and `.candy-code/agent-memory-local`, the `/newagent` draft tree
+     * `.candy-code/agents-proposed`, and the project-shipped formatter binary
+     * `.bin/prettier` — each loader-local or never-refusing, each a named gap
+     * below rather than a feeder here.
      *
      *  - `.candy-code/settings.json` and `.candy-code/settings.local.json` are
      *    genuinely new — the project tier of
@@ -2547,15 +2554,19 @@ final class Bootstrap
      * {@see foreignAgentPresets()} and gave that registry's refusal seam its first
      * reader; the split was five and five before it.
      *
-     * The FOURTEEN that are gated elsewhere and named as gaps rather than
+     * The NINETEEN that are gated elsewhere and named as gaps rather than
      * counted here — `.opencode/memory`, `.candy-code/hooks.yaml`,
      * `.candy-code/config.json`, `.candy-code/settings.json`,
      * `.candy-code/settings.local.json`, the rules tier `.candy-code/rules`,
      * the import sentinel `.candy-code/memory`, and the instruction tail alias
      * `.github/copilot-instructions.md`, and the three command-floor trees
      * `.claude/commands`, `.opencode/command` and `.opencode/commands`, and the
-     * bundle manifest `.claude-plugin/plugin.json` — are
-     * itemised on {@see $projectTierRefusals}, all fourteen of them.
+     * bundle manifest `.claude-plugin/plugin.json`, and the five the §7
+     * closeout classified — the styles tier `.candy-code/styles`, the
+     * agent-memory tiers `.candy-code/agent-memory` and
+     * `.candy-code/agent-memory-local`, the draft tree `.candy-code/agents-proposed`,
+     * and the formatter binary `.bin/prettier` — are
+     * itemised on {@see $projectTierRefusals}, all nineteen of them.
      *
      * `.candy-code/commands` IS NOT ONE OF THEM, and this sentence used to say
      * it was — a gap list that went stale when crush_code.md Phase 2 item 4
