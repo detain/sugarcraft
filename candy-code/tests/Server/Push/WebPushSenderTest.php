@@ -355,7 +355,17 @@ final class WebPushSenderTest extends TestCase
             throw new LogicException('OpenSSL could not describe the test pair');
         }
 
-        return [(string) $pem, rtrim(strtr(base64_encode("\x04" . $point['ec']['x'] . $point['ec']['y']), '+/', '-_'), '=')];
+        // §7(1) cure: OpenSSL strips leading zero bytes off the coordinates,
+        // so a raw concatenation is 65 octets only ~127 times in 128 — the
+        // rare key whose x (or y) begins 0x00 serialized short and
+        // PushSubscription::new() refused it ('must be a ... 65 octets
+        // starting with 0x04'). src/Server/Push/VapidKeys.php pads the same
+        // details to fixed width; the fixture must agree, or the shape pins
+        // flake on the birthday of a zero byte.
+        $x = str_pad($point['ec']['x'], 32, "\x00", STR_PAD_LEFT);
+        $y = str_pad($point['ec']['y'], 32, "\x00", STR_PAD_LEFT);
+
+        return [(string) $pem, rtrim(strtr(base64_encode("\x04" . $x . $y), '+/', '-_'), '=')];
     }
 
     /** @return array{0: mixed, 1: ?\Throwable} settled value and settled error */
