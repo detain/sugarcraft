@@ -33,6 +33,9 @@ use SugarCraft\Code\Config\StatusLineCommand;
 use SugarCraft\Code\Skills\SkillMentions;
 use SugarCraft\Code\Host\SessionTabState;
 use SugarCraft\Code\Host\SessionSwitch;
+use SugarCraft\Code\Media\Voice\AudioRecorder;
+use SugarCraft\Code\Media\Voice\TranscribeCmd;
+use SugarCraft\Code\Media\Voice\VoiceSession;
 use SugarCraft\Code\Tui\ComposerVim;
 use SugarCraft\Code\Tui\MessagePicker\OpenMessagePickerMsg;
 use SugarCraft\Code\Tui\Renderer as TuiRenderer;
@@ -395,6 +398,27 @@ trait HandlesKeys
             && !$this->mentionPopupOpen()
         ) {
             return $this->delegateToInput($msg);
+        }
+
+        // C-TUI-6.m (`chat.voice`): a held voice take owns Esc FIRST. A
+        // terminal delivers no key-up, so the take's cancel is a press, and
+        // the one press a recording user reaches for is the same Escape the
+        // two-beat stop below would otherwise arm — arming a turn-cancel
+        // while the microphone is open would be the wrong answer to the
+        // question on screen ("Esc cancel"). The press throws the take away
+        // through the engine's own teardown (`VoiceSession::cancel()`:
+        // killed recorder, deleted WAV, nothing transcribed, nothing sent),
+        // and claims nothing else: no `lastEscapeAt` stamp is written, so a
+        // later idle Escape re-arms the picker pairing exactly as if the
+        // recording had never overlapped it. The arm sits after the modal
+        // surfaces and the vim resolves above (each keeps its own Escape
+        // owner — a take started before the palette opened is closed by
+        // `Alt+V`, not by an Escape the popup swallows), and before the
+        // soft-cancel family, which is the order the design names.
+        if ($msg->type === KeyType::Escape && VoiceSession::active()) {
+            VoiceSession::cancel();
+
+            return [$this, null];
         }
 
         if ($msg->type === KeyType::Escape && $this->palette === null && $this->sessionPicker === null && $this->dirPicker === null && $this->historySearch === null) {
@@ -1001,6 +1025,18 @@ trait HandlesKeys
             // real terminal can hand either case through the same chord.
             $msg->type === KeyType::Char && $msg->alt && !$msg->ctrl && strtolower($msg->rune) === 'o'
                 => $this->toggleVerboseOutput(),
+            // C-TUI-6.m (`chat.voice`): `Alt+V` toggles one voice take — the
+            // first press arms the microphone, the same chord again stops it
+            // and hands the take to the transcriber (a terminal delivers no
+            // key-up, so push-to-talk can only be a toggle). Checked before
+            // the generic ctrl-Char and delegate arms below, exactly like
+            // the Alt+M / Alt+A / Alt+O neighbours, with `!$msg->ctrl` so
+            // `Ctrl+V` stays `chat.paste-image` and the lowered rune so
+            // either real spelling of the chord answers. The Mac Option key
+            // can deliver `√` instead of an alt-flagged `v` (C-TUI-7.b) —
+            // the `keybindings` setting re-chords the row for that case.
+            $msg->type === KeyType::Char && $msg->alt && !$msg->ctrl && strtolower($msg->rune) === 'v'
+                => $this->toggleVoiceTake(),
             // R20: Ctrl+Tab / Ctrl+Shift+Tab cycle the active session
             // through the OPEN TABS — see cycleSessionTab()'s docblock for
             // the decode/routing chain a real keypress takes and how this
@@ -1158,5 +1194,48 @@ trait HandlesKeys
         );
 
         return [$chat, $applyCmd === null ? $toastCmd : Cmd::batch($applyCmd, $toastCmd)];
+    }
+
+    /**
+     * The `chat.voice` chord's answer (C-TUI-6.m): stop-and-transcribe while
+     * a take is held, start one otherwise. The engine owns every judgement
+     * this arm forwards — voice off, recorder missing, cache refused — and
+     * each refusal comes back as its translated sentence, which is shown as
+     * the warning toast rather than swallowed (the welded posture: the user
+     * always learns which case they are in). A started take needs no toast:
+     * the status bar carries "● rec" for as long as it is rolling, and the
+     * design keeps that cue static — no clock, no extra tick.
+     *
+     * Stopping returns the take to {@see TranscribeCmd::cmd()}, whose shape
+     * mirrors {@see StatusLineCommand::cmd()} (the HandlesRunControl arm
+     * above is the direct-call precedent). The one case the engine cannot
+     * answer kindly is a stop while an EARLIER transcription still holds
+     * the latch: `cmd()` returns null and the take would strand its WAV in
+     * the cache. That file is audio the user meant to throw away the moment
+     * they pressed the chord again, so it is discarded through the
+     * recorder's own cancel and the press says so loudly.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function toggleVoiceTake(): array
+    {
+        if (!VoiceSession::active()) {
+            $refusal = VoiceSession::start();
+
+            return $refusal === null
+                ? [$this, null]
+                : $this->withSettingsToast($refusal, \SugarCraft\Toast\ToastType::Warning);
+        }
+
+        $take = VoiceSession::stop();
+        $cmd = $take === null ? null : TranscribeCmd::cmd($take);
+
+        if ($take !== null && $cmd === null) {
+            AudioRecorder::cancel($take);
+
+            return $this->withSettingsToast(Lang::t('chat.voice.busy'), \SugarCraft\Toast\ToastType::Warning);
+        }
+
+        return [$this, $cmd];
     }
 }

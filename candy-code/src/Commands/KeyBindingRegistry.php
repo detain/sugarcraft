@@ -1117,6 +1117,12 @@ final class KeyBindingRegistry
             KeyBinding::new('chat.agents-strip', 'Alt+↓', Lang::t('keys.chat.agents-strip'), $c),
             // Roadmap 5.7-1 (decision D8): Shift+Tab stays `shell.pane-prev`.
             KeyBinding::new('chat.plan-mode', 'Alt+M', Lang::t('keys.chat.plan-mode'), $c),
+            // C-TUI-6.m: `Alt+V` toggles one voice take — record, then the
+            // same chord stops it and the transcript lands at the caret,
+            // never sent. Ctrl+V stays `chat.paste-image`; a Mac Option key
+            // that delivers `√` instead (C-TUI-7.b) is served by re-chording
+            // THIS id through the `keybindings` setting.
+            KeyBinding::new('chat.voice', 'Alt+V', Lang::t('keys.chat.voice'), $c),
             // E744: with a draft selection held this chord COPIES first and the
             // next press quits (Chat's Ctrl+C arm). The nuance stays out of the
             // description — renderKeyHelp() clips long text and KeyHelpTest

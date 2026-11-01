@@ -317,6 +317,7 @@ all one component tree — not two parallel UIs.
 | `Alt+↓` | Focus the **live agents strip**, the row of delegated runs above the input box — see the fine print below. |
 | `Alt+M` | Toggle **plan mode** between turns: read and explore, changes refused — see the fine print below. |
 | `Alt+O` | Toggle **verbose tool output** for this session only: `expandToolOutput` flips without leaving the chat, and nothing is written to disk (`Alt+O` again collapses) |
+| `Alt+V` | Toggle a **voice take**: the press starts recording (the status bar shows `● rec · Alt+V stop · Esc cancel`), the same chord again stops it and the transcript is inserted at the caret — never sent. `Esc` while recording throws the take away (file deleted, nothing transcribed). Requires `voice.baseUrl` (see [`docs/MEDIA.md`](docs/MEDIA.md)); on macOS Option may deliver `√` instead of `Alt+V` — re-chord `chat.voice` with the `keybindings` setting. |
 | `Esc` / `Alt+↑` (Agent View) | Back to the main transcript; the `Esc` that leaves the view is never the first half of an `Esc` `Esc` cancel. `Alt+N` / `Alt+P` open the next / previous agent of the same `Task` batch |
 | `Ctrl+X` `c` / `p` / `s` / `o` / `b` (Agent View) | Control the agent on screen — cancel, pause, stop-all, open as a session, background — see the fine print below. |
 | `Ctrl+G` | **Broadcast**: the composer sends to every running agent of the batch at once — see the fine print below. |

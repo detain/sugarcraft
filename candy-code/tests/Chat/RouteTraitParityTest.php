@@ -100,6 +100,10 @@ final class RouteTraitParityTest extends TestCase
         'ToolResultsMsg',
         'TranscriptFlushMsg',
         'TurnHooksResolvedMsg',
+        // C-TUI-6.m: the two voice answers, claimed by HandlesSessionSurface
+        // (insert at caret / notice row) — rows land in-step with the arms.
+        'VoiceFailedMsg',
+        'VoiceTranscribedMsg',
         'WindowSizeMsg',
     ];
 

@@ -169,8 +169,9 @@ left open.
 
 Microphone dictation rides the same media module as image and video: a local
 recorder child captures a WAV take, and an OpenAI-compatible
-`/audio/transcriptions` endpoint turns it into text. This section is the core
-only — the key binding and the web surface arrive with their own steps.
+`/audio/transcriptions` endpoint turns it into text. This section covers the
+core; the TUI chord arrived with C-TUI-6.m below, and the web surface still
+arrives with its own step.
 
 **Configuration** (`voice.*`, all user tier, all listed in the layered
 roster above): `voice.baseUrl` is the endpoint and there is **no default** —
@@ -201,6 +202,21 @@ after the call, on success and on every failure path; audio bytes are never
 written to a log, and the recorder's own stdout/stderr go to `/dev/null`.
 Failure sentences are built from status codes and sanitized endpoint text
 only — the API key is never part of a printable string.
+
+**Push-to-talk (C-TUI-6.m).** `Alt+V` (`chat.voice`) toggles one take: the
+first press arms the microphone and the status bar shows the static cue
+`● rec · Alt+V stop · Esc cancel`; the same chord again stops the take and
+uploads it; `Esc` while recording throws the take away (recorder killed, WAV
+deleted, nothing transcribed). Terminals deliver no key-up, so push-to-talk
+can only be a toggle. The transcript is **inserted at the caret, never
+sent** — it is draft material you read and edit before pressing Enter — and
+a failed or empty take says so as a transcript notice or a toast rather
+than swallowing the keystroke. With `voice.baseUrl` unset the chord answers
+with the same "set `voice.baseUrl`" refusal sentence; there is no silent
+no-op. `Ctrl+V` stays `chat.paste-image`. On macOS the Option key may
+deliver `√` where the chord expects `Alt+V` (C-TUI-7.b) — re-chord
+`chat.voice` through the `keybindings` setting, which the alias funnel
+honours for this row like any other.
 
 ## Server and web surface
 

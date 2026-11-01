@@ -1238,6 +1238,27 @@ final class KeyBindingDriftTest extends TestCase
                     \SugarCraft\Code\Config\Settings\UiSettings::forget();
                 }
             },
+            // C-TUI-6.m (`chat.voice`): the label's press is CLAIMED (the
+            // voice chord answers here) and answers loudly — with no
+            // `voice.baseUrl` in the sandboxed HOME, Alt+V surfaces the
+            // refusal sentence naming the setting to flip, never a silent
+            // no-op. The rolling-take paths are engine-static state this
+            // file's fixtures do not own; VoicePushToTalkTest drives them
+            // with planted takes.
+            'chat.voice' => function (array $k): void {
+                $this->assertCount(1, $k, 'the label names one press');
+                \SugarCraft\Code\Media\Voice\VoiceSession::resetForTesting();
+                try {
+                    $chat = (new Chat(
+                        backend: \SugarCraft\Code\Backend\EngineBackend::new(new \SugarCraft\Code\Tests\Support\ScriptedProvider([]), 'm'),
+                    ))->withSize(100, 30);
+                    [$toast] = $chat->update($k[0]);
+                    $view = \SugarCraft\Core\Util\Ansi::strip((string) ($toast->settingsToast()?->view('', 400, 0) ?? ''));
+                    $this->assertStringContainsString('voice.baseUrl', $view, 'Alt+V toasts the voice-off refusal');
+                } finally {
+                    \SugarCraft\Code\Media\Voice\VoiceSession::resetForTesting();
+                }
+            },
             'chat.quit' => function (array $k): void {
                 [, $cmd] = $this->chat()->update($k[0]);
                 $this->assertNotNull($cmd, 'Ctrl+C must return a quit Cmd');

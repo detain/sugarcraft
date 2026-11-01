@@ -402,11 +402,13 @@ final class KeyBindingRegistryTest extends TestCase
      * 18 groups, with the six `wizard.*` rows of the "First-run wizard"
      * group — the band the launch offers once on a blank interactive
      * start, whose keys ride the same registry as every other slot.
+     * C-TUI-6.m carries it on: 174 -> 175 live (175 all), 18 groups, with
+     * `chat.voice` — the `Alt+V` voice-take toggle beside `chat.plan-mode`.
      */
     public function testTheDeclaredShapeIsWhatTheDocblocksSayItIs(): void
     {
-        $this->assertCount(174, KeyBindingRegistry::all(), 'update the docblocks that state this count');
-        $this->assertCount(174, KeyBindingRegistry::live(), 'update the docblocks that state this count');
+        $this->assertCount(175, KeyBindingRegistry::all(), 'update the docblocks that state this count');
+        $this->assertCount(175, KeyBindingRegistry::live(), 'update the docblocks that state this count');
         $this->assertCount(0, KeyBindingRegistry::dormant(), 'update the docblocks that state this count');
         $this->assertCount(18, KeyBindingRegistry::grouped(), 'update the docblocks that state this count');
     }

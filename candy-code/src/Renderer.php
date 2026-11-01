@@ -18,6 +18,8 @@ use SugarCraft\Diff\Writer\SideBySideFormat;
 use SugarCraft\Code\Config\StatusLineCommand;
 use SugarCraft\Code\Media\PreviewPaint;
 use SugarCraft\Code\Media\PreviewSlots;
+use SugarCraft\Code\Media\Voice\TranscribeCmd;
+use SugarCraft\Code\Media\Voice\VoiceSession;
 use SugarCraft\Code\Support\StartupSummary;
 use SugarCraft\Code\Tui\ScreenReaderMode;
 use SugarCraft\Core\Util\Width;
@@ -2413,10 +2415,27 @@ final class Renderer
         // that still leaves room for the separator and the context readout's
         // narrowest form (its bare percentage) is taken, so on any terminal
         // the full bar fitted, it is still the full bar.
-        $processing = self::fitProcessingHint(
-            $chat,
-            $cols - Width::of(' · ') - Width::of(self::contextIndicator($chat, 0)),
-        );
+        // C-TUI-6.m: a voice take owns the hint slot while it is live. The
+        // cue is STATIC prose (the design's law): no elapsed clock, so no
+        // new tick, so the bar repaints exactly as often as it does today.
+        // While a take rolls, the bar says which chord stops it and which
+        // cancels it; while the transcriber child runs, it says so plainly.
+        // Every other state — the overwhelming majority of frames — sees a
+        // byte-identical bar, because both reads are false there and the
+        // pre-existing fitProcessingHint() call runs untouched. The reads
+        // are by class name because the voice family is process-global
+        // static state — the same reach VoiceSession's own docblock
+        // sanctions for this wiring (one terminal, one microphone, one
+        // take).
+        $voiceCue = VoiceSession::active()
+            ? Lang::t('chat.voice.recording')
+            : (TranscribeCmd::inFlight() ? Lang::t('chat.voice.transcribing') : '');
+        $processing = $voiceCue !== ''
+            ? $voiceCue
+            : self::fitProcessingHint(
+                $chat,
+                $cols - Width::of(' · ') - Width::of(self::contextIndicator($chat, 0)),
+            );
         // Messages the user sent while this turn was running
         // ({@see Chat::enqueuePrompt()}). The transcript notice each one wrote
         // scrolls away; this does not, which is what stops a queued message from

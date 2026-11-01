@@ -116,6 +116,8 @@ use SugarCraft\Code\App\ClipboardImagePastedMsg;
 use SugarCraft\Code\App\SideQuestionAnsweredMsg;
 use SugarCraft\Code\App\DreamPassCompletedMsg;
 use SugarCraft\Code\App\MemoryConsolidatedMsg;
+use SugarCraft\Code\App\VoiceFailedMsg;
+use SugarCraft\Code\App\VoiceTranscribedMsg;
 use SugarCraft\Code\App\BackendToolEventsMsg;
 use SugarCraft\Code\App\PermissionRequestMsg;
 use SugarCraft\Code\App\RuntimeNoticePumpMsg;
@@ -317,6 +319,24 @@ trait HandlesSessionSurface
             }
 
             return [$this->withInput($this->input->insertString($this->mentionFor($msg->path) . ' ')), null];
+        }
+
+        // C-TUI-6.m (`chat.voice`): the transcriber's answer lands at the
+        // caret, exactly beside the clipboard image arm above — inserted,
+        // never sent. The user stopped the take, not approved a turn; the
+        // transcript is draft material they read, edit and delete before
+        // Enter. The engine already bounded what this string can be (its
+        // excerpt law), and nothing here logs it: the draft is its only
+        // destination.
+        if ($msg instanceof VoiceTranscribedMsg) {
+            return [$this->withInput($this->input->insertString($msg->text)), null];
+        }
+
+        // And the failure is a notice row, the same shape as the no-image
+        // refusal above — a take that died should say so in the transcript
+        // rather than quietly eat the keystrokes the user just gave it.
+        if ($msg instanceof VoiceFailedMsg) {
+            return [$this->mutate(['history' => [...$this->history, Message::notice($msg->line)]]), null];
         }
 
         // E744 WS5: the session picker's load-more edge. The ONLY production
