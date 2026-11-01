@@ -227,6 +227,8 @@ Over `candy-code serve` (see [`SERVER.md`](SERVER.md)):
 | `generate.submit` | Starts an **image** or **video** generation — `kind` selects the tool door (default `image`; the video half was the TUI-only side until the web Generate panel wired it here). Each kind forwards only its own tool's key set, the image door still naming the twelve shared-request fields; the answer is `{jobId}`. Replays are idempotent: a repeated submission returns the same job. |
 | `generate.status` | A job's `{state, progress01}`, plus artifact refs when done and an error when failed. The schema declares an ETA field that v1 never sends. |
 | `media.fetch` | A stored artifact's bytes as base64 slices — by artifact id or by path, never both, default slice with a hard ceiling, and an `eof` flag. |
+| `audio.transcribe` | Starts a **voice** transcription from a recorded take — `audioBase64`, a `mime` from the declared recording shapes (`audio/webm`, `audio/ogg`, `audio/mp4`), and an optional `language`. The decoded bytes are checked against a ceiling before the take is filed, and the dial goes to the configured voice endpoint; the request itself cannot name a URL. The answer is `{jobId}`. Replays are idempotent: a repeated submission returns the same job. |
+| `audio.status` | A transcription job's `{state}`, with `text` when done and an `error` when failed. Error sentences ride the transport's key-scrub, so a refused upstream answer never carries the API key back. |
 
 Consent is the session's effective permission gate, evaluated at submit
 time: a Deny answers `permission_denied`, and an Ask that nobody can answer
@@ -242,9 +244,10 @@ path outside the store — a `Read` of a workspace image — has that copy
 adopted into it under a deterministic `read-<sha256(id|path) prefix>.<ext>`
 name (idempotent, so re-projecting the same row reuses the one copy), and a
 path with no bytes to adopt projects no ref at all — no card renders that
-cannot load. `hello` advertises `features.media` (`image`, `video`, and a
-truncated SHA-256 of the configured origin's host, never the hostname)
-computed fail-open at boot.
+cannot load. `hello` advertises `features.media` (`image`, `video`,
+`transcribe`, and a truncated SHA-256 of the configured origin's host,
+never the hostname) computed fail-open at boot; `transcribe` mirrors the
+voice door — a configured `voice.baseUrl` — independent of the SD server.
 
 ## Attachment limits
 
@@ -331,6 +334,17 @@ single-owner server model. Starting images given as URLs are fetched by the
 *SD server*, not by CandyCode, relocating that SSRF surface to the machine
 you already trust to generate; and because the origin is trusted, response
 bodies are read fully into memory.
+
+The serve-mode audio pair is pinned the same way: `audio.transcribe` dials
+the voice endpoint named in user settings and nothing else — the wire
+carries audio, a format, and an optional language, never a URL. The mime
+is checked against the declared allowlist, and a take that decodes over
+eight MiB is refused before a single byte is filed (its base64 form is
+itself bounded under the frame ceiling the transport verifies first). The
+sentence that lands in the transcription ledger passes the transport's
+key-scrub, so a failed job cannot carry the API key back onto the wire.
+With `voice.baseUrl` unset both audio doors answer `voice_unconfigured`:
+nothing is dialed, nothing is filed, and no ledger exists to poll.
 
 ## See also
 
