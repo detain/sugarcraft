@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { ansiSegments } from '../../lib/ansi'
 import { t } from '../../lib/i18n'
 import type { BackgroundShell } from '../../protocol/generated'
 import { useShellsStore } from '../../stores/agents/shells'
@@ -24,6 +25,18 @@ import { describe } from '../../stores/session'
  * The interval is slow on purpose: the rows are age-stamps and settle
  * states, not a live byte counter (output is read only into an expanded
  * row, on demand).
+ *
+ * C-TOOL-6.l: an INTERACTIVE (pty) row expands into a typing pane instead of
+ * the plain read-once tail. It is a POLLING, LINE-ORIENTED terminal, not a
+ * PTY-over-WebSocket bridge and not a terminal emulator in the browser:
+ * output arrives by threading a `shells.output` cursor every TAIL_POLL_MS
+ * while the row is expanded and the panel open; keystrokes LEAVE as single
+ * `shells.input` calls (the line plus its Enter in one send). Output is
+ * painted through ansiSegments — SGR colours become classes, everything else
+ * is dropped, and a lone CR/backspace rewrites the line the way the shell's
+ * own progress display expects. Without write scope the input row and key
+ * buttons are disabled, exactly like Stop. Non-interactive rows keep the
+ * plain window tail and never see the typing controls.
  */
 const props = defineProps<{ sessionId: string | null }>()
 
@@ -32,6 +45,22 @@ const connection = useConnectionStore()
 const canWrite = computed(() => connection.scopes.includes('write'))
 const expanded = ref<string | null>(null)
 const error = ref<string | null>(null)
+const draft = ref('')
+
+/** Rows arrive typed against the pre-6.l generated union; the flag rides the row. */
+function isInteractive(shell: BackgroundShell): boolean {
+  return (shell as { interactive?: boolean }).interactive === true
+}
+
+/** The named keys the pane offers, exactly the wire enum's useful subset. */
+const KEY_BUTTONS = [
+  { key: 'C-c', label: 'Ctrl-C' },
+  { key: 'C-d', label: 'Ctrl-D' },
+  { key: 'Tab', label: 'Tab' },
+  { key: 'Esc', label: 'Esc' },
+  { key: 'Up', label: '↑' },
+  { key: 'Down', label: '↓' },
+] as const
 
 /** Sibling idiom (BackgroundPanel): a rejecting store call lands as an error line, never an uncaught rejection. */
 async function act(action: () => Promise<unknown>): Promise<void> {
@@ -45,7 +74,10 @@ async function act(action: () => Promise<unknown>): Promise<void> {
 
 /** How often an OPEN panel re-reads the table. A closed one never polls. */
 const POLL_MS = 3000
+/** How often an EXPANDED interactive row reads the next output slice. */
+const TAIL_POLL_MS = 750
 let timer: ReturnType<typeof setInterval> | null = null
+let tailTimer: ReturnType<typeof setInterval> | null = null
 
 function refresh(): void {
   if (props.sessionId !== null) void shells.load(props.sessionId)
@@ -53,6 +85,10 @@ function refresh(): void {
 
 function startPolling(): void {
   stopPolling()
+  stopTail()
+  if (expanded.value !== null) shells.resetTail(expanded.value)
+  expanded.value = null
+  draft.value = ''
   if (props.sessionId === null) return
   refresh()
   timer = setInterval(refresh, POLL_MS)
@@ -65,13 +101,40 @@ function stopPolling(): void {
   }
 }
 
+function stopTail(): void {
+  if (tailTimer !== null) {
+    clearInterval(tailTimer)
+    tailTimer = null
+  }
+}
+
+function startTail(shellId: string): void {
+  stopTail()
+  const id = props.sessionId
+  if (id === null) return
+  void shells.pollTail(shellId, id)
+  tailTimer = setInterval(() => {
+    if (props.sessionId !== null) void shells.pollTail(shellId, props.sessionId)
+  }, TAIL_POLL_MS)
+}
+
 onMounted(startPolling)
-onUnmounted(stopPolling)
+onUnmounted(() => {
+  stopPolling()
+  stopTail()
+})
 watch(() => props.sessionId, startPolling)
 
 function toggle(shell: BackgroundShell): void {
+  if (expanded.value !== null) {
+    stopTail()
+    shells.resetTail(expanded.value)
+  }
   expanded.value = expanded.value === shell.shellId ? null : shell.shellId
-  if (expanded.value !== null && props.sessionId !== null) void shells.loadOutput(shell.shellId, props.sessionId)
+  const id = props.sessionId
+  if (expanded.value === null || id === null) return
+  if (isInteractive(shell)) startTail(shell.shellId)
+  else void shells.loadOutput(shell.shellId, id)
 }
 
 async function stop(shellId: string): Promise<void> {
@@ -80,12 +143,40 @@ async function stop(shellId: string): Promise<void> {
   await act(() => shells.stop(shellId, id))
 }
 
+/** Enter on the input line: one call carries the text AND its Enter, so the shell sees one complete line. */
+async function sendLine(): Promise<void> {
+  const id = props.sessionId
+  const shellId = expanded.value
+  if (id === null || shellId === null) return
+  error.value = null
+  try {
+    if (draft.value === '') await shells.input(shellId, id, undefined, 'Enter')
+    else await shells.input(shellId, id, draft.value, 'Enter')
+    draft.value = ''
+  } catch (failure) {
+    error.value = describe(failure)
+  }
+}
+
+function sendKey(key: string): void {
+  const id = props.sessionId
+  const shellId = expanded.value
+  if (id === null || shellId === null) return
+  void act(() => shells.input(shellId, id, undefined, key))
+}
+
 function outputText(shellId: string): string {
   const held = shells.output(shellId)
   const body = [held.stdout, held.stderr].filter((part: string) => part !== '').join('\n')
   if (body !== '') return (held.skippedBytes > 0 ? `… ${held.skippedBytes} older bytes skipped\n` : '') + body
 
   return held.loading ? 'Loading…' : held.error ?? 'No output yet.'
+}
+
+function tailSegments(shellId: string) {
+  const held = shells.tail(shellId)
+
+  return ansiSegments([held.stdout, held.stderr].filter((part: string) => part !== '').join('\n'))
 }
 
 /** What the row's settle column says: the code, else the note, else an honest dash. */
@@ -120,7 +211,22 @@ function ageText(seconds: number): string {
             <span class="meta">{{ settleText(shell) }}<template v-if="shell.expired"> {{ t('web.panels.proc_expired') }}</template> · {{ ageText(shell.ageSeconds) }}</span>
           </button>
           <div v-if="expanded === shell.shellId" class="body">
-            <pre data-testid="proc-output">{{ outputText(shell.shellId) }}</pre>
+            <pre v-if="isInteractive(shell)" data-testid="proc-tail"><span v-for="(seg, i) in tailSegments(shell.shellId)" :key="i" :class="seg.classes">{{ seg.text }}</span></pre>
+            <pre v-else data-testid="proc-output">{{ outputText(shell.shellId) }}</pre>
+            <div v-if="isInteractive(shell)" class="type">
+              <input
+                type="text"
+                data-testid="proc-input"
+                v-model="draft"
+                :placeholder="t('web.panels.proc_input_ph')"
+                :aria-label="t('web.panels.proc_input_ph')"
+                :disabled="!canWrite"
+                @keydown.enter.prevent="sendLine"
+              />
+              <span class="keys" role="group" :aria-label="t('web.panels.proc_keys_aria')">
+                <button v-for="k in KEY_BUTTONS" :key="k.key" type="button" :data-testid="`proc-key-${k.key}`" :disabled="!canWrite" @click="sendKey(k.key)">{{ k.label }}</button>
+              </span>
+            </div>
             <div v-if="canWrite && shell.state === 'running'" class="actions">
               <button type="button" class="danger" :data-testid="`proc-stop-${shell.shellId}`" @click="stop(shell.shellId)">{{ t('web.panels.stop') }}</button>
             </div>
@@ -210,4 +316,64 @@ pre {
   gap: 0.4rem;
   flex-wrap: wrap;
 }
+.type {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.type input {
+  flex: 1;
+  min-width: 8rem;
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+}
+.keys {
+  display: flex;
+  gap: 0.25rem;
+}
+/* The tail pane's SGR classes (the C-TOOL-6.l render model): colours named
+   from the ANSI palette, looks mapped to their browser equivalents. */
+.processes :deep(.ansi-bold) {
+  font-weight: 700;
+}
+.processes :deep(.ansi-dim) {
+  opacity: 0.65;
+}
+.processes :deep(.ansi-italic) {
+  font-style: italic;
+}
+.processes :deep(.ansi-underline) {
+  text-decoration: underline;
+}
+.processes :deep(.ansi-inverse) {
+  filter: invert(1);
+}
+/* fg-black would vanish on the dark theme; it rides the muted foreground. */
+.processes :deep(.ansi-fg-black) {
+  color: #6a737d;
+}
+.processes :deep(.ansi-fg-red) { color: #e05c5c; }
+.processes :deep(.ansi-fg-green) { color: #57ab5a; }
+.processes :deep(.ansi-fg-yellow) { color: #c8a103; }
+.processes :deep(.ansi-fg-blue) { color: #4078c2; }
+.processes :deep(.ansi-fg-magenta) { color: #b37ac4; }
+.processes :deep(.ansi-fg-cyan) { color: #39a8b5; }
+.processes :deep(.ansi-fg-white) { color: #d1d5da; }
+.processes :deep(.ansi-fg-bright-black) { color: #959da5; }
+.processes :deep(.ansi-fg-bright-red) { color: #f08080; }
+.processes :deep(.ansi-fg-bright-green) { color: #7bc97e; }
+.processes :deep(.ansi-fg-bright-yellow) { color: #e8c547; }
+.processes :deep(.ansi-fg-bright-blue) { color: #74b3e8; }
+.processes :deep(.ansi-fg-bright-magenta) { color: #d6a8e0; }
+.processes :deep(.ansi-fg-bright-cyan) { color: #66ccd9; }
+.processes :deep(.ansi-fg-bright-white) { color: #ffffff; }
+.processes :deep(.ansi-bg-black) { background: #1b1f23; }
+.processes :deep(.ansi-bg-red) { background: #e05c5c; }
+.processes :deep(.ansi-bg-green) { background: #57ab5a; }
+.processes :deep(.ansi-bg-yellow) { background: #c8a103; }
+.processes :deep(.ansi-bg-blue) { background: #4078c2; }
+.processes :deep(.ansi-bg-magenta) { background: #b37ac4; }
+.processes :deep(.ansi-bg-cyan) { background: #39a8b5; }
+.processes :deep(.ansi-bg-white) { background: #d1d5da; }
 </style>

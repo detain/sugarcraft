@@ -204,3 +204,165 @@ describe('ProcessesSection', () => {
     expect(section.findAll('[data-testid="proc-item"]')).toHaveLength(2)
   })
 })
+
+// C-TOOL-6.l: interactive (pty) rows expand into a POLLING typing pane —
+// a rendered tail threaded on the shells.output cursor, plus one shells.input
+// call per line/keystroke. The fixture is deliberately separate from
+// SHELL_ROWS so every pre-6.l pin above keeps asserting the shape it was
+// written against.
+const INT_ROWS = {
+  items: [
+    { shellId: 'sh-int1', label: 'build', state: 'running', exitCode: null, exitNote: null, expired: false, ageSeconds: 5, interactive: true },
+    { shellId: 'sh-p1', label: 'plain', state: 'running', exitCode: null, exitNote: null, expired: false, ageSeconds: 4, interactive: false },
+  ],
+}
+
+const INT_OUT = (stdout: string, cursor: string, stderr = '') => ({
+  shellId: 'sh-int1',
+  stdout,
+  stderr,
+  cursor,
+  skippedBytes: 0,
+  bytesAvailable: stdout.length + stderr.length,
+  state: 'running',
+  exitCode: null,
+  exitNote: null,
+  expired: false,
+})
+
+describe('ProcessesSection — the typing pane (C-TOOL-6.l)', () => {
+  it('interactive rows expand into the rendered tail + input line; plain rows keep the read-once dump', async () => {
+    const wrapper = await openSection()
+    await wire.answer('shells.list', INT_ROWS)
+    await flushPromises()
+
+    await wrapper.find('[data-testid="proc-head-sh-int1"]').trigger('click')
+    await flushPromises()
+    const first = wire.sent('shells.output')
+    expect(first).toHaveLength(1)
+    expect(first[0]?.params).toMatchObject({ sessionId: 's1', shellId: 'sh-int1', cursor: '0.0' })
+    // CRLF off the pty (ONLCR) stays a line break — the CR never eats the word.
+    await wire.answer('shells.output', INT_OUT('ready\r\n', '7.0'))
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="proc-tail"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="proc-tail"]').text()).toContain('ready')
+    expect(wrapper.find('[data-testid="proc-input"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="proc-key-C-c"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="proc-output"]').exists()).toBe(false)
+
+    // Expanding the plain row collapses the pane and reads the plain window —
+    // cursorless, because loadOutput answers the tail itself.
+    await wrapper.find('[data-testid="proc-head-sh-p1"]').trigger('click')
+    await flushPromises()
+    const second = wire.sent('shells.output')[1]
+    expect(second?.params).toMatchObject({ sessionId: 's1', shellId: 'sh-p1' })
+    expect(Object.keys(second?.params as Record<string, unknown>)).not.toContain('cursor')
+    await wire.answer('shells.output', { ...OUTPUT, shellId: 'sh-p1' })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="proc-output"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="proc-tail"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="proc-input"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('the tail polls on its own 750 ms clock, threads the cursor, and dies on collapse and on unmount', async () => {
+    const wrapper = await openSection()
+    await wire.answer('shells.list', INT_ROWS)
+    await flushPromises()
+    await wrapper.find('[data-testid="proc-head-sh-int1"]').trigger('click')
+    await flushPromises()
+    expect(wire.sent('shells.output')).toHaveLength(1)
+    await wire.answer('shells.output', INT_OUT('a', '1.0'))
+    await flushPromises()
+
+    vi.advanceTimersByTime(750)
+    expect(wire.sent('shells.output')).toHaveLength(2)
+    expect(wire.sent('shells.output')[1]?.params).toMatchObject({ cursor: '1.0' })
+    await wire.answer('shells.output', INT_OUT('b', '2.0'))
+    await flushPromises()
+
+    // Collapse: the tail clock stops and the buffer is forgotten.
+    await wrapper.find('[data-testid="proc-head-sh-int1"]').trigger('click')
+    await flushPromises()
+    vi.advanceTimersByTime(2_249) // stays under the list tick to keep counting clean
+    expect(wire.sent('shells.output')).toHaveLength(2)
+
+    // Re-expand starts the pane from the head again.
+    await wrapper.find('[data-testid="proc-head-sh-int1"]').trigger('click')
+    await flushPromises()
+    expect(wire.sent('shells.output')[2]?.params).toMatchObject({ cursor: '0.0' })
+    await wire.answer('shells.output', INT_OUT('c', '1.0'))
+    await flushPromises()
+
+    wrapper.unmount()
+    vi.advanceTimersByTime(6_000)
+    expect(wire.sent('shells.output')).toHaveLength(3) // the panel closing stops everything
+  })
+
+  it('Enter sends the draft WITH its Enter in one call, then a bare Enter sends just the key', async () => {
+    const wrapper = await openSection()
+    await wire.answer('shells.list', INT_ROWS)
+    await flushPromises()
+    await wrapper.find('[data-testid="proc-head-sh-int1"]').trigger('click')
+    await flushPromises()
+    await wire.answer('shells.output', INT_OUT('', '0.0'))
+    await flushPromises()
+
+    const input = wrapper.find('[data-testid="proc-input"]')
+    await input.setValue('ls -l')
+    await input.trigger('keydown.enter')
+    expect(wire.sent('shells.input')).toHaveLength(1)
+    expect(wire.sent('shells.input')[0]?.params).toEqual({ sessionId: 's1', shellId: 'sh-int1', text: 'ls -l', key: 'Enter' })
+    await wire.answer('shells.input', { accepted: true, cursor: 5 })
+    await flushPromises()
+    expect((input.element as HTMLInputElement).value).toBe('') // cleared only after the send landed
+
+    await input.trigger('keydown.enter')
+    expect(wire.sent('shells.input')[1]?.params).toEqual({ sessionId: 's1', shellId: 'sh-int1', key: 'Enter' })
+    await wire.answer('shells.input', { accepted: true, cursor: 6 })
+    await flushPromises()
+    wrapper.unmount()
+  })
+
+  it('the named-key buttons send their key alone', async () => {
+    const wrapper = await openSection()
+    await wire.answer('shells.list', INT_ROWS)
+    await flushPromises()
+    await wrapper.find('[data-testid="proc-head-sh-int1"]').trigger('click')
+    await flushPromises()
+    await wire.answer('shells.output', INT_OUT('', '0.0'))
+    await flushPromises()
+
+    await wrapper.find('[data-testid="proc-key-C-c"]').trigger('click')
+    expect(wire.sent('shells.input')[0]?.params).toEqual({ sessionId: 's1', shellId: 'sh-int1', key: 'C-c' })
+    await wire.answer('shells.input', { accepted: true, cursor: 1 })
+    await flushPromises()
+
+    await wrapper.find('[data-testid="proc-key-Up"]').trigger('click')
+    expect(wire.sent('shells.input')[1]?.params).toEqual({ sessionId: 's1', shellId: 'sh-int1', key: 'Up' })
+    await wire.answer('shells.input', { accepted: true, cursor: 1 })
+    await flushPromises()
+    wrapper.unmount()
+  })
+
+  it('a read-only caller can watch the tail but cannot type — input and keys disabled, like Stop', async () => {
+    const wrapper = await openSection(['read'])
+    await wire.answer('shells.list', INT_ROWS)
+    await flushPromises()
+    await wrapper.find('[data-testid="proc-head-sh-int1"]').trigger('click')
+    await flushPromises()
+    expect(wire.sent('shells.output')).toHaveLength(1) // watching needs no write scope
+    await wire.answer('shells.output', INT_OUT('view-only', '9.0'))
+    await flushPromises()
+
+    expect((wrapper.find('[data-testid="proc-input"]').element as HTMLInputElement).disabled).toBe(true)
+    expect((wrapper.find('[data-testid="proc-key-C-c"]').element as HTMLButtonElement).disabled).toBe(true)
+    expect(wrapper.find('[data-testid="proc-stop-sh-int1"]').exists()).toBe(false)
+    // The typing controls exist but carry the disabled attribute — jsdom
+    // would still run click handlers if we triggered, so the honest pin is
+    // the attribute the browser itself gates on, like 3.e pinned for Stop.
+    expect(wire.sent('shells.input')).toHaveLength(0)
+    wrapper.unmount()
+  })
+})

@@ -391,6 +391,8 @@ export const WEB_STRINGS_EN: Record<string, string> = {
     "web.panels.proc_exit": "exit {code}",
     "web.panels.proc_exit_unknown": "exit ?",
     "web.panels.proc_expired": "· expired",
+    "web.panels.proc_input_ph": "Type a line — Enter sends it to the shell",
+    "web.panels.proc_keys_aria": "Named keys",
     "web.panels.proc_open_session": "Open a session to see its background shells.",
     "web.panels.proc_running": "running",
     "web.panels.proc_title": "Processes",

@@ -136,7 +136,15 @@ documents the protocol and the UI).
   *Background* for a run the conversation itself delegated (the TUI's
   `Ctrl+X b`: the run moves to a background session); **Todo** — the
   agent's todo list, live; **Background** — `/bg` sessions with output, stop
-  and *send to this session*; **Workflows** — run one, and the session's
+  and *send to this session*, plus the launch's background shells as a
+  Processes section — rows with state, age and recent output (`shells.list`,
+  `shells.stop`), where an interactive (pty) shell's row expands into a
+  typing pane: a cursor-threaded polled tail (`shells.output`, while the row
+  stays expanded) rendered from SGR classes, plus a line and named keys that
+  leave as single writes (`shells.input`). This is a POLLING, line-oriented
+  door — not PTY-over-WebSocket, and the browser is not a terminal emulator;
+  without write scope the pane is watch-only, exactly like Stop;
+  **Workflows** — run one, and the session's
   `/workflow` and `Workflow` tool runs; **Memory** — notes per scope, search,
   add, edit, delete, and a history tab listing the home store's commits with a
   confirmed undo (write scope); **Rules** — the permission policy in the open (mode and
