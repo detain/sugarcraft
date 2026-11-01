@@ -28,8 +28,18 @@ import {
     createDictation,
     dictationNoticeFor,
     dictationSupported,
+    pickEngine,
     type Dictation,
+    type DictationEngine,
 } from "../lib/dictation";
+import {
+    encodeTakeBase64,
+    RecorderError,
+    recorderSupported,
+    startTake,
+    type ActiveTake,
+    type Take,
+} from "../lib/recorder";
 
 /**
  * C-MCP-2.c: one row of the `@mcp:` popup. Accepting inserts the keyword
@@ -548,18 +558,56 @@ function onInput(event: Event): void {
 }
 
 /**
- * C-TUI-6.k: Web Speech dictation. The mic appears only where the browser
- * has the API and the page is a secure context; the audio is heard by the
- * BROWSER vendor's speech service and never reaches the candy-code server
- * (the button's title says so). Interim text shows as a dim hint under the
- * textarea; a final utterance is inserted at the caret — dictation never
- * sends on its own. A lone Esc stops it, like the TUI's key.
+ * C-TUI-6.k: Web Speech dictation. The mic appears only where an engine is
+ * available; on the browser engine the vendor's speech service hears the
+ * audio and it never reaches the candy-code server (the title says so).
+ * C-TUI-6.n: when the server advertises `transcribe` AND this browser can
+ * record a declared mime, the mic instead rides the SERVER engine —
+ * lib/recorder.ts captures the take and the audio pair transcribes it on
+ * the user's own configured voice endpoint. Whichever engine answers, a
+ * settled utterance is inserted at the caret — dictation never sends on
+ * its own — and a lone Esc stops it, like the TUI's key.
  */
-const canDictate = ref(dictationSupported(window));
+/**
+ * The connection store read lazily and fail-soft: a page with no installed
+ * Pinia (a standalone component test) has no server to advertise anything,
+ * so the honest answer is "no transcription door" — the same shape as a
+ * fresh app before the hello. Once installed, the singleton is memoised.
+ */
+type ConnectionStore = ReturnType<typeof useConnectionStore>
+let connStore: ConnectionStore | null = null
+function connection(): ConnectionStore | null {
+    if (connStore === null) {
+        try {
+            connStore = useConnectionStore();
+        } catch {
+            return null;
+        }
+    }
+    return connStore;
+}
+/** Set when a platform refuses an engine at start-up; the choice then degrades honestly. */
+const recorderDead = ref(false);
+const browserDead = ref(false);
+const engine = computed<DictationEngine>(() =>
+    pickEngine({
+        canTranscribe: connection()?.canTranscribe === true,
+        recorderReady: !recorderDead.value && recorderSupported(window),
+        browserSpeech: !browserDead.value && dictationSupported(window),
+    }),
+);
+const canDictate = computed(() => engine.value !== "none");
+/** The take's own seconds budget; the server independently enforces its transport cap. */
+const VOICE_MAX_SECONDS = 120;
+/** '' between takes; 'recording' while the mic is open; 'transcribing' in flight server-side. */
+const voiceState = ref<"" | "recording" | "transcribing">("");
 const listening = ref(false);
 const interim = ref("");
 const dictationNotice = ref("");
 let dictation: Dictation | null = null;
+let take: ActiveTake | null = null;
+/** Bumped by Esc/unmount so an in-flight server answer lands nowhere. */
+let transcribeToken = 0;
 
 /** The final text lands between the caret's ends; the parent owns the draft. */
 function insertDictated(text: string): void {
@@ -580,7 +628,141 @@ function stopDictation(): void {
     dictation?.stop();
 }
 
-function toggleDictation(): void {
+/** Stop whichever engine is mid-flight; an in-flight upload is abandoned by token. */
+function stopVoice(): void {
+    if (voiceState.value === "recording") {
+        take?.cancel();
+        take = null;
+        voiceState.value = "";
+        listening.value = false;
+        return;
+    }
+    if (voiceState.value === "transcribing") {
+        transcribeToken++;
+        voiceState.value = "";
+        listening.value = false;
+        return;
+    }
+    stopDictation();
+}
+
+function voiceFailureText(cause: unknown): string {
+    if (cause instanceof RecorderError) {
+        switch (cause.code) {
+            case "permission-denied":
+                return t("web.composer.voice.denied");
+            case "no-device":
+                return t("web.composer.voice.no_device");
+            case "no-supported-mime":
+                return t("web.composer.voice.no_mime");
+            case "not-secure":
+                return t("web.composer.voice.not_secure");
+            default:
+                return t("web.composer.voice.failed");
+        }
+    }
+    return t("web.composer.voice.failed");
+}
+
+/** Upload a finished take and carry its transcription back to the caret. */
+async function sendTake(finished: Take): Promise<void> {
+    const token = ++transcribeToken;
+    voiceState.value = "transcribing";
+    listening.value = true;
+    const finish = (notice: string, text?: string): void => {
+        if (token !== transcribeToken) return;
+        voiceState.value = "";
+        listening.value = false;
+        dictationNotice.value = notice;
+        if (text !== undefined && text !== "") insertDictated(text);
+    };
+    try {
+        const store = connection()
+        if (store === null) {
+            finish(t("web.composer.voice.failed"));
+            return;
+        }
+        const audioBase64 = await encodeTakeBase64(finished.blob);
+        if (token !== transcribeToken) return;
+        const submitted = await store.request("audio.transcribe", {
+            sessionId: sessionId.value,
+            audioBase64,
+            mime: finished.mime,
+            language: navigator.language,
+        });
+        // The poll reads the job's own ledger; the bound is the composer's
+        // patience, not a kill switch (E646): a still-running job simply
+        // stops being watched here, and the server settles its own ledger.
+        for (let polls = 0; polls < 240; polls++) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            if (token !== transcribeToken) return;
+            const status = await store.request("audio.status", {
+                sessionId: sessionId.value,
+                jobId: submitted.jobId,
+            });
+            if (status.state === "done") {
+                finish("", status.text ?? "");
+                return;
+            }
+            if (status.state === "failed") {
+                finish(t("web.composer.voice.failed"));
+                return;
+            }
+        }
+        finish(t("web.composer.voice.failed"));
+    } catch (cause) {
+        finish(voiceFailureText(cause));
+    }
+}
+
+async function toggleServerTake(): Promise<void> {
+    if (voiceState.value === "recording") {
+        const active = take;
+        take = null;
+        if (active === null) return;
+        voiceState.value = "";
+        listening.value = false;
+        try {
+            const finished = await active.stop();
+            await sendTake(finished);
+        } catch (cause) {
+            dictationNotice.value = voiceFailureText(cause);
+        }
+        return;
+    }
+    if (voiceState.value !== "") return; // transcribing: the button waits its turn
+    dictationNotice.value = "";
+    interim.value = "";
+    if (sessionId.value === "") {
+        dictationNotice.value = t("web.composer.voice.no_session");
+        return;
+    }
+    try {
+        // Explicit window: the component and its tests share this one object.
+        take = await startTake(window, VOICE_MAX_SECONDS, (finished) => {
+            // The seconds cap fired: the encoder stopped itself; deliver the
+            // take to its transcription like a user click would have.
+            take = null;
+            void sendTake(finished);
+        });
+    } catch (cause) {
+        if (cause instanceof RecorderError && cause.code === "no-supported-mime") {
+            // The server offers it, this browser cannot encode it: fall to
+            // the browser engine for the rest of the page, visibly.
+            recorderDead.value = true;
+        }
+        dictationNotice.value = voiceFailureText(cause);
+        return;
+    }
+    voiceState.value = "recording";
+    listening.value = true;
+}
+
+async function toggleDictation(): Promise<void> {
+    if (engine.value === "server") {
+        await toggleServerTake();
+        return;
+    }
     if (listening.value) {
         stopDictation();
         return;
@@ -615,7 +797,7 @@ function toggleDictation(): void {
     );
     if (dictation === null) {
         // Detection said yes, the platform said no: drop the button.
-        canDictate.value = false;
+        browserDead.value = true;
         return;
     }
     listening.value = true;
@@ -624,13 +806,15 @@ function toggleDictation(): void {
 
 onBeforeUnmount(() => {
     dictation?.stop();
+    take?.cancel();
+    transcribeToken++;
 });
 
 function onKeydown(event: KeyboardEvent): void {
     if (event.key === "Escape" && listening.value) {
-        // While dictation runs, a lone Esc is its stop key (C-TUI-6.k).
+        // While a take or dictation runs, a lone Esc is its stop key (C-TUI-6.k, C-TUI-6.n).
         event.preventDefault();
-        stopDictation();
+        stopVoice();
         return;
     }
     if (
@@ -1009,6 +1193,14 @@ defineExpose({ focus: () => input.value?.focus() });
                 {{ dictationNotice }}
             </div>
             <div
+                v-if="voiceState === 'transcribing'"
+                class="dictation-hint"
+                aria-live="polite"
+                data-testid="composer-voice-transcribing"
+            >
+                {{ t("web.composer.voice.transcribing") }}
+            </div>
+            <div
                 v-if="quickAdd !== null"
                 class="quick-add"
                 aria-live="polite"
@@ -1069,7 +1261,7 @@ defineExpose({ focus: () => input.value?.focus() });
                 :class="{ live: listening }"
                 :aria-pressed="listening"
                 :aria-label="listening ? t('web.composer.mic_aria_stop') : t('web.composer.mic_aria')"
-                :title="t('web.composer.mic_title')"
+                :title="engine === 'server' ? t('web.composer.voice.title') : t('web.composer.mic_title')"
                 data-testid="composer-mic"
                 @click="toggleDictation"
             >

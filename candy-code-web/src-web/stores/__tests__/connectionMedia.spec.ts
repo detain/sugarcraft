@@ -51,6 +51,7 @@ describe('connection media capabilities (W6.7)', () => {
     expect(connection.capabilitiesMedia).toBeNull()
     expect(connection.canGenerateImage).toBe(false)
     expect(connection.canGenerateVideo).toBe(false)
+    expect(connection.canTranscribe).toBe(false)
   })
 
   it('offers images when the server says sdapi is ready', async () => {
@@ -77,5 +78,26 @@ describe('connection media capabilities (W6.7)', () => {
     expect(connection.capabilitiesMedia).not.toBeNull()
     expect(connection.canGenerateImage).toBe(false)
     expect(connection.canGenerateVideo).toBe(false)
+    expect(connection.canTranscribe).toBe(false)
+  })
+
+  it('raises the voice door on the transcribe flag alone', async () => {
+    // The flag is independent of the SD pair: a server with a voice
+    // endpoint and no image backend advertises exactly this quad.
+    const connection = await connectWith({
+      media: { image: false, video: false, transcribe: true, baseUrlHostOnly: null },
+    })
+    expect(connection.canTranscribe).toBe(true)
+    expect(connection.canGenerateImage).toBe(false)
+  })
+
+  it('an old server block without the key answers false — the flag is optional on the wire', async () => {
+    // A pre-C-TUI-6.n server says image/video and nothing about voice;
+    // an absent key is silence, never an implicit yes.
+    const connection = await connectWith({
+      media: { image: true, video: true, baseUrlHostOnly: 'da0e86db9b77f6b8' },
+    })
+    expect(connection.canTranscribe).toBe(false)
+    expect(connection.canGenerateImage).toBe(true)
   })
 })

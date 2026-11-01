@@ -1,15 +1,21 @@
 /**
- * Browser dictation over the Web Speech API (C-TUI-6.k). The composer's mic
- * button rides this module; every browser-shaped detail lives here so the
- * component stays presentation and a test can feed a fake recognition class.
+ * Browser dictation over the Web Speech API (C-TUI-6.k), and the engine
+ * choice in front of it (C-TUI-6.n). The composer's mic button rides this
+ * module; every browser-shaped detail lives here so the component stays
+ * presentation and a test can feed a fake recognition class.
  *
- * Privacy: the audio is heard by the BROWSER VENDOR's speech service (Chrome
- * routes through Google, Safari through Apple). Nothing here contacts the
- * candy-code server — the button's title discloses exactly that.
+ * Privacy, per engine: on the `browser` engine the audio is heard by the
+ * BROWSER VENDOR's speech service (Chrome routes through Google, Safari
+ * through Apple) and nothing here contacts the candy-code server. On the
+ * `server` engine — chosen whenever the server advertises `transcribe` —
+ * the audio instead goes to the candy-code server and from there to the
+ * user's own configured voice endpoint; the recording itself lives in
+ * lib/recorder.ts. The button's title discloses whichever engine it rides.
  *
- * Firefox ships no SpeechRecognition at all, so the button is simply absent
- * there; plain-http serve on a LAN host is not a secure context, so it stays
- * hidden there too (the API itself refuses in an insecure context).
+ * Firefox ships no SpeechRecognition at all, so on that browser the button
+ * rides the server engine when configured and is simply absent otherwise;
+ * plain-http serve on a LAN host is not a secure context, so both engines
+ * hide there too (the browser refuses both APIs in an insecure context).
  */
 
 /** One alternative inside a result; only the transcript is read. */
@@ -171,6 +177,28 @@ export function createDictation(
       }
     },
   }
+}
+
+/**
+ * Which dictation engine the mic button should ride (C-TUI-6.n). The law
+ * this function exists to keep honest: the button must never silently
+ * promise one engine and run another. `server` answers ONLY when the
+ * server advertises the transcribe affordance (the user's own configured
+ * endpoint) AND this browser can actually record a declared mime; the
+ * browser vendor engine is next; otherwise none, and the button is absent.
+ * Server-first is deliberate: the user's endpoint hears the audio, not the
+ * browser vendor's cloud.
+ */
+export type DictationEngine = 'server' | 'browser' | 'none'
+
+export function pickEngine(facts: {
+  canTranscribe: boolean
+  recorderReady: boolean
+  browserSpeech: boolean
+}): DictationEngine {
+  if (facts.canTranscribe && facts.recorderReady) return 'server'
+  if (facts.browserSpeech) return 'browser'
+  return 'none'
 }
 
 /**

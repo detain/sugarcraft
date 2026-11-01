@@ -3,6 +3,7 @@ import {
   createDictation,
   dictationNoticeFor,
   dictationSupported,
+  pickEngine,
   type DictationWindow,
   type RecognitionErrorEvent,
   type RecognitionResult,
@@ -253,5 +254,25 @@ describe('dictationNoticeFor (error mapping)', () => {
     expect(dictationNoticeFor('network')).toContain('network')
     expect(dictationNoticeFor('already-running')).toContain('already running')
     expect(dictationNoticeFor('something-new')).toBe('Dictation failed (something-new).')
+  })
+})
+
+describe('pickEngine (the honest engine answer)', () => {
+  it('prefers the server when the door is open and the browser can record', () => {
+    expect(pickEngine({ canTranscribe: true, recorderReady: true, browserSpeech: true })).toBe('server')
+    // The server wins even where no browser engine exists at all.
+    expect(pickEngine({ canTranscribe: true, recorderReady: true, browserSpeech: false })).toBe('server')
+  })
+
+  it('falls to the browser engine when the server door is shut', () => {
+    expect(pickEngine({ canTranscribe: false, recorderReady: true, browserSpeech: true })).toBe('browser')
+    // A shut door is not a dead recorder; and a dead recorder is not a yes.
+    expect(pickEngine({ canTranscribe: true, recorderReady: false, browserSpeech: true })).toBe('browser')
+  })
+
+  it('answers none when neither path works — no engine is promised that cannot run', () => {
+    expect(pickEngine({ canTranscribe: true, recorderReady: false, browserSpeech: false })).toBe('none')
+    expect(pickEngine({ canTranscribe: false, recorderReady: false, browserSpeech: false })).toBe('none')
+    expect(pickEngine({ canTranscribe: false, recorderReady: true, browserSpeech: false })).toBe('none')
   })
 })

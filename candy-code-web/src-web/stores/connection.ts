@@ -89,6 +89,13 @@ export const useConnectionStore = defineStore('connection', () => {
   const capabilitiesMedia = computed(() => hello.value?.features?.media ?? null)
   const canGenerateImage = computed(() => capabilitiesMedia.value?.image === true)
   const canGenerateVideo = computed(() => capabilitiesMedia.value?.video === true)
+  /**
+   * C-TUI-6.n: the server's own voice endpoint is configured. The flag is
+   * OPTIONAL on the wire, so absence says false — an old server simply does
+   * not offer dictation through itself, and the mic falls back by engine
+   * choice, never by guessing.
+   */
+  const canTranscribe = computed(() => capabilitiesMedia.value?.transcribe === true)
 
   let client: CandyCodeClient | null = null
   let overrides: Partial<ClientOptions> = {}
@@ -255,6 +262,7 @@ export const useConnectionStore = defineStore('connection', () => {
     capabilitiesMedia,
     canGenerateImage,
     canGenerateVideo,
+    canTranscribe,
     rttMs,
     retryAt,
     lastError,
