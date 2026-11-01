@@ -171,7 +171,7 @@ was never a detour around this breaker.
 Three name classes drive the evaluators. Each built-in tool declares its class in its `#[BuiltInTool]` attribute, and `Tools\Catalog\ToolCatalog` reads them:
 
 - **read-only**: `Read`, `Glob`, `Grep`, `Skill`, `Lsp`, `RepoMap`, `Ls`, `ShellOutput`, `mcp_list`, `skills_search`, `BoardRead`
-- **write-capable**: `Bash`, `Edit`, `Write`, `Workflow`, `ApplyPatch`, `PtyRun`, `ShellStop`, `mcp_call`, `SkillWorkshop`, `Script`, `ShellSend`, `Task`, and anything starting `mcp__` or `client__`
+- **write-capable**: `Bash`, `Edit`, `Write`, `Workflow`, `ApplyPatch`, `PtyRun`, `ShellStop`, `mcp_call`, `SkillWorkshop`, `Script`, `ShellSend`, `NotebookEdit`, `Task`, and anything starting `mcp__` or `client__`
 - **no-ask** (allowed in every mode; they write only harness-owned state): `Memory`, `Prune`, `Todo`, `Compress`, `Recall`, `Team`, `AskUser`, `PlanExit`, `SendMessage`, `Subagents`, `InterruptAgent`, `Advisor`, `Canvas`, `BoardPost`
 
 Note what is in *none* of these lists: `WebFetch`, `WebSearch`, `doctor`, `GenerateImage`, `GenerateVideo` and `Schedule`.
@@ -225,7 +225,7 @@ rule — see [Rules](#rules).
 | `default` | Allow | Ask — except a `Bash` line made only of read-only commands, Allow ([below](#read-only-shell-commands-run-unasked)) | Ask |
 | `accept-edits` | Allow | a read-only `Bash` line Allow, as under `default`; `Edit`/`Write` inside the project root Allow, and an `ApplyPatch` whose every path is; `mkdir`/`touch`/`rmdir` via `Bash` on contained paths Allow; the rest (`rm`, `mv`, `cp` included) Ask | Ask |
 | `plan` | Allow | `Bash` Allow only when every command in it is a known read-only one (no file redirection, no substitution), otherwise Deny; `Edit`/`Write` of a `.md` plan directly in `.candy-code/plans/` Allow, and an `ApplyPatch` touching only such plans; every other `Edit`/`Write`/`ApplyPatch`, unhinted `mcp__*`, every `user__*` and every `client__*` Deny | Ask |
-| `auto` | gated by `SafetyClassifier`: a security finding Asks, any other flagged call is Denied (or reviewed, with `autoReview`), with a 3-strike / 20-total circuit breaker; a read-only-hinted `mcp__*` Allow | as classified (`Bash`/`PtyRun` by command, `Edit`/`Write` by target, `ApplyPatch` by its worst path); unhinted `mcp__*`, every `user__*` and every `client__*` Ask | as classified (`WebFetch` by its URL) |
+| `auto` | gated by `SafetyClassifier`: a security finding Asks, any other flagged call is Denied (or reviewed, with `autoReview`), with a 3-strike / 20-total circuit breaker; a read-only-hinted `mcp__*` Allow | as classified (`Bash`/`PtyRun` by command, `Edit`/`Write`/`NotebookEdit` by target, `ApplyPatch` by its worst path); unhinted `mcp__*`, every `user__*` and every `client__*` Ask | as classified (`WebFetch` by its URL) |
 | `dont-ask` | Allow | Deny | Deny |
 | `bypass-permissions` | Allow | Allow | Allow |
 
@@ -352,7 +352,7 @@ The mode grants **edits**, and the grant was the other way round
 until then: `Edit` and `Write` asked — a hard refusal wherever no prompt is
 attached — while `rm ./src/Main.php` ran unprompted. Now:
 
-- **The `Edit` and `Write` tools run without asking** when their `file_path` is
+- **The `Edit`, `Write` and `NotebookEdit` tools run without asking** when their `file_path` is
   strictly inside the project root and not under `.git`, `.candy-code` or
   `.mcp.json` (`Permissions\WritePathScope`). On the live tool loop and on a
   sub-agent's gate the gate is handed the root, so the path is resolved the way
@@ -894,7 +894,7 @@ The tool names a pattern can start with are the tool catalog's names —
 `SendMessage`, `Subagents`, `InterruptAgent`, `Ls`, `ShellOutput`, `ShellSend`, `ShellStop`,
 `GenerateImage`,
 `GenerateVideo`, `BoardPost`, `BoardRead`, `Advisor`, `Schedule`,
-`SkillWorkshop`, `skills_search`, `Canvas`, `Script`,
+`SkillWorkshop`, `skills_search`, `Canvas`, `Script`, `NotebookEdit`,
 `mcp_list`, `mcp_call` — and
 `mcp__<server>__<tool>` for bridges (`mcp__git__*`). What differs per tool is
 the argument's *grammar*: shell segments for `Bash` and `PtyRun`, path
