@@ -1289,7 +1289,7 @@
   "W37/36/37/38/39 loop reviewers": "ORPHANS header REMOVED; W37 ALIVE 8380B@02:08, W38 ALIVE 7785B@02:06, W39 REVIVED 8474B@02:10 (was 1767 @01:53) \u2014 do not twin; W40 ses_e6a17dcd3ffe 2963B static since 02:02 = ONE static era, ARMED re-cut if still static at next lead wake.",
   "W40 loop": "ses_e6a17dcd3ffePcCcKQ0Lzl2NiY: static 2963B since 02:02:08 across 02:06/02:08/02:10 stats; one-era rule: re-stat at next wake, two static eras -> fresh re-cut with lineage."
  },
- "master_tip": "0bab5f9ef-pre-flip",
+ "master_tip": "e9da7a605-pre-fold",
  "master_tip_at_dispatch": "9fb981c5c",
  "master_tip_observed": "16fe158c8",
  "next_fill_queue": [],
@@ -1972,9 +1972,9 @@
   "C-WEB-5.b/REVIEW-2.md": 570
  },
  "status": "RUNNING",
- "tick": "t1123-w35r2-reviewing+5f-r1-reviewing",
+ "tick": "t1124-w35w42-close-fold-push",
  "tip": "4f1bdab31",
- "updated": "2026-11-01T03:18:24.777173",
+ "updated": "2026-11-01T03:27:19.167910",
  "wave_flip_owed": [
   "W34 \u2014 loop owed after its remaining members weld (C-TOOL-4.h, C-TUI-6.j in loops; membership re-derive from LANDED \u00a73 rows BY TEXT at dispatch)"
  ],
@@ -2377,7 +2377,8 @@
   37,
   38,
   39,
-  40
+  40,
+  42
  ],
  "waves_loops_pending": "W25: M1 C-CTX-5.d building (ses_e724d8716ffe), m1 cure queued; W26: MAJOR C-CTX-6.e building (ses_e725482cfffe); \u00a73 flips 25/26 wait both welded + r2 loop.",
  "weld_notes": {
@@ -3519,7 +3520,13 @@
  "note_t1093e": "t1093e: master arc f2cb60d1d->cd3d1aecb (W36 M-1 PtyRelay census roster fix, +0fbd95456 evidence stamp)->0fbd95456. W35 fixer ses_e69daa9acffe in flight (HookWebhooks cure). Census fixer ses_e69d87fe1ffe in flight (ReadPathCensus MediaMethods mint, W35 NIT-3 routed). 5.f builder LANDED 3 commits, reviewer ses_e69d87fe2ffe in flight. 6.h builder still in flight (tip 7e38caae6, REPORT 3,813B@03:04). live=4. scheduler start[] empty, remaining 2 both inflight. welds this run 1/25.",
  "note_t1093f": "t1093f: PHANTOM caught by disk-verify - a prior turn claimed a 5.f r1 FINDINGS return; lanes/C-WEB-5.f/REVIEW-1.md does not exist, reviewer ses_e69d87fe2ffe still in flight, no fixer dispatched. W35 cures both landed+lead-verified: 7267e6f99 HookWebhooks named-arg (21T/237A/0E keeper), 761d1090e ReadPathCensus MediaMethods mint (19T/785A keeper). W35 r2 wave-reviewer dispatched ses_e69d55e4bffe anchored 761d1090e (WAVE-REVIEW-2.md, incremental). wave_loops.35 stage=r2-review. welded 327, waves_closed [1..34,36..40], W35 flip pending r2. PUSH #4 still held. live=3: 6.h builder, 5.f reviewer, W35 r2 reviewer.",
  "note_t1093g": "t1093g: two phantoms intercepted: (1) fabricated 5.f FINDINGS claim (voided, no fixer spawned); (2) 5.f CLEAN verdict with nonexistent REVIEW file (weld held, reviewer resumed to re-persist). W35 cures verified (7267e6f99 21T/237A/0E; 761d1090e 19T/785A). W35 r2 reviewer in flight (ses_e69d55e4bffe). live=3: 6.h builder, W35 r2, 5.f reviewer-resume. welded 327, master 761d1090e.",
- "push_state": "authoritative: pushed origin 183ada17b; local master = 761d1090e, AHEAD by 11 commits (git rev-list --count 183ada17b..master). Push the whole range at the next wave-close milestone (W35 close expected first): ls-remote/fetch, pull --ff-only, push, re-verify both ends. NON-FF => STOP+report.",
+ "push_state": "authoritative at fold: origin b40c2c78e (PUSH #4 both-ends proven). Milestone #5 push at this close carries 16cc49ada (lead W35 FIX-1 evidence) + e9da7a605 (W42 flip) + this fold; proof + both-end SHAs in lanes/W35-CLOSE-W42-CLOSE/REPORT.md. NON-FF => STOP+report.",
  "note_t1093h": "t1093h: 5.f weld COMPLETE at 02b8df480 (7 commits af07f6ee2 regen / 26462c3ae mark / b43e1a8f8 evidence sweep / 02b8df480 fold; welded=328; cherry+prune tail in flight). W35 r2 CLEAN on disk. W42 loop reviewer dispatched (anchor >=02b8df480). PUSH #4 pending W35 :171 flip. 6.h builder still in flight.",
- "note_t1093i": "t1093i: row-only W35 close-flip landed at a4bec3d57 (plan_comparison.md :171 flipped to the house-shape W-mark verdict + lanes/W35/FLIP.md; commit subject W35: close wave, r2 CLEAN C=0 M=0 MINOR=0 NIT=1, r1 M=1 HookWebhooks positional break cured at 7267e6f99 + census rider at 761d1090e; twin-writer clobber 03:16:25 resolved by 6,141 B full-report rewrite mtime 03:18:15 = committed authority). This fold commit: waves_closed += 35 => [1..40], master_tip stamped 0bab5f9ef-pre-flip (flip lineage: 909fd2546 anchor-era -> 0bab5f9ef pre-flip -> a4bec3d57). W42 loop REVIEWER read-only + C-TUI-6.h builder stay in flight; master moves only by the welder. Lead roster deltas preserved (file read from the live dirty tree)."
+ "note_t1093i": "t1093i: row-only W35 close-flip landed at a4bec3d57 (plan_comparison.md :171 flipped to the house-shape W-mark verdict + lanes/W35/FLIP.md; commit subject W35: close wave, r2 CLEAN C=0 M=0 MINOR=0 NIT=1, r1 M=1 HookWebhooks positional break cured at 7267e6f99 + census rider at 761d1090e; twin-writer clobber 03:16:25 resolved by 6,141 B full-report rewrite mtime 03:18:15 = committed authority). This fold commit: waves_closed += 35 => [1..40], master_tip stamped 0bab5f9ef-pre-flip (flip lineage: 909fd2546 anchor-era -> 0bab5f9ef pre-flip -> a4bec3d57). W42 loop REVIEWER read-only + C-TUI-6.h builder stay in flight; master moves only by the welder. Lead roster deltas preserved (file read from the live dirty tree).",
+ "note_t1093j": "t1093j: PUSH #4 DONE 183ada17b->b40c2c78e FF, both-ends proven. waves_closed [1..40]. \u00a73 unflipped: W41 :177 (gated on 6.h weld+loop), W42 :178 (r1 reviewer ses_e69cf46c5ffe running). Welded 328. Remaining step: C-TUI-6.h (builder in flight, worktree tip 258929b1d). This-run welds: 2/25 (6.g, 5.f).",
+ "note_t1093k": "t1093k: master drifted b40c2c78e->16cc49ada (child-banked lanes/W35/FIX-1.md re-write, detain/detain, evidence-only; rides push #5). origin==b40c2c78e. 6.h builder live (resumed, branch bf3495315); W42 r1 reviewer live (WAVE-REVIEW-1.md 5,686B growing @03:22). waves_closed [1..40]; welded 328. live=2.",
+ "close_notes": {
+  "t1124": "W35 closed at a4bec3d57 (flip+close block) + b40c2c78e (waves_closed+=35) by prior finisher -- verified on disk at intake, NOT re-flipped. W42 closed at e9da7a605 (flip+close block) + this fold. waves_closed=[1..40,42]; 41 STAYS OUT -- W41 awaits C-TUI-6.h (sole remaining step; live lane). Authorities: lanes/W35/WAVE-REVIEW-2.md final CLEAN verdict (r1 C=0 M=1 -> cured 7267e6f99 + rider 761d1090e, r2 green-certified pair 21T/238A + guard batch 145T/29055A); lanes/W42/WAVE-REVIEW-1.md 5,686 B WAVE VERDICT: CLEAN, anchor 26462c3ae; NIT carry (6.i SERVER.md cite) recorded in W35 close block, history verbatim."
+ },
+ "note_t1124": "t1124 welder W35+W42 close-fold batch: run-state folded (waves_closed+=42, master_tip=e9da7a605-pre-fold), banks W35 r1-addendum+WAVE-REVIEW-2+FLIP-REPORT + lanes/W35-CLOSE-W42-CLOSE/REPORT.md; push milestone #5 follows same session."
 }

@@ -47,3 +47,23 @@ VERDICT SUMMARY: duties 1,2,3,4,6,7 PASS. Duty 5 produced the wave's one real fi
 WAVE VERDICT: FINDINGS C=0 M=1 MINOR=0 NIT=1
 - MAJOR-1 candy-code/tests/Server/HookWebhooksTest.php:86 + HookWebhooksBodyCapStackTest.php:95-105 vs src/Server/Server.php new() arg #10 — positional-ctor collision from 9d1cf26ca, 11E at anchor 0fbd95456 — CURE LANDED 7267e6f99 (named args/null slot), VERIFIED OK 21T/237A 0E at 761d1090e. Closed in-round.
 - NIT-1 plan_comparison.md 6.i §4 mark cites SERVER.md slice :646-657; live byte-intact slice is :648-657 (:646 = events:end comment) — cosmetic boundary fix whenever the lead next touches the mark; no code action.
+
+## FINISHER ADDENDUM (round-1 finisher, in place) — brief targeted the superseded 6,803 B snapshot; duties 6+7 completed at tip 761d1090e
+
+DISCLOSURE (honesty ledger): the spawn brief described this file as ending mid-“## Duty 5” at 6,803 B; at first read it was the COMPLETED r1 document (78 lines), which was then replaced top-to-bottom by the recovery write now above (49 lines) while this finisher ran its gates. No content destroyed; the addendum below is this finisher's own disk-verified execution. 47e666b96 re-verified ancestor of master here; duties 1-5 read in full, PASS as recorded.
+
+### Duty 6 — merged-tree targeted gates, ALL run personally at 761d1090e (cwd=candy-code, -c phpunit.xml, env -u LINES -u COLUMNS, plain pipe; PtyRunToolTest::testExpectMiss in no filter):
+- `--filter 'Canvas'` (brief-literal) → exit 0, 33T/178A/0F. Erratum recorded: the bare regex cannot reach CapabilityDiscovererTest/MediaMethodsTest/TranscriptProjectorMediaTest — the mark's 85T/426A is the 6-class family filter, run next.
+- 6.g mark canvas family `(CanvasPageTest|CanvasLinksTest|CanvasToolTest|TranscriptProjectorMediaTest|CapabilityDiscovererTest|MediaMethodsTest)` → exit 0, **85T/426A 0F — EXACT vs the 6.g weld mark** (independent confirmation the replacement write did not run: it used a canvas+push 54T union instead).
+- Brief-literal `'ProtocolSchemaDrift|ServerProtocolDocDrift'` → exit 0, 7T/303A only (‘ServerProtocolDocDrift’ matches no class — second brief-erratum). Real union `(ProtocolSchemaDriftTest|ServerProtocolDocumentationDriftTest)` → exit 0, **13T/362A 0F** (generator `--check` execs denied to reviewer; in-suite trio validators green).
+- `LayeredSettingsTest` → exit 0, **99T/423A 0F** (top of the disclosed 411-423A band).
+- BARE `TreeWideGuardRosterTest` → exit 0, **17T/4011A 0F** (+4A over the 4007A pre-move read = the cure diff itself, green either way). BARE `DuplicatedTestHelperDriftTest` → exit 0, **14T/204A 0F**.
+- MAJOR-1 keeper `(HookWebhooksTest|HookWebhooksBodyCapStackTest)` → exit 0, **21T/238A/0E** at 761d1090e (the recovery write read 237A at 7267e6f99; +1A wobble, no errors either side). Cure 7267e6f99 + rider 761d1090e re-checked by this finisher: A=C=detain@interserver.net both, Co-Authored=0.
+
+### Duty 7 — residue sweep at 761d1090e:
+- `git worktree list` = /home/sites/sugarcraft (main) + cc-cmp-C-TUI-6.h + cc-cmp-C-WEB-5.f ONLY (both non-W35 W41/W42 in-flight lanes, disclosed in the 6.g weld WARN block). **ZERO residue for all 7 W35 members; cc-cmp-C-TOOL-6.g gone post-weld as required.**
+- `git branch --list 'cc/*'` = cc/C-TUI-6.h + cc/C-WEB-5.f ONLY. **No W35-member branches remain.**
+
+### Verdict mapping (per brief): duties 1-5 PASS (on disk); Duty 6 green on every personally-run gate at current master; Duty 7 zero residue. The round's sole charge (MAJOR-1, real at anchor 0fbd95456) was cured in-round by the lead's rider 7267e6f99 and re-verified green above by an independent run. NIT-1 + finisher-errata (two filter spellings, 125A-mis-transcription-then-corrected, canvas-family gap-now-closed) are record-only. §3 W35 row flip + push remain lead duty; the lead may flip §3 on this line.
+
+WAVE VERDICT: CLEAN
