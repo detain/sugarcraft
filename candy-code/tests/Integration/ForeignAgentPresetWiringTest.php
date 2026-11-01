@@ -521,6 +521,18 @@ final class ForeignAgentPresetWiringTest extends TestCase
                 // flag and ServerConfig's launch mode; ServerConfig reads its
                 // own property. Neither touches a preset's field.
                 'Cli/Serve.php',
+                // §7 closeout (the roster the guard asks to decide, decided):
+                // NOT an Agent reader — the status-line payload carries the
+                // SESSION's own PermissionMode value string for the operator's
+                // statusline script (built from chat state at
+                // HandlesRunControl:410); a preset's field never reaches it.
+                'Config/StatusLineSession.php',
+                // §7 closeout: NOT an Agent reader — `/schedules add`'s
+                // --mode= flag text becomes the SCHEDULE ROW's requested
+                // permission_mode, settled against the live gate by
+                // ScheduleFactory (the stricter-of ceiling above), and `list`
+                // echoes the stored row. No preset or Agent field is read.
+                'Host/Commands/SchedulesCommand.php',
                 // O-3b: the same — SessionHost's own per-session mode, the
                 // protocol's `permission_mode_refused` error tag, and the
                 // server/session snapshots reading ServerConfig or the host.
