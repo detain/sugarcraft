@@ -183,6 +183,7 @@ return [
     'cli.completion.option.root' => 'Usare <dir> come radice del progetto',
     'cli.completion.option.safe_mode' => 'Avvio che ignora ogni fiducia: radici, bundle, skill e comandi esterni',
     'cli.completion.option.version' => 'Mostrare la versione installata',
+'cli.completion.option.worktree' => 'Eseguire la sessione nel proprio worktree git (nome facoltativo)',
     'cli.completion.unsupported_shell' => 'completion {shell}: shell non supportata',
     'cli.completion.usage' => 'Uso: candy-code completion {shells}',
     'cli.completion.verb.acp' => 'Eseguire come agente Agent Client Protocol per un editor',

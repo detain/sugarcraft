@@ -183,6 +183,7 @@ return [
     'cli.completion.option.root' => '<dir> als Projektstamm verwenden',
     'cli.completion.option.safe_mode' => 'Start, der alle Vertrauensregeln ignoriert: Stämme, Bundles, fremde Skills und Befehle',
     'cli.completion.option.version' => 'Installierte Version anzeigen',
+'cli.completion.option.worktree' => 'Sitzung in einem eigenen Git-Worktree ausführen (Name optional)',
     'cli.completion.unsupported_shell' => 'completion {shell}: nicht unterstützte Shell',
     'cli.completion.usage' => 'Verwendung: candy-code completion {shells}',
     'cli.completion.verb.acp' => 'Als Agent Client Protocol-Agent für einen Editor ausführen',

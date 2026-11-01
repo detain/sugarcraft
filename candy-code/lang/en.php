@@ -215,6 +215,7 @@ return [
     'cli.completion.option.root' => 'Use <dir> as the project root',
     'cli.completion.option.safe_mode' => 'Launch that ignores all trust: roots, bundles, foreign skills and commands',
     'cli.completion.option.version' => 'Show the installed version',
+'cli.completion.option.worktree' => 'Run the session inside its own git worktree (name optional)',
     'cli.completion.unsupported_shell' => 'completion {shell}: unsupported shell',
     'cli.completion.usage' => 'Usage: candy-code completion {shells}',
     'cli.completion.verb.acp' => 'Run as an Agent Client Protocol agent for an editor',

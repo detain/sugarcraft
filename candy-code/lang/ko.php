@@ -183,6 +183,7 @@ return [
     'cli.completion.option.root' => '<dir>을 프로젝트 루트로 사용',
     'cli.completion.option.safe_mode' => '모든 신뢰를 무시하고 실행: 루트, 번들, 외부 스킬 및 명령',
     'cli.completion.option.version' => '설치된 버전 표시',
+'cli.completion.option.worktree' => '세션을 자체 git worktree에서 실행 (이름 선택 사항)',
     'cli.completion.unsupported_shell' => 'completion {shell}: 지원되지 않는 셸',
     'cli.completion.usage' => '사용법: candy-code completion {shells}',
     'cli.completion.verb.acp' => '에디터용 Agent Client Protocol 에이전트로 실행',

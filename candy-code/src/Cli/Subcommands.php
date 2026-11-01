@@ -4403,6 +4403,9 @@ final class Subcommands
         '--append-system-prompt' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.append_system_prompt'],
         '--continue' => ['short' => '-c', 'value' => null, 'desc' => 'cli.completion.option.continue'],
         '--resume' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.resume'],
+        // C-AGT-6.c shipped the parser branch without this row, so no shell
+        // ever offered --worktree (row added at the §7(1) gate cure).
+        '--worktree' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.worktree'],
         '--incognito' => ['short' => null, 'value' => null, 'desc' => 'cli.completion.option.incognito'],
         '--restricted' => ['short' => null, 'value' => null, 'desc' => 'cli.completion.option.restricted'],
         '--safe-mode' => ['short' => null, 'value' => null, 'desc' => 'cli.completion.option.safe_mode'],

@@ -183,6 +183,7 @@ return [
     'cli.completion.option.root' => 'Usar <dir> como raíz del proyecto',
     'cli.completion.option.safe_mode' => 'Iniciar ignorando toda confianza: raíces, bundles, skills y comandos externos',
     'cli.completion.option.version' => 'Mostrar la versión instalada',
+'cli.completion.option.worktree' => 'Ejecutar la sesión en su propio worktree de git (nombre opcional)',
     'cli.completion.unsupported_shell' => 'completion {shell}: shell no compatible',
     'cli.completion.usage' => 'Uso: candy-code completion {shells}',
     'cli.completion.verb.acp' => 'Ejecutar como agente del Agent Client Protocol para un editor',

@@ -183,6 +183,7 @@ return [
     'cli.completion.option.root' => '<dir> をプロジェクトルートとして使用',
     'cli.completion.option.safe_mode' => 'すべての信頼を無視して起動: ルート、bundle、外部スキル、コマンド',
     'cli.completion.option.version' => 'インストール済みバージョンを表示',
+'cli.completion.option.worktree' => 'セッションを独自の git worktree で実行（名前省略可）',
     'cli.completion.unsupported_shell' => 'completion {shell}: 未対応のシェル',
     'cli.completion.usage' => '使い方: candy-code completion {shells}',
     'cli.completion.verb.acp' => 'エディター向け Agent Client Protocol エージェントとして実行',

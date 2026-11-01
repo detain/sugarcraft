@@ -183,6 +183,7 @@ return [
     'cli.completion.option.root' => '使用 <dir> 作为项目根目录',
     'cli.completion.option.safe_mode' => '启动时忽略所有信任：根目录、bundle、外部技能和命令',
     'cli.completion.option.version' => '显示已安装版本',
+'cli.completion.option.worktree' => '在独立 git worktree 中运行会话（名称可选）',
     'cli.completion.unsupported_shell' => 'completion {shell}：不支持的 shell',
     'cli.completion.usage' => '用法：candy-code completion {shells}',
     'cli.completion.verb.acp' => '作为 Agent Client Protocol 代理运行，供编辑器使用',

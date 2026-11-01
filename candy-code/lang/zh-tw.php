@@ -183,6 +183,7 @@ return [
     'cli.completion.option.root' => '以 <dir> 作為專案根目錄',
     'cli.completion.option.safe_mode' => '啟動時忽略所有信任：根目錄、bundles、外部 skills 與 commands',
     'cli.completion.option.version' => '顯示已安裝的版本',
+'cli.completion.option.worktree' => '在獨立 git worktree 中執行工作階段（名稱可選）',
     'cli.completion.unsupported_shell' => 'completion {shell}：不支援的 shell',
     'cli.completion.usage' => '用法：candy-code completion {shells}',
     'cli.completion.verb.acp' => '以 Agent Client Protocol 代理身分執行，供編輯器使用',

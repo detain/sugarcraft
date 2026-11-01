@@ -183,6 +183,7 @@ return [
     'cli.completion.option.root' => 'Использовать <dir> как корень проекта',
     'cli.completion.option.safe_mode' => 'Запуск, игнорирующий все доверия: roots, bundles, чужие skills и команды',
     'cli.completion.option.version' => 'Показать установленную версию',
+'cli.completion.option.worktree' => 'Запустить сессию в собственном git worktree (имя необязательное)',
     'cli.completion.unsupported_shell' => 'completion {shell}: неподдерживаемая оболочка',
     'cli.completion.usage' => 'Использование: candy-code completion {shells}',
     'cli.completion.verb.acp' => 'Запустить как агент Agent Client Protocol для редактора',
