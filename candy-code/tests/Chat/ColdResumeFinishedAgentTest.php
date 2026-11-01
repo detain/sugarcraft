@@ -188,13 +188,18 @@ final class ColdResumeFinishedAgentTest extends TestCase
                 resumeId: $state->resumeId,
             ));
         }
-        foreach (mb_str_split('now fix them') as $rune) {
-            [$chat] = $chat->update(new KeyMsg(KeyType::Char, $rune));
-        }
+        // P-AGENT.b (W17) window semantics: the view's composer is its own
+        // window's draft — opening the view stashes the main draft and
+        // restores the view window's (empty) one. The production shape is
+        // therefore open-first-then-type, so the runes ride App::update and
+        // land in the view's composer.
         [$app] = App::new($this->createMock(ProviderInterface::class), 'm')
             ->withChat($chat)
             ->update(new WindowSizeMsg(200, 24));
         $app = $app->openAgentView($runId);
+        foreach (mb_str_split('now fix them') as $rune) {
+            [$app] = $app->update(new KeyMsg(KeyType::Char, $rune));
+        }
 
         [$app, $cmd] = $app->update(new KeyMsg(KeyType::Enter));
         $this->assertSame('', $app->chat?->inputBuf, 'the draft was taken');
