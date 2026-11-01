@@ -101,3 +101,39 @@ All remaining TRIAGE-queue reds cured and committed (each %ae/%ce detain separat
   W31 2, W32 1, W33 8, W34 6, W35 7, W36 5, W37 3, W38 2, W39 4, W40 4, W41 3, W42 2.
 - Serial pass at this entry: 46% no reds (14101/30171). Next on OK: refresh-suite-figure +
   README twin, durations regen, battery-2 conservation, drift sweep, CLOSEOUT, hygiene, push.
+
+## Fix rounds 11-14 (serial-1 result + the eleven cures)
+
+serial-1 (nohup, plain-pipe): Tests 30171, Assertions 751467, Failures 11,
+Skipped 8, Risky 2, Deprecations 2 — iso3 re-run settled every failure as
+deterministic program-owned drift (no pollution). Cures, one commit each:
+
+- 731fb970b SessionAffinityWiringTest: fixture disarms the C-SES-7.d
+  resume-cost guard (guard pinned separately by its own test).
+- 3ad98c3d6 PaletteClickTest sweep quadratic cure — one hoisted base render
+  + monotonic walkers; the two 60s Risky aborts gone (20T green).
+- f90e5823c ChatInputCursor:380 '/re' completion target → '/recap ' (offset 7).
+- DoctorExtensionProbesTest :128 pin follows the SES-1 SqliteConnect routing
+  (same batch).
+- 1b8cf6e37 BootstrapLaunchFormatConstants: PAGE_QUOTE_FIELD_BYTES 322→394
+  (37-tool sample measures 354), far.md filler 46→57, lapsed README
+  refusal-line coincidence row deleted + docblock history rewritten.
+- 9ca23114a DreamPassTest echo-arm: consolidation rides the summary backend
+  (engine-independence belongs to DreamPass::call); dream oracle now the
+  state file, same one the engine arm reads.
+- 68d6fba7e CommandFilterFullQuery '/re' rows 7→8 (recap first).
+- 3f06900df ReadLedgerStaleness: ledger carriers four→five (NotebookEdit).
+- 83fd97f9f InterpolationOpenerToken: two raw-TEXT brace walkers
+  (SettingsFileWatchTest chat() slice, McpBackgroundCallTest
+  sliceFunctionBody) licensed with KNOWN_GAPS rows — selection-side gap,
+  Awk/Sed family.
+- 1cd7a283c RendererTest slash-menu first-match pin → '▸ /recap'.
+- 80bab5722 ShellMenu PLACEMENT names the run's five late rows (doctor,
+  output-style, copy, insights, recap) at registry adjacency in their
+  category groups — restores the shipped-tree no-More invariant.
+
+Live --list-tests re-count: 30,171 (unchanged; the hand-bump d8ed6fc19
+already matches). serial-1 carried NO ReadmeSuiteFigureDrift failure — the
+pair bump satisfies the guard; refresh-suite-figure will move BOTH files'
+assertions to the green serial-2 figure in the re-pin commit.
+serial-2 launched (nohup recipe) → GATE/serial2.{log,xml}.
