@@ -9816,7 +9816,11 @@ public static function useMaxCost(?string $maxCost): void
      * subject cannot join one roster and miss the other), plus `Task` and
      * `Workflow` (each spawns sub-agents that hold their own tool sets —
      * dropping only the outer shell would leave the code path running
-     * through delegation), plus `ShellStop` (meaningless without a shell to
+     * through delegation), plus `Script` (the C-TOOL-6 bridge runs
+     * arbitrary PHP the operator never read through `ScriptBridge` —
+     * exactly the class of surface `--restricted` exists to close, and a
+     * launch that kept it could rebuild the shell it just dropped), plus
+     * `ShellStop` (meaningless without a shell to
      * stop, and its kill surface is a shell's), plus `mcp_call` (an MCP
      * server is code the operator did not read, reached through a wire
      * format the permission matcher only partly sees — McpToolShape's
@@ -9830,7 +9834,7 @@ public static function useMaxCost(?string $maxCost): void
      *
      * @var list<string>
      */
-    public const RESTRICTED_TOOL_NAMES = [...ShellSubjectTools::NAMES, 'Task', 'Workflow', 'ShellStop', 'mcp_call'];
+    public const RESTRICTED_TOOL_NAMES = [...ShellSubjectTools::NAMES, 'Task', 'Workflow', 'Script', 'ShellStop', 'mcp_call'];
 
     /**
      * Apply the user's `allowedTools` / `disabledTools` settings to the

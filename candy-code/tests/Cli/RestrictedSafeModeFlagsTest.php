@@ -143,13 +143,15 @@ final class RestrictedSafeModeFlagsTest extends TestCase
     // --restricted at the tool-set funnel
     // =========================================================================
 
-    public function testTheRestrictedRosterIsTheShellPairPlusTheFourCodeShapers(): void
+    public function testTheRestrictedRosterIsTheShellPairPlusTheFiveCodeShapers(): void
     {
         // Mirrored against ShellSubjectTools::NAMES by reference, not copy:
         // when the shell pair grows a member, --restricted follows it, and a
         // hand-copied list here would freeze the old pair and go green.
+        // 'Script' joined the roster at the §7 closeout per the C-TOOL-6.d
+        // review recommendation: the bridge runs operator-unread PHP.
         self::assertSame(
-            [...ShellSubjectTools::NAMES, 'Task', 'Workflow', 'ShellStop', 'mcp_call'],
+            [...ShellSubjectTools::NAMES, 'Task', 'Workflow', 'Script', 'ShellStop', 'mcp_call'],
             Bootstrap::RESTRICTED_TOOL_NAMES,
         );
     }

@@ -2033,7 +2033,7 @@ session.
 
 `--restricted` (also `--restricted=true|false`) drops the code-running tools
 from every model-facing set for the whole launch: `Bash`, `PtyRun`, `Task`,
-`Workflow`, `ShellStop` and `mcp_call` are removed at the one tool-set funnel
+`Workflow`, `Script`, `ShellStop` and `mcp_call` are removed at the one tool-set funnel
 (`Bootstrap::filterToolSet()`) after the config's allow/deny lists have had
 their say. File tools stay, confined by the existing `WritePathScope`;
 `/permissions` cannot put the dropped tools back, because the drop is

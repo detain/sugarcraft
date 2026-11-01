@@ -1430,7 +1430,7 @@ flags decide what it can even hold, and neither can be reopened from inside
 the session:
 
 `--restricted` removes the code-running tools — `Bash`, `PtyRun`, `Task`,
-`Workflow`, `ShellStop` and `mcp_call` — from the tool set at
+`Workflow`, `Script`, `ShellStop` and `mcp_call` — from the tool set at
 `Bootstrap::filterToolSet()`, after the config's allow/deny lists have had
 their say, so every backend build (main chat, sub-agents, `-p`) answers on the
 shrunken set. File tools stay, confined by the existing `WritePathScope`.
