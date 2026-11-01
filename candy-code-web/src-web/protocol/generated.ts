@@ -1612,6 +1612,41 @@ export interface Methods {
       more: boolean
     }
   }
+  /** Announce client-hosted tools for this connection; an empty list withdraws them. */
+  "tools.client.register": {
+    params: {
+      sessionId: SessionId
+      tools: {
+        name: string
+        description: string
+        /** A JSON Schema object for the arguments, at most 16 KiB encoded; must declare `"type": "object"`. */
+        inputSchema: Record<string, unknown>
+        timeoutSeconds?: number
+      }[]
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      registrationId: string
+      names: string[]
+      effective: "next_turn"
+    }
+  }
+  /** Answer one tool.client.call with the client's result. */
+  "tools.client.result": {
+    params: {
+      sessionId: SessionId
+      callId: string
+      registrationId: string
+      content: string
+      isError?: boolean
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      accepted: boolean
+    }
+  }
   /** The durable usage ledger folded by day and model — one snapshot of the same read `/usage` prints, with derived totals, the unpriced lower-bound flag, and this launch's session-retention setting (read-only). scope "session" narrows to sessionId; scope "all" spans every session the ledger holds; days trims to the last 7 or 30 whole UTC days. */
   "usage.rollup": {
     params: {
@@ -1863,6 +1898,8 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "shells.stop": "write",
   "todo.get": "read",
   "tool.output": "read",
+  "tools.client.register": "write",
+  "tools.client.result": "write",
   "usage.rollup": "read",
   "workflow.list": "read",
   "workflow.pause": "write",
@@ -1910,6 +1947,8 @@ export const IDEMPOTENT_METHODS: readonly MethodName[] = [
   "session.unshare",
   "settings.set",
   "shells.stop",
+  "tools.client.register",
+  "tools.client.result",
   "workflow.pause",
   "workflow.resume",
   "workflow.run",
@@ -2181,6 +2220,19 @@ export interface Events {
       status: "pending" | "in_progress" | "completed" | "cancelled"
     })[]
   }
+  /** A client-hosted tool call is being asked of the clients: run `name` and answer tools.client.result with `callId`/`registrationId`; ephemeral — the pending call lives on a deadline, not in the log. */
+  "tool.client.call": {
+    /** Answer tools.client.result with this; the first accepted result settles the call. */
+    callId: string
+    /** The registration that owns the name; clients whose current registration is not this one ignore the event. */
+    registrationId: string
+    /** The full proxy name, `client__` prefix included. */
+    name: string
+    /** The model-supplied arguments, validated against the registered inputSchema. */
+    arguments: Record<string, unknown>
+    /** Wall-clock milliseconds by which the answer must land; after it the call settles as an error. */
+    deadlineAt: number
+  }
   /** A tool call finished (content capped; tool.output has the rest). */
   "tool.finished": {
     messageId?: string
@@ -2296,6 +2348,7 @@ export const EVENT_KINDS: { readonly [E in EventName]: { readonly durable: boole
   "subagent.progress": { durable: false, scope: "session" },
   "subagent.started": { durable: true, scope: "session" },
   "todo.updated": { durable: true, scope: "session" },
+  "tool.client.call": { durable: false, scope: "session" },
   "tool.finished": { durable: true, scope: "session" },
   "tool.progress": { durable: false, scope: "session" },
   "tool.started": { durable: true, scope: "session" },

@@ -5785,6 +5785,134 @@
                 ]
             }
         },
+        "tools.client.register": {
+            "description": "Announce client-hosted tools for this connection; an empty list withdraws them.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "tools": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string",
+                                    "maxLength": 48
+                                },
+                                "description": {
+                                    "type": "string",
+                                    "maxLength": 1024
+                                },
+                                "inputSchema": {
+                                    "type": "object",
+                                    "additionalProperties": {},
+                                    "description": "A JSON Schema object for the arguments, at most 16 KiB encoded; must declare `\"type\": \"object\"`."
+                                },
+                                "timeoutSeconds": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 600
+                                }
+                            },
+                            "required": [
+                                "name",
+                                "description",
+                                "inputSchema"
+                            ]
+                        },
+                        "maxItems": 16
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "sessionId",
+                    "tools"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "registrationId": {
+                        "type": "string"
+                    },
+                    "names": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "effective": {
+                        "enum": [
+                            "next_turn"
+                        ]
+                    }
+                },
+                "required": [
+                    "registrationId",
+                    "names",
+                    "effective"
+                ]
+            }
+        },
+        "tools.client.result": {
+            "description": "Answer one tool.client.call with the client's result.",
+            "scope": "write",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
+                    "callId": {
+                        "type": "string",
+                        "maxLength": 64
+                    },
+                    "registrationId": {
+                        "type": "string",
+                        "maxLength": 64
+                    },
+                    "content": {
+                        "type": "string",
+                        "maxLength": 262144
+                    },
+                    "isError": {
+                        "type": "boolean"
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "sessionId",
+                    "callId",
+                    "registrationId",
+                    "content"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "accepted": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "accepted"
+                ]
+            }
+        },
         "usage.rollup": {
             "description": "The durable usage ledger folded by day and model — one snapshot of the same read `/usage` prints, with derived totals, the unpriced lower-bound flag, and this launch's session-retention setting (read-only). scope \"session\" narrows to sessionId; scope \"all\" spans every session the ledger holds; days trims to the last 7 or 30 whole UTC days.",
             "scope": "read",
@@ -7497,6 +7625,45 @@
                 },
                 "required": [
                     "items"
+                ]
+            }
+        },
+        "tool.client.call": {
+            "description": "A client-hosted tool call is being asked of the clients: run `name` and answer tools.client.result with `callId`/`registrationId`; ephemeral — the pending call lives on a deadline, not in the log.",
+            "durable": false,
+            "scope": "session",
+            "data": {
+                "type": "object",
+                "properties": {
+                    "callId": {
+                        "type": "string",
+                        "description": "Answer tools.client.result with this; the first accepted result settles the call."
+                    },
+                    "registrationId": {
+                        "type": "string",
+                        "description": "The registration that owns the name; clients whose current registration is not this one ignore the event."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "The full proxy name, `client__` prefix included."
+                    },
+                    "arguments": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "description": "The model-supplied arguments, validated against the registered inputSchema."
+                    },
+                    "deadlineAt": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Wall-clock milliseconds by which the answer must land; after it the call settles as an error."
+                    }
+                },
+                "required": [
+                    "callId",
+                    "registrationId",
+                    "name",
+                    "arguments",
+                    "deadlineAt"
                 ]
             }
         },

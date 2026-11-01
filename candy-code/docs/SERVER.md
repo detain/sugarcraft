@@ -555,6 +555,8 @@ it and the two tables below are generated from the code
 | `shells.stop` | write | yes | `sessionId`, `shellId` | Stop a background shell through the launch's kill ladder; a settled or foreign id is a no-op answer. |
 | `todo.get` | read |  | `sessionId` | A session's todo list, as its Todo tool last wrote it. |
 | `tool.output` | read |  | `sessionId`, `toolCallId` | A finished tool call's full output, from an offset. |
+| `tools.client.register` | write | yes | `sessionId`, `tools` | Announce client-hosted tools for this connection; an empty list withdraws them. |
+| `tools.client.result` | write | yes | `sessionId`, `callId`, `registrationId`, `content` | Answer one tool.client.call with the client's result. |
 | `usage.rollup` | read |  | `scope` | The durable usage ledger folded by day and model — one snapshot of the same read `/usage` prints, with derived totals, the unpriced lower-bound flag, and this launch's session-retention setting (read-only). scope "session" narrows to sessionId; scope "all" spans every session the ledger holds; days trims to the last 7 or 30 whole UTC days. |
 | `workflow.list` | read |  | — | The workflows /workflow run can start. |
 | `workflow.pause` | write | yes | `workflowId` | Pause a workflow run before its next stage. |
@@ -625,6 +627,7 @@ TUI alone drains.
 | `subagent.progress` | session | live | A delegated sub-agent made progress. |
 | `subagent.started` | session | durable | A delegated sub-agent started. |
 | `todo.updated` | session | durable | A Todo call rewrote the session's todo list; carries the whole list. |
+| `tool.client.call` | session | live | A client-hosted tool call is being asked of the clients: run `name` and answer tools.client.result with `callId`/`registrationId`; ephemeral — the pending call lives on a deadline, not in the log. |
 | `tool.finished` | session | durable | A tool call finished (content capped; tool.output has the rest). |
 | `tool.progress` | session | live | Live tail of a running tool call, frame-rate capped; ephemeral — tool.finished is the contract, so a late joiner replays nothing and still sees the whole output. |
 | `tool.started` | session | durable | A tool call started. |
@@ -636,6 +639,17 @@ TUI alone drains.
 | `turn.step` | session | live | The running turn reached a step boundary. |
 | `usage.updated` | session | durable | Token and cost usage changed. |
 <!-- protocol:events:end -->
+
+**Client-hosted tools.** When `server.clientTools` is on, a Write-scope connection may
+announce tools that run inside the client itself: `tools.client.register` stores the set
+against the connection and answers its `client__*` names, the model is offered them from
+the next turn onward, and calling one announces the ephemeral `tool.client.call` event on
+the session's feed with `callId`, `registrationId`, `name`, `arguments` and `deadlineAt`.
+Any subscriber of that session whose `registrationId` still owns the name may run the tool
+and answer `tools.client.result`; the first accepted answer settles the call and the rest
+read `accepted: false`. Registrations die with the connection that made them, and an open
+call fails at once when its host connection drops. Off (the default), every
+`tools.client.*` call is refused with the `client_tools_disabled` kind.
 
 ### Sending, queueing, steering, cancelling
 
