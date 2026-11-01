@@ -23,6 +23,7 @@ use SugarCraft\Code\Protocol\RpcError;
 use SugarCraft\Code\Protocol\Scope;
 use SugarCraft\Code\Protocol\SessionFeed;
 use SugarCraft\Code\Protocol\WebStrings;
+use SugarCraft\Code\Server\LogTail;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\Ws\Outbox;
 use SugarCraft\Code\Tools\Tool;
@@ -46,6 +47,7 @@ final class ServerMethods
         $registry->add(MethodSpec::new('server.info', Scope::Read, 'What this server offers: providers, agents, commands, tools, permission modes.', self::info(...)));
         $registry->add(MethodSpec::new('server.strings', Scope::Read, 'The web UI chrome strings in one locale (C-TUI-6.f): only web.-prefixed keys; server, tool and model text stay untranslated.', self::strings(...)));
         $registry->add(MethodSpec::new('server.shutdown', Scope::Admin, 'Stop the server, draining running turns first.', self::shutdown(...), true));
+        $registry->add(MethodSpec::new('server.logs', Scope::Admin, 'The tail of the server log, flattened and capped; admin scope is the only door (R13).', self::logs(...)));
         $registry->add(MethodSpec::new('client.viewing', Scope::Read, 'Say which sessions this client shows, and which is in front.', self::viewing(...)));
     }
 
@@ -246,6 +248,27 @@ final class ServerMethods
         $accepted = $call->server->shutdown($drain === null ? null : (float) $drain);
 
         return ['accepted' => $accepted];
+    }
+
+    /**
+     * The admin-scoped log tail (C-WEB-5.f, R13). Log lines can quote prompts
+     * and paths, so Scope::Admin is the ONLY door — the owner accepted them
+     * on the wire behind exactly that gate (plan §6.1 R13); every other
+     * surface keeps the ErrorLog never-onto-the-wire law. The answer is
+     * flattened and capped by line count and bytes
+     * ({@see LogTail::answer()}); the machine reason token travels
+     * untranslated like all server text — the browser maps it to its own
+     * chrome string. A foreground server that never wrote a server.log gets
+     * an empty list with `no_log`, not an error: the question is answerable,
+     * the file simply is not there.
+     *
+     * @return array<string, mixed>
+     */
+    private static function logs(CallContext $call, Params $params): array
+    {
+        $lines = $params->optionalInt('lines', 1, LogTail::MAX_LINES) ?? LogTail::DEFAULT_LINES;
+
+        return LogTail::answer($call->server->config()->stateDir, $lines);
     }
 
     /**

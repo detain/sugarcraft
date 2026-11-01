@@ -158,6 +158,13 @@ final class MethodSchemas
                 Schema::object(['drainSeconds' => Schema::number(0)]),
                 Schema::object(['accepted' => Schema::boolean()], ['accepted']),
             ],
+            'server.logs' => [
+                Schema::object(['lines' => Schema::integer(1, 200)->describe('How many trailing lines to answer with; the newest survive the line and byte caps. Default 100.')]),
+                Schema::object([
+                    'lines' => Schema::arrayOf(Schema::string(), 200)->describe('Flattened server.log lines, oldest first (control bytes collapsed, each line clipped); the newest survive the byte cap.'),
+                    'reason' => Schema::string(35)->nullable()->describe('`no_log` when this server has no regular server.log to read — a foreground launch never wrote one; null otherwise. Machine token: server text stays untranslated, the browser maps it to chrome.'),
+                ], ['lines']),
+            ],
             'client.viewing' => [
                 Schema::object([
                     'sessionIds' => Schema::arrayOf(Schema::ref(D::SESSION_ID), 50),
