@@ -57,7 +57,13 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — thirty-eight sites (C-TOOL-4.g 2026-10-31: +1 in
+ *  1. `fwrite(STDERR, …)` — forty-seven sites (C-TOOL-6.j 2026-10-31: +9 in
+ *     the forked `PtyRelay` pump — the relay's own refusal and degrade lines,
+ *     stderr-alone by the same detached-process decision as the bridge below:
+ *     the relay is the child the spawner launches, its stderr is captured to
+ *     the session's `<id>.err` sidecar, and there is no live transcript on
+ *     this path to fold any of them into;
+ *     C-TOOL-4.g 2026-10-31: +1 in
  *     `EgressBridge::runFromArgv()` for the bridge-argv contract line,
  *     stderr-alone by the same sibling-process decision as the subcommand
  *     writers below: the bridge is the jail's pre-exec relay, there is no
@@ -328,6 +334,15 @@ final class StderrEmitterCensusTest extends TestCase
      */
     private const DIRECT_SITES = [
         'bin/candy-code' => 4,
+        // C-TOOL-6.j 2026-10-31: +9 — the forked pty relay's own report lines:
+        // bad launch argv, pty mechanism unavailable, staged command file
+        // unreadable, no pcntl_fork, the pump fork failing, SIGTERM arming
+        // failing (relay and pump arms), the pty or shell not starting, and
+        // the transcript sinks not opening. Stderr alone, the EgressBridge
+        // decision again: the relay IS the detached child — no live transcript
+        // exists on this path, and the spawner captures the relay's stderr to
+        // the session's `<id>.err` sidecar, so these lines are its whole log.
+        'src/Background/PtyRelay.php' => 9,
         // Roadmap 5.9: `acp`'s one funnel (Acp::stderr()) for whatever PHP
         // would have printed onto the protocol, and the launch warnings.
         // Stderr alone: stdout is the editor's JSON-RPC stream, and an editor
