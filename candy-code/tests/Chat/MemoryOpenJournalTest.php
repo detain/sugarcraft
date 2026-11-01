@@ -52,7 +52,7 @@ final class MemoryOpenJournalTest extends TestCase
     {
         $this->restoreHomeSandbox();
         if ($this->sandbox !== '' && is_dir($this->sandbox)) {
-            exec('rm -rf ' . escapeshellarg($this->sandbox));
+            exec('rm -rf ' . escapeshellarg($this->sandbox) . ' 2>&1');
         }
     }
 

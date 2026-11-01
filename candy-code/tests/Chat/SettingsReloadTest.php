@@ -60,7 +60,7 @@ final class SettingsReloadTest extends TestCase
         LaunchNotices::reset();
         Bootstrap::useConfigPath(null);
         $this->restoreHomeSandbox();
-        exec('rm -rf ' . escapeshellarg($this->home));
+        exec('rm -rf ' . escapeshellarg($this->home) . ' 2>&1');
     }
 
     /**

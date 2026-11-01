@@ -57,7 +57,7 @@ final class MemoryExportCommandTest extends TestCase
         ini_set('error_log', $this->origErrorLog);
         $this->restoreHomeSandbox();
         if ($this->sandbox !== '' && is_dir($this->sandbox)) {
-            exec('rm -rf ' . escapeshellarg($this->sandbox));
+            exec('rm -rf ' . escapeshellarg($this->sandbox) . ' 2>&1');
         }
     }
 

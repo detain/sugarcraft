@@ -79,7 +79,7 @@ final class AttachRemoteCommandsTest extends TestCase
         $this->fixture->tearDown();
         $this->restoreHomeSandbox();
         if (\is_dir($this->sandbox)) {
-            \exec('rm -rf ' . \escapeshellarg($this->sandbox));
+            \exec('rm -rf ' . \escapeshellarg($this->sandbox) . ' 2>&1');
         }
     }
 

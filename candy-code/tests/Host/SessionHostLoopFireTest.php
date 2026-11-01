@@ -75,7 +75,7 @@ final class SessionHostLoopFireTest extends TestCase
     {
         $this->restoreHomeSandbox();
         if (\is_dir($this->sandbox)) {
-            \exec('rm -rf ' . \escapeshellarg($this->sandbox));
+            \exec('rm -rf ' . \escapeshellarg($this->sandbox) . ' 2>&1');
         }
     }
 

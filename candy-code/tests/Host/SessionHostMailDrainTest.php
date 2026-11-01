@@ -80,10 +80,10 @@ final class SessionHostMailDrainTest extends TestCase
         $inbox = SessionMailbox::forSession($this->session);
         if ($inbox !== null) {
             $dir = $inbox->directory();
-            \exec('rm -rf ' . \escapeshellarg($dir));
+            \exec('rm -rf ' . \escapeshellarg($dir) . ' 2>&1');
         }
         if (\is_dir($this->sandbox)) {
-            \exec('rm -rf ' . \escapeshellarg($this->sandbox));
+            \exec('rm -rf ' . \escapeshellarg($this->sandbox) . ' 2>&1');
         }
     }
 

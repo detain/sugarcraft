@@ -89,7 +89,7 @@ final class SessionHostOtelFoldTest extends TestCase
         $this->restoreEnvPriors();
         $this->restoreHomeSandbox();
         if (\is_dir($this->sandbox)) {
-            \exec('rm -rf ' . \escapeshellarg($this->sandbox));
+            \exec('rm -rf ' . \escapeshellarg($this->sandbox) . ' 2>&1');
         }
     }
 

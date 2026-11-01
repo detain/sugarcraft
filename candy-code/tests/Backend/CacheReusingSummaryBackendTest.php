@@ -56,7 +56,7 @@ final class CacheReusingSummaryBackendTest extends TestCase
         RuntimeNoticeSink::reset();
         $this->restoreHomeSandbox();
         if (is_dir($this->sandbox)) {
-            exec('rm -rf ' . escapeshellarg($this->sandbox));
+            exec('rm -rf ' . escapeshellarg($this->sandbox) . ' 2>&1');
         }
     }
 

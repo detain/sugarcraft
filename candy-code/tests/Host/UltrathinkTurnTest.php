@@ -59,7 +59,7 @@ final class UltrathinkTurnTest extends TestCase
     {
         RuntimeNoticeSink::reset();
         if (\is_dir($this->dir)) {
-            \exec('rm -rf ' . \escapeshellarg($this->dir));
+            \exec('rm -rf ' . \escapeshellarg($this->dir) . ' 2>&1');
         }
     }
 
