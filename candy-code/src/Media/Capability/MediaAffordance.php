@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Media\Capability;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Media\Sd\Client;
 use SugarCraft\Code\Media\Video\JobClient;
+use SugarCraft\Code\Media\Voice\VoiceConfig;
 use SugarCraft\Code\Providers\ProviderFactory;
 
 /**
@@ -42,6 +43,11 @@ use SugarCraft\Code\Providers\ProviderFactory;
  *  - KINDS: an absent or empty `mediaKinds` roster means "everything the
  *    host can do" — the W1.8 config-authority fail-open both tools carry
  *    (GenerateImage.php:352, GenerateVideo.php:515).
+ *  - TRANSCRIBE: the voice door, independent of the SD base — true exactly
+ *    when `voice.baseUrl` names an endpoint, the same
+ *    {@see VoiceConfig::enabled()} predicate the transport itself refuses
+ *    on (C-TUI-6.n). No key presence is required to advertise it: a bad key
+ *    fails the call loudly, and no socket is dialed to answer the flag.
  *  - BASE URL: nothing is offered over no server — {@see Client::resolveBaseUrl()}
  *    is the single base authority (env > `sd.baseUrl` > `mediaBaseUrl`); a
  *    null answer forces both flags false.
@@ -56,7 +62,7 @@ final class MediaAffordance
     /** Hex chars of the host's sha256 that ride the wire (a bucket, not a name). */
     public const HOST_HASH_CHARS = 16;
 
-    /** @var array{image: bool, video: bool, baseUrlHostOnly: string|null}|null */
+    /** @var array{image: bool, video: bool, transcribe: bool, baseUrlHostOnly: string|null}|null */
     private static ?array $bootMemo = null;
 
     private function __construct()
@@ -68,7 +74,7 @@ final class MediaAffordance
      * first ask (the boot-time law, plan :844), then memoised — a settings
      * edit lands at the next serve start, not mid-connection.
      *
-     * @return array{image: bool, video: bool, baseUrlHostOnly: string|null}
+     * @return array{image: bool, video: bool, transcribe: bool, baseUrlHostOnly: string|null}
      */
     public static function current(): array
     {
@@ -80,7 +86,7 @@ final class MediaAffordance
      * the tests drive table-first without touching env or the filesystem.
      *
      * @param array<array-key, mixed> $settings  the merged user config
-     * @return array{image: bool, video: bool, baseUrlHostOnly: string|null}
+     * @return array{image: bool, video: bool, transcribe: bool, baseUrlHostOnly: string|null}
      */
     public static function flags(array $settings, ?string $base): array
     {
@@ -92,6 +98,7 @@ final class MediaAffordance
             'image' => $host !== null && $family->isImplemented() && $permits('image'),
             'video' => $host !== null && $family->isImplemented()
                 && JobClient::videoContract($family) !== null && $permits('video'),
+            'transcribe' => VoiceConfig::fromSettings($settings)->enabled(),
             'baseUrlHostOnly' => $host === null ? null : \substr(\hash('sha256', $host), 0, self::HOST_HASH_CHARS),
         ];
     }

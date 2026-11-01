@@ -10,6 +10,7 @@ use SugarCraft\Code\Media\Capability\EndpointFamily;
 use SugarCraft\Code\Media\Capability\MediaAffordance;
 use SugarCraft\Code\Media\Sd\Client;
 use SugarCraft\Code\Media\Video\JobClient;
+use SugarCraft\Code\Media\Voice\VoiceConfig;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
@@ -69,13 +70,13 @@ final class MediaAffordanceTest extends TestCase
     }
 
     /**
-     * @return array<string, array{array<array-key, mixed>, string|null, array{image: bool, video: bool, baseUrlHostOnly: string|null}, string}>
+     * @return array<string, array{array<array-key, mixed>, string|null, array{image: bool, video: bool, transcribe: bool, baseUrlHostOnly: string|null}, string}>
      */
     public static function flagTables(): array
     {
-        $off = ['image' => false, 'video' => false, 'baseUrlHostOnly' => null];
-        $imageOnly = ['image' => true, 'video' => false, 'baseUrlHostOnly' => self::hash('gpu.example')];
-        $bothOffers = ['image' => true, 'video' => true, 'baseUrlHostOnly' => self::hash('gpu.example')];
+        $off = ['image' => false, 'video' => false, 'transcribe' => false, 'baseUrlHostOnly' => null];
+        $imageOnly = ['image' => true, 'video' => false, 'transcribe' => false, 'baseUrlHostOnly' => self::hash('gpu.example')];
+        $bothOffers = ['image' => true, 'video' => true, 'transcribe' => false, 'baseUrlHostOnly' => self::hash('gpu.example')];
 
         return [
             'no server configured' => [[], null, $off, 'nothing is offered over no base URL'],
@@ -89,7 +90,7 @@ final class MediaAffordanceTest extends TestCase
             'roster video-only under sdapi' => [
                 ['mediaKinds' => ['video']],
                 self::BASE,
-                ['image' => false, 'video' => false, 'baseUrlHostOnly' => self::hash('gpu.example')],
+                ['image' => false, 'video' => false, 'transcribe' => false, 'baseUrlHostOnly' => self::hash('gpu.example')],
                 'roster shuts image; sdapi carries no video contract so video stays false',
             ],
             'empty roster fails open' => [['mediaKinds' => []], self::BASE, $imageOnly, 'an empty mediaKinds roster means everything the host can do (W1.8)'],
@@ -98,7 +99,7 @@ final class MediaAffordanceTest extends TestCase
             'recognised unimplemented family' => [
                 ['mediaFamily' => 'comfyui'],
                 self::BASE,
-                ['image' => false, 'video' => false, 'baseUrlHostOnly' => self::hash('gpu.example')],
+                ['image' => false, 'video' => false, 'transcribe' => false, 'baseUrlHostOnly' => self::hash('gpu.example')],
                 'comfyui parses, is not implemented, and carries no contract — both doors shut by name',
             ],
             'schemeless host:port' => [[], 'gpu.example:7860', $imageOnly, 'a bare host:port base still resolves a host'],
@@ -107,6 +108,12 @@ final class MediaAffordanceTest extends TestCase
                 'http://',
                 $off,
                 'a base with no host component resolves nothing — flags stay off, hash stays null',
+            ],
+            'voice endpoint without an sd server' => [
+                ['voice.baseUrl' => 'https://voice.example/v1'],
+                null,
+                ['image' => false, 'video' => false, 'transcribe' => true, 'baseUrlHostOnly' => null],
+                'the voice door is independent of the SD base — naming an endpoint is the whole predicate, and no key is needed to advertise it (C-TUI-6.n)',
             ],
         ];
     }
@@ -182,9 +189,51 @@ final class MediaAffordanceTest extends TestCase
     public function testCurrentAnswersOffWhenNothingIsConfigured(): void
     {
         self::assertSame(
-            ['image' => false, 'video' => false, 'baseUrlHostOnly' => null],
+            ['image' => false, 'video' => false, 'transcribe' => false, 'baseUrlHostOnly' => null],
             MediaAffordance::current(),
             'an empty sandbox home is an unconfigured server',
         );
+    }
+
+    public function testTheTranscribeFlagIsTheVoiceConfigEnabledDoorVerbatim(): void
+    {
+        // The flag must answer from the SAME predicate the transport itself
+        // refuses on (VoiceConfig::enabled() — voice.baseUrl set), so the
+        // advertisement and the call cannot drift: a named endpoint opens
+        // the door with or without a key, whitespace is no endpoint, and a
+        // lone key is silence.
+        foreach ([
+            [[], false],
+            [['voice.apiKey' => 'sk-not-a-door'], false],
+            [['voice.baseUrl' => '   '], false],
+            [['voice.baseUrl' => 'https://voice.example/v1'], true],
+            [['voice.baseUrl' => 'https://voice.example/v1', 'voice.apiKey' => 'sk-whatever'], true],
+        ] as [$settings, $expected]) {
+            $flags = MediaAffordance::flags((array) $settings, self::BASE);
+            self::assertSame(
+                $expected,
+                $flags['transcribe'],
+                'voice door drifted from VoiceConfig::enabled() over ' . \json_encode($settings),
+            );
+            self::assertSame(
+                VoiceConfig::fromSettings((array) $settings)->enabled(),
+                $flags['transcribe'],
+                'the flag and the transport authority must answer the same',
+            );
+        }
+    }
+
+    public function testTheVoiceEndpointNeverRidesTheFlagsInClear(): void
+    {
+        // plan :839's privacy law extends to the new door: the voice URL is
+        // an endpoint like any other and never appears in the advertisement,
+        // only the SD host's hash does (and only when an SD base exists).
+        $token = 'vhost-' . \bin2hex(\random_bytes(6));
+        $wire = (string) \json_encode(MediaAffordance::flags(
+            ['voice.baseUrl' => 'http://' . $token . ':7861/v1'],
+            self::BASE,
+        ));
+        self::assertStringNotContainsString($token, $wire, 'a configured voice endpoint is advertised as a flag, never as a host');
+        self::assertStringNotContainsString('http', $wire);
     }
 }

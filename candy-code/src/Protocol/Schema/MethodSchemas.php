@@ -107,8 +107,9 @@ final class MethodSchemas
                         'media' => Schema::object([
                             'image' => Schema::boolean(),
                             'video' => Schema::boolean(),
+                            'transcribe' => Schema::boolean(),
                             'baseUrlHostOnly' => Schema::string()->nullable(),
-                        ], ['image', 'video', 'baseUrlHostOnly'])->describe('Whether this server may offer image/video generation, derived at boot from config intersected with probed capability without dialing the server; `baseUrlHostOnly` is a sha256 prefix of the SD host — never the URL or hostname in the clear, null when none is configured.'),
+                        ], ['image', 'video', 'baseUrlHostOnly'])->describe('Whether this server may offer image/video generation, derived at boot from config intersected with probed capability without dialing the server; `transcribe` is optional (old clients and servers interoperate either way) and says whether `voice.baseUrl` names an endpoint — while it is off, the `audio.*` pair answers `voice_unconfigured`; `baseUrlHostOnly` is a sha256 prefix of the SD host — never the URL or hostname in the clear, null when none is configured.'),
                     ], ['methods', 'events']),
                     'limits' => Schema::map(Schema::integer(0)),
                     'principal' => Schema::object([
@@ -878,6 +879,30 @@ final class MethodSchemas
                     'eof' => Schema::boolean(),
                     'mime' => Schema::string(128),
                 ], ['artifactId', 'offset', 'bytes', 'totalBytes', 'eof']),
+            ],
+
+            // C-TUI-6.n: the audio pair. The ceilings are MediaMethods' own
+            // constants and the mime enum is its allowlist keys, so schema
+            // bound and handler refusal cannot drift — AudioTranscribeMethodTest
+            // re-derives those equalities, the 5.d roster discipline.
+            'audio.transcribe' => [
+                Schema::object([
+                    ...$sid,
+                    'audioBase64' => Schema::string(\SugarCraft\Code\Protocol\Methods\MediaMethods::TRANSCRIBE_MAX_BASE64_BYTES)
+                        ->describe('Base64 of the recorded take; the decode is capped at 8 MiB of audio bytes, and the inbound WS frame ceiling (ServerConfig::MAX_CLIENT_FRAME_BYTES) already refuses a larger body before dispatch.'),
+                    'mime' => Schema::enum(\array_keys(\SugarCraft\Code\Protocol\Methods\MediaMethods::TRANSCRIBE_MIME_EXTENSIONS)),
+                    'language' => Schema::string(64),
+                    'idempotencyKey' => Schema::string(64),
+                ], ['sessionId', 'audioBase64', 'mime']),
+                Schema::object(['jobId' => Schema::string(64)], ['jobId']),
+            ],
+            'audio.status' => [
+                Schema::object([...$sid, 'jobId' => Schema::string(64)], ['sessionId', 'jobId']),
+                Schema::object([
+                    'state' => Schema::enum(\SugarCraft\Code\Protocol\Methods\MediaMethods::AUDIO_STATES),
+                    'text' => Schema::string(),
+                    'error' => Schema::string(2048),
+                ], ['state']),
             ],
 
             // C-SES-8.a: one snapshot of the same fold `/usage` prints; the

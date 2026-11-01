@@ -12,6 +12,9 @@ use SugarCraft\Code\Media\MediaJob;
 use SugarCraft\Code\Media\MediaJobStatus;
 use SugarCraft\Code\Media\MediaKind;
 use SugarCraft\Code\Media\MediaRequest;
+use SugarCraft\Code\Media\Voice\AudioRecording;
+use SugarCraft\Code\Media\Voice\Transcriber;
+use SugarCraft\Code\Media\Voice\VoiceConfig;
 use SugarCraft\Code\Permissions\PermissionDecision;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Protocol\CallContext;
@@ -58,6 +61,16 @@ use SugarCraft\Code\Tools\Tool;
  * own temp-then-rename publish shape. MediaStore's listings scandir with an
  * `is_file` filter, so that `jobs/` directory is invisible to artifact ids —
  * job records never masquerade as fetchable artifacts.
+ *
+ * The `audio.*` pair (C-TUI-6.n) rides the same fork-and-poll shape for a
+ * different medium: a client-uploaded take is capped on its DECODED bytes,
+ * filed 0600 as a hidden sibling of the render ledgers under its own
+ * `audio-` name prefix, and handed to the voice transport — the endpoint
+ * comes from server settings only, never from the wire, and while voice is
+ * unconfigured BOTH doors answer `voice_unconfigured`. A transcription
+ * ledger row is `{state, mime, started_at, finished_at}` plus `text` when
+ * done or `error` when failed; `audio.status` projects exactly the wire
+ * shape `{state, text?, error?}` from it.
  */
 final class MediaMethods
 {
@@ -102,6 +115,59 @@ final class MediaMethods
     private const ERROR_CLIP_BYTES = 2048;
 
     /**
+     * Decoded-bytes ceiling for one `audio.transcribe` take (C-TUI-6.n).
+     * Eight MiB of compressed speech is hours of dictation, so the cap is
+     * flood-headroom, not a plausible-take limit; the inbound WS frame
+     * ceiling ({@see \SugarCraft\Code\Server\ServerConfig::MAX_CLIENT_FRAME_BYTES},
+     * 16 MiB) bounds the whole body before this handler ever runs.
+     */
+    public const TRANSCRIBE_MAX_AUDIO_BYTES = 8_388_608;
+
+    /**
+     * The base64 form of {@see TRANSCRIBE_MAX_AUDIO_BYTES} — ceil(bytes / 3)
+     * times 4. The param is refused over this length at param-reading time,
+     * so an oversized body never allocates a decode.
+     */
+    public const TRANSCRIBE_MAX_BASE64_BYTES = 11_184_812;
+
+    /**
+     * The declared mime allowlist for `audio.transcribe`, mapped to the
+     * extension a take is filed under: the web recorder's ladder (opus in
+     * webm first, then ogg, then mp4) and nothing else. The check runs
+     * BEFORE the take touches the filesystem.
+     *
+     * @var array<string, string>
+     */
+    public const TRANSCRIBE_MIME_EXTENSIONS = [
+        'audio/webm' => 'webm',
+        'audio/ogg' => 'ogg',
+        'audio/mp4' => 'mp4',
+    ];
+
+    /** A transcription job whose transport has not answered yet. */
+    public const AUDIO_STATE_RUNNING = 'running';
+
+    /** A transcription job whose ledger carries the text. */
+    public const AUDIO_STATE_DONE = 'done';
+
+    /** A transcription job whose ledger carries the failure sentence. */
+    public const AUDIO_STATE_FAILED = 'failed';
+
+    /**
+     * The `audio.status` state enum, derived from the constants above so
+     * schema and ledger states cannot drift.
+     *
+     * @var list<string>
+     */
+    public const AUDIO_STATES = [self::AUDIO_STATE_RUNNING, self::AUDIO_STATE_DONE, self::AUDIO_STATE_FAILED];
+
+    /**
+     * Ledger name prefix separating transcription rows from render rows in
+     * the shared `jobs/` directory.
+     */
+    private const AUDIO_LEDGER_PREFIX = 'audio-';
+
+    /**
      * Test seams only (see {@see self::setToolFactoryForTesting()}): the
      * render tool, the consent gate override, and a switch that runs the
      * render inline so a suite can pin ledger shapes deterministically.
@@ -111,6 +177,13 @@ final class MediaMethods
     private static ?PermissionGate $gateOverride = null;
 
     private static bool $directRun = false;
+
+    /**
+     * Transcriber builder seam (C-TUI-6.n): production builds a bare
+     * {@see Transcriber}; a suite injects a stub answering without dialling,
+     * or a real one over a canned handler.
+     */
+    private static ?\Closure $transcriberFactory = null;
 
     private function __construct()
     {
@@ -136,6 +209,19 @@ final class MediaMethods
             Scope::Read,
             'A stored media artifact\'s bytes, in base64 slices.',
             self::fetch(...),
+        ));
+        $registry->add(MethodSpec::new(
+            'audio.transcribe',
+            Scope::Write,
+            'Transcribe a base64 audio take through the configured voice endpoint; answers with its job id.',
+            self::transcribe(...),
+            true,
+        ));
+        $registry->add(MethodSpec::new(
+            'audio.status',
+            Scope::Read,
+            'A transcription job\'s state and text, from its ledger.',
+            self::transcribeStatus(...),
         ));
     }
 
@@ -171,11 +257,18 @@ final class MediaMethods
         self::$directRun = $direct;
     }
 
+    /** Swap the transcriber builder; null falls back to the bare {@see Transcriber}. */
+    public static function setTranscriberFactoryForTesting(?\Closure $factory): void
+    {
+        self::$transcriberFactory = $factory;
+    }
+
     public static function resetForTesting(): void
     {
         self::$toolFactory = null;
         self::$gateOverride = null;
         self::$directRun = false;
+        self::$transcriberFactory = null;
     }
 
     // ── methods ────────────────────────────────────────────────────────
@@ -400,6 +493,228 @@ final class MediaMethods
         }
 
         return $out;
+    }
+
+    // ── audio ──────────────────────────────────────────────────────────
+
+    /**
+     * `audio.transcribe` (C-TUI-6.n): file a client-uploaded take and run
+     * the voice transport against it — the same fork-and-poll shape submit
+     * renders, answering `{jobId}` without waiting; `audio.status` polls.
+     *
+     * Egress law: the bytes reach ONLY `voice.baseUrl` through the welded
+     * {@see Transcriber} — the wire names no endpoint, this lane adds no
+     * dialer, and the mime is checked against the declared allowlist before
+     * a take is written anywhere. Size bounds ride the base64 param ceiling
+     * (refused at param-reading) and the decoded-bytes ceiling (refused
+     * BEFORE the take lands); no blanket wall-clock kill exists on either
+     * half — the transport's connect- and stall-bounds are the timers
+     * (E646), so a slow-but-live endpoint is allowed to answer.
+     *
+     * @param array<string, mixed> $_
+     *
+     * @return array{jobId: string}
+     */
+    private static function transcribe(CallContext $call, Params $params): array
+    {
+        if ($call->server->isDraining()) {
+            throw RpcError::of(ErrorCode::Busy, 'the server is shutting down', 'draining');
+        }
+
+        $voice = self::configuredVoice();
+
+        $sessionId = SessionMethods::sessionId($params);
+        $host = $call->host($sessionId);
+
+        $encoded = $params->string('audioBase64', self::TRANSCRIBE_MAX_BASE64_BYTES);
+        $mime = $params->string('mime', 64);
+        if (!isset(self::TRANSCRIBE_MIME_EXTENSIONS[$mime])) {
+            throw RpcError::invalidParams(\sprintf(
+                'invalid params: mime must be one of %s',
+                \implode(', ', \array_keys(self::TRANSCRIBE_MIME_EXTENSIONS)),
+            ));
+        }
+        $language = $params->optionalString('language', 64);
+
+        $audio = \base64_decode($encoded, true);
+        if ($audio === false) {
+            throw RpcError::invalidParams('invalid params: audioBase64 is not valid base64');
+        }
+        if ($audio === '') {
+            throw RpcError::invalidParams('invalid params: audioBase64 decodes to no bytes');
+        }
+        if (\strlen($audio) > self::TRANSCRIBE_MAX_AUDIO_BYTES) {
+            throw RpcError::invalidParams(\sprintf(
+                'invalid params: audioBase64 decodes to %d bytes; the limit is %d',
+                \strlen($audio),
+                self::TRANSCRIBE_MAX_AUDIO_BYTES,
+            ));
+        }
+
+        // A wire language overrides only the request's `language` field; the
+        // endpoint, key and model stay the server's own settings — rebuild
+        // the snapshot through the same fromSettings() authority rather than
+        // reading the live config a second time.
+        $engine = $language === null ? $voice : VoiceConfig::fromSettings([
+            'voice.baseUrl' => $voice->baseUrl,
+            'voice.apiKey' => $voice->apiKey,
+            'voice.model' => $voice->model,
+            'voice.language' => $language,
+            'voice.maxSeconds' => $voice->maxSeconds,
+        ]);
+
+        $jobId = \bin2hex(\random_bytes(8));
+        $store = MediaStore::forSession($sessionId);
+        $jobsDir = PrivateDir::ensure($store->directoryPath() . '/' . self::LEDGER_DIR, 'media job ledger');
+        $takePath = $jobsDir . '/.' . $jobId . '.audio.' . self::TRANSCRIBE_MIME_EXTENSIONS[$mime];
+        $ledgerPath = $jobsDir . '/' . self::AUDIO_LEDGER_PREFIX . $jobId . '.json';
+        $startedAt = \time();
+
+        self::writeTake($takePath, $audio);
+        self::writeLedger($ledgerPath, [
+            'state' => self::AUDIO_STATE_RUNNING,
+            'mime' => $mime,
+            'started_at' => $startedAt,
+            'finished_at' => null,
+        ]);
+
+        $run = static function () use ($engine, $takePath, $jobId, $ledgerPath, $mime, $startedAt): string {
+            $recording = new AudioRecording($takePath, 'web-mediarecorder', $engine->maxSeconds, (float) $startedAt);
+            try {
+                $text = (self::$transcriberFactory ?? static fn (): Transcriber => new Transcriber())()
+                    ->transcribe($recording, $engine);
+                $record = [
+                    'state' => self::AUDIO_STATE_DONE,
+                    'mime' => $mime,
+                    'started_at' => $startedAt,
+                    'finished_at' => \time(),
+                    'text' => $text,
+                ];
+                $status = self::AUDIO_STATE_DONE;
+            } catch (\Throwable $e) {
+                // The real transport unlinks the take on every exit path; a
+                // replaced one may not, and an orphan take must never
+                // outlive its job either way.
+                @\unlink($takePath);
+                $record = [
+                    'state' => self::AUDIO_STATE_FAILED,
+                    'mime' => $mime,
+                    'started_at' => $startedAt,
+                    'finished_at' => \time(),
+                    'error' => self::clipError($e->getMessage()),
+                ];
+                $status = self::AUDIO_STATE_FAILED;
+            }
+            self::writeLedger($ledgerPath, $record);
+
+            return (string) \json_encode(['job_id' => $jobId, 'status' => $status]);
+        };
+
+        if (!self::$directRun && TurnController::canFork()) {
+            TurnController::forkPayload(
+                $run,
+                static fn (string $file): string|false => TurnController::takePayload($file),
+                $run,
+                new CancellationToken(),
+            )->then(static function (): void {
+            });
+        } else {
+            // No pcntl (or a pinned suite): the fork door's own $inline
+            // semantics, run where the refusal cannot pretend otherwise.
+            $run();
+        }
+
+        return ['jobId' => $jobId];
+    }
+
+    /**
+     * `audio.status`: poll one transcription ledger, projecting exactly
+     * `{state, text?, error?}` onto the wire. The honest-silence law of the
+     * submit door holds here too: while voice is unconfigured the poll
+     * answers `voice_unconfigured` as well, so a client never reads a
+     * stranded ledger as a live capability. Read scope: draining answers.
+     *
+     * @param array<string, mixed> $_
+     *
+     * @return array<string, mixed>
+     */
+    private static function transcribeStatus(CallContext $call, Params $params): array
+    {
+        self::configuredVoice();
+
+        $sessionId = SessionMethods::sessionId($params);
+        $host = $call->host($sessionId);
+
+        $jobId = $params->string('jobId', 64);
+        if (\preg_match(self::JOB_ID_PATTERN, $jobId) !== 1) {
+            throw RpcError::invalidParams('invalid params: jobId must be a 16-character hex job id');
+        }
+
+        $path = MediaStore::forSession($sessionId)->directoryPath()
+            . '/' . self::LEDGER_DIR . '/' . self::AUDIO_LEDGER_PREFIX . $jobId . '.json';
+        if (!\is_file($path)) {
+            throw RpcError::notFound(\sprintf('no transcription job %s in this session', $jobId), 'audio_job_not_found');
+        }
+        $raw = @\file_get_contents($path);
+        $decoded = $raw === false ? null : \json_decode($raw, true);
+        if (!\is_array($decoded) || !\is_string($decoded['state'] ?? null)) {
+            throw RpcError::of(ErrorCode::Internal, 'the job ledger could not be read', 'ledger_corrupt');
+        }
+
+        $out = ['state' => $decoded['state']];
+        if (isset($decoded['text']) && \is_string($decoded['text']) && $decoded['text'] !== '') {
+            $out['text'] = $decoded['text'];
+        }
+        if (isset($decoded['error']) && \is_string($decoded['error']) && $decoded['error'] !== '') {
+            $out['error'] = $decoded['error'];
+        }
+
+        return $out;
+    }
+
+    /**
+     * The voice door's single gate: the transport settings must name an
+     * endpoint (the same predicate `MediaAffordance` answers `transcribe`
+     * from) or both audio doors refuse. Refusal sentences name the setting,
+     * never a key.
+     */
+    private static function configuredVoice(): VoiceConfig
+    {
+        $voice = VoiceConfig::fromSettings();
+        if (!$voice->enabled()) {
+            throw RpcError::of(
+                ErrorCode::Forbidden,
+                'audio needs a voice endpoint; set voice.baseUrl in user settings',
+                'voice_unconfigured',
+            );
+        }
+
+        return $voice;
+    }
+
+    /**
+     * File one decoded take at 0600 before the ledger names it: the same
+     * exclusive-create publish law the ledger follows, so a planted path is
+     * refused rather than overwritten, and a short write leaves no partial
+     * take behind. The name is server-minted (job id plus the allowlist's
+     * own extension), never client-chosen.
+     */
+    private static function writeTake(string $path, string $bytes): void
+    {
+        $umask = \umask(0o077);
+        $handle = @\fopen($path, 'xb');
+        \umask($umask);
+        if ($handle === false) {
+            throw RpcError::of(ErrorCode::Internal, 'the audio take could not be opened for writing', 'take_unwritable');
+        }
+        @\chmod($path, MediaStore::FILE_MODE);
+        $written = \fwrite($handle, $bytes);
+        \fclose($handle);
+        if ($written !== \strlen($bytes)) {
+            @\unlink($path);
+
+            throw RpcError::of(ErrorCode::Internal, 'the audio take could not be written whole', 'take_unwritable');
+        }
     }
 
     // ── consent ────────────────────────────────────────────────────────

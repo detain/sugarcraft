@@ -67,7 +67,7 @@ final class HelloMediaFlagsTest extends TestCase
         $hello = $this->hello();
 
         self::assertSame(
-            ['image' => false, 'video' => false, 'baseUrlHostOnly' => null],
+            ['image' => false, 'video' => false, 'transcribe' => false, 'baseUrlHostOnly' => null],
             $hello['features']['media'] ?? null,
             'an empty config is silence about media, never an assumption of it',
         );
@@ -119,5 +119,28 @@ final class HelloMediaFlagsTest extends TestCase
         self::assertIsArray($media);
         self::assertTrue($media['image'], 'the env base is the same single authority Client::resolveBaseUrl() answers from');
         self::assertSame(\substr(\hash('sha256', 'env-side.example'), 0, MediaAffordance::HOST_HASH_CHARS), $media['baseUrlHostOnly']);
+    }
+
+    public function testAConfiguredVoiceEndpointRaisesTheTranscribeFlagWithoutNamingIt(): void
+    {
+        // C-TUI-6.n's flag over the real handshake: an endpoint name is the
+        // whole predicate, the door is independent of the SD base, and the
+        // voice URL itself never rides the wire in the clear.
+        $token = 'voice-' . \bin2hex(\random_bytes(6));
+        \file_put_contents(
+            $this->home . '/.candy-code/config.json',
+            (string) \json_encode(['voice.baseUrl' => 'http://' . $token . '.example:7861/v1']),
+        );
+        MediaAffordance::resetForTesting();
+
+        $hello = $this->hello();
+        $media = $hello['features']['media'] ?? null;
+
+        self::assertIsArray($media);
+        self::assertTrue($media['transcribe'], 'voice is offered once voice.baseUrl names an endpoint');
+        self::assertFalse($media['image'], 'the voice door is independent: no sd base, no image offer');
+        self::assertNull($media['baseUrlHostOnly'], 'the voice endpoint is not the SD host — nothing hashes in, nothing rides out');
+        self::assertStringNotContainsString($token, (string) \json_encode($media), 'plan :839 applies to the voice URL too');
+        self::assertSame([], ProtocolSchema::errors($hello, MethodSchemas::result(ServerMethods::HELLO), ServerMethods::HELLO));
     }
 }
