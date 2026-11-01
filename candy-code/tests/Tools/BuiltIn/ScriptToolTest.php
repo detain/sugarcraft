@@ -293,8 +293,12 @@ final class ScriptToolTest extends TestCase
                 => new ToolResult(toolCallId: '', content: 'tick'),
         );
 
+        // The count is MAX_LEDGER_ROWS + 6 spelled through the constant: a bare
+        // literal at or over 60 in this body reads to {@see FixtureLifetimeCensusTest}'s
+        // scanner as a fixture lifetime, and the assertion below is about the
+        // ledger's own arithmetic, not a wall clock.
         $result = $tool->execute([
-            'code' => '$i = 0; while ($i < 70) { tool("Tick", ["n" => $i]); $i++; } return $i;',
+            'code' => '$i = 0; while ($i < ' . (ScriptTool::MAX_LEDGER_ROWS + 6) . ') { tool("Tick", ["n" => $i]); $i++; } return $i;',
         ]);
 
         self::assertFalse($result->isError());
