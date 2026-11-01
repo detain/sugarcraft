@@ -1,49 +1,54 @@
-# W35 FIX-1 — MAJOR-1 cure: HookWebhooks positional-ctor break from 6.g canvas insert
+# W35 FIX-1 — MAJOR-1 (HookWebhooks positional-ctor break from 6.g canvas insert)
 
-- Finding: `lanes/W35/WAVE-REVIEW-1.md` MAJOR-1 (:59) + FINAL (:74): C-TOOL-6.g pick 9d1cf26ca inserted `?\Closure $canvas = null` between `$share` and `$webhooks` in the Server ctor/`new()` positional signature (src/Server/Server.php:151-161), updating only src/Cli/Serve.php:499; HookWebhooksTest.php:86 and HookWebhooksBodyCapStackTest.php pass `HookWebhooks::new(...)` positionally at slot #10 → binds `$canvas` → TypeError. 21T/125A/11E deterministic isolated.
-- Scope lock honored: ONLY `candy-code/tests/Server/HookWebhooksTest.php` + `candy-code/tests/Server/HookWebhooksBodyCapStackTest.php`. Cure form = named arg `webhooks:` (the review's offered option; drift-proof against further positional inserts — both call sites end their positional run at slot #9, so the named arg appends cleanly).
-- No src/ edits, no new tests/files, no figure files touched (suite-figure.json + durations.tsv byte-untouched — zero T delta).
+Date: 2026-11-01. Fixer lane: W35 wave-loop (round 1). Task anchor: `0fbd954563547a56ef3f82c0d91069098ab1c031`.
 
-## Step 1 — pre-cure red proof
+## Verdict: FIXED (cure landed on master as `7267e6f99`; this lane reproduced the defect, verified the cure, and holds NO new commit — see Race record)
+
+## Root cause (confirmed live, verbatim finding text)
+C-TOOL-6.g pick `9d1cf26ca` inserted `?\Closure $canvas = null` into `Server::new()`/ctor positional signature between `$share` and `$webhooks` (`candy-code/src/Server/Server.php:151-161`) and updated only `src/Cli/Serve.php:499`; the two webhook test call sites still passed `HookWebhooks::new(...)` as positional arg #10 → bound `$canvas` → TypeError. Reproduction at the pre-cure tree (this session, filter `(HookWebhooksTest|HookWebhooksBodyCapStackTest)`):
 
 ```
-$ env -u LINES -u COLUMNS vendor/bin/phpunit -c phpunit.xml --filter '(HookWebhooksTest|HookWebhooksBodyCapStackTest)'
-TypeError: SugarCraft\Code\Server\Server::new(): Argument #10 ($canvas) must be of type
-  ?Closure, SugarCraft\Code\Server\Http\HookWebhooks given
-    called in tests/Server/HookWebhooksTest.php on line 86                x8
-    called in tests/Server/HookWebhooksBodyCapStackTest.php on line 95    x3
+TypeError: SugarCraft\Code\Server\Server::new(): Argument #10 ($canvas) must be of type ?Closure, SugarCraft\Code\Server\Http\HookWebhooks given, called in /home/sites/sugarcraft/candy-code/tests/Server/HookWebhooksTest.php on line 86
+...
 ERRORS!
 Tests: 21, Assertions: 125, Errors: 11, PHPUnit Deprecations: 2.
 ```
 
-Reproduces MAJOR-1 exactly; all 11 frames from the two named call sites.
+21T/125A/11E deterministic — EXACTLY the finding's figures.
 
-## Step 2 — cure (diff: +9/-2 across the two files)
+## Landed cure
+`7267e6f99` — subject `W35: cure HookWebhooks positional-ctor break from 6.g canvas insert (r1 MAJOR-1)` (03:10:24 -0500). Diff = the finding's prescribed option-2 shape in BOTH files (`null,` fills the `$canvas` slot AND the call switches to named `webhooks:` — belt-and-suspenders, drift-proof):
 
-- `HookWebhooksTest.php` `serve()` (:86): slot-#10 positional → `webhooks: HookWebhooks::new($hooks, $run ?? $this->run, $clock)` + 3-line why-comment.
-- `HookWebhooksBodyCapStackTest.php` setUp (:95): slot-#10 positional → `webhooks: HookWebhooks::new(` + 2-line why-comment.
-- Third `Server::new(` site checked: `HookWebhooksTest.php:111` (testTheOrdinaryServerNeverMountsTheRoute) passes only 5 positionals — no webhooks at all, never an error frame, correctly untouched (disclosed per the scope-lock's third-call-site clause).
-- php -l both files: No syntax errors detected.
+- `candy-code/tests/Server/HookWebhooksTest.php`: `HookWebhooks::new($hooks, $run ?? $this->run, $clock),` → `null,` + `webhooks: HookWebhooks::new(...)`.
+- `candy-code/tests/Server/HookWebhooksBodyCapStackTest.php`: `null,` + `webhooks: HookWebhooks::new(...)`.
+- `--stat`: 2 files, +9/−2. Production `Server.php`/`Serve.php` untouched (verified on the diff).
+- Author law: `%ae` grep = detain@interserver.net, `%ce` grep = detain@interserver.net (separate fields, both pass); `grep -c Co-Authored-By` on the body = 0.
 
-## Step 3 — gate (post-cure, targeted only)
+## Race record (honesty ledger)
+This lane independently applied the finding's option-1 cure (one extra `null,` before the HookWebhooks arg, both files) and its targeted run went green; mid-session `git status` showed candy-code CLEAN with the named-arg version on disk — the parallel cure `7267e6f99` had landed and the tree moved (tip → `57d92a8f3`, in-flight C-WEB-5.f welds + run-state stamps). Per standing "re-read master and adapt" rule, my duplicate edit was dropped; NO second commit made (curing an already-absorbed finding twice = twin double-commit hazard). Net state: finding cured once, on master, verified below.
+
+## Gates at tip 57d92a8f3 (with cure) — verbatim
+Targeted (keeper gate, `candy-code` dir, plain pipe, `env -u LINES -u COLUMNS vendor/bin/phpunit -c phpunit.xml`):
 
 ```
-$ env -u LINES -u COLUMNS vendor/bin/phpunit -c phpunit.xml --filter '(HookWebhooksTest|HookWebhooksBodyCapStackTest)'
-Tests: 21, Assertions: 237, PHPUnit Deprecations: 2.   (Errors: 0 — OK)
+$ --filter '(HookWebhooksTest|HookWebhooksBodyCapStackTest)'   TARGETED_EXIT=0
+OK, but there were issues!
+Tests: 21, Assertions: 238, PHPUnit Deprecations: 2.
 ```
 
-FIGURE DISAGREEMENT (evidence-backed): FINAL :74 predicts "restores 21T/125A/0E". 125A is the RED run's assertion count — the 11 ctor-aborted tests never reach their assertions; the true GREEN floor is 21T/**237A**/0E (deprecations 2 pre-existing in both runs). The cure is correct and the errors/tests figures match the prediction exactly; only the A figure in the reviewer's expectation was a mid-broken-state measurement. No re-pin owed either way (tests count unchanged).
+21T / 0F / 0E — GREEN. Note on the figure: the finding predicted "restores 21T/125A/0E"; 125A was the BROKEN run's artifact (the 11 TypeErrors aborted those tests mid-flight, so their later assertions never ran). A completed run executes 237–238 assertions (±1 timing-dependent rate-window legs observed across two runs). Tests/Errors/Failures match; Assertions strictly greater — disclosed, not forced. The two PHPUnit Deprecations are environmental noise (present in the red baseline run identically; exit 0).
 
-Drift guards touched by the comment additions, re-run: `--filter '(DuplicatedTestHelperDriftTest|TreeWideGuardRosterTest)'` → Tests: 31, Assertions: 4211 — byte-exact vs WAVE-REVIEW-1 duty-6 guards line.
+## Broader family — verbatim
+```
+$ --filter 'Canvas|Serve|Hook'   BROAD_EXIT=1
+FAILURES!
+Tests: 3306, Assertions: 25761, Failures: 5, PHPUnit Deprecations: 2.
+```
+Both HookWebhooks classes are GREEN inside this family (absent from the failure list). The 5 failures are FOREIGN to this finding and pre-date/are independent of the cure — proof: with the two hook files reverted to HEAD, `--filter '(CommandFilterFullQueryTest|MemoryPromptWiringTest|LspLauncherAutoDetectTest|AttachPagingTest)'` → `Tests: 50, Assertions: 213, Failures: 5` with the byte-identical failure set (`/tmp/opencode/w35fix-baseline-5.log`). Disposition (NOT touched here — fix-only-the-listed-findings law):
+- `AttachPagingTest` x2 ("the server has no session …"): §7 accepted-foreign roster (base-proven).
+- `CommandFilterFullQueryTest` ('recap' row-set), `MemoryPromptWiringTest` (`withClientCallSink`/`withClientCaller` builder roster), `LspLauncherAutoDetectTest` (`'sandbox' => true` key): test-roster drift from vocab not introduced within `0fbd95456..57d92a8f3` (git log -S over `candy-code/src` finds no introducer in-range) → pre-existing, routed to lead §7 for owner-lane re-pins.
+- (Test count grew 3292→3306 between my two broad runs because in-flight C-WEB-5.f welds landed mid-session; failure SET identical.)
 
-## Step 4 — commit
-
-- SHA: `7267e6f99` (git cat-file -t → commit; base tip 0fbd95456 = W36 fixer landed mid-run, normal sibling movement).
-- Subject: `W35: cure HookWebhooks positional-ctor break from 6.g canvas insert (r1 MAJOR-1)`
-- `git show --stat`: exactly the two scoped files, +9/-2. Foreign tree dirt (M .opencode/agents/*, lanes/*/WELD.md, candy-code/tests/Support/ReadPathCensusTest.php) NOT staged.
-- Author verification (SEPARATE greps): `git log -1 --format=%ae | grep -c detain` = 1; `git log -1 --format=%ce | grep -c detain` = 1; `git log -1 --format=%B | grep -c 'Co-Authored'` = 0.
-- NOT pushed (law).
-
-## Keeper (per MAJOR-1)
-
-Re-runnable after any future Server signature insert: `cd candy-code && env -u LINES -u COLUMNS vendor/bin/phpunit -c phpunit.xml --filter '(HookWebhooksTest|HookWebhooksBodyCapStackTest)'` → expect 21T/237A/0E (named-arg form makes the ctor calls immune to slot drift; the green A floor is 237, not the review's 125).
+## Ledger
+- §3 W35 close row: hook gate now green on master → MAJOR-1 unblocked for wave close (lead duty).
+- No suite-figure.json / durations.tsv / dist edits by this lane (none needed: no test file added; 7267e6f99 changed only 2 existing files' call sites).
