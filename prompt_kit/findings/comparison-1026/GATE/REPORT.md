@@ -57,3 +57,47 @@ All remaining TRIAGE-queue reds cured and committed (each %ae/%ce detain separat
 ## §7(2) re-pin state
 - live enumeration (guard register) = 30,171; hand-bump pair LANDED d8ed6fc19 (json tests + README headline 25,537→30,171, assertions equal 609,443 both sides — pair legs green, refreshed after green serial).
 - FULL candy-code serial now running to GATE/serial1.xml (background, plain pipe, env -u LINES -u COLUMNS). Next: refresh-suite-figure.php on the green log + README assertions twin (one commit) → durations wholesale regen from the same junit → battery-2 K=24 --against-json conservation.
+
+## Fix rounds 11–12 + §7(3)/§7(5) passes (gate, 2026-11-01)
+- ProviderConnectTimeout x2 env-proxy cure c5f3f7cd9 ('proxy'=>false in the two origin-dial pins;
+  this box exports proxy vars — connectPreflight's proxy bail correctly skips the probe there).
+- GlobDialect docblock 1efca51cc: src/Util/PathGlob.php figure re-derived live
+  312,477 = 561 x 557 (test asserts derived==docblock; never a literal).
+- ReadmeJsonErrorContractDrift x4 f6755b134 (import-refused + lsp-install join README union/exit
+  table/enumerating/outsider legs; NonInteractive.php index three->five).
+- SwallowingCatch pair 89477c9ea (capture-then-assert; fail-in-try was RuntimeException-swallowed).
+- StdinConstantReader + SrcCatch rosters fff428089; FixtureLifetime 0f55a9a93; RefusalStderrSurface
+  160b056d0 (nine-line refusal block); WorktreeJail+MenuBarLabels 653d5bb4f; FrameCap rename
+  17b903693; EnumSpelling 2fef82b65; notice-cap aggregate bfec0ada2; ColdResume a46bc0b90;
+  ForeignAgentPreset roster 02f9216d3; keepWarm badge 9c260c6b2; CompactionHides src fix
+  9db066db5 (real defect: messageWithContent dropped thinkingBlocks+recallTitles); reaper pair
+  f19859183 (+ shrink-test clearstatcache law); PtyRelay convention 276ec9047.
+- RESTRICTED_TOOL_NAMES += 'Script' rider LANDED 3de78fd2e (C-TOOL-6.d r1 recommendation).
+- AttachPaging/RemoteBackend REAL protocol cure 9e4fb5c5a: session.list body-only FTS (C-SES-2.c)
+  had silently broken attach-by-id/prefix; new spelled 'search' param through
+  SessionHub::list->withSearch, RemoteSessionHost::open dials it; schema+generated.ts regenerated;
+  SessionListBodySearchTest leg pins the arm.
+- LaunchContextDelegates 250143f1e (egress-armed tools door allowance, ordered-regex pin).
+- OneSidedHomeSandbox:435 af61e710b (six program-era files migrated to HomeSandboxTrait;
+  backlog list shrinks per the guard's own law).
+- SettingsEditor ccfa28a90 (git.lspAutoDetect help text matches 'trusted' — category list grew).
+- ChildStderrCapture d446f4b68 (19 rm -rf sweeps got ' 2>&1'; guard-sanctioned merge).
+- KeyHelpTest ef3ece989 six-leg live re-pin (210 content lines; 185 overflow at 100x30; derived
+  offset sweeps replace the hundred-Down loops; /help hint listing renders at derived width +
+  100-col clip pinned). HelpTest env entry CANDY_CODE_SERVICE_TIER 1236307f6.
+- §7(2) hand-bump d8ed6fc19: tests figure 25,537 -> 30,171 (guard register = --list-tests ' - '
+  lines); full serial relaunched via nohup (shell-tool bg jobs die to SIGHUP ~10min).
+- §7(3): gen-command-docs/gen-tool-docs/gen-settings-doc/gen-protocol-schema --check all up to
+  date; npm run gen:protocol byte-clean; npm run build -> dist porcelain EMPTY (tracked, clean);
+  vitest-2 --no-file-parallelism 921/921 green (104 files); check-path-repos --no-lib-path-repos,
+  check-child-lifetimes (61 libs, 33 sites, 9 findings), check-one-type-per-file rc0.
+- §7(5): COMPARISON.md refresh 9c7f880db (all @b47@-planned cells; 64->75 built-ins verified live
+  = 75 specs / 67 slash / 8 palette-only / 6 aliases; scoreboard regenerated from empty patch —
+  web GIT 7->8 yellow 3->2 red, Total yellow 156->158 red 63->61; apply_comparison --check
+  356 rows, 0 changed).
+- §7(6) derivation: GATE/step-ledger.tsv — 329 marks, ALL rows resolved to master ancestors
+  (10 lane-tip marks mapped to their weld commits 041cf425a/c0a462bc9/b138e5c73/d665c01e5/
+  bb8a83ce0/978ff2889/2123c6582/5f9f6a488); per-wave counts W1-27 x10, W28 6, W29 3, W30 3,
+  W31 2, W32 1, W33 8, W34 6, W35 7, W36 5, W37 3, W38 2, W39 4, W40 4, W41 3, W42 2.
+- Serial pass at this entry: 46% no reds (14101/30171). Next on OK: refresh-suite-figure +
+  README twin, durations regen, battery-2 conservation, drift sweep, CLOSEOUT, hygiene, push.
