@@ -226,12 +226,21 @@ final class ClaudeSettingsImportTest extends TestCase
     {
         $path = $this->writeDoc('hostile.json', $json);
 
+        // §7 closeout: capture-then-assert. The fail() used to stand INSIDE the
+        // try, and PHPUnit's ExpectationFailedException extends RuntimeException
+        // through AssertionFailedError — so a subject that accepted the hostile
+        // document had its own refusal swallowed by the catch and re-judged
+        // against the message the fail() wrote. SwallowingCatchCensusTest
+        // names this shape; the clause now catches only the subject's own
+        // verdicts, never the test's.
+        $thrown = null;
         try {
             ClaudeSettingsImport::inspect([$path]);
-            $this->fail('the import accepted a hostile document: ' . $json);
         } catch (\InvalidArgumentException | \RuntimeException $e) {
-            $this->assertMatchesRegularExpression($message, $e->getMessage());
+            $thrown = $e;
         }
+        $this->assertNotNull($thrown, 'the import accepted a hostile document: ' . $json);
+        $this->assertMatchesRegularExpression($message, $thrown->getMessage());
     }
 
     public function testSymlinkedFileIsRefused(): void

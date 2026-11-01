@@ -260,12 +260,18 @@ final class VapidKeysTest extends TestCase
             . "\x02" . chr(33) . "\x00" . str_repeat("\x22", 32);
 
         foreach (['double zero padding' => $doublePad, 'trailing bytes' => $trailing, 'sequence length mismatch' => $shortSeq] as $shape => $der) {
+            // §7 closeout: capture-then-assert. The fail() used to stand INSIDE
+            // the try, and PHPUnit's ExpectationFailedException extends
+            // RuntimeException through AssertionFailedError — a decoder that
+            // accepted the forgery had its refusal swallowed by the catch, and
+            // the assertTrue(true) arm asserted nothing about the subject.
+            $thrown = null;
             try {
                 $method->invoke(null, $der);
-                self::fail("rawSignature accepted the $shape forgery");
-            } catch (\RuntimeException) {
-                self::assertTrue(true);
+            } catch (\RuntimeException $e) {
+                $thrown = $e;
             }
+            self::assertNotNull($thrown, "rawSignature accepted the $shape forgery");
         }
     }
 
