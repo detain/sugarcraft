@@ -15,6 +15,7 @@ use SugarCraft\Code\Hooks\HookLogEntry;
 use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Memory\SecretRedactor;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
  * C-EXT-6.b (GAP-HK-08): the hook log's write, guard and read contract.
@@ -38,6 +39,7 @@ use SugarCraft\Code\Memory\SecretRedactor;
  */
 final class HookLogTest extends TestCase
 {
+    use HomeSandboxTrait;
     /**
      * 40 characters from the bearer pattern's alphabet, comfortably past its
      * `{16,}` — the audit pair's fixture, deterministic and diffed by eye.
@@ -565,12 +567,13 @@ final class HookLogTest extends TestCase
     public function testTheUnpinnedNoHomeDefaultNamesThePerUidFamily(): void
     {
         $log = $this->suitePin;
-        $home = getenv('HOME');
         // An UNVERIFIABLE HOME — not an unset one. HomeDirectory::resolved()
         // falls back to the passwd entry when HOME is absent, so
         // `putenv('HOME')` changes nothing on a real box; a directory that
         // cannot be realpath'ed is what actually answers owned() === null.
-        putenv('HOME=' . $this->tempDir . '/no-such-home');
+        // §7 closeout: two-sided via HomeSandboxTrait; create:false keeps
+        // the no-such path unrealizable, which is the whole subject.
+        $this->useHomeSandbox($this->tempDir . '/no-such-home', false);
 
         try {
             HookLog::pinDefaultLogFile(null);
@@ -583,9 +586,7 @@ final class HookLogTest extends TestCase
             self::assertStringEndsWith('/' . HookLog::DEFAULT_LEAF, $path);
         } finally {
             HookLog::pinDefaultLogFile($log);
-            if ($home !== false) {
-                putenv('HOME=' . $home);
-            }
+            $this->restoreHomeSandbox();
         }
     }
 

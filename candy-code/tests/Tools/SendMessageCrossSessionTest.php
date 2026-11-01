@@ -16,6 +16,7 @@ use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Tests\Support\ScriptedProvider;
 use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\Tools\BuiltIn\SendMessageTool;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
  * C-AGT-4.e: `SendMessage` with a `session:<id>` target reaches another
@@ -26,6 +27,7 @@ use SugarCraft\Code\Tools\BuiltIn\SendMessageTool;
  */
 final class SendMessageCrossSessionTest extends TestCase
 {
+    use HomeSandboxTrait;
     private string $base;
 
     private string $root;
@@ -195,8 +197,10 @@ final class SendMessageCrossSessionTest extends TestCase
         // umask would shave 0o777 at mkdir; set the bit explicitly so
         // HomeDirectory::owned() sees a world-writable home and refuses it.
         self::assertNotFalse(chmod($unowned, 0o777));
-        $home = getenv('HOME');
-        putenv('HOME=' . $unowned);
+        // §7 closeout: two-sided HOME via HomeSandboxTrait (the old swap
+        // moved putenv only — the one-sided shape OneSidedHomeSandbox
+        // refuses). create default: the dir already exists.
+        $this->useHomeSandbox($unowned);
         try {
             $tool = SendMessageTool::new()
                 ->withEngine(EngineBackend::new(new ScriptedProvider([]), 'm')->withSessionId($this->main))
@@ -212,7 +216,7 @@ final class SendMessageCrossSessionTest extends TestCase
             self::assertTrue($result->isError(), 'an unverifiable store is a refusal, not an exception');
             self::assertStringContainsString('no session store', $result->content());
         } finally {
-            putenv(false === $home ? 'HOME' : 'HOME=' . $home);
+            $this->restoreHomeSandbox();
         }
     }
 

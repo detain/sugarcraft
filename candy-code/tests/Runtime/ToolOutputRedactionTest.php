@@ -24,6 +24,7 @@ use SugarCraft\Code\Runtime;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Tools\ToolResult;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Usage;
 
 /**
@@ -50,12 +51,11 @@ use SugarCraft\Code\Usage;
  */
 final class ToolOutputRedactionTest extends TestCase
 {
+    use HomeSandboxTrait;
     /** ≥16 chars of the Bearer arm's class, so the pattern bites. */
     public const TOKEN = 'supersecretvalue0123456789abcdef';
 
     private string $dir;
-
-    private string $originalHome;
 
     protected function setUp(): void
     {
@@ -64,13 +64,15 @@ final class ToolOutputRedactionTest extends TestCase
         $this->dir = sys_get_temp_dir() . '/sc_tool_redaction_' . bin2hex(random_bytes(6));
         mkdir($this->dir . '/home', 0o700, true);
 
-        $this->originalHome = getenv('HOME') ?: '';
-        putenv('HOME=' . $this->dir . '/home');
+        // §7 closeout: two-sided HOME via HomeSandboxTrait (the old
+        // pin moved putenv only — the one-sided shape OneSidedHomeSandbox
+        // refuses).
+        $this->useHomeSandbox($this->dir . '/home');
     }
 
     protected function tearDown(): void
     {
-        $this->originalHome === '' ? putenv('HOME') : putenv('HOME=' . $this->originalHome);
+        $this->restoreHomeSandbox();
         $this->removeTree($this->dir);
 
         parent::tearDown();

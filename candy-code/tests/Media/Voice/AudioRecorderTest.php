@@ -9,6 +9,7 @@ use ReflectionMethod;
 use SugarCraft\Code\Media\Voice\AudioRecording;
 use SugarCraft\Code\Media\Voice\AudioRecorder;
 use SugarCraft\Code\Media\Voice\VoiceConfig;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
  * C-TUI-6.l recorder laws: the design's argv ladder is pinned shape for
@@ -19,7 +20,7 @@ use SugarCraft\Code\Media\Voice\VoiceConfig;
  */
 final class AudioRecorderTest extends TestCase
 {
-    private ?string $recorderHomeRestore = null;
+    use HomeSandboxTrait;
 
     private ?string $recorderPathRestore = null;
 
@@ -32,10 +33,7 @@ final class AudioRecorderTest extends TestCase
     {
         AudioRecorder::resetForTesting();
 
-        if ($this->recorderHomeRestore !== null) {
-            \putenv('HOME=' . $this->recorderHomeRestore);
-            $this->recorderHomeRestore = null;
-        }
+        $this->restoreHomeSandbox();
 
         if ($this->recorderPathRestore !== null) {
             \putenv('PATH=' . $this->recorderPathRestore);
@@ -133,8 +131,9 @@ final class AudioRecorderTest extends TestCase
 
     public function testStartRefusesNoHomeWhenTheHomeCannotBeOwned(): void
     {
-        $this->recorderAdoptFakeHome('skip-putenv');
-        \putenv('HOME=/');
+        // '/' is a home this process cannot own — the refusal under
+   // test. create:false: the spelling is asserted about, never created.
+        $this->useHomeSandbox('/', false);
 
         $result = AudioRecorder::start(
             VoiceConfig::off(),
@@ -273,22 +272,13 @@ final class AudioRecorderTest extends TestCase
             'probe and exec read the same PATH at call time, so a vanished binary is caught before spawn');
     }
 
-    /** @return string the fake home path, when $seed is omitted; $seed=null only arms restore */
-    private function recorderAdoptFakeHome(string $seed = 'default'): string
+    /** @return string the fake home path this test now writes under */
+    private function recorderAdoptFakeHome(): string
     {
-        if ($this->recorderHomeRestore === null) {
-            $home = \getenv('HOME');
-            $this->recorderHomeRestore = \is_string($home) ? $home : '';
-        }
-
-        if ($seed === 'skip-putenv') {
-            return '';
-        }
-
-        $home = $this->recorderTempDir();
-        \putenv('HOME=' . $home);
-
-        return $home;
+        // §7 closeout: two-sided HOME via HomeSandboxTrait (the old arm
+        // moved putenv only — the one-sided shape OneSidedHomeSandbox
+        // refuses).
+        return $this->useHomeSandbox($this->recorderTempDir());
     }
 
     /** Make a shim binary answer locateOnPath AND the child PATH, and log its argv. */

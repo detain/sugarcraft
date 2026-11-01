@@ -10,6 +10,7 @@ use SugarCraft\Code\Media\Voice\AudioRecorder;
 use SugarCraft\Code\Media\Voice\AudioRecording;
 use SugarCraft\Code\Media\Voice\TranscribeCmd;
 use SugarCraft\Code\Media\Voice\VoiceSession;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
  * C-TUI-6.l session laws: the gate answers OFF before any hardware or
@@ -25,11 +26,10 @@ use SugarCraft\Code\Media\Voice\VoiceSession;
  */
 final class VoiceSessionTest extends TestCase
 {
+    use HomeSandboxTrait;
     /** @var list<string> */
     private array $vcsScratch = [];
 
-    /** True only while this test replaced HOME with a temp root. */
-    private bool $vcsHomeAdopted = false;
 
     protected function tearDown(): void
     {
@@ -37,12 +37,10 @@ final class VoiceSessionTest extends TestCase
         AudioRecorder::resetForTesting();
         TranscribeCmd::resetForTesting();
 
-        if ($this->vcsHomeAdopted) {
-            // Removal, not reassignment: what the next process reads is then
-            // passwd-derived again, exactly as before this test ran.
-            \putenv('HOME');
-            $this->vcsHomeAdopted = false;
-        }
+        // §7 closeout: two-sided HOME via HomeSandboxTrait (the old arm
+        // removed putenv only — the one-sided shape OneSidedHomeSandbox
+        // refuses).
+        $this->restoreHomeSandbox();
 
         foreach ($this->vcsScratch as $dir) {
             $this->vcsPrune($dir);
@@ -57,9 +55,7 @@ final class VoiceSessionTest extends TestCase
         // refusal is the translated OFF sentence — and it must arrive BEFORE
         // the recorder probes PATH or reserves a directory (fail quiet-loud:
         // no silent half-start, no litter).
-        $home = $this->vcsFakeHome();
-        \putenv('HOME=' . $home);
-        $this->vcsHomeAdopted = true;
+        $home = $this->useHomeSandbox($this->vcsFakeHome());
 
         self::assertSame(Lang::t('media.voice.off'), VoiceSession::start());
         self::assertFalse(VoiceSession::active(), 'a refused start never rolls a take');

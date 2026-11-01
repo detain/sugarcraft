@@ -15,6 +15,7 @@ use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Role;
 use SugarCraft\Code\Tui\Components\PaneLabel;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Core\Util\Width;
 
 /**
@@ -31,23 +32,23 @@ use SugarCraft\Core\Util\Width;
  */
 final class HelpHostCommandTest extends TestCase
 {
-    private string $sandbox;
+    use HomeSandboxTrait;
 
-    private string|false $originalHome;
+    private string $sandbox;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->sandbox = sys_get_temp_dir() . '/cweb2e_help_' . bin2hex(random_bytes(6));
-        mkdir($this->sandbox . '/home', 0700, true);
         mkdir($this->sandbox . '/project', 0700, true);
-        $this->originalHome = getenv('HOME');
-        putenv('HOME=' . $this->sandbox . '/home');
+        // §7 closeout: two-sided HOME (the old pin moved putenv only, the
+        // one-sided shape this file's own roster law refuses).
+        $this->useHomeSandbox($this->sandbox . '/home');
     }
 
     protected function tearDown(): void
     {
-        $this->originalHome === false ? putenv('HOME') : putenv('HOME=' . $this->originalHome);
+        $this->restoreHomeSandbox();
         $this->removeTree($this->sandbox);
         parent::tearDown();
     }
