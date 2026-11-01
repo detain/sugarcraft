@@ -295,6 +295,13 @@ final class LspLauncherAutoDetectTest extends TestCase
             'env' => [],
             'initializationOptions' => null,
             'timeout' => LspLauncher::DEFAULT_TIMEOUT_SECONDS,
+            // The sandbox wave made jail the default posture for every
+            // launcher-spawned server (LspLauncher's `'sandbox' => true` on
+            // the auto row mirrors the manual spec's defaulted key): the
+            // "full manual shape" this test exists to pin now INCLUDES the
+            // sandbox flag, so an auto-detected server reads the same array
+            // a hand-configured one would.
+            'sandbox' => true,
         ], $servers[0]);
     }
 
