@@ -10,6 +10,7 @@ use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Background\BackgroundShellRegistry;
 use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Code\Tests\Support\ReapsForkedChildrenTrait;
 
 /**
  * SHL-1: the background shell table — spawn, settle, cursor tail, the stop
@@ -29,6 +30,8 @@ use SugarCraft\Code\Support\ProcessContainment;
  */
 final class BackgroundShellRegistryTest extends TestCase
 {
+    use ReapsForkedChildrenTrait;
+
     private string $root;
 
     protected function setUp(): void
@@ -39,6 +42,7 @@ final class BackgroundShellRegistryTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->reapTrackedForkedChildren();
         $prefix = $this->root . '/';
         foreach (scandir($this->root) ?: [] as $entry) {
             if ($entry === '.' || $entry === '..') {
@@ -868,7 +872,7 @@ final class BackgroundShellRegistryTest extends TestCase
         mkdir($dir, 0o700);
         $report = $dir . '/verdict.json';
 
-        $pid = pcntl_fork();
+        $pid = $this->forkTracked();
         self::assertGreaterThanOrEqual(0, $pid, 'the fork itself must succeed for this pin to mean anything');
         if ($pid === 0) {
             try {
@@ -892,6 +896,10 @@ final class BackgroundShellRegistryTest extends TestCase
                 usleep(20_000);
             }
             self::assertGreaterThanOrEqual(0, pcntl_waitpid($pid, $status), 'the child must be reaped by this test');
+            // §7 closeout: the reaper ledger forgets what this test reaped
+            // itself, so a later teardown never signals a dead pid (the
+            // ForkFdHygiene house shape).
+            $this->forgetForkedChild($pid);
 
             $verdict = json_decode((string) file_get_contents($report), true);
             self::assertIsArray($verdict, 'the child never reported its verdict');
@@ -949,12 +957,17 @@ final class BackgroundShellRegistryTest extends TestCase
             self::assertSame(800, (int) file_put_contents($stdoutPath, str_repeat('A', 800)));
             self::assertSame(500, (int) file_put_contents($stderrPath, str_repeat('B', 500)));
 
+            // §7 closeout: the file's own stat-cache contract (see the
+            // interleaved pin below) — a bare filesize() read can answer with
+            // the pre-write size, since only stream opens refresh the cache.
+            \clearstatcache();
             $first = $registry->read($id, 0, 512);
             self::assertTrue($first['ok']);
             self::assertSame(str_repeat('A', 512), $first['stdout']);
             self::assertSame('', $first['stderr']);
             self::assertSame('512.0', $first['cursor']);
 
+            \clearstatcache();
             $second = $registry->read($id, '512.0', 512);
             self::assertSame(str_repeat('A', 288), $second['stdout']);
             self::assertSame(str_repeat('B', 224), $second['stderr']);
@@ -963,11 +976,13 @@ final class BackgroundShellRegistryTest extends TestCase
             // The shell truncates its own stdout beneath the threaded cursor.
             self::assertSame(100, (int) file_put_contents($stdoutPath, str_repeat('A', 100)));
 
+            \clearstatcache();
             $third = $registry->read($id, '800.224', 4096);
             self::assertSame('', $third['stdout'], 'the truncated remainder is gone — the honest read is EOF on that stream');
             self::assertSame(str_repeat('B', 276), $third['stderr'], 'the 276 stderr bytes the caller never saw must arrive, not be skipped by arithmetic against a stdout that no longer exists — and the 224 already delivered must not replay');
             self::assertSame('100.500', $third['cursor'], 'each stream lands on its own true end: the shrunk space never lied forward');
 
+            \clearstatcache();
             $fourth = $registry->read($id, '100.500', 4096);
             self::assertSame('', $fourth['stdout']);
             self::assertSame('', $fourth['stderr']);
