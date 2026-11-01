@@ -125,7 +125,10 @@ final class DoctorExtensionProbesTest extends TestCase
         $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/DoctorChecks.php');
         $pdoSlice = substr($src, (int) strpos($src, 'private static function pdoDriverProbe'));
         $pdoSlice = substr($pdoSlice, 0, (int) strpos($pdoSlice, "\n    }"));
-        $this->assertStringContainsString('new \\PDO($dsn)', $pdoSlice);
+        // §7(1): the construction moved behind SqliteConnect::openDsn with
+        // the SES-1 routing cure — the probe still OPENS the dsn rather than
+        // name-checking, which is what this pin exists to hold.
+        $this->assertStringContainsString('SqliteConnect::openDsn($dsn)', $pdoSlice);
 
         // ISS-083: the sqlite3 half of the row is the EXERCISED construction
         // TaskList performs, not a returned `extension_loaded` string — a
