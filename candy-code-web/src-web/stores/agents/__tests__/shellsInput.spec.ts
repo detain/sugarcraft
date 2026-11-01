@@ -9,6 +9,9 @@ import { Wire } from './harness'
  * answer of a cursor-threaded `shells.output` read, and each stream of a tail
  * keeps only its newest 64 KiB. These are the store halves the Processes
  * section drives; the component's own pins live in processesSection.spec.
+ * `shells.input` is an IDEMPOTENT_METHODS member: the client stamps each
+ * send with a retry-safe `idempotencyKey`, so the pins below strip that key
+ * and then shape-lock the business params exactly (absent stays absent).
  *
  * Promise discipline: every request must be CAPTURED before its answer (the
  * store awaits the wire frame), so the pins below take the pending promise
@@ -42,7 +45,9 @@ describe('shells store: input + tail (C-TOOL-6.l)', () => {
     const pending = shells.input('sh-input', 's1', 'ls -l', 'Enter')
     const sent = wire.sent('shells.input')
     expect(sent).toHaveLength(1)
-    expect(sent[0]?.params).toEqual({ sessionId: 's1', shellId: 'sh-input', text: 'ls -l', key: 'Enter' })
+    const { idempotencyKey, ...inputParams } = sent[0]?.params as Record<string, unknown>
+    expect(inputParams).toEqual({ sessionId: 's1', shellId: 'sh-input', text: 'ls -l', key: 'Enter' })
+    expect(idempotencyKey).toMatch(/^[0-9a-f]{32}$/) // a retry-safe write, like every IDEMPOTENT_METHODS member
     await wire.answer('shells.input', { accepted: true, cursor: 42 })
     expect(await pending).toEqual({ accepted: true, cursor: 42 })
   })
@@ -50,7 +55,9 @@ describe('shells store: input + tail (C-TOOL-6.l)', () => {
   it('a key-only send carries NO text param (absent, never empty)', async () => {
     const shells = await openStore()
     const pending = shells.input('sh-input', 's1', undefined, 'C-c')
-    expect(wire.sent('shells.input')[0]?.params).toEqual({ sessionId: 's1', shellId: 'sh-input', key: 'C-c' })
+    const { idempotencyKey, ...inputParams } = wire.sent('shells.input')[0]?.params as Record<string, unknown>
+    expect(inputParams).toEqual({ sessionId: 's1', shellId: 'sh-input', key: 'C-c' })
+    expect(idempotencyKey).toMatch(/^[0-9a-f]{32}$/) // a retry-safe write, like every IDEMPOTENT_METHODS member
     await wire.answer('shells.input', { accepted: true, cursor: 7 })
     expect(await pending).toEqual({ accepted: true, cursor: 7 })
   })

@@ -313,13 +313,17 @@ describe('ProcessesSection — the typing pane (C-TOOL-6.l)', () => {
     await input.setValue('ls -l')
     await input.trigger('keydown.enter')
     expect(wire.sent('shells.input')).toHaveLength(1)
-    expect(wire.sent('shells.input')[0]?.params).toEqual({ sessionId: 's1', shellId: 'sh-int1', text: 'ls -l', key: 'Enter' })
+    const { idempotencyKey, ...draftParams } = wire.sent('shells.input')[0]?.params as Record<string, unknown>
+    expect(draftParams).toEqual({ sessionId: 's1', shellId: 'sh-int1', text: 'ls -l', key: 'Enter' })
+    expect(idempotencyKey).toMatch(/^[0-9a-f]{32}$/) // client-stamped retry-safe write (IDEMPOTENT_METHODS)
     await wire.answer('shells.input', { accepted: true, cursor: 5 })
     await flushPromises()
     expect((input.element as HTMLInputElement).value).toBe('') // cleared only after the send landed
 
     await input.trigger('keydown.enter')
-    expect(wire.sent('shells.input')[1]?.params).toEqual({ sessionId: 's1', shellId: 'sh-int1', key: 'Enter' })
+    const { idempotencyKey: bareKey, ...bareParams } = wire.sent('shells.input')[1]?.params as Record<string, unknown>
+    expect(bareParams).toEqual({ sessionId: 's1', shellId: 'sh-int1', key: 'Enter' })
+    expect(bareKey).toMatch(/^[0-9a-f]{32}$/)
     await wire.answer('shells.input', { accepted: true, cursor: 6 })
     await flushPromises()
     wrapper.unmount()
@@ -335,12 +339,16 @@ describe('ProcessesSection — the typing pane (C-TOOL-6.l)', () => {
     await flushPromises()
 
     await wrapper.find('[data-testid="proc-key-C-c"]').trigger('click')
-    expect(wire.sent('shells.input')[0]?.params).toEqual({ sessionId: 's1', shellId: 'sh-int1', key: 'C-c' })
+    const { idempotencyKey: ccStamp, ...ccParams } = wire.sent('shells.input')[0]?.params as Record<string, unknown>
+    expect(ccParams).toEqual({ sessionId: 's1', shellId: 'sh-int1', key: 'C-c' })
+    expect(ccStamp).toMatch(/^[0-9a-f]{32}$/) // client-stamped retry-safe write (IDEMPOTENT_METHODS)
     await wire.answer('shells.input', { accepted: true, cursor: 1 })
     await flushPromises()
 
     await wrapper.find('[data-testid="proc-key-Up"]').trigger('click')
-    expect(wire.sent('shells.input')[1]?.params).toEqual({ sessionId: 's1', shellId: 'sh-int1', key: 'Up' })
+    const { idempotencyKey: upStamp, ...upParams } = wire.sent('shells.input')[1]?.params as Record<string, unknown>
+    expect(upParams).toEqual({ sessionId: 's1', shellId: 'sh-int1', key: 'Up' })
+    expect(upStamp).toMatch(/^[0-9a-f]{32}$/)
     await wire.answer('shells.input', { accepted: true, cursor: 1 })
     await flushPromises()
     wrapper.unmount()
