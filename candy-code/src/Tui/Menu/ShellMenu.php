@@ -120,8 +120,11 @@ final class ShellMenu
             'new', 'new-picker', 'close-tab', 'sessions', 'rename', 'session-pin', 'session-delete',
             self::SEP,
             ['branch' => ['branch', 'fork', 'handoff']],
-            ['history' => ['compact', 'clear', 'rewind', 'undo', 'redo', 'diff']],
-            ['share' => ['share', 'export']],
+            // §7(1) closeout placement (family of the W14/W15/W21 carries): the
+            // run's later rows sat unplaced in App▸More, which both broke the
+            // no-More invariant and left the guards below naming them.
+            ['history' => ['compact', 'clear', 'rewind', 'undo', 'redo', 'diff', 'recap']],
+            ['share' => ['share', 'export', 'copy']],
         ],
         'agent' => [
             'model', 'effort', 'fast', 'agents', 'btw',
@@ -136,7 +139,7 @@ final class ShellMenu
                 // C-CTX-3.a carry (W21 loop): /instructions sits between
                 // memory and skills, its exact registry position (2405), in
                 // the design's Memory & rules submenu.
-                'instructions', 'skills', 'init', 'rules', 'newrule']],
+                'instructions', 'skills', 'init', 'rules', 'output-style', 'newrule']],
         ],
         'tools' => [
             'generate-form',
@@ -153,7 +156,7 @@ final class ShellMenu
         ],
         'app' => [
             'settings', 'permissions',
-            ['status' => ['status', 'budget', 'usage', 'notices']],
+            ['status' => ['status', 'doctor', 'budget', 'usage', 'insights', 'notices']],
             ['help' => ['keys', 'help', 'docs']],
             self::RUNTIME_MORE,
             self::SEP,
