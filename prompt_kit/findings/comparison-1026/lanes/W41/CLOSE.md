@@ -95,3 +95,27 @@ OK, but there were issues!
 Tests: 635, Assertions: 52058, PHPUnit Deprecations: 2, Skipped: 1.
 ```
 Both EXACT vs the r1/step-weld expectations (2 deprecations = accepted foreign AccessorDeprecationTest provider roster). Negative-control diff-scope proof per duty 5(a) landed in §4. Full battery deliberately NOT run (that is the §7 gate's job). suite-figure.json + durations.tsv NEVER touched.
+
+## 7. Milestone push (push_law owner 2026-10-29, FF-only at wave close) — verbatim transcript
+
+```
+$ git ls-remote origin master
+8416644c522dae9a80c0bc522e7b68074fbb01fb	refs/heads/master
+$ git fetch origin
+ t [tag update]          candy-code/dev -> candy-code/dev   (tag ref only — zero master movement)
+$ git pull --ff-only
+Already up to date.
+$ git push origin master
+To github.com:detain/sugarcraft.git
+   8416644c5..865ff0a56  master -> master
+$ git ls-remote origin master
+865ff0a56b4479d6645538ca087a6b4328f53977	refs/heads/master
+$ git rev-parse master
+865ff0a56b4479d6645538ca087a6b4328f53977
+```
+
+Equal in the same shell — NON-FF never appeared; no merge/force/rewrite executed. The push carried the 8 dispatch-listed unpushed commits + this close (A/B/C). Closing evidence commit D (this record) rides a follow-up FF push.
+
+## 8. Final state
+
+ALL 328 genuine steps welded; ALL 42 waves closed (waves_closed == [1..42], inflight {}). §7 gate program owns: K=24 battery + suite-figure/README re-pin + durations audit + GlobDialect re-derive + §7(1) vitest four-spec flip + BinDispatch --worktree :1958 leg + thirteen-verbs + accepted-standing foreign red set (WAVE-REVIEW-1.md ## Not charged list = the carried ledger).
