@@ -1289,7 +1289,7 @@
     "W37/36/37/38/39 loop reviewers": "ORPHANS header REMOVED; W37 ALIVE 8380B@02:08, W38 ALIVE 7785B@02:06, W39 REVIVED 8474B@02:10 (was 1767 @01:53) — do not twin; W40 ses_e6a17dcd3ffe 2963B static since 02:02 = ONE static era, ARMED re-cut if still static at next lead wake.",
     "W40 loop": "ses_e6a17dcd3ffePcCcKQ0Lzl2NiY: static 2963B since 02:02:08 across 02:06/02:08/02:10 stats; one-era rule: re-stat at next wake, two static eras -> fresh re-cut with lineage."
   },
-  "master_tip": "761d1090e87b35ce59d873e896c2760a2c71e57a",
+  "master_tip": "02b8df480",
   "master_tip_at_dispatch": "9fb981c5c",
   "master_tip_observed": "16fe158c8",
   "next_fill_queue": [],
@@ -3039,7 +3039,8 @@
       "rider": "vitest aboutModal 16/16 PASS; keepers filter OK 110T/1736A/0F; drift trio 15T/367A 0F",
       "mark": "26462c3ae; evidence b43e1a8f8",
       "anomaly": "5.f REVIEW mtime 03:13:46 precedes directory first-appearance at lead check 03:2x — content-govern decision",
-      "verification": "REVIEW-1.md 7,165B VERDICT: CLEAN; REPORT.md absent at weld time — anomaly recorded, proceeded on REVIEW authority (disk-authoritative law)"
+      "verification": "REVIEW-1.md 7,165B VERDICT: CLEAN; REPORT.md absent at weld time — anomaly recorded, proceeded on REVIEW authority (disk-authoritative law)",
+      "stamp": "fold 02b8df480 (re-stamp commit cannot self-reference; house precedent c082a64/e27787c/8e8f790)"
     }
   },
   "weld_pending": [],
