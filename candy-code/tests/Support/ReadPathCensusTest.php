@@ -932,10 +932,17 @@ final class ReadPathCensusTest extends TestCase
                 . 'resolves outside it and is refused, and the fd is read in bounded slices, never whole',
             'SELF_LOCATED — the ledger atomic-publish temp (.partial beside jobs/<jobId>.json the method '
                 . 'itself mints from the MediaJob id, xb + 0600 + rename), never caller-supplied',
+            'SELF_LOCATED — writeTake() (C-TUI-6.n): the audio take the transcribe door files before the '
+                . 'ledger names it, a hidden jobs/.<jobId>.audio.<ext> whose id the method mints and whose '
+                . 'extension comes from the mime allowlist alone, xb + 0600 so a planted path is refused '
+                . 'rather than overwritten; never client-chosen',
         ],
         'Protocol/Methods/MediaMethods.php|file_get_contents' => [
             'SELF_LOCATED — generate.status reads back only the jobs/<jobId>.json ledger this class wrote '
                 . 'under the session media root; the path is derived from the store layout, not from the request',
+            'SELF_LOCATED — transcribeStatus() (C-TUI-6.n) reads back only the jobs/audio-<jobId>.json '
+                . 'ledger this class wrote under the session media root; the id is pattern-checked to the '
+                . '16-hex form the door mints and the path is derived from the store layout, never the request',
         ],
         'Protocol/WebStrings.php|require' => [
             'PROCESS_DERIVED — the `server.strings` catalogue (C-TUI-6.f): the path comes from the '
