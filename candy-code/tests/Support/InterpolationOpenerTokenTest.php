@@ -216,6 +216,27 @@ final class InterpolationOpenerTokenTest extends TestCase
             . 'nesting. Its input is a shell argument, never token_get_all() output, so no '
             . 'PHP opener token can reach it: the gap is in the selection, not in the walker.',
         ],
+        // §7(1) closeout rows: two more raw-TEXT walkers joined the tree during
+        // the comparison run's waves and the selection reads their brace
+        // dispatch without seeing what stream it is over.
+        'tests/Config/SettingsFileWatchTest.php' => [
+            'openers' => ['T_CURLY_OPEN', 'T_DOLLAR_OPEN_CURLY_BRACES'],
+            'reason' =>
+            'Slices the body of `Bootstrap::chat()` by counting the raw \'{\'/\'}\' '
+            . 'CHARACTERS of the file\'s text to find the matching close. Its input is '
+            . 'comment-bearing source TEXT read by file_get_contents(), never '
+            . 'token_get_all() output, so no PHP opener token can reach it: the gap is '
+            . 'in the selection, not in the walker — the same family as the Awk/Sed rows.',
+        ],
+        'tests/MCP/McpBackgroundCallTest.php' => [
+            'openers' => ['T_CURLY_OPEN', 'T_DOLLAR_OPEN_CURLY_BRACES'],
+            'reason' =>
+            'sliceFunctionBody() counts the raw \'{\'/\'}\' CHARACTERS of a src/MCP '
+            . 'file\'s text from a signature to its matching brace, for structural pins. '
+            . 'Its input is source TEXT, never token_get_all() output, so no PHP opener '
+            . 'token can reach it: the gap is in the selection, not in the walker — the '
+            . 'same family as the ShellSubjectToolsCompletenessTest row.',
+        ],
     ];
 
     /**
