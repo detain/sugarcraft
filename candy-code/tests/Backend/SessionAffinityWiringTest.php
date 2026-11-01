@@ -116,14 +116,20 @@ final class SessionAffinityWiringTest extends TestCase
     public function testChatStampsItsCurrentSessionOnEachDispatchAndFollowsASwitch(): void
     {
         $shared = EngineBackend::new($this->sessionRecordingProvider(), 'wired');
-        $chat = (new Chat(history: [Message::user('hello'), Message::assistant('hi')], backend: $shared))
-            ->withCurrentSessionId('first-session');
+        // C-SES-7.d: naming a fresh id on a chat that already carries history
+        // re-derives the resume-cost arm — a cold, unpriced launch would HOLD
+        // the Enter this test needs to observe. The guard is not this test's
+        // subject; the stamping is, so disarm explicitly after each switch.
+        $chat = $this->disarmResumeGuard(
+            (new Chat(history: [Message::user('hello'), Message::assistant('hi')], backend: $shared))
+                ->withCurrentSessionId('first-session')
+        );
 
         $launched = $this->dispatchedEngine($this->submitDraft($chat, 'go'));
         $this->assertSame('first-session', $this->engineSession($launched));
         $this->assertNull($this->engineSession($shared), 'the shared backend is never stamped — the clone is per dispatch');
 
-        $switched = $this->dispatchedEngine($this->submitDraft($chat->withCurrentSessionId('second-session'), 'again'));
+        $switched = $this->dispatchedEngine($this->submitDraft($this->disarmResumeGuard($chat->withCurrentSessionId('second-session')), 'again'));
         $this->assertSame('second-session', $this->engineSession($switched));
     }
 
@@ -218,6 +224,18 @@ final class SessionAffinityWiringTest extends TestCase
                 return new EmbeddingsResponse([]);
             }
         };
+    }
+
+    /**
+     * Un-arm the C-SES-7.d resume-cost guard on a clone whose session id was
+     * just named (the wither re-derives the arm from the constructor shape).
+     * Same reflection seam ResumeCostGuardTest drives the guard with.
+     */
+    private function disarmResumeGuard(Chat $chat): Chat
+    {
+        $method = new \ReflectionMethod(Chat::class, 'mutate');
+
+        return $method->invoke($chat, ['resumeCostGuardArmed' => false]);
     }
 
     /** @return \Closure the command the submit produced */
