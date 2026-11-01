@@ -6,18 +6,31 @@ namespace SugarCraft\Code\Host\Commands;
 
 use SugarCraft\Code\Background\BackgroundShellRegistry;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Tools\BuiltIn\PtyRun;
 
 /**
- * `/shells` (C-TOOL-3.d) — the list / read / stop surface over the launch's
- * background shell table: `list` (also the bare form), `output <id> [cursor]`,
- * `stop <id>`.
+ * `/shells` (C-TOOL-3.d) — the list / read / type / stop surface over the
+ * launch's background shell table: `list` (also the bare form),
+ * `output <id> [cursor]`, `send <id> <keys…>` (C-TOOL-6.k), `stop <id>`.
  *
  * READ-ONLY JUDGEMENT (the plan asks for it explicitly): LISTING and READING
  * are admitted in a read-only window — they consult this process's roster and
  * the two log files a shell writes, and change nothing; STOP is not, because
- * it runs the kill ladder on a live child. Spawning is deliberately absent:
- * the Shell tool with `background: true` is the one spawn door, so this
- * command never grows a second one (the plan's no-new-spawn-sites law).
+ * it runs the kill ladder on a live child, and SEND is not, because typing
+ * into a live terminal is exactly the mutation the read-only door exists to
+ * keep out — `isReadOnlyVerb()` leaving `send` out of the roster IS the
+ * judgement, and the Chat arm C-TOOL-3.d wired consults nothing else.
+ * Spawning is deliberately absent: the Shell tool with `background: true` is
+ * the one spawn door, so this command never grows a second one (the plan's
+ * no-new-spawn-sites law) — `send` only feeds a shell some Bash call already
+ * started, through the SAME registry door the ShellSend tool uses, tagged
+ * `human` so the row's audit counter sees the hand that pressed.
+ *
+ * A send here is ONE honest try, not the ShellSend tool's bounded
+ * relay-attach re-trial: a human who typed `/shells send` into a relay that
+ * has not attached yet gets the engine's refusal and may press again —
+ * blocking the interface loop on a kernel promise is not what a command
+ * should do.
  *
  * OWNERSHIP rides the rows C-TOOL-3.c tags: every read passes
  * `$context->currentSessionId()` as the owner, so the table a session lists
@@ -50,6 +63,7 @@ final class ShellsCommand implements HostCommand
         return match ($verb) {
             'list' => CommandResult::reply($text, self::listing($registry, $owner)),
             'output' => self::output($text, $registry, $words, $owner),
+            'send' => self::send($text, $registry, $words, $owner),
             'stop' => self::stop($text, $registry, $words, $owner),
             default => CommandResult::errorReply($text, Lang::t('host.shells.usage')),
         };
@@ -148,6 +162,49 @@ final class ShellsCommand implements HostCommand
         $sections[] = Lang::t('host.shells.cursor', ['cursor' => (string) $read['cursor']]);
 
         return CommandResult::reply($text, $head . "\n" . implode("\n", $sections));
+    }
+
+    /**
+     * The `send` body (C-TOOL-6.k): the keys are the RAW rest of the line
+     * after the id — a tokeniser would eat the very spacing the grammar is
+     * meant to type — decoded through the shared PtyRun grammar, and written
+     * by the registry's own door with origin `human`. The success answer
+     * names the pre-write cursor so `/shells output <id> <cursor>` is the
+     * exact follow-up; the engine's door refusals (unknown, foreign-owner,
+     * plain-background, settled, oversize) pass through verbatim, which is
+     * what keeps foreign ids indistinguishable from missing ones here too.
+     *
+     * @param list<string> $words
+     */
+    private static function send(string $text, BackgroundShellRegistry $registry, array $words, ?string $owner): CommandResult
+    {
+        $id = $words[2] ?? '';
+        if ($id === '') {
+            return CommandResult::errorReply($text, Lang::t('host.shells.usage'));
+        }
+        if (preg_match('/^sh-[0-9a-f]{8}$/', $id) !== 1) {
+            return CommandResult::errorReply($text, Lang::t('host.shells.send_bad_id', ['id' => $id]));
+        }
+        $at = \strpos($text, $id);
+        $rest = $at === false ? '' : \ltrim(\substr($text, $at + \strlen($id)));
+        if ($rest === '') {
+            return CommandResult::errorReply($text, Lang::t('host.shells.send_empty'));
+        }
+        $decoded = PtyRun::decode($rest);
+        if ($decoded === '') {
+            return CommandResult::errorReply($text, Lang::t('host.shells.send_empty'));
+        }
+
+        $answer = $registry->send($id, $decoded, 'human', $owner);
+        if ($answer['ok'] !== true) {
+            return CommandResult::errorReply($text, (string) $answer['error']);
+        }
+
+        return CommandResult::reply($text, Lang::t('host.shells.send_sent', [
+            'id' => $id,
+            'bytes' => (string) \strlen($decoded),
+            'cursor' => (string) (int) $answer['cursor'],
+        ]));
     }
 
     /**

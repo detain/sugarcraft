@@ -5479,6 +5479,10 @@ final class DocFigureProseDriftTest extends TestCase
         // directory (42) and the generator re-spelled both pages; the map
         // rides the same commit, per the same rule.
         $wordNumbers['forty-two'] = 42;
+        // C-TOOL-6.k era, in-step census flip: ShellSend.php joined the
+        // directory (43) and the generator re-spelled both pages; the map
+        // rides the same commit, per the same rule.
+        $wordNumbers['forty-three'] = 43;
         self::assertArrayHasKey($word[1], $wordNumbers, "the spelled count '{$word[1]}' is outside the pinned word map — extend it deliberately");
 
         $files = array_values(array_filter(scandir($root . '/src/Tools/BuiltIn') ?: [], static fn(string $f): bool => str_ends_with($f, '.php')));

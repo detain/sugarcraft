@@ -449,6 +449,8 @@ final class ReadmeSettingsTierClaimTest extends TestCase
         35 => 'thirty-five',
         // C-TOOL-6.d era, in-step: ScriptTool joined the filterable set (36).
         36 => 'thirty-six',
+        // C-TOOL-6.k era, in-step: ShellSend joined the filterable set (37).
+        37 => 'thirty-seven',
     ];
 
     /**

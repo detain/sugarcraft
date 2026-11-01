@@ -735,14 +735,18 @@ final class PermissionGate
             return PermissionDecision::Deny;
         }
 
-        // A call that types keystrokes into a live terminal (PtyRun steps) is a
-        // question every time in every non-bypass mode: typed input can open a
-        // shell the spawned `command` never mentions, so no session answer —
-        // minted from the command alone — can cover it. Mark it forced so the
-        // session fallback below is skipped and the modal badge lights up; an
-        // explicit rule that covers command AND every step still answers first
-        // (rules run before the mode below, and Allow rules are exact-text).
-        $typesKeystrokes = ShellSubjectTools::stepTexts($call->name, $call->arguments) !== [];
+        // A call that types keystrokes into a live terminal (PtyRun steps,
+        // and every ShellSend — C-TOOL-6.k) is a question every time in
+        // every non-bypass mode: typed input can open a shell the spawned
+        // `command` never mentions, so no session answer — minted from the
+        // command alone — can cover it. Mark it forced so the session
+        // fallback below is skipped and the modal badge lights up; an
+        // explicit rule that covers command AND every step still answers
+        // first (rules run before the mode below, and Allow rules are
+        // exact-text). ShellSend needs no step-text test: every call to it
+        // IS typing, by name — the design's keystroke rule includes it.
+        $typesKeystrokes = ShellSubjectTools::stepTexts($call->name, $call->arguments) !== []
+            || $call->name === \SugarCraft\Code\Tools\BuiltIn\ShellSend::NAME;
         if ($typesKeystrokes) {
             $this->forcedAsk = true;
             $this->lastAutoReason = 'types keystrokes into a live terminal, which always asks';
@@ -1106,11 +1110,14 @@ final class PermissionGate
             return PermissionDecision::Ask;
         }
 
-        // PtyRun-with-steps is a question, not a classification: keystrokes
-        // typed into a live terminal can open a shell no pattern has judged
-        // (vim `:!`, mysql `\!`), so Auto never Allows it and never resets its
-        // counters on it. decide() has already set the forced-ask mark.
-        if (ShellSubjectTools::stepTexts($call->name, $call->arguments) !== []) {
+        // PtyRun-with-steps and every ShellSend are questions, not
+        // classifications: keystrokes typed into a live terminal can open a
+        // shell no pattern has judged (vim `:!`, mysql `\!`), so Auto never
+        // Allows them and never resets its counters on them. decide() has
+        // already set the forced-ask mark (C-TOOL-6.k widened it to the
+        // ShellSend name — a send IS typing, whatever the keys say).
+        if (ShellSubjectTools::stepTexts($call->name, $call->arguments) !== []
+            || $call->name === \SugarCraft\Code\Tools\BuiltIn\ShellSend::NAME) {
             return PermissionDecision::Ask;
         }
 
@@ -1496,6 +1503,30 @@ final class PermissionGate
      */
     private function isRmRfRootOrHome(ToolCall $call): bool
     {
+        // C-TOOL-6.k: typed input reaches the same floor. A ShellSend carries
+        // no command line, so each DECODED LINE of its keystrokes is judged
+        // through the very word test a shell command passes — typing
+        // `rm -rf /` at a rescue shell trips the breaker even under
+        // `bypass-permissions`. This is the roster's honest exception, not a
+        // membership: ShellSend is not a shell-subject tool (its class
+        // doc-block carries that argument); the breaker simply refuses to
+        // care what program is holding the terminal when the words are the
+        // self-destruct ones.
+        if ($call->name === \SugarCraft\Code\Tools\BuiltIn\ShellSend::NAME) {
+            $keys = $call->arguments['keys'] ?? null;
+            if (!\is_string($keys) || $keys === '') {
+                return false;
+            }
+            $decoded = \SugarCraft\Code\Tools\BuiltIn\PtyRun::decode($keys);
+            foreach (\preg_split('/\r\n?|\n/', $decoded) ?: [] as $line) {
+                if ($line !== '' && $this->textTripsRmRfFloor($line)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         // The breaker covers every tool whose `command` is handed to a shell,
         // not just `Bash` — `PtyRun` spawns the same `/bin/sh -c $command`, so a
         // model that reaches for the interactive driver must not step around an
@@ -1509,20 +1540,36 @@ final class PermissionGate
         // `PtyRun` that includes the decoded keystrokes, so `rm -rf /` typed at
         // a rescue shell trips the same floor as `Bash` running it directly.
         foreach (ShellSubjectTools::judgedShellTexts($call->name, $call->arguments) as $command) {
-            foreach (ShellWords::parse($command)->commands as $words) {
-                if ($this->wordsAreRmRfRootOrHome($words)) {
-                    return true;
-                }
+            if ($this->textTripsRmRfFloor($command)) {
+                return true;
             }
+        }
 
-            foreach (preg_split('/[;&|()\r\n]+/', $command) ?: [] as $segment) {
-                $tokens = array_map(
-                    $this->stripMatchingQuotes(...),
-                    preg_split('/\s+/', trim($segment), -1, PREG_SPLIT_NO_EMPTY) ?: [],
-                );
-                if ($this->wordsAreRmRfRootOrHome($tokens)) {
-                    return true;
-                }
+        return false;
+    }
+
+    /**
+     * One shell-bound text through the breaker: the quote-aware `ShellWords`
+     * command walks first, and a `preg_split` segment fallback catches what
+     * the parse cannot read (folded into the shared helper at C-TOOL-6.k so
+     * the ShellSend line-judgement and the shell-subject text-judgement run
+     * the SAME word floor — byte-identical semantics for Bash and PtyRun).
+     */
+    private function textTripsRmRfFloor(string $command): bool
+    {
+        foreach (ShellWords::parse($command)->commands as $words) {
+            if ($this->wordsAreRmRfRootOrHome($words)) {
+                return true;
+            }
+        }
+
+        foreach (preg_split('/[;&|()\r\n]+/', $command) ?: [] as $segment) {
+            $tokens = array_map(
+                $this->stripMatchingQuotes(...),
+                preg_split('/\s+/', trim($segment), -1, PREG_SPLIT_NO_EMPTY) ?: [],
+            );
+            if ($this->wordsAreRmRfRootOrHome($tokens)) {
+                return true;
             }
         }
 

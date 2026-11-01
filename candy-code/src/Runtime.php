@@ -795,7 +795,11 @@ final class Runtime
     // be free of the write class. The Write permission class carries it in
     // PermissionGate; this roster is the Runtime-side mirror the drift test
     // ties to it.
-    public const WRITE_CAPABLE_TOOL_NAMES = [...ShellSubjectTools::NAMES, 'Edit', 'Write', 'ApplyPatch', 'Task', 'Workflow', 'ShellStop', 'Schedule', 'SkillWorkshop', 'Script', 'mcp_call'];
+    // 'ShellSend' joined at C-TOOL-6.k on ShellStop's own judgement: typed
+    // input moves whatever program holds the terminal, so a batch that typed
+    // into a shell changed what later calls in the same batch can depend on,
+    // exactly like the teardown ShellStop records.
+    public const WRITE_CAPABLE_TOOL_NAMES = [...ShellSubjectTools::NAMES, 'Edit', 'Write', 'ApplyPatch', 'Task', 'Workflow', 'ShellStop', 'ShellSend', 'Schedule', 'SkillWorkshop', 'Script', 'mcp_call'];
 
     /**
      * MCP tool-name prefix — an `mcp__<server>__<tool>` call's capability is

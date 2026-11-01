@@ -19,8 +19,8 @@ use SugarCraft\Code\Tools\BuiltIn\McpCallTool;
 use SugarCraft\Code\Tools\BuiltIn\McpListTool;
 use SugarCraft\Code\Tools\BuiltIn\ScheduleTool;
 use SugarCraft\Code\Tools\BuiltIn\ScriptTool;
+use SugarCraft\Code\Tools\BuiltIn\ShellSend;
 use SugarCraft\Code\Tools\BuiltIn\SkillsSearch;
-use SugarCraft\Code\Tools\BuiltIn\SkillWorkshop;
 use SugarCraft\Code\Tools\BuiltIn\TaskTool;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;
@@ -127,13 +127,12 @@ final class ToolCatalogTest extends TestCase
         self::assertContains(McpListTool::NAME, $names);
         self::assertContains(McpCallTool::NAME, $names);
         self::assertSame(
-            // C-TOOL-6.d truth-flip: Canvas (45, C-TOOL-6.f) and Script (46,
-            // this step) landed unconditionally after SkillWorkshop, so the
-            // pair now rides ahead of only the three newest unconditional
-            // tools. The pin keeps its meaning (the pair never sneaks in
-            // before its trigger) by naming the unconditional tools that land
-            // after it.
-            [SkillWorkshop::NAME, CanvasTool::NAME, ScriptTool::NAME],
+            // C-TOOL-6.k truth-flip: ShellSend (47) landed unconditional after
+            // Script (46, C-TOOL-6.d), so the pair now rides ahead of only
+            // the three newest unconditional tools. The pin keeps its meaning
+            // (the pair never sneaks in before its trigger) by naming the
+            // unconditional tools that land after it.
+            [CanvasTool::NAME, ScriptTool::NAME, ShellSend::NAME],
             \array_slice($names, -3),
             'the dispatcher pair lands in roster order 39 then 40, ahead only of the newest unconditional tools',
         );

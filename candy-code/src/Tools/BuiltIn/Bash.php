@@ -305,7 +305,10 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
             . 'terminal, `interactive: true` attaches a private pseudo-terminal it '
             . 'can paint on and its screen comes back as the transcript; no one '
             . 'types answers there and no password is ever accepted, so a program '
-            . 'that waits for input is terminated at its idle deadline. '
+            . 'that waits for input is terminated at its idle deadline. Combined '
+            . 'with `run_in_background: true` it instead starts an INTERACTIVE '
+            . 'background shell — a live terminal someone does type into, with '
+            . 'ShellSend keystrokes, and the screen answers each send. '
             . sprintf(
                 'Every command is bounded by `timeout` seconds (default %d, max %d): past it the '
                 . 'command and everything it started are killed, and the output it produced so far '
@@ -314,7 +317,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
                 $this->maxTimeoutSeconds,
             )
             . ($this->registry === null ? '' : sprintf(
-                ' `run_in_background: true` starts the command detached and answers a shell_id at once: read it with ShellOutput (cursor-offset tail), end it with ShellStop; a background shell is killed with its whole group after %d seconds.',
+                ' `run_in_background: true` starts the command detached and answers a shell_id at once: read it with ShellOutput (cursor-offset tail), end it with ShellStop; with `interactive: true` as well it starts a live terminal you type into with ShellSend; a background shell is killed with its whole group after %d seconds.',
                 BackgroundShellRegistry::MAX_LIFETIME_SECONDS,
             ))
             . ($this->sandbox === null ? '' : ' ' . $this->sandbox->describe($this->writableRoot()));
@@ -451,7 +454,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
             // detached pipe spawn, byte for byte.
             'interactive' => [
                 'type' => 'boolean',
-                'description' => 'Run the command attached to a private pseudo-terminal it can paint on, for programs that refuse to run without a terminal. Default false. There is no human at this terminal and no password is ever accepted: a program that blocks waiting for input is terminated once its output stops, with its screen returned as the transcript.',
+                'description' => 'Run the command attached to a private pseudo-terminal it can paint on, for programs that refuse to run without a terminal. Default false. There is no human at this terminal and no password is ever accepted: a program that blocks waiting for input is terminated once its output stops, with its screen returned as the transcript. Set run_in_background: true together with this to start a live interactive background shell instead — the model types into it with ShellSend and reads the screen back through ShellOutput.',
             ],
             'timeout' => [
                 'type' => 'integer',
@@ -471,7 +474,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
             'run_in_background' => [
                 'type' => 'boolean',
                 'description' => sprintf(
-                    'Return immediately with a shell_id instead of waiting for the command. Read its output with ShellOutput(shell_id, cursor) and end it with ShellStop(shell_id). A background shell is killed with its whole process group after %d seconds whether or not anything reads it; raise `timeout` is not an option here — restart it if it needs to live longer. Default false.',
+                    'Return immediately with a shell_id instead of waiting for the command. Read its output with ShellOutput(shell_id, cursor) and end it with ShellStop(shell_id). Together with interactive: true it starts an INTERACTIVE background shell — a live terminal the model types into with ShellSend(shell_id, keys). A background shell is killed with its whole process group after %d seconds whether or not anything reads it; raise `timeout` is not an option here — restart it if it needs to live longer. Default false.',
                     BackgroundShellRegistry::MAX_LIFETIME_SECONDS,
                 ),
             ],
@@ -583,19 +586,16 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         $interactive = ($args['interactive'] ?? false) === true;
         $background = ($args['run_in_background'] ?? false) === true;
 
-        // SHL-1, and it is checked BEFORE the sandbox probe so a refused
-        // combination costs no spawn at all (fail fast, fail loud): a pty is
-        // the synchronous mechanism by design — its whole point is a screen
-        // captured while a human-less program paints on it — and a detached
-        // background shell has no one left to watch one. The two flags ask
-        // for opposite lives for the same child.
-        if ($background && $interactive) {
-            return new ToolResult(
-                toolCallId: $args['id'] ?? '',
-                content: 'run_in_background and interactive cannot both be true: an interactive run is a captured terminal screen this call waits for, and a background shell has no reader between calls. Pick one.',
-                isError: true,
-            );
-        }
+        // SHL-1 chose the mechanisms; C-TOOL-6.k wired the combination the
+        // flags always spelled. `run_in_background` with `interactive` is no
+        // longer a contradiction to refuse — it starts a RELAYED interactive
+        // shell (the launch's PtyRelay keeps a real pty open behind the
+        // sinks), and the model types into it with ShellSend while ShellOutput
+        // reads it. The route lives inside the background branch BELOW, AFTER
+        // the sandbox wrap, so the staged command carries exactly the same
+        // sandbox prefix the plain background path starts with. A registry-
+        // less launch still refuses fail-closed at the branch's own door, and
+        // a Windows launch takes the engine's interactive refusal unchanged.
 
         // WEB-4: the live tail. The ring is built only when the turn bound a
         // channel AND the call has its engine-spliced id — a tail without an
@@ -678,6 +678,24 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
                 );
             }
 
+            // C-TOOL-6.k: the interactive combination rides the SAME wrapped
+            // command the plain background path starts below (cd guard,
+            // sandbox prefix and all) into the relay engine. The POSIX-shaped
+            // $cmd goes to both hosts on purpose — ProcessContainment::
+            // interactiveAvailable() refuses Windows inside startInteractive,
+            // so the launch answers the engine's refusal unchanged rather
+            // than nesting a second bash the way the captured leg avoids.
+            if ($interactive) {
+                return $this->backgroundAnswer($args, $this->registry->startInteractive(
+                    $cmd,
+                    (string) ($args['description'] ?? ''),
+                    BackgroundShellRegistry::INTERACTIVE_COLS,
+                    BackgroundShellRegistry::INTERACTIVE_ROWS,
+                    [],
+                    $this->shellOwner,
+                ), interactive: true);
+            }
+
             return $this->backgroundAnswer($args, $this->registry->start(
                 // C-TUI-6.a: on Windows the registry's own arm spawns the
                 // [bash.exe, '-c', wrapper] array, so it receives the plain
@@ -745,7 +763,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
      * @param array<string, mixed> $args
      * @param array{ok: bool, error?: string, shell?: array<string, mixed>} $started
      */
-    private function backgroundAnswer(array $args, array $started): ToolResult
+    private function backgroundAnswer(array $args, array $started, bool $interactive = false): ToolResult
     {
         if ($started['ok'] !== true) {
             return new ToolResult(
@@ -756,6 +774,25 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         }
         $shell = $started['shell'];
         $id = (string) ($shell['id'] ?? '');
+
+        if ($interactive) {
+            // C-TOOL-6.k: the typed channel replaces the read-first framing;
+            // the wall and cap sentences stay the engine's own numbers.
+            return new ToolResult(
+                toolCallId: $args['id'] ?? '',
+                content: sprintf(
+                    'Started interactive background shell %s on a private pseudo-terminal (%dx%d). Type into it with ShellSend {shell_id: "%s", keys: "command<Enter>"} — the keys use the PtyRun grammar, and <Enter> submits a line; each send answers what the screen printed back. Read anything you missed with ShellOutput {shell_id: "%s", cursor: <the cursor the last answer gave>}; stop it with ShellStop {shell_id: "%s"}. It is killed with its whole process group after %d seconds whether or not anything reads it — the wrapper enforces that wall in the kernel, beside the launch-side ladder. Its screen bytes stay readable while this launch tracks it, and any shell file nobody tracks and nobody has written for a day is swept when the next background shell starts.',
+                    $id,
+                    BackgroundShellRegistry::INTERACTIVE_COLS,
+                    BackgroundShellRegistry::INTERACTIVE_ROWS,
+                    $id,
+                    $id,
+                    $id,
+                    BackgroundShellRegistry::MAX_LIFETIME_SECONDS,
+                ),
+                isError: false,
+            );
+        }
 
         return new ToolResult(
             toolCallId: $args['id'] ?? '',

@@ -197,6 +197,8 @@ final class ReadmeRosterDriftTest extends TestCase
             35 => 'Thirty-five',
             // C-TOOL-6.d era, in-step: ScriptTool joined the launch set (36).
             36 => 'Thirty-six',
+            // C-TOOL-6.k era, in-step: ShellSend joined the launch set (37).
+            37 => 'Thirty-seven',
         ];
         $this->assertArrayHasKey(
             \count($shipped),

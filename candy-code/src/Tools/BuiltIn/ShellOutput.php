@@ -49,7 +49,17 @@ use SugarCraft\Code\Tools\ToolResult;
  *
  * READ permission class: this tool writes nothing and kills nothing — it
  * tails a file this launch created. Its sibling {@see ShellStop} carries the
- * process-mutating half.
+ * process-mutating half, and {@see ShellSend} (C-TOOL-6.k) the typing half.
+ *
+ * ON AN INTERACTIVE ROW the read-back is a terminal screen, not a log:
+ * display text is ANSI-stripped (paint is noise to a text model, the raw
+ * bytes stay reachable through the cursor walk), the answer notes the size
+ * the pty was opened at, and when the human has typed into the shell since
+ * this window last read it, the answer SAYS SO — the model learns it is not
+ * the only hand on this keyboard. The since-last-read memo is per-instance
+ * display state (the class sheds `readonly` for exactly that array); a fresh
+ * instance after a fork-rejoin reports the honest TOTAL instead of a delta,
+ * never a number it cannot stand behind.
  *
  * SINCE C-TOOL-3.c the read answers only shells this session owns or that
  * carry no owner at all: a foreign session's id gets the very same
@@ -57,7 +67,7 @@ use SugarCraft\Code\Tools\ToolResult;
  * sessions never leaks another's shells.
  */
 #[BuiltInTool(name: 'ShellOutput', permission: ToolPermissionClass::Read, position: 37, gloss: 'read output from a background shell started with Bash run_in_background')]
-final readonly class ShellOutput implements Tool, AcceptsShellOwner, BuildsFromCatalog, TakesToolCallId, CarriesSessionState
+final class ShellOutput implements Tool, AcceptsShellOwner, BuildsFromCatalog, TakesToolCallId, CarriesSessionState
 {
     public const NAME = 'ShellOutput';
 
@@ -67,14 +77,29 @@ final readonly class ShellOutput implements Tool, AcceptsShellOwner, BuildsFromC
     ) {}
 
     /**
+     * Per-instance display memo (C-TOOL-6.k): humanInputs count as of this
+     * window's LAST paint, per shell id. It exists only to phrase "since
+     * your last read" honestly; losing it (fresh instance, fork rejoin)
+     * falls back to the row's total, which is still true.
+     *
+     * @var array<string,int>
+     */
+    private array $humanInputsPainted = [];
+
+    /**
      * This tool scoping its reads to session $owner, registry kept — the
      * rebuild is total because both properties are constructor-promoted
      * (C-TOOL-3.c); {@see \SugarCraft\Code\Tools\AcceptsShellOwner} is the
-     * seam the turn hands the session id over.
+     * seam the turn hands the session id over. The display memo carries
+     * across the re-scope: it is this window's read history, not the
+     * owner's secret.
      */
     public function withShellOwner(?string $owner): self
     {
-        return new self($this->registry, $owner);
+        $scoped = new self($this->registry, $owner);
+        $scoped->humanInputsPainted = $this->humanInputsPainted;
+
+        return $scoped;
     }
 
     public static function new(): self
@@ -141,9 +166,16 @@ final readonly class ShellOutput implements Tool, AcceptsShellOwner, BuildsFromC
             return $this->refuse((string) $answer['error']);
         }
 
+        // Row door for the interactive extras ({@see the class doc-block}):
+        // read() answers the stream half, status() the terminal half
+        // (interactive / cols / rows / humanInputs). A row that vanished
+        // between the two reads simply loses the extras — the stream answer
+        // stands on its own.
+        $row = $this->registry->status($id, $this->shellOwner);
+
         return new ToolResult(
             toolCallId: (string) ($args['id'] ?? ''),
-            content: $this->paint($id, $answer),
+            content: $this->paint($id, $answer, $row),
         );
     }
 
@@ -165,11 +197,19 @@ final readonly class ShellOutput implements Tool, AcceptsShellOwner, BuildsFromC
 
     /**
      * @param array<string, mixed> $answer
+     * @param array<string, mixed>|null $row
      */
-    private function paint(string $id, array $answer): string
+    private function paint(string $id, array $answer, ?array $row): string
     {
+        $interactive = $row !== null && ($row['interactive'] ?? false) === true;
         $stdout = (string) $answer['stdout'];
         $stderr = (string) $answer['stderr'];
+        if ($interactive) {
+            // A pty stream is a SCREEN: SGR paint is noise to a text model
+            // (the raw bytes stay reachable through the cursor walk).
+            $stdout = \SugarCraft\Core\Util\Ansi::strip($stdout);
+            $stderr = \SugarCraft\Core\Util\Ansi::strip($stderr);
+        }
         $body = '';
         if ($stdout !== '') {
             $body .= $stdout;
@@ -197,8 +237,27 @@ final readonly class ShellOutput implements Tool, AcceptsShellOwner, BuildsFromC
         if ((int) $answer['skippedBytes'] > 0) {
             $notes[] = sprintf('%d older bytes skipped (%d unread bytes were available)', (int) $answer['skippedBytes'], (int) $answer['bytesAvailable']);
         }
+        if ($interactive) {
+            $notes[] = sprintf('interactive pty %dx%d, display text ANSI-stripped', (int) ($row['cols'] ?? 0), (int) ($row['rows'] ?? 0));
+        }
 
-        return $head . ($notes === [] ? '' : ' — ' . implode('; ', $notes)) . "\n" . $body . "\n"
+        // The human-hand sentence (C-TOOL-6.k): a delta once this window has
+        // read the shell at least once, the honest total before that — a
+        // number this instance cannot anchor to a previous read is never
+        // dressed up as one.
+        $typedNote = '';
+        if ($interactive) {
+            $total = (int) ($row['humanInputs'] ?? 0);
+            $seen = $this->humanInputsPainted[$id] ?? null;
+            $this->humanInputsPainted[$id] = $total;
+            if ($total > 0 && $seen !== null && $total > $seen) {
+                $typedNote = "\n" . sprintf('note: the user typed into this shell %d times since your last read.', $total - $seen);
+            } elseif ($total > 0 && $seen === null) {
+                $typedNote = "\n" . sprintf('note: the user has typed into this shell %d times in all; this window had not read it before.', $total);
+            }
+        }
+
+        return $head . ($notes === [] ? '' : ' — ' . implode('; ', $notes)) . "\n" . $body . $typedNote . "\n"
             . sprintf('[cursor: %s]', (string) $answer['cursor']);
     }
 

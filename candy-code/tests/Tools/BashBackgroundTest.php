@@ -62,14 +62,26 @@ final class BashBackgroundTest extends TestCase
         self::assertStringContainsString('sync-ok', $result->content());
     }
 
-    public function testBackgroundAndInteractiveRefuseEachOtherAtTheDoor(): void
+    /**
+     * C-TOOL-6.k truth-flip: the combination is no longer a contradiction to
+     * refuse — it ROUTES to the interactive background relay. The refusal
+     * sentence is pinned ABSENT (a re-spelt contradiction door reddens this
+     * leg), and a registry-less Bash falls closed on the same registry door
+     * the plain background flag always used: the combination reaches the
+     * hand-off, and the hand-off refuses without a registry. The live route
+     * (relay row, sandbox-prefixed stage, ShellSend answer) is
+     * {@see \SugarCraft\Code\Tests\Tools\BashInteractiveBackgroundTest}'s
+     * subject — this file pins the door, never the spawn.
+     */
+    public function testBackgroundAndInteractiveRouteToTheRegistryDoorTogether(): void
     {
         $result = (new Bash())->execute([
-            'command' => 'true', 'description' => 'clash',
+            'command' => 'true', 'description' => 'combo',
             'run_in_background' => true, 'interactive' => true,
         ]);
         self::assertTrue($result->isError());
-        self::assertStringContainsString('cannot both be true', $result->content());
+        self::assertStringNotContainsString('cannot both be true', $result->content(), 'the old contradiction refusal must not come back — the combination routes now');
+        self::assertStringContainsString('no background shell registry attached', $result->content(), 'the combo reaches the registry door and fails closed there without a registry');
     }
 
     public function testABashWithoutARegistryRefusesToBackgroundLoudly(): void

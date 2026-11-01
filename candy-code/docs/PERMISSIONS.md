@@ -161,12 +161,17 @@ first — `$(echo rm) -rf /`, `x=-rf; rm $x /`, `bash -c '…'`, `eval`, aliases
 It fires for `Bash` **and** `PtyRun` alike: `PtyRun` hands its `command` to the same
 `/bin/sh -c`, so `PtyRun{command: "rm -rf ~"}` is refused at step 0 exactly as
 `Bash`'s is — reaching for the interactive driver is not a way around the floor.
+Since C-TOOL-6.k it reaches the typed half too: each decoded line of a `ShellSend`
+`keys` template runs the same word-floor check, so `rm -rf /<Enter>` typed into an
+interactive background shell is refused at step 0 like the direct call — and a
+`PtyRun` step already ran it the same way, which is why typing a destructive line
+was never a detour around this breaker.
 
 <!-- tools:classes:begin -->
 Three name classes drive the evaluators. Each built-in tool declares its class in its `#[BuiltInTool]` attribute, and `Tools\Catalog\ToolCatalog` reads them:
 
 - **read-only**: `Read`, `Glob`, `Grep`, `Skill`, `Lsp`, `RepoMap`, `Ls`, `ShellOutput`, `mcp_list`, `skills_search`, `BoardRead`
-- **write-capable**: `Bash`, `Edit`, `Write`, `Workflow`, `ApplyPatch`, `PtyRun`, `ShellStop`, `mcp_call`, `SkillWorkshop`, `Script`, `Task`, and anything starting `mcp__` or `client__`
+- **write-capable**: `Bash`, `Edit`, `Write`, `Workflow`, `ApplyPatch`, `PtyRun`, `ShellStop`, `mcp_call`, `SkillWorkshop`, `Script`, `ShellSend`, `Task`, and anything starting `mcp__` or `client__`
 - **no-ask** (allowed in every mode; they write only harness-owned state): `Memory`, `Prune`, `Todo`, `Compress`, `Recall`, `Team`, `AskUser`, `PlanExit`, `SendMessage`, `Subagents`, `InterruptAgent`, `Advisor`, `Canvas`, `BoardPost`
 
 Note what is in *none* of these lists: `WebFetch`, `WebSearch`, `doctor`, `GenerateImage`, `GenerateVideo` and `Schedule`.
@@ -766,6 +771,16 @@ How the argument half is matched:
   `true; 'rm' -rf build`. A permissive one (`allow`) fires only when **every**
   segment matches, so `Allow Bash(git *)` does **not** grant `git log && rm x`
   (measured: Deny under `dont-ask`).
+- **Keystroke-typing calls ask every time.** A `PtyRun` step and a `ShellSend` call type into a live terminal — input that can open a shell the
+  spawned command never mentions — so the gate treats both as a forced question: every non-bypass mode asks, a session "always" cannot answer it,
+  and `auto` neither Allows nor strikes on them. Their rules behave differently because their subjects differ: `PtyRun` stays a shell subject (its
+  decoded steps are judged as extra command text, and an `Allow` must cover the command **and** every step), while `ShellSend` (C-TOOL-6.k) is
+  deliberately **not** one — that roster means *the argument IS a command line*, and treating typed REPL input as one would let `Allow Bash(git *)`
+  answer for typing `git` into whatever program holds the terminal, and let the classifier read keystrokes as shell text it never runs through
+  `/bin/sh -c`. What covers a send is its own rule: an explicit `Allow ShellSend` answers for every shell and every key, name-only, because there is
+  no bindable subject half. The mode-independent `rm -rf` floor is the exception to all of this, and it reaches inside the grammar: each **decoded
+  line** of a `ShellSend` `keys` template runs the same breaker the shell texts run, so `rm -rf /<Enter>` typed at a rescue shell is refused even
+  under `bypass-permissions`.
 - **A shell `allow` fails closed**. A greedy `*` used to swallow
   whatever sat inside one segment: measured under `dont-ask` with
   `Allow Bash(git *)`, `git log $(id)`, ``git log `id` `` and
@@ -876,7 +891,7 @@ The tool names a pattern can start with are the tool catalog's names —
 `Skill`, `doctor`; the roster is now the whole catalog — also `ApplyPatch`,
 `PtyRun`, `Task`, `Team`, `Workflow`, `Memory`,
 `RepoMap`, `Prune`, `Todo`, `Compress`, `Recall`, `AskUser`, `PlanExit`,
-`SendMessage`, `Subagents`, `InterruptAgent`, `Ls`, `ShellOutput`, `ShellStop`,
+`SendMessage`, `Subagents`, `InterruptAgent`, `Ls`, `ShellOutput`, `ShellSend`, `ShellStop`,
 `GenerateImage`,
 `GenerateVideo`, `BoardPost`, `BoardRead`, `Advisor`, `Schedule`,
 `SkillWorkshop`, `skills_search`, `Canvas`, `Script`,
