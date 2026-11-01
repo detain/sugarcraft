@@ -519,13 +519,40 @@ final class PaletteClickTest extends TestCase
         $rows = $chat->paletteMatches();
         self::assertGreaterThan(1, count($rows), 'fixture: the root palette must offer several rows');
 
-        $refusals = 0;
-        foreach ($rows as $index => $label) {
-            Renderer::scanner()->clear();
-            $this->resetClickTracker();
-            Renderer::render($chat);
+        // §7(1) timing cure: the sweep used to repaint the whole frame and
+        // re-arrow from row 0 on EVERY row — 50 renders and a quadratic walk
+        // of full update() clones, which pushed each dataset past the suite's
+        // 60-second defaultTimeLimit under serial load (RISKY aborts). The
+        // base frame is identical for every row, so all zones come from ONE
+        // render, and the keyboard walks advance MONOTONICALLY through rows
+        // that are iterated in palette order. Same rows, same per-row oracles.
+        Renderer::scanner()->clear();
+        $this->resetClickTracker();
+        Renderer::render($chat);
 
-            $zone = Renderer::scanner()->get(Renderer::PALETTE_ITEM_ZONE_PREFIX . $index);
+        /** @var array<int, ?Zone> $zones */
+        $zones = [];
+        foreach (array_keys($rows) as $index) {
+            $zones[$index] = Renderer::scanner()->get(Renderer::PALETTE_ITEM_ZONE_PREFIX . $index);
+        }
+
+        // The single keyboard walker for the base chat, and its idle twin for
+        // the state-independent-write cross-check.
+        $walkTo = static function (Chat $walker, int $at, int $target) use (&$walkTo): Chat {
+            for (; $at < $target; $at++) {
+                [$walker] = $walker->update(new KeyMsg(KeyType::Down));
+            }
+
+            return $walker;
+        };
+
+        $refusals = 0;
+        $at = 0;
+        $typed = $chat;
+        $idle = (new Chat(palette: PaletteState::root(), inFlight: false))->withSize(100, 140);
+        $idleAt = 0;
+        foreach ($rows as $index => $label) {
+            $zone = $zones[$index];
 
             if (in_array($label, self::WIDE_UNCLICKABLE_ROWS, true)) {
                 // C-EXT-5.b seam (see self::WIDE_UNCLICKABLE_ROWS): the row
@@ -538,10 +565,8 @@ final class PaletteClickTest extends TestCase
                 // is pinned end-to-end in tests/Chat/PalettePrefillRowsTest.
                 self::assertNull($zone, "row {$index} ('{$label}') paints clipped and claims a zone anyway");
 
-                $typed = $chat;
-                for ($step = 0; $step < $index; $step++) {
-                    [$typed] = $typed->update(new KeyMsg(KeyType::Down));
-                }
+                $typed = $walkTo($typed, $at, $index);
+                $at = $index;
                 self::assertSame($index, $typed->palette()?->selectedIndex, "the arrows reached row {$index}");
                 [$entered] = $typed->update(new KeyMsg(KeyType::Enter));
 
@@ -566,11 +591,9 @@ final class PaletteClickTest extends TestCase
             [$clicked, $clickCmd] = $pressed->update($this->release($zone->startCol, $zone->startRow));
 
             // The keyboard half, through the same front door: arrow down onto
-            // the row, then Enter.
-            $typed = $chat;
-            for ($step = 0; $step < $index; $step++) {
-                [$typed] = $typed->update(new KeyMsg(KeyType::Down));
-            }
+            // the row (monotonic walker), then Enter.
+            $typed = $walkTo($typed, $at, $index);
+            $at = $index;
             self::assertSame($index, $typed->palette()?->selectedIndex, "the arrows reached row {$index}");
             [$entered, $enterCmd] = $typed->update(new KeyMsg(KeyType::Enter));
 
@@ -597,10 +620,9 @@ final class PaletteClickTest extends TestCase
                     // state, still reddens here — the defect this leg was
                     // written against (an unexplained mid-turn write) is
                     // unexplained whether it arrives in one state or both.
-                    $idle = (new Chat(palette: PaletteState::root(), inFlight: false))->withSize(100, 140);
-                    for ($step = 0; $step < $index; $step++) {
-                        [$idle] = $idle->update(new KeyMsg(KeyType::Down));
-                    }
+                    $idle = $walkTo($idle, $idleAt, $index);
+                    $idleAt = $index;
+                    self::assertSame($index, $idle->palette()?->selectedIndex, "the idle walker's arrows reached row {$index}");
                     [$idleAnswered] = $idle->update(new KeyMsg(KeyType::Enter));
                     self::assertGreaterThan(
                         count($idle->history),
