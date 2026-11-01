@@ -20,7 +20,9 @@ A terminal AI coding agent for PHP 8.3+, built on the SugarCraft libraries. It i
 
 > **Before you start.** You need **PHP 8.3+**, **Composer**, and the extensions
 > listed under [Install](#install). Platform support: **Linux** is the primary,
-> fully tested target; **macOS** is best-effort; **Windows is not supported**.
+> fully tested target; **macOS** is best-effort; **Windows** is experimental —
+> the chat/TUI runs there on PHP 8.4+ (Windows 10 1809 or newer) with Git for
+> Windows' bash, while `candy-code serve` stays a Linux/macOS/WSL program.
 > CandyCode itself is free and keeps no account: every token cost is billed by
 > the provider whose key you point it at, and a spend ceiling — `--max-cost` at
 > launch or `/budget` inside a session — decides in advance what one launch may
@@ -166,7 +168,13 @@ each turn runs in a forked child, and without it turns, parallel tool calls and
 sub-agents run in-process and the screen only updates when they finish.
 `candy-code serve` additionally needs `ext-pcntl`, `ext-posix` and `ext-ffi`,
 and serves the browser UI when `sugarcraft/candy-code-web` is installed
-beside it. `candy-code doctor` checks all of this for you.
+beside it. `candy-code doctor` checks all of this for you. On **Windows** the
+chat/TUI is experimental: the interactive tools (Bash `interactive` and
+PtyRun) allocate a ConPTY pseudoconsole, which needs PHP 8.4+, Windows 10
+1809 or newer, `ext-ffi`, and a `bash.exe` on PATH or under the default Git
+for Windows install location — there is no cmd.exe fallback. `serve` is not a
+Windows program at all: it forks every session through pcntl and posix, which
+Windows PHP does not ship; use WSL for the server.
 
 ### Install as a user
 

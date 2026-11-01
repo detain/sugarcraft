@@ -1567,7 +1567,11 @@ origin through the forwarded `Host` and needs no `--allowed-origin`.
 ## Windows
 
 `serve` needs pcntl and posix, which Windows PHP does not have; it refuses to
-start there. WSL works.
+start there. WSL works. A Windows-native `candy-code` is experimental in a
+narrow sense: the chat/TUI — including the interactive tools over a real
+ConPTY allocation — is exercised by a dedicated Windows smoke job in CI, while
+`serve` itself stays out of scope there because its fork machinery has no
+Windows PHP to run on. Run the server under WSL (or a container).
 
 ## Container
 
