@@ -94,6 +94,12 @@ documents the protocol and the UI).
   closed. Payloads carry only generic catalogue text — never a session title
   or transcript line — and the toggle needs a secure context (HTTPS or
   localhost); switching it off unsubscribes both the browser and the server.
+- **Client-hosted tools** (when the server opens `server.clientTools`): after
+  following a session this tab announces its local tools — the sample
+  `browser_context` (language, time zone, viewport, pixel ratio, colour
+  scheme, online state; nothing private) — runs the model's `client__…` call
+  when the session's `tool.client.call` carries this connection's
+  registration, and answers within the call's deadline.
 - **Transcript**: virtualised (`@tanstack/vue-virtual`); replies stream in as
   Markdown (`markdown-it`, raw HTML off, then DOMPurify — model and tool text
   are untrusted), fenced code coloured by a small highlighter loaded on first

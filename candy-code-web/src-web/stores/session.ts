@@ -5,6 +5,7 @@ import type { EventEnvelope, MethodResult, PermissionMode, SessionSnapshot, Subs
 import { ProtocolError } from '../protocol/jsonrpc'
 import type { PastedDocument, PastedImage } from '../lib/paste'
 import { useConnectionStore } from './connection'
+import { useClientToolsStore } from './clientTools'
 import { useLayoutStore } from './layout'
 import { applyEvent, applyOlderPage, applyPendingAsks, applySnapshot, createState, type ToolItem } from './reducer'
 
@@ -101,6 +102,10 @@ function setup(sessionId: string) {
       const subscription = await connection.request('session.subscribe', afterSeq === undefined ? { sessionId } : { sessionId, afterSeq })
       applySubscription(subscription)
       void loadCommands()
+      // C-TOOL-6.i: every fresh subscription re-announces this tab's
+      // client-hosted tools — the registration id the answers must carry only
+      // lives as long as the socket, so a replay or a resume needs a new one.
+      void useClientToolsStore().attach(sessionId)
     } catch (failure) {
       phase.value = 'idle'
       error.value = describe(failure)
