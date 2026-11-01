@@ -3975,7 +3975,7 @@ Each lane entry is the brief's summary. **The full brief (approach, root cause, 
 - **Deps:** C-TOOL-6.h (W38)
 - **Brief:** `prompt_kit/findings/comparison-1026/design-tool.md` → `### C-TOOL-6.i`
 
-#### C-TUI-6.d — candy-code on Windows: PtyRun / interactive Bash over ConPTY, README banner, CI smoke job
+#### ✅ 82e22a922,33915c3f9,b7f830aae,df2613aff C-TUI-6.d — candy-code on Windows: PtyRun / interactive Bash over ConPTY, README banner, CI smoke job
 - **Item:** C-TUI-6 (sources: GAP-PLAT-04, p2-miss: Windows support (×2)) · gap · effort M
 - **What:** **The PTY opener.** candy-code opens PTYs through the deprecated POSIX-only facade `\SugarCraft\Pty\Pty::open()`, in `PtyDriver.php:116` and `CapturesProcessOutput.php:518`. A new `PtyBackend::open($cols, $rows)` returns a …
 - **Files — create:** `candy-code/src/Support/PtyBackend.php`
