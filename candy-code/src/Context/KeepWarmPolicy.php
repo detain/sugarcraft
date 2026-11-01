@@ -68,10 +68,12 @@ final class KeepWarmPolicy
     }
 
     /**
-     * The configured cap, clamped. Read by both hosts from their layered
-     * `userConfig` snapshot on every decision — the key is Live like the
-     * fold keys beside it, so `/settings set promptCache.keepWarm 2` takes
-     * effect on the next tick rather than the next launch.
+     * The configured cap, clamped. Both hosts read it from their layered
+     * `userConfig` snapshot on every decision — a snapshot taken at launch,
+     * because neither keeps a writable copy (§7 closeout truth-flip: the key
+     * first shipped badged `live`, which promises an apply arm this state
+     * shape cannot have; the honest mode is `restart`, so a save joins the
+     * next launch).
      *
      * @param array<string, mixed> $userConfig
      */

@@ -1281,7 +1281,7 @@ project-settable.
 | `compaction.mode` | Context & Compaction | enum | `llm` | P U C | — | live | tuning |
 | `compaction.refillLimit` | Context & Compaction | int | `3` | U C | — | live | spend |
 | `compaction.idleAuto` | Context & Compaction | enum | `off` | U C | — | live | tuning |
-| `promptCache.keepWarm` | Context & Compaction | int | `0` | U C | — | live | spend |
+| `promptCache.keepWarm` | Context & Compaction | int | `0` | U C | — | restart | spend |
 | `contextPruning.minContextTokens` | Context & Compaction | int | `60000` | P U C | — | next turn | tuning |
 | `contextPruning.maxContextTokens` | Context & Compaction | int | `120000` | P U C | — | next turn | tuning |
 | `contextPruning.nudgeFrequency` | Context & Compaction | int | `5` | P U C | — | next turn | tuning |
@@ -1569,13 +1569,13 @@ Saved is not applied: see the next section for when each key takes effect.
 <!-- settings:apply:begin -->
 | Applies | When a saved change takes effect | Keys |
 |---|---|---|
-| live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `reasoningEffort`, `maxToolSteps`, `maxCostUsd`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`, `compaction.idleAuto`, `promptCache.keepWarm`, `autoReviewScope`, `memory.projectNoteMaxBytes`, `theme`, `statusLine`, `layout`, `queueMode`, `terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `resumeCostWarnUsd`, `paletteMru`, `diffPreviewRows`, `diffStyle`, `toolOutputPreviewLines`, `sessions.autoTitle`, `promptSuggestions`, `promptSuggestionHistory`, `sessions.awayRecap`, `expandToolOutput`, `maxCheckpoints`, `vimMode`, `screenReader` |
+| live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `reasoningEffort`, `maxToolSteps`, `maxCostUsd`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`, `compaction.idleAuto`, `autoReviewScope`, `memory.projectNoteMaxBytes`, `theme`, `statusLine`, `layout`, `queueMode`, `terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `resumeCostWarnUsd`, `paletteMru`, `diffPreviewRows`, `diffStyle`, `toolOutputPreviewLines`, `sessions.autoTitle`, `promptSuggestions`, `promptSuggestionHistory`, `sessions.awayRecap`, `expandToolOutput`, `maxCheckpoints`, `vimMode`, `screenReader` |
 | next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`, `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`, `contextPruning.compress`, `repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`, `env.diffMaxBytes`, `contextPruning.mode`, `permissions.autoStrikeLimit`, `permissions.autoTotalLimit`, `permissions.autoAllowReadOnly`, `redactToolOutput`, `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`, `toolSpillWindowPercent`, `toolInstructionCapBytes`, `toolSpillCaptureBytes`, `toolSpillMinCapBytes`, `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `grepTimeoutSeconds`, `requireReadBeforeWrite`, `sd.timeoutSeconds`, `rules.standingMaxBytes`, `skills.pathNudges`, `memory.promptMaxEntries`, `memory.promptMaxBytes`, `memory.entryMaxBytes`, `memory.userMaxEntries`, `memory.userMaxBytes`, `memory.autoConsolidate`, `memory.dreamIntervalSeconds`, `memory.dreamProposeSkills`, `embeddingModel`, `skills.listingMaxBytes`, `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `streamHeaderTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
 | reload | On `/keys reload`, or at the next launch: the saved file is re-read and re-applied when you say the word (plan_comparison TUI-4a) | `keybindings` |
-| restart | At the next launch: read once while the session is built | `models`, `providers`, `titleModel`, `summaryModel`, `advisorModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `serviceTier`, `promptCache`, `symbolMap.enabled`, `notices.transcriptLimit`, `contextWindow`, `permissionMode`, `permissionRules`, `autoReview`, `autoReviewModel`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `references`, `bashSandbox`, `bashSandboxNestedUserns`, `sandboxScope`, `sandboxAllowedDomains`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `webSearchBackend`, `sd.baseUrl`, `sd.apiKey`, `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`, `sd.savePattern`, `voice.baseUrl`, `voice.apiKey`, `voice.model`, `voice.language`, `voice.maxSeconds`, `instructions`, `instructions.walkToRoot`, `instructionsExclude`, `disabledRules`, `disabledSkills`, `enabledSkills`, `pluginPaths`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `notify`, `watchFiles`, `sessionRetentionDays`, `transcriptJsonl`, `lintCommands`, `formatCommands`, `formatAuto`, `hooksDefaultTimeoutSeconds`, `disabledMcpServers`, `mcp.enabled`, `mcp.lazySchemaTokens`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.allowedIps`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `server.dirBrowse`, `server.clientTools`, `server.browseRoot`, `webhooks`, `webhooksOut`, `connectTimeoutSeconds`, `debug.skills`, `debug.commands`, `debug.rules`, `debug.stream` |
+| restart | At the next launch: read once while the session is built | `models`, `providers`, `titleModel`, `summaryModel`, `advisorModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `serviceTier`, `promptCache`, `promptCache.keepWarm`, `symbolMap.enabled`, `notices.transcriptLimit`, `contextWindow`, `permissionMode`, `permissionRules`, `autoReview`, `autoReviewModel`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `references`, `bashSandbox`, `bashSandboxNestedUserns`, `sandboxScope`, `sandboxAllowedDomains`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `webSearchBackend`, `sd.baseUrl`, `sd.apiKey`, `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`, `sd.savePattern`, `voice.baseUrl`, `voice.apiKey`, `voice.model`, `voice.language`, `voice.maxSeconds`, `instructions`, `instructions.walkToRoot`, `instructionsExclude`, `disabledRules`, `disabledSkills`, `enabledSkills`, `pluginPaths`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `notify`, `watchFiles`, `sessionRetentionDays`, `transcriptJsonl`, `lintCommands`, `formatCommands`, `formatAuto`, `hooksDefaultTimeoutSeconds`, `disabledMcpServers`, `mcp.enabled`, `mcp.lazySchemaTokens`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.allowedIps`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `server.dirBrowse`, `server.clientTools`, `server.browseRoot`, `webhooks`, `webhooksOut`, `connectTimeoutSeconds`, `debug.skills`, `debug.commands`, `debug.rules`, `debug.stream` |
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
 
-**In numbers:** forty-four live, fifty-seven next turn, one reload, eighty-nine
+**In numbers:** forty-three live, fifty-seven next turn, one reload, ninety
 restart and seven next launch.
 
 **This session only** accepts `maxOutputTokens`, `reasoningEffort`,
@@ -1586,26 +1586,25 @@ restart and seven next launch.
 `compaction.toolOutputChars`, `compaction.reminderTokens`,
 `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`,
 `compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`,
-`compaction.idleAuto`, `promptCache.keepWarm`,
-`contextPruning.minContextTokens`, `contextPruning.maxContextTokens`,
-`contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`,
-`repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`,
-`env.diffMaxBytes`, `autoReviewScope`, `permissions.autoStrikeLimit`,
-`permissions.autoTotalLimit`, `permissions.autoAllowReadOnly`,
-`redactToolOutput`, `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`,
-`readPageLines`, `readPageBytes`, `toolSpillWindowPercent`,
-`toolInstructionCapBytes`, `toolSpillCaptureBytes`, `toolSpillMinCapBytes`,
-`globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`,
-`bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`,
-`chatToolTimeoutSeconds`, `grepTimeoutSeconds`, `requireReadBeforeWrite`,
-`sd.timeoutSeconds`, `skills.pathNudges`, `embeddingModel`, `subagentMaxTurns`,
-`subagentMaxDepth`, `subagentMaxActive`, `theme`, `statusLine`, `queueMode`,
-`terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`,
-`doubleEscSeconds`, `resumeCostWarnUsd`, `paletteMru`, `diffPreviewRows`,
-`diffStyle`, `toolOutputPreviewLines`, `sessions.autoTitle`,
-`promptSuggestions`, `promptSuggestionHistory`, `sessions.awayRecap`,
-`expandToolOutput`, `maxCheckpoints`, `vimMode`, `screenReader`,
-`providerRetryAttempts` and `providerRetryBaseBackoffMs`.
+`compaction.idleAuto`, `contextPruning.minContextTokens`,
+`contextPruning.maxContextTokens`, `contextPruning.nudgeFrequency`,
+`contextPruning.iterationNudgeThreshold`, `repoMap.enabled`, `repoMap.maxBytes`,
+`env.gitDiffAfterWrites`, `env.diffMaxBytes`, `autoReviewScope`,
+`permissions.autoStrikeLimit`, `permissions.autoTotalLimit`,
+`permissions.autoAllowReadOnly`, `redactToolOutput`, `toolOutputCapBytes`,
+`mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`,
+`toolSpillWindowPercent`, `toolInstructionCapBytes`, `toolSpillCaptureBytes`,
+`toolSpillMinCapBytes`, `globMaxMatches`, `webFetchMaxBytes`,
+`webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`,
+`bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `grepTimeoutSeconds`,
+`requireReadBeforeWrite`, `sd.timeoutSeconds`, `skills.pathNudges`,
+`embeddingModel`, `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`,
+`theme`, `statusLine`, `queueMode`, `terminalBackground`, `mouse`,
+`mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `resumeCostWarnUsd`,
+`paletteMru`, `diffPreviewRows`, `diffStyle`, `toolOutputPreviewLines`,
+`sessions.autoTitle`, `promptSuggestions`, `promptSuggestionHistory`,
+`sessions.awayRecap`, `expandToolOutput`, `maxCheckpoints`, `vimMode`,
+`screenReader`, `providerRetryAttempts` and `providerRetryBaseBackoffMs`.
 <!-- settings:apply:end -->
 
 `provider` and `layout` are live through their own doors — `/model` and the

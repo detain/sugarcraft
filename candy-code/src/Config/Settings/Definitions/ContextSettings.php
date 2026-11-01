@@ -195,7 +195,14 @@ final class ContextSettings implements SettingDefinitionSet
                 ->withCategory(SettingCategory::Context)
                 ->withRiskClass(RiskClass::Spend)
                 ->withLayered()
-                ->withApplyMode(ApplyMode::Live)
+                // §7 closeout: this badge first shipped `live` on the promise
+                // that "the next tick sees the save". Neither host keeps a
+                // writable copy of it — `Chat::handleKeepWarmTick()` and
+                // `SessionHost::keepWarmServed()` both read the workspace's
+                // LAUNCH snapshot, and `Chat::applySettings()` has no arm that
+                // could refresh a readonly WorkspaceContext — so the honest
+                // mode is the one the guard's law prints: restart.
+                ->withApplyMode(ApplyMode::Restart)
                 ->withRange(0, KeepWarmPolicy::MAX_PINGS)
                 ->withLabel(Lang::t('settings.promptCache.keepWarm.label'))
                 ->withHelp(Lang::t('settings.promptCache.keepWarm.help'))
