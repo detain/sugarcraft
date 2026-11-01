@@ -945,21 +945,33 @@ final class BackgroundShellRegistryTest extends TestCase
 
     public function testAStdoutThatShrinksAloneDoesNotStrandTheUnreadStderr(): void
     {
+        // §7(1) re-derive (battery-2b shard 22): the fixture used to be
+        // planted with file_put_contents() against a LIVE `sleep 30` row —
+        // but the spawn's process-substitution recorder cats open these very
+        // sinks with `>` a moment AFTER proc_open() returns (buildWrapper),
+        // so a planted fixture could be wiped by the recorder's own
+        // open-truncate (measured: size genuinely 0 at read time, stdout
+        // losing and stderr — written later, past its open — keeping). No
+        // re-write loop can close that: the truncate instant is not
+        // observable from here. The race-free shape keeps the SAME cursor
+        // arithmetic: the shell delivers both bursts through its recorders
+        // and settles first — after that no opener remains to truncate, and
+        // the shrink is planted as a plain rewrite of the dead sink.
         $registry = $this->registry();
-        $started = $registry->start('sleep 30', 'shrink pin');
-        self::assertTrue($started['ok']);
+        $started = $registry->start(
+            'printf %s ' . str_repeat('A', 800) . '; printf %s ' . str_repeat('B', 500) . ' >&2',
+            'shrink pin',
+        );
+        self::assertTrue($started['ok'], (string) ($started['error'] ?? ''));
         $id = (string) $started['shell']['id'];
 
         try {
+            $settled = $this->waitFor($registry, static fn (BackgroundShellRegistry $r): bool => ($r->status($id)['state'] ?? '') === 'finished');
+            self::assertTrue($settled, 'the shrink pin never settled within the budget');
             $state = $registry->status($id);
             $stdoutPath = (string) $state['stdoutPath'];
-            $stderrPath = (string) $state['stderrPath'];
-            self::assertSame(800, (int) file_put_contents($stdoutPath, str_repeat('A', 800)));
-            self::assertSame(500, (int) file_put_contents($stderrPath, str_repeat('B', 500)));
+            self::assertSame(800, (int) (@\stat($stdoutPath)['size'] ?? -1), 'the recorder delivered the full stdout burst');
 
-            // §7 closeout: the file's own stat-cache contract (see the
-            // interleaved pin below) — a bare filesize() read can answer with
-            // the pre-write size, since only stream opens refresh the cache.
             \clearstatcache();
             $first = $registry->read($id, 0, 512);
             self::assertTrue($first['ok']);
@@ -973,8 +985,11 @@ final class BackgroundShellRegistryTest extends TestCase
             self::assertSame(str_repeat('B', 224), $second['stderr']);
             self::assertSame('800.224', $second['cursor']);
 
-            // The shell truncates its own stdout beneath the threaded cursor.
-            self::assertSame(100, (int) file_put_contents($stdoutPath, str_repeat('A', 100)));
+            // Shrink stdout beneath the threaded cursor. Safe now: the row
+            // settled, both recorder cats saw EOF, closed, and stamped their
+            // done markers before the exit file — nobody holds this sink open
+            // to re-truncate an outside write.
+            self::assertSame(100, (int) \file_put_contents($stdoutPath, str_repeat('A', 100)));
 
             \clearstatcache();
             $third = $registry->read($id, '800.224', 4096);
