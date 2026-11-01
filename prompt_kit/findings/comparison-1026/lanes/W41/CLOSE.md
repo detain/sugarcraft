@@ -53,3 +53,45 @@ run-state.json diff (surgical, +1 line): waves_closed `[…,40, 42]` → `[…,4
 
 Staged paths (explicit, `git commit -o`): plan_comparison.md (1 line), lanes/W41/WAVE-REVIEW-1.md + CLOSE.md (both previously untracked — add -N first), lanes/run-state.json. Pre-existing foreign lanes/** WELD.md dirt + .opencode/agents/cc-cmp-lead.md untouched (allowed dirt, lead's own).
 
+
+## 4. Commit ledger
+
+- COMMIT A = 39296c576 `W41: close wave (…)` — name-only: plan_comparison.md, lanes/W41/CLOSE.md, lanes/W41/WAVE-REVIEW-1.md, lanes/run-state.json (4 files, +102/−1). cat-file -e OK. Law: %ae detain=1, %ce detain=1, %an 'Joe Huss'=1, Co-Authored=0 (SEPARATE greps, one shell).
+- COMMIT B = ea0f5cd69 `run-state: master_tip=39296c576 + tick t1133-W41-closed-all-42-waves (…follow-up one-liner per c082a64 precedent — a commit cannot contain its own SHA)` — name-only: run-state.json (+2/−2: master_tip f3e31905d→39296c576, tick t1132→t1133). cat-file -e OK. Law: ae=1 ce=1 Co-Authored=0. waves_closed re-verified via python json.load: complete==True ([1..42]), inflight=={} untouched.
+- Scope proof: every commit touches ONLY plan_comparison.md + prompt_kit/findings/comparison-1026/** (per-commit `git show --name-only` pasted above in ledger). Foreign lanes/** WELD.md dirt + .opencode/agents/cc-cmp-lead.md left untouched (lead's own).
+
+## 5. Cherry proof + prune
+
+```
+$ git cherry master cc/C-TUI-6.h
+- 2f53689bf1383a5a87d95584e932357ec5fb8a33
+- 11d0d647f184fccacdc743fbdefd833cc747bacb
+- bf349531521fa6d63622c208aaf2fa56c6856e3e
+```
+Exactly 3 '-' zero '+'. Worktree porcelain: single untracked REPORT.md (5,037 B) md5 c9a8ad9450bd82823bdac27d24836cd4 == committed lanes/C-TUI-6.h/REPORT-BUILDER-WT.md (byte-identical, diff EMPTY) — no-throwaway law satisfied by existing bank, so bare removal (which refuses on untracked) was completed with --force after that proof:
+
+```
+$ git worktree remove --force ../cc-cmp-C-TUI-6.h
+$ git branch -D cc/C-TUI-6.h
+Deleted branch cc/C-TUI-6.h (was bf3495315).
+$ git worktree list
+/home/sites/sugarcraft  ea0f5cd69 [master]
+$ git branch --list 'cc/*'
+(empty)
+$ git rev-parse --verify cc/C-TUI-6.h
+fatal: Needed a single revision
+$ ls -d /home/sites/cc-cmp-C-TUI-6.h
+No such file or directory
+```
+
+## 6. Targeted gates on the final tree (ea0f5cd69; cwd=candy-code, -c phpunit.xml, env -u LINES -u COLUMNS plain pipe)
+
+```
+$ vendor/bin/phpunit -c phpunit.xml --filter '(BashSandboxTest|BubblewrapHardeningTest)::'
+OK, but there were issues!
+Tests: 39, Assertions: 192, PHPUnit Deprecations: 2.
+$ vendor/bin/phpunit -c phpunit.xml --filter 'Lang'
+OK, but there were issues!
+Tests: 635, Assertions: 52058, PHPUnit Deprecations: 2, Skipped: 1.
+```
+Both EXACT vs the r1/step-weld expectations (2 deprecations = accepted foreign AccessorDeprecationTest provider roster). Negative-control diff-scope proof per duty 5(a) landed in §4. Full battery deliberately NOT run (that is the §7 gate's job). suite-figure.json + durations.tsv NEVER touched.
