@@ -46,7 +46,7 @@ final class McpToolProgressTest extends TestCase
 
     public function testTheServersProgressMessageBecomesATailFrameOnTheTurnsChannel(): void
     {
-        $marker = 'tmcpprog' . uniqid();
+        $marker = 'tmcpprog' . uniqid(getmypid() . '_', true);
         $frames = [];
         $bridge = $this->bridgingDesk(function (\Closure $handler) use ($marker): array {
             $handler('notifications/progress', ['progressToken' => 'pt', 'progress' => 30, 'total' => 100, 'message' => $marker . ' indexing'], true);
@@ -133,7 +133,7 @@ final class McpToolProgressTest extends TestCase
 
     public function testTheElicitationIsPutToTheApproverInTheAskUserShape(): void
     {
-        $questionText = 'tmcpsay' . uniqid();
+        $questionText = 'tmcpsay' . uniqid(getmypid() . '_', true);
         $askedWith = [];
         $bridge = $this->bridgingDesk(function (\Closure $handler) use ($questionText): array {
             $reply = $handler('elicitation/create', [
@@ -333,7 +333,7 @@ final class McpToolProgressTest extends TestCase
         // `turnTools()` — no per-tool `withPermissionApprover` call anywhere
         // in the caller. The reflection shape follows the established
         // turnTools pins ({@see DelegationLoaderViewTest}).
-        $questionText = 'tmcpturn' . uniqid();
+        $questionText = 'tmcpturn' . uniqid(getmypid() . '_', true);
         $askedWith = [];
         $bridge = $this->bridgingDesk(static function (\Closure $handler) use ($questionText): array {
             $reply = $handler('elicitation/create', [

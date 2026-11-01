@@ -191,7 +191,9 @@ final class AudioRecorder
             return $refuse(self::REFUSAL_CACHE_REFUSED, $whyDir);
         }
 
-        $wav = $dir . '/take-' . \gmdate('Ymd-His') . '-' . \uniqid() . '.wav';
+        // pid prefix AND the more-entropy flag (ProcessUniqueTempName law):
+        // two recorders in one instant must never reserve the same take path.
+        $wav = $dir . '/take-' . \gmdate('Ymd-His') . '-' . \uniqid(getmypid() . '_', true) . '.wav';
         $reserve = self::reserveTake($wav);
 
         if ($reserve !== '') {

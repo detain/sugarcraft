@@ -67,7 +67,7 @@ final class CanvasToolTest extends TestCase
 
     public function testBoundSessionLandsTheFileAtSixZeroZeroAndTheResultNamesIdPathAndBytes(): void
     {
-        $session = 'ses-' . \uniqid();
+        $session = 'ses-' . \uniqid(getmypid() . '_', true);
         $engine = EngineBackend::new(new ScriptedProvider([]), 'm')->withSessionId($session);
         $tool = CanvasTool::new()->withEngine($engine)->withMediaRoot($this->mediaRoot);
 

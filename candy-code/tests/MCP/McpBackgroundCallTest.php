@@ -413,7 +413,7 @@ final class McpBackgroundCallTest extends TestCase
      */
     public function testACallHoldingTheTurnsChannelsBlocksWhileACallHoldingNeitherHandsOff(): void
     {
-        $question = 'tmcpsev' . uniqid();
+        $question = 'tmcpsev' . uniqid(getmypid() . '_', true);
 
         $asked = [];
         $approver = static function (ToolCall $call, HookResult $ask) use (&$asked): ApprovalVerdict {
