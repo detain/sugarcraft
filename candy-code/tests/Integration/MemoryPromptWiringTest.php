@@ -469,6 +469,13 @@ final class MemoryPromptWiringTest extends TestCase
             'withHostPermissionMode' => fn(EngineBackend $b): EngineBackend => $b->withHostPermissionMode(
                 PermissionMode::Default,
             ),
+            // §7 gate carry: C-TOOL-6.h shipped the client-call pair onto
+            // EngineBackend without $steps rows — same drift shape as the
+            // withJsonSchema cure above, caught by the reflected-set pair.
+            // Fixture closures mirror the EngineBackendWitherPreservesStateTest
+            // doubles; this test never invokes them, only carries the store.
+            'withClientCallSink' => fn(EngineBackend $b): EngineBackend => $b->withClientCallSink(static function (): void {}),
+            'withClientCaller' => fn(EngineBackend $b): EngineBackend => $b->withClientCaller(static fn(): bool => true),
             'withContextLedger' => fn(EngineBackend $b): EngineBackend => $b->withContextLedger(\SugarCraft\Code\Context\Pruning\ContextLedger::new()),
             'withTurnInbox' => fn(EngineBackend $b): EngineBackend => $b->withTurnInbox(null),
             'withWrapUpAt' => fn(EngineBackend $b): EngineBackend => $b->withWrapUpAt(70),
