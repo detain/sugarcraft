@@ -451,6 +451,8 @@ final class ReadmeSettingsTierClaimTest extends TestCase
         36 => 'thirty-six',
         // C-TOOL-6.k era, in-step: ShellSend joined the filterable set (37).
         37 => 'thirty-seven',
+        // C-TOOL-6.b era, in-step: NotebookEdit joined the filterable set (38).
+        38 => 'thirty-eight',
     ];
 
     /**

@@ -86,6 +86,10 @@ final class SafetyClassifierTest extends TestCase
         yield 'Write the MCP roster' => ['Write', ['file_path' => '.mcp.json'], 'protected-path-write'];
         yield 'Write outside, absolute' => ['Write', ['file_path' => '/etc/cron.d/x'], 'outside-root-write'];
         yield 'Edit outside, dotdot' => ['Edit', ['file_path' => '../other/a.php'], 'outside-root-write'];
+        // C-TOOL-6.b, in-step: NotebookEdit classifies exactly like Edit —
+        // the same file_path argument is the whole risk, cell or no cell.
+        yield 'NotebookEdit in-root' => ['NotebookEdit', ['file_path' => 'nb.ipynb', 'edit_mode' => 'replace', 'cell_id' => 'abc', 'new_source' => 'x'], null];
+        yield 'NotebookEdit outside, dotdot' => ['NotebookEdit', ['file_path' => '../other/nb.ipynb', 'edit_mode' => 'replace', 'cell_id' => 'abc', 'new_source' => 'x'], 'outside-root-write'];
         yield 'Write home' => ['Write', ['file_path' => '~/.bashrc'], 'outside-root-write'];
         yield 'Write with no target' => ['Write', [], 'outside-root-write'];
         yield 'WebFetch plain' => ['WebFetch', ['url' => 'https://example.com/docs'], null];

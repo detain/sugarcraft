@@ -1397,6 +1397,11 @@ final class ReadPathCensusTest extends TestCase
             'PATH_JAIL — the bounded cap+1 head read (audit F-T2 re-measure), one statement above the byte-count '
                 . 'refusal, on the same jailed path the edit will write back',
         ],
+        'Tools/BuiltIn/NotebookEdit.php|file_get_contents' => [
+            'PATH_JAIL — the bounded cap+1 head read of the notebook to edit, on the same already-jailed '
+                . '$path: the jail resolve, the regular-file guard and the size guard all sit above it, '
+                . 'and the bytes feed Notebook::parse before any write',
+        ],
         'Tools/BuiltIn/Glob.php|glob' => [
             'PATH_JAIL — the search root is jailed; the pattern is additionally prefix-checked here',
         ],
@@ -1414,6 +1419,12 @@ final class ReadPathCensusTest extends TestCase
             'PATH_JAIL — the read tool\'s page arm, streaming every read a page at a time (0.11)',
             'PATH_JAIL — the binary sniff\'s bounded head read (ISS-060), on the same already-jailed '
                 . '$path: the jail resolve and the regular-file guard both sit above it',
+        ],
+        'Tools/BuiltIn/Read.php|file_get_contents' => [
+            'PATH_JAIL — the notebook cell-page arm (C-TOOL-6.b): one whole-file read of an `.ipynb` '
+                . 'already size-capped, jail-resolved and regular-file-checked above the call, feeding '
+                . 'Notebook::parse; a refusal or a failed parse never reaches it, and the bytes it hands '
+                . 'the ledger hash are exactly the bytes it read',
         ],
         'Tools/BuiltIn/WebFetch.php|fopen' => [
             'NOT_A_FILESYSTEM_PATH — a pinned HTTP(S) URL through a stream context',

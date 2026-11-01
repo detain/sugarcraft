@@ -198,8 +198,12 @@ final readonly class NotebookEdit implements Tool, AcceptsWorktreeJail, BuildsFr
                 return new ToolResult(toolCallId: $id, content: 'Error: path outside worktree', isError: true);
             }
             $path = $resolved;
-        } elseif ($this->root !== null && PathJail::resolve($this->root, $path) === null) {
-            return new ToolResult(toolCallId: $id, content: 'Error: path outside workspace root', isError: true);
+        } elseif ($this->root !== null) {
+            $resolved = PathJail::resolve($this->root, $path);
+            if ($resolved === null) {
+                return new ToolResult(toolCallId: $id, content: 'Error: path outside workspace root', isError: true);
+            }
+            $path = $resolved;
         }
 
         if (ToolOutputSpill::readablePath($path) !== null) {
