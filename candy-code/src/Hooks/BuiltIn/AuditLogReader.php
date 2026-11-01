@@ -21,7 +21,7 @@ namespace SugarCraft\Code\Hooks\BuiltIn;
  * never reads past what one rotation generation can hold; it stops growing
  * the moment the window begins just after a newline, because a window that
  * cut mid-line would make the head fragment look like a record — the same
- * seek discipline `Cli\Serve::tail()` applies to `server.log`. A record long
+ * seek discipline `Server\LogTail::tail()` applies to `server.log`. A record long
  * enough that the walk must reach the file start to begin whole at all (the
  * reason field is uncapped) is read in full, because that IS the bounded
  * window by then. A last line torn by a crash between the write and its
@@ -196,7 +196,7 @@ final class AuditLogReader
 
         // Walk back in growing windows until the window either reaches the
         // file start or begins just after a newline — only then does it hold
-        // whole records from its first byte, which is the law Serve::tail()
+        // whole records from its first byte, which is the law LogTail::tail()
         // enforces by dropping what its fixed window cut.
         $start = \max(0, $size - self::WINDOW_BYTES);
         $span = \min($size, self::WINDOW_BYTES);
@@ -229,7 +229,7 @@ final class AuditLogReader
     /**
      * $length bytes of $path from $offset, or null when the file could not
      * be opened. A directory or symlink is refused before it is opened, the
-     * way `Serve::tail()` refuses anything but a regular file.
+     * way `LogTail::answer()` refuses anything but a regular file.
      */
     private static function window(string $path, int $offset, int $length): ?string
     {

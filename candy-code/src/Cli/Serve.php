@@ -25,6 +25,7 @@ use SugarCraft\Code\Server\Http\SharePageController;
 use SugarCraft\Code\Server\Http\StaticFiles;
 use SugarCraft\Code\Server\InterfaceAddresses;
 use SugarCraft\Code\Server\Listener;
+use SugarCraft\Code\Server\LogTail;
 use SugarCraft\Code\Server\Pairing\QrEncoder;
 use SugarCraft\Code\Server\Pairing\QrTerminal;
 use SugarCraft\Code\Server\ParentPidWatchdog;
@@ -859,7 +860,7 @@ final class Serve
             );
         }
 
-        [$lines, $offset] = self::tail($path, self::LOG_TAIL_LINES);
+        [$lines, $offset] = LogTail::tail($path, self::LOG_TAIL_LINES);
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
             echo NonInteractive::encodeDocument(['result' => ['path' => $path, 'lines' => $lines]]) . "\n";
 
@@ -1212,35 +1213,6 @@ final class Serve
         $token = \trim((string) @\file_get_contents($path));
 
         return \preg_match('/^[0-9a-f]{64}$/', $token) === 1 ? $token : null;
-    }
-
-    /**
-     * The last $count lines of $path and the byte offset reading stopped at.
-     *
-     * @return array{0: list<string>, 1: int}
-     */
-    private static function tail(string $path, int $count): array
-    {
-        $handle = @\fopen($path, 'r');
-        if ($handle === false) {
-            return [[], 0];
-        }
-        $size = (int) (\fstat($handle)['size'] ?? 0);
-        $window = 256 * 1024;
-        $from = \max(0, $size - $window);
-        \fseek($handle, $from);
-        $text = (string) \stream_get_contents($handle, $size - $from);
-        \fclose($handle);
-
-        $lines = \explode("\n", \rtrim($text, "\n"));
-        if ($from > 0) {
-            \array_shift($lines);
-        }
-        if ($lines === ['']) {
-            $lines = [];
-        }
-
-        return [\array_slice($lines, -$count), $size];
     }
 
     /**
