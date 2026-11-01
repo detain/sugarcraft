@@ -119,7 +119,11 @@ final class DoctorChecks
         $driver = $driver === false ? $dsn : $driver;
 
         try {
-            new \PDO($dsn);
+            // SES-1 law: open through SqliteConnect so the probe performs
+            // the armed act every real session open performs; the driver
+            // failure this branch exists to surface throws from the same
+            // construction either way.
+            \SugarCraft\Code\Support\SqliteConnect::openDsn($dsn);
             $state = Lang::t('cli.doctor.pdo_usable');
             $usable = true;
         } catch (\Throwable $e) {

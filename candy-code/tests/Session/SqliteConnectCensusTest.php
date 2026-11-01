@@ -37,11 +37,10 @@ final class SqliteConnectCensusTest extends TestCase
         // The arm itself. Both constructions live in SqliteConnect; every
         // other file reaches SQLite through one of them.
         'src/Support/SqliteConnect.php' => 2,
-        // The doctor's driver-existence probe: its whole job is to throw
-        // `could not find driver` for a DSN no driver claims, before any
-        // statement could run, so it must construct the raw PDO itself.
-        // (Its sibling fts5Probe routes through openDsn() — SES-1.)
-        'src/Cli/Subcommands.php' => 1,
+        // §7 closeout: the doctor's driver-existence probe (its raw `new PDO`)
+        // retired into SqliteConnect::openDsn() with the SES-1 routing — the
+        // Subcommands.php roster row this note replaces no longer names a
+        // construction, and the census's stale half said so.
     ];
 
     public function testEveryConnectSiteInSrcIsAccountedFor(): void
