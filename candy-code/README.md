@@ -176,6 +176,22 @@ for Windows install location — there is no cmd.exe fallback. `serve` is not a
 Windows program at all: it forks every session through pcntl and posix, which
 Windows PHP does not ship; use WSL for the server.
 
+### Languages
+
+The TUI, its slash-command output and the browser UI's chrome are translated
+through `lang/`. `en` is the source of truth; the shipped community locales
+are `fr`, `de`, `es`, `pt`, `pt-br`, `zh-cn`, `zh-tw`, `ja`, `ru`, `it` and
+`ko`. The launch locale is picked the POSIX way — the first of `LC_ALL`,
+`LC_MESSAGES`, `LANG` — so a French terminal just works:
+
+```bash
+LANG=fr_FR.UTF-8 candy-code
+```
+
+Anything the *model* reads (the system prompt, tool descriptions, tool
+results) stays English whatever the locale. Translating a language of your
+own is one file: see `docs/CONTRIBUTING.md`.
+
 ### Install as a user
 
 To put `candy-code` on your PATH without a project of your own, install it

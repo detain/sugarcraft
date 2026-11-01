@@ -125,6 +125,25 @@ surfaces regenerate through their real generators, never by hand:
 --write`, the wire schema through `php tools/gen-protocol-schema.php
 --write`, and docs-site pages through the root `tools/gen-docs.php`.
 
+## Locales and translations
+
+`lang/en.php` is the source of truth: every key a person reads lives there,
+and only there may a key be added. The community locales (`fr`, `de`, `es`,
+`pt`, `pt-br`, `zh-cn`, `zh-tw`, `ja`, `ru`, `it`, `ko`) mirror it key for
+key — `LangParityTest` is **strict**: a new English key turns the guard red
+in every locale until it is translated, in the same change that adds the
+key. Codes follow root `LOCALES.md`: bare base codes, a regional file only
+where the wording genuinely diverges.
+
+The rules for a locale file: keep every `{placeholder}` verbatim (the parity
+test diffs the placeholder set per key), keep backticked spans, printf
+tokens, flags, paths and the brand names `CandyCode`/`candy-code` byte for
+byte, and translate nothing the model reads — tool descriptions, prompt
+layers and tool results are not in `lang/` and stay English whatever the
+locale. The shipped community files began as machine translations with
+machine review; a human-reviewed contribution is of course welcome, but the
+parity and placeholder arms treat them as law, not drafts.
+
 ## See also
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — the code's shape and invariants.
