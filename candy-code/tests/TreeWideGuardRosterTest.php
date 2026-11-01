@@ -813,6 +813,12 @@ final class TreeWideGuardRosterTest extends TestCase
         // dirname(__DIR__,2) file_get_contents pins, which read files, not
         // directories); this row licences the walker, not those reads.
         'Tools/BashSandboxTest.php' => ['RecursiveDirectoryIterator($this->tmpDir,\FilesystemIterator::SKIP_DOTS)'],
+        // C-TOOL-6.k, in-step: the interactive-route test reads its own src
+        // file through dirname(__DIR__,2) (the route-order scan pin), which
+        // names the package root and joins census scope; its walk is the
+        // tearDown() sweep of the sys_get_temp_dir() ib-* fixture dir setUp()
+        // made — a directory the test created, never the package.
+        'Tools/BashInteractiveBackgroundTest.php' => ['scandir($this->ibRoot)', 'scandir($dir)'],
         // C-TOOL-1.b r2 (pick c5b1f923a): the :249 source-read anchor
         // realpath(__DIR__ . '/../../../src/Tools/BuiltIn/Grep.php') names the package
         // root, so the file joins census scope; removeTree() in tearDown() empties the
@@ -820,6 +826,12 @@ final class TreeWideGuardRosterTest extends TestCase
         'Tools/BuiltIn/GrepOptionInjectionTest.php' => ['scandir($dir)'],
         'Tools/GenerateVideoTest.php' => ["glob(\$this->mediaRoot.'/main/'.\\chr(42).'.mp4')", "glob(\$this->mediaRoot.'/main/'.\\chr(42).'.json')", "glob(\$quietRoot.'/'.\\chr(42).'/'.\\chr(42).'.json')", "glob(\$this->mediaRoot.'/'.\\chr(42).'/'.\\chr(42))", "glob(\$root.'/main/'.\\chr(42).'.mp4')", "glob(\$root.'/main/'.\\chr(42).'.json')", 'scandir($dir)'],
         'Tools/PtyShimAutoloadResolutionTest.php' => ['RecursiveDirectoryIterator($path,\FilesystemIterator::SKIP_DOTS)'],
+        // C-TOOL-6.k, in-step: same shape as the BashInteractiveBackgroundTest
+        // row directly below the BashSandbox entry — the send test's
+        // docblock/attach-window pins read src through dirname(__DIR__,2),
+        // and its only walks are the tearDown() sweeps of the c6k-send-*
+        // fixture dir setUp() made.
+        'Tools/ShellSendTest.php' => ['scandir($this->c6kRoot)', 'scandir($dir)'],
         'Workflows/WorkflowRegistryTest.php' => ['scandir($dir)'],
         // tearDown() removes the sys_get_temp_dir() HOME sandbox setUp() made.
         'Workflows/WorkflowRetriesTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
