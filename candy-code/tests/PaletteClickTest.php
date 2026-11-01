@@ -45,7 +45,7 @@ final class PaletteClickTest extends TestCase
      * and `Renderer::recordPaletteItemZones()` claims box lines by a row's
      * FULL content, which a clipped line can never contain. Such a row
      * therefore carries no click zone; only its keyboard half exists. The
-     * roster is the four root-list rows whose `/<name> <argument-hint>`
+     * roster is the five root-list rows whose `/<name> <argument-hint>`
      * labels (PaletteCatalog, C-EXT-5.a) exceed the box width — the first
      * labels in the palette's history long enough to trip it, because the
      * action half is all short sentences. The census arm in
@@ -57,6 +57,12 @@ final class PaletteClickTest extends TestCase
      * seam in the lane's REPORT.md.
      */
     private const WIDE_UNCLICKABLE_ROWS = [
+        // §7 closeout: the shells surface (C-TOOL-6.l) added the fifth wide
+        // label first in census order; same judgement as the four below —
+        // the argument-hint half of the PaletteCatalog label is longer than
+        // the box interior, so the row paints clipped and owns no click
+        // zone. Keyboard half only.
+        '/shells [list|output <id> [cursor]|send <id> <keys…>|stop <id>]',
         '/schedules [list|add <name> <interval> <prompt>|enable|disable|delete <name>]',
         '/websearch <query> [--safesearch 0|1|2] [--time-range day|month|year]',
         '/generate <prompt> [--steps N] [--size WxH] [--seed N] [--save]',

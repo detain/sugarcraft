@@ -149,6 +149,11 @@ final class PaletteSupersetDispatchTest extends TestCase
         'fork' => 'needs a prompt to run against the clone',
         'websearch' => 'needs a query; the bare form only answers with usage',
         'btw' => 'needs a question for the title model',
+        // C-TOOL-4.f family (away-recap wave): /recap rides RecapHostCommand —
+        // the bare form prints the away-window summary as a transcript readout
+        // (README's slash roster carries it); no pane exists for the palette
+        // to pre-open and no PaletteAction arm was minted.
+        'recap' => 'bare /recap is the whole away-window readout; no palette pane exists to open',
         'generate' => 'needs a prompt; the palette twin is the generate-form row',
         'sendto' => 'needs a PNG path to import',
         'play' => 'needs a video artifact to open',
