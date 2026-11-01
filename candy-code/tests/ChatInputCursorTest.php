@@ -377,8 +377,8 @@ final class ChatInputCursorTest extends TestCase
     {
         // Slash completion (Enter on an ambiguous prefix) writes the string.
         $completed = $this->drive(new Chat(inputBuf: '/re'), new KeyMsg(KeyType::Enter));
-        $this->assertSame('/recompress ', $completed->inputBuf);
-        $this->assertSame(12, $completed->inputCursorOffset(), 'ready to type the argument');
+        $this->assertSame('/recap ', $completed->inputBuf);
+        $this->assertSame(7, $completed->inputCursorOffset(), 'ready to type the argument');
 
         // Up-recall writes the string too, over a cursor that had been moved.
         $recalled = $this->drive(
