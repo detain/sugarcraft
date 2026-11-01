@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tui;
 
-use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Tty;
@@ -1546,8 +1545,12 @@ final class Renderer
      * One patch row, painted: C-TUI-2.c's marker-column vocabulary —
      * headers bold systemLabel, `@@` blue, `+` green, `-` red, context
      * dim — then the token highlight over the row's body for a known
-     * language. Byte-identical to the plain whole-row paint when nothing
-     * tints (the same no-op law {@see LiveRenderer::renderDiffBody} gives).
+     * language. The marker styles come through
+     * {@see LiveRenderer::styleDiffLine()}: the SAME seam the tool-card diff
+     * paints with, so the two diff surfaces cannot drift and `src/Tui/`
+     * keeps its no-colour-literal law (ShellContrastTest). Byte-identical to
+     * the plain whole-row paint when nothing tints (the same no-op law
+     * {@see LiveRenderer::renderDiffBody} gives).
      */
     private static function reviewDiffRow(
         string $row,
@@ -1556,16 +1559,11 @@ final class Renderer
         Theme $theme,
         RegexHighlighter $highlighter,
     ): string {
-        if ($isHeader) {
-            return Style::new()->foreground($theme->systemLabel)->bold()->render($row);
-        }
+        $style = LiveRenderer::styleDiffLine($row, $theme, $isHeader);
 
-        $style = match (true) {
-            str_starts_with($row, '@@') => Style::new()->foreground(Color::ansi(6)),
-            str_starts_with($row, '+') => Style::new()->foreground(Color::ansi(2)),
-            str_starts_with($row, '-') => Style::new()->foreground(Color::ansi(1)),
-            default => self::reviewDim($theme),
-        };
+        if ($isHeader) {
+            return $style->render($row);
+        }
 
         if ($language === null) {
             return $style->render($row);

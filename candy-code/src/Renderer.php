@@ -6113,8 +6113,14 @@ final class Renderer
      * and already knows whether a hunk is open. It is a required argument, not a
      * defaulted one, so a future caller has to decide rather than silently get
      * the ambiguous reading back.
+     *
+     * Public as the ONE marker-column vocabulary: the review overlay's rows
+     * in `Tui\Renderer::reviewDiffRow()` paint through here rather than
+     * repeating the `Color::ansi()` literals — `tests/Tui/ShellContrastTest`
+     * forbids colour literals under `src/Tui/`, and a second spelling of the
+     * same three colours is exactly how the two diff surfaces would drift.
      */
-    private static function styleDiffLine(string $line, Theme $theme, bool $isHeader): Style
+    public static function styleDiffLine(string $line, Theme $theme, bool $isHeader): Style
     {
         if ($isHeader) {
             return Style::new()->foreground($theme->systemLabel)->bold();
