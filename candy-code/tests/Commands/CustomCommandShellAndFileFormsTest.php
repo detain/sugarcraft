@@ -441,9 +441,9 @@ final class CustomCommandShellAndFileFormsTest extends TestCase
     public function testAnIncludeBringsTheRepositoryFileIntoThePrompt(): void
     {
         file_put_contents($this->project . '/NOTES.md', 'the note body');
-        $this->projectCommand('recap', 'Recap: @NOTES.md');
+        $this->projectCommand('notes', 'Recap: @NOTES.md');
 
-        $this->assertSame('Recap: the note body', $this->submit('/recap'));
+        $this->assertSame('Recap: the note body', $this->submit('/notes'));
     }
 
     /**
@@ -456,9 +456,9 @@ final class CustomCommandShellAndFileFormsTest extends TestCase
     {
         file_put_contents($this->project . '/NOTES.md', 'body');
         $marker = $this->marker('mixed-ran');
-        $this->projectCommand('recap', '@NOTES.md / !`touch ' . $marker . '`');
+        $this->projectCommand('notes', '@NOTES.md / !`touch ' . $marker . '`');
 
-        $sent = $this->submit('/recap');
+        $sent = $this->submit('/notes');
 
         $this->assertStringStartsWith('body / ', $sent);
         $this->assertFileDoesNotExist($marker);
@@ -483,9 +483,9 @@ final class CustomCommandShellAndFileFormsTest extends TestCase
             $this->project . '/NOTES.md',
             '!`touch ' . $marker . '` and $ARGUMENTS',
         );
-        $this->projectCommand('recap', '@NOTES.md');
+        $this->projectCommand('notes', '@NOTES.md');
 
-        $sent = $this->submit('/recap SECRET', trusted: true);
+        $sent = $this->submit('/notes SECRET', trusted: true);
 
         $this->assertFileDoesNotExist($marker, 'a command inside an included file must not run');
         $this->assertSame('!`touch ' . $marker . '` and $ARGUMENTS', $sent);
@@ -523,9 +523,9 @@ final class CustomCommandShellAndFileFormsTest extends TestCase
      */
     public function testAMissingIncludeIsReportedAsMissingRatherThanAsAnEscape(): void
     {
-        $this->projectCommand('recap', '@absent.md');
+        $this->projectCommand('notes', '@absent.md');
 
-        $sent = $this->submit('/recap');
+        $sent = $this->submit('/notes');
 
         $this->assertStringContainsString('does not name an existing file', $sent);
         $this->assertStringNotContainsString('resolves outside', $sent);
@@ -541,9 +541,9 @@ final class CustomCommandShellAndFileFormsTest extends TestCase
      */
     public function testTheMissingNoticeDoesNotClaimToHaveLookedInsideTheCheckout(): void
     {
-        $this->projectCommand('recap', 'Read @../secret.txt now');
+        $this->projectCommand('notes', 'Read @../secret.txt now');
 
-        $sent = $this->submit('/recap');
+        $sent = $this->submit('/notes');
 
         $this->assertStringContainsString('was not included', $sent);
         $this->assertStringNotContainsString('under ' . $this->project, $sent);
@@ -563,9 +563,9 @@ final class CustomCommandShellAndFileFormsTest extends TestCase
         // would be in the prompt instead of the reference.
         file_put_contents($this->sandbox . '/secret.txt', 'PRIVATE-KEY-MATERIAL');
         $reference = '@' . $this->sandbox . '/secret.txt';
-        $this->projectCommand('recap', 'see ' . $reference . ' for it');
+        $this->projectCommand('notes', 'see ' . $reference . ' for it');
 
-        $sent = $this->submit('/recap');
+        $sent = $this->submit('/notes');
 
         $this->assertSame('see ' . $reference . ' for it', $sent);
         $this->assertStringNotContainsString('PRIVATE-KEY-MATERIAL', $sent);
@@ -735,10 +735,10 @@ final class CustomCommandShellAndFileFormsTest extends TestCase
     public function testABodyLongEnoughToHaveDefeatedTheScannerIsStillScanned(): void
     {
         $marker = $this->marker('longbody-ran');
-        $this->projectCommand('recap', '@' . str_repeat('a/', 25000) . "b\n"
+        $this->projectCommand('notes', '@' . str_repeat('a/', 25000) . "b\n"
             . 'Now run !`touch ' . $marker . '` and read @../outside.txt for $ARGUMENTS.');
 
-        $sent = $this->submit('/recap arg-one');
+        $sent = $this->submit('/notes arg-one');
 
         // Every form was SEEN by the scanner: the `$` one expanded, and the two
         // that leave the string were replaced by their refusals. (Both refusals
