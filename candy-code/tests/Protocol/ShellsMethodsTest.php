@@ -112,7 +112,7 @@ final class ShellsMethodsTest extends TestCase
 
         foreach ($items as $row) {
             self::assertSame(
-                ['shellId', 'label', 'state', 'exitCode', 'exitNote', 'expired', 'ageSeconds'],
+                ['shellId', 'label', 'state', 'exitCode', 'exitNote', 'expired', 'ageSeconds', 'interactive'],
                 \array_keys($row),
                 'the row is exactly what the web table needs — no pid, no stdout/stderr/exit paths',
             );

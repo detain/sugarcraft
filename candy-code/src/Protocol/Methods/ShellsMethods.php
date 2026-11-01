@@ -320,6 +320,8 @@ final class ShellsMethods
             'exitNote' => $row['exitNote'] ?? null,
             'expired' => (bool) ($row['expired'] ?? false),
             'ageSeconds' => (float) ($row['ageSeconds'] ?? 0.0),
+            // C-TOOL-6.l: the web's tail pane opens only for these rows.
+            'interactive' => (bool) ($row['interactive'] ?? false),
         ];
     }
 

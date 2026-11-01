@@ -232,6 +232,7 @@ final class Definitions
                 'exitNote' => Schema::string()->nullable()->describe('Set when the shell settled without an ordinary exit code — its output sink hit the cap, the lifetime wall stopped it, or the exit record was unreadable.'),
                 'expired' => Schema::boolean()->describe('True when the lifetime wall stopped the shell.'),
                 'ageSeconds' => Schema::number(0),
+                'interactive' => Schema::boolean()->describe('True when the row is an interactive (pty) shell — the C-TOOL-6.l tail pane and `shells.input` door apply; plain rows keep the read-only tail.'),
             ], ['shellId', 'label', 'state', 'expired', 'ageSeconds'])->describe('A background shell row from the launch\'s shell table, as the Shell tool started it; never its output — `shells.output` reads that.'),
             self::USAGE => Schema::object([
                 'totalTokens' => Schema::integer(0),
