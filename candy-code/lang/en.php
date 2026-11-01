@@ -719,6 +719,11 @@ Environment variables:
                           and the reply loudly refuses the key and names
                           /share serve, which publishes a self-hosted
                           snapshot page on your own candy-code serve.
+   CANDY_CODE_SERVICE_TIER
+                          'fast' or 'default': the service tier this launch
+                          starts on. An unrecognized value asks nothing;
+                          /fast and the settings screen still switch it. The
+                          layered user config's serviceTier is the fallback.
    CANDY_CODE_WORKTREES_DIR
                           Base directory under which per-teammate git
                           worktrees are created.
