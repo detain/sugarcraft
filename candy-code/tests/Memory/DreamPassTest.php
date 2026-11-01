@@ -285,8 +285,17 @@ final class DreamPassTest extends TestCase
         CompactionJournal::forStore($other)->append('c1', ['r1' => 'A summary.'], ['manual']);
         $echo = new Chat(history: [Message::user('hi')], inFlight: true, memoryStore: $other, projectRoot: $this->root);
         [, $none] = $echo->update(new AssistantMsg(Message::assistant('hello')));
-        self::assertNull($none, 'a backend that is not an engine schedules no pass');
-        self::assertFileDoesNotExist(DreamPass::statePath($other));
+        // §7(1) re-pin: consolidation rides the SUMMARY backend, not the
+        // engine, so this settle does schedule that call (the table at
+        // Host\TurnSettleWork::plan gates it on a summary backend being
+        // present, which Chat's own mirroring always gives it). The dream
+        // rule the leg named is still exactly true and is asserted where it
+        // lives: DreamPass::call refuses any backend that is not an
+        // EngineBackend, and a pass that was scheduled claims its throttle
+        // on disk the moment it is — the absent state file below is that
+        // proof, the same oracle the engine arm above reads in the present.
+        self::assertNotNull($none, 'the summary-backend consolidation is scheduled for a non-engine chat');
+        self::assertFileDoesNotExist(DreamPass::statePath($other), 'a backend that is not an engine schedules no DREAM pass');
 
         $pass = DreamPass::new(MemoryWriter::new($this->store, $this->root))->withInterval(0);
         [$entries, $start, $end] = $pass->pending(CompactionJournal::forStore($this->store), []);
