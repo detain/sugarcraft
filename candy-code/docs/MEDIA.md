@@ -165,6 +165,43 @@ library auto-plays audio for sources that carry it when an external player
 is present — that is accepted library behaviour, with operator enforcement
 left open.
 
+## Voice input (C-TUI-6.l)
+
+Microphone dictation rides the same media module as image and video: a local
+recorder child captures a WAV take, and an OpenAI-compatible
+`/audio/transcriptions` endpoint turns it into text. This section is the core
+only — the key binding and the web surface arrive with their own steps.
+
+**Configuration** (`voice.*`, all user tier, all listed in the layered
+roster above): `voice.baseUrl` is the endpoint and there is **no default** —
+voice stays off until a user-tier setting names one, so audio never leaves
+the machine by surprise. `voice.apiKey` follows the `${VAR}` house posture
+(`OPENAI_API_KEY` by default spelling; an unset variable sends no header).
+`voice.model` defaults to `whisper-1`, `voice.language` is optional (the
+endpoint detects otherwise), and `voice.maxSeconds` caps every take at
+5–600 seconds (default 120). A project tier can set none of these; that is
+the same trust boundary `sd.baseUrl` enforces, guarded by
+`LayeredSettingsTest`.
+
+**Recording.** The recorder picks `arecord`, then `sox`, from PATH — and when
+neither exists (stock macOS and Windows included) it reports
+`no recorder binary was found` rather than faking a take. The cap is passed
+into the child's own argv (`-d <max>` / `trim 0 <max>`) so an orphaned
+recorder stops itself; stopping sends SIGINT, which finalizes the WAV
+header, followed by a bounded TERM/KILL ladder. Takes land at 0600 under
+`~/.candy-code/cache/voice/` inside the PrivateDir-verified 0700 root. A
+process that exits with a live take cancels it.
+
+**Egress posture.** The upload is one multipart POST — `file`, `model`, and
+optional `language` — to `rtrim(voice.baseUrl,'/') . '/audio/transcriptions'`
+(a trailing `/v1` is kept, deliberately not Guzzle `base_uri` resolution).
+Requests are connect-bound and stall-bound, never total-timeout-bound
+(E646: a slow-but-live endpoint is allowed to answer). The WAV is deleted
+after the call, on success and on every failure path; audio bytes are never
+written to a log, and the recorder's own stdout/stderr go to `/dev/null`.
+Failure sentences are built from status codes and sanitized endpoint text
+only — the API key is never part of a printable string.
+
 ## Server and web surface
 
 Over `candy-code serve` (see [`SERVER.md`](SERVER.md)):

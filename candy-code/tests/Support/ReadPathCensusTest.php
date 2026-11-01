@@ -1274,6 +1274,26 @@ final class ReadPathCensusTest extends TestCase
                 . 'no content is read, and only an old regular file this uid owns whose name has '
                 . 'save()\'s exact shape is unlinked',
         ],
+        // C-TUI-6.l voice core: the take file and the upload read.
+        'Media/Voice/AudioRecorder.php|fopen' => [
+            'SELF_LOCATED — reserveTake() creates the take path `xb` (exclusive, after an '
+                . 'lstat plant refusal) under a 0077 umask inside the PrivateDir-verified '
+                . '0700 voice cache under the owned home; the name is gmdate+uniqid built '
+                . 'here, never taken from disk, and the handle is closed without reading — '
+                . 'it exists to settle the 0600 mode before the recorder truncates it',
+        ],
+        'Media/Voice/TranscribeCmd.php|file_get_contents' => [
+            'SELF_LOCATED — collect(): the transcription child\'s result payload, the name '
+                . 'Support\\ToolIpcFiles::reserve() created for this run, read once after the '
+                . 'child exits and immediately discarded; decoded as JSON, never executed '
+                . '(mirror of the Config/StatusLineCommand.php row above)',
+        ],
+        'Media/Voice/Transcriber.php|file_get_contents' => [
+            'SELF_LOCATED — the WAV body uploaded once to the user-configured endpoint; the '
+                . 'path is the one AudioRecorder::start() generated in the PrivateDir-verified '
+                . 'cache, never caller-supplied, and unlink()ed in a finally so no read of it '
+                . 'outlives the request. Bytes flow to the upload body only, never to a log',
+        ],
         'Support/PublicUrlGuard.php|fopen' => [
             'NOT_A_FILESYSTEM_PATH — a pinned HTTPS URL through a stream context; '
                 . 'the guard above the dial validates the address and the body read '

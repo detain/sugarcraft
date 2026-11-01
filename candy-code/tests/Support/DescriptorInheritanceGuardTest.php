@@ -221,6 +221,16 @@ final class DescriptorInheritanceGuardTest extends TestCase
             'count' => 1,
             'reason' => 'handle returned for loop-driven draining; child outlives the call by design',
         ],
+        // C-TUI-6.l: the take recorder. Handle stored in the class's live-take
+        // registry (self::$live, keyed by WAV path) so stop() can SIGINT it;
+        // the child carries its OWN cap (`-d`/`trim 0 <max>` from
+        // voice.maxSeconds) so an orphan stops itself, stop() runs the
+        // bounded SIGINT→TERM→KILL ladder, and VoiceSession's shutdown hook
+        // cancels any take abandoned by process exit.
+        'Media/Voice/AudioRecorder.php::spawn' => [
+            'count' => 1,
+            'reason' => 'take recorder handle stored for stop()/cancel(); self-capped child, bounded escalate ladder, shutdown-hook cancel',
+        ],
         'Backend/StreamingCommandBackend.php::begin' => [
             'count' => 1,
             'reason' => 'handle returned for loop-driven draining; child outlives the call by design',
