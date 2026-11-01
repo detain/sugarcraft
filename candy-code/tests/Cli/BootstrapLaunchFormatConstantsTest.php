@@ -372,7 +372,8 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             'docs/SETTINGS.md' => self::class . '::testTheDocPagesQuoteTheRetentionSummaryTheLauncherActuallyPrints',
         ],
         'PROJECT_TIER_REFUSAL_FORMAT' => [
-            'README.md' => self::PAGE_QUOTE_IS_COINCIDENCE,
+            // §7(2) closeout: README's coincidence sentence lapsed past the
+            // bound (451 bytes) — see the PAGE_QUOTE_IS_COINCIDENCE doc-block.
             'docs/TROUBLESHOOTING.md' => self::class
                 . '::testTheTroubleshootingPageQuotesTheRefusalShapeTheLauncherActuallyPrints',
         ],
@@ -398,12 +399,13 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
      * sentence — the "near" case {@see testTheSweepFindsAQuotedFormatOnAPageWhoseAnswerIsKnown()}
      * pins, settled by a person reading the page.
      *
-     * README.md is a holder since W10 widened {@see PAGE_QUOTE_FIELD_BYTES}
-     * for the twenty-four-name tool list: its "rather than ignoring it"
-     * sentence and a later em dash now fall inside the bound for
-     * {@see Bootstrap::PROJECT_TIER_REFUSAL_FORMAT}'s `ignoring %s — %s`.
-     * README quotes no refusal line. `docs/DOCKER.md` is the second holder
-     * since W1 DST-2: its Compose sketch's `candy-code:` service key carries
+     * README.md WAS a holder from W10's widening of {@see PAGE_QUOTE_FIELD_BYTES}
+     * until the §7(2) closeout: its "rather than ignoring it" sentence and the
+     * next em dash had grown 451 bytes apart — past even the widened bound —
+     * so the sweep no longer nominates README for
+     * {@see Bootstrap::PROJECT_TIER_REFUSAL_FORMAT}'s `ignoring %s — %s`, and
+     * the roster carries no README row. `docs/DOCKER.md` is the remaining
+     * holder since W1 DST-2: its Compose sketch's `candy-code:` service key carries
      * the label and colon, and the flattened page runs it into the dot ending
      * a `--rotate` command line — a YAML key, not a launch line.
      */
@@ -431,25 +433,28 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
      * field is longer than this is NOT nominated, and the sweep reports its
      * absence as silence. Nothing here can detect that, which is why the bound
      * is generous — the longest field a quoting page interpolates is the
-     * project-tier tool-removal report's disabled list, 311 bytes for the
-     * thirty-two tools the sample names since C-TUI-2.e (it was 271 for the
-     * thirty since comparison-plan SHL-1, 235 for twenty-six since
-     * crush-media W5.3, 205 for twenty-four until that join, and 160 until
-     * W10 widened the bound past
-     * it), every other one under sixty — and why the fixture in
+     * project-tier tool-removal report's disabled list, 352 bytes for the
+     * thirty-seven tools the sample names since the §7(2) closeout (it was
+     * 311 for the thirty-two since C-TUI-2.e, 271 for the thirty since
+     * comparison-plan SHL-1, 235 for twenty-six since crush-media W5.3, 205
+     * for twenty-four until that join, and 160 until W10 widened the bound
+     * past it), every other one under sixty — and why the fixture in
      * {@see testTheSweepFindsAQuotedFormatOnAPageWhoseAnswerIsKnown()} pins
      * both directions rather than only the one this file wants.
      *
-     * THE CEILING IS THE FIXTURE, NOT A ROUND NUMBER: 322 clears the measured
-     * 311 with room for roughly one more tool name, and stays under the
-     * fixture's 325-byte "far" field (`it.` plus the 322-byte filler) so the
+     * THE CEILING IS THE FIXTURE, NOT A ROUND NUMBER: 394 clears the measured
+     * 352 with room for roughly four more tool names, and stays under the
+     * fixture's 402-byte "far" field (`it.` plus the 399-byte filler) so the
      * false-positive direction remains pinned. Each future tool that lands in
      * that sample spends part of the headroom; when it runs out, the sweep
      * reds LOUDLY on the quoting page dropping out — which is this bound's way
      * of asking for the same measured-widening W10 and W5 performed, or for the
-     * doc sample to shrink.
+     * doc sample to shrink. The §7(2) closeout re-measure paid that bill: the
+     * sample's disabled list grew to 352 bytes for the thirty-seven tools the
+     * run left standing, README dropped out of the sweep, and the bound moved
+     * 322 -> 394 with the fixture's filler widened to keep the ceiling honest.
      */
-    private const PAGE_QUOTE_FIELD_BYTES = 322;
+    private const PAGE_QUOTE_FIELD_BYTES = 394;
 
     /**
      * PHPUnit's own two output forms. Never excused by an anchor — see
@@ -1346,7 +1351,7 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // only a human reading the page can settle it. That is what the
         // roster's verdict column is for.
         $coincidence = self::flattenPages([
-            'far.md' => 'reject one at exit `2` rather than ignoring it.' . str_repeat(' filler', 46) . ' — and on.',
+            'far.md' => 'reject one at exit `2` rather than ignoring it.' . str_repeat(' filler', 57) . ' — and on.',
             'near.md' => 'reject one at exit `2` rather than ignoring it, which — as noted — is deliberate.',
         ]);
         self::assertSame(
