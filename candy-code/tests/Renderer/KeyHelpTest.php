@@ -117,7 +117,20 @@ final class KeyHelpTest extends TestCase
      */
     public function testSlashHelpNoLongerOpensTheKeyboardReference(): void
     {
-        [$next] = $this->chat('/help')->update(new KeyMsg(KeyType::Enter));
+        // Rendered wide enough that EVERY registry hint fits its spill row —
+        // the widest `  /name <hint>` column plus the listing's own chrome.
+        // At the old default 100 columns `/skills`' hint (its `history`/`undo`
+        // arms arrived after this pin) clips to an ellipsis, so the verbatim
+        // duty is measured where the layout can carry it, and the clip is
+        // pinned at 100x30 below rather than papered over.
+        $need = 0;
+        foreach (CommandRegistry::slashCommands() as $spec) {
+            $left = '  /' . $spec->name . ($spec->argumentHint !== null ? ' ' . $spec->argumentHint : '');
+            $need = max($need, Width::of($left));
+        }
+        $fitCols = $need + 4;
+
+        [$next] = $this->chat('/help', $fitCols, 30)->update(new KeyMsg(KeyType::Enter));
 
         $this->assertNull($next->keyHelp(), '/help must not open the keybinding reference any more');
         $this->assertSame('', $next->inputBuf, 'but it IS a command, so it clears the draft');
@@ -139,6 +152,18 @@ final class KeyHelpTest extends TestCase
                 );
             }
         }
+
+        // And at the narrow frame the loss is measured, not silent: the
+        // `/skills` spill row ends in the ellipsis that marks it.
+        [$narrow] = $this->chat('/help')->update(new KeyMsg(KeyType::Enter));
+        $narrowRow = null;
+        foreach (explode("\n", $narrow->history[array_key_last($narrow->history)]->content) as $row) {
+            if (str_starts_with($row, '  /skills ')) {
+                $narrowRow = $row;
+            }
+        }
+        $this->assertNotNull($narrowRow, 'the /skills row is listed at 100 columns too');
+        $this->assertStringEndsWith('…', $narrowRow, 'its over-wide hint is clipped WITH the marker, not dropped');
 
         // And it points at the screen it used to BE, so the split does not lose
         // the discoverability the alias was added for.
@@ -1149,8 +1174,14 @@ final class KeyHelpTest extends TestCase
         // it already had: 180 lines, 149 -> 155 at 100x30, fitting at 100x185.
         // The shell menu's submenu chord (P-MENU.d) declared `menu.submenu`:
         // one row under a heading it already had: 181 lines, 155 -> 156 at
-        // 100x30, fitting at 100x186.
-        foreach ([[100, 30, 156], [100, 186, 0]] as [$cols, $rows, $expectedOverflow]) {
+        // 100x30, fitting at 100x186. The run's later keybinding waves declared
+        // 23 more live rows under three new headings — the diff-review panel,
+        // the message picker and the first-run wizard — plus six more under
+        // headings they already had (`chat.voice`, `chat.agent-cycle`,
+        // `chat.message-picker`, `chat.verbose-toggle`, `agentview.interrupt`,
+        // `sessions.toggle`): 210 lines, 156 -> 185 at 100x30, fitting at
+        // 100x215 (the §7(2) closeout re-derived this census live).
+        foreach ([[100, 30, 185], [100, 215, 0]] as [$cols, $rows, $expectedOverflow]) {
             [$open] = $this->chat('', $cols, $rows)->update(new KeyMsg(KeyType::Char, '?'));
 
             $this->assertStringContainsString(
@@ -1214,8 +1245,10 @@ final class KeyHelpTest extends TestCase
                 "the scrolling footer spends 63 of the {$limit} columns available at cols={$cols} — one "
                 . 'column of margin, and it is this test that keeps it real',
             );
-            // 186 rows, not 80: the list is 181 content lines now (152 live
-            // rows, 15 headers, 14 separators; 180 before `menu.submenu`, 174 before the Context pane's three ladder rows and its meter click, 173 before `chat.tool-row`, 172 before `chat.history-search`, 171 before `chat.repaint`, 170 before `permission.persist`,
+            // 215 rows, not 80: the list is 210 content lines now (175 live
+            // rows, 18 headers, 17 separators; 181 before the run's later
+            // keybinding waves put 23 rows live under three new headings,
+            // 180 before `menu.submenu`, 174 before the Context pane's three ladder rows and its meter click, 173 before `chat.tool-row`, 172 before `chat.history-search`, 171 before `chat.repaint`, 170 before `permission.persist`,
             // 167 before `media.open_form` and its fourteenth heading, 156 before `/new`'s nine folder-picker keys, 155 before `permission.edit`, 151 before the N-P5 remainder's four settings keys, 150 before 5.7-2's `permission.choice`, 148 before N-P5's two settings keys, 147 before P-E3's Ctrl+X b, 146 before plan mode's Alt+M, 138 before P-D3's agent controls, 137 before the composer's row, 130 before the Agent View's rows, 120 before the settings editor's keys, 112 before the agents strip's rows, 110 before the two permission rows, 108 before 1.C-3's two rows, 107 before `chat.stop`, 98 before the settings
             // view's rows, 86 before the eleven session picker rows of
             // Appendix P-A2), and an 80-row terminal gives a
@@ -1225,7 +1258,7 @@ final class KeyHelpTest extends TestCase
             // arithmetic spelled out.
             $this->assertSame(
                 35,
-                Width::of($this->footer($this->chat('', $cols, 186))),
+                Width::of($this->footer($this->chat('', $cols, 215))),
                 'and the non-scrolling form, which is what a box tall enough for the whole list paints',
             );
         }
@@ -1326,9 +1359,12 @@ final class KeyHelpTest extends TestCase
         // plus a roster leg that any NEW overflow must be added to deliberately.
         // P-CTX.e put two rows over the line: `mouse.side-row` grew its
         // description to name the Context pane, and `mouse.context-meter` is a
-        // new row whose sentence is one column too long. Both are pinned in
-        // clipped form below, and a third long sentence arrives only by editing
-        // this roster on purpose.
+        // new row whose sentence is one column too long. The run's cycling keys
+        // put three more over it: `chat.agent-cycle` and
+        // `chat.session-cycle-prev` at sixty columns and `chat.session-cycle`
+        // at fifty-six, against the 49 the box leaves. All five are pinned in
+        // clipped form below, and a further long sentence arrives only by
+        // editing this roster on purpose.
         $keyCol = 0;
         foreach (KeyBindingRegistry::live() as $binding) {
             $keyCol = max($keyCol, Width::of($binding->keys));
@@ -1362,7 +1398,7 @@ final class KeyHelpTest extends TestCase
         }
 
         $this->assertSame(
-            ['mouse.side-row', 'mouse.context-meter'],
+            ['chat.agent-cycle', 'chat.session-cycle', 'chat.session-cycle-prev', 'mouse.side-row', 'mouse.context-meter'],
             $overflows,
             'exactly these live rows exceed the box\'s ' . $room . '-column description room and ride the '
             . 'ellipsis; a new one must be measured, shortened, or adjudicated into this roster',
@@ -1655,28 +1691,34 @@ final class KeyHelpTest extends TestCase
         // on a narrower terminal). So here $cols is the plain bound.
         foreach ([[54, 10], [55, 6], [80, 24], [120, 40]] as [$cols, $rows]) {
             $chat = $this->chat('', $cols, $rows)->withKeyHelp(0);
-            for ($i = 0; $i < 100; $i++) {
-                $chat->view();
-                [$chat] = $chat->update(new KeyMsg(KeyType::Down));
-            }
+            $this->body($chat);
+            // §7(1) re-pin: the list is 210 content lines now, so a hundred
+            // single-line scrolls neither reach the end the test's name
+            // promises nor stay inside the suite's time budget under battery
+            // load. Step to the derived end and mid position directly instead
+            // — the frame bound is a per-frame property, and the per-keystroke
+            // scroll is pinned by the footer and scroll-through tests.
+            $max = Renderer::keyHelpMaxOffset();
+            foreach ([$max, intdiv($max, 2)] as $offset) {
+                $scrolled = $chat->withKeyHelp($offset);
+                $lines = explode("\n", $this->body($scrolled));
+                $this->assertCount($rows, $lines, "frame height at {$cols}x{$rows}, scrolled");
+                foreach ($lines as $line) {
+                    // The plain terminal width, with none of the narrow-terminal
+                    // slack testTheReferenceNeverOverflowsTheTerminal() has to
+                    // allow: every size here is wide enough that the status bar
+                    // fits, so nothing legitimately exceeds $cols.
+                    $this->assertLessThanOrEqual(
+                        $cols,
+                        Width::of($line),
+                        "frame width at {$cols}x{$rows}, scrolled",
+                    );
+                }
 
-            $lines = explode("\n", $this->body($chat));
-            $this->assertCount($rows, $lines, "frame height at {$cols}x{$rows}, scrolled");
-            foreach ($lines as $line) {
-                // The plain terminal width, with none of the narrow-terminal
-                // slack testTheReferenceNeverOverflowsTheTerminal() has to
-                // allow: every size here is wide enough that the status bar
-                // fits, so nothing legitimately exceeds $cols.
-                $this->assertLessThanOrEqual(
-                    $cols,
-                    Width::of($line),
-                    "frame width at {$cols}x{$rows}, scrolled",
-                );
+                // Scrolled to the position, the box still respects the bound
+                // that keeps it off the status bar.
+                $this->assertLessThanOrEqual($rows - 2, count($this->overlay($scrolled)));
             }
-
-            // Scrolled to the very end, the box still respects the bound that
-            // keeps it off the status bar.
-            $this->assertLessThanOrEqual($rows - 2, count($this->overlay($chat)));
         }
     }
 
@@ -3919,12 +3961,9 @@ final class KeyHelpTest extends TestCase
      */
     public function testAClippedKeyHelpFieldEndsWithAnEllipsis(): void
     {
-        $box = $this->overlay($this->chat('', 49, 30)->withKeyHelp(0));
+        $chat = $this->chat('', 49, 30)->withKeyHelp(0);
+        $box = $this->overlay($chat);
         $this->assertNotSame([], $box, 'fixture: the box must be drawn at 49 columns');
-        $rows = array_map(
-            static fn(string $line): string => (string) preg_replace('/\e\[[0-9;]*m/', '', $line),
-            $box,
-        );
 
         $clippedDescriptions = 0;
         $longest = '';
@@ -3936,13 +3975,23 @@ final class KeyHelpTest extends TestCase
         $this->assertGreaterThan(40, Width::of($longest), 'fixture: a live description must overflow 49 columns');
 
         $needle = mb_substr($longest, 0, 12);
-        foreach ($rows as $row) {
-            if (!str_contains($row, $needle)) {
-                continue;
+        // §7(1) re-pin: the longest row no longer sits in the first frame at
+        // this size (the cycling keys outrank what P-CTX.e pinned), so walk
+        // the scroll range and mark every frame that paints the row.
+        $max = Renderer::keyHelpMaxOffset();
+        for ($offset = 0; $offset <= $max; $offset++) {
+            $rows = array_map(
+                static fn(string $line): string => (string) preg_replace('/\e\[[0-9;]*m/', '', $line),
+                $this->overlay($chat->withKeyHelp($offset)),
+            );
+            foreach ($rows as $row) {
+                if (!str_contains($row, $needle)) {
+                    continue;
+                }
+                ++$clippedDescriptions;
+                $body = trim($row, "\u{2502} ");
+                $this->assertStringEndsWith('…', $body, "clipped description row must mark the loss: {$row}");
             }
-            ++$clippedDescriptions;
-            $body = trim($row, "\u{2502} ");
-            $this->assertStringEndsWith('…', $body, "clipped description row must mark the loss: {$row}");
         }
         $this->assertGreaterThan(0, $clippedDescriptions, 'the longest live description must be drawn clipped at 49 columns');
     }
