@@ -9,7 +9,7 @@ namespace SugarCraft\Code\Tools\Script;
  *
  * One job: turn bytes off the socket into whole frames, and whole frames back
  * into bytes, under one hard rule — **nothing over
- * {@see MAX_FRAME_BYTES} is ever decoded**. A child is model-written code, so
+ * {@see MAX_BRIDGE_FRAME_BYTES} is ever decoded**. A child is model-written code, so
  * its framing is untrusted input: an endless line with no newline must not
  * grow a parent buffer without bound, and a line that is not a JSON object
  * must not be half-parsed into an execution. Both shapes therefore arrive as
@@ -33,7 +33,7 @@ final class ScriptBridge
      * read a full legal response; a parent response never exceeds the cap
      * because {@see ScriptRunner} clips it before sending.
      */
-    public const MAX_FRAME_BYTES = 1_048_576;
+    public const MAX_BRIDGE_FRAME_BYTES = 1_048_576;
 
     /** Undecoded bytes still buffered from {@see feed()}. */
     private string $buffer = '';
@@ -57,7 +57,7 @@ final class ScriptBridge
      * Append child bytes to the read buffer.
      *
      * The cap is enforced HERE, not at decode: once a pending line crosses
-     * {@see MAX_FRAME_BYTES} without naming a newline, the buffer stops
+     * {@see MAX_BRIDGE_FRAME_BYTES} without naming a newline, the buffer stops
      * growing and the rest of that line counts as discarded until its newline
      * lands. A child that never sends a newline is bounded the same way,
      * because only ever the capped head is held.
@@ -75,7 +75,7 @@ final class ScriptBridge
                 return;
             }
             $this->discardedRunning += $newline;
-            $this->oversizeBytes = $this->discardedRunning + self::MAX_FRAME_BYTES;
+            $this->oversizeBytes = $this->discardedRunning + self::MAX_BRIDGE_FRAME_BYTES;
             $this->discardedRunning = 0;
             $this->discarding = false;
             $this->oversizePending = true;
@@ -84,8 +84,8 @@ final class ScriptBridge
         }
 
         $this->buffer .= $bytes;
-        if (strlen($this->buffer) > self::MAX_FRAME_BYTES && strpos($this->buffer, "\n") === false) {
-            $this->discardedRunning += strlen($this->buffer) - self::MAX_FRAME_BYTES;
+        if (strlen($this->buffer) > self::MAX_BRIDGE_FRAME_BYTES && strpos($this->buffer, "\n") === false) {
+            $this->discardedRunning += strlen($this->buffer) - self::MAX_BRIDGE_FRAME_BYTES;
             $this->buffer = '';
             $this->discarding = true;
         }
@@ -113,7 +113,7 @@ final class ScriptBridge
             $this->lastFrameBytes = $this->oversizeBytes;
             return self::errorFrame(null, sprintf(
                 'frame exceeds the %d byte bridge cap',
-                self::MAX_FRAME_BYTES,
+                self::MAX_BRIDGE_FRAME_BYTES,
             ));
         }
 

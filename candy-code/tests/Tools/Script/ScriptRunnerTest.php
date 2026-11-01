@@ -403,7 +403,7 @@ final class ScriptRunnerTest extends TestCase
 
     public function testAResponseOverTheFrameCapIsClippedAtTheEndAndNamed(): void
     {
-        $big = str_repeat('C', ScriptBridge::MAX_FRAME_BYTES + 600);
+        $big = str_repeat('C', ScriptBridge::MAX_BRIDGE_FRAME_BYTES + 600);
         $run = ScriptRunner::run(
             // The child measures what ARRIVED: if the clip were removed the
             // over-cap line would truncate inside the child's fgets and the
@@ -422,8 +422,8 @@ final class ScriptRunnerTest extends TestCase
         self::assertIsArray($run->return);
         self::assertFalse(($run->return ?? [])['err'], 'the child received a well-formed frame, not a decode failure');
         $bytes = (int) (($run->return ?? [])['bytes'] ?? 0);
-        self::assertLessThanOrEqual(ScriptBridge::MAX_FRAME_BYTES, $bytes, 'no frame crosses the 1MiB budget');
-        self::assertGreaterThan(ScriptBridge::MAX_FRAME_BYTES - 200, $bytes, 'the clip trims to the cap, it does not collapse the response');
+        self::assertLessThanOrEqual(ScriptBridge::MAX_BRIDGE_FRAME_BYTES, $bytes, 'no frame crosses the 1MiB budget');
+        self::assertGreaterThan(ScriptBridge::MAX_BRIDGE_FRAME_BYTES - 200, $bytes, 'the clip trims to the cap, it does not collapse the response');
         self::assertSame('cap]', (string) (($run->return ?? [])['tail'] ?? ''), 'the breach is named inside the content itself');
         self::assertGreaterThan(600, $run->capBreaches['response'] ?? 0, 'the dropped tail is counted by name');
         self::assertSame(ScriptRun::OUTCOME_OK, $run->calls[0]['outcome'] ?? null);

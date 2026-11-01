@@ -46,7 +46,7 @@ use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
  * The wall clock counts SCRIPT time only: it pauses while a bridged call is
  * in flight, so a permission ask or a long inner Bash never kills the script.
  * On expiry the recorded group gets TERM, then KILL, via the standard ladder.
- * Frames are capped at {@see ScriptBridge::MAX_FRAME_BYTES}, calls at
+ * Frames are capped at {@see ScriptBridge::MAX_BRIDGE_FRAME_BYTES}, calls at
  * {@see MAX_CALLS}, stdout and stderr tails at {@see MAX_OUTPUT_BYTES} each
  * and the return value at {@see MAX_RETURN_BYTES}. No cap cuts silently:
  * every breach is a named entry on {@see ScriptRun}, and the tail that
@@ -467,7 +467,7 @@ final class ScriptRunner
                 // past the cap are dropped from the END (the catalog is
                 // ordered by the caller) and the drop is named.
                 $line = ScriptBridge::encode(['id' => $id, 'result' => ['tools' => $tools]]);
-                while (strlen($line) > ScriptBridge::MAX_FRAME_BYTES && $tools !== []) {
+                while (strlen($line) > ScriptBridge::MAX_BRIDGE_FRAME_BYTES && $tools !== []) {
                     $droppedRow = array_pop($tools);
                     $listDropped += strlen(ScriptBridge::encode(['name' => $droppedRow['name'], 'signature' => $droppedRow['signature']]));
                     $line = ScriptBridge::encode(['id' => $id, 'result' => ['tools' => $tools]]);
@@ -533,7 +533,7 @@ final class ScriptRunner
     private static function boundedResponseLine(int $id, string $content, bool $isError): array
     {
         $line = ScriptBridge::encode(['id' => $id, 'result' => ['content' => $content, 'isError' => $isError]]);
-        if (strlen($line) <= ScriptBridge::MAX_FRAME_BYTES) {
+        if (strlen($line) <= ScriptBridge::MAX_BRIDGE_FRAME_BYTES) {
             return [$line, 0];
         }
 
@@ -545,7 +545,7 @@ final class ScriptRunner
         // frame. 71 bytes.
         $marker = '[content truncated by the script-runner frame cap]';
         $original = strlen($content);
-        $over = strlen($line) - ScriptBridge::MAX_FRAME_BYTES;
+        $over = strlen($line) - ScriptBridge::MAX_BRIDGE_FRAME_BYTES;
         // The marker rides INSIDE the clipped region: content loses
         // $over + strlen($marker) bytes and gets strlen($marker) back, so the
         // re-encode nets out at exactly the cap for unescaped content, and

@@ -68,7 +68,7 @@ final class ScriptBridgeTest extends TestCase
     public function testAnOversizeFrameIsRefusedNotBuffered(): void
     {
         $bridge = new ScriptBridge();
-        $head = str_repeat('A', ScriptBridge::MAX_FRAME_BYTES + 1);
+        $head = str_repeat('A', ScriptBridge::MAX_BRIDGE_FRAME_BYTES + 1);
 
         $bridge->feed($head);
         self::assertNull($bridge->next(), 'the refusal is named when the line CLOSES, not per byte');
@@ -86,7 +86,7 @@ final class ScriptBridgeTest extends TestCase
         self::assertNull($refusal['id'], 'a head of pure filler names no id to echo');
         self::assertStringContainsString('exceeds', (string) $refusal['error']);
         self::assertSame(
-            2 * ScriptBridge::MAX_FRAME_BYTES + 1,
+            2 * ScriptBridge::MAX_BRIDGE_FRAME_BYTES + 1,
             $bridge->takeOversizeBytes(),
             'every discarded byte is counted for the named breach',
         );
@@ -139,7 +139,7 @@ final class ScriptBridgeTest extends TestCase
     public function testARefusedOversizeLinePrecedesTheFramesBehindIt(): void
     {
         $bridge = new ScriptBridge();
-        $bridge->feed(str_repeat('C', ScriptBridge::MAX_FRAME_BYTES + 10));
+        $bridge->feed(str_repeat('C', ScriptBridge::MAX_BRIDGE_FRAME_BYTES + 10));
         $bridge->feed("\n{\"id\":6,\"method\":\"list\"}\n");
 
         $refusal = $bridge->next();
@@ -168,6 +168,6 @@ final class ScriptBridgeTest extends TestCase
     {
         // Byte-stable pin (house doctrine for wire caps): a revalue of the
         // 1 MiB frame budget must be a deliberate edit through here.
-        self::assertSame(1_048_576, ScriptBridge::MAX_FRAME_BYTES);
+        self::assertSame(1_048_576, ScriptBridge::MAX_BRIDGE_FRAME_BYTES);
     }
 }
