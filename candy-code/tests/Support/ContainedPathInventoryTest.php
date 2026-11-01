@@ -224,12 +224,21 @@ final class ContainedPathInventoryTest extends TestCase
         'Host/Commands/AgentsHostCommand.php' => 2,
         'Host/Commands/MemoryCommand.php' => 1,
         'MCP/GitCommandHandlers.php' => 2,
+        // C-AGT-3.b: the agent-scoped memory tier writes its note through a
+        // temp-create + rename and asks `below()` that the resolved store
+        // directory still sits under the boundary the caller named — the one
+        // path leg where a grafted link could otherwise land bytes outside
+        // the agent's own store.
+        'Memory/AgentMemory.php' => 1,
         'Memory/ForeignMemoryImporter.php' => 2,
         'Protocol/Methods/ContextMethods.php' => 1,
         'Providers/ProviderFactory.php' => 2,
         'Server/Http/StaticFiles.php' => 1,
         'Skills/ProposedSkills.php' => 1,
-        'Skills/SkillLoader.php' => 3,
+        // C-EXT-2.a grew the fourth: the asset walk bounds every depth-capped
+        // entry it yields under the skill directory, beside the two read
+        // gates and the anchored-directory leg already counted.
+        'Skills/SkillLoader.php' => 4,
         'Support/Directories/DirectoryBrowser.php' => 3,
         // ROOTFIX: SafeDelete is the single answer to "may this be unlinked"
         // for every sweep routine; its two arms (symlink, regular) each ask
@@ -296,7 +305,7 @@ final class ContainedPathInventoryTest extends TestCase
      * be confined to itself. `within()` and not `below()`, because a prefix
      * mapped to `""` means the package root itself.
      *
-     * "THIRTY-FOUR call sites in FOURTEEN files", per file — the sum and the key
+     * "SIXTY-SEVEN call sites in THIRTY-FOUR files", per file — the sum and the key
      * count of {@see ROUTED_CALL_SITES} as it stands below, which is what
      * {@see testTheRoutedCallSiteInventory()} checks against the derivation over
      * `src/`. (It read "twenty-seven in eleven", then "twenty-eight in twelve",
@@ -393,7 +402,7 @@ final class ContainedPathInventoryTest extends TestCase
             'THIRTY-SIX' => 36, 'THIRTY-SEVEN' => 37, 'THIRTY-EIGHT' => 38, 'THIRTY-NINE' => 39,
             'FORTY' => 40, 'FORTY-ONE' => 41, 'FORTY-TWO' => 42, 'FORTY-THREE' => 43,
             'FORTY-FOUR' => 44, 'FORTY-FIVE' => 45, 'FORTY-SIX' => 46, 'FORTY-SEVEN' => 47, 'FORTY-EIGHT' => 48, 'FORTY-NINE' => 49, 'FIFTY' => 50, 'FIFTY-ONE' => 51, 'FIFTY-THREE' => 53, 'FIFTY-FOUR' => 54, 'FIFTY-FIVE' => 55, 'FIFTY-SIX' => 56,
-            'SIXTY' => 60, 'SIXTY-ONE' => 61, 'SIXTY-FOUR' => 64, 'SIXTY-FIVE' => 65,
+            'SIXTY' => 60, 'SIXTY-ONE' => 61, 'SIXTY-FOUR' => 64, 'SIXTY-FIVE' => 65, 'SIXTY-SEVEN' => 67,
             'TWENTY-ONE' => 21, 'TWENTY-TWO' => 22, 'TWENTY-THREE' => 23, 'TWENTY-FOUR' => 24, 'TWENTY-FIVE' => 25,
         ];
 
@@ -447,7 +456,18 @@ final class ContainedPathInventoryTest extends TestCase
     }
 
     /**
-     * "THIRTEEN spellings remain by hand, in EIGHT files" — plus the eleven the
+     * "TWENTY-ONE spellings remain by hand, in FIFTEEN files" — the §7 closeout
+     * re-derived the set after the waves that landed since it last read
+     * "THIRTEEN ... EIGHT": the new spellings are the boundary judgement in
+     * {@see \SugarCraft\Code\Cli\LaunchContext}'s extra-root dedup, the
+     * EnvironmentBlock root probe, the HookLog fallback-arm anchor, the two
+     * host-command shelf gates (context dump, memory export), the
+     * TranscriptProjector media-store containment, the Bubblewrap `--config`
+     * under-the-root refusal, and one further compare in PathJail's
+     * ancestor walk. All of them admit or refuse with their answer; none
+     * joins the exclusion list below.
+     *
+     * plus the eleven the
      * inventory deliberately EXCLUDES, named here so the exclusion is a recorded
      * decision rather than a hole. `WorktreeManager`'s pair matches relative paths
      * against a glob directory; it is not a boundary compare. `SkillLoader`'s one
@@ -496,14 +516,34 @@ final class ContainedPathInventoryTest extends TestCase
                 // through it), the same shape as ExportCommand's shelf gate
                 // below. The mentionFor() compare stays in the exclusion
                 // paragraph above; this one is a boundary.
+                // C-TOOL-4.g: the extra-root dedup refuses a `--root` whose
+                // resolved directory sits INSIDE an already-listed root —
+                // str_starts_with against the canonical boundary, a judgement.
+                'Cli/LaunchContext.php' => 1,
                 // plan_comparison W4-B (/export): the shelf gate in
                 // homeShelfTarget() admits only the subtree under
                 // `~/.candy-code` — a boundary that admits or refuses where a
                 // file is written, not an abbreviation, so it lands in the
                 // inventory rather than the exclusion paragraph.
                 'Commands/ExportCommand.php' => 1,
+                // C-CTX-4.f review fix: the environment block's repo-file
+                // enumeration re-checks each candidate under the root before
+                // quoting it into the prompt.
+                'Context/EnvironmentBlock.php' => 1,
                 'Diagnostics/TuiErrorLog.php' => 1,
                 'Hooks/BuiltIn/BashEscapeDenyHook.php' => 1,
+                // C-EXT-6.b: the hook log recognises its temp-directory
+                // fallback arm by prefix against the boundary it would write
+                // under — the arm decides the retention warning.
+                'Hooks/HookLog.php' => 1,
+                // P-CTX.b: the /context shelf gate — a dump path is written
+                // only under `~/.candy-code/context`.
+                'Host/Commands/ContextHostCommand.php' => 1,
+                // C-CTX-3.e: the memory-export shelf gate, same shape.
+                'Host/Commands/MemoryCommand.php' => 1,
+                // C-WEB-1.d: media-card adoption refuses an `@path` whose
+                // realpath leaves the session media anchor.
+                'Host/TranscriptProjector.php' => 1,
                 'Permissions/ReadOnlyCommands.php' => 2,
                 'Renderer.php' => 1,
                 // Plan_comparison W2 (share routing): '/' . ShareStore::URL_PREFIX
@@ -525,15 +565,21 @@ final class ContainedPathInventoryTest extends TestCase
                 'Tools/BuiltIn/Ls.php' => 1,
                 'Tools/Concerns/BuildsUnifiedDiff.php' => 1,
                 'Tools/IgnoreRules.php' => 1,
-                'Tools/PathJail.php' => 5,
+                // C-SEC-2.b grew the sixth: the server-computed-diff walk
+                // bounds every ancestor it stats against the jail root.
+                'Tools/PathJail.php' => 6,
+                // C-TOOL-4.c: the bwrap `--config` re-bind refuses a path
+                // that does not sit under the jail root — binding it would
+                // undo the jail, so the compare is the refusal.
+                'Tools/Sandbox/Bubblewrap.php' => 1,
                 'Tui/SessionPicker.php' => 1,
             ],
             $counts,
         );
 
         unset($counts['Agents/AgentPresetRegistry.php'], $counts['Agents/WorktreeManager.php'], $counts['Chat.php'], $counts['Diagnostics/TuiErrorLog.php'], $counts['Renderer.php'], $counts['Server/Http/Router.php'], $counts['Server/Http/SharePageController.php'], $counts['Skills/SkillLoader.php'], $counts['Tui/SessionPicker.php'], $counts['Tools/Concerns/BuildsUnifiedDiff.php'], $counts['Support/StartupSummary.php']);
-        $this->assertSame(13, array_sum($counts), 'containment spellings still by hand');
-        $this->assertCount(8, $counts, 'files still holding one');
+        $this->assertSame(21, array_sum($counts), 'containment spellings still by hand');
+        $this->assertCount(15, $counts, 'files still holding one');
     }
 
     /**
