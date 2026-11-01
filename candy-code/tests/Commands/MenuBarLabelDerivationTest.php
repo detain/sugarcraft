@@ -36,6 +36,10 @@ final class MenuBarLabelDerivationTest extends TestCase
         'permissions' => 'Show permission mode',
         'notices' => 'Show every warning',
         'status' => 'Show where',
+        // §7 closeout: the C-TOOL-4.f family's host commands landed without
+        // their table entries — same forgotten-rider shape as the /hooks row
+        // above. Re-derived from CommandRegistry::all(), not hand-authored.
+        'doctor' => 'Run the install checks',
         'context' => 'Show what fills',
         'sweep' => 'Prune the tool outputs',
         'pruning' => 'Show or set',
@@ -92,6 +96,7 @@ final class MenuBarLabelDerivationTest extends TestCase
         'goal' => 'Work until a condition',
         'grind' => 'Like /goal',
         'btw' => 'Ask the title model',
+        'recap' => 'Recap where',
         'handoff' => 'Continue in a new',
         'generate' => 'Generate an image',
         'sendto' => "Import a saved PNG's",
