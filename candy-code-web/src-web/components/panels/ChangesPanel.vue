@@ -5,6 +5,7 @@ import type { MethodParams, MethodResult } from '../../protocol/generated'
 import { diffSectionForPath } from '../../lib/diff'
 import { useConnectionStore } from '../../stores/connection'
 import { usePanelsStore } from '../../stores/agents/panels'
+import { useSettingsStore } from '../../stores/settings'
 import { describe } from '../../stores/session'
 import DiffView from '../DiffView.vue'
 import FileViewer from '../FileViewer.vue'
@@ -27,6 +28,7 @@ import FileViewer from '../FileViewer.vue'
  */
 const connection = useConnectionStore()
 const panels = usePanelsStore()
+const settings = useSettingsStore()
 
 type ChangedItem = MethodResult<'files.changed'>['items'][number]
 
@@ -171,6 +173,18 @@ onMounted(() => void load())
           <span v-else class="sel" data-testid="changes-selected">{{ t('web.panels.changes_all_files') }}</span>
           <span v-if="base > 0" class="hint" data-testid="changes-diff-ref">against {{ diffRef }}</span>
           <span v-else-if="selection" class="hint">{{ t('web.panels.changes_hint') }}</span>
+          <!-- The viewer-wide diff layout pref (`stores/settings.ts`, the state
+               every DiffView mount reads) finally gets its control: a header
+               button cycling auto → unified → split, mirroring the theme button
+               in App.vue's chrome — value in the label, tooltip explaining,
+               no chord to register. -->
+          <button
+            type="button"
+            class="link"
+            data-testid="changes-diff-style"
+            :title="t('web.panels.changes_style_title')"
+            @click="settings.cycleDiffStyle()"
+          >{{ t('web.panels.changes_style', { style: settings.diffStyle }) }}</button>
         </div>
         <DiffView :diff="shownDiff" />
       </template>
@@ -254,6 +268,9 @@ onMounted(() => void load())
   gap: 0.5rem;
   align-items: baseline;
   margin: 0.6rem 0 0.3rem;
+}
+.diff-head button {
+  margin-left: auto;
 }
 .sel {
   font-family: var(--mono);

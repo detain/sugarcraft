@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 import { Wire } from '../../../stores/agents/__tests__/harness'
 import { usePanelsStore } from '../../../stores/agents/panels'
+import { useSettingsStore } from '../../../stores/settings'
 import SidePanels from '../SidePanels.vue'
 import ChangesPanel from '../ChangesPanel.vue'
 
@@ -313,5 +314,41 @@ describe('ChangesPanel base selector (C-TUI-2.g)', () => {
     await flushPromises()
     expect(wire.sent('files.diff').at(-1)?.params).toEqual({ sessionId: 's-2' }) // a new session starts on HEAD, not the old base
     expect(wrapper.find<HTMLSelectElement>('[data-testid="changes-base"]').element.value).toBe('0')
+  })
+
+  it('the diff-head control cycles the store style on click (cycleDiffStyle wired)', async () => {
+    await wire.connect()
+    const wrapper = await openPanel()
+    const settings = useSettingsStore()
+    const button = wrapper.find('[data-testid="changes-diff-style"]')
+    // 1. The affordance exists exactly where a diff renders.
+    expect(button.exists(), 'the diff header carries the cycle control').toBe(true)
+    // 2. A click advances the store through the FULL cycle order — the only
+    //    production caller of cycleDiffStyle (before r10 the mutator had none).
+    expect(settings.diffStyle).toBe('auto')
+    await button.trigger('click')
+    expect(settings.diffStyle).toBe('unified')
+    await button.trigger('click')
+    expect(settings.diffStyle).toBe('split')
+    await button.trigger('click')
+    expect(settings.diffStyle).toBe('auto')
+    // 3. Non-vacuous: the control's state feeds the real renderer. A store
+    //    flip to split must move the DiffView's layout through THIS mount —
+    //    the same reactive read the button's clicks advance.
+    expect(wrapper.find('[data-testid="diff"]').classes()).not.toContain('split')
+    settings.diffStyle = 'split'
+    await nextTick()
+    expect(wrapper.find('[data-testid="diff"]').classes()).toContain('split')
+  })
+
+  it('the diff-head label names the active style so the cycle is visible', async () => {
+    await wire.connect()
+    const wrapper = await openPanel()
+    const button = wrapper.find('[data-testid="changes-diff-style"]')
+    expect(button.text()).toBe('style: auto')
+    await button.trigger('click')
+    expect(button.text()).toBe('style: unified')
+    // Clicking still drives the store behind the label.
+    expect(useSettingsStore().diffStyle).toBe('unified')
   })
 })
