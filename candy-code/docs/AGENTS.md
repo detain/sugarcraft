@@ -55,8 +55,11 @@ declaring `mode: subagent` stay delegation-only and are skipped), by name.
 The choice is session-scoped. It is never written to config, a restart runs
 the plain session default, and switching sessions reverts it with the
 session, same as the "always" grants. On served sessions the host records
-the name (`SessionHost::primaryAgentOverride()`); the terminal is the surface
-that narrows its live backend.
+the name (`SessionHost::primaryAgentOverride()`) and honours it: each turn
+dispatch resolves the name against the live roster and narrows through the
+same `PrimaryAgent::apply()` the terminal uses, recomputed on every read, so
+the badge and the wire agree while the host lives. A name that stops
+resolving — the roster was rebuilt without it — runs un-narrowed.
 
 ## The `Task` tool
 
