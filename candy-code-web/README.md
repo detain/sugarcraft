@@ -264,12 +264,15 @@ src-web/
   views/      DashboardView, SessionView, LoginView
 ```
 
-**`dist/` is generated: never hand-edit it.** Rebuild it with `npm run build`
-and commit the result together with the source change. The `web` workflow
-(`.github/workflows/web.yml`) rebuilds from a clean `npm ci` and fails when
-the committed `dist/` differs. The build is deterministic (content-hashed
-file names, no timestamps), so a clean rebuild of unchanged source is
-byte-identical.
+**`dist/` is generated: never hand-edit it.** THE LAW: a change to the web
+source rebuilds `dist/` with `npm run build` and commits the result in the
+SAME commit as the source — never in a follow-up. Enforcement: the `web`
+workflow (`.github/workflows/web.yml`, step "Committed dist/ matches the
+source") rebuilds from a clean `npm ci` and fails when the committed `dist/`
+differs from that build; `npm run check:dist` runs the identical verdict
+locally before you push (it judges the committed tree, so commit your source
+first). The build is deterministic (content-hashed file names, no
+timestamps), so a clean rebuild of unchanged source is byte-identical.
 
 **`src-web/protocol/generated.ts` is generated too**, by
 `scripts/gen-protocol.mjs` from

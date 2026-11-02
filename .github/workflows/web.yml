@@ -99,7 +99,7 @@ jobs:
         run: |
           if ! git diff --exit-code -- dist/ || [ -n "$(git status --porcelain -- dist/)" ]; then
             git status --short -- dist/
-            echo "::error::candy-code-web/dist/ is stale. Run 'npm ci && npm run build' in candy-code-web/ and commit dist/ with the source change."
+            echo "::error::candy-code-web/dist/ is stale. Run 'npm ci && npm run build' in candy-code-web/ and commit dist/ with the source change — same commit, per the dist-freshness law. 'npm run check:dist' reproduces this verdict locally before you push."
             exit 1
           fi
           echo "OK: dist/ is byte-identical to a clean build of src-web/"

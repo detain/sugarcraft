@@ -17,7 +17,8 @@
     "test": "vitest run",
     "e2e": "playwright test",
     "gen:protocol": "node scripts/gen-protocol.mjs",
-    "gen:strings": "node scripts/gen-web-strings.mjs"
+    "gen:strings": "node scripts/gen-web-strings.mjs",
+    "check:dist": "node scripts/check-dist.mjs"
   },
   "dependencies": {
     "@tanstack/vue-virtual": "^3.13.39",
