@@ -47,7 +47,10 @@ final class SkillListingSection
      * caption and its lines sat outside every fence, in the slot the harness's
      * own voice occupies — yet every name and description on it is whoever
      * shipped the skill writing, and a cloned checkout's `.claude/skills`,
-     * `.opencode/skills` and `.candy-code/skills` reach it with no trust gate.
+     * `.opencode/skills` and `.candy-code/skills` reach it with no trust gate
+     * (the LISTING is ungated by design — see
+     * {@see ActiveSkillEffects::preApprovalsHonoured()} for the effect the tier
+     * does gate).
      * {@see SkillPromptLine} already made each line one escaped, capped line;
      * what it could not do is tell the model whose line it is reading. This
      * preamble does, in the same three facts and order as Runtime's two sibling

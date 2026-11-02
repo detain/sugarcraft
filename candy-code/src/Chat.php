@@ -1468,6 +1468,13 @@ final class Chat implements Model
          * operator's own file and needs no per-project grant — see
          * {@see refuseCommandShell()} for the full rule and for what the
          * permission gate adds on top of it.
+         *
+         * IT NOW ANSWERS A SECOND QUESTION TOO (MAJOR-6): whether a
+         * PROJECT-tier skill's `allowed-tools` pre-approves anything this turn
+         * ({@see \SugarCraft\Code\Skills\ActiveSkillEffects}). One grant, two
+         * channels of the same authority — repository-authored content that
+         * makes commands run unasked — rather than a fifth `trustedProject*`
+         * key for the trust dialog to nag about.
          */
         private readonly bool $projectCommandsTrusted = false,
     /**
@@ -5016,7 +5023,17 @@ final class Chat implements Model
         // re-derive from the transcript and swap the chain's gate. Chat builds
         // no CompleteRequest here, so only the tool scoping travels on this
         // path; `model:`/`effort:` ride in Runtime::run()'s step loop.
-        ActiveSkillEffects::apply($this->hooks, $this->history, $this->workspace?->skills);
+        //
+        // MAJOR-6: the turn's grants are handed the SAME trust answer this
+        // class already holds for a project command file's ` !`cmd` ` — a
+        // skill committed into a cloned repository pre-approves nothing until
+        // that root is trusted.
+        ActiveSkillEffects::apply(
+            $this->hooks,
+            $this->history,
+            $this->workspace?->skills,
+            projectTierTrusted: $this->projectCommandsTrusted,
+        );
 
         $hookResult = $this->hooks->preToolUse($context);
 

@@ -1629,7 +1629,30 @@ final class Runtime
         // call earned answers step 2 (its ToolResultMessage is in `$messages`
         // by then), and a new user prompt clears the slice. Stateless on
         // purpose: a forked child re-derives from the same transcript.
-        $effects = ActiveSkillEffects::apply($this->hookManager, $messages, $app->availableSkills);
+        //
+        // MAJOR-6: the child re-derives the TRUST ANSWER from the same root it
+        // re-derives the transcript from, so a fork cannot outrank its parent.
+        // Fail-closed on an unusable config — an unreadable grant is not a
+        // granted one, and the permission question the operator then sees is
+        // the price of that. The catch is the narrowest the contract allows:
+        // Bootstrap::projectCommandShellIsTrusted() documents exactly one
+        // failure, a config file that exists and cannot be parsed; anything
+        // else is a bug and must surface rather than be answered "untrusted"
+        // in silence.
+        $projectTierTrusted = false;
+        try {
+            $projectTierTrusted = \SugarCraft\Code\Cli\Bootstrap::projectCommandShellIsTrusted(self::projectRoot($app));
+        } catch (\SugarCraft\Code\Cli\PermissionConfigException) {
+            // The grant list is unreadable, so there is nothing to honour: the
+            // turn runs as an untrusted root would, with the operator's prompt
+            // standing in place of the skill's pre-approval.
+        }
+        $effects = ActiveSkillEffects::apply(
+            $this->hookManager,
+            $messages,
+            $app->availableSkills,
+            projectTierTrusted: $projectTierTrusted,
+        );
 
         $request = new CompleteRequest(
             model: $effects->model ?? $app->model,

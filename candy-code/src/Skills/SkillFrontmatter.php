@@ -18,8 +18,10 @@ use InvalidArgumentException;
  * eager path happened to sit inside a `catch (\Throwable)`, so its skill was
  * silently dropped; the manifest path reached
  * {@see SkillRegistry::registerFromManifest()} outside any catch, and one
- * repository-shipped SKILL.md — project skills have no trust gate — killed
- * `bin/candy-code` at launch with an uncaught TypeError. Validating HERE turns
+ * repository-shipped SKILL.md — project skills are DISCOVERED and parsed with
+ * no trust gate (what the tier does gate is the pre-approval they carry, in
+ * {@see ActiveSkillEffects}) — killed `bin/candy-code` at launch with an
+ * uncaught TypeError. Validating HERE turns
  * every such value into an {@see InvalidArgumentException} that names the
  * field, which both callers' existing skip recorders turn into a launch notice.
  *

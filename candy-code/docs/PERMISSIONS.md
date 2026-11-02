@@ -1335,8 +1335,17 @@ must be yours, made before the untrusted content is read:
 |---|---|---|
 | `trustedProjectHooks` | `<root>/.candy-code/hooks.yaml` and the `hooks` block of `<root>/.claude/settings.json` / `settings.local.json` — shell on every tool call | [`HOOKS.md`](HOOKS.md) |
 | `trustedProjectMcp` | `<root>/.mcp.json` — servers started at launch | [`MCP.md`](MCP.md) |
-| `trustedProjectCommands` | `` !`cmd` `` forms in `<root>/.candy-code/commands/*.md` | [`COMMANDS.md`](COMMANDS.md) |
+| `trustedProjectCommands` | `` !`cmd` `` forms in `<root>/.candy-code/commands/*.md`, and the `allowed-tools` pre-approvals of a project-tier skill ([`SKILLS.md`](SKILLS.md#frontmatter)) | [`COMMANDS.md`](COMMANDS.md) |
 | `trustedProjectSettings` | `<root>/.candy-code/settings.json` and its `.local.json` sibling | [`SETTINGS.md`](SETTINGS.md) |
+
+The `commands` row covers two channels because they are one authority: a
+command file's `` !`cmd` `` and a repository-shipped skill that pre-answers the
+permission question for `Bash(make)` both make commands run unasked in a
+directory you cloned. A skill still LOADS, lists and runs in an untrusted
+project — only its pre-approvals wait for the grant. A separate
+`trustedProjectSkills` key is the alternative shape, and it is not taken:
+four nagging questions about the same repository is a worse decision surface
+than three honest ones.
 
 They are four separate keys rather than one, and that is a decision rather
 than an accident: folding any of them into another would hand every root

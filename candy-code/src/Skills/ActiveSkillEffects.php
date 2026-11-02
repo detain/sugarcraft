@@ -19,12 +19,38 @@ use SugarCraft\Code\Tools\BuiltIn\SkillTool;
  *
  * A SKILL'S `allowed-tools` was always parsed and carried; what it never had
  * was a reader. This is the reader, and the ruling the reader obeys is the
- * owner's: the list is honoured AS WRITTEN for every tier — a tool named by a
- * skill that is actually running this turn is pre-approved while the turn
- * runs, exactly the Claude Code behaviour the imported skills were written
- * against. That is why the built-ins were trimmed (R-EXT-1's second half):
- * nothing gets a Bash pre-approval it does not actually run commands with,
- * and a name is no longer decoration a skill ships to look scoped.
+ * owner's: the list is honoured AS WRITTEN — a tool named by a skill that is
+ * actually running this turn is pre-approved while the turn runs, exactly the
+ * Claude Code behaviour the imported skills were written against. That is why
+ * the built-ins were trimmed (R-EXT-1's second half): nothing gets a Bash
+ * pre-approval it does not actually run commands with, and a name is no longer
+ * decoration a skill ships to look scoped.
+ *
+ * "AS WRITTEN" answers WHAT a skill may ask for. It never answered WHO ASKED,
+ * and that gap was MAJOR-6: a PROJECT-tier skill arrived with the repository
+ * that was cloned, so honouring its pre-approvals unconditionally lets an
+ * untrusted repository pre-approve its own commands — commit
+ * `allowed-tools: Bash(make:*)`, invoke the skill, and every `make` call of
+ * the turn stops being a question. Pre-approval IS one of the trust grants,
+ * so the gate is that grant and not a new one: {@see derive()} takes
+ * `bool $projectTierTrusted`, the same answer
+ * {@see \SugarCraft\Code\Cli\Bootstrap::projectCommandShellIsTrusted()} gives
+ * the launch, the trust dialog and {@see \SugarCraft\Code\Commands\CommandLoader}
+ * for `.candy-code/commands`, and a project-tier skill's `allowed-tools`
+ * contributes rules only while it is true. Project-tier BUNDLES are covered by
+ * the same test — {@see ForeignSkillDiscovery} labels them `Project` origin —
+ * and {@see Skill::$origin} defaults to `Project`, so a skill whose provenance
+ * was never stamped is gated with the repository rather than excused by it.
+ * There is no new prompt and no new notice for the refusal to pre-approve: the
+ * untrusted case is exactly the question that would have been asked anyway.
+ *
+ * WHAT THE DOOR LEAVES OPEN, on purpose: skill DISCOVERY and the prompt
+ * LISTING are untouched, so an untrusted project's skills stay visible and
+ * invocable (that is R-EXT-1 as shipped, and what the re-check confirmed — the
+ * plan's §6.1 row described a load-time gate that never existed). Nor does the
+ * door soften anything: `disallowed-tools`, `model` and `effort` ride whatever
+ * the tier, because a refusal cannot widen what a repository gets and a model
+ * name is not a permission.
  *
  * THE SCOPE IS THE TURN. "Active" means invoked since the last real user
  * prompt: the slice this class walks ends at the newest non-turn-context
@@ -41,7 +67,8 @@ use SugarCraft\Code\Tools\BuiltIn\SkillTool;
  *    {@see \SugarCraft\Code\Permissions\PermissionGate::withTurnGrants()},
  *    where they answer an `Ask` and nothing else — a turn grant cannot
  *    outrank a configured deny, Plan or the `rm -rf /` breaker any more than
- *    a session grant can.
+ *    a session grant can. A PROJECT-tier skill's list contributes nothing at
+ *    all until the project is trusted (see above).
  *  - `disallowed-tools` becomes `Deny` rules on the same carrier, refused
  *    BEFORE the mode speaks: a skill that says "no Bash this turn" means it
  *    even in a mode that would otherwise allow the call.
@@ -86,9 +113,16 @@ final readonly class ActiveSkillEffects
     /**
      * Everything the skills active in $messages ask for, derived fresh.
      *
+     * $projectTierTrusted is the caller's answer to "does this repository get
+     * to make commands run unasked?" — {@see
+     * \SugarCraft\Code\Cli\Bootstrap::projectCommandShellIsTrusted()} in
+     * production, the launch's own bool in {@see \SugarCraft\Code\Chat}. It is
+     * REQUIRED with no default so that a new call site cannot silently widen
+     * the grant: the argument is the audit trail.
+     *
      * @param iterable<\SugarCraft\Code\Messages\Message> $messages the turn's messages, oldest first
      */
-    public static function derive(iterable $messages, ?SkillRegistry $registry): self
+    public static function derive(iterable $messages, ?SkillRegistry $registry, bool $projectTierTrusted): self
     {
         if ($registry === null) {
             return self::none();
@@ -123,9 +157,13 @@ final readonly class ActiveSkillEffects
             if ($skill === null) {
                 continue; // a name the registry does not know pre-approves nothing
             }
-            foreach (self::rulesFrom($skill->allowedTools, PermissionAction::Allow) as $rule) {
-                $allow[] = $rule;
+            if (self::preApprovalsHonoured($skill, $projectTierTrusted)) {
+                foreach (self::rulesFrom($skill->allowedTools, PermissionAction::Allow) as $rule) {
+                    $allow[] = $rule;
+                }
             }
+            // Ungated on purpose: a refusal cannot widen what the repository
+            // gets, and a model name is not a permission (class docblock).
             foreach (self::rulesFrom($skill->disallowedTools, PermissionAction::Deny) as $rule) {
                 $deny[] = $rule;
             }
@@ -150,9 +188,9 @@ final readonly class ActiveSkillEffects
      *
      * @param iterable<\SugarCraft\Code\Messages\Message> $messages
      */
-    public static function apply(HookManager $hooks, iterable $messages, ?SkillRegistry $registry): self
+    public static function apply(HookManager $hooks, iterable $messages, ?SkillRegistry $registry, bool $projectTierTrusted): self
     {
-        $effects = self::derive($messages, $registry);
+        $effects = self::derive($messages, $registry, $projectTierTrusted);
 
         $hook = $hooks->hook(HookEvent::PreToolUse->value, PermissionGateHook::NAME);
         if (!$hook instanceof PermissionGateHook) {
@@ -224,6 +262,25 @@ final readonly class ActiveSkillEffects
         }
 
         return null;
+    }
+
+    /**
+     * Whether an invoked skill's `allowed-tools` may pre-approve anything.
+     *
+     * Built-in and user tiers are files the operator wrote, so their lists are
+     * honoured however the skill was invoked. The project tier is the
+     * repository's own — gated on the same grant that lets a committed command
+     * file shell out, because a pre-approval is that authority in frontmatter
+     * form. The test is a WHITELIST of the operator's own tiers rather than
+     * `!== Project` so that a future {@see SkillOrigin} case starts GATED: an
+     * added tier must be admitted to the grant deliberately, which is the only
+     * direction that cannot leak authority.
+     */
+    private static function preApprovalsHonoured(Skill $skill, bool $projectTierTrusted): bool
+    {
+        return $projectTierTrusted
+            || $skill->origin === SkillOrigin::BuiltIn
+            || $skill->origin === SkillOrigin::User;
     }
 
     /**

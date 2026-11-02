@@ -12,7 +12,9 @@ namespace SugarCraft\Code\Skills;
  * The two are independent axes: `~/.claude/skills/x` is a user-tier skill in a
  * foreign format, `<repo>/.candy-code/skills/x` a project-tier skill in the
  * native one. The tier is what matters for trust — a project skill arrived
- * with whatever repository was cloned, with no trust gate — so it is the half
+ * with whatever repository was cloned, so it LOADS ungated but its
+ * `allowed-tools` pre-approves nothing until the root is trusted (MAJOR-6,
+ * {@see ActiveSkillEffects::preApprovalsHonoured()}) — so it is also the half
  * the system-prompt listing badges (audit 15d-02, fix step 3): every listing
  * line opens with a tag such as `[project]` or `[user, foreign: claude]`, so a
  * one-line repository description cannot pass for something the operator or
@@ -41,7 +43,9 @@ enum SkillOrigin: string
      * one an embedder registers directly. Unknown provenance is labelled with
      * the least-trusted tier on purpose: the badge exists to stop a line from
      * being over-trusted, and an unlabelled origin claiming `user` or
-     * `built-in` would be the one wrong answer that does harm.
+     * `built-in` would be the one wrong answer that does harm — the same
+     * reasoning makes this the tier whose `allowed-tools` are withheld until
+     * the root is trusted ({@see ActiveSkillEffects}).
      */
     case Project = 'project';
 

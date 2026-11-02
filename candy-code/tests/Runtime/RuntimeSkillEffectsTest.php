@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Runtime;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\App\App;
+use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Runtime;
 use SugarCraft\Code\Context\TurnContextBlock;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
@@ -21,7 +22,9 @@ use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Skills\Skill;
+use SugarCraft\Code\Skills\SkillOrigin;
 use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Tools\ToolCall;
 
 /**
@@ -34,9 +37,43 @@ use SugarCraft\Code\Tools\ToolCall;
  * following step onward without persistent state (forked children re-derive
  * from their copied messages). Absent a declaration the session model and
  * the preset effort stand.
+ *
+ * MAJOR-6 added the second half of that sentence: a project-tier skill's
+ * `allowed-tools` are withheld until the root carries the `commands` grant,
+ * while its `disallowed-tools`, `model` and `effort` ride regardless. Every
+ * test here therefore runs on a root that IS trusted — the grant is written
+ * into the sandbox config in {@see setUp()}, so the pre-existing assertions
+ * measure the legacy (honoured) behavior byte-for-byte — and the two door
+ * tests at the end move the process to a second, ungranted home, because the
+ * trust answer freezes per config path for the life of a process (that is the
+ * design: a session cannot widen itself).
  */
 final class RuntimeSkillEffectsTest extends TestCase
 {
+    use HomeSandboxTrait;
+
+    private string $tmpDir;
+    private string $projectRoot;
+
+    protected function setUp(): void
+    {
+        // Lane-cf law: the sandbox is installed before anything else touches
+        // the environment, so restoreHomeSandbox() puts HOME back as found it.
+        $this->tmpDir = \sys_get_temp_dir() . '/crush_rse_' . \uniqid('', true);
+        $this->projectRoot = $this->tmpDir . '/project';
+        @mkdir($this->projectRoot . '/.candy-code', 0700, true);
+        $this->useHomeSandbox($this->tmpDir . '/home-trusted');
+        $this->grantCommandsOn('home-trusted');
+    }
+
+    protected function tearDown(): void
+    {
+        $this->restoreHomeSandbox();
+        $dir = $this->tmpDir;
+        $this->tmpDir = '';
+        self::removeTree($dir);
+    }
+
     public function testASkillInvokedOnTheTurnRewritesTheNextRequestAndFeedsTheGate(): void
     {
         $captured = null;
@@ -166,6 +203,147 @@ final class RuntimeSkillEffectsTest extends TestCase
         self::assertCount(2, self::chainGate($hooks)->turnAllowRules(), 'the gate must carry the skill allow list');
     }
 
+    // ── The MAJOR-6 trust door, measured through the production call site ──
+
+    /**
+     * THE UNTRUSTED POLARITY, end to end: the same roster, the same Skill call,
+     * the same step loop — the only difference is that the operator's config
+     * grants this root nothing. The chain gate must not even be swapped: with
+     * the pre-approval withheld this skill contributes no rule at all, so the
+     * turn runs byte-identically to a turn on which no skill ran.
+     */
+    public function testAnUntrustedProjectRootWithholdsThePreApprovalEntirely(): void
+    {
+        // A second home, not an edited one: the trust answer freezes per config
+        // path for the life of the process, so widening or narrowing a grant
+        // mid-session is not a thing this code can observe (by design).
+        $this->useHomeSandbox($this->tmpDir . '/home-untrusted');
+
+        $provider = $this->provider();
+        $hooks = $this->hooks($gate = new PermissionGate(PermissionMode::Default));
+        $runtime = new Runtime($provider, $hooks);
+        $app = $this->app($provider, [$this->projectPreApprover()], [
+            new UserMessage('do the thing'),
+            new AssistantMessage('started', [new ToolCall('c1', 'Skill', ['name' => 'make-runner'])]),
+            new ToolResultMessage('c1', 'loaded'),
+        ]);
+
+        self::assertFalse(
+            Bootstrap::projectCommandShellIsTrusted($this->projectRoot),
+            'the fixture must be measuring a root the config does not trust',
+        );
+
+        $runtime->run($app)->rewind();
+
+        self::assertSame($gate, self::chainGate($hooks), 'nothing to carry must not swap the chain gate');
+        self::assertFalse(self::chainGate($hooks)->hasTurnGrants(), 'the withheld allow list must reach no gate');
+    }
+
+    /**
+     * THE SPLIT THE DOOR LEAVES OPEN: the same untrusted root still gets the
+     * skill's refusal list, model and effort — a repository-authored skill may
+     * make the session more careful, never less. {@see setUp()} arms the grant,
+     * so this test moves to the ungranted home itself rather than inheriting it.
+     */
+    public function testAnUntrustedProjectRootStillCarriesRefusalsModelAndEffort(): void
+    {
+        $this->useHomeSandbox($this->tmpDir . '/home-untrusted-2');
+
+        $captured = null;
+        $provider = $this->provider();
+        $hooks = $this->hooks($gate = new PermissionGate(PermissionMode::Default));
+        $runtime = new Runtime($provider, $hooks);
+        $skill = new Skill(
+            name: 'php-wizard',
+            description: 'A wizard for PHP work',
+            userInvocable: true,
+            disableModelInvocation: false,
+            allowedTools: 'Read, Grep',
+            disallowedTools: 'WebFetch',
+            model: 'opus-x',
+            effort: 'high',
+            context: 'thread',
+            paths: [],
+            content: 'wizard body',
+            sourcePath: $this->projectRoot . '/.candy-code/skills/php-wizard/SKILL.md',
+        );
+        $app = $this->app($provider, [$skill], [
+            new UserMessage('do the thing'),
+            new AssistantMessage('started', [new ToolCall('c1', 'Skill', ['name' => 'php-wizard'])]),
+            new ToolResultMessage('c1', 'loaded'),
+        ]);
+
+        $runtime->run($app, onRequest: static function (CompleteRequest $request) use (&$captured): void {
+            $captured = $request;
+        })->rewind();
+
+        self::assertSame('opus-x', $captured?->model, 'the declared model rides an untrusted root');
+        self::assertSame('high', $captured?->reasoningEffort, 'the declared effort rides it too');
+        $chainGate = self::chainGate($hooks);
+        self::assertNotSame($gate, $chainGate, 'the refusal list is not withheld, so the gate is swapped');
+        self::assertSame([], $chainGate->turnAllowRules(), 'while the pre-approval is');
+        self::assertCount(1, $chainGate->turnDenyRules(), 'the refusal the skill declared still binds the turn');
+    }
+
+    /**
+     * A skill that pre-approves and declares nothing else: the shape that makes
+     * the withheld case collapse to "no effect at all" rather than "smaller".
+     */
+    private function projectPreApprover(): Skill
+    {
+        return new Skill(
+            name: 'make-runner',
+            description: 'A skill a repository shipped',
+            userInvocable: true,
+            disableModelInvocation: false,
+            allowedTools: 'Bash(make)',
+            disallowedTools: null,
+            model: null,
+            effort: null,
+            context: 'thread',
+            paths: [],
+            content: 'run make',
+            sourcePath: $this->projectRoot . '/.candy-code/skills/make-runner/SKILL.md',
+        );
+    }
+
+    /**
+     * Grant {@see $projectRoot} the `commands` trust in the sandbox home whose
+     * leaf directory is $homeLeaf — the same list the `` !`cmd` `` forms read.
+     */
+    private function grantCommandsOn(string $homeLeaf): void
+    {
+        $configDir = $this->tmpDir . '/' . $homeLeaf . '/.candy-code';
+        @mkdir($configDir, 0700, true);
+        $canonical = realpath($this->projectRoot);
+        file_put_contents(
+            $configDir . '/config.json',
+            json_encode(['trustedProjectCommands' => [$canonical === false ? $this->projectRoot : $canonical]]),
+        );
+    }
+
+    private static function removeTree(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        $items = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+
+        foreach ($items as $item) {
+            if ($item->isDir()) {
+                @rmdir($item->getPathname());
+            } else {
+                @unlink($item->getPathname());
+            }
+        }
+
+        @rmdir($dir);
+    }
+
     private function wizard(): Skill
     {
         return new Skill(
@@ -204,6 +382,7 @@ final class RuntimeSkillEffectsTest extends TestCase
         $registry->register($skills);
 
         return App::new($provider, 'gpt-4')
+            ->withRoot($this->projectRoot)
             ->withTools([])
             ->withMessages($messages)
             ->withAvailableSkills($registry);

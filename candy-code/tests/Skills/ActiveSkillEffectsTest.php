@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tests\Skills;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Context\TurnContextBlock;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
@@ -17,6 +18,7 @@ use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Skills\ActiveSkillEffects;
 use SugarCraft\Code\Skills\Skill;
+use SugarCraft\Code\Skills\SkillOrigin;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Tools\ToolCall as ProviderToolCall;
 
@@ -29,8 +31,9 @@ use SugarCraft\Code\Tools\ToolCall as ProviderToolCall;
  * consume what {@see ActiveSkillEffects::derive()} lists. So these pins are
  * about WHICH skills are in the turn (slice boundary, failed calls, asset
  * reads, the re-injected roster), how their tool lists become rules (as
- * written, Claude Code's own grammar, prefix dialect included), and which
- * model/effort wins when several skills spoke.
+ * written, Claude Code's own grammar, prefix dialect included), which
+ * model/effort wins when several skills spoke, and — since MAJOR-6 — which
+ * TIER is allowed to pre-approve anything at all.
  *
  * @see ActiveSkillEffects
  */
@@ -76,6 +79,38 @@ final class ActiveSkillEffectsTest extends TestCase
         );
     }
 
+    /**
+     * A skill carrying ONLY a pre-approval — the shape a repository would ship
+     * to make its own build commands unasked (MAJOR-6).
+     */
+    private static function preApprover(string $name = 'make-runner'): Skill
+    {
+        return new Skill(
+            name: $name,
+            description: 'drives the build',
+            userInvocable: true,
+            disableModelInvocation: false,
+            allowedTools: 'Bash(make)',
+            disallowedTools: null,
+            model: null,
+            effort: null,
+            context: 'thread',
+            paths: [],
+            content: 'body',
+            sourcePath: '/nowhere/SKILL.md',
+        );
+    }
+
+    /**
+     * @param list<\SugarCraft\Code\Permissions\PermissionRule> $rules
+     *
+     * @return list<string>
+     */
+    private static function patterns(array $rules): array
+    {
+        return array_map(static fn ($rule) => $rule->pattern, $rules);
+    }
+
     private static function registry(Skill ...$skills): SkillRegistry
     {
         $registry = new SkillRegistry();
@@ -114,6 +149,7 @@ final class ActiveSkillEffectsTest extends TestCase
         $effects = ActiveSkillEffects::derive(
             self::invocation([['name' => 'php-wizard', 'args' => 'audit this']]),
             self::registry(self::wizard()),
+        projectTierTrusted: true,
         );
 
         $this->assertFalse($effects->isEmpty());
@@ -131,6 +167,7 @@ final class ActiveSkillEffectsTest extends TestCase
         $effects = ActiveSkillEffects::derive(
             self::invocation([['name' => 'quiet']]),
             self::registry(self::plain()),
+        projectTierTrusted: true,
         );
 
         $this->assertTrue($effects->isEmpty());
@@ -145,7 +182,7 @@ final class ActiveSkillEffectsTest extends TestCase
         $messages = self::invocation([['name' => 'php-wizard']]);
         $messages[] = new UserMessage('now do something else');
 
-        $this->assertTrue(ActiveSkillEffects::derive($messages, self::registry(self::wizard()))->isEmpty());
+        $this->assertTrue(ActiveSkillEffects::derive($messages, self::registry(self::wizard()), projectTierTrusted: true)->isEmpty());
     }
 
     public function testATurnContextRowIsNotABoundary(): void
@@ -156,7 +193,7 @@ final class ActiveSkillEffectsTest extends TestCase
         $messages = self::invocation([['name' => 'php-wizard']]);
         $messages[] = TurnContextBlock::new()->withInvokedSkills(['php-wizard'])->message();
 
-        $effects = ActiveSkillEffects::derive($messages, self::registry(self::wizard()));
+        $effects = ActiveSkillEffects::derive($messages, self::registry(self::wizard()), projectTierTrusted: true);
         $this->assertSame('opus-x', $effects->model);
     }
 
@@ -166,14 +203,14 @@ final class ActiveSkillEffectsTest extends TestCase
         // so nothing was promised.
         $messages = self::invocation([['name' => 'php-wizard']], failLast: true);
 
-        $this->assertTrue(ActiveSkillEffects::derive($messages, self::registry(self::wizard()))->isEmpty());
+        $this->assertTrue(ActiveSkillEffects::derive($messages, self::registry(self::wizard()), projectTierTrusted: true)->isEmpty());
     }
 
     public function testAnAssetReadIsNotASkillInvocation(): void
     {
         $messages = self::invocation([['name' => 'php-wizard', 'asset' => 'scripts/one.sh']]);
 
-        $this->assertTrue(ActiveSkillEffects::derive($messages, self::registry(self::wizard()))->isEmpty());
+        $this->assertTrue(ActiveSkillEffects::derive($messages, self::registry(self::wizard()), projectTierTrusted: true)->isEmpty());
     }
 
     public function testTheReinjectedRosterCountsAsInvoked(): void
@@ -185,7 +222,7 @@ final class ActiveSkillEffectsTest extends TestCase
             TurnContextBlock::new()->withInvokedSkills(['php-wizard'])->message(),
         ];
 
-        $effects = ActiveSkillEffects::derive($messages, self::registry(self::wizard()));
+        $effects = ActiveSkillEffects::derive($messages, self::registry(self::wizard()), projectTierTrusted: true);
         $this->assertSame(['Read', 'Grep'], array_map(static fn ($r) => $r->pattern, $effects->allowRules));
         $this->assertSame('opus-x', $effects->model);
     }
@@ -197,7 +234,7 @@ final class ActiveSkillEffectsTest extends TestCase
             ['name' => 'php-wizard'],
         ]);
 
-        $effects = ActiveSkillEffects::derive($messages, self::registry(self::wizard()));
+        $effects = ActiveSkillEffects::derive($messages, self::registry(self::wizard()), projectTierTrusted: true);
         $this->assertSame(['Read', 'Grep'], array_map(static fn ($r) => $r->pattern, $effects->allowRules));
     }
 
@@ -208,7 +245,7 @@ final class ActiveSkillEffectsTest extends TestCase
         // grant the model was promised never lands.
         $messages = self::invocation([['name' => 'php-wizard']]);
 
-        $effects = ActiveSkillEffects::derive($messages, self::registry(self::wizard('acme/php-wizard')));
+        $effects = ActiveSkillEffects::derive($messages, self::registry(self::wizard('acme/php-wizard')), projectTierTrusted: true);
         $this->assertSame('opus-x', $effects->model);
         $this->assertSame(['Read', 'Grep'], array_map(static fn ($r) => $r->pattern, $effects->allowRules));
     }
@@ -233,6 +270,7 @@ final class ActiveSkillEffectsTest extends TestCase
         $effects = ActiveSkillEffects::derive(
             self::invocation([['name' => 'composer-wizard']]),
             self::registry($composer),
+        projectTierTrusted: true,
         );
 
         // R-EXT-1 honours the list AS WRITTEN, and 'as written' includes
@@ -264,6 +302,7 @@ final class ActiveSkillEffectsTest extends TestCase
         $effects = ActiveSkillEffects::derive(
             self::invocation([['name' => 'broken']]),
             self::registry($broken),
+        projectTierTrusted: true,
         );
 
         $this->assertSame(['Read'], array_map(static fn ($r) => $r->pattern, $effects->allowRules));
@@ -285,6 +324,7 @@ final class ActiveSkillEffectsTest extends TestCase
         $effects = ActiveSkillEffects::derive(
             self::invocation([['name' => 'early'], ['name' => 'late']]),
             self::registry($early, $late),
+        projectTierTrusted: true,
         );
 
         // 'late' invoked after 'early': its model wins, but it declared no
@@ -299,7 +339,7 @@ final class ActiveSkillEffectsTest extends TestCase
     {
         // Defensive: the App seam always carries a registry, but a null one
         // must answer none() rather than reach for names it cannot resolve.
-        $this->assertTrue(ActiveSkillEffects::derive(self::invocation([['name' => 'php-wizard']]), null)->isEmpty());
+        $this->assertTrue(ActiveSkillEffects::derive(self::invocation([['name' => 'php-wizard']]), null, projectTierTrusted: true)->isEmpty());
     }
 
     // ------------------------------------------------------------------
@@ -324,6 +364,7 @@ final class ActiveSkillEffectsTest extends TestCase
             $hooks,
             self::invocation([['name' => 'php-wizard']]),
             self::registry(self::wizard()),
+        projectTierTrusted: true,
         );
         $this->assertSame('opus-x', $effects->model);
 
@@ -336,7 +377,7 @@ final class ActiveSkillEffectsTest extends TestCase
         // A later step whose turn has no skill calls must CLEAR the grants —
         // stale grants surviving into a fresh turn is the whole leak this
         // class exists to prevent.
-        ActiveSkillEffects::apply($hooks, [new UserMessage('fresh turn')], self::registry(self::wizard()));
+        ActiveSkillEffects::apply($hooks, [new UserMessage('fresh turn')], self::registry(self::wizard()), projectTierTrusted: true);
         $cleared = $this->chain($hooks);
         $this->assertTrue($cleared->hasTurnGrants() === false);
         $this->assertSame([], $cleared->turnAllowRules());
@@ -349,7 +390,7 @@ final class ActiveSkillEffectsTest extends TestCase
         $base = new PermissionGate(PermissionMode::Default);
         $hooks->register(new PermissionGateHook($base));
 
-        $effects = ActiveSkillEffects::apply($hooks, [new UserMessage('just talking')], self::registry());
+        $effects = ActiveSkillEffects::apply($hooks, [new UserMessage('just talking')], self::registry(), projectTierTrusted: true);
 
         $this->assertTrue($effects->isEmpty());
         $this->assertSame($base, $this->chain($hooks), 'an empty turn must not churn the chain');
@@ -366,10 +407,219 @@ final class ActiveSkillEffectsTest extends TestCase
             $hooks,
             self::invocation([['name' => 'php-wizard']]),
             self::registry(self::wizard()),
+        projectTierTrusted: true,
         );
 
         $this->assertSame('opus-x', $effects->model);
         $this->assertSame('high', $effects->effort);
         $this->assertNull($hooks->hook(HookEvent::PreToolUse->value, PermissionGateHook::NAME));
+    }
+
+    // ------------------------------------------------------------------
+    // MAJOR-6: the trust door. A PROJECT-tier skill pre-approves nothing until
+    // the repository is the one the operator said yes to; every other effect of
+    // the same frontmatter rides regardless.
+    // ------------------------------------------------------------------
+
+    public function testAnUntrustedProjectsSkillPreApprovesNothing(): void
+    {
+        // The security pin: the wizard is origin Project (Skill's default tier),
+        // so with the door shut its `allowed-tools` contributes ZERO Allow
+        // rules — the model still gets asked about Read and Grep.
+        $effects = ActiveSkillEffects::derive(
+            self::invocation([['name' => 'php-wizard']]),
+            self::registry(self::wizard()),
+            projectTierTrusted: false,
+        );
+
+        $this->assertSame([], self::patterns($effects->allowRules));
+        $this->assertSame(SkillOrigin::Project, self::wizard()->origin);
+    }
+
+    public function testTheDoorHoldsItsRefusalsModelAndEffortForAnUntrustedProject(): void
+    {
+        // The gate is one-directional: what a repository can do WITHOUT being
+        // trusted is refuse tools and name a model, never widen itself. Both
+        // halves of the wizard's non-pre-approval effects must survive.
+        $effects = ActiveSkillEffects::derive(
+            self::invocation([['name' => 'php-wizard']]),
+            self::registry(self::wizard()),
+            projectTierTrusted: false,
+        );
+
+        $this->assertSame(['WebFetch'], self::patterns($effects->denyRules));
+        $this->assertSame('opus-x', $effects->model);
+        $this->assertSame('high', $effects->effort);
+        $this->assertFalse($effects->isEmpty(), 'a withheld pre-approval must not read as an empty turn');
+    }
+
+    public function testATrustedProjectsSkillPreApprovesExactlyAsLegacy(): void
+    {
+        // The byte-identical-legacy pin: the SAME turn through the SAME registry
+        // with the door open reproduces the pre-MAJOR-6 answers, in order.
+        $effects = ActiveSkillEffects::derive(
+            self::invocation([['name' => 'php-wizard']]),
+            self::registry(self::wizard()),
+            projectTierTrusted: true,
+        );
+
+        $this->assertSame(['Read', 'Grep'], self::patterns($effects->allowRules));
+        $this->assertSame(['WebFetch'], self::patterns($effects->denyRules));
+    }
+
+    /**
+     * The tiers the operator wrote — never the repository — so the door does
+     * not apply to them. These two legs are what a "withhold everything"
+     * mutation trips on; the legs above are what a "widen to every tier" or a
+     * neutered door trips on.
+     */
+    public static function operatorOwnedTiers(): array
+    {
+        return [
+            'the shipped built-in' => [SkillOrigin::BuiltIn],
+            "the operator's home tree" => [SkillOrigin::User],
+        ];
+    }
+
+    /**
+     * @param SkillOrigin $origin
+     */
+    #[DataProvider('operatorOwnedTiers')]
+    public function testAnOperatorOwnedTierPreApprovesInAnUntrustedProject(SkillOrigin $origin): void
+    {
+        $effects = ActiveSkillEffects::derive(
+            self::invocation([['name' => 'php-wizard']]),
+            self::registry(self::wizard()->withOrigin($origin)),
+            projectTierTrusted: false,
+        );
+
+        $this->assertSame(['Read', 'Grep'], self::patterns($effects->allowRules));
+    }
+
+    public function testAProjectTierBundleSkillIsGatedByTheSameDoor(): void
+    {
+        // ForeignSkillDiscovery::bundleTiers() labels a `project` bundle's
+        // skills SkillOrigin::Project, so the bundle shape needs no second
+        // rule — but it needs THIS one, since a vendored bundle is exactly the
+        // content a cloned repository ships.
+        $bundled = self::preApprover('acme/make-runner')->withOrigin(SkillOrigin::Project);
+
+        $untrusted = ActiveSkillEffects::derive(
+            self::invocation([['name' => 'acme/make-runner']]),
+            self::registry($bundled),
+            projectTierTrusted: false,
+        );
+        $this->assertSame([], self::patterns($untrusted->allowRules));
+        $this->assertTrue($untrusted->isEmpty());
+
+        $trusted = ActiveSkillEffects::derive(
+            self::invocation([['name' => 'acme/make-runner']]),
+            self::registry($bundled),
+            projectTierTrusted: true,
+        );
+        $this->assertSame(['Bash(make)'], self::patterns($trusted->allowRules));
+    }
+
+    public function testAnUntrustedPreApprovalLeavesTheChainGateUntouched(): void
+    {
+        // Exec-level consequence, not just the derived list: with the door shut
+        // a pre-approval-only skill must not churn the hook chain at all — the
+        // step runs on the launch's own gate, which is what keeps today's
+        // refusal prompts byte-identical for an untrusted checkout.
+        $hooks = new HookManager(new HookRegistry());
+        $base = new PermissionGate(PermissionMode::Default);
+        $hooks->register(new PermissionGateHook($base));
+
+        ActiveSkillEffects::apply(
+            $hooks,
+            self::invocation([['name' => 'make-runner']]),
+            self::registry(self::preApprover()),
+            projectTierTrusted: false,
+        );
+
+        $this->assertSame($base, $this->chain($hooks));
+        $this->assertFalse($this->chain($hooks)->hasTurnGrants());
+    }
+
+    public function testATrustedPreApprovalReachesTheGateWhereTheUntrustedOneStops(): void
+    {
+        // The other side of the same fixture pair: open the door and the Bash
+        // pre-approval lands on the chain gate. Read through the gate itself so
+        // a carrier-side bug cannot hide behind derive().
+        $hooks = new HookManager(new HookRegistry());
+        $base = new PermissionGate(PermissionMode::Default);
+        $hooks->register(new PermissionGateHook($base));
+
+        ActiveSkillEffects::apply(
+            $hooks,
+            self::invocation([['name' => 'make-runner']]),
+            self::registry(self::preApprover()),
+            projectTierTrusted: true,
+        );
+
+        $carried = $this->chain($hooks);
+        $this->assertNotSame($base, $carried);
+        $this->assertSame(['Bash(make)'], self::patterns($carried->turnAllowRules()));
+    }
+
+    public function testBothProductionCallSitesHandTheDoorTheirTrustAnswer(): void
+    {
+        // The argument is required with no default, which is only a design if
+        // the two live callers actually pass the real answer rather than a
+        // literal. This scans them: a future edit that drops the argument (or
+        // starts hard-coding true) reddens here instead of silently widening
+        // the grant, and there is no third site because derive()/apply() have
+        // no other consumers in src/.
+        $sources = [
+            'Runtime' => (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Runtime.php'),
+            'Chat' => (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Chat.php'),
+        ];
+
+        foreach ($sources as $file => $source) {
+            $site = preg_match('/ActiveSkillEffects::apply\(([^;]*)\);/s', $source, $match);
+            self::assertSame(1, $site, $file . ': the step/dispatch site must call apply()');
+            self::assertStringContainsString(
+                'projectTierTrusted',
+                $match[1],
+                $file . ': the apply() call must name the trust argument',
+            );
+        }
+
+        self::assertStringContainsString(
+            'Bootstrap::projectCommandShellIsTrusted(self::projectRoot($app))',
+            $sources['Runtime'],
+            'Runtime must ask the same trust predicate the launch, the dialog and CommandLoader ask',
+        );
+        self::assertStringContainsString(
+            'projectTierTrusted: $this->projectCommandsTrusted',
+            $sources['Chat'],
+            'Chat must thread the bool the launch handed it, not re-ask mid-session',
+        );
+    }
+
+    public function testTheTrustDoorIsTheCommandsGrantNotAFifthKey(): void
+    {
+        // Provenance of the design, pinned because it is a decision someone
+        // else will be tempted to "improve": the door reads the `commands`
+        // grant, so no `trustedProjectSkills` key may appear in src/ without
+        // the trust dialog, the docs table and TrustKeyDocumentationDriftTest
+        // being walked first (that guard is the real census; this asserts only
+        // that this lane did not mint the key).
+        $keys = [];
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(\dirname(__DIR__, 2) . '/src')) as $file) {
+            if (!$file->isFile() || $file->getExtension() !== 'php') {
+                continue;
+            }
+            preg_match_all('/\'(trustedProject[A-Za-z0-9_]+)\'/', (string) file_get_contents($file->getPathname()), $found);
+            $keys = array_merge($keys, $found[1]);
+        }
+
+        $this->assertNotContains(
+            'trustedProjectSkills',
+            $keys,
+            'this lane took the existing `commands` grant rather than minting a fifth key; '
+                . 'a real fifth grant means the trust dialog, the docs table and '
+                . 'TrustKeyDocumentationDriftTest walk together',
+        );
     }
 }
