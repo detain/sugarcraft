@@ -326,10 +326,12 @@ final class MenuBar
      * spelling, the focused pane's bare label, and gone. Null $cols — a
      * caller measuring the bar on its own — is the full spelling. In the
      * marked twin the line carries the {@see PANES_DOOR_ZONE} click zone.
-     * The per-tab visual states the strip used to carry (focused
-     * bold-underlined, docked full foreground, undocked muted) are told now
-     * by the Panes rows' check marks and the cascade's own row highlight —
-     * nothing lost, only moved.
+     * The per-tab visual states the strip used to carry survive only in
+     * part: the docked tell lives on as the Panes rows' check marks (docked
+     * ✓, undocked blank), and the focused pane is NAMED by this indicator
+     * rather than painted under a tab — but the old bold-underlined /
+     * full-foreground / muted tints themselves were dropped. The cascade's
+     * row highlight marks the menu cursor, which is not a pane state.
      */
     private static function indicator(App $a, Theme $theme, bool $marked, ?int $cols): string
     {

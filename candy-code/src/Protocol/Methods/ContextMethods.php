@@ -121,7 +121,7 @@ final class ContextMethods
      * walk, because the listing already carries the loader's containment), and
      * the personal file is spelled through the sentinel the browser can
      * resolve even when it does not exist yet, mirroring the TUI's
-     * `/instructions`-open laws ({@see \SugarCraft\Code\Cli\Chat}). Containment
+     * `/instructions`-open laws ({@see \SugarCraft\Code\Chat}). Containment
      * is re-checked at write time through the one routed compare
      * ({@see ContainedPath}) so a listing that raced into a symlink cannot
      * write outside its tier's boundary. The size cap is the loader's own

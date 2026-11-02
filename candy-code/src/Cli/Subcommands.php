@@ -3355,12 +3355,17 @@ final class Subcommands
      * The root is the launch's own: ArgvParser has already refused a `--root`
      * that does not exist, and the unset case is the working directory — the
      * same resolution the `-p` path uses for its own root-bearing calls. The
-     * gate is the headless-surface gate: `Bootstrap::permissionGate()` with
-     * its defaults, the approval floor a spawned editor client will never be
-     * asked past in a terminal it does not own, and the hook chain is built
-     * AROUND it exactly as the host prescribes — {@see Bootstrap::hooks()}
+     * gate is the background-surface gate: `Bootstrap::permissionGate()`
+     * with its defaults answers on the surface a daemon launched from a
+     * terminal it does not own uses — with no mode named in the config that
+     * is bypass, so the gate is deliberately NOT an approval floor here;
+     * the floor is the read-only roster, the deny rules, and the hook chain
+     * built AROUND it exactly as the host prescribes — {@see Bootstrap::hooks()}
      * installs the gate last, so audit, confirm-rm and protect-files still
-     * run ahead of it. The roster is {@see McpServeRoster::build()}'s own
+     * run ahead of it. A mode the config does spell is honoured, and an ask
+     * it config'd into existence is refused fail-closed by the host
+     * ({@see McpServeHost}) — nothing can be answered in this terminal.
+     * The roster is {@see McpServeRoster::build()}'s own
      * output — the read-only four, classified, never a hand-list widened at
      * this call site (r1 NIT-2). The host answers until stdin closes and
      * returns 0 itself; nothing here duplicates its framing or touches

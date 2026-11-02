@@ -667,13 +667,15 @@ What each one is, and what its isolation flag actually buys:
 
 Caveats, stated because a browser server makes every rule above load-bearing:
 
-- **There is no jail around these children.** `bashSandbox` wraps `Bash`
-  calls, and nothing else: a `stdio` server is a plain spawn of the pinned
+- **A jail around these children is opt-in, not default.** "Jailed
+  servers" above confines `stdio` servers once `sandboxScope` names `mcp`
+  (and `bashSandbox` is not off) — but a stock config leaves `sandboxScope`
+  empty, so by default a `stdio` server is still a plain spawn of the pinned
   argv, started at the tier's directory ("Where a `stdio` server runs"
-  above). A browser server reaches any URL its page is pointed at and any
-  profile it is given, even while your Bash calls run sandboxed. Until a
-  server-side jail exists (C-TOOL-4.e), deciding to start the server *is*
-  the security decision, which is exactly why the pins above are exact.
+  above). And the jail confines the filesystem, not the browser: a browser
+  server reaches any URL its page is pointed at and any profile it is
+  given, jailed or not. Deciding to start the server *is* the security
+  decision, which is exactly why the pins above are exact.
 - **Every bridged tool counts as a write.** The permission gate classifies an
   `mcp__<server>__<tool>` call as a write unless the server declared the tool
   read-only (`PermissionGate::isWriteTool()` — the hint is the server's own
@@ -1330,7 +1332,9 @@ in `MCP\Serve\McpServeHost`, one JSON-RPC frame per line in and out until stdin
 closes. It answers `initialize` and `tools/list` with the roster
 `MCP\Serve\McpServeRoster` builds — Read, Glob, Grep, Ls, RepoMap, the read-only
 tools classified for this purpose — and every call runs jailed to the launch's
-root, through the same permission gate a headless turn answers to and the same
+root, through the same permission gate a background daemon answers to (its
+bypass default unless the config names a mode, so the gate is not the floor
+here) and the same
 `PreToolUse` hook chain the TUI builds, so the containment rules the git server
 spells out below are not the only floor under it. A client spawns it the way it
 spawns any stdio server:

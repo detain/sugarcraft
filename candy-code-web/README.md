@@ -128,7 +128,7 @@ documents the protocol and the UI).
   tries make up the ladder; when it runs out the tab stops retrying and says
   the server is gone — the same verdict `candy-code attach` reaches after its
   exhausted ladder (SERVER.md) — with *Try again* to spend a fresh one.
-- **Side panels** (the *panels* button — eleven, per the `PANELS` registry in
+- **Side panels** (the *panels* button — twelve, per the `PANELS` registry in
   `src-web/stores/agents/panels.ts`): **Agents** — the
   session's delegated runs as a live tree, also under each `Task` card, each
   opening into an agent view with the run's own transcript, a box to message it
@@ -249,16 +249,18 @@ src-web/
               reducer in reducer.ts), approvals, layout, settings (theme,
               notifications), settings/ (the settings form: fields,
               serverSettings), agents/ (agent tree, todos, background,
-              workflows, memory, the eleven-panel drawer state)
+              workflows, memory, the twelve-panel drawer state)
   components/ SessionSidebar, Transcript (virtualised), TranscriptItem,
               MessageMarkdown, ReasoningFold, ToolCard, DiffView,
               PermissionCard, Composer, QueueStrip, StatusBar,
               ConnectionBanner; grid/ (tabs, tiles), approvals/ (drawer),
               settings/ (SettingsView, fields, preview), agents/ (tree,
               agent view), panels/ (the side-panel drawer — todo, background,
-              workflows, memory, rules, changes, context, generate — and the
-              command palette; the Agents and Catalog views live under agents/)
-  lib/        markdown, diff, format, highlight (lazy)
+              workflows, memory, rules, changes, files, context, generate,
+              usage — and the command palette; the Agents and Catalog views
+              live under agents/)
+  lib/        markdown, diff, format, highlight (lazy for markdown,
+              eager for DiffView)
   views/      DashboardView, SessionView, LoginView
 ```
 

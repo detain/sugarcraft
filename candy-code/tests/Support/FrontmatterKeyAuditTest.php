@@ -86,6 +86,16 @@ final class FrontmatterKeyAuditTest extends TestCase
         self::assertSame([], FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::AGENT, ['isolation' => 'worktree']));
     }
 
+    public function testModeIsLiveSoACycleClaimIsNotReported(): void
+    {
+        // C-AGT-4.b: the Alt+A primary-agent cycle and the served web roster
+        // present on `mode`, so it left the inert map — declaring it is acted
+        // on, and no launch may call it "not acted on" any more.
+        self::assertArrayNotHasKey('mode', FrontmatterKeyAudit::INERT[FrontmatterKeyAudit::AGENT]);
+        self::assertContains('mode', FrontmatterKeyAudit::KNOWN[FrontmatterKeyAudit::AGENT]);
+        self::assertSame([], FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::AGENT, ['mode' => 'primary']));
+    }
+
     public function testForkContextAndAgentAreLiveSoNoSkillKeyIsInert(): void
     {
         // C-EXT-2.c: SkillTool gained the forked-run path, so `context` left

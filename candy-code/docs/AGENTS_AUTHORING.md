@@ -242,7 +242,7 @@ Reaching the roster is not the same as changing what a delegated run does.
 `Task` runs every sub-agent on the session's provider and under the session's
 permission gate (`TaskTool`); its model and reasoning effort are the agent's,
 its permission mode can only narrow the session's, and every field below
-except `mode` reaches a live path:
+reaches a live path:
 
 | Field | Effect today |
 |---|---|
@@ -256,14 +256,14 @@ except `mode` reaches a live path:
 | `background` | Live: runs the delegation as a background session; the call's own `background` wins (see [What you can actually do with a preset today](#what-you-can-actually-do-with-a-preset-today)). |
 | `isolation` | Live: `worktree` runs the delegation (and a `/bg` session run as this agent) in a git worktree of its own; see [Teams and worktrees](#teams-and-worktrees). |
 | `color` | Live: the agents strip, the Agent View header and activity line, and the dashboard row paint a run whose preset declared a colour this theme renders legibly. |
-| `mode` | **Inert (C-AGT-4.a)**: which presets the primary-agent cycle offers — `primary`, `subagent`, or `all` (default when absent). Validated at read (`AgentPresetRegistry::parseAgentMode` refuses a value it cannot spell) and carried on the preset, but nothing presents on it yet; the cycle lands with C-AGT-4.b, and `FrontmatterKeyAudit::INERT` sheds the entry the step that wires it ships. |
+| `mode` | Live (C-AGT-4.b): which presets the primary-agent cycle offers — `primary`, `subagent`, or `all` (default when absent). Validated at read (`AgentPresetRegistry::parseAgentMode` refuses a value it cannot spell); Alt+A cycles only the presets whose mode faces it, and the web roster and badge honour the declared value. |
 
-As of C-AGT-4.a this table has exactly one **Inert** row:
-`mode`, whose audit entry `FrontmatterKeyAudit::INERT` carries as an empty
-notice — parsed and validated, not yet presented on.
+As of C-AGT-4.b this table has no **Inert** row: every field listed
+reaches a live path — `mode` was the last to go, with the primary-agent
+cycle and the served roster.
 `InertFrontmatterDocumentationDriftTest` pins that equality against this table
 in both directions, so a step that let a preset field go silent again would add
-its entry there and mark this row together. A preset that declares a key
+its entry there and mark its row together. A preset that declares a key
 outside this table, such as a misspelt `permisionMode`, is still loaded, and
 the launch names it in one aggregated row (stderr and transcript) with a
 did-you-mean for a near miss.
