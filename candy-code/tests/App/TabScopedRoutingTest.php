@@ -355,5 +355,14 @@ final class TabScopedRoutingTest extends TestCase
             substr_count($source, '$app->scopeForegroundCmd($chatCmd)'),
             'applyMessagePickerAction wraps the rewind command it hands back',
         );
+        // Total leg: the three per-spelling counts above each dodge a
+        // differently-spelled call, so a sixth site on a fresh receiver or
+        // variable rides all of them silently. Pin the sum — any new call
+        // site, in ANY spelling, must come through here and be adjudicated.
+        self::assertSame(
+            5,
+            substr_count($source, '->scopeForegroundCmd('),
+            'exactly five scopeForegroundCmd call sites stand in App.php; a sixth — whatever its spelling — forces adjudication of whether it too must scope to the foreground tab',
+        );
     }
 }

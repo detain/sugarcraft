@@ -26,15 +26,21 @@ namespace SugarCraft\Code\Tests\Host;
 use React\EventLoop\Loop;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Commands\CommandLoader;
+use SugarCraft\Code\Commands\CommandSpec;
+use SugarCraft\Code\Commands\McpPromptCommands;
 use SugarCraft\Code\Host\SessionHost;
 use SugarCraft\Code\Host\SessionHub;
 use SugarCraft\Code\Host\TurnTicket;
 use SugarCraft\Code\Host\WorkspaceContext;
+use SugarCraft\Code\MCP\McpClient;
+use SugarCraft\Code\MCP\McpPromptProvider;
+use SugarCraft\Code\MCP\McpServer;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ServerContext;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Session\EnhancedSessionStore;
+use SugarCraft\Code\Skills\SkillSource;
 use SugarCraft\Code\Tests\Server\Support\WireClient;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use PHPUnit\Framework\TestCase;
@@ -153,7 +159,215 @@ final class ServedProjectCommandTrustTest extends TestCase
         self::assertSame('file', $rows['notes']['source'] ?? null);
     }
 
+    // ── C-SEC-3.b on the serve path: the user-tier opt-in lists ────────
+
+    /**
+     * r9: a bundle the operator listed under `trustedBundleCommands` must
+     * carry its opt-in through the SERVED chain too — the TUI threads the
+     * same two user-tier lists into every posture call, and the serve path
+     * building them positionally-empty denied all a bundle its owner had
+     * explicitly trusted. The fork itself is the discriminator for the
+     * mustFork leg: an unthreaded list keeps the row sync (mustFork false)
+     * and the ticket answers STARTED, while the threaded list parks the
+     * expansion off-thread exactly as a native shell row does.
+     */
+    public function testAServedOptedInUserTierBundleForksAndRunsItsShellForm(): void
+    {
+        $spec = CommandSpec::new('kit:log', 'd', 'Custom', template: 'On !`printf %s twig` now.', tier: 'user', source: SkillSource::Bundle, originName: 'kit');
+        $host = $this->bundleHost($spec, ['kit'], []);
+
+        $ticket = $host->submit('/kit:log');
+
+        self::assertSame(TurnTicket::PENDING, $ticket->admitted, 'the opted-in bundle forks for the shell it may now run — the same answer the TUI gives');
+
+        $this->drain($host);
+
+        $sent = $this->servedContents($host);
+        self::assertStringContainsString('On twig now.', $sent, 'the opted-in shell form actually ran in the forked expansion');
+        self::assertStringNotContainsString('came from a plugin bundle', $sent, 'the opt-in opened the posture — the bundle sentence has no business here');
+
+        $host->release();
+    }
+
+    /**
+     * rev-r4 C-1 on the serve path: a checkout can author its own bundle
+     * manifest, so the opt-in counts a bundle row only when the row itself
+     * carries the user tier. A project-tier squat of the very name the
+     * operator listed must stay a refused posture over serve, shell never
+     * run — the trust the list carries belongs to the user's own install,
+     * not to whatever spells the same name from a clone.
+     */
+    public function testAServedProjectTierBundleSquattingAListedNameStaysRefused(): void
+    {
+        $forged = CommandSpec::new('kit:log', 'd', 'Custom', template: 'On !`printf %s twig` now.', tier: 'project', source: SkillSource::Bundle, originName: 'kit');
+        $host = $this->bundleHost($forged, ['kit'], []);
+
+        $ticket = $host->submit('/kit:log');
+
+        self::assertSame(TurnTicket::STARTED, $ticket->admitted, 'a refused squat expands inline — its shell form runs nowhere, so it has no business off-thread');
+        $this->drain($host);
+
+        $sent = $this->servedContents($host);
+        self::assertStringContainsString('came from a plugin bundle', $sent, 'the squatted name opens nothing on serve — the posture refusal rides the expansion');
+        self::assertStringNotContainsString('On twig now.', $sent, 'the squatted shell ran — the tier test narrowed nothing');
+
+        $host->release();
+    }
+
+    /**
+     * Default-off, the shipped answer is untouched: a user-tier bundle row
+     * nobody listed expands its refusal inline over serve, exactly as it did
+     * before the lists existed. This is the byte-identity arm — the fix may
+     * only ever unlock what the operator named.
+     */
+    public function testAServedBundleWithoutTheOptInStaysRefusedInline(): void
+    {
+        $spec = CommandSpec::new('kit:log', 'd', 'Custom', template: 'On !`printf %s twig` now.', tier: 'user', source: SkillSource::Bundle, originName: 'kit');
+        $host = $this->bundleHost($spec, [], []);
+
+        $ticket = $host->submit('/kit:log');
+
+        self::assertSame(TurnTicket::STARTED, $ticket->admitted, 'no opt-in, no fork — today\'s shape stands');
+        $this->drain($host);
+
+        $sent = $this->servedContents($host);
+        self::assertStringContainsString('came from a plugin bundle', $sent);
+        self::assertStringNotContainsString('On twig now.', $sent, 'an unlisted bundle must run no shell over serve');
+
+        $host->release();
+    }
+
+    /**
+     * The MCP leg, end to end through the forked expansion: the fetched
+     * body's shell form runs over serve ONLY when the operator listed the
+     * server key in `mcpPromptShell`, and the lists reach the child that
+     * does the expanding (the parked fork's directive), not just the
+     * parent's fork decision. The empty-list twin is the default-off arm.
+     */
+    public function testAServedOptedInMcpPromptRunsItsFetchedShellFormInTheChild(): void
+    {
+        $host = $this->mcpHost(['srv']);
+
+        $ticket = $host->submit('/mcp__srv__p');
+
+        self::assertSame(TurnTicket::PENDING, $ticket->admitted, 'the fetch always parks the turn, opt-in or not');
+        $this->drain($host);
+
+        $sent = $this->servedContents($host);
+        self::assertStringContainsString('head ran-here tail', $sent, 'the listed server\'s fetched shell form ran — the opt-in rode into the forked expansion');
+        self::assertStringNotContainsString('is an MCP prompt fetched from a server', $sent, 'the opt-in opened the posture — no refusal sentence here');
+
+        $host->release();
+    }
+
+    /** Default-off MCP arm: the same fetched body, the same fork, the refusal. */
+    public function testAServedMcpPromptWithoutTheOptInStaysRefused(): void
+    {
+        $host = $this->mcpHost([]);
+
+        $host->submit('/mcp__srv__p');
+        $this->drain($host);
+
+        $sent = $this->servedContents($host);
+        self::assertStringContainsString('is an MCP prompt fetched from a server', $sent, 'the child\'s directive kept today\'s posture answer with the lists empty');
+        self::assertStringNotContainsString('ran-here', $sent, 'the stranger\'s shell ran — the child expanded without the opt-in check');
+
+        $host->release();
+    }
+
     // ── harness ────────────────────────────────────────────────────────
+
+    /**
+     * A served host carrying one hand-planted command row — the loader stays
+     * out of it, so the only variables are the row's tier/stamp and the two
+     * workspace opt-in lists.
+     *
+     * @param list<string> $trustedBundleCommands
+     * @param list<string> $mcpPromptShell
+     */
+    private function bundleHost(CommandSpec $spec, array $trustedBundleCommands, array $mcpPromptShell): SessionHost
+    {
+        return SessionHost::new(
+            's',
+            WorkspaceContext::new(
+                root: $this->project,
+                sessionStore: $this->store,
+                backend: new EchoBackend(),
+                trustedBundleCommands: $trustedBundleCommands,
+                mcpPromptShell: $mcpPromptShell,
+            ),
+            history: [Message::user('hello'), Message::assistant('hi')],
+            customCommands: ['kit:log' => $spec],
+        );
+    }
+
+    /**
+     * A served host whose command map is the real launch-frozen MCP row for
+     * a server whose fetched body carries a shell form; the ONLY difference
+     * between the two arms is the workspace's `mcpPromptShell` list.
+     *
+     * @param list<string> $mcpPromptShell
+     */
+    private function mcpHost(array $mcpPromptShell): SessionHost
+    {
+        $server = new class implements McpServer, McpPromptProvider {
+            public function start(): void {}
+            public function stop(): void {}
+
+            /** @return list<array<mixed>> */
+            public function listTools(): array
+            {
+                return [];
+            }
+
+            /** @return array<mixed> */
+            public function callTool(string $toolName, array $args): array
+            {
+                return [];
+            }
+
+            /** @return list<array<mixed>> */
+            public function listPrompts(): array
+            {
+                return [['name' => 'p', 'description' => 'd']];
+            }
+
+            /** @return array<mixed> */
+            public function prompt(string $name, array $arguments = []): array
+            {
+                return ['messages' => [['role' => 'user', 'content' => ['type' => 'text', 'text' => 'head !`printf ran-%s here` tail']]]];
+            }
+        };
+
+        $client = new McpClient($this->sandbox . '/mcp-' . \bin2hex(\random_bytes(4)) . '.json', unrestricted: true);
+        (new \ReflectionProperty(McpClient::class, 'servers'))->setValue($client, ['srv' => $server]);
+        $provider = static fn (): McpClient => $client;
+
+        $placeholder = McpPromptCommands::specs($provider)['mcp__srv__p'] ?? null;
+        self::assertInstanceOf(CommandSpec::class, $placeholder);
+
+        return SessionHost::new(
+            's',
+            WorkspaceContext::new(
+                root: $this->project,
+                sessionStore: $this->store,
+                backend: new EchoBackend(),
+                mcpPromptShell: $mcpPromptShell,
+            ),
+            history: [Message::user('hello'), Message::assistant('hi')],
+            customCommands: ['mcp__srv__p' => $placeholder],
+            mcpProvider: $provider,
+        );
+    }
+
+    /** Everything the turn appended past the seeded pair, as one haystack. */
+    private function servedContents(SessionHost $host): string
+    {
+        return \implode("\n", \array_map(
+            static fn (Message $m): string => $m->content,
+            \array_slice($host->history(), 2),
+        ));
+    }
 
     /**
      * A host whose command files come from the workspace loader — the shape

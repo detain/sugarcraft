@@ -704,12 +704,14 @@ final class SessionHost
     }
 
     /**
-     * The gate this session is consented by — the same resolution
-     * {@see backend()} forks onto its turn backend: the session's own mode
-     * over the base rules when it names one, else the base gate itself.
-     * Out-of-turn side-effect surfaces (`generate.submit`) must consult
-     * this, not the bare workspace gate, or a bypass-admitted session would
-     * run tools freely in-turn yet be refused at the RPC door (R15 MAJOR-1).
+     * The gate this session is consented by — the session resolution: the
+     * session's own mode over the base rules when it names one, else the
+     * base gate itself. {@see backend()} recomputes this per dispatch and
+     * then folds the primary agent's own mode on top, so an agent hat
+     * narrows turns only — it never widens out-of-turn consent. Out-of-turn
+     * side-effect surfaces (`generate.submit`) must consult this, not the
+     * bare workspace gate, or a bypass-admitted session would run tools
+     * freely in-turn yet be refused at the RPC door (R15 MAJOR-1).
      */
     public function permissionGate(): ?PermissionGate
     {
@@ -1667,7 +1669,17 @@ final class SessionHost
             if ($this->workspace->backend === null) {
                 return TurnTicket::refused($turns->noBackendNotice());
             }
-            if ($turns->customCommandMustFork($text, $this->customCommands, null, $this->workspace->projectCommandsTrusted)) {
+            // C-SEC-3.b: the serve path carries the same user-tier opt-in
+            // lists the TUI forwards — an empty pair here would deny-all a
+            // bundle the owner explicitly trusted in their own config.
+            if ($turns->customCommandMustFork(
+                $text,
+                $this->customCommands,
+                null,
+                $this->workspace->projectCommandsTrusted,
+                $this->workspace->trustedBundleCommands,
+                $this->workspace->mcpPromptShell,
+            )) {
                 return $this->parkExpansion($text, $command);
             }
 
@@ -1783,7 +1795,12 @@ final class SessionHost
         $trusted = $this->workspace->projectCommandsTrusted;
         $gate = $this->workspace->permissionGate;
         $provider = $this->mcpProvider;
-        $run = static function () use ($turns, $spec, $arguments, $root, $trusted, $gate, $provider): array {
+        // C-SEC-3.b: the forked child expands with the SAME user-tier opt-in
+        // lists the parent's fork decision consulted; thread them through the
+        // closure's capture, not the (empty) defaults.
+        $bundles = $this->workspace->trustedBundleCommands;
+        $mcpShell = $this->workspace->mcpPromptShell;
+        $run = static function () use ($turns, $spec, $arguments, $root, $trusted, $gate, $provider, $bundles, $mcpShell): array {
             $gated = [];
             // C-MCP-2.a: for an MCP prompt row the network fetch IS the
             // reason this turn is parked (the posture always forks one), so
@@ -1805,7 +1822,7 @@ final class SessionHost
                 $arguments,
                 $turns->commandDirective($spec, $root, $trusted, $gate, static function (string $command) use (&$gated): void {
                     $gated[] = $command;
-                }),
+                }, $bundles, $mcpShell),
             );
 
             return [$expanded, $gated];
@@ -3510,6 +3527,8 @@ final class SessionHost
             $this->root(),
             $this->workspace->projectCommandsTrusted,
             $this->workspace->permissionGate,
+            trustedBundleCommands: $this->workspace->trustedBundleCommands,
+            mcpPromptShell: $this->workspace->mcpPromptShell,
         );
     }
 
