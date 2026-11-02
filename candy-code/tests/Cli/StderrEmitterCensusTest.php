@@ -252,7 +252,7 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * application does not write one. `Bootstrap`'s warnings are handed to
  * {@see \SugarCraft\Code\Cli\Bootstrap::STDERR_LINE_FORMAT}, which adds the
  * prefix on the way out, so the message literals are invisible to a scan for
- * it — FORTY-NINE call sites in `src/Cli/Bootstrap.php` (f-app-launch 2026-10-14
+ * it — FIFTY-ONE call sites in `src/Cli/Bootstrap.php` (f-app-launch 2026-10-14
  * added three: the rv-sec-1 bypass banner, the rv-sec-3 policy-freshness notice
  * and the rv-enduser-1 unselectable-override row; PLG-1 added three more: the
  * bundles() warning drain and the two declined-surface notices, and C-SEC-7.d
@@ -260,7 +260,7 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * warnings, and C-SEC-6.b one more: the project-narrowing notice, and C-SEC-7.a one more:
  * the headless-default banner that now names `-p`'s new asking default; and C-SEC-7.b two more still: useRestricted()'s and useSafeMode()'s
  * one-launch notices each, and C-SEC-7.e one more: the once-per-session
- * implicit-autoReview launch notice that rides the seam when the default engages, and C-TOOL-6.e one more: the per-file skip announcements for user script tools), each producing a
+ * implicit-autoReview launch notice that rides the seam when the default engages, and C-TOOL-6.e one more: the per-file skip announcements for user script tools, and C-SEC-3.b two more: trustedOriginNames()'s not-a-list and not-a-name-entry warnings), each producing a
  * distinct `candy-code: ` line, against a channel-4 credit of eight for that
  * file (ISS-026's envelope-carrying resume notice joined the six as a raw
  * fwrite line, and its rv6 `--resume` pick twin joined the seven). Off by
@@ -715,7 +715,12 @@ final class StderrEmitterCensusTest extends TestCase
         // carries each switch's one row.
         // +1 in C-SEC-7.e: the implicit-autoReview launch notice rides the
         // transcript seam from permissionGate() — same routing, same sibling.
-        'src/Cli/Bootstrap.php' => 49,
+        // +2 in C-SEC-3.b: the two wrong-shape warnings in trustedOriginNames()
+        // — a name list whose value is not a list, and an entry that is not a
+        // name — ride warnPermissionConfigOnce, the same sibling as every other
+        // config-shape notice; the pair parses both opt-in lists, so both arms
+        // of the parse warn once each.
+        'src/Cli/Bootstrap.php' => 51,
     ];
 
     /**
@@ -1121,7 +1126,7 @@ final class StderrEmitterCensusTest extends TestCase
         'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39, 'forty' => 40,
         'forty-one' => 41, 'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44, 'forty-five' => 45,
         'forty-six' => 46, 'forty-seven' => 47, 'forty-eight' => 48, 'forty-nine' => 49,
-        'fifty' => 50,
+        'fifty' => 50, 'fifty-one' => 51,
     ];
 
     public function testTheDirectFwriteStderrRosterIsUnchanged(): void
@@ -1903,7 +1908,7 @@ final class StderrEmitterCensusTest extends TestCase
                 . 'without the sibling census noticing; do not bump either number until you know which.',
         );
         self::assertSame(1, $direct, 'the number of warnings that go to stderr and bypass the once-guard moved');
-        self::assertSame(11, $once, 'the number of stderr-only, once-per-process warnings moved');
+        self::assertSame(13, $once, 'the number of stderr-only, once-per-process warnings moved');
         self::assertSame(
             self::PREFIXED_WRITER_SITES['src/Cli/Bootstrap.php'],
             $direct + $once + $seam,

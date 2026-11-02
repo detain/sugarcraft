@@ -207,6 +207,34 @@ final class WorkspaceContextTest extends TestCase
         putenv('CUSTOM_API_KEY=test-key');
     }
 
+    /**
+     * rev-r4 MINOR-2: the two C-SEC-3.b opt-in lists are workspace state —
+     * `new()` must forward them into the constructor it names, and `mutate()`
+     * (whose only public caller today is `withService()`) must carry them or
+     * every service registered on the context would silently return the
+     * process to deny-all for bundle and MCP prompt shell.
+     */
+    public function testTheWorkspaceCarriesTheTwoShellOptInListsThroughConstructionAndMutation(): void
+    {
+        $context = WorkspaceContext::new(
+            root: $this->tempDir,
+            trustedBundleCommands: ['kit'],
+            mcpPromptShell: ['srv'],
+        );
+        self::assertSame(['kit'], $context->trustedBundleCommands, 'new() forwards the bundle allow-list');
+        self::assertSame(['srv'], $context->mcpPromptShell, 'new() forwards the MCP server allow-list');
+
+        $grown = $context->withService('probe', new \stdClass());
+        self::assertNotSame($context, $grown);
+        self::assertSame(['kit'], $grown->trustedBundleCommands, 'the mutate() field map must keep carrying trustedBundleCommands');
+        self::assertSame(['srv'], $grown->mcpPromptShell, 'the mutate() field map must keep carrying mcpPromptShell');
+
+        // An untouched workspace still reads the shipped deny-all default.
+        $plain = WorkspaceContext::new(root: $this->tempDir);
+        self::assertSame([], $plain->trustedBundleCommands);
+        self::assertSame([], $plain->mcpPromptShell);
+    }
+
     /** @return list<TaskTool> */
     private static function taskTools(EngineBackend $backend): array
     {
