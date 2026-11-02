@@ -28,7 +28,7 @@ const TRUST = {
   sessionId: 's1',
 }
 
-function sourcesFor(id: string): Record<string, unknown> {
+function sourcesFor(_id: string): Record<string, unknown> {
   return {
     instructionFiles: [],
     memorySections: [],

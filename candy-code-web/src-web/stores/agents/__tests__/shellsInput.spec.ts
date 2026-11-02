@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { TAIL_CAP_BYTES, useShellsStore } from '../shells'
 import { Wire } from './harness'
 

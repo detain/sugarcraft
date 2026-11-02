@@ -10,6 +10,15 @@ export default defineConfig(
   tseslint.configs.recommended,
   pluginVue.configs['flat/essential'],
   {
+    name: 'candy-code-web/intentional-unused-args',
+    rules: {
+      // A `_`-prefixed argument is the convention for a binding that must
+      // exist to carry a type (typed mock params, fixture-builder params)
+      // but is never read. Everything else stays a hard error.
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    },
+  },
+  {
     name: 'candy-code-web/vue-ts',
     files: ['**/*.vue'],
     languageOptions: { parserOptions: { parser: tseslint.parser } },

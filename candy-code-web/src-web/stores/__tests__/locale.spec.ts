@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FakeSocket, FakeTimers, flush, helloResult } from '../../__tests__/fakes'
 import { Backoff } from '../../protocol/reconnect'
-import { resetWebStrings, servedLocale, setWebStrings, t } from '../../lib/i18n'
+import { resetWebStrings, servedLocale, t } from '../../lib/i18n'
 import { useConnectionStore } from '../connection'
 import { useLocaleStore } from '../locale'
 

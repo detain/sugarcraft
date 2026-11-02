@@ -222,7 +222,7 @@ function searchMcpMentions(partial: string): void {
  * file search, exactly as the `@mcp:` popup does.
  */
 function searchAgentMentions(partial: string): void {
-    const seq = ++fileSeq;
+    ++fileSeq; // no async leg to guard here, but the bump discards any in-flight search's continuation
     files.value = [];
     mcpMentions.value = [];
     lastSearchAt = Date.now();

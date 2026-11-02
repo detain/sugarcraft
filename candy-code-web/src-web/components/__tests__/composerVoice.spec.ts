@@ -11,18 +11,6 @@ import { helloResult } from '../../__tests__/fakes'
 const mocks = vi.hoisted(() => ({ routeParams: { id: 'ses-voice-test' } as Record<string, string> }))
 vi.mock('vue-router', () => ({ useRoute: () => ({ params: mocks.routeParams }) }))
 
-interface RecInstance {
-  state: string
-  started: number
-  stops: number
-  requestedMime: string | undefined
-  ondataavailable: ((event: BlobEvent) => void) | null
-  onstop: (() => void) | null
-  start(): void
-  stop(): void
-  emit(bytes: number): void
-}
-
 class FakeMediaRecorder {
   static supported: string[] = ['audio/webm;codecs=opus']
   static instances: FakeMediaRecorder[] = []

@@ -12,7 +12,7 @@ import { bindingLabel, KEY_ACTIONS, loadKeymap, type KeyAction } from '../lib/ke
  * marker, so a terminal-UI-only command is visible as one instead of
  * failing on send.
  */
-const props = defineProps<{ open: boolean; commands: CommandInfo[] }>()
+defineProps<{ open: boolean; commands: CommandInfo[] }>()
 const emit = defineEmits<{ close: [] }>()
 
 const ACTION_LABELS: Record<KeyAction, string> = {
