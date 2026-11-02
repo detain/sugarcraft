@@ -8,6 +8,7 @@ use React\EventLoop\Loop;
 use React\EventLoop\TimerInterface;
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\Agents\Live\SessionMailbox;
+use SugarCraft\Code\Agents\PrimaryAgent;
 use SugarCraft\Code\App\AssistantMsg;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CacheHealthWatch;
@@ -244,10 +245,12 @@ final class SessionHost
     /**
      * C-AGT-4.b: the primary agent this session was switched to by
      * `/agent use` through a host surface. The NAME lives here, not a
-     * narrowed backend — the host records the choice beside the model
-     * override and leaves applying it to the dispatch that reads the
-     * roster. Like {@see self::$modelOverride} it dies with the host:
-     * the choice is session-scoped and never written to config.
+     * narrowed backend — {@see backend()} resolves it against the roster
+     * and applies the narrowing afresh on every read (MAJOR-2: the switch
+     * is honoured, not just recorded, on the serve path). Like
+     * {@see self::$modelOverride} it dies with the host: the choice is
+     * session-scoped and never written to config. A name that stops
+     * resolving (the roster was rebuilt without it) runs un-narrowed.
      */
     private ?string $primaryAgentOverride = null;
 
@@ -641,8 +644,11 @@ final class SessionHost
      * C-AGT-4.b: the preset name this session's `/agent use` switched the
      * primary agent to, or null while it runs the plain session default
      * (`use default` stores null exactly like the terminal's revert). The
-     * same host-lifetime law as {@see self::$modelOverride}: a restart
-     * resolves the launch roster afresh and finds no override.
+     * serve path honours the name: each turn dispatch resolves it against
+     * the roster and narrows through {@see PrimaryAgent::apply()}, so the
+     * badge and the wire agree while the host lives. The same host-lifetime
+     * law as {@see self::$modelOverride}: a restart resolves the launch
+     * roster afresh and finds no override.
      */
     public function primaryAgentOverride(): ?string
     {
@@ -2246,7 +2252,9 @@ final class SessionHost
                     // way the SetModel arm records the pair — name only, no
                     // config write, host-lifetime. `default` (and a plain
                     // `/agent use default`) stores null, which is the same
-                    // state a fresh host starts in.
+                    // state a fresh host starts in. MAJOR-2: the name is not
+                    // merely stored — every turn dispatch reads it through
+                    // backend() and runs narrowed while it stands.
                     $this->primaryAgentOverride = $effect->primaryAgentName();
                     // C-AGT-4.c: the choice is summary state (the wire carries
                     // it), so a switch announces session.updated exactly like
@@ -3409,7 +3417,11 @@ final class SessionHost
      * was chosen (WEB-2), else the workspace's — judged by this session's own
      * permission mode when it has one: a gate in that mode over the same
      * rules, so a client choosing `accept-edits` for one session changes
-     * nothing for another.
+     * nothing for another. A recorded primary agent (C-AGT-4.b, MAJOR-2)
+     * narrows the result through {@see PrimaryAgent::apply()} exactly as the
+     * terminal does — recomputed on every read, so the switch lands on each
+     * subsequent served turn and clearing it lands the plain base on the
+     * next one, with nothing stored to revert.
      *
      * @param ?PermissionMode $ceiling when given (C-AGT-2.b, from
      *        {@see SubmitOptions::withModeCeiling()}), this ONE turn's gate
@@ -3425,11 +3437,25 @@ final class SessionHost
         }
         $base = $backend->permissionGate();
         $gated = $this->sessionGate($base, $ceiling);
-        if ($gated === null || $gated === $base) {
-            return $backend;
+        if ($gated !== null && $gated !== $base) {
+            $backend = $backend->withPermissionGate($gated);
         }
 
-        return $backend->withPermissionGate($gated);
+        $manager = $this->workspace->agentManager;
+        $agent = $this->primaryAgentOverride === null ? null : $manager?->get($this->primaryAgentOverride);
+        if ($agent === null) {
+            return $backend;
+        }
+        // MAJOR-2: the switch is applied here, per dispatch — the same
+        // narrowing the terminal performs at the switch itself (roster,
+        // model, effort, mode, instructions), just recomputed instead of
+        // stored, because the session gate above rides a per-turn ceiling.
+        // The launch slice needs no revert record: the base this folds over
+        // was never narrowed in the first place.
+
+        [, $backend] = PrimaryAgent::apply($backend, $manager, $agent);
+
+        return $backend;
     }
 
     /**

@@ -47,10 +47,15 @@ use SugarCraft\Code\Support\FrontmatterKeyAudit;
  * exactly the roster whose agents the agent tools already may delegate to.
  * The reply only CONFIRMS; the switch travels as a
  * {@see CommandEffect::setPrimaryAgent()} the way `/model`'s built backend
- * travels, and each driver applies it its own way: the TUI narrows its
- * session through {@see \SugarCraft\Code\Agents\PrimaryAgent}, the host
- * stores the session's override. The choice is SESSION-scoped — it is never
- * written to config, and the next launch runs the plain session default.
+ * travels, and both drivers honour it through
+ * {@see \SugarCraft\Code\Agents\PrimaryAgent}: the TUI narrows its session
+ * once at the switch, and the host (MAJOR-2) re-resolves the name and
+ * narrows at every turn dispatch, so a served session runs subsequent turns
+ * as that agent and `use default` lands the plain base on the next one.
+ * A mid-turn switch is refused on both surfaces — the terminal by `Chat`,
+ * the host by its command door — so the change never races a running turn.
+ * The choice is SESSION-scoped — it is never written to config, and the
+ * next launch runs the plain session default.
  */
 final class AgentsHostCommand implements HostCommand
 {
@@ -109,9 +114,11 @@ final class AgentsHostCommand implements HostCommand
      * (see the class doc-block). The effect carries the NAME, not the Agent:
      * the applying driver resolves it against its own live roster, so a
      * preset this launch never trusted cannot reach a session by way of the
-     * effect channel. Success echoes here; a mid-turn refusal, if the TUI is
-     * busy, is answered by `Chat`'s own arm in its transcript — the command
-     * cannot see the turn.
+     * effect channel. Success echoes here; on BOTH surfaces a switch typed
+     * during a turn never reaches this method — the terminal refuses it in
+     * `Chat`'s arm and the host refuses every command at its door
+     * (`host.turn.host_command_in_flight`) — so the switch always takes
+     * effect whole, starting with the next turn.
      *
      * @param list<string> $args the words after the verb
      */

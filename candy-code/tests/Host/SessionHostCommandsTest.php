@@ -214,24 +214,77 @@ final class SessionHostCommandsTest extends TestCase
         self::assertNull($host->primaryAgentOverride());
     }
 
+    /**
+     * MAJOR-2: on the serve path the primary-agent switch is HONOURED, not
+     * merely recorded. A served `/agents use worker` must move the preset's
+     * model and instructions onto the wire of every later turn (the same
+     * narrowing the terminal applies at the switch — recomputed per dispatch
+     * here, because the session gate rides a per-turn ceiling), and
+     * `use default` must land the plain session base on the next turn.
+     * ScriptedProvider records each wire request, so both halves read from
+     * what the provider was asked for, not from internal state.
+     */
+    public function testAServedPrimaryAgentSwitchNarrowsTheWireOfLaterTurns(): void
+    {
+        // EngineBackend::completeAsync() forks, so the request is read from
+        // a file the answering closure writes IN THE CHILD — the same idiom
+        // the inline-model pin above uses.
+        $log = $this->dir . '/agent-turns.log';
+        $record = static fn (string $answer): \Closure => static function (CompleteRequest $request) use ($log, $answer): CompleteResponse {
+            $instructions = (string) ($request->systemPrompt ?? '');
+            file_put_contents(
+                $log,
+                $request->model . "\t" . (str_contains($instructions, 'You are a worker.') ? 'worker' : 'plain') . "\n",
+                \FILE_APPEND | \LOCK_EX,
+            );
+
+            return new CompleteResponse(content: $answer);
+        };
+        $provider = new ScriptedProvider([$record('as worker'), $record('as default')]);
+        $host = $this->host(
+            backend: EngineBackend::new($provider, 'session-model'),
+            agentManager: $this->managerWithWorker(),
+        );
+
+        self::assertFalse($host->runCommand('agents', 'use worker')->isRefused());
+        $host->submit('do the thing');
+        $this->drain($host);
+
+        self::assertFalse($host->runCommand('agents', 'use default')->isRefused());
+        $host->submit('wrap up');
+        $this->drain($host);
+
+        $lines = array_values(array_filter(explode("\n", (string) file_get_contents($log))));
+        self::assertSame(
+            ["claude-sonnet-4-6\tworker", "session-model\tplain"],
+            $lines,
+            'the switch put the preset\'s model and instructions on the next turn, and clearing it restored the plain session base on the one after',
+        );
+    }
+
     private function managerWithWorker(): \SugarCraft\Code\Agents\AgentManager
     {
-        $manager = (new \ReflectionClass(\SugarCraft\Code\Agents\AgentManager::class))->newInstanceWithoutConstructor();
-        $property = new \ReflectionProperty(\SugarCraft\Code\Agents\AgentManager::class, 'agents');
-        $property->setAccessible(true);
-        $property->setValue($manager, [
-            'worker' => new \SugarCraft\Code\Agents\Agent(
-                name: 'worker',
-                description: 'Runs as the primary for one session',
-                prompt: 'You are a worker.',
-                model: 'claude-sonnet-4-6',
-                provider: 'anthropic',
-                tools: [],
-                skillNames: [],
-                hooks: [],
-                isActive: true,
-            ),
-        ]);
+        // A real manager (the terminal's PrimaryAgentSwitchTest shape): the
+        // wire-honour pin below reaches toolsForPrimary, which resolves
+        // grants against the registry — a reflection-populated roster with
+        // no registry cannot answer that leg.
+        $manager = new \SugarCraft\Code\Agents\AgentManager(
+            new ScriptedProvider([]),
+            new \SugarCraft\Code\Skills\SkillRegistry(),
+            toolRegistry: [],
+            toolUniverse: [],
+        );
+        $manager->register(new \SugarCraft\Code\Agents\Agent(
+            name: 'worker',
+            description: 'Runs as the primary for one session',
+            prompt: 'You are a worker.',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+        ));
 
         return $manager;
     }
