@@ -21,6 +21,12 @@ use SugarCraft\Code\Commands\CommandRegistry;
  *  - §2 scoreboard rows, both category lines and the Total line, must equal
  *    the glyph census of the §3 taxonomy rows (`-N` rows are excluded, exactly
  *    as the §2 heading's "(N taxonomy rows)" counts them);
+ *  - every matrix cell glyph — ALL 409 rows, all six product columns, `-N`
+ *    rows included — must equal the leading glyph of that product's bullet in
+ *    the row's Appendix A block, which must exist and carry exactly one bullet
+ *    per product (the 2026-11 recheck caught a flip wave mirroring only 4
+ *    synced blocks and leaving 26 ids desynced; this leg makes that class
+ *    un-regrowable);
  *  - `lang/` file and key counts must match the PLAT-10 cell and detail;
  *  - `CommandRegistry::all()`, `slashCommands()` and `paletteEntries()` must
  *    match the CMD-01/CMD-08 cells and the CMD-01 appendix "(N files" figure;
@@ -271,6 +277,132 @@ final class ComparisonTruthDriftTest extends TestCase
         }
 
         self::assertSame([], $mismatches, "COMPARISON.md's §2 scoreboard no longer recounts §3:\n  - " . implode("\n  - ", $mismatches));
+    }
+
+    public function testTheMatrixGlyphsMatchEveryAppendixDetailBullet(): void
+    {
+        $lines = self::docLines();
+        [$start, $end] = self::matrixBounds($lines);
+
+        // The six product names, taken from the §3 header row itself — the
+        // guard never hard-codes the roster of products or of rows.
+        $header = null;
+        for ($i = $start; $i < $end; $i++) {
+            if (str_starts_with($lines[$i], '| ID | Feature |')) {
+                $header = $lines[$i];
+                break;
+            }
+        }
+        self::assertNotNull($header, 'COMPARISON.md lost the §3 matrix header row');
+        $products = array_slice(self::splitMatrixRow($header), 2);
+        self::assertCount(self::COLUMN_COUNT, $products, 'the §3 header does not carry six product columns');
+
+        // id => six leading glyphs, every taxonomy AND `-N` row.
+        $matrix = [];
+        for ($i = $start; $i < $end; $i++) {
+            if (preg_match('/^\| ([A-Z]+-N?\d+) \|/u', $lines[$i], $m) !== 1) {
+                continue;
+            }
+
+            if (isset($matrix[$m[1]])) {
+                self::fail("matrix row {$m[1]} appears twice in §3");
+            }
+
+            $glyphs = [];
+            foreach (array_slice(self::splitMatrixRow($lines[$i]), 2) as $cell) {
+                $glyph = mb_substr($cell, 0, 1, 'UTF-8');
+                if (!in_array($glyph, self::GLYPHS, true)) {
+                    self::fail("bad glyph in {$m[1]}: " . substr($cell, 0, 30));
+                }
+
+                $glyphs[] = $glyph;
+            }
+
+            $matrix[$m[1]] = $glyphs;
+        }
+        self::assertNotEmpty($matrix, 'no matrix rows parsed from §3');
+
+        // Appendix A: id => product => glyph, one bullet per product per block.
+        $appendixStart = null;
+        $appendixEnd = count($lines);
+        foreach ($lines as $i => $line) {
+            if ($appendixStart === null && str_starts_with($line, '## Appendix A')) {
+                $appendixStart = $i;
+                continue;
+            }
+
+            if ($appendixStart !== null && str_starts_with($line, '## Appendix B')) {
+                $appendixEnd = $i;
+                break;
+            }
+        }
+        self::assertNotNull($appendixStart, 'COMPARISON.md lost Appendix A');
+
+        $appendix = [];
+        $current = null;
+        $bullet = '/^- \*\*(.+?)\*\* (' . implode('|', self::GLYPHS) . ')(?:\s|$)/u';
+        for ($i = $appendixStart; $i < $appendixEnd; $i++) {
+            $line = $lines[$i];
+            if (preg_match('/^<details><summary><b>([A-Z]+-N?\d+)<\/b>/u', $line, $m) === 1) {
+                if (isset($appendix[$m[1]])) {
+                    self::fail("appendix block {$m[1]} appears twice");
+                }
+
+                $current = $m[1];
+                $appendix[$current] = [];
+                continue;
+            }
+
+            if ($line === '</details>') {
+                $current = null;
+                continue;
+            }
+
+            if ($current === null || preg_match($bullet, $line, $m) !== 1) {
+                continue;
+            }
+
+            if (isset($appendix[$current][$m[1]])) {
+                self::fail("appendix block {$current} carries two {$m[1]} bullets");
+            }
+
+            $appendix[$current][$m[1]] = $m[2];
+        }
+
+        $failures = [];
+        foreach ($matrix as $rowId => $glyphs) {
+            if (!isset($appendix[$rowId])) {
+                $failures[] = "{$rowId}: §3 has the row, Appendix A has no detail block";
+                continue;
+            }
+
+            $labels = array_keys($appendix[$rowId]);
+            $missing = implode(', ', array_diff($products, $labels));
+            $foreign = implode(', ', array_diff($labels, $products));
+            if ($missing !== '' || $foreign !== '') {
+                $failures[] = "{$rowId}: appendix bullets are not the six product columns"
+                    . ($missing !== '' ? " (missing: {$missing})" : '')
+                    . ($foreign !== '' ? " (unexpected: {$foreign})" : '');
+                continue;
+            }
+
+            foreach ($products as $k => $product) {
+                $appendixGlyph = $appendix[$rowId][$product];
+                if ($appendixGlyph !== $glyphs[$k]) {
+                    $failures[] = "{$rowId} [{$product}]: matrix says {$glyphs[$k]}, Appendix A says {$appendixGlyph}";
+                }
+            }
+        }
+
+        foreach (array_diff(array_keys($appendix), array_keys($matrix)) as $extra) {
+            $failures[] = "{$extra}: Appendix A has a detail block §3 does not carry";
+        }
+
+        self::assertSame(
+            [],
+            $failures,
+            "COMPARISON.md's matrix and its Appendix A detail no longer agree:\n  - " . implode("\n  - ", $failures),
+        );
     }
 
     public function testTheLocaleFiguresMatchTheLangDirectory(): void

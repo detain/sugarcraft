@@ -146,7 +146,7 @@ The matrix has **409 rows**, each with **6 product columns**: the 356-row taxono
 | MOD-19 | Prompt caching (provider cache breakpoints) | ✅ `CacheBreakpoints` on native `anthropic` and Claude-on-Vertex, Bedrock `cachePoint`; OpenAI/SGLang cache server-side; health watch | 🟡 Inherited; cache tokens are not shown (status bar has context tokens and $ only) | ✅ Automatic prompt caching with a stable prefix (system → project context → conversation); 5m/1h TTL; `/usage` cache stats | ✅ Auto cache breakpoints on first 2 system + last 2 msgs; promptCacheKey=sessionID; x-session-affinity header | ✅ Δ Provider `compatibility.cacheFormat`/`supportsPromptCacheKey`; frozen instruction baseline; opt-in cache `warming` | ✅ Explicit system-prompt cache boundary, runtime-context carriers, cache-TTL-aware pruning, cacheRead/Write in /status |
 | MOD-20 | Long-context (1M) support / context-window detection | ✅ Per-model Vertex `CONTEXT_WINDOWS` table plus a working `contextWindow` override; unknown models report null, not a guess | ✅ Context meter = `contextTokens / contextWindow` from the server (window detected server-side), % + bar | ✅ 1M window by default on Fable, Sonnet 5+, Haiku 5.5, Opus 4.7+; `[1m]` variants for Opus/Sonnet 4.6; gateway window correction | ✅ Context/input/output limits from models.dev or config `limit`; usable window derived for compaction | ✅ Context/input/output limits from models.dev or config `limit`; usable window derived for compaction | ✅ Context window from catalog metadata; window-scaled tool-result caps; 1M models supported |
 | MOD-21 | Vision input (images to model) | ✅ PNG/JPEG/GIF/WebP via @mention, drag-drop, Ctrl+V; native image parts; non-vision models get placeholder + notice | ✅ Clipboard paste attaches PNG/JPEG/GIF/WebP via `session.send` `images` (server re-sniffs bytes); no drag-drop or file picker | ✅ Images via Ctrl+V/Alt+V paste ([Image #N] chips), dragged paths, Read tool, Remote Control attachments | ✅ Images via paste, @file, read tool; auto-resize >2000px or >5 MB base64 (attachment.image) | ✅ Δ Images via composer, read tool (≤20 MiB source) and `media.image` normalization (renamed from `attachment`) | ✅ Images from channels/Control UI (paste, drop, camera) and `view_image` tool; model-aware resize |
-| MOD-22 | PDF / document input | ✅ PDFs ride document blocks on supporting providers (`AttachmentType::Document`, `%PDF-` sniff) | ✅ Browser PDF upload (drag-drop or picker, 16 MiB cap) rides document blocks; `@path` to a server-side PDF too | ✅ PDFs read whole (≤10 pages) or by `pages` ranges (≤20 per call; ranges need poppler `pdftoppm`) | ✅ PDFs attached as file parts via @file or read tool (provider must support PDF input) | ✅ Δ PDFs sent as document media from composer attachments and the read tool; models without PDF input get a short note | ✅ `pdf` tool (PDF-capable model) + included document-extract plugin for attachments |
+| MOD-22 | PDF / document input | ✅ PDFs ride document blocks on supporting providers (`AttachmentType::Document`, `%PDF-` sniff) | ✅ Browser PDF upload (drag-drop or picker) rides document blocks under the server's shared 11 MiB decoded budget; `@path` too | ✅ PDFs read whole (≤10 pages) or by `pages` ranges (≤20 per call; ranges need poppler `pdftoppm`) | ✅ PDFs attached as file parts via @file or read tool (provider must support PDF input) | ✅ Δ PDFs sent as document media from composer attachments and the read tool; models without PDF input get a short note | ✅ `pdf` tool (PDF-capable model) + included document-extract plugin for attachments |
 | MOD-23 | Audio / voice input or output | 🟡 Alt+V push-to-talk dictation (record → server `audio.transcribe`, whisper-1 default) lands text in the draft; no spoken replies | 🟡 Secure-context Web Speech dictation plus server `audio.transcribe`; no spoken replies | 🟡 Voice dictation input only (`/voice` hold/tap; claude.ai accounts; streamed to Anthropic STT); no spoken output | ❌ No voice/audio input or speech output (TUI audio is only notification sounds) | 🟡 Δ Experimental SDK `client.voice.session()` brokers realtime voice models (OpenAI, xAI, Gemini Live); no voice in TUI/desktop | ✅ Transcription in, TTS out, realtime Talk mode, voice wake, phone calls (plugin) |
 | MOD-24 | Structured output / JSON-schema mode | ✅ `--json-schema` wired end-to-end (flag → CompleteRequest → provider); providers without support refuse honestly | ➖ Not a client concern; nothing exposed | ✅ `--json-schema` validated structured output (print mode); SDK structured outputs | ✅ API/SDK `format: {type:'json_schema'}` forces a StructuredOutput tool; result in info.structured_output | ❌ Δ Structured output (`format: json_schema` / StructuredOutput tool) not present in the v2 API | ✅ JSON-Schema-validated output in Swarm collectors (`structured_output` tool) and the included `llm-task` plugin tool |
 | MOD-25 | Credential storage (keychain, env, config file, auth.json) | 🟡 Env vars or plaintext apiKey in ~/.candy-code/config.json (0600, ${VAR}; `candy-code login` writes it); no OS keychain | ✅ Browser never holds the token: one-time code → HttpOnly SameSite=Strict cookie → 30 s ticket; provider secrets masked | ✅ macOS Keychain; `~/.claude/.credentials.json` (0600) on Linux/Windows; env vars; `apiKeyHelper` scripts; long-lived tokens | 🟡 auth.json (~/.local/share/opencode, 0600), env vars, {env:}/{file:} config substitution; no OS keychain | 🟡 Δ Credentials per integration with multiple accounts; `auth export` prints secrets as JSON, `auth import` restores | ✅ Per-agent SQLite auth profiles, env vars, config keys, SecretRefs (1Password/Bitwarden/Vault/pass/sops), secret store |
@@ -1282,7 +1282,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 <details><summary><b>MOD-22</b> PDF / document input</summary>
 
 - **candy-code** ✅ — `AttachmentType` is File (text, ≤256 KiB inline `<file>` block), Image or Document. A `%PDF-` file within `DOCUMENT_MAX_BYTES` becomes a Document attachment sent as a document block on providers that accept one. — _Evidence:_ `src/AttachmentType.php:18`; `src/Attachments/FileMentions.php:260-262,296-310`
-- **candy-code-web** 🟡 — Served prompts resolve mentions server-side. A `%PDF-` file within `DOCUMENT_MAX_BYTES` becomes an `AttachmentType::Document` sent as a document block on supporting providers. `session.send` accepts only `images`. — _Evidence:_ `src/Attachments/FileMentions.php:260-262,296-310`; `src/Host/TurnController.php:1060`; `src/Protocol/Schema/MethodSchemas.php:215`
+- **candy-code-web** ✅ — Browser PDF upload (drag-drop or picker) rides document blocks: `session.send` carries a `documents` pair and the server enforces one shared 11 MiB decoded attachment budget across images and documents (`TurnMethods::MAX_ATTACHMENT_TOTAL_BYTES`); the 16 MiB figure is only the transport-frame ceiling. A `@path` to a server-side PDF resolves through the 20 MiB `DOCUMENT_MAX_BYTES` mention route. — _Evidence:_ `src/Protocol/Methods/TurnMethods.php:96`; `src/Protocol/Schema/MethodSchemas.php:274,288-297`; `src/Attachments/FileMentions.php:65,260-262,296-310`; `web:components/Composer.vue`
 - **Claude Code 2.1.311** ✅ — Notebooks returned with outputs; Remote Control file attachments arrive as `@` references. — _Evidence:_ cc:tools-reference#read-tool-behavior; cc:remote-control
 - **OpenCode 1.19.4** ✅ — `read` returns PDFs as attachments (`isPdfAttachment`). @file of a PDF becomes a base64 data-URL file part. MCP resource blobs may be PDF (≤10 MB). — _Evidence:_ OC/tool/read.ts:306; OC/session/tools.ts:32-38; OC/tool/read.txt
 - **OpenCode 2.1.4** ✅ — The attachment table lists `PDF → Document media`: PDFs from composer attachments and the read tool reach the model, and models without PDF input get a short note. — _Evidence:_ anomalyco/opencode@v2.1.4:services/www/src/docs/content/attachments.mdx L60-70
@@ -1291,8 +1291,8 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 </details>
 <details><summary><b>MOD-23</b> Audio / voice input or output</summary>
 
-- **candy-code** ❌ — Only media output is image/video generation through an SD/sglang-diffusion server (separate TL row). — _Evidence:_ grep `whisper/speech/voice` in src → none
-- **candy-code-web** ❌ — —
+- **candy-code** 🟡 — `chat.voice` (Alt+V) push-to-talk records a take and sends it to the server's `audio.transcribe`; `voice.model` defaults to `whisper-1` against the user-tier `voice.baseUrl`; the settled text lands in the draft. No spoken replies. — _Evidence:_ `src/Commands/KeyBindingRegistry.php:1125`; `src/Config/Settings/Definitions/MediaSettings.php:166,184`; `src/Protocol/Methods/MediaMethods.php`
+- **candy-code-web** 🟡 — Secure-context Web Speech dictation; when the server advertises `transcribe` the mic instead rides the server's `audio.transcribe` engine on the user's configured voice endpoint. No spoken replies. — _Evidence:_ `web:lib/dictation.ts`; `web:lib/recorder.ts`; `web:components/Composer.vue` (voiceState)
 - **Claude Code 2.1.311** 🟡 — Not available with API keys, Bedrock, Agent Platform, Foundry, SSH or cloud sessions; WSL needs WSLg; transcription doesn't count toward usage. — _Evidence:_ cc:voice-dictation
 - **OpenCode 1.19.4** ❌ — `audio.ts` / `attention` play notification sound packs. There is no speech-to-text or TTS. — _Evidence:_ TUI/audio.ts; DOCS/tui (Attention)
 - **OpenCode 2.1.4** 🟡 — Server-brokered realtime voice sessions (WebRTC/WebSocket) for OpenAI GPT-Live/Realtime, xAI Grok Voice and Gemini Live, plus `client.voice.models()` and Console-hosted GPT-Live. This is an SDK-only API: the TUI and desktop have no voice UI. — _Evidence:_ anomalyco/opencode@v2.1.4:packages/core/src/voice.ts, packages/server/src/handlers/voice.ts; CHANGELOG v2.0.32 (#55951), v2.1.0 (#56888), v2.1.3 (#57194)
@@ -2349,7 +2349,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 </details>
 <details><summary><b>AGT-07</b> Agent creation wizard / AI-generated agent</summary>
 
-- **candy-code** ❌ — No `/agents new` or generator exists; no `builtin-commands/` spec creates agents. Presets are written by hand. — _Evidence:_ `builtin-commands/`
+- **candy-code** ✅ — `/agents new` runs a model-drafted preset interview (`NewAgentPrompt`) writing to `.candy-code/agents-proposed/`; accept re-audits the file (refuse-audit + TOCTOU check) before activation. — _Evidence:_ `src/Host/Commands/NewAgentPrompt.php`
 - **candy-code-web** ❌ — —
 - **Claude Code 2.1.311** ✅ — `claude plugin init <name> --with agents` scaffolds plugin agents. — _Evidence:_ cc:sub-agents#quickstart-create-your-first-subagent; help (`plugin init`)
 - **OpenCode 1.19.4** ✅ — Generation prompt in OC/agent/generate.txt. Unselected permissions are written as deny. — _Evidence:_ CLI: `opencode agent --help`; DOCS/agents (Create agents); OC/agent/generate.txt
@@ -2632,7 +2632,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 </details>
 <details><summary><b>SKL-09</b> Skill registry / marketplace (ClawHub, plugin marketplaces, skills.sh)</summary>
 
-- **candy-code** 🟡 — bundles install` stages a Claude-format bundle into `~/.candy-code/bundles/` (bounded git clone with `protocol.ext.allow=never`, or a path copy) and `bundles list` shows what the reader sees; its `skills/` join discovery on the next launch. There is no index, search or update command. — _Evidence:_ `src/Cli/Subcommands.php:1464-1480,1604-1625`; `src/Cli/ParsedArgs.php:56`; `src/Skills/SkillManager.php:115
+- **candy-code** ✅ — `bundles install <git-url|path>` stages a Claude-format bundle (bounded clone with `protocol.ext.allow=never`, or a path copy); `bundles marketplace add|list|remove|update` manages registry sources and `bundles search <q>` queries them — the registry starts empty and refuses by default (no hosted default catalog). — _Evidence:_ `src/Cli/Subcommands.php:1565-1595,2754`; `src/Bundles/MarketplaceRegistry.php:31`; `src/Bundles/Marketplace.php:43`
 - **candy-code-web** ❌ — —
 - **Claude Code 2.1.311** ✅ — Third-party marketplaces via `claude plugin marketplace add`; Anthropic `pdf`/`xlsx` etc. always sync for claude.ai logins; `claude plugin eval` to measure. — _Evidence:_ local: claude-plugins-official marketplace.json; cc:plugins/overview; cc:skills#how-synced-skills-behave
 - **OpenCode 1.19.4** 🟡 — A remote index lists skills and files, which are downloaded and cached. ocx (installed globally, registry `registry.kdco.dev` configured here) distributes profiles, plugins, agents and skills. — _Evidence:_ OC/skill/discovery.ts; LOCAL: ~/.config/opencode/ocx.jsonc; ocx package.json
@@ -2672,7 +2672,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 </details>
 <details><summary><b>SKL-13</b> Hot reload of skills</summary>
 
-- **candy-code** 🟡 — No watcher or reload exists. An accepted draft also takes effect from the next launch. — _Evidence:_ `src/Tools/BuiltIn/SkillTool.php:226`; `docs/SKILLS.md:659`
+- **candy-code** ✅ — Skill bodies are re-read from disk on each Skill call; `/skills reload` plus the `SkillRosterDiffTracker` pick up roster edits mid-session without relaunch. — _Evidence:_ `src/Tools/BuiltIn/SkillTool.php:226`; `src/Skills/SkillRosterDiffTracker.php`; `docs/SKILLS.md:659`
 - **candy-code-web** 🟡 — serve` builds one workspace per root at launch (`Bootstrap::workspace()` → `skillRegistry()`); the panel's reload calls `context.sources` again over the same registry. Bodies are re-read from disk per Skill call, as in the TUI. — _Evidence:_ `candy-code/src/Cli/Serve.php:592`; `candy-code/src/Host/ContextSources.php:153-157`; `src/Tools/BuiltIn/SkillTool.php:226
 - **Claude Code 2.1.311** ✅ — SKILL.md text only; plugin-skill-folder components need `/reload-plugins`; not in bare mode. — _Evidence:_ cc:skills#live-change-detection; cc:commands
 - **OpenCode 1.19.4** ❌ — Discovery lives in InstanceState. Only `PATCH /config` or `/instance/dispose` reload the instance; there is no file watcher on skill dirs. — _Evidence:_ OC/skill/index.ts:257-286; OC/server/routes/instance/httpapi/handlers/config.ts:20
@@ -2712,8 +2712,8 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 </details>
 <details><summary><b>SKL-N2</b> Skill search beyond the prompt listing (model-callable search over skills the budgeted listing omits)</summary>
 
-- **candy-code** ❌ — The Skill tool description states it does not list or search skills; the listing drops skills past `skills.listingMaxBytes` from the tail and replaces them with one "N more skills" line. No search tool exists in the catalog. — _Evidence:_ `src/Tools/BuiltIn/SkillTool.php:88-107`; `src/Skills/SkillMatcher.php:26-44`
-- **candy-code-web** ❌ — Served turns run the same engine tool set, so the model has no skill search; the web has no skills list either. — _Evidence:_ `src/Tools/BuiltIn/SkillTool.php:88-107`; no `skills_search` hit under `web:`
+- **candy-code** ✅ — The built-in `skills_search` tool queries the roster by name and description, so skills the budgeted listing collapses stay searchable without exact names. — _Evidence:_ `src/Tools/BuiltIn/SkillsSearch.php`
+- **candy-code-web** 🟡 — Inherited: served turns run the same engine tool set, so `skills_search` answers served sessions too. — _Evidence:_ `src/Tools/BuiltIn/SkillsSearch.php`; engine tool set served from `src/Cli/Bootstrap.php`
 - **Claude Code 2.1.311** · — Not assessed — _Evidence:_ —
 - **OpenCode 1.19.4** · — Not assessed — _Evidence:_ —
 - **OpenCode 2.1.4** · — Not assessed — _Evidence:_ —
@@ -2795,7 +2795,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 </details>
 <details><summary><b>CMD-08</b> Command palette (Ctrl+P etc.)</summary>
 
-- **candy-code** 🟡 — Palette rows are the 50 specs carrying a `paletteAction`; most dispatch through the generic `/<name>` tail. Twenty-five slash commands stay slash-only by recorded judgement (effort, fast, status, doctor, output-style, pane, copy, usage, insights, instructions, review, security-review, commit, pr, bg, shells, schedules, loop, fork, websearch, btw, recap, generate, sendto, play), and command files and MCP prompts never appear. — _Evidence:_ `src/Commands/CommandRegistry.php:200-209`; `src/Chat.php:17227`; `tests/Chat/PaletteSupersetDispatchTest.php:40-90`
+- **candy-code** ✅ — Ctrl+P (Ctrl+K in shell) opens 50 palette rows: actions and pickers first, plus one prefill row (`/name` + arg hint) per remaining visible slash command that drops the invocation into the draft, so arg-taking and file commands are reachable. — _Evidence:_ `src/Commands/CommandRegistry.php:200-209`; `src/Chat.php:17227`; `tests/Chat/PaletteSupersetDispatchTest.php:40-90`
 - **candy-code-web** ✅ — — — _Evidence:_ `src-web/components/panels/CommandPalette.vue:41-75,142-147`
 - **Claude Code 2.1.311** 🟡 — Desktop/VS Code have their own command surfaces. — _Evidence:_ cc:interactive-mode#keyboard-shortcuts
 - **OpenCode 1.19.4** ✅ — `command_list: ctrl+p`. Palette entries carry categories (Session, Agent, Prompt, VCS…). The which-key overlay (ctrl+alt+k) shows pending leader groups. — _Evidence:_ DOCS/keybinds; TUI/component/command-palette.tsx; TUI/feature-plugins/system/which-key.tsx
@@ -2835,7 +2835,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 </details>
 <details><summary><b>CMD-12</b> Per-command keybindings</summary>
 
-- **candy-code** 🟡 — Overrides accept Ctrl/Alt/Shift chords and lone function keys; a `null` value drops the shipped chord; `/keys reload` re-registers the map mid-session; collisions are announced and `/keys` shows effective rows. Binding ids name actions, not slash or file commands. — _Evidence:_ `src/Commands/KeyBindingRegistry.php:239-262,281`; `src/Chat.php:11947`; `src/Config/Settings/Validator/KeyBindingsValidator.php`
+- **candy-code** ✅ — `keybindings` rebinds or unbinds (null) declared binding ids including `command:<name>` chords for slash and custom commands (collision announced, `/keys reload` re-applies, `/keys` shows effective rows); no chord editor UI. — _Evidence:_ `src/Commands/KeyBindingRegistry.php:239-264,281`; `src/Chat.php:11947`; `src/Config/Settings/Validator/KeyBindingsValidator.php`
 - **candy-code-web** ❌ — —
 - **Claude Code 2.1.311** ✅ — `~/.claude/keybindings.json` rebinds actions per context (chords, `null` unbinds, JSON schema, hot reload). The `command:<name>` action binds a key to run `/<name>` (e.g. `"meta+g": "command:compact"` in a `Chat` block; unbound by default), and key-bound slash commands never run as shell input in `!` mode. Mods' Buttons can trigger keybinding actions. — _Evidence:_ cc:keybindings (Chat actions, `command:<name>` row); CL v2.1.309; cc:plugins/mods/reference
 - **OpenCode 1.19.4** 🟡 — Bindings take strings, arrays or objects (`key`, `event`, `preventDefault`, `fallthrough`). Leader key with `leader_timeout`. — _Evidence:_ DOCS/keybinds; TUI/config/keybind.ts
@@ -2971,7 +2971,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 </details>
 <details><summary><b>PLG-02</b> Plugin marketplace / install command</summary>
 
-- **candy-code** 🟡 — candy-code bundles list|install <path|git-url>`; install refuses a manifest-less dir, never overwrites, and clones with `git -c protocol.ext.allow=never clone --depth 1 --no-tags` as a contained child into `~/.candy-code/bundles/<name>` only. No index, search, update or marketplace. — _Evidence:_ `src/Cli/Subcommands.php:1464-1520,1616,1726-1750`; `docs/PLUGINS.md:95-113
+- **candy-code** ✅ — `bundles install` (git/path — contained clone, refuses a manifest-less dir, never overwrites) plus `bundles marketplace add|list|remove|update` and `bundles search` over a registry — no hosted default catalog (starts empty, refuses by default). — _Evidence:_ `src/Cli/Subcommands.php:1565-1595,1726-1750,2754`; `src/Bundles/MarketplaceRegistry.php`; `docs/PLUGINS.md:95-113`
 - **candy-code-web** ❌ — —
 - **Claude Code 2.1.311** ✅ — Official marketplace auto-added on first interactive run; scopes user/project/local; `plugin details` shows token cost; `prune`, `tag`, `validate`, `eval`, `configure`; org allowlists/force-install. — _Evidence:_ help (`plugin`, `plugin marketplace`, `plugin install`); cc:plugins/install; cc:plugins/org
 - **OpenCode 1.19.4** ✅ — Unpinned plugins are re-resolved from npm on startup and cached under ~/.cache/opencode/packages. No curated marketplace: the ecosystem page, awesome-opencode and opencode.cafe, plus the ocx extension manager with registries. — _Evidence:_ CLI: `opencode plugin --help`; DOCS/plugins (How plugins are installed); LOCAL: ~/.cache/opencode/packages
@@ -4020,7 +4020,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 <details><summary><b>GIT-01</b> Git awareness (branch / status)</summary>
 
 - **candy-code** ✅ — Values are fence-escaped and capped. GitRunner adds `--no-optional-locks`. The session picker can filter by branch. — _Evidence:_ `src/Context/EnvironmentBlock.php:1290-1340`; `src/Tui/SessionPicker.php:304,1372`
-- **candy-code-web** 🟡 — The Changes panel loads `files.changed` and `files.diff` together, fail-soft per side. Clicking a file narrows the diff to it, and untracked files are labelled. SessionSummary carries no branch, so the web never shows one. — _Evidence:_ `web:components/panels/ChangesPanel.vue:9-58`; `src/Protocol/Methods/FilesMethods.php:38-39`; `web:protocol/generated.ts` (SessionSummary, no `branch`)
+- **candy-code-web** ✅ — The Changes panel lists changed/untracked files (`files.changed`) with the workspace diff, fail-soft per side; clicking a file narrows the diff to it and untracked files are labelled. The branch the session opened on is server-tagged per session (`git_branch`) and shown as the ⎇ status-bar chip. — _Evidence:_ `web:components/panels/ChangesPanel.vue:9-58`; `web:components/StatusBar.vue:211-216`; `src/Protocol/Methods/FilesMethods.php:38-39`; `src/Protocol/ServerContext.php:530`
 - **Claude Code 2.1.311** ✅ — Badge refreshes after push or gh/glab PR commands. — _Evidence:_ obs; cc:interactive-mode#pr-review-status
 - **OpenCode 1.19.4** 🟡 — `GET /vcs` returns VCS info. — _Evidence:_ OC/session/system.ts:81; TUI/feature-plugins/home/footer.tsx:17-24
 - **OpenCode 2.1.4** 🟡 — `GET /vcs` returns VCS info. — _Evidence:_ OC/session/system.ts:81; TUI/feature-plugins/home/footer.tsx:17-24
@@ -4152,7 +4152,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 </details>
 <details><summary><b>UI-02</b> Themes (count) & custom themes</summary>
 
-- **candy-code** 🟡 — `/theme`, palette "Switch theme" or the settings view. Persisted to `config.json`. The `adaptive` theme follows the terminal background (OSC 11 reply, `COLORFGBG`, `CANDY_CODE_BACKGROUND`). Every chrome colour is projected along HSL lightness until it clears WCAG contrast against the detected background *and* the row-highlight fill, so even `light` stays readable on a dark terminal. No user theme files or overrides: `Theme::byName` throws for any name not in the fixed list. The picker opens on the current theme (● marker), and the palette and menu labels match. — _Evidence:_ `src/Theme.php:60,139-180,237-330`; `src/Tui/TerminalBackground.php`; live: `/theme`, palette
+- **candy-code** ✅ — 6 built-in themes (dark, light, dracula, tokyoNight, ansi, adaptive) plus custom theme files: `~/.candy-code/themes/<name>.json` with `extends` and token overrides, colour validation, symlink-escape refused, contrast re-projected. The `adaptive` theme follows the terminal background (OSC 11, `COLORFGBG`, `CANDY_CODE_BACKGROUND`) and every chrome colour is HSL-projected until it clears WCAG contrast. — _Evidence:_ `src/Theme.php:60,139-180,237-330`; `src/Config/ThemeFile.php`; `src/Tui/TerminalBackground.php`; live: `/theme`, palette
 - **candy-code-web** 🟡 — Three token sets (auto/dark/light), cycled from the top bar and kept per viewer. The token pairs are WCAG AA-checked by a contrast spec derived from `tokens.css`. The TUI's dracula/tokyoNight/ansi sets are not mirrored. — _Evidence:_ `web:stores/settings.ts:5,23-40`; `web:styles/tokens.css`
 - **Claude Code 2.1.311** ✅ — `/theme` → "New custom theme…" token editor; `custom:<slug>`. — _Evidence:_ cc:settings-reference#theme; cc:terminal-config#create-a-custom-theme
 - **OpenCode 1.19.4** ✅ — Truecolor is recommended. `/themes` (<leader>t). — _Evidence:_ TUI/theme/assets/*.json (33 files); DOCS/themes
@@ -4182,7 +4182,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 </details>
 <details><summary><b>UI-05</b> Diff rendering (side-by-side / unified)</summary>
 
-- **candy-code** 🟡 — Edit/Write results build a unified diff with project-relative headers. It is painted boxed with a DiffGutter, capped at `diffPreviewRows` (default 24), and Ctrl+O expands it. The Edit/Write/ApplyPatch approval modal previews the same diff. There is no side-by-side view, no word-level highlighting and no syntax highlighting. `/diff [n]` prints a checkpoint patch. — _Evidence:_ `src/Tools/Concerns/BuildsUnifiedDiff.php:165-168`; `src/Renderer.php:286-294,7259-7261`; `src/Tools/BuiltIn/Edit.php:573`; `src/Tui/DiffGutter.php`
+- **candy-code** ✅ — Edit/Write results build a unified diff with project-relative headers, painted boxed with a DiffGutter, capped at `diffPreviewRows` (default 24), Ctrl+O expands it, and the approval modal previews the same diff. Inline, unified and side-by-side (`SideBySideFormat`) renders all exist; the `diffStyle` setting picks the style and split is used when the pane width allows. `/diff [n]` prints a checkpoint patch. — _Evidence:_ `src/Tools/Concerns/BuildsUnifiedDiff.php:165-168`; `src/Renderer.php:286-294,7259-7261`; `src/Tui/DiffGutter.php` (`SideBySideFormat`); `src/Tools/BuiltIn/Edit.php:573`
 - **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/DiffView.vue`; `src-web/lib/diff.ts`
 - **Claude Code 2.1.311** 🟡 — — — _Evidence:_ cc:interactive-mode#review-changes-with-/diff; cc:vs-code; CL (word-level diff display)
 - **OpenCode 1.19.4** ✅ — — — _Evidence:_ DOCS/tui (diff_style); TUI/routes/session/permission.tsx:33-80
@@ -4223,7 +4223,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 <details><summary><b>UI-09</b> Input history & search (Ctrl+R)</summary>
 
 - **candy-code** ✅ — HistorySearch filters recalled prompts newest-first by case-insensitive containment. Pressing Ctrl+G again cycles matches. Enter accepts into the draft without sending, and Esc restores the pre-search draft. There is no session/project scope switch. — _Evidence:_ `src/Tui/HistorySearch.php:5-25`; `src/Commands/KeyBindingRegistry.php:947-949`; `src/Chat.php:17781-17810`; `src/Renderer.php:6418-6424`
-- **candy-code-web** 🟡 — `promptHistory.ts` keeps a most-recent-first ring in localStorage, capped at 50, skipping a duplicate of the head. The composer's ↑/↓ walk it and restore the draft on the way back. — _Evidence:_ `web:stores/promptHistory.ts:1-36`; `web:components/Composer.vue:147-208`
+- **candy-code-web** ✅ — `promptHistory.ts` keeps a most-recent-first ring in localStorage, capped at 50 (`PROMPT_HISTORY_CAP`), skipping a duplicate of the head; the composer's ↑/↓ walk it. Ctrl+G opens the reverse/incremental history-search overlay (`HistorySearch.vue`); repeated Ctrl+G steps matches. — _Evidence:_ `web:stores/promptHistory.ts:1-36`; `web:components/HistorySearch.vue`; `web:components/Composer.vue:147-208`
 - **Claude Code 2.1.311** ✅ — Ctrl+S stash; Up restores a Ctrl+C-cleared draft (v2.1.288). — _Evidence:_ cc:interactive-mode#command-history; CL v2.1.288
 - **OpenCode 1.19.4** 🟡 — Prompt stash: push, pop and list. — _Evidence:_ DOCS/keybinds (history_*, prompt_stash*); LOCAL: ~/.local/state/opencode/prompt-history.jsonl
 - **OpenCode 2.1.4** 🟡 — Prompt stash: push, pop and list. — _Evidence:_ DOCS/keybinds (history_*, prompt_stash*); LOCAL: ~/.local/state/opencode/prompt-history.jsonl
@@ -4253,7 +4253,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 <details><summary><b>UI-12</b> Image paste / drag-drop</summary>
 
 - **candy-code** ✅ — The image is saved to a private temp dir and inserted as an `@` mention. A missing tool or no image gives a notice. Images are checked by magic bytes, max 5 MiB, and sent as provider-native parts. A non-vision model gets a text placeholder plus a notice. — _Evidence:_ `KeyBindingRegistry.php` chat.paste-image; `src/ClipboardImagePastedMsg.php`; README.md:29,383-404
-- **candy-code-web** 🟡 — `readPastedImages` turns clipboard Blobs into strict-base64 entries of the sniffed raster type. Images never ride a `/command` or `!bang`. No drop handler exists. — _Evidence:_ `web:lib/paste.ts:1-20`; `web:components/Composer.vue:70-71,114-122`; `web:stores/session.ts:172-176`
+- **candy-code-web** ✅ — Clipboard image paste and Files drag-drop both attach chips (images and PDF strips) sent with `session.send`; images never ride a `/command` or `!bang`. — _Evidence:_ `web:lib/paste.ts:1-20`; `web:components/Composer.vue:70-71,114-122`; `web:stores/session.ts:172-176`
 - **Claude Code 2.1.311** ✅ — Remote Control attachments from phone/browser. — _Evidence:_ cc:interactive-mode#keyboard-shortcuts; CL (dragged image paths honor Read deny)
 - **OpenCode 1.19.4** ✅ — — — _Evidence:_ TUI/clipboard.ts:32-56; TUI/component/prompt/index.tsx:378-384
 - **OpenCode 2.1.4** ✅ — — — _Evidence:_ TUI/clipboard.ts:32-56; TUI/component/prompt/index.tsx:378-384
@@ -4292,8 +4292,8 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 </details>
 <details><summary><b>UI-16</b> Copy message / code block to clipboard</summary>
 
-- **candy-code** 🟡 — The status bar confirms `✓ copied N chars`. Only the transcript text column is selectable, so borders never land on the clipboard. There is no "copy last reply" or "copy code block" command or key. — _Evidence:_ README.md:257-277; `src/Tui/TextSelection.php`; `src/Support/SystemClipboard.php`; `src/Chat.php:2869-2892`
-- **candy-code-web** 🟡 — No component calls the Clipboard API (a grep for `navigator.clipboard`/`copy` across `src-web` finds no caller), so code blocks and replies have no copy affordance. — _Evidence:_ `web:components/MessageMarkdown.vue`; `web:components/TranscriptItem.vue`
+- **candy-code** ✅ — Mouse drag-select copies; `/copy` copies the last reply or the selection, with the private-use invisible-glyph sweep applied before the OSC 52 write and the native clipboard hand. — _Evidence:_ `src/Commands/CopyCommand.php`; `src/Support/SystemClipboard.php`; `src/Chat.php:2869-2892`; README.md:257-277
+- **candy-code-web** ✅ — A copy-message button per transcript item and per-code-fence copy buttons write the clipboard, guarded to secure contexts. — _Evidence:_ `web:components/MessageMarkdown.vue:35-52,66-70`; `web:components/TranscriptItem.vue`
 - **Claude Code 2.1.311** ✅ — — — _Evidence:_ cc:commands (/copy); cc:fullscreen#use-the-mouse
 - **OpenCode 1.19.4** ✅ — `OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`. — _Evidence:_ DOCS/keybinds (messages_copy); TUI/routes/session/index.tsx:877-940
 - **OpenCode 2.1.4** ✅ — `/copy` copies the latest assistant message, or the completed compaction summary when that is newest (1.x: the transcript). `<leader>y` copies the last reply; the transcript is available through the palette or `/export`; copy-on-select works with the mouse. — _Evidence:_ CHANGELOG v2.0.32 (#56053, #56055)
@@ -4353,7 +4353,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 <details><summary><b>UI-22</b> Thinking display toggle</summary>
 
 - **candy-code** ✅ — No global "always show/hide thinking" setting. Thought rows are per message. — _Evidence:_ `src/Renderer.php:4554`; README.md:762-765; live
-- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/ReasoningFold.vue`
+- **candy-code-web** ✅ — Individual reasoning folds (`ReasoningFold.vue`) plus a global show/hide-thinking toolbar toggle persisted in the `transcriptView` store. — _Evidence:_ `web:components/ReasoningFold.vue`; `web:stores/transcriptView.ts`
 - **Claude Code 2.1.311** ✅ — — — _Evidence:_ cc:model-config#extended-thinking
 - **OpenCode 1.19.4** ✅ — — — _Evidence:_ DOCS/tui (thinking)
 - **OpenCode 2.1.4** ✅ — v1 (✅): /thinking toggles reasoning display. v2 (✅): cli.json `session.thinking: show/hide` (no /thinking command) — _Evidence:_ V2D/cli/config (Sessions)
@@ -4362,7 +4362,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 </details>
 <details><summary><b>UI-23</b> Status line (customizable / scriptable)</summary>
 
-- **candy-code** 🟡 — The line refreshes every 2 s (configurable up to 1 h). Output is stripped of ANSI, zone sentinels and newlines and fitted last, and returns over ToolIpc, so a frame never blocks. Stdin is closed at spawn and only the inherited, scrubbed env is passed. Claude Code's JSON payload has no counterpart. — _Evidence:_ `src/Config/StatusLineCommand.php:528,590-623`
+- **candy-code** ✅ — `statusLine` runs a shell command in a forked child and fills a status-bar segment; a `StatusLineSession` JSON document arrives on stdin (session_id, cwd, model{id,display_name}, workspace). The line refreshes every 2 s (configurable up to 1 h), output is stripped of ANSI, zone sentinels and newlines and returns over ToolIpc, so a frame never blocks. — _Evidence:_ `src/Config/StatusLineCommand.php:528,590-623`; `src/Config/StatusLineSession.php`
 - **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/StatusBar.vue`
 - **Claude Code 2.1.311** ✅ — Multi-line, OSC 8 links, refresh interval, `subagentStatusLine` per-subagent rows; managed lock under `allowManagedHooksOnly`. — _Evidence:_ cc:statusline
 - **OpenCode 1.19.4** 🟡 — — — _Evidence:_ PLUG/tui.ts:455-486
@@ -4383,7 +4383,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 <details><summary><b>UI-25</b> Keybinding customization</summary>
 
 - **candy-code** ✅ — Overrides and suppressions register at launch after validation. `/keys reload` re-runs the same path mid-session (there is no file watcher) and clears every derived memo. An unbound chord is rewritten to an inert sentinel, so the shell regains the key. Vim keys are a mode, not registry rows, and are not rebindable. — _Evidence:_ `src/Commands/KeyBindingRegistry.php:200-301`; `src/Commands/KeyBinding.php:174`; `src/Chat.php:11947-11955`; `src/Config/Settings/Definitions/InterfaceSettings.php:281-289`
-- **candy-code-web** ❌ — —
+- **candy-code-web** 🟡 — Browser keymap customisation persisted via `lib/keymap.ts` with conflict refusal and a Settings editor; TUI bindings stay separate (`/keys`). — _Evidence:_ `web:lib/keymap.ts`
 - **Claude Code 2.1.311** ✅ — Readline word-edit keys not remappable. — _Evidence:_ cc:keybindings
 - **OpenCode 1.19.4** ✅ — — — _Evidence:_ DOCS/keybinds
 - **OpenCode 2.1.4** ✅ — v1 (✅): tui.json keybinds (~150 actions, leader key, multi-binding objects, 'none' to disable). v2 (✅): Keybinds in global cli.json (migrated from tui.json) — _Evidence:_ V2D/cli/keybinds; V2D/migrate-v1 (Terminal client configuration)
@@ -4413,7 +4413,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 <details><summary><b>UI-28</b> Help screen / shortcuts overlay</summary>
 
 - **candy-code** ✅ — The reference covers chat, panes, palette, session picker, folder picker, permission prompt, agent view/strip/transcript, skill picker, settings view, media form, menu bar and mouse. A test presses every listed row. The overlay is confined to the chat pane, so with panes docked descriptions are hard-cut with no ellipsis. `??` types a literal `?`. — _Evidence:_ `src/Commands/KeyBindingRegistry.php`; `src/Renderer.php:6230-6290`; `builtin-commands/1000-keys.php`, `1100-help.php`; live
-- **candy-code-web** ❌ — —
+- **candy-code-web** ✅ — Help/shortcuts overlay (`HelpOverlay.vue`) listing key bindings and slash commands. — _Evidence:_ `web:components/HelpOverlay.vue`
 - **Claude Code 2.1.311** ✅ — — — _Evidence:_ cc:interactive-mode#quick-commands; cc:commands
 - **OpenCode 1.19.4** ✅ — — — _Evidence:_ TUI/app.tsx:814; TUI/feature-plugins/system/which-key.tsx
 - **OpenCode 2.1.4** ✅ — — — _Evidence:_ TUI/app.tsx:814; TUI/feature-plugins/system/which-key.tsx
@@ -4422,7 +4422,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 </details>
 <details><summary><b>UI-29</b> Onboarding / first-run setup</summary>
 
-- **candy-code** 🟡 — The notice is a transcript row (Message::notice). Provider selection is the palette's "Switch model" list. No guided key entry or provider login flow in the TUI. — _Evidence:_ `src/Chat.php:10685-10706`; lang/en.php:2609
+- **candy-code** ✅ — `FirstRunWizard` offers provider-key setup on a tty, re-reads the config to verify, and merges (never clobbers) existing settings; with no provider it still falls back to the offline echo backend with a notice. — _Evidence:_ `src/Tui/FirstRunWizard/FirstRunWizard.php`; `src/Chat.php:10685-10706` (notice row); lang/en.php:2609
 - **candy-code-web** 🟡 — — — _Evidence:_ `src-web/views/LoginView.vue`
 - **Claude Code 2.1.311** ✅ — `/powerup`, `/init`, `/terminal-setup`, `/mobile` QR. — _Evidence:_ cc:quickstart; cc:fullscreen#fullscreen-by-default; cc:plugins/code-intelligence
 - **OpenCode 1.19.4** ✅ — — — _Evidence:_ DOCS/index (Configure); TUI/component/dialog-provider.tsx
@@ -4432,7 +4432,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 </details>
 <details><summary><b>UI-30</b> Accessibility (screen reader, reduced motion, colour-blind)</summary>
 
-- **candy-code** 🟡 — `CANDY_CODE_REDUCED_MOTION` makes every spinner static at once. NO_COLOR and WCAG-projected chrome contrast apply. Mouse can be turned off. Ctrl+F walks a keyboard row cursor over collapsible transcript rows, and Ctrl+O expands the focused one. All strings go through `Lang::t`, but only `en` ships. There is no screen-reader/plain-text mode and no colour-blind palettes. — _Evidence:_ `src/Cli/Bootstrap.php:1232-1240`; `src/Commands/KeyBindingRegistry.php:908-914`; `src/Theme.php:237-480`
+- **candy-code** ✅ — NO_COLOR, WCAG-projected theme contrast, `CANDY_CODE_REDUCED_MOTION` (every spinner static), mouse opt-out, i18n strings, and a `screenReader` mode (flat-text rendering plus bell/OSC 9 cues). Ctrl+F walks a keyboard row cursor over collapsible transcript rows and Ctrl+O expands the focused one. — _Evidence:_ `src/Cli/Bootstrap.php:1232-1240`; `src/Commands/KeyBindingRegistry.php:908-914`; `src/Tui/ScreenReaderMode.php`; `src/Config/Settings/Definitions/InterfaceSettings.php:357-360`; `src/Theme.php:237-480`
 - **candy-code-web** ✅ — The streaming tail is plain pre-wrap text announced once, politely, on completion. A newly arrived question announces its origin from App.vue's region. — _Evidence:_ `web:views/SessionView.vue:34-35,171`; `web:lib/questions.ts:9-36`; `web:styles/tokens.css`
 - **Claude Code 2.1.311** ✅ — — — _Evidence:_ cc:accessibility
 - **OpenCode 1.19.4** 🟡 — — — _Evidence:_ DOCS/keybinds (app_toggle_animations)
@@ -4443,7 +4443,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 <details><summary><b>UI-31</b> Spinner / progress / elapsed time</summary>
 
 - **candy-code** ✅ — The main-turn spinner animates with an elapsed clock, the thinking row carries a paint-time silence gap, and sub-agent live lines animate with tool count, clock and tokens. StallDetector covers background sessions. — _Evidence:_ `src/Tui/AgentActivityLine.php`; `src/Agents/Live/AgentLiveRegistry.php:62`
-- **candy-code-web** 🟡 — — — _Evidence:_ `src-web/components/StatusBar.vue:17-25`
+- **candy-code-web** ✅ — Spinning ◌ on running cards, "working · step n/m", per-call duration, and a live elapsed-time counter in the status bar. — _Evidence:_ `web:components/StatusBar.vue:17-25`; `web:components/TranscriptItem.vue`
 - **Claude Code 2.1.311** ✅ — `spinnerVerbs`, `spinnerTipsOverride`, `prefersReducedMotion`. — _Evidence:_ cc:costs#read-the-token-count-beside-the-spinner; cc:settings-reference
 - **OpenCode 1.19.4** ✅ — — — _Evidence:_ TUI/component/spinner.tsx; TUI/component/bg-pulse.tsx; TUI/routes/session/index.tsx:1481-1570
 - **OpenCode 2.1.4** ✅ — — — _Evidence:_ TUI/component/spinner.tsx; TUI/component/bg-pulse.tsx; TUI/routes/session/index.tsx:1481-1570
@@ -4452,8 +4452,8 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 </details>
 <details><summary><b>UI-32</b> Compact / verbose transcript toggle</summary>
 
-- **candy-code** 🟡 — There is no single chord that flips the whole transcript between compact and verbose (CC: Ctrl+O transcript mode; OC: /details). — _Evidence:_ `src/Config/Settings/Definitions/InterfaceSettings.php:252-260`; `KeyBindingRegistry.php` chat.tool-output
-- **candy-code-web** ❌ — —
+- **candy-code** ✅ — The `expandToolOutput` setting (live) shows all tool output in full, and Alt+O (`chat.verbose-toggle`) is the one-key verbose/compact flip, session-tier and live. — _Evidence:_ `src/Chat/Handlers/HandlesKeys.php:1021-1028,1145-1173`; `src/Config/LayeredSettings.php` (expandToolOutput); `KeyBindingRegistry.php` chat.tool-output
+- **candy-code-web** ✅ — Global toolbar toggles for thinking visibility and expand-tools (verbose transcript), persisted in the `transcriptView` store. — _Evidence:_ `web:stores/transcriptView.ts`
 - **Claude Code 2.1.311** ✅ — `viewMode` setting. — _Evidence:_ cc:interactive-mode; cc:commands (/focus); help
 - **OpenCode 1.19.4** 🟡 — — — _Evidence:_ TUI/config/keybind.ts:101,149-150
 - **OpenCode 2.1.4** ✅ — v1 (🟡): Separate toggles for tool details, generic tool output, timestamps, concealment; no single compact mode. v2 (✅): `session.verbosity` low/high groups tools, thoughts and instruction loads into summaries — _Evidence:_ V2T/routes/session/group-view.tsx:201-240; V2CL v2.0.26
@@ -4512,7 +4512,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 </details>
 <details><summary><b>UI-N4</b> 🆕 Session recap after inactivity (one-line "where were we" summary)</summary>
 
-- **candy-code** ❌ — A grep of src/ and lang/en.php for recap, "where were we" or "welcome back" finds nothing. Prompt suggestions (a title-model call after each turn) propose your next message, Ctrl+R shows session previews, and `/handoff` starts a new session seeded with a state summary. Nothing fires after the terminal loses focus or after time passes. — _Evidence:_ `src/Host/TitleService.php:95`; `src/Host/Commands/HandoffHostCommand.php:7-25`
+- **candy-code** ✅ — A one-line recap fires after ≥3 min unfocused with 3+ turns (`AwayTracker`; `sessions.awayRecap`, default true), and `/recap` answers on demand. — _Evidence:_ `src/Tui/AwayTracker.php` (C-TUI-3.g); `src/Chat/Handlers/HandlesRunControl.php:199,623`; `src/Host/Commands/RecapHostCommand.php`; `src/Config/LayeredSettings.php:647`
 - **candy-code-web** ❌ — — — _Evidence:_ `candy-code-web/src-web/stores/layout.ts:140-160`
 - **Claude Code 2.1.311** ✅ — — — _Evidence:_ cc:interactive-mode#session-recap
 - **OpenCode 1.19.4** ❌ — —
@@ -4585,7 +4585,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 </details>
 <details><summary><b>WEB-04</b> Remote control from phone / browser</summary>
 
-- **candy-code** 🟡 — Host check (DNS rebinding), Origin check, `--allowed-ips`, and trusted-proxy X-Forwarded-For/Proto (Secure cookie only behind a trusted HTTPS proxy). Request bodies carry a read deadline enforced ahead of auth (408). — _Evidence:_ `docs/SERVER.md:1144-1270`; `src/Server/Server.php:507-525`
+- **candy-code** ✅ — Built-in TLS for `serve`: `--tls-cert`/`--tls-key` (both-or-neither) with key-permission and private-key pairing checks, wrapping the public listener only — the control socket stays local by design; `--allow-remote` cleartext bind is still offered, alongside the host/Origin checks and `--allowed-ips`. — _Evidence:_ `src/Server/ServerConfig.php:279-281`; `docs/SERVER.md:1144-1270`; `src/Server/Server.php:507-525`
 - **candy-code-web** ✅ — The top bar wraps and compacts at 375 px, and the PWA manifest makes the UI installable. — _Evidence:_ `web:App.vue`; `web:public/manifest.webmanifest`
 - **Claude Code 2.1.311** ✅ — Outbound-only, short-lived creds, Trusted Devices option; unavailable on 3P providers, ZDR, HIPAA. — _Evidence:_ cc:remote-control
 - **OpenCode 1.19.4** 🟡 — — — _Evidence:_ DOCS/web; DOCS/ecosystem (portal, CodeNomad)
@@ -4675,8 +4675,8 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 </details>
 <details><summary><b>WEB-13</b> Voice interface</summary>
 
-- **candy-code** ❌ — —
-- **candy-code-web** ❌ — —
+- **candy-code** 🟡 — Alt+V push-to-talk in the TUI plus browser-side dictation, both transcribed server-side (`audio.transcribe`; `voice.model` default `whisper-1` on the user-tier `voice.baseUrl`); settled text lands in the draft. No spoken replies. — _Evidence:_ `src/Commands/KeyBindingRegistry.php:1125`; `src/Config/Settings/Definitions/MediaSettings.php:166,184`; `src/Protocol/Methods/MediaMethods.php`
+- **candy-code-web** 🟡 — Secure-context Web Speech dictation; with the server advertising `transcribe` the take rides `audio.transcribe` on the user's configured voice endpoint (`canTranscribe`). No spoken replies. — _Evidence:_ `web:lib/dictation.ts`; `web:lib/recorder.ts`; `web:components/Composer.vue`; `web:stores/connection.ts:98`
 - **Claude Code 2.1.311** 🟡 — — — _Evidence:_ cc:voice-dictation
 - **OpenCode 1.19.4** ❌ — —
 - **OpenCode 2.1.4** 🟡 — The iOS app delegates voice calls, and the experimental SDK offers realtime voice sessions (see MOD-23); the TUI and desktop have no voice. — _Evidence:_ anomalyco/opencode@v2.1.4:packages/core/src/voice.ts; packages/app/src/session/timeline/voice-delegation.ts
