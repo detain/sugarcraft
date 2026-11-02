@@ -1451,6 +1451,23 @@ final class LaunchContext
     private static array $trustedSettingsRoots = [];
 
     /**
+     * The C-SEC-3.b per-origin opt-ins, frozen per resolved config path exactly
+     * like the four root lists beside them — the difference is only WHAT they
+     * hold: ORIGIN NAMES (a bundle's manifest name; an MCP server key) rather
+     * than canonicalised roots. {@see Bootstrap::trustedBundleCommandNames()}
+     * and {@see Bootstrap::mcpPromptShellServers()} seed these; the freeze is
+     * what makes "restart to grant" true of the opt-ins too, so a prompt that
+     * appends a line to the user's config cannot unlock a stranger's shell
+     * inside the very session that wrote it.
+     *
+     * @var array<string, list<string>>
+     */
+    private static array $trustedBundleNames = [];
+
+    /** @var array<string, list<string>> see {@see self::$trustedBundleNames} */
+    private static array $mcpPromptShellNames = [];
+
+    /**
      * The project root {@see Bootstrap::readUserConfig()}'s project layer is read from, or
      * null for "no project named yet" — see
      * {@see Bootstrap::useProjectRootForSettings()}.
@@ -1510,6 +1527,38 @@ final class LaunchContext
     public static function rememberTrustedCommandRoots(string $path, array $roots): void
     {
         self::$trustedCommandRoots[$path] = $roots;
+    }
+
+    /** The frozen C-SEC-3.b bundle opt-ins for $path (see Bootstrap::trustedBundleCommandNames()). */
+    public static function trustedBundleNamesFor(string $path): array
+    {
+        return self::$trustedBundleNames[$path];
+    }
+
+    public static function hasTrustedBundleNamesFor(string $path): bool
+    {
+        return \array_key_exists($path, self::$trustedBundleNames);
+    }
+
+    public static function rememberTrustedBundleNames(string $path, array $names): void
+    {
+        self::$trustedBundleNames[$path] = $names;
+    }
+
+    /** The frozen C-SEC-3.b MCP prompt-shell opt-ins for $path (see Bootstrap::mcpPromptShellServers()). */
+    public static function mcpPromptShellNamesFor(string $path): array
+    {
+        return self::$mcpPromptShellNames[$path];
+    }
+
+    public static function hasMcpPromptShellNamesFor(string $path): bool
+    {
+        return \array_key_exists($path, self::$mcpPromptShellNames);
+    }
+
+    public static function rememberMcpPromptShellNames(string $path, array $names): void
+    {
+        self::$mcpPromptShellNames[$path] = $names;
     }
 
     public static function trustedSettingsRootsFor(string $path): array

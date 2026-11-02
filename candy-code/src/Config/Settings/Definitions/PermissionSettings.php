@@ -213,6 +213,34 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.trustedProjectSettings.label'))
                 ->withHelp(Lang::t('settings.trustedProjectSettings.help'))
                 ->withReaderSymbol(Bootstrap::class . '::projectSettingsTrusted'),
+            // C-SEC-3.b: the per-origin opt-ins for the two third-party shell
+            // postures. Deliberately NOT layered, like the `trustedProject*`
+            // root lists above — a key absent from LAYERED_KEYS is answered by
+            // the user's own config file alone, so a checked-out project can
+            // never name a bundle or an MCP server whose `!cmd` forms it trusts
+            // on the operator's behalf. NOT path validators either: these hold
+            // ORIGIN NAMES (a bundle's manifest name; a server key as the user
+            // config spells it), matched exactly by CommandShellPosture::optedIn,
+            // and that absence is what keeps them out of SettingsWriter::trustKeys()
+            // — the directory-grant flows must not treat a name as a root.
+            // Frozen and empty by default: the shipped deny-all posture stays
+            // byte-identical until the operator opts an origin in.
+            SettingDefinition::new('trustedBundleCommands', SettingType::StringList, [])
+                ->withCategory(SettingCategory::Permissions)
+                ->withRiskClass(RiskClass::Security)
+                ->withApplyMode(ApplyMode::Frozen)
+                ->withUi(UiEditability::List)
+                ->withLabel(Lang::t('settings.trustedBundleCommands.label'))
+                ->withHelp(Lang::t('settings.trustedBundleCommands.help'))
+                ->withReaderSymbol(Bootstrap::class . '::trustedBundleCommandNames'),
+            SettingDefinition::new('mcpPromptShell', SettingType::StringList, [])
+                ->withCategory(SettingCategory::Permissions)
+                ->withRiskClass(RiskClass::Security)
+                ->withApplyMode(ApplyMode::Frozen)
+                ->withUi(UiEditability::List)
+                ->withLabel(Lang::t('settings.mcpPromptShell.label'))
+                ->withHelp(Lang::t('settings.mcpPromptShell.help'))
+                ->withReaderSymbol(Bootstrap::class . '::mcpPromptShellServers'),
         ];
     }
 }

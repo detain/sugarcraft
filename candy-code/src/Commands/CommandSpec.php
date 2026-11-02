@@ -272,6 +272,24 @@ final class CommandSpec
          * collapsing them would lose one of the two answers the popup gives.
          */
         public readonly ?SkillSource $source = null,
+        /**
+         * WHO PUBLISHED this third-party row — C-SEC-3.b's origin stamp: the
+         * raw bundle manifest name for a `SkillSource::Bundle` row, the raw
+         * MCP server key for an `mcp`-tier row, null for every native row.
+         *
+         * Carried because (tier, source) answers WHICH ARM of the posture
+         * table judges the row but not WHICH PACKAGE it judges: the two
+         * name-list opt-ins (`trustedBundleCommands`, `mcpPromptShell`) match
+         * against exactly this value, and no derivation reaches it. A bundle
+         * alias row carries its bundle's name under a flat command name that
+         * mentions neither, and a materialized MCP body outlives the JSON
+         * marker that named its server — so the loader and the prompt bridge
+         * stamp it at the moment they know it. Entries are matched exactly
+         * against this raw spelling, never the folded row-name segment nor
+         * the sanitized wire prefix: the operator names the bundle the way
+         * its manifest and the server the way `.mcp.json` name them.
+         */
+        public readonly ?string $originName = null,
     ) {}
 
     public static function new(
@@ -290,6 +308,7 @@ final class CommandSpec
         ?string $tier = null,
         array $ignoredFrontmatter = [],
         ?SkillSource $source = null,
+        ?string $originName = null,
     ): self {
         return new self(
             $name,
@@ -307,6 +326,7 @@ final class CommandSpec
             $tier,
             $ignoredFrontmatter,
             $source,
+            $originName,
         );
     }
 
@@ -335,8 +355,12 @@ final class CommandSpec
      *                      the loader's answer, never the file's claim, and it
      *                      additionally decides whether opencode's frontmatter
      *                      `template:` key is consulted (below).
+     * @param ?string $originName WHO PUBLISHED a third-party row — see
+     *                      {@see $originName}. The loader's answer (the bundle
+     *                      manifest name), never the file's claim; null on
+     *                      every native disk row.
      */
-    public static function fromFile(string $path, string $name, ?string $tier = null, ?SkillSource $source = null): self
+    public static function fromFile(string $path, string $name, ?string $tier = null, ?SkillSource $source = null, ?string $originName = null): self
     {
         if (preg_match(self::NAME_PATTERN, $name) !== 1) {
             throw new \InvalidArgumentException(Lang::t('cmd.file.unsafe-name', ['name' => $name]));
@@ -415,6 +439,7 @@ final class CommandSpec
             // loader skips has no keys worth reporting as ignored.
             ignoredFrontmatter: FrontmatterKeyAudit::inspect(FrontmatterKeyAudit::COMMAND, $meta),
             source: $source,
+            originName: $originName,
         );
     }
 

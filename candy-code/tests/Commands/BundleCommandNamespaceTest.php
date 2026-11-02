@@ -143,6 +143,11 @@ final class BundleCommandNamespaceTest extends TestCase
         self::assertSame('revA:review', $commands['revA:review']->name, 'row key and spec name agree — CommandRegistry::filter() keys byName');
         self::assertSame(SkillSource::Bundle, $commands['revA:review']->source);
         self::assertSame(SkillSource::Bundle, $commands['revB:review']->source);
+        // C-SEC-3.b: each row carries its bundle's RAW manifest name — the
+        // per-origin opt-in matches this stamp, never the folded row segment,
+        // so two bundles named identically in the fold cannot share an unlock.
+        self::assertSame('revA', $commands['revA:review']->originName);
+        self::assertSame('revB', $commands['revB:review']->originName);
     }
 
     public function testFlatAliasSurvivesWhileNothingElseClaimsIt(): void
@@ -158,6 +163,11 @@ final class BundleCommandNamespaceTest extends TestCase
         self::assertNotSame($commands['revkit:rev'], $commands['rev']);
         self::assertSame(SkillSource::Bundle, $commands['rev']->source);
         self::assertStringContainsString('kit body', (string) $commands['rev']->template);
+        // The alias row is a separate spec, so the stamp rides BOTH rows —
+        // opting a bundle in opens its flat spelling too, which is the same
+        // file's shell forms either way.
+        self::assertSame('revkit', $commands['revkit:rev']->originName, 'C-SEC-3.b stamp on the qualified row');
+        self::assertSame('revkit', $commands['rev']->originName, 'C-SEC-3.b stamp on the flat alias');
     }
 
     public function testAPlainForeignRowOfAnyTierSuppressesTheFlatAlias(): void
@@ -179,9 +189,12 @@ final class BundleCommandNamespaceTest extends TestCase
         self::assertSame(SkillSource::Claude, $commands['rev']->source, 'the plain row owns the flat name');
         self::assertArrayHasKey('bundled:rev', $commands, 'the bundle row itself is untouched by the suppression');
         self::assertStringContainsString('from .claude', (string) $commands['rev']->template);
+        self::assertNull($commands['rev']->originName, 'a plain foreign row is nobody\'s bundle — C-SEC-3.b has no origin to match');
+        self::assertSame('bundled', $commands['bundled:rev']->originName);
 
         self::assertSame(SkillSource::Claude, $commands['late']->source, 'a claimant from the USER band suppresses just the same');
         self::assertArrayHasKey('bundled:late', $commands);
+        self::assertNull($commands['late']->originName);
     }
 
     public function testNamespacedRowResolvesAsTypedAndTheColonArmSurvives(): void
@@ -251,6 +264,7 @@ final class BundleCommandNamespaceTest extends TestCase
 
         self::assertArrayHasKey('My-Kit:review', $commands, 'spaces and punctuation fold to "-", decoration trims');
         self::assertArrayHasKey('review', $commands, 'the flat alias law is unaffected by the fold');
+        self::assertSame('My Kit!', $commands['My-Kit:review']->originName, 'C-SEC-3.b matches the RAW manifest name; the folded segment is row-naming grammar only');
     }
 
     public function testABundleNameThatFoldsToNothingRefusesItsFilesWithADisclosure(): void

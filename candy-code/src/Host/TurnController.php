@@ -600,6 +600,8 @@ final class TurnController
      * later `@path` forms are checked against.
      *
      * @param (\Closure(string): void)|null $onGateEvaluated see {@see refuseCommandShell()}
+     * @param list<string> $trustedBundleCommands C-SEC-3.b user-tier opt-in, forwarded
+     * @param list<string> $mcpPromptShell C-SEC-3.b user-tier opt-in, forwarded
      */
     public function commandDirective(
         CommandSpec $spec,
@@ -607,15 +609,17 @@ final class TurnController
         bool $projectCommandsTrusted,
         ?PermissionGate $gate,
         ?\Closure $onGateEvaluated = null,
+        array $trustedBundleCommands = [],
+        array $mcpPromptShell = [],
     ): \Closure {
         $controller = $this;
 
-        return static function (string $kind, string $payload, float $secondsRemaining) use ($controller, $spec, $root, $projectCommandsTrusted, $gate, $onGateEvaluated): string {
+        return static function (string $kind, string $payload, float $secondsRemaining) use ($controller, $spec, $root, $projectCommandsTrusted, $gate, $onGateEvaluated, $trustedBundleCommands, $mcpPromptShell): string {
             if ($kind === 'include') {
                 return $spec->includeFile($payload, $root);
             }
 
-            $refusal = $controller->refuseCommandShell($spec, $payload, $projectCommandsTrusted, $gate, $onGateEvaluated);
+            $refusal = $controller->refuseCommandShell($spec, $payload, $projectCommandsTrusted, $gate, $onGateEvaluated, $trustedBundleCommands, $mcpPromptShell);
             if ($refusal !== null) {
                 return $refusal;
             }
@@ -635,12 +639,17 @@ final class TurnController
      *    $projectCommandsTrusted — the operator having named this root under
      *    `trustedProjectCommands`. The two third-party postures — an `Mcp`
      *    body fetched over a wire, and a `Bundle` row whatever tier it
-     *    installed under — are REFUSED outright, before trust is even asked:
-     *    the project-trust list vouches for this checkout's own files, and a
-     *    stranger's text is not one of them (C-SEC-3, plan_comparison §6; the
-     *    per-origin opt-in is ruled in — C-SEC-3.b — and lands with the row
-     *    identity stamps, since until a bundle or a fetched body carries its
-     *    origin name there is nothing for the allow-lists to match).
+     *    installed under — are REFUSED before trust is even asked: the
+     *    project-trust list vouches for this checkout's own files, and a
+     *    stranger's text is not one of them (C-SEC-3, plan_comparison §6).
+     *    The C-SEC-3.b per-origin opt-in is the ONE unlock for these rows:
+     *    {@see CommandShellPosture::optedIn()} matches the row's stamped
+     *    origin name against $trustedBundleCommands / $mcpPromptShell — both
+     *    user-tier-only, both empty by default, so the refusal is still the
+     *    shipped posture until the operator names an origin. An opted-in row
+     *    skips the posture refusal and falls through to the gate like any
+     *    other; nothing about it vouches for the text, which is why the gate
+     *    still judges every command.
      *    `Operator` is the user's own file or a spec an in-process caller
      *    built; foreign rows keep the settled tier answer, which the table
      *    routes to these same two cases.
@@ -657,6 +666,8 @@ final class TurnController
      * thread evaluates against the CHILD's copy of the gate, whose counters die
      * with it, so the child reports every command it put to the gate through
      * $onGateEvaluated and the parent replays them against its own.
+     * @param list<string> $trustedBundleCommands C-SEC-3.b: bundle names whose rows may reach the gate (user tier only)
+     * @param list<string> $mcpPromptShell C-SEC-3.b: MCP server keys whose prompt bodies may reach the gate (user tier only)
      */
     public function refuseCommandShell(
         CommandSpec $spec,
@@ -664,23 +675,27 @@ final class TurnController
         bool $projectCommandsTrusted,
         ?PermissionGate $gate,
         ?\Closure $onGateEvaluated = null,
+        array $trustedBundleCommands = [],
+        array $mcpPromptShell = [],
     ): ?string {
         $posture = CommandShellPosture::of($spec);
+        $optedIn = CommandShellPosture::optedIn($spec, $trustedBundleCommands, $mcpPromptShell);
 
         // C-SEC-3 (plan_comparison §6): the two third-party postures are
-        // refused outright, before trust and before the gate. Each keeps its
+        // refused before trust and before the gate — unless C-SEC-3.b's
+        // per-origin opt-in names this exact bundle or server. Each keeps its
         // own sentence so the author who can fix it — the server's, or the
         // bundle's — can see which posture closed, and neither sentence names
-        // `trustedProjectCommands` as the unlock, because for these rows no
-        // local grant unlocks anything.
-        if ($posture === ShellProvenance::Mcp) {
+        // `trustedProjectCommands` as the unlock, because for these rows it is
+        // the origin allow-list or nothing.
+        if ($posture === ShellProvenance::Mcp && !$optedIn) {
             return Lang::t('host.command_shell.mcp_refused', [
                 'command' => CommandSpec::abbreviateForm($command),
                 'name' => $spec->name,
             ]);
         }
 
-        if ($posture === ShellProvenance::Bundle) {
+        if ($posture === ShellProvenance::Bundle && !$optedIn) {
             return Lang::t('host.command_shell.bundle_refused', [
                 'command' => CommandSpec::abbreviateForm($command),
                 'name' => $spec->name,
@@ -728,7 +743,9 @@ final class TurnController
      * holds — `prompts/get` is network IO and belongs off the update path for
      * the same reason a shell form does (MCP-2). False for a refused posture
      * that has nothing but shell forms to offer — a `Bundle` row forks for no
-     * shell its expansion may not run (C-SEC-3). Otherwise true only when
+     * shell its expansion may not run (C-SEC-3); a bundle the operator opted
+     * in under `trustedBundleCommands` (C-SEC-3.b) does fork, because its
+     * shell forms reach the gate like anyone's. Otherwise true only when
      * every one of these holds, so every other expansion stays
      * synchronous and byte-identical: $text names a file whose body has a
      * `` !`…` `` form; that form could actually reach a shell (an untrusted
@@ -738,12 +755,16 @@ final class TurnController
      * build can fork.
      *
      * @param array<string, CommandSpec> $customCommands
+     * @param list<string> $trustedBundleCommands C-SEC-3.b user-tier opt-in, forwarded
+     * @param list<string> $mcpPromptShell C-SEC-3.b user-tier opt-in, forwarded
      */
     public function customCommandMustFork(
         string $text,
         array $customCommands,
         ?string $resolvedText,
         bool $projectCommandsTrusted,
+        array $trustedBundleCommands = [],
+        array $mcpPromptShell = [],
     ): bool {
         if ($resolvedText === $text || !self::canFork()) {
             return false;
@@ -769,8 +790,10 @@ final class TurnController
         }
 
         // A row whose shell forms are all refused never forks on their
-        // account: the child would only run the same refusal off-thread.
-        if ($posture->refusesShell()) {
+        // account: the child would only run the same refusal off-thread. An
+        // origin the operator opted in (C-SEC-3.b) is not refused, so it
+        // forks exactly like an untrusted-but-gated native row.
+        if ($posture->refusesShell() && !CommandShellPosture::optedIn($spec, $trustedBundleCommands, $mcpPromptShell)) {
             return false;
         }
 

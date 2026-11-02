@@ -102,4 +102,57 @@ final class CommandShellPostureTest extends TestCase
         }
         self::assertSame(['Bundle', 'Mcp'], $refusing);
     }
+
+    /**
+     * C-SEC-3.b: the per-origin opt-in consults ONLY the two third-party arms,
+     * matches the RAW stamped name strictly, and never opts in a row that has
+     * no stamp — including a same-named native row, which the lists have no
+     * power to unlock.
+     */
+    public function testOptInOpensOnlyTheThirdPartyArmItNames(): void
+    {
+        $bundle = new CommandSpec('kit:log', 'd', 'Custom', template: 'run', tier: 'user', source: SkillSource::Bundle, originName: 'kit');
+        self::assertTrue(CommandShellPosture::optedIn($bundle, ['kit'], []), 'the named bundle reaches the gate');
+        self::assertFalse(CommandShellPosture::optedIn($bundle, ['other'], []), 'an unlisted bundle stays refused');
+        self::assertFalse(CommandShellPosture::optedIn($bundle, [], ['kit']), 'the lists are per posture — a bundle name in the MCP list opens nothing');
+
+        $mcp = new CommandSpec('mcp__srv__p', 'd', 'Custom', template: 'run', tier: 'mcp', originName: 'srv');
+        self::assertTrue(CommandShellPosture::optedIn($mcp, [], ['srv']), 'the named server reaches the gate');
+        self::assertFalse(CommandShellPosture::optedIn($mcp, [], ['other']), 'an unlisted server stays refused');
+        self::assertFalse(CommandShellPosture::optedIn($mcp, ['srv'], []), 'a server key in the bundle list opens nothing');
+    }
+
+    public function testOptInNeverMatchesAnUnstampedOrNativeRow(): void
+    {
+        // A row predating the stamp (null origin) is never opted in — strict
+        // in_array against a null origin cannot even accidentally match the
+        // empty-string entry a sloppy loose compare would.
+        $unstamped = new CommandSpec('b', 'd', 'Custom', template: 'run', tier: 'user', source: SkillSource::Bundle);
+        self::assertFalse(CommandShellPosture::optedIn($unstamped, ['', 'kit'], ['']));
+
+        // The lists carry no power over the tier's own rows: naming a user or
+        // project command "u"/"p" opts nothing in — Operator and Repo answers
+        // never consult the lists.
+        $user = new CommandSpec('u', 'd', 'Custom', template: 'run', tier: 'user', originName: 'u');
+        self::assertFalse(CommandShellPosture::optedIn($user, ['u'], ['u']));
+        $project = new CommandSpec('p', 'd', 'Custom', template: 'run', tier: 'project', originName: 'p');
+        self::assertFalse(CommandShellPosture::optedIn($project, ['p'], ['p']));
+
+        // Matching is the RAW spelling, never the folded row-name segment nor
+        // the sanitized wire prefix.
+        $folded = new CommandSpec('review-kit:log', 'd', 'Custom', template: 'run', source: SkillSource::Bundle, originName: 'Review Kit');
+        self::assertTrue(CommandShellPosture::optedIn($folded, ['Review Kit'], []), 'the manifest name itself matches');
+        self::assertFalse(CommandShellPosture::optedIn($folded, ['review-kit'], []), 'the folded badge in the row name does NOT match');
+    }
+
+    public function testEmptyListsLeaveEveryStampedRowRefused(): void
+    {
+        // The shipped default: empty lists opt nothing in, whatever stamps exist.
+        $bundle = new CommandSpec('kit:log', 'd', 'Custom', template: 'run', source: SkillSource::Bundle, originName: 'kit');
+        $mcp = new CommandSpec('mcp__srv__p', 'd', 'Custom', template: 'run', tier: 'mcp', originName: 'srv');
+        self::assertFalse(CommandShellPosture::optedIn($bundle), 'no argument at all = today\'s deny-all');
+        self::assertFalse(CommandShellPosture::optedIn($mcp));
+        self::assertFalse(CommandShellPosture::optedIn($bundle, [], []));
+        self::assertFalse(CommandShellPosture::optedIn($mcp, [], []));
+    }
 }

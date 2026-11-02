@@ -199,6 +199,27 @@ final class Bootstrap
     private const TRUSTED_PROJECT_COMMANDS_CONFIG_KEY = 'trustedProjectCommands';
 
     /**
+     * C-SEC-3.b: the per-origin opt-in naming the BUNDLES whose command rows
+     * may put their `` !`cmd` `` forms to the permission gate instead of
+     * meeting the blanket posture refusal. Entries are a bundle's manifest
+     * name spelled as the bundle names itself, matched exactly by
+     * {@see \SugarCraft\Code\Commands\CommandShellPosture::optedIn()} — not
+     * paths, which is why {@see trustedOriginNames()} is its own small parser
+     * rather than the roots funnel {@see trustedProjectRoots()} that is.
+     */
+    private const TRUSTED_BUNDLE_COMMANDS_CONFIG_KEY = 'trustedBundleCommands';
+
+    /**
+     * C-SEC-3.b: the per-origin opt-in naming the MCP SERVERS whose fetched
+     * prompt bodies may put their `` !`cmd` `` forms to the permission gate.
+     * Entries are the server key as the user's own MCP config spells it.
+     * {@see TRUSTED_BUNDLE_COMMANDS_CONFIG_KEY} says why this is its own key:
+     * the two postures are refused for different authors' text, and one
+     * operator decision should not silently widen the other.
+     */
+    private const MCP_PROMPT_SHELL_CONFIG_KEY = 'mcpPromptShell';
+
+    /**
      * The console surface named by {@see permissionGate()}'s `$consoleSurface`
      * for `-p`: an approver that CAN ask (on stderr at a terminal) while the
      * process is attached to one, so this surface starts in the asking
@@ -1618,6 +1639,11 @@ final class Bootstrap
             // {@see projectCommandShellIsTrusted()}. A null $root cannot be
             // trusted by a list of absolute paths, so it is false without asking.
             projectCommandsTrusted: $workspace->projectCommandsTrusted,
+            // C-SEC-3.b: the per-origin opt-ins, ANSWERS read once at launch
+            // from the frozen user-tier lists — the same once-per-process
+            // freeze as the roots above, and root-independent like them.
+            trustedBundleCommands: $workspace->trustedBundleCommands,
+            mcpPromptShell: $workspace->mcpPromptShell,
             // THE APPOINTMENT THAT MAKES THE ARM MEAN SOMETHING (E171).
             // `RuntimeNoticeSink::arm()` in workspace() opens the inbox; this
             // is what says WHICH Chat reads it. The two belong together because
@@ -2193,6 +2219,11 @@ final class Bootstrap
             backgroundSupervisor: new BackgroundSupervisor(),
             workflowEngine: self::workflowEngine($root, $permissionGate, $skills),
             projectCommandsTrusted: $root !== null && self::projectCommandShellIsTrusted(self::configRoot($root)),
+            // C-SEC-3.b: the per-origin opt-ins, ANSWERS not the ability to
+            // ask — same freeze argument as projectCommandShellIsTrusted above.
+            // Root-independent: a name is not anchored to a checkout.
+            trustedBundleCommands: self::trustedBundleCommandNames(),
+            mcpPromptShell: self::mcpPromptShellServers(),
         );
 
         // THE HOST SERVICES (Appendix O §4.3), registered where the workspace
@@ -7137,6 +7168,115 @@ public static function useMaxCost(?string $maxCost): void
     }
 
     /**
+     * The bundle names the operator opted in under
+     * {@see TRUSTED_BUNDLE_COMMANDS_CONFIG_KEY} (C-SEC-3.b) — the ANSWER list
+     * {@see chat()} hands Chat, which forwards it to
+     * {@see \SugarCraft\Code\Commands\CommandShellPosture::optedIn()}. Empty by
+     * default: the blanket refusal of a bundle's shell forms is the shipped
+     * posture until the operator names a bundle, and `--safe-mode` answers
+     * empty whatever the config says ({@see trustedOriginNames()}).
+     *
+     * @return list<string>
+     *
+     * @throws PermissionConfigException when the user config exists and is unusable
+     */
+    public static function trustedBundleCommandNames(): array
+    {
+        $path = self::trustedConfigDirPath() . '/config.json';
+
+        if (!LaunchContext::hasTrustedBundleNamesFor($path)) {
+            LaunchContext::rememberTrustedBundleNames($path, self::trustedOriginNames(
+                self::permissionConfig(),
+                self::TRUSTED_BUNDLE_COMMANDS_CONFIG_KEY,
+                Lang::t('cli.warn.untrusted_bundles'),
+            ));
+        }
+
+        return LaunchContext::trustedBundleNamesFor($path);
+    }
+
+    /**
+     * The MCP server keys the operator opted in under
+     * {@see MCP_PROMPT_SHELL_CONFIG_KEY} (C-SEC-3.b), same shape and same
+     * freeze as {@see trustedBundleCommandNames()}.
+     *
+     * @return list<string>
+     *
+     * @throws PermissionConfigException when the user config exists and is unusable
+     */
+    public static function mcpPromptShellServers(): array
+    {
+        $path = self::trustedConfigDirPath() . '/config.json';
+
+        if (!LaunchContext::hasMcpPromptShellNamesFor($path)) {
+            LaunchContext::rememberMcpPromptShellNames($path, self::trustedOriginNames(
+                self::permissionConfig(),
+                self::MCP_PROMPT_SHELL_CONFIG_KEY,
+                Lang::t('cli.warn.untrusted_prompt_shell'),
+            ));
+        }
+
+        return LaunchContext::mcpPromptShellNamesFor($path);
+    }
+
+    /**
+     * ONE PARSER for the C-SEC-3.b origin-name lists, the sibling of
+     * {@see trustedProjectRoots()} distinguished only by WHAT its entries
+     * are: ORIGIN NAMES, not paths. That difference deletes the entire path
+     * half of the roots funnel — no `~` expansion, no realpath, and above all
+     * no relative-entry refusal, because a name is never a relative path and
+     * the `"."`-is-a-global-bypass argument has no purchase on a bundle's
+     * manifest name. What carries over unchanged is the tolerance discipline:
+     * a wrong-shaped value costs everything via one loud warning, a bad entry
+     * is dropped with one loud warning per entry, and {@see safeMode()} answers
+     * empty BEFORE any memo, so `--safe-mode` refuses the opt-ins exactly like
+     * it refuses the root lists — they are all trust grants.
+     *
+     * Matching downstream is strict and raw: entries are trimmed but never
+     * case-folded, because the row's stamped origin ({@see CommandSpec}) is
+     * the manifest's or server config's own spelling and a silent fold would
+     * let `ReviewKit` opt in `reviewkit`.
+     *
+     * @param array<string, mixed> $config the already-read user config
+     * @param string $key which origin list to read
+     * @param string $nothingOptedIn what a wrong-shaped value costs, for the warning
+     * @return list<string>
+     */
+    private static function trustedOriginNames(array $config, string $key, string $nothingOptedIn): array
+    {
+        if (self::safeMode()) {
+            return [];
+        }
+
+        $raw = $config[$key] ?? null;
+        if ($raw === null) {
+            return [];
+        }
+
+        if (!is_array($raw)) {
+            self::warnPermissionConfigOnce(
+                Lang::t('cli.warn.name_list_not_list', ['key' => $key, 'consequence' => $nothingOptedIn]),
+            );
+
+            return [];
+        }
+
+        $names = [];
+        foreach ($raw as $index => $entry) {
+            if (!is_string($entry) || trim($entry) === '') {
+                self::warnPermissionConfigOnce(
+                    Lang::t('cli.warn.name_entry_not_name', ['key' => $key, 'index' => $index]),
+                );
+                continue;
+            }
+
+            $names[] = trim($entry);
+        }
+
+        return $names;
+    }
+
+    /**
      * The project roots listed under $key in the user config, canonicalised.
      *
      * ONE PARSER FOR ALL FOUR TRUST KEYS, parameterised by the key name rather
@@ -7174,7 +7314,7 @@ public static function useMaxCost(?string $maxCost): void
     private static function trustedProjectRoots(array $config, string $key, string $nothingTrusted): array
     {
         // C-SEC-7.b: `--safe-mode` makes every trust list answer "nothing
-        // trusted". This is the ONE funnel all four `trusted*` readers walk
+        // trusted". This is the funnel all four ROOT-LIST readers walk
         // through (hooks, MCP, command shells and settings roots all call
         // here), so refusing at the source is the single switch the design
         // asked for: the per-key predicates downstream ({@see
@@ -7182,8 +7322,10 @@ public static function useMaxCost(?string $maxCost): void
         // projectCommandShellIsTrusted()}) each find their root absent and
         // answer untrusted on their own, and {@see
         // trustedRootsForThisProcess()} — which reads the same lists — sees
-        // none. No memo is consulted or seeded, so the refusal cannot be
-        // frozen out by an earlier non-safe-mode read.
+        // none. The C-SEC-3.b origin-name readers ({@see
+        // trustedOriginNames()}) carry the same refusal at their own source,
+        // for the same reason. No memo is consulted or seeded, so the refusal
+        // cannot be frozen out by an earlier non-safe-mode read.
         if (self::safeMode()) {
             return [];
         }

@@ -449,6 +449,15 @@ final class SettingsWriterTest extends TestCase
             SettingsWriter::trustKeys(),
         );
 
+        // C-SEC-3.b: the per-origin opt-ins are Frozen permission StringLists
+        // too, but they hold ORIGIN NAMES, and grantTrust() appends realpath'd
+        // directories — the definitions' missing AbsolutePathValidator is what
+        // keeps them out of this roster (the canonical four would widen
+        // silently otherwise, so the exact-four pin above is the double
+        // discriminator and these arms name the WHY).
+        self::assertNotContains('trustedBundleCommands', SettingsWriter::trustKeys());
+        self::assertNotContains('mcpPromptShell', SettingsWriter::trustKeys());
+
         $this->expectException(\InvalidArgumentException::class);
         $this->userWriter()->grantTrust('permissionMode', $this->root);
     }

@@ -586,7 +586,7 @@ final class CommandLoader
             }
 
             try {
-                $commands[$name] = CommandSpec::fromFile($realPath, $name, $tier, $source);
+                $commands[$name] = CommandSpec::fromFile($realPath, $name, $tier, $source, $bundle);
                 $this->commandSources[$name] = $realPath;
                 if ($bundle !== null) {
                     // A separate spec under the flat name: row keys and
@@ -601,7 +601,7 @@ final class CommandLoader
                     // refused, and a refused candidate's path landing under
                     // a live key misattributes the winner's report rows
                     // (review-1 cure).
-                    $this->bundleAliasRows[$flat][$name] = CommandSpec::fromFile($realPath, $flat, $tier, $source);
+                    $this->bundleAliasRows[$flat][$name] = CommandSpec::fromFile($realPath, $flat, $tier, $source, $bundle);
                 }
             } catch (\Throwable $e) {
                 $skip = Lang::t('cmd.loader.file-failed', ['file' => $realPath, 'error' => $e->getMessage()]);

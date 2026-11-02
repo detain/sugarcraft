@@ -171,6 +171,11 @@ final class McpPromptCommands
             argumentHint: $spec->argumentHint,
             template: $body,
             tier: self::TIER,
+            // The JSON marker is gone from this row's template — the fetched
+            // body replaced it — so this stamp is the ONLY place the raw
+            // server name survives into expansion time, which is exactly
+            // where `mcpPromptShell` (C-SEC-3.b) must match it.
+            originName: $marker['server'],
         );
     }
 
@@ -226,6 +231,11 @@ final class McpPromptCommands
                 'arguments' => $declared,
             ]),
             tier: self::TIER,
+            // C-SEC-3.b: the placeholder carries the RAW server key as its
+            // origin stamp (the marker's copy is for the fetch, this one is
+            // for the posture), and materialize() re-stamps from the marker
+            // so the fetched body keeps the same identity.
+            originName: $server,
         );
     }
 

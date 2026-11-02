@@ -14,10 +14,11 @@ namespace SugarCraft\Code\Commands;
  * can undo a refusal. The operator edits their own file; a repository's author
  * is reached by the operator listing the root under `trustedProjectCommands`;
  * the author of a fetched MCP prompt body and the author of a bundle's files
- * are reached by NEITHER machine-local grant — their shell forms are refused
- * outright, and that distinction is what the refusal sentences tell each
- * author. C-SEC-3.b is the planned per-origin opt-in for the two third-party
- * cases; until it lands, refusing is the whole posture.
+ * are reached by NEITHER machine-local root grant — their shell forms are
+ * refused outright unless the operator names that exact origin in the
+ * C-SEC-3.b per-origin opt-ins ({@see CommandShellPosture::optedIn()}, the
+ * `trustedBundleCommands` and `mcpPromptShell` user-tier lists), and that
+ * distinction is what the refusal sentences tell each author.
  *
  * There is no `Foreign` case on purpose: `.claude` and `.opencode` rows keep
  * today's answer in this step — the tier decides, exactly as for the native
@@ -32,17 +33,21 @@ enum ShellProvenance
     /** A project-tier file that arrived with the repository: `trustedProjectCommands` first, then the gate. */
     case Repo;
 
-    /** A `SkillSource::Bundle` row, whatever tier it installed under: shell forms are refused. */
+    /** A `SkillSource::Bundle` row, whatever tier it installed under: shell forms are refused unless the operator opted its bundle in (`trustedBundleCommands`). */
     case Bundle;
 
-    /** An MCP prompt body fetched over the wire: shell forms are refused. */
+    /** An MCP prompt body fetched over the wire: shell forms are refused unless the operator opted its server in (`mcpPromptShell`). */
     case Mcp;
 
     /**
      * Whether this provenance's shell forms are refused before the permission
-     * gate is even evaluated — the two third-party cases. A refusal that
-     * never reached the gate must not move Auto mode's circuit-breaker
-     * counters, which is why the callers consult this before evaluating.
+     * gate is even evaluated — the two third-party cases AT THEIR DEFAULT,
+     * with the C-SEC-3.b opt-ins unset. A caller holding the operator's
+     * allow-lists consults {@see CommandShellPosture::optedIn()} first; an
+     * opted-in origin skips this refusal and goes straight to the gate. A
+     * refusal that never reached the gate must not move Auto mode's
+     * circuit-breaker counters, which is why the callers consult this before
+     * evaluating.
      */
     public function refusesShell(): bool
     {

@@ -1478,6 +1478,25 @@ final class Chat implements Model
          */
         private readonly bool $projectCommandsTrusted = false,
     /**
+     * C-SEC-3.b: the per-origin opt-ins — bundle names and MCP server keys
+     * whose `` !`cmd` `` forms the gate may judge instead of meeting the
+     * blanket posture refusal. Both arrive as ANSWERS from
+     * {@see \SugarCraft\Code\Cli\Bootstrap::chat()}, are user-tier-only by
+     * construction (the keys are not layered), and DEFAULT EMPTY, which is the
+     * shipped deny-all posture byte-for-byte. Unlike $projectCommandsTrusted
+     * these are root-independent: a name vouches for an origin, not for a
+     * checkout.
+     *
+     * @var list<string>
+     */
+    private readonly array $trustedBundleCommands = [],
+    /**
+     * C-SEC-3.b MCP server counterpart of $trustedBundleCommands.
+     *
+     * @var list<string>
+     */
+    private readonly array $mcpPromptShell = [],
+    /**
          * Whether THIS Chat is the process's drain owner for
          * {@see \SugarCraft\Code\Diagnostics\RuntimeNoticeSink} (E171).
          *
@@ -5777,6 +5796,8 @@ final class Chat implements Model
             $this->customCommands,
             $this->resolvedCustomCommand['text'] ?? null,
             $this->projectCommandsTrusted,
+            $this->trustedBundleCommands,
+            $this->mcpPromptShell,
         );
     }
 
@@ -9247,6 +9268,11 @@ final class Chat implements Model
             // the trust grant evaporate on the first character typed and turn
             // every project command's !`cmd` into a refusal.
             'projectCommandsTrusted' => $this->projectCommandsTrusted,
+            // C-SEC-3.b: carried by value (they are immutable launch answers).
+            // A clone that dropped them would silently widen the posture the
+            // moment the user typed a `/name`: opted-in origins back to refused.
+            'trustedBundleCommands' => $this->trustedBundleCommands,
+            'mcpPromptShell' => $this->mcpPromptShell,
             // A field missing from this map silently resets on the next
             // keystroke — for this one that would mean the drain owner stops
             // being the drain owner the moment the user types, and every
@@ -11935,6 +11961,8 @@ final class Chat implements Model
             $this->projectCommandsTrusted,
             $this->permissionGate(),
             $onGateEvaluated,
+            $this->trustedBundleCommands,
+            $this->mcpPromptShell,
         );
     }
 
@@ -11979,6 +12007,8 @@ final class Chat implements Model
             $this->projectCommandsTrusted,
             $this->permissionGate(),
             $onGateEvaluated,
+            $this->trustedBundleCommands,
+            $this->mcpPromptShell,
         );
     }
 

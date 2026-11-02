@@ -297,6 +297,8 @@ final class RestrictedSafeModeFlagsTest extends TestCase
             'trustedProjectHooks' => [$this->projectRoot],
             'trustedProjectCommands' => [$this->projectRoot],
             'trustedProjectMcp' => [$this->projectRoot],
+            'trustedBundleCommands' => ['kit'],
+            'mcpPromptShell' => ['srv'],
         ]);
 
         // Control: the SAME fixture the armed test uses, unarmed, answers
@@ -306,6 +308,9 @@ final class RestrictedSafeModeFlagsTest extends TestCase
         self::assertContains(realpath($this->projectRoot), self::invokePrivate('trustedRootsForThisProcess'));
         self::assertTrue(self::invokePrivate('projectMcpIsTrusted', [$this->projectRoot]));
         self::assertTrue(self::invokePrivate('projectHooksAreTrusted', [$this->projectRoot]));
+        // C-SEC-3.b: the origin-name opt-ins answer their lists unarmed…
+        self::assertSame(['kit'], Bootstrap::trustedBundleCommandNames());
+        self::assertSame(['srv'], Bootstrap::mcpPromptShellServers());
     }
 
     public function testSafeModeRefusesEveryTrustedProjectList(): void
@@ -318,6 +323,8 @@ final class RestrictedSafeModeFlagsTest extends TestCase
             'trustedProjectHooks' => [$this->projectRoot],
             'trustedProjectCommands' => [$this->projectRoot],
             'trustedProjectMcp' => [$this->projectRoot],
+            'trustedBundleCommands' => ['kit'],
+            'mcpPromptShell' => ['srv'],
         ]);
 
         ob_start();
@@ -328,6 +335,10 @@ final class RestrictedSafeModeFlagsTest extends TestCase
         self::assertSame([], self::invokePrivate('trustedRootsForThisProcess'));
         self::assertFalse(self::invokePrivate('projectMcpIsTrusted', [$this->projectRoot]));
         self::assertFalse(self::invokePrivate('projectHooksAreTrusted', [$this->projectRoot]));
+        // C-SEC-3.b: the origin-name opt-ins are trust grants too — the switch
+        // refuses them at their own source, before any memo answers.
+        self::assertSame([], Bootstrap::trustedBundleCommandNames());
+        self::assertSame([], Bootstrap::mcpPromptShellServers());
     }
 
     public function testSafeModeLoadsNoBundles(): void

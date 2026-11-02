@@ -94,6 +94,14 @@ final class LayeredSettingsTest extends TestCase
         self::assertNotContains('trustedProjectHooks', LayeredSettings::LAYERED_KEYS);
         self::assertNotContains('trustedProjectMcp', LayeredSettings::LAYERED_KEYS);
         self::assertNotContains('trustedProjectCommands', LayeredSettings::LAYERED_KEYS);
+        // C-SEC-3.b: the per-origin opt-ins are answered by the user config
+        // ALONE, exactly like the roots above — a checked-out project must not
+        // be able to name the bundle or server whose shell it trusts on the
+        // operator's behalf.
+        self::assertNotContains('trustedBundleCommands', LayeredSettings::LAYERED_KEYS);
+        self::assertNotContains('mcpPromptShell', LayeredSettings::LAYERED_KEYS);
+        self::assertNotContains('trustedBundleCommands', LayeredSettings::PROJECT_TIER_KEYS);
+        self::assertNotContains('mcpPromptShell', LayeredSettings::PROJECT_TIER_KEYS);
         self::assertNotContains(
             LayeredSettings::PROJECT_SETTINGS_TRUST_KEY,
             LayeredSettings::LAYERED_KEYS,

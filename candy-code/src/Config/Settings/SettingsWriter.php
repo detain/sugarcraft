@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Config\Settings;
 use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Config\LayeredSettings;
+use SugarCraft\Code\Config\Settings\Validator\AbsolutePathValidator;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Support\ContainedPath;
 
@@ -386,7 +387,13 @@ final class SettingsWriter
 
     /**
      * The trust lists the confirmed action may edit: the schema's Frozen
-     * permission lists (`trustedProject*`).
+     * permission lists that canonicalize DIRECTORY roots — today exactly the
+     * `trustedProject*` grants, each defined with an AbsolutePathValidator.
+     * The C-SEC-3.b per-origin opt-ins are Frozen permission string lists
+     * too, but they hold ORIGIN NAMES, not paths, and grantProjectTrust()
+     * appends realpath'd directories; the validator's presence is what tells
+     * the two shapes apart, so name lists stay out of this roster (pinned by
+     * SettingsWriterTest::testOnlyTheTrustListsAreTrustKeys).
      *
      * @return list<string>
      */
@@ -396,9 +403,23 @@ final class SettingsWriter
             static fn (SettingDefinition $d): string => $d->key,
             array_filter(
                 SettingsSchema::inCategory(SettingCategory::Permissions),
-                static fn (SettingDefinition $d): bool => $d->applyMode === ApplyMode::Frozen && $d->type === SettingType::StringList,
+                static fn (SettingDefinition $d): bool => $d->applyMode === ApplyMode::Frozen
+                    && $d->type === SettingType::StringList
+                    && self::canonicalizesDirectories($d),
             ),
         ));
+    }
+
+    /** Whether this definition's explicit validators canonicalize directory paths. */
+    private static function canonicalizesDirectories(SettingDefinition $definition): bool
+    {
+        foreach ($definition->validators as $validator) {
+            if ($validator instanceof AbsolutePathValidator) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function editTrust(string $trustKey, string $root, bool $grant): string

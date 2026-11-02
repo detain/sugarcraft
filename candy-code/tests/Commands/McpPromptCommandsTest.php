@@ -98,6 +98,7 @@ final class McpPromptCommandsTest extends TestCase
         self::assertSame('two lines of junk', $spec->description, 'popup rows are one flat line');
         self::assertSame('<target> [style]', $spec->argumentHint);
         self::assertSame('MCP', $spec->category);
+        self::assertSame('weird srv', $spec->originName, 'C-SEC-3.b: the placeholder carries the RAW server key — mcpPromptShell matches this spelling, never the sanitized row name');
     }
 
     public function testCollidingRowsKeepTheFirstAndJunkRowsAreSkipped(): void
@@ -239,6 +240,7 @@ final class McpPromptCommandsTest extends TestCase
         self::assertIsString($materialized?->template);
         self::assertSame("LINE ONE\n\nLINE TWO", $materialized?->template);
         self::assertSame('mcp', $materialized?->tier, 'the fetched body keeps the provenance the shell gate reads');
+        self::assertSame('srv', $materialized?->originName, 'C-SEC-3.b: the fetched body is the only place the raw server key can survive — the opt-in matches against this stamp');
         self::assertSame($placeholder->name, $materialized?->name);
         self::assertInstanceOf(CommandSpec::class, $materialized);
         self::assertFalse(McpPromptCommands::isMcpPrompt($materialized), 'the fetched body is no longer a marker — it expands through the template machinery');
@@ -332,6 +334,41 @@ final class McpPromptCommandsTest extends TestCase
         self::assertStringContainsString('is an MCP prompt fetched from a server', $expanded, 'the body expanded without the mcp refusal sentence');
         self::assertStringContainsString('printf ran-', $expanded, 'the refusal does not name the form it declined — the discriminator this leg pins is the declined form in the notice, not its output');
         self::assertStringContainsString('head', $expanded, 'the rest of the prompt was not sent, contrary to the page');
+    }
+
+    /**
+     * C-SEC-3.b through the REAL chain: the same fetched body, with the
+     * server's key in the `mcpPromptShell` list, expands its `` !`…` `` form
+     * — `ran-here` proves the printf actually ran — and no refusal sentence
+     * appears. The twin call with the list empty is the default-off arm: the
+     * same body, the same directive construction minus the opt-in, refuses
+     * exactly as {@see testAFetchedShellFormIsRefusedAtExpansionAndNeverRuns()}
+     * pins. The gate is null on both legs: with no permission configuration a
+     * session must not be stricter than the shipped default mode, so the only
+     * thing this test moves is the posture answer.
+     */
+    public function testAnOptedInServerRunsThroughTheRealChain(): void
+    {
+        $server = $this->fetchingServer([['role' => 'user', 'content' => ['type' => 'text', 'text' => 'head !`printf ran-%s here` tail']]]);
+        $placeholder = McpPromptCommands::specs($this->providerFor(['srv' => $server]))['mcp__srv__p'] ?? null;
+        self::assertNotNull($placeholder);
+        $materialized = McpPromptCommands::materialize($placeholder, '', $this->providerFor(['srv' => $server]));
+        self::assertInstanceOf(CommandSpec::class, $materialized);
+
+        $turns = TurnController::new();
+        $directive = $turns->commandDirective($materialized, sys_get_temp_dir(), true, null, null, [], ['srv']);
+
+        $expanded = $turns->expandCustomCommand($materialized, '', $directive);
+        self::assertIsString($expanded);
+        self::assertStringContainsString('ran-here', $expanded, 'the opted-in server\'s form never reached a shell');
+        self::assertStringNotContainsString('is an MCP prompt fetched from a server', $expanded, 'a posture refusal rode an opted-in origin');
+
+        $locked = $turns->commandDirective($materialized, sys_get_temp_dir(), true, null, null, [], []);
+        self::assertStringContainsString(
+            'is an MCP prompt fetched from a server',
+            $turns->expandCustomCommand($materialized, '', $locked),
+            'without the opt-in the same body is refused again',
+        );
     }
 
     // ── fixtures ────────────────────────────────────────────────────────

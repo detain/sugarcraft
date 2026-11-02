@@ -77,6 +77,10 @@ final class WorkspaceContext
         public readonly ?PermissionGate $permissionGate,
         public readonly ?CommandLoader $commandLoader,
         public readonly bool $projectCommandsTrusted,
+        /** C-SEC-3.b user-tier opt-in: bundle names whose command rows may reach the gate (list<string>). */
+        public readonly array $trustedBundleCommands,
+        /** C-SEC-3.b user-tier opt-in: MCP server keys whose prompt bodies may reach the gate (list<string>). */
+        public readonly array $mcpPromptShell,
         public readonly ?AgentManager $agentManager,
         public readonly ?AgentPoolConfig $agentPoolConfig,
         public readonly ?AgentWorkerPool $taskPool,
@@ -117,6 +121,10 @@ final class WorkspaceContext
         ?PermissionGate $permissionGate = null,
         ?CommandLoader $commandLoader = null,
         bool $projectCommandsTrusted = false,
+        /** C-SEC-3.b: list<string> of trusted bundle names (user tier only, empty = deny-all) */
+        array $trustedBundleCommands = [],
+        /** C-SEC-3.b: list<string> of MCP server keys with prompt shell enabled (user tier only, empty = deny-all) */
+        array $mcpPromptShell = [],
         ?AgentManager $agentManager = null,
         ?AgentPoolConfig $agentPoolConfig = null,
         ?AgentWorkerPool $taskPool = null,
@@ -140,6 +148,8 @@ final class WorkspaceContext
             permissionGate: $permissionGate,
             commandLoader: $commandLoader,
             projectCommandsTrusted: $projectCommandsTrusted,
+            trustedBundleCommands: $trustedBundleCommands,
+            mcpPromptShell: $mcpPromptShell,
             agentManager: $agentManager,
             agentPoolConfig: $agentPoolConfig,
             taskPool: $taskPool,
@@ -286,6 +296,8 @@ final class WorkspaceContext
             'permissionGate' => $this->permissionGate,
             'commandLoader' => $this->commandLoader,
             'projectCommandsTrusted' => $this->projectCommandsTrusted,
+            'trustedBundleCommands' => $this->trustedBundleCommands,
+            'mcpPromptShell' => $this->mcpPromptShell,
             'agentManager' => $this->agentManager,
             'agentPoolConfig' => $this->agentPoolConfig,
             'taskPool' => $this->taskPool,
