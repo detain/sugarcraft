@@ -25,8 +25,8 @@ Three tiers, merged by name, later overriding earlier
 | built-in | `CommandRegistry::all()` | n/a, they are PHP |
 | user | `~/.candy-code/commands/*.md` | yes |
 | project | `<root>/.candy-code/commands/*.md` | **only if this root is trusted** |
-| bundle | a plugin bundle's `commands/*.md` ([PLUGINS.md](PLUGINS.md)), rows named `<bundle>:<cmd>` | **never — refused whatever tier the bundle installed under** |
-| mcp | a fetched `prompts/get` body ([MCP.md](MCP.md)) | **never — refused whatever this project trusts** |
+| bundle | a plugin bundle's `commands/*.md` ([PLUGINS.md](PLUGINS.md)), rows named `<bundle>:<cmd>` | **not by itself — reaches the gate only with the bundle's name in `trustedBundleCommands`, and only for a user-tier row** |
+| mcp | a fetched `prompts/get` body ([MCP.md](MCP.md)) | **not by itself — reaches the gate only with the server key in `mcpPromptShell`** |
 | foreign | the other tools' trees (below) | the tier decides: user **yes**, project **only if this root is trusted** |
 
 The foreign floor is what INT-3 added: `~/.claude/commands`,
