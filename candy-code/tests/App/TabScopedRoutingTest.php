@@ -7,12 +7,19 @@ namespace SugarCraft\Code\Tests\App;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\App\AgentMessageSentMsg;
+use SugarCraft\Code\App\Tabs\CloseTabMsg;
 use SugarCraft\Code\App\Tabs\OpenTabMsg;
 use SugarCraft\Code\App\Tabs\SessionDeck;
 use SugarCraft\Code\App\Tabs\TabScopedMsg;
+use SugarCraft\Code\App\ToolEventPumpMsg;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Commands\KeyBindingRegistry;
+use SugarCraft\Code\Events\SubAgentActivity;
+use SugarCraft\Code\Events\TokenDelta;
 use SugarCraft\Code\Providers\ProviderInterface;
+use SugarCraft\Code\Tui\Components\MenuSelectedMsg;
+use SugarCraft\Code\Tui\MessagePicker\OpenMessagePickerMsg;
 use SugarCraft\Code\Tui\Settings\OpenSettingsMsg;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
@@ -198,5 +205,155 @@ final class TabScopedRoutingTest extends TestCase
 
         self::assertSame(1, $after->deck?->count());
         self::assertNotSame($before, $after->chat);
+    }
+
+    /**
+     * Deck-armed App whose FOREGROUND chat is handed in verbatim — the
+     * producer-side sibling of {@see self::routingDeckApp()}, which builds
+     * its own foreground and cannot seed an inbox or the tabHosted flag.
+     */
+    private function producerDeckApp(Chat $foreground): App
+    {
+        $app = App::new($this->provider, 'test-model')
+            ->withChat($foreground)
+            ->withTabFactory(fn (?string $sessionId): Chat => new Chat(backend: new EchoBackend()));
+        [$app] = $app->update(new WindowSizeMsg(100, 30));
+
+        return $app;
+    }
+
+    /**
+     * P-TABS.e producer law, same-instance leg: a Cmd the foreground Chat
+     * re-arms on itself (the live-event pump's continuation) must reach the
+     * program stamped with the tab that produced it. Deleting the wrap on
+     * App.php's `!$next instanceof Chat || $next === $this->chat` return
+     * reddens exactly this pin (the raw ToolEventPumpMsg would surface).
+     */
+    public function testThePumpReArmProducedByTheForegroundChatCarriesItsTabScope(): void
+    {
+        $inbox = new \ArrayObject([
+            [1, new SubAgentActivity('progress', 'run_a', 'explore', 'first beat', 1, '')],
+            [1, new TokenDelta('a queued delta keeps one entry behind the fold')],
+        ]);
+        $chat = new Chat(
+            backend: new EchoBackend(),
+            inFlight: true,
+            generation: 1,
+            liveToolEvents: $inbox,
+        );
+        $app = $this->producerDeckApp($chat);
+
+        [, $cmd] = $app->update(new ToolEventPumpMsg());
+
+        self::assertNotNull($cmd, 'a non-empty queue after the fold must re-arm the pump');
+        $produced = $cmd();
+        self::assertInstanceOf(TabScopedMsg::class, $produced);
+        self::assertSame('tab-1', $produced->tabKey);
+        self::assertInstanceOf(ToolEventPumpMsg::class, $produced->inner);
+    }
+
+    /**
+     * P-TABS.e producer law, transition leg: the idle double-Escape opens
+     * the message picker ON THE TAB THAT OWNED THE KEYS. With tab-2 in
+     * front, the wrap must carry tab-2 — the finding's exact shape (a
+     * reply produced while another tab is backgrounded reaches its OWNER).
+     * Deleting the wrap on the delegateToChat `withChat($next)` return
+     * reddens exactly this pin.
+     */
+    public function testTheDoubleEscapePickerRequestCarriesTheActiveTabScope(): void
+    {
+        $app = $this->producerDeckApp(new Chat(backend: new EchoBackend(), tabHosted: true));
+        [$app] = $app->update(new OpenTabMsg());
+        self::assertSame('tab-2', $app->deck?->activeKey(), 'fixture: the second tab is in front');
+
+        [$app, $first] = $app->update(new KeyMsg(KeyType::Escape));
+        self::assertNull($first, 'the arming press sends nothing; the null Cmd passes through');
+
+        [$app, $second] = $app->update(new KeyMsg(KeyType::Escape));
+        self::assertNotNull($second);
+        $produced = $second();
+        self::assertInstanceOf(TabScopedMsg::class, $produced, 'the picker request must carry its owning tab');
+        self::assertSame('tab-2', $produced->tabKey);
+        self::assertInstanceOf(OpenMessagePickerMsg::class, $produced->inner);
+    }
+
+    /**
+     * P-TABS.e producer law, menu door: a palette-only registry row chosen
+     * from the menu bar runs on the FOREGROUND Chat, and its Cmd crosses the
+     * deck boundary stamped ({@see App::runRegistryCommand()}). Deleting the
+     * wrap there reddens exactly this pin.
+     */
+    public function testTheMenuRowCommandReturnCarriesTheActiveTabScope(): void
+    {
+        $app = $this->producerDeckApp(new Chat(backend: new EchoBackend(), tabHosted: true));
+
+        [, $cmd] = $app->consumeShellCmd(new MenuSelectedMsg('Session', 'Close tab', 'cmd:close-tab'));
+
+        self::assertNotNull($cmd, 'fixture: the deck-hosted close row answers with a CloseTabMsg Cmd');
+        $produced = $cmd();
+        self::assertInstanceOf(TabScopedMsg::class, $produced);
+        self::assertSame('tab-1', $produced->tabKey);
+        self::assertInstanceOf(CloseTabMsg::class, $produced->inner);
+    }
+
+    /**
+     * P-TABS.e producer law, chord door: the same scoping applies to a
+     * `command:<name>` chord binding ({@see App::runBoundCommand()}) —
+     * typing parity includes deck parity. Deleting the wrap there reddens
+     * exactly this pin.
+     */
+    public function testTheBoundChordCommandReturnCarriesTheActiveTabScope(): void
+    {
+        $overridesBefore = KeyBindingRegistry::overrides();
+        $suppressedBefore = KeyBindingRegistry::suppressed();
+        KeyBindingRegistry::useOverrides(['command:settings' => 'Ctrl+Z']);
+        try {
+            $app = $this->producerDeckApp(new Chat(backend: new EchoBackend(), tabHosted: true));
+
+            [, $cmd] = $app->update(new KeyMsg(KeyType::Char, 'z', ctrl: true));
+
+            self::assertNotNull($cmd, 'fixture: /settings without arguments answers with an OpenSettingsMsg Cmd');
+            $produced = $cmd();
+            self::assertInstanceOf(TabScopedMsg::class, $produced);
+            self::assertSame('tab-1', $produced->tabKey);
+            self::assertInstanceOf(OpenSettingsMsg::class, $produced->inner);
+        } finally {
+            KeyBindingRegistry::useOverrides(
+                $overridesBefore + array_fill_keys($suppressedBefore, null),
+            );
+        }
+    }
+
+    /**
+     * The fifth producer site — the message-picker accept path
+     * (App::applyMessagePickerAction) — is unreachable with a non-null Cmd
+     * at execution level today: the rewind it dispatches answers state-only,
+     * so its wrap sees null and null passes through identically with or
+     * without the wrap. This census is therefore that site's SOLE pin, and
+     * belt-and-braces for the four sites the exec pins above cover: every
+     * `scopeForegroundCmd(` call the shipped producer set has must stand at
+     * its own return, in its own spelling.
+     */
+    public function testEveryProducerScopeForegroundCmdCallSiteStands(): void
+    {
+        $source = file_get_contents(__DIR__ . '/../../src/App/App.php');
+        self::assertIsString($source);
+
+        self::assertStringContainsString('private function scopeForegroundCmd', $source);
+        self::assertSame(
+            3,
+            substr_count($source, '$app->scopeForegroundCmd($cmd)'),
+            'runRegistryCommand, runBoundCommand and the delegateToChat transition leg each wrap their return',
+        );
+        self::assertSame(
+            1,
+            substr_count($source, '$this->scopeForegroundCmd($cmd)'),
+            'the delegateToChat same-instance leg wraps its return',
+        );
+        self::assertSame(
+            1,
+            substr_count($source, '$app->scopeForegroundCmd($chatCmd)'),
+            'applyMessagePickerAction wraps the rewind command it hands back',
+        );
     }
 }
