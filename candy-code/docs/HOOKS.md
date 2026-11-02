@@ -286,7 +286,7 @@ already run:
 | `Stop` | the agent answered without calling a tool and is about to stop — the one that can keep it going | `EngineBackend::runTurn()` |
 | `SubagentStop` | a sub-agent (a `Task` run, or a workflow stage's agent) is about to stop | `EngineBackend::runTurn()` |
 | `SessionStart` | the first prompt submitted into an empty history | `Chat::dispatchTurnHooks()`, `SessionHost::fireTurnHooks()`, `NonInteractive::fireTurnHooks()`, `BackgroundSessionRunner::fireTurnHooks()` |
-| `SessionEnd` | the process is exiting: the TUI closed, or a `-p` run printed its answer | `NonInteractive::fireSessionEnd()` |
+| `SessionEnd` | the process is exiting: the TUI closed, or a `-p` run printed its answer | `NonInteractive::fireSessionEndDetached()`, `NonInteractive::fireSessionEnd()` |
 | `UserPromptSubmit` | you submitted a prompt | `Chat::dispatchTurnHooks()`, `SessionHost::fireTurnHooks()`, `NonInteractive::fireTurnHooks()`, `BackgroundSessionRunner::fireTurnHooks()` |
 | `PreCompact` | before a compaction condenses the history — the one that can skip it | `Chat::preCompactGate()`, `EngineBackend::runTurn()` |
 | `PostCompact` | after a compaction was applied | `Chat::postCompactCmd()`, `EngineBackend::runTurn()` |
@@ -342,8 +342,9 @@ the action has already happened:
   **contested** on the board (`list` shows `completion contested`).
 - `TeammateIdle` — the teammate is handed **no task this time**; its `claim`
   says a hook held the next task back, with the hook's stderr as the reason.
-- `SessionEnd` — nothing is left to stop, so the reason is one line on stderr
-  and the exit is unchanged.
+- `SessionEnd` — nothing is left to stop, so the reason is one line of output
+  (stderr for a `-p` run, the TUI log once the chain has been handed to a daemon,
+  see below) and the exit is unchanged.
 - `PreCompact` — **skips the compaction**: the history is left as it was, and
   stderr reaches **you only**. See *The two compaction events* below.
 - `PostCompact`, `SessionStart` — stderr reaches **you only**; there is no agent
@@ -442,13 +443,26 @@ when a hook for the event is wired, so an unhooked turn ends exactly as before.
   this turn going, so a hook can let go. `SubagentStop` adds `agent_id` and
   `agent_type`.
 
-`SessionEnd` fires once as the process exits, from
-`NonInteractive::fireSessionEnd()`: after the TUI's program loop returns
+`SessionEnd` fires once as the process exits. The TUI hands the chain to
+`NonInteractive::fireSessionEndDetached()` after its program loop returns
 (`bin/candy-code`, with the session's own chain, id and root; `toolInput`
-`{"reason": "prompt_input_exit"}`) and after a `-p` run's answer is printed
+`{"reason": "prompt_input_exit"}`), and a `-p` run calls
+`NonInteractive::fireSessionEnd()` directly once its answer is printed
 (`{"reason": "other"}`) — never from the TUI's quit paths, which only leave the
 loop. A `-p` caller that supplies its own backend owns its session's end, so
 nothing fires there. The session server (`serve`) does not fire it yet.
+
+The TUI's dispatcher does not wait for the chain. By the time it runs, the alt
+screen is left and the prompt looks finished, and a chain is bounded by the
+**sum** of what its entries asked for — a `caliber` finalize at the sixty-second
+default held the shell for a minute after a `/exit` that looked instant. So the
+chain goes to a detached process (a `Support\Daemonize` daemon) that outlives the TUI and
+runs to the deadlines its own hooks were configured with: what goes away is the
+waiting, never the hook. It writes to the TUI log rather than your terminal, and
+the two places it cannot be handed off — no log to write to, or a build that
+cannot daemonize — keep the foreground behavior of a `-p` run instead of dropping
+the hook. This is why `keepWarm` daemons and `/bg` sessions are unaffected: they
+were never waited on either.
 
 ### The two compaction events
 

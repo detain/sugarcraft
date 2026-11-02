@@ -699,11 +699,20 @@ fwrite(STDOUT, Ansi::popKittyKeyboard());
 // Step 3.D-2: the session ends HERE, once, after every way out of run() has
 // funnelled through teardown — not at the Chat's Cmd::quit() sites, which are
 // only ways out of the loop. The hosted Chat's own chain, session and root, so
-// a SessionEnd hook sees the session it ran in; after the pop above, so a line
-// it prints lands on a terminal that is the operator's again.
+// a SessionEnd hook sees the session it ran in.
 $finalChat = $finalModel instanceof \SugarCraft\Code\App\App ? $finalModel->chat : ($finalModel instanceof Chat ? $finalModel : null);
 if ($finalChat !== null) {
-    NonInteractive::fireSessionEnd($finalChat->hooks(), $finalChat->currentSessionId() ?? '', $finalChat->projectRoot(), 'prompt_input_exit');
+    // x1102: handed to a detached daemon rather than run here. The chain is
+    // bounded by the SUM of what its entries asked for — a minute of `caliber`
+    // at the default — and by now the screen is restored and the prompt looks
+    // finished, so all that waiting could buy was a shell that seemed to hang.
+    // The hooks still run to the deadlines they were configured with; only the
+    // waiting is gone. Where a daemon is not available the chain runs here
+    // instead, after the pop above, so a line it prints lands on a terminal
+    // that is the operator's again.
+    NonInteractive::fireSessionEndDetached(
+        $finalChat->hooks(), $finalChat->currentSessionId() ?? '', $finalChat->projectRoot(), 'prompt_input_exit', $tuiErrorLog,
+    );
 }
 // `/new` picked another project root: the terminal is restored by now, so
 // restart there — one root per process (Support\SessionRelaunch).

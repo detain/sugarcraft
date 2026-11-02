@@ -121,13 +121,17 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  *     answer. Step 3.D-2: `NonInteractive::fireSessionEnd()`'s one line when
  *     a SessionEnd hook refuses, stderr-only because the session is over.)
  *  2. `STDERR` captured into a variable or property and written through later —
- *     THREE sites: {@see \SugarCraft\Code\Cli\HeadlessPermissionPrompt}, whose
+ *     FOUR sites: {@see \SugarCraft\Code\Cli\HeadlessPermissionPrompt}, whose
  *     `$err` defaults to `\STDERR` and which writes FOUR distinct
  *     `candy-code: ` shapes through it, plan_rename.md 8A's
  *     `bin/candy-code`, which hands the constant to `LegacyMigration::run()`
- *     as the launch's notice channel before any sink exists, and DST-3's
+ *     as the launch's notice channel before any sink exists, DST-3's
  *     {@see \SugarCraft\Code\Cli\SelfUpdate}, whose `$errorStream` test seam
- *     defaults to `\STDERR` for the headless verb's report and refusal lines.
+ *     defaults to `\STDERR` for the headless verb's report and refusal lines,
+ *     and x1102's `NonInteractive::fireSessionEndDetached()`, which flushes the
+ *     handle from inside a detached daemon ahead of its self-SIGKILL exit —
+ *     `Daemonize` has pointed fd 2 at the TUI log by then, so nothing here can
+ *     reach a terminal a person has already gone back to using.
  *     A grep for `fwrite(STDERR` cannot see any of these files at all.
  *  3. `error_log(…)` — ONE site, in one file. MEASURED on this
  *     box, PHP 8.3.6, `ini_get('error_log')` is `''` and `php -r
@@ -438,6 +442,12 @@ final class StderrEmitterCensusTest extends TestCase
         // not something the session can no longer do.
         'bin/candy-code' => 1,
         'src/Cli/HeadlessPermissionPrompt.php' => 1,
+        // x1102: the detached SessionEnd daemon flushes the handle before its
+        // self-SIGKILL exit, so a buffered refusal line is not lost with it.
+        // The routing decision: nowhere the transcript cares — `Daemonize`
+        // points the daemon's stderr at the TUI log, so nothing here can reach
+        // the operator's terminal, and the session is over by design.
+        'src/Cli/NonInteractive.php' => 1,
         // DST-3: SelfUpdate's report() writes through the test-rebindable
         // $errorStream ?? STDERR handle. The routing decision is stderr alone:
         // self-update is a headless verb with no session running, so neither

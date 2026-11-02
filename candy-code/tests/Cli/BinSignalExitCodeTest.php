@@ -57,7 +57,7 @@ final class BinSignalExitCodeTest extends TestCase
         // SessionEnd funnel keep running first, and a relaunch still execs
         // the fresh process instead of exiting a signal code here.
         $this->assertLessThan($read, $this->at("fwrite(STDOUT, Ansi::popKittyKeyboard());"));
-        $this->assertLessThan($read, $this->at('NonInteractive::fireSessionEnd('));
+        $this->assertLessThan($read, $this->at('NonInteractive::fireSessionEndDetached('));
         $this->assertLessThan($read, $this->at('exit(SessionRelaunch::exec($relaunchDir, $argv, __FILE__));'));
         // ...and inside the try, before its catch — no structural move.
         $this->assertGreaterThan($exit, $this->at('} catch (PermissionConfigException $e) {'));

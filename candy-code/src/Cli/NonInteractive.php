@@ -20,6 +20,8 @@ use SugarCraft\Code\Permissions\ToolRefusal;
 use SugarCraft\Code\Skills\SkillMentions;
 use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Skills\SkillSlashInvocation;
+use SugarCraft\Code\Support\Daemonize;
+use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Tools\BuiltIn\AskUserTool;
 use SugarCraft\Code\Tools\BuiltIn\McpCallTool;
 use SugarCraft\Code\Tools\BuiltIn\PlanExitTool;
@@ -962,6 +964,86 @@ final class NonInteractive
         \fwrite(\STDERR, $line);
 
         return $line;
+    }
+
+    /**
+     * Run the same {@see fireSessionEnd()} chain without making the operator
+     * wait for it (x1102). The TUI calls this from `bin/candy-code` after the
+     * terminal is already the operator's again, so the only thing a chain can
+     * accomplish by running here is holding the shell hostage: a `SessionEnd`
+     * entry asks for {@see ScriptHook::DEFAULT_TIMEOUT_SECONDS} at a time, and
+     * a chain of them is bounded by their SUM — a minute of `caliber` on the
+     * prompt looked like a hang.
+     *
+     * The whole chain goes to a detached daemon, because every slow kind of
+     * hook is under one roof here (a script, an HTTP call, an LLM prompt) and
+     * a per-kind decision would have to know which. The daemon outlives this
+     * process and runs to the deadlines the hooks themselves asked for, so
+     * the configured behavior is kept, not cancelled: it is the WAITING that
+     * goes away. With nothing registered for `SessionEnd` there is no fork at
+     * all, so an unhooked exit costs what it always did.
+     *
+     * Where the handover cannot happen — no log to send the output to, this
+     * build cannot daemonize, or the fork itself fails ({@see Daemonize::detach()}
+     * throws on a transient resource story) — the chain runs here instead: a
+     * hook that fires late beats one that never fires, and an uncaught trace
+     * across a terminal the operator is already using is the worst of both.
+     */
+    public static function fireSessionEndDetached(
+        ?HookManager $hooks,
+        string $sessionId,
+        string $root,
+        string $reason,
+        ?string $logPath,
+    ): void {
+        $event = HookEvent::SessionEnd;
+        if ($hooks === null || !$hooks->hasHooksFor($event, $event->value)) {
+            return;
+        }
+
+        if (self::sessionEndHandedToDaemon($hooks, $sessionId, $root, $reason, $logPath)) {
+            return;
+        }
+
+        self::fireSessionEnd($hooks, $sessionId, $root, $reason);
+    }
+
+    /**
+     * Try to give the `SessionEnd` chain to a detached daemon, reporting
+     * whether it was taken (x1102). False means the caller still owes the
+     * chain a run — never "the hooks are dropped".
+     */
+    private static function sessionEndHandedToDaemon(
+        HookManager $hooks,
+        string $sessionId,
+        string $root,
+        string $reason,
+        ?string $logPath,
+    ): bool {
+        if ($logPath === null || Daemonize::unavailableReason() !== null) {
+            return false;
+        }
+
+        try {
+            Daemonize::detach($logPath, static function () use ($hooks, $sessionId, $root, $reason): int {
+                self::fireSessionEnd($hooks, $sessionId, $root, $reason);
+                // The daemon leaves through exitNow(), a self-SIGKILL that
+                // skips the inherited shutdown: a still-buffered write would
+                // die in the stream wrapper with it.
+                @\fflush(\STDOUT);
+                @\fflush(\STDERR);
+
+                return ForkedChild::exitNow(0);
+            });
+        } catch (\RuntimeException) {
+            // A refused fork is transient by nature (process table, memory),
+            // so this is not the moment to tell the operator their configured
+            // hook will never run — and not the moment to print a fatal
+            // either, with the shell already back. Run it here, pay the wait.
+            return false;
+        }
+
+        return true;
     }
 
     /**

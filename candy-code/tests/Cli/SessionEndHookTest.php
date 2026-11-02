@@ -13,6 +13,8 @@ use SugarCraft\Code\Hooks\HookInterface;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Hooks\HookResult;
+use SugarCraft\Code\Hooks\ScriptHook;
+use SugarCraft\Code\Support\Daemonize;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
@@ -28,6 +30,8 @@ final class SessionEndHookTest extends TestCase
 
     private ?string $tempDir = null;
 
+    private ?string $sandbox = null;
+
     /** @var array<string, string|false> */
     private array $savedEnv = [];
 
@@ -40,6 +44,9 @@ final class SessionEndHookTest extends TestCase
         $this->restoreHomeSandbox();
         if ($this->tempDir !== null) {
             exec('rm -rf ' . escapeshellarg($this->tempDir));
+        }
+        if ($this->sandbox !== null) {
+            exec('rm -rf ' . escapeshellarg($this->sandbox));
         }
 
         parent::tearDown();
@@ -107,6 +114,182 @@ final class SessionEndHookTest extends TestCase
         self::assertStringContainsString('hello there', $stdout);
         self::assertFileExists($marker, 'the SessionEnd hook never ran');
         self::assertSame('{"reason":"other"}', file_get_contents($marker));
+    }
+
+    /**
+     * x1102: the TUI's exit tail is the shape this test pins, because that is
+     * where the minute used to live. The chain goes to
+     * {@see NonInteractive::fireSessionEndDetached()}; a bare
+     * {@see NonInteractive::fireSessionEnd()} there makes the shell wait out
+     * the SUM of the hooks' own deadlines AFTER the screen is already back.
+     */
+    public function testTheTuiExitSeamHandsTheChainToTheDetachedDispatcher(): void
+    {
+        $bin = \file_get_contents(\dirname(__DIR__, 2) . '/bin/candy-code');
+        self::assertIsString($bin, 'bin/candy-code has to be readable for its exit seam to be pinned');
+        self::assertStringContainsString(
+            'NonInteractive::fireSessionEndDetached(',
+            $bin,
+            'the TUI exits before the operator sees the shell prompt again',
+        );
+        self::assertStringNotContainsString(
+            'NonInteractive::fireSessionEnd(',
+            $bin,
+            'the waiting form is what held the terminal (x1102): only the detached dispatcher belongs at the exit seam',
+        );
+    }
+
+    /**
+     * The other half of the exit seam's honesty (x1102 review, MINOR-1):
+     * {@see Daemonize::detach()} throws `RuntimeException` when the FIRST FORK
+     * fails, which is a different story from the pre-checked
+     * {@see Daemonize::unavailableReason()} — a full process table is transient
+     * and says nothing about whether the operator configured a `SessionEnd`
+     * hook. Uncaught, it would print a fatal across a terminal the operator is
+     * already typing in, exit 255, and drop the chain: the exact opposite
+     * polarity this dispatcher argues for ("a hook that fires late beats one
+     * that never fires"). So a refused fork must route to the SAME foreground
+     * fire the no-log path uses.
+     *
+     * Pinned as a source scan because the throw cannot be provoked without
+     * fault injection, and widening the dispatcher with a test-only detacher
+     * seam to reach one line of error handling is the worse trade.
+     */
+    public function testAForkRefusedByTheKernelStillFiresTheChainHere(): void
+    {
+        $src = \file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/NonInteractive.php');
+        self::assertIsString($src, 'NonInteractive.php has to be readable for the exit seam to be pinned');
+
+        self::assertSame(
+            1,
+            \preg_match('/catch \(\S*RuntimeException[^)]*\)\s*\{[^{}]*return false;/s', $src),
+            'the detached handover must turn a refused fork into "run it here" — a missing catch, '
+                . 'or one that reports success, leaves /exit holding a fatal instead of a chain',
+        );
+
+        self::assertStringContainsString(
+            'Daemonize::detach(',
+            $src,
+            'the pin above reads a window around a call this file is expected to make',
+        );
+
+        self::assertSame(
+            2,
+            \substr_count($src, 'self::fireSessionEnd($hooks, $sessionId, $root, $reason);'),
+            'exactly two foreground fires belong in this file: the one the daemon runs, and the ONE '
+                . 'fallback every cannot-daemonize path shares. A third means the fallback was '
+                . 'duplicated instead of reused, and a first copy is free to drift.',
+        );
+    }
+
+    /**
+     * The hook is configured to take two seconds, and the exit is not allowed
+     * to care: control comes back first, the chain finishes anyway. On a build
+     * that cannot daemonize the documented fallback runs the chain here, which
+     * is the same assertion with the polarity flipped — no skipped test, no
+     * silent weakening either way.
+     */
+    public function testTheDetachedChainGivesBackTheShellFirstAndCompletesAfterwards(): void
+    {
+        [$manager, $marker] = $this->slowSessionEndChain();
+        $log = $this->sandbox . '/exit.log';
+        $previousUmask = \umask();
+
+        try {
+            $started = \microtime(true);
+            NonInteractive::fireSessionEndDetached($manager, 'sess-x1102', $this->sandbox, 'prompt_input_exit', $log);
+            $elapsed = \microtime(true) - $started;
+
+            if (Daemonize::unavailableReason() === null) {
+                self::assertLessThan(1.0, $elapsed, \sprintf(
+                    'a two-second chain cost %.3fs of the exit; the dispatcher is supposed to hand back at once', $elapsed,
+                ));
+                self::assertFileDoesNotExist($marker, 'the hook was run here after all, not detached');
+
+                $deadline = \microtime(true) + 20.0;
+                while (!\is_file($marker) && \microtime(true) < $deadline) {
+                    \usleep(50_000);
+                }
+
+                self::assertFileExists($marker, 'the detached chain never completed: the hook was dropped, not deferred');
+                self::assertFileExists($log, 'the daemon never opened the log it was handed: the positive control for '
+                    . 'testAnUnhookedSessionEndForksNothing');
+
+                return;
+            }
+
+            self::assertGreaterThan(1.5, $elapsed, 'without a daemon the chain runs in the foreground, as documented');
+            self::assertFileExists($marker);
+        } finally {
+            \umask($previousUmask);
+        }
+    }
+
+    /**
+     * With nowhere to send the chain's output the dispatcher keeps the old
+     * behavior rather than dropping the hook: a late-firing hook beats one that
+     * never fires.
+     */
+    public function testWithoutALogToHandTheOutputToTheChainFiresHere(): void
+    {
+        $seen = [];
+        $manager = self::manager(static function (HookContext $context) use (&$seen): HookResult {
+            $seen[] = $context->sessionId;
+
+            return HookResult::allow();
+        });
+
+        NonInteractive::fireSessionEndDetached($manager, 'sess-foreground', '/p', 'other', null);
+
+        self::assertSame(['sess-foreground'], $seen);
+    }
+
+    /**
+     * The unhooked exit must stay what it was: no fork, so nothing for the
+     * shell to be shadowed by. The daemon opens its log on the way in, so the
+     * absence of that file is the proof — a shape that cannot drift with timing.
+     */
+    public function testAnUnhookedSessionEndForksNothing(): void
+    {
+        $this->makeSandbox();
+        $builtIns = new HookManager(new HookRegistry());
+        $builtIns->registerBuiltIns();
+        $log = $this->sandbox . '/should-not-exist.log';
+
+        NonInteractive::fireSessionEndDetached($builtIns, '', $this->sandbox, 'other', $log);
+        NonInteractive::fireSessionEndDetached(null, '', $this->sandbox, 'other', $log);
+
+        self::assertFileDoesNotExist($log);
+    }
+
+    /**
+     * A real {@see ScriptHook} whose script takes two seconds, plus the marker
+     * file it touches when it gets there.
+     *
+     * @return array{HookManager, string}
+     */
+    private function slowSessionEndChain(): array
+    {
+        $this->makeSandbox();
+        $marker = $this->sandbox . '/done';
+        $script = $this->sandbox . '/slow.sh';
+        \file_put_contents($script, "#!/bin/sh\nsleep 2\ntouch " . $marker . "\n");
+        \chmod($script, 0o755);
+
+        $manager = new HookManager(new HookRegistry());
+        $manager->register(new ScriptHook('slow-finalize', HookEvent::SessionEnd, '.*', $script, '', 20.0));
+
+        return [$manager, $marker];
+    }
+
+    private function makeSandbox(): void
+    {
+        if ($this->sandbox !== null) {
+            return;
+        }
+
+        $this->sandbox = \sys_get_temp_dir() . '/session_end_detach_' . \uniqid('', true);
+        \mkdir($this->sandbox, 0o700, true);
     }
 
     /**
