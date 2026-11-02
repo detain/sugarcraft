@@ -3527,6 +3527,10 @@ final class SessionHost
             $this->root(),
             $this->workspace->projectCommandsTrusted,
             $this->workspace->permissionGate,
+            // r9f: no exec pin on this box can reach this arm (an opted-in
+            // row forks at mustFork whenever canFork() holds) — the
+            // threading is pinned structurally by
+            // {@see \SugarCraft\Code\Tests\Host\ServedProjectCommandTrustTest::testTheSynchronousDirectiveCallSiteCarriesBothOptInLists()}.
             trustedBundleCommands: $this->workspace->trustedBundleCommands,
             mcpPromptShell: $this->workspace->mcpPromptShell,
         );

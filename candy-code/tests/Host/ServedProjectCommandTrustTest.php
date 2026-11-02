@@ -275,6 +275,38 @@ final class ServedProjectCommandTrustTest extends TestCase
         $host->release();
     }
 
+    /**
+     * r9f (rev-r9 MAJOR-1): the synchronous directive() arm is
+     * exec-indiscriminable on this box — an opted-in shell row forks at
+     * customCommandMustFork whenever canFork() is true, so the sync path is
+     * the no-pcntl-platform shape. Its threading is therefore pinned
+     * STRUCTURALLY: the shipped call site must hand commandDirective both
+     * opt-in lists by name. Stripping either arg — which no exec pin here
+     * can see — silently regresses serve on pcntl-less platforms; this leg
+     * is what reddens that refactor.
+     */
+    public function testTheSynchronousDirectiveCallSiteCarriesBothOptInLists(): void
+    {
+        $file = (new \ReflectionClass(SessionHost::class))->getFileName();
+        self::assertIsString($file);
+        $source = (string) file_get_contents($file);
+        $from = strpos($source, 'private function directive(CommandSpec $spec)');
+        self::assertIsInt($from, 'the synchronous expansion takes its directive from directive()');
+
+        $body = substr($source, $from, (int) (strpos($source, 'private function turns(', $from) ?: $from + 600) - $from);
+        self::assertStringContainsString('commandDirective(', $body, 'the slice must cover the call site itself');
+        self::assertStringContainsString(
+            'trustedBundleCommands: $this->workspace->trustedBundleCommands',
+            $body,
+            'the sync directive forwards the bundle opt-in — the fork pins cannot reach this arm on a forking box',
+        );
+        self::assertStringContainsString(
+            'mcpPromptShell: $this->workspace->mcpPromptShell',
+            $body,
+            'and the MCP server-key opt-in with it',
+        );
+    }
+
     // ── harness ────────────────────────────────────────────────────────
 
     /**
