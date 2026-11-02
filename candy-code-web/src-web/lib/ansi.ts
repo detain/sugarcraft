@@ -92,8 +92,7 @@ export function ansiSegments(text: string): AnsiSegment[] {
 
   function writeText(chunk: string): void {
     const chars = Array.from(chunk)
-    for (let index = 0; index < chars.length; index++) {
-      const ch = chars[index]
+    for (const [index, ch] of chars.entries()) {
       if (ch === '\r') {
         // The pty's own CRLF (ONLCR) is a line END, not an overwrite: a CR
         // followed by an LF just rides the newline. A LONE CR is the
@@ -113,6 +112,7 @@ export function ansiSegments(text: string): AnsiSegment[] {
     const codes = (params === '' ? ['0'] : params.split(';')).map((part) => Number.parseInt(part === '' ? '0' : part, 10))
     for (let i = 0; i < codes.length; i++) {
       const code = codes[i]
+      if (code === undefined) continue // unreachable: i < codes.length; narrows the flag
       if (code === 0) {
         look.bold = look.dim = look.italic = look.underline = look.inverse = false
         look.fg = look.bg = null
@@ -127,9 +127,9 @@ export function ansiSegments(text: string): AnsiSegment[] {
       else if (code === 27) look.inverse = false
       else if (code === 39) look.fg = null
       else if (code === 49) look.bg = null
-      else if (code >= 30 && code <= 37) look.fg = FG_NAMES[code - 30]
+      else if (code >= 30 && code <= 37) look.fg = FG_NAMES[code - 30] ?? null
       else if (code >= 90 && code <= 97) look.fg = `bright-${FG_NAMES[code - 90]}`
-      else if (BG_CODE.has(code)) look.bg = code >= 100 ? `bright-${FG_NAMES[code - 100]}` : FG_NAMES[code - 40]
+      else if (BG_CODE.has(code)) look.bg = code >= 100 ? `bright-${FG_NAMES[code - 100]}` : FG_NAMES[code - 40] ?? null
       else if (code === 38 || code === 48) {
         // Consume the extended-colour tail. Palette 0-15 still names a class;
         // 256-colour beyond it and truecolor are dropped (documented limit).
@@ -137,7 +137,7 @@ export function ansiSegments(text: string): AnsiSegment[] {
         const size = mode === 5 ? 2 : mode === 2 ? 5 : 0
         const value = mode === 5 ? codes[i + 2] : undefined
         const target = code === 38 ? 'fg' : 'bg'
-        if (mode === 5 && value !== undefined && value >= 0 && value <= 7) look[target] = FG_NAMES[value]
+        if (mode === 5 && value !== undefined && value >= 0 && value <= 7) look[target] = FG_NAMES[value] ?? null
         else if (mode === 5 && value !== undefined && value >= 8 && value <= 15) look[target] = `bright-${FG_NAMES[value - 8]}`
         else look[target] = null
         i += size

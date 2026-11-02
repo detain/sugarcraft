@@ -285,7 +285,7 @@ describe('StatusBar spend bound (WEB-5 parity)', () => {
     await wrapper.vm.$nextTick()
 
     const spend = wrapper.find('[data-testid="spend"]')
-    expect(spend.text()).toBe('≥$0.00', 'the live turn is a lower bound from its first call')
+    expect(spend.text(), 'the live turn is a lower bound from its first call').toBe('≥$0.00')
     expect(spend.attributes('data-unpriced')).toBe('true')
 
     applyEvent(state, {
@@ -294,7 +294,7 @@ describe('StatusBar spend bound (WEB-5 parity)', () => {
     } as EventEnvelope)
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.find('[data-testid="spend"]').text()).toBe('≥$0.25', 'the bound grows, the badge stays')
+    expect(wrapper.find('[data-testid="spend"]').text(), 'the bound grows, the badge stays').toBe('≥$0.25')
   })
 })
 

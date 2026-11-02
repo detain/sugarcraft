@@ -332,7 +332,7 @@ function onKey(event: KeyboardEvent): void {
           <li v-if="canWrite && summary.archived === true"><button type="button" role="menuitem" :data-testid="`row-restore-${summary.id}`" @click="restoreRow(summary)">{{ t('web.chrome.sidebar.restore') }}</button></li>
           <li v-if="summary.status !== 'closed'"><button type="button" role="menuitem" :data-testid="`row-close-${summary.id}`" @click="closeRow(summary)">{{ t('web.chrome.sidebar.close') }}</button></li>
           <li v-if="summary.ephemeral !== true"><button type="button" role="menuitem" class="danger" :data-testid="`row-delete-${summary.id}`" @click="removeRow(summary)">{{ t('web.chrome.sidebar.delete') }}</button></li>
-          <li v-if="elsewhere(summary)"><button type="button" role="menuitem" :data-testid="`row-close-host-${summary.id}`" @click="closeHost(summary)">{{ t('web.chrome.sidebar.close_host', { dir: elsewhere(summary) }) }}</button></li>
+          <li v-if="elsewhere(summary)"><button type="button" role="menuitem" :data-testid="`row-close-host-${summary.id}`" @click="closeHost(summary)">{{ t('web.chrome.sidebar.close_host', { dir: elsewhere(summary) ?? '' }) }}</button></li>
         </ul>
       </li>
     </ul>

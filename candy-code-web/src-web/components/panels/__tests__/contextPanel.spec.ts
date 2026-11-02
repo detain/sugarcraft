@@ -227,21 +227,21 @@ describe('ContextPanel trust prompt (WEB-3b)', () => {
 
     const rows = wrapper.findAll('[data-testid="context-trust-row"]')
     expect(rows).toHaveLength(2)
-    expect(rows[0].attributes('data-target')).toBe('mcp')
-    expect(rows[1].attributes('data-target')).toBe('settings')
-    expect(rows[1].find('[data-testid="context-trust-reason"]').text()).toContain('settings layer is dropped')
+    expect(rows[0]!.attributes('data-target')).toBe('mcp')
+    expect(rows[1]!.attributes('data-target')).toBe('settings')
+    expect(rows[1]!.find('[data-testid="context-trust-reason"]').text()).toContain('settings layer is dropped')
 
-    await rows[1].find('[data-testid="context-trust-user"]').trigger('click')
+    await rows[1]!.find('[data-testid="context-trust-user"]').trigger('click')
     expect(wire.sent('context.trust').at(-1)?.params).toEqual({ sessionId: 's1', askId: 'trust-5a5b5c5d6', decision: 'grant', remember: 'user' })
     await wire.answer('context.trust', { askId: 'trust-5a5b5c5d6', status: 'granted', persisted: true })
     await flushPromises()
 
     // The settings row settled; the mcp row never loses its buttons.
     const after = wrapper.findAll('[data-testid="context-trust-row"]')
-    expect(after[0].find('[data-testid="context-trust-user"]').exists()).toBe(true)
-    expect(after[0].find('[data-testid="context-trust-settled"]').exists()).toBe(false)
-    expect(after[1].find('[data-testid="context-trust-user"]').exists()).toBe(false)
-    expect(after[1].find('[data-testid="context-trust-settled"]').text()).toContain('user config')
+    expect(after[0]!.find('[data-testid="context-trust-user"]').exists()).toBe(true)
+    expect(after[0]!.find('[data-testid="context-trust-settled"]').exists()).toBe(false)
+    expect(after[1]!.find('[data-testid="context-trust-user"]').exists()).toBe(false)
+    expect(after[1]!.find('[data-testid="context-trust-settled"]').text()).toContain('user config')
   })
 
   it('adopts a live trust prompt even when the measurement returned none', async () => {

@@ -33,7 +33,9 @@ describe('chrome string coverage (C-TUI-6.f)', () => {
   for (const file of files) {
     const text = readFileSync(file, 'utf8')
     for (const match of text.matchAll(/\bt\(\s*(['"])(web\.[^'"]+)\1/g)) {
-      used.push(match[2])
+      const key = match[2]
+      if (key === undefined) throw new Error(`t() call site in ${file} matched no key`)
+      used.push(key)
     }
   }
 

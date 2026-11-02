@@ -55,9 +55,9 @@ describe('dormant-method roster (C-WEB-3)', () => {
 
   it('the roster declares only real schema methods, each with a reason', () => {
     const scopes = METHOD_SCOPES as Readonly<Record<string, string>>
-    for (const method of Object.keys(DORMANT_REASONS)) {
+    for (const [method, reason] of Object.entries(DORMANT_REASONS)) {
       expect(scopes[method], `${method} must exist in METHOD_SCOPES`).toBeTypeOf('string')
-      expect(DORMANT_REASONS[method].length, `${method} needs a reason`).toBeGreaterThan(0)
+      expect(reason.length, `${method} needs a reason`).toBeGreaterThan(0)
     }
   })
 

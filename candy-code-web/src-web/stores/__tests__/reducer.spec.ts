@@ -304,20 +304,20 @@ describe('reducer: snapshot', () => {
       ev('usage.updated', { turnUsage: { totalTokens: 10, costUsd: 0.25, unpricedModel: null } }),
     ])
     expect(priced.turnUsage).toMatchObject({ costUsd: 0.25 })
-    expect(priced.unpriced).toBe(false, 'a priced frame is not the lower bound')
+    expect(priced.unpriced, 'a priced frame is not the lower bound').toBe(false)
 
     const unpriced = run(createState('s1'), [
       ev('usage.updated', { turnUsage: { totalTokens: 10, costUsd: 0, unpricedModel: 'mystery-9' } }),
     ])
-    expect(unpriced.unpriced).toBe(true, 'an unpriced frame lights the badge mid-turn')
+    expect(unpriced.unpriced, 'an unpriced frame lights the badge mid-turn').toBe(true)
 
     const latched = run(unpriced, [
       ev('usage.updated', { turnUsage: { totalTokens: 12, costUsd: 0.1, unpricedModel: null } }),
     ])
-    expect(latched.unpriced).toBe(true, 'a later priced frame never un-says the blindness already billed')
+    expect(latched.unpriced, 'a later priced frame never un-says the blindness already billed').toBe(true)
 
     const keyless = run(createState('s1'), [ev('usage.updated', { turnUsage: { totalTokens: 5, costUsd: 0.2 } })])
-    expect(keyless.unpriced).toBe(false, 'a frame that names no model is priced, absent stays absent')
+    expect(keyless.unpriced, 'a frame that names no model is priced, absent stays absent').toBe(false)
   })
 
   it('a refused row keeps its denial', () => {

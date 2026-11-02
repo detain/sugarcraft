@@ -147,6 +147,6 @@ describe('contextSources trust routing (C-SEC-4)', () => {
     wire.event(null, 'permission.asked', { ...TRUST, status: 'granted' as const, persisted: true }, false)
     await flushPromises()
     expect(store.pendingTrusts.map((row) => row.askId)).toEqual(['trust-9f0e1d2c3', 'trust-444455556'])
-    expect(store.pendingTrusts[0].status).toBe('granted')
+    expect(store.pendingTrusts[0]!.status).toBe('granted')
   })
 })

@@ -89,7 +89,7 @@ describe('ContextPanel instruction editing (C-CTX-3.c)', () => {
     expect(wrapper.find(MODAL).exists()).toBe(true)
     // The textarea starts empty on purpose: the protocol never ships file
     // content to the browser, so a save replaces what you type.
-    expect(wrapper.find(TEXT).element.value).toBe('')
+    expect(wrapper.find<HTMLTextAreaElement>(TEXT).element.value).toBe('')
 
     await wrapper.find(TEXT).setValue('new content')
     await wrapper.find(SAVE).trigger('click')

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Events, MethodResult } from '../protocol/generated'
+import type { Events, MethodResult, TrustPrompt as TrustPromptWire } from '../protocol/generated'
 import { ProtocolError } from '../protocol/jsonrpc'
 import { useConnectionStore } from './connection'
 
@@ -180,11 +180,18 @@ export const useContextSourcesStore = defineStore('contextSources', () => {
    * C-SEC-5.b: one row per `askId`. A late `asked` delivery never resurrects
    * a row this client already settled or was refused about — the server's one
    * answer per (root, target) is final.
+   *
+   * Generic over the two row shapes this store carries: the wire rows from
+   * `sources.trusts` (no `sessionId` — the listing is per root) and the live
+   * event payloads (`TrustPrompt`, stamped with the session they rode). The
+   * merge law itself reads only `askId`/`status`, which both shapes share.
    */
-  function mergeTrustRow(rows: TrustPrompt[], row: TrustPrompt): TrustPrompt[] {
+  function mergeTrustRow<T extends TrustPromptWire>(rows: T[], row: T): T[] {
     const index = rows.findIndex((existing) => existing.askId === row.askId)
     if (index === -1) return [...rows, row]
-    if (row.status === 'asked' && rows[index].status !== 'asked') return rows
+    const previous = rows[index]
+    if (previous === undefined) return rows // unreachable: index came from findIndex
+    if (row.status === 'asked' && previous.status !== 'asked') return rows
     const next = rows.slice()
     next[index] = row
     return next

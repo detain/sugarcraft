@@ -4,6 +4,7 @@ import { ansiSegments } from '../../lib/ansi'
 import { t } from '../../lib/i18n'
 import type { BackgroundShell } from '../../protocol/generated'
 import { useShellsStore } from '../../stores/agents/shells'
+import type { ShellInputKey } from '../../stores/agents/shells'
 import { useConnectionStore } from '../../stores/connection'
 import { describe } from '../../stores/session'
 
@@ -158,7 +159,7 @@ async function sendLine(): Promise<void> {
   }
 }
 
-function sendKey(key: string): void {
+function sendKey(key: ShellInputKey): void {
   const id = props.sessionId
   const shellId = expanded.value
   if (id === null || shellId === null) return

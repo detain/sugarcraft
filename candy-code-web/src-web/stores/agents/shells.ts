@@ -1,8 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { BackgroundShell } from '../../protocol/generated'
+import type { BackgroundShell, MethodParams } from '../../protocol/generated'
 import { useConnectionStore } from '../connection'
 import { describe } from '../session'
+
+/** The named keys `shells.input` accepts — the wire enum, spelled once. */
+export type ShellInputKey = NonNullable<MethodParams<'shells.input'>['key']>
 
 export interface ShellOutput {
   stdout: string
@@ -153,8 +156,8 @@ export const useShellsStore = defineStore('shells', () => {
    * settled, too long, NUL) reject with the wire error; the caller surfaces
    * them, and the held cursor stays put so the next poll misses nothing.
    */
-  async function input(shellId: string, sessionId: string, text?: string, key?: string): Promise<{ accepted: boolean; cursor: number }> {
-    const params: Record<string, unknown> = { sessionId, shellId }
+  async function input(shellId: string, sessionId: string, text?: string, key?: ShellInputKey): Promise<{ accepted: boolean; cursor: number }> {
+    const params: MethodParams<'shells.input'> = { sessionId, shellId }
     if (text !== undefined) params.text = text
     if (key !== undefined) params.key = key
     const result = await connection.request('shells.input', params)

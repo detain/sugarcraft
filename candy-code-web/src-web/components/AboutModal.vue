@@ -100,7 +100,7 @@ async function loadLogs(): Promise<void> {
     const answer = await connection.request('server.logs', {})
     if (mine !== generation) return
     logs.value = answer.lines
-    logsReason.value = answer.reason
+    logsReason.value = answer.reason ?? null
   } catch (failure) {
     if (mine !== generation) return
     logsError.value = describe(failure)

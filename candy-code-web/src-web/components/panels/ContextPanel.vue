@@ -245,7 +245,7 @@ onMounted(() => void context.load(props.sessionId))
           </li>
         </ul>
         <p class="meta">
-          {{ t('web.panels.ctx_tools_label') }} <template v-if="context.sources.breakdown.toolCount !== null">{{ t('web.panels.ctx_tools_count', {count: context.sources.breakdown.toolCount, tokens: context.sources.breakdown.toolTokens?.toLocaleString()}) }}</template>
+          {{ t('web.panels.ctx_tools_label') }} <template v-if="context.sources.breakdown.toolCount !== null">{{ t('web.panels.ctx_tools_count', {count: context.sources.breakdown.toolCount, tokens: context.sources.breakdown.toolTokens?.toLocaleString() ?? ''}) }}</template>
           <template v-else>{{ t('web.panels.ctx_not_measured') }}</template>
           {{ t('web.panels.ctx_history_stats', {sent: context.sources.breakdown.historyMessages, uiOnly: context.sources.breakdown.uiOnlyRows}) }}
           <template v-if="context.sources.breakdown.pruning"> {{ t('web.panels.ctx_pruned', {tokens: context.sources.breakdown.pruning.outputTokens.toLocaleString(), mode: context.sources.breakdown.pruning.mode}) }}</template>
