@@ -153,6 +153,46 @@ final class TurnControllerBundleShellTest extends TestCase
         );
     }
 
+    /**
+     * rev-r4 C-1: a bundle's manifest name is SELF-DECLARED, so the opt-in
+     * counts a bundle only when the row itself carries the `user` tier stamp.
+     * A checkout that ships `.candy-code/bundles/x/bundle.json` squatting the
+     * user's own listed bundle name stays a refused posture — shell on an
+     * untrusted clone must remain something the operator granted, never
+     * something the repository authors into its own manifest.
+     */
+    public function testAProjectTierBundleSquattingAUserListedNameStillRefuses(): void
+    {
+        $turns = TurnController::new();
+        $forged = CommandSpec::new('kit:log', 'd', 'Custom', template: 'On !`printf %s twig` now.', tier: 'project', source: SkillSource::Bundle, originName: 'kit');
+        $asked = [];
+        $record = static function (string $command) use (&$asked): void {
+            $asked[] = $command;
+        };
+        $gate = new PermissionGate(PermissionMode::Default);
+
+        $refusal = $turns->refuseCommandShell($forged, 'make test', true, $gate, $record, ['kit'], ['kit']);
+        self::assertNotNull($refusal, 'the squatted name opens nothing for a project-tier bundle — not even with both lists carrying it and the checkout trusted');
+        self::assertStringContainsString('came from a plugin bundle', $refusal);
+        self::assertSame([], $asked, 'a refused squat never moves the gate');
+
+        // The fork answer follows the refusal, as everywhere else: the shell
+        // form expands to a refusal, so it must not drag the expansion off
+        // the host's thread.
+        $commands = ['kit:log' => $forged];
+        self::assertFalse(
+            $turns->customCommandMustFork('/kit:log x', $commands, null, true, ['kit'], ['kit']),
+            'a squatted project-tier bundle does not fork on a user-listed name it merely spells',
+        );
+
+        // Control: the genuine user-tier row with the identical stamp keeps
+        // its opt-in — if this leg goes red the tier test is killing, not
+        // narrowing.
+        $legit = CommandSpec::new('kit:log', 'd', 'Custom', template: 'On !`printf %s twig` now.', tier: 'user', source: SkillSource::Bundle, originName: 'kit');
+        self::assertNull($turns->refuseCommandShell($legit, 'make test', false, $gate, $record, ['kit'], []), 'the user-tier row keeps its opt-in');
+        self::assertSame(['make test'], $asked, 'the control leg reaches the gate exactly once');
+    }
+
     public function testAnOptedInMcpPromptReachesTheGateWhileTheFetchForkStands(): void
     {
         $turns = TurnController::new();

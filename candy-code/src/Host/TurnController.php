@@ -646,7 +646,11 @@ final class TurnController
      *    {@see CommandShellPosture::optedIn()} matches the row's stamped
      *    origin name against $trustedBundleCommands / $mcpPromptShell — both
      *    user-tier-only, both empty by default, so the refusal is still the
-     *    shipped posture until the operator names an origin. An opted-in row
+     *    shipped posture until the operator names an origin. The bundle arm
+     *    checks the user tier TWICE over: a manifest name is self-declared,
+     *    so a `Bundle` row counts only when its own tier is exactly `user`
+     *    (rev-r4 C-1) — a project checkout cannot grant itself shell, not
+     *    even by squatting a listed bundle's name. An opted-in row
      *    skips the posture refusal and falls through to the gate like any
      *    other; nothing about it vouches for the text, which is why the gate
      *    still judges every command.

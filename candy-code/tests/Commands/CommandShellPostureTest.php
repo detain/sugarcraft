@@ -15,7 +15,9 @@ use SugarCraft\Code\Skills\SkillSource;
  * single answer both the `!cmd` refusal and the fork decision read, so the
  * whole table is pinned row by row here — including the two orderings the
  * prose states: the `mcp` tier stamp answers first, and a bundle badge
- * OUTRANKS the tier it installed under.
+ * OUTRANKS the tier it installed under. The badge, though, does not outrank
+ * the opt-in's user-tier law: rev-r4 C-1 pins that a project-tier bundle
+ * squatting a listed name still refuses.
  */
 final class CommandShellPostureTest extends TestCase
 {
@@ -140,15 +142,40 @@ final class CommandShellPostureTest extends TestCase
 
         // Matching is the RAW spelling, never the folded row-name segment nor
         // the sanitized wire prefix.
-        $folded = new CommandSpec('review-kit:log', 'd', 'Custom', template: 'run', source: SkillSource::Bundle, originName: 'Review Kit');
+        $folded = new CommandSpec('review-kit:log', 'd', 'Custom', template: 'run', tier: 'user', source: SkillSource::Bundle, originName: 'Review Kit');
         self::assertTrue(CommandShellPosture::optedIn($folded, ['Review Kit'], []), 'the manifest name itself matches');
         self::assertFalse(CommandShellPosture::optedIn($folded, ['review-kit'], []), 'the folded badge in the row name does NOT match');
+    }
+
+    /**
+     * rev-r4 C-1: a bundle's manifest name is SELF-DECLARED, so the bundle arm
+     * of the opt-in also demands the row's own tier be exactly `user`. A
+     * project checkout shipping `.candy-code/bundles/<x>/bundle.json` that
+     * squats a user-listed bundle's name must NOT earn shell through the
+     * badge — and neither may a row whose tier was never stamped, fail-closed
+     * against future minters that forget the stamp.
+     */
+    public function testAProjectTierBundleCannotSquatAUserListedNameIntoShell(): void
+    {
+        $forged = new CommandSpec('kit:log', 'd', 'Custom', template: 'run', tier: 'project', source: SkillSource::Bundle, originName: 'kit');
+        self::assertFalse(CommandShellPosture::optedIn($forged, ['kit'], []), 'the squatted bundle name does not open the bundle arm for a project-tier row');
+        self::assertFalse(CommandShellPosture::optedIn($forged, [], ['kit']), 'nor does it reach the MCP arm — the posture is Bundle, the lists stay per posture');
+        self::assertFalse(CommandShellPosture::optedIn($forged, ['kit'], ['kit']), 'neither list, nor both together, opt a project-tier bundle in');
+
+        $untiered = new CommandSpec('kit:log', 'd', 'Custom', template: 'run', source: SkillSource::Bundle, originName: 'kit');
+        self::assertFalse(CommandShellPosture::optedIn($untiered, ['kit'], []), 'a bundle row with no tier stamp fails closed — the arm demands === user, not !== project');
+
+        // The same squat through the OTHER list: a project-tier row (no bundle
+        // badge — posture answers Repo) named in the MCP list still cannot
+        // opt in, because only the in-memory `mcp` tier stamp reaches that arm.
+        $squat = new CommandSpec('mcp__srv__p', 'd', 'Custom', template: 'run', tier: 'project', originName: 'srv');
+        self::assertFalse(CommandShellPosture::optedIn($squat, [], ['srv']), 'a project-tier row is the Repo posture, which never consults a list');
     }
 
     public function testEmptyListsLeaveEveryStampedRowRefused(): void
     {
         // The shipped default: empty lists opt nothing in, whatever stamps exist.
-        $bundle = new CommandSpec('kit:log', 'd', 'Custom', template: 'run', source: SkillSource::Bundle, originName: 'kit');
+        $bundle = new CommandSpec('kit:log', 'd', 'Custom', template: 'run', tier: 'user', source: SkillSource::Bundle, originName: 'kit');
         $mcp = new CommandSpec('mcp__srv__p', 'd', 'Custom', template: 'run', tier: 'mcp', originName: 'srv');
         self::assertFalse(CommandShellPosture::optedIn($bundle), 'no argument at all = today\'s deny-all');
         self::assertFalse(CommandShellPosture::optedIn($mcp));

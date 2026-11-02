@@ -29,11 +29,23 @@ use SugarCraft\Code\Skills\SkillSource;
  *    `~/.candy-code/commands` and `<root>/.candy-code/commands`.
  *
  * The per-origin opt-in ({@see self::optedIn()}) covers only the two
- * third-party arms: the row-identity stamps ({@see CommandSpec::$originName})
- * the bundle loader and the MCP prompt bridge mint give the two user-tier
- * allow-lists something to match, and an opted-in row falls through to the
- * permission gate like any other. Both lists default empty, so the answers
- * above are the shipped posture until the operator names an origin.
+ * third-party arms. The bundle arm additionally demands the row's own tier be
+ * `user`: a bundle's manifest name is SELF-DECLARED, so a project checkout
+ * that ships `.candy-code/bundles/<x>/bundle.json` naming a user-listed bundle
+ * would otherwise match the allow-list through the badge and opt itself into
+ * shell with zero user trust (rev-r4 C-1). Legit user installs and plugin
+ * paths stamp `user` on every row they mint, so the tier test removes only
+ * the squat. The MCP arm needs no tier test: the `mcp` tier is a stamp no
+ * disk walk applies, the row's identity is the server key as the USER config
+ * names it, and approving that server's trust pin is itself the opt-in
+ * decision (TOFU-subsumed) — a project-tier row can never reach the MCP arm
+ * at all, it answers Repo and the default leg refuses it.
+ *
+ * An opted-in row falls through to the permission gate like any other —
+ * opt-in is not bypass: only a Deny rule refuses it there, and because the
+ * expansion runs unattended an Ask rule cannot prompt, so it proceeds. Both
+ * lists default empty, so the answers above are the shipped posture until
+ * the operator names an origin.
  */
 final class CommandShellPosture
 {
@@ -71,11 +83,22 @@ final class CommandShellPosture
      * row (native operator/project file, or any row predating the stamp) has a
      * null origin and is never opted in; only the two third-party postures
      * consult their lists, exactly as the ruling narrowed this opt-in.
+     *
+     * REV-R4 C-1 NARROWS THE BUNDLE ARM: the manifest name is self-declared,
+     * so a `Bundle` row opts in only when its tier is exactly `user` — the
+     * stamp every genuine user-directory install and plugin path lands
+     * (`BundleDiscovery` + `ForeignCommandDiscovery::bundleDirs()` chain) and
+     * the one a checked-out bundle can never carry. A `project`-tier bundle
+     * row squatting a listed name stays refused; so does a row with a null
+     * tier, fail-closed. The MCP arm takes no tier test — see the class
+     * table: its posture is reachable only through the in-memory `mcp` tier
+     * stamp, and the listed identity is the user's own server key.
      */
     public static function optedIn(CommandSpec $spec, array $trustedBundleCommands = [], array $mcpPromptShell = []): bool
     {
         return match (self::of($spec)) {
-            ShellProvenance::Bundle => in_array($spec->originName, $trustedBundleCommands, true),
+            ShellProvenance::Bundle => $spec->tier === 'user'
+                && in_array($spec->originName, $trustedBundleCommands, true),
             ShellProvenance::Mcp => in_array($spec->originName, $mcpPromptShell, true),
             default => false,
         };
