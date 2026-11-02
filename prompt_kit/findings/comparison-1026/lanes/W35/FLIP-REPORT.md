@@ -1,6 +1,0 @@
-# W35 row-only close-flip report (flip agent, 2026-11-01)
-D0 preflight: master 0bab5f9ef re-verified; :171 unflipped row confirmed verbatim; staging restricted to plan_comparison.md + lanes/W35/FLIP.md + lanes/run-state.json only.
-D1/D2 LANDED: §3 :171 flipped to r2-CLEAN house shape + lanes/W35/FLIP.md (7-line record: both verdict lines verbatim, cure SHAs 7267e6f99/761d1090e, NIT-1 record-only, twin-writer clobber 03:16:25 -> 6,141 B rewrite 03:18:15) in ONE commit a4bec3d57 (house precedent ad41fe82c/a48287d9a; disclosed choice). Laws: %ae=1 %ce=1 Co-Authored=0, cat-file commit.
-D3 LANDED: run-state fold in own commit b40c2c78e — waves_closed [1..34,36..40] -> [1..40], master_tip 02b8df480 -> 0bab5f9ef-pre-flip, note_t1093i one-liner added at root beside lead's note_t1093h; json re-parsed + welded_count 328 == len(welded) held; the 3,513/3,508 churn is the lead's pre-existing indent-1 reformat (file was M at preflight) committed per 'lead's current run-state.json' precedent.
-Anomaly ledger: three transient python assert-path/JSON comma misses during the fold (note_t1093* are ROOT keys, not weld_notes children) — repaired surgically, final file validated before commit, no bad content ever committed.
-FLIP COMPLETE b40c2c78e

@@ -1,7 +1,0 @@
-# W35 close-flip record (row-only, 2026-11-01, flip agent)
-r1 (lanes/W35/WAVE-REVIEW-1.md, 8,503 B @03:14:01) verbatim: WAVE VERDICT: FINDINGS C=0 M=1 MINOR=0 NIT=1
-r2 (lanes/W35/WAVE-REVIEW-2.md, 6,141 B @03:18:15) verbatim: WAVE VERDICT: CLEAN — 0 CRITICAL / 0 MAJOR / 0 MINOR / 1 NIT
-Cures: r1 MAJOR-1 HookWebhooksTest.php:86 + HookWebhooksBodyCapStackTest.php:95-105 vs Server.php new() arg #10 positional-ctor collision from 9d1cf26ca (11E at anchor 0fbd95456) CURED at 7267e6f99 'W35: cure HookWebhooks positional-ctor break from 6.g canvas insert (r1 MAJOR-1)' (named args/null slot, tests-only +9/−2); §7-rider ReadPathCensus MediaMethods read sinks minted at 761d1090e (+7/−0). r2 gates: pair 21T/237A/0E EXACT, ReadPathCensus 19T/785A/0E, keeper re-run at moved tip 909fd2546 no regressions.
-NIT-1 record-only §7 rider: 6.i §4 mark cites SERVER.md slice :646-657; live byte-intact slice :648-657 (:646 = events:end comment) — cosmetic boundary whenever the lead next touches the mark; no code action.
-Anomaly: twin-writer clobber at 03:16:25 — completed 4,660 B r2 report overwritten by 1,436 B partial from a concurrent r2 lineage (clobbering cure-shape sentence verified TRUE to landed diff); resolved by full-report rewrite 6,141 B mtime 03:18:15 = committed authority.
-Eligibility (r2 duty 5): 7/7 W35 §4 marks '#### ✅' at :3733/:3744/:3756/:3768/:3780/:3791/:3803 inside ### W35 (:3728)..### W36 (:3814); 30/30 ancestor+author-clean at r1; zero marks moved by cures.

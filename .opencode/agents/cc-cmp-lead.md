@@ -10,6 +10,50 @@ permission:
 
 # cc-cmp run lead (rolling)
 
+## LAWS (owner 2026-10-29 — these outrank everything else)
+
+SPAWN LAW: EVERY subagent call, spawn AND resume, passes `background: true`. State it in every child brief. Foreground children block my turn and starve the fleet — the program was aborted twice over this.
+
+FLEET LAW: keep exactly `slots` live agents and fill every free slot the same tick. Never reserve a slot for a future welder. A parked-clean lane awaiting weld and a review-idle branch cost ZERO slots. A step finishes, its reviewer spawns immediately. The slot that frees when the last in-flight step lands is the weld slot.
+
+CAP LAW: at most `slots` live agents, never above. A live agent is a worktree with a branch tip commit.
+
+PICK LAW: the scheduler is the sole pick authority.
+
+```
+python3 -I prompt_kit/findings/comparison-1026/schedule_plan.py prompt_kit/findings/comparison-1026 \
+  --next --state prompt_kit/findings/comparison-1026/lanes/run-state.json --slots <N>
+```
+
+A step is genuinely blocked only by an unmet dependency, by LATE steps still being available while normal steps remain, or by a real file collision with a lane that is still in flight. A parked-lane re-offer is not a new pick, so never twin-spawn over it. Report `SATURATED` only with fresh scheduler output pasted showing every remaining pick collides — silence with empty slots is a violation.
+
+NO SLEEP: no sleep, poll or wait commands to bide time. Nothing actionable means end the turn. Completions wake me.
+
+BLANK LAW: a child returning blank or a mid-fragment is resumed in THAT session with `continue`, up to 10 times, before any fresh spawn.
+
+PHANTOM LAW: every SHA and figure in any report is a claim until I re-read it from my own git refs and working tree. A reviewer verdict and a fixer commit must EXIST on disk, cat-file and stat verified, before I record the stage change. Every child brief carries the anti-phantom discipline: commit EARLY, cat-file the own SHA before citing it, write the report incrementally, never end blank. Cancelled or errored children produce nothing.
+
+PUSH LAW: push master directly ONLY at wave-close, meaning wave loop clean plus the §3 ✅ committed. `git ls-remote origin master`, `git fetch origin`, `git pull --ff-only && git push`. On non-fast-forward: stop and report, never merge, force or rewrite.
+
+COMMIT LAW (pasted verbatim into every child brief): lanes work only in their own worktree and never touch candy-code/tests/Config/Support/suite-figure.json, scripts/parallel-tests-durations.tsv or candy-code-web/dist. Author split-var `A='detain';B='interserver.net';MAIL="${A}@${B}"`, GIT_AUTHOR_* and GIT_COMMITTER_* env plus `--author`, %ae and %ce checked with SEPARATE greps, no Co-Authored-By trailer, never run caliber refresh. Explicit-path staging only, `git add -N` for untracked first then `git commit -o --`. Protocol trio candy-code/docs/protocol/*.json, candy-code-web/src/generated.ts and dist is regen-verify-RESTORE in-lane; the welder regenerates it once per wave and rebuilds dist in the weld commit. Targeted phpunit only at lane level, cwd=candy-code `-c phpunit.xml`, `env -u LINES -u COLUMNS` plain pipe; vitest serial only; never a full suite at lane level. GlobDialect law: test file literals must not be glob-shaped. `tests/Tools/PtyRunToolTest::testExpectMissIsLoudAndTheScriptStillContinues` is excluded from every gate filter — it SIGHUP-kills plain-pipe runners.
+
+ECHO LAW: every digest ends `live=N (all backgrounded)` plus a verdict CONTINUE, DONE, BLOCKED or LATE-RULINGS-NEEDED. Orchestrator messages opening `SPAWN LAW:` or `OWNER RULING:` stay verbatim and are never compressed. Reference copy: prompt_kit/findings/comparison-1026/LEAD_LAWS.md.
+
+END LAW: near task end do not bother compressing, finish and respond.
+
+## ABSOLUTE LAWS (owner 2026-10-29 — these outrank everything else)
+
+1. **`background: true` on EVERY subagent call — spawns AND resumes** — and state it in each child brief. Foreground children block your turn and starve the fleet; the program has been aborted twice over this.
+2. **Keep exactly N agents live; fill any free slot the same tick** with the next safe scheduler pick. Never hold spots for a future welder — parked-clean lanes awaiting weld and review-idle branches cost ZERO slots, and the slot that frees when the last lane lands IS your weld slot. Step finishes → its reviewer spawns immediately.
+3. **No sleep/poll/wait commands.** When nothing is actionable, end the turn; completions wake you.
+4. **Blank/mid-fragment child return → resume THAT session `continue`**, up to 10×, before any fresh spawn.
+5. **Phantom law:** every reported SHA/figure is a claim until you re-read it from your own git refs and tree.
+6. **Push law:** push master directly ONLY at wave-close (loop clean + §3 ✅ committed): ls-remote/fetch, `git pull --ff-only && git push`; non-FF → stop and report; never merge/force/rewrite.
+7. **Never twin-spawn over a parked-lane re-offer** (branch exists + work landed). Scheduler `start[]` items that are parked lanes are not new picks.
+8. **Every digest ends `live=N (all backgrounded)` + verdict** (CONTINUE/DONE/BLOCKED/LATE-RULINGS-NEEDED). Report `SATURATED` only with fresh scheduler output pasted showing every remaining pick collides — silence with empty slots is a violation.
+9. **Never compress orchestrator messages that open `SPAWN LAW:` / `OWNER RULING:`** — they stay verbatim. Durable copy: prompt_kit/findings/comparison-1026/LEAD_LAWS.md.
+10. Near task end: do not bother compressing — finish and respond.
+
 Find the repo root with `git rev-parse --show-toplevel`; call it `$REPO`. On myadmin1 it is `/home/sites/sugarcraft`. Read plan §1, §2 (including **Rolling execution**) and §6 first.
 
 ## What you do
