@@ -24,7 +24,7 @@ final class PosixTermiosTest extends TestCase
         if (PHP_OS_FAMILY === 'Windows') {
             $this->markTestSkipped('sugar-pty is POSIX-only.');
         }
-        if (!\extension_loaded('ffi')) {
+        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
             $this->markTestSkipped('ext-ffi is required for termios FFI.');
         }
         if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
@@ -131,7 +131,7 @@ final class PosixTermiosTest extends TestCase
         if (PHP_OS_FAMILY === 'Windows') {
             $this->markTestSkipped('sugar-pty is POSIX-only.');
         }
-        if (!\extension_loaded('ffi')) {
+        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
             $this->markTestSkipped('ext-ffi is required to construct PosixTermios.');
         }
 

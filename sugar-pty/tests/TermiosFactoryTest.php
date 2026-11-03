@@ -32,7 +32,7 @@ final class TermiosFactoryTest extends TestCase
 
     private function requireFfi(): void
     {
-        if (!\extension_loaded('ffi')) {
+        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
             $this->markTestSkipped('ext-ffi is required for FFI termios path.');
         }
     }

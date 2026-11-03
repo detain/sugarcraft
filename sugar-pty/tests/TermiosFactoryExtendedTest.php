@@ -19,7 +19,7 @@ final class TermiosFactoryExtendedTest extends TestCase
         if (PHP_OS_FAMILY === 'Windows') {
             $this->markTestSkipped('sugar-pty is POSIX-only.');
         }
-        if (!\extension_loaded('ffi')) {
+        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
             $this->markTestSkipped('ext-ffi required for this test.');
         }
         if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {

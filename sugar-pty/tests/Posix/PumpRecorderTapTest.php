@@ -31,7 +31,7 @@ final class PumpRecorderTapTest extends TestCase
         if (PHP_OS_FAMILY === 'Windows') {
             $this->markTestSkipped('sugar-pty is POSIX-only; Windows ConPTY is a separate port.');
         }
-        if (!\extension_loaded('ffi')) {
+        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
             $this->markTestSkipped('ext-ffi is required to exercise the libc PTY syscalls.');
         }
         if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
