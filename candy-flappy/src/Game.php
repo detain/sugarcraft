@@ -469,10 +469,11 @@ final class Game implements Model
         // M27 (comment truth only — behaviour is the game spec): PHP's round()
         // rounds half AWAY from zero, so y = -0.5 rounds to -1 and CRASHES;
         // safe is y > -0.5 strictly (row() >= 0).
-        $crashed = $bird->row() < 0 || $bird->row() >= self::HEIGHT;
+        $birdRow = $bird->row();
+        $crashed = $birdRow < 0 || $birdRow >= self::HEIGHT;
         if ($crashed === false) {
             foreach ($pipes as $p) {
-                if ($p->collides($bird->x, $bird->row()) === true) {
+                if ($p->collides($bird->x, $birdRow) === true) {
                     $crashed = true;
                     break;
                 }

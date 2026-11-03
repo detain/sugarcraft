@@ -26,6 +26,45 @@ use SugarCraft\Style\Style;
  */
 final class Renderer
 {
+    /** Palette (M23: hoisted from the per-cell loop to named constants). */
+    private const AMBER = '#fde68a';
+    private const GREEN = '#6ee7b7';
+    private const HINT = '#7d6e98';
+    private const DOT = '#3a2c5a';
+    private const CRASH = '#ff5f87';
+
+    /**
+     * M23: the per-cell loop rendered ~1080 cells per frame and each cell
+     * rebuilt a Style/Color chain producing the SAME bytes every time. The
+     * fully-styled glyph strings are process-static memos — one build per
+     * glyph, ever. The goldens pin that the memo bytes equal the old
+     * per-call bytes.
+     */
+    private static ?string $birdCell = null;
+    private static ?string $crashCell = null;
+    private static ?string $pipeCell = null;
+    private static ?string $dotCell = null;
+
+    private static function birdCell(): string
+    {
+        return self::$birdCell ??= Style::new()->foreground(Color::hex(self::AMBER))->bold()->render('>');
+    }
+
+    private static function crashCell(): string
+    {
+        return self::$crashCell ??= Style::new()->foreground(Color::hex(self::CRASH))->bold()->render('💥');
+    }
+
+    private static function pipeCell(): string
+    {
+        return self::$pipeCell ??= Style::new()->foreground(Color::hex(self::GREEN))->render('▓');
+    }
+
+    private static function dotCell(): string
+    {
+        return self::$dotCell ??= Style::new()->foreground(Color::hex(self::DOT))->render('·');
+    }
+
     public static function render(Game $g): string
     {
         if ($g->colorProfile === ColorProfile::NoTty) {
@@ -47,11 +86,22 @@ final class Renderer
         $bird = $g->bird;
         $birdRow = $bird->row();
 
+        // M23: one collides() pass per pipe per row (<= 6x18 checks) instead
+        // of re-scanning every pipe inside every cell (60x18x<=6 before).
+        $wallRows = [];
+        foreach ($g->pipes as $p) {
+            $blocked = [];
+            for ($y = 0; $y < $h; $y++) {
+                $blocked[$y] = $p->collides($p->x, $y);
+            }
+            $wallRows[$p->x] = $blocked;
+        }
+
         $rows = [];
         for ($y = 0; $y < $h; $y++) {
             $cells = [];
             for ($x = 0; $x < $w; $x++) {
-                $cells[] = self::cellGlyph($g, $x, $y, $bird->x, $birdRow);
+                $cells[] = self::cellGlyph($g, $x, $y, $bird->x, $birdRow, $wallRows);
             }
             $rows[] = implode('', $cells);
         }
@@ -59,11 +109,11 @@ final class Renderer
 
         $framed = Style::new()
             ->border(Border::rounded())
-            ->foreground(Color::hex('#fde68a'))
+            ->foreground(Color::hex(self::AMBER))
             ->render($field);
 
         $scoreText = "score: {$g->score}";
-        $score = Style::new()->bold()->foreground(Color::hex('#fde68a'))
+        $score = Style::new()->bold()->foreground(Color::hex(self::AMBER))
             ->render($scoreText);
         $highScore = $g->highScore();
         if ($g->crashed === true) {
@@ -71,12 +121,12 @@ final class Renderer
             $highScorePlain = '';
             if ($g->newRecord && $g->score > 0) {
                 $highScorePlain = " 🏆 NEW HIGH SCORE: {$highScore}";
-                $highScoreLine = Style::new()->bold()->foreground(Color::hex('#6ee7b7'))
+                $highScoreLine = Style::new()->bold()->foreground(Color::hex(self::GREEN))
                     ->render($highScorePlain) . '   ';
                 $highScorePlain .= '   ';
             } elseif ($highScore > 0) {
                 $highScorePlain = " best: {$highScore}";
-                $highScoreLine = Style::new()->foreground(Color::hex('#7d6e98'))
+                $highScoreLine = Style::new()->foreground(Color::hex(self::HINT))
                     ->render($highScorePlain) . '   ';
                 $highScorePlain .= '   ';
             }
@@ -86,7 +136,7 @@ final class Renderer
                 '💥 splat — press r to try again, q to quit',
                 '💥 splat — r retry · q quit',
             );
-            $hint = Style::new()->foreground(Color::hex('#ff5f87'))->bold()
+            $hint = Style::new()->foreground(Color::hex(self::CRASH))->bold()
                 ->render($hintPlain);
             return self::fit($g, $framed . "\n " . $score . $highScoreLine . '    ' . $hint . "\n");
         }
@@ -96,7 +146,7 @@ final class Renderer
         $bestLine = '';
         if ($highScore > 0) {
             $bestPlain = " best: {$highScore}";
-            $bestLine = Style::new()->foreground(Color::hex('#7d6e98'))
+            $bestLine = Style::new()->foreground(Color::hex(self::HINT))
                 ->render($bestPlain) . '    ';
         }
         // M10: an unstarted board advertises the start key instead of the
@@ -116,7 +166,7 @@ final class Renderer
                 'space flap · q quit',
             );
         }
-        $hint = Style::new()->foreground(Color::hex('#7d6e98'))
+        $hint = Style::new()->foreground(Color::hex(self::HINT))
             ->render($hintPlain);
 
         return self::fit($g, $framed . "\n " . $score . $bestLine . '    ' . $hint . "\n");
@@ -235,29 +285,25 @@ final class Renderer
         return implode("\n", $out);
     }
 
-    private static function cellGlyph(Game $g, int $x, int $y, int $birdX, int $birdRow): string
+    /**
+     * @param array<int, array<int, bool>> $wallRows precomputed open/closed
+     *                                               rows keyed by pipe column
+     */
+    private static function cellGlyph(Game $g, int $x, int $y, int $birdX, int $birdRow, array $wallRows): string
     {
         // Bird glyph wins over everything (m29: on a crashed board the
         // bird cell renders as the 💥 that the status line announces).
         if ($x === $birdX && $y === $birdRow) {
-            if ($g->crashed === true) {
-                return Style::new()->foreground(Color::hex('#ff5f87'))->bold()->render('💥');
-            }
-            return Style::new()->foreground(Color::hex('#fde68a'))->bold()->render('>');
+            return $g->crashed === true ? self::crashCell() : self::birdCell();
         }
-        // Pipe walls.
-        foreach ($g->pipes as $p) {
-            if ($p->x !== $x) continue;
-            if ($p->collides($x, $y) === true) {
-                return Style::new()->foreground(Color::hex('#6ee7b7'))->render('▓');
-            }
-            // Inside the gap: just air.
-            return ' ';
+        // Pipe walls; inside the gap it is just air.
+        if (isset($wallRows[$x])) {
+            return $wallRows[$x][$y] === true ? self::pipeCell() : ' ';
         }
         // Background: a sparse parallax dot field — every 12 columns (scroll-
         // shifted by the tick) and every 5th row starting at row 2 (m11 truth).
         if (($x + $g->tickIndex) % 12 === 0 && ($y % 5) === 2) {
-            return Style::new()->foreground(Color::hex('#3a2c5a'))->render('·');
+            return self::dotCell();
         }
         return ' ';
     }

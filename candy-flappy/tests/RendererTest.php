@@ -124,4 +124,17 @@ final class RendererTest extends TestCase
         $this->assertStringNotContainsString('NEW HIGH SCORE', $out);
         $this->assertStringContainsString('best:', $out);
     }
+
+    public function testTheCellLoopCarriesNoStyleConstruction(): void
+    {
+        // M23 structural pin: the per-cell glyph path must draw from the
+        // memoised styled strings — a reintroduced Style::new() inside
+        // cellGlyph is the regression this catches.
+        $src = (string) file_get_contents(__DIR__ . '/../src/Renderer.php');
+        $start = strpos($src, 'private static function cellGlyph(');
+        $this->assertIsInt($start);
+        $body = substr($src, $start);
+        $this->assertStringNotContainsString('Style::new()', $body);
+        $this->assertStringNotContainsString('Color::hex(', $body);
+    }
 }
