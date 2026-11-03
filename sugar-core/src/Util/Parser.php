@@ -38,6 +38,19 @@ namespace SugarCraft\Core\Util;
  */
 final class Parser
 {
+    /**
+     * Upper bound on a single incomplete escape sequence held across
+     * parse() calls. Real terminal traffic never approaches it (OSC /
+     * DCS replies are tens of bytes); it exists so a hostile or stuck
+     * stream that sends `ESC ]` and never a terminator cannot grow the
+     * internal buffer without limit — which would also turn every
+     * later feed into a rescan of the whole backlog (quadratic CPU).
+     * Once the partial exceeds the cap, its bytes are recovered as a
+     * TEXT token (the same contract {@see flush()} applies on EOF) and
+     * the parser resynchronises on the next chunk.
+     */
+    public const MAX_PENDING_BYTES = 65536;
+
     /** Bytes carried over from the previous parse() call. */
     private string $pending = '';
 
@@ -71,8 +84,22 @@ final class Parser
                 $textStart = -1;
                 $consumed = $this->consumeEsc($buf, $i, $len, $tokens);
                 if ($consumed < 0) {
-                    // Incomplete — buffer and bail.
-                    $this->pending = substr($buf, $i);
+                    // Incomplete — buffer and bail, unless the run of bytes
+                    // from here to the end of the buffer has outgrown the
+                    // cap: no terminator this parser accepts is coming, so
+                    // recover those bytes as text and resynchronise. The
+                    // partial itself may still be short (the backlog before
+                    // it is what grew), so judge on the combined pending
+                    // length rather than the tail.
+                    $rest = substr($buf, $i);
+                    if ($len > self::MAX_PENDING_BYTES) {
+                        // $rest is the tail of $buf, so this also bounds the
+                        // buffer we are about to carry: no rescan backlog can
+                        // grow past the cap either.
+                        $tokens[] = new Token(Token::TEXT, $rest);
+                        return $tokens;
+                    }
+                    $this->pending = $rest;
                     return $tokens;
                 }
                 $i += $consumed;

@@ -165,6 +165,28 @@ final class ParserTest extends TestCase
         $this->assertSame('after', $tokens[1]->data);
     }
 
+    public function testUnterminatedSequenceBeyondTheCapIsRecoveredAsText(): void
+    {
+        $p = new Parser();
+        // An OSC opener that never meets BEL or ST: buffered while the
+        // partial fits MAX_PENDING_BYTES, recovered as text the moment the
+        // backlog would outgrow it (no unbounded state, no quadratic
+        // rescan of the backlog across feeds).
+        $prefix = "\x1b]0;" . str_repeat('x', Parser::MAX_PENDING_BYTES - 5); // pending == cap - 1
+        $this->assertSame([], $p->parse($prefix));   // within the cap: still buffered
+        $tokens = $p->parse('yy');                   // pushes the backlog one past it
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Token::TEXT, $tokens[0]->type);
+        $this->assertSame($prefix . 'yy', $tokens[0]->data);
+        $this->assertSame([], $p->flush());          // nothing left buffered
+
+        // Resynchronised: the next chunk parses normally.
+        $tokens = $p->parse("\x1b[31m");
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Token::CSI, $tokens[0]->type);
+        $this->assertSame('m', $tokens[0]->final);
+    }
+
     public function testFlushReturnsBufferedAsText(): void
     {
         $p = new Parser();
