@@ -15,10 +15,11 @@ hit-testing and incremental diff output for efficient redraws.
   vertical anchor and a horizontal anchor, and any case is valid on either
   axis — each axis reads only the component it cares about (see
   [Positioning](#positioning)).
-- **Backdrop dimming** — dim the base content under the overlay using
-  truecolor blending (0–100% opacity); lines whose *first byte* is already
-  an escape introducer are carried through un-dimmed, because a line that
-  starts styled has no plain cells for the dim to blend into.
+- **Backdrop dimming** — darken the whole canvas except the overlay's own
+  footprint by wrapping every non-empty background line in a truecolor dim
+  pen (0–100% opacity). Styling inside a line that sets its own color later
+  overrides the dim; the dim does not compound across stacked layers (two
+  50% veils dim once, not twice).
 - **Border chrome** — wrap the overlay in any sugar-style `Border`
   (normal, rounded, thick, double, …). Applied by `composite()` whenever a
   border is set.
@@ -31,6 +32,15 @@ hit-testing and incremental diff output for efficient redraws.
 - **Incremental diffing** — emit only the changed cells when a background
   is re-rendered at the same size (see
   [Buffer diffing](#buffer-diffing-and-rendersession)).
+
+## Install
+
+```bash
+composer require sugarcraft/sugar-overlay
+```
+
+Every example below assumes the Composer autoloader is already required
+(`require __DIR__ . '/../vendor/autoload.php';` from a project script).
 
 ## Quick Start
 
@@ -116,21 +126,37 @@ $veil = Veil::new()->withBackdrop(50); // 50% dim
 echo $veil->composite($fg, $bg, Position::CENTER, Position::CENTER) . "\n";
 ```
 
-`withBackdrop(int $opacity)` takes 0–100 (clamped). Background lines that
-already *start* with an escape sequence are carried through byte-exact —
-the dim only blends plain runs, never content that arrives pre-styled.
+`withBackdrop(int $opacity)` takes 0–100 (clamped) and darkens every row
+outside the overlay footprint: each non-empty background line is wrapped in
+`\e[38;2;v;v;v…\e[39m` with `v = round(255 × (1 − opacity/100))`. Lines that
+arrive pre-styled are no longer skipped — the wrap dims them too, though any
+SGR inside the line that sets its own color afterwards still overrides the
+pen for its span. The pen is a **darkening** convention: it assumes a dark
+terminal background, so on a light theme a dimmed canvas brightens toward
+gray instead. During an animation the scrim ramps with the transition —
+the first frames are partially dimmed, full strength lands only with the
+settled frame (see [Animations](#animations)).
+
+`composite()` anchors horizontally with a deliberate asymmetry: `baseX` is
+**not** clamped, so an overlay wider than the canvas at `LEFT` keeps its
+left cells and loses its right edge (the reverse at `RIGHT`). A
+"shrink-to-fit-the-canvas" mode is a design decision this library does not
+make for you.
 
 ## Animations
 
 `animate()` steps a transition: progress `0.0` is the start state, `1.0`
-the settled overlay. Pick a kind with `withAnimation()`; each kind applies
-its default easing.
+the settled overlay. Values outside `0.0–1.0` saturate (they are clamped,
+never extrapolated). Pick a kind with `withAnimation()`; each kind applies
+its default easing. At `0.0`, `FADE` and `SCALE` render no foreground at
+all and the scrim is fully transparent; `SLIDE` sits one column-step off
+the anchored edge.
 
 | Kind | Default easing | Motion |
 |---|---|---|
-| `AnimationKind::SLIDE` | `CubicBezier::easeOut()` | enters from the anchored edge |
-| `AnimationKind::FADE` | `CubicBezier::easeInOut()` | opacity in from black (truecolor pen) |
-| `AnimationKind::SCALE` | `CubicBezier::easeOut()` | line-by-line reveal |
+| `AnimationKind::SLIDE` | `CubicBezier::easeOut()` | enters from the anchored edge; a CENTER anchor has no edge to slide from, so SLIDE is a no-op there (only the scrim ramps) |
+| `AnimationKind::FADE` | `CubicBezier::easeInOut()` | truecolor dim pen over the foreground, lifting to full brightness |
+| `AnimationKind::SCALE` | `CubicBezier::easeOut()` | lines reveal from the middle outward (vertical, whole lines only) |
 
 ```php
 <?php
@@ -139,12 +165,32 @@ use SugarCraft\Overlay\{Animation\AnimationKind, Position, Veil};
 $bg = "..............................\n..............................\n..............................";
 $fg = "[dialog box]";
 
-$veil  = Veil::new()->withAnimation(AnimationKind::SLIDE);
+// Each frame gets a FRESH veil: composite/animate state rides a shared
+// RenderSession, so reusing one veil would emit deltas after step 0 —
+// near-empty strings, not frames.
 $frame = '';
 for ($step = 0; $step <= 10; $step++) {
+    $veil  = Veil::new()->withAnimation(AnimationKind::SLIDE);
     $frame = $veil->animate($fg, $bg, Position::TOP, Position::LEFT, $step / 10);
 }
 echo $frame . "\n"; // settled frame
+```
+
+For users who ask the platform for reduced motion, opt the veil out of
+stepped transitions entirely:
+
+```php
+<?php
+use SugarCraft\Overlay\{Animation\AnimationKind, Position, Veil};
+
+// Apps read the platform preference from sugar-colorprofile, e.g.
+// Probe::reducedMotion(), and pass it straight through.
+$reduced = (bool) ($_ENV['REDUCE_MOTION'] ?? false);
+$bg = "..............................\n..............................\n..............................";
+
+$veil = Veil::new()->withAnimation(AnimationKind::FADE)->withReducedMotion($reduced);
+echo $veil->animate("[dialog box]", $bg, Position::TOP, Position::LEFT, 0.3) . "\n";
+// with the flag set, any progress paints the settled frame in one shot.
 ```
 
 ### Custom easing
@@ -245,7 +291,18 @@ echo $stack->composite($background, Position::CENTER, Position::CENTER) . "\n";
 
 Both passes feed every layer the **accumulated** canvas (later veils see
 earlier veils, including their dimming) and run each veil
-`withoutSession()` so stacked painting always emits full frames.
+`withoutSession()` so stacked painting always emits full frames (the stack
+never diffs — full frames are its architecture, not an oversight). A stack
+holds at most `VeilStack::MAX_LAYERS` (256) layers; `add()` throws
+`OverflowException` beyond the bound, which keeps `compositeAll()`'s
+per-frame walk cost finite.
+
+The stack reads each veil's `content()` **verbatim** — it performs no
+sweep of its own. Untrusted payloads must be swept per-veil with
+`withUntrustedContent()` *before* `add()`; a forged zone sentinel that
+reaches the stack survives into the composited frame and mints a phantom
+hit-test zone with the attacker's chosen id (see
+[Security](#security--untrusted-content)).
 
 ### Per-veil placement: withPosition()
 
@@ -335,19 +392,31 @@ foreach (range(1, 3) as $row) {
     echo $line . "\n";
 }
 
-$click = new MouseMsg(x: 0, y: 0, button: MouseButton::Left, action: MouseAction::Press);
+$click = new MouseMsg(x: 1, y: 1, button: MouseButton::Left, action: MouseAction::Press);
 echo ($scanned->isClickOutside($click) ? 'dismiss' : 'inside') . "\n";
 ```
 
 Notes:
 
 - `scan()` returns a **new** instance carrying the zones of that frame
-  (a re-scan never retro-changes other clones). `hit()` returns the
-  `Zone` at a cell or `null`; `Zone::$id` is the public id.
-- `isClickOutside()` requires a prior `scan()` (throws otherwise) and
-  always answers `false` unless `withClickOutsideDismiss(true)`.
+  (a re-scan never retro-changes other clones). Ordinary `with*()` clones
+  made *after* the scan carry the zones forward — the scanner rides the
+  clone — while the pre-scan original stays unscanned. `hit()` returns
+  the `Zone` at a cell or `null`; `Zone::$id` is the public id. Both
+  `hit()` and `isClickOutside()` are **1-based**: `isClickOutside()`
+  forwards `MouseMsg::$x/$y` straight into `hit()`, so normalize the
+  terminal's 0-based report before constructing the message.
+- `scan()` throws `InvalidArgumentException` when the frame carries two
+  zones with the same id (`sugar-mouse` refuses ambiguous zones) — keep
+  `mark()` ids unique per frame.
+- `isClickOutside()` requires dismissal to be enabled: with the flag off
+  it always answers `false`; with the flag on but no prior `scan()` it
+  throws.
 - `scan()` sees zones from its own render only — zones do not accumulate
-  across frames; re-scan after each render you want to hit-test.
+  across frames; re-scan after each render you want to hit-test. When you
+  are on the diffing path, the frames `composite()` returns after the
+  first are deltas that carry **no zone markers**; scan
+  `$veil->lastFullFrame()` instead (see below).
 
 ## Buffer Diffing and RenderSession
 
@@ -375,10 +444,26 @@ full again.
 > fresh `Veil::new()` per pipeline. `resetPreviousFrame()` mutates through
 > the same shared session: it invalidates for **every** clone.
 
-For incremental updates over SSH the full frame of a typical 40×10 modal
-costs ~1,940 bytes while a one-character change diffs down to a few
-bytes; a diff whose cursor position could not be trusted is what
-`resetPreviousFrame()` exists to recover from.
+Over an SSH link a full frame is what costs: the Quick Start's frame is
+89 bytes undimmed (209 once a 50% scrim wraps every row), while a
+one-character change diffs down to 8 bytes. A diff whose cursor position
+could not be trusted is what `resetPreviousFrame()` exists to recover
+from. (These three figures are pinned live by `tests/ReadmeByteFigureTest.php`
+— change the fixture, change the prose.)
+
+> **Warning — deltas carry no zone markers.** The cursor-move diff is
+> paint only: the `mark()` envelopes live exclusively in the FULL frame.
+> Hit-testing on the diffing path must scan `$veil->lastFullFrame()` —
+> the complete frame behind the most recent emission, exposed on both
+> `Veil` and `RenderSession` — never the string `composite()` just
+> returned. Scanning a delta finds zero zones, so every click reads as
+> "outside" and a dismissal-enabled modal self-closes from frame two.
+
+Extended color operands saturate before any arithmetic runs: a `38;5;n`
+palette index is clamped to 0–255 and `38;2;r;g;b` components to 0–255
+each, so a hostile `38;5;300` cannot push the 6×6×6 cube formula past the
+`0xRRGGBB` range the cell model stores (unclamped, it would have run the
+grey ramp to 688 per channel — a value no frame can round-trip).
 
 ## Security — untrusted content
 
@@ -400,18 +485,64 @@ use SugarCraft\Overlay\{Position, Veil};
 $bg      = str_repeat("..............................\n", 3);
 $hostile = (string) ($_ENV['MODAL_BODY'] ?? "fallback text"); // text from wherever you do NOT trust it
 
-// Direct composite path: sanitize explicitly.
+// Direct composite path: sweep payloads, but keep the marker arena —
+// your own mark() zones legitimately ride these bytes.
 echo Veil::new()->composite(Sanitize::untrustedForMarkedFrames($hostile), $bg, Position::CENTER, Position::CENTER) . "\n";
 
-// Stack content path: same sweep built in.
+// Content/stack path: sweep AT SET TIME. The stack reads content()
+// verbatim — an unswept veil added to a VeilStack mints zones from
+// forged sentinels — so untrusted bodies go through withUntrustedContent().
 $veil = Veil::new()->withUntrustedContent($hostile);
 echo $veil->composite($veil->content(), $bg, Position::CENTER, Position::CENTER) . "\n";
 ```
 
+The two sweeps differ deliberately:
+
+- `Sanitize::untrustedForMarkedFrames()` serves terminal-bound **marked
+  frames**: it neutralizes control sequences but PRESERVES the U+E000
+  arena so legitimate zone markers survive the trip.
+- `withUntrustedContent()` serves **display content**: it applies
+  `Sanitize::untrustedForDisplay()` plus `stripZoneSentinels()` and
+  folds TAB to its measured four cells. The frames-channel sanitizer is
+  wrong here because its contract KEEPS CR and TAB — and both are
+  geometry lies downstream: a bare CR repaints over cells the width math
+  already counted (the diff model and the screen desync), and terminals
+  stop TAB at the next 8-column tab stop while `Width` reports four
+  cells, so every clip and anchor computed from the measured width cuts
+  the row short or past its end.
+
 The law, exactly: **sweep at the boundary, render the result.** Marked
-frames go through `Sanitize::untrustedForMarkedFrames()`; mark() only
-text you assembled yourself, never raw payloads (a payload that contains
-sentinels mints its own zones if you skip the sweep).
+frames go through `Sanitize::untrustedForMarkedFrames()`; untrusted
+bodies entering content/stack paths go through `withUntrustedContent()`;
+mark() only text you assembled yourself, never raw payloads (a payload
+that contains sentinels mints its own zones if you skip the sweep).
+Both sweeps preserve sugar-image's U+E002+ image-marker band.
+
+## Zone markers and presentation
+
+`mark()` wraps content in `U+E000 id U+E001 … U+E000 /id U+E001`
+envelopes. The C1 fix made these cost ZERO columns everywhere in the
+compositor — measurement, clipping, and anchoring all account them like
+escape sequences — but they are not invisible: the id characters are
+printable bytes, and a host that forwards a marked frame straight to a
+dumb pipe (or to a logger) sees `[Kept]`-style garbage where the zone
+sat. The split is by consumer:
+
+- the **scanner** needs the envelopes — `scan($veil->lastFullFrame())`
+  reads them before anything is stripped;
+- the **terminal you own** rides them harmlessly (private-use band);
+- **presentation channels** you do not control (logs, plain-text
+  fallbacks, paste-through) must strip first:
+  `Sanitize::stripZoneSentinels($frame)` removes exactly the
+  U+E000/U+E001 pair and leaves everything else — image markers included
+  — byte-for-byte. (The fleet does this today: candy-code's
+  `src/Tui/Renderer.php` strips marker triples on its own transcript
+  path.)
+
+If your app never hit-tests, opt out entirely with
+`Veil::withoutZoneMarkers()`: `mark()` then returns the content
+byte-for-byte (id validation still throws — bad ids stay loud) and the
+frame carries no envelopes to strip anywhere.
 
 ## Accessibility
 
@@ -422,6 +553,13 @@ keep focus movement inside sugar-focus / sugar-navstack so the overlay's
 buttons are reachable without a mouse. When an overlay opens, announce it
 (a title line or `withBorder()` frame helps screen-reader users locate the
 new block) and return focus to the underlying pane when it closes.
+
+For motion, call `withReducedMotion()` whenever the user has asked their
+platform to reduce it (sugar-colorprofile's `Probe::reducedMotion()` is
+the fleet-standard read): `animate()` then treats every progress as 1.0
+and paints the settled frame in one shot, with no dim-pen sweep and no
+travel. During ordinary animation the scrim ramps with the animation
+instead of snapping to full opacity at frame one.
 
 ## Shared foundations
 

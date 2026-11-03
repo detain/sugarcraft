@@ -253,7 +253,7 @@ final class MarkedFrame
      * The pen-neutralizer a spliced segment needs at its right edge.
      *
      * A row assembled from three independently truncated segments can leak
-     * the LEFT segment's colour pen into the middle or right one when the
+     * the LEFT segment's color pen into the middle or right one when the
      * left segment ends without an explicit reset (crop, provider-styled
      * line, marker envelope wrapping a styled tail). Returns the default
      * fg/bg restoration only when the walk actually ends on a non-default
@@ -299,7 +299,7 @@ final class MarkedFrame
                     } else {
                         $bg = true;
                     }
-                    // 38;5;n / 38;2;r;g;b — consume the extended colour leg.
+                    // 38;5;n / 38;2;r;g;b — consume the extended color leg.
                     $i += (($codes[$i + 1] ?? null) === 2) ? 4 : 2;
                 }
             }

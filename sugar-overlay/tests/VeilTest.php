@@ -218,7 +218,7 @@ final class VeilTest extends TestCase
     public function testTruecolorComponentsAreClampedInTheDiffPen(): void
     {
         // 300 must saturate to 255 like a terminal does — the old `& 0xFF`
-        // wrapped it to 44, so the delta repainted the cell in a colour the
+        // wrapped it to 44, so the delta repainted the cell in a color the
         // full frame never showed.
         $v = Veil::new();
         $bg = "....\n....";
@@ -879,7 +879,7 @@ final class VeilTest extends TestCase
      * Regression for the FIX-2 deferred-buffer change.
      *
      * The diff-buffer build is now deferred from frame 1 to the first subsequent
-     * same-dimension composite. Public behaviour must be IDENTICAL to before:
+     * same-dimension composite. Public behavior must be IDENTICAL to before:
      *  (a) a fresh Veil's first composite() returns the FULL output;
      *  (b) a REUSED Veil's second same-dim composite() returns a DELTA (not the full
      *      output) for a small change;
@@ -1152,7 +1152,7 @@ final class VeilTest extends TestCase
      * (a syntax-highlighted file, an OSC-8 hyperlink row) never dimmed under a
      * scrim at all: stacked modals showed un-dimmed bands. The wrap only
      * prepends/appends SGRs, so the payload still survives byte-intact; the
-     * line's own colour pen (set after the dim pen) wins for its styled cells,
+     * line's own color pen (set after the dim pen) wins for its styled cells,
      * and only default-pen cells read dimmed.
      */
     public function testDimLinePreservesAnsiPrefixedLines(): void

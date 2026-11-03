@@ -7,7 +7,7 @@
 - Applied per-line before compositing; each dimmed line is wrapped as `\e[38;2;R;G;Bm`…`\e[39m`
 - This replaces the old nested `\e[2m` FAINT approach which only produced ~2 visual states; the truecolor blend gives a smooth gradient across 0–100%
 - At opacity 0, no dimming is applied (line returned unchanged)
-- Applies to all lines uniformly; for backdrop lines (typically terminal-default foreground) the gray blend achieves visible dimming; for styled overlay content the truecolor blends with existing colors
+- Applies to every NON-EMPTY background line uniformly (plain or escape-led) once opacity > 0; the dim pen is the FIRST pen on the line, so a color pen set inside the line wins for its own cells rather than blending — there is no per-cell color mixing. Styled OVERLAY (foreground) content never passes through the backdrop dim
 
 ## Animation System
 
@@ -29,7 +29,7 @@
 ### Fade Animation
 
 - Terminal emulators do not support true per-character alpha blending, so `Fade::apply()` renders opacity as a truecolor gray pen (`\e[38;2;L;L;Lm`, L = 255 × opacity/100), the same blend the backdrop dim uses
-- The pen is re-applied after every SGR sequence inside a line so content colours / resets cannot punch through; background colours and attributes are untouched
+- The pen is re-applied after every SGR sequence inside a line so content colors / resets cannot punch through; background colors and attributes are untouched
 - Opacity 0 → `''` (nothing painted, like Scale at 0); opacity 100 → foreground byte-for-byte
 
 ### Scale Animation
@@ -46,9 +46,7 @@
 
 ## Auto-Size
 
-- When `autoSize` is `true`, `composite()` calls `applyBorderChrome()` on the foreground BEFORE measuring dimensions
-- This means border chrome is already baked in when computing line width and count
-- Without autoSize, foreground dimensions are measured raw then the border is not accounted for
+- `withAutoSize()` is a DEPRECATED NO-OP: `composite()` never reads the flag. Border chrome, when configured, applies unconditionally to the foreground before measuring (docs-fix-1023 C1 made the chrome unconditional; the `autoSize` field and `withAutoSize()` ride only for source compatibility — `BorderChromeIsUnconditionalTest` pins the behavior, the deprecated pair documents itself)
 
 ## Border Chrome
 
@@ -74,11 +72,11 @@
 
 ## Mouse hit-testing
 
-- Mouse hit-testing is self-contained via sugar-mouse `Scanner` — no external Manager. `scan($rendered)` registers zones; `hit($col, $row)` queries them.
-- The inert sugar-mouse `Manager` back-compat shim (`withManager()`/`manager()`) was removed — sugar-overlay no longer depends on sugar-mouse.
+- Mouse hit-testing uses the sugar-mouse `Scanner` directly — self-contained, no external Manager. `scan($rendered)` registers zones; `hit($col, $row)` queries them.
+- The inert sugar-mouse `Manager` back-compat shim (`withManager()`/`manager()`) was removed. sugar-overlay STILL depends on sugar-mouse (composer requires it; `Veil` imports `Mark`, `Scanner`, `Zone`) — removing the shim removed one class, not the package.
 
 ## Buffer diffing
 
-- `composite()` holds a `?Buffer $previousFrame`; on each call it diffs against the prior frame and emits only delta ops via `DiffEncoder`.
-- Reset `previousFrame` on window resize, cursor-position-lost, or first paint — diffing across these boundaries produces visual corruption.
+- The diff state (`?Buffer $previousFrame`, the full output, dims) lives on `RenderSession`, which `Veil` holds — NOT on `composite()` itself. Each call diffs against the prior frame and emits only delta ops via `DiffEncoder`; a same-size second `composite()` on the same session returns a DELTA, so zone hit-testing must read `RenderSession::lastFullFrame()` (exposed as `Veil::lastFullFrame()`) — deltas carry no marker envelopes.
+- Reset the session (`resetPreviousFrame()` / dimension change) on window resize, cursor-position-lost, or first paint — diffing across these boundaries produces visual corruption.
 - **Source:** step-27 ai/buffer-diff-consumers

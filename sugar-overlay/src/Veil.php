@@ -759,7 +759,7 @@ final class Veil
             }
 
             // Splice with pen isolation: a segment that ends on a non-default
-            // colour pen (crop mid-style, no trailing reset) must not bleed
+            // color pen (crop mid-style, no trailing reset) must not bleed
             // that pen into the next segment — the dim wrap and the reset
             // order below make each of the three segments self-contained.
             $dp = $this->dimLine($prefix);
@@ -812,7 +812,7 @@ final class Veil
      * that START with an escape sequence. The wrap only PREPENDS and APPENDS
      * SGR sequences; embedded OSC/CSI payloads are never rewritten, so a
      * hyperlink-led line keeps its target. A styled line whose own SGR sets a
-     * colour after the dim pen keeps that colour (the pen inside wins): the
+     * color after the dim pen keeps that color (the pen inside wins): the
      * dim reaches exactly the cells that were on the default foreground.
      *
      * Two honest limits: dims do not COMPOUND (each call replaces the pen,
@@ -1148,17 +1148,17 @@ final class Veil
      * Merge one CSI SGR parameter string into the live pen.
      *
      * Mirrors Buffer::styleFromSgr() (private in sugar-cellbuffer) — reset,
-     * 16-colour + bright ranges, 38;5/38;2 and 48;5/48;2 colour keys,
-     * 39/49 default colours, and the attribute on-codes — so veil's diff
+     * 16-color + bright ranges, 38;5/38;2 and 48;5/48;2 color keys,
+     * 39/49 default colors, and the attribute on-codes — so veil's diff
      * pen and sugar-cellbuffer's own parse agree on what a style means.
      * SGR reset deliberately does NOT clear the link pen (xterm scopes
      * links to the OSC 8 protocol).
      *
-     * Out-of-range colour operands are CLAMPED into 0–255 (see channel()),
+     * Out-of-range color operands are CLAMPED into 0–255 (see channel()),
      * never bit-masked — truecolor components and 38;5/48;5 palette indices
      * alike, the same rule sugar-cellbuffer's styleFromSgr() applies. The pen is
      * re-encoded into every delta, so a wrapped component or an index past
-     * the palette would repaint a cell in a colour the full frame never
+     * the palette would repaint a cell in a color the full frame never
      * showed.
      */
     private static function penFromSgr(string $params, ?BufferStyle $carry): ?BufferStyle
@@ -1208,7 +1208,7 @@ final class Veil
                     }
                     $i += 2; // consumed 5;n
                 } else {
-                    $i = $count; // malformed extended colour: stop, keep prior pen
+                    $i = $count; // malformed extended color: stop, keep prior pen
                 }
             } elseif ($p === 1) {
                 $attrs |= BufferStyle::ATTR_BOLD;
@@ -1235,7 +1235,7 @@ final class Veil
     }
 
     /**
-     * Clamp one 38;2 / 48;2 colour component into 0–255, the way terminals
+     * Clamp one 38;2 / 48;2 color component into 0–255, the way terminals
      * saturate an out-of-range value — `300` paints as 255, never as the
      * `300 & 0xFF = 44` a bit-mask would produce.
      */
@@ -1270,7 +1270,7 @@ final class Veil
     }
 
     /**
-     * Standard xterm 256-colour palette index → 0xRRGGBB: 0-7 and 8-15 map
+     * Standard xterm 256-color palette index → 0xRRGGBB: 0-7 and 8-15 map
      * through ansiColorToHex(), 16-231 the 6×6×6 cube, 232-255 the grayscale
      * ramp. The index is clamped into 0-255 first (channel(), as sugar-cellbuffer
      * does): unclamped, `38;5;300` ran the gray-ramp formula to 688 per

@@ -14,12 +14,12 @@ use SugarCraft\Spring\Easing\CubicBezier;
  * the eased opacity (see opacity()). While the fade runs (opacity strictly
  * between 0 and 100) every glyph of the overlay is drawn in that neutral
  * gray — the pen is re-applied after each SGR sequence inside a line, so the
- * content's own foreground colours and SGR resets cannot punch through it.
- * Background colours and attributes (bold, underline, …) are left alone.
+ * content's own foreground colors and SGR resets cannot punch through it.
+ * Background colors and attributes (bold, underline, …) are left alone.
  *
  * At opacity 0 the overlay is fully transparent and apply() returns '' (the
  * compositor then paints the backdrop only, as Scale does at progress 0); at
- * opacity 100 the foreground is returned byte-for-byte, original colours
+ * opacity 100 the foreground is returned byte-for-byte, original colors
  * included.
  */
 final class Fade

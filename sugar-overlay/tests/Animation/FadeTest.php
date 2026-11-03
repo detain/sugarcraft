@@ -50,7 +50,7 @@ final class FadeTest extends TestCase
 
     public function testApplyRepinsThePenAfterEveryContentSgr(): void
     {
-        // A content colour or reset inside the line must not punch through
+        // A content color or reset inside the line must not punch through
         // the fade: the gray pen is re-applied right after each SGR.
         $fade = new Fade(CubicBezier::linear());
         $pen = "\e[38;2;128;128;128m";

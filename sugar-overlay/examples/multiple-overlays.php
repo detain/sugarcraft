@@ -35,8 +35,8 @@ echo "Base view:\n{$base}\n\n";
 // at composite time by the Position anchors plus column/row offsets.
 $tooltip = "  [Tooltip] Unsaved changes  ";
 $modal   = "+----------------------------------+\n"
-         . "|  Save changes before closing?   |\n"
-         . "|  [Y] Yes   [N] No   [C] Cancel |\n"
+         . "|  Save changes before closing?    |\n"
+         . "|  [Y] Yes   [N] No   [C] Cancel   |\n"
          . "+----------------------------------+";
 
 // Veil::composite() composites ONE foreground over ONE background.

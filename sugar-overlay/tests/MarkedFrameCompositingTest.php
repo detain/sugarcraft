@@ -136,4 +136,25 @@ final class MarkedFrameCompositingTest extends TestCase
         $first = explode("\n", $frame)[0];
         $this->assertSame(30, MarkedFrame::measure($first));
     }
+
+    public function testFarOversizedForegroundRespectsTheCanvasAtEveryAnchor(): void
+    {
+        // m23: fg ≫ bg at all nine anchors — no anchor may emit a row
+        // longer than the canvas (pre-C1, envelope-charged widths made
+        // clip math desync and rows spilled or holed).
+        foreach ([Position::TOP, Position::BOTTOM, Position::CENTER] as $v) {
+            foreach ([Position::LEFT, Position::RIGHT, Position::CENTER] as $h) {
+                $veil = Veil::new()->withBackdrop(60)->withPosition($v, $h);
+                $frame = $veil->composite($veil->mark('m', 'M') . str_repeat('W', 69), self::BG, $v, $h);
+
+                foreach (explode("\n", $frame) as $row) {
+                    $this->assertSame(
+                        30,
+                        MarkedFrame::measure($row),
+                        sprintf('anchor %s/%s must not emit a row wider than the 30-cell canvas', $v->name, $h->name)
+                    );
+                }
+            }
+        }
+    }
 }
