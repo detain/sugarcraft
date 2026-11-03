@@ -191,6 +191,35 @@ final class DocSurfaceTruthTest extends TestCase
         $this->assertStringContainsString('lists no `ext-ssh2`', $readme);
     }
 
+    /**
+     * The public runChild() docblock used to promise that "closing the master
+     * signals SIGHUP to the child via lost-ctty" — a mechanism Linux does not
+     * implement, and the very claim the same file's finally-block comment and
+     * the CALIBER entry disprove. The sentence stayed after the ladder was
+     * written, so the file argued with itself: read the top and you expect a
+     * free hangup signal, read the bottom and you find explicit SIGHUP, a
+     * grace period, and SIGKILL. Both surfaces are pinned, because the lying
+     * half is the half a caller reads before calling.
+     */
+    public function testTheTeardownLadderIsStatedInsteadOfAFreeHangupSignal(): void
+    {
+        $source = (string) \file_get_contents(\dirname(__DIR__) . '/src/Transport/InProcessTransport.php');
+        $flatSource = (string) \preg_replace('/\s+/', ' ', $source);
+        $this->assertStringContainsString('sends SIGHUP, waits ~200 ms, then SIGKILL', $flatSource);
+        $this->assertStringContainsString('does NOT deliver SIGHUP on Linux', $flatSource);
+        $this->assertStringNotContainsString('via lost-ctty', $flatSource);
+
+        $guide = $this->adminGuide();
+        if ($guide === null) {
+            return;
+        }
+
+        $flatGuide = (string) \preg_replace('/\s+/', ' ', $guide);
+        $this->assertStringContainsString('SIGHUP', $flatGuide);
+        $this->assertStringContainsString('delivers no signal on Linux', $flatGuide);
+        $this->assertStringNotContainsString('and SIGHUP on EOF', $flatGuide);
+    }
+
     private function adminGuide(): ?string
     {
         $path = \dirname(__DIR__, 3) . '/docs/admin/sugar-ssh-server.md';

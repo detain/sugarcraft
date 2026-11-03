@@ -34,7 +34,7 @@ stderr goes to the connecting client, not to your journal.
 
 2. Builds a root `Context` and walks the middleware chain
 3. The terminal middleware (`Spawn`) calls `runChild()` on the injected `ChildSpawner`
-4. `InProcessTransport` allocates a sugar-pty master/slave pair, spawns the user's command, pumps bytes between the PTY master and STDIN/STDOUT, forwards SIGWINCH on window-change, and SIGHUP on EOF
+4. `InProcessTransport` allocates a sugar-pty master/slave pair, spawns the user's command, pumps bytes between the PTY master and STDIN/STDOUT, forwards SIGWINCH on window-change, and on teardown runs an explicit SIGHUP → ~200 ms grace → SIGKILL ladder against the child (closing the PTY master delivers no signal on Linux)
 
 Under **HostSshdTransport** (legacy, opt-in):
 

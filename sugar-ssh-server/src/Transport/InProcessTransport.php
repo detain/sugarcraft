@@ -232,10 +232,14 @@ final class InProcessTransport implements Transport, ChildSpawner
      * exits or one of the stdio streams hits EOF.
      *
      * Returns the child's exit code. Tears down the PTY before
-     * returning regardless of which exit path fires; closing the
-     * master signals SIGHUP to the child via lost-ctty so children
-     * that don't react to STDIN EOF (sleep, daemons) still
-     * terminate when the SSH client disconnects.
+     * returning regardless of which exit path fires, and the teardown
+     * is an explicit ladder, not a side effect of closing the master:
+     * `finally` sends SIGHUP, waits ~200 ms, then SIGKILL if the child
+     * is still alive (audit M14, and see the CALIBER entry on this
+     * file). Closing a PTY master does NOT deliver SIGHUP on Linux —
+     * the kernel only hangs the master up, so a child that ignores
+     * STDIN EOF (sleep, a daemon) would otherwise outlive the session
+     * and hold the socket open.
      *
      * The two streams are not treated alike, and the asymmetry is the
      * contract (audit K9): STDIN and the PTY master are flipped to
