@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Log\Hook;
 
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Log\Level;
 
 /**
@@ -68,6 +69,12 @@ final class HookRegistry
      * is less than or equal to the emitted level. There is no way to fire
      * a hook at an exact level only.
      *
+     * A handler is a third-party callback: its failure must not cancel the
+     * handlers behind it and must never propagate to the logging caller
+     * (PSR-3: logging never fails loudly). Each dispatch is individually
+     * guarded; a throwing handler is reported once as a sanitized notice on
+     * STDERR and the walk continues.
+     *
      * Note: Hooks fire only via PsrBridge, not when calling Logger directly.
      * Direct Logger calls (e.g., $logger->info()) do not dispatch hooks.
      *
@@ -75,15 +82,33 @@ final class HookRegistry
      * @param string       $psrLevel The PSR-3 level string.
      * @param string       $message  The primary log message.
      * @param array<mixed> $context  Key/value pairs attached to the entry.
-     * @return void                  This method returns void (nothing).
      */
     public function fire(Level $level, string $psrLevel, string $message, array $context): void
     {
         foreach ($this->handlers as $handler) {
-            if ($level->value >= $handler['level']->value) {
+            if ($level->value < $handler['level']->value) {
+                continue;
+            }
+            try {
                 $handler['callback']($level, $psrLevel, $message, $context);
+            } catch (\Throwable $e) {
+                self::reportHookFailure($e);
             }
         }
+    }
+
+    /**
+     * One-line sanitized STDERR notice for a failed hook. Guarded so a closed
+     * STDERR degrades to silence; the payload can never inject extra lines
+     * or control sequences. Never throws.
+     */
+    private static function reportHookFailure(\Throwable $e): void
+    {
+        if (!\is_resource(\STDERR)) {
+            return;
+        }
+        $detail = \str_replace(["\n", "\r", "\t"], ' ', Sanitize::untrusted($e::class . ': ' . $e->getMessage()));
+        \fwrite(\STDERR, '[sugar-log] hook failed: ' . $detail . "\n");
     }
 
 }

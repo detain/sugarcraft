@@ -201,4 +201,44 @@ final class HookRegistryTest extends TestCase
         $registry->fire(Level::Error, 'error', 'msg', []);
         $this->assertTrue($called);
     }
+
+    public function testThrowingHookNeitherCancelsLaterHooksNorEscapesFire(): void
+    {
+        // [M7] fire() walks third-party callbacks: one handler detonating must
+        // not cancel the handlers registered behind it, and must never surface
+        // to the logging caller. Pre-fix the bare foreach propagated the
+        // exception, killing the rest of the walk (and, via PsrBridge, the
+        // record itself).
+        $registry = new HookRegistry();
+        $secondCalled = false;
+
+        $registry->onLevel(Level::Info, function (): void {
+            throw new \LogicException("multi\nline\x1b[31m forged");
+        });
+        $registry->onLevel(Level::Info, function () use (&$secondCalled): void {
+            $secondCalled = true;
+        });
+
+        $registry->fire(Level::Info, 'info', 'msg', []); // must not throw
+
+        $this->assertTrue($secondCalled, 'a failed hook must not cancel the walk');
+    }
+
+    public function testEveryHandlerGuardedIndividually(): void
+    {
+        // Three hostile hooks in a row: all attempted, fire() silent-returns.
+        $registry = new HookRegistry();
+        $attempts = 0;
+
+        foreach ([1, 2, 3] as $n) {
+            $registry->onLevel(Level::Info, function () use (&$attempts, $n): void {
+                $attempts++;
+                throw new \RuntimeException('hook ' . $n);
+            });
+        }
+
+        $registry->fire(Level::Info, 'info', 'msg', []);
+
+        $this->assertSame(3, $attempts);
+    }
 }

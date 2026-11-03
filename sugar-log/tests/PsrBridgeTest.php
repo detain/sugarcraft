@@ -48,15 +48,20 @@ final class PsrBridgeTest extends TestCase
 
     public function testEmergencyMapsToFatal(): void
     {
+        // [C1 flip, 2026-11] PSR-3 severity methods must never propagate a
+        // Throwable. The wrapped Logger's deliberate Fatal RuntimeException is
+        // swallowed by the bridge AFTER the record is written. Pre-fix this
+        // pin expected the throw to escape the :void bridge method.
         $logger = Logger::new(stream: $this->tempFile, level: Level::Debug, reportTimestamp: false);
         $bridge = new PsrBridge($logger);
 
-        $this->expectException(\RuntimeException::class);
-        try {
-            $bridge->emergency('panic');
-        } catch (\RuntimeException $e) {
-            throw new \RuntimeException('exit(1)');
-        }
+        $bridge->emergency('panic');
+
+        \fclose($this->tempFile);
+        $content = \file_get_contents($this->tempPath);
+
+        $this->assertStringContainsString('panic', $content);
+        $this->assertStringContainsString('FTL', $content);
     }
 
     public function testDebugMapsToDebugLevel(): void
@@ -116,36 +121,33 @@ final class PsrBridgeTest extends TestCase
 
     public function testAlertMapsToFatal(): void
     {
+        // [C1 flip, 2026-11] See testEmergencyMapsToFatal: the record must
+        // land and the bridge must return cleanly — no escape hatch expected.
         $logger = Logger::new(stream: $this->tempFile, level: Level::Debug, reportTimestamp: false);
         $bridge = new PsrBridge($logger);
 
-        try {
-            $bridge->alert('alert message');
-        } catch (\RuntimeException $e) {
-            \fclose($this->tempFile);
-            $content = \file_get_contents($this->tempPath);
-            $this->assertStringContainsString('alert message', $content);
-            $this->assertStringContainsString('FTL', $content);
-            return;
-        }
-        $this->fail('Expected RuntimeException was not thrown');
+        $bridge->alert('alert message');
+
+        \fclose($this->tempFile);
+        $content = \file_get_contents($this->tempPath);
+
+        $this->assertStringContainsString('alert message', $content);
+        $this->assertStringContainsString('FTL', $content);
     }
 
     public function testCriticalMapsToFatal(): void
     {
+        // [C1 flip, 2026-11] Same contract as alert/emergency.
         $logger = Logger::new(stream: $this->tempFile, level: Level::Debug, reportTimestamp: false);
         $bridge = new PsrBridge($logger);
 
-        try {
-            $bridge->critical('critical message');
-        } catch (\RuntimeException $e) {
-            \fclose($this->tempFile);
-            $content = \file_get_contents($this->tempPath);
-            $this->assertStringContainsString('critical message', $content);
-            $this->assertStringContainsString('FTL', $content);
-            return;
-        }
-        $this->fail('Expected RuntimeException was not thrown');
+        $bridge->critical('critical message');
+
+        \fclose($this->tempFile);
+        $content = \file_get_contents($this->tempPath);
+
+        $this->assertStringContainsString('critical message', $content);
+        $this->assertStringContainsString('FTL', $content);
     }
 
     public function testNoticeMapsToInfoLevel(): void
@@ -162,19 +164,47 @@ final class PsrBridgeTest extends TestCase
         $this->assertStringContainsString('INF', $content);
     }
 
-    public function testUnknownPsrLevelFallsBackToInfo(): void
+    public function testUnknownPsrLevelRaisesInvalidArgumentException(): void
     {
+        // [M13 flip, 2026-11] Silently relabeling an unrecognized level as Info
+        // buries caller bugs (and hostile spammers) in fake INFO records.
+        // PSR-3 sanctions InvalidArgumentException from log(); nothing else
+        // on this class can receive a free-form level. Pre-fix this pin
+        // asserted the Info fallback.
         $logger = Logger::new(stream: $this->tempFile, level: Level::Debug, reportTimestamp: false);
         $bridge = new PsrBridge($logger);
 
-        // 'madeupstring' doesn't match any PSR level - falls back to Level::Info
-        $bridge->log('madeupstring', 'fallback message');
+        $this->expectException(\Psr\Log\InvalidArgumentException::class);
+        try {
+            $bridge->log('madeupstring', 'fallback message');
+        } finally {
+            \fclose($this->tempFile);
+        }
+
+        $this->assertSame('', \file_get_contents($this->tempPath) ?: '', 'a refused level must write nothing');
+    }
+
+    public function testLogRejectsNonStringLevels(): void
+    {
+        // [M13 flip, 2026-11] The old pin demanded numeric/null/array levels
+        // "land on the Info fallback without TypeError". A number is not a
+        // PSR-3 level: refusing is the spec-sanctioned behavior, and the
+        // failure names the argument type instead of writing a mislabeled row.
+        $logger = Logger::new(stream: $this->tempFile, level: Level::Debug, reportTimestamp: false);
+        $bridge = new PsrBridge($logger);
+
+        foreach ([123, 4.5, null, true, ['array']] as $hostile) {
+            $threw = false;
+            try {
+                $bridge->log($hostile, 'never written');
+            } catch (\Psr\Log\InvalidArgumentException) {
+                $threw = true;
+            }
+            $this->assertTrue($threw, 'log() must reject ' . \get_debug_type($hostile));
+        }
 
         \fclose($this->tempFile);
-        $content = \file_get_contents($this->tempPath);
-
-        $this->assertStringContainsString('fallback message', $content);
-        $this->assertStringContainsString('INF', $content);
+        $this->assertSame('', \file_get_contents($this->tempPath) ?: '');
     }
 
     public function testImplementsPsrLoggerInterface(): void
@@ -199,23 +229,100 @@ final class PsrBridgeTest extends TestCase
         $logger->warning('typed sink');
     }
 
-    public function testLogAcceptsNonStringLevelWithoutTypeError(): void
+    public function testHostileFormatterInsideBridgeIsReportedNotPropagated(): void
     {
+        // [C1] A throwing custom formatter used to escape a :void PSR-3 method
+        // and kill the host request. Now: no throw, and the failure is visible.
+        $logger = Logger::new(
+            stream: $this->tempFile,
+            level: Level::Debug,
+            reportTimestamp: false,
+            formatter: new class implements \SugarCraft\Log\Formatter {
+                public function format(
+                    Level $level,
+                    string $message,
+                    array $context,
+                    \DateTimeImmutable $time,
+                    ?string $caller,
+                    ?string $prefix,
+                ): string {
+                    throw new \LogicException('boom');
+                }
+            },
+        );
+        $bridge = new PsrBridge($logger);
+
+        $bridge->error('formatter explodes'); // must not throw
+
+        $this->addToAssertionCount(1); // reaching here is the assertion
+    }
+
+    public function testThrowingMessageCastIsContained(): void
+    {
+        // [C1] __toString blowing up mid-log must not escape either.
         $logger = Logger::new(stream: $this->tempFile, level: Level::Debug, reportTimestamp: false);
         $bridge = new PsrBridge($logger);
 
-        // PSR-3's log() leaves $level untyped; a hostile/sloppy caller must
-        // still land on the Info fallback rather than raising.
-        $bridge->log(123, 'numeric level');
-        $bridge->log(null, 'null level');
-        $bridge->log(['array'], 'array level');
+        $poison = new class implements \Stringable {
+            public function __toString(): string
+            {
+                throw new \RuntimeException('cast exploded');
+            }
+        };
 
+        $bridge->info($poison); // must not throw
+        $this->addToAssertionCount(1);
+    }
+
+    public function testHooksSeeALandedRecordAndFilteredRecordsDispatchNothing(): void
+    {
+        // [M7 ordering + m2] Hooks fire after the write — a hook reading the
+        // sink mid-call sees its own record — and a record the level filter
+        // drops must not dispatch hooks at all.
+        $logger = Logger::new(stream: $this->tempFile, level: Level::Warn, reportTimestamp: false);
+        $hooks = new HookRegistry();
+        $seenOnWarn = null;
+        $infoCalls = 0;
+        $hooks->onLevel(Level::Info, function () use (&$seenOnWarn, &$infoCalls): void {
+            if ($seenOnWarn === null) {
+                $infoCalls++;
+            }
+        });
+
+        $bridge = new PsrBridge($logger, $hooks);
+        $bridge->info('filtered away');
+        $this->assertSame(0, $infoCalls, 'a filtered record must not dispatch hooks');
+
+        // Now let Warn through and capture whether the file already carries
+        // the record while the hook runs. Pre-fix the hook fired BEFORE the
+        // write, so the sink was still empty at this point.
+        $hookSawRecord = false;
+        $hooks2 = new HookRegistry();
+        $hooks2->onLevel(Level::Info, function () use (&$hookSawRecord): void {
+            $hookSawRecord = \str_contains((string) \file_get_contents($this->tempPath), 'landed first');
+        });
+        $bridge2 = new PsrBridge($logger, $hooks2);
+        $bridge2->warning('landed first');
+
+        $this->assertTrue($hookSawRecord, 'hooks fire after the record is written');
+    }
+
+    public function testFatalViaBridgeFiresHooksAndStillNeverThrows(): void
+    {
+        // [C1 x M7] The fatal swallow must not skip the hook dispatch either.
+        $logger = Logger::new(stream: $this->tempFile, level: Level::Debug, reportTimestamp: false);
+        $hooks = new HookRegistry();
+        $fired = 0;
+        $hooks->onLevel(Level::Info, function () use (&$fired): void {
+            $fired++;
+        });
+        $bridge = new PsrBridge($logger, $hooks);
+
+        $bridge->critical('the world ends');
+
+        $this->assertSame(1, $fired);
         \fclose($this->tempFile);
-        $content = \file_get_contents($this->tempPath);
-
-        $this->assertStringContainsString('numeric level', $content);
-        $this->assertStringContainsString('null level', $content);
-        $this->assertStringContainsString('array level', $content);
+        $this->assertStringContainsString('FTL', (string) \file_get_contents($this->tempPath));
     }
 
     public function testStringableLevelIsMappedByItsStringForm(): void
