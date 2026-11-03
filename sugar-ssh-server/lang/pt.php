@@ -29,4 +29,5 @@ return [
     'certificateauth.required'        => 'Certificado necessário, mas nenhum apresentado.',
     'certificateauth.rejected'        => 'Certificado rejeitado.',
     'keyboardinteractive.auth_failed' => 'Autenticação falhou.',
+    'channel.exec_refused' => 'Exec request refused: {program}',
 ];

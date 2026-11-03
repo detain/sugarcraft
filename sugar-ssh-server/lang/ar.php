@@ -29,4 +29,5 @@ return [
     'certificateauth.required'        => 'مطلوب شهادة ولكن لم يتم تقديم أي شهادة.',
     'certificateauth.rejected'        => 'تم رفض الشهادة.',
     'keyboardinteractive.auth_failed' => 'فشلت المصادقة.',
+    'channel.exec_refused' => 'Exec request refused: {program}',
 ];

@@ -16,6 +16,22 @@ See also the extension-point counterpart: [Developer Guide](../dev/sugar-ssh-ser
 Under **InProcessTransport** (default):
 
 1. Reads session metadata from sshd environment variables (`SSH_ORIGINAL_COMMAND`, `SSH_CLIENT`, etc.)
+
+**The exec contract, stated plainly (audit K1 + MAJOR 10).** `ssh host
+some-command` does *not* run `some-command` through this library's channel
+layer. sshd has already honoured its `ForceCommand` by the time PHP starts, so
+the client's request arrives only as the `SSH_ORIGINAL_COMMAND` environment
+variable — `Session::$command` is the field that carries it — and stock
+`Spawn`/`BubbleTea` stacks ignore that field. If you want the peer's argument to
+decide what runs, you are writing a feature, not inheriting one: decode it with
+the public `DefaultChannelHandler::decodeCommandString()` (a quoting tokenizer —
+no shell, so `;`, `$(…)`, backticks and `*` stay inert argv tokens) and pass it
+through the same two gates the channel handler uses (`$allowedExec` exact-path
+list, `$execGate` returning exactly `true`). Both are default-closed on purpose:
+the program is peer-chosen, so silence must never be permission. Refuse loudly
+when either is missing, and remember a refusal notice written to the default
+stderr goes to the connecting client, not to your journal.
+
 2. Builds a root `Context` and walks the middleware chain
 3. The terminal middleware (`Spawn`) calls `runChild()` on the injected `ChildSpawner`
 4. `InProcessTransport` allocates a sugar-pty master/slave pair, spawns the user's command, pumps bytes between the PTY master and STDIN/STDOUT, forwards SIGWINCH on window-change, and SIGHUP on EOF

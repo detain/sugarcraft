@@ -29,4 +29,5 @@ return [
     'certificateauth.required'        => '証明書が必要ですが提示されませんでした。',
     'certificateauth.rejected'        => '証明書が拒否されました。',
     'keyboardinteractive.auth_failed' => '認証に失敗しました。',
+    'channel.exec_refused' => 'Exec request refused: {program}',
 ];

@@ -29,4 +29,5 @@ return [
     'certificateauth.required'        => 'Sertifika gerekiyor ancak sunulmadı.',
     'certificateauth.rejected'        => 'Sertifika reddedildi.',
     'keyboardinteractive.auth_failed' => 'Kimlik doğrulama başarısız.',
+    'channel.exec_refused' => 'Exec request refused: {program}',
 ];

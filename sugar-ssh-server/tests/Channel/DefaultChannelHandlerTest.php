@@ -18,6 +18,19 @@ use SugarCraft\SshServer\Transport\ChildSpawner;
 
 final class DefaultChannelHandlerTest extends TestCase
 {
+    /** @var list<resource> */
+    private array $streams = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->streams as $stream) {
+            if (\is_resource($stream)) {
+                \fclose($stream);
+            }
+        }
+        $this->streams = [];
+    }
+
     private function fakeSession(): Session
     {
         return new Session(
@@ -93,28 +106,39 @@ final class DefaultChannelHandlerTest extends TestCase
         $this->assertFalse($handler->shellRequested());
     }
 
+    /**
+     * A refused request is still DECODED and remembered: the operator
+     * needs to see what the peer asked for, and an embedder reading
+     * pendingCommand() must not have to know whether the policy allowed
+     * the spawn (audit K1).
+     */
     public function testHandleExecSetsExecRequestedTrue(): void
     {
-        $handler = new DefaultChannelHandler();
+        [$err, $read] = $this->sink();
+        $handler = new DefaultChannelHandler(stderr: $err);
 
         $handler->handleExec(new ExecMsg('echo hello'), $this->fakeSession());
 
         $this->assertTrue($handler->execRequested());
         $this->assertSame(['echo', 'hello'], $handler->pendingCommand());
+        $this->assertStringContainsString('Exec request refused: echo', $read());
     }
 
     public function testHandleExecParsesSimpleCommand(): void
     {
-        $handler = new DefaultChannelHandler();
+        [$err, $read] = $this->sink();
+        $handler = new DefaultChannelHandler(allowedExec: ['/bin/ls'], stderr: $err);
 
         $handler->handleExec(new ExecMsg('/bin/ls -la /tmp'), $this->fakeSession());
 
         $this->assertSame(['/bin/ls', '-la', '/tmp'], $handler->pendingCommand());
+        $this->assertSame('', $read(), 'an allowlisted program is not refused');
     }
 
     public function testHandleExecParsesQuotedCommand(): void
     {
-        $handler = new DefaultChannelHandler();
+        [$err, $read] = $this->sink();
+        $handler = new DefaultChannelHandler(stderr: $err);
 
         $handler->handleExec(new ExecMsg("echo 'hello world'"), $this->fakeSession());
 
@@ -123,7 +147,8 @@ final class DefaultChannelHandlerTest extends TestCase
 
     public function testHandleExecPreservesEmptyQuotedArg(): void
     {
-        $handler = new DefaultChannelHandler();
+        [$err, $read] = $this->sink();
+        $handler = new DefaultChannelHandler(stderr: $err);
 
         $handler->handleExec(new ExecMsg("cmd ''"), $this->fakeSession());
 
@@ -132,12 +157,29 @@ final class DefaultChannelHandlerTest extends TestCase
 
     public function testHandleExecBackslashEscapeOutsideQuotes(): void
     {
-        $handler = new DefaultChannelHandler();
+        [$err, $read] = $this->sink();
+        $handler = new DefaultChannelHandler(stderr: $err);
 
         // `foo\ bar` → single token `foo bar`
         $handler->handleExec(new ExecMsg('echo foo\ bar'), $this->fakeSession());
 
         $this->assertSame(['echo', 'foo bar'], $handler->pendingCommand());
+    }
+
+    /**
+     * @return array{0:resource,1:callable():string}
+     */
+    private function sink(): array
+    {
+        $memory = \fopen('php://memory', 'w+');
+        $this->assertIsResource($memory);
+        $this->streams[] = $memory;
+
+        return [$memory, function () use ($memory): string {
+            \rewind($memory);
+
+            return (string) \stream_get_contents($memory);
+        }];
     }
 
     public function testHandleSignalIsNoOp(): void
@@ -546,5 +588,192 @@ final class DefaultChannelHandlerTest extends TestCase
         $this->assertSame('SSH-2.0-wish', $captured->serverVersion);
         $this->assertSame(132, $captured->cols);
         $this->assertSame(43, $captured->rows);
+    }
+
+    /**
+     * @return array{0:object{calls():list<array{0:string}>},1:\SugarCraft\SshServer\Channel\DefaultChannelHandler}
+     */
+    private function recordingHandler(array $allowedExec = [], mixed $gate = null): array
+    {
+        $seen = [];
+        $spy = new class($seen) implements ChildSpawner {
+            /** @var list<list<string>> */
+            public array $spawned = [];
+
+            /** @param list<list<string>> $sink */
+            public function __construct(array &$sink)
+            {
+                $this->spawned = &$sink;
+            }
+
+            public function runChild(Session $session, array $cmd, ?array $env = null): int
+            {
+                $this->spawned[] = $cmd;
+
+                return 0;
+            }
+
+            public function signalChild(int $signal): void {}
+        };
+        [$err, $read] = $this->sink();
+        $handler = new DefaultChannelHandler($spy, null, [], null, $allowedExec, $gate, $err);
+
+        return [$spy, $handler, $read];
+    }
+
+    public function testNothingIsSpawnedByAnExecRequestUntilTheOperatorAllowsAProgram(): void
+    {
+        [$spy, $handler, $read] = $this->recordingHandler();
+
+        $handler->handleExec(new ExecMsg('/bin/ls -la'), $this->fakeSession());
+
+        $this->assertSame([], $spy->spawned, 'silence must not be permission (audit K1)');
+        $this->assertStringContainsString('Exec request refused: /bin/ls', $read());
+    }
+
+    public function testTheAllowlistSpawnsTheExactProgramWithItsArguments(): void
+    {
+        [$spy, $handler] = $this->recordingHandler(['/bin/ls']);
+
+        $handler->handleExec(new ExecMsg('/bin/ls -la /tmp'), $this->fakeSession());
+
+        $this->assertSame([['/bin/ls', '-la', '/tmp']], $spy->spawned);
+    }
+
+    public function testTheAllowlistMatchesTheWholeProgramPathNotAPrefix(): void
+    {
+        [$spy, $handler, $read] = $this->recordingHandler(['/bin/ls']);
+
+        $handler->handleExec(new ExecMsg('/bin/lsblk'), $this->fakeSession());
+
+        $this->assertSame([], $spy->spawned);
+        $this->assertStringContainsString('Exec request refused: /bin/lsblk', $read());
+    }
+
+    public function testTheGateVetoesEvenAnAllowlistedProgram(): void
+    {
+        [$spy, $handler, $read] = $this->recordingHandler(['/bin/ls'], static fn (): bool => false);
+
+        $handler->handleExec(new ExecMsg('/bin/ls'), $this->fakeSession());
+
+        $this->assertSame([], $spy->spawned);
+        $this->assertStringContainsString('Exec request refused: /bin/ls', $read());
+    }
+
+    public function testTheGateSeesTheSessionAndTheDecodedArguments(): void
+    {
+        $asked = [];
+        $gate = static function (Session $session, array $argv) use (&$asked): bool {
+            $asked[] = [$session->user, $argv];
+
+            return true;
+        };
+        [$spy, $handler] = $this->recordingHandler(['/bin/ls'], $gate);
+
+        $handler->handleExec(new ExecMsg("/bin/ls 'two words'"), $this->fakeSession());
+
+        $this->assertSame([['alice', ['/bin/ls', 'two words']]], $asked);
+        $this->assertCount(1, $spy->spawned);
+    }
+
+    public function testAGateThatCannotAnswerHasNotGivenPermission(): void
+    {
+        [$spy, $handler] = $this->recordingHandler(['/bin/ls'], static function (): bool {
+            throw new \RuntimeException('policy backend down');
+        });
+
+        $handler->handleExec(new ExecMsg('/bin/ls'), $this->fakeSession());
+
+        $this->assertSame([], $spy->spawned);
+    }
+
+    public function testOnlyAnExactTrueFromTheGateAdmitsTheRequest(): void
+    {
+        [$spy, $handler] = $this->recordingHandler(['/bin/ls'], static fn (): int => 1);
+
+        $handler->handleExec(new ExecMsg('/bin/ls'), $this->fakeSession());
+
+        $this->assertSame([], $spy->spawned, 'a truthy non-bool is not consent');
+    }
+
+    public function testAnEmptyRequestIsNotAnnouncedAsARefusal(): void
+    {
+        [$spy, $handler, $read] = $this->recordingHandler();
+
+        $handler->handleExec(new ExecMsg('   '), $this->fakeSession());
+
+        $this->assertSame([], $spy->spawned);
+        $this->assertSame('', $read());
+    }
+
+    public function testTheRefusalNamesNoServerPathAndNoPolicyContent(): void
+    {
+        [$spy, $handler, $read] = $this->recordingHandler(['/bin/true']);
+
+        $handler->handleExec(new ExecMsg('/etc/passwd'), $this->fakeSession());
+        $notice = $read();
+
+        $this->assertStringNotContainsString(\dirname(__DIR__), $notice);
+        $this->assertStringNotContainsString('/bin/true', $notice, 'the allowlist itself must not leak');
+    }
+
+    public function testAPeerChosenProgramNameCannotSmuggleControlBytesIntoTheNotice(): void
+    {
+        [$spy, $handler, $read] = $this->recordingHandler();
+
+        $handler->handleExec(new ExecMsg("/bin/echo\x01\x02banner"), $this->fakeSession());
+        $notice = $read();
+
+        $this->assertStringNotContainsString("\x01", $notice);
+        $this->assertStringNotContainsString("\x02", $notice);
+        $this->assertStringContainsString('/bin/echobanner', $notice);
+    }
+
+    public function testTheNoticeKeepsRealMultibyteProgramNamesIntact(): void
+    {
+        [$spy, $handler, $read] = $this->recordingHandler();
+
+        // A byte-wise \x7f-\x9f sweep would corrupt this; the codepoint
+        // walk must leave the printable characters alone.
+        $handler->handleExec(new ExecMsg("/bin/ls\u{00e9}\u{00e9}"), $this->fakeSession());
+
+        $this->assertStringContainsString("/bin/ls\u{00e9}\u{00e9}", $read());
+    }
+
+    public function testTheDecoderIsThePublicOriginalCommandEntryPoint(): void
+    {
+        $this->assertSame(
+            ['/bin/sh', '-c', 'exit 0'],
+            DefaultChannelHandler::decodeCommandString("/bin/sh -c 'exit 0'"),
+        );
+        // Nothing reaches a shell, so metacharacters stay inert arguments
+        // — the property the exec gate relies on.
+        $this->assertSame(
+            ['ls;', 'rm', '-rf', '/'],
+            DefaultChannelHandler::decodeCommandString('ls; rm -rf /'),
+        );
+        $this->assertSame(
+            ['echo', '$(id)', '`id`', '$HOME'],
+            DefaultChannelHandler::decodeCommandString('echo $(id) `id` "$HOME"'),
+        );
+        $this->assertSame([], DefaultChannelHandler::decodeCommandString(''));
+    }
+
+    public function testTheDormantDispatchTruthIsOnTheClassAndInTheReadme(): void
+    {
+        $doc = (string) \file_get_contents(\dirname(__DIR__, 2) . '/src/Channel/DefaultChannelHandler.php');
+        // Markdown wraps mid-phrase, so doc needles are matched on a
+        // whitespace-flattened copy (house shape for README pins).
+        $readme = (string) \preg_replace(
+            '/\s+/u',
+            ' ',
+            (string) \file_get_contents(\dirname(__DIR__, 2) . '/README.md'),
+        );
+
+        $this->assertStringContainsString('audit K1', $doc);
+        $this->assertStringContainsString('WindowChangeMsg', $doc);
+        $this->assertStringContainsString('SSH_ORIGINAL_COMMAND', $doc);
+        $this->assertStringNotContainsString('ChannelHandler dispatch are complete', $readme);
+        $this->assertStringContainsString('not fed from the wire', $readme);
     }
 }

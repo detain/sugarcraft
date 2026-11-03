@@ -29,4 +29,5 @@ return [
     'certificateauth.required'        => '증명서가 필요하지만 제시되지 않았습니다.',
     'certificateauth.rejected'        => '증명서가 거부되었습니다.',
     'keyboardinteractive.auth_failed' => '인증에 실패했습니다.',
+    'channel.exec_refused' => 'Exec request refused: {program}',
 ];

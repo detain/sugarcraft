@@ -98,9 +98,9 @@ Server::new()
 <tr><td>Keepalive</td><td>new(int $intervalSeconds)</td><td>Sends SSH keepalive messages at the given interval</td></tr>
 <tr><td>InProcessTransport</td><td>new(?PtySystem, ?ChannelHandler)</td><td>Default transport — PTY supervisor + sugar-pty; optional custom ChannelHandler</td></tr>
 <tr><td>HostSshdTransport</td><td>new()</td><td>Legacy transport — inline middleware, Program on STDIN/STDOUT</td></tr>
-<tr><td>ChannelHandler</td><td>handlePtyReq / handleWindowChange / handleShell / handleExec / handleSignal / handleEnv / handleBreak</td><td>Interface for custom channel-level message handling (InProcessTransport only)</td></tr>
+<tr><td>ChannelHandler</td><td>handlePtyReq / handleWindowChange / handleShell / handleExec / handleSignal / handleEnv / handleBreak</td><td>Interface for custom channel-level message handling (InProcessTransport only). Only <code>WindowChangeMsg</code> is produced by the library today &mdash; from a <code>SIGWINCH</code>; the other six are dispatched by your own code, not by the wire.</td></tr>
 <tr><td>ChannelMsg</td><td>abstract base</td><td>Base for all SSH channel messages (RFC 4254)</td></tr>
-<tr><td>DefaultChannelHandler</td><td>new(?ChildSpawner, ?Session)</td><td>Default impl — tracks PTY dims, env vars, drives ChildSpawner on shell/exec</td></tr>
+<tr><td>DefaultChannelHandler</td><td>new(?ChildSpawner, ?Session, array $acceptEnv, ?string $shell, array $allowedExec, ?callable $execGate, $stderr)</td><td>Default impl — tracks PTY dims, env vars, drives ChildSpawner on shell/exec. Exec is <strong>default-closed</strong>: the peer names the program, so nothing spawns unless <code>$allowedExec</code> holds that exact path <em>and</em> the optional <code>$execGate</code> returns exactly <code>true</code>. <code>decodeCommandString()</code> is the public quoting tokenizer (no shell, no expansion, no globbing) and is also the right entry point for <code>SSH_ORIGINAL_COMMAND</code>.</td></tr>
 <tr><td>PtyReqMsg</td><td>wantPty, term, cols, rows, widthPx, heightPx</td><td>PTY allocation request</td></tr>
 <tr><td>WindowChangeMsg</td><td>cols, rows, widthPx, heightPx</td><td>Terminal resize (SIGWINCH equivalent)</td></tr>
 <tr><td>ShellMsg</td><td>wantShell, subsystem</td><td>Login-shell request</td></tr>

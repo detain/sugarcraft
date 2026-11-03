@@ -29,4 +29,5 @@ return [
     'certificateauth.required'        => 'Требуется сертификат, но он не был представлен.',
     'certificateauth.rejected'        => 'Сертификат отклонён.',
     'keyboardinteractive.auth_failed' => 'Ошибка аутентификации.',
+    'channel.exec_refused' => 'Exec request refused: {program}',
 ];

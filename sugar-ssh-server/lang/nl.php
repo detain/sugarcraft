@@ -29,4 +29,5 @@ return [
     'certificateauth.required'        => 'Certificaat vereist maar niet aangeboden.',
     'certificateauth.rejected'        => 'Certificaat geweigerd.',
     'keyboardinteractive.auth_failed' => 'Verificatie mislukt.',
+    'channel.exec_refused' => 'Exec request refused: {program}',
 ];

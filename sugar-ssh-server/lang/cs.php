@@ -29,4 +29,5 @@ return [
     'certificateauth.required'        => 'Vyžadován certifikát, ale nebyl předložen.',
     'certificateauth.rejected'        => 'Certifikát zamítnut.',
     'keyboardinteractive.auth_failed' => 'Ověření selhalo.',
+    'channel.exec_refused' => 'Exec request refused: {program}',
 ];

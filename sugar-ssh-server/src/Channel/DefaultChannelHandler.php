@@ -12,7 +12,9 @@ use SugarCraft\SshServer\Channel\Msg\PtyReqMsg;
 use SugarCraft\SshServer\Channel\Msg\ShellMsg;
 use SugarCraft\SshServer\Channel\Msg\SignalMsg;
 use SugarCraft\SshServer\Channel\Msg\WindowChangeMsg;
+use SugarCraft\SshServer\Lang;
 use SugarCraft\SshServer\Session;
+use SugarCraft\SshServer\StreamHelper;
 use SugarCraft\SshServer\Transport\ChildSpawner;
 
 /**
@@ -26,6 +28,41 @@ use SugarCraft\SshServer\Transport\ChildSpawner;
  * Concrete transports inject themselves as a {@see ChildSpawner} at
  * construction time so the handler can call {@see runChild()} when
  * the shell or exec request fires.
+ *
+ * **The exec path is client-chosen, so it is default-closed.** An exec
+ * request names the program the server should run — the peer picks it,
+ * not the operator. `handleExec()` therefore spawns nothing unless the
+ * request passes {@see execAllowed()}: the program's exact path must be
+ * in `$allowedExec`, and the optional `$execGate` must not veto. An
+ * empty `$allowedExec` (the default) refuses every exec request, which
+ * is the safe shape for a deployment that has not thought about it:
+ * nothing here can be reached by an SSH client that was never given
+ * permission. Refusals are announced on `$stderr` — and under
+ * ForceCommand that stream is the SSH extended-data channel, i.e. the
+ * client that just asked (see the sink note on
+ * {@see \SugarCraft\SshServer\Middleware\Logger}), so the notice is
+ * deliberately one line naming the program and nothing about the policy
+ * behind it.
+ *
+ * **Shell requests are not gated**, and that asymmetry is intentional:
+ * a shell request names no program. The interpreter comes from the
+ * configured shell, then the server-side `SHELL`, then
+ * {@see FALLBACK_SHELL} — a client-supplied `SHELL` is stripped (it is
+ * in {@see DANGEROUS_VARS}) so a peer cannot choose what it gets exec'd
+ * into ({@see resolveShell()}).
+ *
+ * **Nothing feeds these messages from the wire today (audit K1).** The
+ * only {@see ChannelMsg} this repository ever constructs in production
+ * is {@see WindowChangeMsg}, from a SIGWINCH inside
+ * {@see \SugarCraft\SshServer\Transport\InProcessTransport}; the
+ * exec/shell/pty-req/env/signal/break requests are minted by tests and
+ * by embedders that dispatch them themselves. The handler is a live
+ * object with a dormant input, and the exec contract a client expects
+ * from `ssh host some-command` is served elsewhere — by the
+ * `SSH_ORIGINAL_COMMAND` a forced script receives, not by
+ * `handleExec()`. Read the Status section and the exec-policy note in
+ * `docs/admin/sugar-ssh-server.md` before planning around channel
+ * dispatch.
  */
 final class DefaultChannelHandler implements ChannelHandler
 {
@@ -44,6 +81,9 @@ final class DefaultChannelHandler implements ChannelHandler
     private bool $shellRequested = false;
 
     private bool $execRequested = false;
+
+    /** @var resource */
+    private $stderr;
 
     /**
      * Known-dangerous env vars that are always excluded, even if
@@ -80,13 +120,28 @@ final class DefaultChannelHandler implements ChannelHandler
      * @param string|null       $shell     explicit login shell for shell requests;
      *                                     blank/null falls through to `getenv('SHELL')`
      *                                     and then to {@see FALLBACK_SHELL} (see `spawnShell()`)
+     * @param list<string>      $allowedExec exact program paths an exec request may run.
+     *                                     Empty (the default) refuses EVERY exec request —
+     *                                     the exec program is chosen by the peer, so it is
+     *                                     not granted by silence.
+     * @param callable|null     $execGate  `fn(Session, list<string> $argv): bool`, consulted
+     *                                     only after `$allowedExec` has admitted the program;
+     *                                     use it for argument- and user-level policy. Null
+     *                                     adds no condition beyond the path list.
+     * @param resource|null     $stderr    where exec refusals are announced; null opens
+     *                                     `php://stderr`, which under ForceCommand is the
+     *                                     connecting client.
      */
     public function __construct(
         private readonly ?ChildSpawner $spawner = null,
         ?Session $session = null,
         private readonly array $acceptEnv = [],
         private readonly ?string $shell = null,
+        private readonly array $allowedExec = [],
+        private readonly mixed $execGate = null,
+        $stderr = null,
     ) {
+        $this->stderr = StreamHelper::openOrValidate($stderr);
         if ($session !== null && $session->cols > 0) {
             $this->cols = $session->cols;
         }
@@ -121,10 +176,92 @@ final class DefaultChannelHandler implements ChannelHandler
     public function handleExec(ExecMsg $msg, Session $session): void
     {
         $this->execRequested = true;
-        $this->pendingCommand = self::parseCommandString($msg->command);
-        if ($this->spawner !== null) {
-            $this->spawnWithExec($session, $this->pendingCommand);
+        $argv = self::decodeCommandString($msg->command);
+        $this->pendingCommand = $argv;
+        if ($argv === []) {
+            // Nothing to run — an empty request is not a refusal worth a notice.
+            return;
         }
+        if (!$this->execAllowed($session, $argv)) {
+            $this->refuseExec($session, $argv);
+            return;
+        }
+        if ($this->spawner !== null) {
+            $this->spawnWithExec($session, $argv);
+        }
+    }
+
+    /**
+     * May this decoded request be spawned?
+     *
+     * Two conditions, both required: the program is one of the
+     * operator's `$allowedExec` paths (exact string match on argv[0] —
+     * no prefix rules, so `/bin/ls` never authorises `/bin/lsblk`), and
+     * the optional `$execGate` returns exactly `true`. Anything else —
+     * an empty allowlist, a gate that throws, a gate that returns a
+     * truthy non-bool — refuses. The default-deny direction is the whole
+     * point: a mistake in policy configuration must not become an open
+     * remote-exec primitive.
+     *
+     * @param list<string> $argv
+     */
+    public function execAllowed(Session $session, array $argv): bool
+    {
+        $program = $argv[0] ?? '';
+        if ($program === '' || !\in_array($program, $this->allowedExec, true)) {
+            return false;
+        }
+        if ($this->execGate === null) {
+            return true;
+        }
+
+        try {
+            return ($this->execGate)($session, $argv) === true;
+        } catch (\Throwable) {
+            // A policy that cannot answer has not given permission.
+            return false;
+        }
+    }
+
+    /**
+     * Announce a refused exec request, briefly and path-free.
+     *
+     * The stream defaults to the one the connecting client reads (see
+     * the class docblock), so the line names only what the peer already
+     * knows — the program it asked for — never the allowlist it failed
+     * to be on, and never a server path. Control characters in the
+     * program name are the peer's, so they are neutralised before they
+     * reach any stream.
+     *
+     * @param list<string> $argv
+     */
+    private function refuseExec(Session $session, array $argv): void
+    {
+        if (!\is_resource($this->stderr)) {
+            return;
+        }
+
+        \fwrite(
+            $this->stderr,
+            Lang::t('channel.exec_refused', ['program' => self::printable($argv[0])]) . "\n",
+        );
+    }
+
+    /**
+     * Strip everything non-printable without breaking valid UTF-8.
+     *
+     * A byte-wise `[\x7f-\x9f]` class would eat continuation bytes of
+     * real multibyte characters, so this walks codepoints (//u) and
+     * falls back to a fixed token when the input is not UTF-8 at all.
+     */
+    private static function printable(string $value): string
+    {
+        $clean = \preg_replace('/[^\P{C}\n]+/u', '', $value);
+        if ($clean === false || $clean === '') {
+            return '<unreadable>';
+        }
+
+        return \strlen($clean) > 128 ? \substr($clean, 0, 128) . '…' : $clean;
     }
 
     public function handleSignal(SignalMsg $msg, Session $session): void
@@ -305,11 +442,15 @@ final class DefaultChannelHandler implements ChannelHandler
      * This is a pragmatic tokenizer, NOT full POSIX word-splitting —
      * no `$()`, backticks, variable expansion, or globbing. Tokens go
      * to `runChild()` as argv with no shell, so the divergence is safe
-     * but documented.
+     * but documented. It is also the decoder an embedder uses for the
+     * `SSH_ORIGINAL_COMMAND` a ForceCommand child receives: that
+     * variable carries the same string the exec channel would have
+     * carried, so decode-and-gate once ({@see execAllowed()}) rather
+     * than re-splitting ad hoc.
      *
      * @return list<string>
      */
-    private static function parseCommandString(string $command): array
+    public static function decodeCommandString(string $command): array
     {
         $tokens = [];
         $current = '';

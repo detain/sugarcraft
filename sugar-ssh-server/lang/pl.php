@@ -29,4 +29,5 @@ return [
     'certificateauth.required'        => 'Wymagany certyfikat, ale nie został przedstawiony.',
     'certificateauth.rejected'        => 'Certyfikat odrzucony.',
     'keyboardinteractive.auth_failed' => 'Uwierzytelnianie nie powiodło się.',
+    'channel.exec_refused' => 'Exec request refused: {program}',
 ];

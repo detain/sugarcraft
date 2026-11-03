@@ -398,18 +398,67 @@ The `InProcessTransport` dispatches SSH channel-level messages through a
 `ChannelHandler` rather than handling them inline. This lets you replace the
 default PTY/shell wiring with a custom implementation.
 
+**Which messages actually arrive (audit K1).** The library mints exactly one
+channel message itself: `WindowChangeMsg`, from a `SIGWINCH` observed while
+pumping. `pty-req`, `shell`, `exec`, `env`, `signal` and `break` are **not fed from the
+wire** — this transport sits behind sshd's `ForceCommand`, so sshd has
+already made the shell/exec/subsystem choice before your script starts, and the
+protocol-level request never reaches PHP. Those six classes exist for embedders
+that dispatch them (a test, or your own decoder for a real channel layer), and
+`DefaultChannelHandler` is a live object with a dormant input. Do not plan on
+`handleExec()` running for a client that typed `ssh host some-command`: that
+request reaches you as the `SSH_ORIGINAL_COMMAND` environment variable inside
+the forced script, and `Session::$command` is the field that carries it.
+
 | Class | Purpose |
 |-------|---------|
 | `ChannelHandler` | Interface — implement to handle pty-req, window-change, shell, exec, signal, env, break |
 | `ChannelMsg` | Abstract base for all channel messages (RFC 4254) |
-| `DefaultChannelHandler` | Default impl — tracks PTY state, env vars, cols/rows, drives `ChildSpawner` on shell/exec |
+| `DefaultChannelHandler` | Default impl — tracks PTY state, env vars, cols/rows, drives `ChildSpawner` on shell/exec; exec is **default-closed** (`$allowedExec` + `$execGate`) |
 | `PtyReqMsg` | `wantPty`, `term`, `cols`, `rows`, `widthPx`, `heightPx` |
 | `WindowChangeMsg` | `cols`, `rows`, `widthPx`, `heightPx` |
 | `ShellMsg` | `wantShell`, `subsystem` |
-| `ExecMsg` | `command` (raw string — parsed by `DefaultChannelHandler::parseCommandString()`) |
+| `ExecMsg` | `command` (raw string — decoded by the public `DefaultChannelHandler::decodeCommandString()`, the same entry point to use for `SSH_ORIGINAL_COMMAND`) |
 | `SignalMsg` | `signalName` |
 | `EnvMsg` | `name`, `value` |
 | `BreakMsg` | Break request (no fields) |
+
+### Exec policy: the program comes from the peer
+
+An exec request names the binary the server should run, so `handleExec()`
+spawns nothing unless the operator has said otherwise — two conditions, both
+required:
+
+```php
+$handler = new DefaultChannelHandler(
+    spawner: $transport,
+    session: $session,
+    allowedExec: ['/bin/ls', '/usr/bin/rsync'],   // exact argv[0]; '' = refuse all
+    execGate: function (Session $s, array $argv): bool {
+        return $s->user === 'backup';             // argument/user policy, optional
+    },
+    stderr: $noticeSink,                          // default php://stderr = the CLIENT
+);
+```
+
+`$allowedExec` matches the whole path, never a prefix (`/bin/ls` does not admit
+`/bin/lsblk`). `$execGate` must return exactly `true`; a gate that throws, or
+returns a truthy non-bool, refuses — a policy that cannot answer has not given
+permission. Refusals are announced with one line naming the requested program
+and nothing about the allowlist behind it, and the program name is scrubbed of
+control characters first (it is peer-chosen text). Note the sink default: under
+`ForceCommand` a notice on stderr travels to the connecting client, not to your
+journal — see [Sinks: who actually reads what you write](#sinks-who-actually-reads-what-you-write).
+
+There is no shell in this path. `decodeCommandString()` is a quoting tokenizer
+(single/double quotes, backslash escapes, empty quoted args preserved), so
+`;`, `$(…)`, backticks, `$HOME` and `*` arrive as inert argv tokens rather than
+as commands or expansions — the property the allowlist rests on. Empty or
+whitespace-only requests decode to `[]` and are not announced at all.
+
+Shell requests are deliberately *not* gated, because they name no program: the
+interpreter is the configured `$shell`, then the server-side `SHELL`, then
+`FALLBACK_SHELL`, and a client-supplied `SHELL` is stripped as a dangerous var.
 
 On a shell request, `DefaultChannelHandler` resolves the login shell in this
 order: the explicit `$shell` configured at construction time, then the
@@ -524,7 +573,16 @@ extracts the name and dispatches.
 
 ## Status
 
-🟢 Context propagation + ChannelHandler dispatch are complete, alongside the middleware suite (logging, auth suite, keepalive, rate limit, spawn, subsystem, async bridge, BubbleTea) and the ChannelHandler/ChannelMsg + 7 message classes.
+🟢 Context propagation and the middleware suite (logging, auth suite,
+keepalive, rate limit, spawn, subsystem, async bridge, BubbleTea) are complete,
+and the `ChannelHandler`/`ChannelMsg` types plus the 7 message classes ship as
+a dispatch API. That API is honest about its input: only `WindowChangeMsg` is
+produced by this library today, so the other six messages are dormant unless
+your own code dispatches them (see
+[Channel handler](#channel-handler-inprocesstransport)). The wire decoder that
+would feed them belongs to a transport that speaks the SSH protocol itself, and
+this library deliberately does not — see
+[Runtime requirements](#runtime-requirements).
 
 Runnable examples:
 - [`examples/hello-server.php`](examples/hello-server.php) — banner-only stack you can ForceCommand against.
