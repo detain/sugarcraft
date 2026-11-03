@@ -294,7 +294,7 @@ final class DiffSplitRenderTest extends TestCase
         return implode("\n", [
             '--- a/greet.php',
             '+++ b/greet.php',
-            '@@ -1,3 +1,4 @@',
+            '@@ -1,5 +1,6 @@',
             ' <?php',
             '-$old = 1;',
             '+$name = "hello";',
@@ -310,7 +310,7 @@ final class DiffSplitRenderTest extends TestCase
         return implode("\n", [
             '--- a/Makefile',
             '+++ b/Makefile',
-            '@@ -1,2 +1,2 @@',
+            '@@ -1,3 +1,3 @@',
             '-rule:	recipe old',
             '+rule:	recipe',
             ' all:',
