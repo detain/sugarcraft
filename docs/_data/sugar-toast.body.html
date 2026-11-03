@@ -20,12 +20,12 @@ echo $toast-&gt;view($bg);</code></pre>
     <div class="feature-grid">
       <div class="feature"><strong>Four types</strong><span>Info, Success, Warning, Error — each with a distinct symbol and color.</span></div>
             <div class="feature"><strong>Positions</strong><span>9 positions: TopLeft, TopCenter, TopRight, MiddleLeft, MiddleCenter, MiddleRight, BottomLeft, BottomCenter, BottomRight.</span></div>
-            <div class="feature"><strong>Auto-dismiss</strong><span>Configurable duration; null for persistent (never expires).</span></div>
+            <div class="feature"><strong>Auto-dismiss</strong><span>Configurable duration. Passing <code>null</code> $expiresAt at the alert()/progressToast() doors means &quot;use the configured duration&quot; — persistence is reached by keeping the toast duration unset or through the explicit sentinel (<code>withoutExpiry()</code>/<code>cancelAlert()</code>).</span></div>
             <div class="feature"><strong>Symbol sets</strong><span>NerdFont, Unicode, or Ascii.</span></div>
             <div class="feature"><strong>Overflow control</strong><span>DropOldest, DropNewest, or Enqueue when maxConcurrent is exceeded.</span></div>
             <div class="feature"><strong>Progress toasts</strong><span>Inline progress bar (0–100%) beneath the message body.</span></div>
-            <div class="feature"><strong>Action buttons</strong><span>Clickable [Label] buttons with closure callbacks attached to an alert.</span></div>
-            <div class="feature"><strong>History log</strong><span>Immutable record of every dismissed alert via history().</span></div>
+            <div class="feature"><strong>Action buttons</strong><span>[Label] buttons with closure callbacks; their frame cells are exported by <code>actionRects()</code>/<code>actionAt()</code> for host-side mouse and keyboard dispatch.</span></div>
+            <div class="feature"><strong>History log</strong><span>Cumulative immutable record of dismissed and overflow-evicted alerts via <code>history()</code>; <code>clear()</code> never resets it.</span></div>
             <div class="feature"><strong>Styled alerts</strong><span>Per-alert background, foreground, and border colour overrides via Color.</span></div>
 
     </div>
@@ -45,26 +45,27 @@ echo $toast-&gt;view($bg);</code></pre>
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Toast</td><td>new(int $maxWidth = 50)</td><td>Factory — max width in cells</td></tr>
 <tr><td>Toast</td><td>withPosition(Position)</td><td>Set screen position (9 positions)</td></tr>
-<tr><td>Toast</td><td>withDuration(?float $seconds)</td><td>Auto-dismiss after N seconds (null to disable)</td></tr>
+<tr><td>Toast</td><td>withDuration(?float $seconds)</td><td>Auto-dismiss after N seconds (null = no expiry is armed — alerts persist unless an explicit expiry is given)</td></tr>
 <tr><td>Toast</td><td>withAllowEscToClose(bool)</td><td>Set the Escape-dismiss preference flag (the renderer handles no input; the host reads it)</td></tr>
 <tr><td>Toast</td><td>withMaxWidth(int)</td><td>Set maximum alert width in cells</td></tr>
 <tr><td>Toast</td><td>withMinWidth(int)</td><td>Set minimum alert width in cells</td></tr>
 <tr><td>Toast</td><td>withSymbolSet(SymbolSet)</td><td>NerdFont, Unicode, or Ascii symbol sets</td></tr>
-<tr><td>Toast</td><td>withMaxConcurrent(?int)</td><td>Cap concurrent alerts (<code>null</code> = unlimited)</td></tr>
+<tr><td>Toast</td><td>withMaxConcurrent(?int)</td><td>Cap concurrent alerts (<code>null</code> = unlimited; values &lt; 1 throw)</td></tr>
 <tr><td>Toast</td><td>withOverflow(Overflow)</td><td>Strategy when cap exceeded: DropOldest, DropNewest, Enqueue</td></tr>
 <tr><td>Toast</td><td>withHistoryLimit(?int $n)</td><td>Cap history log, oldest evicted first (default 100; <code>null</code> = unbounded)</td></tr>
-<tr><td>Toast</td><td>alert(ToastType|string, string, ?float $expiresAt = null, ?array $actions = null)</td><td>Add alert; string type = case-insensitive lookup; <code>null</code> $expiresAt inherits the configured duration — persistent means keeping the duration unset (or cancelAlert())</td></tr>
-<tr><td>Toast</td><td>progressToast(ToastType|string, string, float $progress, ?float $expiresAt = null, ?array $actions = null)</td><td>Add alert with progress bar (0.0–1.0, clamped); same expiry semantics as alert()</td></tr>
+<tr><td>Toast</td><td>alert(ToastType|string, string, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)</td><td>Add alert; string type = case-insensitive lookup; $expiresAt is an absolute epoch (duration-shaped values throw); <code>null</code> inherits the configured duration; an $id re-queue updates the live alert in place</td></tr>
+<tr><td>Toast</td><td>progressToast(ToastType|string, string, float $progress, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)</td><td>Add alert with progress bar (finite 0.0–1.0; out-of-range clamps, NAN/INF throw); same expiry semantics as alert(); re-calling with the same $id advances one box instead of appending</td></tr>
 <tr><td>Toast</td><td>push(Alert $alert)</td><td>Enqueue a pre-built Alert (styled/actioned)</td></tr>
-<tr><td>Toast</td><td>cancelAlert(int $index)</td><td>Make a queued alert persistent (never auto-dismisses)</td></tr>
-<tr><td>Toast</td><td>extendAlert(int $index, float $additionalSeconds) / extendAll(float)</td><td>Push one / every expiring alert's expiry later</td></tr>
+<tr><td>Toast</td><td>cancelAlert(int $index)</td><td>Make a queued alert persistent (never auto-dismisses); $index addresses the <code>activeAlerts()</code> order</td></tr>
+<tr><td>Toast</td><td>extendAlert(int $index, float $additionalSeconds) / extendAll(float)</td><td>Push one (in <code>activeAlerts()</code> order) / every expiring alert's expiry later</td></tr>
 <tr><td>Toast</td><td>allowEscToClose(): bool</td><td>Read the Escape-dismiss preference flag</td></tr>
 <tr><td>Toast</td><td>error(string), warning(string), info(string), success(string)</td><td>Convenience alert helpers</td></tr>
 <tr><td>Toast</td><td>hasActiveAlert(): bool</td><td>Returns true if non-expired alerts are queued</td></tr>
-<tr><td>Toast</td><td>dismiss(), clear(), pruneExpired()</td><td>Manage alert lifecycle; dismiss() records non-expired alerts to history</td></tr>
-<tr><td>Toast</td><td>history(): list&lt;Alert&gt;</td><td>Return all dismissed alerts recorded since last dismiss()</td></tr>
-<tr><td>Toast</td><td>view(string $background, int $w, int $h): string</td><td>Render toast layer over background view</td></tr>
-<tr><td>Alert</td><td>withProgress(float)</td><td>Attach progress bar (0.0–1.0, clamped)</td></tr>
+<tr><td>Toast</td><td>dismiss(), clear(), pruneExpired()</td><td>Manage alert lifecycle; <code>dismiss()</code> files EVERY queued alert (expired included) into history, <code>clear()</code> drops without recording, <code>pruneExpired()</code> is silent</td></tr>
+<tr><td>Toast</td><td>history(): list&lt;Alert&gt;</td><td>Return all recorded alerts — dismissed AND overflow-evicted; cumulative, <code>clear()</code> never resets it</td></tr>
+<tr><td>Toast</td><td>view(string $background, int $w = 80, int $h = 24): string</td><td>Composite the toast layer over the background frame; dimensions outside 1..10000 throw; content that cannot fit ellipsizes instead of vanishing</td></tr>
+<tr><td>Alert</td><td>new(ToastType $type, ?string $message = null, ?float $expiresAt = null, ?float $progress = null, array $actions = [], ?Color $backgroundColor = null, ?Color $foregroundColor = null, ?Color $borderColor = null, bool $persistent = false, ?string $id = null)</td><td>Factory mirroring the constructor</td></tr>
+<tr><td>Alert</td><td>withProgress(float)</td><td>Attach progress bar (finite 0.0–1.0; out-of-range clamps, NAN/INF throw)</td></tr>
 <tr><td>Alert</td><td>withActions(list&lt;Action&gt;)</td><td>Attach action buttons</td></tr>
 <tr><td>Alert</td><td>isExpired(): bool</td><td>Check expiry</td></tr>
 <tr><td>Alert</td><td>withExpiry(float $duration)</td><td>Set expiry from now</td></tr>
@@ -72,18 +73,26 @@ echo $toast-&gt;view($bg);</code></pre>
 <tr><td>Alert</td><td>withExtendedExpiry(float)</td><td>Move the expiry later by N seconds</td></tr>
 <tr><td>Alert</td><td>withBackgroundColor(?Color) / withForegroundColor(?Color) / withBorderColor(?Color)</td><td>Per-alert colour overrides (<code>null</code> = type default)</td></tr>
 <tr><td>Action</td><td>new(string $label, \Closure(): void $callback)</td><td>Factory</td></tr>
-<tr><td>Action</td><td>$label: non-empty-string</td><td>User-visible button label (readonly)</td></tr>
+<tr><td>Action</td><td>$label: non-empty-string</td><td>User-visible button label (readonly; normalised at construction — inline SGR kept, other control/escape constructs stripped, printable-empty refused)</td></tr>
 <tr><td>Action</td><td>$callback: \Closure(): void</td><td>Invoked when action is triggered (readonly)</td></tr>
 <tr><td>HistoryLog</td><td>push(Alert, ?int $limit = null): self</td><td>Append alert (evicting oldest past $limit), return new immutable log</td></tr>
 <tr><td>HistoryLog</td><td>all(): list&lt;Alert&gt;</td><td>Return all recorded alerts</td></tr>
 <tr><td>HistoryLog</td><td>count(): int</td><td>Number of recorded entries</td></tr>
+<tr><td>Toast</td><td>activeAlerts(): list&lt;Alert&gt;</td><td>The live queue exactly as view() sees it (expired filtered)</td></tr>
+<tr><td>Toast</td><td>removeAlert(string $id): self</td><td>Retire the queued alert with this id, unrecorded</td></tr>
+<tr><td>Toast</td><td>actionRects(string $background = '', int $viewportWidth = 80, int $viewportHeight = 24): list&lt;array{action,alert,alertIndex,actionIndex,row,col,width}&gt;</td><td>Absolute frame cells of every painted button</td></tr>
+<tr><td>Toast</td><td>actionAt(int $col, int $row, string $background = '', int $viewportWidth = 80, int $viewportHeight = 24): ?Action</td><td>Which Action covers a frame position (first match in queue order)</td></tr>
+<tr><td>Toast</td><td>nextExpiry(): ?float / secondsUntilNextExpiry(): ?float</td><td>Absolute epoch / seconds of the soonest live expiry (null when none)</td></tr>
+<tr><td>Toast</td><td>withAccessibleText(bool $on = true) / accessibleText(): bool</td><td>Opt-in plain-text severity word + progress percentages beside the colour/glyph channel</td></tr>
 <tr><td>ToastType</td><td>Info, Success, Warning, Error</td><td>Toast type constants</td></tr>
-<tr><td>ToastType</td><td>label()</td><td>Translated label via Lang::t() (i18n-aware)</td></tr>
+<tr><td>ToastType</td><td>label() / icon(SymbolSet) / nerdIcon() / unicodeIcon() / asciiPrefix() / color()</td><td>Translated label via Lang::t() (i18n-aware); per-set glyphs and the default ANSI colour</td></tr>
+<tr><td>Position</td><td>xOffset(int $alertWidth, int $viewportWidth): int / yOffset(int $alertHeight, int $frameHeight, int $stackedBefore = 0): int</td><td>Placement maths — xOffset can go negative when the box outgrows the viewport (view() clamps to 0)</td></tr>
 <tr><td>Position</td><td>TopLeft, TopCenter, TopRight, MiddleLeft, MiddleCenter, MiddleRight, BottomLeft, BottomCenter, BottomRight</td><td>9 screen positions</td></tr>
 <tr><td>Overflow</td><td>DropOldest, DropNewest, Enqueue</td><td>Overflow strategy when maxConcurrent is exceeded</td></tr>
 <tr><td>SymbolSet</td><td>NerdFont, Unicode, Ascii</td><td>Symbol set for alert icons</td></tr>
 <tr><td>Lang</td><td>t(key, params)</td><td>Translate a string: 'dismiss', 'count', 'type.*'</td></tr>
 </table>
+    <p>Per-alert render size is bounded too: <code>Toast::MAX_MESSAGE_CELLS</code> truncates over-long messages with a visible marker and <code>Toast::MAX_ACTIONS_PER_ALERT</code> folds surplus buttons into a &quot;[+N more]&quot; row — the full text and action list still ride the Alert into history.</p>
 
     <h3 style="margin-top: 32px;">Internationalization</h3>
     <p>User-facing strings use <code>SugarCraft\Toast\Lang::t()</code>. All keys are in <code>lang/en.php</code> under the <code>toast</code> namespace.</p>
@@ -106,12 +115,12 @@ echo $toast-&gt;view($bg);</code></pre>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-toast/.vhs/types.gif" alt="All toast types">
                 <h3>All toast types</h3>
-                <span class="demo-caption">Info / Success / Warning / Error rendered side-by-side.</span>
+                <span class="demo-caption">Each type rendered as its own sequential full-viewport frame.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-toast/.vhs/basic.gif" alt="Basic toast">
                 <h3>Basic toast</h3>
-                <span class="demo-caption">A single Info toast — title, body, dismiss timer.</span>
+                <span class="demo-caption">Multiple queued toasts across three sections; no duration is set — nothing auto-dismisses, the host drives pruning.</span>
             </div>
         </div>
     </div>

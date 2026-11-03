@@ -1314,7 +1314,10 @@ final class Toast
      * (╭ ─ ╮ │ ╰ ╯) take the border colour; remaining interior text takes
      * the foreground colour. Cells that already carry a colour — the
      * severity-coloured icon and any inline-SGR message spans — keep it.
-     * Mirrors the styled toast box rendered by sugar-dashboard's Toast::render().
+     * sugar-dashboard's Toast adapter DELEGATES to this renderer — the
+     * styled box originates here (PR #1289 folded dashboard's rendering
+     * into this lib; the earlier 'mirrors sugar-dashboard' cite was the
+     * direction inverted, lib-reviews-1102 m12).
      *
      * @param list<string> $lines The rendered alert rows, used to bound the
      *                            styled columns to each row's box width so a

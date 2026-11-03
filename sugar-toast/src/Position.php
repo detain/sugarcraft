@@ -23,6 +23,10 @@ enum Position
 
     /**
      * Compute the X offset in a viewport of given dimensions.
+     *
+     * Right/centre arms return a NEGATIVE offset when $alertWidth exceeds
+     * $viewportWidth; view() clamps it via max(0) — hosts calling this
+     * accessor directly must clamp the same way (lib-reviews-1102 n6).
      */
     public function xOffset(int $alertWidth, int $viewportWidth): int
     {

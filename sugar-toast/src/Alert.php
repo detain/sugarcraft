@@ -77,6 +77,12 @@ final class Alert
         return new self($type, $message, $expiresAt, $progress, $actions, $backgroundColor, $foregroundColor, $borderColor, $persistent, $id);
     }
 
+    /**
+     * Expiry reads CLOCK_REALTIME (microtime) — an NTP step can shorten or
+     * lengthen how long a live alert stays on screen. A monotonic-clock
+     * injection seam is a recorded future API candidate (lib-reviews-1102
+     * m10); no rate assumption here is load-bearing beyond display timing.
+     */
     public function isExpired(): bool
     {
         if ($this->persistent || $this->expiresAt === null) return false;

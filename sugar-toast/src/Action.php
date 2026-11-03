@@ -10,6 +10,13 @@ namespace SugarCraft\Toast;
  * Encapsulates a label and a closure callback that is invoked when the
  * action is triggered.
  *
+ * Lifetime: the callback rides its Alert into the dismiss/overflow history,
+ * so a captured scope stays alive until the history limit evicts the entry.
+ * Actions (and therefore Alerts and Toasts carrying them) are NOT
+ * serializable and are fork-hostile in the sense that a child process
+ * inherits a detached copy of the scope — host persistence layers must
+ * store labels, not Action objects (lib-reviews-1102 m11).
+ *
  * The label is normalised at construction — the single ingress point the
  * whole label channel flows through. Inline CSI-SGR styling survives (a
  * red "Delete" is a legitimate design ask, and the message channel already

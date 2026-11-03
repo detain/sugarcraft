@@ -24,6 +24,14 @@ final class ToastDocApiCensusTest extends TestCase
 
     private const ENUM_CLASSES = ['Position', 'ToastType', 'Overflow', 'SymbolSet'];
 
+    /**
+     * PHP-generated enum members (and, for non-backed enums, values()/from()
+     * simply do not exist). They are language surface, not lib API rows —
+     * documenting them would push the tables toward noise. cases() stays
+     * EXCLUDED here but the forward arm still polices its README table.
+     */
+    private const REVERSE_BUILTINS = ['cases' => 1, 'values' => 1, 'from' => 1, 'tryFrom' => 1, 'columns' => 1];
+
     public function testEveryReadmeApiSummaryMethodAndCaseResolves(): void
     {
         [$rows, $unparseable] = $this->parseRows($this->readmeApiSection(), 'readme');
@@ -51,6 +59,114 @@ final class ToastDocApiCensusTest extends TestCase
         }
         $this->assertFalse(method_exists(\SugarCraft\Toast\Action::class, 'make'));
     }
+
+    /**
+     * REVERSE arm (lib-reviews-1102 minor-16): every PUBLIC method the code
+     * DECLARES must carry a row on BOTH doc surfaces. The forward arm above
+     * catches docs->code phantoms; this closes the code->docs direction —
+     * how nextExpiry/secondsUntilNextExpiry and the WELD-K accessors silently
+     * lagged the site table by eight rows while CI stayed green.
+     *
+     * Scope rules, documented as law: reflection is filtered to methods
+     * DECLARED on the class (inherited core helpers like Lang::t are the
+     * core's doc duty — the parity leg separately keeps the two surfaces
+     * agreeing on the 't' row this lib does print); '__construct' is prose-
+     * documented; PHP's generated enum members (cases/values/from/tryFrom)
+     * are language surface, not lib API rows.
+     */
+    public function testEveryDeclaredPublicMethodHasARowOnBothDocSurfaces(): void
+    {
+        $readme = $this->documentedMethodNames('readme');
+        $site = $this->documentedMethodNames('site');
+
+        $censused = 0;
+        foreach (self::KNOWN_CLASSES as $class) {
+            $fqcn = "SugarCraft\\Toast\\{$class}";
+            foreach ((new \ReflectionClass($fqcn))->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
+                if ($method->getDeclaringClass()->getName() !== $fqcn) {
+                    continue;
+                }
+                $name = $method->getName();
+                if ($name === '__construct' || isset(self::REVERSE_BUILTINS[$name])) {
+                    continue;
+                }
+                $censused++;
+                $this->assertTrue(
+                    in_array($name, $readme, true),
+                    "README API Summary has no row for {$class}::{$name}() (code->docs drift)"
+                );
+                $this->assertTrue(
+                    in_array($name, $site, true),
+                    "site API table has no row for {$class}::{$name}() (code->docs drift)"
+                );
+            }
+        }
+        // Fail-closed: the census must be policing a real slice of the API.
+        $this->assertGreaterThanOrEqual(40, $censused, 'reverse census collapsed — extraction drifted off the row shapes');
+    }
+
+    /**
+     * PARITY leg: the two surfaces must advertise the SAME method-name sets.
+     * Deltas are allowed only through the documented exclusions below.
+     */
+    public function testTheReadmeAndSiteApiTablesListTheSameMethodNames(): void
+    {
+        $readme = $this->documentedMethodNames('readme');
+        $site = $this->documentedMethodNames('site');
+        $this->assertSame(
+            [],
+            array_values(array_diff($readme, $site)),
+            'README advertises method names the site table lost (or renamed)'
+        );
+        $this->assertSame(
+            [],
+            array_values(array_diff($site, $readme)),
+            'site advertises method names the README lost (or renamed)'
+        );
+    }
+
+    /**
+     * Method names extracted from a surface's API rows, in the same shape the
+     * forward arm parses: slash-joined name groups are expanded, property and
+     * i18n-key rows are not methods, enum case lists are excluded, and the
+     * 'no-arg' bare rows ('label()') carry through.
+     *
+     * @param non-empty-string $label readme|site
+     * @return list<non-empty-string>
+     */
+    private function documentedMethodNames(string $label): array
+    {
+        [$rows, $unparseable] = $label === 'readme'
+            ? $this->parseRows($this->readmeApiSection(), 'readme')
+            : $this->parseRows($this->siteBodyApiRows(), 'html');
+        $this->assertSame([], $unparseable, "{$label}: unparseable rows during reverse extraction");
+
+        $names = [];
+        foreach ($rows as $row) {
+            $sig = $row['sig'];
+            // Property shapes ("->label: non-empty-string", "$label: …") — not methods.
+            if (preg_match('/^(?:->|\$)?[A-Za-z_]\w*:(?!:)/', $sig) === 1) {
+                continue;
+            }
+            $class = $row['class'];
+            if (enum_exists("SugarCraft\\Toast\\{$class}") && preg_match('/^[A-Z]/', $sig) === 1) {
+                continue; // enum case list row
+            }
+            // Same extraction family the forward arm uses: EVERY call-shaped
+            // name in the row, so merged rows ("a() / b(): c / c()") contribute
+            // all of their methods on both surfaces.
+            if (preg_match_all('/(?<![\w\\\\])([a-zA-Z_]\w*)\s*\(/', $sig, $m) >= 1) {
+                foreach ($m[1] as $name) {
+                    if ($name === 'Closure' || $name === 'callable') {
+                        continue; // type notation, not a documented method
+                    }
+                    $names[] = $name;
+                }
+            }
+        }
+        return array_values(array_unique($names));
+    }
+
 
     // ── row extraction ─────────────────────────────────────────────────────
 

@@ -18,8 +18,8 @@ sugar-toast — a floating alert notification component for terminal UIs, for PH
 ## Features
 
 - **9 positions**: TopLeft, TopCenter, TopRight, MiddleLeft, MiddleCenter, MiddleRight, BottomLeft, BottomCenter, BottomRight
-- **4 alert types**: Error, Warning, Info, Success — each with distinct styling
-- **Dynamic width**: fixed or auto-sizing between minWidth and maxWidth
+- **4 alert types**: Error, Warning, Info, Success — severity carried by icon + colour (add `withAccessibleText()` for a plain-text word; the chrome itself is identical across types)
+- **Dynamic width**: full `maxWidth` by default; auto-fit to content engages ONLY via `withMinWidth(n>0)` — stacked boxes then anchor at ragged per-message offsets (shrink-to-fit vs stack-alignment trade)
 - **Symbol sets**: NerdFont (icons), Unicode (symbols), Ascii (plain text)
 - **Auto-dismiss**: duration-based expiry support
 - **Multiple alerts**: queue of toasts rendered in order
@@ -61,6 +61,11 @@ $bg = str_repeat("background content\n", 20);
 echo $toast->view($bg);
 ```
 
+Every default is plain: position `TopLeft`, `maxWidth` 50, `minWidth` 0 (auto-fit
+off), `duration` `null` (alerts persist until dismissed — persistence is the
+explicit `Alert::$persistent` sentinel, not a magic `null` expiry),
+`allowEscToClose` true, `maxConcurrent` `null` (unbounded), overflow
+`DropOldest`, history limit 100, symbol set `Unicode`.
 ## Alert Types
 
 
@@ -196,14 +201,14 @@ schedule a single timer for exactly that moment:
 ```php
 $delay = $toast->secondsUntilNextExpiry();   // seconds until the soonest expiry, or null
 if ($delay !== null) {
-    // e.g. in a sugar-core app:
-    $cmd = Cmd::tick($delay, fn () => new ToastTickMsg());
-}
-
-// when the tick fires:
-$toast = $toast->pruneExpired();
-if ($toast->hasActiveAlert()) {
-    // reschedule for the next expiry, repeat
+    // sugar-toast ships no message class of its own — wire this to your
+    // host's own timer. Cmd::tick(float $seconds, \Closure $onTick) is
+    // sugar-core's one-shot example:
+    $cmd = Cmd::tick($delay, function () use (&$toast) {
+        $toast = $toast->pruneExpired();
+        // Repaint, then reschedule from the new secondsUntilNextExpiry();
+        // when hasActiveAlert() is false there is nothing left to arm.
+    });
 }
 ```
 
@@ -435,12 +440,19 @@ already over the new cap survive until the next push evicts them.
 | `->extendAll(float $additionalSeconds): self` | Push every expiring alert's expiry later |
 | `->allowEscToClose(): bool` | Read the Escape-dismiss preference flag (host consumes it; the renderer handles no input) |
 | `->accessibleText(): bool` | Read the accessible-text preference flag |
-| `->error/warning/info/success(string)` | Convenience alert helpers |
+| `->error(string $message): self` | Convenience queue for `ToastType::Error` (inherits duration/expiry rules of `alert()`) |
+| `->warning(string $message): self` | Convenience queue for `ToastType::Warning` |
+| `->info(string $message): self` | Convenience queue for `ToastType::Info` |
+| `->success(string $message): self` | Convenience queue for `ToastType::Success` |
 | `->hasActiveAlert(): bool` | True if non-expired alerts queued |
 | `->nextExpiry(): ?float` | Soonest expiry instant (epoch seconds) of an auto-dismissing alert, or `null` |
 | `->secondsUntilNextExpiry(): ?float` | Delay until the next expiry, clamped `>= 0.0`, or `null` — schedule one prune tick |
-| `->dismiss() / clear() / pruneExpired()` | Lifecycle: `dismiss()` moves live alerts to history (rendering stops until `clear()`, which also resets the flag) |
-| `->history(): list<Alert>` | Return all dismissed alerts |
+| `->dismiss() / clear() / pruneExpired()` | Lifecycle: `dismiss()` files EVERY queued alert (expired included) into history and stops rendering until `clear()`, which also resets the flag but files nothing; `pruneExpired()` drops expired alerts silently |
+| `->history(): list<Alert>` | Return all recorded alerts — dismissed AND overflow-evicted (`DropOldest`); cumulative, `clear()` never resets it |
+| `->activeAlerts(): list<Alert>` | The live queue exactly as `view()` sees it — expired filtered, queue order; the index space `cancelAlert()`/`extendAlert()` and `actionRects()`'s `alertIndex` share |
+| `->actionRects(string $background = '', int $viewportWidth = 80, int $viewportHeight = 24): list<array{action:Action,alert:Alert,alertIndex:int,actionIndex:int,row:int,col:int,width:int}>` | Absolute frame cells of every painted `[Label]` button (the `"[+N more]"` fold row is not clickable) |
+| `->actionAt(int $col, int $row, string $background = '', int $viewportWidth = 80, int $viewportHeight = 24): ?Action` | The dispatch door: which Action (if any) covers a frame position — first match in queue order |
+| `Lang::t(string $key, array $params = []): string` | Translate a known key ('dismiss', 'count', 'type.*') — the inherited sugar-core helper behind `ToastType::label()` |
 | `->view(string $background, int $w, int $h): string` | Render toast layer over background; both dimensions must lie in `1..Toast::MAX_VIEWPORT_DIMENSION` (10 000) or an `InvalidArgumentException` is thrown before any allocation — the frame is a real `width × height` cell grid, so bogus winsizes fail loud instead of exhausting memory. Boxes that cannot fit ellipsize (`…`): the icon and the line indent drop out on very narrow frames, and message/action content degrades instead of vanishing. (the legacy `View()` call sites keep resolving via PHP's case-insensitive method dispatch — there is no alias method) |
 
 | Class | Method | Description |
@@ -457,13 +469,15 @@ already over the new cap survive until the next push evicts them.
 | `Alert` | `withForegroundColor(?Color)` | Override text colour (`null` = type default) |
 | `Alert` | `withBorderColor(?Color)` | Override border colour (`null` = type default) |
 | `Action` | `new(string $label, \Closure(): void $callback)` | Factory |
-| `Action` | `->label: non-empty-string` | Button label (readonly) |
+| `Action` | `->label: non-empty-string` | Button label (readonly; normalised at construction — inline SGR kept, other control/escape constructs stripped, printable-empty refused) |
 | `Action` | `->callback: \Closure(): void` | Callback (readonly) |
 | `HistoryLog` | `push(Alert, ?int $limit = null): self` | Append alert, evicting oldest past `$limit`; new log |
 | `HistoryLog` | `all(): list<Alert>` | Return all entries |
 | `HistoryLog` | `count(): int` | Entry count |
 | `Position` | `xOffset(int $alertWidth, int $viewportWidth): int` | X offset of a box in a viewport (left edge 0, center floored, right flush) |
 | `Position` | `yOffset(int $alertHeight, int $viewportHeight, int $stackedHeightBefore = 0): int` | Y offset; top families stack downward from the top, bottom and middle families stack upward against `$stackedHeightBefore`, clamped to row 0 on short viewports |
+| `ToastType` | `label(): string` | Translated severity word (`Lang::t('type.*')`) — surfaced in the frame by `withAccessibleText()` |
+| `ToastType` | `icon(SymbolSet $set): string` | Icon glyph for this type under the given symbol set |
 | `ToastType` | `nerdIcon(): string` | NerdFont icon symbol for the type |
 | `ToastType` | `unicodeIcon(): string` | Unicode symbol (✖ ⚠ ℹ ✔) — fallback when no NerdFont |
 | `ToastType` | `asciiPrefix(): string` | Plain ASCII prefix (`[E]` `[W]` `[I]` `[S]`) |

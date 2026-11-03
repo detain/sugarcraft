@@ -15,6 +15,10 @@ enum Overflow
     /** Discard the new alert rather than adding it to the queue. */
     case DropNewest;
 
-    /** Allow the queue to temporarily exceed maxConcurrent. */
+    /**
+     * Allow the queue to exceed maxConcurrent. The surplus is NOT transient:
+     * with persistent alerts accumulating it is permanent until the host
+     * clears or replaces them (lib-reviews-1102 n12).
+     */
     case Enqueue;
 }
