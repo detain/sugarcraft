@@ -347,7 +347,9 @@ final class Game implements Model
         }
 
         // Collision: bird hits a pipe, hits the floor, or hits the top wall.
-        // y = -0.5 rounds to 0 = safe; y <= -0.51 rounds to -1 = crash.
+        // M27 (comment truth only — behaviour is the game spec): PHP's round()
+        // rounds half AWAY from zero, so y = -0.5 rounds to -1 and CRASHES;
+        // safe is y > -0.5 strictly (row() >= 0).
         $crashed = $bird->row() < 0 || $bird->row() >= self::HEIGHT;
         if ($crashed === false) {
             foreach ($pipes as $p) {

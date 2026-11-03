@@ -8,12 +8,16 @@ use SugarCraft\Flappy\Game;
 use SugarCraft\Flappy\Renderer;
 use PHPUnit\Framework\TestCase;
 
+use SugarCraft\Flappy\Tests\Support\UsesHermeticConfig;
+
 final class RendererTest extends TestCase
 {
+    use UsesHermeticConfig;
+
     private function game(): Game
     {
         // Deterministic PRNG: always return 0 → pipes pin to top.
-        return Game::start(static fn(int $max): int => 0);
+        return Game::start(static fn(int $max): int => 0, $this->hermeticConfigDir());
     }
 
     public function testRenderHasBirdGlyph(): void
