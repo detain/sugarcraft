@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Flexbox\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Flexbox\Scrollbar;
 use SugarCraft\Flexbox\Viewport;
 
 final class StickyViewportTest extends TestCase
@@ -330,5 +331,28 @@ final class StickyViewportTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         Viewport::withContent('x', 20, 5)->withSize(40, -1);
+    }
+
+    // ---- withVerticalScrollbar accepts THIS lib's wrapper (shadowing trap) --
+
+    public function testTheViewportAcceptsItsOwnScrollbarWrapper(): void
+    {
+        // The documented companion is sugar-flexbox's own Scrollbar; the
+        // parameter historically type-hinted the shadowing widgets import,
+        // so the honest example threw a TypeError at the delegate boundary.
+        $vp = Viewport::withContent(\implode("\n", \range(1, 20)), 20, 6)
+            ->withScrollbar()
+            ->withVerticalScrollbar(Scrollbar::vertical());
+
+        $again = $vp->withVerticalScrollbar(Scrollbar::horizontal());
+        $this->assertNotSame($vp, $again, 'attaching a scrollbar stays immutable');
+
+        $view = $again->view();
+        $this->assertNotSame('', $view, 'a wrapped scrollbar must still render a frame');
+        $this->assertSame(
+            20,
+            \SugarCraft\Core\Util\Width::string(\explode("\n", $view)[0]),
+            'the scrollbar column stays inside the requested width',
+        );
     }
 }

@@ -118,6 +118,12 @@ final class Table
      * The index must address a real column: silently sorting NOTHING for
      * an out-of-range index used to leave callers believing a sort had
      * happened. Resets cursorRow to 0.
+     *
+     * Comparison semantics: when BOTH cells are numeric they compare as
+     * numbers (2 sorts before 100); otherwise they compare as
+     * case-insensitive strings (strcasecmp), so 'a' precedes 'B' — the
+     * binary strcmp order ('B' first) would read as a bug to every human
+     * looking at a sorted name column.
      */
     public function sortBy(int $colIndex, bool $ascending = true): self
     {
@@ -224,6 +230,13 @@ final class Table
         return \count($this->columns);
     }
 
+    /**
+     * The cursor row of the MATERIALIZED view: a pending sort or filter
+     * is settled first, so this always answers about what render() would
+     * show, not about the stale last-settled frame. Null when the cursor
+     * falls off the view entirely (empty table, or an index left past
+     * the end by a filter).
+     */
     public function currentRow(): ?array
     {
         $this->ensureView();

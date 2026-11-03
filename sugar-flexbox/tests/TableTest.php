@@ -465,4 +465,20 @@ final class TableTest extends TestCase
         $this->assertSame(2, $t->rowCount());
         $this->assertSame(['100'], $t->currentRow());
     }
+
+    public function testStringSortIsCaseInsensitiveAcrossTheBinaryOrderBoundary(): void
+    {
+        // Binary strcmp would put uppercase 'B' (0x42) before lowercase
+        // 'a' (0x61); the documented strcasecmp comparison must not.
+        $t = Table::new()
+            ->addColumn(Column::new('Name', 8))
+            ->addRow(['B'])
+            ->addRow(['a'])
+            ->sortBy(0, true);
+                $lines = $t->buildLines();
+        // header + ruler + two data rows; 'a' must be the first data line.
+        $this->assertStringContainsString('a', $lines[2]);
+        $this->assertStringNotContainsString('B', $lines[2]);
+        $this->assertStringContainsString('B', $lines[3]);
+    }
 }
