@@ -515,7 +515,7 @@ final class BackgroundSessionRunnerTest extends TestCase
 
         $this->assertSame(0, $exit, 'a refusal is an event inside the turn, not a failed turn');
         $this->assertStringContainsString(
-            BackgroundSessionRunner::REFUSAL_RECORD . ' [hook] Bash was not run - Hook denied: rm -rf is blocked',
+            BackgroundSessionRunner::REFUSAL_RECORD . ' [hook] Bash was not run — Hook denied: rm -rf is blocked',
             $contents,
         );
         // The answer is still the answer.
@@ -560,7 +560,7 @@ final class BackgroundSessionRunnerTest extends TestCase
             $tokensSeen[$kind->token()] = true;
 
             $this->assertStringContainsString(
-                BackgroundSessionRunner::REFUSAL_RECORD . ' [' . $kind->token() . '] Edit was not run - '
+                BackgroundSessionRunner::REFUSAL_RECORD . ' [' . $kind->token() . '] Edit was not run — '
                 . $prefix . ' because reasons',
                 (string) file_get_contents($buffer),
                 'roster entry "' . $prefix . '" was not recognised by the daemon, or was recorded under the wrong kind',
@@ -633,7 +633,7 @@ final class BackgroundSessionRunnerTest extends TestCase
             "exactly one of these seven events is a refusal, and the buffer records " . count($records) . ":\n" . $contents,
         );
         $this->assertStringContainsString(
-            ' Write was not run - ',
+            ' Write was not run — ',
             $records[0],
             'the classifier recorded a refusal, but not the event that was one',
         );
@@ -730,7 +730,7 @@ final class BackgroundSessionRunnerTest extends TestCase
         // under each spelling. This is the consequence the assertion above
         // buys, demonstrated rather than asserted about.
         $this->assertFalse(self::bufferReportsFailureOf(
-            "[session:task:complete]\n" . BackgroundSessionRunner::REFUSAL_RECORD . " Bash was not run - Hook denied: no\n",
+            "[session:task:complete]\n" . BackgroundSessionRunner::REFUSAL_RECORD . " Bash was not run — Hook denied: no\n",
         ));
         $this->assertTrue(
             self::bufferReportsFailureOf("[session:task:complete]\n[session:task:refused] Bash was not run\n"),

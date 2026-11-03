@@ -951,7 +951,7 @@ final class BackgroundSessionRunner
      * after the fact. The token now sits between the record marker and the
      * tool name, matching
      * {@see \SugarCraft\Code\Cli\NonInteractive::refusalNotice()}'s
-     * `candy-code: [<kind>] <tool> was not run - <reason>`, so the daemon's
+     * `candy-code: [<kind>] <tool> was not run — <reason>`, so the daemon's
      * sidecar and the `-p` console spell one thing one way.
      *
      * AFTER THE MARKER RATHER THAN BEFORE IT, AND THAT IS THE LINE PROTOCOL
@@ -980,7 +980,7 @@ final class BackgroundSessionRunner
 
         $this->log(
             self::REFUSAL_RECORD . ' [' . $refusal->kind->token() . '] ' . $this->oneLine($refusal->tool)
-            . ' was not run - ' . $this->oneLine($refusal->reason),
+            . ' was not run — ' . $this->oneLine($refusal->reason),
         );
     }
 
