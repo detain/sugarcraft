@@ -26,7 +26,7 @@ cd my-app
       <div class="feature"><strong>composer create-project</strong><span>Three commands and you're running. <code>composer create-project sugarcraft/candy-starter my-app && cd my-app && ./bin/start</code>.</span></div>
       <div class="feature"><strong>Demo Counter</strong><span><code>src/Counter.php</code> — a minimal Model with up/down/quit and a styled border.</span></div>
       <div class="feature"><strong>Tests in place</strong><span>PHPUnit 10 wired to <code>tests/</code>. Replace, don't reconfigure.</span></div>
-      <div class="feature"><strong>Three-line entry</strong><span><code>bin/start</code> is autoload + Model + <code>Program::run()</code>.</span></div>
+      <div class="feature"><strong>Entry point + exit tail</strong><span><code>bin/start</code> is autoload + Model + <code>Program::run()</code> + the <code>stopSignal()</code> tail that exits <code>128+N</code> on signals.</span></div>
       <div class="feature"><strong>Pure-Model anatomy</strong><span>Demonstrates all four required Model methods — init / update / view / subscriptions — plus readonly props.</span></div>
       <div class="feature"><strong>Common-next-steps table</strong><span>README points at the SugarForms / SugarMarkdown / SugarCharts / SugarStyle / SugarSshServer you're likely to reach for next — and flags which of them are not plain renderers.</span></div>
     </div>

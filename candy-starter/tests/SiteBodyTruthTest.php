@@ -11,12 +11,12 @@ use PHPUnit\Framework\TestCase;
  * saying what the README says (lib-reviews-1102 C1/M7/M13/M12 cluster).
  *
  * docs/_data/candy-starter.body.html is hand-maintained input to
- * tools/gen-docs.php; nothing else pins its prose, so the three
- * highest-consequence claims for a template — HOW you install it, WHAT
- * the Model contract requires, and WHERE the copyable examples live —
- * are asserted here. In a standalone split-repo clone the monorepo docs
- * tree is absent; the guard degrades to a single skipped-free absence
- * assertion rather than failing for the wrong reason.
+ * tools/gen-docs.php; nothing else pins its prose, so the highest-
+ * consequence claims for a template — HOW you install it, WHAT the Model
+ * contract requires, WHERE the copyable examples live, and what the entry
+ * point costs — are asserted here. In a standalone split-repo clone the
+ * monorepo docs tree is absent and each test skips loudly rather than
+ * failing for the wrong reason.
  */
 final class SiteBodyTruthTest extends TestCase
 {
@@ -43,6 +43,11 @@ final class SiteBodyTruthTest extends TestCase
             'composer require sugarcraft/candy-starter',
             $body,
             '"composer require" is refused for project-type packages — the site must not teach it',
+        );
+        $this->assertStringContainsString(
+            'stopSignal()',
+            $body,
+            'the entry-point card must include the stopSignal() exit tail — the bin is not just three lines any more (M2)',
         );
     }
 
