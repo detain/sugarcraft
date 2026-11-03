@@ -28,6 +28,7 @@ sugar-toast — a floating alert notification component for terminal UIs, for PH
 - **Styled alerts**: per-alert background/foreground/border colour overrides
 - **History log**: immutable, bounded record of dismissed alerts (default cap 100)
 - **Pure renderer**: outputs ANSI strings; works with any TUI framework
+- **Accessibility envs**: `REDUCE_MOTION`/`PREFERS_REDUCED_MOTION` drop blink; `NO_COLOR`/`CLICOLOR=0` drop all colour bytes (renderer palette, custom alert colours, inline message SGR); `CLICOLOR_FORCE` overrides. Environment-only checks — sugar-toast composites for its host and never probes a TTY itself
 
 ## Install
 

@@ -733,6 +733,48 @@ final class Toast
     }
 
     /**
+     * Env truthiness in the fleet idiom (sugar-crush palette short-circuit,
+     * aa8955d75 lineage): a variable suppresses only when SET to something
+     * other than the empty string or "0". The pure NO_COLOR spec treats any
+     * non-empty value — including "0" — as suppression; the divergence is
+     * deliberate and fleet-consistent.
+     */
+    private static function envTruthy(string $name): bool
+    {
+        $value = \getenv($name);
+        return $value !== false && $value !== '' && $value !== '0';
+    }
+
+    /**
+     * WCAG 2.2.2 reduced-motion preference (lib-reviews-1102 M10). Read per
+     * render, not cached: like sugar-spring's Spring.php the environment is
+     * the living contract and a host may flip it between frames.
+     */
+    private function reducedMotionPreferred(): bool
+    {
+        return self::envTruthy('REDUCE_MOTION') || self::envTruthy('PREFERS_REDUCED_MOTION');
+    }
+
+    /**
+     * Colour-suppression request (lib-reviews-1102 M12a; fleet NO_COLOR /
+     * CLICOLOR family). Checked ENV-ONLY, never against a TTY: sugar-toast
+     * is a compositing library — it does not print, its HOST does, so probing
+     * this process's own stdout would query the wrong terminal entirely.
+     * CLICOLOR_FORCE wins over NO_COLOR; NO_COLOR suppresses; CLICOLOR=0
+     * suppresses.
+     */
+    private function coloursSuppressed(): bool
+    {
+        if (self::envTruthy('CLICOLOR_FORCE')) {
+            return false;
+        }
+        if (self::envTruthy('NO_COLOR')) {
+            return true;
+        }
+        return \getenv('CLICOLOR') === '0';
+    }
+
+    /**
      * Shared geometry pass behind {@see view()}, {@see actionRects()} and
      * {@see actionAt()} — the ONE place the box stack is computed, so the
      * pixels and the hit-test can never disagree (lib-reviews-1102 C1:
@@ -1003,8 +1045,13 @@ final class Toast
         $inner = \max(1, $width - 2);
 
         // SGR prefix routed through sugar-core Ansi so the icon's colour
-        // is emitted byte-identically to a hand-built CSI sequence.
-        $prefix = Ansi::CSI . $color . 'm' . $icon . Ansi::reset() . ' ';
+        // is emitted byte-identically to a hand-built CSI sequence. Under
+        // NO_COLOR/CLICOLOR=0 the icon rides plain (M12a) — Width::string
+        // of the prefix therefore also collapses, giving the message one
+        // extra cell of budget instead of dead SGR padding.
+        $prefix = $this->coloursSuppressed()
+            ? $icon . ' '
+            : Ansi::CSI . $color . 'm' . $icon . Ansi::reset() . ' ';
 
         // Top / bottom borders: '─' is a 3-byte UTF-8 grapheme but one
         // display cell, so repeat it $inner times for $inner cells.
@@ -1181,6 +1228,13 @@ final class Toast
      */
     private function colorAlertGrid(array $grid, int $bufWidth, Alert $alert, array $lines): array
     {
+        if ($this->coloursSuppressed()) {
+            // M12a: custom background/foreground/border colours are colour
+            // output too — under NO_COLOR the alert keeps its glyphs, layout
+            // and (non-colour) attributes, the palette stays off the wire.
+            return $grid;
+        }
+
         static $borderGlyphs = ['╭' => true, '─' => true, '╮' => true, '│' => true, '╰' => true, '╯' => true];
 
         $bg     = $alert->backgroundColor !== null ? $this->colorToRgb($alert->backgroundColor) : null;
@@ -1415,9 +1469,26 @@ final class Toast
         $fg = $base?->fg();
         $bg = $base?->bg();
         $attrs = $base?->attrs() ?? 0;
+        $suppressColour = $this->coloursSuppressed();
+        $reducedMotion = $this->reducedMotionPreferred();
 
         for ($k = 0; $k < $count; $k++) {
             $code = $params[$k];
+
+            // NO_COLOR legs (M12a): extended-colour payloads must still be
+            // CONSUMED so later codes stay aligned; the 16/256 colour sets
+            // are skipped outright; 39/49 resets no-op on already-null
+            // facets and fall through untouched.
+            if ($suppressColour && ($code === 38 || $code === 48)) {
+                if ($this->readExtendedColor($params, $k) === null) {
+                    break; // malformed payload — stop the walk, like a terminal
+                }
+                continue;
+            }
+            if ($suppressColour && (($code >= 30 && $code <= 37) || ($code >= 40 && $code <= 47)
+                || ($code >= 90 && $code <= 97) || ($code >= 100 && $code <= 107))) {
+                continue;
+            }
 
             if ($code === 38 || $code === 48) {
                 $rgb = $this->readExtendedColor($params, $k);
@@ -1445,7 +1516,13 @@ final class Toast
             } elseif ($code === 4) {
                 $attrs |= Style::ATTR_UNDERLINE;
             } elseif ($code === 5) {
-                $attrs |= Style::ATTR_BLINK;
+                // Reduced motion (M10): blink is the only CARRIED animation
+                // this renderer emits, and it can arrive via UNTRUSTED
+                // message text — WCAG 2.2.2 says honour the user's flag.
+                // 25 (blink off) stays unconditional; nothing else is motion.
+                if (!$reducedMotion) {
+                    $attrs |= Style::ATTR_BLINK;
+                }
             } elseif ($code === 7) {
                 $attrs |= Style::ATTR_REVERSE;
             } elseif ($code === 8) {
