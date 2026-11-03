@@ -12,7 +12,7 @@ use SugarCraft\AnsiParser\Parser\DebugHandler;
 use SugarCraft\AnsiParser\Parser\Parser;
 
 /**
- * F-16: end-to-end byte sequences through the real parser into the codecs —
+ * End-to-end byte sequences through the real parser into the codecs —
  * the "not silently swallowed" proof for all three gaps.
  */
 final class ParserIntegrationTest extends TestCase

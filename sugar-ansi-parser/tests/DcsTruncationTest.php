@@ -9,7 +9,7 @@ use SugarCraft\AnsiParser\Parser\DebugHandler;
 use SugarCraft\AnsiParser\Parser\Parser;
 
 /**
- * F-16: DCS truncation / recovery semantics, pinned at the byte level.
+ * DCS truncation / recovery semantics, pinned at the byte level.
  *
  * The contract (documented on Parser::flush() and Handler::dcsDispatch()):
  * - a DCS with a final byte but no ST dispatches the bytes that arrived, so

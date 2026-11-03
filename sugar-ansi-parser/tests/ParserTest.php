@@ -688,7 +688,7 @@ final class ParserTest extends TestCase
     }
 
     /**
-     * C1 (lane A3a): every cross-type C1 introducer pair discards the
+     * Every cross-type C1 introducer pair discards the
      * pending payload instead of bleeding it into the foreign sequence's
      * dispatch — an APC fragment arriving as OSC data is a title-injection
      * vector from untrusted peers. Same-type continuation stays pinned in
@@ -765,7 +765,7 @@ final class ParserTest extends TestCase
 
     public function testRawUtf8InsideApcStaysInPayloadAndPrintsNothing(): void
     {
-        // C2 (lane A3a): before the Put-range extension the UTF-8 lead in
+        // Before the Put-range extension the UTF-8 lead in
         // the anywhere table won over the narrow 0x20-0x7F Put, so the CJK
         // rune ESCAPED the sequence — printChar fired mid-string and the
         // bytes vanished from the dispatch.
@@ -819,7 +819,7 @@ final class ParserTest extends TestCase
         // shape: a mid-string C1 re-introducer is NOT a cancellation — the
         // bytes collected before it ride through into the dispatch. A naive
         // start()-clears-buffer fix for the bleed regressed exactly this
-        // (sugar-vterm pins it as CALIBER 2026-05-30 step-20).
+        // (sugar-vterm pins the same payload-survival edge downstream).
         $parser->feed("\x1bXAB\x98CD\x9c");
 
         $sos = $handler->filter('sos');

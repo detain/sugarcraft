@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\AnsiParser\Codec\Iterm1337;
 
 /**
- * F-16: Iterm1337 codec — inline-image transfer header decode (the OSC arm)
+ * Iterm1337 codec — inline-image transfer header decode (the OSC arm)
  * plus the tmux DCS passthrough arm.
  */
 final class Iterm1337Test extends TestCase
@@ -213,7 +213,7 @@ final class Iterm1337Test extends TestCase
 
     public function testDescribeNeutralizesControlBytesFromTheDcsArm(): void
     {
-        // m3 (rev-w10-4): via fromDcs the DCS body admits 0x00-0x17 Put bytes
+        // Via fromDcs the DCS body admits 0x00-0x17 Put bytes
         // (the OSC path is protected by Transitions dropping them), so the
         // non-File command verb must be escaped like the URL-decoded name.
         $inner = "\x1b]1337;Po\x0b\n\x07";

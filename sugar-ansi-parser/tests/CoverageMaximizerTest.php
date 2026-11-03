@@ -20,7 +20,7 @@ final class CoverageMaximizerTest extends TestCase
      * Test interrupted UTF-8 sequence with replaceMalformed=false.
      * When a non-continuation byte interrupts a UTF-8 sequence and
      * replaceMalformed is false, the incomplete rune is silently dropped.
-     * This exercises lines 213-220 in Parser.php.
+     * This exercises the mid-rune interruption path in Parser::advance().
      */
     public function testInterruptedUtf8WithReplaceMalformedFalse(): void
     {

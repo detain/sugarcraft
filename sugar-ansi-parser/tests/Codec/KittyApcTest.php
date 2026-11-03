@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\AnsiParser\Codec\KittyApc;
 
 /**
- * F-16: KittyApc codec — control-pair decoding and the geometry/size labels
+ * KittyApc codec — control-pair decoding and the geometry/size labels
  * the inspector previously reduced to a byte count.
  */
 final class KittyApcTest extends TestCase
@@ -126,7 +126,7 @@ final class KittyApcTest extends TestCase
 
     public function testBackslashBeforeADelimiterIsOrdinaryData(): void
     {
-        // m1 (rev-w10-4): the protocol defines no escape grammar (upstream
+        // The protocol defines no escape grammar (upstream
         // parse-graphics-command.h splits on plain ','/';' and accepts no
         // string values), so `\,` and `\;` stay data bytes — pinned against
         // any future silent-unescape invention.
@@ -147,7 +147,7 @@ final class KittyApcTest extends TestCase
 
     public function testDescribeNeutralizesControlBytesInTheAction(): void
     {
-        // m2 (rev-w10-4): APC string states Put bytes 0x00-0x17, so the
+        // APC string states Put bytes 0x00-0x17, so the
         // quoted flag value must be escaped+clipped like Dcs::describe().
         $apc = KittyApc::parse("Ga=f\n\x07;QUJD");
 

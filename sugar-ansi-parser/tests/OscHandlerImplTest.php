@@ -58,7 +58,7 @@ final class OscHandlerImplTest extends TestCase
 
     public function testCloseSequenceCarryingIdStillResetsBothFields(): void
     {
-        // C3 (lane A3a): 'ESC]8;id=x;ST' parses to hyperlink('', 'x'); the
+        // 'ESC]8;id=x;ST' parses to hyperlink('', 'x'); the
         // close path must clear the id too — the docblock always promised
         // BOTH fields reset, and a stale id outlives the link it named.
         $impl = new OscHandlerImpl();

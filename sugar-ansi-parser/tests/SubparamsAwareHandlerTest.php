@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\AnsiParser\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\AnsiParser\Parser\DebugHandler;
 use SugarCraft\AnsiParser\Parser\Handler;
 use SugarCraft\AnsiParser\Parser\Parser;
 use SugarCraft\AnsiParser\Parser\SubparamsAwareHandler;
@@ -240,10 +241,28 @@ final class SubparamsAwareHandlerTest extends TestCase
     }
 
     /**
+     * The pull window belongs to the stream, not to the process: after
+     * flush() (which delegates to the same clear() a finished dispatch
+     * triggers) the flag list is empty again, so a handler that reads
+     * {@see Parser::subparams()} outside a dispatch — or after end of
+     * stream — can never mistake the previous sequence's flags for its
+     * own. Pinned because the Parser::subparams() docblock promises the
+     * window ends at flush.
+     */
+    public function testFlushClosesThePullWindow(): void
+    {
+        $parser = new Parser(new DebugHandler());
+        $parser->feed("\x1b[4:3");
+        self::assertNotSame([], $parser->subparams(), 'in-flight CSI keeps the window open');
+        $parser->flush();
+        self::assertSame([], $parser->subparams(), 'flush closes the pull window');
+    }
+
+    /**
      * The capability is a strict supertype relationship: implementing it implies
      * implementing {@see Handler}, so a capable class can always be handed to
-     * the parser. Pinned because vt-B will put this name in an `implements`
-     * clause in two other repositories.
+     * the parser. Pinned because consumer sinks in two other repositories
+     * (sugar-vterm, candy-codeshot) list this name in their `implements` clauses.
      */
     public function testCapabilityExtendsHandler(): void
     {
@@ -438,12 +457,12 @@ final class SubparamsAwareHandlerTest extends TestCase
     }
 
     /**
-     * Regression pin for the legacy pull route that sugar-vterm
-     * (`attachSubparamsProvider`) and candy-codeshot (`bindParser`) still use: a
-     * NON-capable handler consulting {@see Parser::subparams()} mid-dispatch must
-     * still resolve colon SGRs, and resolve them to exactly what the new push
-     * delivers. That equivalence is the contract vt-B relies on when it migrates
-     * the consumers and retires the closure plumbing.
+     * Regression pin for the legacy pull route a handler can still take when it
+     * owns its Parser (candy-ansi-inspect's AnsiHandler implements nothing and
+     * consults {@see Parser::subparams()} from inside its own csiDispatch()): a
+     * NON-capable handler consulting the pull mid-dispatch must still resolve
+     * colon SGRs, and resolve them to exactly what the push delivers. That
+     * equivalence is the contract that keeps both routes live side by side.
      */
     public function testPullFallbackStillResolvesColonSgrsIdenticallyToPush(): void
     {
