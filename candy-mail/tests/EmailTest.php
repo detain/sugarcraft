@@ -216,4 +216,43 @@ final class EmailTest extends TestCase
         $this->assertSame(['Cc@X.com'], $email->cc);
         $this->assertSame(['Bcc@Y.com'], $email->bcc);
     }
+
+    public function testStrayAngleBracketsAreRefused(): void
+    {
+        // RFC 5322 sect. 3.4: the only bracketed form is a single trailing
+        // angle-addr; anything else was silently accepted and shipped.
+        foreach (['weird <a@b.example> </x>', 'Name <a@b.example> junk', 'a@b.example<c@d.example>'] as $hostile) {
+            try {
+                new Email(from: ['ok@example.com'], to: [$hostile]);
+                $this->fail('hostile address accepted: ' . $hostile);
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('Invalid email address', $e->getMessage());
+            }
+        }
+    }
+
+    public function testDisplayNameFormSurvivesTheAngleGate(): void
+    {
+        $email = new Email(from: ['"Q, uote" <a@b.example>'], to: ['Display Name <c@d.example>']);
+        $this->assertSame(['"Q, uote" <a@b.example>'], $email->from);
+        $this->assertSame(['Display Name <c@d.example>'], $email->to);
+    }
+
+    public function testControlBytesAreStrippedFromBodies(): void
+    {
+        $email = new Email(
+            from:      ['a@b.example'],
+            to:        ['c@d.example'],
+            body:      "Hi\x00the\x07re",
+            htmlBody:  "<p>x\x1By</p>",
+            signature: "sig\x01\r\nline",
+        );
+        $this->assertSame('Hithere', $email->body);
+        $this->assertSame('<p>xy</p>', $email->htmlBody);
+        $this->assertSame("sig\r\nline", $email->signature);
+
+        // Tabs and newlines (C0 members with layout meaning) are preserved.
+        $keep = new Email(from: ['a@b.example'], to: ['c@d.example'], body: "keep\tme\nas-is");
+        $this->assertSame("keep\tme\nas-is", $keep->body);
+    }
 }

@@ -49,6 +49,8 @@ final class SmtpTransport implements Transport
     private string $lastResponse = '';
     /** Runtime flag: is the live channel currently encrypted? */
     private bool $encrypted = false;
+    /** EHLO capability snapshot — lastResponse is clobbered by later replies (M-DD). */
+    private bool $serverSupports8Bit = false;
 
     public function __construct(
         string $host,
@@ -239,11 +241,19 @@ final class SmtpTransport implements Transport
             $this->connect();
             $this->startTlsIfNeeded();
             $this->authenticateIfNeeded();
-            $this->sendMailFrom($email->from[0]);
+
+            // M-DD (lib-reviews-1102): 8-bit bodies are only negotiable when
+            // the server advertised 8BITMIME (RFC 6152). Without the
+            // advertisement the envelope stays plain MAIL FROM and the
+            // document is encoded 7-bit safe (quoted-printable text parts).
+            $needs8Bit = $this->emailNeeds8Bit($email);
+            $use8Bit   = $needs8Bit && $this->serverSupports8Bit;
+
+            $this->sendMailFrom($email->from[0], $use8Bit);
             foreach ($email->allRecipients() as $rcpt) {
                 $this->sendRcptTo($rcpt);
             }
-            $this->sendData($email);
+            $this->sendData($email, $use8Bit || !$needs8Bit);
             $this->quit();
         } catch (\Throwable $e) {
             $this->disconnect();
@@ -294,6 +304,12 @@ final class SmtpTransport implements Transport
         // Identify with EHLO
         $this->sendRaw("EHLO {$this->getHeloHost()}\r\n");
         $this->readResponse(250);
+
+        // M-DD (lib-reviews-1102): snapshot the 8BITMIME advertisement NOW
+        // (RFC 6152). lastResponse is overwritten by the AUTH reply and by
+        // later responses, so a capability read at MAIL FROM time would
+        // inspect the wrong server text.
+        $this->serverSupports8Bit = $this->hasExtension('8BITMIME');
     }
 
     /**
@@ -372,6 +388,11 @@ final class SmtpTransport implements Transport
         // Re-EHLO after TLS so the post-upgrade extension list (e.g. AUTH) is fresh.
         $this->sendRaw("EHLO {$this->getHeloHost()}\r\n");
         $this->readResponse(250);
+
+        // M-DD: the plaintext EHLO's capability list is void after STARTTLS —
+        // re-snapshot from the post-upgrade EHLO (servers may advertise MORE
+        // inside TLS, never assume the pre-TLS answer carries over).
+        $this->serverSupports8Bit = $this->hasExtension('8BITMIME');
     }
 
     private function authenticateIfNeeded(): void
@@ -416,6 +437,8 @@ final class SmtpTransport implements Transport
         }
         // Belt-braces for M-A: a closed channel is never an encrypted one.
         $this->encrypted = false;
+        // Capability state belongs to the socket we just threw away (M-DD).
+        $this->serverSupports8Bit = false;
     }
 
     private function quit(): void
@@ -444,9 +467,14 @@ final class SmtpTransport implements Transport
     // SMTP commands
     // -------------------------------------------------------------------------
 
-    private function sendMailFrom(string $address): void
+    private function sendMailFrom(string $address, bool $declare8Bit = false): void
     {
-        $this->sendRaw("MAIL FROM:<{$this->bareAddr($address)}>\r\n");
+        // RFC 6152: BODY=8BITMIME may only be asserted when the server
+        // advertised the 8BITMIME extension (the flag is computed from the
+        // EHLO snapshot by the caller). Envelopes are 7-bit by RFC 5321
+        // §2.3.8 without it.
+        $param = $declare8Bit ? ' BODY=8BITMIME' : '';
+        $this->sendRaw("MAIL FROM:<{$this->bareAddr($address)}>{$param}\r\n");
         $this->readResponse(250);
     }
 
@@ -456,14 +484,33 @@ final class SmtpTransport implements Transport
         $this->readResponse(250);
     }
 
-    private function sendData(Email $email): void
+    private function sendData(Email $email, bool $allow8Bit = true): void
     {
         $this->sendRaw("DATA\r\n");
         $this->readResponse(354);
 
-        $mime = $this->dotStuff($this->buildMimeMessage($email));
-        $this->sendRaw($mime . "\r\n.\r\n");
+        // buildMimeMessage() now terminates with the closing CRLF of the last
+        // boundary line, so the dot-stuffer output goes straight out followed
+        // only by the <CRLF>.<CRLF> terminator (RFC 5321 §4.1.1.4).
+        $mime = $this->dotStuff($this->buildMimeMessage($email, $allow8Bit));
+        $this->sendRaw($mime . ".\r\n");
         $this->readResponse(250);
+    }
+
+    /**
+     * Does the message carry any non-ASCII text that would travel as 8-bit?
+     * Base64 attachments are 7-bit-safe and never trigger this.
+     */
+    private function emailNeeds8Bit(Email $email): bool
+    {
+        $plain = $email->bodyWithSignature() ?? $email->body;
+        foreach ([$plain, $email->htmlBody] as $text) {
+            if ($text !== null && \preg_match('/[^\x00-\x7F]/', $text) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -492,7 +539,7 @@ final class SmtpTransport implements Transport
      * to open the body part, making every emitted message structurally
      * invalid for strict parsers).
      */
-    public function buildMimeMessage(Email $email): string
+    public function buildMimeMessage(Email $email, bool $allow8Bit = true): string
     {
         $boundary = \bin2hex(\random_bytes(16));
         $lines = [];
@@ -501,12 +548,46 @@ final class SmtpTransport implements Transport
         $lines = \array_merge($lines, $this->buildHeaders($email, $boundary));
 
         // Body
-        $lines = \array_merge($lines, $this->buildBody($email, $boundary));
+        $lines = \array_merge($lines, $this->buildBody($email, $boundary, $allow8Bit));
 
         // Attachments
         $lines = \array_merge($lines, $this->buildAttachments($email->attachments, $boundary));
 
         $lines[] = '--' . $boundary . '--';
+
+        // RFC 2046 §5.1: the close-delimiter terminates a line — the document
+        // ends with CRLF after the final "--", so consumers never append onto
+        // the boundary token itself. (MIME edge tests used to pin the bare
+        // "--boundary--" tail; the wire is identical because sendData() used
+        // to bolt on the missing CRLF before the SMTP dot.)
+        return \implode("\r\n", $lines) . "\r\n";
+    }
+
+    /**
+     * Fold a header value so no physical line exceeds the RFC 5322 §2.1.1
+     * limit of 998 content octets, breaking at existing spaces and prefixing
+     * each continuation with one WSP (obs-fold, §2.2.3).
+     */
+    private static function foldHeader(string $field, string $value): string
+    {
+        if (\strlen($field) + 2 + \strlen($value) <= 998) {
+            return "{$field}: {$value}";
+        }
+
+        $lines   = [];
+        $current = $field . ':';
+        foreach (\explode(' ', $value) as $word) {
+            // +1 for the joining space; never emit a fold before the first
+            // word (an unsplittable single token stays long — folding it
+            // mid-word would corrupt encoded-words).
+            if (\strlen($current) + 1 + \strlen($word) > 998 && $current !== $field . ':') {
+                $lines[]  = $current;
+                $current  = ' ' . $word;
+                continue;
+            }
+            $current .= ' ' . $word;
+        }
+        $lines[] = $current;
 
         return \implode("\r\n", $lines);
     }
@@ -518,21 +599,21 @@ final class SmtpTransport implements Transport
      */
     private function buildHeaders(Email $email, string $boundary): array
     {
-        $lines = [];
-        $lines[] = "From: {$this->addrListHeader($email->from)}";
-        $lines[] = "To: {$this->addrListHeader($email->to)}";
+        $lines   = [];
+        $lines[] = self::foldHeader('From', $this->addrListHeader($email->from));
+        $lines[] = self::foldHeader('To', $this->addrListHeader($email->to));
         if ($email->cc !== []) {
-            $lines[] = "Cc: {$this->addrListHeader($email->cc)}";
+            $lines[] = self::foldHeader('Cc', $this->addrListHeader($email->cc));
         }
         if ($email->subject !== null) {
-            $lines[] = "Subject: {$this->encodeHeaderWord($email->subject)}";
+            $lines[] = self::foldHeader('Subject', $this->encodeHeaderWord($email->subject));
         }
         $lines[] = 'Date: ' . \date('r');
         $lines[] = 'Message-ID: <' . \bin2hex(\random_bytes(16)) . '@' . $this->messageIdHost() . '>';
         $lines[] = "MIME-Version: 1.0";
         $lines[] = "Content-Type: multipart/mixed; boundary=\"{$boundary}\"";
         if ($email->replyTo !== null) {
-            $lines[] = "Reply-To: {$this->addrListHeader([$email->replyTo])}";
+            $lines[] = self::foldHeader('Reply-To', $this->addrListHeader([$email->replyTo]));
         }
         return $lines;
     }
@@ -540,48 +621,109 @@ final class SmtpTransport implements Transport
     /**
      * Build MIME body parts (text and/or HTML).
      *
-     * The part opener MUST use the caller's declared multipart/mixed
-     * boundary; an inner multipart/alternative declares its own boundary
-     * inside its own part header.
+     * M-R (lib-reviews-1102): a lone HTML body used to be wrapped in an empty
+     * multipart/alternative whose first sub-part carried no headers at all —
+     * malformed under strict parsers. Single representations now emit as one
+     * part; only the genuine text+HTML pair gets the alternative wrapper,
+     * which declares its own boundary inside its own part header (C-1 law).
+     *
+     * $allow8Bit=false (server did not advertise 8BITMIME, RFC 6152) forces
+     * 8-bit text onto quoted-printable so the whole document stays 7-bit safe.
      *
      * @return list<string>
      */
-    private function buildBody(Email $email, string $boundary): array
+    private function buildBody(Email $email, string $boundary, bool $allow8Bit = true): array
     {
-        $lines = [];
+        $plain = $email->body !== null ? ($email->bodyWithSignature() ?? $email->body) : null;
+        $html  = $email->htmlBody;
+
+        if ($plain === null && $html === null) {
+            return [];
+        }
+
+        if ($plain !== null && $html !== null) {
+            $bodyBoundary = \bin2hex(\random_bytes(16));
+            $lines        = ['', '--' . $boundary];
+            $lines[]      = "Content-Type: multipart/alternative; boundary=\"{$bodyBoundary}\"";
+            $lines[]      = '';
+            $lines        = \array_merge($lines, $this->textPart('text/plain', $plain, $allow8Bit, $bodyBoundary));
+            $lines        = \array_merge($lines, $this->textPart('text/html', $html, $allow8Bit, $bodyBoundary));
+            $lines[]      = '--' . $bodyBoundary . '--';
+            $lines[]      = '';
+            return $lines;
+        }
+
+        $lines = ['', '--' . $boundary];
+
+        return \array_merge(
+            $lines,
+            $this->textPart($plain !== null ? 'text/plain' : 'text/html', $plain ?? $html, $allow8Bit),
+            [''],
+        );
+    }
+
+    /**
+     * One text/* part: optional boundary opener line, headers, then the body.
+     *
+     * @return list<string>
+     */
+    private function textPart(string $type, string $content, bool $allow8Bit, ?string $openerBoundary = null): array
+    {
+        $normalized = \preg_replace('/\r\n|\r/', "\n", $content);
+
+        $lines = $openerBoundary !== null ? ['--' . $openerBoundary] : [];
+
+        if (!$allow8Bit && \preg_match('/[^\x00-\x7F]/', $normalized) === 1) {
+            // RFC 2045 §6.7: quoted-printable is the canonical 7-bit folding
+            // for mostly-ASCII text; quoted_printable_encode() (bundled since
+            // PHP 5.3) wraps at 76 octets with soft line breaks.
+            $qp = \str_replace("\r\n", "\n", \quoted_printable_encode($normalized));
+
+            return \array_merge(
+                $lines,
+                ["Content-Type: {$type}; charset=\"utf-8\"", 'Content-Transfer-Encoding: 7bit', ''],
+                \explode("\n", \rtrim($qp, "\n")),
+                [''],
+            );
+        }
+
+        $lines[] = "Content-Type: {$type}; charset=\"utf-8\"";
+        $lines[] = 'Content-Transfer-Encoding: ' . $this->cteFor($normalized);
         $lines[] = '';
-        $lines[] = '--' . $boundary;
-
-        $bodyBoundary = \bin2hex(\random_bytes(16));
-        if ($email->htmlBody !== null) {
-            $lines[] = "Content-Type: multipart/alternative; boundary=\"{$bodyBoundary}\"";
-            $lines[] = '';
-            $lines[] = '--' . $bodyBoundary;
-        }
-
-        if ($email->body !== null) {
-            $body = $email->bodyWithSignature() ?? $email->body;
-            $normalized = \preg_replace('/\r\n|\r/', "\n", $body);
-            $lines[] = 'Content-Type: text/plain; charset="utf-8"';
-            $lines[] = 'Content-Transfer-Encoding: ' . $this->cteFor($normalized);
-            $lines[] = '';
-            $lines = \array_merge($lines, \explode("\n", $normalized));
-            $lines[] = '';
-        }
-
-        if ($email->htmlBody !== null) {
-            $lines[] = '--' . $bodyBoundary;
-            $lines[] = 'Content-Type: text/html; charset="utf-8"';
-            $normalized = \preg_replace('/\r\n|\r/', "\n", $email->htmlBody);
-            $lines[] = 'Content-Transfer-Encoding: ' . $this->cteFor($normalized);
-            $lines[] = '';
-            $lines = \array_merge($lines, \explode("\n", $normalized));
-            $lines[] = '';
-            $lines[] = '--' . $bodyBoundary . '--';
-            $lines[] = '';
-        }
+        $lines   = \array_merge($lines, \explode("\n", $normalized));
+        $lines[] = '';
 
         return $lines;
+    }
+
+    /**
+     * RFC 2231 §4/§7 parameter form: ASCII values stay a plain quoted-string;
+     * anything else rides `name*=charset''percent-encoded` next to an ASCII
+     * compatibility copy (filenames are sanitized against CRLF at Attachment
+     * construction, so only the charset case reaches the extended form).
+     *
+     * @return array{plain:string,extended:?string}
+     */
+    private static function mimeNameParams(string $attr, string $filename): array
+    {
+        if (\preg_match('/^[\x20-\x7E]*$/', $filename) === 1 && !\str_contains($filename, '"')) {
+            return ['plain' => "{$attr}=\"{$filename}\"", 'extended' => null];
+        }
+
+        $ascii   = \preg_replace('/[^\x21-\x7E]/u', '_', $filename)
+                ?? \preg_replace('/[^\x21-\x7E]/', '_', $filename) ?? '';
+        $escaped = self::quoteMimeParam($ascii);
+
+        // rawurlencode keeps unreserved bytes and the RFC 3986 sub-delims
+        // "!" "*" "(" ")" "'"; RFC 2231 attr-char excludes all of them, so
+        // force them through percent-encoding too.
+        $ext = \rawurlencode($filename);
+        $ext = \str_replace(['!', '*', '(', ')', "'"], ['%21', '%2A', '%28', '%29', '%27'], $ext);
+
+        return [
+            'plain'    => "{$attr}=\"{$escaped}\"",
+            'extended' => "{$attr}*=UTF-8''{$ext}",
+        ];
     }
 
     /**
@@ -595,21 +737,31 @@ final class SmtpTransport implements Transport
         $lines = [];
         foreach ($attachments as $att) {
             $content = $att->content();
-            $encoded = \chunk_split(\base64_encode($content), 76, "\n");
+            // The document is CRLF-delimited; bare LFs inside the base64 payload
+            // (the old chunk_split glue) desynchronized strict line readers.
+            $encoded = \chunk_split(\base64_encode($content), 76, "\r\n");
 
             // RFC 2045 quoted-string: CRLF is refused at Attachment construction
             // (docs-fix-1023 C-2); quotes and backslashes are escaped here so a
-            // name like a"b.txt cannot corrupt the quoted parameter.
-            $name = self::quoteMimeParam($att->filename);
+            // name like a"b.txt cannot corrupt the quoted parameter. Non-ASCII
+            // names additionally ride the RFC 2231 extended form (M-CC).
+            $name = self::mimeNameParams('filename', $att->filename);
+            $type = self::mimeNameParams('name', $att->filename);
+
+            $typeParams = $type['extended'] !== null ? $type['plain'] . '; ' . $type['extended'] : $type['plain'];
 
             $headers = [
-                "Content-Type: {$att->mimeType}; name=\"{$name}\"",
+                "Content-Type: {$att->mimeType}; {$typeParams}",
                 "Content-Transfer-Encoding: base64",
-                "Content-Disposition: " . ($att->cid !== null
-                    ? "inline; filename=\"{$name}\""
-                    : "attachment; filename=\"{$name}\""
-                ),
             ];
+
+            $disposition = $att->cid !== null
+                ? 'inline; ' . $name['plain']
+                : 'attachment; ' . $name['plain'];
+            if ($name['extended'] !== null) {
+                $disposition .= ';' . "\r\n " . $name['extended'];
+            }
+            $headers[] = 'Content-Disposition: ' . $disposition;
 
             if ($att->cid !== null) {
                 $headers[] = "Content-ID: <{$att->cid}>";
@@ -761,12 +913,15 @@ final class SmtpTransport implements Transport
     /**
      * Extract the bare address from a "Name <addr@host>" string.
      *
-     * Mirrors charmbracelet/pop bare address extraction.
+     * The angle-addr is the TRAILING route (RFC 5322 §3.4). Anchoring the
+     * match at the end keeps the envelope identical to what
+     * formatAddressForHeader() displays and to what Email::sanitizeAddr()
+     * already validated — the old FIRST-match scan could deliver "x@first"
+     * for a value whose header line ended in "<y@second>".
      */
     private function bareAddr(string $addr): string
     {
-        // Check for "Name <addr@host>" format
-        if (\preg_match('/<([^>]+)>/', $addr, $matches)) {
+        if (\preg_match('/<([^>]+)>\s*$/', $addr, $matches) === 1) {
             return $matches[1];
         }
         return $addr;
@@ -780,28 +935,58 @@ final class SmtpTransport implements Transport
     {
         // Check for "Name <addr@host>" format
         if (\preg_match('/^(.+)\s<([^>]+)>$/', $addr, $matches)) {
-            $displayName = \trim($matches[1]);
+            $displayName = $this->encodeHeaderWord(\trim($matches[1]));
             $emailAddr = $matches[2];
-            // RFC 2047 encode the display name if it contains non-ASCII
-            if (\preg_match('/[^\x00-\x7F]/', $displayName)) {
-                $displayName = '=?UTF-8?B?' . \base64_encode($displayName) . '?=';
-            }
             return "{$displayName} <{$emailAddr}>";
         }
         return $addr;
     }
 
     /**
-     * RFC 2047 encode a header word if it contains non-ASCII bytes.
+     * RFC 2047 encode a header value if it contains non-ASCII bytes.
      *
-     * Mirrors charmbracelet/pop header encoding.
+     * Tokens split on spaces; any token whose encoded-word would exceed the
+     * RFC 2047 §2 75-character limit is emitted as several encoded-words
+     * joined by a space (each carries <= 45 raw bytes: 12 chars of "=?UTF-8?
+     * B??=" overhead + 60 base64 chars = 72 <= 75). Long CJK subjects used to
+     * ride as one 400-character word that RFC-compliant receivers reject (M-J).
+     * ASCII values pass through untouched; folding is foldHeader()'s job.
      */
     private function encodeHeaderWord(string $word): string
     {
-        if (\preg_match('/[^\x00-\x7F]/', $word)) {
-            return '=?UTF-8?B?' . \base64_encode($word) . '?=';
+        if (\preg_match('/[^\x00-\x7F]/', $word) !== 1) {
+            return $word;
         }
-        return $word;
+
+        $words = [];
+        foreach (\explode(' ', $word) as $token) {
+            if ($token === '' || \preg_match('/[^\x00-\x7F]/', $token) !== 1) {
+                $words[] = $token;
+                continue;
+            }
+
+            $chars = \preg_split('//u', $token, -1, \PREG_SPLIT_NO_EMPTY);
+            if ($chars === false) {
+                // Invalid UTF-8: no safe character walk exists — emit one
+                // oversized word exactly as the old code did (best effort).
+                $words[] = '=?UTF-8?B?' . \base64_encode($token) . '?=';
+                continue;
+            }
+
+            $buffer = '';
+            foreach ($chars as $char) {
+                if (\strlen($buffer) + \strlen($char) > 45 && $buffer !== '') {
+                    $words[] = '=?UTF-8?B?' . \base64_encode($buffer) . '?=';
+                    $buffer  = '';
+                }
+                $buffer .= $char;
+            }
+            if ($buffer !== '') {
+                $words[] = '=?UTF-8?B?' . \base64_encode($buffer) . '?=';
+            }
+        }
+
+        return \implode(' ', $words);
     }
 
     /**

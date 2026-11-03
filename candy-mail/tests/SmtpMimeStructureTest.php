@@ -31,8 +31,9 @@ final class SmtpMimeStructureTest extends TestCase
 
         // The FIRST delimiter after the header block must be the declared one.
         $this->assertStringContainsString("\r\n\r\n--{$boundary}\r\n", $mime);
-        // And the message closes with that same boundary's epilogue token.
-        $this->assertStringEndsWith("--{$boundary}--", $mime);
+        // And the message closes with that same boundary's epilogue token,
+        // terminated by CRLF per RFC 2046 §5.1 (B6).
+        $this->assertStringEndsWith("--{$boundary}--\r\n", $mime);
     }
 
     public function testEveryPartDelimiterWasDeclaredSomewhereInTheMessage(): void
@@ -139,6 +140,192 @@ final class SmtpMimeStructureTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+
+    // ---- B6 (lib-reviews-1102): line endings, folding, RFC 2231, 8BITMIME ----
+
+    public function testNoBareLineFeedsAnywhereInTheRenderedDocument(): void
+    {
+        $tmp = \tempnam(\sys_get_temp_dir(), 'cmime');
+        \file_put_contents($tmp, 'attachment content');
+        try {
+            $email = (new Email(
+                from:     ['from@example.com'],
+                to:       ['to@example.com'],
+                subject:  'Mixed shapes',
+                body:     "plain\nsecond line",
+                htmlBody: "<p>html</p>\n<p>two</p>",
+            ))->withAttachment('test.txt', $tmp);
+
+            $mime = $this->render($email);
+
+            // RFC 2046 sect. 2 + 5.1.1: every line in the message, including
+            // base64 payload chunks, is CRLF-terminated; the old chunk_split
+            // glue leaked bare LFs into a CRLF document.
+            $this->assertSame(0, \preg_match('/(?<!\r)\n/', $mime), 'bare LF found in rendered MIME');
+        } finally {
+            @\unlink($tmp);
+        }
+    }
+
+    public function testLongSubjectFoldsUnderThe998OctetLimit(): void
+    {
+        $subject = \str_repeat('word ', 250) . 'end';
+        $email = new Email(from: ['a@example.com'], to: ['b@example.com'], subject: $subject, body: 'x');
+        $mime  = $this->render($email);
+
+        $this->assertHeaderLinesWithinRfc5322($mime);
+
+        $block = $this->subjectBlock($mime);
+        // 1259 octets over the limit -> exactly one continuation line here;
+        // any fold at all proves the 998 cap fired (unfold check below is the
+        // semantic pin).
+        $this->assertGreaterThanOrEqual(1, \substr_count($block, "\r\n"), 'a long subject must fold');
+        // Unfolding (RFC 5322 sect. 2.2.3 obs-fold) restores the exact value.
+        $this->assertSame('Subject: ' . $subject, \str_replace("\r\n ", ' ', $block));
+    }
+
+    public function testCjkSubjectSplitsIntoBoundedEncodedWords(): void
+    {
+        $subject = \str_repeat("\u{65e5}\u{672c}\u{8a9e}", 40); // 360 bytes, no spaces
+        $email = new Email(from: ['a@example.com'], to: ['b@example.com'], subject: $subject, body: 'x');
+        $mime  = $this->render($email);
+
+        $this->assertHeaderLinesWithinRfc5322($mime);
+
+        $block = $this->subjectBlock($mime);
+        $count = \preg_match_all('/=\?UTF-8\?B\?([A-Za-z0-9+\/=]+)\?=/', $block, $m);
+        $this->assertGreaterThan(1, $count, 'a 360-byte subject must split into several encoded-words');
+        foreach ($m[0] as $word) {
+            $this->assertLessThanOrEqual(75, \strlen($word), 'RFC 2047 sect. 2 encoded-word limit');
+        }
+        // The chunks concatenated decode back to the exact original.
+        $this->assertSame($subject, \base64_decode(\implode('', $m[1])));
+    }
+
+    public function testNonAsciiFilenameRidesTheRfc2231Form(): void
+    {
+        $tmp = \tempnam(\sys_get_temp_dir(), 'cattach');
+        \file_put_contents($tmp, 'data');
+        try {
+            $email = (new Email(from: ['a@example.com'], to: ['b@example.com'], body: 'x'))
+                ->withAttachment("r\u{e9}sum\u{e9}-\u{20ac}.txt", $tmp);
+            $mime = $this->render($email);
+
+            // RFC 2231 sect. 4 extended form ...
+            $this->assertStringContainsString("filename*=UTF-8''r%C3%A9sum%C3%A9-%E2%82%AC.txt", $mime);
+            $this->assertStringContainsString("name*=UTF-8''", $mime);
+            // ... next to an ASCII compatibility copy with substitution dots.
+            $this->assertStringContainsString('filename="r_sum_-_.txt"', $mime);
+            // No raw non-ASCII bytes leak into the headers (RFC 2047/2231 domain).
+            $this->assertStringNotContainsString("r\u{e9}sum\u{e9}-\u{20ac}", $mime);
+        } finally {
+            @\unlink($tmp);
+        }
+    }
+
+    public function testEightBitBodyDowngradesToQuotedPrintableWithoutTheCapability(): void
+    {
+        $email = new Email(from: ['a@example.com'], to: ['b@example.com'], body: "Caf\u{e9} plain");
+        $transport = new SmtpTransport('smtp.example.com', 587);
+
+        // Default (server advertised 8BITMIME or caller rendering): 8-bit rides as-is.
+        $this->assertStringContainsString('Content-Transfer-Encoding: 8bit', $transport->buildMimeMessage($email));
+
+        // M-DD: against a server without 8BITMIME the document must be 7-bit safe.
+        $mime7 = $transport->buildMimeMessage($email, false);
+        $this->assertStringContainsString('Content-Transfer-Encoding: 7bit', $mime7);
+        $this->assertStringNotContainsString('Content-Transfer-Encoding: 8bit', $mime7);
+        $this->assertStringContainsString('=C3=A9', $mime7, 'quoted-printable form (RFC 2045 sect. 6.7)');
+        $this->assertHeaderLinesWithinRfc5322($mime7);
+    }
+
+    public function testMailFromCarriesBodyEightBitMimeOnlyWhenDeclared(): void
+    {
+        [$client, $server] = \stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
+        $transport = new SmtpTransport('smtp.example.com', 587);
+        (new \ReflectionProperty($transport, 'socket'))->setValue($transport, $client);
+
+        // Two canned 250 answers for the two MAIL FROM legs (readResponse drains).
+        \fwrite($server, "250 ok\r\n250 ok\r\n");
+
+        try {
+            $send = new \ReflectionMethod($transport, 'sendMailFrom');
+
+            $send->invoke($transport, 'a@example.com', true);
+            $this->assertSame("MAIL FROM:<a@example.com> BODY=8BITMIME\r\n", \fgets($server));
+
+            $send->invoke($transport, 'a@example.com', false);
+            $this->assertSame("MAIL FROM:<a@example.com>\r\n", \fgets($server));
+        } finally {
+            (new \ReflectionProperty($transport, 'socket'))->setValue($transport, null);
+            if (\is_resource($client)) { \fclose($client); }
+            if (\is_resource($server)) { \fclose($server); }
+        }
+    }
+
+    public function testEightBitCapabilityIsSnapshottedAfterTheEhloReply(): void
+    {
+        // Behaviour half: hasExtension() reads lastResponse live, and the AUTH
+        // 235 reply clobbers the EHLO capability list — a live read at MAIL
+        // FROM time would always answer "no".
+        $transport = new SmtpTransport('smtp.example.com', 587);
+        (new \ReflectionProperty($transport, 'lastResponse'))->setValue($transport, '235 2.7.0 Authentication successful');
+        $has = new \ReflectionMethod($transport, 'hasExtension');
+        $this->assertFalse($has->invoke($transport, '8BITMIME'));
+
+        // Structural half: connect() snapshots AFTER the EHLO 250 read.
+        $src  = \file_get_contents(\dirname(__DIR__) . '/src/SmtpTransport.php');
+        $from = \strpos($src, 'private function connect(');
+        $this->assertNotFalse($from);
+        $body = \substr($src, $from, \strpos($src, "\n    }\n", $from) - $from);
+        $ehlo = \strpos($body, '$this->readResponse(250)');
+        $snap = \strpos($body, '$this->serverSupports8Bit = $this->hasExtension');
+        $this->assertNotFalse($ehlo);
+        $this->assertNotFalse($snap);
+        $this->assertGreaterThan($ehlo, $snap, 'the 8BITMIME snapshot must follow the EHLO reply read');
+    }
+
+    public function testEnvelopeAndHeaderAgreeOnTheTrailingAngleAddr(): void
+    {
+        // RFC 5322 sect. 3.4 puts the route address last; bareAddr() used to
+        // grab the FIRST angle pair, desyncing the envelope from the header.
+        $transport = new SmtpTransport('smtp.example.com', 587);
+        $bare   = new \ReflectionMethod($transport, 'bareAddr');
+        $format = new \ReflectionMethod($transport, 'formatAddressForHeader');
+
+        $this->assertSame('real@x.example', $bare->invoke($transport, 'Name <first@x.example> other <real@x.example>'));
+        $this->assertSame('real@x.example', $bare->invoke($transport, '<b> John <real@x.example>'));
+        $this->assertStringContainsString('<real@x.example>', $format->invoke($transport, 'Name <first@x.example> other <real@x.example>'));
+    }
+
+    private function subjectBlock(string $mime): string
+    {
+        $lines = \explode("\r\n", $mime);
+        $start = null;
+        foreach ($lines as $i => $line) {
+            if (\str_starts_with($line, 'Subject: ')) {
+                $start = $i;
+                break;
+            }
+        }
+        $this->assertNotNull($start, 'Subject header missing');
+        $block = $lines[$start];
+        for ($j = $start + 1; isset($lines[$j]) && \str_starts_with($lines[$j], ' '); $j++) {
+            $block .= "\r\n" . $lines[$j];
+        }
+        return $block;
+    }
+
+    private function assertHeaderLinesWithinRfc5322(string $mime): void
+    {
+        foreach (\explode("\r\n", $mime) as $line) {
+            if ($line === '') {
+                break;
+            }
+            // RFC 5322 sect. 2.1.1: no more than 998 content octets per line.
+            $this->assertLessThanOrEqual(998, \strlen($line), 'header line too long: ' . \substr($line, 0, 40));
+        }
+    }
 
     private function render(Email $email): string
     {

@@ -93,8 +93,10 @@ final class SmtpMimeTest extends TestCase
             // Attachment should be base64 encoded
             $this->assertStringContainsString("Content-Transfer-Encoding: base64", $mime);
             $this->assertStringContainsString("attachment; filename=\"test.txt\"", $mime);
-            // Check the base64 encoded content
-            $encoded = \chunk_split(\base64_encode('attachment content'), 76, "\n");
+            // Check the base64 encoded content — chunked with CRLF so the
+            // payload lines match the CRLF-delimited document (B6: the old
+            // bare-LF glue desynced strict line readers).
+            $encoded = \chunk_split(\base64_encode('attachment content'), 76, "\r\n");
             $this->assertStringContainsString($encoded, $mime);
         } finally {
             @\unlink($tmp);

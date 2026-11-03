@@ -25,8 +25,10 @@ final class SmtpMimeEdgeTest extends TestCase
             htmlBody: '<p>Hello World</p>',
         ));
 
-        // Should have multipart/alternative with HTML content
-        $this->assertStringContainsString('multipart/alternative', $mime);
+        // M-R (lib-reviews-1102): a lone HTML body is a single part — the old
+        // code wrapped it in an EMPTY multipart/alternative whose boundary was
+        // never opened. Flipping the pinned defect shape:
+        $this->assertStringNotContainsString('multipart/alternative', $mime);
         // Should NOT have a text/plain part when body is null
         $this->assertStringNotContainsString('Content-Type: text/plain', $mime);
         // Should have HTML content
@@ -159,8 +161,10 @@ final class SmtpMimeEdgeTest extends TestCase
         ));
 
         // Should end with --boundary-- to close the multipart/mixed
-        // CRLF comes BEFORE the closing boundary, not after
-        $this->assertMatchesRegularExpression('/\r\n--[a-f0-9]{32}--$/', $mime);
+        // RFC 2046 §5.1: the close-delimiter terminates a line, so the
+        // document ends with CRLF AFTER the final "--" (B6 flip: the old pin
+        // asserted the bare tail and sendData bolted the CRLF on at wire time).
+        $this->assertMatchesRegularExpression('/--[a-f0-9]{32}--\r\n$/', $mime);
     }
 
     public function testBuildMimeMessageWithBodyAndHtml(): void

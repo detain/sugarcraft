@@ -56,21 +56,33 @@ final class Email
         $this->from         = $this->sanitizeAddressList($from);
         $this->to           = $this->sanitizeAddressList($to);
         $this->subject      = $this->sanitizeHeader($subject, 'subject');
-        $this->body         = $body;
+        // Bodies ride the MIME document verbatim except for stray control
+        // bytes: NUL/BEL/etc. inside text survive into wire bytes that
+        // downstream filters and terminals choke on (qa-m4, lib-reviews-1102).
+        // Tab and newlines are kept; CR exists only to form CRLF, which the
+        // renderer normalizes anyway.
+        $this->body         = self::stripStrayControl($body);
         $this->cc           = $this->sanitizeAddressList($cc);
         $this->bcc          = $this->sanitizeAddressList($bcc);
-        $this->htmlBody     = $htmlBody;
+        $this->htmlBody     = self::stripStrayControl($htmlBody);
         $this->replyTo      = $replyTo !== null ? $this->sanitizeAddr($replyTo) : null;
         $this->attachments  = $attachments;
-        $this->signature    = $signature;
+        $this->signature    = self::stripStrayControl($signature);
     }
 
     /**
-     * Sanitize a list of addresses (strip CRLF, validate format).
-     *
-     * @param list<string> $addrs
-     * @return list<string>
+     * Remove C0 control bytes (RFC 2046 §2 text bodies are printable plus
+     * tab/newline) and DEL from a body-like string, keeping \t \n \r.
      */
+    private static function stripStrayControl(?string $text): ?string
+    {
+        if ($text === null) {
+            return null;
+        }
+
+        return \preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $text);
+    }
+
     /**
      * Merge an existing list with incoming addresses, dropping duplicates.
      *
@@ -103,6 +115,12 @@ final class Email
         return $merged;
     }
 
+    /**
+     * Sanitize a list of addresses (refuse injection bytes, validate format).
+     *
+     * @param array<array-key, string> $addrs
+     * @return list<string>
+     */
     private function sanitizeAddressList(array $addrs): array
     {
         // Empty arrays are allowed; filter out empty strings first
@@ -133,6 +151,15 @@ final class Email
             throw new \InvalidArgumentException(Lang::t('email.crlf_in_address'));
         }
         $trimmed = \trim($addr);
+
+        // Angle brackets may only appear as ONE well-formed trailing
+        // route-addr (RFC 5322 §3.4: display-name [CFWS] "<" addr-spec ">").
+        // The old code extracted the LAST "<…>" and validated only its
+        // contents, so 'a@b <c@d> </x>' or 'Name <a@b> junk' rode on with
+        // stray brackets that break the envelope/header agreement downstream.
+        if (\str_contains($trimmed, '<') && \preg_match('/^(?:[^<>]* )?<[^<>]+>$/', $trimmed) !== 1) {
+            throw new \InvalidArgumentException(Lang::t('email.invalid_address', ['addr' => $trimmed]));
+        }
 
         // Extract bare address if in "Name <addr@host>" format
         $bareAddr = $trimmed;
