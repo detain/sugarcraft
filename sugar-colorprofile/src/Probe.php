@@ -5,51 +5,55 @@ declare(strict_types=1);
 namespace SugarCraft\ColorProfile;
 
 use SugarCraft\ColorProfile\Probe\InfocmpBinary;
+use SugarCraft\ColorProfile\Probe\TerminfoParser;
 
 /**
  * Static probe for terminal color profile and environment-based color detection.
  *
- * Precedence order (implement exactly as specified):
- *  1. CLICOLOR_FORCE=1                    → TrueColor  (overrides everything)
- *  2. NO_COLOR (any value)                → NoTTY
- *  3. CLICOLOR=0                          → NoTTY
- *  4. TERM=dumb                           → NoTTY
- *  5. COLORTERM=24bit|truecolor|yes        → TrueColor
- *  6. WT_SESSION (set)                    → TrueColor  (Windows Terminal)
- *  7. GOOGLE_CLOUD_SHELL=true             → TrueColor
- *  8. TMUX || STY set + base TERM checks tmux/screen first
- *  9. TERM=xterm-kitty|xterm-ghostty|*-256color → Ansi256
- * 10. TERM=xterm*|screen*|tmux*            → Ansi
- * 11. Default                             → Ansi
- * 12. Optional Phase 2: infocmp Tc/RGB    → upgrade Ansi → TrueColor
+ * The environment answer comes from the canonical 13-step ladder in
+ * {@see DetectionChain} (steps 1-13: CLICOLOR_FORCE, FORCE_COLOR, NO_COLOR,
+ * CLICOLOR=0, TERM=dumb, COLORTERM, TERM_PROGRAM, WT_SESSION,
+ * GOOGLE_CLOUD_SHELL, TMUX/STY, TERM depth rungs, default) — Probe adds the
+ * optional terminfo phase on top:
+ *
+ *  Phase 2: infocmp declares `Tc`/`RGB` at capability-name position
+ *           → upgrade Ansi or Ansi256 to TrueColor.
+ *
+ * Phase 2 is capped per TERM value for the process lifetime: repeated calls
+ * never re-shell (the old code ran a fresh unbounded shell_exec per call),
+ * and {@see self::_reset()} clears the cap for tests.
  *
  * @see https://github.com/charmbracelet/colorprofile
  */
 final class Probe
 {
     /**
-     * Negotiated color profile after walking every environment variable in precedence order.
+     * Per-TERM phase-2 upgrade verdicts (true = infocmp declares Tc/RGB).
      *
-     * Uses DetectionChain for core env-based detection, then applies
-     * Probe-specific infocmp upgrade (phase 2).
+     * @var array<string, bool>
+     */
+    private static array $terminfoUpgradeMemo = [];
+
+    private function __construct()
+    {
+    }
+
+    /**
+     * Negotiated color profile after walking every environment variable in
+     * the canonical precedence order, then the optional infocmp phase-2
+     * upgrade.
      */
     public static function colorProfile(): ColorProfile
     {
-        // Use DetectionChain for the core detection (steps 1-11)
         $chain = DetectionChain::detect();
-
-        // Handle CLICOLOR_FORCE=1 separately since it's checked first
-        // and DetectionChain doesn't differentiate force color from env-based detection
-        if (self::isForceColor()) {
-            return ColorProfile::TrueColor;
-        }
-
         $profile = $chain->toColorProfile();
 
-        // Phase 2: infocmp Tc/RGB upgrade (Probe-specific)
-        if ($profile === ColorProfile::Ansi) {
-            $upgraded = self::infocmpUpgrade(ColorProfile::Ansi);
-            if ($upgraded === ColorProfile::TrueColor) {
+        // Phase 2: infocmp Tc/RGB upgrade (Probe-specific). Gated on ANY
+        // color rung below TrueColor — the old gate ran it only from Ansi,
+        // so an xterm-kitty/ghostty/256color TERM could never reach
+        // TrueColor through Probe although TerminalProbe could.
+        if ($profile === ColorProfile::Ansi || $profile === ColorProfile::Ansi256) {
+            if (self::terminfoHasTrueColor($chain->term())) {
                 return ColorProfile::TrueColor;
             }
         }
@@ -58,11 +62,14 @@ final class Probe
     }
 
     /**
-     * NO_COLOR is set (any value, including empty string).
+     * NO_COLOR is set to a non-empty value. An empty string means UNSET per
+     * the no-color.org convention the whole ecosystem follows.
      */
     public static function isNoColor(): bool
     {
-        return self::getEnv('NO_COLOR') !== null;
+        $value = self::getEnv('NO_COLOR');
+
+        return $value !== null && $value !== '';
     }
 
     /**
@@ -74,17 +81,23 @@ final class Probe
     }
 
     /**
-     * Reduced motion preference — checks REDUCE_MOTION then PREFERS_REDUCED_MOTION.
+     * Reduced motion preference — checks REDUCE_MOTION then
+     * PREFERS_REDUCED_MOTION. Explicit negative spellings (0/false/no/off,
+     * case-insensitive) mean "not reduced"; any other non-empty value means
+     * reduced. The old polarity treated REDUCE_MOTION=false as TRUE,
+     * inverting the operator's declared preference.
      */
     public static function reducedMotion(): bool
     {
-        $reduceMotion = self::getEnv('REDUCE_MOTION');
-        if ($reduceMotion !== null && $reduceMotion !== '0' && $reduceMotion !== '') {
-            return true;
-        }
+        foreach (['REDUCE_MOTION', 'PREFERS_REDUCED_MOTION'] as $name) {
+            $value = self::getEnv($name);
+            if ($value === null || $value === '') {
+                continue;
+            }
+            if (in_array(strtolower($value), ['0', 'false', 'no', 'off'], true)) {
+                continue;
+            }
 
-        $prefersReduced = self::getEnv('PREFERS_REDUCED_MOTION');
-        if ($prefersReduced !== null && $prefersReduced !== '0' && $prefersReduced !== '') {
             return true;
         }
 
@@ -92,69 +105,47 @@ final class Probe
     }
 
     // -------------------------------------------------------------------------
-    // Private helpers — env read (protected for testability)
+    // Private helpers
     // -------------------------------------------------------------------------
 
     /**
-     * Read an env var with a single, uniform polarity: a var that is SET —
-     * even to the empty string — returns its string value; only a genuinely
-     * unset var returns null.
-     *
-     * The old `getenv($name) ?: null` collapsed set-but-empty to null, so
-     * `$_ENV['NO_COLOR'] = ''` (via the superglobal map) disabled color while
-     * `putenv('NO_COLOR=')` (visible only to getenv) did not — two answers to
-     * one question. getenv() itself distinguishes '' (set-empty) from false
-     * (unset); this helper preserves that.
+     * Ambient env read routed through the one {@see Env} resolution rule
+     * (shared with Palette/DetectionChain/TerminalProbe). A var set to the
+     * empty string returns ''; only a genuinely unset var returns null.
      */
     private static function getEnv(string $name): ?string
     {
-        if (\array_key_exists($name, $_ENV)) {
-            $value = $_ENV[$name];
-
-            return $value === null ? null : (string) $value;
-        }
-
-        $value = \getenv($name);
-
-        return $value === false ? null : $value;
-    }
-
-    private static function term(): ?string
-    {
-        return self::getEnv('TERM');
+        return Env::value(Env::resolve([]), $name);
     }
 
     /**
-     * Optional Phase 2: parse infocmp for Tc/RGB capabilities; upgrade Ansi → TrueColor.
+     * Optional Phase 2: does infocmp declare Tc/RGB for this TERM?
      */
-    private static function infocmpUpgrade(ColorProfile $profile): ColorProfile
+    private static function terminfoHasTrueColor(string $term): bool
     {
-        if ($profile !== ColorProfile::Ansi) {
-            return $profile;
+        if ($term === '') {
+            return false;
         }
 
-        $term = self::term();
-        if ($term === null || $term === '') {
-            return $profile;
+        $key = strtolower($term);
+        if (array_key_exists($key, self::$terminfoUpgradeMemo)) {
+            return self::$terminfoUpgradeMemo[$key];
         }
 
-        // Check if infocmp binary exists
         $binary = InfocmpBinary::path();
         if ($binary === null) {
-            return $profile;
+            return self::$terminfoUpgradeMemo[$key] = false;
         }
 
         $output = @shell_exec($binary . ' -1 ' . escapeshellarg($term) . ' 2>/dev/null');
         if ($output === null) {
-            return $profile;
+            return self::$terminfoUpgradeMemo[$key] = false;
         }
 
-        // Tc (True-color) or RGB (direct color) capability present
-        if (preg_match('/\bTc\b/', $output) || preg_match('/\bRGB\b/', $output)) {
-            return ColorProfile::TrueColor;
-        }
-
-        return $profile;
+        // Tc (true-color) or RGB (direct color string cap) at NAME position —
+        // the old /\bTc\b/ whole-output regex false-matched descriptions.
+        return self::$terminfoUpgradeMemo[$key] =
+            TerminfoParser::hasCapName($output, TerminfoParser::TRUECOLOR_NAMES);
     }
 
     /**
@@ -165,5 +156,6 @@ final class Probe
     public static function _reset(): void
     {
         InfocmpBinary::reset();
+        self::$terminfoUpgradeMemo = [];
     }
 }

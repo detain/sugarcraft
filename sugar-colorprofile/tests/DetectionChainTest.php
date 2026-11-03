@@ -32,10 +32,13 @@ final class DetectionChainTest extends TestCase
                 DetectionChain::LEVEL_NONE,
                 'env:NO_COLOR',
             ],
-            'no_color empty string returns none' => [
-                ['NO_COLOR' => ''],
-                DetectionChain::LEVEL_NONE,
-                'env:NO_COLOR',
+            // no-color.org: NO_COLOR set to the EMPTY string means UNSET —
+            // the chain falls through to the TERM rungs (flipped with the
+            // MT2 cure; the old pin treated "" as "set").
+            'no_color empty string is unset' => [
+                ['NO_COLOR' => '', 'TERM' => 'unknownterm'],
+                DetectionChain::LEVEL_ANSI,
+                'fallback:default',
             ],
             // CLICOLOR=0 → none
             'clicolor_0 returns none' => [

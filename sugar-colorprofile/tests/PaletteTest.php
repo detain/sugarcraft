@@ -225,11 +225,13 @@ final class PaletteTest extends TestCase
         $this->assertSame(Profile::TrueColor, $profile);
     }
 
-    public function testXterm256ImpliesTrueColor(): void
+    public function testXterm256WithEmptyNoColorKeepsColor(): void
     {
+        // no-color.org convention: NO_COLOR="" is UNSET, not a suppression.
+        // (The old pin asserted NoTTY here, disabling color for an operator
+        // who merely exported an empty variable.)
         $profile = Palette::detect(null, ['TERM' => 'xterm-256color', 'NO_COLOR' => '']);
-        // NO_COLOR overrides term capability
-        $this->assertSame(Profile::NoTTY, $profile);
+        $this->assertSame(Profile::ANSI256, $profile);
     }
 
     public function testXterm16ImpliesAnsi(): void

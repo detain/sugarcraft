@@ -8,9 +8,11 @@ namespace SugarCraft\ColorProfile\Probe;
  * Terminal capability enum discovered via TerminalProbe.
  *
  * Each case represents a terminal feature that can be detected.
- * The source string (env:var, terminfo:cap, escape:seq) is stored in ProbeReport.
+ * The source string records WHERE the verdict came from: `env:VAR` (environment
+ * variable), `terminfo:cap` (infocmp capability) or `fallback:reason`
+ * (floor rules).
  *
- * Mirrors charmbracelet/vhs terminal capability detection.
+ * Mirrors charmbracelet/colorprofile capability detection.
  */
 enum Capability: string
 {
@@ -65,5 +67,18 @@ enum Capability: string
             self::FocusEvents   => 'Focus Events',
             self::BasicAscii     => 'Basic ASCII',
         };
+    }
+
+    /**
+     * The string key a Capability occupies in a raw caps map.
+     *
+     * PHP arrays cannot key on enum cases under the strict typing this lib
+     * uses, so reports carry the backing value as key. Replaces the old
+     * namespaced free function at the bottom of TerminalProbe.php, which was
+     * not autoloadable through the class map.
+     */
+    public static function key(self $cap): string
+    {
+        return $cap->value;
     }
 }

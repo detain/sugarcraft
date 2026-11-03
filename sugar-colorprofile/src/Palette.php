@@ -15,9 +15,6 @@ declare(strict_types=1);
  */
 namespace SugarCraft\ColorProfile;
 
-use SugarCraft\ColorProfile\Color;
-use SugarCraft\ColorProfile\Profile;
-
 /**
  * Detect and query the terminal color profile.
  *
@@ -37,32 +34,20 @@ final class Palette
     /**
      * Detect the terminal color profile from the environment.
      *
-     * Steps 3-12 run through the shared {@see DetectionChain} ladder, with
-     * the SugarCraft-only extensions FORCE_COLOR levels (step 2), the iTerm
-     * TERM_PROGRAM upgrade (step 7), and TTY detection (step 13) living here —
-     * Probe does not read FORCE_COLOR or TERM_PROGRAM, so this is the richest
-     * ladder, not a byte-copy of Probe::colorProfile().
+     * The full 13-step ladder (CLICOLOR_FORCE, FORCE_COLOR, NO_COLOR,
+     * CLICOLOR, TERM=dumb, COLORTERM, TERM_PROGRAM, WT_SESSION,
+     * GOOGLE_CLOUD_SHELL, TMUX/STY, TERM depth rungs) runs through the shared
+     * {@see DetectionChain} — Probe, TerminalProbe and Palette all take the
+     * same env answer from that one ladder. The only step living here is the
+     * TTY gate below it.
      *
-     * Priority:
-     *  1. CLICOLOR_FORCE=1   → TrueColor (SugarCraft extension)
-     *  2. FORCE_COLOR=0..3   → profile by level (SugarCraft extension)
-     *  3. NO_COLOR=          → NoTTY
-     *  4. CLICOLOR=0         → NoTTY
-     *  5. TERM=dumb          → NoTTY
-     *  6. COLORTERM=24bit|truecolor|yes → TrueColor
-     *  7. TERM_PROGRAM=iTerm.app → TrueColor (Palette-only upgrade — never
-     *     overrides steps 3/4/5: an explicit no-color env wins, never
-     *     resurrected by an advertised terminal name)
-     *  8. WT_SESSION non-empty → TrueColor
-     *  9. GOOGLE_CLOUD_SHELL=true → TrueColor
-     * 10. TMUX||STY + TERM screen/tmux → ANSI256
-     * 11. TERM=*-256color|xterm-kitty|xterm-ghostty → ANSI256
-     * 12. TERM=xterm*|screen*|tmux* → ANSI
-     * 13. TTY detection      → NoTTY if not a TTY
-     * 14. Default            → ANSI
-     *
-     * @param resource|null $stream  Stream to check for TTY (default: STDOUT)
-     * @param array<string,string|null> $env     Environment map (default: $_ENV)
+     * @param resource|null $stream  Stream whose TTY-ness gates color (null =
+     *                               env-only, no TTY check — mirroring upstream
+     *                               colorprofile.Detect which checks isatty on
+     *                               the *passed* writer, never on a default)
+     * @param array<string,string|null> $env  Hermetic override map; a NON-EMPTY
+     *                               map REPLACES the ambient environment
+     *                               entirely ({@see Env::resolve()}). [] = ambient.
      */
     public function __construct(
         $stream = null,
@@ -199,72 +184,35 @@ final class Palette
     // Private detection logic
     // -------------------------------------------------------------------------
 
-    /**
-     * One env lookup for all three operator-knob reads in
-     * {@see self::detectProfile()} — previously CLICOLOR_FORCE skipped the
-     * $_ENV layer the other two consulted, an accident of edit history, not
-     * a designed difference. The injected DI map is primary (that is what
-     * makes the chain testable); $_ENV then the real environment follow, and
-     * a key present-but-null falls THROUGH to the ambient layers rather than
-     * blocking them — blocking requires unsetting the key everywhere.
-     * "unset" is normalised to null (getenv's `false` never leaks out).
-     */
-    private static function envValue(array $env, string $key): ?string
-    {
-        $value = $env[$key] ?? $_ENV[$key] ?? \getenv($key);
-
-        return $value === false ? null : $value;
-    }
-
     private static function detectProfile($stream, array $env): ColorProfile
     {
-        // 1. CLICOLOR_FORCE=1 → TrueColor (overrides everything below)
-        if (self::envValue($env, 'CLICOLOR_FORCE') === '1') {
-            return ColorProfile::TrueColor;
-        }
-
-        // 2. FORCE_COLOR: SugarCraft extension (level-based) — not in DetectionChain
-        $force = self::envValue($env, 'FORCE_COLOR');
-        if (\is_string($force) && $force !== '') {
-            // chalk/npm convention spells "force color" as a truthy
-            // word, not a level digit — intval('true')===0 used to destroy
-            // color down to Ascii. Truthy strings ride the level-3 rung.
-            $force = \in_array(\strtolower($force), ['true', 'yes', 'on'], true) ? '3' : $force;
-            $level = \intval($force);
-            return match (true) {
-                $level >= 3 => ColorProfile::TrueColor,
-                $level === 2 => ColorProfile::Ansi256,
-                $level === 1 => ColorProfile::Ansi,
-                default => ColorProfile::Ascii,
-            };
-        }
-
-        // Use DetectionChain for core env-based detection (steps 3-12)
+        // The complete 13-step environment ladder — CLICOLOR_FORCE,
+        // FORCE_COLOR, NO_COLOR, CLICOLOR=0, TERM=dumb, COLORTERM,
+        // TERM_PROGRAM=iTerm.app, WT_SESSION, GOOGLE_CLOUD_SHELL, TMUX/STY
+        // and the TERM depth rungs — lives in DetectionChain so Probe,
+        // TerminalProbe and Palette can never answer the same environment
+        // differently. (Previously FORCE_COLOR and the iTerm upgrade were
+        // duplicated here on a per-key OVERLAY while the chain beneath used
+        // a whole-map REPLACEMENT: an ambient CLICOLOR_FORCE leaked into a
+        // "hermetic" detect() call while an ambient NO_COLOR did not.)
         $chain = DetectionChain::detect($env);
 
-        // 3-6: NO_COLOR, CLICOLOR=0, TERM=dumb disable color unconditionally.
-        // An advertised TERM_PROGRAM=iTerm.app must NOT resurrect color over an
-        // explicit no-color environment: the iTerm upgrade below
-        // only runs when the chain allows color.
+        // An advertised terminal name must not resurrect color over an
+        // explicit no-color environment: the iTerm rung sits BELOW the
+        // NO_COLOR/CLICOLOR=0/TERM=dumb suppressions inside the ladder, so
+        // this early return preserves that ordering.
         if (!$chain->allowsColor()) {
             return ColorProfile::NoTTY;
         }
 
-        // 8-12: Return the profile from DetectionChain
-        $profile = $chain->toProfile();
+        $profile = $chain->toColorProfile();
 
-        // TERM_PROGRAM=iTerm.app check (only if color is allowed)
-        $termProgram = self::envValue($env, 'TERM_PROGRAM');
-        if ($termProgram === 'iTerm.app') {
-            return ColorProfile::TrueColor;
-        }
-
-        // 13. TTY detection — Palette-specific (Probe and TerminalProbe don't
+        // TTY detection — Palette-specific (Probe and TerminalProbe don't
         // check TTY). Only applies when the caller hands us a stream: with
-        // $stream === null detection is env-only, mirroring upstream
-        // colorprofile.Detect which checks isatty on the *passed* writer.
-        // (The old posix_isatty(STDOUT) fallback made env-only detection
-        // return NoTTY under any piped/CI stdout, regardless of $env.)
+        // $stream === null detection is env-only. The iTerm upgrade is now
+        // part of the ladder, so a piped stream demotes iTerm.app to NoTTY
+        // exactly like every other rung — the old code returned TrueColor for
+        // iTerm BEFORE this gate, printing 24-bit escape vomit into pipes.
         if ($stream !== null && \function_exists('stream_isatty')) {
             if (!@\stream_isatty($stream)) {
                 return ColorProfile::NoTTY;

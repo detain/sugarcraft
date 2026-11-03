@@ -77,9 +77,10 @@ final class ProbeTest extends TestCase
                 ['NO_COLOR' => '1', 'COLORTERM' => 'truecolor'],
                 ColorProfile::NoTTY,
             ],
-            'no_color empty string returns NoTTY' => [
+            // no-color.org: NO_COLOR="" is UNSET — falls through (flipped with MT2).
+            'no_color empty string is unset' => [
                 ['NO_COLOR' => ''],
-                ColorProfile::NoTTY,
+                ColorProfile::Ansi,
             ],
 
             // 3. CLICOLOR=0 → NoTTY
@@ -213,7 +214,9 @@ final class ProbeTest extends TestCase
         $this->assertTrue(Probe::isNoColor());
 
         $this->env('NO_COLOR', '');
-        $this->assertTrue(Probe::isNoColor());
+        // no-color.org: set-but-empty means UNSET (MT2 cure; the old pin
+        // disabled color for an exported empty variable).
+        $this->assertFalse(Probe::isNoColor());
     }
 
     /**

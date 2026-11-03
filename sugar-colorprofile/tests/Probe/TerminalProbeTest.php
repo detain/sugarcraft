@@ -81,9 +81,11 @@ final class TerminalProbeTest extends TestCase
                 ['NO_COLOR' => '1', 'COLORTERM' => 'truecolor'],
                 [Capability::NoColor, Capability::BasicAscii],
             ],
-            'no_color empty string returns NoColor' => [
+            // no-color.org: NO_COLOR="" is UNSET — detection falls through
+            // to the TERM rungs (flipped with the MT2 cure).
+            'no_color empty string is unset' => [
                 ['NO_COLOR' => ''],
-                [Capability::NoColor, Capability::BasicAscii],
+                [Capability::Color16, Capability::BasicAscii],
             ],
 
             // 3. CLICOLOR=0 → NoColor
