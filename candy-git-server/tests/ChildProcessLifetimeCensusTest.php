@@ -25,9 +25,9 @@ use SugarCraft\GitServer\User;
  * The census is a live-descendant ps scan of THIS process (plus a
  * pcntl_waitpid drain check where ext-pcntl is loaded), and it carries a
  * known-positive arm: a planted running child MUST be visible, so a zero
- * result is evidence and not a blind reader. The UploadPack path writes to
- * the process STDOUT constant and therefore runs in a probe php child that
- * censuses its own descendants and reports on stderr.
+ * result is evidence and not a blind reader. The delegated git services
+ * take explicit stream handles (no process-STDOUT constants), so every
+ * descendant census runs against this process directly.
  *
  * @covers \SugarCraft\GitServer\Git\GitDaemon
  * @covers \SugarCraft\GitServer\Git\StatelessRpc
@@ -43,12 +43,11 @@ final class ChildProcessLifetimeCensusTest extends TestCase
     /** Ceiling for "the terminate fired" timing arms; the stall is 30s. */
     private const BOUNDED_TEARDOWN_CEILING_SECONDS = 8.0;
 
-    /** Every proc_open site the E721 census accounted for, by file. */
+    /** Every proc_open site the census accounted for, by file. */
     private const SPAWN_SITES_BY_FILE = [
-        'Git/StdioPipe.php' => 1,          // run() — the daemon's delegated git child
+        'Git/StdioPipe.php' => 1,          // run() — the shared bounded pump behind the daemon + SSH services
         'Git/StatelessRpc.php' => 2,       // advertise(), negotiate() (smart-HTTP children)
-        'Git/UploadPack.php' => 1,         // sendPack()
-        'HttpSmartProtocol/Server.php' => 1, // dormant generatePackData only (r1024/githttp: live children moved to StatelessRpc)
+        'HttpSmartProtocol/Server.php' => 1, // dormant generatePackData only (live children moved to StatelessRpc/StdioPipe)
     ];
 
     private string $tmpDir;
@@ -486,78 +485,39 @@ final class ChildProcessLifetimeCensusTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // UploadPack CGI path — probe process censuses its own descendants
+    // UploadPack delegated service — spawn, negotiation bytes, zero survivors
     // -------------------------------------------------------------------------
 
-    public function testUploadPackSendPackReapsWithinTheSpawningProcess(): void
+    public function testUploadPackServeCompletesNegotiationAndReapsItsChild(): void
     {
-        if (\PHP_OS_FAMILY !== 'Linux') {
-            $this->markTestSkipped('the probe self-census reads /proc (Linux only)');
-        }
-
-        $repo = $this->createGitRepo('cgi-census');
+        $repo = $this->createGitRepo('serve-census');
         $head = $repo->refs()['refs/heads/main'] ?? null;
         $this->assertIsString($head);
 
-        $probe = $this->tmpDir . '/upload-pack-probe.php';
-        \file_put_contents($probe, $this->uploadPackProbeSource());
+        $inPath = $this->tmpDir . '/serve-in.bin';
+        $outPath = $this->tmpDir . '/serve-out.bin';
+        file_put_contents(
+            $inPath,
+            PktLine::encode("want {$head}\n") . PktLine::FLUSH . PktLine::encode("done\n")
+        );
 
-        $desc = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
-        $cmd = \escapeshellarg(\PHP_BINARY) . ' ' . \escapeshellarg($probe)
-            . ' ' . \escapeshellarg($repo->path()) . ' ' . \escapeshellarg($head);
-        $proc = \proc_open($cmd, $desc, $pipes);
-        $this->assertIsResource($proc);
+        $pack = new UploadPack($repo, User::new('probe')->withAdmin(true));
+        $in = fopen($inPath, 'rb');
+        $out = fopen($outPath, 'wb');
+        $this->assertIsResource($in);
+        $this->assertIsResource($out);
 
-        // Drain both streams to EOF (the probe writes the pack to stdout and
-        // the SURVIVORS marker to stderr, then exits).
-        $stdout = (string) \stream_get_contents($pipes[1]);
-        $stderr = (string) \stream_get_contents($pipes[2]);
-        \fclose($pipes[1]);
-        \fclose($pipes[2]);
-        \fclose($pipes[0]);
-        $rc = \proc_close($proc);
+        self::assertSame(0, $pack->serve($in, $out));
+        fclose($in);
+        fclose($out);
 
-        self::assertSame(0, $rc, 'probe failed: ' . $stderr);
-        self::assertStringStartsWith('PACK', $stdout, 'the CGI sendPack child must have streamed its pack');
-        self::assertStringContainsString('SURVIVORS:0', $stderr, 'self-census inside the probe: ' . $stderr);
-    }
-
-    private function uploadPackProbeSource(): string
-    {
-        $autoload = \escapeshellarg(\dirname(__DIR__) . '/vendor/autoload.php');
-
-        return <<<PHP
-            <?php
-            declare(strict_types=1);
-            require {$autoload};
-
-            use SugarCraft\\GitServer\\Git\\UploadPack;
-            use SugarCraft\\GitServer\\Repo;
-
-            \$repo = Repo::new('probe', \$argv[1]);
-            \$pack = new UploadPack(\$repo);
-            \$send = new ReflectionMethod(UploadPack::class, 'sendPack');
-            \$send->setAccessible(true);
-            \$send->invoke(\$pack, [\$argv[2]]);
-
-            \$mine = getmypid();
-            \$survivors = 0;
-            foreach (glob('/proc/[0-9]*') ?: [] as \$dir) {
-                \$stat = @file_get_contents(\$dir . '/stat');
-                if (\$stat === false) {
-                    continue;
-                }
-                \$close = strrpos(\$stat, ')');
-                if (\$close === false) {
-                    continue;
-                }
-                \$fields = preg_split('/\\s+/', trim(substr(\$stat, \$close + 1)));
-                if ((int) (\$fields[1] ?? -1) === \$mine) {
-                    \$survivors++;
-                }
-            }
-            fwrite(STDERR, 'SURVIVORS:' . \$survivors . "\\n");
-            PHP;
+        $bytes = (string) file_get_contents($outPath);
+        self::assertMatchesRegularExpression(
+            '/PACK\x00\x00\x00[\x02\x03]/',
+            $bytes,
+            'the delegated upload-pack must have streamed a real pack'
+        );
+        $this->assertNoLiveChildren('after the delegated upload-pack served a fetch');
     }
 
     // -------------------------------------------------------------------------

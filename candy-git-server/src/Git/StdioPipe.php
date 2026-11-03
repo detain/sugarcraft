@@ -100,7 +100,7 @@ final class StdioPipe
         /** @var resource|\Process|false $proc */
         $proc = @\proc_open($argv, $descriptors, $pipes, $cwd);
         if ($proc === false) {
-            $label = $argv[1] ?? 'git';
+            $label = self::label($argv);
             \fwrite(\STDERR, "candy-git-server: could not start the {$label} child\n");
 
             return 127;
@@ -108,6 +108,11 @@ final class StdioPipe
 
         $errTail = '';
         $exitCode = -1;
+        // PHP's proc_get_status() reports the exit code exactly once: the
+        // call that observes the child as no-longer-running reaps it and
+        // every later call reads -1. Latch the code on that first
+        // observation so the final report tells the truth.
+        $observedCode = null;
         // Declared before the try so the finally block is meaningful even
         // when the pump body throws on its first statements.
         $childErrDone = false;
@@ -149,7 +154,7 @@ final class StdioPipe
                     $write[] = $outStream;
                 }
 
-                $status = \proc_get_status($proc);
+                $running = self::childRunning($proc, $observedCode);
                 $nowNs = \hrtime(true);
                 if ($nowNs - $startNs >= $hardNs || $nowNs - $lastActivityNs >= $idleNs) {
                     break;
@@ -157,7 +162,7 @@ final class StdioPipe
                 if ($read === [] && $write === []) {
                     // Nothing left to talk to. If the child is still
                     // running it is wedged; the reap ladder ends it.
-                    if (!$status['running']) {
+                    if (!$running) {
                         break;
                     }
                     $wedgedNs ??= $nowNs;
@@ -265,9 +270,8 @@ final class StdioPipe
                 // the idle deadline would fake a hung server. Whatever
                 // is still buffered from the client is discarded by the
                 // caller closing the connection.
-                $status = \proc_get_status($proc);
                 $toChildEmpty = $toChild === '' || !$childInOpen;
-                if (!$status['running']
+                if (!self::childRunning($proc, $observedCode)
                     && $childOutDone
                     && $toChildEmpty
                     && ($pendingOut === '' || $clientGone)
@@ -307,11 +311,11 @@ final class StdioPipe
             // E721 reap ladder: TERM, bounded poll, KILL, bounded poll,
             // then close the handle. proc_close never waits on a child
             // we did not already bound.
-            if (\proc_get_status($proc)['running']) {
+            if (self::childRunning($proc, $observedCode)) {
                 @\proc_terminate($proc);
-                if (!self::waitForExit($proc, self::TERM_GRACE_SECONDS)) {
+                if (!self::waitForExit($proc, self::TERM_GRACE_SECONDS, $observedCode)) {
                     @\proc_terminate($proc, 9);
-                    self::waitForExit($proc, self::KILL_WAIT_SECONDS);
+                    self::waitForExit($proc, self::KILL_WAIT_SECONDS, $observedCode);
                 }
             }
             foreach ($pipes as $pipe) {
@@ -319,7 +323,7 @@ final class StdioPipe
                     @\fclose($pipe);
                 }
             }
-            $reapedCode = \proc_get_status($proc)['exitcode'];
+            $reapedCode = $observedCode ?? \proc_get_status($proc)['exitcode'];
             $closeRc = \proc_close($proc);
             // Capture the code BEFORE proc_close: after it, the status is
             // gone. Precedence note: bare `$closeRc >= 0 ? $closeRc : x
@@ -328,7 +332,7 @@ final class StdioPipe
         }
 
         if ($exitCode !== 0) {
-            $label = $argv[1] ?? 'git';
+            $label = self::label($argv);
             $line = "candy-git-server: {$label} exited with code {$exitCode}";
             if ($errTail !== '') {
                 $line .= "\n" . $errTail;
@@ -367,16 +371,51 @@ final class StdioPipe
         return null;
     }
 
-    private static function waitForExit($proc, float $seconds): bool
+    private static function waitForExit($proc, float $seconds, ?int &$observedCode = null): bool
     {
         $untilNs = \hrtime(true) + (int) ($seconds * 1e9);
         while (\hrtime(true) < $untilNs) {
-            if (!\proc_get_status($proc)['running']) {
+            if (!self::childRunning($proc, $observedCode)) {
                 return true;
             }
             \usleep(self::REAP_POLL_MICROSECONDS);
         }
 
-        return !\proc_get_status($proc)['running'];
+        return !self::childRunning($proc, $observedCode);
+    }
+
+    /**
+     * Is the child still running? The first observation that it is NOT
+     * reaps it and latches its exit code through $observedExit (later
+     * proc_get_status calls would only read -1).
+     *
+     * @param resource|\Process $proc
+     */
+    private static function childRunning($proc, ?int &$observedExit): bool
+    {
+        $status = \proc_get_status($proc);
+        if (!$status['running'] && $observedExit === null) {
+            $observedExit = $status['exitcode'];
+        }
+
+        return (bool) $status['running'];
+    }
+
+    /**
+     * Human name for a git child from its argv: the subcommand token
+     * (upload-pack, receive-pack, ...), skipping flags like -C and path
+     * arguments that are not a bare lowercase word.
+     *
+     * @param array<int, string> $argv
+     */
+    private static function label(array $argv): string
+    {
+        foreach ($argv as $token) {
+            if (\preg_match('/^[a-z][a-z0-9-]*$/', $token) && $token !== 'git') {
+                return $token;
+            }
+        }
+
+        return $argv[1] ?? 'git';
     }
 }

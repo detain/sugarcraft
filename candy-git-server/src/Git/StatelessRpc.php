@@ -75,13 +75,20 @@ final class StatelessRpc
      */
     private static function reapBounded($proc, array $pipes): array
     {
+        // PHP reports a dead child's exit code exactly once — the call
+        // that first observes running=false reaps it and every later call
+        // reads -1. Latch the code at that first observation so the
+        // failure log names the real status.
+        $observedCode = null;
         $status = \proc_get_status($proc);
-        if ($status['running']) {
+        if (!$status['running']) {
+            $observedCode = $status['exitcode'];
+        } else {
             @\proc_terminate($proc);
-            if (!self::waitForExit($proc, self::TERM_GRACE_SECONDS)) {
+            if (!self::waitForExit($proc, self::TERM_GRACE_SECONDS, $observedCode)) {
                 // 9 = SIGKILL: a child that ignored TERM gets the hard end.
                 @\proc_terminate($proc, 9);
-                self::waitForExit($proc, self::KILL_WAIT_SECONDS);
+                self::waitForExit($proc, self::KILL_WAIT_SECONDS, $observedCode);
             }
             $status = \proc_get_status($proc);
         }
@@ -92,20 +99,33 @@ final class StatelessRpc
             }
         }
 
-        return ['exitCode' => \proc_close($proc), 'signal' => (int) $status['termsig']];
+        $closeRc = \proc_close($proc);
+        $exitCode = $observedCode ?? ($closeRc >= 0 ? $closeRc : $status['exitcode']);
+
+        return ['exitCode' => (int) $exitCode, 'signal' => (int) $status['termsig']];
     }
 
-    private static function waitForExit($proc, float $seconds): bool
+    private static function waitForExit($proc, float $seconds, ?int &$observedCode = null): bool
     {
         $until = \hrtime(true) + (int) ($seconds * 1e9);
         while (\hrtime(true) < $until) {
-            if (!\proc_get_status($proc)['running']) {
+            $status = \proc_get_status($proc);
+            if (!$status['running']) {
+                $observedCode ??= $status['exitcode'];
+
                 return true;
             }
             \usleep((int) (self::REAP_POLL_SECONDS * 1e6));
         }
 
-        return !\proc_get_status($proc)['running'];
+        $status = \proc_get_status($proc);
+        if (!$status['running']) {
+            $observedCode ??= $status['exitcode'];
+
+            return true;
+        }
+
+        return false;
     }
 
     private function __construct()
@@ -217,7 +237,7 @@ final class StatelessRpc
      * @param float|null $deadlineSeconds production default stays
      *                                    {@see NEGOTIATE_DEADLINE_SECONDS}
      *
-     * @return array{bytes: string, reason: string, stderrTail: string}
+     * @return array{bytes: string, reason: string, stderrTail: string, exitCode: int}
      *         bytes is whatever was collected before the verdict (full
      *         response only on REASON_OK); stderrTail is the bounded tail
      *         the child wrote to its error pipe.
@@ -279,7 +299,12 @@ final class StatelessRpc
             self::reportFailure($binary, '--stateless-rpc', 'exit', $reap, $stderrTail);
         }
 
-        return ['bytes' => $bytes, 'reason' => $reason, 'stderrTail' => $stderrTail];
+        return [
+            'bytes' => $bytes,
+            'reason' => $reason,
+            'stderrTail' => $stderrTail,
+            'exitCode' => $reap['exitCode'],
+        ];
     }
 
     /**

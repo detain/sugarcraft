@@ -13,9 +13,9 @@ namespace SugarCraft\GitServer\Git;
  * bytes (pack('N') / hex2bin(dechex())) where the spec demands four ASCII
  * hex digits, every one of them appended a stray "\n" the spec does not
  * allow, and the flush packets disagreed on ASCII vs binary. The
- * docs-review-1023 C2 finding recorded the shapes and the deliberately
- * planted anti-regression pins (GitProtocolTest) documented them byte for
- * byte until the fix landed.
+ * broken shapes were deliberately pinned byte for byte as anti-regression
+ * landmines until this codec landed; the pins were flipped to assert the
+ * SPEC framing in the same commit.
  *
  * Spec (https://git-scm.com/docs/protocol-common#packets):
  *  - a packet is its total length (payload + the 4 prefix bytes) as four

@@ -121,15 +121,51 @@ final class SSHServerTest extends TestCase
         $this->assertNull($this->server->authenticatedUser());
     }
 
+    /**
+     * A duplex temp file pre-seeded with an empty push request (the ASCII
+     * flush packet '0000' = a valid command list of zero commands).
+     *
+     * PHP's stream_select cannot represent php://memory streams, and the
+     * delegated stdio pump drives its event loop through select - a memory
+     * handle that ever reaches the pump stalls it to the idle deadline and
+     * the child's exit code is lost. Connection tests that may spawn a git
+     * child therefore use files, never memory streams.
+     *
+     * @return array{0: resource, 1: string}
+     */
+    private function flushRequest(string $tag): array
+    {
+        $file = $this->tmpDir . '/' . $tag . '.duplex';
+        \file_put_contents($file, '0000');
+
+        // 'r+b' not 'w+b': fopen's 'w' mode would truncate the seeded request.
+        return [\fopen($file, 'r+b'), $file];
+    }
+
+    /** A registered, real-on-disk bare repo so the service never touches the shared default data dir. */
+    private function registerBareRepo(string $name): Repo
+    {
+        $path = $this->tmpDir . '/repos/' . $name;
+        $repo = Repo::new($name, $path)->init();
+        $this->server->registerRepo($repo);
+
+        return $repo;
+    }
+
     public function testHandleConnectionAcceptsMatchingPresentedKey(): void
     {
         $authorized = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL6m3B1t3xK7qVQ5JxF9kE3xM8qFV2hG4pR9e2mY3xLk alice@host';
 
         $user = User::new('alice')->withAdmin(true)->addAuthorizedKey($authorized);
         $this->server->registerUser($user);
+        $this->registerBareRepo('key-check-repo');
 
-        $stream = \fopen('php://memory', 'r+');
+        [$stream] = $this->flushRequest('key-check');
         $result = $this->server->handleConnection($stream, 'alice', 'git-receive-pack /key-check-repo', $authorized);
+        // rc 0 is now git's own answer to an empty command list, measured
+        // against the real receive-pack binary. The auth discriminator is
+        // the identity below; a wrong key fails earlier with rc 1 and never
+        // spawns the child (see the rejection pins).
         $this->assertSame(0, $result);
         $this->assertSame('alice', $this->server->authenticatedUser()?->username);
     }
@@ -194,22 +230,26 @@ final class SSHServerTest extends TestCase
         $user = User::new('alice')->withAdmin(true);
         $this->server->registerUser($user);
 
-        // Well-formed command should be parsed (repo lookup happens after parse)
-        $result = $this->server->handleConnection($stream, 'alice', 'git-upload-pack /valid-name');
-        // Fails at repo lookup (repo doesn't exist), not command parse
+        // Well-formed command passes the parse and dies at the repo-lookup
+        // gate, before any child could spawn (a memory stream is therefore
+        // safe here). The name is unregistered AND absent on disk, so no
+        // leftover repository from another run can shift the outcome.
+        $result = $this->server->handleConnection($stream, 'alice', 'git-upload-pack /parse-check-ghost-' . \uniqid());
         $this->assertSame(1, $result);
     }
 
     public function testCommandRegexParsesReceivePack(): void
     {
-        $stream = \fopen('php://memory', 'r+');
-        // Authenticating as a user now requires a real, verified key (an empty
-        // key can never authenticate as a user), so present alice's key.
+        // Authenticating as a user now requires a real, verified key (an
+        // empty key can never authenticate as a user), so present alice's key.
         $key = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL6m3B1t3xK7qVQ5JxF9kE3xM8qFV2hG4pR9e2mY3xLk alice@host';
         $user = User::new('alice')->withAdmin(true)->addAuthorizedKey($key);
         $this->server->registerUser($user);
+        $this->registerBareRepo('valid-name');
 
-        // With admin and git-receive-pack, on-demand repo creation succeeds
+        [$stream] = $this->flushRequest('receive-parse');
+        // Delegated to the real receive-pack child with an empty command
+        // list: the parse + auth + routing chain completes with rc 0.
         $result = $this->server->handleConnection($stream, 'alice', 'git-receive-pack /valid-name', $key);
         $this->assertSame(0, $result);
     }
@@ -240,9 +280,10 @@ final class SSHServerTest extends TestCase
         $user = User::new('alice');
         $this->server->registerUser($user);
 
-        // Try to push to a non-existent repo - should fail without admin
-        $result = $this->server->handleConnection($stream, 'alice', 'git-receive-pack /new-repo');
-        // Should return 1 because user cannot create repos
+        // Try to push to a brand-new repo - must fail without the create
+        // permission, before any child spawns. Name unregistered AND absent
+        // so no leftover repository on disk can soften the outcome.
+        $result = $this->server->handleConnection($stream, 'alice', 'git-receive-pack /create-permission-check-' . \uniqid());
         $this->assertSame(1, $result);
     }
 

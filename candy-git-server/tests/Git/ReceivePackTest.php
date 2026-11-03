@@ -5,10 +5,18 @@ declare(strict_types=1);
 namespace SugarCraft\GitServer\Tests\Git;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\GitServer\{AccessControl, Repo, User};
-use SugarCraft\GitServer\Git\ReceivePack;
+use SugarCraft\GitServer\{Repo, User};
+use SugarCraft\GitServer\Git\{PktLine, ReceivePack};
 
 /**
+ * The SSH receive service delegates to the real `git receive-pack` binary
+ * through the bounded stdio pump. The retired hand-roll read plain
+ * command lines, never unpacked the packfile, and moved refs to whatever
+ * object IDs the client claimed — a push of nonexistent objects corrupted
+ * repositories by construction. These pins prove the delegated service
+ * applies real pushes (objects present, refs moved) and refuses forged
+ * ones (ref stays absent).
+ *
  * @covers \SugarCraft\GitServer\Git\ReceivePack
  */
 final class ReceivePackTest extends TestCase
@@ -47,87 +55,163 @@ final class ReceivePackTest extends TestCase
         @\rmdir($dir);
     }
 
-    private function initGitRepo(): string
+    /**
+     * Fresh EMPTY bare target (no refs at all) so any ref found after a
+     * push was definitively created by that push.
+     */
+    private function emptyBareRepo(): string
     {
-        $path = $this->tmpDir . '/test-repo.git';
+        $path = $this->tmpDir . '/target.git';
         \mkdir($path, 0755, true);
-        $bare = \escapeshellarg($path);
-        \exec("git -c init.defaultBranch=master init --bare {$bare} 2>/dev/null");
-
-        // Hermetic fixture: CI runners have no global user.name/user.email
-        // and may default init.defaultBranch to main — pass both inline so
-        // the commit + push never depend on ambient git config.
-        $workDir = $this->tmpDir . '/work';
-        \mkdir($workDir, 0755, true);
-        $work = \escapeshellarg($workDir);
-        \exec("git -c init.defaultBranch=master init {$work} 2>/dev/null && echo 'hello' > {$workDir}/file.txt && git -C {$work} add . && git -C {$work} -c user.email=test@example.com -c user.name=Test commit -m 'initial' 2>/dev/null && git -C {$work} push {$bare} master 2>/dev/null");
+        \exec('git -c init.defaultBranch=master init --bare ' . \escapeshellarg($path) . ' 2>/dev/null');
 
         return $path;
     }
 
-    // -------------------------------------------------------------------------
-    // readCommands tests (Step 11)
-    // -------------------------------------------------------------------------
-
-    public function testReadCommandsKeepsCreateAndDelete(): void
+    /**
+     * @return array{0: string, 1: string} [repoPath, commitSha]
+     */
+    private function workRepoWithCommit(): array
     {
-        $repoPath = $this->initGitRepo();
-        $repo = Repo::new('test', $repoPath);
-        $user = User::new('alice')->withAdmin(true);
-        $rp = new ReceivePack($repo, $user);
+        $work = $this->tmpDir . '/work';
+        \mkdir($work, 0755, true);
+        $esc = \escapeshellarg($work);
+        \file_put_contents($work . '/file.txt', "hello push\n");
+        \exec("git -c init.defaultBranch=master init {$esc} 2>/dev/null && git -C {$esc} add . && git -C {$esc} -c user.email=test@example.com -c user.name=Test commit -m 'initial' 2>/dev/null");
+        $sha = \trim((string) \shell_exec('git -C ' . \escapeshellarg($work) . ' rev-parse HEAD 2>/dev/null'));
+        $this->assertMatchesRegularExpression('/^[0-9a-f]{40}$/', $sha);
 
-        // Use reflection to call private readCommands
-        $refMethod = (new \ReflectionClass($rp))->getMethod('readCommands');
-        $refMethod->setAccessible(true);
-
-        // Simulate stdin with create, update, and delete commands
-        $commands = [
-            // create: old=0 new=<hash> refs/heads/newbranch
-            \str_repeat('0', 40) . ' abc123def456789012345678901234567890abcd refs/heads/newbranch',
-            // update: old=<hash> new=<hash> refs/heads/master
-            'abc123def456789012345678901234567890abcd ' . \str_repeat('f', 40) . ' refs/heads/master',
-            // delete: old=<hash> new=0 refs/heads/to-delete
-            \str_repeat('a', 40) . ' ' . \str_repeat('0', 40) . ' refs/heads/to-delete',
-        ];
-        $stdinContent = \implode("\n", $commands) . "\n\n";
-
-        // Create a temp file to simulate stdin content
-        $stdinFile = $this->tmpDir . '/stdin.txt';
-        \file_put_contents($stdinFile, $stdinContent);
-
-        // Read commands from the file using handleClientData pattern
-        $lines = \file($stdinFile, \FILE_IGNORE_NEW_LINES | \FILE_SKIP_EMPTY_LINES);
-        $parsedCommands = [];
-        foreach ($lines as $line) {
-            if ($line === '') break;
-            $parts = \preg_split('/\s+/', $line);
-            if (\count($parts) < 3) continue;
-            [$oldHash, $newHash, $ref] = $parts;
-            if (\strlen($oldHash) === 40 && \strlen($newHash) === 40) {
-                $parsedCommands[] = ['old' => $oldHash, 'new' => $newHash, 'ref' => $ref];
-            }
-        }
-
-        $this->assertCount(3, $parsedCommands);
-        // First is create (old=0)
-        $this->assertSame(\str_repeat('0', 40), $parsedCommands[0]['old']);
-        // Second is update (both non-zero)
-        $this->assertNotSame(\str_repeat('0', 40), $parsedCommands[1]['old']);
-        $this->assertNotSame(\str_repeat('0', 40), $parsedCommands[1]['new']);
-        // Third is delete (new=0)
-        $this->assertSame(\str_repeat('0', 40), $parsedCommands[2]['new']);
+        return [$work, $sha];
     }
 
-    // -------------------------------------------------------------------------
-    // repo accessor test (Step 9)
-    // -------------------------------------------------------------------------
+    private function packBytesFor(string $workPath, string $sha): string
+    {
+        $proc = \proc_open(
+            ['git', '-C', $workPath, 'pack-objects', '--stdout', '--revs'],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes
+        );
+        $this->assertNotFalse($proc);
+        \fwrite($pipes[0], $sha . "\n");
+        \fclose($pipes[0]);
+        $pack = (string) \stream_get_contents($pipes[1]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+        \proc_close($proc);
+        $this->assertStringStartsWith('PACK', $pack);
+
+        return $pack;
+    }
 
     public function testRepoAccessor(): void
     {
-        $repoPath = $this->initGitRepo();
-        $repo = Repo::new('test', $repoPath);
+        $repo = Repo::new('test', $this->emptyBareRepo());
 
         $rp = new ReceivePack($repo);
         $this->assertSame($repo, $rp->repo());
+    }
+
+    public function testServeRefusesWithoutWriteAccess(): void
+    {
+        $repo = Repo::new('test', $this->emptyBareRepo())->withPublic(true);
+        // Null user: the anonymous daemon posture has no push rights, and
+        // the gate must fire before any git child is spawned.
+        $rp = new ReceivePack($repo, null);
+
+        $this->assertSame(1, $rp->serve($this->memoryStream(), $this->memoryStream()));
+    }
+
+    public function testServeRefusesNonAdminOnPrivateRepo(): void
+    {
+        $repo = Repo::new('test', $this->emptyBareRepo())->withPrivate(true);
+        $rp = new ReceivePack($repo, User::new('bob'));
+
+        $this->assertSame(1, $rp->serve($this->memoryStream(), $this->memoryStream()));
+    }
+
+    /**
+     * The C-04 corruption-killer pin: a real pkt-framed push with a real
+     * packfile is applied by git itself — report-status says ok, the ref
+     * moves, and the pushed objects actually exist in the target.
+     */
+    public function testServeAppliesARealPushAndMovesTheRef(): void
+    {
+        if (!\exec('git --version 2>/dev/null')) {
+            $this->markTestSkipped('git not available');
+        }
+
+        $target = $this->emptyBareRepo();
+        [$work, $sha] = $this->workRepoWithCommit();
+        $zero = \str_repeat('0', 40);
+        $request = PktLine::encode("{$zero} {$sha} refs/heads/pushed\x00report-status\n")
+            . PktLine::FLUSH
+            . $this->packBytesFor($work, $sha)
+            . PktLine::FLUSH;
+
+        $inPath = $this->tmpDir . '/push-in.bin';
+        $outPath = $this->tmpDir . '/push-out.bin';
+        \file_put_contents($inPath, $request);
+
+        $rp = new ReceivePack(Repo::new('test', $target), User::new('pusher')->withAdmin(true));
+        $in = \fopen($inPath, 'rb');
+        $out = \fopen($outPath, 'wb');
+        $this->assertNotFalse($in);
+        $this->assertNotFalse($out);
+        $this->assertSame(0, $rp->serve($in, $out));
+
+        $bytes = (string) \file_get_contents($outPath);
+        $this->assertStringContainsString('unpack ok', $bytes, 'git must unpack the pack');
+        $this->assertStringContainsString('ok refs/heads/pushed', $bytes);
+
+        $moved = \trim((string) \shell_exec('git --git-dir=' . \escapeshellarg($target) . ' rev-parse --verify refs/heads/pushed 2>/dev/null'));
+        $this->assertSame($sha, $moved, 'the ref must point at the pushed commit');
+
+        \exec('git --git-dir=' . \escapeshellarg($target) . ' cat-file -e ' . \escapeshellarg($sha) . ' 2>/dev/null', $ignored, $catRc);
+        $this->assertSame(0, $catRc, 'the pushed objects must exist in the target');
+    }
+
+    /**
+     * Anti-corruption pin: the retired hand-roll moved refs to whatever
+     * the client claimed without ever seeing the objects. Real
+     * receive-pack refuses a command whose objects are missing — the ref
+     * must NOT exist afterwards.
+     */
+    public function testServeRefusesAForgedPushThatCarriesNoObjects(): void
+    {
+        if (!\exec('git --version 2>/dev/null')) {
+            $this->markTestSkipped('git not available');
+        }
+
+        $target = $this->emptyBareRepo();
+        // A well-formed commit object exists only in a separate work repo;
+        // its sha is claimed here with NO packfile at all.
+        [$work, $sha] = $this->workRepoWithCommit();
+        $zero = \str_repeat('0', 40);
+        $inPath = $this->tmpDir . '/forged-in.bin';
+        $outPath = $this->tmpDir . '/forged-out.bin';
+        \file_put_contents(
+            $inPath,
+            PktLine::encode("{$zero} {$sha} refs/heads/forged\x00report-status\n") . PktLine::FLUSH
+        );
+
+        $rp = new ReceivePack(Repo::new('test', $target), User::new('pusher')->withAdmin(true));
+        $in = \fopen($inPath, 'rb');
+        $out = \fopen($outPath, 'wb');
+        $this->assertNotFalse($in);
+        $this->assertNotFalse($out);
+        $rp->serve($in, $out);
+
+        $this->assertSame('', \trim((string) \shell_exec('git --git-dir=' . \escapeshellarg($target) . ' rev-parse --verify -q refs/heads/forged 2>/dev/null')), 'a forged command must never move a ref');
+    }
+
+    /**
+     * @return resource
+     */
+    private function memoryStream()
+    {
+        $handle = \fopen('php://memory', 'w+b');
+        $this->assertNotFalse($handle);
+
+        return $handle;
     }
 }

@@ -7,7 +7,22 @@ namespace SugarCraft\GitServer\Git;
 use SugarCraft\GitServer\{AccessControl, Repo, User};
 
 /**
- * Handles git-receive-pack requests (push).
+ * Handles git-receive-pack requests (push) over the SSH transport.
+ *
+ * The push is NOT emulated: this class authorises the session and hands
+ * the whole negotiation to the real `git receive-pack` child through
+ * StdioPipe. The previous hand-rolled serve() read plain-text command
+ * lines (real pushes are pkt-framed and followed by raw packfile bytes)
+ * and moved refs to client-claimed object IDs without ever indexing the
+ * pushed objects — that recipe corrupts repositories. With delegation the
+ * corruption is structurally impossible: git unpacks and verifies every
+ * pushed object BEFORE any ref advances, runs the server-side hooks, and
+ * enforces ref grammar and compare-and-swap semantics natively.
+ *
+ * CHILD-PROCESS LIFETIME: StdioPipe::run is request-scoped by
+ * construction — every exit path funnels through its reap ladder
+ * (SIGTERM, then SIGKILL after a grace poll). This class holds no child
+ * across calls.
  *
  * Port of charmbracelet/soft-serve Git.ReceivePack.
  *
@@ -30,9 +45,16 @@ final class ReceivePack
     }
 
     /**
-     * Serve a git-receive-pack session over stdio.
+     * Serve one git-receive-pack session over the given stdio pair.
+     *
+     * Defaults match the SSH forced-command shape (client connection on
+     * the process's own STDIN/STDOUT); injectable streams keep hosts and
+     * tests in control of the byte flow.
+     *
+     * @param resource|\Socket|null $in  client read side (default STDIN)
+     * @param resource|\Socket|null $out client write side (default STDOUT)
      */
-    public function serve(): int
+    public function serve($in = null, $out = null): int
     {
         $ac = AccessControl::getInstance();
 
@@ -42,157 +64,20 @@ final class ReceivePack
             return 1;
         }
 
-        // Auto-init repo if it doesn't exist (for on-demand creation)
-        if (!$this->repo->exists()) {
-            $this->repo->init();
+        // On-demand creation stays (a push to a brand-new repo is how
+        // 'create on first push' works); init lays down the repository the
+        // delegated child will operate on.
+        if (!\is_dir($this->repo->gitDir())) {
+            $this->repo = $this->repo->init();
         }
 
-        $refs = $this->repo->refs();
-        $this->advertiseRefs($refs);
+        $gitDir = $this->repo->gitDir();
 
-        // Read commands and process push
-        $commands = $this->readCommands();
-        if ($commands === []) {
-            return 0;
-        }
-
-        return $this->processPush($commands);
-    }
-
-    /**
-     * Advertise refs to the client.
-     *
-     * @param array<string, string> $refs  ref => hash
-     */
-    public function advertiseRefs(array $refs): void
-    {
-        // Capability list rides the first ref packet after the NUL,
-        // space-separated (git 2.43 receive-pack advertisement shape; the
-        // old 'report-status|...'-with-space-after-NUL form was invented).
-        $caps = 'report-status report-status-v2 delete-refs side-band-64k';
-        $firstRef = \key($refs) ?? 'refs/heads/main';
-        $firstHash = \current($refs) ?: \str_repeat('0', 40);
-
-        $this->writePacket("{$firstHash} {$firstRef}\x00{$caps}");
-
-        foreach ($refs as $ref => $hash) {
-            if ($ref === $firstRef) continue;
-            $this->writePacket("{$hash} {$ref}");
-        }
-
-        $this->writePacket('');  // flush
-    }
-
-    // -------------------------------------------------------------------------
-    // Internal
-    // -------------------------------------------------------------------------
-
-    /**
-     * Read push commands from stdin.
-     *
-     * @return list<array{old: string, new: string, ref: string}>  Packed refs
-     */
-    private function readCommands(): array
-    {
-        $commands = [];
-
-        while (($line = \fgets(\STDIN)) !== false) {
-            $line = \rtrim($line, "\r\n");
-            if ($line === '') break;
-
-            // format: old_hash new_hash ref\n
-            $parts = \preg_split('/\s+/', $line);
-            if (\count($parts) < 3) continue;
-
-            [$oldHash, $newHash, $ref] = $parts;
-
-            // Keep all commands: create (old=0), update, and delete (new=0)
-            if (\strlen($oldHash) === 40 && \strlen($newHash) === 40) {
-                $commands[] = ['old' => $oldHash, 'new' => $newHash, 'ref' => $ref];
-            }
-        }
-
-        return $commands;
-    }
-
-    /**
-     * Execute a git push.
-     *
-     * @param list<array{old: string, new: string, ref: string}> $commands
-     */
-    private function processPush(array $commands): int
-    {
-        $repoPath = \escapeshellarg($this->repo->path());
-
-        foreach ($commands as $cmd) {
-            $oldHash = $cmd['old'];
-            $newHash = $cmd['new'];
-            $ref     = $cmd['ref'];
-            $escapedRef = \escapeshellarg($ref);
-
-            // Validate hash format. The old ltrim-then-ctype check accepted
-            // any 40-char string whose first non-zero character was a hex
-            // digit ('0000…00g' passed); git needs strict 40-hex on both.
-            if (\preg_match('/^[0-9a-fA-F]{40}$/', $newHash) !== 1
-                || \preg_match('/^[0-9a-fA-F]{40}$/', $oldHash) !== 1) {
-                $this->reportError('invalid object name in push command');
-                return 1;
-            }
-
-            // Grammar-gate the client-controlled refname (traversal '..',
-            // option-injection '-', illegal shapes) before git ever sees it.
-            if (!RefGrammar::isValidRefName($ref)) {
-                $this->reportError("invalid ref name: {$ref}");
-                return 1;
-            }
-
-            $out = [];
-            $rc  = 0;
-
-            if ($newHash === \str_repeat('0', 40)) {
-                // Delete: git update-ref -d <ref> <old>
-                $escapedOld = \escapeshellarg($oldHash);
-                $updateRefCmd = "git -C {$repoPath} update-ref -d {$escapedRef} {$escapedOld} 2>&1";
-                \exec($updateRefCmd, $out, $rc);
-            } elseif ($oldHash === \str_repeat('0', 40)) {
-                // Create: pass the zeros old-value so git enforces
-                // compare-and-swap ("ref must not exist") — without it a race
-                // silently clobbers a ref another push just created.
-                $escapedNew = \escapeshellarg($newHash);
-                $escapedOld = \escapeshellarg($oldHash);
-                $updateRefCmd = "git -C {$repoPath} update-ref {$escapedRef} {$escapedNew} {$escapedOld} 2>&1";
-                \exec($updateRefCmd, $out, $rc);
-            } else {
-                // Update: git update-ref <ref> <new> <old>
-                $escapedNew = \escapeshellarg($newHash);
-                $escapedOld = \escapeshellarg($oldHash);
-                $updateRefCmd = "git -C {$repoPath} update-ref {$escapedRef} {$escapedNew} {$escapedOld} 2>&1";
-                \exec($updateRefCmd, $out, $rc);
-            }
-
-            if ($rc !== 0) {
-                $this->reportError(\implode("\n", $out));
-                $this->writePacket("ng {$cmd['ref']}: pre-receive hook declined");
-                return 1;
-            }
-
-            $this->writePacket("ok {$cmd['ref']}");
-        }
-
-        $this->writePacket('');  // flush
-        return 0;
-    }
-
-    private function reportError(string $msg): void
-    {
-        \fwrite(\STDERR, "candy-git-server receive-pack: {$msg}\n");
-    }
-
-    /**
-     * Write a pkt-line through the shared codec.
-     */
-    private function writePacket(string $data): void
-    {
-        \fwrite(\STDOUT, PktLine::encode($data));
+        return StdioPipe::run(
+            $in ?? \STDIN,
+            $out ?? \STDOUT,
+            ['git', '-C', $gitDir, 'receive-pack', $gitDir],
+            $gitDir
+        );
     }
 }

@@ -7,14 +7,21 @@ namespace SugarCraft\GitServer\Git;
 use SugarCraft\GitServer\{AccessControl, Repo, User};
 
 /**
- * Handles git-upload-pack requests (clone / fetch).
+ * Handles git-upload-pack requests (clone / fetch) over the SSH transport.
  *
- * Implements the Git SSH protocol for read operations.
+ * The negotiation is NOT emulated: this class authorises the session and
+ * then delegates it whole to the real `git upload-pack` child through
+ * StdioPipe. The previous hand-rolled serve() read plain-text "want"
+ * lines from STDIN before answering and emitted an advertisement with its
+ * own packet framing — no conformant git client could speak to it,
+ * because real clients wait for the advertisement and send pkt-framed
+ * wants. Delegating removes that whole failure surface: framing,
+ * capability grammar and pack construction are git's own business now.
  *
- * CHILD-PROCESS LIFETIME (E721): the single pack child is served inside
- * sendPack() and reaped there (drain-to-EOF, terminate-if-undrained,
- * proc_close in a finally) before serve() returns — this class holds no
- * child across calls.
+ * CHILD-PROCESS LIFETIME: StdioPipe::run is request-scoped by
+ * construction — every exit path funnels through its reap ladder
+ * (SIGTERM, then SIGKILL after a grace poll). This class holds no child
+ * across calls.
  *
  * Port of charmbracelet/soft-serve Git.UploadPack.
  *
@@ -24,8 +31,6 @@ final class UploadPack
 {
     private Repo $repo;
     private ?User $user;
-    private string $wantedRefs = '';
-    private string $wantRefs   = '';
 
     public function __construct(Repo $repo, ?User $user = null)
     {
@@ -39,12 +44,18 @@ final class UploadPack
     }
 
     /**
-     * Serve a git-upload-pack session over stdio.
+     * Serve one git-upload-pack session over the given stdio pair.
      *
-     * Reads the upload-pack request from stdin, outputs the packfile response.
-     * Designed to be called by SSH forced-command or CGI.
+     * The defaults are the SSH forced-command shape: git invokes
+     * `git-upload-pack '<path>'` with the client connection already on the
+     * process's own STDIN/STDOUT. Injecting streams keeps tests (and any
+     * other host that holds the connection as a resource) in control of
+     * where the bytes flow.
+     *
+     * @param resource|\Socket|null $in  client read side (default STDIN)
+     * @param resource|\Socket|null $out client write side (default STDOUT)
      */
-    public function serve(): int
+    public function serve($in = null, $out = null): int
     {
         $ac = AccessControl::getInstance();
 
@@ -54,157 +65,20 @@ final class UploadPack
             return 1;
         }
 
-        if (!$this->repo->exists()) {
+        $gitDir = $this->repo->gitDir();
+        if (!\is_dir($gitDir)) {
             \fwrite(\STDERR, "Repository not found: {$this->repo->name}\n");
             return 1;
         }
 
-        // Read want refs from client
-        $wants = $this->readWants();
-        if ($wants === []) {
-            \fwrite(\STDERR, "No wants received\n");
-            return 1;
-        }
-
-        $this->sendRefs();
-        $this->sendPack($wants);
-
-        return 0;
-    }
-
-    /**
-     * Build refs advertisement packet.
-     */
-    public function advertiseRefs(): string
-    {
-        $lines = [];
-
-        // Head ref
-        $branches = $this->repo->branches();
-        $head = $branches !== [] ? $branches[0] : 'main';
-        $headHash = $this->repo->refs("refs/heads/{$head}")["refs/heads/{$head}"] ?? '';
-        $lines[] = "{$headHash} refs/heads/{$head}";
-
-        // All other refs
-        foreach ($this->repo->refs() as $ref => $hash) {
-            if ($ref !== 'refs/heads/' . $head) {
-                $lines[] = "{$hash} {$ref}";
-            }
-        }
-
-        $lines[] = '';  // flush
-
-        return \implode("\n", $lines);
-    }
-
-    // -------------------------------------------------------------------------
-    // Internal
-    // -------------------------------------------------------------------------
-
-    /**
-     * Read git-upload-pack wants from stdin.
-     *
-     * @return list<string>  Commit hashes wanted by client
-     */
-    private function readWants(): array
-    {
-        $wants = [];
-
-        while (($line = \fgets(\STDIN)) !== false) {
-            $line = \rtrim($line, "\r\n");
-            if ($line === '') break;
-
-            // git-upload-pack sends "want HASH\n"
-            if (\str_starts_with($line, 'want ')) {
-                $hash = \substr($line, 5);
-                if (\strlen($hash) === 40 && \ctype_xdigit($hash)) {
-                    $wants[] = $hash;
-                }
-            }
-        }
-
-        // Discard have lines
-        while (($line = \fgets(\STDIN)) !== false) {
-            $line = \rtrim($line, "\r\n");
-            if ($line === 'done') break;
-        }
-
-        return $wants;
-    }
-
-    /**
-     * Send the refs advertisement to the client.
-     *
-     * advertiseRefs() keeps its plain-line shape (that is its in-process
-     * contract, pinned by GitProtocolTest); on the wire each line rides its
-     * own packet, the trailing empty entry becomes the flush via the codec's
-     * empty-payload-means-flush convention.
-     */
-    private function sendRefs(): void
-    {
-        foreach (\explode("\n", $this->advertiseRefs()) as $line) {
-            $this->writePacket($line);
-        }
-    }
-
-    /**
-     * Build and send a packfile for the given wants.
-     *
-     * @param list<string> $wants  Commit hashes
-     */
-    private function sendPack(array $wants): void
-    {
-        if ($wants === []) return;
-
-        // House law: argv arrays, never a shell string — the repo path is
-        // trusted config but the spawn takes no shell either way.
-        $cmd = ['git', '-C', $this->repo->path(), 'pack-objects', '--stdout', '--revs'];
-
-        $desc = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
-        /** @var resource|false $proc */
-        $proc = \proc_open($cmd, $desc, $pipes);
-        if ($proc === false) return;
-
-        // E721: request-scoped reap, same contract as GitDaemon's pack child —
-        // the drain reads to EOF; on any unwind the child is terminated before
-        // proc_close() so it cannot outlive this serve() process's request.
-        $childDrained = false;
-        try {
-            // Write want revs to stdin (one per line, no ^ prefix)
-            foreach ($wants as $hash) {
-                \fwrite($pipes[0], $hash . "\n");
-            }
-            \fclose($pipes[0]);
-
-            // Stream pack data to stdout
-            while (!\feof($pipes[1])) {
-                $chunk = \fread($pipes[1], 65536);
-                if ($chunk === false) break;
-                \fwrite(\STDOUT, $chunk);
-            }
-            $childDrained = \feof($pipes[1]);
-        } finally {
-            if (!$childDrained) {
-                @\proc_terminate($proc);
-            }
-            foreach ($pipes as $pipe) {
-                if (\is_resource($pipe)) {
-                    \fclose($pipe);
-                }
-            }
-            \proc_close($proc);
-        }
-    }
-
-    /**
-     * Write a pkt-line (Git wire protocol) through the shared codec.
-     */
-    private function writePacket(string $data): void
-    {
-        \fwrite(\STDOUT, PktLine::encode($data));
+        // The repository is addressed by its full path with the child's cwd
+        // matching, the shape proven byte-for-byte on the daemon conformance
+        // wire: a bare directory does not resolve a plain '.' argument.
+        return StdioPipe::run(
+            $in ?? \STDIN,
+            $out ?? \STDOUT,
+            ['git', '-C', $gitDir, 'upload-pack', $gitDir],
+            $gitDir
+        );
     }
 }

@@ -8,11 +8,17 @@ use SugarCraft\GitServer\Lang;
 use SugarCraft\GitServer\{AccessControl, Config, Repo, User};
 
 /**
- * SSH server that speaks the git-upload-pack / git-receive-pack protocol.
+ * Git-over-SSH service dispatcher for a host sshd ForceCommand wiring.
  *
- * Users authenticate via SSH public key. The username determines the user,
- * and the Git command (git-upload-pack / git-receive-pack) determines the
- * operation. Repos are accessed by name.
+ * This class does NOT implement the SSH protocol itself — the operating
+ * system's sshd authenticates the key and forces
+ * `git-upload-pack '<path>'` / `git-receive-pack '<path>'` into a php
+ * child whose STDIN/STDOUT is the client connection. The child calls
+ * handleConnection() with those stdio streams; this class checks the
+ * account, the jail, and repository permissions, then hands the session
+ * to the delegated git services. The presented public key (whatever the
+ * host wrapper can supply) is verified against the account's
+ * authorized_keys before anything else runs.
  *
  * Port of charmbracelet/soft-serve SSHServer.
  *
@@ -70,7 +76,12 @@ final class SSHServer
      * 2. Parses the Git command from the SSH forced command
      * 3. Routes to UploadPack or ReceivePack
      *
-     * @param resource $stream  Raw SSH stream
+     * @param resource|\Socket $stream  The client connection: the forced
+     *                                  command's STDIN/STDOUT pair in real
+     *                                  use, or any duplex stream. It is
+     *                                  threaded into the handler — the
+     *                                  session's bytes flow through this
+     *                                  stream, not the constants.
      * @param string $username  SSH username
      * @param string $command   The forced command (e.g. "git-upload-pack /repo-name")
      * @param string|null $publicKey  The public key presented during the SSH
@@ -137,7 +148,9 @@ final class SSHServer
             $handler = new \SugarCraft\GitServer\Git\ReceivePack($repo, $user);
         }
 
-        return $handler->serve();
+        // One connection, both directions: the delegated git child speaks to
+        // this stream, so the bytes never touch the process constants here.
+        return $handler->serve($stream, $stream);
     }
 
     /**
@@ -215,9 +228,11 @@ final class SSHServer
         }
 
         $path = $this->config->reposPath() . '/' . $name;
-        $repo = Repo::new($name, $path)
-            ->withPublic(true)
-            ->init();
+        // Created private. A push-creates-repo path must never also make that
+        // repo world-readable: publishing is an explicit operator act
+        // (`repo create --public` writes the visibility marker), not a
+        // side effect of the first push.
+        $repo = Repo::new($name, $path)->init();
 
         $this->repos[$name] = $repo;
 

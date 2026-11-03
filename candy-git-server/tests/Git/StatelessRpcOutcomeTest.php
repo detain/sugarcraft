@@ -70,6 +70,9 @@ final class StatelessRpcOutcomeTest extends TestCase
         $result = StatelessRpc::negotiate('git-upload-pack', $this->tmpDir, "junk\n", 1 << 20, 10.0);
 
         self::assertSame(StatelessRpc::REASON_EXITED, $result['reason']);
+        // PHP reports a dead child's exit code once; the reaper must latch
+        // it at the first observation, not read -1 after proc_close.
+        self::assertSame(3, $result['exitCode']);
         self::assertStringContainsString('boom from git', $result['stderrTail'], 'the child error must reach the operator, not the bit bucket');
     }
 
