@@ -230,7 +230,7 @@ final class HyperlinkParsingTest extends TestCase
     }
     public function testCloseSequenceThroughParserClearsTheId(): void
     {
-        // C3 (lane A3a) end-to-end: open with an id, close with a param-
+        // End-to-end: open with an id, close with a param-
         // carrying terminator ('ESC]8;id=x;ST'); both accessors must be
         // empty afterwards, matching the class doc.
         $oscImpl = new OscHandlerImpl();

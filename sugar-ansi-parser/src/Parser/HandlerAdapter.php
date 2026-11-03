@@ -6,29 +6,41 @@ namespace SugarCraft\AnsiParser\Parser;
 
 /**
  * Adapter bridging the Parser's {@see Handler} interface to
- * {@see CsiHandler} + {@see OscHandler} for the vcr renderer path.
+ * {@see CsiHandler} + {@see OscHandler}.
  *
- * Translates parse events into handler method calls.
+ * Translates parse events into handler method calls. The adapter is a
+ * DELIBERATE SIEVE: `CsiHandler` covers the renderer's working CSI set and
+ * the OSC subset for titles/hyperlinks, so ESC sequences, DCS, SOS/PM/APC
+ * strings, unmapped CSI finals (HPA `G`, VPA `d`, ECH `X`, DSR `n`, DECSCUSR
+ * `SP q`, DA `c`, …) and most C0/C1 executes (BEL, VT, FF, IND, NEL, RI …)
+ * stop here by design — `sugar-vterm` implements the wider set on its own
+ * handler instead of through this adapter.
+ *
+ * Consumers that need the rest pass an optional `$fallback` handler:
+ * escDispatch/dcsDispatch/sosPmApcDispatch are ALWAYS forwarded to it, and
+ * execute/csiDispatch/oscDispatch forward the events the sieve did not
+ * consume (the SCO-gated `CSI ? s/u` discard is considered consumed —
+ * forwarding it would re-open the cursor-teleport defect gated below).
  *
  * Mirrors charmbracelet/x/ansi.HandlerAdapter
  */
 final class HandlerAdapter implements Handler
 {
     public function __construct(
-        private CsiHandler $csi,
-        private OscHandler $osc,
+        private readonly CsiHandler $csi,
+        private readonly OscHandler $osc,
+        private readonly ?Handler $fallback = null,
     ) {
     }
 
     public function printChar(string $rune): void
     {
-        $byte = $rune[0] ?? '';
-        // Forward printable ASCII OR any valid UTF-8 lead byte (>= 0xC2).
-        // Drop C0 (< 0x20) and C1 (0x80-0xBF continuation) control bytes.
-        // Defense-in-depth, not a live rule: the parser never routes a
-        // sub-0x20-leading rune here — C0 bytes arrive via execute(), and
-        // every rune path starts at a lead byte >= 0xC2 (or plain ASCII).
-        if ($byte !== '' && ord($byte) >= 0x20) {
+        // Defense-in-depth against a hand-called adapter, not a live rule:
+        // the parser never routes a sub-0x20-leading rune here (C0 arrives
+        // via execute(); runes start at plain ASCII or a lead byte >= 0xC2).
+        // C1 bytes 0x80-0x9F are never seen on this path at all — they
+        // execute or introduce sequences upstream (Parser's UTF-8 policy).
+        if ($rune !== '' && ord($rune[0]) >= 0x20) {
             $this->csi->printable($rune);
         }
     }
@@ -36,11 +48,11 @@ final class HandlerAdapter implements Handler
     public function execute(int $byte): void
     {
         match ($byte) {
-            0x09 => $this->csi->cht(1),
-            0x0A => $this->csi->lf(),  // LF — line feed
-            0x0D => $this->csi->cr(),  // CR — carriage return
-            0x08 => $this->csi->cub(1),
-            default => null,
+            0x09 => $this->csi->cht(1), // HT — tab to next stop
+            0x0A => $this->csi->lf(),   // LF — line feed
+            0x0D => $this->csi->cr(),   // CR — carriage return
+            0x08 => $this->csi->cub(1), // BS — backspace
+            default => $this->fallback?->execute($byte),
         };
     }
 
@@ -71,12 +83,12 @@ final class HandlerAdapter implements Handler
             'C' => $this->csi->cuf($count),
             'D' => $this->csi->cub($count),
             'H' => $this->csi->cup(
-                $p0 === -1 ? 1 : $p0,
-                $p1 === -1 ? 1 : $p1,
+                $p0 === -1 ? 1 : max(1, $p0),
+                $p1 === -1 ? 1 : max(1, $p1),
             ),
             'f' => $this->csi->hvp(
-                $p0 === -1 ? 1 : $p0,
-                $p1 === -1 ? 1 : $p1,
+                $p0 === -1 ? 1 : max(1, $p0),
+                $p1 === -1 ? 1 : max(1, $p1),
             ),
             'm' => $this->csi->sgr($params),
             'J' => $this->csi->ed($p0 === -1 ? 0 : $p0),
@@ -99,7 +111,7 @@ final class HandlerAdapter implements Handler
             'b' => $this->csi->rep($count),
             's' => $this->csi->scosc(),
             'u' => $this->csi->scorc(),
-            default => null,
+            default => $this->fallback?->csiDispatch($final, $params, $prefix, $intermediate),
         };
     }
 
@@ -130,24 +142,43 @@ final class HandlerAdapter implements Handler
 
     public function escDispatch(int $final, int $intermediate): void
     {
+        // The adapter models no ESC sequences itself; a wired fallback sees
+        // the whole family unfiltered.
+        $this->fallback?->escDispatch($final, $intermediate);
     }
 
     public function oscDispatch(string $data): void
     {
-        // OSC 8 — hyperlink: `ESC ] 8 ; params ; uri ST`.
-        // `params` is a colon-separated key=value list (only `id=` is defined);
-        // `uri` is everything after the second `;` and may be empty (closes the
-        // hyperlink). The /s flag lets the URI span any byte the parser buffered.
-        if (preg_match('/^8;([^;]*);(.*)$/s', $data, $m)) {
-            $this->osc->hyperlink($m[2], $this->parseHyperlinkId($m[1]));
+        // OSC 8 — hyperlink: `ESC ] 8 ; params ; uri ST`, where `params` is a
+        // colon-separated key=value list (only `id=` is defined) and `uri` is
+        // everything after the second `;` and may be empty (closes the link).
+        // The xterm HVP spelling without a params field — `ESC ] 8 ; uri ` ` `
+        // (backtick-terminated) — is accepted: a trailing backtick is stripped
+        // before parsing. A malformed `8;…` that has neither a second `;` nor
+        // the backtick terminator CLOSES the current link instead of being
+        // dropped: a swallowed close would bleed following text into a stale
+        // hyperlink.
+        if (str_starts_with($data, '8;')) {
+            $backtick = str_ends_with($data, '`');
+            $payload = $backtick ? substr($data, 0, -1) : $data;
+            if (preg_match('/^8;([^;]*);(.*)$/s', $payload, $m) === 1) {
+                $this->osc->hyperlink($m[2], $this->parseHyperlinkId($m[1]));
+            } elseif ($backtick) {
+                $this->osc->hyperlink(substr($payload, 2), '');
+            } else {
+                $this->osc->hyperlink('', '');
+            }
             return;
         }
 
         // OSC 0/1/2 — window / icon title.
         // .* allows an empty payload (e.g. "2;" = clear title).
-        if (preg_match('/^([0-2]);(.*)$/', $data, $m)) {
+        if (preg_match('/^([0-2]);(.*)$/', $data, $m) === 1) {
             $this->osc->title($m[2]);
+            return;
         }
+
+        $this->fallback?->oscDispatch($data);
     }
 
     /**
@@ -170,9 +201,13 @@ final class HandlerAdapter implements Handler
 
     public function dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void
     {
+        // DCS payloads belong to the fallback: the renderer-facing handler set
+        // (CsiHandler/OscHandler) has no DCS surface.
+        $this->fallback?->dcsDispatch($final, $params, $prefix, $intermediate, $data);
     }
 
     public function sosPmApcDispatch(string $kind, string $data): void
     {
+        $this->fallback?->sosPmApcDispatch($kind, $data);
     }
 }

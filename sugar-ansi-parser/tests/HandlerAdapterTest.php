@@ -484,7 +484,8 @@ final class HandlerAdapterTest extends TestCase
 
     public function testExecuteUnhandledControlByteTriggersNoCsiHandlerMethod(): void
     {
-        // BEL (0x07) is not routed by HandlerAdapter::execute() (default => null).
+        // BEL (0x07) is not routed by HandlerAdapter::execute() and no fallback
+        // is wired here, so nothing fires at all.
         $this->csi->expects($this->never())->method('cr');
         $this->csi->expects($this->never())->method('lf');
         $this->csi->expects($this->never())->method('cht');
