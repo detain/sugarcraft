@@ -171,6 +171,45 @@ final class RowDeltaTest extends TestCase
     }
 
     /**
+     * The stronger shape: the frame fails at UNCHANGED dimensions (a throwing
+     * Stringable walks into the window when the cursor moves onto it). The
+     * resize check cannot rescue this one — only the catch-path memo reset
+     * forces the full repaint after the error text covered the screen. Added
+     * 2026-11-03 after a mutation showed the zero-viewport pin above survives
+     * a neutered catch (its repair changes dims, which re-clears the memo via
+     * the resize path anyway).
+     */
+    public function testFailedFrameAtUnchangedDimsStillForcesFullRepaint(): void
+    {
+        $poison = new class implements \Stringable {
+            public function __toString(): string
+            {
+                throw new \RuntimeException('boom-mid-render');
+            }
+        };
+
+        $base = Model::new()->setViewport(10, 2)->addItemsFromArray(['a', 'b']);
+        $this->assertSame("a\nb\n", $base->view()); // memo established
+
+        // The poison sits at index 2 — off a 2-row window anchored at the
+        // start. Moving the cursor to the end pulls it into the window, so
+        // lines() dies mid-render at exactly the dimensions that rendered
+        // fine one frame ago.
+        $atEnd = $base->addItem($poison)->cursorToEnd();
+        $error = $atEnd->view();
+        $this->assertStringContainsString('boom-mid-render', $error);
+
+        $fixed = $atEnd->removeItem(2);
+        $frame = $fixed->view();
+        $this->assertSame(
+            "a\nb\n",
+            $frame,
+            'a frame that failed at unchanged dims must still force a full repaint',
+        );
+        $this->assertStringNotContainsString("\x1b[", $frame);
+    }
+
+    /**
      * A failed frame must not print exception prose raw: control bytes and
      * OSC payloads smuggled through a throwing Stringable value are swept
      * out of the error sink before the message reaches the terminal.
