@@ -653,4 +653,34 @@ final class VideoSourceTest extends TestCase
             @rmdir($dir);
         }
     }
+
+    /**
+     * @testdox m10: a cover-art stream never shadows the real video track, first video wins
+     */
+    public function testTheAttachedPicCoverStreamNeverShadowsTheVideo(): void
+    {
+        $real = ['codec_type' => 'video', 'width' => 640, 'height' => 480, 'duration' => '10', 'r_frame_rate' => '30/1'];
+        $cover = ['codec_type' => 'video', 'width' => 10, 'height' => 10, 'r_frame_rate' => '25/1', 'disposition' => ['attached_pic' => 1]];
+        $audio = ['codec_type' => 'audio'];
+        $after = VideoSource::fromFfprobeJson('/x.mp4', json_encode(['streams' => [$real, $audio, $cover]]));
+        $this->assertSame(640, $after->width, 'a trailing cover must not overwrite the real stream');
+        $this->assertSame(30.0, $after->fps);
+        $before = VideoSource::fromFfprobeJson('/x.mp4', json_encode(['streams' => [$cover, $real]]));
+        $this->assertSame(640, $before->width, 'a leading cover must be skipped, not adopted');
+        $topLevel = VideoSource::fromFfprobeJson('/x.mp4', json_encode(['streams' => [
+            ['codec_type' => 'video', 'width' => 640, 'height' => 480, 'r_frame_rate' => '24/1'],
+            ['codec_type' => 'video', 'width' => 8, 'height' => 8, 'attached_pic' => 1],
+        ]]));
+        $this->assertSame(640, $topLevel->width, 'the top-level attached_pic spelling is honoured too');
+    }
+
+    /**
+     * @testdox m10: the probe drain refuses to buffer past its byte ceiling
+     */
+    public function testTheProbeDrainIsByteCapped(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__) . '/src/Source/VideoSource.php');
+        $this->assertStringContainsString('MAX_PROBE_OUTPUT_BYTES = 8 * 1024 * 1024', $src);
+        $this->assertStringContainsString('strlen($buffer) > self::MAX_PROBE_OUTPUT_BYTES', $src);
+    }
 }

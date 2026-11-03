@@ -48,6 +48,12 @@ final class VideoSource
     private const PROBE_EXIT_GRACE_SECONDS = 1.0;
 
     /**
+     * m10: hard ceiling on drained ffprobe stdout — a pathological or hostile
+     * probe emitting endlessly cannot pin unbounded bytes in the parent.
+     */
+    private const MAX_PROBE_OUTPUT_BYTES = 8 * 1024 * 1024;
+
+    /**
      * @param string $path    Resolved file path (never empty after probe)
      * @param int    $width   Frame width in pixels
      * @param int    $height  Frame height in pixels
@@ -97,7 +103,10 @@ final class VideoSource
         foreach ($streams as $stream) {
             $codecType = $stream['codec_type'] ?? '';
 
-            if ($codecType === 'video') {
+            // m10: a cover-art stream (attached_pic) must never shadow the real
+        // video track — the FIRST non-cover video stream answers, later ones
+        // (including a trailing cover) are ignored.
+        if ($codecType === 'video' && $width === 0 && !(((int) ($stream['disposition']['attached_pic'] ?? $stream['attached_pic'] ?? 0)) === 1)) {
                 $width = (int) ($stream['width'] ?? 0);
                 $height = (int) ($stream['height'] ?? 0);
                 $duration = (float) ($stream['duration'] ?? '0');
@@ -257,6 +266,9 @@ final class VideoSource
             $chunk = fread($pipe, 65536);
             if ($chunk !== false && $chunk !== '') {
                 $buffer .= $chunk;
+                if (strlen($buffer) > self::MAX_PROBE_OUTPUT_BYTES) {
+                    return null;
+                }
                 continue;
             }
 
