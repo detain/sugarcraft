@@ -10,7 +10,7 @@ declare(strict_types=1);
  * against the slave, drain the master, reap, print.
  *
  *   1. PtySystemFactory::new() → PosixPtySystem on Linux/macOS
- *      (UnsupportedPlatformException on Windows; v2 ConPTY work).
+ *      (ConPtySystem on Windows, auto-selected).
  *   2. $system->open($cols, $rows) → PtyPair with master/slave.
  *   3. $pair->slave()->spawn(...) with controllingTerminal:true so
  *      Ctrl+C in interactive children reaches the right pgroup.
@@ -41,13 +41,12 @@ try {
 
     $child = $slave->spawn(
         ['/bin/bash', '-c', $cmd],
-        ['TERM' => 'xterm-256color', 'PATH' => getenv('PATH') ?: '/usr/bin:/bin'],
+        [...(array) getenv(), 'TERM' => 'xterm-256color'], // $env REPLACES — spread what you keep
         80,
         24,
         controllingTerminal: true,
     );
 
-    stream_set_blocking($master->stream(), false);
     $captured = '';
     $deadline = microtime(true) + 5.0;
 

@@ -52,7 +52,7 @@ try {
 
     $child = $slave->spawn(
         ['/bin/sh', '-c', $script],
-        ['TERM' => 'xterm-256color', 'PATH' => getenv('PATH') ?: '/usr/bin:/bin'],
+        [...(array) getenv(), 'TERM' => 'xterm-256color'], // $env REPLACES — spread what you keep
         $cols,
         $rows,
     );
@@ -62,7 +62,9 @@ try {
     // and ioctls TIOCSWINSZ on the master fd.
     usleep(750_000);
     [$cols, $rows] = [132, 40];
-    posix_kill(posix_getpid(), SIGWINCH);
+    if (\function_exists('posix_kill')) { // ext-posix: the lib's own kill() is FFI-backed, this one raises OUR signal
+        \posix_kill(\posix_getpid(), \SIGWINCH);
+    }
     echo "  → resized to {$cols}×{$rows} at t≈0.75s\n";
 
     $child->wait();

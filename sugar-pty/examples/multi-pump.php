@@ -55,7 +55,7 @@ foreach ($commands as $idx => $cmd) {
 
     $child = $pair->slave()->spawn(
         ['/bin/bash', '-c', $cmd],
-        ['TERM' => 'xterm-256color', 'PATH' => getenv('PATH') ?: '/usr/bin:/bin'],
+        [...(array) getenv(), 'TERM' => 'xterm-256color'], // $env REPLACES — spread what you keep
         80,
         24,
         controllingTerminal: true,
@@ -121,7 +121,7 @@ echo "\nMultiPump done — exiting.\n";
 
 foreach ($sessions as $s) {
     if (isset($s['child']) && !$s['child']->exited()) {
-        $s['child']->kill(\SIGTERM);
+        $s['child']->kill(\SugarCraft\Pty\Contract\Child::SIGTERM);
         $s['child']->wait();
     }
     if (isset($s['master']) && !$s['master']->isClosed()) {

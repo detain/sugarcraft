@@ -42,7 +42,6 @@ try {
         24,
     );
 
-    stream_set_blocking($master->stream(), false);
     $linesPrinted = 0;
     $buffer = '';
     $deadline = microtime(true) + 30.0;

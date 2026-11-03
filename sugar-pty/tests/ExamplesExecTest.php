@@ -16,7 +16,8 @@ use SugarCraft\Pty\Tests\Support\PtyCapability;
  * stays the last resort rather than the first responder.
  *
  * Only self-terminating examples belong here: pump-output counts to N
- * and exits; multi-pump exits once every scripted command finished.
+ * and exits; multi-pump exits once every scripted command finished;
+ * expect-login kills its cat in teardown.
  * The interactive ones (spawn-bash, resize-forwarding) stay manual.
  */
 final class ExamplesExecTest extends TestCase
@@ -41,6 +42,14 @@ final class ExamplesExecTest extends TestCase
         self::assertStringContainsString('MultiPump done', $out);
         self::assertStringContainsString('one-off-A', $out);
         self::assertStringContainsString('one-off-B', $out);
+    }
+
+    public function testExpectLoginExampleMatchesEchoedToken(): void
+    {
+        [$exit, $out] = $this->runExample('expect-login.php', []);
+
+        self::assertSame(0, $exit, "example exited {$exit}; output:\n" . $out);
+        self::assertStringContainsString('expect-ok', $out);
     }
 
     /**

@@ -482,6 +482,8 @@ $opts = (new PumpOptions())
 - [`examples/spawn-bash.php`](examples/spawn-bash.php) — The simplest end-to-end slice: `PtySystemFactory::new()->open()` → `$pair->slave()->spawn(['bash', ...])` → drain master → reap. Start here.
 - [`examples/pump-output.php`](examples/pump-output.php) — Long-running counter; demonstrates non-blocking read with timeout, line-by-line pumping.
 - [`examples/resize-forwarding.php`](examples/resize-forwarding.php) — Wire `SignalForwarder` to deliver host SIGWINCH into the child PTY's TIOCSWINSZ; observe the child's `tput cols / lines` flip mid-stream.
+- [`examples/multi-pump.php`](examples/multi-pump.php) — Multiplex several PTY sessions through one `MultiPump` tick loop with per-session prefixes.
+- [`examples/expect-login.php`](examples/expect-login.php) — `Expect` round-trip: send a token through the master, match it inside a bounded timeout, tear the child down on the house ladder.
 
 ## Internationalization
 
