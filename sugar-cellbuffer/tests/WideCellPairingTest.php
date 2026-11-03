@@ -136,4 +136,31 @@ final class WideCellPairingTest extends TestCase
         self::assertSame(' ', $buf->cellAt(0, 0)->rune());
         self::assertSame(1, $buf->cellAt(1, 0)->width());
     }
+
+    public function testOverwritingAWideLeadSlotBlanksTheDisplacedPairContinuation(): void
+    {
+        // M7: landing a fresh wide pair on top of an existing one blanks
+        // the displaced pair's orphaned continuation — the fourth sweep.
+        $buf = Buffer::new(4, 1)
+            ->withCellAt(1, 0, Cell::new(self::WIDE, null, null, 2))
+            ->withCellAt(0, 0, Cell::new(self::WIDE, null, null, 2));
+
+        self::assertSame([2, 0, 1, 1], [
+            $buf->cellAt(0, 0)->width(),
+            $buf->cellAt(1, 0)->width(),
+            $buf->cellAt(2, 0)->width(),
+            $buf->cellAt(3, 0)->width(),
+        ]);
+        self::assertSame(' ', $buf->cellAt(2, 0)->rune());
+
+        // Invariant leg: no width-0 cell may exist without a wide lead
+        // immediately to its left.
+        for ($col = 0; $col < 4; $col++) {
+            if ($buf->cellAt($col, 0)->width() !== 0) {
+                continue;
+            }
+            self::assertGreaterThan(0, $col);
+            self::assertSame(2, $buf->cellAt($col - 1, 0)->width());
+        }
+    }
 }

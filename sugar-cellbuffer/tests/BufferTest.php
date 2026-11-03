@@ -600,6 +600,29 @@ final class BufferTest extends TestCase
         }
     }
 
+    public function testDiffAdvancesWideRunsByColumnsNotCells(): void
+    {
+        // M5: a run containing a wide lead advances the diff cursor by the
+        // columns it physically occupies, not the cells it collected — the
+        // cell after the pair is never revisited and repainted.
+        $prev = Buffer::new(4, 1);
+        $curr = $prev
+            ->withCellAt(0, 0, Cell::new('X'))
+            ->withCellAt(1, 0, Cell::new('中', null, null, 2))
+            ->withCellAt(3, 0, Cell::new('X'));
+
+        $ops = $curr->diff($prev);
+
+        $this->assertCount(2, $ops); // one cursor move + one run, no revisit
+        $this->assertInstanceOf(MoveCursorOp::class, $ops[0]);
+        $this->assertInstanceOf(SetCellOp::class, $ops[1]);
+        $this->assertCount(3, $ops[1]->cells);
+
+        $bytes = (new DiffEncoder())->encode($ops);
+        $this->assertSame('X中X', $bytes);
+        $this->assertStringNotContainsString("\x1b[1;4H", $bytes);
+    }
+
     public function testDiffRepeatRunSameRuneAndStyle(): void
     {
         $prev = Buffer::new(5, 1);

@@ -624,6 +624,10 @@ final class Buffer implements \JsonSerializable
                 $runStyle = $currCell->style();
                 $runLink = $currLink;
                 $runLen = 1;
+                // Columns the run physically occupies (leads count their own
+                // width; continuations are consumed by their lead), so the
+                // cursor advance matches what the encoder will step over.
+                $runCols = $currCell->width() > 0 ? $currCell->width() : 1;
                 $nextCol = $col + 1;
 
                 while ($nextCol < $this->width) {
@@ -642,6 +646,7 @@ final class Buffer implements \JsonSerializable
                         // This cell also differs AND has same style.
                         $run[] = $nextCell;
                         $runLen++;
+                        $runCols += $nextCell->width() > 0 ? $nextCell->width() : 1;
                         $nextCol++;
                     } else {
                         break;
@@ -682,9 +687,10 @@ final class Buffer implements \JsonSerializable
                     }
                 }
 
-                // Advance cursor past the run.
-                $lastEmittedCol = $col + $runLen - 1;
-                $col += $runLen - 1; // -1 because for-loop increments
+                // Advance cursor past the run (column span, not cell count —
+                // wide leads consume their continuation columns).
+                $lastEmittedCol = $col + $runCols - 1;
+                $col += $runCols - 1; // -1 because for-loop increments
             }
         }
 
@@ -903,7 +909,10 @@ final class Buffer implements \JsonSerializable
      *  - replacing a lead with a real cell blanks a left-behind continuation
      *    so the cleared column repaints instead of ghosting;
      *  - writing a real cell onto a continuation blanks the stranded lead
-     *    to its left instead of leaving a half-open pair.
+     *    to its left instead of leaving a half-open pair;
+     *  - a width-2 lead landing on a partner slot that is itself the lead of
+     *    another pair blanks that pair's continuation one column further
+     *    right, so overwriting a wide cell never orphans half a pair.
      *
      * Continuation-to-continuation writes pass through untouched, so a
      * well-formed source pair blits byte-identically.
@@ -918,7 +927,11 @@ final class Buffer implements \JsonSerializable
 
         if ($cell->width() === 2) {
             if ($col + 1 < $this->width) {
+                $displaced = $grid[$idx + 1];
                 $grid[$idx + 1] = Cell::continuation();
+                if ($displaced->width() === 2 && $col + 2 < $this->width) {
+                    $grid[$idx + 2] = Cell::new();
+                }
             }
         } elseif ($cell->width() !== 0
             && $previous->width() === 2
