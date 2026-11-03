@@ -1219,7 +1219,7 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
     {
         $navHint = '[j/k] nav  [Space] toggle';
         $actionHint = $this->isDirty() ? '  [c] commit  [r] revert' : '';
-        $quitHint = '  [q] quit';
+        $quitHint = '  [q] back';
         $base = Style::new()->foreground(Color::hex('#6b7280'))->render($navHint . $actionHint . $quitHint);
 
         // These two indicators used single-quoted escape literals before, i.e.

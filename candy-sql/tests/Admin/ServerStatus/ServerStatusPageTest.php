@@ -147,7 +147,9 @@ final class ServerStatusPageTest extends TestCase
         $result = $page->view();
 
         $this->assertStringContainsString('[r] refresh', $result);
-        $this->assertStringContainsString('[q] quit', $result);
+        // D-M18 (2026-11-03): in-app q returns to Tables (D-C5), so the
+        // page footer says back — 'quit' was the old lie.
+        $this->assertStringContainsString('[q] back', $result);
     }
 
     public function testNewCreatesInstanceWithContext(): void

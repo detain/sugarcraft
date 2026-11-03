@@ -278,7 +278,7 @@ final class DebugPage extends PageBase implements RowNavigable
     private function renderFooter(): string
     {
         return Style::new()->foreground(Color::hex('#6b7280'))
-            ->render('[j/k] nav  [c] clear  [q] quit');
+            ->render('[j/k] nav  [c] clear  [q] back');
     }
 
     // ─── Accessors ───────────────────────────────────────────────────────────

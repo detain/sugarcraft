@@ -719,7 +719,7 @@ final class ReportsPage extends PageBase implements RowNavigable
     private function renderFooter(): string
     {
         return Style::new()->foreground(Color::hex('#6b7280'))
-            ->render('[j/k] nav rows  [h/l] category  [/] cycle report  [c] unit toggle  [q] quit');
+            ->render('[j/k] nav rows  [h/l] category  [/] cycle report  [c] unit toggle  [q] back');
     }
 
     private function renderErrorScreen(): string
@@ -735,7 +735,7 @@ final class ReportsPage extends PageBase implements RowNavigable
         $lines[] = $muted->render('Ensure MySQL 5.6.6+ with performance_schema=enabled');
         $lines[] = $muted->render('and the sys schema installed.');
         $lines[] = '';
-        $lines[] = $muted->render('[q] quit');
+        $lines[] = $muted->render('[q] back');
 
         return \implode("\n", $lines);
     }

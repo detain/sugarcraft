@@ -418,7 +418,7 @@ final class ServerStatusPage extends PageBase
 
     private function renderFooter(): string
     {
-        return Style::new()->foreground(Color::hex('#6b7280'))->render('[r] refresh  [q] quit');
+        return Style::new()->foreground(Color::hex('#6b7280'))->render('[r] refresh  [q] back');
     }
 
     // ─── Tristate Helper ─────────────────────────────────────────────────

@@ -841,7 +841,7 @@ final class VariablesPage extends PageBase implements RowNavigable
     private function renderFooter(): string
     {
         return Style::new()->foreground(Color::hex('#6b7280'))
-            ->render('[w] rw filter  [s] search  [j/k] nav  [e] edit(dynamic)  [q] quit');
+            ->render('[w] rw filter  [s] search  [j/k] nav  [e] edit(dynamic)  [q] back');
     }
 
     /**

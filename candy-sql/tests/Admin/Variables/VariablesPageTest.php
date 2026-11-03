@@ -105,7 +105,8 @@ final class VariablesPageTest extends TestCase
         $result = $page->view();
 
         $this->assertStringContainsString('[j/k] nav', $result); // Tab is globally consumed by the pane cycle - the footer must not advertise it
-        $this->assertStringContainsString('[q] quit', $result);
+        // D-M18 (2026-11-03): q backs out to Tables in-app, not quit.
+        $this->assertStringContainsString('[q] back', $result);
     }
 
     public function testViewContainsSearchPrompt(): void

@@ -406,7 +406,8 @@ final class PerfSchemaPageTest extends TestCase
         $page = new PerfSchemaPage($this->context);
         $result = $page->view();
 
-        $this->assertStringContainsString('[q] quit', $result);
+        // D-M18 (2026-11-03): q backs out to Tables in-app, not quit.
+        $this->assertStringContainsString('[q] back', $result);
     }
 
     // ─── Version Gating Tests ─────────────────────────────────────────────────
