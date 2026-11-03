@@ -13,8 +13,9 @@ use SugarCraft\GitServer\LFS\LFSHandler;
  *
  * Handles Git clone/fetch over HTTP/1.1 using the smart protocol (not
  * the dumb HTTP transport). git-upload-pack is served end to end;
- * git-receive-pack POSTs answer a 501 phase-2 refusal (owner ruling 1b)
- * while its advertisement stays gated behind canWrite for the push phase.
+ * git-receive-pack POSTs answer an honest 501 refusal — push is not
+ * implemented over smart-HTTP yet — while its advertisement stays gated
+ * behind canWrite for the day it is.
  *
  * Smart HTTP protocol flow:
  * 1. Client GETs /info/refs?service=git-upload-pack  → advertises refs
@@ -299,22 +300,33 @@ final class Server
         // Delegate the whole negotiation to the real binary through the
         // argv-array stateless-rpc pump (StatelessRpc owns the E721
         // request-scoped reap: bounded write + bounded drain on one
-        // deadline, stderr to null, TERM->KILL).
+        // deadline, bounded stderr tail logged on failure, TERM->KILL on
+        // every path including success). git.max_timeout, when positive,
+        // overrides the built-in negotiation ceiling (the constant
+        // was not configurable).
         $maxBytes = $this->config->maxPackBytes ?? 268435456; // 256 MiB default
-        $packData = StatelessRpc::negotiate('git-upload-pack', $repo->path(), $body, $maxBytes);
-        if ($packData === null) {
+        $deadline = $this->config->gitMaxTimeout > 0 ? (float) $this->config->gitMaxTimeout : null;
+        $result = StatelessRpc::negotiate('git-upload-pack', $repo->path(), $body, $maxBytes, $deadline);
+
+        // Typed outcome: overflow is 413, a wedged child is 504 —
+        // answering 413 for a timeout told clients to send SMALLER
+        // requests when nothing was too large.
+        if ($result['reason'] === StatelessRpc::REASON_OVERFLOW) {
             return $this->errorResponse(413, 'Packfile too large');
+        }
+        if ($result['reason'] === StatelessRpc::REASON_TIMEOUT) {
+            return $this->errorResponse(504, 'Negotiation timed out');
         }
 
         $this->stats()->recordPackDownload();
         $this->responseHeaders['Content-Type'] = 'application/x-git-upload-pack-result';
-        $this->body = $packData;
+        $this->body = $result['bytes'];
         return $this->finalizeResponse();
     }
 
     /**
-     * Handle POST /{repo}/git-receive-pack — phase-2 refusal (owner ruling
-     * 1b, r1024/githttp): phase 1 ships the smart-HTTP READ path only.
+     * Handle POST /{repo}/git-receive-pack — an honest 501: only the
+     * smart-HTTP READ path ships today.
      * Push needs receive-pack negotiation plus ref-update hardening that
      * belong to their own lane; until then this answers 501 loudly instead
      * of pretending to work. The receive-pack ADVERTISEMENT (info/refs
@@ -562,7 +574,7 @@ final class Server
 
         // Clients append '.git' to clone URLs (and tolerate it omitted);
         // hosts register under whichever name they scanned. Resolve the
-        // other spelling before declaring 404 (r1024/githttp).
+        // other spelling before declaring 404.
         if (\str_ends_with($name, '.git')) {
             return $this->repos[\substr($name, 0, -4)] ?? null;
         }
@@ -717,7 +729,7 @@ final class Server
     private function getUserFromHeaders(array $headers): ?User
     {
         // HTTP header names are case-insensitive on the wire (git sends
-        // lowercase); canonicalize once at the trust boundary (r1024/githttp).
+        // lowercase); canonicalize once at the trust boundary.
         $headers = \array_change_key_case($headers, \CASE_LOWER);
 
         // Check Basic auth
@@ -741,8 +753,8 @@ final class Server
                         if ($hash === null || $hash === '' || !\password_verify($password, $hash)) {
                             return null;
                         }
-                        // A deactivated account authenticates to nothing
-                        // (gap #5 cure, r1024/githttp): credentials out,
+                        // A deactivated account authenticates to nothing:
+                        // credentials out,
                         // identity null — the request proceeds as anonymous.
                         if (!$user->isActive) {
                             return null;

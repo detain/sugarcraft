@@ -100,27 +100,44 @@ final class ChildProcessLifetimeCensusTest extends TestCase
 
         $derived = 0;
         foreach ($this->srcFiles() as $relative => $source) {
-            $perFile = 0;
-            foreach ($this->functionBodies($source) as $name => $body) {
+            $perFile  = 0;
+            $bodies   = $this->functionBodies($source);
+            foreach ($bodies as $name => $body) {
                 $spawned = \preg_match_all('/\bproc_open\s*\(/', $body) ?: 0;
                 if ($spawned === 0) {
                     continue;
                 }
                 $perFile += $spawned;
-                self::assertGreaterThan(
-                    0,
-                    \preg_match_all('/\bproc_close\s*\(/', $body),
-                    "{$relative}::{$name} spawns a child without proc_close() in scope"
-                );
                 self::assertStringContainsString(
                     'finally',
                     $body,
                     "{$relative}::{$name} reaps outside a finally (E721 contract)"
                 );
-                self::assertStringContainsString(
-                    'proc_terminate',
-                    $body,
-                    "{$relative}::{$name} has no bounded early-exit for a stalled child (E721)"
+                // The ladder may be inline or delegated to a same-file
+                // reaper (StatelessRpc::reapBounded); either way the spawn
+                // site's finally must reach a scope that terminates and
+                // proc_close()s. Delegation is accepted ONLY when the
+                // callee lives in the same file and carries both halves —
+                // testTheDelegatedReaperClosesAndTerminates pins the callee.
+                $reaps = \preg_match_all('/\bproc_close\s*\(/', $body) > 0
+                    && \preg_match('/\bproc_terminate\s*\(/', $body) === 1;
+                if (!$reaps) {
+                    foreach ($bodies as $helper => $hbody) {
+                        if ($helper === $name
+                            || !\preg_match('/self::' . \preg_quote($helper, '/') . '\s*\(/', $body)) {
+                            continue;
+                        }
+                        if (\preg_match_all('/\bproc_close\s*\(/', $hbody) > 0
+                            && \preg_match('/\bproc_terminate\s*\(/', $hbody) === 1) {
+                            $reaps = true;
+
+                            break;
+                        }
+                    }
+                }
+                self::assertTrue(
+                    $reaps,
+                    "{$relative}::{$name} neither reaps inline nor delegates its finally to a same-file bounded reaper (E721)"
                 );
             }
             self::assertSame(
@@ -144,6 +161,28 @@ final class ChildProcessLifetimeCensusTest extends TestCase
                     "unexpected {$ban}() child spawn in {$relative}"
                 );
             }
+        }
+    }
+
+    /**
+     * The delegation the census above accepts must be real: reapBounded()
+     * is only a lawful reaper because it terminates and proc_close()s with a
+     * bounded wait, and only from the spawn sites' finally blocks.
+     */
+    public function testTheDelegatedReaperClosesAndTerminates(): void
+    {
+        $bodies = $this->functionBodies($this->srcFiles()['Git/StatelessRpc.php']);
+        self::assertArrayHasKey('reapBounded', $bodies, 'the delegated reaper vanished — spawn sites would hold unclosable children');
+        $reaper = $bodies['reapBounded'];
+        self::assertGreaterThan(0, \preg_match_all('/\bproc_close\s*\(/', $reaper), 'reapBounded must collect the exit code via proc_close');
+        self::assertMatchesRegularExpression('/\bproc_terminate\s*\(/', $reaper, 'reapBounded must run the TERM/KILL ladder');
+        self::assertStringContainsString('waitForExit', $reaper, 'the ladder must poll with a bound, never block an unbounded wait on a wedged child');
+        foreach (['advertise', 'negotiate'] as $spawner) {
+            self::assertMatchesRegularExpression(
+                '/finally\s*\{[^{}]*self::reapBounded\s*\(/s',
+                $bodies[$spawner],
+                "{$spawner}() must hand its child to the bounded reaper from the finally block"
+            );
         }
     }
 

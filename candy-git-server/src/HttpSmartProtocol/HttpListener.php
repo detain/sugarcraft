@@ -23,7 +23,7 @@ use React\EventLoop\LoopInterface;
  * neither. The router never blocks on a child longer than the bounded read
  * ladder in Git\StatelessRpc allows, so an accept tick always terminates.
  *
- * Added by r1024/githttp (owner ruling 1b): smart-HTTP READ path only.
+ * Scope: the smart-HTTP READ path only.
  */
 final class HttpListener
 {
@@ -35,8 +35,7 @@ final class HttpListener
 
     /**
      * How long a response write may make ZERO progress on a client socket
-     * before the listener gives up on that client (r1024/githttp2, review
-     * MAJOR-1 cure). Progress resets the window, so a slow-but-alive reader
+     * before the listener gives up on that client. Progress resets the window, so a slow-but-alive reader
      * is never cut off; a wedged one holds one stalled write for this long.
      */
     private const WRITE_STALL_SECONDS = 10.0;
@@ -302,7 +301,7 @@ final class HttpListener
             $wire .= "{$name}: {$value}\r\n";
         }
         $wire .= "\r\n" . $result['body'];
-        // r1024/githttp2 (review MAJOR-1): the socket is non-blocking, so a
+        // The socket is non-blocking, so a
         // bare fwrite hands the kernel AT MOST one send-buffer of bytes and
         // the rest of the response would be silently lost on close — real
         // `git clone` of any repo whose pack exceeds the kernel buffers died
@@ -399,6 +398,7 @@ final class HttpListener
         411 => 'Length Required',
         413 => 'Payload Too Large',
         422 => 'Unprocessable Entity',
+        504 => 'Gateway Timeout',
         431 => 'Request Header Fields Too Large',
         500 => 'Internal Server Error',
         501 => 'Not Implemented',

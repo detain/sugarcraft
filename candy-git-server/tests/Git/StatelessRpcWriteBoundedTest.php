@@ -28,7 +28,7 @@ final class StatelessRpcWriteBoundedTest extends TestCase
         self::assertIsResource($writer);
         try {
             $body = 'want ' . \str_repeat('a', 40) . "\n";
-            self::invokeWriteBounded($writer, $body, \microtime(true) + 2.0);
+            self::invokeWriteBounded($writer, $body, \hrtime(true) + 2_000_000_000);
 
             @\fclose($writer); // half-close so the blocking drain below sees EOF
             self::assertSame($body, (string) \stream_get_contents($reader));
@@ -53,8 +53,8 @@ final class StatelessRpcWriteBoundedTest extends TestCase
         $writer = $pipes[0];
         \stream_set_blocking($writer, false);
 
-        $started  = \microtime(true);
-        $deadline = $started + 0.2;
+        $started  = \hrtime(true);
+        $deadline = $started + 200_000_000; // ns — writeBounded takes the same absolute hrtime deadline negotiate computes
         $raised   = null;
         try {
             // fail() lives OUTSIDE this catch on purpose: PHPUnit's
@@ -75,7 +75,7 @@ final class StatelessRpcWriteBoundedTest extends TestCase
 
         self::assertNotNull($raised, 'a non-consuming stdin must trip the deadline');
         self::assertStringContainsString('stdin write stalled past the deadline', $raised);
-        self::assertGreaterThanOrEqual(0.2, \microtime(true) - $started, 'the deadline is honored, not skipped');
+        self::assertGreaterThanOrEqual(0.2, (\hrtime(true) - $started) / 1e9, 'the deadline is honored, not skipped');
     }
 
     public function testNegotiateFeedsStdinThroughTheBoundedWriter(): void
@@ -92,12 +92,12 @@ final class StatelessRpcWriteBoundedTest extends TestCase
 
         self::assertStringContainsString('self::writeBounded($pipes[0]', $body);
         self::assertStringNotContainsString('\fwrite($pipes[0]', $body, 'unguarded stdin write reintroduced');
-        self::assertStringContainsString('$deadline - \microtime(true)', $body, 'drain must inherit the write deadline budget');
+        self::assertStringContainsString('self::drainBounded($pipes[1], $pipes[2], $deadline', $body, 'drain must inherit the write deadline budget');
     }
 
     /** @param resource $writer */
-    private static function invokeWriteBounded($writer, string $bytes, float $deadlineMono): void
+    private static function invokeWriteBounded($writer, string $bytes, int $deadlineNs): void
     {
-        (new \ReflectionMethod(StatelessRpc::class, 'writeBounded'))->invoke(null, $writer, $bytes, $deadlineMono);
+        (new \ReflectionMethod(StatelessRpc::class, 'writeBounded'))->invoke(null, $writer, $bytes, $deadlineNs);
     }
 }

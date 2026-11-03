@@ -8,7 +8,7 @@ namespace SugarCraft\GitServer\Git;
  * The single stateless-rpc delegate: this package never re-implements git's
  * protocol brain, it pumps bytes to and from the real binary.
  *
- * Owner ruling 1b (r1024/githttp): the smart-HTTP read path advertises and
+ * The smart-HTTP read path advertises and
  * negotiates by spawning `git upload-pack --stateless-rpc` (and, for the
  * advertisement half of receive-pack, `git receive-pack --stateless-rpc`)
  * per request, exactly the way git's own http-backend does. Spawns go
@@ -41,26 +41,71 @@ final class StatelessRpc
     /** Wall-clock bound for a negotiation child: covers a full pack build. */
     public const NEGOTIATE_DEADLINE_SECONDS = 120.0;
 
+    /** How much of the child's stderr is kept for failure reporting. */
+    public const STDERR_TAIL_BYTES = 8192;
+
     /** Grace between SIGTERM and SIGKILL for an undrained child. */
     private const TERM_GRACE_SECONDS = 1.0;
+
+    /** Ceiling for a SIGKILLed child to actually disappear. */
+    private const KILL_WAIT_SECONDS = 2.0;
 
     /** Poll interval while waiting for a terminated child to die. */
     private const REAP_POLL_SECONDS = 0.01;
 
     /**
-     * SIGKILL a child that ignored TERM within the grace window. The number
-     * 9 is the Unix SIGKILL constant — no ext-pcntl dependency.
+     * Negotiation outcome reasons. Timeout and overflow were both signalled
+     * as null before, which made the caller answer every wedged child with
+     * 413 "too large" — a misleading wire verdict for a slow child.
      */
-    private static function escalateToKill($proc): void
+    public const REASON_OK = 'ok';
+    public const REASON_OVERFLOW = 'overflow';
+    public const REASON_TIMEOUT = 'timeout';
+    public const REASON_EXITED = 'exited';
+
+    /**
+     * E721 request-scoped reap, one ladder for every exit path — including
+     * the SUCCESS path: a child that has closed its output pipes is polled
+     * until it reports exited, and only then does proc_close() collect the
+     * code. The old shape skipped straight to proc_close() on success, so a
+     * git child that drained stdout but hung around (hook, stuck object
+     * access) froze the whole single-loop server indefinitely.
+     *
+     * @return array{exitCode: int, signal: int}
+     */
+    private static function reapBounded($proc, array $pipes): array
     {
-        $grace = \microtime(true) + self::TERM_GRACE_SECONDS;
-        while (\microtime(true) < $grace && \proc_get_status($proc)['running']) {
+        $status = \proc_get_status($proc);
+        if ($status['running']) {
+            @\proc_terminate($proc);
+            if (!self::waitForExit($proc, self::TERM_GRACE_SECONDS)) {
+                // 9 = SIGKILL: a child that ignored TERM gets the hard end.
+                @\proc_terminate($proc, 9);
+                self::waitForExit($proc, self::KILL_WAIT_SECONDS);
+            }
+            $status = \proc_get_status($proc);
+        }
+
+        foreach ($pipes as $pipe) {
+            if (\is_resource($pipe)) {
+                @\fclose($pipe);
+            }
+        }
+
+        return ['exitCode' => \proc_close($proc), 'signal' => (int) $status['termsig']];
+    }
+
+    private static function waitForExit($proc, float $seconds): bool
+    {
+        $until = \hrtime(true) + (int) ($seconds * 1e9);
+        while (\hrtime(true) < $until) {
+            if (!\proc_get_status($proc)['running']) {
+                return true;
+            }
             \usleep((int) (self::REAP_POLL_SECONDS * 1e6));
         }
 
-        if (\proc_get_status($proc)['running']) {
-            @\proc_terminate($proc, 9);
-        }
+        return !\proc_get_status($proc)['running'];
     }
 
     private function __construct()
@@ -84,9 +129,13 @@ final class StatelessRpc
      * Run `git <binary> --stateless-rpc --advertise-refs` over $repoPath and
      * return its raw pkt-framed advertisement bytes.
      *
+     * @param float|null $deadlineSeconds override for tests/ops; the
+     *                                    production default stays
+     *                                    {@see ADVERTISE_DEADLINE_SECONDS}
+     *
      * @throws \RuntimeException when the child cannot start or fails
      */
-    public static function advertise(string $service, string $repoPath): string
+    public static function advertise(string $service, string $repoPath, ?float $deadlineSeconds = null): string
     {
         $binary = self::binaryFor($service);
         if ($binary === null) {
@@ -102,49 +151,85 @@ final class StatelessRpc
             throw new \RuntimeException('failed to start git ' . $binary . ' --advertise-refs');
         }
 
-        // E721 request-scoped reap: stdout is the answer, stderr is drained
-        // to null (it must never block the child); anything undrained at the
-        // end of the bounded read is terminated-then-killed before close.
-        $bytes     = null;
-        $exitCode  = -1;
+        // E721 request-scoped reap: stdout is the answer, stderr keeps a
+        // bounded tail (it is drained either way, so the child can never
+        // block on a full error pipe). reapBounded() ends the child on
+        // EVERY path — success included — never an unbounded proc_close.
+        $stderrTail = '';
+        $timedOut   = false;
         try {
             \fclose($pipes[0]);
-            $bytes = self::drainBounded($proc, $pipes[1], $pipes[2], self::ADVERTISE_DEADLINE_SECONDS, \PHP_INT_MAX);
+            $drained = self::drainBounded(
+                $pipes[1],
+                $pipes[2],
+                \hrtime(true) + (int) (($deadlineSeconds ?? self::ADVERTISE_DEADLINE_SECONDS) * 1e9),
+                \PHP_INT_MAX,
+                $stderrTail
+            );
+            $bytes    = $drained['bytes'];
+            $timedOut = $drained['reason'] === self::REASON_TIMEOUT;
         } finally {
-            if ($bytes === null) {
-                @\proc_terminate($proc);
-                self::escalateToKill($proc);
-            }
-            foreach ($pipes as $pipe) {
-                if (\is_resource($pipe)) {
-                    @\fclose($pipe);
-                }
-            }
-            $exitCode = \proc_close($proc);
+            $reap = self::reapBounded($proc, $pipes);
         }
 
-        if ($bytes === null || $bytes === '' && $exitCode !== 0) {
-            throw new \RuntimeException('git ' . $binary . ' --advertise-refs exited ' . $exitCode);
+        // A timeout truncates the advertisement mid-frame; handing the
+        // partial bytes to the client would masquerade as a valid answer.
+        if ($timedOut) {
+            self::reportFailure($binary, '--advertise-refs', 'timeout', $reap, $stderrTail);
+            throw new \RuntimeException('git ' . $binary . ' --advertise-refs timed out');
+        }
+        if ($bytes === '' && $reap['exitCode'] !== 0) {
+            self::reportFailure($binary, '--advertise-refs', 'exit', $reap, $stderrTail);
+            throw new \RuntimeException('git ' . $binary . ' --advertise-refs exited ' . $reap['exitCode']);
         }
 
         return $bytes;
     }
 
     /**
+     * A failed child used to be silent — stderr drained to null and
+     * the reason (timeout vs exit code) was lost. The bounded tail now goes
+     * to the server's STDERR so a 500 on the wire has a matching log line.
+     */
+    private static function reportFailure(string $binary, string $mode, string $reason, array $reap, string $stderrTail): void
+    {
+        $line = "candy-git-server: git {$binary} {$mode} failed ({$reason}, exit code {$reap['exitCode']}, signal {$reap['signal']})";
+        if ($stderrTail !== '') {
+            $line .= "\n" . $stderrTail;
+        }
+        \fwrite(\STDERR, $line . "\n");
+    }
+
+    /**
      * Run one stateless-rpc negotiation: feed $body (the smart-HTTP request
      * body, service header included — clients send it) to
-     * `git <binary> --stateless-rpc` and return the raw response bytes.
+     * `git <binary> --stateless-rpc` and return the response.
      *
      * The child carries the protocol: wants, haves, NAK/ACK, side-band and
      * the packfile all come from the real binary, byte-exact.
      *
-     * @param int $maxBytes refuse responses above this many bytes
-     * @return string|null null when the response overflowed $maxBytes (the
-     *                     caller answers 413 and the child is reaped anyway)
+     * The outcome is TYPED: the old ?string return conflated a
+     * wedged child (timeout) with a response over the cap (overflow) —
+     * both null, so the caller answered every slow child with a wrong
+     * "413 too large". Callers now branch on REASON_*.
+     *
+     * @param int        $maxBytes        refuse responses above this many bytes
+     * @param float|null $deadlineSeconds production default stays
+     *                                    {@see NEGOTIATE_DEADLINE_SECONDS}
+     *
+     * @return array{bytes: string, reason: string, stderrTail: string}
+     *         bytes is whatever was collected before the verdict (full
+     *         response only on REASON_OK); stderrTail is the bounded tail
+     *         the child wrote to its error pipe.
      * @throws \RuntimeException when the child cannot start
      */
-    public static function negotiate(string $service, string $repoPath, string $body, int $maxBytes): ?string
-    {
+    public static function negotiate(
+        string $service,
+        string $repoPath,
+        string $body,
+        int $maxBytes,
+        ?float $deadlineSeconds = null
+    ): array {
         $binary = self::binaryFor($service);
         if ($binary === null) {
             throw new \RuntimeException('unknown smart-HTTP service: ' . $service);
@@ -167,74 +252,87 @@ final class StatelessRpc
         }
 
         // E721 request-scoped reap — same ladder as advertise(): ONE
-        // NEGOTIATE_DEADLINE_SECONDS budget now covers write + drain
-        // together (r1024/githttp2, review MINOR-1) — writeBounded() feeds
-        // stdin only as fast as a consuming child takes it and stops at the
-        // deadline; the drain below gets whatever the write left over. A
-        // child that never reads is refused and escalated TERM→KILL by the
-        // finally, never frozen mid-fwrite.
-        $bytes    = null;
-        $deadline = \microtime(true) + self::NEGOTIATE_DEADLINE_SECONDS;
+        // deadline budget covers write + drain together; writeBounded()
+        // feeds stdin only as fast as a consuming child takes it and stops
+        // at the deadline; a child that never reads is refused and ended
+        // by reapBounded()'s TERM→KILL run, never frozen mid-fwrite.
+        $deadline = \hrtime(true) + (int) (($deadlineSeconds ?? self::NEGOTIATE_DEADLINE_SECONDS) * 1e9);
+        $stderrTail = '';
+        $bytes = '';
+        $reason = self::REASON_OK;
         try {
             self::writeBounded($pipes[0], $stdin, $deadline);
             \fclose($pipes[0]);
-            $bytes = self::drainBounded($proc, $pipes[1], $pipes[2], $deadline - \microtime(true), $maxBytes);
+            $drained = self::drainBounded($pipes[1], $pipes[2], $deadline, $maxBytes, $stderrTail);
+            $bytes   = $drained['bytes'];
+            $reason  = $drained['reason'];
         } finally {
-            if ($bytes === null) {
-                @\proc_terminate($proc);
-                self::escalateToKill($proc);
-            }
-            foreach ($pipes as $pipe) {
-                if (\is_resource($pipe)) {
-                    @\fclose($pipe);
-                }
-            }
-            \proc_close($proc);
+            $reap = self::reapBounded($proc, $pipes);
         }
 
-        return $bytes;
+        // Reported once the child is actually dead, so the line carries
+        // the true exit status rather than a placeholder.
+        if ($reason !== self::REASON_OK) {
+            self::reportFailure($binary, '--stateless-rpc', $reason, $reap, $stderrTail);
+        } elseif ($reap['exitCode'] !== 0 && $bytes === '') {
+            $reason = self::REASON_EXITED;
+            self::reportFailure($binary, '--stateless-rpc', 'exit', $reap, $stderrTail);
+        }
+
+        return ['bytes' => $bytes, 'reason' => $reason, 'stderrTail' => $stderrTail];
     }
 
     /**
      * Remove a leading "# service=<name>" packet (and its flush) from a
      * smart-HTTP request body, exactly once; everything else rides through
      * untouched (including bodies that are not pkt-framed at all).
+     *
+     * Byte-slice, not decode-reshape: the old implementation ran
+     * the WHOLE body through PktLine::decode() and re-encoded every
+     * packet — which (a) throws on any legitimate payload above the
+     * per-packet cap (real push command packets with long refs/caps, and
+     * packfile bytes are NOT packets at all), and the catch then fed the
+     * child the UNSTRIPPED body: guaranteed "expected to get object ID"
+     * death on exactly the requests that matter; (b) churned the body 3x
+     * through memory. Only the first two packets are parsed; the rest of
+     * the wire is relocated by offset, raw.
      */
     private static function stripServiceHeader(string $service, string $body): string
     {
-        if (\strlen($body) < PktLine::HEADER_BYTES || \ctype_xdigit(\substr($body, 0, PktLine::HEADER_BYTES)) !== true) {
+        if (\strlen($body) < PktLine::HEADER_BYTES || !\ctype_xdigit(\substr($body, 0, PktLine::HEADER_BYTES))) {
+            return $body;
+        }
+        $length = \hexdec(\substr($body, 0, PktLine::HEADER_BYTES));
+        if ($length < PktLine::HEADER_BYTES || $length > PktLine::MAX_PACKET_BYTES || \strlen($body) < $length) {
             return $body;
         }
 
-        try {
-            $packets = PktLine::decode($body);
-        } catch (\RuntimeException) {
+        $first = \substr($body, PktLine::HEADER_BYTES, $length - PktLine::HEADER_BYTES);
+        if (!PktLine::isServiceHeader($first, $service)) {
             return $body;
         }
+        $offset = $length;
 
-        $first = $packets[0] ?? null;
-        if (!\is_string($first) || !PktLine::isServiceHeader($first, $service)) {
-            return $body;
+        // Skip the header's flush packet ("0000") when present.
+        if (\strlen($body) >= $offset + PktLine::HEADER_BYTES
+            && \substr($body, $offset, PktLine::HEADER_BYTES) === PktLine::FLUSH
+        ) {
+            $offset += PktLine::HEADER_BYTES;
         }
 
-        \array_shift($packets);
-        if (($packets[0] ?? null) === null) {
-            \array_shift($packets); // the header's flush-pkt
-        }
-
-        return \implode('', \array_map(static fn (?string $p): string => PktLine::encode((string) $p), $packets));
+        return \substr($body, $offset);
     }
 
     /**
      * Feed $bytes to a (non-blocking) child stdin pipe until the whole body
      * is accepted or the absolute wall-clock $deadlineMono passes — never a
      * bare fwrite that could freeze the single-loop server on a child that
-     * stops consuming (r1024/githttp2, review MINOR-1).
+     * stops consuming.
      *
      * @param resource $stream
      * @throws \RuntimeException when the child did not take the whole body in time
      */
-    private static function writeBounded($stream, string $bytes, float $deadlineMono): void
+    private static function writeBounded($stream, string $bytes, int $deadlineNs): void
     {
         \stream_set_blocking($stream, false);
 
@@ -249,7 +347,7 @@ final class StatelessRpc
                 $offset += $written;
                 continue;
             }
-            if (\microtime(true) >= $deadlineMono) {
+            if (\hrtime(true) >= $deadlineNs) {
                 throw new \RuntimeException('stateless-rpc stdin write stalled past the deadline');
             }
             $read = $except = null;
@@ -259,30 +357,30 @@ final class StatelessRpc
     }
 
     /**
-     * Read stdout (capped) while stderr drains to null, until both close or
-     * the wall-clock deadline passes. A wedged child that never closes its
-     * pipes ends the call at the deadline with null — the caller's reap
-     * escalates TERM→KILL, so this function itself cannot hang.
+     * Read stdout (capped) while stderr is collected (bounded tail), until
+     * both close or the absolute hrtime deadline passes. A wedged child
+     * ends the call at the deadline with REASON_TIMEOUT and whatever was
+     * already collected — the caller's reapBounded() then ends the child,
+     * so this function itself cannot hang.
      *
-     * @param resource $proc
      * @param resource $stdoutPipe
      * @param resource $stderrPipe
-     * @return string|null null on deadline or size-cap overflow
+     * @param \Iterator-returning shape: bytes + verdict reason
+     * @return array{bytes: string, reason: string}
      */
-    private static function drainBounded($proc, $stdoutPipe, $stderrPipe, float $deadlineSeconds, int $maxBytes): ?string
+    private static function drainBounded($stdoutPipe, $stderrPipe, int $deadlineNs, int $maxBytes, string &$stderrTail): array
     {
-        $deadline = \microtime(true) + $deadlineSeconds;
-        $data     = '';
-        $outEof   = false;
-        $errEof   = false;
+        $data   = '';
+        $outEof = false;
+        $errEof = false;
 
         \stream_set_blocking($stdoutPipe, false);
         \stream_set_blocking($stderrPipe, false);
 
         while (!($outEof && $errEof)) {
-            $remaining = $deadline - \microtime(true);
-            if ($remaining <= 0.0) {
-                return null; // wedged child — the caller's reap escalates
+            $remainingNs = $deadlineNs - \hrtime(true);
+            if ($remainingNs <= 0) {
+                return ['bytes' => $data, 'reason' => self::REASON_TIMEOUT]; // wedged child — caller reaps
             }
 
             $read = [];
@@ -294,7 +392,7 @@ final class StatelessRpc
             }
 
             $null  = null;
-            $ready = @\stream_select($read, $null, $null, (int) $remaining, (int) (($remaining - (int) $remaining) * 1e6));
+            $ready = @\stream_select($read, $null, $null, 0, (int) \min(1_000_000, $remainingNs));
             if ($ready === false) {
                 \usleep(1000); // interrupted (signal): re-check the deadline next turn
                 continue;
@@ -305,8 +403,16 @@ final class StatelessRpc
                 $closed = $chunk === false || ($chunk === '' && \feof($stream));
 
                 if ($stream === $stderrPipe) {
-                    // Drain to null: the child must never block on a full
-                    // error pipe; we only watch it for its close.
+                    // Collected for the failure line, tail-bounded
+                    // so a chatty child cannot balloon server memory; the
+                    // pipe is drained either way, so the child never
+                    // blocks on it.
+                    if ($chunk !== false && $chunk !== '') {
+                        $stderrTail .= $chunk;
+                        if (\strlen($stderrTail) > self::STDERR_TAIL_BYTES) {
+                            $stderrTail = \substr($stderrTail, -self::STDERR_TAIL_BYTES);
+                        }
+                    }
                     if ($closed || \feof($stderrPipe)) {
                         $errEof = true;
                     }
@@ -324,12 +430,11 @@ final class StatelessRpc
 
                 $data .= $chunk;
                 if (\strlen($data) > $maxBytes) {
-                    return null; // response overflow — reap and answer 413
+                    return ['bytes' => $data, 'reason' => self::REASON_OVERFLOW]; // caller answers 413
                 }
             }
         }
 
-        return $data;
+        return ['bytes' => $data, 'reason' => self::REASON_OK];
     }
-
 }
