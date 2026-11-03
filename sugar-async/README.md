@@ -22,7 +22,7 @@ use SugarCraft\Async\{AsyncOps, CancellationSource, Subscriptions};
 $source = CancellationSource::new();
 
 // Attach a cancellation callback
-$source->token()->onCancel(fn() => echo "Cancelled!\n");
+$source->token()->onCancel(function (): void { echo "Cancelled!\n"; });
 
 $source->cancel(); // prints "Cancelled!"
 
