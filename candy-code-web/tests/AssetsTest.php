@@ -17,6 +17,34 @@ use SugarCraft\CodeWeb\Assets;
  */
 final class AssetsTest extends TestCase
 {
+    /**
+     * Outputs intentionally emitted at the bundle root with a STABLE url,
+     * exempt from the content-hash rule. A service worker must never change
+     * its own address (its registration scope is the url it was served at,
+     * and candy-code serves it with a year-long cache), so moving `sw.js`
+     * under `assets/` with a hash would stale every installed worker for a
+     * year. Roster is bidirectional: an entry that stops being root-stable
+     * goes red here, and a hashed build that keeps a stale row goes red too.
+     */
+    private const ROOT_STABLE_OUTPUTS = ['sw.js'];
+
+    /** @var list<string> temporary package roots to sweep after each test */
+    private array $temporaryRoots = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->temporaryRoots as $root) {
+            foreach (\glob($root . '/dist/*') ?: [] as $file) {
+                @\unlink((string) $file);
+            }
+            @\rmdir($root . '/dist');
+            @\rmdir($root);
+        }
+        $this->temporaryRoots = [];
+
+        parent::tearDown();
+    }
+
     public function testDistPathIsTheCanonicalBundleDirectory(): void
     {
         $dist = Assets::distPath();
@@ -26,27 +54,71 @@ final class AssetsTest extends TestCase
         self::assertStringEndsNotWith('/', $dist);
     }
 
-    public function testManifestHasOneEntryAndEveryFileItNamesExists(): void
+    public function testTryDistPathAgreesWithDistPathOnTheRealBundle(): void
+    {
+        // The soft variant must never disagree with the hard one where both
+        // answer: candy-code's installedWebRoot() branches on the null.
+        self::assertSame(Assets::distPath(), Assets::tryDistPath());
+    }
+
+    public function testManifestHasOnePageEntryAndEveryFileItNamesExists(): void
     {
         $manifest = Assets::manifest();
         $dist = Assets::distPath();
+        $index = (string) \file_get_contents($dist . '/index.html');
 
-        $entries = \array_filter($manifest, static fn (array $chunk): bool => ($chunk['isEntry'] ?? false) === true);
-        self::assertCount(1, $entries, 'the bundle has exactly one entry chunk');
-        self::assertArrayHasKey('index.html', $entries);
+        // "Entry" is Vite's word for both the page bundle and a service
+        // worker build — the bundle is ONE entry chunk when the page is
+        // asked for exactly. The service worker rides the root roster below.
+        $pageEntries = [];
+        foreach ($manifest as $source => $chunk) {
+            if (($chunk['isEntry'] ?? false) !== true) {
+                continue;
+            }
+
+            $file = $chunk['file'] ?? null;
+            if (\is_string($file) && \str_contains($index, 'src="./' . $file . '"')) {
+                $pageEntries[] = $source;
+            }
+        }
+
+        self::assertSame(['index.html'], $pageEntries, 'index.html references exactly one entry chunk');
 
         foreach ($manifest as $source => $chunk) {
             self::assertIsString($chunk['file'] ?? null, "manifest entry {$source} names its output file");
             $files = [$chunk['file'], ...($chunk['css'] ?? []), ...($chunk['assets'] ?? [])];
             foreach ($files as $file) {
                 self::assertFileExists($dist . '/' . $file, "manifest entry {$source} → {$file}");
+                if (\in_array($file, self::ROOT_STABLE_OUTPUTS, true)) {
+                    continue;
+                }
+
                 self::assertMatchesRegularExpression(
                     '~^assets/[\w.-]+-[\w-]{8}\.\w+$~',
                     $file,
-                    'emitted assets carry a content hash, so serve can cache them immutably',
+                    "emitted assets carry a content hash, so serve can cache them immutably ({$file})",
                 );
             }
         }
+    }
+
+    public function testRootStableRosterMatchesTheBundleExactly(): void
+    {
+        $hashed = [];
+        foreach (Assets::manifest() as $chunk) {
+            foreach ([$chunk['file'], ...($chunk['css'] ?? []), ...($chunk['assets'] ?? [])] as $file) {
+                if (\is_string($file) && !\preg_match('~^assets/[\w.-]+-[\w-]{8}\.\w+$~', $file)) {
+                    $hashed[] = $file;
+                }
+            }
+        }
+
+        // Forward: every unhashed output is a rostered stable url.
+        self::assertSame(
+            self::ROOT_STABLE_OUTPUTS,
+            $hashed,
+            'root-level unhashed outputs must be rostered (and stay out of assets/ on purpose)',
+        );
     }
 
     public function testIndexHtmlLoadsTheManifestEntryByRelativeUrl(): void
@@ -96,5 +168,105 @@ final class AssetsTest extends TestCase
             }
         }
         self::assertGreaterThan(0, $seen);
+    }
+
+    public function testDiagnoseReportsAWellFormedPackageRoot(): void
+    {
+        $root = $this->makeBundleRoot();
+        self::writeBundleFiles($root, manifest: '{"index.html":{"file":"assets/a-DEADBEEF.js","isEntry":true}}', buildInfo: '{"version":"9.9.9"}');
+
+        $report = Assets::diagnose($root);
+
+        self::assertNull($report['error']);
+        self::assertSame($root . '/dist', $report['dist']);
+        self::assertSame(['index.html'], \array_keys($report['manifest']));
+        self::assertSame('9.9.9', $report['version']);
+    }
+
+    /**
+     * Every failure branch of the throwing API, reached through the reporting
+     * seam: a broken install must be NAMEABLE (the serve doctor reads this),
+     * and each message here is the message distPath/manifest/version throws.
+     *
+     * @return array<string, array{0: bool, 1: array<string, ?string>, 2: string}>
+     *         [writeHealthyBundle, overrides (null = delete), error needle]
+     */
+    public static function brokenInstallBranches(): array
+    {
+        return [
+            'nothing but an empty dist' => [false, [], 'dist/index.html is missing'],
+            'index.html deleted' => [true, ['index.html' => null], 'dist/index.html is missing'],
+            'manifest file absent' => [true, ['manifest.json' => null], 'dist/manifest.json is missing'],
+            'manifest unreadable JSON' => [true, ['manifest.json' => '{'], 'dist/manifest.json is not valid JSON'],
+            'manifest JSON is not an object' => [true, ['manifest.json' => '5'], 'dist/manifest.json is not a JSON object'],
+            'build-info absent' => [true, ['build-info.json' => null], 'dist/build-info.json is missing'],
+            'build-info not an object' => [true, ['build-info.json' => '"x"'], 'dist/build-info.json is not a JSON object'],
+            'build-info carries no version' => [true, ['build-info.json' => '{}'], 'build-info.json carries no version'],
+            'build-info version is not a string' => [true, ['build-info.json' => '{"version":7}'], 'carries no version'],
+        ];
+    }
+
+    /** @param array<string, ?string> $overrides file name => content, or null to delete */
+    #[\PHPUnit\Framework\Attributes\DataProvider('brokenInstallBranches')]
+    public function testDiagnoseNamesEachBrokenInstallBranch(bool $healthyStart, array $overrides, string $expectedNeedle): void
+    {
+        $root = $this->makeBundleRoot();
+        if ($healthyStart) {
+            self::writeBundleFiles($root, manifest: '{"index.html":{"file":"assets/a-DEADBEEF.js"}}', buildInfo: '{"version":"9.9.9"}');
+        }
+        foreach ($overrides as $name => $content) {
+            $path = $root . '/dist/' . $name;
+            if ($content === null) {
+                @\unlink($path);
+                continue;
+            }
+            \file_put_contents($path, $content);
+        }
+
+        $report = Assets::diagnose($root);
+
+        self::assertNotNull($report['error'], 'the broken branch must be reported, not papered over');
+        self::assertStringContainsString($expectedNeedle, (string) $report['error']);
+        self::assertNull($report['manifest']);
+        self::assertNull($report['version']);
+    }
+
+    public function testTheServeShimContractIsNameStable(): void
+    {
+        // candy-code's Serve::installedWebRoot() reaches this class through
+        // a string FQCN + method_exists probe (composer `suggest`, no hard
+        // dep), which is invisible to static analysis in BOTH packages:
+        // renaming the namespace or distPath() silently drops the UI to the
+        // "web_missing" fallback. This pin is the seam's only tripwire.
+        $servePath = \dirname(__DIR__, 2) . '/candy-code/src/Cli/Serve.php';
+        if (!\is_file($servePath)) {
+            // Split-repo checkout of the web package alone: the sibling
+            // server is not in this tree (carve-out mirrors candy-code's
+            // WebStringsDriftTest shape).
+            self::markTestSkipped('candy-code sibling absent — split-repo checkout');
+        }
+
+        self::assertSame('SugarCraft\CodeWeb\Assets', Assets::class);
+        self::assertTrue(\method_exists(Assets::class, 'distPath'), 'Serve.php probes distPath() by name');
+
+        $serve = (string) \file_get_contents($servePath);
+        self::assertStringContainsString("'SugarCraft\\\\CodeWeb\\\\Assets'", $serve, 'Serve probes this exact FQCN string');
+        self::assertStringContainsString("method_exists(\$assets, 'distPath')", $serve, 'the probed method keeps its name');
+    }
+
+    private function makeBundleRoot(): string
+    {
+        $root = \sys_get_temp_dir() . '/codeweb-assets-' . \uniqid('', true);
+        self::assertIsBool(\mkdir($root . '/dist', 0o777, true));
+        $this->temporaryRoots[] = $root;
+
+        return $root;
+    }
+
+    private static function writeBundleFiles(string $root, string $manifest, string $buildInfo): void
+    {
+        \file_put_contents($root . '/dist/index.html', '<html></html>');
+        \file_put_contents($root . '/dist/manifest.json', $manifest);
+        \file_put_contents($root . '/dist/build-info.json', $buildInfo);
     }
 }

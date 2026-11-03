@@ -31,26 +31,33 @@ final class Assets
     }
 
     /**
-     * Absolute path of the committed bundle (no trailing slash).
+     * Absolute path of the committed bundle (no trailing slash), or null
+     * when the install is incomplete.
      *
      * Resolved through `realpath()` so a server that path-jails requests to
      * this directory compares against the same canonical prefix the kernel
      * reports for the files inside it, even when vendor/ is a symlink farm
      * (path repositories install packages as symlinks).
      *
+     * The soft variant of {@see distPath()}: a consumer that treats a missing
+     * bundle as "serve the API without a UI" (candy-code's `serve`) must not
+     * have to catch a RuntimeException to branch on it. `distPath()` keeps
+     * throwing for callers that want the hard contract.
+     */
+    public static function tryDistPath(): ?string
+    {
+        return self::tryResolveDist(\dirname(__DIR__));
+    }
+
+    /**
+     * Absolute path of the committed bundle (no trailing slash).
+     *
      * @throws \RuntimeException when the bundle is missing — a broken install,
      *                           never a state the server should paper over.
      */
     public static function distPath(): string
     {
-        $dist = \realpath(\dirname(__DIR__) . '/dist');
-        if ($dist === false || !\is_file($dist . '/index.html')) {
-            throw new \RuntimeException(
-                'candy-code-web: dist/index.html is missing; the package install is incomplete.',
-            );
-        }
-
-        return $dist;
+        return self::resolveDist(\dirname(__DIR__));
     }
 
     /**
@@ -61,7 +68,7 @@ final class Assets
     public static function manifest(): array
     {
         /** @var array<string, array<string, mixed>> */
-        return self::readJson(self::MANIFEST);
+        return self::readJson(self::distPath(), self::MANIFEST);
     }
 
     /**
@@ -72,7 +79,58 @@ final class Assets
      */
     public static function version(): string
     {
-        $info = self::readJson(self::BUILD_INFO);
+        return self::versionFrom(self::readJson(self::distPath(), self::BUILD_INFO));
+    }
+
+    /**
+     * Structured health report for any package root — the whole failure
+     * surface of {@see distPath()}, {@see manifest()} and {@see version()}
+     * made observable without a thrown exception. Written for tests and a
+     * future `serve` doctor; the package's own root is just one argument.
+     *
+     * @return array{dist: ?string, manifest: ?array<string, array<string, mixed>>, version: ?string, error: ?string}
+     */
+    public static function diagnose(string $packageRoot): array
+    {
+        $dist = self::tryResolveDist($packageRoot);
+        if ($dist === null) {
+            return [
+                'dist' => null,
+                'manifest' => null,
+                'version' => null,
+                'error' => self::MISSING_INDEX_MESSAGE,
+            ];
+        }
+
+        try {
+            /** @var array<string, array<string, mixed>> $manifest */
+            $manifest = self::readJson($dist, self::MANIFEST);
+            $version = self::versionFrom(self::readJson($dist, self::BUILD_INFO));
+        } catch (\RuntimeException $failure) {
+            return ['dist' => $dist, 'manifest' => null, 'version' => null, 'error' => $failure->getMessage()];
+        }
+
+        return ['dist' => $dist, 'manifest' => $manifest, 'version' => $version, 'error' => null];
+    }
+
+    /** Message shared by the throwing and reporting paths so they cannot drift. */
+    private const MISSING_INDEX_MESSAGE = 'candy-code-web: dist/index.html is missing; the package install is incomplete.';
+
+    private static function resolveDist(string $packageRoot): string
+    {
+        return self::tryResolveDist($packageRoot) ?? throw new \RuntimeException(self::MISSING_INDEX_MESSAGE);
+    }
+
+    private static function tryResolveDist(string $packageRoot): ?string
+    {
+        $dist = \realpath($packageRoot . '/dist');
+
+        return $dist !== false && \is_file($dist . '/index.html') ? $dist : null;
+    }
+
+    /** @param array<mixed> $info */
+    private static function versionFrom(array $info): string
+    {
         $version = $info['version'] ?? null;
         if (!\is_string($version) || $version === '') {
             throw new \RuntimeException('candy-code-web: dist/' . self::BUILD_INFO . ' carries no version.');
@@ -82,14 +140,20 @@ final class Assets
     }
 
     /** @return array<mixed> */
-    private static function readJson(string $name): array
+    private static function readJson(string $dist, string $name): array
     {
-        $path = self::distPath() . '/' . $name;
+        $path = $dist . '/' . $name;
         $raw = @\file_get_contents($path);
         if ($raw === false) {
             throw new \RuntimeException("candy-code-web: dist/{$name} is missing.");
         }
-        $decoded = \json_decode($raw, true, 64, \JSON_THROW_ON_ERROR);
+        try {
+            $decoded = \json_decode($raw, true, 64, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException $malformed) {
+            // Keep the offending file in the message: a bare "Syntax error"
+            // cannot tell an operator which of the two stamps is broken.
+            throw new \RuntimeException("candy-code-web: dist/{$name} is not valid JSON: " . $malformed->getMessage(), previous: $malformed);
+        }
         if (!\is_array($decoded)) {
             throw new \RuntimeException("candy-code-web: dist/{$name} is not a JSON object.");
         }
