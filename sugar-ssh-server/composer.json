@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-ssh-server",
-    "description": "SSH server middleware framework \u2014 port of charmbracelet/wish. Build TUIs that anyone can `ssh user@host` to run, with composable middleware (auth, logging, rate-limiting, ext-ssh2 client wrappers, mount a SugarCraft Program).",
+    "description": "SSH server middleware framework \u2014 port of charmbracelet/wish. Composable middleware (auth, logging, rate-limiting, channel handling) and a PTY supervisor that runs a shell or a SugarCraft Program under a host OpenSSH daemon's ForceCommand. It does not implement the SSH wire protocol, and it ships no client, no port forwarding and no SFTP server.",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -29,6 +29,7 @@
     },
     "require": {
         "php": "^8.3",
+        "ext-ffi": "*",
         "react/event-loop": "^1.6",
         "react/promise-timer": "^1.9",
         "sugarcraft/sugar-core": "dev-master",
@@ -39,7 +40,7 @@
         "sugarcraft/sugar-testing": "dev-master"
     },
     "suggest": {
-        "ext-ssh2": "Enables the Ssh2 client middleware (forwarding, sftp helpers)."
+        "ext-pcntl": "Forks and reaps the InProcessTransport session child and forwards SIGWINCH resizes; runChild() raises a PtyException when it is missing, and the legacy HostSshdTransport needs nothing."
     },
     "autoload": {
         "psr-4": {

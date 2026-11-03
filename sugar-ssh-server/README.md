@@ -42,8 +42,8 @@ composer require sugarcraft/sugar-ssh-server
     and on many shared hosts.
 - The **legacy `HostSshdTransport`** runs the middleware chain inline against
   the PTY sshd already allocated — it needs none of the three above.
-- **`ext-ssh2` is optional** and only relevant for *outbound* SSH opened from
-  inside a session (see [ext-ssh2](#ext-ssh2) below).
+- **`ext-ssh2` is not used by this library at all** and the manifest does not
+  suggest it (see [ext-ssh2](#ext-ssh2) below).
 
 Tests that exercise the PTY stack gate themselves on these capabilities, so
 the suite also passes on hosts without them (the default transport is then
@@ -550,7 +550,21 @@ Both extend `\RuntimeException`.
 
 ## ext-ssh2
 
-The PECL `ssh2` extension is optional and used only if you want a middleware that opens *outbound* SSH connections from inside the session (e.g. SFTP file pickers, remote-control agents). Standard server-side use does not require it.
+Nothing in this library uses the PECL `ssh2` extension, and `composer.json`
+says so: it declares `ext-ffi` (which sugar-pty needs to allocate the PTY at
+all), suggests `ext-pcntl` (which the default transport needs to fork and
+reap the session child), and lists no `ext-ssh2` — an earlier revision
+suggested it for a "Ssh2 client middleware (forwarding, sftp helpers)" that
+was never built. There is no outbound client here, no port forwarding, and no
+SFTP server: `SftpStub` is a wiring example that quarantines itself, and the
+subsystem middleware only routes a named subsystem to whatever handler you
+register. [Subsystem middleware](#subsystem-middleware-inprocesstransport)
+records what that does and does not buy you.
+
+`ssh2` becomes relevant only if *your* middleware opens an outbound SSH
+session from inside one (an SFTP file picker, a remote-control agent). That is
+ordinary application code, with its own trust questions: the peer chose the
+target, so treat it as input, not as configuration.
 
 ## Channel handler (InProcessTransport)
 

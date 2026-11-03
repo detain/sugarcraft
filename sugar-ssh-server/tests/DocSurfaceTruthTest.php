@@ -157,6 +157,40 @@ final class DocSurfaceTruthTest extends TestCase
         $this->assertStringContainsString('loses every byte past', $flatGuide);
     }
 
+    /**
+     * The manifest used to advertise "ext-ssh2 client wrappers" in its
+     * description and suggest ext-ssh2 for a "Ssh2 client middleware
+     * (forwarding, sftp helpers)" that exists nowhere in src/ — while the two
+     * extensions the code really leans on went undeclared. Composer metadata
+     * is a doc surface: installers read it, nothing compiles it, so it is
+     * pinned here alongside the prose surfaces.
+     */
+    public function testTheManifestNamesTheExtensionsThisCodeActuallyNeeds(): void
+    {
+        $path = \dirname(__DIR__) . '/composer.json';
+        $manifest = \json_decode((string) \file_get_contents($path), true, 512, \JSON_THROW_ON_ERROR);
+        $this->assertIsArray($manifest);
+
+        $description = (string) $manifest['description'];
+        $flatDescription = (string) \preg_replace('/\s+/', ' ', $description);
+        $this->assertStringNotContainsString('ssh2', \strtolower($flatDescription));
+        // The description carries the negative claim itself, so a future edit
+        // that re-adds a client, forwarder or SFTP server cannot leave the
+        // sentence standing: the words are asserted as present-in-denial.
+        $this->assertStringContainsString('it ships no client, no port forwarding and no SFTP server', $flatDescription);
+
+        $this->assertArrayHasKey('ext-ffi', $manifest['require'], 'sugar-pty allocates the PTY over FFI');
+
+        $suggest = $manifest['suggest'] ?? [];
+        $this->assertIsArray($suggest);
+        $this->assertArrayNotHasKey('ext-ssh2', $suggest, 'no ssh2 middleware ships in this library');
+        $this->assertArrayHasKey('ext-pcntl', $suggest);
+        $this->assertStringContainsString('PtyException', (string) $suggest['ext-pcntl']);
+
+        $readme = (string) \preg_replace('/\s+/', ' ', (string) $this->readme());
+        $this->assertStringContainsString('lists no `ext-ssh2`', $readme);
+    }
+
     private function adminGuide(): ?string
     {
         $path = \dirname(__DIR__, 3) . '/docs/admin/sugar-ssh-server.md';
