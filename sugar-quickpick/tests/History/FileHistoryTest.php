@@ -18,8 +18,8 @@ final class FileHistoryTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tmpPath = \sys_get_temp_dir() . '/hermit_history_' . \uniqid() . '.jsonl';
-        $this->baseDir = \sys_get_temp_dir() . '/hermit_base_' . \uniqid();
+        $this->tmpPath = \sys_get_temp_dir() . '/hermit_history_' . \uniqid('', true) . '.jsonl';
+        $this->baseDir = \sys_get_temp_dir() . '/hermit_base_' . \uniqid('', true);
         \mkdir($this->baseDir, 0700, true);
     }
 
@@ -67,14 +67,20 @@ final class FileHistoryTest extends TestCase
         $this->assertSame('banana', $items[1]->value());
     }
 
-    public function testClearRemovesFile(): void
+    public function testClearEmptiesHistory(): void
     {
+        // The documented contract is "clear history", not "remove the inode":
+        // clear() truncates under LOCK_EX (see FileHistory::clear) so the
+        // history file's owner/mode stay stable and a racing append cannot
+        // be redirected into an unlinked file.
         $history = new FileHistory($this->tmpPath);
         $history->append(new FilteredItem(1, 'test'));
 
         $history->clear();
 
-        $this->assertFalse(\is_file($this->tmpPath));
+        $this->assertSame([], $history->all());
+        \clearstatcache();
+        $this->assertSame(0, \filesize($this->tmpPath));
     }
 
     public function testPathReturnsCorrectPath(): void
@@ -85,11 +91,14 @@ final class FileHistoryTest extends TestCase
 
     public function testAllSkipsCorruptLine(): void
     {
-        // Write a good line, a bad JSON line, then another good line.
+        // Write a good line, a bad JSON line, a decodable-but-not-an-entry
+        // line (review M7: bare scalars/arrays used to mint FilteredItem(0,'')
+        // ghosts), then another good line.
         \file_put_contents(
             $this->tmpPath,
             \json_encode(['n' => 1, 'v' => 'first']) . "\n"
                 . "{bad json\n"
+                . "42\n\"str\"\ntrue\nnull\n[1,2]\n"
                 . \json_encode(['n' => 2, 'v' => 'third']) . "\n",
         );
 

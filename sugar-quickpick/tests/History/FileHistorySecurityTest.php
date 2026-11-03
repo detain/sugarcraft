@@ -1,0 +1,220 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\QuickPick\Tests\History;
+
+use InvalidArgumentException;
+use PHPUnit\Framework\TestCase;
+use RuntimeException;
+use SugarCraft\QuickPick\FilteredItem;
+use SugarCraft\QuickPick\History\FileHistory;
+
+/**
+ * Trust-boundary pins for FileHistory (fixes C2, M17, M8, M9, mm10 from
+ * the 2026-11 review). The old docs taught world-writable /tmp history
+ * paths; the old code happily appended through a planted symlink and
+ * swallowed write failures silently. These pins lock the new contract:
+ * private-by-construction creation, symlink refusal on every operation,
+ * loud append, truncate-clear, and substitute-not-throw on invalid UTF-8.
+ */
+final class FileHistorySecurityTest extends TestCase
+{
+    /** @var list<string> */
+    private array $paths = [];
+
+    protected function tearDown(): void
+    {
+        // Remove links/files first, then dirs (the confine test plants a
+        // symlink inside its base dir).
+        foreach ([['is_link', 'unlink'], ['is_file', 'unlink'], ['is_dir', 'rmdir']] as [$test, $rm]) {
+            foreach ($this->paths as $path) {
+                if ($test($path)) {
+                    $rm($path);
+                }
+            }
+        }
+        $this->paths = [];
+    }
+
+    private function tempPath(string $suffix = '.jsonl'): string
+    {
+        $path = sys_get_temp_dir() . '/qp-sec-' . uniqid('', true) . $suffix;
+        $this->paths[] = $path;
+
+        return $path;
+    }
+
+    /**
+     * M17/C2: a planted symlink at the history path must never be followed.
+     * This is the exact attack the old code permitted: plant
+     * /tmp/attacker-victim pointing at a file the victim owns, then let the
+     * victim's history appender write attacker-chosen JSONL lines THROUGH
+     * the link.
+     */
+    public function testAppendRefusesAPlantedSymlinkAndLeavesTheTargetUntouched(): void
+    {
+        $victim = $this->tempPath('-victim.txt');
+        file_put_contents($victim, "secret-account-list\n");
+        $link = $this->tempPath();
+        self::assertTrue(symlink($victim, $link));
+
+        $history = new FileHistory($link);
+
+        $before = filesize($victim);
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('symlink');
+
+        try {
+            $history->append(new FilteredItem(1, 'injected-value'));
+        } finally {
+            clearstatcache();
+            self::assertSame($before, filesize($victim), 'symlinked append must not write through to the target');
+        }
+    }
+
+    public function testReadRefusesASymlinkedHistoryFile(): void
+    {
+        $victim = $this->tempPath('-victim.txt');
+        file_put_contents($victim, json_encode(['n' => 9, 'v' => 'stolen-via-read']) . "\n");
+        $link = $this->tempPath();
+        self::assertTrue(symlink($victim, $link));
+
+        $history = new FileHistory($link);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('symlink');
+        $history->all();
+    }
+
+    public function testClearRefusesASymlinkedHistoryFileAndSparesTheTarget(): void
+    {
+        $victim = $this->tempPath('-victim.txt');
+        file_put_contents($victim, "do-not-truncate-me\n");
+        $link = $this->tempPath();
+        self::assertTrue(symlink($victim, $link));
+
+        $history = new FileHistory($link);
+
+        try {
+            $history->clear();
+            self::fail('clear() through a symlinked history path must throw');
+        } catch (RuntimeException $e) {
+            self::assertStringContainsString('symlink', $e->getMessage());
+        }
+
+        clearstatcache();
+        self::assertSame("do-not-truncate-me\n", file_get_contents($victim));
+    }
+
+    /**
+     * The confine() hardening half: a symlinked leaf inside the base dir is
+     * refused at CONSTRUCTION, so the confined path can never resolve
+     * outside the jail even before the first write.
+     */
+    public function testConfineRefusesASymlinkedLeafInsideTheBaseDir(): void
+    {
+        $base = $this->tempPath('-base');
+        mkdir($base, 0700, true);
+        $outside = $this->tempPath('-outside.txt');
+        file_put_contents($outside, "escape\n");
+        self::assertTrue(symlink($outside, $base . '/confined.jsonl'));
+        $this->paths[] = $base . '/confined.jsonl';
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('symlink');
+        new FileHistory('confined.jsonl', baseDir: $base);
+    }
+
+    /**
+     * A dangling symlink (link exists, target does not) previously took the
+     * fopen('a') success path and created the target as a side effect.
+     */
+    public function testAppendRefusesADanglingSymlinkToo(): void
+    {
+        $missingTarget = $this->tempPath('-nope.txt');
+        $link = $this->tempPath();
+        self::assertTrue(symlink($missingTarget, $link));
+
+        $history = new FileHistory($link);
+
+        try {
+            $history->append(new FilteredItem(1, 'x'));
+            self::fail('append through a dangling symlink must throw');
+        } catch (RuntimeException $e) {
+            self::assertStringContainsString('symlink', $e->getMessage());
+        }
+
+        clearstatcache();
+        self::assertFalse(file_exists($missingTarget), 'the symlink target must not be created');
+    }
+
+    /** C2: fresh history files are private-by-construction, not umask roulette. */
+    public function testFreshHistoryFileIsCreatedPrivate(): void
+    {
+        $path = $this->tempPath();
+        $history = new FileHistory($path);
+        $history->append(new FilteredItem(1, 'first'));
+
+        clearstatcache();
+        self::assertSame(0600, fileperms($path) & 0777);
+    }
+
+    /** M8: a failed open is loud — the old code returned void in silence. */
+    public function testAppendThrowsWhenTheFileCannotBeOpened(): void
+    {
+        $history = new FileHistory('/this-directory-does-not-exist/qp-history.jsonl');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Cannot open QuickPick history file for append');
+        $history->append(new FilteredItem(1, 'lost-in-silence'));
+    }
+
+    /** M9: invalid UTF-8 in a value must not fatal the appender. */
+    public function testAppendSubstitutesInvalidUtf8InsteadOfThrowing(): void
+    {
+        $path = $this->tempPath();
+        $history = new FileHistory($path);
+
+        $history->append(new FilteredItem(7, "bad\xFFbyte"));
+
+        $raw = (string) file_get_contents($path);
+        self::assertStringNotContainsString("\xFF", $raw, 'raw invalid byte must not reach the file');
+
+        $items = $history->all();
+        self::assertCount(1, $items);
+        self::assertSame("bad\u{FFFD}byte", $items[0]->value(), 'the invalid byte lands substituted, not fatal');
+    }
+
+    /** mm10: clear() empties the file in place; concurrent readers never see an absent path. */
+    public function testClearTruncatesInPlaceAndKeepsTheFileUsable(): void
+    {
+        $path = $this->tempPath();
+        $history = new FileHistory($path);
+        $history->append(new FilteredItem(1, 'one'));
+        $history->append(new FilteredItem(2, 'two'));
+
+        $inodeBefore = (int) (stat($path)['ino'] ?? -1);
+        $history->clear();
+        clearstatcache();
+
+        self::assertFileExists($path, 'clear() must not unlink the history path out from under other writers');
+        self::assertSame(0, filesize($path));
+        self::assertSame($inodeBefore, (int) (stat($path)['ino'] ?? -2), 'same inode: truncated in place');
+
+        $history->append(new FilteredItem(3, 'after-clear'));
+        $items = $history->all();
+        self::assertCount(1, $items);
+        self::assertSame('after-clear', $items[0]->value());
+    }
+
+    /** Round-trip sanity after the hardened writes: values that ARE safe still land. */
+    public function testSafeValuesStillRoundTrip(): void
+    {
+        $path = $this->tempPath();
+        $history = new FileHistory($path);
+        $history->append(new FilteredItem(1, 'plain-value'));
+
+        self::assertSame([1], array_map(static fn($i) => $i->number(), $history->all()));
+    }
+}

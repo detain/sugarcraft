@@ -73,9 +73,12 @@ $h = QuickPick::new($items)
     ->setFilterFn(fn($item): bool => $item->number() > 0)  // filter by custom predicate
     ->setPrompt('> ');
 
-// Persist selections to JSONL file
-$history = new FileHistory('/tmp/hermit_history.jsonl');
-$history->append($h->selected());  // save selected item
+// Persist selections to a JSONL file inside your app's own state directory.
+// Pick a path you own — never a predictable world-shared location like /tmp.
+$history = new FileHistory(getenv('HOME') . '/.myapp/history.jsonl');
+if ($choice = $h->selected()) {   // selected() is ?Item — null when nothing is selected
+    $history->append($choice);    // save selected item
+}
 $allItems = $history->all();      // load previous items
 ```
 
@@ -275,19 +278,33 @@ final readonly class FilteredItem implements Item {
 use SugarCraft\QuickPick\History\FileHistory;
 use SugarCraft\QuickPick\FilteredItem;
 
-// Create history at a file path (file is created on first append)
-$history = new FileHistory('/tmp/my_history.jsonl');
+// Point at a history file. Nothing touches the filesystem yet — the file is
+// created lazily on the first append(), with 0600 permissions regardless of
+// the process umask. Use a path you own; on shared hosts, never a predictable
+// world-writable location such as /tmp (a planted symlink there is refused
+// outright — see below).
+$history = new FileHistory(getenv('HOME') . '/.myapp/history.jsonl');
 
-// Append an Item (stored as JSON line: {"n":1,"v":"apple"}\n)
+// Optionally jail the file inside a private base directory: paths that
+// resolve outside it (via '..', an absolute path elsewhere, a symlinked
+// parent — or a symlink at the file itself) are rejected at construction.
+$history = new FileHistory('history.jsonl', baseDir: getenv('HOME') . '/.myapp');
+
+// Append an Item (stored as a JSON line: {"n":1,"v":"apple"}\n).
+// Fails LOUD — a RuntimeException when the file cannot be opened, locked,
+// or fully written, or when the path is a symlink. Nothing is ever
+// silently dropped.
 $history->append(new FilteredItem(1, 'apple'));
 
-// Read all items back
+// Read all items back; lines that are not encoded entries (bad JSON,
+// scalars, arrays without a value field) are skipped.
 $items = $history->all();  // returns list<Item>
 
-// Clear the history file
+// Clear the history: the file is truncated in place under an exclusive
+// lock (permissions and inode are preserved; no unlink-and-recreate).
 $history->clear();
 
-// Get the history file path
+// Get the history file path (absolute and confined when baseDir is set).
 $path = $history->path();
 ```
 
