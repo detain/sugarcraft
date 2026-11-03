@@ -69,6 +69,7 @@ if ($archive !== '') {
     }
 }
 
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Mail\{Email, Lang, Mailer, ResendTransport, SmtpTransport};
 
 // Guard: only run dispatch when called as CLI script (not when required by tests)
@@ -90,16 +91,26 @@ if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === __FILE__) {
     foreach (\SugarCraft\Core\Util\LegacyEnv::import([
         'POP_' => 'CANDY_MAIL_', // @rename-keep
     ]) as $legacyVar) {
-        fwrite(STDERR, sprintf("candy-mail: %s is deprecated; set CANDY_MAIL_%s instead.\n", $legacyVar, substr($legacyVar, strlen('POP_')))); // @rename-keep
+        // C5 (lib-reviews-1102): env var NAMES are attacker-settable in any
+        // process environment — an OSC/BEL-bearing name would ride this
+        // warning raw to the terminal. Sweep at the egress choke.
+        fwrite(STDERR, Sanitize::untrusted(sprintf("candy-mail: %s is deprecated; set CANDY_MAIL_%s instead.\n", $legacyVar, substr($legacyVar, strlen('POP_'))))); // @rename-keep
     }
 
     try {
         $args = parseArgs($argv);
     } catch (\Throwable $e) {
-        fwrite(STDERR, Lang::t('cli.error', ['message' => $e->getMessage()]) . "\n");
+        // C5 (lib-reviews-1102): $e->getMessage() carries raw untrusted bytes
+        // here — argv tokens on parse refusals, file paths, and (downstream)
+        // pre-STARTTLS server lines; sugar-core's untrusted choke strips
+        // SGR/OSC/BEL before they reach the terminal.
+        fwrite(STDERR, Sanitize::untrusted(Lang::t('cli.error', ['message' => $e->getMessage()])) . "\n");
         exit(1);
     }
-    $bin = basename($argv[0]);
+    // C5 (lib-reviews-1102): argv[0] is attacker-settable by any caller
+    // (execve), and the usage banner echoes it to the terminal — sweep the
+    // untrusted name at the choke instead of trusting the exec line.
+    $bin = Sanitize::untrusted(basename($argv[0]));
 
     if ($args['version']) {
         fwrite(STDOUT, cliVersion() . "\n");
@@ -124,7 +135,11 @@ if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === __FILE__) {
     try {
         $email = buildEmail($args['opts'], $body);
     } catch (\Throwable $e) {
-        fwrite(STDERR, Lang::t('cli.error', ['message' => $e->getMessage()]) . "\n");
+        // C5 (lib-reviews-1102): $e->getMessage() carries raw untrusted bytes
+        // here — argv tokens on parse refusals, file paths, and (downstream)
+        // pre-STARTTLS server lines; sugar-core's untrusted choke strips
+        // SGR/OSC/BEL before they reach the terminal.
+        fwrite(STDERR, Sanitize::untrusted(Lang::t('cli.error', ['message' => $e->getMessage()])) . "\n");
         exit(1);
     }
 
@@ -148,7 +163,9 @@ if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === __FILE__) {
     try {
         $transport = buildTransport();
     } catch (\Throwable $e) {
-        fwrite(STDERR, Lang::t('cli.transport_error', ['message' => $e->getMessage()]) . "\n");
+        // C5: transport errors embed the raw SMTP greeting/response bytes —
+        // attacker-controlled before STARTTLS. Sweep at the egress choke.
+        fwrite(STDERR, Sanitize::untrusted(Lang::t('cli.transport_error', ['message' => $e->getMessage()])) . "\n");
         exit(1);
     }
 
@@ -158,7 +175,8 @@ if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === __FILE__) {
         $mailer->send($email);
         echo Lang::t('cli.email_sent', ['transport' => $mailer->transportName()]) . "\n";
     } catch (\Throwable $e) {
-        fwrite(STDERR, Lang::t('cli.send_failed', ['message' => $e->getMessage()]) . "\n");
+        // C5: send failures carry server/Resend-response bytes verbatim.
+        fwrite(STDERR, Sanitize::untrusted(Lang::t('cli.send_failed', ['message' => $e->getMessage()])) . "\n");
         exit(1);
     }
 }

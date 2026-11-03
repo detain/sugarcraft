@@ -320,4 +320,132 @@ final class BinDispatchTest extends TestCase
         $this->assertLessThan($projectRoot, $packageLocal, 'candidate order drifted');
         $this->assertStringContainsString('cannot find composer autoload.php', $src);
     }
+
+    // ---------------------------------------------------------------------
+    // C5 (lib-reviews-1102): untrusted bytes must never reach the terminal
+    // raw. Every stderr message choke in bin/candy-mail sweeps the composed
+    // text through SugarCraft\Core\Util\Sanitize::untrusted(); these pins
+    // run the real CLI as a child with hostile escape bytes on each input
+    // surface — argv tokens, env var NAMES, and a pre-STARTTLS server
+    // greeting — and assert the sequences are stripped while the human-
+    // readable text survives (fail-visible wording, silent escapes).
+    // ---------------------------------------------------------------------
+
+    public function testHostileArgvBytesAreSanitizedBeforeHittingStderr(): void
+    {
+        // parseArgs refuses the unknown option with the raw argv token
+        // interpolated; the OSC title-set + BEL inside it must not ride out.
+        $result = $this->runCli(['--to', 'b@example.com', "--frobn\x1b]0;pwned\x07"]);
+
+        $this->assertSame(1, $result['status']);
+        $this->assertStringContainsString('Unknown option: --frobn', $result['err']);
+        $this->assertStringNotContainsString("\x1b", $result['err']);
+        $this->assertStringNotContainsString("\x07", $result['err']);
+        $this->assertStringNotContainsString('pwned', $result['err'], 'OSC payload must not leak to the terminal');
+    }
+
+    public function testLegacyEnvVarNameChokeIsSanitizedInBootstrapSource(): void
+    {
+        // The POP_* deprecation warning echoes env var NAMES, and names are
+        // attacker-settable — but PHP's own exec layer filters control bytes
+        // out of environment names (measured: SGR/BEL/DEL/TAB-bearing names
+        // never reach getenv intact via proc_open), so no child can deliver
+        // one. The honest pin is therefore structural: the fwrite at the
+        // legacy choke must wrap the composed string in Sanitize::untrusted.
+        $src = (string) \file_get_contents((string) \realpath(__DIR__ . '/../bin/candy-mail'));
+
+        $pos = \strpos($src, 'is deprecated');
+        $this->assertNotFalse($pos, 'legacy deprecation warning drifted out of the bin');
+        $window = \substr($src, \max(0, $pos - 220), 320);
+        $this->assertStringContainsString('Sanitize::untrusted(', $window, 'legacy-name choke lost its untrusted sweep');
+        $this->assertStringNotContainsString('fwrite(STDERR, sprintf(', $window, 'raw legacy-name echo reintroduced');
+    }
+
+    public function testUsageBannerNameChokeIsSanitizedInBootstrapSource(): void
+    {
+        // help($bin) echoes argv[0] to STDOUT; execve lets any caller set
+        // argv[0], so the banner name must pass through the untrusted sweep.
+        $src = (string) \file_get_contents((string) \realpath(__DIR__ . '/../bin/candy-mail'));
+
+        $this->assertStringContainsString('Sanitize::untrusted(basename($argv[0]))', $src, 'usage-banner name choke lost its sweep');
+        $this->assertStringNotContainsString('= basename($argv[0]);', $src, 'raw argv[0] banner echo reintroduced');
+    }
+
+    public function testHostilePreStartTlsGreetingIsSanitizedOnSendFailure(): void
+    {
+        if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
+            $this->markTestSkipped('pcntl not available');
+        }
+
+        $errno  = 0;
+        $errstr = '';
+        $server = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        if ($server === false) {
+            $this->markTestSkipped("cannot bind loopback server: {$errstr}");
+        }
+        $name = \stream_socket_get_name($server, false);
+        $port = (int) \substr((string) $name, \strrpos((string) $name, ':') + 1);
+
+        $pid = \pcntl_fork();
+        if ($pid === -1) {
+            @\fclose($server);
+            $this->markTestSkipped('pcntl_fork failed');
+        }
+        if ($pid === 0) {
+            // Child: a refusal reply whose continuation line carries an OSC
+            // title-set + BEL — attacker-controlled bytes BEFORE any TLS,
+            // echoed verbatim into smtp.unexpected_response's {response}.
+            $conn = @\stream_socket_accept($server, 3);
+            if ($conn !== false) {
+                @\fwrite($conn, "599-\x1b]0;pwned\x07host\r\n250 fake\r\n");
+                @\fclose($conn);
+            }
+            @\fclose($server);
+            // Hard-exit: skip inherited PHPUnit shutdown handlers (SmtpSecurityTest idiom).
+            if (\function_exists('posix_kill')) {
+                \posix_kill(\getmypid(), \SIGKILL);
+            }
+            exit(0);
+        }
+        @\fclose($server); // parent drives the client only; child owns accept()
+
+        try {
+            $result = $this->runCli(
+                ['--to', 'b@example.com'],
+                'hello',
+                [
+                    'CANDY_MAIL_FROM'            => 'a@example.com',
+                    'CANDY_MAIL_SMTP_HOST'       => '127.0.0.1',
+                    'CANDY_MAIL_SMTP_PORT'       => (string) $port,
+                    'CANDY_MAIL_SMTP_REQUIRE_TLS' => '0',
+                ]
+            );
+
+            $this->assertSame(1, $result['status']);
+            $this->assertStringContainsString('599', $result['err']);
+            $this->assertStringContainsString('host', $result['err']);
+            $this->assertStringNotContainsString("\x1b", $result['err']);
+            $this->assertStringNotContainsString("\x07", $result['err']);
+            $this->assertStringNotContainsString('pwned', $result['err'], 'OSC payload must not ride the greeting to the terminal');
+        } finally {
+            $this->reapHostileServer($pid);
+        }
+    }
+
+    private function reapHostileServer(int $pid): void
+    {
+        $deadline = \microtime(true) + 5.0;
+        do {
+            $res = \pcntl_waitpid($pid, $status, \WNOHANG);
+            if ($res === $pid || $res === -1) {
+                return;
+            }
+            \usleep(20_000);
+        } while (\microtime(true) < $deadline);
+
+        if (\function_exists('posix_kill')) {
+            @\posix_kill($pid, \SIGKILL);
+        }
+        \pcntl_waitpid($pid, $status);
+    }
 }
