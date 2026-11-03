@@ -17,6 +17,10 @@ use SugarCraft\Vterm\Hyperlink\Hyperlink;
  * one untouched. The immutable frame view is Snapshot / copy-on-write, not
  * this class.
  *
+ * Cloning a Buffer is the correct deep copy for frame capture: PHP's default
+ * clone copies the `$grid` array by value, and {@see Cell} is readonly —
+ * writes to the original can never reach through a clone (or vice versa).
+ *
  * Tracks a minimal bounding box of cells written since the instance was
  * built ({@see dirtyRegion()}). `resize()`/`clear()` mint a new instance, so
  * their dirty box starts empty even though content carried over.

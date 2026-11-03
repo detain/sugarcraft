@@ -97,7 +97,7 @@ sugar-vterm ships **two** Terminal entry-points for distinct use cases:
 | Class | Use case | Methods |
 |-------|----------|---------|
 | `SugarCraft\Vterm\Terminal\Terminal` | Full VT500 emulator — parses CSI/OSC/DCS, maintains Sgr/Mode/Hyperlink/Scrollback. | `new(cols, rows, ?scrollbackSize)`, `feed(bytes, ?respond)`, `feedAsync(bytes): PromiseInterface<string>`, `feedStream(ReadableStreamInterface, ?respond, ?cancellation): PromiseInterface<string>`, `replies()`, `flush()`, `screen()`, `cursor()`, `mode()`, `windowTitle()`, `palette()`, `clipboardEvents()`, `resize(cols, rows)`, `enableAltScreen()`/`disableAltScreen()`/`isAltScreen()`, plus `with*()` builders for Buffer/Cursor/Mode/WindowTitle/TabStops/ScrollbackSize. |
-| `SugarCraft\Vterm\Terminal` (root) | Lightweight emulator used by candy-vcr's renderer — produces `Snapshot` value objects directly. | `new(cols, rows, ?Theme)`, `theme()`, `feed(bytes): self`, `snapshot(?time): Snapshot`, `cursor(): Cursor`, `grid(): Buffer`, `windowTitle(): string`, `isWrapPending(): bool`. `enableAltScreen()`/`disableAltScreen()` exist for interface parity but ALWAYS throw `\LogicException` — alt-screen machinery lives only on the full `Terminal\Terminal`. |
+| `SugarCraft\Vterm\Terminal` (root) | Lightweight emulator used by candy-vcr's renderer — produces `Snapshot` value objects directly. | `new(cols, rows, ?Theme)`, `theme()`, `feed(bytes): self` (mutates in place, returns `$this`), `snapshot(?time): Snapshot` (deep-copies the grid), `revision(): int`, `cursor(): Cursor`, `grid(): Buffer`, `windowTitle(): string`, `isWrapPending(): bool`. `enableAltScreen()`/`disableAltScreen()` exist for interface parity but ALWAYS throw `\LogicException` — alt-screen machinery lives only on the full `Terminal\Terminal`. |
 
 ```php
 use SugarCraft\Vterm\Terminal;       // root — renderer path
@@ -108,11 +108,14 @@ $vt = $vt->feed("\x1b[1;1H\x1b[31mhello\x1b[0m");
 $snapshot = $vt->snapshot(time: 1.234);
 ```
 
-The root `Terminal` returns a NEW instance from `feed()` (immutable
-fluent style) and uses the `HandlerAdapter` + `CsiHandlerImpl` +
-`OscHandlerImpl` triple internally. The full `Terminal\Terminal`
-mutates in place (`feed(): void`) — it's optimised for byte-stream
-ingest rather than per-frame snapshots.
+The root `Terminal` MUTATES in place — `feed()` writes into the terminal's
+own grid and returns `$this` purely for chaining (it is not an immutable
+fluent builder). Frames are frozen explicitly: `snapshot()` deep-copies the
+grid, so a captured `Snapshot` never retro-mutates as later feeds land. The
+root path uses the `HandlerAdapter` + `CsiHandlerImpl` + `OscHandlerImpl`
+triple internally. The full `Terminal\Terminal` also mutates in place
+(`feed(): void`) — it's optimised for byte-stream ingest rather than
+per-frame snapshots.
 
 ### Renderer value objects (vcr path)
 
@@ -162,7 +165,10 @@ Each handler translates parser actions into handler state mutations:
 
 ### Snapshot
 
-`SugarCraft\Vterm\Snapshot` is an immutable point-in-time grid + cursor:
+`SugarCraft\Vterm\Snapshot` is an immutable point-in-time grid + cursor +
+feed revision. Captures through `Snapshot::of()` or `Terminal::snapshot()`
+deep-copy the grid, so a snapshot keeps showing the frame as it was even
+after the terminal consumes more bytes:
 
 ```php
 use SugarCraft\Vterm\Snapshot;
@@ -170,22 +176,28 @@ use SugarCraft\Vterm\Terminal;
 
 $terminal = Terminal::new(cols: 80, rows: 24)->feed("hello\r\n");
 
-$snap = Snapshot::of($terminal, time: 1.234);  // captures grid + cursor
-$snap->grid;     // Buffer
-$snap->cursor;   // Cursor
-$snap->time;     // float — virtual playback time
+$snap = Snapshot::of($terminal, time: 1.234);  // deep-copies grid + cursor
+$snap->grid;       // Buffer — frozen copy, unaffected by later feeds
+$snap->cursor;     // Cursor
+$snap->time;       // float — virtual playback time
+$snap->revision;   // int — terminal's feed counter at capture time
+
+$terminal->feed("world\r\n");                  // live grid moves on...
+$snap->grid->cell(1, 0)->grapheme;             // ' ' — snapshot's row 1 stayed blank
 
 $replay = Snapshot::of($terminal, time: 1.234);
-$shifted = Snapshot::of($terminal, time: 9.999);
 
-$snap->equals($replay);          // true  — grid + cursor match (used by FrameDedup)
-$snap->equalsWithTime($replay);  // true  — grid + cursor + time match (strict reproducibility)
-$snap->equalsWithTime($shifted); // false — same screen, different time
+$snap->equals($replay);          // false — the second feed changed the grid
+$snap->equalsWithTime($replay);  // false — grid + cursor + time strict check
 ```
+
+Build a `Snapshot` directly from its constructor only when you already own
+the Buffer — the constructor stores what it is given without copying.
 
 `Snapshot::equals()` is the dedup signal used by candy-vcr's
 `FrameDedup` to collapse visually identical adjacent frames before GIF
-encoding.
+encoding. `Terminal::revision()` gives the cheaper first pass: two captures
+with the same revision saw no intervening write path at all.
 
 ## Parser state machine
 
@@ -695,7 +707,7 @@ Each subdirectory of `src/` owns a small piece of VT state:
 | Namespace | Purpose | Public surface |
 |-----------|---------|----------------|
 | `Buffer\Buffer` | Cell grid storage (`rows × cols` array of `Cell`). | `cell($row, $col)`, `put($row, $col, $cell)`, `each(): Generator`, `copy(): array`, `resize($cols, $rows): self`. |
-| `Screen\Screen` | Immutable snapshot of Buffer + Scrollback; cell-level diff API. | `fromBuffer($buf, ?$scrollback)`, `lines()`, `cell($row, $col)`, `scrollback()`, `diff($other)`. |
+| `Screen\Screen` | Immutable snapshot of Buffer + Scrollback; cell-level diff API. | `fromBuffer($buf, ?$scrollback)`, `lines()` (Generator: full-width rows, combining marks re-appended), `linesWithHistory()` (Generator: scrolled-off rows oldest-first, then visible), `cell($row, $col)` (out-of-bounds in EITHER coordinate returns `Cell::empty()`), `scrollback()`, `diff($other)`. |
 | `Screen\Scrollback` | Ring buffer (default 1000 rows) for rows scrolled off the top. | `count()`, `maxSize()`, `at($n)`, `all()`. |
 | `Cell\Cell` | Cell-grid cell — grapheme + Sgr + Hyperlink + combining marks. Used by the full Terminal facade. | `empty()`, `continuation($prev)`, `withCombining($s)`, `sgr()`, `foreground()`, `background()`, `equals()`. |
 | `Cursor\Cursor` | Position + visibility + shape + saved-state. | `withRow($r)`, `withCol($c)`, `withVisible($v)`, `withShape($s)`, `save()`, `restore()`, `equals()`. |

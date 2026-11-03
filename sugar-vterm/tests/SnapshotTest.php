@@ -150,4 +150,67 @@ final class SnapshotTest extends TestCase
 
         $this->assertSame(0.0, $snap->time);
     }
+
+    public function testCaptureDeepCopiesTheGridSoLaterFeedsCannotRetroMutate(): void
+    {
+        $terminal = \SugarCraft\Vterm\Terminal::new(80, 24);
+        $terminal->feed("hello\r\n");
+
+        $snap = Snapshot::of($terminal);
+
+        // The capture is a copy — not the live grid object.
+        $this->assertNotSame($terminal->grid(), $snap->grid);
+
+        $terminal->feed("world\r\n");
+
+        // Frozen frame: the snapshot never saw the second feed — row 1
+        // stayed blank where the live grid now prints 'world'.
+        $this->assertSame('h', $snap->grid->cell(0, 0)->grapheme);
+        $this->assertSame(' ', $snap->grid->cell(1, 0)->grapheme);
+        $this->assertSame('e', $snap->grid->cell(0, 1)->grapheme);
+
+        // The live grid moved on.
+        $this->assertSame('w', $terminal->grid()->cell(1, 0)->grapheme);
+    }
+
+    public function testSnapshotMethodAlsoFreezesAgainstInPlaceMutation(): void
+    {
+        $terminal = \SugarCraft\Vterm\Terminal::new(10, 3);
+        $terminal->feed("A");
+        $snap = $terminal->snapshot();
+
+        // put() mutates the live Buffer in place — the exact retro-mutation
+        // surface the aliasing defect exposed.
+        $terminal->grid()->put(0, 0, new Cell(char: 'B'));
+
+        $this->assertSame('B', $terminal->grid()->cell(0, 0)->char);
+        $this->assertSame('A', $snap->grid->cell(0, 0)->char);
+    }
+
+    public function testRevisionCountsWritePathCalls(): void
+    {
+        $terminal = \SugarCraft\Vterm\Terminal::new(80, 24);
+        $this->assertSame(0, $terminal->revision());
+
+        $terminal->feed('a');
+        $this->assertSame(1, $terminal->revision());
+
+        $terminal->feed('b')->feed('c');
+        $this->assertSame(3, $terminal->revision());
+
+        $before = $terminal->snapshot();
+        $this->assertSame(3, $before->revision);
+
+        $terminal->flush();
+        $after = $terminal->snapshot();
+        $this->assertSame(4, $terminal->revision());
+        $this->assertSame(4, $after->revision);
+    }
+
+    public function testConstructorCarriesRevisionDefaultZero(): void
+    {
+        $snap = new Snapshot(new Buffer(10, 3), new Cursor(), 0.0);
+
+        $this->assertSame(0, $snap->revision);
+    }
 }

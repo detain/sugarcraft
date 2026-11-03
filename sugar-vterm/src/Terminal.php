@@ -16,7 +16,9 @@ use SugarCraft\Vterm\Parser\RendererHandler;
  *
  * Holds a Buffer, Cursor, and sugar-ansi-parser's Parser with CsiHandlerImpl +
  * OscHandlerImpl wired through sugar-ansi-parser's HandlerAdapter. Feed bytes
- * through `feed()`, capture frames via `snapshot()`.
+ * through `feed()` (mutates in place, returns `$this` for chaining), capture
+ * frames via `snapshot()` — which deep-copies the grid so a captured frame
+ * is frozen against all later feeds.
  */
 final class Terminal
 {
@@ -26,6 +28,7 @@ final class Terminal
     private CsiHandlerImpl $csi;
     private OscHandlerImpl $osc;
     private Theme $theme;
+    private int $revision = 0;
 
     public function __construct(
         public readonly int $cols,
@@ -73,9 +76,15 @@ final class Terminal
         return $this->theme;
     }
 
+    /**
+     * Consume bytes. MUTATES this terminal in place and returns $this for
+     * chaining — it does not produce a new instance (frames are frozen by
+     * {@see self::snapshot()}, which deep-copies the grid at capture).
+     */
     public function feed(string $bytes): self
     {
         $this->parser->feed($bytes);
+        $this->revision++;
         $this->syncState();
         return $this;
     }
@@ -92,6 +101,7 @@ final class Terminal
     public function flush(): void
     {
         $this->parser->flush();
+        $this->revision++;
         $this->syncState();
     }
 
@@ -118,9 +128,24 @@ final class Terminal
         throw new \LogicException('Alt screen requires the full Terminal\Terminal path');
     }
 
+    /**
+     * Freeze the current frame: the grid is deep-copied (clone) so the
+     * Snapshot is unaffected by any later {@see self::feed()}, and the
+     * terminal's feed revision rides along for cheap change detection.
+     */
     public function snapshot(float $time = 0.0): Snapshot
     {
-        return new Snapshot($this->grid, $this->cursor, $time);
+        return new Snapshot(clone $this->grid, $this->cursor, $time, $this->revision);
+    }
+
+    /**
+     * Monotonic write counter: bumped once per {@see self::feed()} and
+     * {@see self::flush()} call. Two snapshots with equal revision and
+     * equal grid are provably the same frame without a deep compare.
+     */
+    public function revision(): int
+    {
+        return $this->revision;
     }
 
     public function cursor(): Cursor

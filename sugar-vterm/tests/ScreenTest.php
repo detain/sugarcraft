@@ -98,4 +98,64 @@ final class ScreenTest extends TestCase
         $this->assertSame('AB ', $lines[0]);
         $this->assertSame('CDE', $lines[1]);
     }
+
+    public function testLinesReAppendsStoredCombiningMarks(): void
+    {
+        $buf = new Buffer(4, 1);
+        // 'e' + COMBINING ACUTE ACCENT carried the way the screen stores it:
+        // base grapheme in the cell, the mark in the combining payload.
+        $buf->put(0, 0, new Cell(grapheme: 'e', combining: "\u{301}"));
+        $buf->put(0, 1, new Cell(grapheme: 'x'));
+
+        $lines = iterator_to_array(Screen::fromBuffer($buf)->lines());
+
+        $this->assertSame("e\u{301}x  ", $lines[0]);
+    }
+
+    public function testCombiningMarksSurviveAnEmulatorFeedRoundTrip(): void
+    {
+        $terminal = new \SugarCraft\Vterm\Terminal\Terminal(cols: 10, rows: 3);
+        $terminal->feed("e\u{301}x");
+
+        $lines = iterator_to_array($terminal->screen()->lines());
+
+        $this->assertSame("e\u{301}x", rtrim($lines[0], ' '));
+        // The base column carries ONE cell holding base+mark — not a lost mark.
+        $this->assertSame("e\u{301}", $terminal->screen()->cell(0, 0)->grapheme . $terminal->screen()->cell(0, 0)->combining);
+    }
+
+    public function testLinesIsAGeneratorWithFullWidthPadding(): void
+    {
+        $screen = Screen::fromBuffer(new Buffer(4, 2));
+
+        $this->assertInstanceOf(\Generator::class, $screen->lines());
+        $this->assertSame(['    ', '    '], iterator_to_array($screen->lines()));
+    }
+
+    public function testLinesWithHistoryYieldsScrolledOffRowsOldestFirst(): void
+    {
+        $terminal = new \SugarCraft\Vterm\Terminal\Terminal(cols: 4, rows: 2, scrollbackSize: 10);
+        $terminal->feed("1\r\n2\r\n3\r\n4");
+
+        $screen = $terminal->screen();
+        $this->assertNotNull($screen->scrollback());
+        $this->assertSame(['3   ', '4   '], iterator_to_array($screen->lines()));
+        $this->assertSame(
+            ['1   ', '2   ', '3   ', '4   '],
+            iterator_to_array($screen->linesWithHistory()),
+        );
+    }
+
+    public function testLinesWithHistoryWithoutRingEqualsLines(): void
+    {
+        $buf = new Buffer(3, 2);
+        $buf->put(0, 0, new Cell(grapheme: 'A'));
+        $screen = Screen::fromBuffer($buf);
+
+        $this->assertNull($screen->scrollback());
+        $this->assertSame(
+            iterator_to_array($screen->lines()),
+            iterator_to_array($screen->linesWithHistory()),
+        );
+    }
 }

@@ -8,7 +8,8 @@ use SugarCraft\Vterm\Buffer\Buffer;
 use SugarCraft\Vterm\Cell;
 
 /**
- * Readonly snapshot of the terminal grid.
+ * Readonly snapshot of the terminal grid, optionally carrying the
+ * scrollback ring that holds the scrolled-off rows.
  *
  * Constructed from a Buffer copy. Screen instances are always immutable.
  * Mirrors charmbracelet/x/vt Screen.
@@ -75,19 +76,66 @@ final readonly class Screen
     /**
      * Iterate rows as grapheme strings (continuation cells skipped).
      *
+     * Combining marks the parser attached to a base cell ride the cell's
+     * `combining` payload and are re-appended here, so `e` + U+0301
+     * round-trips as the two-codepoint string rather than a bare `e`.
+     * Marks that land on a wide glyph's continuation tail are dropped at
+     * PRINT time (the tail has no base to carry them) — this channel
+     * cannot recover what the screen never stored. Rows are padded to the
+     * full screen width (blank cells yield their ' '), and text written
+     * while concealed (SGR 8) still appears: this is a TEXT channel, not
+     * a visibility model.
+     *
+     * The return value is a Generator — iterate it or
+     * `iterator_to_array($screen->lines())`; `count()` and `[0]` on the
+     * generator itself are fatal by design.
+     *
      * @return \Generator<int, string>
      */
     public function lines(): \Generator
     {
         for ($r = 0; $r < $this->rows; $r++) {
-            $line = '';
-            for ($c = 0; $c < $this->cols; $c++) {
-                $cell = $this->grid[$r][$c] ?? Cell::empty();
-                if (!$cell->continuation) {
-                    $line .= $cell->grapheme;
-                }
-            }
-            yield $r => $line;
+            yield $r => self::lineFromRow($this->grid[$r] ?? [], $this->cols);
         }
+    }
+
+    /**
+     * Text extraction across the scrollback ring AND the visible screen:
+     * rows pushed off the top first (oldest to newest), then every visible
+     * line. Keys run 0..n continuously. With no ring attached — or nothing
+     * ever scrolled — this yields exactly {@see self::lines()}.
+     *
+     * @return \Generator<int, string>
+     */
+    public function linesWithHistory(): \Generator
+    {
+        $key = 0;
+        if ($this->scrollback !== null) {
+            foreach ($this->scrollback->all() as $row) {
+                yield $key++ => self::lineFromRow($row, $this->cols);
+            }
+        }
+        for ($r = 0; $r < $this->rows; $r++) {
+            yield $key++ => self::lineFromRow($this->grid[$r] ?? [], $this->cols);
+        }
+    }
+
+    /**
+     * Shared row → text builder for both extraction channels: skip
+     * continuation tails, emit base grapheme + stored combining marks,
+     * pad to the screen width.
+     *
+     * @param array<int, Cell> $row
+     */
+    private static function lineFromRow(array $row, int $cols): string
+    {
+        $line = '';
+        for ($c = 0; $c < $cols; $c++) {
+            $cell = $row[$c] ?? Cell::empty();
+            if (!$cell->continuation) {
+                $line .= $cell->grapheme . $cell->combining;
+            }
+        }
+        return $line;
     }
 }
