@@ -1185,6 +1185,41 @@ final class EscapeDecoderTest extends TestCase
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
     }
 
+    public function testAltModifiedControlKeysShareTheBareVocabulary(): void
+    {
+        // M12: the ESC-prefixed forms used to surface the raw control byte as
+        // the key name while the bare form named them symbolically — two
+        // vocabularies for one key family. Alt-modified Tab/Enter/Backspace
+        // now carry the same names as unmodified presses, raw preserved.
+        foreach ([
+            ["\x1b\t", 'Tab', "\x1b\t"],
+            ["\x1b\r", 'Enter', "\x1b\r"],
+            ["\x1b\n", 'Enter', "\x1b\n"],
+            ["\x1b\x7f", 'Backspace', "\x1b\x7f"],
+        ] as [$wire, $name, $raw]) {
+            $events = $this->decoder->decode($wire);
+            $this->assertCount(1, $events, $wire);
+            $this->assertSame($name, $events[0]->key);
+            $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
+            $this->assertSame($raw, $events[0]->raw);
+        }
+    }
+
+    public function testTripleEscapeDecodesAltEscapeThenArrowNotPhantomBrackets(): void
+    {
+        // M12 evidence pin: xterm delivers Alt+ArrowRight as ESC ESC then
+        // CSI C. The old review phantom ('[' + 'A' keys leaking) does not
+        // reproduce on the current core — ESC ESC settles as Alt+Escape and
+        // the following CSI decodes as the arrow it is, nothing else.
+        $events = $this->decoder->decode("\x1b\x1b\x1b[C");
+        $this->assertCount(2, $events);
+        $this->assertSame('Escape', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
+        $this->assertSame('ArrowRight', $events[1]->key);
+        $this->assertFalse($events[1]->modifiers->includes(KeyModifier::ALT));
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
     public function testCtrlModifiedLetter(): void
     {
         $events = $this->decoder->decode("\x05"); // Ctrl+E = 0x05

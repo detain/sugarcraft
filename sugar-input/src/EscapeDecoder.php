@@ -1591,6 +1591,22 @@ final class EscapeDecoder
     private function mapChar(string $byte): string
     {
         $ord = ord($byte);
+
+        // M12: Alt-modified presses of the three symbolic control keys carry
+        // the SAME names as their unmodified forms (Tab via decodeClean's
+        // sibling, Enter via decodeControlChar, Backspace via decodeClean).
+        // Without this, ESC+CR surfaced key="\r" while a bare CR surfaced
+        // key='Enter' — one wire family, two vocabularies.
+        if ($ord === 0x09) {
+            return 'Tab';
+        }
+        if ($ord === 0x0a || $ord === 0x0d) {
+            return 'Enter';
+        }
+        if ($ord === 0x7f) {
+            return 'Backspace';
+        }
+
         if ($ord >= 97 && $ord <= 122) {
             return chr($ord);
         }
