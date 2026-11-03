@@ -31,7 +31,7 @@ return [
     // Remote-source request headers (see Source/HttpHeaders — rejected before anything
     // reaches ffmpeg, because a CR/LF in a header value is request smuggling)
     'header.invalid_name' => 'Invalid HTTP header name {name}: must be a non-empty token with no CR, LF, NUL or ":" in it',
-    'header.invalid_value' => 'Invalid HTTP header value for {name}: CR, LF and NUL are rejected so a header value cannot start a second request line or truncate the argv passed to the decoder',
+    'header.invalid_value' => 'Invalid HTTP header value for {name}: CR, LF, NUL and other C0 controls are rejected so a header value cannot start a second request line or truncate the argv passed to the decoder',
     'header.malformed_field' => 'Malformed HTTP header field {field}: expected "Name: value"',
     'header.openurl_positional' => 'sugar-video: Reel::openUrl() second argument is HTTP headers as a name => value map, not a positional list — a list looks like the old allowedHosts position; pass headers as name => value entries and the host allowlist as the named allowedHosts: argument',
     'header.ignored_local_source' => 'sugar-video: ignoring {count} HTTP request header(s) — the decoder reads "{source}" without an HTTP request of its own, so there is nothing for them to ride on',

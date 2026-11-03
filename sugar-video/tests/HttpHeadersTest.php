@@ -34,7 +34,7 @@ final class HttpHeadersTest extends TestCase
     public function testCarriageReturnInValueRejected(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('CR, LF and NUL are rejected');
+        $this->expectExceptionMessage('C0 controls are rejected');
         HttpHeaders::parse(['Authorization' => "Bearer abc\r\nX-Injected: yes"]);
     }
 
@@ -44,7 +44,7 @@ final class HttpHeadersTest extends TestCase
     public function testLineFeedInValueRejected(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('CR, LF and NUL are rejected');
+        $this->expectExceptionMessage('C0 controls are rejected');
         HttpHeaders::parse(['Cookie' => "sid=1\nInjected: 1"]);
     }
 
@@ -54,7 +54,7 @@ final class HttpHeadersTest extends TestCase
     public function testNullByteInValueRejected(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('CR, LF and NUL are rejected');
+        $this->expectExceptionMessage('C0 controls are rejected');
         HttpHeaders::parse(['Authorization' => "Bearer\0evil"]);
     }
 
@@ -289,5 +289,30 @@ final class HttpHeadersTest extends TestCase
         $this->assertContains('-reconnect', $cmd);
         $this->assertNotContains('-headers', $cmd);
         $this->assertNotContains('-user_agent', $cmd);
+    }
+
+    /**
+     * @testdox n4: C0 bytes beyond CR/LF/NUL (VT, GS, DEL) are refused in values and names
+     */
+    public function testControlBytesBeyondCrlfCannotRideTheWire(): void
+    {
+        foreach ([11, 29, 127] as $ord) {
+            try {
+                HttpHeaders::parse(['X-Test' => 'pre' . chr($ord) . 'post']);
+                $this->fail('value carrying chr(' . $ord . ') must be refused');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('C0 controls', $e->getMessage());
+            }
+        }
+
+        try {
+            HttpHeaders::parse(['X-Bad' . chr(29) => 'value']);
+            $this->fail('name carrying GS must be refused');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('X-Bad', $e->getMessage(), 'the refusal names the offending header');
+        }
+
+        $ok = HttpHeaders::parse(['X-Tab' => "kept\ttab"]);
+        $this->assertCount(1, $ok->pairs(), 'HTAB stays legal in a field value');
     }
 }

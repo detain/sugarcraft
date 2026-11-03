@@ -45,7 +45,11 @@ final class HttpHeaders
      * argv delimiter — exec-level C-string handling would silently truncate the
      * argument while our stored pair kept the full text (credential corruption).
      */
-    private const LINE_BREAK = '/[\x00\r\n]/';
+    // n4: every C0 control byte except HTAB, plus DEL, is refused — not
+    // just the CR/LF/NUL trio. VT/FF/GS/RS and friends have no legal place in
+    // a header line and parsers downstream (the child's HTTP stack) treat
+    // them inconsistently, which is exactly the ambiguity that must not ride.
+    private const LINE_BREAK = '/[\x00-\x08\x0A\x0B\x0C\x0E-\x1F\x7F]|\r/';
 
     /** A header field-name must be an RFC 7230 token: no separators, no space. */
     private const VALID_NAME = '/^[!#$%&\'*+\-.^_`|~0-9A-Za-z]+$/';
