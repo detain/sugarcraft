@@ -211,8 +211,14 @@ final class MosaicPosterIntegrationTest extends TestCase
 
         // Index 9 is loaded but outside the window, so visibleCards() omits it.
         $withFar = $after->withItems($this->filledCards(Mosaic::halfBlock(), [1, 2, 3, 9]));
-        self::assertSame(5, $withFar->loadedCount());
+        // Dated flip (2026-11-03 review n20): this pinned the raw map size (5).
+        // Index 9 sits PAST total() === 6, and n20's point is precisely that
+        // such an entry is not loaded content of this collection — the honest
+        // figure is 4. The entry itself stays in the sparse map (widening must
+        // not force a refetch), which visibleCards() still proves by omitting it.
+        self::assertSame(4, $withFar->loadedCount(), 'past-the-end entries do not inflate the count');
         self::assertSame([0, 1, 2, 3], array_keys($withFar->visibleCards()), 'the window bounds what is visible');
+        self::assertSame(5, $withFar->withTotal(10)->loadedCount(), 'the past entry survives for the widening');
     }
 
     // ---- overlay renderers: the poster does NOT enter the frame -----------

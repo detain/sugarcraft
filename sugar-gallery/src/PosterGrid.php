@@ -105,12 +105,27 @@ final class PosterGrid
      * Splice a page of cards in at their ABSOLUTE indices, merging with whatever
      * is already loaded (new cards win). This is how a range fetch lands.
      *
-     * @param array<int, PosterCard> $items absolute index → card
+     * Non-integer keys and wrong-typed values are refused loudly at this
+     * ingress: `'abc' >= 0` evaluates TRUE in PHP 8, so a string key used to
+     * slip into the sparse map and detonate later as a frame-wide TypeError
+     * deep inside render() (2026-11-03 review m1 — fail-fast, not silent-drop).
+     * Negative INTENTIONAL indices are skipped quietly (a pinned contract for
+     * hosts that splice whole API pages without pre-filtering).
+     *
+     * @param array<array-key, mixed> $items absolute index → card
      */
     public function withItems(array $items): self
     {
         $clone = clone $this;
         foreach ($items as $index => $card) {
+            if (!is_int($index) || !($card instanceof PosterCard)) {
+                throw new \InvalidArgumentException(sprintf(
+                    'withItems() expects int keys and %s values, got key %s and value %s',
+                    PosterCard::class,
+                    get_debug_type($index),
+                    get_debug_type($card),
+                ));
+            }
             if ($index >= 0) {
                 $clone->items[$index] = $card;
             }
@@ -144,9 +159,19 @@ final class PosterGrid
      *
      * @param array{0:int, 1:int} $range inclusive [startIndex, endIndex]; an
      *                                    empty window ([a,b] with b < a) drops all
+     * @throws \InvalidArgumentException if the pair is not exactly two ints
      */
     public function withoutItemsOutside(array $range): self
     {
+        // Shape-gate before the destructure: ['start' => 0, 'end' => 5] used to
+        // fatal with "Cannot access offset of type string" (2026-11-03 review
+        // m1 twin).
+        if (count($range) !== 2 || !array_key_exists(0, $range) || !array_key_exists(1, $range)
+            || !is_int($range[0]) || !is_int($range[1])) {
+            throw new \InvalidArgumentException(
+                'withoutItemsOutside() expects an inclusive [int $start, int $end] pair',
+            );
+        }
         [$start, $end] = $range;
 
         $kept = [];
@@ -403,10 +428,23 @@ final class PosterGrid
         return $this->total;
     }
 
-    /** How many cards are actually loaded (sparse map size). */
+    /**
+     * How many loaded cards sit INSIDE the current total. Entries the host
+     * spliced past the end of the list (then shrank withTotal) stay in the
+     * sparse map for the next widening, but they are not loaded content of
+     * this collection — counting them over-reported progress (2026-11-03
+     * review n20).
+     */
     public function loadedCount(): int
     {
-        return count($this->items);
+        $count = 0;
+        foreach ($this->items as $index => $card) {
+            if ($index < $this->total) {
+                $count++;
+            }
+        }
+
+        return $count;
     }
 
     public function cursorIndex(): int
@@ -424,14 +462,53 @@ final class PosterGrid
         return $this->scrollRow;
     }
 
+    /**
+     * The loaded card at an absolute index, or NULL for an index the host has
+     * not spliced in yet (a skeleton cell — which is still a hit-testable
+     * `cell:<index>` zone by design, so clicking an unloaded slot works).
+     */
     public function item(int $index): ?PosterCard
     {
         return $this->items[$index] ?? null;
     }
 
+    /** The card under the cursor, or NULL when that slot has not been fetched. */
     public function cursorCard(): ?PosterCard
     {
         return $this->items[$this->cursor] ?? null;
+    }
+
+    /**
+     * The grid's own position readout — "  (3/12)" in the Rail header's shape,
+     * or `''` for an empty grid. The grid frame is deliberately chrome-free
+     * (every row is cell geometry the owner composes), so unlike Rail it prints
+     * no heading: the composing screen places this string where it belongs
+     * (2026-11-03 review M2 — before this seam the 2-D view had no way to tell
+     * the user where they were).
+     */
+    public function positionText(): string
+    {
+        if ($this->total <= 0) {
+            return '';
+        }
+
+        return '  (' . ($this->cursor + 1) . '/' . $this->total . ')';
+    }
+
+    /**
+     * Does the configured cell geometry actually fit a viewport? columns()
+     * and visibleRows() floor at one, so a sub-cell viewport still renders —
+     * and silently LIES about what is visible (2026-11-03 review M14). This is
+     * the detection seam callers want before laying a screen around the grid;
+     * the grid keeps its floor rather than collapsing frames to blank.
+     * Defaults to the grid's own current viewport.
+     */
+    public function fitsViewport(?int $cols = null, ?int $rows = null): bool
+    {
+        $cols ??= $this->cols;
+        $rows ??= $this->rows;
+
+        return $cols >= $this->cardWidth && $rows >= $this->cellHeight();
     }
 
     public function isEmpty(): bool
@@ -589,7 +666,18 @@ final class PosterGrid
     private function synced(int $cursor): self
     {
         if ($this->total <= 0) {
-            return $this;
+            // An empty grid has no window to keep — reset rather than freeze
+            // a stale cursor/scroll that would resurface (wrongly) after the
+            // next withTotal() widens the list again (2026-11-03 review n11).
+            if ($this->cursor === 0 && $this->scrollRow === 0) {
+                return $this;
+            }
+
+            $clone = clone $this;
+            $clone->cursor = 0;
+            $clone->scrollRow = 0;
+
+            return $clone;
         }
 
         $cursor = max(0, min($this->total - 1, $cursor));
