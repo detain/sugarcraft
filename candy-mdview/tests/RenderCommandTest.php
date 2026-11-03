@@ -9,6 +9,7 @@ use SugarCraft\MdView\ReloadTickMsg;
 use SugarCraft\MdView\RenderCommand;
 use SugarCraft\Markdown\Renderer;
 use SugarCraft\Markdown\Theme;
+use SugarCraft\Core\I18n\T;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use Symfony\Component\Console\Command\Command;
@@ -27,6 +28,9 @@ final class RenderCommandTest extends TestCase
     /** @var array<string,string|false> values as found before setUp cleared them */
     private array $savedColorEnv = [];
 
+    /** locale as found before setUp pinned it to 'en' */
+    private string $savedLocale = 'en';
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -34,6 +38,11 @@ final class RenderCommandTest extends TestCase
             $this->savedColorEnv[$key] = getenv($key);
             putenv($key); // unset
         }
+        // KM6: the locale is now adopted from the environment at boot, so
+        // error-message pins must pin the locale too — English here, whatever
+        // the developer has exported elsewhere.
+        $this->savedLocale = T::locale();
+        T::setLocale('en');
     }
 
     /**
@@ -190,8 +199,15 @@ final class RenderCommandTest extends TestCase
         }
     }
 
-    public function testExecuteWithNoInputReturnsFailure(): void
+    public function testExecuteWithNoInputOnTerminalIsUsageError(): void
     {
+        // KM5: a tty-stdin run used to print the one-word "no input" to
+        // STDOUT with FAILURE — an error in the data channel and a code that
+        // meant four different faults at once. It is a named usage fault now:
+        // STDERR-routed through writeError, INVALID (2). The seam keeps the
+        // throw before any real STDIN read, so the test never blocks.
+        RenderCommand::setStdinTtyCallback(fn () => true);
+
         $input = $this->createMock(InputInterface::class);
         $input->method('getArgument')->with('file')->willReturn(null);
         $input->method('getOption')->willReturnMap([
@@ -203,14 +219,19 @@ final class RenderCommandTest extends TestCase
             ['no-hyperlinks', false],
         ]);
 
-        $output = $this->createMock(OutputInterface::class);
-        $output->expects($this->once())
-            ->method('writeln')
-            ->with('<error>no input</error>');
+        $captured = '';
+        $output   = $this->createMock(OutputInterface::class);
+        $output->method('writeln')->willReturnCallback(
+            static function ($messages) use (&$captured): void {
+                $captured .= (string) $messages;
+            }
+        );
 
         $command = new RenderCommand();
-        $result = $this->invokeExecute($command, $input, $output);
-        $this->assertSame(Command::FAILURE, $result);
+        $result  = $this->invokeExecute($command, $input, $output);
+        $this->assertSame(Command::INVALID, $result);
+        $this->assertStringContainsString('no input:', $captured);
+        $this->assertStringContainsString('file argument', $captured);
     }
 
     public function testExecuteWithValidInputNoPagerReturnsSuccess(): void
@@ -376,6 +397,8 @@ final class RenderCommandTest extends TestCase
     {
         RenderCommand::setColorProbeCallback(null);
         RenderCommand::setTerminalCheckCallback(null);
+        RenderCommand::setStdinTtyCallback(null);
+        T::setLocale($this->savedLocale);
         foreach ($this->savedColorEnv as $key => $value) {
             if ($value === false) {
                 putenv($key);
@@ -709,8 +732,12 @@ final class RenderCommandTest extends TestCase
         $this->assertSame("# Hello from stdin", $result);
     }
 
-    public function testExecuteUnreadableThemeConfigThrows(): void
+    public function testExecuteUnreadableThemeConfigIsUsageError(): void
     {
+        // KM5/KM21: this used to throw a raw InvalidArgumentException out of
+        // execute() and print a multi-line Symfony exception block naming
+        // RenderCommand.php and the line number. It is a refusal now: one
+        // error line, INVALID exit code, no usage dump.
         $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
         $this->assertNotFalse($tmp);
         file_put_contents($tmp, "# Hello");
@@ -726,11 +753,19 @@ final class RenderCommandTest extends TestCase
                 ['no-hyperlinks', false],
             ]);
 
-            $output = $this->createMock(OutputInterface::class);
+            $captured = '';
+            $output   = $this->createMock(OutputInterface::class);
+            $output->method('writeln')->willReturnCallback(
+                static function ($messages) use (&$captured): void {
+                    $captured .= (string) $messages;
+                }
+            );
 
             $command = new RenderCommand();
-            $this->expectException(\InvalidArgumentException::class);
-            $this->invokeExecute($command, $input, $output);
+            $result  = $this->invokeExecute($command, $input, $output);
+            $this->assertSame(Command::INVALID, $result);
+            $this->assertStringContainsString('theme config not readable', $captured);
+            $this->assertStringContainsString('/no/such/theme.json', $captured);
         } finally {
             unlink($tmp);
         }
@@ -746,8 +781,9 @@ final class RenderCommandTest extends TestCase
         // Valid JSON that WOULD decode fine, but exceeds the 1 MB byte cap.
         // Without the cap the decoder happily accepts it (the extra 'pad' key
         // is ignored); with the cap it is rejected before ever being decoded.
-        // Reverting the cap makes this input load successfully -> no exception
-        // -> this test fails, which is exactly what pins the guard in place.
+        // Reverting the cap makes this input load successfully -> no error
+        // line and rc SUCCESS -> this test fails, which is exactly what pins
+        // the guard in place.
         $huge = '{"paragraph":{"fg":"white","bg":"black"},"pad":"' . str_repeat('a', 1_000_001) . '"}';
         file_put_contents($configTmp, $huge);
         try {
@@ -762,12 +798,18 @@ final class RenderCommandTest extends TestCase
                 ['no-hyperlinks', false],
             ]);
 
-            $output = $this->createMock(OutputInterface::class);
+            $captured = '';
+            $output   = $this->createMock(OutputInterface::class);
+            $output->method('writeln')->willReturnCallback(
+                static function ($messages) use (&$captured): void {
+                    $captured .= (string) $messages;
+                }
+            );
 
             $command = new RenderCommand();
-            $this->expectException(\InvalidArgumentException::class);
-            $this->expectExceptionMessageMatches('/exceeds \d+ bytes/');
-            $this->invokeExecute($command, $input, $output);
+            $result  = $this->invokeExecute($command, $input, $output);
+            $this->assertSame(Command::INVALID, $result);
+            $this->assertStringContainsString('exceeds 1000000 bytes', $captured);
         } finally {
             unlink($tmp);
             unlink($configTmp);
@@ -846,5 +888,233 @@ final class RenderCommandTest extends TestCase
         } finally {
             @unlink($path);
         }
+    }
+
+    // --- usage-error contract (KM5 / KM11 / KM12 / KM21) -------------------
+
+    /**
+     * Default option rows for execute() probes, with per-name overrides.
+     *
+     * @param array<string,mixed> $overrides
+     *
+     * @return list<array{0:string,1:mixed}> rows for willReturnMap
+     */
+    private function optionMap(array $overrides = []): array
+    {
+        $base = [
+            'theme-config'  => '',
+            'style'         => null,
+            'theme'         => null,
+            'width'         => 0,
+            'pager'         => false,
+            'no-hyperlinks' => false,
+        ];
+        $merged = array_merge($base, $overrides);
+        return array_map(
+            static fn(string $name, mixed $value): array => [$name, $value],
+            array_keys($merged),
+            $merged
+        );
+    }
+
+    /**
+     * Run execute() in print mode and capture every writeln() line the
+     * command emits (writeError falls back to the given output for plain
+     * OutputInterface mocks, so error lines are visible here).
+     *
+     * @param list<array{0:string,1:mixed}> $optionRows
+     * @param array<string,mixed>           $argumentMap
+     *
+     * @return array{0:int,1:string} exit code + concatenated writeln payload
+     */
+    private function runUsageRun(?string $content, array $optionRows, array $argumentMap = []): array
+    {
+        $tmp = null;
+        if ($content !== null) {
+            $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
+            $this->assertNotFalse($tmp);
+            file_put_contents($tmp, $content);
+        }
+        try {
+            $input = $this->createMock(InputInterface::class);
+            $capturedFile = $tmp;
+            $input->method('getArgument')->willReturnCallback(
+                static fn(string $name): mixed => $argumentMap[$name] ?? ($name === 'file' ? $capturedFile : null)
+            );
+            $input->method('getOption')->willReturnMap($optionRows);
+
+            $captured = '';
+            $output   = $this->createMock(OutputInterface::class);
+            $output->method('writeln')->willReturnCallback(
+                static function ($messages) use (&$captured): void {
+                    $captured .= (string) $messages;
+                }
+            );
+            $output->method('write')->willReturnCallback(
+                static function ($messages): void {
+                    // Success payload — not captured; usage probes assert rc.
+                }
+            );
+
+            return [$this->invokeExecute(new RenderCommand(), $input, $output), $captured];
+        } finally {
+            if ($tmp !== null) {
+                unlink($tmp);
+            }
+        }
+    }
+
+    public function testMissingFileNamesThePath(): void
+    {
+        // glow names the path ("open <path>: no such file"); mdview must too.
+        [$rc, $msg] = $this->runUsageRun(null, $this->optionMap(), ['file' => '/no/such/dir/candy-mdview-x.md']);
+        $this->assertSame(Command::INVALID, $rc);
+        $this->assertStringContainsString('candy-mdview-x.md', $msg);
+        $this->assertStringContainsString('no such file', $msg);
+    }
+
+    public function testDirectoryArgumentFailsLoudly(): void
+    {
+        // KM4 keystone: `candy-mdview docs/` used to "succeed" — directory
+        // reads returned string(0), passed the is_string gate, and rendered
+        // an empty document with exit code 0. An exit-code lie is now a
+        // named refusal.
+        $dir = (string) sys_get_temp_dir();
+        [$rc, $msg] = $this->runUsageRun(null, $this->optionMap(), ['file' => $dir]);
+        $this->assertSame(Command::INVALID, $rc);
+        $this->assertStringContainsString($dir, $msg);
+        $this->assertStringContainsString('is a directory', $msg);
+    }
+
+    public function testBinaryFileIsRefused(): void
+    {
+        // KM11: a mistyped PNG/PDF/ELF path used to spray raw control bytes
+        // at the terminal with SUCCESS. NUL bytes are conclusive refusal.
+        [$rc, $msg] = $this->runUsageRun(str_repeat("\x7fELF\x00\x01\x02", 4), $this->optionMap());
+        $this->assertSame(Command::INVALID, $rc);
+        $this->assertStringContainsString('not a text file', $msg);
+    }
+
+    public function testUnicodeDocumentStillRenders(): void
+    {
+        // The refusal must not become a gate against real text: multi-byte
+        // UTF-8 (and its emoji) carry no C0 bytes and sail through.
+        [$result, $payload] = $this->runPrint("# 日本語 ünïcode 😀 ok\n", $this->optionMap());
+        $this->assertSame(Command::SUCCESS, $result);
+        $this->assertStringContainsString('日本語', $payload);
+        $this->assertStringContainsString('😀', $payload);
+    }
+
+    public function testInvalidWidthValuesAreUsageErrors(): void
+    {
+        // KM12 rider: `--width abc` / negatives used to silently become 0
+        // (no-wrap, then hard truncation). Fail fast, name the value.
+        foreach (['-5', 'abc', '99999999', '1.5', '1 2'] as $bad) {
+            [$rc, $msg] = $this->runUsageRun('# Hello', $this->optionMap(['width' => $bad]));
+            $this->assertSame(Command::INVALID, $rc, "width {$bad} must be a usage error");
+            $this->assertStringContainsString('--width', $msg);
+            $this->assertStringContainsString($bad, $msg);
+        }
+    }
+
+    public function testUnknownThemeIsUsageErrorNotException(): void
+    {
+        // KM5: theme faults used to leave execute() as raw exceptions and
+        // print the Symfony usage dump. One line, INVALID, names the theme.
+        [$rc, $msg] = $this->runUsageRun('# Hello', $this->optionMap(['theme' => 'ZORG']));
+        $this->assertSame(Command::INVALID, $rc);
+        $this->assertStringContainsString('unknown theme: ZORG', $msg);
+    }
+
+    public function testThemeFaultIsReportedBeforeMissingInput(): void
+    {
+        // KM5 ordering (copywriter-M3): the shipped execute() validated the
+        // input first, so `--theme=ZORG missingfile.md` only ever said
+        // "no input" — the bogus flag was never seen. Flags now resolve
+        // before the document read.
+        [$rc, $msg] = $this->runUsageRun(null, $this->optionMap(['theme' => 'ZORG']), ['file' => '/no/such/qq.md']);
+        $this->assertSame(Command::INVALID, $rc);
+        $this->assertStringContainsString('theme', $msg);
+        $this->assertStringNotContainsString('no such file', $msg);
+    }
+
+    public function testEmptyStdinIsNamedDistinctly(): void
+    {
+        // Empty stdin and a tty stdin used to be one word. The injected
+        // stream keeps this hermetic: no read of the runner's real STDIN.
+        $stream = fopen('php://temp', 'r+');
+        $this->assertNotFalse($stream);
+        try {
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessage('standard input is empty');
+            $this->invokeStatic('readDocument', ['', $stream]);
+        } finally {
+            fclose($stream);
+        }
+    }
+
+    public function testBinaryStdinIsRefused(): void
+    {
+        $stream = fopen('php://temp', 'r+');
+        $this->assertNotFalse($stream);
+        fwrite($stream, "\x00\x01\x02binary");
+        fseek($stream, 0);
+        try {
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessage('not a text file');
+            $this->invokeStatic('readDocument', ['', $stream]);
+        } finally {
+            fclose($stream);
+        }
+    }
+
+    public function testForgedEscapeBytesInArgvNeverReachTheErrorLine(): void
+    {
+        // KM21 (argv channel of the terminal-injection family): a crafted
+        // `--theme=$'A\e[31mB'` used to land RAW in the error box, letting a
+        // filename/theme emit live SGR at the user. Sanitize::cellValue
+        // flattens every control byte to '·' (U+00B7) at the writeError choke.
+        [$rc, $msg] = $this->runUsageRun('# Hello', $this->optionMap(['theme' => "A\x1b[31mB"]));
+        $this->assertSame(Command::INVALID, $rc);
+        $this->assertStringNotContainsString("\x1b", $msg, 'no escape byte may reach the error line');
+        $this->assertStringContainsString('unknown theme: A' . "\u{00B7}" . '[31mB', $msg);
+    }
+
+    public function testForgedOscBytesInArgvNeverReachTheErrorLine(): void
+    {
+        // OSC-8 face of the same channel: the injection must not be able to
+        // mint a clickable hyperlink from inside the error box either.
+        [$rc, $msg] = $this->runUsageRun('# Hello', $this->optionMap(['theme' => "\x1b]8;;http://evil\x07x"]));
+        $this->assertSame(Command::INVALID, $rc);
+        $this->assertStringNotContainsString("\x1b", $msg);
+        $this->assertStringNotContainsString("\x07", $msg);
+    }
+
+    public function testFormatterTagsInPathsCannotRestyleTheErrorLine(): void
+    {
+        // OutputFormatter::escape neutralises `<…>` from user paths: a
+        // missing file literally named <info>... cannot open a green block.
+        [$rc, $msg] = $this->runUsageRun(null, $this->optionMap(), ['file' => '/tmp/mdview-<info>zz']);
+        $this->assertSame(Command::INVALID, $rc);
+        $this->assertStringContainsString('\\<info\\>', $msg, 'tags arrive backslash-escaped to the formatter');
+        $this->assertStringContainsString('zz', $msg);
+    }
+
+    public function testLoadInputGuardsStdinDefinitionBeforeUse(): void
+    {
+        // Structural pin (senior-m2, Law-1 ordering): the shipped arm read
+        // `$stream ?? STDIN` BEFORE the defined('STDIN') check, making the
+        // defensive branch dead code. The guard must precede the use.
+        $ref  = new ReflectionMethod(RenderCommand::class, 'loadInput');
+        $src  = implode('', array_slice(
+            file((string) $ref->getFileName()),
+            $ref->getStartLine() - 1,
+            $ref->getEndLine() - $ref->getStartLine() + 1
+        ));
+        $guard = strpos($src, "defined('STDIN')");
+        $use   = strpos($src, '$stream = STDIN');
+        $this->assertNotFalse($guard);
+        $this->assertNotFalse($use);
+        $this->assertLessThan($use, $guard, 'STDIN must be checked defined() before it is read');
     }
 }

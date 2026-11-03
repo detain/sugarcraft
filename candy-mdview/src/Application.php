@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\MdView;
 
+use SugarCraft\Core\I18n\T;
 use Symfony\Component\Console\Application as SymfonyApplication;
 
 /**
@@ -20,6 +21,11 @@ final class Application extends SymfonyApplication
 
     public function __construct()
     {
+        // Adopt the user's locale before any string is produced. sugar-core's
+        // translator defaults to 'en' and T::detect() is opt-in; without this
+        // line the shipped lang/ files were unreachable dead weight and the
+        // CLI answered every user in English regardless of environment.
+        T::setLocale(T::detect());
         parent::__construct('candy-mdview', self::versionString());
         $command = new RenderCommand();
         $this->add($command);
@@ -27,8 +33,8 @@ final class Application extends SymfonyApplication
     }
 
     /**
-     * The version Symfony's `--version` will print, phar-aware (the DST-1
-     * lesson from candy-code): inside an archive the build manifest wins —
+     * The version Symfony's `--version` will print, phar-aware: inside an
+     * archive the build manifest wins —
      * the hardcoded literal would otherwise freeze a number no release
      * process produced, while the manifest names the exact tag the artifact
      * was cut from. A bare `dev-build` stamp is working-tree noise, not a
@@ -63,7 +69,7 @@ final class Application extends SymfonyApplication
     /**
      * The real-filesystem path of the phar archive hosting this install, or ''
      * when this code is not running from an archive. Three identities, first
-     * answer wins (measured on PHP 8.3.6 while porting the candy-code DST-1
+     * answer wins (measured on PHP 8.3.6 while porting the archive-version
      * guard): Phar::running() names the archive for code executing inside it;
      * in the stub region running() answers '' and `__FILE__` names the
      * self-naming archive; a `phar://` prefix on this file's own `__FILE__`

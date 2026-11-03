@@ -84,4 +84,66 @@ final class LangTest extends TestCase
         $this->assertNotSame('render.unknown_theme', $full);
         $this->assertStringContainsString('nope', $full);
     }
+
+    public function testInputLaneErrorKeysCarryTheirEnglishTexts(): void
+    {
+        // KM5: the usage-error vocabulary execute() throws must exist in
+        // en with the exact texts the tests and docs quote.
+        $this->assertSame(
+            'no input: pass a file argument or pipe Markdown to standard input',
+            Lang::t('render.no_input_tty')
+        );
+        $this->assertSame(
+            'no input: standard input is empty',
+            Lang::t('render.no_input_empty')
+        );
+        $this->assertSame(
+            'open {path}: no such file',
+            Lang::t('render.file_missing')
+        );
+        $this->assertSame(
+            'open {path}: is a directory',
+            Lang::t('render.file_is_directory')
+        );
+        $this->assertSame(
+            'open {path}: cannot read file',
+            Lang::t('render.file_unreadable')
+        );
+        $this->assertSame(
+            'refusing to render {path}: not a text file',
+            Lang::t('render.binary_input')
+        );
+        $this->assertSame(
+            'input exceeds {limit} bytes: {path}',
+            Lang::t('render.input_too_large')
+        );
+        $this->assertSame(
+            'invalid --width value: {value} (expected a non-negative integer)',
+            Lang::t('render.width_invalid')
+        );
+    }
+
+    public function testInputLaneKeysInterpolateTheirPlaceholders(): void
+    {
+        $this->assertSame(
+            'open /tmp/candy-mdview-ghost.md: no such file',
+            Lang::t('render.file_missing', ['path' => '/tmp/candy-mdview-ghost.md'])
+        );
+        $this->assertSame(
+            'open ' . sys_get_temp_dir() . ': is a directory',
+            Lang::t('render.file_is_directory', ['path' => sys_get_temp_dir()])
+        );
+        $this->assertStringContainsString(
+            '67108864',
+            Lang::t('render.input_too_large', ['path' => '/big.md', 'limit' => 67_108_864])
+        );
+        $this->assertStringContainsString(
+            '/big.md',
+            Lang::t('render.input_too_large', ['path' => '/big.md', 'limit' => 67_108_864])
+        );
+        $this->assertStringContainsString(
+            'abc',
+            Lang::t('render.width_invalid', ['value' => 'abc'])
+        );
+    }
 }

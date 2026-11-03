@@ -14,4 +14,12 @@ return [
     'render.theme_config_too_large' => 'theme config exceeds {limit} bytes: {path}',
     'glamour.json_invalid' => 'glamour theme config is not valid JSON',
     'glamour.json_object' => 'glamour theme config must be a JSON object',
+    'render.no_input_tty' => 'no input: pass a file argument or pipe Markdown to standard input',
+    'render.no_input_empty' => 'no input: standard input is empty',
+    'render.file_missing' => 'open {path}: no such file',
+    'render.file_is_directory' => 'open {path}: is a directory',
+    'render.file_unreadable' => 'open {path}: cannot read file',
+    'render.binary_input' => 'refusing to render {path}: not a text file',
+    'render.input_too_large' => 'input exceeds {limit} bytes: {path}',
+    'render.width_invalid' => 'invalid --width value: {value} (expected a non-negative integer)',
 ];
