@@ -4,47 +4,59 @@
 
 Terminal escape sequence decoder for keyboard (legacy + Kitty progressive keyboard protocol + xterm modifyOtherKeys) and mouse (SGR 1006/1016, urxvt 1015, X10). Provides the `InputDriver` interface and `EscapeDecoder` implementation.
 
+New here? Read [Quickstart](#quickstart), then [Terminal replies](#terminal-replies--drained-not-dropped) if you host a prober, and [Security](#security-decoded-content-is-untrusted) before shipping. Glossary: a *frame* is one wire sequence (`ESC [ 57352 ; 1u`), an *event* is its decoded product, a *reply* is a frame the terminal sends unprompted by your keys.
+
 ## Overview
 
 `sugar-input` is the missing input layer for SugarCraft — it decodes raw TTY bytes into structured `Event` objects that programs can switch on. It handles:
 
 - **Plain ASCII keys** — letters, digits, punctuation, control codes
 - **Legacy escape sequences** — F1–F12, arrow keys, Home/End/PgUp/PgDn, Insert, Delete, Backspace, Tab, Enter, Escape, Backtab (`CSI Z`) — including the MODIFIED numbered-key family `CSI number ; modifier ~` that terminals really emit: xterm/alacritty terminfo ship `kDC=\E[3;2~` (Shift+Delete) and wezterm ships `kf34=\E[21;5~` (Ctrl+F10), so `3;5~` decodes as Ctrl+Delete rather than vanishing
-- **Kitty keyboard protocol** — event frames `CSI code ; mods u` (the `mods` field is the spec's `1 + bitmask`, so a bare press carries `;1` — release via the legacy `0x20` flag or the spec `:event-type` sub-param; event type 2, auto-repeat, deliberately decodes as an ordinary press). On release the key name gains the `Release` prefix and its first letter is upper-cased: a released `a` arrives as `ReleaseA`
+- **Kitty keyboard protocol** — event frames `CSI code ; mods u` (the `mods` field is the spec's `1 + bitmask`, so a bare press carries `;1` — release via the legacy `0x20` flag or the spec `:event-type` sub-param; event type 2, auto-repeat, deliberately decodes as an ordinary press with `isRepeat` set). Codepoints follow the spec's private-use layout: `57344`–`57454` carry the functional keys (arrows at `57350`–`57353`, the keypad block from `57399`), and codes below `57344` in `u` frames are TEXT codepoints — legacy tilde numbers like `11u` are counted drops, not F1. On release the key name gains the `Release` prefix and its first letter is upper-cased: a released `a` arrives as `ReleaseA`
 - **xterm modifyOtherKeys** — wrapped keys `CSI 27 ; mods ; keysym ~`, so a modified key with no dedicated sequence is told apart from a plain press
 - **Application keypad (DECKPAM)** — SS3 `ESC O p..y` (digits), `Ol` (decimal), `Om` (minus), `OM` (enter)
-- **SGR mouse 1006 / 1016** — press, release, drag, and scroll (incl. horizontal wheel) with modifier support (`CSI < b ; x ; y M|m`); 1016 is byte-identical to 1006 so a stateless decoder reports its coordinate field verbatim
+- **SGR mouse 1006 / 1016** — press, release, drag, and scroll (incl. horizontal wheel) with modifier support (`CSI < b ; x ; y M|m`); 1016 (pixels) frames carry colon sub-parameters and arrive byte-compatible with 1006 — the decoder keeps the first integer of each field, which for 1016 is a PIXEL coordinate. A stateless decoder cannot convert, so `x`/`y` are whatever the reporting mode measures; a host that enabled 1016 knows its own units. Non-numeric mouse parameters are refused, never cast to phantom origin clicks
 - **urxvt mouse 1015** — `CSI b ; x ; y M` decimal reports (no `<` introducer, so it never collides with 1006)
 - **X10 mouse** — `CSI M` three-byte compressed reports (mode 1000), not printable-key spam
 - **Focus events** — DECSET 1004 via `CSI I` / `CSI O`
-- **Bracketed paste** — `CSI 200 ~` … `CSI 201 ~` with 1 MiB safety cap (a paste over the cap force-closes as a `PasteEvent` with `truncated` set; see [Bracketed paste](#bracketed-paste))
-- **Terminal replies** — DA1/DA2, DSR/CPR, XTWINOPS, kitty flags, DECRPM and OSC/DCS strings are drained as `TerminalReplyEvent` — never buffered, never mis-parsed as keys (see below)
+- **Bracketed paste** — `CSI 200 ~` … `CSI 201 ~` with 1 MiB safety cap (a paste over the cap announces one truncated `PasteEvent`, then DISCARDS the remaining body bytes until the real terminator — see [Bracketed paste](#bracketed-paste))
+- **Terminal replies** — DA1/DA2, DSR/CPR, XTWINOPS, kitty flags, DECRPM and OSC/DCS/APC/PM strings are drained as `TerminalReplyEvent` — never buffered, never mis-parsed as keys (see below)
 
 ## Quickstart
 
 ```php
-use SugarCraft\Input\EscapeDecoder;
 use SugarCraft\Input\Driver\StreamInputDriver;
 use SugarCraft\Input\Event\KeyEvent;
 use SugarCraft\Input\Event\MouseEvent;
+use SugarCraft\Input\Event\PasteEvent;
+use SugarCraft\Input\Event\FocusEvent;
+use SugarCraft\Input\Event\TerminalReplyEvent;
 
-$decoder = new EscapeDecoder();
-$driver  = new StreamInputDriver(STDIN);
+$driver = new StreamInputDriver(STDIN);
 
-// Non-blocking read loop
-while (true) {
+// Non-blocking read loop with an idle backoff — never a hot spin:
+// read() returns null BOTH when more bytes may come and when the stream
+// hit EOF. isEof() tells the two apart; hasPending() says the decoder is
+// holding a partial sequence.
+while (!$driver->isEof()) {
     $event = $driver->read();
     if ($event === null) {
-        continue; // non-blocking empty or EOF
+        if (!$driver->hasPending()) {
+            usleep(2_000); // nothing buffered — back off before polling again
+        }
+        continue;
     }
 
     match (true) {
         $event instanceof KeyEvent  => handleKey($event),
         $event instanceof MouseEvent => handleMouse($event),
-        default                      => handleOther($event),
+        default                     => handleOther($event), // Paste/Focus/Reply/Resize
     };
 }
 ```
+
+Before any of this reaches the decoder, the HOST owns the terminal modes —
+see [Terminal setup is the host's duty](#terminal-setup-is-the-hosts-duty).
 
 ## Installation
 
@@ -52,12 +64,27 @@ while (true) {
 composer require sugarcraft/sugar-input
 ```
 
+## Requirements
+
+- PHP `^8.3` (PHPUnit `^10.5` for the suite).
+- The decoder itself is pure: no extensions, no tty, no environment reads.
+  It models bytes; everything about the terminal is the host's (below).
+- `ext-pcntl` (+ `ext-posix` to self-signal in tests) for
+  `SignalResizeDriver`; without pcntl, `arm()` returns `false` and detection
+  stays off — never a silent half-start.
+- A `tput` binary on `PATH` for the resize driver's dimension probes. When
+  terminfo cannot be resolved the probe fails soft and dimensions keep their
+  last known value (80×24 until a real answer arrives).
+- `react/stream` + `react/event-loop` only if you use `ReactInputDriver`;
+  it emits through `evenement` (declared).
+
 ## API
 
 ### EscapeDecoder
 
 ```php
-$decoder = new EscapeDecoder();
+$decoder = new EscapeDecoder();                                // pure decoder
+$decoder = new EscapeDecoder(new EscapeDecoderOptions(...));   // filtered
 
 // Decode a byte buffer — returns 0+ Events, buffers partial sequences
 $events = $decoder->decode($bytes);
@@ -65,62 +92,158 @@ $events = $decoder->decode($bytes);
 // Get unconsumed remainder after decode()
 $remainder = $decoder->remainder();
 
-// Clear the partial-sequence buffer (and both counters)
+// Resolve a held lone ESC when deferTrailingEscape is on (else [])
+$events = $decoder->flushDeferredEscape();
+
+// Observability counters (all zeroed by reset())
+$decoder->drainedReplyCount();    // replies surfaced as TerminalReplyEvent
+$decoder->droppedUnknownCount();  // complete sequences consumed with no event
+$decoder->discardedPasteBytes();  // bytes dropped by the paste cap (C2)
+
+// Clear every buffer, flag and counter — the documented recovery lever
 $decoder->reset();
 ```
 
-Feature groups toggle through `EscapeDecoderOptions`: `enableKitty`,
-`enableFocus`, `enablePaste`, `enableMouse` (all on by default) and the opt-in
-`deferTrailingEscape` (see [Deferred trailing escape](#deferred-trailing-escape-opt-in)).
+Feed whole reads; do NOT feed the decoder one byte per `decode()` call as a
+policy. A byte-at-a-time stream makes every bare `ESC` resolve eagerly to the
+`Escape` key under the default options (the deferred mode just holds it
+forever until flushed). Real reads deliver whole frames; if your reader can
+legitimately return 1 byte at a time, enable `deferTrailingEscape` and bound
+it with an idle timer.
 
-### InputDriver
-
-```php
-interface InputDriver {
-    /** Returns the next Event, or null on EOF / non-blocking empty */
-    public function read(): ?Event;
-}
-```
+Feature groups toggle through `EscapeDecoderOptions` — five `public readonly`
+bools (`enableKitty`, `enableFocus`, `enablePaste`, `enableMouse`,
+`deferTrailingEscape`); a disabled family's frames become counted drops, so
+construct the mix you want (named arguments make that a one-liner).
 
 ### Input drivers
 
 | Driver | Reads | Notes |
 |---|---|---|
-| `StreamInputDriver` | any readable stream (e.g. `STDIN`) | Non-blocking by contract: it takes over the stream's blocking flag on construction and restores the previous value in `__destruct`. Each `read()` pulls at most 8192 bytes through the internal `EscapeDecoder`; on EOF it first drains whatever the decoder still holds, and a read that produced no events re-reads once so buffered partials cannot stall the loop. |
-| `ReactInputDriver` | a `React\Stream\ReadableStreamInterface` | Attaches to `data` and feeds the same decoder. `isReadable()` follows React's contract (`true` until the stream closes, not "bytes pending"); `pause()` defers emission — already-buffered events flush on `resume()`. Incoming chunks are sliced at 8192 bytes (`MAX_CHUNK_SIZE`) with a lone-trailing-`ESC` carry law so a boundary can never split a sequence's escape byte from its params. `pipe()` forwards the RAW byte stream, not events. |
-| `SignalResizeDriver` | `SIGWINCH` | The production producer of `ResizeEvent`. Construction is side-effect free; the install is opt-in via `arm()`, which registers a weak-map fan-out `pcntl_signal` handler, enables `pcntl_async_signals()`, and probes current dimensions through `tput cols`/`tput lines` (capability name validated before the shell-out — see the gate in `SignalResizeDriver::CAPABILITY_PATTERN`). `read()` returns a `ResizeEvent` only after a SIGWINCH arrived. |
+| `StreamInputDriver` | any readable stream resource (e.g. `STDIN`) | Non-blocking by contract: takes over the stream's blocking flag on construction, restores it in `__destruct`; anything that is not a resource is refused at the constructor. Each `read()` pulls at most 8192 bytes through the internal `EscapeDecoder` and returns events one at a time in order. `isEof()` distinguishes "input ended" from `read()`'s shared idle-`null`; `hasPending()` reports buffered events or a partial sequence. `escapeDecoder()` exposes the owned decoder for `reset()`, `flushDeferredEscape()` and the counters. |
+| `ReactInputDriver` | a `React\Stream\ReadableStreamInterface` | PUSHES events by `emit('data', Event)` — it is not an `InputDriver`. `isReadable()` follows React's contract (`true` until the stream closes, not "bytes pending"); `pause()` defers emission — already-buffered events flush on `resume()`. Incoming chunks are sliced at 8192 bytes (`MAX_CHUNK_SIZE`) with a lone-trailing-`ESC` carry law so a boundary can never split a sequence's escape byte from its params. `pipe()` forwards the RAW byte stream, not events — the React "data" event name means one event per emit here, not per chunk. `escapeDecoder()` exposes the owned decoder. |
+| `SignalResizeDriver` | `SIGWINCH` | The production producer of `ResizeEvent`. Construction is side-effect free; `arm(): bool` is opt-in: it joins a weak-map fan-out, installs the process-wide handler, enables `pcntl_async_signals()`, probes current dimensions through `tput cols`/`tput lines` (capability names are refused before any shell-out unless they are a well-formed terminfo name, and stay quoted even after validation), and returns `false` where pcntl is absent. The handler itself only sets a per-instance flag — dimension probes run lazily in `read()`, so a resize-drag storm costs one probe pair, not 2×N forks from signal context. `disarm(): bool` reverses the last `arm()`: when the final armed driver leaves, the SIGWINCH disposition is handed back (see the one-disposition law below). |
+
+One-disposition law: a process holds exactly one `SIGWINCH` handler and
+`arm()` takes it. Installing your own `pcntl_signal(SIGWINCH, …)` after an
+`arm()` silently blinds every armed driver (and the reverse silently kills
+your handler). Responding to resizes needs no handler of your own — poll
+`read()`; it returns the fresh dimensions.
+
+### Terminal setup is the host's duty
+
+This library never writes to the terminal. It only decodes what it is handed,
+which means the bytes it models exist only if the HOST put the terminal into
+the right shape first:
+
+- **raw mode, echo off** — in canonical mode the line discipline buffers
+  until Enter, converts `\n`, and ECHOES what the "attacker" injected; a TUI
+  must disable ICANON/ECHO (via `stty`, termios, or `sugar-pty`) before
+  driving a decoder. Arrow keys do not "work" without this step — they are
+  waiting in the canonical line buffer.
+- **mode negotiation** — DECSET/DECRST for mouse reporting (`?1000`/`?1003`/
+  `?1006`), bracketed paste (`?2004`), focus reporting (`?1004`), and the
+  kitty keyboard flags query/enable sequence are the host's writes. The
+  decoder is stateless about which modes are on; a disabled
+  `EscapeDecoderOptions` family only filters parsing, it does not enable or
+  disable anything on the wire.
 
 ### Bracketed paste
 
-A paste larger than `PasteEvent::MAX_SIZE` (1 MiB) force-closes: the emitted
-`PasteEvent` carries `content` clipped to the cap, `truncated` set, and
-`truncationNotice()` — a localized one-liner suitable for showing the user why
-their paste looks short. The held-back tail of a split `CSI 201 ~` marker stays
-in `remainder()` and is never re-surfaced as its own event.
+A paste larger than `PasteEvent::MAX_SIZE` (1 MiB) is handled in two phases:
+the head is announced exactly once as a `PasteEvent` with `content` clipped
+to the cap, `truncated` set, and `truncationNotice()` — a localized one-liner
+suitable for showing the user why their paste looks short (`lang/en.php`;
+locale resolution follows sugar-core's `I18n\Lang`). The REMAINING BODY IS
+THEN DISCARDED — counted by `discardedPasteBytes()` — until the real
+`CSI 201 ~` terminator arrives. Overflow bytes are never re-decoded as
+keystrokes: an injected 1 MiB+ paste can end up commanding your input loop,
+so the cap's force-close must consume, not reinterpret. If the terminator
+never comes (an aborted or forged paste), the open episode simply stays
+open — every following keystroke is absorbed rather than spoofed, and
+`$decoder->reset()` is the documented way back: it discards the open episode
+and zeroes buffers, flags and counters, no restart required.
 
-Recovery lever: if the terminal ever loses the paste-END marker (an aborted
-paste), every following keystroke is absorbed into the open paste until the 1 MiB
-cap force-closes it. Calling `$decoder->reset()` (or `StreamInputDriver`
-teardown with a fresh decoder) discards the open episode immediately — that is
-the documented way back, no restart required.
+Paste content is not normalized: CRLF from Windows clipboards rides through
+verbatim, so split on `"\r\n"` as well as `"\n"` if you consume lines. The
+held-back tail of a split `CSI 201~` marker stays in `remainder()` and is
+never re-surfaced as its own event.
 
 ## Event types
 
 | Event | Key fields |
 |---|---|
-| `KeyEvent` | `key`, `modifiers`, `raw` |
-| `MouseEvent` | `x`, `y`, `button`, `action`, `modifiers` — `button` is 0/1/2 for left/middle/right press-drag-release; scroll steps report 96 (up), 97 (down), 98 (left/wire 66), 99 (right/wire 67) |
-| `FocusEvent` | `gained` |
-| `PasteEvent` | `content`, `truncated`, `truncationNotice()` |
+| `KeyEvent` | `key`, `modifiers`, `raw`, `isRelease()`, `isRepeat` |
+| `MouseEvent` | `x`, `y`, `button`, `action`, `modifiers` — `action` is `press`/`release`/`drag`/`scroll` (refused at the constructor otherwise); `button` is 0/1/2 for left/middle/right press-drag-release; scroll steps report 96 (up), 97 (down), 98 (left/wire 66), 99 (right/wire 67); `x`/`y` are the units the reporting mode measures (cells under 1000/1006, pixels under 1016) |
+| `FocusEvent` | `gained`, `raw` |
+| `PasteEvent` | `content`, `truncated`, `truncationNotice(): ?string` |
 | `ResizeEvent` | `cols`, `rows` — produced by `SignalResizeDriver` (see [Input drivers](#input-drivers)) |
-| `TerminalReplyEvent` | `family`, `params`, `raw`, `body`, `truncated` |
+| `TerminalReplyEvent` | `family`, `params` (head-clamped to `MAX_PARAMS`, overflow counted in `paramsDropped`), `raw`, `body`, `truncated` |
 
 Control characters surface as `KeyEvent` pairing the lowercase letter with the
 Ctrl modifier — 0x01 arrives as key `a` with `modifiers` carrying Ctrl. The
 bytes with no letter to pair with — NUL (0x00) and the four separators
 0x1C–0x1F (FS/GS/RS/US) — carry the RAW byte itself as the key name, so
 `match ($event->key)` arms test for `"\0"` / `"\x1c"`…`"\x1f"` rather than an
-invented mnemonic.
+invented mnemonic. Alt-modified control chords share the bare vocabulary:
+`ESC` + `0x0D` names `Enter` (with Alt), not a raw `\r` (a legacy quirk fixed
+in the C-round — if you matched on `"\r"`, match on `'Enter'` plus Alt now).
+
+### Key names (the complete vocabulary)
+
+Names are stable strings; the match arms below are the whole space a decoder
+can produce. Anything a release carries gains the `Release` prefix with the
+first letter upper-cased (`ReleaseA`, `ReleaseArrowUp`, `ReleaseEnter`) —
+compare `isRelease()` rather than parsing the prefix.
+
+| Family | Names |
+|---|---|
+| Text | every printable character (`a`… `Z`, digits, punctuation, Unicode runes as the character itself), `Space` |
+| Editing/whitespace | `Tab`, `Enter`, `Backspace`, `Escape`, `Backtab`, `Insert`, `Delete`, `Home`, `End`, `PageUp`, `PageDown` |
+| Arrows | `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight` |
+| Function | `F1`–`F24` (legacy families), up to `F35` via kitty |
+| Keypad | `KP0`–`KP9`, `KPDecimal`, `KPDivide`, `KPMultiply`, `KPSubtract`, `KPAdd`, `KPEnter`, `KPEqual`, `KPSeparator`, `KPBegin`, `KPLeft`, `KPRight`, `KPUp`, `KPDown`, `KPPageUp`, `KPPageDown`, `KPHome`, `KPEnd`, `KPInsert`, `KPDelete` |
+| Locks/navigation state | `CapsLock`, `ScrollLock`, `NumLock`, `PrintScreen`, `Pause`, `Menu` |
+| Media (kitty) | `MediaPlay`…`MediaRecord`, `LowerVolume`, `RaiseVolume`, `MuteVolume` |
+| Modifier-as-key (kitty) | `LeftShift`, `RightShift`, `LeftCtrl`, `RightCtrl`, `LeftAlt`, `RightAlt`, `LeftSuper`, `RightSuper`, `LeftHyper`, `RightHyper`, `LeftMeta`, `RightMeta`, `IsoLevel3Shift`, `IsoLevel5Shift` |
+| Ctrl-paired | lowercase letter with the Ctrl modifier (`0x01` → `a`+Ctrl) |
+| Raw fallback | NUL and 0x1C–0x1F as the byte itself |
+
+Shift+letter is protocol-dependent — code accordingly: legacy terminals send
+the capital directly (`Shift+a` → key `"A"`, NO `SHIFT` bit), the kitty
+protocol sends key `"a"` WITH the `SHIFT` bit. A match arm on `"A"` silently
+dies the moment kitty negotiation turns on; match `mb_strtolower($key)` plus
+`$modifiers->includes(KeyModifier::SHIFT)` if you need case-independent
+handling of both worlds.
+
+Modifier state arrives **on events** — you read them; you do not build masks
+(the `KeyModifier` constructor is private):
+
+```php
+if ($event->modifiers->includes(KeyModifier::CTRL)) { /* ... */ }
+$event->modifiers->value(); // the underlying bitmask, for caching/comparison
+```
+
+The constants `SHIFT`, `ALT`, `CTRL`, `META`, `SUPER`, `HYPER` (plus
+`CAPS_LOCK`, `NUM_LOCK`) document the wire bit layout the decoders map from:
+`KeyModifier::fromKittyInt()` reads kitty bits 0–5 plus the lock-state bits
+64/128 (which ride only the explicit `:event-type` sub-param form — the
+legacy form masks them off), `fromXtermParam()` converts the legacy
+`1 + bitmask` field, `fromSgrMouse()` extracts mouse-report bits. `all()`
+covers Shift+Alt+Ctrl only — the bits the legacy CSI forms can express — and
+the named factories (`none()`, `alt()`, `ctrl()`, `shift()`, `altShift()`,
+`ctrlShift()`, `altCtrl()`) exist for producers and tests, not as a public
+combining API. The xterm legacy `+8` modifier slot is named `META` in this
+library's mapping (the spec calls that bit "meta"; ctlseqs reserves "super"
+for different reporting) — treat legacy `;9A` as Meta+ArrowUp and rely on the
+kitty path for true Super.
+
+Reserved combinations (the legacy wire cannot distinguish these — do not
+design keymaps against the distinction): `Ctrl+I` IS `Tab`, `Ctrl+J`/`Ctrl+M`
+ARE `Enter`, `Ctrl+[` IS `Escape`, `Ctrl+@`/`Ctrl+Space` collide with NUL,
+and Alt via the `ESC` prefix collapses with Meta/Escape-then-key on legacy
+terminals. The kitty protocol disambiguates all of them; negotiating it is
+the host's duty (above).
 
 ## Terminal replies — drained, not dropped
 
@@ -157,29 +280,34 @@ boundary) rather than resuming key decoding mid-string, which would leak the
 tail as keystrokes. A stream that never terminates the string is abandoned
 after 64 KiB of swallowed payload so keystrokes resume; that abandon boundary
 is byte-exact, so for never-terminated streams chunk size cannot change the
-decoded event stream. A pathological reply that terminates only *after*
-exceeding the abandon budget is the one documented divergence: bytes past the
-budget may already have resumed decoding as keys by the time the real
+decoded event stream. Between the announce and the real terminator up to 64
+KiB of further traffic — including genuine keystrokes — is silently absorbed;
+that is the deliberate safety direction (a stuck prober swallows keys rather
+than a forged string forging them). A pathological reply that terminates only
+*after* exceeding the abandon budget is the one documented divergence: bytes
+past the budget may already have resumed decoding as keys by the time the real
 terminator arrives — which ones, exactly, depends on where the reads fell —
 so the guarantee there is "keystrokes always come back", not "oversized
 replies stay wholly silent".
 
 ### Observability: drained reply vs dropped unknown
 
-Two counters on `EscapeDecoder` tell the two silent paths apart:
+Three counters on `EscapeDecoder` tell the silent paths apart:
 
 ```php
-$decoder->drainedReplyCount();   // replies recognized and surfaced as TerminalReplyEvent
-$decoder->droppedUnknownCount(); // complete sequences consumed with no event
+$decoder->drainedReplyCount();    // replies recognized and surfaced as TerminalReplyEvent
+$decoder->droppedUnknownCount();  // complete sequences consumed with no event (incl. overflowed CSI)
+$decoder->discardedPasteBytes();  // paste body bytes dropped past the 1 MiB cap
 ```
 
 A rising `drainedReplyCount()` is normal terminal chatter; a rising
 `droppedUnknownCount()` means bytes were consumed but produced no event. That
 includes genuinely unrecognized sequences (unknown private CSIs, unmapped SS3
-finals, malformed mouse reports) **and** recognized-but-filtered ones — a kitty
+finals, malformed or non-numeric mouse reports, kitty `u`-frames below the
+functional block such as `11u`) **and** recognized-but-filtered ones — a kitty
 event frame when the progressive protocol is disabled, or a stray `CSI 201~`
 paste-end marker with no paste open — so a non-zero count is not necessarily a
-terminal this decoder fails to model. `reset()` zeroes both counters along with
+terminal this decoder fails to model. `reset()` zeroes all counters along with
 the buffers.
 
 ### Deferred trailing escape (opt-in)
@@ -210,25 +338,16 @@ guard is load-bearing.) Caveat: with the option on, a deferred `ESC` followed
 by a plain byte in the *next* chunk still merges into `Alt+char`; flush before
 resolving an Escape-only keystroke.
 
-## Modifiers (KeyModifier)
+## Documented gaps
 
-Modifiers arrive **on events** — you read them; you do not build masks (the
-constructor is private):
+Complete-by-design omissions, pinned by tests so they stay known:
 
-```php
-if ($event->modifiers->includes(KeyModifier::CTRL)) { /* ... */ }
-$event->modifiers->value(); // the underlying bitmask, for caching/comparison
-```
-
-The constants `SHIFT`, `ALT`, `CTRL`, `META`, `SUPER`, `HYPER` (plus
-`CAPS_LOCK`, `NUM_LOCK`) document the wire bit layout the decoders map from:
-`KeyModifier::fromKittyInt()` reads kitty bits 0–5, `fromXtermParam()` converts
-the legacy `1 + bitmask` field, `fromSgrMouse()` extracts mouse-report bits.
-`CAPS_LOCK`/`NUM_LOCK` are declared for spec completeness but are unreachable
-from the wire forms decoded today. `all()` covers Shift+Alt+Ctrl only — the
-bits the legacy CSI forms can express — and the named factories (`none()`,
-`alt()`, `ctrl()`, `shift()`, `altShift()`, `ctrlShift()`, `altCtrl()`) exist
-for producers and tests, not as a public combining API.
+- Parameterized focus forms (`CSI 1;3I`) are dropped, not decoded — matches
+  xterm, which never sends them.
+- 8-bit C1 controls (`0x80`–`0x9F`) are not treated as sequence starts; they
+  surface as raw printable keys. Modern emulators transmit 7-bit CSIs.
+- The mouse motion-tracking distinction between modes 1003 and 1005 is a
+  host-side mode choice; every `CSI < … M|m` frame decodes identically.
 
 ## Security: decoded content is untrusted
 
@@ -241,16 +360,45 @@ field as hostile bytes:
 
 - Never echo decoded content straight back to the terminal — a crafted paste
   or reply body can carry further escape sequences and command your renderer.
+  That includes OSC-8 hyperlinks: echoed content carrying `ESC ] 8 ; … \a`
+  becomes a clickable URL in modern emulators, so strip or escape OSC-8 (and
+  every other introducer) before display — sugar-core's `Sanitize` surface
+  is the fleet's shared tool for this.
 - Never interpolate it into shell commands, paths, or logs without your own
   quoting and redaction discipline.
+- **Bracketed paste fences are forgeable.** `CSI 200~`/`CSI 201~` are just
+  bytes: an attacker who can write the pts can open a paste window, hide
+  anything inside it, or close one you did not start. Use paste framing for
+  convenience (bulk text without keymap side effects), never as an
+  authenticity boundary between "typed" and "pasted".
+- **Caps never reinterpret.** When a sequence or paste overflows its cap the
+  excess is discarded and counted (`discardedPasteBytes()`), never pushed
+  back into the stream for a second parse; an oversized frame cannot surface
+  as synthesized keys, and an oversized paste body cannot masquerade as
+  keystrokes after its announce.
 - The fleet's private-use-area arena (zone sentinels U+E000/U+E001 and the
   image-marker block from U+E002) passes through decoding byte-identical — a
   hostile paste can forge marker bytes. Frame-marked composites should sweep
-  with candy-core `Sanitize::untrustedForMarkedFrames()` before rendering.
+  with sugar-core's `SugarCraft\Core\Util\Sanitize::untrustedForMarkedFrames()`
+  before rendering. (This library deliberately keeps the bytes: it decodes,
+  it does not clean — the consumer that renders owns the sweep. sugar-readline
+  is an example of a consumer that strips.)
 
 The decoder's own caps (partial sequence, 1 MiB paste, 1 KiB/64 KiB string
 replies) contain parser resource use; they do not make the content trustworthy.
-The fleet-wide contract lives in [`docs/TRUST-BOUNDARY.md`](../docs/TRUST-BOUNDARY.md).
+The fleet-wide contract lives in
+[`docs/TRUST-BOUNDARY.md`](https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md).
+
+## Two decoders in the fleet
+
+`sugar-input` is the byte-level decoder that `sugar-readline`, `sugar-pty` and
+the input-facing apps consume. `candy-code` additionally carries an older
+stream reader of its own lineage; the two are NOT guaranteed to agree on every
+exotic frame, and neither patches the other's gaps at runtime. Pick ONE decoder
+for a program's whole input path; do not pipe bytes through both. The
+private-use-area law differs on purpose (above): this library passes PUA bytes
+through, while sugar-readline strips them at its own boundary. Convergence of
+the two readers is tracked as a fleet finding, not a promise this README makes.
 
 ## License
 
