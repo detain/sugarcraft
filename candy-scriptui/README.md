@@ -68,11 +68,22 @@ Commands without the attributes get the stock help verbatim.
 
 ### Typo suggestion
 
-When a user types an unknown command name, `Application::find()` runs it
-through a `TypoSuggester` that computes Levenshtein distance against all
-registered command names. If a match is found within distance ≤ 2, the
-error message suggests the single nearest alternative (e.g. "Did you mean
-choose?"). Beyond distance 2 the original error propagates silently.
+When a user types an unknown command name, `Application::find()` refuses it
+outright — commands are only ever matched by exact name, never by prefix —
+after running the name through a `TypoSuggester`: one near alternative is
+quoted back (`Did you mean "choose"?`), several are listed (`Did you mean
+one of: "completion", "confirm", "log"?`), and beyond distance 2 nothing is
+suggested.
+
+### Output channels
+
+Every subcommand keeps two streams apart. **Data** (the styled text, the
+chosen value, the rendered table, the completion script) goes to STDOUT
+raw — never through the console formatter, so a value that happens to look
+like `<info>` survives byte-exact. **Diagnostics** (refusals, malformed
+flag values, I/O failures) go to STDERR as plain sentences, so scripts
+that `eval` completion output or capture `confirm` answers can never
+consume an error message as data.
 
 ```php
 use SugarCraft\ScriptUi\Attribute\Flag;

@@ -53,7 +53,7 @@ final class PagerCommand extends Command
         if (is_string($file) && $file !== '') {
             $raw = @file_get_contents($file);
             if ($raw === false) {
-                $output->writeln('<error>' . Lang::t('io.read_failed', ['path' => $file]) . '</error>');
+                fwrite(STDERR, Lang::t('io.read_failed', ['path' => $file]) . "\n");
                 return Command::FAILURE;
             }
         } else {

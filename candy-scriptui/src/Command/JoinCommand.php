@@ -50,18 +50,18 @@ final class JoinCommand extends Command
         $align      = strtolower((string) $input->getOption('align'));
 
         if ($horizontal) {
-            $output->writeln(self::joinHorizontal(
+            $output->write(self::joinHorizontal(
                 $parts,
                 is_string($separator) ? $separator : '',
                 $align,
-            ));
+            ), true, OutputInterface::OUTPUT_RAW);
             return Command::SUCCESS;
         }
-        $output->writeln(self::joinVertical(
+        $output->write(self::joinVertical(
             $parts,
             is_string($separator) ? $separator : "\n",
             $align,
-        ));
+        ), true, OutputInterface::OUTPUT_RAW);
         return Command::SUCCESS;
     }
 

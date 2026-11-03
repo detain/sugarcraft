@@ -108,7 +108,9 @@ final class PagerCommandTest extends TestCase
 
         $display = $tester->getDisplay();
         $this->assertSame(1, $status);
-        $this->assertStringContainsString('could not read file:', $display);
+        $this->assertStringNotContainsString('could not read file', $display);
+        $src = (string) file_get_contents(__DIR__ . '/../../src/Command/PagerCommand.php');
+        $this->assertStringContainsString("fwrite(STDERR, Lang::t('io.read_failed'", $src);
         // Before the Lang import fix this path fataled: "Class ... not found".
         $this->assertStringNotContainsString('Class "', $display);
     }

@@ -44,7 +44,7 @@ final class FormatCommand extends Command
         if (is_string($file) && $file !== '') {
             $raw = @file_get_contents($file);
             if ($raw === false) {
-                $output->writeln('<error>' . Lang::t('io.read_failed', ['path' => $file]) . '</error>');
+                fwrite(STDERR, Lang::t('io.read_failed', ['path' => $file]) . "\n");
                 return Command::FAILURE;
             }
         } else {
@@ -69,7 +69,7 @@ final class FormatCommand extends Command
             $rendered = \SugarCraft\Core\Util\Ansi::strip($rendered);
         }
 
-        $output->writeln($rendered);
+        $output->write($rendered, true, OutputInterface::OUTPUT_RAW);
         return Command::SUCCESS;
     }
 

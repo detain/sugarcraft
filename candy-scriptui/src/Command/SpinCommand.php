@@ -188,7 +188,7 @@ final class SpinCommand extends Command
         // timeout — so `spin --timeout N --show-output` never swallows
         // what the child managed to print.
         if ($showOutput) {
-            $output->write($process->stdout());
+            $output->write($process->stdout(), false, OutputInterface::OUTPUT_RAW);
         }
         if ($showError) {
             fwrite(STDERR, $process->stderr());

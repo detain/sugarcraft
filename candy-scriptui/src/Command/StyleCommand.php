@@ -81,7 +81,7 @@ final class StyleCommand extends Command
         if ($input->getOption('trim')) {
             $rendered = implode("\n", array_map(static fn(string $l) => rtrim($l), explode("\n", $rendered)));
         }
-        $output->writeln($rendered);
+        $output->write($rendered, true, OutputInterface::OUTPUT_RAW);
         return Command::SUCCESS;
     }
 
