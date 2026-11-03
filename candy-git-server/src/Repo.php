@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\GitServer;
 
 use SugarCraft\GitServer\Lang;
+use SugarCraft\GitServer\Support\BoundedCommand;
 
 /**
  * A Git repository managed by CandyGitServer.
@@ -242,17 +243,14 @@ final class Repo
 
         $gitDir = $this->path . '/.git';
         if (!\is_dir($gitDir)) {
-            $out = [];
-            $rc  = 0;
-            $escapedGitDir = \escapeshellarg($gitDir);
-            \exec("git init --bare {$escapedGitDir} 2>&1", $out, $rc);
-            if ($rc !== 0) {
-                throw new \RuntimeException(Lang::t('repo.git_init_failed', ['output' => \implode("\n", $out)]));
+            $init = BoundedCommand::run(['git', 'init', '--bare', $gitDir]);
+            if ($init['code'] !== 0) {
+                throw new \RuntimeException(Lang::t('repo.git_init_failed', ['output' => \implode("\n", $init['output'])]));
             }
 
             // Group-writable objects so pushes work when server workers run
             // under different users sharing a group (soft-serve parity).
-            \exec("git -C {$escapedGitDir} config core.sharedRepository umask 2>&1", $out, $rc);
+            BoundedCommand::run(['git', '-C', $gitDir, 'config', 'core.sharedRepository', 'umask']);
         }
 
         // Set description
@@ -295,13 +293,12 @@ final class Repo
      */
     public function branches(): array
     {
-        $out = [];
-        $rc  = 0;
-        $path = \escapeshellarg($this->path);
-        \exec("git -C {$path} branch --format='%(refname:short)' 2>&1", $out, $rc);
-        if ($rc !== 0) return [];
+        $result = BoundedCommand::run(['git', '-C', $this->path, 'branch', '--format=%(refname:short)']);
+        if ($result['code'] !== 0) {
+            return [];
+        }
 
-        return \array_values(\array_filter(\array_map('trim', $out), fn($l) => $l !== ''));
+        return \array_values(\array_filter(\array_map('trim', $result['output']), static fn ($l) => $l !== ''));
     }
 
     /**
@@ -309,11 +306,9 @@ final class Repo
      */
     public function tags(): array
     {
-        $out = [];
-        $rc  = 0;
-        $path = \escapeshellarg($this->path);
-        \exec("git -C {$path} tag 2>&1", $out, $rc);
-        return $rc === 0 ? $out : [];
+        $result = BoundedCommand::run(['git', '-C', $this->path, 'tag']);
+
+        return $result['code'] === 0 ? $result['output'] : [];
     }
 
     /**
@@ -323,15 +318,16 @@ final class Repo
      */
     public function refs(string $prefix = 'refs/heads'): array
     {
-        $out = [];
-        $rc  = 0;
-        $path = \escapeshellarg($this->path);
-        $escapedPrefix = \escapeshellarg($prefix);
-        \exec("git -C {$path} for-each-ref --format='%(objectname) %(refname)' {$escapedPrefix} 2>&1", $out, $rc);
-        if ($rc !== 0) return [];
+        $listing = BoundedCommand::run([
+            'git', '-C', $this->path,
+            'for-each-ref', '--format=%(objectname) %(refname)', $prefix,
+        ]);
+        if ($listing['code'] !== 0) {
+            return [];
+        }
 
         $result = [];
-        foreach ($out as $line) {
+        foreach ($listing['output'] as $line) {
             $line = \trim($line);
             if ($line === '') continue;
             // for-each-ref's format string guarantees exactly one separating space
@@ -350,14 +346,12 @@ final class Repo
      */
     public function readFile(string $commitHash, string $path): ?string
     {
-        $escapedPath = \escapeshellarg($path);
-        $escapedHash = \escapeshellarg($commitHash);
-        $repoPath = \escapeshellarg($this->path);
-        $out = [];
-        $rc  = 0;
-        \exec("git -C {$repoPath} show {$escapedHash}:{$escapedPath} 2>&1", $out, $rc);
-        if ($rc !== 0) return null;
-        return \implode("\n", $out);
+        $result = BoundedCommand::run(['git', '-C', $this->path, 'show', $commitHash . ':' . $path]);
+        if ($result['code'] !== 0) {
+            return null;
+        }
+
+        return \implode("\n", $result['output']);
     }
 
     /**

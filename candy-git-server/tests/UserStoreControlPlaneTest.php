@@ -80,7 +80,7 @@ final class UserStoreControlPlaneTest extends TestCase
     {
         $path = $this->tmpDir . '/users.json';
         $store = new UserStore($path);
-        $store->add(User::new('carol')->withPassword('hunter2')->withPasswordHash(\password_hash('hunter2', PASSWORD_DEFAULT)));
+        $store->add(User::new('carol')->withPasswordHash(\password_hash('hunter2', PASSWORD_DEFAULT)));
         $store->save();
 
         $raw = (string) \file_get_contents($path);

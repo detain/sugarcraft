@@ -48,6 +48,7 @@ final class ChildProcessLifetimeCensusTest extends TestCase
         'Git/StdioPipe.php' => 1, // run() — the shared bounded pump behind the daemon + SSH services
         'Git/StatelessRpc.php' => 2, // advertise(), negotiate() (smart-HTTP children)
         'HttpSmartProtocol/Server.php' => 1, // dormant generatePackData only (live children moved to StatelessRpc/StdioPipe)
+        'Support/BoundedCommand.php' => 1, // run() — the deadline-bound argv runner behind Repo reads, keygen and mirror fetch
     ];
 
     private string $tmpDir;

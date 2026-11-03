@@ -89,7 +89,9 @@ final class GitServerTest extends TestCase
         $u = User::new('carol')->addAuthorizedKey($key);
 
         $this->assertTrue($u->verifyPublicKey($key));
-        $this->assertFalse($u->verifyPublicKey('ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL6m3B1t3xK7qVQ5JxF9kE3xM8qFV2hG4pR9e2mY3xLk wrong@host'));
+        // Identity is type+blob; the comment is a free-form label — demanding
+        // it match broke auth against every client that relabels its keys.
+        $this->assertTrue($u->verifyPublicKey('ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL6m3B1t3xK7qVQ5JxF9kE3xM8qFV2hG4pR9e2mY3xLk wrong@host'));
         $this->assertFalse($u->verifyPublicKey('ssh-rsa AAAAB3NzaC1...'));
     }
 

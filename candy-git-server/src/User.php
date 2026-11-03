@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\GitServer;
 
 use SugarCraft\GitServer\Lang;
+use SugarCraft\GitServer\Support\BoundedCommand;
 
 /**
  * User account with SSH public key authentication.
@@ -18,13 +19,13 @@ final class User
     public readonly string $username;
     public readonly bool $isAdmin;
     public readonly bool $isActive;
-    public readonly ?string $password;
 
     /**
-     * password_hash() digest for HTTP Basic auth. The on-disk UserStore keeps
-     * ONLY this digest — a stored cleartext password is the account
-     * store's worst property. $password remains the in-memory
-     * (test/dev) channel until it folds away.
+     * password_hash() digest for HTTP Basic auth — the ONLY credential
+     * this account model carries. A cleartext $password property used to
+     * exist here; it was dead weight (nothing authenticated against it)
+     * and the classic leak vector, so it is gone: persistence keeps the
+     * digest, comparison runs through password_verify().
      */
     public readonly ?string $passwordHash;
 
@@ -35,16 +36,14 @@ final class User
         string $username,
         bool $isAdmin = false,
         bool $isActive = true,
-        ?string $password = null,
         string $authorizedKeys = '',
         ?string $passwordHash = null,
     ) {
         $this->username       = $username;
         $this->isAdmin        = $isAdmin;
         $this->isActive       = $isActive;
-        $this->password       = $password;
-        $this->passwordHash   = $passwordHash;
         $this->authorizedKeys = $authorizedKeys;
+        $this->passwordHash   = $passwordHash;
     }
 
     public static function new(string $username): self
@@ -54,33 +53,28 @@ final class User
 
     public function withUsername(string $u): self
     {
-        return new self($u, $this->isAdmin, $this->isActive, $this->password, $this->authorizedKeys, $this->passwordHash);
+        return new self($u, $this->isAdmin, $this->isActive, $this->authorizedKeys, $this->passwordHash);
     }
 
     public function withAdmin(bool $v = true): self
     {
-        return new self($this->username, $v, $this->isActive, $this->password, $this->authorizedKeys, $this->passwordHash);
+        return new self($this->username, $v, $this->isActive, $this->authorizedKeys, $this->passwordHash);
     }
 
     public function withActive(bool $v = true): self
     {
         // The constructor order is
-        // (username, isAdmin, isActive, password, keys) — this setter used to
+        // (username, isAdmin, isActive, keys) — this setter used to
         // write $v into the isAdmin slot, so 'deactivating' a user stripped
         // admin and left the account ACTIVE. A trust gate on isActive cannot
         // exist while this flips the wrong field.
-        return new self($this->username, $this->isAdmin, $v, $this->password, $this->authorizedKeys, $this->passwordHash);
-    }
-
-    public function withPassword(?string $password): self
-    {
-        return new self($this->username, $this->isAdmin, $this->isActive, $password, $this->authorizedKeys, $this->passwordHash);
+        return new self($this->username, $this->isAdmin, $v, $this->authorizedKeys, $this->passwordHash);
     }
 
     /** Attach a password_hash() digest (the only password form the store keeps). */
     public function withPasswordHash(?string $hash): self
     {
-        return new self($this->username, $this->isAdmin, $this->isActive, $this->password, $this->authorizedKeys, $hash);
+        return new self($this->username, $this->isAdmin, $this->isActive, $this->authorizedKeys, $hash);
     }
 
     /**
@@ -115,7 +109,6 @@ final class User
             $username,
             (bool) ($row['admin'] ?? false),
             (bool) ($row['active'] ?? true),
-            null,
             \is_array($keys) ? \implode("\n", \array_map('strval', $keys)) : '',
             isset($row['password_hash']) ? (string) $row['password_hash'] : null,
         );
@@ -218,11 +211,13 @@ final class User
     }
 
     /**
-     * Generate an ssh-ed25519 key pair.
+     * Generate an ssh-ed25519 key pair by delegating to ssh-keygen(1).
      *
-     * Requires the ssh2 extension. Returns ['private' => ..., 'public' => ...].
+     * Returns ['private' => ..., 'public' => ...], or null when the
+     * capability gate is closed (this build refuses to shell out unless
+     * the ssh2 extension is present) or ssh-keygen is missing/fails.
      *
-     * @return array{private: string, public: string}|null  null if ssh2 not available
+     * @return array{private: string, public: string}|null
      */
     public function generateKeyPair(): ?array
     {
@@ -232,14 +227,11 @@ final class User
 
         $keyPath = \sys_get_temp_dir() . '/candy-git-server-key-' . \bin2hex(\random_bytes(8));
 
-        // Generate using ssh-keygen
-        $comment = \escapeshellarg($this->publicKeyComment());
-        $cmd = "ssh-keygen -t ed25519 -f {$keyPath} -N '' -C {$comment} 2>&1";
-        $out = [];
-        $rc  = 0;
-        \exec($cmd, $out, $rc);
+        $generated = BoundedCommand::run([
+            'ssh-keygen', '-t', 'ed25519', '-f', $keyPath, '-N', '', '-C', $this->publicKeyComment(),
+        ]);
 
-        if ($rc !== 0 || !\file_exists($keyPath)) {
+        if ($generated['code'] !== 0 || !\file_exists($keyPath)) {
             return null;
         }
 
@@ -263,14 +255,28 @@ final class User
     /**
      * Compare two SSH public keys for equality.
      *
-     * All parts (type, base64 blob, and comment) must match. Whitespace
-     * between fields is normalized.
+     * A key's IDENTITY is its type and its base64 blob; the trailing
+     * comment is a free-form label (it defaults to user@host and every
+     * regeneration or copy across machines rewrites it). Requiring the
+     * comment to match made public-key auth fail against every realistic
+     * client — and against this package's own generator, which stamps
+     * `<username>@candy-git-server` while the key may have been added
+     * under any other label. Whitespace between fields is normalized;
+     * the comment is ignored.
      */
     private function keysMatch(string $a, string $b): bool
     {
-        $normalize = static fn (string $key): string =>
-            \implode(' ', \preg_split('/\s+/', \trim($key)) ?: []);
+        $identity = static function (string $key): ?string {
+            $parts = \preg_split('/\s+/', \trim($key)) ?: [];
+            if (\count($parts) < 2 || $parts[0] === '' || $parts[1] === '') {
+                return null; // malformed line cannot match anything
+            }
 
-        return $normalize($a) === $normalize($b);
+            return $parts[0] . ' ' . $parts[1];
+        };
+
+        $ida = $identity($a);
+
+        return $ida !== null && $ida === $identity($b);
     }
 }

@@ -27,8 +27,10 @@ use SugarCraft\GitServer\LFS\LFSHandler;
  * TERM/KILL escalation ladder releases pipes and handle in a `finally` per
  * spawn site. This class keeps exactly one further `proc_open` — the DORMANT
  * generatePackData() shortcut, no callers, carrying the same reap shape — so
- * nothing outlives the synchronous handleRequest() call that reached it. All
- * `exec()` helpers (Repo metadata reads) wait for their child by definition.
+ * nothing outlives the synchronous handleRequest() call that reached it. The
+ * short metadata commands (Repo reads, ssh-keygen, mirror fetch) all run
+ * through Support\BoundedCommand, which enforces the same deadline-and-reap
+ * contract synchronously.
  * There is no daemon object here to stop: the host application owns the
  * socket, and a request never returns while it has a live child.
  *

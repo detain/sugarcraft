@@ -9,18 +9,29 @@ use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
 use SugarCraft\GitServer\Config;
 use SugarCraft\GitServer\Repo;
+use SugarCraft\GitServer\Support\BoundedCommand;
 
 /**
- * Mirror-pull background job (plan item 7.5).
+ * Mirror-pull background job.
  *
- * Honors the `jobs.mirror_pull` schedule that {@see Config} has carried
- * as a dead string since the initial port. Repos are mirrors when they
- * carry an upstream pull URL ({@see Repo::isMirror()} /
- * `withMirrorFrom()`); each due mirror is refreshed with
- * `git -C <path> fetch --prune <url> '+refs/*:refs/*'` — the
- * full-mirror refspec so deleted upstream refs prune locally, matching
- * soft-serve's `git remote update --prune` semantics for
+ * Honors the `jobs.mirror_pull` schedule that {@see Config} parses;
+ * repos are mirrors when they carry an upstream pull URL
+ * ({@see Repo::isMirror()} / `withMirrorFrom()`); each due mirror is
+ * refreshed with `git -C <path> fetch --prune <url> '+refs/*:refs/*'` —
+ * the full-mirror refspec so deleted upstream refs prune locally,
+ * matching soft-serve's `git remote update --prune` semantics for
  * `--mirror` clones.
+ *
+ * The upstream URL is operator-supplied, so it passes a safety envelope
+ * before any child is spawned: an explicit scheme from
+ * {@see self::ALLOWED_SCHEMES} only (git's `ext::` transport is remote
+ * code execution dressed as a URL; `file://` reads the server's own disk;
+ * plaintext `http://` ships credentials over the wire), no leading dash
+ * (an option like `--upload-pack=cmd` would be parsed as a flag), and the
+ * fetch runs as an argv vector through {@see BoundedCommand} — no shell,
+ * no quoting to forget, a hard deadline, and GIT_TERMINAL_PROMPT=0 so a
+ * credentialed upstream can never park the tick on an interactive prompt.
+ * Failure logging redacts any password embedded in the URL.
  *
  * Dual-mode, like the rest of the lib: {@see attach()} registers a
  * periodic timer on a ReactPHP loop (the `serveAsync()` path);
@@ -31,6 +42,12 @@ use SugarCraft\GitServer\Repo;
  */
 final class MirrorPuller
 {
+    /** Transports an operator may mirror over, after lowercasing. */
+    public const ALLOWED_SCHEMES = ['https', 'ssh', 'git'];
+
+    /** Wall-clock ceiling for one upstream fetch (git can be slow, not forever). */
+    public const FETCH_TIMEOUT_SECONDS = 300.0;
+
     private Schedule $schedule;
 
     /** @var array<string, Repo> repo name => Repo */
@@ -39,7 +56,11 @@ final class MirrorPuller
     /** @var array<string, int> repo name => last pull attempt (unix time) */
     private array $lastPull = [];
 
-    /** Exec seam: fn(string $cmd): array{int, list<string>} => [exit code, output lines]. */
+    /**
+     * Process-execution seam: fn(list<string> $argv): array{code:int, output:list<string>}.
+     *
+     * @var \Closure(list<string>): array{code: int, output: list<string>}
+     */
     private \Closure $exec;
 
     private ?LoopInterface $loop = null;
@@ -47,18 +68,15 @@ final class MirrorPuller
 
     /**
      * @param \Closure|null $exec Process-execution seam for tests; the
-     *                            default shells out via \exec().
+     *                            default runs argv vectors through
+     *                            {@see BoundedCommand::run()}.
      * @throws \InvalidArgumentException if the configured schedule is invalid
      */
     public function __construct(Config $config, ?\Closure $exec = null)
     {
         $this->schedule = Schedule::parse($config->mirrorPullSchedule);
-        $this->exec = $exec ?? static function (string $cmd): array {
-            $out = [];
-            $rc = 0;
-            \exec($cmd, $out, $rc);
-
-            return [$rc, $out];
+        $this->exec = $exec ?? static function (array $argv): array {
+            return BoundedCommand::run($argv, self::FETCH_TIMEOUT_SECONDS, ['GIT_TERMINAL_PROMPT' => '0']);
         };
     }
 
@@ -136,7 +154,8 @@ final class MirrorPuller
 
     /**
      * Fetch a single mirror from its upstream. The attempt is recorded
-     * even on failure so a broken upstream cannot hot-loop the job.
+     * even on failure — and on refusal — so a broken or unfit config
+     * cannot hot-loop the job.
      */
     public function pull(Repo $repo, ?int $now = null): bool
     {
@@ -146,18 +165,68 @@ final class MirrorPuller
 
         $this->lastPull[$repo->name] = $now ?? \time();
 
-        $path = \escapeshellarg($repo->path());
-        $url = \escapeshellarg((string) $repo->mirrorFrom);
-        $refspec = \escapeshellarg('+refs/*:refs/*');
-        [$rc, $out] = ($this->exec)("git -C {$path} fetch --prune {$url} {$refspec} 2>&1");
+        $url = (string) $repo->mirrorFrom;
+        $refusal = self::upstreamRefusal($url);
+        if ($refusal !== null) {
+            // The refusal names the problem, never the URL: a hostile
+            // config drop should not get its payload echoed into logs.
+            \error_log("candy-git-server: mirror pull refused for {$repo->name}: {$refusal}");
 
-        if ($rc !== 0) {
-            \error_log("candy-git-server: mirror pull failed for {$repo->name}: " . \implode(' ', $out));
+            return false;
+        }
+
+        $result = ($this->exec)([
+            'git', '-C', $repo->path(), 'fetch', '--prune', $url, '+refs/*:refs/*',
+        ]);
+
+        if ($result['code'] !== 0) {
+            \error_log("candy-git-server: mirror pull failed for {$repo->name}: "
+                . self::redactCredentials(\implode(' ', $result['output']), $url));
 
             return false;
         }
 
         return true;
+    }
+
+    /**
+     * Why an operator-supplied upstream URL is unfit to fetch, or null.
+     */
+    private static function upstreamRefusal(string $url): ?string
+    {
+        if ($url === '') {
+            return 'empty upstream URL';
+        }
+        if ($url[0] === '-') {
+            return 'upstream URL starts with a dash (git would parse it as an option)';
+        }
+        if (\stripos($url, 'ext::') === 0) {
+            return 'the git ext:: transport executes commands and is refused';
+        }
+
+        $scheme = \parse_url($url, \PHP_URL_SCHEME);
+        if (!\is_string($scheme) || !\in_array(\strtolower($scheme), self::ALLOWED_SCHEMES, true)) {
+            return 'upstream scheme must be one of ' . \implode(', ', self::ALLOWED_SCHEMES)
+                . ' (scp-style "host:path" needs the explicit ssh:// form)';
+        }
+
+        return null;
+    }
+
+    /**
+     * Mask `scheme://user:password@` credentials in a message — first the
+     * configured URL itself, then anywhere else the text picked it up
+     * (git quotes the remote in its own failure lines).
+     */
+    private static function redactCredentials(string $text, string $url): string
+    {
+        $pattern = '#(://[^/@\s:]*:)[^@\s/]*@#';
+        $masked = \preg_replace($pattern, '$1***@', $url);
+        if (\is_string($masked) && $masked !== $url) {
+            $text = \str_replace($url, $masked, $text);
+        }
+
+        return \preg_replace($pattern, '$1***@', $text) ?? $text;
     }
 
     // -------------------------------------------------------------------------

@@ -108,7 +108,10 @@ final class SSHServerTest extends TestCase
     public function testHandleConnectionRejectsWrongPresentedKey(): void
     {
         $authorized = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL6m3B1t3xK7qVQ5JxF9kE3xM8qFV2hG4pR9e2mY3xLk alice@host';
-        $wrong = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL6m3B1t3xK7qVQ5JxF9kE3xM8qFV2hG4pR9e2mY3xLk mallory@host';
+        // A different BLOB, not just a label: after the comment-insensitive
+        // key-identity fix, relabelled copies of the same key ARE the same
+        // key — the discriminator auth must refuse is the cryptographic one.
+        $wrong = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL6m3B1t3xK7qVQ5JxF9kE3xM8qFV2hG4pR9e2mY3xLK mallory@host';
 
         $user = User::new('alice')->withAdmin(true)->addAuthorizedKey($authorized);
         $this->server->registerUser($user);

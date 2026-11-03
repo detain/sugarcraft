@@ -11,9 +11,9 @@ use SugarCraft\GitServer\Jobs\MirrorPuller;
 use SugarCraft\GitServer\Repo;
 
 /**
- * Mirror-pull background job — plan item 7.5.
+ * Mirror-pull background job.
  *
- * Process execution is stubbed through the constructor's exec seam, so
+ * Process execution is stubbed through the constructor's argv seam, so
  * no real `git fetch` runs.
  *
  * @covers \SugarCraft\GitServer\Jobs\MirrorPuller
@@ -50,12 +50,12 @@ final class MirrorPullerTest extends TestCase
         return Config::load($this->tmpDir . '/config.yaml');
     }
 
-    private function puller(string $schedule = '@every 10m', int $exitCode = 0): MirrorPuller
+    private function puller(string $schedule = '@every 10m', int $exitCode = 0, ?\Closure $stub = null): MirrorPuller
     {
-        return new MirrorPuller($this->config($schedule), function (string $cmd) use ($exitCode): array {
-            $this->commands[] = $cmd;
+        return new MirrorPuller($this->config($schedule), $stub ?? function (array $argv) use ($exitCode): array {
+            $this->commands[] = $argv;
 
-            return [$exitCode, $exitCode === 0 ? [] : ['fatal: mirror unreachable']];
+            return ['code' => $exitCode, 'output' => $exitCode === 0 ? [] : ['fatal: mirror unreachable']];
         });
     }
 
@@ -123,9 +123,11 @@ final class MirrorPullerTest extends TestCase
 
         $this->assertSame(1, $pulled);
         $this->assertCount(1, $this->commands);
-        $this->assertStringContainsString("git -C '/tmp/repos/m' fetch --prune", $this->commands[0]);
-        $this->assertStringContainsString("'https://example.com/m.git'", $this->commands[0]);
-        $this->assertStringContainsString("'+refs/*:refs/*'", $this->commands[0]);
+        $this->assertSame(
+            ['git', '-C', '/tmp/repos/m', 'fetch', '--prune', 'https://example.com/m.git', '+refs/*:refs/*'],
+            $this->commands[0],
+            'the fetch must reach the seam as a complete argv vector — no shell string anywhere'
+        );
         $this->assertSame(5000, $puller->lastPullAt('m'));
     }
 
@@ -163,7 +165,7 @@ final class MirrorPullerTest extends TestCase
         $this->assertSame([], $this->commands);
     }
 
-    public function testEscapesShellMetacharactersInUrlAndPath(): void
+    public function testMetacharactersReachGitAsOneArgumentNotShellSyntax(): void
     {
         $puller = $this->puller();
         $puller->registerRepo(
@@ -174,8 +176,77 @@ final class MirrorPullerTest extends TestCase
         $puller->runOnce(1000);
 
         $this->assertCount(1, $this->commands);
-        $this->assertStringContainsString("'/tmp/repos/evil\$(rm -rf x)'", $this->commands[0]);
-        $this->assertStringContainsString("'https://example.com/a.git;echo pwned'", $this->commands[0]);
+        // The classic escapeshellarg pin becomes structural truth instead:
+        // with an argv vector there is no shell to escape, so the
+        // metacharacters are simply characters of one argument each.
+        $this->assertSame(
+            ['git', '-C', '/tmp/repos/evil$(rm -rf x)', 'fetch', '--prune',
+                'https://example.com/a.git;echo pwned', '+refs/*:refs/*',],
+            $this->commands[0]
+        );
+    }
+
+    public function testUpstreamUrlsOutsideTheSafetyEnvelopeAreRefusedBeforeAnySpawn(): void
+    {
+        $hostile = [
+            'http://example.com/plain.git' => 'plaintext transport would ship credentials',
+            'file:///etc/git/bare.git' => 'local-file transport reads the server disk',
+            'ext::sh -c touch /tmp/pwned' => 'ext:: is remote code execution as a URL',
+            '-u--upload-pack=touch /tmp/pwned' => 'leading dash turns the URL into a git option',
+            '' => 'an empty URL cannot be fetched',
+            'example.com/path/repo.git' => 'scp-style syntax carries no explicit trustworthy scheme',
+        ];
+
+        foreach ($hostile as $url => $why) {
+            $this->commands = [];
+            $puller = $this->puller();
+            $puller->registerRepo(Repo::new('h' . \substr(\md5((string) $url), 0, 8), '/tmp/h')->withMirrorFrom((string) $url));
+
+            $this->assertFalse($puller->pull($this->onlyMirror($puller)), (string) $why);
+            $this->assertSame([], $this->commands, "refusal must not reach the fetch seam: {$why}");
+        }
+    }
+
+    public function testGitSchemeIsAnAcceptedExplicitTransport(): void
+    {
+        $puller = $this->puller();
+        $mirror = Repo::new('g', '/tmp/g')->withMirrorFrom('git://example.com/pub.git');
+        $puller->registerRepo($mirror);
+
+        $this->assertTrue($puller->pull($mirror));
+        $this->assertCount(1, $this->commands);
+    }
+
+    public function testCredentialsAreRedactedInFailureLogs(): void
+    {
+        $logPath = $this->tmpDir . '/error.log';
+        \ini_set('error_log', $logPath);
+
+        try {
+            $url = 'https://user:hunter2@example.com/m.git';
+            $puller = $this->puller('@every 10m', stub: static function (array $argv) use ($url): array {
+                // git echoes the credentialed remote in its own failure text
+                return ['code' => 128, 'output' => ["fatal: Authentication failed for '{$url}/'"]];
+            });
+            $mirror = Repo::new('cred', '/tmp/cred')->withMirrorFrom($url);
+            $puller->registerRepo($mirror);
+
+            $this->assertFalse($puller->pull($mirror, 1000));
+
+            $log = (string) \file_get_contents($logPath);
+            $this->assertStringNotContainsString('hunter2', $log, 'a password must never reach the log');
+            $this->assertStringContainsString('://user:***@example.com', $log);
+        } finally {
+            \ini_restore('error_log');
+        }
+    }
+
+    private function onlyMirror(MirrorPuller $puller): Repo
+    {
+        $mirrors = $puller->mirrors();
+        $this->assertCount(1, $mirrors);
+
+        return $mirrors[0];
     }
 
     // -------------------------------------------------------------------------

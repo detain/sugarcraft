@@ -457,12 +457,13 @@ final class GitProtocolTest extends TestCase
         $this->assertNotSame($user, $newUser);
     }
 
-    public function testWithPassword(): void
+    public function testWithPasswordHash(): void
     {
         $user = User::new('alice');
-        $newUser = $user->withPassword('secret123');
+        $digest = \password_hash('secret123', \PASSWORD_DEFAULT);
+        $newUser = $user->withPasswordHash($digest);
 
-        $this->assertSame('secret123', $newUser->password);
+        $this->assertSame($digest, $newUser->passwordHash);
         $this->assertNotSame($user, $newUser);
     }
 

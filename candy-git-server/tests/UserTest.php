@@ -45,17 +45,17 @@ final class UserTest extends TestCase
         $user = User::new('bob')
             ->withAdmin(true)
             ->withActive(false)
-            ->withPassword('secret');
+            ->withPasswordHash('digest-under-test');
 
         $this->assertSame('bob', $user->username);
         $this->assertTrue($user->isAdmin);
         $this->assertFalse($user->isActive);
-        $this->assertSame('secret', $user->password);
+        $this->assertSame('digest-under-test', $user->passwordHash);
 
         $renamed = $user->withUsername('rob');
         $this->assertSame('rob', $renamed->username);
         $this->assertTrue($renamed->isAdmin);
         $this->assertFalse($renamed->isActive);
-        $this->assertSame('secret', $renamed->password);
+        $this->assertSame('digest-under-test', $renamed->passwordHash);
     }
 }
