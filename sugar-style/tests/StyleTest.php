@@ -1359,36 +1359,34 @@ final class StyleTest extends TestCase
     }
 
     /**
-     * The residue E69's fix cannot reach, pinned with its mechanism so nobody
-     * re-derives it as a new finding — and so the claim "Style and Width now
-     * agree on tabs" is never made without this exception attached.
+     * The one two-codepoint input whose width `render()` used to MOVE (6 cells
+     * in, 4 out): substituting spaces for a tab re-clustered the following
+     * skin-tone modifier onto the final space, so the modifier contributed 0
+     * where alone it charges 2. Pinned here as the exception to "Style and
+     * Width agree on tabs" for every ICU that still joins the pair.
      *
-     * `render()` does not merely re-MEASURE content, it REWRITES it, and
-     * substituting spaces for a tab changes GRAPHEME CLUSTERING downstream of
-     * the substitution. A tab is a Control character, which by UAX #29 GB4/GB5
-     * never joins a following Extend; a space is not, and does. So in
-     * `"\t" . U+1F3FD` the skin-tone modifier is its own 2-cell cluster, while
-     * in the rendered `"    " . U+1F3FD` it attaches to the final space and
-     * contributes 0 — 6 cells in, 4 cells out.
-     *
-     * This is the same two-codepoint input the E69 write-up delta-debugged,
-     * and it shows the finding's proposed remedy is incomplete by construction:
-     * no per-tab cell charge can fix a reclustering. Only not rewriting the
-     * content would, and that is `Style::tabWidth(0)`.
+     * **STATUS AT THIS COMMIT: the family is CLOSED on this rig.** sugar-core
+     * `2039e65fa` (printable-ASCII fast path in `Width::string()`) measures
+     * `" " . U+1F3FD` as 3 cells — the modifier keeps its own 2-cell charge
+     * after a space — so expanding a tab no longer rewrites the answer:
+     * 6 cells in, 6 out. The equality asserted below is what Style owns; the
+     * mechanism itself (`Width::string()` clustering) is sugar-core's to pin,
+     * so the old isolated-mechanism legs were dropped rather than re-spelled
+     * here. An ICU or core change that re-joins the pair reddens this test —
+     * that is the tripwire working, not the gap re-opening by accident.
      */
-    public function testExpandingATabCanStillReclusterAFollowingCombiningMark(): void
+    public function testExpandingATabNoLongerReclustersAFollowingCombiningMark(): void
     {
         $input = "\t\u{1F3FD}";
 
         $this->assertSame(Width::TAB_WIDTH + 2, Width::string($input));
-        $this->assertSame(Width::TAB_WIDTH, Width::string(Style::new()->render($input)));
+        $this->assertSame(
+            Width::string($input),
+            Width::string(Style::new()->render($input)),
+            'render() moved the width of the tab+modifier pair that used to recluster',
+        );
 
-        // The mechanism, isolated from tabs entirely: an Extend after a SPACE
-        // joins it, an Extend after a CONTROL does not.
-        $this->assertSame(1, Width::string(" \u{1F3FD}"));
-        $this->assertSame(Width::TAB_WIDTH + 2, Width::string("\t\u{1F3FD}"));
-
-        // Not rewriting the content is what actually preserves the width.
+        // Not rewriting the content is the path that always preserved width.
         $this->assertSame(
             Width::string($input),
             Width::string(Style::new()->tabWidth(0)->render($input)),
@@ -1424,8 +1422,8 @@ final class StyleTest extends TestCase
      * writes past the row. E73 was an over-run of up to 8 cells.
      *
      * Over-runs must be ZERO. Under-runs are allowed and counted, because
-     * they are all the reclustering shape pinned in
-     * {@see self::testExpandingATabCanStillReclusterAFollowingCombiningMark()}
+     * historically they were all the tab-reclustering shape pinned in
+     * {@see self::testExpandingATabNoLongerReclustersAFollowingCombiningMark()}
      * — this test asserts that too, by requiring every under-run to contain a
      * `\t`, which is the only transform a default `Style` applies to content.
      *
@@ -1463,7 +1461,6 @@ final class StyleTest extends TestCase
         \mt_srand(20260822);
         $overRuns = [];
         $unexplained = [];
-        $underRuns = 0;
         for ($t = 0; $t < 20000; $t++) {
             $len = 1 + \mt_rand(0, 5);
             $s = '';
@@ -1479,7 +1476,6 @@ final class StyleTest extends TestCase
                 continue;
             }
             if ($laidOut < $promised) {
-                $underRuns++;
                 // Every under-run must be the tab-reclustering shape: a
                 // default Style rewrites nothing else in a single-line input.
                 if (!\str_contains($s, "\t") && \count($unexplained) < 5) {
@@ -1489,23 +1485,16 @@ final class StyleTest extends TestCase
         }
         $this->assertSame([], $overRuns, 'render() laid out more cells than Width::string() promised');
         $this->assertSame([], $unexplained, 'an under-run that is not the tab-reclustering shape');
-        // NOT an over-run assertion, despite this test's name. It is a canary
-        // on the UNDER-run residue documented in
-        // testExpandingATabCanStillReclusterAFollowingCombiningMark(): the
-        // residue is real and non-zero, so a change that drives it to zero has
-        // changed tab reclustering and must say so deliberately.
-        //
-        // If you are reading this because it went red: nothing is corrupting
-        // the frame. Over-runs are asserted above and they are still []. You
-        // have most likely CLOSED the reclustering under-run family — which is
-        // a welcome change — and the fix is to delete this canary and the
-        // paragraph in this test's docblock that calls the residue permanent,
-        // not to re-open the gap.
-        $this->assertGreaterThan(
-            0,
-            $underRuns,
-            'the documented tab-reclustering UNDER-run residue is now zero (this is not an over-run; see the comment at this assertion)',
-        );
+        // No count canary here any more. This test used to require the
+        // UNDER-run bucket to be non-zero — a deliberate tripwire while the
+        // tab-reclustering residue documented in
+        // {@see self::testExpandingATabNoLongerReclustersAFollowingCombiningMark()}
+        // was real on this rig. sugar-core `2039e65fa` closed that family
+        // (measuring `" " . U+1F3FD` without the join), the canary went red
+        // exactly as its own comment predicted, and per that comment's
+        // prescription it was deleted rather than the gap re-opened. The two
+        // assertions above — over-runs zero, every under-run tab-explained —
+        // are the load-bearing part and stay.
     }
 
     // ─── colorWhitespace(false) ────────────────────────────────────────
