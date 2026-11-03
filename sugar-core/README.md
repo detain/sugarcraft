@@ -9,7 +9,7 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-core)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-core)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-core?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-core)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.2-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 
@@ -24,7 +24,7 @@ that renders it — driven by an event loop with subscriptions, commands and
 a full-screen diffing renderer.
 
 ```php
-use SugarCraft\Core\{Cmd, KeyType, Model, Msg, Program};
+use SugarCraft\Core\{Cmd, KeyType, Model, Msg, Program, Subscriptions};
 use SugarCraft\Core\Msg\{KeyMsg, WindowSizeMsg};
 
 final class Counter implements Model
@@ -46,6 +46,11 @@ final class Counter implements Model
     }
 
     public function view(): string { return "count: $this->count\n(↑/↓ to change, q to quit)"; }
+
+    // Model::subscriptions() is part of the contract — return null when
+    // the model needs none (or `use SubscriptionCapable;` to get that
+    // default for free).
+    public function subscriptions(): ?Subscriptions { return null; }
 }
 
 (new Program(new Counter()))->run();
@@ -53,18 +58,28 @@ final class Counter implements Model
 
 ## Requirements
 
-- PHP 8.1+ (PHP 8.4+ recommended on Windows for FFI `SetConsoleCtrlHandler` support)
-- `mbstring`
-- `intl` — **required, and now declared as `ext-intl` in `composer.json`.** `Width`'s grapheme
+- PHP 8.3+ (PHP 8.4+ recommended on Windows for FFI `SetConsoleCtrlHandler` support)
+- `mbstring` — **required, and declared as `ext-mbstring` in `composer.json`.**
+  Escape decoding and clipboard paths call `mb_*` functions on hot paths.
+- `intl` — **required, and declared as `ext-intl` in `composer.json`.** `Width`'s grapheme
   segmentation is built on ICU via `grapheme_extract()`. Without it every width measure falls
   back to per-codepoint counting, which is self-consistent but wrong for any cluster — a
   skin-toned emoji measures 4 cells instead of 2 — and the cell-budget invariants the TUI
-  renderers rely on stop holding. It was a silent requirement before round 40 (2026-08-22):
-  the manifest omitted it while this list already named it.
+  renderers rely on stop holding. It was a silent requirement before the 2026-08 hardening
+  pass: the manifest omitted it while this list already named it.
 - `pcntl` (signal handling — POSIX only; not available on Windows)
 - `FFI` extension (required on Windows for raw TTY support)
 - `react/event-loop` ^1.6 (Composer)
+- `sugarcraft/sugar-pty` `@dev` — the runtime's raw-mode/termios backend. sugar-core and
+  sugar-pty hard-require each other (sugar-pty consumes core's primitives); CI injects the
+  path-repo closure so the cycle resolves inside the monorepo, and standalone installs take
+  both from Packagist. `Util\Tty\Termios` therefore appears in a public constructor type
+  (`ProgramOptions::$termios`).
 - Windows 10 version 1809+ (for `ENABLE_VIRTUAL_TERMINAL_PROCESSING`)
+
+> Install note: sibling `sugarcraft/*` packages track `@dev` and the monorepo sets
+> `minimum-stability: dev` with `prefer-stable: true`. A consumer pinning stable releases
+> only should mirror that pair in its own root manifest or install fails to resolve.
 
 ## Environment variables
 
@@ -78,6 +93,7 @@ library's full surface.
 | `COLORTERM` | `Util\ColorProfile::detect()` | no early TrueColor bail |
 | `TERM_PROGRAM` | `Util\ColorProfile::detect()`, `Util\Tty\EnvDetect` (mintty), `Util\Clipboard` (backend plan) | no known-terminal match |
 | `NO_COLOR` | `Util\ColorProfile::detect()` | colour stays enabled |
+| `CLICOLOR` | `Util\ColorProfile::detect()` (`CLICOLOR=0` opts out of colour) | no opt-out signal |
 | `CLICOLOR_FORCE` | `Util\ColorProfile::detect()` | no force (truthy = non-empty, not `0`, not `false`) |
 | `FORCE_COLOR` | `Util\ColorProfile::detect()` | no force |
 | `WT_SESSION` | `Util\ColorProfile::detect()` | not Windows Terminal |
@@ -97,6 +113,7 @@ library's full surface.
 | `HOME` | `WorkerPool` (worker environment seed) | `/tmp` |
 | `VISUAL` | `Util\Editor` (discovery: explicit override → `VISUAL` → `EDITOR` → platform default) | falls to `EDITOR` |
 | `EDITOR` | `Util\Editor` | falls to the platform default editor |
+| `TMPDIR` | PHP's `sys_get_temp_dir()`, consumed by `Util\Editor`'s temp-file scaffold | system temp (`/tmp`) |
 | `LC_ALL` | `I18n\T::detect()` (chain `LC_ALL` → `LC_MESSAGES` → `LANG`; `$_SERVER` first, then `getenv()`) | falls to `LC_MESSAGES` |
 | `LC_MESSAGES` | `I18n\T::detect()` | falls to `LANG` |
 | `LANG` | `I18n\T::detect()` | locale `en` |
@@ -115,47 +132,60 @@ the enum carries the same list; both are derived from the code):
 2. `TERM=dumb` → `NoTty` unless forced.
 3. `NO_COLOR` truthy → `Ascii` (decoration kept, per no-color.org) — it
    outranks the force variables because it is consulted first.
-4. Forced (`CLICOLOR_FORCE`/`FORCE_COLOR`) → `TrueColor`.
-5. `COLORTERM` = `truecolor` or `24bit` → `TrueColor`.
-6. Known `TERM_PROGRAM` values → the matched tier (iTerm/WezTerm/VS Code/
+4. `CLICOLOR=0` → `Ascii` (the BSD opt-out: colour disabled, decoration
+   kept), unless a force variable already won.
+5. Forced (`CLICOLOR_FORCE`/`FORCE_COLOR`) → `TrueColor`.
+6. `COLORTERM` = `truecolor` or `24bit` → `TrueColor`.
+7. Known `TERM_PROGRAM` values → the matched tier (iTerm/WezTerm/VS Code/
    Kitty/alacritty/Ghostty/Hyper → `TrueColor`; Apple_Terminal →
    `Ansi256`).
-7. `WT_SESSION` set → `TrueColor`.
-8. `TERM` contains `truecolor` or `direct` → `TrueColor`; contains `256`
+8. `WT_SESSION` set → `TrueColor`.
+9. `TERM` contains `truecolor` or `direct` → `TrueColor`; contains `256`
    → `Ansi256`; contains `color` or equals `xterm`/`screen`/`tmux` →
    `Ansi`.
-9. Any CI variable truthy (`CI`, `GITHUB_ACTIONS`, `GITLAB_CI`,
-   `BUILDKITE`) → `Ansi`.
-10. Fallback → `Ascii`.
+10. Any CI variable truthy (`CI`, `GITHUB_ACTIONS`, `GITLAB_CI`,
+    `BUILDKITE`) → `Ansi`.
+11. Fallback → `Ascii`.
+
+Colour note: the runtime's own renderer emits SGR unconditionally —
+`ColorProfile` tells *your* code which tier the terminal supports, but it
+is not a suppression switch inside the renderer. If your app must honour
+`NO_COLOR` end-to-end, consult `ColorProfile::detect()` and emit plain
+text yourself; there is no automatic downgrade.
 
 ## Architecture
 
 - **`Model`** — your app implements `init()`, `update(Msg)`, `view()`, `subscriptions()`.
-- **`Msg`** — marker interface for events. Built-ins: `KeyMsg`, `WindowSizeMsg`, `QuitMsg`.
+- **`Msg`** — marker interface for events. Built-ins: `KeyMsg`, `WindowSizeMsg`, `QuitMsg`
+  (the full catalogue is indexed under [Message catalogue](#message-catalogue)).
 - **`Cmd`** — `Closure(): ?Msg`. Async work whose result is dispatched as a Msg. Helpers in `Cmd::quit()`, `Cmd::batch()`, `Cmd::send()`.
 - **`Program`** — orchestrator. Sets up TTY, runs the ReactPHP event loop, dispatches Msgs, drives renders at the configured framerate.
 - **Timer accuracy** — on a libuv-backed loop (`ExtUvLoop`, picked automatically when `ext-uv` is installed) a timer's deadline is computed against a clock refreshed once per loop iteration, so a timer armed after long blocking work in a callback fires early by that much. Keep callbacks short; see the notes on `Program::run()` for the measured numbers and the safe paths.
 - **Timers in tests** — a PHPUnit process runs the loop in short bursts with long synchronous gaps, which is the same hazard writ large: a safety timer can fire instantly. Suites that arm one should pin a clock-fresh loop from `tests/bootstrap.php` with sugar-testing's `SugarCraft\Testing\LoopPin::pinStableClock()`.
 - **`InputReader`** — stateful byte-stream parser; handles split escape sequences across reads.
-- **`Renderer`** — minimal cursor-home + erase + write. Diff-based renderer is a follow-up.
+- **`Renderer`** — line-diff full-screen renderer by default (repaints only changed rows inside a DEC 2026 synchronized-output update); pass `cellDiffRenderer: true` for the per-cell "cursed" diff. Both are implemented; there is no plain full-repaint mode.
 - **`Util/`** — `Ansi`, `Color`, `ColorProfile`, `Width`, `Tty`, `TtyDetect`, `RawMode`, `Open` foundation utilities, shared with SugarStyle. `RawMode::enable($stream)` / `RawMode::disable($stream)` is the portable `stty`-based raw-mode toggle for the controlling terminal — a safe no-op on non-tty streams.
 - **`Semaphore`** (in `Util/`) — bounded-concurrency permit pool over ReactPHP promises: `Semaphore::new(6)->run(fn() => fetch($url))` caps in-flight work, parks the rest FIFO, and returns each permit when its promise settles. Share one pool across every component touching the same scarce resource, and `close()` it when the owner is retired so parked waiters fail (with `SemaphoreClosedException`) instead of pending. Distinct from `WorkerPool` (subprocess concurrency) — see its docblock.
 - **`LruMap`** (in `Util/`) — fixed-capacity least-recently-used map: `get()` promotes, `peek()` reads without disturbing recency, `put()` evicts the longest-unused entry past the cap, `evictions()` reports how often that happened, and an optional `maxCapacity` growth guard caps `resize()`. Iterates most-recently-used first; `keys()` is the string-safe key view. The size bound that complements a TTL cache; it does not replace one.
 - **`Subscription`** — value object: id, Kind, params, produce closure.
 - **`Subscriptions`** — immutable collection with `withTick()`, `withKey()`, `withSignal()`, `withCustom()`, `all()`, `has()`.
-- **`Kind`** — backed enum: Tick / Key / Signal / Custom.
+- **`Kind`** — pure enum: Tick / Key / Signal / Custom.
 - **`SubscriptionCapable`** — trait providing the default `subscriptions(): null`.
- - **`ScreenStack`** — immutable stack with `push()` / `pop()` / `current()` / `breadcrumb()` / `isEmpty()` / `count()`. <!-- @rename-keep -->
- - **`Screen`** — value object: `model`, optional `title`, `onEnter` closure, `onExit` closure.
- - **`ScreenStackCapable`** — interface: `screens(): ScreenStack`. Implement to activate screen-stack routing.
- - **`RootModelWithScreenStack`** — concrete root model owning a `ScreenStack`; routes `ScreenStackPushedMsg` / `ScreenStackPoppedMsg` internally, delegates `view()` to the active screen.
- - **`PushScreenCmd`** / **`PopScreenCmd`** — Cmd factories that emit `ScreenStackPushedMsg` / `ScreenStackPoppedMsg`.
- - **`ScreenStackPushedMsg`** / **`ScreenStackPoppedMsg`** — infrastructure messages dispatched through `Program::send()`.
- - **`Component`** — interface extending `Model`; adds `onMount(): ?Closure` (fired when mounted into a `Composite`) and `onUnmount(): ?Closure` (fired when removed). Return a `Cmd` to run immediately or `null` for no-op.
-  - **`Composite`** — `Model` that manages a list of child `Component`s. Tracks `pendingCmds` and drains them during reconcile, calling child `onMount()`/`onUnmount()` Cmds synchronously. Children are reconciled by ordinal position — reordering triggers lifecycle events on affected children.
-  - **`WorkerPool`** — bounded-concurrency pool (default 4 workers) for offloading CPU-bound tasks to subprocesses via serialized callables. Pass a global function name or a serializable callable; a `Closure` cannot cross the process boundary, so dispatching one returns an already-rejected promise.
-  - **`WorkerCmd`** — `Cmd` factory: `WorkerCmd::run($pool, $callable)` dispatches a task to the pool and yields a `WorkerResultMsg` when complete.
-  - **`WorkerResultMsg`** — result `Msg` carrying `$result`, `$error`, and `$workerId` from a pool worker.
+
+### Composition primitives
+
+- **`ScreenStack`** — immutable stack with `push()` / `pop()` / `current()` / `breadcrumb()` / `isEmpty()` / `count()`.
+- **`Screen`** — value object: `model`, optional `title`, `onEnter` closure, `onExit` closure.
+- **`ScreenStackCapable`** — interface: `screens(): ScreenStack`. Implement to activate screen-stack routing.
+- **`RootModelWithScreenStack`** — concrete root model owning a `ScreenStack`; routes `ScreenStackPushedMsg` / `ScreenStackPoppedMsg` internally, delegates `view()` to the active screen.
+- **`PushScreenCmd`** / **`PopScreenCmd`** (in `SugarCraft\Core\Cmd`) — Cmd factories that emit `ScreenStackPushedMsg` / `ScreenStackPoppedMsg`.
+- **`ScreenStackPushedMsg`** / **`ScreenStackPoppedMsg`** — infrastructure messages dispatched through the loop; always handled by the root model, never by the active screen.
+- **`Component`** — interface extending `Model`; adds `onMount(): ?Closure` (fired when mounted into a `Composite`) and `onUnmount(): ?Closure` (fired when removed). Return a `Cmd` to run immediately or `null` for no-op.
+- **`Composite`** — `Model` that manages a list of child `Component`s. Tracks `pendingCmds` and drains them during reconcile, calling child `onMount()`/`onUnmount()` Cmds synchronously. Children are reconciled by *presence*: a child that stays in the list keeps its state; adding or removing triggers lifecycle events. Reordering alone does not re-run lifecycle.
+- **`Panes` / `Pane` / `Rect`** — split-region bookkeeping for apps that manage multiple viewports. Geometry is advisory: the runtime does **not** clip a pane's `view()` output to its `Rect` — models must size their own frames (see [Viewport fit](#viewport-fit)).
+- **`WorkerPool`** — bounded-concurrency pool (default 4 workers) for offloading CPU-bound tasks to subprocesses. Tasks are named global functions or serialized `Serializable`/closure-free callables; a `Closure` cannot cross the process boundary, so dispatching one returns an already-rejected promise. Worker children run `php` without your application autoloader: only PHP built-ins and whatever the worker's own script loads are resolvable inside the child.
+- **`WorkerCmd`** — `Cmd` factory: `WorkerCmd::run($pool, $callable)` dispatches a task to the pool and yields a `WorkerResultMsg` when complete.
+- **`WorkerResultMsg`** — result `Msg` carrying `$result`, `$error`, and `$workerId` from a pool worker.
 
 ## Subscriptions
 
@@ -166,8 +196,11 @@ the active one — new subscriptions start, dropped ones cancel, stable ones
 keep running.
 
 ```php
-use SugarCraft\Core\{Kind, Model, Msg, Program, Subscriptions};
-use SugarCraft\Core\Cmd\SubscribeCmd;
+use SugarCraft\Core\{Model, Msg, Program, Subscriptions};
+
+/** App-local message — sugar-core ships no TickMsg; the produce closure
+ *  returns whatever Msg your update() understands. */
+final class TickMsg implements Msg {}
 
 final class Clock implements Model
 {
@@ -177,7 +210,9 @@ final class Clock implements Model
 
     public function update(Msg $msg): array
     {
-        // tick handling...
+        if ($msg instanceof TickMsg) {
+            return [new self($this->ticks + 1), null];
+        }
         return [$this, null];
     }
 
@@ -185,9 +220,11 @@ final class Clock implements Model
 
     public function subscriptions(): ?Subscriptions
     {
-        return (new Subscriptions())->withTick('clock-tick', 1.0, fn () => new TickMsg());
+        return (new Subscriptions())->withTick('clock-tick', 1.0, static fn (): Msg => new TickMsg());
     }
 }
+
+(new Program(new Clock()))->run();
 ```
 
 The `SubscriptionCapable` trait satisfies `Model::subscriptions()` with a null
@@ -199,19 +236,34 @@ use SugarCraft\Core\{Model, SubscriptionCapable};
 final class StaticModel implements Model
 {
     use SubscriptionCapable;
-    // ... no subscriptions() needed
+    // ... init()/update()/view() still required; no subscriptions() needed
 }
 ```
+
+Two reconciliation facts are worth knowing (both pinned by tests):
+
+- **Ids are the identity.** A subscription is stable while its `id` is
+  present across cycles. Changing the closure or interval *under the same
+  id* keeps the originally-started timer — to change cadence or producer,
+  use a different id. Duplicate ids in one `Subscriptions` collapse to the
+  first entry.
+- **`SubscribeCmd` is transient.** Its `SubscriptionsMsg` reconciles the
+  given set immediately, but the next `update()` cycle re-diffs against
+  `Model::subscriptions()`, which cancels anything the model itself does
+  not declare. For durable subscriptions, return them from
+  `subscriptions()`; use `SubscribeCmd` only for one-shot or
+  model-declared-parity sets.
 
 ## Screen / ScreenStack
 
 Modal and sub-screen workflows use an immutable `ScreenStack` owned by a
 `ScreenStackCapable` root model. The `Program` routes `init()` / `update()` /
-`view()` to the active screen automatically, while infrastructure messages
-(`ScreenStackPushedMsg` / `ScreenStackPoppedMsg`) stay in the root model.
+`view()` to the active screen's model, writes the screen's next model back
+into the stack, and keeps infrastructure messages
+(`ScreenStackPushedMsg` / `ScreenStackPoppedMsg`) on the root model.
 
 ```php
-use SugarCraft\Core\{Cmd, KeyType, Model, Msg, Program, RootModelWithScreenStack, Screen, ScreenStack};
+use SugarCraft\Core\{Cmd, KeyType, Model, Msg, Program, ScreenStack, ScreenStackCapable, SubscriptionCapable};
 use SugarCraft\Core\Cmd\{PushScreenCmd, PopScreenCmd};
 use SugarCraft\Core\Msg\{KeyMsg, ScreenStackPushedMsg, ScreenStackPoppedMsg};
 
@@ -222,17 +274,20 @@ final class DetailScreen implements Model
     public function update(Msg $msg): array
     {
         if ($msg instanceof KeyMsg && $msg->rune === 'b') {
-            return [$this, Cmd::pop()];
+            return [$this, new PopScreenCmd()];
         }
         return [$this, null];
     }
     public function view(): string { return "Detail: {$this->id}\n(press b to go back)\n"; }
+    public function subscriptions(): ?Subscriptions { return null; }
 }
 
-// Root model owns the stack and handles infrastructure messages.
-final class App implements Model, \SugarCraft\Core\ScreenStackCapable
+// Minimal root: the base layer is a plain string; the active screen (if
+// any) replaces it. Infrastructure push/pop messages rebuild the stack.
+final class App implements Model, ScreenStackCapable
 {
-    use \SugarCraft\Core\SubscriptionCapable;
+    use SubscriptionCapable;
+
     public function __construct(public ScreenStack $screens = new ScreenStack()) {}
     public function screens(): ScreenStack { return $this->screens; }
     public function init(): ?\Closure { return null; }
@@ -243,11 +298,9 @@ final class App implements Model, \SugarCraft\Core\ScreenStackCapable
             return [new self($this->screens->push($msg->screen)), null];
         }
         if ($msg instanceof ScreenStackPoppedMsg) {
-            if ($this->screens->isEmpty()) return [$this, null];
-            $popped = $this->screens->current();
             return [new self($this->screens->pop()), null];
         }
-        if ($msg instanceof KeyMsg && $msg->rune === 'n') {
+        if ($this->screens->isEmpty() && $msg instanceof KeyMsg && $msg->rune === 'n') {
             return [$this, new PushScreenCmd(new Screen(new DetailScreen('item-1'), title: 'Item 1'))];
         }
         return [$this, null];
@@ -255,17 +308,31 @@ final class App implements Model, \SugarCraft\Core\ScreenStackCapable
 
     public function view(): string
     {
-        $active = $this->screens->isEmpty()
-            ? new \SugarCraft\Core\Model\Anonymous(fn() => "Push a screen with n\n")
-            : $this->screens->current()->model;
-        return $active->view();
+        return $this->screens->isEmpty()
+            ? "Push a screen with n\n"
+            : (string) $this->screens->current()->model->view();
     }
 }
 
 (new Program(new App()))->run();
 ```
 
+`sugar-core` also ships `RootModelWithScreenStack`, a ready-made root model
+with this exact routing pre-implemented — extend-free to use, with
+`pushedIds` / `poppedIds` tracking for tests.
+
 `examples/screen-stack.php` is a runnable demo showing 3-deep push / pop.
+
+## Viewport fit
+
+The runtime paints whatever `view()` returns. It does **not** clip frames to
+the terminal, and `Pane`/`Rect` carry bounds purely as advisory metadata —
+no code path in the renderer reads them. A frame wider than the viewport
+soft-wraps and shifts every following row, which is why border-alignment
+defects surface so often across TUI apps. Read `WindowSizeMsg` (1-based
+`$cols` / `$rows` arrive at startup and on every resize), size your content
+to it, and truncate with `Util\Width::truncateAnsi()` so SGR bytes survive
+the cut.
 
 ## Demos
 
@@ -282,7 +349,7 @@ final class App implements Model, \SugarCraft\Core\ScreenStackCapable
 
 - **Foundation utilities**: 🟢 complete.
 - **Runtime**: 🟢 Program loop, mouse (cell-motion + all-motion + SGR 1006), focus / blur, bracketed paste, full function-key set including F13–F63 and the Kitty PUA range, the cell-diff "cursed" renderer (synchronized output 2026 + unicode mode 2027), inline-mode rendering, declarative `View` struct, plus the Cmd surface (`Suspend` / `Interrupt` / `Exec` / `Sequence` / `Every` / `Printf` / `Raw` and more — a resume is deliberately not a Cmd: SIGCONT dispatches a `ResumeMsg` from the runtime) and the Program control methods (`wait` / `kill` / `releaseTerminal` / `restoreTerminal`).
-- **Terminal recovery**: 🟢 `setupTerminal()` arms a one-shot shutdown backstop. `run()`'s `finally` restores the terminal on every path it can see; a `die()`, `exit()` or zend bailout that skips pending `finally` blocks still lands on the registered shutdown function, so the library that entered the alt screen is the library that leaves it and consumers do not need to re-invent a `bin` guard. The hook holds a `WeakReference` and compares the install pid at fire time — finished Programs are never pinned alive by the shutdown queue, and a forked child exiting never releases the parent's terminal.
+- **Terminal recovery**: 🟢 `setupTerminal()` arms a one-shot shutdown backstop. `run()`'s `finally` restores the terminal on every path it can see; a `die()`, `exit()` or zend bailout that skips pending `finally` blocks still lands on the registered shutdown function, so the library that entered the alt screen is the library that leaves it and consumers do not need to write their own `bin` guard. The hook holds a `WeakReference` and compares the install pid at fire time — finished Programs are never pinned alive by the shutdown queue, and a forked child exiting never releases the parent's terminal.
 
 
 ## Companion libraries
@@ -291,10 +358,10 @@ SugarCraft is the foundation — the rest of the SugarCraft stack
 builds on it. From the same monorepo:
 
 - **SugarStyle** — declarative styling + layout.
-- **SugarWidgets** — 14 prebuilt components.
+- **SugarWidgets** — prebuilt terminal components.
 - **SugarForms** — multi-page form library.
 - **SugarCharts** — sparkline / bar / line / heatmap / OHLC.
-- **CandyScriptui** — composer-installable CLI of 13 subcommands.
+- **CandyScriptui** — composer-installable CLI (`gum`-style subcommands).
 - **SugarMarkdown** — Markdown → ANSI renderer.
 - **SugarMouse** — mouse-zone tracker.
 - **SugarSpring** — spring physics + Newtonian projectile sim.
@@ -332,6 +399,13 @@ throw new \InvalidArgumentException(
 );
 ```
 
+Scope of the registry: it translates **validation and user-facing refusal
+messages** — the strings the library routes through `Lang::t()` (indexed in
+`lang/en.php`). Low-level programming errors (`\InvalidArgumentException`
+for bad internal arguments, `LogicException` for protocol misuse) stay raw
+SPL strings by design: they mark developer bugs, not product copy, and
+translating them would promise a coverage the registry does not target.
+
 ### Adding a new locale
 
 1.  Copy `sugar-core/lang/en.php` to `sugar-core/lang/<locale>.php`
@@ -343,8 +417,10 @@ throw new \InvalidArgumentException(
 Lookup chain: **exact locale → base language → `en` → raw key**. So a
 single `fr.php` automatically serves `fr-fr`, `fr-ca`, `fr-be`, etc. —
 only add a regional file (e.g. `pt-br.php`) when the wording genuinely
-diverges from the base language. A forgotten string is visible, never
-a fatal error.
+diverges from the base language. A key missing from your locale file falls
+back to the English value, so partial locales surface as mixed-language
+text, never a fatal error; `tests/LocaleKeyParityTest` fails the build when
+a shipped locale drifts from the `en` key set.
 
 See [`LOCALES.md`](https://github.com/detain/sugarcraft/blob/master/LOCALES.md)
 in the SugarCraft monorepo for the recommended set of codes plus a list
@@ -361,7 +437,7 @@ T::overrideNamespace('charts', '/etc/myapp/lang/charts');
 
 See the [`SugarCraft\Core\I18n\T`](src/I18n/T.php) docblock for the
 full API surface (`register`, `translate`, `setLocale`, `locale`,
-`detect`, `overrideNamespace`, `reset`).
+`detect`, `overrideNamespace`, `charset`, `t`, `reset`).
 
 ## Composing Cmds
 
@@ -380,14 +456,19 @@ maps common orchestration needs to the PHP combinators:
 | Print text above the program region | `Cmd::println($s)` / `Cmd::printf($fmt, ...)` |
 | Drop bytes onto the wire | `Cmd::raw($bytes)` |
 | Suspend on Ctrl+Z, resume on SIGCONT | `Cmd::suspend()` (returns to a `ResumeMsg`) |
-| Run an external program (`$EDITOR`) | `Cmd::exec($cmd, $args, fn ($exit) => $msg)` |
+| Run an external program (`$EDITOR`) | `Cmd::exec($command, captureOutput: false, onComplete: fn (int $exitCode) => $msg)` |
+| Offload to a worker subprocess | `WorkerCmd::run($pool, $callable)` → `WorkerResultMsg` |
+| Replace the subscription set for this cycle | `new SubscribeCmd($subscriptions)` |
 
-`init()` returns a Cmd (or null) to fire once at startup. `update()`
+`init()` returns a Cmd (or null) to fire once at startup — for the active
+model only: a screen pushed later is *not* re-inited; initialise it in the
+`Screen`'s `onEnter` or in its first `update()` instead. `update()`
 returns `[Model, ?Cmd]` — the runtime applies the Cmd, dispatches
 its Msg, and feeds the result back into `update()`.
 
 The `examples/` directory has runnable demos for each pattern:
-[`counter`](examples/counter.php) (basic), [`timer`](examples/timer.php)
+[`counter`](examples/counter.php) (basic), [`simple`](examples/simple.php)
+(minimal quit-on-key), [`timer`](examples/timer.php)
 (tick scheduling), [`realtime`](examples/realtime.php) (self-rescheduling
 tick), [`sequence`](examples/sequence.php) (`Cmd::sequence`),
 [`send-msg`](examples/send-msg.php) (custom Msg + `Cmd::tick`),
@@ -395,14 +476,38 @@ tick), [`sequence`](examples/sequence.php) (`Cmd::sequence`),
 [`views`](examples/views.php) (multi-view switcher),
 [`splash`](examples/splash.php) (animated splash → main view),
 [`suspend`](examples/suspend.php) (`Cmd::suspend` + `ResumeMsg`),
+[`altscreen-toggle`](examples/altscreen-toggle.php),
+[`panes`](examples/panes.php),
+[`screen-stack`](examples/screen-stack.php),
 [`mouse`](examples/mouse.php), [`focus-blur`](examples/focus-blur.php),
 [`window-size`](examples/window-size.php), [`print-key`](examples/print-key.php),
 [`set-window-title`](examples/set-window-title.php), and
 [`prevent-quit`](examples/prevent-quit.php).
 
+## Message catalogue
+
+Built-in `Msg` classes under `SugarCraft\Core\Msg\` (all implement the
+`Msg` marker interface; addressed messages implement
+`ComponentAddressedMsg` so a `Composite` can route by child address):
+
+| Group | Classes |
+|---|---|
+| Keyboard | `KeyMsg`, `KeyPressMsg`, `KeyReleaseMsg`, `KeyRepeatMsg` |
+| Mouse | `MouseMsg`, `MouseClickMsg`, `MouseReleaseMsg`, `MouseMotionMsg`, `MouseWheelMsg` |
+| Paste | `PasteMsg`, `PasteStartMsg`, `PasteEndMsg` |
+| Lifecycle | `QuitMsg`, `SuspendMsg`, `ResumeMsg`, `InterruptMsg`, `Empty`-family via `RawMsg` |
+| Terminal | `WindowSizeMsg` (`$cols`/`$rows`), `CursorPositionMsg`, `BackgroundColorMsg`, `ForegroundColorMsg`, `CursorColorMsg`, `ColorProfileMsg`, `TerminalVersionMsg`, `ModeReportMsg`, `CapabilityMsg`, `KeyboardEnhancementsMsg`, `ClipboardMsg` |
+| Focus | `FocusGainedMsg`, `FocusLostMsg` |
+| Screen stack | `ScreenStackPushedMsg`, `ScreenStackPoppedMsg` |
+| Composition | `AddComponentMsg`, `RemoveComponentMsg`, `ComponentAddressedMsg` (interface) |
+| Async / infra | `ExceptionMsg`, `ExecMsg`, `EnvMsg`, `PrintMsg`, `RawMsg`, `BatchMsg`, `SequenceMsg`, `SubscriptionsMsg`, `SuggestionsReadyMsg`, `TickRequest` (Msg-shaped request), `WorkerResultMsg` |
+
 ## Alt-screen vs inline mode
 
-Pass `useAltScreen: true` (the default) to `ProgramOptions` and the
+The shipped default is **neither**: `useAltScreen: false` and
+`inlineMode: false` paint over the current screen with the diff renderer.
+
+Pass `useAltScreen: true` to `ProgramOptions` and the
 runtime takes over the alt-screen — the user's previous content is
 preserved underneath, and `Cmd::quit()` restores it. Best for
 fullscreen TUIs.
@@ -423,7 +528,7 @@ Every SugarCraft program is three things: a **Model** (the state), an
 shopping list that walks through all three.
 
 ```php
-use SugarCraft\Core\{Cmd, KeyType, Model, Msg, Program};
+use SugarCraft\Core\{Cmd, KeyType, Model, Msg, Program, Subscriptions};
 use SugarCraft\Core\Msg\KeyMsg;
 
 final class ShoppingList implements Model
@@ -475,6 +580,8 @@ final class ShoppingList implements Model
         $lines[] = "\n(↑/↓ to move, space to toggle, q to quit)";
         return implode("\n", $lines);
     }
+
+    public function subscriptions(): ?Subscriptions { return null; }
 }
 
 (new Program(new ShoppingList(['eggs', 'milk', 'bread', 'candy'])))->run();
@@ -513,6 +620,12 @@ debug info from inside a running program:
    both honour this) — perfect for "I got here" prints during
    development.
 
+An uncaught exception thrown from `update()` or `view()` reaches the
+program's exception handler (default: rethrow), which means a raw PHP
+stack trace with local paths lands on the recovered screen — informative
+for the developer, alarming for the user. Install `withExceptionHandler()`
+if you want to log it and resume (or show a friendlier frame) instead.
+
 Other gotchas:
 
 - **Don't return `null` from `Model::view()`.** The runtime expects
@@ -523,9 +636,10 @@ Other gotchas:
 - **Test the Model in isolation.** Drive `update()` with scripted
   Msgs in PHPUnit; the runtime is irrelevant for state-machine
   testing. (See `sugar-core/tests/ProgramTest.php` for the pattern.)
-- **Profile with `--bail`.** If a render is slow, the cell-diff
-  renderer skips unchanged regions — make sure your `view()` is
-  deterministic so the diff stays cheap.
+- **Keep `view()` deterministic.** The line-diff (and especially the
+  cell-diff, `cellDiffRenderer: true`) renderer skips unchanged rows
+  only when the frame is byte-stable — randomised or time-dependent
+  output defeats the diff and repaints everything every frame.
 
 ## Mouse support — cell-motion vs all-motion
 
@@ -539,47 +653,66 @@ including bare-cursor moves) to `ProgramOptions`. Pick:
   can hold Shift to bypass mouse capture.
 - **`AllMotion`** when the model reacts to hover state (tooltips,
   fancy cursor effects, drag-preview overlays). Trade: every
-  motion event lands in `update()`, so use a `MouseMode::CellMotion`
-  stub for non-hover frames if perf bites.
+  motion event lands in `update()`, so enable it only while a
+  hover-sensitive view is up (`View->mouseMode`) instead of
+  process-wide.
 
 `MouseMsg` carries a `MouseAction` enum (`Press` / `Release` /
-`Motion` / `WheelUp` / `WheelDown`) and 1-based `col` / `row`
-coordinates. The four `MouseClickMsg` / `MouseReleaseMsg` /
+`Motion`) and 1-based `$x` / `$y` coordinates. The wheel is not an
+action: wheel events arrive as `Press` with `MouseButton::WheelUp` /
+`MouseButton::WheelDown`. The four `MouseClickMsg` / `MouseReleaseMsg` /
 `MouseMotionMsg` / `MouseWheelMsg` subclasses let you match by class
 when that's more convenient.
 
 `examples/mouse.php` is a runnable demonstrator.
 
-## ProgramOptions Builder
+## ProgramOptions
 
-`ProgramOptions` has a 16-parameter constructor — use the fluent builder to avoid long argument lists:
+`ProgramOptions` is a 24-parameter value object (`readonly` promoted
+properties). Pass it as `Program`'s second argument:
 
 ```php
-use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\{Program, ProgramOptions};
+
+$program = new Program(
+    new Counter(),
+    new ProgramOptions(framerate: 60.0, useAltScreen: true, mouseMode: MouseMode::CellMotion),
+);
+$program->run();
+```
+
+For code that assembles options incrementally there is
+`SugarCraft\Core\ProgramOptions\ProgramOptionsBuilder` — a fluent mirror
+of the same 24 options (`withFramerate()`, `withUseAltScreen()`,
+`withMouseMode()`, `withInlineMode()`, …); `build()` returns the
+`ProgramOptions` and performs no validation beyond the types:
+
+```php
+use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions\ProgramOptionsBuilder;
 
 $opts = (new ProgramOptionsBuilder())
-    ->withModel(new Counter())
-    ->withInitialModelFromCmd(fn () => new Counter(42))
-    ->withThrowOnQuit(false)
-    ->withCatchSignals(false)
-    ->withSignificantKeyEventsOnly(true)
+    ->withUseAltScreen(true)
+    ->withFramerate(60.0)
+    ->withCellDiffRenderer(true)
     ->build();
 
-(new Program($opts))->run();
+(new Program(new Counter(), $opts))->run();
 ```
-
-`build()` validates required fields and throws `\InvalidArgumentException` on missing required. The existing 16-arg `new ProgramOptions(...)` ctor is preserved for full back-compatibility.
 
 ## Program helpers
 
 ### withLogger
 
-Inject a PSR-3 logger to receive runtime events. Default is `Psr\Log\NullLogger`:
+Inject a PSR-3-shaped logger to receive runtime lifecycle events.
+The default is the library's own `SugarCraft\Core\Util\NullLogger` (a
+silent sink — sugar-core does not depend on `psr/log`); any object
+exposing `info()` / `error()` / `warning()` is accepted, and missing
+methods are skipped:
 
 ```php
-use Psr\Log\NullLogger;
 use SugarCraft\Core\Program;
+use SugarCraft\Core\Util\NullLogger;
 
 $program = (new Program(new Counter()))
     ->withLogger(new NullLogger());   // immutable — returns new instance
@@ -610,7 +743,9 @@ echo $program->lastFrameDuration();  // 0.0 before first render, >0 after
 
 ## ProgressReporter
 
-The `ProgressReporter` interface reports ongoing operation progress — consumed by `candy-mail` and `sugar-forms` in later steps:
+The `ProgressReporter` interface reports ongoing operation progress. It is
+a shared vocabulary shipped by the foundation; as of today no monorepo
+package consumes it — apps (or future library releases) adopt it directly:
 
 ```php
 use SugarCraft\Core\ProgressReporter;
@@ -641,7 +776,8 @@ $reporter = new SilentProgressReporter();
 
 ## UndoActionType
 
-Typed enum replacing ad-hoc string-prefix detection for undo routing (`str_starts_with($desc, 'delete ')` patterns in super-candy / candy-minesweeper / candy-tetris):
+Typed enum for apps that want structured undo routing instead of
+string-prefix detection (`str_starts_with($desc, 'delete ')` patterns):
 
 ```php
 use SugarCraft\Core\Undo\UndoActionType;
@@ -653,6 +789,8 @@ enum UndoActionType: string
     case Move   = 'move';
     case Rename = 'rename';
     case Copy   = 'copy';
+    case Insert = 'insert';
+    case Modify = 'modify';
     case Custom = 'custom';
 }
 
@@ -661,6 +799,26 @@ $action = UndoAction::new(UndoActionType::Delete, ['path' => '/tmp/foo'], 'delet
 echo $action->type->value;   // 'delete'
 echo $action->label;          // 'delete foo'
 ```
+
+## Atomic durable JSON files (`Util\AtomicJsonFile`)
+
+The pattern eight sibling libs consolidate onto: `AtomicJsonFile::path($file)
+->write($data)` serialises to a `0600` temp inode, `fsync`s, then
+`rename()`s, so a reader never sees a half-written file, and takes a
+`Semaphore`-guarded lock so concurrent processes serialise.
+
+Operator notes:
+
+- **Stale `.lock` sidecar.** The lock lives in `<file>.lock`. If a process
+  is `SIGKILL`ed while holding it, the sidecar can outlive its flock lease;
+  on a multi-uid host the residue may even belong to another user, and
+  every later write fails until an operator removes the stale `.lock`
+  (the flock itself auto-releases when the owning process is gone — the
+  unlink is purely cosmetic hygiene, safe to `rm` when `flock -n` proves
+  nobody holds it).
+- **Publish permissions.** Resulting file modes derive from the process
+  umask (opt-in `withPermissions()` tightens them explicitly); a
+  world-readable umask publishes world-readable state files.
 
 ## Renamed packages
 
