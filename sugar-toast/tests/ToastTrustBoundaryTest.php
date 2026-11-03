@@ -12,7 +12,15 @@ use PHPUnit\Framework\TestCase;
  * docs/TRUST-BOUNDARY.md §1): alert text is app-supplied, and the cell-grid
  * re-encode means view()'s output can carry ONLY the escape sequences the
  * renderer itself builds — a hostile message can never smuggle raw OSC,
- * BEL, screen-clears, or sugar-mouse zone sentinels onto the wire.
+ * BEL, or screen-clears onto the wire.
+ *
+ * What the boundary does NOT claim: sugar-mouse zone sentinels U+E000/U+E001
+ * are ordinary printable Private-Use-Area glyphs to this renderer and DO
+ * reach the composed frame (README trust section states this and instructs
+ * marked-frame hosts to sweep untrusted text upstream). The sentinel legs
+ * below pin THAT pass-through at raw-byte level — they are regression
+ * fences against the renderer silently starting to drop (or split) the
+ * 3-byte sequences, which would un-pair every host zone it overlaps.
  *
  * Inline SGR in a message remains an honoured styling feature (re-encoded
  * through the grid), so the negative pins here are deliberately scoped to
@@ -23,12 +31,20 @@ final class ToastTrustBoundaryTest extends TestCase
     /**
      * Message shaped like a hostile payload: OSC-8 hyperlink framing (with a
      * BEL terminator variant), an erase-screen CSI, a bare-ESC 7-bit escape,
-     * and forged sugar-mouse U+E000/U+E001 zone sentinels around a label.
+     * and forged sugar-mouse zone sentinels (REAL U+E000/U+E001 codepoints —
+     * written as \u{...}; the "\x{...}" spelling is an 8-char ASCII literal
+     * and was the exact vacuity this file shipped with, lib-reviews-1102
+     * M13) wrapped around a label.
      */
     private const HOSTILE = "\x1b]8;;http://evil.invalid\x1b\\CLICK"
         . "\x1b[2J"
         . "\x1b]0;title\x07TITLED"
-        . "\x1bE";
+        . "\x1bE"
+        . "\u{e000}FORGED\u{e001}";
+
+    /** Raw UTF-8 encodings of the sugar-mouse zone sentinels (EE 80 80 / EE 80 81). */
+    private const SENTINEL_OPEN = "\xEE\x80\x80";
+    private const SENTINEL_CLOSE = "\xEE\x80\x81";
 
     private function render(string $message): string
     {
@@ -70,6 +86,8 @@ final class ToastTrustBoundaryTest extends TestCase
         // The message's printable payload still rides through — containment
         // must not be silent text loss (fail-loud data stays, escapes die).
         $this->assertStringContainsString('CLICK', $out);
+        $this->assertStringContainsString('TITLED', $out);
+        $this->assertStringContainsString('FORGED', $out);
     }
 
     public function testZoneSentinelsPassThroughAsPrintableText(): void
@@ -80,10 +98,47 @@ final class ToastTrustBoundaryTest extends TestCase
         // untrusted text with Sanitize::untrustedForMarkedFrames() upstream.
         // This pin reddens if the renderer ever starts dropping them (a
         // behavior change worth a documented flip, not a silent drift).
-        $out = $this->render("pre \x{e000}ZONE\x{e001} post");
-        $this->assertStringContainsString("\x{e000}", $out);
-        $this->assertStringContainsString("\x{e001}", $out);
+        //
+        // Real codepoints this time (lib-reviews-1102 M13: the previous legs
+        // fed the ASCII literal "\x{e000}" — 8 printable characters, zero
+        // sentinel bytes — so the whole pin could never redden). Assertions
+        // are byte-level: the raw EE 80 80 / EE 80 81 sequences must arrive
+        // exactly once and paired, not just "somewhere in the string".
+        $out = $this->render("pre \u{e000}ZONE\u{e001} post");
+        $this->assertSame(1, \substr_count($out, self::SENTINEL_OPEN), 'open sentinel must reach the frame exactly once');
+        $this->assertSame(1, \substr_count($out, self::SENTINEL_CLOSE), 'close sentinel must reach the frame exactly once');
         $this->assertStringContainsString('ZONE', $out);
+    }
+
+    public function testHostilePayloadSentinelsSurvivePairedAlongsideTheEscapeKill(): void
+    {
+        // The same HOSTILE text that must lose its OSC/BEL framing must keep
+        // its sentinel pair intact and ordered — proving containment kills
+        // escapes without mangling the PUA pass-through channel.
+        $out = $this->render(self::HOSTILE);
+        $open = \strpos($out, self::SENTINEL_OPEN);
+        $close = \strpos($out, self::SENTINEL_CLOSE);
+        $this->assertNotFalse($open);
+        $this->assertNotFalse($close);
+        $this->assertLessThan($close, $open, 'sentinel pair must stay open-then-close');
+        $this->assertSame(1, \substr_count($out, self::SENTINEL_OPEN));
+        $this->assertSame(1, \substr_count($out, self::SENTINEL_CLOSE));
+    }
+
+    public function testActionLabelsCarryTheSameSentinelPassThrough(): void
+    {
+        // The label channel must obey the same documented law as the message
+        // channel (lib-reviews-1102 A2a: security's "pinned in both channels"
+        // claim was pinned in NEITHER — the label leg never existed).
+        $action = Action::new("\u{e000}GO\u{e001}", static function () {});
+        $toast = Toast::new(60)
+            ->withPosition(Position::TopLeft)
+            ->alert(ToastType::Info, 'label sentinels are content too', actions: [$action]);
+
+        $out = $toast->view(\str_repeat("bg\n", 12), 80, 12);
+        $this->assertSame(1, \substr_count($out, self::SENTINEL_OPEN));
+        $this->assertSame(1, \substr_count($out, self::SENTINEL_CLOSE));
+        $this->assertStringContainsString('GO', $out);
     }
 
     public function testControlBytesInActionLabelsAreContainedToo(): void
