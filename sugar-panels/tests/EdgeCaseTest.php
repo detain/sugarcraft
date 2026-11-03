@@ -348,6 +348,52 @@ final class EdgeCaseTest extends TestCase
         $this->assertSame($full, self::body($this->panels->render($layout, 10, 1)), 'the frame after a zero-area render is a full frame');
     }
 
+    public function testAViewportBeyondTheCellBudgetIsRefused(): void
+    {
+        // 4096 per side is legal, but 4000x3000 is 12 million cells: the grid
+        // alone was ~225 MiB before a glyph was painted. Refused, and refused
+        // before the allocation.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('exceeds the supported maximum');
+
+        $this->panels->render(Node::leaf('x')->withBorder(false), 4000, 3000);
+    }
+
+    public function testAViewportBeyondOneSideIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        $this->panels->render(Node::leaf('x')->withBorder(false), SugarPanels::MAX_VIEWPORT_DIMENSION + 1, 1);
+    }
+
+    public function testOneCellOverTheAreaBudgetIsRefusedEvenWithinEachSide(): void
+    {
+        // The per-side ceiling is generous enough that no real terminal hits
+        // it, so the area budget is the load-bearing leg: 1001x1001 is two
+        // perfectly legal sides and an illegal frame.
+        $legal = $this->panels->render(Node::leaf('x')->withBorder(false), 1, SugarPanels::MAX_VIEWPORT_DIMENSION);
+        $this->assertStringContainsString('x', self::body($legal));
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->panels->render(Node::leaf('x')->withBorder(false), 1001, 1001);
+    }
+
+    public function testPhpIntMaxDimensionsFailLoudNotLeaky(): void
+    {
+        // PHP_INT_MAX used to sail past the negative guard and leak
+        // array_fill()'s ValueError out of library internals.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('exceeds the supported maximum');
+
+        $this->panels->render(Node::leaf('x')->withBorder(false), \PHP_INT_MAX, \PHP_INT_MAX);
+    }
+
+    public function testTheCeilingsArePublicSoTheDocsCanPinThem(): void
+    {
+        $this->assertSame(4096, SugarPanels::MAX_VIEWPORT_DIMENSION);
+        $this->assertSame(1_000_000, SugarPanels::MAX_VIEWPORT_CELLS);
+    }
+
     public function testRenderNegativeWidthViewport(): void
     {
         $layout = Node::leaf('content')->withBorder(false);

@@ -72,6 +72,29 @@ final class SugarPanels
     private const ERASE = "\x1b[2J";
 
     /**
+     * Largest viewport side this renderer will paint, in cells.
+     *
+     * A viewport size is HOST input — a winsize ioctl, a tmux resize, a value
+     * parsed off a terminal report — not the host's intent. Every cell is a
+     * PHP array slot retained for the whole render, so an unbounded size meant
+     * one bogus event could allocate more memory than the host had. Real
+     * terminals are nowhere near 4096 cells wide, so the ceiling never bites
+     * legitimately; it exists to make the failure loud instead of fatal.
+     *
+     * Documented in README.md ("Input ranges"); pinned against the prose in
+     * ReadmeSnippetsTest so the two cannot drift apart.
+     */
+    public const MAX_VIEWPORT_DIMENSION = 4096;
+
+    /**
+     * Largest total area this renderer will paint, in cells.
+     *
+     * The per-side ceiling alone is not enough: 4096x4096 is 16.7 million
+     * cells. The area budget is what actually bounds the allocation.
+     */
+    public const MAX_VIEWPORT_CELLS = 1_000_000;
+
+    /**
      * Per-Style SGR-prefix cache, keyed by the Style OBJECT via a WeakMap.
      *
      * A WeakMap ties each entry's lifetime to its Style: when a style is GC'd,
@@ -186,7 +209,9 @@ final class SugarPanels
      *  collapses a pane to zero lines and back therefore gets a full repaint,
      *  which is exactly what the terminal needs after being off-screen.
      *
-     * @throws \InvalidArgumentException If either viewport dimension is negative.
+     * @throws \InvalidArgumentException If a viewport dimension is negative,
+     *                                  or exceeds MAX_VIEWPORT_DIMENSION per
+     *                                  side / MAX_VIEWPORT_CELLS in total.
      */
     public function render(Node $root, int $width, int $height): string
     {
@@ -195,6 +220,38 @@ final class SugarPanels
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(
                 "Viewport dimensions must not be negative, got {$width}x{$height}"
+            );
+        }
+
+        // The upper bound matters for the same reason. A viewport is host
+        // input — a winsize read, a tmux report, a resize event — and the
+        // whole grid is allocated from it: an unbounded size let one bogus
+        // number ask for more memory than the host had (4000x3000 was ~225
+        // MiB of cells before a single glyph was painted), and PHP_INT_MAX
+        // dimensions used to leak array_fill()'s ValueError instead.
+        if ($width > self::MAX_VIEWPORT_DIMENSION
+            || $height > self::MAX_VIEWPORT_DIMENSION
+            || $width * $height > self::MAX_VIEWPORT_CELLS
+        ) {
+            throw new \InvalidArgumentException(
+                "Viewport {$width}x{$height} exceeds the supported maximum ("
+                . self::MAX_VIEWPORT_DIMENSION . " per side, "
+                . self::MAX_VIEWPORT_CELLS . ' cells in total)'
+            );
+        }
+
+        // Upper bound, for the same reason as the lower one: the grid is
+        // allocated from these numbers, and they arrive from a terminal that
+        // is allowed to lie. Checked before any allocation so a refused frame
+        // costs nothing.
+        if ($width > self::MAX_VIEWPORT_DIMENSION
+            || $height > self::MAX_VIEWPORT_DIMENSION
+            || $width * $height > self::MAX_VIEWPORT_CELLS
+        ) {
+            throw new \InvalidArgumentException(
+                "Viewport {$width}x{$height} exceeds the supported maximum ("
+                . self::MAX_VIEWPORT_DIMENSION . ' per side, '
+                . self::MAX_VIEWPORT_CELLS . ' cells in total)'
             );
         }
 
