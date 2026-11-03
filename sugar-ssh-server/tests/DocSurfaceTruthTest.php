@@ -754,6 +754,42 @@ final class DocSurfaceTruthTest extends TestCase
         self::assertStringContainsString('something the connecting peer asserted, not something sshd proved', $this->prose($example));
     }
 
+    /**
+     * The canonical example in `Server.php` used to teach a stack without
+     * `exit()` and a sink that printed into the peer's channel. Both halves
+     * are pinned here, along with the constructor table and the deploy check
+     * the README now asks for (audit NIT 8, MINOR 21, MINOR 24, MINOR 29).
+     */
+    public function testTheCanonicalExampleAndTheOptionTableAgreeWithTheCode(): void
+    {
+        $server = $this->prose((string) \file_get_contents(\dirname(__DIR__) . '/src/Server.php'));
+
+        self::assertStringContainsString('exit(Server::new()', $server);
+        self::assertStringContainsString('->use(Logger::auto())', $server);
+        self::assertStringContainsString('is not decoration', $server);
+        // Spawn takes a shaped array; an example that trims it teaches a fatal.
+        self::assertStringContainsString("'cmd' => ['/bin/bash', '-l']", $server);
+        self::assertStringNotContainsString('->use(new Logger())', $server);
+
+        $readme = $this->readme();
+        if ($readme === null) {
+            $this::fail('the library README is missing');
+        }
+
+        $readme = $this->prose($readme);
+        self::assertStringContainsString('### Constructor options', $readme);
+        self::assertStringContainsString('Auth::MAX_ECHOED_BYTES', $readme);
+        self::assertStringContainsString('MAX_RESPONSE_BYTES', $readme);
+        self::assertStringContainsString('$failClosed = false', $readme);
+        self::assertStringContainsString('there is no override flag', $readme);
+        // Fields the metadata fence used to omit.
+        self::assertStringContainsString('$s->serverHost;', $readme);
+        self::assertStringContainsString('$s->lang;', $readme);
+        // The deploy check the guide's health section already insists on.
+        self::assertStringContainsString('check that it took effect', $readme);
+        self::assertStringContainsString('echo "status=$?"', $readme);
+    }
+
     private function adminGuide(): ?string
     {
         return $this->monorepoFile('docs/admin/sugar-ssh-server.md');

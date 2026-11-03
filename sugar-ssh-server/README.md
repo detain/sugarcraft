@@ -133,7 +133,21 @@ Match User wishuser
     X11Forwarding no
 ```
 
-Then `systemctl reload sshd`.
+Then `systemctl reload sshd`, and check that it took effect before you
+depend on it:
+
+```bash
+ssh -o BatchMode=yes wishuser@host; echo "status=$?"
+```
+
+That runs your entry script, not your shell -- which is the point. A status of
+`0` or `129` means `ForceCommand` reached the account (see [Exit
+status](../docs/admin/sugar-ssh-server.md#exit-status)); a login that drops you
+into an interactive shell means the `Match` block never applied, and every
+assumption below it about rate limits and pairing is currently unenforced. Do
+not write the probe as `ssh wishuser@host echo ok`: the argument is discarded
+before PHP starts
+([Healthcheck](../docs/admin/sugar-ssh-server.md#healthcheck)).
 
 ### 2. Provision the paths the stack writes
 
@@ -298,6 +312,31 @@ final class HelloBanner implements Middleware
     }
 }
 ```
+
+### Constructor options
+
+Every shipped gate takes its knobs at construction, and several defaults are
+security-relevant, so the signatures are tabulated once here rather than
+inferred from examples. Names in **bold** are the ones that change behaviour
+when left alone.
+
+| Middleware | Constructor | Defaults worth knowing |
+|---|---|---|
+| `Logger` | `Logger::auto()`, `::toFile($path)`, `::toStream($r)`, `::toStderr()`; `new Logger($target)` still works | `auto()` appends to `$`**`SSH_SERVER_LOG`** when set, and to `php://stderr` otherwise -- which under `ForceCommand` is the connecting peer. A file this class creates is `0600`; an existing file keeps its mode. `target()` says which you got. |
+| `Auth` | `new Auth($users, $keyFingerprints, $stderr, $fingerprintValidator, $userKeys)` | Empty **`$users` and `$keyFingerprints` arm nothing**: a bare `new Auth()` admits every session. `$userKeys` is the pairing surface (`[Auth::ANY_KEY]` = any key for that name); notices are sanitized and truncated at `Auth::MAX_ECHOED_BYTES` (128). |
+| `PasswordAuth` | `new PasswordAuth($validate, $stderr)` | Reads `SSH_PASSWORD`, which nothing in OpenSSH ever sets. A session that delivered no variable is refused **before** `$validate` runs; an explicitly empty one reaches it. |
+| `CertificateAuth` | `new CertificateAuth($validate, $required = true, $stderr)` | Probes `CertificateAuth::ENV_KEYS` (`SSL_CLIENT_CERT`, `SSH_CLIENT_CERT`, `CERTIFICATE`); stock OpenSSH exports none. **`$required = false` forwards** -- after announcing that it checked nothing. |
+| `AuthMethods` | `new AuthMethods($methods, $stdout, $announce = false)` | Stores the list in `Context`. The `SSH_AUTH_METHODS` stdout line is **off by default**; `announce: true` opts in and owns the placement. |
+| `KeyboardInteractive` | `new KeyboardInteractive($challenges, $validate, $name, $instruction, $stdout, $stdin, $stderr)` | **No `$validate` means any answer passes.** Answers capped at `KeyboardInteractive::MAX_RESPONSE_BYTES` (4096); `echo` is a label, not terminal state, and says so when a prompt asks for silence. No deadline but the stream you inject. |
+| `RateLimit` | `new RateLimit($statePath, $burst = 5, $ratePerSec = 0.5, $stderr, $failClosed = false, $userBurst = null, $userRatePerSec = null)` | **`$failClosed = false`**: a lock or decode problem lets the connection through with a notice. State serialises on a `<state>.lock` sidecar; idle refilled buckets are pruned; `$userBurst` adds a per-username bucket. |
+| `Keepalive` | `new Keepalive($intervalSeconds = 60)` | Idle `\0` into the child's stdin, not an SSH keepalive; no-op under `HostSshdTransport`. Installed for you by `Server::withKeepalive($seconds)`. |
+| `Spawn` | `new Spawn($factory)` where `fn (Session): array{cmd: list<string>, env?: array}` returns the child command | Terminal. The factory's `cmd` is argv -- no shell is involved, and nothing here vetoes it. |
+| `BubbleTea` | `new BubbleTea($factory)` where `fn (Session): object` builds the `Program` | Mounts a `Program` on the supervisor's own stdio, which is only sound under `HostSshdTransport`. Under the default `InProcessTransport` it throws `bubbletea.requires_host_sshd` -- there is no override flag; the alternatives are `Spawn` plus a wrapper script (`examples/run-program.php`) or the legacy transport. |
+| `Subsystem` | `new Subsystem()` then `->register($name, $handler)` | Terminal for registered names. An **unregistered** name falls through on purpose, so `subsystem sftp` reaches `Spawn` and lands in a shell unless you register the name (or a rejecting handler). |
+| `AsyncMiddleware` | abstract; subclass and implement `protected handleAsync($ctx, $session, $next): PromiseInterface` | The transport's single settle point drives your promise to completion -- never call `PromiseAwait::settle()` yourself, and never await from inside a loop you already run. |
+
+See [Defaults that are open until you close them](#defaults-that-are-open-until-you-close-them)
+for the four that most often ship open by accident.
 
 ## Defaults that are open until you close them
 
@@ -519,8 +558,14 @@ $s->clientPort;  // 54321
 $s->term;        // 'xterm-256color'
 $s->cols;        // 120
 $s->rows;        // 40
-$s->tty;         // '/dev/pts/3'   (null when non-interactive)
-$s->command;     // SSH_ORIGINAL_COMMAND if set
+$s->tty;          // '/dev/pts/3'   (null when non-interactive)
+$s->command;      // SSH_ORIGINAL_COMMAND if set -- what the peer asked to run,
+                  // which ForceCommand ignores unless you decode it (see Status)
+$s->serverHost;   // '198.51.100.2' -- empty on the 3-field SSH_CLIENT fallback,
+                  // which carries a server port and no server address
+$s->serverPort;   // 22
+$s->lang;         // 'en_US.UTF-8'  -- the peer's declared LANG; log it, never
+                  // obey it (see [Language](#language-nothing-selects-it-for-you))
 $s->isInteractive();
 $s->toLogContext();
 ```

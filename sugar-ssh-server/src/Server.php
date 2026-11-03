@@ -50,23 +50,25 @@ use SugarCraft\SshServer\Transport\InProcessTransport;
  * **Example `server.php`** (in-process default):
  *
  * ```php
- * Server::new()
- *     ->use(new Logger())
+ * exit(Server::new()
+ *     ->use(Logger::auto())
  *     ->use(new Spawn(fn (Session $s) => ['cmd' => ['/bin/bash', '-l']]))
- *     ->serve();
+ *     ->serve());
  * ```
  *
- * (Prefix the final call with `exit(...)` — see {@see self::serve()} —
- * so the SSH client receives the child's exit status.)
+ * The `exit(...)` wrapper is not decoration ({@see self::serve()} explains
+ * the three answers): a script that calls `serve()` and falls off the end of
+ * the file reports success to whichever cron entry or CI step asked, whether
+ * the session was served, refused, or never ran at all.
  *
  * **Same example, host-sshd legacy:**
  *
  * ```php
- * Server::new()
+ * exit(Server::new()
  *     ->withTransport(new HostSshdTransport())
- *     ->use(new Logger())
+ *     ->use(Logger::auto())
  *     ->use(new BubbleTea(fn () => new MyApp()))
- *     ->serve();
+ *     ->serve());
  * ```
  */
 final class Server
