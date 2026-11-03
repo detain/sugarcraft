@@ -263,4 +263,51 @@ final class FlexBoxColumnTest extends TestCase
             $this->assertSame(10, \SugarCraft\Core\Util\Width::string($line));
         }
     }
+
+    public function testColumnTruncatesLinesToContainerWidth(): void
+    {
+        // Fit contract C3(a): a 20-cell line in a 10-wide box used to print
+        // 20 cells (alignCell truncated only to the item's measured width and
+        // padRight never truncates), collapsing page geometry downstream.
+        $box = FlexBox::column(
+            FlexItem::new('0123456789ABCDEFGHIJ'),
+        )->withAlign(Align::Start);
+
+        $lines = \explode("\n", $box->render(10, 1));
+        $this->assertCount(1, $lines);
+        $this->assertSame(10, \SugarCraft\Core\Util\Width::string($lines[0]));
+        $this->assertStringContainsString('01234', $lines[0]);
+        $this->assertStringNotContainsString('KLMNOPQRST', $lines[0]);
+    }
+
+    public function testColumnTruncatesWideGlyphLinesToContainerWidth(): void
+    {
+        // The same contract in cells, not bytes: 8 CJK glyphs = 16 cells.
+        $box = FlexBox::column(
+            FlexItem::new('日本語のテキスト'),
+        )->withAlign(Align::Start);
+
+        $lines = \explode("\n", $box->render(5, 1));
+        $this->assertCount(1, $lines);
+        $this->assertLessThanOrEqual(5, \SugarCraft\Core\Util\Width::string($lines[0]), 'cell-aware truncate must never leave a 6-cell remnant in a 5-wide box');
+    }
+
+    public function testColumnNeverPrintsMoreLinesThanAllocatedHeight(): void
+    {
+        // Fit contract C3(c): the old foreach emitted EVERY content line and
+        // only ever padded up, so a five-line item with 2 reserved rows stole
+        // the viewport and the following sibling vanished from the window.
+        $box = FlexBox::column(
+            FlexItem::new("a1\na2\na3\na4\na5")->withBasis(2),
+            FlexItem::new('bee')->withBasis(2),
+        )->withAlign(Align::Start);
+
+        $lines = \explode("\n", $box->render(5, 4));
+        $this->assertCount(4, $lines);
+        $this->assertStringContainsString('a1', $lines[0]);
+        $this->assertStringContainsString('a2', $lines[1]);
+        $this->assertStringContainsString('bee', $lines[2], 'the second item must keep its reserved rows');
+        $this->assertStringNotContainsString('a3', \implode("\n", $lines));
+        $this->assertStringNotContainsString('a5', \implode("\n", $lines));
+    }
 }

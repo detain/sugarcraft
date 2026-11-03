@@ -118,9 +118,16 @@ final class FlexBox
 
         $resultLines = [];
         $heights = \array_column($measured, 'height');
-        $maxHeight = $this->align === Align::Stretch
-            ? $totalHeight
-            : ($heights === [] ? 0 : \max($heights));
+        // Fit contract: a row never emits more lines than totalHeight. The
+        // tallest-item cross-axis size is a CEILING, not an exemption — a
+        // 10-line item in a 3-row box renders 3 rows (clamped, never
+        // overflowed; see Align's vertical-axis promise).
+        $maxHeight = \min(
+            $this->align === Align::Stretch
+                ? $totalHeight
+                : ($heights === [] ? 0 : \max($heights)),
+            $totalHeight,
+        );
 
         for ($line = 0; $line < $maxHeight; $line++) {
             $lineStr = '';
@@ -172,7 +179,22 @@ final class FlexBox
         for ($i = 0; $i < \count($measured); $i++) {
             $m    = $measured[$i];
             $itemLines = \explode("\n", $m['item']->content);
-            $maxW = $this->align === Align::Stretch ? $totalWidth : $m['width'];
+            // Fit contract: an item may never print more lines than the
+            // height allocateMainAxis reserved for it. A taller multi-line
+            // sibling used to spill past its slice and push the next item
+            // out of the totalHeight window entirely, falsifying the
+            // exact-sum contract (a column is a vertical box just as a row
+            // is a horizontal one — Align's "clamped, never distributed"
+            // promise holds on both axes).
+            $itemLines = \array_slice($itemLines, 0, \max(0, $m['allocated']));
+            // Fit contract: cap the cell at the container width. A measured
+            // width wider than totalWidth (plain or CJK/emoji cells) must
+            // truncate, not just pad — alignCell honours Width::truncateAnsi
+            // up to this ceiling, so a 20-cell line in a 10-wide box prints
+            // exactly 10, matching renderRow's final clamp.
+            $maxW = $this->align === Align::Stretch
+                ? $totalWidth
+                : \min($m['width'], $totalWidth);
 
             foreach ($itemLines as $line) {
                 $line = $this->sanitize($line);

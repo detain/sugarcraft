@@ -850,4 +850,25 @@ final class FlexboxTest extends TestCase
         $this->assertSame('', FlexBox::column(FlexItem::new('a'))->render(10, -1));
         $this->assertSame('', FlexBox::column(FlexItem::new('a'))->render(0, 5));
     }
+
+    public function testRowNeverEmitsMoreLinesThanTotalHeight(): void
+    {
+        // Fit contract C3(b): a row used to size its line loop to the
+        // tallest item, so a 10-line child inside a 3-row box emitted 10
+        // rows and overflowed the container (no array_slice equivalent to
+        // column mode's final clamp).
+        $tall = \implode("\n", \array_map(strval(...), \range(1, 10)));
+        $box  = FlexBox::row(
+            FlexItem::new($tall),
+            FlexItem::new('x'),
+        )->withAlign(Align::Start);
+
+        $lines = \explode("\n", $box->render(10, 3));
+        $this->assertCount(3, $lines, 'row height is a ceiling, never a suggestion');
+        $this->assertStringContainsString('1', $lines[0]);
+        $this->assertStringContainsString('3', $lines[2]);
+        foreach ($lines as $line) {
+            $this->assertLessThanOrEqual(10, \SugarCraft\Core\Util\Width::string($line));
+        }
+    }
 }
