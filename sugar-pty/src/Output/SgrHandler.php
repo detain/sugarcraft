@@ -37,7 +37,9 @@ final class SgrHandler implements Handler
     /**
      * Current SGR state, updated on every csiDispatch where final='m'.
      *
-     * @readonly
+     * Mutable by design: {@see self::reset()} swaps it for a fresh
+     * default alongside the transition-log clear, so it carries no
+     * readonly marker.
      */
     public SgrState $state;
 

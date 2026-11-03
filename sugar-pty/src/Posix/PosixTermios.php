@@ -30,13 +30,23 @@ final class PosixTermios implements Termios
     /** Drain output and discard input. */
     public const TCSAFLUSH = 2;
 
-    /** Opaque termios buffer — ≥80 bytes covers glibc/musl/Darwin. */
+    /**
+     * Opaque termios buffer — ≥80 bytes covers glibc/musl/Darwin.
+     *
+     * There is deliberately no runtime sizeof guard: 'struct termios'
+     * is never declared in the FFI cdef (the calls take void*), BECAUSE
+     * the layout differs across libc vendors — taking its size at
+     * runtime would require committing to one layout, defeating the
+     * opacity this constant exists to buy. 80 exceeds every observed
+     * vendor layout (glibc/musl ≈60, Darwin 72) with headroom.
+     */
     private const BUFSIZE = 80;
 
     private int $fd;
     private \FFI\CData $buf;
     private \FFI $libc;
     private ?self $original = null;
+    private bool $captured = false;
 
     public function __construct(int $fd)
     {
@@ -61,16 +71,31 @@ final class PosixTermios implements Termios
         // restore() on this snapshot can revert the fd to them. Without
         // this, $original stays null and restore() is a dead no-op.
         $instance->original = $this->withCData($instance->buf);
+        $instance->captured = true;
         return $instance;
     }
 
     /**
      * @see portable-pty.Termios.MakeRaw()
+     *
+     * Cfmakeraw() mutates whatever bytes it is handed, so a raw snapshot
+     * of a freshly-constructed (never tcgetattr'd) instance would carry
+     * a zeroed buffer with only cfmakeraw's explicit bits set — apply()
+     * would then write junk for every flag cfmakeraw does not touch
+     * (c_cflag, the whole c_cc array beyond VMIN/VTIME). On a PTY that
+     * junk is mostly moot, which is why the behavior tests stayed green
+     * — but the class is fd-generic, so an uncaptured instance now
+     * fetches the fd's real current attributes first (via current()) and
+     * cfmakeraws THOSE. A side benefit: the returned snapshot carries
+     * $original, so `$termios->makeRaw()->apply()` followed by
+     * restore() works instead of hitting restore()'s LogicException door.
      */
     public function makeRaw(): self
     {
-        $instance = $this->withCData($this->buf);
+        $base = $this->captured ? $this : $this->current();
+        $instance = $base->withCData($base->buf);
         $this->libc->cfmakeraw(\FFI::addr($instance->buf));
+        $instance->captured = true;
         return $instance;
     }
 

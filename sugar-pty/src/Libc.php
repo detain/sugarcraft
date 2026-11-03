@@ -58,7 +58,8 @@ final class Libc
 
         if (PHP_OS_FAMILY === 'Windows') {
             throw new PtyException(
-                'sugar-pty requires POSIX libc; use ConPTY on Windows (not yet ported).'
+                'sugar-pty requires POSIX libc; on Windows use the ConPTY backend '
+                . 'via PtySystemFactory instead.'
             );
         }
 
@@ -295,7 +296,8 @@ CPROTO;
     {
         if (PHP_OS_FAMILY === 'Windows') {
             throw new PtyException(
-                'sugar-pty requires POSIX libc; use ConPTY on Windows (not yet ported).'
+                'sugar-pty requires POSIX libc; on Windows use the ConPTY backend '
+                . 'via PtySystemFactory instead.'
             );
         }
 
