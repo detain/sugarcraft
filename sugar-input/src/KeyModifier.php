@@ -10,8 +10,7 @@ namespace SugarCraft\Input;
  * These are bitmask flags compatible with the Kitty keyboard protocol
  * modifier encoding and the SGR 1006 mouse modifier field.
  *
- * @see Mirrors charmbracelet/bubbletea (input handling).
- * @api
+ * Mirrors charmbracelet/bubbletea's input handling.
  */
 final class KeyModifier
 {
@@ -136,7 +135,7 @@ final class KeyModifier
      * Xterm encodes modifiers as 1 + bitmask where bit 0=Shift,
      * bit 1=Alt, bit 2=Ctrl, bit 3=Meta.
      *
-     * @see Mirrors xterm modifier key sequence format
+     * Mirrors the xterm modifier key sequence format.
      */
     public static function fromXtermParam(int $xtermParam): self
     {

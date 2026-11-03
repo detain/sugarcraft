@@ -10,7 +10,7 @@ use SugarCraft\Input\KeyModifier;
 /**
  * A mouse event (SGR 1006 / X10).
  *
- * @see Mirrors charmbracelet/bubbletea (input handling).
+ * Mirrors charmbracelet/bubbletea's input handling.
  * @readonly
  */
 final readonly class MouseEvent implements Event

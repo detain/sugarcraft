@@ -90,7 +90,7 @@ final class PasteEventTest extends TestCase
         $event = PasteEvent::truncate(str_repeat('a', PasteEvent::MAX_SIZE + 100));
 
         $this->assertTrue($event->truncated);
-        $this->assertSame('Paste truncated at 1048576 bytes.', $event->truncationNotice());
+        $this->assertSame('Paste truncated at 1 MiB (1048576 bytes).', $event->truncationNotice());
     }
 
     public function testIntactPasteCarriesNoTruncationSignal(): void

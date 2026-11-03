@@ -9,11 +9,9 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
 /**
  * Per-library translation facade for sugar-input.
  *
- * Wraps the shared {@see \SugarCraft\Core\I18n\T} registry with the
- * 'input' namespace baked in. Translated strings live in
- * {@see ../lang/en.php}.
- *
- * @extends BaseLang
+ * Bakes the 'input' namespace into sugar-core's shared translation base:
+ * lookups resolve exact locale → base language → English → raw key. The
+ * catalogs live under `lang/` (en.php is the shipped source of truth).
  */
 final class Lang extends BaseLang
 {

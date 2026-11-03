@@ -12,7 +12,7 @@ use SugarCraft\Input\Event;
  * CSI I  = focus gained  (DECSET 1004 report)
  * CSI O  = focus lost    (DECSET 1004 report)
  *
- * @see Mirrors charmbracelet/bubbletea (input handling).
+ * Mirrors charmbracelet/bubbletea's input handling.
  * @readonly
  */
 final readonly class FocusEvent implements Event

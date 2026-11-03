@@ -19,16 +19,16 @@ final class LangTest extends TestCase
 
     public function testPasteTruncatedKeyInterpolation(): void
     {
-        $result = Lang::t('paste.truncated', ['bytes' => 10]);
+        $result = Lang::t('paste.truncated', ['bytes' => 10, 'mib' => 0]);
 
-        $this->assertSame('Paste truncated at 10 bytes.', $result);
+        $this->assertSame('Paste truncated at 0 MiB (10 bytes).', $result);
     }
 
     public function testPasteTruncatedWithLargeBytes(): void
     {
-        $result = Lang::t('paste.truncated', ['bytes' => 1048576]);
+        $result = Lang::t('paste.truncated', ['bytes' => 1048576, 'mib' => 1]);
 
-        $this->assertSame('Paste truncated at 1048576 bytes.', $result);
+        $this->assertSame('Paste truncated at 1 MiB (1048576 bytes).', $result);
     }
 
     public function testUnknownKeyReturnsNamespacedKey(): void

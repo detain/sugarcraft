@@ -9,7 +9,7 @@ use SugarCraft\Input\Event;
 /**
  * A terminal resize event (SIGWINCH).
  *
- * @see Mirrors charmbracelet/bubbletea (input handling).
+ * Mirrors charmbracelet/bubbletea's input handling.
  * @readonly
  */
 final readonly class ResizeEvent implements Event

@@ -13,13 +13,11 @@ use SugarCraft\Input\Lang;
  * Starts with CSI 200 ~ and ends with CSI 201 ~.
  * Content is capped at 1 MiB to prevent OOM from hostile input.
  *
- * Truncation used to be silent: a clipped paste was byte-indistinguishable
- * from an intact one at exactly the cap. truncate() now records the clip in
- * {@see self::$truncated}, and {@see self::truncationNotice()} renders the
- * library's translated 'paste.truncated' message — wiring the lang key that
- * previously had no production consumer.
+ * A clipped paste is never silent: truncate() records the clip in
+ * $truncated, and truncationNotice() renders the library's translated
+ * 'paste.truncated' one-liner suitable for display.
  *
- * @see Mirrors charmbracelet/bubbletea (input handling).
+ * Mirrors charmbracelet/bubbletea's input handling.
  * @readonly
  */
 final readonly class PasteEvent implements Event
@@ -50,6 +48,6 @@ final readonly class PasteEvent implements Event
             return null;
         }
 
-        return Lang::t('paste.truncated', ['bytes' => self::MAX_SIZE]);
+        return Lang::t('paste.truncated', ['bytes' => self::MAX_SIZE, 'mib' => self::MAX_SIZE >> 20]);
     }
 }

@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-input",
-    "description": "Terminal escape sequence decoder for keyboard (legacy + Kitty progressive) and mouse (SGR 1006). Provides InputDriver interface and EscapeDecoder implementation. Unblocks sugar-readline migration to real-TTY input.",
+    "description": "Terminal escape sequence decoder for keyboard (legacy, Kitty progressive protocol, xterm modifyOtherKeys) and mouse (X10, urxvt 1015, SGR 1006/1016), with typed terminal-reply draining. Provides the InputDriver interface and the EscapeDecoder implementation.",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -29,8 +29,13 @@
     },
     "require": {
         "php": "^8.3",
+        "evenement/evenement": "^3.0",
         "react/stream": "^1.2",
         "sugarcraft/sugar-core": "dev-master"
+    },
+    "suggest": {
+        "ext-pcntl": "Required by SignalResizeDriver for SIGWINCH detection; without it arm() returns false.",
+        "ext-posix": "Used by the test suite to self-signal SIGWINCH."
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5"

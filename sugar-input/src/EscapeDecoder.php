@@ -32,7 +32,7 @@ use SugarCraft\Input\Event\TerminalReplyEvent;
  *    {@see \SugarCraft\Input\Event\TerminalReplyEvent}, never left in the
  *    buffer and never mis-parsed as a keystroke.
  *
- * @see Mirrors charmbracelet/bubbletea (input handling).
+ * Mirrors charmbracelet/bubbletea's input handling.
  */
 final class EscapeDecoder
 {

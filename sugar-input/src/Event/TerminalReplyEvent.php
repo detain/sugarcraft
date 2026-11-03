@@ -18,7 +18,8 @@ use SugarCraft\Input\Event;
  * Recognized reply families (see {@see self::FAMILIES}):
  *  - "device-attributes" — DA1 `CSI ? Pm c` / DA2 `CSI > Pm c`
  *  - "cursor-position"   — CPR/DSR report `CSI row ; col R`
- *  - "dsr-status"        — DSR status report `CSI 0 n`
+ *  - "dsr-status"        — DSR status report `CSI 0 n` / `CSI 3 n`; any
+ *                          `CSI … n` final drains, not only these two
  *  - "window-report"     — XTWINOPS `CSI Pm t`
  *  - "kitty-flags"       — kitty keyboard flags `CSI ? flags u` (incl. bare `CSI ? u`)
  *  - "mode-report"       — DECRPM `CSI ? mode ; status $ y`
