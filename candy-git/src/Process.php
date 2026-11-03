@@ -27,6 +27,17 @@ final class Process
     public const TERMINATE_GRACE_SECONDS = 2.0;
 
     /**
+     * A27: hard cap on bytes of child output accumulated per stream. A
+     * runaway (or pathological) git invocation must not be able to balloon
+     * the app's memory before the deadline fires. The head bytes are kept —
+     * diff headers and error lines come first — and one visible notice is
+     * appended when a stream overflowed the cap.
+     */
+    public const MAX_CAPTURE = 4 * 1024 * 1024;
+
+    private const CAPTURE_NOTICE = '[candy-git: output truncated at 4 MiB]';
+
+    /**
      * Environment handed to every child: the parent's environment plus
      * git-specific overrides. Each override closes a real way a repo- or
      * user-controlled setting could block or hijack a synchronous git call
@@ -101,6 +112,8 @@ final class Process
 
         $stdout      = '';
         $stderr      = '';
+        $stdoutTruncated = false;
+        $stderrTruncated = false;
         $timedOut    = false;
         $abandoned   = false; // loop stopped while the child may still be live (timeout or EINTR)
         $deadline    = $timeout > 0 ? microtime(true) + $timeout : null;
@@ -151,10 +164,23 @@ final class Process
                     }
                     continue;
                 }
+                // A27: append up to the cap, discard the rest (keep draining
+                // so the child finishes naturally), and remember that
+                // truncation happened so the caller sees a marker.
                 if ($key === 1) {
-                    $stdout .= $chunk;
+                    if (strlen($stdout) < self::MAX_CAPTURE) {
+                        $stdout .= substr($chunk, 0, self::MAX_CAPTURE - strlen($stdout));
+                    }
+                    if (strlen($stdout) >= self::MAX_CAPTURE) {
+                        $stdoutTruncated = true;
+                    }
                 } else {
-                    $stderr .= $chunk;
+                    if (strlen($stderr) < self::MAX_CAPTURE) {
+                        $stderr .= substr($chunk, 0, self::MAX_CAPTURE - strlen($stderr));
+                    }
+                    if (strlen($stderr) >= self::MAX_CAPTURE) {
+                        $stderrTruncated = true;
+                    }
                 }
             }
 
@@ -188,6 +214,13 @@ final class Process
         }
 
         $exit = proc_close($proc);
+
+        if ($stdoutTruncated) {
+            $stdout .= "\n" . self::CAPTURE_NOTICE;
+        }
+        if ($stderrTruncated) {
+            $stderr .= "\n" . self::CAPTURE_NOTICE;
+        }
 
         return [
             'stdout'   => $stdout,

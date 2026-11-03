@@ -139,6 +139,9 @@ final class DiffHighlighter
             return null;
         }
 
+        // A27 note: constructing per line is deliberate — RegexHighlighter
+        // memoises its compiled patterns statically (core $patternCache), so
+        // the instance itself carries no per-call cost to hoist.
         $spans = (new RegexHighlighter())->tokenize($content, $language);
         foreach ($spans as $span) {
             if ($span->kind !== TokenKind::Plain) {

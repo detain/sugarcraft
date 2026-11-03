@@ -104,4 +104,54 @@ final class ProcessTest extends TestCase
         $this->assertTrue($r['timedOut'], 'a full pipe plus idle child must hit the deadline');
         $this->assertLessThan(2.5, microtime(true) - $start);
     }
+
+    /**
+     * A27: a runaway child writing more than the capture cap must not be
+     * accumulated whole in memory — the head is kept and a visible marker
+     * rides at the end so Git-level failures explain the truncation.
+     */
+    public function testStdoutOverTheCapIsHeadKeptWithOneVisibleNotice(): void
+    {
+        $r = Process::run(
+            // Size spelled out: the bare -r child cannot see the class constant.
+            ['php', '-r', 'echo str_repeat("x", 4 * 1024 * 1024 + 65536);'],
+            null,
+            15.0,
+        );
+
+        $this->assertFalse($r['timedOut']);
+        $this->assertLessThanOrEqual(
+            Process::MAX_CAPTURE + strlen("\n[candy-git: output truncated at 4 MiB]"),
+            strlen($r['stdout']),
+        );
+        $this->assertStringContainsString('[candy-git: output truncated at 4 MiB]', $r['stdout']);
+        $this->assertStringStartsWith('xxxx', $r['stdout']);
+    }
+
+    public function testStderrOverTheCapCarriesTheSameNotice(): void
+    {
+        $r = Process::run(
+            ['php', '-r', 'fwrite(STDERR, str_repeat("e", 4 * 1024 * 1024 + 65536));'],
+            null,
+            15.0,
+        );
+
+        $this->assertStringContainsString('[candy-git: output truncated at 4 MiB]', $r['stderr']);
+        $this->assertLessThanOrEqual(
+            Process::MAX_CAPTURE + strlen("\n[candy-git: output truncated at 4 MiB]"),
+            strlen($r['stderr']),
+        );
+    }
+
+    public function testOutputUnderTheCapCarriesNoTruncationNotice(): void
+    {
+        $r = Process::run(
+            ['php', '-r', 'echo str_repeat("s", 100000);'],
+            null,
+            10.0,
+        );
+
+        $this->assertSame(100_000, strlen($r['stdout']));
+        $this->assertStringNotContainsString('truncated', $r['stdout']);
+    }
 }
