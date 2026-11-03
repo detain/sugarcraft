@@ -275,7 +275,7 @@ sensitive enough to be cleared on sign-out.
 | `push` | device-notification consent | boolean | its own Settings toggle |
 | `panels.open` / `panels.active` | side-panel drawer state | enum values | kept |
 | `transcriptView.showThinking` / `transcriptView.expandTools` | transcript toolbar toggles | booleans | kept |
-| `keymap` (+ legacy `tab-chord`) | rebinding overrides per browser | per-chord map | kept |
+| `keymap` / `tab-chord` | rebinding overrides per browser (`tab-chord` is the legacy chord slot, migrated forward on read) | per-chord map | kept |
 
 The table is machine-checked: `src-web/__tests__/storageInventory.spec.ts`
 derives every persisted key name from the sources and fails if a key ships
