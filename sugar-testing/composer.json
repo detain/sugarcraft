@@ -1,13 +1,13 @@
 {
     "name": "sugarcraft/sugar-testing",
-    "description": "Test harness for TEA programs \u2014 ProgramSimulator, golden-file assertions, and snapshot helpers for SugarCraft.",
+    "description": "Test harness for SugarCraft terminal programs \u2014 golden snapshots, cell-grid assertions, program simulation, scripted input, VHS tape building, and graphics decoding.",
     "type": "library",
     "license": "MIT",
     "keywords": [
         "tui",
         "terminal",
         "testing",
-        "tea",
+        "golden-file",
         "elm-architecture",
         "bubbletea",
         "sugarcraft"
@@ -33,6 +33,9 @@
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5"
+    },
+    "suggest": {
+        "ext-gd": "Pixel materialization in Graphics assertions (the pixel paths fail loudly without it)"
     },
     "autoload": {
         "psr-4": {

@@ -3,8 +3,9 @@
 > Formerly published as `sugarcraft/candy-testing` (renamed 2026-10). <!-- @rename-keep -->
 
 Deterministic test harness for SugarCraft apps — MVC-style Model–Update–View
-programs — for PHP 8.3+: scripted input, golden snapshots and full program
-simulation.
+programs — for PHP 8.3+: scripted input, golden snapshots, cell-grid
+assertions, program simulation, VHS tape building, and graphics-stream
+decoding.
 
 > **Architecture background:** SugarCraft apps follow the MVC-style Model–Update–View architecture. Testing such programs deterministically has been a long-standing gap — `sugar-testing` closes it for the PHP ecosystem.
 
@@ -12,41 +13,38 @@ simulation.
 
 `sugar-testing` provides the infrastructure for deterministic SugarCraft app testing:
 
-- **`ProgramSimulator`** — drives a `Program` with scripted input, captures model/view/cmds
+- **`ProgramSimulator`** — drives a `Model` or `Program` with scripted messages,
+  intercepting control messages at the dispatch layer exactly as `Program` does
+  (see [Simulation subset](#simulation-subset))
 - **`ScriptedInput`** — fluent builder for message sequences (`->key('q')->enter()`)
-- **Snapshot assertions** — `assertGoldenAnsi`, `assertCellGrid`, `assertAnsiEquals`, `assertViewIdempotent`
-- **`GoldenFile`** — load/save helper for `.golden` fixture files (`resolve()` refuses traversal outside the base directory)
-- **`Graphics\`** — inline-image stream assertions (`KittyStream`, `Iterm2Stream`, `SixelStream`, `PixelGrid`, `Mode`, `MalformedGraphicsException`) — consumed by sugar-image
-- **`LoopPin`** — pins the shared ReactPHP loop to `StreamSelectLoop` so safety timers keep their real deadlines (see below)
-- **`TapeRecorder`** — emits VHS-compatible `.tape` files for demo rendering
-
-## Quickstart
-
-```php
-use SugarCraft\Core\KeyType;
-use SugarCraft\Core\Msg\KeyMsg;
-use SugarCraft\Testing\ProgramSimulator;
-use SugarCraft\Testing\Input\ScriptedInput;
-use SugarCraft\Testing\Snapshot\Assertions;
-
-// Build a scripted session and run the simulator; run() returns a TestResult.
-$result = ProgramSimulator::for($program)
-    ->send(new KeyMsg(KeyType::Char, 'a'))
-    ->send(new KeyMsg(KeyType::Enter))
-    ->run();
-
-// Assert the view output matches the golden file.
-Assertions::assertGoldenAnsi(__DIR__ . '/fixtures/counter.golden', $result->view);
-
-// Inspect the final model state.
-$counter = $result->model; // CounterModel with updated count
-```
+- **Snapshot assertions** — `assertGoldenAnsi`, `assertCellGrid`, `assertAnsiEquals`,
+  `assertViewIdempotent` — every shape that cannot assert anything **fails loudly**;
+  a silent green is never produced by a malformed expectation
+- **`GoldenFile`** — lifecycle-aware `.golden` helper: `load()` (null only when
+  missing; unreadable or symlinked goldens throw), `save()` (atomic clobber —
+  fixture seeding), `create()` (one-way, refuses an existing golden),
+  `update()` (deliberate re-baseline), `resolve()` (fixtures-relative path with a
+  traversal *and* symlink jail)
+- **`TestResult`** — what `run()` returns: final model, last view, captured cmds,
+  raw output, per-turn `frames`, and `droppedAfterStop`
+- **`Graphics\`** — inline-image stream assertions (`KittyStream`, `Iterm2Stream`,
+  `SixelStream`, `PixelGrid`, `Mode`, `DecodeLimits`, `MalformedGraphicsException`)
+  — consumed by sugar-image
+- **`LoopPin`** — pins the shared ReactPHP loop to `StreamSelectLoop` so safety
+  timers keep their real deadlines (see below)
+- **`TapeRecorder`** — builds VHS-compatible `.tape` files for demo rendering, with
+  an escape guarantee: typed text can never forge a standalone directive line
+- **`TemporaryDirectoryTrait`** — unique, mode-`0700`, symlink-safe scratch dirs
+  for filesystem tests
 
 ## Requirements
 
 - PHP 8.3+
 - `sugarcraft/sugar-core` (Program, Msg, Model, Cmd)
 - `sugarcraft/sugar-cellbuffer` (Buffer for cell-grid assertions)
+- `react/event-loop` (the loop `LoopPin` swaps)
+- `ext-gd` — only needed to materialize pixels in `Graphics` assertions; it is a
+  `suggest`, not a hard requirement, and streams can be decoded without it
 
 ## Install
 
@@ -54,40 +52,132 @@ $counter = $result->model; // CounterModel with updated count
 composer require sugarcraft/sugar-testing:@dev
 ```
 
+## Quickstart
+
+This block runs exactly as copy-pasted (the suite executes it as a test):
+
+```php
+use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Testing\Input\ScriptedInput;
+use SugarCraft\Testing\ProgramSimulator;
+use SugarCraft\Testing\Snapshot\Assertions;
+use SugarCraft\Testing\Snapshot\GoldenFile;
+
+// The smallest drivable counter — inline so this block is self-contained.
+// A real suite hands the simulator its own app's Model (or Program).
+$counter = new class implements \SugarCraft\Core\Model {
+    public function __construct(private int $count = 0)
+    {
+    }
+
+    public function init(): ?\Closure
+    {
+        return null;
+    }
+
+    public function update(Msg $msg): array
+    {
+        if ($msg instanceof KeyMsg && $msg->rune === 'a') {
+            return [new self($this->count + 1), null];
+        }
+
+        return [$this, null];
+    }
+
+    public function view(): string
+    {
+        return 'count: ' . $this->count;
+    }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
+};
+
+$result = ProgramSimulator::for($counter)
+    ->send(...ScriptedInput::new()->key('a')->key('q')->build())
+    ->run();
+
+// Real suites COMMIT the golden file; a missing golden then fails loudly (see
+// Assertions). The guarded save() below just stands in for that first seeding.
+$golden = sys_get_temp_dir() . '/sugar-testing-quickstart.golden';
+if (GoldenFile::load($golden) === null) {
+    GoldenFile::save($golden, $result->view);
+}
+
+Assertions::assertGoldenAnsi($golden, $result->view);
+```
+
+`send()` takes one message or many — pairing `ScriptedInput` with the simulator
+is a single spread: `$sim->send(...$input->build());` (equivalently, a
+`foreach` of `send()` calls over `$input->build()`).
+
 ## API
 
 ### ProgramSimulator
 
 ```php
-// Wrap a Program for testing.
-$sim = ProgramSimulator::for($program);
+use SugarCraft\Testing\ProgramSimulator;
 
-// Enqueue messages (fluent).
-$sim->send(new KeyMsg(...))->send(new KeyMsg(...));
+$sim = ProgramSimulator::for($program);           // Model or Program
 
-// Provide the fake runner that decides the injected message for each Cmd;
-// the REAL Cmd closures still execute for their side effects (counters,
-// files, sockets) unless you also call withRealCmdRunner(false).
-$sim->withFakeCmdRunner(fn($cmd) => null);
+$sim->send($msgA, $msgB);                          // enqueue (fluent, variadic)
+$sim->withRealCmdRunner(false);                    // capture-only: cmds collected, never executed
+$sim->withFakeCmdRunner(fn ($cmd) => $nextMsg);    // substitute the Cmd result
+$result = $sim->run();                             // replayable from the initial state
 
-// Capture-only mode: cmds are collected in $result->cmds and never executed.
-$sim->withRealCmdRunner(false);
-
-// Run the session and get the result.
-$result = $sim->run();
-echo $result->view;   // Last view() output
-echo $result->model;  // Final model state
-echo $result->output; // Concatenated view() output across steps
+echo $result->view;                                // last view() string
+echo $result->output;                              // every view() line, concatenated
+$finalModel = $result->model;                      // the model object — inspect it, don't echo it
 ```
+
+**Queue and clone discipline.** `send()` mutates the handle you call it on; the
+`with*()` configuration setters return a **clone** that copies the queue by
+value at clone time. Configure first, then send — sending on the original
+handle after cloning leaves the clone's queue (and therefore its `run()`)
+without those messages. `run()` resets all drain state and replays from the
+initial model, so repeated runs are identical.
+
+### Simulation subset
+
+`Program::dispatch()` intercepts control messages before your `update()` ever
+sees them. The simulator mirrors that layer message for message — but it is a
+simulator, not the real runtime, and the boundary is explicit:
+
+- `BatchMsg` / `SequenceMsg` — each member closure runs as a Cmd would; the
+  messages they produce are dispatched. Members must be callables; anything
+  else throws. The container itself never reaches `update()`.
+- `TickRequest` — `produce()` fires **immediately**. There is no virtual clock:
+  the requested delay is not simulated, and nothing is armed on a loop.
+- `RawMsg` / `PrintMsg` — written to `$result->output` as a side channel; no
+  model turn, no frame.
+- `QuitMsg` / `InterruptMsg` — halt the drain, production-style: the model
+  never sees them, and any messages still queued when the halt lands are
+  counted in `$result->droppedAfterStop` instead of vanishing silently.
+  `ScriptedInput::quit()` sends the real thing.
+- `SuspendMsg` — consumed (there is no terminal to suspend).
+- `ExecRequest` — **throws** a `RuntimeException`. `exec` suspends onto a real
+  terminal; the simulator has none, so it refuses rather than faking a pass.
+- **Startup trio** — `Program` dispatches `WindowSizeMsg`, `EnvMsg` and
+  `ColorProfileMsg` *before* `init()`. The simulator replays that order only
+  when armed, so a default run stays byte-identical to pre-parity suites:
+  `->withWindowSize(80, 24)->withEnvironment($vars)->withColorProfile($profile)`.
+- Subscriptions are fired after `init()` and after each delivered message, as
+  `Program` does. A runaway cmd↔message loop is refused at 10,000 update
+  cycles — a fixed bound, not a growable one.
 
 ### Assertions
 
 ```php
-// Golden ANSI snapshot (auto-creates on first run if UPDATE_GOLDENS=1).
+use SugarCraft\Testing\Snapshot\Assertions;
+
+// Golden ANSI snapshot. Argument order: (golden path, actual bytes).
 Assertions::assertGoldenAnsi('tests/fixtures/view.golden', $actual);
 
-// Cell-grid diff (for buffer-based renderers).
-Assertions::assertCellGrid($expected2DArray, $buffer);
+// Cell-grid diff against a Buffer — schema below.
+Assertions::assertCellGrid($grid, $buffer);
 
 // Byte-exact ANSI comparison with readable diff on failure.
 Assertions::assertAnsiEquals("\x1b[1;32mHello\x1b[0m", $actual);
@@ -99,22 +189,86 @@ Assertions::assertViewIdempotent($model);
 Golden comparison is BYTE-EXACT — no SGR stripping and no line-1 header skip
 (machine-stamped golden headers are a sugar-dash convention, handled by that
 lib's own comparator). A golden here must be byte-stable across machines.
-`UPDATE_GOLDENS=1` is CREATE-ONLY: it writes a missing golden, but an existing
-golden that differs still fails and is never rewritten — delete the file to
-re-baseline deliberately.
+
+**Missing goldens FAIL.** On a fresh checkout the run fails rather than
+silently green-ing itself; the failure message points at the create flag.
+`SUGAR_TESTING_UPDATE_GOLDENS=1` (legacy alias `UPDATE_GOLDENS=1`) is
+CREATE-ONLY: the first run creates the file — and counts a read-back assertion
+proving what it wrote — but an existing golden that differs still **fails and
+is never rewritten**. To re-baseline deliberately, delete the file and rerun
+with the flag set (that is also the CI workflow: no flag is ever set in CI, so
+CI only ever compares).
+
+### The cell-grid schema (`assertCellGrid`)
+
+The grid is a list of rows compared against a `SugarCraft\CellBuffer\Buffer`.
+Every part of the shape is parsed at the boundary and **nothing is silently
+skipped** — a grid that cannot assert anything fails, so a typo can never
+produce a false green:
+
+```php
+// A plain string row spreads its grapheme clusters across cells, one per
+// cell. This matches a 1-row, 4-column buffer painted "abcd":
+Assertions::assertCellGrid(['abcd'], $buffer);
+
+// Per-cell forms — each row is exactly `buffer->width()` cells long:
+Assertions::assertCellGrid([
+    ['ok', ['rune' => '🎉', 'width' => 2], null],  // string cell, array form (wide glyph claims
+                                                   // its continuation cell), wildcard skip
+    [null, null, null, null],                      // fully wildcard row (4 columns wide)
+], $buffer);
+```
+
+Rules the parser enforces (each violation raises immediately — older versions
+skipped malformed input and passed green):
+
+- The outer grid must be a list, with exactly `$buffer->height()` rows; a
+  height or row-width mismatch fails the assertion, naming the dimensions.
+  Ragged rows used to leave their tails never-compared — they are a hard error
+  now.
+- A row is either a plain string (its clusters spread cell-by-cell; a wide
+  cluster claims the following continuation cell) or a list of cells of
+  exactly buffer width.
+- A cell is `null` (a deliberate wildcard for that one position), a string
+  holding a **single narrow** grapheme cluster, or an array with keys from
+  `rune` and `width` (`0` continuation / `1` / `2`). Unknown keys throw with a
+  teaching message — a typo'd `'run'` would once have unchecked the position
+  forever. A string cell claiming more than one cluster throws: spread it
+  across cells or use the array form.
+- A grid whose every cell is a wildcard **fails** (“compared zero cells”) —
+  vacuous green is the exact failure mode this library exists to prevent.
+- Failures dump up to 20 mismatching cells with `(row, col)` coordinates, then
+  a summary of cells compared vs skipped, so a full-buffer diff cannot flood a
+  test log.
 
 ### GoldenFile
 
 ```php
-// Load (null when missing) / save; save creates parent dirs and accepts an
-// empty golden (0 bytes is a legal pin for a silent renderer).
-$expected = GoldenFile::load('/abs/path/tests/fixtures/view.golden');
-GoldenFile::save('/abs/path/tests/fixtures/view.golden', $actual);
+use SugarCraft\Testing\Snapshot\GoldenFile;
 
-// Fixtures-relative path builder with a traversal guard: the result is
-// anchored at <baseDir>/fixtures and anything escaping it throws.
-$path = GoldenFile::resolve(__DIR__, 'view.golden');
+$actual = 'frame';                                   // the bytes you want pinned
+
+$path = GoldenFile::resolve(__DIR__, 'view.golden'); // anchors at <this file's dir>/fixtures/view.golden;
+                                                    // escapes ('../', backslash smuggles, symlinked
+                                                    // sub-directories) throw
+
+$expected = GoldenFile::load($path);                 // null ONLY when absent; unreadable or
+                                                    // symlinked golden -> RuntimeException
+if ($expected === null) {
+    GoldenFile::save($path, $actual);                // atomic (temp + rename), clobbering: seeding
+}
+
+// GoldenFile::create($path, $actual);               // one-way creation: throws
+                                                    // GoldenFileExistsException if the golden
+                                                    // exists — the race-safe path behind
+                                                    // assertGoldenAnsi's create flag
+// GoldenFile::update($path, $actual);               // deliberate re-baseline (same atomic write)
 ```
+
+Every write goes through a uniquely named temp file and a `rename()`, so a
+crash mid-write cannot leave a half-baseline; empty content (0 bytes) is a
+legal golden for a silent renderer. Reading or writing **through** a symlinked
+golden is refused outright — a fixture path must be a fixture.
 
 ### Graphics stream assertions
 
@@ -138,21 +292,51 @@ GraphicsAssertions::assertInlineImageDimensions($bytes, Mode::Sixel, 64, 32);
 GraphicsAssertions::assertProtocolRoundTrip($bytes, Mode::Iterm2);
 ```
 
-Pixel materialisation goes through GD; tests that need pixels skip where
-ext-gd is absent. Malformed streams raise `MalformedGraphicsException` with a
-precise reason (bad parameter, missing introducer, unterminated payload…).
+Pixel materialization goes through GD. Where ext-gd is absent the pixel paths
+**fail loudly** (a `RuntimeException` naming the missing extension) — a
+graphics assertion never skips silently, because a skipped pixel check reads
+identical to a passing one in a green run. Decoding needs no GD.
+
+These decoders eat captured output, which may be hostile-sized, so
+`DecodeLimits` budgets every allocation before it happens: declared rasters
+beyond 4M cells, numeric literals beyond 9 digits, `o=z` payloads inflating
+past 64 MiB (capped **while** streaming, so a bomb cannot pre-materialize),
+and images declaring more than 16.7M pixels all raise a catchable
+`MalformedGraphicsException` with a precise reason — never an OOM-killed
+runner. Malformed streams likewise raise `MalformedGraphicsException` (bad
+parameter, missing introducer, unterminated payload…).
 
 ### ScriptedInput
 
 ```php
+use SugarCraft\Testing\Input\ScriptedInput;
+
 $input = ScriptedInput::new()
     ->key('h', ctrl: true)  // Ctrl+h
-    ->arrow('down')
+    ->arrow('down')         // lowercase direction vocabulary
     ->enter()
-    ->ticks(5)             // 5 tick events
+    ->ticks(5)              // 5 harness TickMsgs — see the tick note below
     ->resize(120, 40)
     ->key('q')
-    ->build();
+    ->build();              // list<Msg>, feed with $sim->send(...$input->build())
+```
+
+Builders: `new()`, `key(char, shift:, ctrl:, alt:)`, `namedKey(KeyType, rune,
+shift:, ctrl:, alt:)`, `enter()`, `escape()`, `backspace()`, `tab()`,
+`arrow(dir, shift:, ctrl:, alt:)`, `ticks(count, seconds:, factory:)`,
+`resize(cols, rows)`, `quit()` (a real `QuitMsg` — it halts the simulator
+drain, production-style), `mouse(...)`, `wheel(...)`, `paste(content)`,
+`bytes(...$reads)`, `clipboard(content, selection:)`,
+`keyboardEnhancements(flags)`, `push(msg)` for anything bespoke, plus
+`build()`, `count()`, and constants `READ_SIZE`, `PASTE_START`, `PASTE_END`.
+
+**Ticks.** Every fleet lib ships its *own* tick message class (`minesweeper`,
+`widgets`, `forms`, … each match their own), so a bare `ticks(5)` enqueues the
+harness’s `SugarCraft\Testing\Input\TickMsg` — which matches **nothing** in
+your model. Pass the factory to script your lib’s real tick:
+
+```php
+->ticks(3, factory: fn (int $i, float $s) => new \My\Lib\Msg\TickMsg($s))
 ```
 
 Symbolic builders (`key()`, `arrow()`, `enter()`, …) produce the DECODED message
@@ -164,7 +348,8 @@ harness driving a program from outside must send the `ESC [ C` bytes for the sam
 reason.)
 
 Terminal-shaped input is decoded by sugar-core's real `InputReader` — the parser
-`Program` reads stdin with — so a script sees what the live runtime delivers:
+`Program` reads stdin with — so a script sees the same messages the live runtime
+delivers:
 
 ```php
 ScriptedInput::new()
@@ -176,15 +361,70 @@ ScriptedInput::new()
 ScriptedInput::new()->withSanitizePaste(false)->paste($raw); // mirrors ProgramOptions::$sanitizePaste
 ```
 
-`paste()` follows the runtime exactly: payloads are sanitized by default, a paste past
+`paste()` follows the runtime: payloads are sanitized by default, a paste past
 `InputReader::MAX_PASTE_BYTES` arrives as several `PasteMsg`s (concatenate every one
 between `PasteStartMsg` and the one after `PasteEndMsg`), and a paste whose end marker
-never arrives is closed after the runtime's idle timeout. For a bare `PasteMsg` with no
-envelope, `push(new PasteMsg($text))`.
+never arrives is closed out eagerly. For a bare `PasteMsg` with no envelope,
+`push(new PasteMsg($text))`.
 
 `ProgramSimulator` fires each subscription once after `init()` and once after every sent
 message, delivering what it produces before the next sent message; `run()` replays from
 the Program's model each time, so repeated runs give the same result.
+
+### TestResult
+
+`run()` returns a `SugarCraft\Testing\TestResult`:
+
+- `->model` — final model object
+- `->view` — last `view()` string
+- `->cmds` — every captured command closure, in dispatch order
+- `->output` — concatenated `view()` output across the run plus `RawMsg`/`PrintMsg`
+  side-channel writes
+- `->frames` — the `view()` after each delivered message (plus the final one), for
+  animation/progression assertions
+- `->droppedAfterStop` — messages left in the queue when a `QuitMsg`/`InterruptMsg`
+  halted the drain (0 in a healthy run; a surprise non-zero means your script
+  over-sent)
+
+Verbs: `assertCmdCount(int)`, `assertCmdContains(callable $filter, ?string $message)`
+(failure names the captured-cmd count, since “matched none of 0” is the usual story),
+`assertNoCmds()`.
+
+### TapeRecorder
+
+`SugarCraft\Testing\Tape\TapeRecorder` **builds** `.tape` scripts for the VHS
+GIF renderer (it records nothing from a running program — you compose the
+choreography):
+
+```php
+use SugarCraft\Testing\Tape\TapeRecorder;
+
+TapeRecorder::to(__DIR__ . '/.vhs/demo.tape')
+    ->header(theme: 'TokyoNight')          // Set Theme/FontSize/Width/Height
+    ->type('php examples/demo.php')
+    ->enter()
+    ->sleep(1)
+    ->type("q")
+    ->comment('rendered by .github/workflows/vhs.yml')
+    ->save();
+```
+
+Everything interpolated is escaped so it cannot forge a standalone directive
+line — `type()` neutralizes newlines and control bytes inside the quotes,
+`comment()` prefixes every physical line, and even the theme string is escaped.
+`line()` is the deliberate verbatim escape hatch: CI executes the tapes these
+files describe, so only feed it trusted, generated directives. See
+`examples/tape-recorder.php` for a runnable demo.
+
+### TemporaryDirectoryTrait
+
+`SugarCraft\Testing\Concerns\TemporaryDirectoryTrait` gives a test class a
+scratch directory that is per-test unique, mode-`0700`, and removed without
+ever following a planted symlink into someone else's tree. The trait **owns**
+the `$tmpDir` property — do not re-declare it in your class (that is a
+fatal). Call `$this->setUpTemporaryDirectory()` from `setUp()` and
+`$this->tearDownTemporaryDirectory()` from `tearDown()`; override
+`getTempDirSuffix()` to name the directory after your test class.
 
 ### LoopPin
 
@@ -264,4 +504,6 @@ MIT
 
 ## Credits & inspiration
 
-Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
+Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem
+(upstream-antecedented by `charmbracelet/x/exp/golden` and `charmbracelet/teatest`);
+SugarCraft is developed as a native PHP project.
