@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CandyGitServer — SugarCraft</title>
-<meta name="description" content="CandyGitServer: a self-hostable Git server with the smart-HTTP read path live (git clone/fetch over HTTP via serve --http); SSH gate, Git daemon and push classes remain scaffold.">
+<meta name="description" content="CandyGitServer: a self-hostable Git server; the smart-HTTP transport (clone, fetch, auth-gated push, LFS) runs today via serve --http, with the SSH ForceCommand dispatcher and git-daemon advertisement at class level.">
 <meta property="og:title" content="CandyGitServer — SugarCraft">
 <meta property="og:description" content="Smart-HTTP read path (clone/fetch) live; push, SSH gate and Git daemon remain scaffold.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-git-server.png">
@@ -51,7 +51,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-git-server"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-git-server" alt="CandyGitServer code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;"><strong>Status: read path live (phase 1).</strong> <code>serve --http</code> runs a real <code>git clone</code>/<code>git fetch</code> over smart HTTP — a shared pkt-line codec plus git's own <code>--stateless-rpc</code> engine, e2e-tested against the system git binary. The rest stays scaffold: bare <code>serve</code> still refuses, push POSTs answer a loud 501 (phase 2), and the SSH gate and git daemon have no entrypoint. See the README &quot;Known gaps&quot; inventory.</p>
+    <p class="lede" style="margin-top: 28px;"><strong>Status: smart-HTTP transport live.</strong> <code>serve --http</code> runs a real <code>git clone</code>, <code>git fetch</code> and authenticated <code>git push</code> over smart HTTP, plus the LFS batch and object routes — a shared pkt-line codec plus git's own <code>--stateless-rpc</code> engine, e2e-tested against the system git binary, behind fail-closed access gates. The SSH <code>ForceCommand</code> dispatcher and the git-daemon advertisement exist at class level; the sshd host recipe and a fetch-completing daemon are open work. See the README &quot;Known gaps&quot; inventory.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-git-server</code></pre>
@@ -74,7 +74,8 @@ $repo = Repo::new('my-project', $config-&gt;reposPath() . '/my-project.git')
 $acl = AccessControl::getInstance();
 $acl-&gt;canWrite(User::new('alice'), $repo);   // true  (collaborator)
 $acl-&gt;canWrite(User::new('bob'), $repo);     // false
-$acl-&gt;canRead(null, $repo);                  // true  (public repo, anonymous read)
+$acl-&gt;canRead(null, $repo);                  // false (anonymous reads are opt-in:
+$acl-&gt;setAllowAnonymousRead(true);        //   git.allow_anonymous_read in config)
 
 // Library surface (not assembled): a future host would drive the daemon
 // like this — the serve() method exists; no shipped entrypoint calls it.
@@ -84,8 +85,8 @@ $daemon-&gt;registerRepo($repo);</code></pre>
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>SSH front end (class)</strong><span><code>SSHServer</code> authenticates users by public key and dispatches git upload-pack / receive-pack for the single request a host sshd <code>ForceCommand</code> hands it. No SSH wire protocol, no shipped entrypoint.</span></div>
-      <div class="feature"><strong>Git daemon (class)</strong><span><code>GitDaemon</code> implements a git:// daemon surface — blocking <code>serve()</code> or ReactPHP <code>serveAsync()</code>; packet framing rides the shared codec while the wire dialect still deviates from spec (see README Known gaps) and nothing constructs it yet.</span></div>
-      <div class="feature"><strong>Smart-HTTP read path</strong><span><code>HttpSmartProtocol\Server</code> + <code>HttpListener</code> serve <code>git clone</code>/<code>git fetch</code> behind <code>serve --http</code>; trust gates answer before any advertisement byte, push POSTs refuse 501 (phase 2), and LFS routes ride the same router (router-pinned only).</span></div>
+      <div class="feature"><strong>Git daemon (class)</strong><span><code>GitDaemon</code> answers the git:// <code>git-upload-pack</code> advertisement via a real <code>git upload-pack --advertise-refs</code> child — read-only by design, pushes refused at dispatch; completing fetches over git:// is open work (see README Known gaps) and nothing constructs it yet.</span></div>
+      <div class="feature"><strong>Smart-HTTP transport</strong><span><code>HttpSmartProtocol\Server</code> + <code>HttpListener</code> serve <code>git clone</code>, <code>git fetch</code> and authenticated <code>git push</code> behind <code>serve --http</code>; trust gates answer before any advertisement byte or pack body, hook declines ride in-band, and the LFS batch + object routes share the router with validated oids, sizes and atomic storage.</span></div>
       <div class="feature"><strong>Access control</strong><span><code>AccessControl</code> answers read / write / admin for a user (or anonymous) against a repo's visibility and collaborators.</span></div>
       <div class="feature"><strong>LFS support</strong><span>Git LFS over HTTP through <code>LFSHandler</code> and a pluggable storage backend.</span></div>
       <div class="feature"><strong>Config file</strong><span>YAML server configuration via <code>Config::load()</code>, or env + defaults via <code>Config::fromDefaults()</code>.</span></div>
@@ -105,14 +106,14 @@ $daemon-&gt;registerRepo($repo);</code></pre>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Config</td><td>static fromDefaults() / static load(path)</td><td>Configuration from env + defaults, or from a YAML file</td></tr>
-<tr><td>Config</td><td>reposPath() / sshPath() / dbPath() / lfsPath()</td><td>Data directories</td></tr>
+<tr><td>Config</td><td>reposPath() / sshPath() / lfsPath()</td><td>Data directories</td></tr>
 <tr><td>Repo</td><td>static new(name, path) / withDescription() / withPublic() / withPrivate() / withVisibility() / withAllowPush() / addCollaborator()</td><td>Immutable repository description</td></tr>
 <tr><td>Repo</td><td>init() / path() / branches()</td><td>Create the bare repository; inspect it</td></tr>
-<tr><td>User</td><td>static new(username) / withAdmin() / withAuthorizedKeys() / addAuthorizedKey()</td><td>Immutable user account with SSH keys</td></tr>
+<tr><td>User</td><td>static new(username) / withAdmin() / withPasswordHash() / withAuthorizedKeys() / addAuthorizedKey()</td><td>Immutable account: hashed password + SSH keys (accounts persist via UserStore)</td></tr>
 <tr><td>AccessControl</td><td>static getInstance() / canRead() / canWrite() / canAdmin()</td><td>Permission checks</td></tr>
 <tr><td>SSHServer</td><td>__construct(Config) / registerUser() / registerRepo() / handleConnection(stream, username, command, publicKey)</td><td>SSH command dispatcher</td></tr>
-<tr><td>GitDaemon</td><td>__construct(Config) / registerRepo() / serve(pidFile) / serveAsync(loop, pidFile) / shutdown()</td><td>git:// protocol daemon</td></tr>
-<tr><td>HttpSmartProtocol\Server</td><td>__construct(Config) / registerRepo() / registerUser() / handleRequest(…)</td><td>Smart-HTTP router (read path live; push POST 501)</td></tr>
+<tr><td>GitDaemon</td><td>__construct(Config) / registerRepo() / serve() / serveAsync() / stop()</td><td>git:// advertisement daemon (read-only)</td></tr>
+<tr><td>HttpSmartProtocol\Server</td><td>__construct(Config) / registerRepo() / registerUser() / handleRequest(…)</td><td>Smart-HTTP router: clone, fetch, auth-gated push, LFS</td></tr>
 <tr><td>Git\PktLine</td><td>static encode(payload) / static flush() / static decode(bytes) / static isServiceHeader(payload, service)</td><td>Shared pkt-line codec (4-hex length prefix)</td></tr>
 <tr><td>Git\StatelessRpc</td><td>static advertise(service, repoPath) / static negotiate(service, repoPath, body, maxBytes)</td><td>git --stateless-rpc children: capped drain, TERM-to-KILL reap</td></tr>
 <tr><td>HttpSmartProtocol\HttpListener</td><td>__construct(Server, host, port, ?loop) / start() / stop() / listenAddress()</td><td>Smart-HTTP socket listener behind serve --http</td></tr>

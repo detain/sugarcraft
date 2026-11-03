@@ -1,6 +1,6 @@
 {
     "title": "CandyGitServer — SugarCraft",
-    "description": "CandyGitServer: a self-hostable Git server with the smart-HTTP read path live (git clone/fetch over HTTP via serve --http); SSH gate, Git daemon and push classes remain scaffold.",
+    "description": "CandyGitServer: a self-hostable Git server; the smart-HTTP transport (clone, fetch, auth-gated push, LFS) runs today via serve --http, with the SSH ForceCommand dispatcher and git-daemon advertisement at class level.",
     "ogTitle": "CandyGitServer — SugarCraft",
     "ogDescription": "Smart-HTTP read path (clone/fetch) live; push, SSH gate and Git daemon remain scaffold.",
     "emoji": "",
