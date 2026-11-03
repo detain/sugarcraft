@@ -423,4 +423,92 @@ final class GifDecoderTest extends TestCase
 
         $this->assertStringContainsString('ignoring 1 HTTP request header', $logged);
     }
+
+    /**
+     * Hand-built GIF89a with $frames one-pixel frames. Upstream coalesces
+     * identical runs, so this fixture is a shape probe, not a frame-count
+     * promise — see the budget helper tests for the arithmetic itself.
+     */
+    private function rawFrameGifPath(int $frames): string
+    {
+        $header = "GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00";
+        $frame = "!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x01\x00";
+        $bytes = $header . str_repeat($frame, $frames) . ";";
+
+        $path = sys_get_temp_dir() . '/sugarcraft-gif-budget-' . uniqid('', true) . '.gif';
+        file_put_contents($path, $bytes);
+        $this->tempGifPath = $path;
+
+        return $path;
+    }
+
+    /**
+     * @testdox M6: the budget helper trips exactly one frame past the product limit
+     */
+    public function testTheResidentBudgetHelperTripsAtTheExactProductBoundary(): void
+    {
+        $probe = new \ReflectionMethod(GifDecoder::class, 'exceedsResidentBudget');
+        $probe->setAccessible(true);
+
+        // 99,856 px per frame (316x316 Ascii): the 80th fits, the 81st does not.
+        $this->assertFalse($probe->invoke(null, 79, 99_856));
+        $this->assertTrue($probe->invoke(null, 80, 99_856), 'the 81st frame of 99,856 px lands at 8,088,336 — over');
+
+        // Exact-equality edges stay inside (limit is not "greater than").
+        $this->assertFalse($probe->invoke(null, 999, 8_000));
+        $this->assertTrue($probe->invoke(null, 1_000, 8_000));
+        $this->assertTrue($probe->invoke(null, 0, 8_000_001), 'a single frame over the whole budget refuses at once');
+    }
+
+    /**
+     * @testdox M6: hydrate consults the helper before accepting each frame
+     */
+    public function testTheHydrateLoopEnforcesTheResidentBudget(): void
+    {
+        $source = (string) file_get_contents(\dirname(__DIR__) . '/src/Decode/GifDecoder.php');
+
+        $this->assertStringContainsString(
+            'if (self::exceedsResidentBudget(count($frames), $perFrame)) {',
+            $source,
+            'the consume loop must gate every frame through the helper (M6)',
+        );
+        $this->assertStringContainsString('\'frame\' => (string) (count($frames) + 1),', $source);
+        $this->assertStringNotContainsString(
+            'iterator_to_array(AnimationDecoder::decodeBytes',
+            $source,
+            'the unbounded eager collect must never come back',
+        );
+    }
+
+    /**
+     * @testdox M6: a many-frame raw GIF inside the budget still hydrates
+     */
+    public function testABudgetShapedRawGifStillHydrates(): void
+    {
+        $path = $this->rawFrameGifPath(90);
+
+        $decoder = new GifDecoder();
+        $decoder->open($path, 316, 316, 10.0, Mode::Ascii);
+        $this->assertNotNull($decoder->next());
+        $decoder->close();
+    }
+
+    /**
+     * @testdox m2: the hydrate call sites pass exactly the declared five arguments
+     */
+    public function testTheHydrateCallSitesMatchTheDeclaredArity(): void
+    {
+        $source = (string) file_get_contents(\dirname(__DIR__) . '/src/Decode/GifDecoder.php');
+
+        $this->assertSame(
+            2,
+            substr_count($source, '$this->hydrate($cellsW, $cellsH, $fps, $mode, $startSec);'),
+            'both rebuild paths (open and same-source reopen) call the five-parameter hydrate',
+        );
+        $this->assertStringNotContainsString(
+            '$this->hydrate($cellsW, $cellsH, $fps, $mode, $startSec, $headers',
+            $source,
+            'no call site may keep feeding a sixth argument into a five-parameter method (m2)',
+        );
+    }
 }

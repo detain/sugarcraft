@@ -35,6 +35,18 @@ final class GifDecoder implements Decoder
     public const MAX_SOURCE_BYTES = 67_108_864; // 64 MiB
 
     /**
+     * Resident-pixel budget for the whole decoded frame list (M6).
+     *
+     * Measured basis: one 316x316 graphics-grid frame costs ~24.9 MiB of
+     * resident GD-derived state, so the un-capped product of upstream's own
+     * per-axis caps projected to multi-GB residency on hostile files. 8M
+     * frame-pixels bounds the worst case near ~2 GiB of the same units and
+     * comfortably passes ordinary terminal playback (an 80x24 HalfBlock clip
+     * is 3,840 px per frame, i.e. thousands of frames of headroom).
+     */
+    private const MAX_TOTAL_FRAME_PIXELS = 8_000_000;
+
+    /**
      * `st_mode` masks used by {@see readBoundedBytes()} to prove the source
      * is a regular file at every check, mirroring the constants
      * sugar-image's hardened ingress uses (same S_IFmt/S_IFREG pair).
@@ -134,7 +146,9 @@ final class GifDecoder implements Decoder
         $this->bytes = self::readBoundedBytes($source);
         $this->bytesSource = $source;
 
-        $this->hydrate($cellsW, $cellsH, $fps, $mode, $startSec, $headers);
+        // Pure-PHP GIF decoding takes no request headers: whatever arrived was
+        // logged-and-dropped above, so nothing downstream can forget to.
+        $this->hydrate($cellsW, $cellsH, $fps, $mode, $startSec);
     }
 
     /**
@@ -175,11 +189,31 @@ final class GifDecoder implements Decoder
         // from imagecreatetruecolor(). Reel's decoder contract is RuntimeException
         // (see FfmpegDecoder), so translate narrowly instead of letting the
         // engine-level error class escape.
+        // RESIDENCY BUDGET: the decoder upstream caps a single frame's grid
+        // (graphics path) and the frame roster, but never their PRODUCT, so a
+        // GIF could still hydrate a multi-gigabyte resident list (measured
+        // ~24.9 MiB per 316x316 frame; 256 such frames project ~6.2 GiB).
+        // Consume the generator frame by frame and refuse the moment the
+        // running product would pass MAX_TOTAL_FRAME_PIXELS: at most one
+        // frame's allocation beyond the budget is ever made, then nothing
+        // over-budget stays resident and the refusal is loud and typed.
+        $perFrame = max(1, $decodeW * $decodeH);
+        $frames = [];
         try {
-            $this->frames = iterator_to_array(AnimationDecoder::decodeBytes($bytes, $decodeW, $decodeH), preserve_keys: false);
+            foreach (AnimationDecoder::decodeBytes($bytes, $decodeW, $decodeH) as $frame) {
+                if (self::exceedsResidentBudget(count($frames), $perFrame)) {
+                    throw new \RuntimeException(Lang::t('decoder.gif_budget', [
+                        'frame' => (string) (count($frames) + 1),
+                        'grid' => (string) $perFrame,
+                        'max' => (string) self::MAX_TOTAL_FRAME_PIXELS,
+                    ]));
+                }
+                $frames[] = $frame;
+            }
         } catch (\ValueError $e) {
             throw new \RuntimeException("GIF decode failed: {$e->getMessage()}", 0, $e);
         }
+        $this->frames = $frames;
 
         // The authored loop count, read from the SAME audited bytes as
         // the frames (never a second open — the single-capture law) and re-derived on every
@@ -215,6 +249,18 @@ final class GifDecoder implements Decoder
 
         $animationFrame = $this->frames[$this->frameIndex++];
         return $this->animationFrameToRgbFrame($animationFrame);
+    }
+
+    /**
+     * Whether accepting one more resident frame would pass the budget (M6).
+     *
+     * Pure arithmetic split out so the exact trip point is unit-testable
+     * without crafting a GIF that survives upstream's frame coalescing —
+     * {@see self::MAX_TOTAL_FRAME_PIXELS} for the measured basis.
+     */
+    private static function exceedsResidentBudget(int $heldFrames, int $pixelsPerFrame): bool
+    {
+        return ($heldFrames + 1) * $pixelsPerFrame > self::MAX_TOTAL_FRAME_PIXELS;
     }
 
     /**
@@ -486,7 +532,7 @@ final class GifDecoder implements Decoder
      * returning — the resident form stays the indexed cell grid, so the
      * ban on holding N × W × H × 4 for the playback lifetime is untouched
      * (decode-time capture via {@see AnimationFrame::rgbaBytes()} was ruled
-     * out for exactly that reason: hydrate() holds every frame eagerly).
+     * out for exactly that reason: hydrate() holds every frame eagerly, bounded only by MAX_TOTAL_FRAME_PIXELS).
      *
      * Filter semantics mirror chafa's DEFAULT canvas scaler: chafa sizes the
      * composited RGBA canvas at print time through smolscale, which picks its
@@ -639,7 +685,7 @@ final class GifDecoder implements Decoder
                 ]));
             }
 
-            $this->hydrate($cellsW, $cellsH, $fps, $mode, $startSec, $headers);
+            $this->hydrate($cellsW, $cellsH, $fps, $mode, $startSec);
             return;
         }
 
