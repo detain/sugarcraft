@@ -13,6 +13,7 @@ use SugarCraft\Forms\Field\Note;
 use SugarCraft\Forms\Field\NumberField;
 use SugarCraft\Forms\Field\RadioPills;
 use SugarCraft\Forms\Field\Select;
+use SugarCraft\Forms\Field\Slider;
 use SugarCraft\Forms\Field\Text;
 use SugarCraft\Forms\Form;
 use SugarCraft\Forms\TextArea\TextArea as TextAreaWidget;
@@ -122,6 +123,24 @@ final class ShortAliasesTest extends TestCase
         $viaShort = NumberField::new('k', 0, 100, 1, 17)->step(10)->min(0)->max(100);
         $viaLong  = NumberField::new('k', 0, 100, 1, 17)->withStep(10)->withMin(0)->withMax(100);
         $this->assertSame($viaLong->value(), $viaShort->value());
+    }
+
+    public function testSliderAliases(): void
+    {
+        // Same README :99 contract as NumberField: Slider already carried
+        // title/desc/width/default but not its lattice trio or validator.
+        $long  = Slider::new('k')
+            ->withMin(0)->withMax(40)->withStep(4)->withValue(12)->view();
+        $short = Slider::new('k')
+            ->min(0)->max(40)->step(4)->default(12)->view();
+        $this->assertSame($long, $short);
+
+        // Slider feeds its validator the numeric value (not a string): the
+        // alias must forward the identical contract.
+        $this->assertSame(
+            Slider::new('k')->withValidator(static fn (int|float $v): ?string => null)->view(),
+            Slider::new('k')->validator(static fn (int|float $v): ?string => null)->view(),
+        );
     }
 
     public function testRadioPillsAliases(): void

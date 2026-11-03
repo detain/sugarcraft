@@ -180,6 +180,10 @@ final class Slider implements \SugarCraft\Forms\Field
     public function desc(string $d): self   { return $this->withDescription($d); }
     public function width(int $w): self     { return $this->withWidth($w); }
     public function default(int|float $v): self { return $this->withValue($v); }
+    public function min(int|float $m): self { return $this->withMin($m); }
+    public function max(int|float $m): self { return $this->withMax($m); }
+    public function step(int|float $s): self { return $this->withStep($s); }
+    public function validator(Validator|\Closure|null $v): self { return $this->withValidator($v); }
 
     // ------------------------------------------------------------------
     // Field contract
