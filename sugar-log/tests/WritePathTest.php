@@ -1,0 +1,114 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Log\Tests;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Log\Level;
+use SugarCraft\Log\Logger;
+
+/**
+ * [M8/m15/N5/N7] Write-path honesty pins: a record that cannot land must be
+ * announced, never silently lost, and the logger must survive the failure.
+ */
+final class WritePathTest extends TestCase
+{
+    private string $dir;
+
+    protected function setUp(): void
+    {
+        $this->dir = \sys_get_temp_dir() . '/sugar-log-write-' . \uniqid();
+        \mkdir($this->dir, 0o700);
+    }
+
+    protected function tearDown(): void
+    {
+        foreach (\glob($this->dir . '/*') ?: [] as $f) {
+            @\unlink($f);
+        }
+        @\rmdir($this->dir);
+    }
+
+    public function testClosedStreamDegradesToNoticeWithoutThrowing(): void
+    {
+        // [m15] A handle validated at assignment time can be closed by the
+        // host afterwards; emit() must notice-and-continue, never fatal.
+        $path = $this->dir . '/closed.log';
+        $stream = \fopen($path, 'w');
+        $log = Logger::new(level: Level::Debug, reportTimestamp: false, stream: $stream);
+        \fclose($stream);
+
+        $log->info('after-close');
+        $log->warn('also-after-close');
+
+        // The logger stays usable after switching to a live destination.
+        $path2 = $this->dir . '/revived.log';
+        $stream2 = \fopen($path2, 'w');
+        $log->setOutput($stream2);
+        $log->info('revived');
+        \fclose($stream2);
+
+        $this->assertStringContainsString('revived', (string) \file_get_contents($path2));
+    }
+
+    public function testReadOnlyStreamIsRejectedQuietlyAndLossIsAnnounced(): void
+    {
+        // [M8] fwrite() to a read-only handle returns false. Pre-fix the
+        // result was discarded and the record vanished silently; now the
+        // failure path runs (retry, then the STDERR notice) without any
+        // exception reaching the caller.
+        $path = $this->dir . '/readonly.log';
+        \file_put_contents($path, 'untouched');
+        $stream = \fopen($path, 'r');
+        $log = Logger::new(level: Level::Debug, reportTimestamp: false, stream: $stream);
+
+        $log->error('cannot-land');
+
+        \fclose($stream);
+        $this->assertSame('untouched', (string) \file_get_contents($path));
+    }
+
+    public function testRoutingThresholdFallsBackToErrorWhenNulled(): void
+    {
+        // [N5] The documented default threshold is Error. Forcing the slot
+        // to null (state the public setters refuse to create) must keep
+        // Info on the main stream — null coercion would once compare
+        // `$level->value >= null` and route every non-Debug record away.
+        $mainPath = $this->dir . '/main.log';
+        $errPath = $this->dir . '/err.log';
+        $main = \fopen($mainPath, 'w');
+        $err = \fopen($errPath, 'w');
+
+        $log = Logger::new(level: Level::Debug, reportTimestamp: false, stream: $main, errorStream: $err);
+        (new \ReflectionProperty(Logger::class, 'errorStreamAt'))->setValue($log, null);
+
+        $log->info('gentle-info');
+        $log->error('loud-error');
+        \fclose($main);
+        \fclose($err);
+
+        $mainContent = (string) \file_get_contents($mainPath);
+        $errContent = (string) \file_get_contents($errPath);
+
+        $this->assertStringContainsString('gentle-info', $mainContent);
+        $this->assertStringNotContainsString('gentle-info', $errContent);
+        $this->assertStringContainsString('loud-error', $errContent);
+    }
+
+    public function testFlushDrainsBufferedFileBytes(): void
+    {
+        // [M8 docs] File streams buffer; flush() is the documented drain for
+        // hard-exit paths. After flush(), bytes must be readable while the
+        // stream is still open.
+        $path = $this->dir . '/buffered.log';
+        $stream = \fopen($path, 'w');
+        $log = Logger::new(level: Level::Debug, reportTimestamp: false, stream: $stream);
+
+        $log->info('buffered-now');
+        $log->flush();
+
+        $this->assertStringContainsString('buffered-now', (string) \file_get_contents($path));
+        \fclose($stream);
+    }
+}

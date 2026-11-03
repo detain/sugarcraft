@@ -128,13 +128,24 @@ final class TextFormatter implements Formatter
      * text byte-unchanged, which is what makes identity the safe default for
      * every previously-dead styling knob.
      */
+    /** @var \WeakMap<Style,bool>|null render-identity verdicts by instance ([N6]). */
+    private static ?\WeakMap $identityMemo = null;
+
     private function pick(Style ...$candidates): ?Style
     {
+        // [N6] render('x') allocates a string per styled part per record just
+        // to learn whether a Style instance is a no-op. The verdict is a
+        // property of the instance, so memoize it against the object itself:
+        // WeakMap entries die with the style, keeping this both effective
+        // and free of staleness/leak concerns.
+        $memo = self::$identityMemo ??= new \WeakMap();
         foreach ($candidates as $style) {
-            if ($style->render('x') !== 'x') {
+            $identity = $memo[$style] ??= ($style->render('x') === 'x');
+            if (!$identity) {
                 return $style;
             }
         }
+
         return null;
     }
 

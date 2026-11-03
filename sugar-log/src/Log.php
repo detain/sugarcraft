@@ -128,7 +128,12 @@ final class Log
         \set_exception_handler(static function (\Throwable $e) use ($formatter, $previousHandler): void {
             self::restoreTerminal();
             $report = $formatter->format($e);
-            \fwrite(\STDERR, "\n{$report}\n");
+            // [N7] Exotic hosts can close STDERR; a fwrite to a non-resource
+            // would raise during panic reporting — exactly when only safe
+            // code is allowed to run.
+            if (\is_resource(\STDERR)) {
+                @\fwrite(\STDERR, "\n{$report}\n");
+            }
 
             // Chain to previous handler if one was registered.
             if ($previousHandler !== null) {
@@ -148,7 +153,9 @@ final class Log
             if ($err !== null && \in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true)) {
                 self::restoreTerminal();
                 $msg = sprintf('%s: %s in %s on line %d', self::fatalTypeName($err['type']), $err['message'], $err['file'], $err['line']);
-                \fwrite(\STDERR, "\n{$formatter->format(new \ErrorException($msg))}\n");
+                if (\is_resource(\STDERR)) {
+                    @\fwrite(\STDERR, "\n{$formatter->format(new \ErrorException($msg))}\n");
+                }
             }
         });
     }

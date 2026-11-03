@@ -8,6 +8,7 @@ use SugarCraft\Log\Lang;
 use SugarCraft\Log\Formatter\TextFormatter;
 use SugarCraft\Log\PartsOrder;
 use SugarCraft\ColorProfile\Probe;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Style\Style;
 
 /**
@@ -194,7 +195,11 @@ final class Logger
         $time = new \DateTimeImmutable();
 
         $target = $this->stream;
-        if ($this->errorStream !== null && $level->value >= $this->errorStreamAt?->value) {
+        if ($this->errorStream !== null && $level->value >= ($this->errorStreamAt ?? Level::Error)->value) {
+            // [N5] The setter normalizes the threshold, so the ?? arm keeps
+            // the documented default honest even if the invariant were ever
+            // broken by a future path: routing must never silently widen to
+            // "everything at Info and above".
             $target = $this->errorStream;
         }
 
@@ -208,10 +213,80 @@ final class Logger
 
         $line = $formatter->format($level, $message, $merged, $time, $caller, $this->prefix);
 
-        \fwrite($target, $line);
+        $this->writeRecord($target, $line);
 
         if ($level === Level::Fatal) {
             throw new \RuntimeException(Lang::t('logger.fatal', ['message' => $message]));
+        }
+    }
+
+    /**
+     * Best-effort single write of a formatted record.
+     *
+     * [M8] A discarded fwrite() result used to swallow lost records whole:
+     * a closed handle, a broken pipe, or a short write simply vanished. A
+     * failed write is retried once after flushing buffered bytes; if it
+     * still cannot land, the loss is announced on STDERR as a sanitized
+     * one-line internal notice. Logging never escalates I/O failure by
+     * throwing — callers inside catch blocks must not gain new exceptions.
+     */
+    private function writeRecord(mixed $target, string $line): void
+    {
+        if (!\is_resource($target)) {
+            // [m15] requireStream() validated the handle at assignment time;
+            // the host may have closed it since. Degrade to a notice.
+            $this->reportWriteFailure('stream is no longer a valid resource', $line);
+
+            return;
+        }
+
+        $written = @\fwrite($target, $line);
+        if ($written === \strlen($line)) {
+            return;
+        }
+
+        @\fflush($target);
+        $rest = $written === false ? $line : \substr($line, $written);
+        $again = @\fwrite($target, $rest);
+        if ($again === \strlen($rest)) {
+            return;
+        }
+
+        $this->reportWriteFailure(
+            $written === false && $again === false ? 'stream rejected the write' : 'partial write only',
+            $line,
+        );
+    }
+
+    /**
+     * Announce a dropped record on STDERR — the logger's own error channel —
+     * without throwing. Control bytes and line breaks are swept so a hostile
+     * message riding inside the record cannot forge extra notice lines.
+     */
+    private function reportWriteFailure(string $why, string $line): void
+    {
+        if (!\is_resource(\STDERR)) {
+            return;
+        }
+
+        $excerpt = \str_replace(["\n", "\r", "\t"], ' ', Sanitize::untrusted($line));
+        @\fwrite(\STDERR, '[sugar-log] log write failed: ' . $why . ': ' . $excerpt . "\n");
+    }
+
+    /**
+     * Push buffered bytes out to both destinations.
+     *
+     * PHP buffers file-stream writes, so a process killed with SIGKILL (or
+     * any hard-exit path that skips shutdown) loses whatever still sits in
+     * the buffer. Call flush() on critical paths before exiting.
+     */
+    public function flush(): void
+    {
+        if (\is_resource($this->stream)) {
+            @\fflush($this->stream);
+        }
+        if ($this->errorStream !== null && \is_resource($this->errorStream)) {
+            @\fflush($this->errorStream);
         }
     }
 

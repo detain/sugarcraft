@@ -206,7 +206,12 @@ $one = $log->withErrorStream(null);                                // back to a 
 Routing is decided per record when it is emitted; `Fatal` still throws
 `RuntimeException` after writing. Constructor and `setOutput()`/
 `withOutput()`/`setErrorStream()`/`withErrorStream()` reject non-resource
-streams with an `InvalidArgumentException`.
+streams with an `InvalidArgumentException`. A record that cannot be written
+(closed or unwritable handle) never throws: it is retried once after a flush
+and the loss is announced as a sanitized `[sugar-log] log write failed:`
+notice on STDERR. File streams are buffered by PHP — call `$log->flush()`
+before hard-exit paths (SIGKILL, `posix_kill`, `exit()` under a fatal
+framework) so nothing still in the buffer is lost.
 
 ## Record integrity
 
