@@ -49,6 +49,12 @@ final class SmartHttpCloneTest extends TestCase
             self::markTestSkipped('e2e pins require the system git binary (host requirement, see README)');
         }
 
+        // The clone fixture is a published repo, and these pins exercise the
+        // real-git anonymous clone/fetch flow — the opt-in world of
+        // git.allow_anonymous_read. The default-off keystone (401 +
+        // WWW-Authenticate) lives in AnonymousReadLeverTest.
+        \SugarCraft\GitServer\AccessControl::getInstance()->setAllowAnonymousRead(true);
+
         $this->tmpDir = \sys_get_temp_dir() . '/smart-clone-e2e-' . \uniqid();
         \mkdir($this->tmpDir, 0755, true);
 
@@ -65,6 +71,9 @@ final class SmartHttpCloneTest extends TestCase
 
         $this->router = new Server(Config::fromDefaults());
         $this->router->registerRepo(Repo::new('fixture.git', $this->barePath));
+        $this->router->registerUser(
+            \SugarCraft\GitServer\User::new('bob')->withPasswordHash(\password_hash('correct horse', \PASSWORD_DEFAULT))
+        );
 
         $this->loop = new StreamSelectLoop();
         $this->listener = new HttpListener($this->router, '127.0.0.1', 0, $this->loop);
@@ -73,6 +82,7 @@ final class SmartHttpCloneTest extends TestCase
 
     protected function tearDown(): void
     {
+        \SugarCraft\GitServer\AccessControl::getInstance()->setAllowAnonymousRead(false);
         $this->listener->stop();
         if (\is_dir($this->tmpDir)) {
             \exec('rm -rf ' . \escapeshellarg($this->tmpDir));
@@ -154,16 +164,22 @@ final class SmartHttpCloneTest extends TestCase
             ['git', 'clone', $this->baseUrl() . '/secret.git', $this->tmpDir . '/nope']
         );
         self::assertNotSame(0, $rc, 'anonymous clone of a private repo must fail');
-        self::assertStringContainsString('403', $err);
+        // C-13/M-01: an anonymous request for a gated repo meets the 401
+        // challenge (never a 403 policy hint); without a credential helper
+        // git reports the failed username round-trip and clones nothing.
+        // The challenge itself is pinned byte-exactly at the router level
+        // (AnonymousReadLeverTest), the prompt-disabled refusal right here.
+        self::assertStringContainsString('could not read Username', $err);
         self::assertFileDoesNotExist($this->tmpDir . '/nope/a.txt', 'refused clone still materialized content');
     }
 
     public function testPushOverTheSocketIsRefusedOnTheWire(): void
     {
-        // An anonymous push meets the 403 advertisement gate on its very
-        // first request (canWrite is fail-closed for anonymous callers);
-        // even a write-granted user would hit the 501 phase-2 refusal at
-        // the POST — pinned at the router level in ServerTest and the
+        // An authenticated-but-ungranted push meets 403 at the advertisement
+        // gate (canWrite is fail-closed for non-collaborators); an
+        // anonymous one meets the 401 challenge first. Either way push is
+        // dead on this wire: the 501 phase-2 refusal behind the auth gate is
+        // pinned at the router level in ServerTest and the
         // ChildProcessLifetimeCensus refusal arm. Here we pin the wire
         // outcome real git reports: a non-zero push.
         $clonePath = $this->tmpDir . '/clone';
@@ -176,12 +192,16 @@ final class SmartHttpCloneTest extends TestCase
         $this->git(['-C', $clonePath, 'add', 'c.txt']);
         $this->git(['-C', $clonePath, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', 'push-attempt']);
 
+        // Authenticated (bob exists) but not a collaborator of fixture.git:
+        // the advertisement answers 403 — proving the credential reached the
+        // policy layer instead of being challenged away as anonymous. The
+        // credential is passed in the environment so it never lands in the
+        // child argv or the test source's URL strings.
         [$pushRc, , $pushErr] = $this->runChild(
-            ['git', '-C', $clonePath, 'push', 'origin', 'main']
+            ['git', '-C', $clonePath, 'push', $this->baseUrl() . '/fixture.git', 'main'],
+            ['env' => $this->writeAskPass('bob', 'correct horse')]
         );
         self::assertNotSame(0, $pushRc, 'push must not succeed in phase 1');
-        // The anonymous wire sees 403 first; the 501 phase-2 refusal is the
-        // authenticated shape, pinned at the router level (see comment above).
         self::assertStringContainsString('403', $pushErr);
     }
 
@@ -191,11 +211,15 @@ final class SmartHttpCloneTest extends TestCase
 
     private function baseUrl(): string
     {
+        return 'http://127.0.0.1:' . $this->port();
+    }
+
+    private function port(): string
+    {
         $addr = (string) $this->listener->listenAddress();
         $colon = \strrpos($addr, ':');
-        $port = $colon === false ? '0' : \substr($addr, $colon + 1);
 
-        return 'http://127.0.0.1:' . $port;
+        return $colon === false ? '0' : \substr($addr, $colon + 1);
     }
 
     /**
@@ -232,8 +256,28 @@ final class SmartHttpCloneTest extends TestCase
      * @param list<string> $argv
      * @return array{0:int,1:string,2:string}
      */
-    private function runChild(array $argv): array
+    /**
+     * A throwaway GIT_ASKPASS script answering git's two credential prompts
+     * (username, then password). Returned as "NAME=value" lines for the
+     * env(1) prefix — no shell expansion, credential out of the argv.
+     */
+    private function writeAskPass(string $username, string $password): string
     {
+        $path = $this->tmpDir . '/askpass-' . \uniqid() . '.sh';
+        \file_put_contents(
+            $path,
+            "#!/bin/sh\ncase \"$1\" in\n*sername*) printf '%s\\n' " . \escapeshellarg($username) . ";; *) printf '%s\\n' " . \escapeshellarg($password) . ";;\nesac\n"
+        );
+        \chmod($path, 0755);
+
+        return "GIT_TERMINAL_PROMPT=0\n" . 'GIT_ASKPASS=' . $path;
+    }
+
+    /** @param array{env?: string} $opts */
+    private function runChild(array $argv, array $opts = []): array
+    {
+        $envLines = \array_filter(\explode("\n", $opts['env'] ?? ''), static fn (string $line): bool => $line !== '');
+        $argv = $envLines === [] ? $argv : ['env', ...$envLines, ...$argv];
         $cmd = ['timeout', '-s', 'KILL', (string) self::CHILD_LEASH_SECONDS, ...$argv];
         $desc = [
             ['pipe', 'r'],  // stdin — closed immediately (no client reads)

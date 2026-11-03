@@ -20,10 +20,15 @@ final class LFSHandlerTest extends TestCase
         parent::setUp();
         $this->tmpDir = sys_get_temp_dir() . '/lfs-handler-test-' . uniqid();
         mkdir($this->tmpDir, 0755, true);
+        // handleBatch consults canRead; these pins model the published
+        // world where the operator opted into anonymous reads (the fail-closed
+        // default is pinned in AnonymousReadLeverTest).
+        \SugarCraft\GitServer\AccessControl::getInstance()->setAllowAnonymousRead(true);
     }
 
     protected function tearDown(): void
     {
+        \SugarCraft\GitServer\AccessControl::getInstance()->setAllowAnonymousRead(false);
         // Clean up temp directory
         $this->removeDirectory($this->tmpDir);
         parent::tearDown();

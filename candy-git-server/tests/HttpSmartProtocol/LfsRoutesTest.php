@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\GitServer\Tests\HttpSmartProtocol;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\GitServer\AccessControl;
 use SugarCraft\GitServer\Config;
 use SugarCraft\GitServer\HttpSmartProtocol\Server;
 use SugarCraft\GitServer\LFS\LocalStorageBackend;
@@ -44,11 +45,20 @@ final class LfsRoutesTest extends TestCase
         $this->server->setStats($this->stats);
 
         $this->server->registerRepo(Repo::new('testrepo.git', $this->tmpDir . '/testrepo.git'));
-        $this->server->registerUser(User::new('admin')->withAdmin(true)->withPassword('adminpass'));
+        // Passwords authenticate against a hash only (cleartext field is
+        // never consulted); accounts here mint their hash up front.
+        $this->server->registerUser(User::new('admin')->withAdmin(true)
+            ->withPasswordHash(\password_hash('adminpass', \PASSWORD_DEFAULT)));
+
+        // The published world: anonymous READ is opt-in via the config
+        // lever, which these arms raise. Denial arms use private repos or
+        // write operations, which the lever never unlocks.
+        AccessControl::getInstance()->setAllowAnonymousRead(true);
     }
 
     protected function tearDown(): void
     {
+        AccessControl::getInstance()->setAllowAnonymousRead(false);
         $this->removeDirectory($this->tmpDir);
         parent::tearDown();
     }
@@ -132,7 +142,10 @@ final class LfsRoutesTest extends TestCase
         $body = \json_encode(['operation' => 'upload', 'objects' => [['oid' => \str_repeat('a', 64), 'size' => 4]]]);
 
         $anonymous = $this->request('POST', '/testrepo.git/info/lfs/objects/batch', $body);
-        $this->assertSame(403, $anonymous['status']);
+        // No identity → 401 challenge (one uniform "who are you?" answer;
+        // git-lfs only prompts on 401).
+        $this->assertSame(401, $anonymous['status']);
+        $this->assertSame('Basic realm="candy-git-server"', $anonymous['headers']['WWW-Authenticate']);
 
         $admin = $this->request('POST', '/testrepo.git/info/lfs/objects/batch', $body, $this->adminHeaders());
         $this->assertSame(200, $admin['status']);
@@ -197,7 +210,7 @@ final class LfsRoutesTest extends TestCase
         $oid = $this->storeObject('secret bytes');
 
         $anonymous = $this->request('GET', "/secret.git/info/lfs/objects/{$oid}");
-        $this->assertSame(403, $anonymous['status']);
+        $this->assertSame(401, $anonymous['status']);
 
         $admin = $this->request('GET', "/secret.git/info/lfs/objects/{$oid}", '', $this->adminHeaders());
         $this->assertSame(200, $admin['status']);
@@ -234,7 +247,7 @@ final class LfsRoutesTest extends TestCase
 
         $result = $this->request('PUT', "/testrepo.git/info/lfs/objects/{$oid}", $content);
 
-        $this->assertSame(403, $result['status']);
+        $this->assertSame(401, $result['status']);
         $this->assertFalse((new LocalStorageBackend($this->config->lfsPath()))->exists($oid));
     }
 

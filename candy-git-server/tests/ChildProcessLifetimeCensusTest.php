@@ -60,13 +60,22 @@ final class ChildProcessLifetimeCensusTest extends TestCase
 
         \file_put_contents(
             $this->tmpDir . '/config.yaml',
-            "name: \"Test\"\ngit: { listen_addr: \"127.0.0.1:0\", idle_timeout: 3, max_connections: 8 }\n"
+            "name: \"Test\"\ngit: { listen_addr: \"127.0.0.1:0\", idle_timeout: 3, max_connections: 8, allow_anonymous_read: true }\n"
         );
         $this->config = Config::load($this->tmpDir . '/config.yaml');
+
+        // The daemon arms below exercise anonymous READ of a published repo
+        // and the smart-HTTP upload path — the opt-in world of
+        // git.allow_anonymous_read (fail-closed default pinned in
+        // AnonymousReadLeverTest). The lever is part of the parsed config
+        // above (the daemon snapshots it at construction); the singleton
+        // arm covers the direct-Server pins.
+        \SugarCraft\GitServer\AccessControl::getInstance()->setAllowAnonymousRead(true);
     }
 
     protected function tearDown(): void
     {
+        \SugarCraft\GitServer\AccessControl::getInstance()->setAllowAnonymousRead(false);
         if ($this->savedPath !== null) {
             \putenv('PATH=' . $this->savedPath);
             $this->savedPath = null;
@@ -423,7 +432,7 @@ final class ChildProcessLifetimeCensusTest extends TestCase
         \mkdir($dir, 0755, true);
         \file_put_contents(
             $dir . '/config.yaml',
-            "git: { listen_addr: \"127.0.0.1:0\" }\nhttp: { max_pack_bytes: 64 }\n"
+            "git: { listen_addr: \"127.0.0.1:0\", allow_anonymous_read: true }\nhttp: { max_pack_bytes: 64 }\n"
         );
         $server = new Server(Config::load($dir . '/config.yaml'));
         $server->registerRepo(Repo::new('http-cap.git', $repo->path())->withPublic(true));

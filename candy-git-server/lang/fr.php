@@ -12,6 +12,7 @@ return [
     'user.invalid_ssh_key'     => 'Format de clé SSH publique invalide',
     'repo.create_dir_failed'   => 'Échec de la création du répertoire du dépôt : {path}',
     'repo.git_init_failed'     => 'Échec de git init : {output}',
+    'repo.visibility_marker_unwritable' => 'Écriture du marqueur de visibilité impossible : {file}',
     'config.not_found'         => 'Fichier de configuration introuvable : {path}',
     'config.read_failed'       => 'Échec de la lecture de la configuration : {path}',
     'ssh.user_cannot_create'   => 'L\'utilisateur {viewer} ne peut pas créer de dépôts',
@@ -42,10 +43,11 @@ return [
 
     // bin/candy-git-server — user
     'cli.usage_user_root'      => 'Usage : candy-git-server user add|key|list',
-    'cli.usage_user_add'       => 'Usage : candy-git-server user add <username>',
+    'cli.usage_user_add'       => 'Usage : candy-git-server user add <username> [data-path] [--password <pw>|-]',
     'cli.usage_user_key'       => 'Usage : candy-git-server user key <username> [key-file]',
     'cli.user_created'         => "Utilisateur '{username}' créé (admin : true)",
-    'cli.user_key_hint'        => "Utilisez 'candy-git-server user key {username} < key.pub' pour ajouter une clé SSH publique.",
+    'cli.user_password_stored' => 'Mot de passe stocké sous forme de hachage.',
+    'cli.user_key_hint'        => "Utilisez 'candy-git-server user key {username} <key-file|->' pour ajouter une clé SSH publique.",
     'cli.user_key_read_failed' => 'Échec de la lecture de la clé depuis : {file}',
     'cli.user_key_added'       => "Clé ajoutée pour l'utilisateur '{username}'",
     'cli.user_keys_header'     => 'Clés autorisées :',

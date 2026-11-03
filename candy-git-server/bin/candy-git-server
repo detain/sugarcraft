@@ -54,7 +54,7 @@ namespace SugarCraft\GitServer\Bin;
     exit(1);
 })();
 
-use SugarCraft\GitServer\{Config, Lang, Repo, User, UserStore};
+use SugarCraft\GitServer\{Config, Lang, Repo, User, UserStore, Visibility};
 
 // Pre-rename env compatibility (plan_rename.md R4.5): CANDY_SERVE_DATA_PATH was // @rename-keep
 // this app's data-dir var before the 2026-10 rename. Import any old-prefix
@@ -207,12 +207,40 @@ function cmdServeHttp(array $args): int
         return 1;
     }
 
-    $config = $configPath !== null
-        ? \SugarCraft\GitServer\Config::load($configPath)
-        : \SugarCraft\GitServer\Config::fromDefaults();
+    try {
+        $config = $configPath !== null
+            ? \SugarCraft\GitServer\Config::load($configPath)
+            : \SugarCraft\GitServer\Config::fromDefaults();
+    } catch (\RuntimeException | \InvalidArgumentException $e) {
+        // A corrupt or unsupported config must name itself and stop the
+        // launch — not surface as an uncaught fatal trace.
+        \fwrite(\STDERR, 'candy-git-server: ' . $e->getMessage() . "\n");
+        return 1;
+    }
+
+    // Authz wiring: the anonymous-read lever comes from config (default
+    // OFF); accounts come from the persisted store so `user add` and
+    // `user key` actually reach the wire. A corrupt store refuses the
+    // launch loudly rather than serving an auth-less server.
+    \SugarCraft\GitServer\AccessControl::getInstance()
+        ->setAllowAnonymousRead($config->allowAnonymousRead);
+
+    try {
+        // all() reads (and validates) the persisted store: a corrupt file
+        // throws and refuses the launch rather than serving auth-less.
+        $storedUsers = \SugarCraft\GitServer\UserStore::forDataPath($config->dataPath)->all();
+    } catch (\RuntimeException $e) {
+        \fwrite(\STDERR, 'candy-git-server: ' . $e->getMessage() . "\n");
+        return 1;
+    }
 
     $server = new \SugarCraft\GitServer\HttpSmartProtocol\Server($config);
+    $storedUserCount = \count($storedUsers);
+    foreach ($storedUsers as $storedUser) {
+        $server->registerUser($storedUser);
+    }
     $served = 0;
+    $published = 0;
     foreach ((array) \scandir($repoRoot) as $entry) {
         if ($entry === '.' || $entry === '..') {
             continue;
@@ -223,12 +251,22 @@ function cmdServeHttp(array $args): int
         }
         // Bare repo (HEAD + objects) directly, or a normal repo whose .git is bare.
         if (\is_file($dir . '/HEAD') && \is_dir($dir . '/objects')) {
-            $server->registerRepo(\SugarCraft\GitServer\Repo::new($entry, $dir));
-            $served++;
+            $gitDir = $dir;
         } elseif (\is_file($dir . '/.git/HEAD') && \is_dir($dir . '/.git/objects')) {
-            $server->registerRepo(\SugarCraft\GitServer\Repo::new($entry, $dir . '/.git'));
-            $served++;
+            $gitDir = $dir . '/.git';
+        } else {
+            continue;
         }
+        // Scanned repos default to PRIVATE: visibility persists only via
+        // the marker an operator minted (repo create --public, or the
+        // file itself). Directory presence is never publication.
+        $repo = \SugarCraft\GitServer\Repo::new($entry, $gitDir)
+            ->withVisibility(\SugarCraft\GitServer\Repo::markerVisibility($gitDir));
+        if ($repo->isVisiblePublic()) {
+            $published++;
+        }
+        $server->registerRepo($repo);
+        $served++;
     }
 
     $listener = new \SugarCraft\GitServer\HttpSmartProtocol\HttpListener($server, $host, $port);
@@ -239,7 +277,10 @@ function cmdServeHttp(array $args): int
         return 1;
     }
     \fwrite(\STDOUT, 'candy-git-server: smart-HTTP read listener on '
-        . (string) $listener->listenAddress() . " ({$served} repos; push and ssh/daemon transports are not implemented)\n");
+        . (string) $listener->listenAddress()
+        . " ({$served} repos, {$published} published; {$storedUserCount} accounts; anonymous-read="
+        . ($config->allowAnonymousRead ? 'on' : 'off')
+        . "; push and ssh/daemon transports are not implemented)\n");
 
     // Graceful stop when signals are available; without pcntl the process
     // dies on the terminal's SIGINT default, which is still truthful.
@@ -290,6 +331,7 @@ ssh:
   key_path: "ssh/soft_serve_host"
 git:
   listen_addr: ":9418"
+  allow_anonymous_read: false
 http:
   listen_addr: ":23232"
   public_url: "http://localhost:23232"
@@ -356,7 +398,31 @@ function cmdUserAdd(array $args): int
     }
 
     $username = $args[0];
-    $dataPath = bin_data_path($args[1] ?? null);
+    $password = null;
+    $positional = [];
+    for ($i = 1; $i < \count($args); $i++) {
+        if ($args[$i] === '--password') {
+            $password = $args[$i + 1] ?? null;
+            if ($password === null) {
+                return error("candy-git-server: --password requires a value ('-' reads from stdin)\n");
+            }
+            $i++;
+            continue;
+        }
+        if (\str_starts_with($args[$i], '--password=')) {
+            $password = \substr($args[$i], \strlen('--password='));
+            continue;
+        }
+        $positional[] = $args[$i];
+    }
+    if ($password === '-') {
+        $raw = \stream_get_contents(\STDIN);
+        $password = $raw === false ? '' : \rtrim($raw, "\r\n");
+    }
+    if ($password === '') {
+        return error("candy-git-server: --password requires a non-empty value\n");
+    }
+    $dataPath = bin_data_path($positional[0] ?? null);
     if (!bin_valid_account_name($username)) {
         return error("Invalid username: '{$username}' (letters, digits, dot, underscore, hyphen; not all dots)\n");
     }
@@ -366,7 +432,13 @@ function cmdUserAdd(array $args): int
         if ($store->find($username) !== null) {
             return error("User '{$username}' already exists in {$store->path()}\n");
         }
-        $store->add(User::new($username)->withAdmin(true));
+        $user = User::new($username)->withAdmin(true);
+        if ($password !== null) {
+            // Only the password_hash() digest is persisted; the plaintext
+            // is used once and discarded (never reaches users.json).
+            $user = $user->withPasswordHash(\password_hash($password, \PASSWORD_DEFAULT));
+        }
+        $store->add($user);
         $store->save();
     } catch (\RuntimeException $e) {
         return error('candy-git-server: ' . $e->getMessage() . "\n");
@@ -374,6 +446,9 @@ function cmdUserAdd(array $args): int
 
     echo Lang::t('cli.user_created', ['username' => $username]) . "\n";
     echo Lang::t('cli.user_key_hint', ['username' => $username]) . "\n";
+    if ($password !== null) {
+        echo Lang::t('cli.user_password_stored') . "\n";
+    }
     echo "Persisted to {$store->path()}\n";
 
     return 0;
@@ -501,7 +576,17 @@ function cmdRepoCreate(array $args): int
         return error(Lang::t('cli.usage_repo_create') . "\n");
     }
 
-    $dataPath = $args[1] ?? \getenv('CANDY_GIT_SERVER_DATA_PATH') ?: \sys_get_temp_dir() . '/candy-git-server';
+    $makePublic = false;
+    $positional = [];
+    foreach (\array_slice($args, 1) as $arg) {
+        if ($arg === '--public') {
+            $makePublic = true;
+            continue;
+        }
+        $positional[] = $arg;
+    }
+
+    $dataPath = $positional[0] ?? \getenv('CANDY_GIT_SERVER_DATA_PATH') ?: \sys_get_temp_dir() . '/candy-git-server';
     $name     = $args[0];
 
     if (!Repo::isJailSafeName($name)) {
@@ -511,7 +596,14 @@ function cmdRepoCreate(array $args): int
     }
 
     $path = "{$dataPath}/repositories/{$name}";
-    $repo = Repo::new($name, $path)->withPublic(true)->init();
+    // Created PRIVATE by default (fail-closed): visibility is a publish
+    // decision, made once with --public and persisted as a marker inside
+    // the repository so the scan-based launcher honors it.
+    $repo = Repo::new($name, $path)->init();
+    if ($makePublic) {
+        $repo = $repo->withVisibility(Visibility::Public)->withPublic(true);
+        $repo->writeVisibilityMarker();
+    }
 
     echo Lang::t('cli.repo_created', ['name' => $name, 'path' => $path]) . "\n";
     // No clone URL is printed: nothing listens for git traffic yet, and a

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\GitServer\Tests\HttpSmartProtocol;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\GitServer\AccessControl;
 use SugarCraft\GitServer\Config;
 use SugarCraft\GitServer\Git\PktLine;
 use SugarCraft\GitServer\HttpSmartProtocol\Server;
@@ -61,10 +62,15 @@ final class SmartHttpReadPathTest extends TestCase
         self::assertMatchesRegularExpression('/^[0-9a-f]{40}$/', $this->headSha, 'fixture seed commit failed');
 
         $this->server->registerRepo(Repo::new('seeded.git', $bare));
+
+        // Published world: the anonymous-read lever is raised (the
+        // fail-closed default is pinned in ServerTest).
+        AccessControl::getInstance()->setAllowAnonymousRead(true);
     }
 
     protected function tearDown(): void
     {
+        AccessControl::getInstance()->setAllowAnonymousRead(false);
         if (\is_dir($this->tmpDir)) {
             \exec('rm -rf ' . \escapeshellarg($this->tmpDir));
         }
@@ -159,7 +165,10 @@ final class SmartHttpReadPathTest extends TestCase
             ''
         );
 
-        self::assertSame(403, $result['status']);
+        // No identity → 401 challenge before any advertisement byte; the
+        // repo's existence and policy stay unspoken either way.
+        self::assertSame(401, $result['status']);
+        self::assertSame('Basic realm="candy-git-server"', $result['headers']['WWW-Authenticate']);
         self::assertStringNotContainsString('refs/', $result['body']);
         self::assertStringNotContainsString('advertisement', $result['headers']['Content-Type']);
     }
@@ -172,10 +181,13 @@ final class SmartHttpReadPathTest extends TestCase
             Repo::new('ghostsecret.git', $secret)->withVisibility(Visibility::Private)
         );
         // An ACTIVE admin would read this repo (canRead short-circuits on
-        // admin); deactivating the user must strip that trust at the header
-        // gate, so the request arrives anonymous and 403s (gap #5 cure).
+        // admin); deactivating the account must strip that trust at the
+        // header gate — the credentials verify but yield no identity, so
+        // the request is anonymous and gets challenged (401).
         $this->server->registerUser(
-            User::new('ghost')->withAdmin(true)->withPassword('pw')->withActive(false)
+            User::new('ghost')->withAdmin(true)
+                ->withPasswordHash(\password_hash('pw', \PASSWORD_DEFAULT))
+                ->withActive(false)
         );
 
         $result = $this->server->handleRequest(
@@ -186,7 +198,7 @@ final class SmartHttpReadPathTest extends TestCase
             ''
         );
 
-        self::assertSame(403, $result['status']);
+        self::assertSame(401, $result['status']);
         self::assertStringNotContainsString('refs/', $result['body']);
     }
 }

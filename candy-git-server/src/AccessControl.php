@@ -21,6 +21,14 @@ final class AccessControl
 
     private static ?self $instance = null;
 
+    /**
+     * Fail-closed by default: anonymous (unauthenticated) traffic may not
+     * read even repos the model marks public. The HTTP/daemon launch paths
+     * raise this from the `git.allow_anonymous_read` config lever when the
+     * operator opts in.
+     */
+    private bool $allowAnonymousRead = false;
+
     public static function getInstance(): self
     {
         return self::$instance ??= new self();
@@ -32,11 +40,25 @@ final class AccessControl
     }
 
     /**
+     * Set whether requests with no authenticated identity may read public
+     * repos. Authenticated users are never gated by this lever.
+     */
+    public function setAllowAnonymousRead(bool $allowed): void
+    {
+        $this->allowAnonymousRead = $allowed;
+    }
+
+    /**
      * Check if a user can read a repo.
      */
     public function canRead(?User $user, Repo $repo): bool
     {
-        if ($repo->isVisiblePublic()) return true;
+        // A public repo is readable to authenticated users always; anonymous
+        // traffic needs the allow-anonymous-read lever raised (fail-closed
+        // default) — a fresh install exposes nothing to passers-by.
+        if ($repo->isVisiblePublic() && ($user !== null || $this->allowAnonymousRead)) {
+            return true;
+        }
         if ($user === null) return false;
         if ($user->isAdmin) return true;
         return $repo->isCollaborator($user->username);
@@ -77,7 +99,7 @@ final class AccessControl
      */
     public function allowAnonymousRead(): bool
     {
-        return true;
+        return $this->allowAnonymousRead;
     }
 
     /**

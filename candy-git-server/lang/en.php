@@ -13,6 +13,7 @@ return [
     'user.ssh_key_too_short'   => 'SSH public key blob too short for {type}: {len} < {min} base64 chars',
     'repo.create_dir_failed'   => 'Failed to create repo directory: {path}',
     'repo.git_init_failed'     => 'git init failed: {output}',
+    'repo.visibility_marker_unwritable' => 'Failed to write visibility marker: {file}',
     'config.not_found'         => 'Config file not found: {path}',
     'config.read_failed'       => 'Failed to read config: {path}',
     'config.parse_failed'      => 'Invalid YAML config: {error}',
@@ -47,10 +48,11 @@ return [
 
     // bin/candy-git-server — user
     'cli.usage_user_root'      => 'Usage: candy-git-server user add|key|list',
-    'cli.usage_user_add'       => 'Usage: candy-git-server user add <username>',
+    'cli.usage_user_add'       => 'Usage: candy-git-server user add <username> [data-path] [--password <pw>|-]',
     'cli.usage_user_key'       => 'Usage: candy-git-server user key <username> [key-file]',
     'cli.user_created'         => "User '{username}' created (admin: true)",
-    'cli.user_key_hint'        => "Use 'candy-git-server user key {username} < key.pub' to add an SSH public key.",
+    'cli.user_password_stored' => 'Password stored as a hash.',
+    'cli.user_key_hint'        => "Use 'candy-git-server user key {username} <key-file|->' to add an SSH public key.",
     'cli.user_key_read_failed' => 'Failed to read key from: {file}',
     'cli.user_key_added'       => "Key added for user '{username}'",
     'cli.user_keys_header'     => 'Authorized keys:',

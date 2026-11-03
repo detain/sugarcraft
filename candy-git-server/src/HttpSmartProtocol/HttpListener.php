@@ -392,11 +392,13 @@ final class HttpListener
     private const REASON_PHRASES = [
         200 => 'OK',
         400 => 'Bad Request',
+        401 => 'Unauthorized',
         403 => 'Forbidden',
         404 => 'Not Found',
         405 => 'Method Not Allowed',
         411 => 'Length Required',
         413 => 'Payload Too Large',
+        422 => 'Unprocessable Entity',
         431 => 'Request Header Fields Too Large',
         500 => 'Internal Server Error',
         501 => 'Not Implemented',

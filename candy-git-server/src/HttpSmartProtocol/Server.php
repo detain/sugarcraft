@@ -235,19 +235,22 @@ final class Server
             return $this->errorResponse(404, 'Repository not found');
         }
 
-        // Gate BEFORE any advertisement byte leaves the process (M3 cure,
-        // r1024/githttp owner ruling 1b): the old code refused upload-pack
-        // only and openly admitted the receive-pack bypass, leaking private
-        // repo ref names. Read advertisement rides canRead, push advertisement
-        // rides canWrite — an anonymous client learns nothing it may not use.
+        // Gate BEFORE any advertisement byte leaves the process: a client
+        // with no valid identity is challenged (401 + WWW-Authenticate)
+        // rather than told yes/no about the repo's policy — one uniform
+        // answer for "who are you", so an anonymous probe cannot use the
+        // 403-versus-advertisement difference to map push policy (or even
+        // existence rules) across repos. A known identity that lacks the
+        // right gets 403. Read advertisement rides canRead, push
+        // advertisement rides canWrite and always requires an identity.
         $ac = AccessControl::getInstance();
         $user = $this->getUserFromHeaders($headers);
         if ($service === 'git-upload-pack') {
             if (!$ac->canRead($user, $repo)) {
-                return $this->errorResponse(403, 'Access denied');
+                return $this->authDenied($user);
             }
         } elseif (!$ac->canWrite($user, $repo)) {
-            return $this->errorResponse(403, 'Access denied');
+            return $this->authDenied($user);
         }
 
         // Build the advertisement packet
@@ -278,8 +281,9 @@ final class Server
         }
 
         $ac = AccessControl::getInstance();
-        if (!$ac->canRead($this->getUserFromHeaders($headers), $repo)) {
-            return $this->errorResponse(403, 'Access denied');
+        $user = $this->getUserFromHeaders($headers);
+        if (!$ac->canRead($user, $repo)) {
+            return $this->authDenied($user);
         }
 
         // Delegate the whole negotiation to the real binary through the
@@ -383,9 +387,15 @@ final class Server
             return $this->errorResponse(400, 'Invalid JSON body');
         }
 
-        if (($request['operation'] ?? 'download') === 'upload'
-            && !AccessControl::getInstance()->canWrite($user, $repo)) {
-            return $this->errorResponse(403, 'Access denied');
+        $ac = AccessControl::getInstance();
+        if (($request['operation'] ?? 'download') === 'upload') {
+            if (!$ac->canWrite($user, $repo)) {
+                return $this->authDenied($user);
+            }
+        } elseif (!$ac->canRead($user, $repo)) {
+            // Challenge (401) before the JSON body is examined any further:
+            // git-lfs clients only prompt for credentials on 401.
+            return $this->authDenied($user);
         }
 
         $result = $handler->handleBatch($request);
@@ -411,7 +421,7 @@ final class Server
     private function handleLfsDownload(Repo $repo, LFSHandler $handler, ?User $user, string $oid): array
     {
         if (!AccessControl::getInstance()->canRead($user, $repo)) {
-            return $this->errorResponse(403, 'Access denied');
+            return $this->authDenied($user);
         }
 
         $backend = $handler->storageBackend();
@@ -438,7 +448,7 @@ final class Server
     private function handleLfsUpload(Repo $repo, LFSHandler $handler, ?User $user, string $oid, string $body): array
     {
         if (!AccessControl::getInstance()->canWrite($user, $repo)) {
-            return $this->errorResponse(403, 'Access denied');
+            return $this->authDenied($user);
         }
 
         $maxBytes = $this->config->maxPackBytes;
@@ -481,7 +491,7 @@ final class Server
         }
 
         if (!AccessControl::getInstance()->canWrite($user, $repo)) {
-            return $this->errorResponse(403, 'Access denied');
+            return $this->authDenied($user);
         }
 
         $request = \json_decode($body, true);
@@ -712,8 +722,13 @@ final class Server
                         $password = \substr($credentials, $colon + 1);
                         $user = $this->users[$username] ?? null;
                         if ($user === null) return null;
-                        // Verify password — reject null/empty passwords (deny auth bypass)
-                        if ($user->password === null || !\hash_equals($user->password, $password)) {
+                        // Passwords authenticate against a stored hash only.
+                        // An account with no password hash (key-only account)
+                        // cannot Basic-authenticate; there is no cleartext
+                        // fallback — the old comparison read the plaintext
+                        // field straight off the model.
+                        $hash = $user->passwordHash;
+                        if ($hash === null || $hash === '' || !\password_verify($password, $hash)) {
                             return null;
                         }
                         // A deactivated account authenticates to nothing
@@ -880,6 +895,21 @@ final class Server
         }
         $mask = 0xff << (8 - $rem) & 0xff;
         return (\ord($ipBin[$whole]) & $mask) === (\ord($subnetBin[$whole]) & $mask);
+    }
+
+    /**
+     * Deny an access-control failure with the right HTTP semantics: no
+     * valid identity → 401 with a Basic challenge (so real git clients
+     * prompt and retry); a known identity lacking permission → 403.
+     */
+    private function authDenied(?User $user): array
+    {
+        if ($user === null) {
+            $this->responseHeaders['WWW-Authenticate'] = 'Basic realm="candy-git-server"';
+            return $this->errorResponse(401, 'Authentication required');
+        }
+
+        return $this->errorResponse(403, 'Access denied');
     }
 
     /**

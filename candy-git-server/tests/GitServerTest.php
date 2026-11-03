@@ -173,7 +173,17 @@ final class GitServerTest extends TestCase
         $repo = Repo::new('pub', '/tmp/pub')->withPublic(true);
 
         $this->assertTrue($ac->canRead($user, $repo));
-        $this->assertTrue($ac->canRead(null, $repo));
+
+        // Fail-closed default: a public repo is NOT anonymous-readable
+        // until the operator raises the allow-anonymous-read lever.
+        $ac->setAllowAnonymousRead(false);
+        $this->assertFalse($ac->canRead(null, $repo));
+        try {
+            $ac->setAllowAnonymousRead(true);
+            $this->assertTrue($ac->canRead(null, $repo));
+        } finally {
+            $ac->setAllowAnonymousRead(false);
+        }
     }
 
     public function testAccessControlCanReadPrivateRepo(): void

@@ -94,6 +94,53 @@ final class Repo
         return \preg_match('/^\.+$/', $name) !== 1;
     }
 
+    /**
+     * Name of the on-disk marker file that persists a repo's visibility for
+     * the scan-based launcher (`serve --http --repo-root`). Lives inside the
+     * git directory; its content is a Visibility value ('public',
+     * 'collaborator-only', 'private').
+     */
+    public const VISIBILITY_MARKER = 'candy-git-server-visibility';
+
+    /**
+     * Visibility recorded by the marker inside a git directory — the
+     * launcher's persistence. FAIL-CLOSED: a missing, unreadable, or
+     * unrecognizable marker means PRIVATE. Repos are only world-visible
+     * because an operator explicitly published them; scanning a directory
+     * of ordinary clones must never mint anonymous readability.
+     */
+    public static function markerVisibility(string $gitDir): Visibility
+    {
+        $raw = @\file_get_contents($gitDir . '/' . self::VISIBILITY_MARKER);
+        if ($raw === false) {
+            return Visibility::Private;
+        }
+        return match (\trim($raw)) {
+            Visibility::Public->value             => Visibility::Public,
+            Visibility::CollaboratorOnly->value   => Visibility::CollaboratorOnly,
+            default                               => Visibility::Private,
+        };
+    }
+
+    /** The git directory for this repo (path itself when bare, else path/.git). */
+    public function gitDir(): string
+    {
+        return \is_file($this->path . '/HEAD') ? $this->path : $this->path . '/.git';
+    }
+
+    /** Persist the current visibility marker into the repo's git directory. */
+    public function writeVisibilityMarker(): void
+    {
+        $gitDir = $this->gitDir();
+        if (!\is_dir($gitDir) && !@\mkdir($gitDir, 0777, true) && !\is_dir($gitDir)) {
+            throw new \RuntimeException(Lang::t('repo.visibility_marker_unwritable', ['file' => $gitDir]));
+        }
+        $file = $gitDir . '/' . self::VISIBILITY_MARKER;
+        if (@\file_put_contents($file, $this->visibility->value . "\n") === false) {
+            throw new \RuntimeException(Lang::t('repo.visibility_marker_unwritable', ['file' => $file]));
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Builder
     // -------------------------------------------------------------------------

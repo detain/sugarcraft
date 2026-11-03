@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\GitServer\Tests\HttpSmartProtocol;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\GitServer\AccessControl;
 use SugarCraft\GitServer\Config;
 use SugarCraft\GitServer\HttpSmartProtocol\Server;
 use SugarCraft\GitServer\Repo;
@@ -38,12 +39,35 @@ final class ServerTest extends TestCase
 
         $repo = Repo::new('testrepo.git', $repoPath);
         $this->server->registerRepo($repo);
+
+        // These arms model the published world: the anonymous-read lever is
+        // raised (config opt-in). The lever-off default is pinned by
+        // testAnonymousReadIsFailClosedByDefault below.
+        AccessControl::getInstance()->setAllowAnonymousRead(true);
     }
 
     protected function tearDown(): void
     {
+        AccessControl::getInstance()->setAllowAnonymousRead(false);
         $this->removeDirectory($this->tmpDir);
         parent::tearDown();
+    }
+
+    public function testAnonymousReadIsFailClosedByDefault(): void
+    {
+        AccessControl::getInstance()->setAllowAnonymousRead(false);
+
+        $result = $this->server->handleRequest(
+            'GET',
+            '/testrepo.git/info/refs',
+            'service=git-upload-pack',
+            [],
+            ''
+        );
+
+        $this->assertSame(401, $result['status']);
+        $this->assertSame('Basic realm="candy-git-server"', $result['headers']['WWW-Authenticate']);
+        $this->assertStringNotContainsString('refs/', $result['body']);
     }
 
     private function removeDirectory(string $dir): void
@@ -191,11 +215,12 @@ final class ServerTest extends TestCase
 
     public function testReceivePackAdvertisementRefusesAnonymousBeforeAnyBytes(): void
     {
-        // FLIPPED 2026-10-24 (r1024/githttp): the old arm asserted an
-        // anonymous 200 with '-advisory' CT — that was the M3 defect (the
-        // receive-pack advertisement bypassed every gate). canWrite() is
-        // fail-closed false for anonymous callers even on a public repo, so
-        // the route now answers 403 BEFORE building any advertisement.
+        // FLIPPED 2026-11-03 (review C-13/M-17): the push advertisement now
+        // challenges anonymous callers with 401 + WWW-Authenticate instead
+        // of answering 403 — one uniform "who are you?" answer means an
+        // anonymous probe cannot map push policy (or repo existence rules)
+        // through the status difference. No advertisement byte is emitted
+        // either way; this pin keeps it that way.
         $result = $this->server->handleRequest(
             'GET',
             '/testrepo.git/info/refs',
@@ -204,13 +229,15 @@ final class ServerTest extends TestCase
             ''
         );
 
-        $this->assertSame(403, $result['status']);
+        $this->assertSame(401, $result['status']);
+        $this->assertSame('Basic realm="candy-git-server"', $result['headers']['WWW-Authenticate']);
         $this->assertStringNotContainsString('refs/', $result['body']);
     }
 
     public function testReceivePackAdvertisementServesAnAdminOverBasicAuth(): void
     {
-        $this->server->registerUser(User::new('pusher')->withAdmin(true)->withPassword('pushpass'));
+        $this->server->registerUser(User::new('pusher')->withAdmin(true)
+            ->withPasswordHash(\password_hash('pushpass', \PASSWORD_DEFAULT)));
 
         $result = $this->server->handleRequest(
             'GET',
@@ -405,7 +432,7 @@ final class ServerTest extends TestCase
 
     public function testHandleRequestAcceptsBasicAuth(): void
     {
-        $user = User::new('testuser')->withPassword('secret123');
+        $user = User::new('testuser')->withPasswordHash(\password_hash('secret123', \PASSWORD_DEFAULT));
         $this->server->registerUser($user);
 
         $credentials = \base64_encode('testuser:secret123');
@@ -423,7 +450,7 @@ final class ServerTest extends TestCase
 
     public function testBasicAuthRejectsWrongPassword(): void
     {
-        $user = User::new('authtest')->withPassword('correct-password');
+        $user = User::new('authtest')->withPasswordHash(\password_hash('correct-password', \PASSWORD_DEFAULT));
         $this->server->registerUser($user);
 
         $credentials = \base64_encode('authtest:wrong-password');

@@ -27,10 +27,17 @@ final class GitDaemonTest extends TestCase
 
         // Create a custom config for testing with a temp data path
         $this->config = $this->createTestConfig($this->tmpDir);
+
+        // The daemon path exercises anonymous READ of published repos. The
+        // fail-closed lever restores in tests/bootstrap.php per test, so
+        // the private-repo refusal pins below still run in the default
+        // world (the lever never unlocks a private repo anyway).
+        \SugarCraft\GitServer\AccessControl::getInstance()->setAllowAnonymousRead(true);
     }
 
     protected function tearDown(): void
     {
+        \SugarCraft\GitServer\AccessControl::getInstance()->setAllowAnonymousRead(false);
         $this->removeDirectory($this->tmpDir);
         parent::tearDown();
     }
@@ -42,9 +49,13 @@ final class GitDaemonTest extends TestCase
      */
     private function createTestConfig(string $dataPath): Config
     {
-        // Use fromDefaults which creates a temp-based config
-        $config = Config::fromDefaults();
-        return $config;
+        // fromDefaults, then re-materialized through YAML so the
+        // anonymous-read lever (this fixture world publishes repos) rides
+        // the real Config::load parse path like every other daemon pin.
+        $path = $this->tmpDir . '/lever.yaml';
+        \file_put_contents($path, "git: { allow_anonymous_read: true }\n");
+
+        return Config::load($path);
     }
 
     private function removeDirectory(string $dir): void
@@ -229,7 +240,27 @@ final class GitDaemonTest extends TestCase
         $daemon->registerRepo($repo);
 
         $ac = \SugarCraft\GitServer\AccessControl::getInstance();
+        // Published-repo anonymous read is the lever-ON world (setUp
+        // arms it through the real Config::load parse path).
+        $this->assertTrue($ac->allowAnonymousRead(), 'fixture world has the anonymous-read lever armed');
         $this->assertTrue($ac->canRead(null, $repo));
+    }
+
+    public function testPublishedRepoIsNotReadableByAnonymousWithTheLeverOff(): void
+    {
+        $repo = Repo::new('levered-repo', $this->tmpDir . '/repositories/levered-repo')
+            ->withPublic(true);
+
+        $ac = \SugarCraft\GitServer\AccessControl::getInstance();
+        $ac->setAllowAnonymousRead(false);
+        try {
+            $this->assertFalse(
+                $ac->canRead(null, $repo),
+                'C-13: public visibility alone must never serve anonymous bytes'
+            );
+        } finally {
+            $ac->setAllowAnonymousRead(true);
+        }
     }
 
     public function testPrivateRepoCannotBeReadByAnonymous(): void

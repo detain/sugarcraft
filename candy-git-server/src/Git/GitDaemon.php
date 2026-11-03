@@ -91,6 +91,9 @@ final class GitDaemon
     /** Whether the async transport is currently registered with a loop. */
     private bool $asyncActive = false;
 
+    /** Snapshot of git.allow_anonymous_read taken at construction (C-13). */
+    private bool $anonymousRead = false;
+
     /** Stats collector override (null = shared instance). */
     private ?Stats $stats = null;
 
@@ -98,6 +101,12 @@ final class GitDaemon
     {
         $this->config = $config;
         $this->subscriptions = new Subscriptions();
+
+        // The daemon's read posture is decided ONCE at construction from
+        // git.allow_anonymous_read — serve entry has no runtime re-read
+        // seam by design: flipping the lever on a live daemon must never
+        // silently unmask the anonymous transport.
+        $this->anonymousRead = $config->allowAnonymousRead;
     }
 
     /** Inject a stats collector (default: the shared {@see Stats} instance). */
@@ -608,7 +617,19 @@ final class GitDaemon
             }
 
             $ac = AccessControl::getInstance();
-            $user = null; // Anonymous for git protocol
+            // The daemon's only identity is the config lever: with
+            // git.allow_anonymous_read off, this anonymous transport
+            // refuses EVERY request before serving a byte (C-13,
+            // fail-closed — the same lever the HTTP surface consults,
+            // armed once at construction).
+            if (!$this->anonymousRead) {
+                $this->writePacket($client['socket'], "err Access denied\n");
+                $this->closeClient($idx);
+
+                return;
+            }
+
+            $user = $this->anonymousRead ? null : User::new('__daemon_anonymous_read_disabled__');
 
             // Check access
             if ($gitCmd === 'git-upload-pack') {
@@ -682,6 +703,15 @@ final class GitDaemon
     {
         $uploadPack = $handler;
         $ac = AccessControl::getInstance();
+
+        // C-13 fail-closed: with git.allow_anonymous_read off, the daemon —
+        // an anonymous transport by definition — refuses every request
+        // before serving a byte. With the lever on, publication still
+        // rides canRead's per-repo visibility exactly as before.
+        if (!$this->anonymousRead) {
+            $this->writePacket($socket, "err Access denied\n");
+            return;
+        }
 
         if (!$ac->canRead(null, $uploadPack->repo())) {
             $this->writePacket($socket, "err Access denied\n");

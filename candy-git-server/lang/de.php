@@ -12,6 +12,7 @@ return [
     'user.invalid_ssh_key'     => 'Ungültiges SSH-Öffentlicher-Schlüssel-Format',
     'repo.create_dir_failed'   => 'Repository-Verzeichnis konnte nicht erstellt werden: {path}',
     'repo.git_init_failed'     => 'git init fehlgeschlagen: {output}',
+    'repo.visibility_marker_unwritable' => 'Schreiben des Sichtbarkeits-Markers fehlgeschlagen: {file}',
     'config.not_found'         => 'Konfigurationsdatei nicht gefunden: {path}',
     'config.read_failed'       => 'Konfiguration konnte nicht gelesen werden: {path}',
     'ssh.user_cannot_create'   => 'Benutzer {viewer} kann keine Repositories erstellen',
@@ -42,10 +43,11 @@ return [
 
     // bin/candy-git-server — user
     'cli.usage_user_root'      => 'Nutzung: candy-git-server user add|key|list',
-    'cli.usage_user_add'       => 'Nutzung: candy-git-server user add <username>',
+    'cli.usage_user_add'       => 'Nutzung: candy-git-server user add <username> [data-path] [--password <pw>|-]',
     'cli.usage_user_key'       => 'Nutzung: candy-git-server user key <username> [key-file]',
     'cli.user_created'         => "Benutzer '{username}' erstellt (admin: true)",
-    'cli.user_key_hint'        => "Verwenden Sie 'candy-git-server user key {username} < key.pub', um einen SSH-Öffentlichen Schlüssel hinzuzufügen.",
+    'cli.user_password_stored' => 'Passwort als Hash gespeichert.',
+    'cli.user_key_hint'        => "Verwenden Sie 'candy-git-server user key {username} <key-file|->', um einen SSH-Öffentlichen Schlüssel hinzuzufügen.",
     'cli.user_key_read_failed' => 'Schlüssel konnte nicht gelesen werden von: {file}',
     'cli.user_key_added'       => "Schlüssel für Benutzer '{username}' hinzugefügt",
     'cli.user_keys_header'     => 'Autorisierte Schlüssel:',

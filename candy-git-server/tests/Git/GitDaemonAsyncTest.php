@@ -33,9 +33,14 @@ final class GitDaemonAsyncTest extends TestCase
         // Port 0 = kernel-assigned ephemeral port, read back via listenAddress().
         \file_put_contents(
             $this->tmpDir . '/config.yaml',
-            "name: \"Test\"\ngit: { listen_addr: \"127.0.0.1:0\", idle_timeout: 3, max_connections: 8 }\n"
+            "name: \"Test\"\ngit: { listen_addr: \"127.0.0.1:0\", idle_timeout: 3, max_connections: 8, allow_anonymous_read: true }\n"
         );
         $this->config = Config::load($this->tmpDir . '/config.yaml');
+
+        // This whole fixture file models the published-repo world (repos
+        // created withPublic); the C-13 default-off keystone lives in
+        // AnonymousReadLeverTest.
+        \SugarCraft\GitServer\AccessControl::getInstance()->setAllowAnonymousRead(true);
     }
 
     protected function tearDown(): void
@@ -74,6 +79,9 @@ final class GitDaemonAsyncTest extends TestCase
         \exec("git -C {$escaped} add hello.txt 2>&1");
         \exec("git -C {$escaped} -c user.email=test@example.com -c user.name=Test commit -m init 2>&1");
 
+        // Published repo: the fixture world arms git.allow_anonymous_read
+        // in config.yaml (the C-13 default-off keystone lives in
+        // AnonymousReadLeverTest and the daemon unit gate pins).
         return Repo::new($name, $path)->withPublic(true);
     }
 

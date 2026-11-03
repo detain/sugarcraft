@@ -34,6 +34,14 @@ final class Config
     public readonly int $gitIdleTimeout;
     public readonly int $gitMaxConnections;
 
+    /**
+     * Whether requests with NO authenticated identity may read repositories
+     * the operator explicitly marked public. Default OFF (fail-closed): a
+     * fresh install exposes nothing to passers-by until this is turned on
+     * and repos are published. Push is never affected by this lever.
+     */
+    public readonly bool $allowAnonymousRead;
+
     /** HTTP server config. */
     public readonly string $httpListenAddr;
     public readonly string $httpPublicUrl;
@@ -127,10 +135,11 @@ final class Config
                 'idle_timeout'     => 120,
             ],
             'git'      => [
-                'listen_addr'     => ':9418',
-                'max_timeout'     => 0,
-                'idle_timeout'    => 3,
-                'max_connections' => 32,
+                'listen_addr'          => ':9418',
+                'max_timeout'          => 0,
+                'idle_timeout'         => 3,
+                'max_connections'      => 32,
+                'allow_anonymous_read' => false,
             ],
             'http'     => [
                 'listen_addr'     => ':23232',
@@ -178,6 +187,7 @@ final class Config
         $this->gitMaxTimeout     = (int) ($git['max_timeout'] ?? 0);
         $this->gitIdleTimeout    = (int) ($git['idle_timeout'] ?? 3);
         $this->gitMaxConnections = (int) ($git['max_connections'] ?? 32);
+        $this->allowAnonymousRead = (bool) ($git['allow_anonymous_read'] ?? false);
 
         $http = $data['http'] ?? [];
         $this->httpListenAddr = (string) ($http['listen_addr'] ?? ':23232');

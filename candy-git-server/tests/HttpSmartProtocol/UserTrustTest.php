@@ -127,7 +127,10 @@ final class UserTrustTest extends TestCase
             '10.0.0.1'
         );
 
-        $this->assertSame(403, $result['status']);
+        // C-13 (2026-11-03): an untrusted header resolves to ANONYMOUS, and
+        // an anonymous request for a gated repo meets the 401 challenge —
+        // the server never answers a bare 403 to a caller it hasn't met.
+        $this->assertSame(401, $result['status']);
     }
 
     // -------------------------------------------------------------------------
@@ -232,7 +235,9 @@ final class UserTrustTest extends TestCase
             '',
             '172.16.0.1'
         );
-        $this->assertSame(403, $untrusted['status']);
+        // Untrusted proxy + header ⇒ anonymous ⇒ challenged (401), not
+        // policy-answered (403): see the C-13 note above.
+        $this->assertSame(401, $untrusted['status']);
     }
 
     // -------------------------------------------------------------------------
