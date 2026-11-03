@@ -1,4 +1,4 @@
-<p class="lede" style="margin-top: 28px;">Personal key/value store — one SQLite database per store, <code>@dbname</code> namespaces, glob listing, TTL, binary values, JSON/YAML import/export.</p>
+<p class="lede" style="margin-top: 28px;">Personal key/value store — one SQLite database per store, <code>@dbname</code> namespaces, glob listing, TTL, binary values, JSON/YAML import/export, and a bare CLI.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-kv</code></pre>
@@ -6,36 +6,47 @@
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Kv\Store;
 
-$skate = new Store();                       // SQLite files under ~/.config/skate
+$store = new Store();                       // SQLite files under ~/.config/skate
 
-$skate-&gt;set('user:1', 'Alice');
-$skate-&gt;set('user:2', 'Bob');
-echo $skate-&gt;get('user:1');                 // 'Alice'
-echo $skate-&gt;get('missing', 'n/a');         // fallback: 'n/a'
+$store-&gt;set('user:1', 'Alice');
+$store-&gt;set('user:2', 'Bob');
+echo $store-&gt;get('user:1');                 // 'Alice'
+echo $store-&gt;get('missing', 'n/a');         // fallback: 'n/a'
 
-// A key@db suffix routes to a named database
-$skate-&gt;set('token@passwords', 'ghp_xxxx');
-$skate-&gt;setWithTtl('session', 'abc', 60);   // expires after 60 s
+// A key@db suffix routes to a named database ("\\@" spells a literal at-sign)
+$store-&gt;set('token@passwords', 'ghp_xxxx');
+$store-&gt;setWithTtl('session', 'abc', 60);   // expires after 60 s
 
-foreach ($skate-&gt;list('user:*') as $entry) {  // glob patterns; yields Entry
-    echo "{$entry-&gt;key} =&gt; {$entry-&gt;value}\n";
+foreach ($store-&gt;list('user:*') as $entry) {  // byte-exact glob patterns; yields Entry
+    echo "{$entry-&gt;key} =&gt; {$entry-&gt;rawValue()}\n";
 }
-$skate-&gt;listDatabases();                    // ['default', 'passwords']</code></pre>
+$store-&gt;listDatabases();                    // ['default', 'passwords']
+$store-&gt;pruneExpired();                     // reclaim rows past their TTL</code></pre>
+
+    <h3 style="margin-top: 32px;">CLI</h3>
+    <pre class="code"><code class="language-shell">candy-kv set color blue              # values with NUL/invalid UTF-8 auto-arm binary mode
+candy-kv get color                   # prints exact stored bytes, no added newline
+candy-kv list 'user-*'               # key&ltTAB&gtvalue rows; binary values show a &lt;binary N bytes&gt; placeholder
+candy-kv delete 'tmp-*' --dry-run    # preview the match count without writing
+candy-kv prune                       # remove expired residue
+candy-kv export json &gt; backup.json
+candy-kv import json backup.json     # atomic across databases by default</code></pre>
+    <p style="margin-top: 12px;">Exit codes: <code>0</code> success, <code>1</code> miss / no match / runtime failure, <code>2</code> usage errors (unknown flags and commands are refused before anything is written). Run <code>candy-kv --help</code> for the full flag list.</p>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>SQLite storage</strong><span>One SQLite file per named database under the data directory (<code>~/.config/skate</code> by default); <code>key@db</code> picks the database.</span></div>
-      <div class="feature"><strong>Glob and fuzzy listing</strong><span><code>*</code> / <code>?</code> glob patterns, reverse order, keys-only or values-only modes, and <code>fuzzyFilter()</code>.</span></div>
-      <div class="feature"><strong>TTL support</strong><span>Expire keys after a set time; expired entries are never returned.</span></div>
-      <div class="feature"><strong>Binary values and transactions</strong><span>Store files as binary entries and group writes in a transaction.</span></div>
+      <div class="feature"><strong>SQLite storage</strong><span>One SQLite file per named database under the data directory (<code>~/.config/skate</code> by default, files at <code>0600</code>); <code>key@db</code> picks the database and reads never create files.</span></div>
+      <div class="feature"><strong>Glob and fuzzy listing</strong><span>Case-sensitive <code>*</code> / <code>?</code> glob patterns (<code>\*</code> spells a literal star), reverse order, keys-only or values-only modes, and <code>fuzzyFilter()</code>.</span></div>
+      <div class="feature"><strong>TTL support</strong><span>Expire keys after a set time; expired rows are invisible to readers immediately and stay on disk until <code>pruneExpired()</code> reclaims them.</span></div>
+      <div class="feature"><strong>Binary values and transactions</strong><span>Store raw bytes as binary entries (<code>rawValue()</code> decodes them) and group writes in a transaction.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-kv">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-kv/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-kv/tree/main/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/charmbracelet/skate">charmbracelet/skate</a> (Go); SugarCraft is developed as a native PHP project.</li>
+      <li><a href="https://github.com/sugarcraft/candy-kv/tree/master/examples">Runnable examples</a></li>
+      <li>Originally inspired by <a href="https://github.com/charmbracelet/skate">charmbracelet/skate</a> (Go); SugarCraft is developed as a native PHP project. The interactive TUI of upstream skate is not part of this port — library and CLI only.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
@@ -43,14 +54,14 @@ $skate-&gt;listDatabases();                    // ['default', 'passwords']</code
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Store</td><td>__construct(?string $dataDir = null, string $defaultDb = 'default')</td><td>Key-value store over per-database SQLite files</td></tr>
+<tr><td>Store</td><td>__construct(?string $dataDir = null, string $defaultDb = 'default')</td><td>Key-value store over per-database SQLite files; construction touches nothing on disk</td></tr>
 <tr><td>Store</td><td>set(key, value, bool $binary = false, ?int $ttlSeconds = null) / setWithTtl(key, value, ttl)</td><td>Write a key; <code>key@db</code> routes to a named database</td></tr>
-<tr><td>Store</td><td>get(key, fallback = '') / entry(key)</td><td>Read a value, or the full Entry</td></tr>
-<tr><td>Store</td><td>list(?pattern, ?dbName, reverse, mode, delimiter) / fuzzyFilter(query)</td><td>Glob or fuzzy listing</td></tr>
-<tr><td>Store</td><td>delete(key) / setFile(key, path) / saveTo(key, path)</td><td>Delete; binary values from and to files</td></tr>
+<tr><td>Store</td><td>get(key, fallback = '') / entry(key) / suggestionFor(key)</td><td>Read a value, or the full Entry, or a close-existing key for a typo</td></tr>
+<tr><td>Store</td><td>list(?pattern, ?dbName, reverse, mode) / fuzzyFilter(query) / pruneExpired()</td><td>Glob listing; reclaim expired rows</td></tr>
+<tr><td>Store</td><td>delete(key) / setFile(key, path) / saveTo(key, path)</td><td>Delete; binary values from and to files (<code>0600</code>)</td></tr>
 <tr><td>Store</td><td>listDatabases() / deleteDatabase(name) / transaction(dbName, callable)</td><td>Database management</td></tr>
-<tr><td>Database</td><td>__construct(path, name) / get / set / delete / list / count / deleteMany / transaction</td><td>One SQLite database</td></tr>
-<tr><td>Entry</td><td>key, value, binary, createdAt, modifiedAt, expiresAt / isExpired()</td><td>A stored value</td></tr>
+<tr><td>Database</td><td>get / raw / set / delete / deleteMany / list / allKeys / count / pruneExpired / transaction / close</td><td>One SQLite database; <code>raw()</code> also sees expired rows</td></tr>
+<tr><td>Entry</td><td>key, value, binary, createdAt, modifiedAt, expiresAt / isExpired() / rawValue()</td><td>A stored value; <code>rawValue()</code> returns decoded bytes for binary entries</td></tr>
 </table>
   </div>
 </section>
@@ -64,17 +75,17 @@ $skate-&gt;listDatabases();                    // ['default', 'passwords']</code
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/basic.gif" alt="Get / set / list">
                 <h3>Get / set / list</h3>
-                <span class="demo-caption">Default in-memory store — set, get, list, delete.</span>
+                <span class="demo-caption">File-backed store — set, get, list, delete.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/glob.gif" alt="Glob listing">
                 <h3>Glob listing</h3>
-                <span class="demo-caption">List keys matching `users/*` and `cache/*`.</span>
+                <span class="demo-caption">List keys matching `user-*`, `user-?` and `config-*`.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/reverse-order.gif" alt="Reverse-order list">
                 <h3>Reverse-order list</h3>
-                <span class="demo-caption">List a key range in reverse insertion order.</span>
+                <span class="demo-caption">List the same keys forward and in reverse key order.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/binary.gif" alt="Binary values">
